@@ -657,18 +657,18 @@ public static class PacketTests
         // daylight saving: the same Eastern wall-clock grid in October (aion2-data's 00:00 UTC Rift anchor of 2026-10-07), across
         // the autumn change, and over the hour skipped in spring
         var summer = EventTimers.Around(rift, U(10, 7, 22, 30), naE).Next;
-        var mon = EventTimers.Around(siege, U(10, 12, 12), naE).Next;
+        var thu = EventTimers.Around(siege, U(10, 15, 12), naE).Next;
         var (fallLast, fallNext) = EventTimers.Around(rift, U(11, 1, 4), naE);
         var spring = EventTimers.Around(rift, new DateTime(2027, 3, 14, 5, 0, 0, DateTimeKind.Utc), naE).Next;
-        Check(summer == U(10, 8, 0) && mon == U(10, 13, 1) && fallLast == U(11, 1, 3) && fallNext == U(11, 1, 7) && spring == new DateTime(2027, 3, 14, 7, 0, 0, DateTimeKind.Utc),
-            $"...daylight saving: the Rift at {summer:HH:mm}Z on 2026-10-07 (20:00 EDT), the siege Mon 21:00 EDT = {mon:ddd HH:mm}Z; on 2026-11-01 {fallLast:HH:mm}Z then {fallNext:HH:mm}Z (23:00 EDT, 02:00 EST); on 2027-03-14 02:00 doesn't exist: {spring:HH:mm}Z (03:00 EDT)");
+        Check(summer == U(10, 8, 0) && thu == U(10, 16, 1) && fallLast == U(11, 1, 3) && fallNext == U(11, 1, 7) && spring == new DateTime(2027, 3, 14, 7, 0, 0, DateTimeKind.Utc),
+            $"...daylight saving: the Rift at {summer:HH:mm}Z on 2026-10-07 (20:00 EDT), the siege Thu 21:00 EDT = {thu:ddd HH:mm}Z; on 2026-11-01 {fallLast:HH:mm}Z then {fallNext:HH:mm}Z (23:00 EDT, 02:00 EST); on 2027-03-14 02:00 doesn't exist: {spring:HH:mm}Z (03:00 EDT)");
         var at3 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 3), lag, naE);
         var at6 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 6), lag, naE);
         Check(at3 is { OnNow: true, When: "started 3 min ago" } && at6 is { OnNow: false, When: "54m 00s" }, $"...the Shugo Festival 3 min past the hour: {Say(at3)}; at 6 past: {Say(at6)}");
         var siegeOn = EventTimers.RowOf(siege, U(11, 15, 2, 5), lag, naE);
         var siegeNext = EventTimers.RowOf(siege, U(11, 15, 2, 25), lag, naE);
-        Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == U(11, 17, 2) + lag && siegeNext.When == "1d 23h 35m",
-            $"...the Artifact Siege on Saturday 21:05 ET, then next on Monday 21:00 ET: {Say(siegeNext)}");
+        Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == U(11, 20, 2) + lag && siegeNext.When == "4d 23h 35m",
+            $"...the Artifact Siege on Saturday 21:05 ET, then next on Thursday 21:00 ET (twice a week since the Nov 4 patch): {Say(siegeNext)}");
 
         var et = new EventTimers();
         var pc = server + lag;

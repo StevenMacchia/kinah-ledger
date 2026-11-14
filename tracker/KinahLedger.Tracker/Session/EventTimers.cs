@@ -40,7 +40,7 @@ public sealed class EventTimers
     /// The clock of a region (Settings.Region: "na_e", "na_w", "eu", "latam", "asia"). NA East is US Eastern, checked
     /// 2026-11-14: the Abyss server's own next-siege time (Sat 21:00 ET), the chat's "A Spacetime Rift has appeared" at 11:00,
     /// 14:00 and 17:00 ET on 2026-11-13, and the field bosses on Steven's Lower Reshanta map (Watcher Kaira every 3 h from
-    /// 01:00 ET, the Executors 21:30 ET). The other regions are not checked: UTC+9, as before (Europe is likely Central
+    /// 01:00 ET). The other regions are not checked: UTC+9, as before (Europe is likely Central
     /// European time, but no reading tells it apart yet).
     /// </summary>
     public static RegionClock ClockOf(string? region) => region switch
@@ -86,7 +86,7 @@ public sealed class EventTimers
         new("Shugo Festival", "Every hour", 60, 0, null, 6, "Verteron and Altgard"),
         new("Dimensional Invasion", "Every hour at half past", 60, 30, null, 13, "Verteron and Altgard"),
         new("Spacetime Rift", "Every 3 hours", 180, 0, null, 10, "One of ten zones", new Dictionary<string, int> { ["na_e"] = 120 }),
-        new("Artifact Siege", "Mon, Thu and Sat", 1440, 21 * 60, new[] { 1, 4, 6 }, 20, "Chaotic Lower Reshanta"),
+        new("Artifact Siege", "Thu and Sat", 1440, 21 * 60, new[] { 4, 6 }, 20, "Chaotic Lower Reshanta"),   // twice a week since the Nov 4 patch
     };
 
     /// <summary>The event the player is in, as its server told it. Times are UTC on this PC's clock.</summary>
