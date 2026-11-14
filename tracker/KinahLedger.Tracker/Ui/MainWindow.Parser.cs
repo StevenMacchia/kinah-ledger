@@ -156,7 +156,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}|{Skins.Current}|{ParserStatus(where).Line}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}|{Skins.Current}|{ParserStatus(where).Line}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear();
@@ -210,6 +210,7 @@ public partial class MainWindow
         var card = PCard(hero: true);
         var body = new StackPanel();
         body.Children.Add(FightHead(e, now, live: true));
+        if (e.BossHpLeft is { } left) body.Children.Add(Margin(BossHpBar(e, left), 0, 10, 0, 0));
         if (FightChips(e, now, live: true) is { } chips) body.Children.Add(Margin(chips, 0, 10, 0, 0));
         body.Children.Add(Margin(RosterTable(e, now, detail: false), 0, 10, 0, 0));
         card.Child = body;
@@ -273,13 +274,14 @@ public partial class MainWindow
         if (e.HasDamage)
         {
             Add(PStat("Group DPS", Amounts.Short(e.GroupDps(now)), "Ink"));
-            if (e.BossDamage > 0) Add(PStat("Boss damage", Amounts.Short(e.BossDamage), "Ink"));
+            if (e.BossDamage > 0 && e.BossMaxHp <= 0) Add(PStat("Boss damage", Amounts.Short(e.BossDamage), "Ink"));
+            if (e.BossMaxHp > 0 && !live) Add(PStat("Boss HP", Amounts.Short(e.BossMaxHp), "Ink", e.Outcome == "kill" ? "" : e.BossHpLeft is { } l ? $"{l:P0} left" : ""));
         }
         int adds = e.Kills.Count(k => !k.Boss);
         if (adds > 0) Add(PStat("Kills near you", adds.ToString("N0", CultureInfo.InvariantCulture), "Ink"));
         int deaths = e.Roster.Sum(f => f.Deaths);
         if (deaths > 0) Add(PStat("Deaths", deaths.ToString("N0", CultureInfo.InvariantCulture), "Coral"));
-        if (!e.HasDamage && e.Roster.Count > 0) Add(PStat("Group CP", AvgCp(e), "Ink", "average"));
+        if (!e.HasDamage && e.Members.Any(f => f.CombatPower > 0)) Add(PStat("Group CP", AvgCp(e), "Ink", "average"));
         if (e.Partial) { var c = PChip("Partial", "Warn", "GoldTint"); c.ToolTip = "Some of this fight wasn't seen: " + string.Join("; ", e.PartialWhy) + ". It is still one fight; its damage and kills may be short."; Add(c); }
         return wp.Children.Count > 0 ? wp : null;
     }
@@ -304,7 +306,9 @@ public partial class MainWindow
         }
         bool dmg = e.HasDamage;
         bool deaths = detail && e.Roster.Any(f => f.Deaths > 0);
-        var cols = new List<(double Width, string Head, bool Right)> { (28, "", false), (0, "Member", false), (92, "Class", false), (64, "CP", true), (62, "Item lvl", true) };
+        // before the group list comes (damage only), the rows are who hit the boss: no class, CP or item level to show
+        bool gear = e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0 || f.Class.Length > 0);
+        var cols = new List<(double Width, string Head, bool Right)> { (28, "", false), (0, "Member", false), (gear ? 92 : 0.01, gear ? "Class" : "", false), (gear ? 64 : 0.01, gear ? "CP" : "", true), (gear ? 62 : 0.01, gear ? "Item lvl" : "", true) };
         if (dmg) { cols.Add((76, "Damage", true)); cols.Add((66, "DPS", true)); }
         if (deaths) cols.Add((50, "Deaths", true));
         Grid Row()
@@ -332,19 +336,30 @@ public partial class MainWindow
             var rule = new Border { BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0), Padding = new Thickness(0, 6, 0, 6), Child = row };
             rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
             first = false;
-            Cell(row, 0, ClassMark(f.Class, 20));
+            Cell(row, 0, f.Other ? OtherMark(20) : ClassMark(f.Class, 20, f.Name));
             var nameBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
-            nameLine.Children.Add(PT(f.Name.Length > 0 ? f.Name : "Unknown", 13, FontWeights.SemiBold, f.You ? "Gold" : "Ink", trim: true));
+            var nm = PT(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 13, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.You ? "Gold" : f.Other || f.Name.Length == 0 ? "Muted" : "Ink", trim: true);
+            if (f.Other) nm.ToolTip = "HP the boss lost with no hit to name a source: damage over time, or traffic that was lost. Shown so the rows add up to the HP it lost.";
+            else if (f.Name.Length == 0) nm.ToolTip = "A source the game's messages didn't name yet (a pet, or a player not seen up close).";
+            nameLine.Children.Add(nm);
             if (f.You) nameLine.Children.Add(Margin(PT("you", 11, FontWeights.SemiBold, "Faint"), 6, 1, 0, 0));
             if (f.Late) nameLine.Children.Add(Margin(PT("joined late", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             if (f.Gone) nameLine.Children.Add(Margin(PT("left", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             nameBox.Children.Add(nameLine);
-            if (dmg) nameBox.Children.Add(ShareBar(f.Damage / (double)top, f.You));
+            if (dmg)
+            {
+                var bar = ShareBar(f.Damage / (double)top, f.You);
+                nameBox.SizeChanged += (_, _) => bar.Width = Math.Min(220, nameBox.ActualWidth);   // left-aligned, never past the column
+                nameBox.Children.Add(bar);
+            }
             Cell(row, 1, nameBox);
-            Cell(row, 2, PT(f.Class.Length > 0 ? f.Class : "–", 12, FontWeights.Medium, "Muted", trim: true));
-            Cell(row, 3, Right(PT(f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.SemiBold, "Ink")));
-            Cell(row, 4, Right(PT(f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, "Text2")));
+            if (gear && !f.Other)
+            {
+                Cell(row, 2, PT(f.Class.Length > 0 ? f.Class : "–", 12, FontWeights.Medium, "Muted", trim: true));
+                Cell(row, 3, Right(PT(f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.SemiBold, "Ink")));
+                Cell(row, 4, Right(PT(f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, "Text2")));
+            }
             int c = 5;
             if (dmg)
             {
@@ -357,9 +372,42 @@ public partial class MainWindow
         return host;
     }
 
+    /// <summary>The boss's HP: a bar in the grade of what is left (coral under a third), the share and the figures beside it.</summary>
+    FrameworkElement BossHpBar(Encounter e, double left)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var track = new Grid { Height = 8, VerticalAlignment = VerticalAlignment.Center };
+        var back = new Border { CornerRadius = new CornerRadius(4) }; back.SetResourceReference(Border.BackgroundProperty, "LineStrong");
+        var fill = new Border { CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left };
+        fill.SetResourceReference(Border.BackgroundProperty, left < 0.34 ? "Coral" : "Gold");
+        track.Children.Add(back); track.Children.Add(fill);
+        track.SizeChanged += (_, _) => fill.Width = Math.Max(left > 0 ? 3 : 0, track.ActualWidth * left);
+        AutomationProperties.SetName(track, $"Boss HP {left:P0}");
+        g.Children.Add(track);
+        var txt = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        txt.Children.Add(PT($"{left:P0}", 13, FontWeights.Bold, left < 0.34 ? "Coral" : "Ink"));
+        txt.Children.Add(Margin(PT($"{Amounts.Short(e.BossHp)} / {Amounts.Short(e.BossMaxHp)} HP", 12, FontWeights.Medium, "Muted"), 7, 0, 0, 0));
+        Grid.SetColumn(txt, 1); g.Children.Add(txt);
+        return g;
+    }
+
+    /// <summary>The Other row's mark: a quiet tile with a dot pattern, not a class.</summary>
+    internal static FrameworkElement OtherMark(double size)
+    {
+        var c = Color.FromRgb(0x86, 0x8D, 0xA1);
+        return new Border
+        {
+            Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.28), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
+            Background = Frozen(Color.FromArgb(0x18, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x50, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
+            Child = new TextBlock { Text = "···", FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -size * 0.12, 0, 0) },
+        };
+    }
+
     FrameworkElement ShareBar(double share, bool you)
     {
-        var track = new Grid { Height = 3, Margin = new Thickness(0, 4, 0, 0), MaxWidth = 220, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var track = new Grid { Height = 3, Margin = new Thickness(0, 4, 0, 0), MaxWidth = 220, HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
         var back = new Border { CornerRadius = new CornerRadius(1.5) }; back.SetResourceReference(Border.BackgroundProperty, "SegGroup");
         var fill = new Border { CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Left };
         fill.SetResourceReference(Border.BackgroundProperty, you ? "Gold" : "Muted");
@@ -372,7 +420,7 @@ public partial class MainWindow
     /// A class's mark: its two letters on a tile in the class's role colour (no class art in the tracker yet). Tanks blue,
     /// healers and support green, melee coral, casters and ranged violet; an unknown class a quiet tile.
     /// </summary>
-    internal static FrameworkElement ClassMark(string cls, double size)
+    internal static FrameworkElement ClassMark(string cls, double size, string name = "")
     {
         var c = ClassColor(cls);
         var b = new Border
@@ -381,7 +429,8 @@ public partial class MainWindow
             Background = Frozen(Color.FromArgb(0x2E, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x80, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
             ToolTip = cls.Length > 0 ? cls : null,
         };
-        var letters = cls.Trim().Length >= 2 ? cls.Trim()[..2] : cls.Trim().Length == 1 ? cls.Trim() : "?";
+        // no class yet (the damage rows before a group list): the name's first letter on the quiet tile
+        var letters = cls.Trim().Length >= 2 ? cls.Trim()[..2] : cls.Trim().Length == 1 ? cls.Trim() : name.Trim().Length > 0 ? name.Trim()[..1].ToUpperInvariant() : "·";
         b.Child = new TextBlock { Text = letters, FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         return b;
     }
@@ -567,7 +616,7 @@ public partial class MainWindow
         Grid.SetColumn(dur, 3); g.Children.Add(dur);
         var fig = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         if (e.HasDamage) { fig.Children.Add(Right(PT(Amounts.Short(e.GroupDps(e.End ?? now)), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT("group DPS", 10.5, FontWeights.Medium, "Faint"))); }
-        else { fig.Children.Add(Right(PT(AvgCp(e), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT($"avg CP · {e.Roster.Count} in group", 10.5, FontWeights.Medium, "Faint"))); }
+        else { fig.Children.Add(Right(PT(AvgCp(e), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT($"avg CP · {e.Members.Count()} in group", 10.5, FontWeights.Medium, "Faint"))); }
         Grid.SetColumn(fig, 4); g.Children.Add(fig);
         var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L3.5,3.5 L0,7"), StrokeThickness = 1.4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
         chev.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Faint");
@@ -680,12 +729,12 @@ public partial class MainWindow
 
     // ---- renders and tests ----
 
-    /// <summary>A layout render's Parser page: "live" (a fight under way), "history" (between fights), "detail" (one kept fight open), "nodamage", "empty".</summary>
+    /// <summary>A layout render's Parser page: "live" (a fight under way), "history" (between fights), "detail" (one kept fight open), "nodamage", "nogroup" (damage before any group list), "empty".</summary>
     internal void ShowParserDemo(string state)
     {
         _demo = true;
         _parserDemoNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
-        var (past, live) = state == "empty" ? (new List<Encounter>(), null) : ParserDemo.Sample(_parserDemoNow, live: state is "live" or "nodamage", damage: state != "nodamage");
+        var (past, live) = state == "empty" ? (new List<Encounter>(), null) : ParserDemo.Sample(_parserDemoNow, live: state is "live" or "nodamage" or "nogroup", damage: state != "nodamage", group: state != "nogroup");
         _parserDemoPast = past; _parserDemoLive = live;
         _parserDemoWhere = state == "empty" ? (ContentKind.Other, "") : (ContentKind.Transcendence, "Shattered Arkanis [Stage 3]");
         _parserOpen = state == "detail" ? past.LastOrDefault(e => e.Kills.Any(k => !k.Boss) && e.Roster.Any(f => f.Deaths > 0))?.Id ?? past.LastOrDefault()?.Id : null;
@@ -705,7 +754,7 @@ public partial class MainWindow
             if (d is TextBlock t && t.Text == "In progress") live = true;
             foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
         }
-        int roster = (ParserLive ?? (_parserOpen != null ? ParserPast().FirstOrDefault(e => e.Id == _parserOpen) : null))?.Roster.Count ?? 0;
+        int roster = (ParserLive ?? (_parserOpen != null ? ParserPast().FirstOrDefault(e => e.Id == _parserOpen) : null))?.Members.Count() ?? 0;
         return (live, rows, detail, roster);
     }
 

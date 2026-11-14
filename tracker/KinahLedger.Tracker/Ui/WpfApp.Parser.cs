@@ -7,7 +7,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "empty" };
+    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty" };
 
     /// <summary>
     /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight]: the Parser page from
@@ -54,12 +54,14 @@ public static partial class WpfApp
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (past, live) = ParserDemo.Sample(now, live: true, damage: true);
         var (pastNd, liveNd) = ParserDemo.Sample(now, live: true, damage: false);
+        var (_, liveNg) = ParserDemo.Sample(now, live: true, damage: true, group: false);
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a gap in the game's traffic");
         var shots = new List<(string File, Encounter E, DateTime At)>
         {
             ("ui-parser-overlay-live.png", live!, now),
             ("ui-parser-overlay-nodamage.png", liveNd!, now),
+            ("ui-parser-overlay-nogroup.png", liveNg!, now),
             ("ui-parser-overlay-killed.png", kill, kill.End!.Value),
             ("ui-parser-overlay-wiped.png", wipe, wipe.End!.Value),
         };

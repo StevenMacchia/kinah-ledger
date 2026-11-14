@@ -44,6 +44,11 @@ public sealed class Encounter
     public bool HasDamage { get; set; }
     /// <summary>Damage dealt to the boss itself, by everyone, when known.</summary>
     public long BossDamage { get; set; }
+    /// <summary>The boss's HP now (at the end, for a kept fight) and its max, when the game gave them; 0 = not known.</summary>
+    public long BossHp { get; set; }
+    public long BossMaxHp { get; set; }
+    /// <summary>The share of the boss's HP left, 0 to 1, or null when not known.</summary>
+    [JsonIgnore] public double? BossHpLeft => BossMaxHp > 0 ? Math.Clamp(BossHp / (double)BossMaxHp, 0, 1) : null;
     /// <summary>The tracker version that kept it.</summary>
     public string App { get; set; } = "";
 
@@ -56,6 +61,9 @@ public sealed class Encounter
     /// <summary>The player's own row, if the group was known.</summary>
     [JsonIgnore] public Fighter? You => Roster.FirstOrDefault(f => f.You);
 
+    /// <summary>The group's members: every row but Other (HP lost with no hit: damage over time, lost traffic).</summary>
+    [JsonIgnore] public IEnumerable<Fighter> Members => Roster.Where(f => !f.Other);
+
     /// <summary>A member's damage per second over the fight; 0 when damage isn't known.</summary>
     public double Dps(Fighter f, DateTime now) { var s = Duration(now).TotalSeconds; return HasDamage && s >= 1 ? f.Damage / s : 0; }
 
@@ -64,8 +72,8 @@ public sealed class Encounter
 
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
-        ? Roster.OrderByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-        : Roster.OrderByDescending(f => f.You).ThenByDescending(f => f.CombatPower).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
+        ? Roster.OrderBy(f => f.Other).ThenByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+        : Roster.Where(f => !f.Other).OrderByDescending(f => f.You).ThenByDescending(f => f.CombatPower).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
 
     public static string KindName(ContentKind k) => k switch
     {
@@ -99,6 +107,10 @@ public sealed class Fighter
     public bool Late { get; set; }
     /// <summary>Left the group during the fight.</summary>
     public bool Gone { get; set; }
+    /// <summary>The "Other" row: HP the boss lost with no hit to name a source (damage over time, lost traffic), so the rows add up to the HP lost.</summary>
+    public bool Other { get; set; }
+    /// <summary>Known only from its damage (no group list yet): Combat Power and item level not known.</summary>
+    public bool FromDamage { get; set; }
     public long Damage { get; set; }
     public int Deaths { get; set; }
 

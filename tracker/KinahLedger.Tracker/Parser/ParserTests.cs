@@ -7,7 +7,8 @@ namespace KinahLedger.Parser;
 /// <summary>
 /// parser-test: the boss-fight rules on made-up fight events. Fights only inside a Transcendence, an Expedition or a
 /// Sanctuary and only for a boss; one per boss, a new boss starts afresh; a gap, a reconnect or a restart marks a fight
-/// partial and never splits it; quiet fights are given up; the group, damage only when the game gives it; the kept file.
+/// partial and never splits it; quiet fights are given up; the group, damage only when the game gives it (the damage rows
+/// are the group until a group list comes, Other keeps the rows adding up), the boss's HP; the kept file.
 /// </summary>
 public static class ParserTests
 {
@@ -49,8 +50,6 @@ public static class ParserTests
             p.Take(new BossEngaged(t.AddSeconds(1), "Talisra of the Void", 900));   // not in an instance yet: the open world
             Check(p.Live == null, "a boss pulled outside the three kinds makes no fight");
             p.Take(new InstanceEntered(t.AddSeconds(2), ContentKind.Expedition, "Shattered Arkanis", 77));
-            p.Take(new BossEngaged(t.AddSeconds(10), "Arkanis Sentinel", 901));
-            Check(p.Live == null, "...nor does an enemy that isn't one of the instance's listed bosses (trash, an elite)");
             p.Take(new BossEngaged(t.AddSeconds(20), "Talisra of the Void", 902));
             var live = p.Live;
             Check(live is { Boss: "Talisra of the Void", Kind: "Expedition", Instance: "Shattered Arkanis" } && live.Roster.Count == 2 && live.You?.Name == "Swoly",
@@ -134,6 +133,33 @@ public static class ParserTests
             r.Take(new InstanceEntered(t, ContentKind.Other, "Western Cantas Valley", 0));
             r.Take(new BossEngaged(t.AddSeconds(5), "Field Boss", 922));
             Check(r.Live == null, "the open world keeps nothing, even a boss the game marks");
+        }
+
+        // the decoder's pull: the boss's HP, damage by source before any group list, Other, then the group list filling in
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 84));
+            p.Take(new BossEngaged(t.AddSeconds(1), "Siliator of Deceit", 950));
+            p.Take(new BossHealth(t.AddSeconds(1), 950, 100_000, 100_000));
+            p.Take(new DamageDealt(t.AddSeconds(5), 11, 950, 30_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(6), 12, 950, 20_000, "Aerin"));
+            p.Take(new DamageDealt(t.AddSeconds(7), 13, 950, 9_000));             // a pet or a player not named yet
+            p.Take(new DamageDealt(t.AddSeconds(8), 0, 950, 1_000));              // Other: no hit came with the fall
+            p.Take(new BossHealth(t.AddSeconds(8), 950, 40_000, 100_000));
+            var l = p.Live!;
+            Check(l.Roster.Count == 4 && l.Members.Count() == 3 && l.You?.Name == "Swoly" && l.Roster.Any(f => f.Id == 13 && f.Name == "" && f.FromDamage),
+                $"with no group list, who hit the boss is the group (you marked, an unnamed source kept): {string.Join(", ", l.Ranked().Select(f => (f.Other ? "Other" : f.Name) + " " + f.Damage))}");
+            Check(l.Ranked().Last().Other && l.Roster.Sum(f => f.Damage) == 60_000 && l.BossDamage == 60_000 && l.BossHpLeft == 0.4,
+                $"...Other last, the rows adding up to the HP lost ({l.Roster.Sum(f => f.Damage):N0}), the boss at {l.BossHpLeft:P0}");
+            p.Take(new GroupChanged(t.AddSeconds(9), new[] { new GroupMember(11, "Swoly", "Gladiator", 4_800, 5_640, true), new GroupMember(12, "Aerin", "Cleric", 4_600, 5_600, false) }));
+            l = p.Live!;
+            var me = l.Roster.Single(f => f.Id == 11);
+            Check(me is { CombatPower: 4_800, ItemLevel: 5_640, Class: "Gladiator", Damage: 30_000, Late: false, FromDamage: false } && !l.Roster.Single(f => f.Id == 13).Gone,
+                "...and the group list fills in class, CP and item level on the same rows, nobody marked late or gone for it");
+            p.Take(new BossEngaged(t.AddSeconds(20), "Ruthilis the Unlisted", 951));
+            Check(kept.Count == 1 && p.Live?.Boss == "Ruthilis the Unlisted", "a pull the boss list doesn't name is still a fight under the game's name (a spelling must never lose one)");
+            p.Take(new BossEngaged(t.AddSeconds(40), "", 952));
+            Check(p.Live?.Boss == BossParser.UnnamedBoss, "...and one with no name at all is kept too");
         }
 
         // a fight with nothing heard for ten minutes is given up at the last thing heard

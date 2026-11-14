@@ -158,7 +158,7 @@ public sealed class ParserOverlay : Window
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}";
+        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}";
         if (sig == _sig) return;
         _sig = sig;
         _body.Children.Clear();
@@ -188,34 +188,53 @@ public sealed class ParserOverlay : Window
         }
         else _body.Children.Add(sub);
 
+        // the boss's HP, when the game gives it
+        if (e.BossHpLeft is { } left && e.Live)
+        {
+            var hp = new Grid { Margin = new Thickness(0, 7, 0, 0) };
+            hp.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            hp.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var track = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Center };
+            track.Children.Add(new Border { Background = Track, CornerRadius = new CornerRadius(3) });
+            var fill = new Border { Background = left < 0.34 ? Coral : HudKit.Gold, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left };
+            track.SizeChanged += (_, _) => fill.Width = Math.Max(left > 0 ? 3 : 0, track.ActualWidth * left);
+            track.Children.Add(fill);
+            hp.Children.Add(track);
+            var pct = T($"{left:P0}", 11.5, FontWeights.Bold, left < 0.34 ? Coral : HudKit.Ink); pct.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(pct, 1); hp.Children.Add(pct);
+            _body.Children.Add(hp);
+        }
+
         // the group
         if (e.Roster.Count > 0)
         {
             bool dmg = e.HasDamage;
+            bool gear = e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0);
             var rows = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
             Grid Row()
             {
                 var g = new Grid();
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(dmg ? 50 : 60) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(dmg ? 44 : 52) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 50 : 60) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 44 : 52) });
                 if (dmg) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
                 return g;
             }
             var hdr = Row();
             void H(int col, string text) { var t = T(text, 10, FontWeights.SemiBold, HudKit.Faint); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); hdr.Children.Add(t); }
-            H(2, "CP"); H(3, "iLvl"); if (dmg) H(4, "DPS");
+            if (gear) { H(2, "CP"); H(3, "iLvl"); }
+            if (dmg) H(4, "DPS");
             hdr.Margin = new Thickness(0, 0, 0, 2);
             rows.Children.Add(hdr);
             long top = Math.Max(1, e.Roster.Max(f => f.Damage));
             foreach (var f in e.Ranked().Take(8))
             {
                 var g = Row(); g.Margin = new Thickness(0, 3, 0, 0);
-                var mark = MainWindow.ClassMark(f.Class, 16);
+                var mark = f.Other ? MainWindow.OtherMark(16) : MainWindow.ClassMark(f.Class, 16, f.Name);
                 g.Children.Add(mark);
                 var nm = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-                var n = T(f.Name.Length > 0 ? f.Name : "Unknown", 12, FontWeights.SemiBold, f.You ? HudKit.Gold : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
+                var n = T(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.You ? HudKit.Gold : f.Other || f.Name.Length == 0 ? HudKit.Muted : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
                 nm.Children.Add(n);
                 if (dmg)
                 {
@@ -229,8 +248,11 @@ public sealed class ParserOverlay : Window
                 }
                 Grid.SetColumn(nm, 1); g.Children.Add(nm);
                 void C(int col, string text, Brush b, FontWeight w) { var t = T(text, 11.5, w, b); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); g.Children.Add(t); }
-                C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
-                C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
+                if (gear && !f.Other)
+                {
+                    C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
+                    C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
+                }
                 if (dmg) C(4, Amounts.Short(e.Dps(f, now)), f.You ? HudKit.Gold : HudKit.Ink, FontWeights.Bold);
                 rows.Children.Add(g);
             }

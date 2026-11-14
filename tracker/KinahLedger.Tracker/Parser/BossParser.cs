@@ -7,9 +7,10 @@ namespace KinahLedger.Parser;
 /// Boss fights from the game's messages (Steven, 2026-11-13: "ONLY for bosses within the zone and nothing else ... it
 /// should reset every time you start a new boss"). The rules:
 /// <list type="bullet">
-/// <item>A fight exists only inside a Transcendence, an Expedition or a Sanctuary, and only for a boss: one on the boss
-///   list for that instance (Parser/BossBook.cs), or, for an instance the list doesn't know yet, one the game marks a
-///   boss. Trash, elites and anything in the open world never make one.</item>
+/// <item>A fight exists only inside a Transcendence, an Expedition or a Sanctuary, and only for a boss pull. The decoder
+///   says a pull only for the bosses on its own list; the tracker's list (Parser/BossBook.cs) gives the kind (a Sanctuary),
+///   the final boss and the name as players know it. A name that list doesn't have is logged, not dropped: a spelling
+///   between the two lists must never lose a fight. Trash, elites and anything in the open world never make one.</item>
 /// <item>One fight per boss: pulling another boss (or a new spawn of the same one) ends the fight under way and starts a new one.</item>
 /// <item>It ends with the boss's death (kill), the game saying the group fell (wipe), or the player leaving the instance
 ///   or the fight going quiet for <see cref="StaleMinutes"/> (left).</item>
@@ -35,6 +36,9 @@ public sealed class BossParser
     const double QuietSeconds = 30;
 
     public BossParser(BossBook? book = null) => _book = book ?? BossBook.Shared;
+
+    /// <summary>A pull with no name: the fight is kept under this.</summary>
+    public const string UnnamedBoss = "Unnamed boss";
 
     // where the player is
     ContentKind _kind;
@@ -131,8 +135,15 @@ public sealed class BossParser
             case DamageDealt dd:
                 if (_cur == null || dd.Amount <= 0) break;
                 _cur.LastAt = Max(_cur.LastAt, dd.At);
-                if (dd.TargetId != 0 && dd.TargetId == _cur.BossId) { _cur.BossDamage += dd.Amount; _cur.HasDamage = true; }
-                if (_cur.Roster.FirstOrDefault(f => f.Id != 0 && f.Id == dd.SourceId) is { } who) { who.Damage += dd.Amount; _cur.HasDamage = true; }
+                _cur.HasDamage = true;
+                if (dd.TargetId != 0 && dd.TargetId == _cur.BossId) _cur.BossDamage += dd.Amount;
+                SourceOf(_cur, dd).Damage += dd.Amount;
+                break;
+            case BossHealth bh:
+                if (_cur == null || (bh.BossId != 0 && _cur.BossId != 0 && bh.BossId != _cur.BossId)) break;
+                _cur.LastAt = Max(_cur.LastAt, bh.At);
+                _cur.BossHp = Math.Max(0, bh.Hp);
+                if (bh.Max > 0) _cur.BossMaxHp = bh.Max;
                 break;
             case FeedGap:
                 if (_cur == null) break;
@@ -146,18 +157,14 @@ public sealed class BossParser
     void Engage(BossEngaged be, List<Encounter> done)
     {
         var name = be.Boss.Trim();
-        if (name.Length == 0) return;
+        if (name.Length == 0) name = UnnamedBoss;   // a pull the decoder couldn't name: still a fight
         if (!Kept(_kind))
         {
             Log($"{name}: not in a Transcendence, Expedition or Sanctuary{(_instance.Length > 0 ? $" ({_instance})" : "")}, no fight kept");
             return;
         }
         BossBook.Boss? listed = _book.Find(_instance, name);
-        if (_book.Knows(_instance) && listed == null)
-        {
-            Log($"{name}: not a boss of {_instance} on the boss list, no fight kept");
-            return;
-        }
+        if (_book.Knows(_instance) && listed == null && name != UnnamedBoss) Log($"{name}: not on data/bosses.txt for {_instance}; kept under the game's name");
         if (_cur != null)
         {
             bool same = be.BossId != 0 && _cur.BossId != 0 ? be.BossId == _cur.BossId : name.Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase);
@@ -176,14 +183,33 @@ public sealed class BossParser
         Log($"{_cur.Boss} pulled in {_cur.Instance} ({_cur.Kind}), {_cur.Roster.Count} in the group: a new fight");
     }
 
+    /// <summary>
+    /// The row a hit goes to: the member by id; else a row made from the hit (its name when the decoder knows it, you
+    /// marked), so the damage rows are the group until a group list comes. Id 0 is the Other row.
+    /// </summary>
+    static Fighter SourceOf(Encounter e, DamageDealt dd)
+    {
+        if (dd.SourceId == 0)
+        {
+            var other = e.Roster.FirstOrDefault(f => f.Other);
+            if (other == null) e.Roster.Add(other = new Fighter { Name = "Other", Other = true });
+            return other;
+        }
+        var f = e.Roster.FirstOrDefault(r => r.Id == dd.SourceId && !r.Other);
+        if (f == null) e.Roster.Add(f = new Fighter { Id = dd.SourceId, FromDamage = true });
+        if (f.Name.Length == 0 && dd.SourceName.Trim().Length > 0) f.Name = dd.SourceName.Trim();
+        f.You |= dd.SourceIsYou;
+        return f;
+    }
+
     /// <summary>The group onto the fight's roster: new members (Late after the pull), known ones updated, missing ones Gone.</summary>
     static void MergeGroup(Encounter e, List<GroupMember> group, bool late)
     {
         foreach (var m in group)
         {
             var f = e.Roster.FirstOrDefault(r => (m.Id != 0 && r.Id == m.Id) || (m.Id == 0 && r.Name.Equals(m.Name.Trim(), StringComparison.OrdinalIgnoreCase)));
-            if (f == null) { f = Fighter.From(m); f.Late = late; e.Roster.Add(f); continue; }
-            f.Gone = false;
+            if (f == null) { f = Fighter.From(m); f.Late = late && !e.HasDamage; e.Roster.Add(f); continue; }
+            f.Gone = false; f.FromDamage = false;
             if (m.Name.Trim().Length > 0) f.Name = m.Name.Trim();
             if (m.Class.Trim().Length > 0) f.Class = m.Class.Trim();
             if (m.CombatPower > 0) f.CombatPower = m.CombatPower;
@@ -192,7 +218,7 @@ public sealed class BossParser
         }
         if (late)
             foreach (var f in e.Roster)
-                if (!group.Any(m => (m.Id != 0 && m.Id == f.Id) || (m.Id == 0 && m.Name.Trim().Equals(f.Name, StringComparison.OrdinalIgnoreCase))) && !f.You) f.Gone = true;
+                if (!f.Other && !f.FromDamage && !f.You && !group.Any(m => (m.Id != 0 && m.Id == f.Id) || (m.Id == 0 && m.Name.Trim().Equals(f.Name, StringComparison.OrdinalIgnoreCase)))) f.Gone = true;
     }
 
     static void MarkPartial(Encounter e, string why)
