@@ -97,9 +97,11 @@ public sealed class BossParser
     /// A copy of the record under way in the mode: the boss pull, the run (with the pull under way as its last split and
     /// its boss's HP), or the fight; null when there is none.
     /// </summary>
-    public Encounter? Live
+    public Encounter? Live => LiveAt(DateTime.UtcNow);
+
+    /// <summary><see cref="Live"/> as of <paramref name="now"/> (the pull under way's clock in a run).</summary>
+    public Encounter? LiveAt(DateTime now)
     {
-        get
         {
             lock (_gate)
             {
@@ -110,7 +112,7 @@ public sealed class BossParser
                         var r = Copy(_run);
                         if (_cur != null)
                         {
-                            r.Splits.Add(Split.From(_cur, DateTime.UtcNow, live: true));
+                            r.Splits.Add(Split.From(_cur, now, live: true));
                             r.Boss = _cur.Boss; r.BossId = _cur.BossId; r.BossHp = _cur.BossHp; r.BossMaxHp = _cur.BossMaxHp;
                         }
                         else { r.Boss = ""; r.BossHp = 0; r.BossMaxHp = 0; }
@@ -237,7 +239,7 @@ public sealed class BossParser
             }
             case GroupChanged gc:
                 _group = gc.Members.Where(m => m.Name.Trim().Length > 0 || m.You).ToList();
-                foreach (var e in Records()) MergeGroup(e, _group, late: true);
+                foreach (var e in Records()) MergeGroup(e, _group, late: (gc.At - e.Start).TotalSeconds > 30);
                 break;
             case DamageDealt dd:
                 if (dd.Amount <= 0) break;
@@ -298,7 +300,7 @@ public sealed class BossParser
                 if (death) e.YourDeaths++;
                 else { e.YourKills++; if (player) e.PlayerKills++; }
                 if (player && name.Trim().Length > 0) e.Opponent = name.Trim();
-                if (!death) e.Kills.Add(new KillNear { At = at, Name = name.Trim().Length > 0 ? name.Trim() : player ? "a player" : "a monster", Player = player, Yours = true });
+                if (!death) e.Kills.Add(new KillNear { At = at, Name = name.Trim().Length > 0 ? name.Trim() : player ? "Player" : "Monster", Player = player, Yours = true });
             }
             if (death && _cur?.You is { } me) me.Deaths++;
             _version++;
@@ -436,6 +438,7 @@ public sealed class BossParser
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
         Log($"{e.Boss}: {e.OutcomeLabel.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
         // the run and the fight around it heard of it too; a kill is the fight's (its own pause decides its end)
+        if (_fight != null && _fight.Boss.Length > 0) _fight.BossResult = e.Outcome;
         foreach (var r in new[] { _run, _fight })
         {
             if (r == null) continue;
@@ -470,7 +473,8 @@ public sealed class BossParser
         _fight = null;
         f.End = Max(at, f.Start);
         f.LastAt = Max(f.LastAt, f.End.Value);
-        f.Outcome = f.YourDeaths > 0 ? "died" : f.YourKills > 0 || f.Kills.Any(k => k.Boss) ? "kill" : "ended";
+        // a fight around a boss ends as its pull did (a wipe is a wipe, whatever the trash before it); else a death, your kills, or nothing
+        f.Outcome = f.Boss.Length > 0 && f.BossResult.Length > 0 ? f.BossResult : f.YourDeaths > 0 ? "died" : f.YourKills > 0 || f.Kills.Any(k => k.Boss) ? "kill" : "ended";
         bool worth = f.YourKills > 0 || f.YourDeaths > 0 || f.Boss.Length > 0 || (f.HasDamage && f.Duration(f.End.Value).TotalSeconds >= MinSeconds);
         Log($"fight: {f.Title} in {f.Instance} {f.OutcomeLabel.ToLowerInvariant()} after {Clock(f.Duration(f.End.Value))}{(why != null ? $" ({why})" : "")}{(worth ? "" : ", nothing to keep")}");
         if (worth) done.Add(Copy(f));

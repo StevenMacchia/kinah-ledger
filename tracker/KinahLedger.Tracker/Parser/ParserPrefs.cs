@@ -17,6 +17,10 @@ public sealed class ParserPrefs
     public int? Top { get; set; }
     /// <summary>The overlay's shortcut ("Ctrl+Shift+P"; "Off" for none).</summary>
     public string Hotkey { get; set; } = DefaultHotkey;
+    /// <summary>What the Parser keeps: "boss" (Bosses only, the default), "run" (Full run), "fight" (Every fight).</summary>
+    public string Mode { get; set; } = "boss";
+    /// <summary>Which records the list shows ("boss", "run", "fight"); the mode's own when empty.</summary>
+    public string ListMode { get; set; } = "";
     /// <summary>The last filters on the Parser page's list.</summary>
     public string KindFilter { get; set; } = "";
     public string BossFilter { get; set; } = "";

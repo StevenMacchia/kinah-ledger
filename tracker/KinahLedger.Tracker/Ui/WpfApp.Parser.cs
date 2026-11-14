@@ -7,7 +7,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty" };
+    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "run", "run-detail", "fight", "fight-history" };
 
     /// <summary>
     /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight]: the Parser page from
@@ -55,6 +55,10 @@ public static partial class WpfApp
         var (past, live) = ParserDemo.Sample(now, live: true, damage: true);
         var (pastNd, liveNd) = ParserDemo.Sample(now, live: true, damage: false);
         var (_, liveNg) = ParserDemo.Sample(now, live: true, damage: true, group: false);
+        var (pastRun, liveRun) = ParserDemo.Sample(now, live: true, mode: ParserMode.Run);
+        var (pastFight, _) = ParserDemo.Sample(now, live: false, mode: ParserMode.Fights);
+        var cleared = pastRun.Last(e => e.Outcome == "cleared");
+        var pvp = pastFight.Last(e => e.PlayerKills > 0);
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a gap in the game's traffic");
         var shots = new List<(string File, Encounter E, DateTime At)>
@@ -62,12 +66,15 @@ public static partial class WpfApp
             ("ui-parser-overlay-live.png", live!, now),
             ("ui-parser-overlay-nodamage.png", liveNd!, now),
             ("ui-parser-overlay-nogroup.png", liveNg!, now),
+            ("ui-parser-overlay-run.png", liveRun!, now),
+            ("ui-parser-overlay-run-cleared.png", cleared, cleared.End!.Value),
+            ("ui-parser-overlay-fight.png", pvp, pvp.End!.Value),
             ("ui-parser-overlay-killed.png", kill, kill.End!.Value),
             ("ui-parser-overlay-wiped.png", wipe, wipe.End!.Value),
         };
         foreach (var (file, e, at) in shots)
         {
-            var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000 };
+            var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = e.ModeKind };
             o.Draw(e, at);
             o.Show();
             DoEvents();
@@ -103,6 +110,24 @@ public static partial class WpfApp
         o.Draw(sample!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); o.Show(); DoEvents();
         check(o.ActualWidth >= ParserOverlay.Width0 - 1 && !o.ShowActivated && o.Topmost && !o.ShowInTaskbar, "Parser: the overlay is drawn, on top, out of the taskbar, never activated");
         o.Close();
+        // the modes: Full run's run under way with its splits, Every fight's fights, the list by mode, the overlay's menu
+        w.ShowParserDemo("run"); DoEvents();
+        var run = w.ParserLiveForTest;
+        check(w.ParserModeForTest == ParserMode.Run && run is { ModeKind: ParserMode.Run } && run.Splits.Count >= 3 && run.Splits[^1].Outcome == "" && w.ParserPageForTest().Rows >= 2,
+            $"Parser, Full run: the run under way with {run?.Splits.Count} splits (the last under way), the kept runs listed ({w.ParserPageForTest().Rows})");
+        w.ShowParserDemo("fight-history"); DoEvents();
+        check(w.ParserModeForTest == ParserMode.Fights && w.ParserPageForTest().Rows >= 4 && w.ParserPastForTest.Any(e => e.ModeKind == ParserMode.Fights && e.Kind == "Abyss" && e.PlayerKills > 0),
+            $"Parser, Every fight: the fights kept, the Abyss's PvP among them ({w.ParserPageForTest().Rows} rows)");
+        w.ShowParserDemo("live"); DoEvents();
+        w.SetParserModeForTest(ParserMode.Run); DoEvents();
+        check(w.ParserModeForTest == ParserMode.Run && w.ParserLiveForTest?.ModeKind == ParserMode.Run, "Parser: picking Full run switches the page to the run under way");
+        var mo = new ParserOverlay(still: true) { Mode = ParserMode.Run };
+        var menu = mo.BuildMenu();
+        var items = menu.Items.OfType<System.Windows.Controls.MenuItem>().Where(i => i.IsCheckable).ToList();
+        check(items.Count == 3 && items.Count(i => i.IsChecked) == 1 && (string)items.Single(i => i.IsChecked).Header == "Full run" && items.All(i => i.ToolTip is string t && t.Length > 20),
+            "Parser: the overlay's menu has the three modes, the one on ticked, each saying what it counts");
+        mo.Close();
+        w.SetParserModeForTest(ParserMode.Bosses); DoEvents();
         w.ShowPartForTest("Farming"); w.ShowDemo(); DoEvents();
     }
 }

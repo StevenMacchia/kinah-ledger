@@ -22,6 +22,12 @@ public sealed class ParserOverlay : Window
 
     /// <summary>The player dropped it somewhere (pixels, the window's top-left).</summary>
     public event Action<int, int>? Dropped;
+    /// <summary>The overlay's own menu (a right-click): a mode picked, hide it, clicks through.</summary>
+    public event Action<ParserMode>? ModePicked;
+    public event Action? HideAsked;
+    public event Action? ClickThroughAsked;
+    /// <summary>The mode the menu ticks (set by the window).</summary>
+    public ParserMode Mode { get; set; }
 
     readonly bool _still;
     readonly StackPanel _body = new();
@@ -37,6 +43,8 @@ public sealed class ParserOverlay : Window
     public ParserOverlay(bool still = false)
     {
         _still = still;
+        // its pictures loaded before the first draw: one first loaded while the window isn't shown yet draws blank
+        foreach (var art in new[] { "boss", "dungeon", "medal", "rift" }) GameArt.Image(art);
         if (!still) { Current = this; Closed += (_, _) => { if (Current == this) Current = null; }; }
         ShowActivated = false;
         WindowStyle = WindowStyle.None;
@@ -69,6 +77,8 @@ public sealed class ParserOverlay : Window
             if (h != IntPtr.Zero && GetWindowRect(h, out var r)) Dropped?.Invoke(r.Left, r.Top);
         };
         MouseEnter += (_, _) => ShowHint(); MouseLeave += (_, _) => ShowHint();
+        // its small menu: what the Parser keeps, hide, clicks through (never while clicks go through: the game has them)
+        MouseRightButtonUp += (_, ev) => { if (_clickThrough || _still) return; ev.Handled = true; OpenMenu(); };
         SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _clickThrough);
         SizeChanged += (_, _) => PlacePending();
     }
@@ -76,9 +86,38 @@ public sealed class ParserOverlay : Window
     /// <summary>The overlay's shortcut, said in the drag hint ("Ctrl+Shift+P").</summary>
     public string HotkeyText { get; set; } = "";
 
+    /// <summary>The overlay's menu, in its own dark look: the three modes (the one on ticked, what each counts on hover), then hide and clicks through.</summary>
+    internal ContextMenu BuildMenu()
+    {
+        var menu = new ContextMenu { Background = HudKit.B(HudKit.Panel2C), BorderBrush = HudKit.FrameLine, Foreground = HudKit.Ink, FontFamily = HudKit.Text, FontSize = 12.5, Padding = new Thickness(2, 4, 2, 4) };
+        menu.Items.Add(new MenuItem { Header = "What the Parser keeps", IsEnabled = false, Foreground = HudKit.Faint, FontSize = 11.5 });
+        foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
+        {
+            var item = new MenuItem { Header = BossParser.Name(md), IsCheckable = true, IsChecked = md == Mode, ToolTip = BossParser.Counts(md), Foreground = HudKit.Ink };
+            var pick = md;
+            item.Click += (_, _) => ModePicked?.Invoke(pick);
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new Separator { Background = HudKit.FrameLine });
+        var hide = new MenuItem { Header = HotkeyText.Length > 0 ? $"Hide the overlay ({HotkeyText})" : "Hide the overlay", Foreground = HudKit.Ink };
+        hide.Click += (_, _) => HideAsked?.Invoke();
+        menu.Items.Add(hide);
+        var through = new MenuItem { Header = "Let clicks through to the game", Foreground = HudKit.Ink, ToolTip = "Turn it off again on the Parser tab" };
+        through.Click += (_, _) => ClickThroughAsked?.Invoke();
+        menu.Items.Add(through);
+        return menu;
+    }
+
+    void OpenMenu()
+    {
+        var menu = BuildMenu();
+        menu.PlacementTarget = this;
+        menu.IsOpen = true;
+    }
+
     void ShowHint()
     {
-        _hint.Text = _clickThrough ? "" : HotkeyText.Length > 0 ? $"drag to move  ·  {HotkeyText} hides it" : "drag to move";
+        _hint.Text = _clickThrough ? "" : HotkeyText.Length > 0 ? $"drag to move  ·  right-click for the mode  ·  {HotkeyText} hides it" : "drag to move  ·  right-click for the mode";
         _hint.Visibility = !_clickThrough && IsMouseOver && !_still ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -158,7 +197,7 @@ public sealed class ParserOverlay : Window
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}";
+        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}";
         if (sig == _sig) return;
         _sig = sig;
         _body.Children.Clear();
@@ -167,15 +206,18 @@ public sealed class ParserOverlay : Window
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var art = GameArt.Element("boss", 22); art.Margin = new Thickness(0, 0, 8, 0);
+        var art = GameArt.Element(e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss", 22); art.Margin = new Thickness(0, 0, 8, 0);
         head.Children.Add(art);
-        var name = T(e.Boss, 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis;
+        var name = T(e.Title, 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis;
         Grid.SetColumn(name, 1); head.Children.Add(name);
         var clock = T(BossParser.Clock(e.Duration(now)), 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink);
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
-        var sub = T($"{BossBook.Strip(e.Instance)} · {e.Kind}", 11, FontWeights.Medium, HudKit.Faint);
+        var place = BossBook.Strip(e.Instance);
+        var where = place.Length > 0 && place != e.Title && place != e.Kind ? $"{place} · {e.Kind}" : e.Kind;
+        // the mode, said once at the head of the sub line, so a glance tells a run from a pull
+        var sub = T($"{BossParser.Name(e.ModeKind)} · {where}", 11, FontWeights.Medium, HudKit.Faint);
         sub.TextTrimming = TextTrimming.CharacterEllipsis; sub.Margin = new Thickness(30, 1, 0, 0);
         if (e.Partial)
         {
@@ -187,6 +229,48 @@ public sealed class ParserOverlay : Window
             _body.Children.Add(row);
         }
         else _body.Children.Add(sub);
+
+        // a run: the pull under way ("Now: the boss" and its clock) and the bosses done so far
+        if (e.ModeKind == ParserMode.Run && e.Live)
+        {
+            var pull = e.Splits.LastOrDefault(x => x.Outcome == "");
+            if (pull != null)
+            {
+                var now1 = new Grid { Margin = new Thickness(0, 7, 0, 0) };
+                now1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                now1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var nl = new StackPanel { Orientation = Orientation.Horizontal };
+                nl.Children.Add(T("Now", 11, FontWeights.SemiBold, HudKit.Gold));
+                var nb = T(pull.Boss, 12, FontWeights.Bold, HudKit.Ink); nb.Margin = new Thickness(6, 0, 0, 0); nb.TextTrimming = TextTrimming.CharacterEllipsis; nb.MaxWidth = 220;
+                nl.Children.Add(nb);
+                now1.Children.Add(nl);
+                var pc = T(BossParser.Clock(TimeSpan.FromSeconds(pull.Seconds)), 12, FontWeights.Bold, HudKit.Gold);
+                Grid.SetColumn(pc, 1); now1.Children.Add(pc);
+                _body.Children.Add(now1);
+            }
+            var done = e.Splits.Where(x => x.Outcome != "").ToList();
+            if (done.Count > 0)
+            {
+                var wp = new WrapPanel { Margin = new Thickness(0, 5, 0, 0) };
+                foreach (var x in done.TakeLast(4))
+                {
+                    var c = x.Outcome == "kill" ? HudKit.Mint : x.Outcome == "wipe" ? Coral : HudKit.Muted;
+                    var chip = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 1, 6, 2), Margin = new Thickness(0, 0, 4, 3), Background = HudKit.B(0xFFFFFF, 0.06),
+                        Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { T(x.Outcome == "kill" ? "✓" : x.Outcome == "wipe" ? "✕" : "·", 10.5, FontWeights.Bold, c), Pad(T($" {Short(x.Boss)} {BossParser.Clock(TimeSpan.FromSeconds(x.Seconds))}", 10.5, FontWeights.Medium, Text2)) } } };
+                    wp.Children.Add(chip);
+                }
+                if (done.Count > 4) wp.Children.Add(T($"+{done.Count - 4}", 10.5, FontWeights.Medium, HudKit.Faint));
+                _body.Children.Add(wp);
+            }
+        }
+        // a fight: your kills (players apart) and deaths
+        if (e.ModeKind == ParserMode.Fights && (e.YourKills > 0 || e.YourDeaths > 0))
+        {
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            if (e.YourKills > 0) line.Children.Add(T($"{e.YourKills} kill{(e.YourKills == 1 ? "" : "s")}{(e.PlayerKills > 0 ? $" · {e.PlayerKills} player{(e.PlayerKills == 1 ? "" : "s")}" : "")}", 12, FontWeights.Bold, HudKit.Mint));
+            if (e.YourDeaths > 0) { var d = T($"{(e.YourKills > 0 ? "   " : "")}{e.YourDeaths} death{(e.YourDeaths == 1 ? "" : "s")}", 12, FontWeights.Bold, Coral); line.Children.Add(d); }
+            _body.Children.Add(line);
+        }
 
         // the boss's HP, when the game gives it
         if (e.BossHpLeft is { } left && e.Live)
@@ -267,26 +351,42 @@ public sealed class ParserOverlay : Window
         Grid.SetColumnSpan(sep, 2); foot.Children.Add(sep);
         if (e.Live)
         {
-            var l = T(e.HasDamage ? "Group DPS" : e.Kills.Count(k => !k.Boss) > 0 ? "Kills near you" : "Fighting", 11, FontWeights.Medium, HudKit.Muted);
+            int near = e.Kills.Count(k => !k.Boss && !k.Yours);
+            var l = T(e.HasDamage ? (e.ModeKind == ParserMode.Run ? "Group DPS (boss pulls)" : "Group DPS") : e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 11, FontWeights.Medium, HudKit.Muted);
             foot.Children.Add(l);
-            var v = T(e.HasDamage ? Amounts.Short(e.GroupDps(now)) : e.Kills.Count(k => !k.Boss) > 0 ? e.Kills.Count(k => !k.Boss).ToString(CultureInfo.InvariantCulture) : "", 12, FontWeights.Bold, HudKit.Ink);
+            var v = T(e.HasDamage ? Amounts.Short(e.GroupDps(now)) : e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 12, FontWeights.Bold, HudKit.Ink);
             Grid.SetColumn(v, 1); foot.Children.Add(v);
         }
         else
         {
+            var took = BossParser.Clock(e.Duration(now));
             var (text, brush) = e.Outcome switch
             {
-                "kill" => ($"Killed in {BossParser.Clock(e.Duration(now))}", HudKit.Mint),
-                "wipe" => ($"Wiped after {BossParser.Clock(e.Duration(now))}", Coral),
-                _ => ($"Left after {BossParser.Clock(e.Duration(now))}", HudKit.Muted),
+                "kill" when e.ModeKind == ParserMode.Fights => ($"{e.OutcomeLabel} in {took}", HudKit.Mint),
+                "kill" => ($"Killed in {took}", HudKit.Mint),
+                "cleared" => ($"Cleared in {took}", HudKit.Mint),
+                "wipe" => ($"Wiped after {took}", Coral),
+                "died" => ($"Died after {took}", Coral),
+                "ended" => ($"Ended after {took}", HudKit.Muted),
+                _ => ($"Left after {took}", HudKit.Muted),
             };
             foot.Children.Add(T(text, 12, FontWeights.Bold, brush));
             var s = T("kept on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint);
             Grid.SetColumn(s, 1); foot.Children.Add(s);
         }
         _body.Children.Add(foot);
-        _frame.BorderBrush = e.Live ? HudKit.FrameLine : e.Outcome == "kill" ? HudKit.B(HudKit.MintC, 0.55) : e.Outcome == "wipe" ? HudKit.B(HudKit.RecC, 0.55) : HudKit.FrameLine;
+        _frame.BorderBrush = e.Live ? HudKit.FrameLine : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : HudKit.FrameLine;
     }
 
+    static TextBlock Pad(TextBlock t) { t.Margin = new Thickness(0); return t; }
+    /// <summary>A boss's name cut to its last word or two for a split chip ("Kromede's Desire", "Rotan").</summary>
+    static string Short(string boss)
+    {
+        // "Talisra of the Void" is Talisra, "Silver Blade Rotan" is Rotan, "Kromede's Desire" stays whole
+        int of = boss.IndexOf(" of ", StringComparison.OrdinalIgnoreCase);
+        if (of > 0) return boss[..of];
+        var w = boss.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return w.Length <= 2 ? boss : w[^1];
+    }
     static TextBlock T(string text, double size, FontWeight w, Brush b) => new() { Text = text, FontSize = size, FontWeight = w, Foreground = b, VerticalAlignment = VerticalAlignment.Center };
 }

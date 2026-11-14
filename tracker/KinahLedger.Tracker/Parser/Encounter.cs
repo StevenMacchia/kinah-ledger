@@ -63,6 +63,8 @@ public sealed class Encounter
     public int YourKills { get; set; }
     public int PlayerKills { get; set; }
     public int YourDeaths { get; set; }
+    /// <summary>A fight's boss pull, how it ended ("kill", "wipe", "left"): the fight ends as it did.</summary>
+    public string BossResult { get; set; } = "";
     /// <summary>The last player you killed (a fight's name when no boss was pulled).</summary>
     public string Opponent { get; set; } = "";
 
@@ -89,11 +91,14 @@ public sealed class Encounter
     /// <summary>The group's members: every row but Other (HP lost with no hit: damage over time, lost traffic).</summary>
     [JsonIgnore] public IEnumerable<Fighter> Members => Roster.Where(f => !f.Other);
 
-    /// <summary>A member's damage per second over the fight; 0 when damage isn't known.</summary>
-    public double Dps(Fighter f, DateTime now) { var s = Duration(now).TotalSeconds; return HasDamage && s >= 1 ? f.Damage / s : 0; }
+    /// <summary>The seconds DPS is over: a run's boss pulls (its damage is the bosses'), else the whole record.</summary>
+    public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
+
+    /// <summary>A member's damage per second (a run's over its boss pulls); 0 when damage isn't known.</summary>
+    public double Dps(Fighter f, DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? f.Damage / s : 0; }
 
     /// <summary>The group's damage per second.</summary>
-    public double GroupDps(DateTime now) { var s = Duration(now).TotalSeconds; return HasDamage && s >= 1 ? Roster.Sum(f => f.Damage) / s : 0; }
+    public double GroupDps(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? Roster.Sum(f => f.Damage) / s : 0; }
 
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
@@ -115,7 +120,7 @@ public sealed class Encounter
     /// <summary>"Killed", "Wiped", "Left", "In progress": the outcome as the page says it.</summary>
     [JsonIgnore] public string OutcomeLabel => Outcome switch
     {
-        "kill" when ModeKind == ParserMode.Fights => YourKills == 1 ? "1 kill" : YourKills > 1 ? $"{YourKills} kills" : "Killed",
+        "kill" when ModeKind == ParserMode.Fights && Boss.Length == 0 => YourKills == 1 ? "1 kill" : YourKills > 1 ? $"{YourKills} kills" : "Killed",
         "kill" => "Killed", "wipe" => "Wiped", "left" => "Left", "cleared" => "Cleared", "died" => "Died", "ended" => "Ended", _ => "In progress",
     };
 
