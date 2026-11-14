@@ -29,7 +29,6 @@ public partial class MainWindow
     void ApplyQuestsSwitch(bool on)
     {
         _prefs.Quests = on;
-        QuestsTab.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (!on && _part == "Quests") ShowPart("Farming");
         _questIn = null; _questsNow = new(); _qTree = null;
         _drawnSig.Remove("goals"); _drawnSig.Remove("questspage");

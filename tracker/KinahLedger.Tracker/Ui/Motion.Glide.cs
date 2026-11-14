@@ -54,7 +54,7 @@ public static partial class Motion
     // when the player last picked a switch's button or a page (a click, a shortcut): only then does a light slide
     static long _pickedAt = long.MinValue / 2;
 
-    /// <summary>The player picked a page by hand (a tab, Ctrl+1 to 5, a link to a page): its tab's light slides there.</summary>
+    /// <summary>The player picked a page by hand (a tab, Ctrl+1 to 4, a link to a page): its tab's light slides there.</summary>
     public static void PickedByHand() => _pickedAt = Environment.TickCount64;
 
     /// <summary>One slide under way on a row: the light's shape (for a slide that starts from where this one is) and its end.</summary>
