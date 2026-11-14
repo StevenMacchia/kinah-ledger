@@ -40,7 +40,7 @@ public partial class MainWindow
         }
         // the pages: Ctrl+1 to 5 as the pills sit (Farm, Craft, Runs, Timers, Parser), a click by hand (the page then stays until something else starts)
         foreach (var (key, part) in new[] { (Key.D1, "Farming"), (Key.NumPad1, "Farming"), (Key.D2, "Crafting"), (Key.NumPad2, "Crafting"), (Key.D3, "Events"), (Key.NumPad3, "Events"),
-            (Key.D4, "Timers"), (Key.NumPad4, "Timers"), (Key.D5, "Parser"), (Key.NumPad5, "Parser") })
+            (Key.D4, "Parser"), (Key.NumPad4, "Parser"), (Key.D5, "Timers"), (Key.NumPad5, "Timers") })
         {
             var p = part;
             InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!_welcome && _part != p) ShowPart(p); }), key, ModifierKeys.Control));
