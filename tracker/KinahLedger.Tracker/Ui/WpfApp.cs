@@ -249,7 +249,7 @@ public static partial class WpfApp
         Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Click((System.Windows.Controls.Button)o.HudLookHost.Children[0]);
+        Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Strip)]);   // the old looks are listed last since 0.10.91
         Click(o.SaveBtn);
         DoEvents();
         Check(w.HudLook == HudLooks.Strip, "back to the Strip");
