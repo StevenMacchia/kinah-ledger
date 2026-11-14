@@ -1046,6 +1046,7 @@ public static partial class WpfApp
 
         // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
         ParserChecks(w, Check);
+        HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs
 
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
         // a fresh install; Got it stores the version; Farming only; six bullets, then "and N more"; the link to the release

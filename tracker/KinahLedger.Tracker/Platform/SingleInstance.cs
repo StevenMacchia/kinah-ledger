@@ -23,8 +23,16 @@ public sealed class SingleInstance : IDisposable
         try { got = m.WaitOne(wait); }
         catch (AbandonedMutexException) { got = true; }   // the last one crashed: the claim is ours
         if (!got) { m.Dispose(); return null; }
+        Held = true;
         return new SingleInstance(m, new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName));
     }
+
+    /// <summary>
+    /// This process is the tracker (it took the claim in WpfApp.Run). Only then does it register shortcuts or show a tray
+    /// icon: a test or render command (options-test, ui-shot ...) makes real windows but never takes the claim, so it can't
+    /// take Steven's shortcuts from his running tracker or put notices on his screen (2026-11-14).
+    /// </summary>
+    public static bool Held { get; private set; }
 
     /// <summary>Asks the running tracker to bring its window up.</summary>
     public static void ShowExisting()
