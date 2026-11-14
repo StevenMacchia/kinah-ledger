@@ -113,8 +113,8 @@ public partial class MainWindow
         }
 
         // the Abyss's bosses, on their schedule (the game's map draws them from it too)
-        var (_, zoneChecked) = AbyssBosses.ZoneFor(_watcher.RegionKey);
-        foreach (var map in AbyssBosses.Rows(now, timers.Offset, _watcher.RegionKey).GroupBy(r => r.Boss.Map))
+        var (_, zoneChecked) = AbyssBosses.ZoneFor(EventRegion);
+        foreach (var map in AbyssBosses.Rows(now, timers.Offset, EventRegion).GroupBy(r => r.Boss.Map))
         {
             body.Children.Add(CkSection(map.Key.ToUpperInvariant() + " · ABYSS"));
             bool sure = zoneChecked && map.All(r => r.Boss.Checked);
