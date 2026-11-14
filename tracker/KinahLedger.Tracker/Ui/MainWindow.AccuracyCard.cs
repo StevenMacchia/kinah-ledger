@@ -83,7 +83,7 @@ public partial class MainWindow
         // the quest kill counter against the count, from the old "Accuracy · Kinah counter agrees …" line under the tables,
         // which this card replaces (2026-10-25: two things called Accuracy on one page)
         var detail = v.Detail;
-        if (!_demo && _watcher.Chat is { QuestKillsGame: > 0 } qc) detail += (detail.Length > 0 ? "\n" : "") + $"Quest kills: the game's counter {qc.QuestKillsGame:N0}, counted {qc.QuestKillsCounted:N0}.";
+        if (!_demo && _watcher.Chat is { QuestKillsGame: > 0 } qc) detail += (detail.Length > 0 ? "\n" : "") + $"Quest kills: the quest counter {qc.QuestKillsGame:N0}, counted {qc.QuestKillsCounted:N0}.";
         if (detail.Length > 0 && v.Counts.Count > 0) { counts.ToolTip = detail; ToolTipService.SetInitialShowDelay(counts, 250); }
         if (v.Counts.Count > 0) body.Children.Add(counts);
         if (!v.HasRows) { body.Children.Add(new Border { Height = 14 }); return card; }

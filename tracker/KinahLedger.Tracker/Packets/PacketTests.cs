@@ -652,10 +652,10 @@ public static class PacketTests
 
         var et = new EventTimers();
         var pc = server + lag;
-        Check(!et.ClockKnown && et.ClockLine(pc).StartsWith("On this PC's clock"), "...before the traffic says, this PC's clock (and the card says so)");
+        Check(!et.ClockKnown && et.ClockLine(pc) == "", "...before the clock is known, the card says nothing of it");
         et.Take(new AreaEvent(pc, server, AreaEvent.Kind.Clock, AreaEvent.Stage.Unknown, null, "", "", "", 0));
         var sf = et.Rows(pc).First(r => r.Event.Name == "Shugo Festival");
-        Check(et.ClockKnown && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31) && et.ClockLine(pc) == "On the game's clock (15 s behind this PC's)",
+        Check(et.ClockKnown && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31) && et.ClockLine(pc) == "" && et.ClockLine(pc.AddSeconds(3600)).StartsWith("Last read"),
             $"...the game's clock from its traffic: {et.Offset.TotalSeconds:F1} s; the Shugo Festival in {BossTimers.Countdown(sf.Left)}; \"{et.ClockLine(pc)}\"");
 
         // the event the player is in: 17:01, 2026-11-13 (UTC 22:01), as the event server said it

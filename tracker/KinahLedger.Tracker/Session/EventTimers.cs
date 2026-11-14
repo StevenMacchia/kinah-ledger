@@ -75,10 +75,8 @@ public sealed class EventTimers
     {
         lock (_gate)
         {
-            if (_clockAt == DateTime.MinValue) return "On this PC's clock: the game's own clock comes with packet reading";
-            double gap = _offset.TotalSeconds;
-            string g = Math.Abs(gap) < 1 ? "" : $" ({Math.Abs(gap):0} s {(gap > 0 ? "behind" : "ahead of")} this PC's)";
-            return (now - _clockAt).TotalSeconds <= ClockLiveSeconds ? $"On the game's clock{g}" : $"On the game's clock as last read{g}, {BossTimers.Ago(now - _clockAt)}";
+            if (_clockAt == DateTime.MinValue) return "";
+            return (now - _clockAt).TotalSeconds <= ClockLiveSeconds ? "" : $"Last read {BossTimers.Ago(now - _clockAt)}";
         }
     }
 

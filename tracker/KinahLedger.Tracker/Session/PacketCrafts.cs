@@ -145,7 +145,7 @@ public sealed class PacketCrafts
         if (_tryAt.Count > 0) _tryAt.RemoveAt(0);
         bool lost = GapBetween?.Invoke(from, at) == true;
         return lost
-            ? new Outcome(at, _recipe, false, false, null, "a try with nothing made while the game's traffic lost bytes: its item may have gone with them, so its outcome isn't known", Lost: true)
+            ? new Outcome(at, _recipe, false, false, null, "a try with nothing made with part of the reading lost: its item may have gone with it, so its outcome isn't known", Lost: true)
             : new Outcome(at, _recipe, false, false, null, why);
     }
 
