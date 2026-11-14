@@ -429,6 +429,16 @@
                 </StackPanel>
                 <CheckBox x:Name="ExplainChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Explain each count"/>
               </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- Inventory details (2026-11-14, Steven: minimal by default): the Inventory window's extra figures and price hovers -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Inventory details"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="The Inventory window also shows what is bound, what has no price yet and the change since you started, and each item’s price on hover."/>
+                </StackPanel>
+                <CheckBox x:Name="InvDetailsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Inventory details"/>
+              </Grid>
             </StackPanel>
           </Border>
         </StackPanel>
