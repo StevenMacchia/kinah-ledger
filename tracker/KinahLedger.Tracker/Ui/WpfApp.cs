@@ -430,10 +430,26 @@ public static partial class WpfApp
         Check(o.TopmostChk.IsChecked == false, "Options opens with it off again");
         Click(o.CancelBtn);
         DoEvents();
-        // the pages by key (0.10.26): Ctrl+2 Crafting, Ctrl+3 Events, Ctrl+1 Farming
-        w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
-        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Events");
+        // the pages by key (0.10.26; redesign 2026-11-14: as the tabs sit, Farm, Runs, Craft, Timers, Quests)
+        w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+2 shows Runs");
+        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+3 shows Crafting");
+        w.PressForTest(Key.D4, ModifierKeys.Control); Check(w.PartForTest == "Timers" && w.TimersPage.Visibility == Visibility.Visible && w.TimersPage.Children.Count > 0, "Ctrl+4 shows the Timers page, drawn");
         w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
+        // no page names where its figures come from (Steven, 2026-11-14: only Options may); every page, the timers live and empty
+        foreach (var timers in new[] { "live", "empty" })
+        {
+            w.TimersSampleForShot(timers);
+            var said = new List<string>();
+            foreach (var page in new[] { "Farming", "Events", "Crafting", "Timers", "Quests" })
+            {
+                w.ShowPartForTest(page); DoEvents();
+                said.AddRange(w.SourceWordsShown().Select(h => $"{page}: {h}"));
+            }
+            said.AddRange(w.SourceWordsShown(w.BuildBossCard(DateTime.UtcNow)).Select(h => $"timers window: {h}"));
+            Check(said.Count == 0, $"no page or hover outside Options names the reading's source (timers {timers}){(said.Count > 0 ? ": " + string.Join(" | ", said.Take(6)) : "")}");
+        }
+        w.TimersSampleForShot("off");
+        w.ShowPartForTest("Farming"); DoEvents();
 
         // Save as CSV (0.10.11): the ⋯ menu's entry, today's loot as the file holds it, and the runs the Events page shows
         Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveLootText), "the ⋯ menu has Save today's loot as CSV…");
@@ -1225,7 +1241,7 @@ public static partial class WpfApp
         {
             var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
             static Rect Near(Rect r) => new(Math.Round(r.X, 3), Math.Round(r.Y, 3), Math.Round(r.Width, 3), Math.Round(r.Height, 3));
-            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.QuestsTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
+            var tabs = new[] { w.FarmTab, w.EventsTab, w.CraftTab, w.TimersTab, w.QuestsTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
             var tabRow = (System.Windows.Controls.Panel)System.Windows.Media.VisualTreeHelper.GetParent(w.FarmTab);
             // where a tab's face draws its light, as the screen has it: the tab's box in its row, inside its one-pixel edge
             Rect Face(System.Windows.Controls.Button b)

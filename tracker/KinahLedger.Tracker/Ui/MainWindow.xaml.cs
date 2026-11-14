@@ -198,6 +198,9 @@ public partial class MainWindow : Window
         CraftTab.Click += (_, _) => ShowPart("Crafting");
         EventsTab.Click += (_, _) => ShowPart("Events");
         QuestsTab.Click += (_, _) => ShowPart("Quests");
+        TimersTab.Click += (_, _) => ShowPart("Timers");
+        RegisterKinahOverlay();
+        Loaded += (_, _) => StartTimersTick();
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
@@ -1221,7 +1224,7 @@ public partial class MainWindow : Window
     const double QuestsScrollFallback = 720;
 
     /// <summary>The window's height cap: the screen, or on the Quests page the Farming page's height, so that page scrolls instead of growing the window.</summary>
-    void ApplyMaxHeight() => MaxHeight = _part == "Quests" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
+    void ApplyMaxHeight() => MaxHeight = _part is "Quests" or "Timers" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
 
     void ShowPart(string part, bool byHand = true)
     {
@@ -1229,7 +1232,7 @@ public partial class MainWindow : Window
         if (byHand) Motion.PickedByHand();   // the tab's light slides to a page the player picked, not to one the page follow picked
         // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
         if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
-        _part = part is "Crafting" or "Events" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
+        _part = part is "Crafting" or "Events" or "Timers" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         // the page being left, as a picture for the cross-fade, before the new page's parts show (Ui/MainWindow.PageTurn.cs)
         var leaving = byHand && was != _part ? LeavingPage() : null;
@@ -1238,7 +1241,9 @@ public partial class MainWindow : Window
         CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "NavOn" : "SegOff");
         QuestsTab.Style = (Style)FindResource(_part == "Quests" ? "NavOn" : "SegOff");
+        TimersTab.Style = (Style)FindResource(_part == "Timers" ? "NavOn" : "SegOff");
         if (_part == "Events") ShowInstances();
+        FillTimersPage();
         if (_part == "Quests") RedrawQuestsPage();
         if (byHand) _follow.Picked();
         if (craft && !_demo) FillCraft(CraftShown);
@@ -1277,11 +1282,12 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, farm = !craft && !events && !quests && !_welcome;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, timers = _part == "Timers" && !_welcome, farm = !craft && !events && !quests && !timers && !_welcome;
         // Full view scaled to the screen it is on, or Compact when even scaled it can't fit (Ui/MainWindow.Fit.cs)
         FitFull(farm && _prefs.FullView, _fullAsked);
         bool full = farm && FullShown;
-        LeftCol.Visibility = craft || events || quests ? Visibility.Collapsed : Visibility.Visible;
+        LeftCol.Visibility = craft || events || quests || timers ? Visibility.Collapsed : Visibility.Visible;
+        TimersPage.Visibility = timers ? Visibility.Visible : Visibility.Collapsed;
         QuestsPage.Visibility = quests ? Visibility.Visible : Visibility.Collapsed;   // in the ledger column, as the Crafting and Events pages are
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
@@ -1293,12 +1299,12 @@ public partial class MainWindow : Window
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
 
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
-        LowerScroll.Visibility = full || craft || events || quests ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = full || craft || events || quests || timers ? Visibility.Visible : Visibility.Collapsed;
         // the Quests page never grows the window (Steven, 2026-11-08: "it shouldn't expand the thing to the size of my screen"):
         // the window keeps the Farming page's height and the page scrolls inside it; before Farming has been measured (a demo
         // render), the scroll area is capped instead
         ApplyMaxHeight();
-        LowerScroll.MaxHeight = quests && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
+        LowerScroll.MaxHeight = (quests || timers) && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
