@@ -393,6 +393,10 @@ public sealed class BossParser
         string cls = f.You && _youClass.Length > 0 ? _youClass : ScreenClassOf(f.Name);
         if (cls.Length == 0) return;
         if (f.ClassNumber != 0) ClassNumbers.Pair(f.ClassNumber, cls);
+        // the decoder names a class from the skills a member hits with (after ten hits); the party list fills the moments
+        // before that, and the two are checked against each other here
+        if (f.Class.Length > 0 && f.ClassNumber == 0 && !string.Equals(f.Class, cls, StringComparison.OrdinalIgnoreCase))
+            CrashLog.NoteBurst($"parser: {(f.Name.Length > 0 ? f.Name : "a member")} is a {f.Class} by their skills, a {cls} by the party list's icon; kept {f.Class}");
         if (f.Class.Length == 0 || f.ClassNumber != 0) f.Class = cls;
     }
 
