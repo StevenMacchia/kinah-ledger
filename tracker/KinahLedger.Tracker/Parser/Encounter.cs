@@ -26,6 +26,8 @@ public sealed class Encounter
     public long BossId { get; set; }
     /// <summary>The instance's last boss on the boss list: killing it clears the instance.</summary>
     public bool FinalBoss { get; set; }
+    /// <summary>A wave stage (bosses.txt "wave": Ferocious Horn Den's Totem room), not a boss: a split in Full run, never a boss pull of its own.</summary>
+    public bool Wave { get; set; }
     public DateTime Start { get; set; }
     /// <summary>When it ended; null while it is under way.</summary>
     public DateTime? End { get; set; }
@@ -100,6 +102,13 @@ public sealed class Encounter
     /// <summary>The group's damage per second.</summary>
     public double GroupDps(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? Roster.Sum(f => f.Damage) / s : 0; }
 
+    /// <summary>
+    /// The rows the live card, the overlay and the list show (Steven, 2026-11-14: "don't count [a member] until they have at
+    /// least 1 [damage]"): with damage counted, only members who have dealt some (and Other); before any damage, everyone.
+    /// The detail's roster lists everyone.
+    /// </summary>
+    public IEnumerable<Fighter> Shown() => HasDamage ? Ranked().Where(f => f.Damage > 0) : Ranked();
+
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
         ? Roster.OrderBy(f => f.Other).ThenByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
@@ -150,6 +159,16 @@ public sealed class Fighter
     public bool FromDamage { get; set; }
     public long Damage { get; set; }
     public int Deaths { get; set; }
+    /// <summary>Damage by ability (the game's skill id; 0: damage over time and the rest), with its hits: a member's breakdown.</summary>
+    public List<AbilityShare> Abilities { get; set; } = new();
+
+    public void AddAbility(int skill, long amount, int hits)
+    {
+        var a = Abilities.FirstOrDefault(x => x.Skill == skill);
+        if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill });
+        a.Damage += amount;
+        a.Hits += Math.Max(1, hits);
+    }
 
     /// <summary>The game's number for the class, when it came as one (0 = not); the class itself once it is paired (Parser/ClassNumbers.cs).</summary>
     public int ClassNumber { get; set; }
@@ -171,6 +190,15 @@ public sealed class Fighter
     }
 }
 
+/// <summary>One ability's share of a member's damage: the skill (0 for damage over time and the rest), its damage and hits.</summary>
+public sealed class AbilityShare
+{
+    public int Skill { get; set; }
+    public long Damage { get; set; }
+    public int Hits { get; set; }
+    public double Average => Hits > 0 ? Damage / (double)Hits : 0;
+}
+
 /// <summary>An enemy that died near the player during a record, or one the player killed (Yours; a player when Player).</summary>
 public sealed class KillNear
 {
@@ -190,6 +218,8 @@ public sealed class Split
     /// <summary>"kill", "wipe", "left"; "" for the pull under way.</summary>
     public string Outcome { get; set; } = "";
     public bool Final { get; set; }
+    /// <summary>A wave stage (the Totem room), not a boss.</summary>
+    public bool Wave { get; set; }
     public double Dps { get; set; }
     public bool Partial { get; set; }
     /// <summary>The boss's HP left (0 to 1) when known, for the pull under way.</summary>
@@ -198,6 +228,6 @@ public sealed class Split
     public static Split From(Encounter pull, DateTime now, bool live) => new()
     {
         Boss = pull.Boss, Start = pull.Start, Seconds = Math.Round(pull.Duration(now).TotalSeconds, 1), Outcome = live ? "" : pull.Outcome,
-        Final = pull.FinalBoss, Dps = Math.Round(pull.GroupDps(now)), Partial = pull.Partial, HpLeft = pull.BossHpLeft,
+        Final = pull.FinalBoss, Wave = pull.Wave, Dps = Math.Round(pull.GroupDps(now)), Partial = pull.Partial, HpLeft = pull.BossHpLeft,
     };
 }

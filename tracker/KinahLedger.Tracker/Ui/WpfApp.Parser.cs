@@ -28,7 +28,6 @@ public static partial class WpfApp
         {
             foreach (var st in states)
             {
-                if (st == "overlay") { ShotParserOverlays(dir); continue; }
                 if (w == null)
                 {
                     w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
@@ -37,6 +36,7 @@ public static partial class WpfApp
                     w.ShowDemo("Open world", null);
                     DoEvents();
                 }
+                if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 w.ShowParserDemo(st);
                 DoEvents();
                 var name = "ui-parser-" + st + (skin != null ? "-" + skin : "");
@@ -50,7 +50,7 @@ public static partial class WpfApp
         return 0;
     }
 
-    static void ShotParserOverlays(string dir)
+    static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (past, live) = ParserDemo.Sample(now, live: true, damage: true);
@@ -82,6 +82,26 @@ public static partial class WpfApp
             // over a game-like mid grey, the way it sits over a bright scene
             Save((FrameworkElement)o.Content, Path.Combine(dir, file), ParserOverlay.Width0, Color.FromRgb(0x4A, 0x52, 0x5C));
             o.Close();
+        }
+        // expanded by default (Steven, 2026-11-14): the Kinah overlay alone, then with the Parser's section above the Kinah
+        // line (a pull under way, a run, the result held after a kill), the Strip and the Card looks
+        var kinahShots = new List<(string File, string Look, Encounter? E, DateTime At)>
+        {
+            ("ui-parser-kinah-overlay.png", HudLooks.Strip, null, now),
+            ("ui-parser-kinah-overlay-live.png", HudLooks.Strip, live, now),
+            ("ui-parser-kinah-overlay-run.png", HudLooks.Strip, liveRun, now),
+            ("ui-parser-kinah-overlay-killed.png", HudLooks.Strip, kill, kill.End!.Value),
+            ("ui-parser-kinah-overlay-card-live.png", HudLooks.Card, live, now),
+        };
+        foreach (var (file, look, e, at) in kinahShots)
+        {
+            var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Update(kinah);
+            h.ShowParser(e, at, e?.ModeKind ?? ParserMode.Bosses, details: false);
+            h.Show();
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x4A, 0x52, 0x5C));
+            h.Close();
         }
     }
 
@@ -166,7 +186,22 @@ public static partial class WpfApp
         var opt = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
-        check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, Kills and deaths, List filters, Explanations on hover, all off by default");
+        check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers, sws.Separate }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, Kills and deaths, List filters, Explanations on hover, Separate parser overlay, all off by default");
+        // expanded by default: the Parser's section opens above the Kinah line and the Kinah line stays where it is
+        {
+            bool still = Motion.Still; Motion.Still = true;
+            var hud = new HudWindow(null) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+            hud.Show(); DoEvents();
+            double bottom = hud.Top + hud.ActualHeight;
+            var (_, pull) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
+            hud.ShowParser(pull, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc), ParserMode.Bosses, false); DoEvents();
+            double grown = hud.ActualHeight, bottom2 = hud.Top + hud.ActualHeight, parserH = hud.ParserHeight;
+            hud.ShowParser(null, DateTime.UtcNow, ParserMode.Bosses, false); DoEvents();
+            double bottom3 = hud.Top + hud.ActualHeight;
+            check(parserH > 100 && Math.Abs(bottom2 - bottom) < 1.5 && Math.Abs(bottom3 - bottom) < 1.5 && hud.ParserHeight == 0,
+                $"the Kinah overlay grows upward for a fight and folds back: its bottom stays put ({bottom:0} / {bottom2:0} / {bottom3:0}), the section {parserH:0} high");
+            hud.Close(); Motion.Still = still;
+        }
         opt.Close();
         w.ShowPartForTest("Farming"); w.ShowDemo(); DoEvents();
     }

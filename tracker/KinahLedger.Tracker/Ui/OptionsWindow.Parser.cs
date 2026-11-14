@@ -13,7 +13,7 @@ namespace KinahLedger.Ui;
 public partial class OptionsWindow
 {
     TextBlock? _parserLabel;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!;
 
     void LoadParser()
     {
@@ -23,6 +23,7 @@ public partial class OptionsWindow
         _parserKillsChk.IsChecked = p.KillsNear;
         _parserFiltersChk.IsChecked = p.Filters;
         _parserHoversChk.IsChecked = p.Hovers;
+        _parserSeparateChk.IsChecked = p.Separate;
     }
 
     void SaveParser()
@@ -33,6 +34,7 @@ public partial class OptionsWindow
         p.KillsNear = _parserKillsChk.IsChecked == true;
         p.Filters = _parserFiltersChk.IsChecked == true;
         p.Hovers = _parserHoversChk.IsChecked == true;
+        p.Separate = _parserSeparateChk.IsChecked == true;
         p.Save();
         ParserPrefs.RaiseSaved();
     }
@@ -62,6 +64,7 @@ public partial class OptionsWindow
         _parserKillsChk = Row("Kills and deaths", "Kills near you and the group's deaths on boss pulls and runs. Every fight always shows your kills and deaths.", "Parser kills and deaths");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
+        _parserSeparateChk = Row("Separate parser overlay", "The Parser in its own overlay you can drag anywhere. Off, it opens above the Kinah overlay when a fight starts and folds away after.", "Separate parser overlay");
         var group = Styled(new Border { Child = stack }, "Group");
         // before Rare drops, which stays the page's last group
         int at = _rareLabel != null ? PageInGame.Children.IndexOf(_rareLabel) : -1;
@@ -70,5 +73,5 @@ public partial class OptionsWindow
     }
 
     /// <summary>For the options test: the Parser group's four switches.</summary>
-    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk);
+    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers, CheckBox Separate) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk);
 }

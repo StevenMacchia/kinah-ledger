@@ -136,7 +136,7 @@ public sealed class BossParser
                         else { r.Boss = ""; r.BossHp = 0; r.BossMaxHp = 0; }
                         return r;
                     case ParserMode.Fights: return _fight == null ? null : Copy(_fight);
-                    default: return _cur == null ? null : Copy(_cur);
+                    default: return _cur == null || _cur.Wave ? null : Copy(_cur);
                 }
             }
         }
@@ -208,8 +208,10 @@ public sealed class BossParser
             case InstanceEntered ie:
             {
                 var kind = ie.Kind != ContentKind.Other ? ie.Kind : _book.KindOf(ie.Name);
+                // an instance the game's messages can't place (no kind, no name): the screen's place names it (ScreenPlace)
+                bool unplaced = kind == ContentKind.Other && ie.Name.Trim().Length == 0;
                 bool SameCopy(Encounter e) => ie.InstanceId != 0 && e.InstanceId != 0 ? ie.InstanceId == e.InstanceId
-                    : BossBook.Strip(ie.Name).Equals(BossBook.Strip(e.Instance), StringComparison.OrdinalIgnoreCase) && Kept(kind);
+                    : unplaced || (BossBook.Strip(ie.Name).Equals(BossBook.Strip(e.Instance), StringComparison.OrdinalIgnoreCase) && Kept(kind));
                 if (_cur != null)
                 {
                     if (SameCopy(_cur)) Rejoined(_cur, ie);
@@ -220,7 +222,10 @@ public sealed class BossParser
                     if (SameCopy(_run)) Rejoined(_run, ie);
                     else CloseRun(RunEnd(_run), _run.LastAt, done, "left for another place");
                 }
-                _kind = kind; _instance = ie.Name.Trim(); _instanceId = ie.InstanceId; _instanceFromGame = true;
+                if (ie.InstanceId == 0 || ie.InstanceId != _instanceId) { _bossNames.Clear(); _downHere.Clear(); }
+                _instanceId = ie.InstanceId;
+                if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: the screen's place names it"); break; }
+                _kind = kind; _instance = ie.Name.Trim(); _instanceFromGame = Kept(kind);
                 if (_mode == ParserMode.Run && _run == null && Kept(kind)) OpenRun(ie.At, midway: false);
                 if (_fight != null && !Kept(kind)) { } // a fight carries on through a loading screen only by its own pause
                 Log($"entered {(_instance.Length > 0 ? _instance : "a place")}{(Kept(kind) ? $" ({Encounter.KindName(kind)})" : "")}");
@@ -268,7 +273,9 @@ public sealed class BossParser
                     e.LastAt = Max(e.LastAt, dd.At);
                     e.HasDamage = true;
                     if (dd.TargetId != 0 && _cur != null && dd.TargetId == _cur.BossId) e.BossDamage += dd.Amount;
-                    SourceOf(e, dd).Damage += dd.Amount;
+                    var src = SourceOf(e, dd);
+                src.Damage += dd.Amount;
+                src.AddAbility(dd.Skill, dd.Amount, dd.Hits);
                 }
                 break;
             case BossHealth bh:
@@ -401,10 +408,28 @@ public sealed class BossParser
         }
     }
 
+    /// <summary>The names given to unnamed bosses by spawn (a wipe and a pull again keep it), and the bosses down in this copy of the instance.</summary>
+    readonly Dictionary<long, string> _bossNames = new();
+    readonly HashSet<string> _downHere = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// An unnamed boss's name: the one this spawn had, else the instance's next boss on the boss list in route order that
+    /// isn't down yet (waves left out); "Unnamed boss" when the list has none.
+    /// </summary>
+    string NameUnnamed(long bossId)
+    {
+        if (bossId != 0 && _bossNames.TryGetValue(bossId, out var had)) return had;
+        var next = _book.BossesOf(_instance).FirstOrDefault(b => !b.Wave && !_downHere.Contains(b.Name) && !_bossNames.ContainsValue(b.Name));
+        var name = next?.Name ?? UnnamedBoss;
+        if (bossId != 0) _bossNames[bossId] = name;
+        Log($"an unnamed boss in {(_instance.Length > 0 ? _instance : "an instance")}: {name}{(next != null ? " (the next on the boss list)" : "")}");
+        return name;
+    }
+
     void Engage(BossEngaged be, List<Encounter> done)
     {
         var name = be.Boss.Trim();
-        if (name.Length == 0) name = UnnamedBoss;   // a pull the decoder couldn't name: still a fight
+        if (name.Length == 0) name = Kept(_kind) ? NameUnnamed(be.BossId) : UnnamedBoss;   // a pull the decoder couldn't name: still a fight
         if (!Kept(_kind))
         {
             Log($"{name}: not in a Transcendence, Expedition or Sanctuary{(_instance.Length > 0 ? $" ({_instance})" : "")}, no boss pull kept");
@@ -423,7 +448,7 @@ public sealed class BossParser
         _cur = new Encounter
         {
             Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId,
-            Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true,
+            Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true, Wave = listed?.Wave == true,
             Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion,
         };
         MergeGroup(_cur, _group, late: false);
@@ -433,7 +458,7 @@ public sealed class BossParser
         {
             if (_fight == null) OpenFight(be.At);
             _fight!.LastAt = Max(_fight.LastAt, be.At);
-            _fight.Boss = _cur.Boss; _fight.BossId = _cur.BossId; _fight.FinalBoss = _cur.FinalBoss;
+            if (!_cur.Wave || _fight.Boss.Length == 0) { _fight.Boss = _cur.Boss; _fight.BossId = _cur.BossId; _fight.FinalBoss = _cur.FinalBoss; }
         }
         if (_run != null) _run.LastAt = Max(_run.LastAt, be.At);
         Log($"{_cur.Boss} pulled in {_cur.Instance} ({_cur.Kind}), {_cur.Roster.Count} in the group: a new pull");
@@ -521,6 +546,7 @@ public sealed class BossParser
         e.End = Max(at, e.Start);
         e.LastAt = Max(e.LastAt, e.End.Value);
         e.Outcome = Encounter.OutcomeName(outcome);
+        if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
         Log($"{e.Boss}: {e.OutcomeLabel.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
@@ -534,7 +560,7 @@ public sealed class BossParser
         }
         if (!worth) return;
         if (_run != null) _run.Splits.Add(Split.From(e, e.End.Value, live: false));
-        if (_mode == ParserMode.Bosses) done.Add(Copy(e));
+        if (_mode == ParserMode.Bosses && !e.Wave) done.Add(Copy(e));
     }
 
     /// <summary>A run's end: cleared when its final boss died, else left.</summary>
@@ -612,6 +638,7 @@ public sealed class BossParser
             var name = instance?.Trim() ?? "";
             if (k == _kind && name == _instance) return;
             _kind = instance == null ? ContentKind.Other : k; _instance = name;
+            if (_mode == ParserMode.Run && _run == null && Kept(_kind)) OpenRun(DateTime.UtcNow, midway: false);
             _version++;
         }
     }

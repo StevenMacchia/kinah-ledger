@@ -23,11 +23,63 @@ public static class ParserTests
         Chalice of Muspel|Sanctuary|Iscariel|
         Chalice of Muspel|Sanctuary|Kaldrix|final
         Snowfield of Sorrow|Sanctuary
+        Ferocious Horn Den|Expedition|Watchdog Kwapo|
+        Ferocious Horn Den|Expedition|Totem room|wave
+        Ferocious Horn Den|Expedition|Necromancer Duanka|
+        Ferocious Horn Den|Expedition|Ferocious Horn Nuakum|final
         """;
 
     static readonly GroupMember Me = new(1, "Swoly", "Gladiator", 312_400, 5_620, true);
     static readonly GroupMember Ally = new(2, "Aerin", "Cleric", 298_100, 5_580, false);
     static readonly GroupMember Ally2 = new(3, "Thorne", "Templar", 305_000, 5_600, false);
+
+    /// <summary>
+    /// parser-replay &lt;capture.pcapng&gt; [--mode boss|run|fight]: a recording through this build's decoder and the Parser as
+    /// fast as it goes, each piece stamped with its own capture time: every record kept, with each member's share of the
+    /// damage (as the tab shows it) and their top abilities. Needs a decoder of interface version 4 or later beside the exe.
+    /// </summary>
+    public static int ParserReplay(string pcapng, string mode, int port = 13328)
+    {
+        if (NativeDecoder.Version < 4) { Console.WriteLine($"this build's decoder reads no fights for the Parser (interface version {NativeDecoder.Version})"); return 1; }
+        var kept = new List<Encounter>();
+        var p = new BossParser { Ended = kept.Add };
+        p.SetMode(BossParser.ModeOf(mode), DateTime.MinValue.AddYears(2000));
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var (at, frame, link) in Pcapng.Read(pcapng))
+            if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == port) segs.Add((at, s));
+        DateTime last = DateTime.MinValue;
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var st = new TcpStream
+            {
+                OnData = (d, at) =>
+                {
+                    last = at;
+                    dec.Feed(d, at);
+                    while (dec.Next() is not null) { }
+                    while (dec.NextItem() is not null) { }
+                    while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
+                    while (dec.NextBossEvent() is { } b) p.Take(b);
+                },
+                OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
+            };
+            foreach (var (at, s) in conn) { st.Add(s.Seq, s.Payload, at, s.Syn); p.Tick(at); }
+        }
+        p.Tick(DateTime.MaxValue.AddDays(-1));
+        foreach (var e in kept)
+        {
+            var end = e.End ?? e.LastAt;
+            Console.WriteLine($"{e.Title} · {e.Instance} · {e.Kind} · {e.OutcomeLabel} in {BossParser.Clock(e.Duration(end))}{(e.BossMaxHp > 0 ? $" · {Ui.Amounts.Short(e.BossMaxHp)} HP" : "")}{(e.Wave ? " · wave" : "")}{(e.Partial ? " · partial: " + string.Join("; ", e.PartialWhy) : "")}");
+            foreach (var x in e.Splits) Console.WriteLine($"   split {x.Boss}{(x.Wave ? " (wave)" : "")}: {x.Outcome} in {BossParser.Clock(TimeSpan.FromSeconds(x.Seconds))}");
+            long total = Math.Max(1, e.Roster.Sum(f => f.Damage));
+            foreach (var f in e.Ranked())
+                Console.WriteLine($"   {(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed"),-16} {(f.Class.Length > 0 ? f.Class : "-"),-13} {f.Damage * 100.0 / total,5:0.0}%  {Ui.Amounts.Short(f.Damage),8}  {(e.Shown().Contains(f) ? "" : "(no row: no damage)")}"
+                    + (f.Abilities.Count > 0 ? "  top: " + string.Join(", ", f.Abilities.OrderByDescending(a => a.Damage).Take(3).Select(a => $"{Abilities.Name(a.Skill)} {Ui.Amounts.Short(a.Damage)} in {a.Hits}")) : ""));
+        }
+        Console.WriteLine($"{kept.Count} records kept ({BossParser.Name(p.Mode)})");
+        return 0;
+    }
 
     /// <summary>party-scan: the party list read from each picture in a folder (5120 × 2160 reward pictures and the like); classes counted.</summary>
     public static int PartyScan(string dir, bool rows, bool names = false)
@@ -94,8 +146,8 @@ public static class ParserTests
         (BossParser P, List<Encounter> Kept) New() { var kept = new List<Encounter>(); return (new BossParser(book) { Ended = kept.Add }, kept); }
 
         // the boss list: kinds, stages, finals
-        Check(book.Count == 5 && book.KindOf("Chalice of Muspel") == ContentKind.Sanctuary && book.KindOf("Snowfield of Sorrow") == ContentKind.Sanctuary && !book.Knows("Snowfield of Sorrow"),
-            $"the boss list reads 5 bosses, the Sanctuaries' kind, an instance with no bosses yet: {book.Count}");
+        Check(book.Count == 9 && book.KindOf("Chalice of Muspel") == ContentKind.Sanctuary && book.KindOf("Snowfield of Sorrow") == ContentKind.Sanctuary && !book.Knows("Snowfield of Sorrow"),
+            $"the boss list reads 9 entries, the Sanctuaries' kind, an instance with no bosses yet: {book.Count}");
         Check(book.Find("Shattered Arkanis [Stage 3]", "ruthilis of pain") is { Final: true }, "...a Transcendence stage is its expedition on the list, names in any case");
         Check(BossBook.Shared.Count >= 40 && BossBook.Shared.Find("Fire Temple", "Kromede's Desire") is { Final: true }, $"...the built-in list carries the bosses: {BossBook.Shared.Count}");
 
@@ -215,7 +267,20 @@ public static class ParserTests
             p.Take(new BossEngaged(t.AddSeconds(20), "Ruthilis the Unlisted", 951));
             Check(kept.Count == 1 && p.Live?.Boss == "Ruthilis the Unlisted", "a pull the boss list doesn't name is still a fight under the game's name (a spelling must never lose one)");
             p.Take(new BossEngaged(t.AddSeconds(40), "", 952));
-            Check(p.Live?.Boss == BossParser.UnnamedBoss, "...and one with no name at all is kept too");
+            Check(p.Live?.Boss == "Talisra of the Void", $"...and one with no name at all takes the instance's next boss on the list not yet down: {p.Live?.Boss}");
+            p.Take(new BossEnded(t.AddSeconds(60), 952, BossOutcome.Wipe));
+            p.Take(new BossEngaged(t.AddSeconds(90), "", 952));
+            Check(p.Live?.Boss == "Talisra of the Void", "...the same spawn keeps that name when it is pulled again after a wipe");
+            p.Take(new BossEnded(t.AddSeconds(150), 952, BossOutcome.Kill));
+            p.Take(new BossEngaged(t.AddSeconds(200), "", 953));
+            Check(p.Live?.Boss == "Siliator of Deceit", $"...and the next unnamed one the boss after it: {p.Live?.Boss}");
+            var (u, _) = New();
+            u.Take(new InstanceEntered(t, ContentKind.Other, "", 0));
+            u.Take(new BossEngaged(t.AddSeconds(5), "", 960));
+            Check(u.Live == null, "an instance the game's messages can't place keeps nothing until the screen names it...");
+            u.ScreenPlace("Expedition", "Shattered Arkanis");
+            u.Take(new BossEngaged(t.AddSeconds(10), "", 961));
+            Check(u.Live is { Boss: "Talisra of the Void", Kind: "Expedition" }, "...then the screen's place makes it one of the three, and its bosses count");
         }
 
         // Full run: one record from entering to leaving, trash included, each boss a split, cleared by the final boss
@@ -306,6 +371,40 @@ public static class ParserTests
                 "...switching to Full run inside an instance starts a run there, partial, with the pull under way");
             p.Take(new BossEnded(t.AddSeconds(150), 981, BossOutcome.Kill));
             Check(kept.Count == 1, "...a pull started under Bosses only and ended under Full run is the run's split, not a record of its own");
+        }
+
+        // Steven's Ferocious Horn Den (2026-11-14): damage by ability, no row before a member's first damage, the Totem room a wave
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 70));
+            p.Take(new GroupChanged(t, new[] { new GroupMember(1, "Swoly", "Templar", 0, 0, true), new GroupMember(2, "Felicity", "Chanter", 0, 0, false) }));
+            p.Take(new BossEngaged(t.AddSeconds(5), "Watchdog Kwapo", 700));
+            p.Take(new DamageDealt(t.AddSeconds(6), 1, 700, 600_000, Skill: 12240000, Hits: 20));
+            p.Take(new DamageDealt(t.AddSeconds(7), 1, 700, 55_000, Skill: 12240000, Hits: 4));
+            p.Take(new DamageDealt(t.AddSeconds(8), 1, 700, 1_000, Skill: 0, Hits: 0));
+            var l = p.Live!;
+            var me = l.Roster.Single(f => f.Id == 1);
+            var judgment = me.Abilities.Single(a => a.Skill == 12240000);
+            Check(judgment is { Damage: 655_000, Hits: 24 } && Math.Abs(judgment.Average - 655_000 / 24.0) < 0.01 && me.Abilities.Single(a => a.Skill == 0).Hits == 1
+                && Abilities.Name(12240000) == "Judgment" && Abilities.Name(0).Length > 0 && Abilities.Name(12060000) == "Ability 12060000",
+                $"damage by ability: each skill's total, hits and average a hit, named from the skill list ({Abilities.Count} skills); a skill it doesn't list says its number");
+            Check(l.Shown().Count() == 1 && l.Shown().Single().Id == 1 && l.Roster.Count == 2,
+                "a member with no damage yet has no row (Felicity), though the record keeps them for its detail");
+            p.Take(new BossEnded(t.AddSeconds(50), 700, BossOutcome.Kill));
+            p.Take(new BossEngaged(t.AddSeconds(80), "Totem room", 701));
+            Check(p.Live == null, "the Totem room is a wave, not a boss: Bosses only shows no pull under way...");
+            p.Take(new DamageDealt(t.AddSeconds(90), 1, 701, 300_000));
+            p.Take(new BossEnded(t.AddSeconds(116), 701, BossOutcome.Kill));
+            Check(kept.Count == 1 && kept[0].Boss == "Watchdog Kwapo", "...and keeps no record of it");
+            var (q, keptRun) = New();
+            q.SetMode(ParserMode.Run, t);
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 71));
+            q.Take(new BossEngaged(t.AddSeconds(80), "Totem room", 711));
+            q.Take(new DamageDealt(t.AddSeconds(90), 1, 711, 300_000));
+            q.Take(new BossEnded(t.AddSeconds(116), 711, BossOutcome.Kill));
+            q.Take(new InstanceLeft(t.AddSeconds(200)));
+            Check(keptRun.Count == 1 && keptRun[0].Splits.Single() is { Boss: "Totem room", Wave: true, Outcome: "kill", Seconds: 36 },
+                "in Full run it is a split of its own, its time and its result");
         }
 
         // a fight with nothing heard for ten minutes is given up at the last thing heard

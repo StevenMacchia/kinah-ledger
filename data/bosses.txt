@@ -1,5 +1,6 @@
 # Bosses of the instances the tracker's Parser keeps fights for (Parser/BossBook.cs): "Instance|Kind|Boss|final", in route
-# order, "final" on the instance's last boss (killing it clears the instance). Kinds: Expedition, Sanctuary (the game's
+# order, "final" on the instance's last boss (killing it clears the instance), "wave" on a wave stage (Ferocious Horn Den's
+# Totem room: six Mau Totem Shamans and their adds, no single boss): a split of its own in Full run, never a boss pull. Kinds: Expedition, Sanctuary (the game's
 # 10-player raids). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart.
 # An instance listed here keeps fights with its listed bosses only (trash, elites and adds never make one); an instance not
 # listed keeps fights with what the game itself marks a boss. A line "Instance|Kind" with no boss only files the instance.
@@ -29,7 +30,7 @@ Dying Dramata's Nest|Expedition|Broodkeeper Nayatman|
 Dying Dramata's Nest|Expedition|Manager Nasium|
 Dying Dramata's Nest|Expedition|Decaying Durvati|final
 Ferocious Horn Den|Expedition|Watchdog Kwapo|
-Ferocious Horn Den|Expedition|Shining Mau Totem|
+Ferocious Horn Den|Expedition|Totem room|wave
 Ferocious Horn Den|Expedition|Necromancer Duanka|
 Ferocious Horn Den|Expedition|Ferocious Horn Nuakum|final
 Fire Temple|Expedition|Silver Blade Rotan|

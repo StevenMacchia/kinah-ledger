@@ -52,7 +52,7 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "packet-replay" or "packet-live" or "packet-record")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "packet-replay" or "packet-live" or "packet-record")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -137,6 +137,8 @@ internal static class Program
                 case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
                 // the boss-fight Parser (Parser/): its rules on made-up fight events
                 case "parser-test": return KinahLedger.Parser.ParserTests.Run(settings);
+                // a recording through the decoder and the Parser at full speed: each record and its members' shares (Parser/ParserTests.cs)
+                case "parser-replay": if (pos.Count == 0) { Console.WriteLine("parser-replay <capture.pcapng> [--mode boss|run|fight] [--port 13328]"); return 2; } return KinahLedger.Parser.ParserTests.ParserReplay(pos[0], opts.GetValueOrDefault("mode") ?? "boss", int.TryParse(opts.GetValueOrDefault("port"), out var prp) ? prp : 13328);
                 // the party list's classes over a folder of game pictures (Ocr/PartyFrame.cs): totals by class, --rows for each picture's
                 case "party-scan": if (pos.Count == 0) { Console.WriteLine("party-scan <folder of pictures> [--rows]"); return 2; } return KinahLedger.Parser.ParserTests.PartyScan(pos[0], opts.ContainsKey("rows") || opts.ContainsKey("names"), opts.ContainsKey("names"));
                 // the Parser's capture-to-screen time over recordings replayed at their own speed (Ui/WpfApp.Parser.cs)

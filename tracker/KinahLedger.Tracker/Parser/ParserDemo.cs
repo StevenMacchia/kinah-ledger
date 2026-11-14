@@ -18,6 +18,13 @@ public static class ParserDemo
         new(4, "Kaelith", "Sorcerer", 4_730, 5_620, false),
     };
 
+    /// <summary>A few real skills of each sample class (data/skills.json), so the demo has damage by ability.</summary>
+    static readonly Dictionary<string, int[]> Skills = new()
+    {
+        ["Gladiator"] = new[] { 11010000, 11020000, 11050000, 11100000 }, ["Cleric"] = new[] { 17040000, 17060000, 17010000 },
+        ["Templar"] = new[] { 12090000, 12040000, 12100000, 12010000 }, ["Sorcerer"] = new[] { 15040000, 15060000, 15010000, 15090000 },
+    };
+
     static double Weight(string cls) => cls == "Cleric" ? 0.45 : cls == "Templar" ? 0.7 : 1;
 
     /// <summary>The kept records (oldest first) and, when <paramref name="live"/>, the record under way, as of <paramref name="now"/>.</summary>
@@ -57,7 +64,8 @@ public static class ParserDemo
                 if (damage)
                 {
                     var who = Group.FirstOrDefault(g => g.Id == src);
-                    p.Take(new DamageDealt(at, src, id, amount, group ? "" : who?.Name ?? "", who?.You == true));
+                    int skill = who != null && Skills.TryGetValue(who.Class, out var sk) ? sk[(int)((s / 3 + src) % sk.Length) % sk.Length] : 0;
+                    p.Take(new DamageDealt(at, src, id, amount, group ? "" : who?.Name ?? "", who?.You == true, skill, 1 + (int)(amount % 3)));
                     hp -= amount;
                     p.Take(new BossHealth(at, id, Math.Max(0, hp), max));
                 }

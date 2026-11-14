@@ -208,6 +208,7 @@ public sealed partial class HudWindow : Window
         MouseEnter += (_, _) => ShowDragHint(); MouseLeave += (_, _) => ShowDragHint();
         SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _unlock.Length == 0);
         SizeChanged += (_, _) => PlacePending();
+        AddParserSection();   // the Parser's section above the Kinah line (Ui/HudWindow.Parser.cs)
     }
 
     /// <summary>The player dropped the panel somewhere (unlocked): the window remembers Left and Top.</summary>

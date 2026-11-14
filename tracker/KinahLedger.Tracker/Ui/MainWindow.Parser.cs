@@ -54,7 +54,8 @@ public partial class MainWindow
         ParserPrefs.Saved += () => Dispatcher.BeginInvoke(() =>
         {
             var fresh = ParserPrefs.Load();
-            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers;
+            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate;
+            ParserOverlayTick();
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
             RedrawParserPage();
         });
@@ -214,7 +215,7 @@ public partial class MainWindow
             ParserOverlayTick();
         }
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
-        bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true };
+        bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true };
         if (oldest is not { } o || !shown) return;
         Interlocked.Increment(ref ParserDrawsShown);
         EventHandler? h = null;
@@ -260,9 +261,13 @@ public partial class MainWindow
 
     void RedrawParserPage() { _drawnSig.Remove("parserpage"); FillParserPage(); }
 
+    /// <summary>The Parser has a window of its own over the game: Options › In game › Parser › Separate parser overlay, or no Kinah overlay to sit in.</summary>
+    internal bool ParserOverlaySeparate => _parserPrefs.Separate || !HudWanted || _hud == null;
+
     /// <summary>
-    /// The overlay follows the fight: on (its switch), a boss fight under way or one that ended in the last
-    /// <see cref="OverlayResultSeconds"/>, and the game (or the tracker) in front. Made on first need, never in a render.
+    /// The Parser over the game follows the record: on (its switch), one under way or one that ended in the last
+    /// <see cref="OverlayResultSeconds"/>. By default it is the Kinah overlay's section above the Kinah line (the Kinah
+    /// overlay shows itself while the game is in front); separated, its own window, while the game (or the tracker) is in front.
     /// </summary>
     void ParserOverlayTick()
     {
@@ -278,6 +283,14 @@ public partial class MainWindow
         }
         if (live != null) { _parserLastLiveId = live.Id; _parserJustEnded = null; }
         var show = live ?? ((now - _parserEndedAt).TotalSeconds <= OverlayResultSeconds ? _parserJustEnded : null);
+        if (!ParserOverlaySeparate)
+        {
+            // expanded by default: the section above the Kinah line; its own window stays away
+            _parserOverlay?.ShowWanted(false);
+            _hud!.ShowParser(_parserPrefs.Overlay ? show : null, now, ParserModeNow, PDetails);
+            return;
+        }
+        _hud?.ShowParser(null, now, ParserModeNow, PDetails);
         bool inFront = ParserOverlayForceForTest || (_watcher.GameRect != null && (Native.ForegroundPid() == (uint)Environment.ProcessId || GameInFront()));
         bool want = _parserPrefs.Overlay && show != null && inFront;
         if (!want) { _parserOverlay?.ShowWanted(false); return; }
@@ -312,7 +325,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear();
@@ -334,9 +347,11 @@ public partial class MainWindow
         g.Children.Add(PT("Parser", 20, FontWeights.SemiBold, "Ink", display: true));
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
-            $"The record under way over the game: the boss or the run, the clock and the group. It shows while one is under way and never takes the game's focus; right-click it for the mode.{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
-        right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
-            "On: clicks go through the overlay to the game. Off: drag the overlay where you want it; it stays there.", "Overlay click-through"), 14, 0, 0, 0));
+            $"The record under way over the game: the boss or the run, the clock and the group. {(_parserPrefs.Separate ? "Its own overlay (Settings › In game › Parser); right-click it for the mode." : "It opens above the Kinah overlay when a fight starts and folds away after.")}{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
+        // click-through and the drag are the separate overlay's; above the Kinah line it follows the Kinah overlay's own
+        if (_parserPrefs.Separate)
+            right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
+                "On: clicks go through the overlay to the game. Off: drag the overlay where you want it; it stays there.", "Overlay click-through"), 14, 0, 0, 0));
         Grid.SetColumn(right, 1);
         g.Children.Add(right);
         box.Children.Add(g);
@@ -451,6 +466,7 @@ public partial class MainWindow
             var nm = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0) };
             nm.Children.Add(PT(x.Boss, 12.5, FontWeights.SemiBold, x.Outcome == "" ? "Gold" : "Ink", trim: true));
             if (x.Final) nm.Children.Add(Margin(PT("final", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
+            if (x.Wave) nm.Children.Add(Margin(PT("waves", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             if (x.Partial) nm.Children.Add(Margin(PT("partial", 11, FontWeights.SemiBold, "Warn"), 6, 1, 0, 0));
             Cell(row, 1, nm);
             Cell(row, 2, Right(PT(BossParser.Clock(x.Start - e.Start), 12.5, FontWeights.Medium, "Muted")));
@@ -590,7 +606,10 @@ public partial class MainWindow
         double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
         double top = Math.Max(1, e.Roster.Max(Measure));
         bool first = true;
-        foreach (var f in e.Ranked())
+        // Steven, 2026-11-14: "don't count [a member] until they have at least 1 [damage]": the live card shows those who
+        // have; the detail lists everyone, those with none last and quiet
+        var rowsShown = detail ? e.Ranked().ToList() : e.Shown().ToList();
+        foreach (var f in rowsShown)
         {
             var row = Row();
             row.Margin = new Thickness(6, 0, 4, 0);
@@ -612,6 +631,17 @@ public partial class MainWindow
             if (f.Gone) nameLine.Children.Add(Margin(PT("left", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             nameBox.Children.Add(nameLine);
             Cell(row, 1, nameBox);
+            if (dmg && f.Damage <= 0 && !f.Other) { meter.Opacity = 0.55; nameLine.Children.Add(Margin(PT("no damage", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0)); }
+            // a member's damage by ability: a click opens it under the row
+            string abilityKey = $"{e.Id}:{f.Id}";
+            bool open = _parserAbilitiesOpen.Contains(abilityKey);
+            if (dmg && f.Abilities.Count > 0)
+            {
+                nameLine.Children.Add(Margin(PT(open ? "▾" : "▸", 11, FontWeights.SemiBold, "Faint"), 6, 0, 0, 0));
+                meter.Cursor = Cursors.Hand;
+                meter.ToolTip = Tip("This member's damage by ability");
+                meter.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; if (!_parserAbilitiesOpen.Remove(abilityKey)) _parserAbilitiesOpen.Add(abilityKey); RedrawParserPage(); };
+            }
             if (gear && !f.Other)
             {
                 Cell(row, 2, PT(f.Class.Length > 0 ? ClassArt.Title(f.Class) : "–", 12, FontWeights.SemiBold, "Text2", trim: true));
@@ -627,7 +657,60 @@ public partial class MainWindow
             }
             if (deaths) Cell(row, c, Right(PT(f.Deaths > 0 ? f.Deaths.ToString(CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, f.Deaths > 0 ? "Coral" : "Faint")));
             host.Children.Add(rule);
+            if (open && f.Abilities.Count > 0) host.Children.Add(AbilityTable(f, e, now));
         }
+        return host;
+    }
+
+    /// <summary>Which members' abilities are open ("record id:member id").</summary>
+    readonly HashSet<string> _parserAbilitiesOpen = new();
+
+    /// <summary>
+    /// A member's damage by ability (Steven, 2026-11-14: "click on and open or expand you abilities to see how much each is
+    /// doing on average / total"): each ability's total, hits, average a hit and share of the member's damage on a bar in
+    /// the class's colour; the first eight, then the rest folded.
+    /// </summary>
+    FrameworkElement AbilityTable(Fighter f, Encounter e, DateTime now)
+    {
+        var host = new StackPanel { Margin = new Thickness(40, 2, 4, 6) };
+        Grid Row()
+        {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            return g;
+        }
+        void Cell(Grid g, int col, FrameworkElement el) { Grid.SetColumn(el, col); g.Children.Add(el); }
+        var head = Row(); head.Margin = new Thickness(6, 0, 4, 2);
+        Cell(head, 0, PT("Ability", 10.5, FontWeights.SemiBold, "Faint"));
+        Cell(head, 1, Right(PT("Damage", 10.5, FontWeights.SemiBold, "Faint")));
+        Cell(head, 2, Right(PT("Hits", 10.5, FontWeights.SemiBold, "Faint")));
+        Cell(head, 3, Right(PT("Average", 10.5, FontWeights.SemiBold, "Faint")));
+        Cell(head, 4, Right(PT("Share", 10.5, FontWeights.SemiBold, "Faint")));
+        host.Children.Add(head);
+        var list = f.Abilities.OrderByDescending(a => a.Damage).ToList();
+        string allKey = $"{e.Id}:{f.Id}:all";
+        bool all = _parserAbilitiesOpen.Contains(allKey);
+        long total = Math.Max(1, f.Damage);
+        double top = Math.Max(1, list.Max(a => a.Damage));
+        foreach (var a in all ? list : list.Take(8))
+        {
+            var g = Row(); g.Margin = new Thickness(6, 0, 4, 0); g.MinHeight = 22;
+            Cell(g, 0, PT(Abilities.Name(a.Skill), 12, FontWeights.Medium, a.Skill == 0 ? "Muted" : "Text2", trim: true));
+            Cell(g, 1, Right(PT(Amounts.Short(a.Damage), 12, FontWeights.SemiBold, "Ink")));
+            Cell(g, 2, Right(PT(a.Hits.ToString("N0", CultureInfo.InvariantCulture), 12, FontWeights.Medium, "Text2")));
+            Cell(g, 3, Right(PT(Amounts.Short(a.Average), 12, FontWeights.Medium, "Text2")));
+            Cell(g, 4, Right(PT($"{a.Damage * 100.0 / total:0}%", 12, FontWeights.Medium, "Muted")));
+            var meter = ClassArt.MeterRow(g, f.Class, a.Damage / top, radius: 4);
+            meter.Margin = new Thickness(0, 2, 0, 0);
+            meter.Opacity = 0.9;
+            host.Children.Add(meter);
+        }
+        if (list.Count > 8)
+            host.Children.Add(Margin(FoldLink(all ? "Fewer" : $"{list.Count - 8} more  ›", () => { if (!_parserAbilitiesOpen.Remove(allKey)) _parserAbilitiesOpen.Add(allKey); RedrawParserPage(); }), 6, 2, 0, 0));
         return host;
     }
 
@@ -877,7 +960,7 @@ public partial class MainWindow
         nameLine.Children.Add(PT(e.Title, 13, FontWeights.SemiBold, "Ink", trim: true));
         if (e.Partial) nameLine.Children.Add(Margin(PT("partial", 11, FontWeights.SemiBold, "Warn"), 6, 1, 0, 0));
         // the group at a glance: each member's class emblem, small, in the same colours as the tab and the overlay
-        var classes = e.Members.Where(f => ClassArt.Key(f.Class).Length > 0).OrderByDescending(f => f.You).Take(8).ToList();
+        var classes = e.Members.Where(f => ClassArt.Key(f.Class).Length > 0 && (!e.HasDamage || f.Damage > 0)).OrderByDescending(f => f.You).Take(8).ToList();
         if (classes.Count > 0)
         {
             var icons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -1069,6 +1152,10 @@ public partial class MainWindow
             _ => null,
         };
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
+        // the detail render opens its top member's damage by ability
+        _parserAbilitiesOpen.Clear();
+        if (_parserOpen != null && all.FirstOrDefault(e => e.Id == _parserOpen) is { } opened && opened.Ranked().FirstOrDefault(f => f.Abilities.Count > 0) is { } topMember)
+            _parserAbilitiesOpen.Add($"{opened.Id}:{topMember.Id}");
         ShowPart("Parser", byHand: false);
         RedrawParserPage();
     }

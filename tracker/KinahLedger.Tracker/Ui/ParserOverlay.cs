@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using KinahLedger.Parser;
@@ -32,14 +33,10 @@ public sealed class ParserOverlay : Window
     public ParserMode Mode { get; set; }
 
     readonly bool _still;
-    readonly StackPanel _body = new();
-    readonly Border _frame;
+    readonly ParserPanel _panel = new();
     readonly TextBlock _hint;
     bool _clickThrough;
-    string _sig = "";
     public const double Width0 = 340;
-
-    static readonly SolidColorBrush Coral = HudKit.B(HudKit.RecC), Text2 = HudKit.B(0xC9CDDA), Track = HudKit.B(0xFFFFFF, 0.08);
 
     /// <param name="still">A drawing (layout renders): not the overlay the readers step around.</param>
     public ParserOverlay(bool still = false)
@@ -62,15 +59,8 @@ public sealed class ParserOverlay : Window
         FontWeight = FontWeights.Medium;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         Left = -10000; Top = -10000;   // placed once it has laid out (Place)
-        _hint = new TextBlock { FontSize = 10.5, Foreground = HudKit.Faint, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
-        _frame = new Border
-        {
-            Width = Width0,
-            Background = HudKit.B(HudKit.PanelC, 0.94), BorderBrush = HudKit.FrameLine, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 10, 12, 10),
-            Child = new StackPanel { Children = { _body, _hint } },
-        };
-        Content = _frame;
+        _hint = new TextBlock { FontSize = 10.5, Foreground = HudKit.Faint, Margin = new Thickness(8, 3, 0, 0), Visibility = Visibility.Collapsed };
+        Content = new StackPanel { Children = { _panel, _hint } };
         MouseLeftButtonDown += (_, _) =>
         {
             if (_clickThrough || _still) return;
@@ -197,6 +187,44 @@ public sealed class ParserOverlay : Window
 
     // ---- what it shows ----
 
+    /// <summary>The record (the panel draws it: Ui/ParserPanel below, shared with the Kinah overlay's parser section).</summary>
+    public void Draw(Encounter e, DateTime now)
+    {
+        _panel.Mode = Mode; _panel.ShowDetails = ShowDetails;
+        _panel.Draw(e, now);
+    }
+}
+
+/// <summary>
+/// What the Parser shows over the game, drawn once for both places it can sit (Steven, 2026-11-14: "expand by default but
+/// give option in settings to separate"): the Kinah overlay's parser section (Ui/HudWindow.Parser.cs) and the separate
+/// overlay window (above). The record's head (its art, title, clock), what it is and where, the boss's HP or a run's pull
+/// and splits, a fight's kills, the members who have dealt damage on meter bars in their class's colour, and its foot.
+/// </summary>
+public sealed class ParserPanel : Border
+{
+    readonly StackPanel _body = new();
+    string _sig = "";
+    /// <summary>The mode the record is counted in, and whether each member's Combat Power and item level show.</summary>
+    public ParserMode Mode { get; set; }
+    public bool ShowDetails { get; set; }
+
+    static readonly SolidColorBrush Coral = HudKit.B(HudKit.RecC), Text2 = HudKit.B(0xC9CDDA), Track = HudKit.B(0xFFFFFF, 0.08);
+
+    public ParserPanel()
+    {
+        Width = ParserOverlay.Width0;
+        Background = HudKit.B(HudKit.PanelC, 0.94); BorderBrush = HudKit.FrameLine; BorderThickness = new Thickness(1);
+        CornerRadius = new CornerRadius(12); Padding = new Thickness(12, 10, 12, 10);
+        TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+        TextElement.SetFontFamily(this, HudKit.Text);
+        TextElement.SetFontWeight(this, FontWeights.Medium);
+        Child = _body;
+        foreach (var art in new[] { "boss", "dungeon", "medal", "rift" }) GameArt.Image(art);
+    }
+
+    // ---- what it shows ----
+
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
@@ -317,7 +345,7 @@ public sealed class ParserOverlay : Window
             // each row on a meter bar in its class's colour (damage, else Combat Power), the class's emblem at its left
             double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
             double top = Math.Max(1, e.Roster.Max(Measure));
-            foreach (var f in e.Ranked().Take(8))
+            foreach (var f in e.Shown().Take(8))
             {
                 var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = 24;
                 var mark = f.Other ? MainWindow.OtherMark(19) : MainWindow.ClassMark(f.Class, 19, f.Name);
@@ -339,7 +367,7 @@ public sealed class ParserOverlay : Window
                 meter.Margin = new Thickness(0, 3, 0, 0);
                 rows.Children.Add(meter);
             }
-            if (e.Roster.Count > 8) rows.Children.Add(T($"+{e.Roster.Count - 8} more on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint));
+            if (e.Shown().Count() > 8) rows.Children.Add(T($"+{e.Shown().Count() - 8} more on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint));
             _body.Children.Add(rows);
         }
         // the foot: the group's DPS while it runs; the result once it's over
@@ -374,7 +402,7 @@ public sealed class ParserOverlay : Window
             Grid.SetColumn(s, 1); foot.Children.Add(s);
         }
         _body.Children.Add(foot);
-        _frame.BorderBrush = e.Live ? HudKit.FrameLine : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : HudKit.FrameLine;
+        BorderBrush = e.Live ? HudKit.FrameLine : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : HudKit.FrameLine;
     }
 
     static TextBlock Pad(TextBlock t) { t.Margin = new Thickness(0); return t; }

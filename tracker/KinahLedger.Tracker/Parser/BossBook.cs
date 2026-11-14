@@ -10,7 +10,8 @@ namespace KinahLedger.Parser;
 /// </summary>
 public sealed class BossBook
 {
-    public sealed record Boss(string Instance, ContentKind Kind, string Name, bool Final);
+    /// <summary>A boss of an instance, in route order; Wave: a wave stage (a split in Full run, never a boss pull).</summary>
+    public sealed record Boss(string Instance, ContentKind Kind, string Name, bool Final, bool Wave = false);
 
     readonly Dictionary<string, List<Boss>> _byInstance = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ContentKind> _kindOf = new(StringComparer.OrdinalIgnoreCase);
@@ -46,7 +47,8 @@ public sealed class BossBook
             b._kindOf.TryAdd(inst, kind);
             if (p.Length < 3 || p[2].Trim().Length == 0) continue;   // an instance with its kind and no bosses yet
             var list = b._byInstance.TryGetValue(inst, out var l) ? l : b._byInstance[inst] = new();
-            list.Add(new Boss(inst, kind, p[2].Trim(), p.Length >= 4 && p[3].Trim().Equals("final", StringComparison.OrdinalIgnoreCase)));
+            var mark = p.Length >= 4 ? p[3].Trim() : "";
+            list.Add(new Boss(inst, kind, p[2].Trim(), mark.Equals("final", StringComparison.OrdinalIgnoreCase), mark.Equals("wave", StringComparison.OrdinalIgnoreCase)));
         }
         return b;
     }

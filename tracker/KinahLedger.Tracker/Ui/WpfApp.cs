@@ -1691,7 +1691,7 @@ public static partial class WpfApp
                 string[] bgFields = { "rate", "total", "feed" };
                 static string BgWords(System.Windows.Controls.TextBlock t) => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
                 List<System.Windows.Controls.TextBlock> BgTexts(HudWindow h) => BadgeTree((DependencyObject)h.Content).OfType<System.Windows.Controls.TextBlock>().ToList();
-                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Content).Children[0];
+                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.OwnContent!).Children[0];
                 var badge = new HudWindow(bgFields);
                 badge.Update(bgV1); badge.Update(bgV2);
                 var bgShown = BgTexts(badge).Select(BgWords).ToList();
