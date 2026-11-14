@@ -961,7 +961,7 @@ options: --process aion[,other]");
             var olderReads = opts.ContainsKey("reads") ? null : Path.Combine(Path.GetDirectoryName(readsPath)!, "reads.old.log");
             // and the Market's openings, which traces before 0.10.12 never recorded, from the scene notes
             bool tracedMarket = signals.Any(x => x.Kind == "market");
-            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date")), olderReads).Where(x => x.At < firstTraced || (x.Kind == "market" && !tracedMarket)).ToList();
+            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date")), olderReads).Where(x => x.At < firstTraced || (x.Kind == "market" && !tracedMarket) || x.Kind == "loading").ToList();   // loading screens: traces never record them
             signals.AddRange(fromLog.Select(x => x.Kind == "reward" ? x with { Kind = "reward-once" } : x));
             Console.WriteLine($"Zone and reward screen reads: {signals.Count(x => x.Kind == "zone")} zone changes, {signals.Count(x => x.Kind.StartsWith("reward"))} reward screens ({fromLog.Count} from {Path.GetFileName(readsPath)}).");
         }
@@ -997,6 +997,7 @@ options: --process aion[,other]");
                     case "reward-once": s.Target.MarkReward(sg.At, sg.Value); rewardUntil = sg.At.AddSeconds(10); break;
                     case "header": s.EventHeaderSeen(sg.Value, sg.At); break;
                     case "market": s.MarketSeen(sg.At); break;
+                    case "loading": s.LoadingSeen(sg.At); break;
                 }
             }
         }
@@ -3253,7 +3254,7 @@ options: --process aion[,other]");
             var (sbk, sayBk) = Session(bk0.AddMinutes(-1), "Southern Tolbas Forest");
             sbk.AllView = new SessionEngine(items); sbk.AllView.SetZone("Southern Tolbas Forest");
             int breaks = 0;
-            sbk.OverallRestart += _ => { breaks++; var a = new SessionEngine(items); a.SetZone(sbk.Zone); sbk.AllView = a; };
+            sbk.OverallRestart += _ => { breaks++; var a = sbk.FreshAll ?? new SessionEngine(items); if (sbk.FreshAll == null) a.SetZone(sbk.Zone); sbk.AllView = a; };
             sayBk(bk0, new[] { "Acquired 111 Kina." });
             sbk.ApplyZone("Eastern Tolbas Forest", bk0.AddMinutes(2));
             sayBk(bk0.AddMinutes(10), new[] { "Acquired 188 Kina." });
@@ -3267,9 +3268,17 @@ options: --process aion[,other]");
             sayBk(ab.AddMinutes(1), new[] { "Acquired 500 Kina." });
             string inAbyss = $"{breaks} {sbk.AllView.Kinah}";
             sbk.ApplyZone("Chaotic Upper Reshanta", ab.AddMinutes(2));
+            // 0.10.70: a crossing counts once it holds a minute (Steven, 2026-11-13: "we gotta stop switching between zones");
+            // a few seconds over the edge and back starts nothing over
             sbk.ApplyZone("Southern Tolbas Forest", ab.AddMinutes(4));
-            Check("...into the Abyss it starts over, within it it goes on, back out it starts over",
-                $"{inAbyss} · {breaks} {sbk.AllView.Kinah}", "2 500 · 3 0");
+            sayBk(ab.AddMinutes(4.2), new[] { "Acquired 70 Kina." });
+            sbk.ApplyZone("Chaotic Upper Reshanta", ab.AddMinutes(4.4));
+            string flicker = $"{breaks} {sbk.AllView.Kinah}";
+            sbk.ApplyZone("Southern Tolbas Forest", ab.AddMinutes(6));
+            sayBk(ab.AddMinutes(6.5), new[] { "Acquired 90 Kina." });
+            sbk.ApplyZone("Southern Tolbas Forest", ab.AddMinutes(7.1));
+            Check("...into the Abyss it starts over, within it it goes on, a moment over the edge and back nothing, back out for a minute it starts over (from the first read out)",
+                $"{inAbyss} · {flicker} · {breaks} {sbk.AllView.Kinah}", "2 500 · 2 570 · 3 90");
         }
         {
             // Poko's Skin Bundle from an Orichalcum Ore node (reads.log 2026-11-11 13:51:36, Steven: "ayyy at least i got a poko
