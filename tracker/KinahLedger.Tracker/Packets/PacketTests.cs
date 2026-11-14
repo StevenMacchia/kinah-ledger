@@ -250,6 +250,13 @@ public static class PacketTests
             Check(!r.On && r.State.Length > 0, $"no game connection: \"{r.State}\"");
         }
         Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
+        if (NativeDecoder.Available)
+            using (var nd = NativeDecoder.TryOpen())
+            {
+                // a dll of a later version without the boss export reads no boss fights and doesn't throw
+                bool threw = false; try { while (nd?.NextBossEvent() != null) { } } catch (Exception) { threw = true; }
+                Check(!threw, $"klnet.dll version {NativeDecoder.Version}: boss fights {(nd?.ReadsBosses == true ? "read" : "not read")}, asking for them never throws");
+            }
 
         // boss fights (klnet.dll version 4): a decoder that reads none hands out none; the decoder's rows become the tracker's
         // events (the roster whole each time, deaths, pulls); the reader queues them in order and keeps the queue bounded; the

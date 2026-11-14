@@ -161,13 +161,20 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         return new ItemChange(new DateTime(c.AtUtcTicks, DateTimeKind.Utc), c.ItemId, (ItemOp)c.Op, c.StackId, c.Delta, c.Total, c.First != 0, c.Batch, c.BatchRows, c.BatchFell != 0);
     }
     readonly BossMapper _bosses = new();
-    public bool ReadsBosses => Version >= 4;
+    // a dll of version 4 or later without kl_next_fight (one built from a branch that took a later number first): no boss
+    // fights, found once, and packet reading goes on
+    static bool _noBossExport;
+    public bool ReadsBosses => Version >= 4 && !_noBossExport;
     public BossEvent? NextBossEvent()
     {
-        if (_h == 0 || Version < 4) return null;
+        if (_h == 0 || !ReadsBosses) return null;
         KlFight f;
-        while (NextBossN(_h, &f) == 1)
+        while (true)
         {
+            int got;
+            try { got = NextBossN(_h, &f); }
+            catch (EntryPointNotFoundException) { _noBossExport = true; return null; }
+            if (got != 1) break;
             var row = new BossRow(new DateTime(f.AtUtcTicks, DateTimeKind.Utc), f.Kind, f.Content, Text(f.Zone, 64), f.Encounter, Text(f.Boss, 64), f.BossEntity,
                 f.Outcome, f.Entity, Text(f.Name, 32), Text(f.Class, 16), f.Self != 0, f.CombatPower, f.ItemLevel, f.Amount, f.Max);
             if (_bosses.Map(row) is { } e) return e;
