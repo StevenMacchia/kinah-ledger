@@ -105,5 +105,28 @@ public static class ClassArt
         return host;
     }
 
+    /// <summary>
+    /// The glass's row (Ui/HudGlass.cs): the row's content, then under it a 3 px meter in the class's colour on a faint
+    /// track, the share of the top figure. Where the old row lay a translucent block of colour behind the name.
+    /// </summary>
+    public static Grid ThinMeterRow(FrameworkElement content, string? cls, double share, bool other = false)
+    {
+        var c = other ? System.Windows.Media.Color.FromRgb(0x86, 0x8D, 0xA1) : ColorOf(cls);
+        var host = new Grid();
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3) });
+        host.Children.Add(content);
+        var track = new Grid { Margin = new Thickness(29, 1, 4, 0), IsHitTestVisible = false };
+        Grid.SetRow(track, 1);
+        track.Children.Add(new Border { Background = HudGlass.Track, CornerRadius = new CornerRadius(1.5) });
+        var bar = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(1.5), Background = Frozen(System.Windows.Media.Color.FromArgb(other ? (byte)0x80 : (byte)0xF2, c.R, c.G, c.B)) };
+        var frac = Math.Clamp(double.IsFinite(share) ? share : 0, 0, 1);
+        track.SizeChanged += (_, _) => bar.Width = frac <= 0 ? 0 : Math.Max(3, track.ActualWidth * frac);
+        track.Children.Add(bar);
+        host.Children.Add(track);
+        host.Tag = frac;   // the share, for the tests
+        return host;
+    }
+
     static SolidColorBrush Frozen(System.Windows.Media.Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 }

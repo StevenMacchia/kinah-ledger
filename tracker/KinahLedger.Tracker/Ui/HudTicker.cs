@@ -72,7 +72,7 @@ public sealed partial class HudTicker : IHudLook
         _sep1 = Rule(14, 9); _sep2 = Rule(14, 9);
         _idle = T("Waiting for the first count", 12, Faint); _idle.Visibility = Visibility.Collapsed;
         // your DPS while farming in the open world: small, after the session, never more (HudWindow.SetFarmDps)
-        _sep3 = Rule(14, 9); _farm = T("", 12, Ink, weight: FontWeights.SemiBold); _farmUnit = T("DPS", 11, Muted, weight: FontWeights.SemiBold); _farmUnit.Margin = new Thickness(4, 0, 0, 0);
+        _sep3 = Rule(14, 9); _farm = T("", 12, Ink, weight: FontWeights.SemiBold); _farm.MinWidth = 34; _farm.TextAlignment = TextAlignment.Right; System.Windows.Documents.Typography.SetNumeralAlignment(_farm, FontNumeralAlignment.Tabular); _farmUnit = T("DPS", 11, Muted, weight: FontWeights.SemiBold); _farmUnit.Margin = new Thickness(4, 0, 0, 0);
         _sep3.Visibility = _farm.Visibility = _farmUnit.Visibility = Visibility.Collapsed;
         _pill = new Border
         {
@@ -86,7 +86,11 @@ public sealed partial class HudTicker : IHudLook
         Root = new StackPanel { Margin = Inset, Width = 270, Children = { _pill, _stack } };
     }
 
-    void Paint() => _pill.Background = B(PanelC, .94 * _alpha);
+    void Paint()
+    {
+        if (HudGlass.OldLooks) { _pill.Background = HudGlass.Fill(.94 * _alpha + .06); _pill.BorderBrush = HudGlass.Edge; _pill.CornerRadius = new CornerRadius(HudGlass.Radius); return; }
+        _pill.Background = B(PanelC, .94 * _alpha);
+    }
 
     public void SetOpacity(double opacity)
     {

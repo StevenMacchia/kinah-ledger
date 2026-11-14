@@ -209,16 +209,47 @@ public static partial class WpfApp
         // the panel's look (2026-10-25): the Strip until another is picked; the three drawn in Options; the Strip's figures grey out for the others
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Check(w.HudLook == HudLooks.Strip && o.HudFieldHost.IsEnabled, "panel look: the Strip, with its figures to pick");
-        Check(o.HudLookHost.Children.Count == 3 && o.HudLookPreview.Children.Count == 3, $"the three looks drawn in Options ({o.HudLookPreview.Children.Count})");
+        Check(w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled, "panel look: Auto by default (the pill, the group's meter above it in a fight); the Strip's figure chips greyed for it");
+        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && o.HudLookPreview.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7, $"every look drawn in Options, the design pass's Auto, Capsule, Meter and Float too ({o.HudLookPreview.Children.Count} of {HudLooks.All.Length})");
+        // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
+        // and Parser section stay folded, and the look shows the boss, the timer and the hour
+        {
+            var now = DateTime.UtcNow;
+            var (_, fight) = KinahLedger.Parser.ParserDemo.Sample(now, live: true, damage: true);
+            var due = new List<Session.TimerBoard.Item> { new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" } };
+            var said = new List<string>();
+            foreach (var key in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+            {
+                var hw = new HudWindow(null, key, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                hw.Update(w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value));
+                hw.ShowTimers(due, now);
+                hw.ShowParser(fight, now, fight!.ModeKind, details: false);
+                hw.Show(); DoEvents();
+                static IEnumerable<string> Texts(DependencyObject d)
+                {
+                    if (d is System.Windows.Controls.TextBlock t) yield return MainWindow.InlineText(t);
+                    for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d); i++)
+                        foreach (var x in Texts(System.Windows.Media.VisualTreeHelper.GetChild(d, i))) yield return x;
+                }
+                var texts = Texts(hw).ToList();
+                bool own = !hw.TimersShown && !hw.ParserShown;
+                bool shows = texts.Any(t => t.Contains(fight.Title)) && texts.Any(t => t.Contains("Invasion")) && texts.Any(t => t.Contains("/h"));
+                said.Add($"{key}: {(own && shows ? "ok" : $"own {own}, shows {shows}")}");
+                hw.ShowParser(null, now, fight.ModeKind, details: false); DoEvents();
+                bool folded = !Texts(hw).Any(t => t.Contains(fight.Title));
+                if (!folded) said[^1] += ", the fight stays after it ends";
+                hw.Close();
+            }
+            Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
+        }
         Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Ticker)]);
-        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Strip && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
+        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);
         DoEvents();
         Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Click((System.Windows.Controls.Button)o.HudLookHost.Children[0]);
+        Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Strip)]);   // the old looks are listed last since 0.10.91
         Click(o.SaveBtn);
         DoEvents();
         Check(w.HudLook == HudLooks.Strip, "back to the Strip");
@@ -978,8 +1009,8 @@ public static partial class WpfApp
                 kinah.Show(); DoEvents();
                 var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.OwnContent!).Children[0];
                 var sf = strip.FrameForTest;
-                bool sibling = sf.CornerRadius == kf.CornerRadius && sf.Padding == kf.Padding && sf.BorderThickness == kf.BorderThickness
-                    && (sf.BorderBrush as SolidColorBrush)?.Color == (kf.BorderBrush as SolidColorBrush)?.Color && (sf.Background as SolidColorBrush)?.Color == (kf.Background as SolidColorBrush)?.Color
+                // the glass, as Auto's pill (the default look since 0.10.91): the gradient fill, the lit edge, the panel's corner and face
+                bool sibling = sf.Background is LinearGradientBrush && ReferenceEquals(sf.BorderBrush, HudGlass.Edge) && sf.CornerRadius.TopLeft == HudGlass.Radius
                     && strip.FontFamily.Source == kinah.FontFamily.Source;
                 kinah.Close();
                 pp.X = 1200; pp.Y = 300;
@@ -993,7 +1024,7 @@ public static partial class WpfApp
                 bool resetOnly = to2.TimersResetBtn != null && to2.TimersSeparateChk?.IsChecked == true;
                 to2.Close();
                 Check(above && sibling && reset && backAbove && resetOnly,
-                    $"the separate strip: first shown just above the Kinah overlay ({above}); the Kinah strip's surface, corner, padding, line and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
+                    $"the separate strip: first shown just above the Kinah overlay ({above}); the overlays' glass, corner and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
                 tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             }
             TimersOverlay.InvisibleForTest = false;

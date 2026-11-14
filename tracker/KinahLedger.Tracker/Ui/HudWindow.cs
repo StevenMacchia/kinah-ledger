@@ -138,7 +138,12 @@ public sealed partial class HudWindow : Window
         if (fields != null) _fields = HudFields.Parse(string.Join(",", fields));
         Look = HudLooks.Parse(look);
         _still = still;
-        _look = Look switch { HudLooks.Card => new HudCard { Still = still }, HudLooks.Ticker => new HudTicker { Still = still }, _ => null };
+        _look = Look switch
+        {
+            HudLooks.Card => new HudCard { Still = still }, HudLooks.Ticker => new HudTicker { Still = still },
+            HudLooks.Auto => new HudAuto { Still = still }, HudLooks.Capsule => new HudCapsule { Still = still }, HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still },
+            _ => null,
+        };
         if (!still)
         {
             Current = this;
@@ -156,6 +161,7 @@ public sealed partial class HudWindow : Window
         FontFamily = HudKit.Text;   // Nunito, the window's face (the Quest look)
         FontWeight = FontWeights.Medium;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+        if (HudGlass.OldLooks) System.Windows.Documents.Typography.SetNumeralAlignment(this, FontNumeralAlignment.Tabular);   // figures that tick never shift the line
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
         Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 260; Top = SystemParameters.WorkArea.Top + 12;
 
@@ -186,7 +192,9 @@ public sealed partial class HudWindow : Window
             Padding = pad,
             Child = _look == null ? badge : null
         };
-        _content = _look?.Root ?? _frame;
+        // the glass (Ui/HudGlass.cs): the fill, the inner edge, and the dark outer hairline round it
+        if (HudGlass.OldLooks) HudGlass.Apply(_frame, 0.94);
+        _content = _look?.Root ?? (HudGlass.OldLooks ? HudGlass.Ring(_frame) : _frame);
         // unlocked: a faint dashed outline on the frame's edge says it can be moved
         var corner = _look?.Corner ?? _frame.CornerRadius.TopLeft;
         _outline = new Rectangle { Stroke = OutlineBrush, StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, RadiusX = corner, RadiusY = corner,
@@ -230,6 +238,8 @@ public sealed partial class HudWindow : Window
     {
         dps ??= "";
         if (dps == _farmDps) return;
+        // the strip, already showing one: just the figure (ten times a second, so not the whole line again)
+        if (_look == null && _farmCell is { Visibility: Visibility.Visible } && _farmDps.Length > 0 && dps.Length > 0) { _farmDps = dps; _farmValue!.Text = dps; return; }
         _farmDps = dps;
         if (_lastValues != null) Update(_lastValues);
     }
@@ -237,7 +247,9 @@ public sealed partial class HudWindow : Window
     /// <summary>The strip's small DPS: a rule, the figure, "DPS", at the end of its line (shown only with the "farmDps" value).</summary>
     StackPanel FarmCell()
     {
-        _farmValue = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center };
+        // tabular digits and a floor on the width: the figure rolls ten times a second without the line twitching
+        _farmValue = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MinWidth = 34, TextAlignment = TextAlignment.Right };
+        System.Windows.Documents.Typography.SetNumeralAlignment(_farmValue, FontNumeralAlignment.Tabular);
         var unit = new TextBlock { Text = "DPS", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var rule = new Border { Width = 1, Height = 14, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Children = { rule, _farmValue, unit } };
@@ -374,7 +386,7 @@ public sealed partial class HudWindow : Window
     public void SetOpacity(double opacity)
     {
         var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
-        _frame.Background = Frozen(Color.FromArgb(a, 0x0B, 0x0C, 0x10));
+        _frame.Background = HudGlass.OldLooks ? HudGlass.Fill(opacity) : Frozen(Color.FromArgb(a, 0x0B, 0x0C, 0x10));
         _look?.SetOpacity(opacity);
         ParserOpacity(opacity);   // the Parser's section above the Kinah line, the same surface (Ui/HudWindow.Parser.cs)
     }
@@ -420,13 +432,13 @@ public sealed partial class HudWindow : Window
                         "rate" => Color.FromRgb(0xF5, 0xB9, 0x42), "kinah" => Color.FromRgb(0xF5, 0xB9, 0x42), "total" => Color.FromRgb(0xF5, 0xB9, 0x42),   // money: gold (mint until the colour pass, 2026-11-13)
                         "best" => Color.FromRgb(0xA2, 0xA8, 0xBA), _ => Color.FromRgb(0xED, 0xEF, 0xF5),
                     };
-                    number.FontSize = key == "rate" ? 19 : 16; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
+                    number.FontSize = HudGlass.OldLooks ? (key == "rate" ? 20 : 15) : key == "rate" ? 19 : 16; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
                     break;
             }
             cell.Children.Add(number);
             if (f.Label.Length > 0)
             {
-                var label = new TextBlock { Text = f.Label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 3 : 2) };
+                var label = new TextBlock { Text = f.Label, FontSize = HudGlass.OldLooks ? 11 : 12, FontWeight = HudGlass.OldLooks ? FontWeights.Medium : FontWeights.SemiBold, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 3 : 2) };
                 cell.Children.Add(label);
                 _labels[key] = label;
             }
@@ -459,7 +471,7 @@ public sealed partial class HudWindow : Window
         line.Children.Add(_feedText); line.Children.Add(_feedValue);
         _feedSep = new Border { Width = 1, Height = 16, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         line.Children.Add(_feedSep);
-        _feedRate = new TextBlock { FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Gold, VerticalAlignment = VerticalAlignment.Center };
+        _feedRate = new TextBlock { FontSize = HudGlass.OldLooks ? 14 : 13, FontWeight = FontWeights.Bold, Foreground = Gold, VerticalAlignment = VerticalAlignment.Center };
         _feedUnit = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         line.Children.Add(_feedRate); line.Children.Add(_feedUnit);
         _feedLine = line; cell.Children.Add(line);

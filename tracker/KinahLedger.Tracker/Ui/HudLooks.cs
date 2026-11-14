@@ -13,14 +13,20 @@ namespace KinahLedger.Ui;
 /// </summary>
 public static class HudLooks
 {
-    public const string Strip = "strip", Card = "card", Ticker = "ticker";
+    public const string Strip = "strip", Card = "card", Ticker = "ticker", Capsule = "capsule", Meter = "meter", Float = "float", Auto = "auto";
 
     /// <param name="Key">Kept in hud.json (HudPrefs.Look).</param>
     public sealed record Look(string Key, string Name, string Hint);
 
     public static readonly Look[] All =
     {
-        // the Quest look's names (2026-11-07): Badge is the strip, Buddy the card, Pop the ticker; the keys stay, so hud.json keeps its choice
+        // the design pass's (2026-11-14, Ui/HudStackLooks.cs) first: each draws the timers due and the fight itself; Auto mixes the two favourites
+        new(Auto, "Auto", "The pill while you farm; in a boss fight the group's meter opens above it"),
+        new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
+        new(Meter, "Meter", "A raid meter: the boss and its HP up top, the group in class colours, your Kinah at the foot"),
+        new(Float, "Float", "No panel: crisp figures straight over the game"),
+        // the older looks, listed last (Steven, 2026-11-14). The Quest look's names (2026-11-07): Badge is the strip, Buddy the card,
+        // Pop the ticker; the keys stay, so hud.json keeps its choice
         new(Strip, "Badge", "One line with the figures you pick, and the ring of your best here"),
         new(Card, "Buddy", "The ring, the hour, your best here and the last three pickups"),
         new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
@@ -113,18 +119,19 @@ static class HudKit
     public static Grid Ring(double size, double stroke, double share, Color tone, string big, string small = "")
     {
         var g = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        g.Children.Add(new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, Stroke = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        if (HudGlass.OldLooks) stroke = Math.Max(2.5, Math.Round(stroke * 0.75, 1));   // a finer line, as the panel's hairlines
+        g.Children.Add(new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, Stroke = HudGlass.OldLooks ? HudGlass.Track : Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
         double s = Math.Clamp(share, 0, 1);
         var brush = Frozen(tone);
         if (s >= 0.999)
-            g.Children.Add(new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, Stroke = brush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
+            g.Children.Add(new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, Stroke = brush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = HudGlass.OldLooks ? null : new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
         else if (s > 0.004)
         {
             double c = size / 2, r = (size - stroke) / 2, a = 2 * Math.PI * s;
             var fig = new PathFigure { StartPoint = new Point(c, c - r), IsClosed = false, IsFilled = false };
             fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
             var geo = new PathGeometry(); geo.Figures.Add(fig); geo.Freeze();
-            g.Children.Add(new System.Windows.Shapes.Path { Data = geo, Stroke = brush, StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = size, Height = size, Effect = new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
+            g.Children.Add(new System.Windows.Shapes.Path { Data = geo, Stroke = brush, StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = size, Height = size, Effect = HudGlass.OldLooks ? null : new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
         }
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = T(big, size >= 40 ? 12.5 : 9.5, Ink, weight: FontWeights.Bold); b.HorizontalAlignment = HorizontalAlignment.Center; b.TextTrimming = TextTrimming.None;
