@@ -885,6 +885,13 @@ public partial class MainWindow
             FileLineReport(new MiscountLine(chosen, chosen == "missing" ? null : line), missing?.Text.Trim() ?? "");
         };
         acts.Children.Add(save);
+        // Not a drop: the line was no pickup (bought at the Market, a reward): out of the totals at once, with Undo (Ui/MainWindow.NotDrop.cs)
+        if (line != null && label != "missing" && CanNotDrop(line))
+        {
+            var nd = new Button { Content = "Not a drop", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0), ToolTip = "Takes this pickup out of your totals (the run, today, the week, the quest points it gave). Undo puts it back." };
+            nd.Click += (_, _) => { if (_card != null) _card.IsOpen = false; NotADrop(line); };
+            acts.Children.Add(nd);
+        }
         var cancel = new Button { Content = line != null && label != "missing" ? "Fine" : "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { if (_card != null) _card.IsOpen = false; };
         acts.Children.Add(cancel);

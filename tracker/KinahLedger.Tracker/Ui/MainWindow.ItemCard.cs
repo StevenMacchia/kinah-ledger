@@ -57,12 +57,16 @@ public partial class MainWindow
                 g.Children.Add(CkText(l.At.ToLocalTime().ToString("HH:mm:ss"), i == 0 ? CkGold : Color.FromRgb(0x5E, 0x65, 0x88), 11.5, mono: true));
                 var w = CkText($"{l.Name} ×{l.Amount:N0}", CkInk, 13, FontWeights.Normal); Grid.SetColumn(w, 1); g.Children.Add(w);
                 var v = CkText(PickupValue(l).Text, CkGold, 12.5, mono: true); Grid.SetColumn(v, 2); g.Children.Add(v);
+                // "Not a drop": this one pickup out of the totals (a Market buy counted as a drop; Ui/MainWindow.NotDrop.cs)
+                if (CanNotDrop(l)) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); var nd = NotDropLink(l); Grid.SetColumn(nd, 3); g.Children.Add(nd); }
                 var row = new Border { Child = g, BorderThickness = new Thickness(0, i > 0 ? 1 : 0, 0, 0), BorderBrush = Ck(CkSlotLine, 0x73) };
                 if (i == 0) row.Background = new LinearGradientBrush(Color.FromArgb(0x1F, CkGold.R, CkGold.G, CkGold.B), Color.FromArgb(0x05, CkGold.R, CkGold.G, CkGold.B), 0);
                 lv.Children.Add(row);
             }
             body.Children.Add(new Border { Child = lv, Margin = new Thickness(16, 14, 16, 0), Padding = new Thickness(0, 2, 0, 4), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine), Background = Ck(CkSlot, 0xA6) });
         }
+        // the item's pickups taken out today ("Not a drop"), each with its Undo; with none in the feed, one to take out of today
+        if (NotDropLine(name, id, mine.Count > 0) is { } ndl) body.Children.Add(ndl);
         // the odds and the hour, in one line of figures
         var trio = new TextBlock { Margin = new Thickness(16, 12, 16, 0), FontSize = 12.5, Foreground = Ck(CkFaint) };
         void Fig(string fig, string label) { if (trio.Inlines.Count > 0) trio.Inlines.Add(new System.Windows.Documents.Run("      ")); trio.Inlines.Add(new System.Windows.Documents.Run(fig) { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 15, Foreground = Ck(CkInk) }); trio.Inlines.Add(new System.Windows.Documents.Run("  " + label)); }

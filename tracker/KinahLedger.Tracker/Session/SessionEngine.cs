@@ -801,6 +801,81 @@ public sealed partial class SessionEngine
         }
     }
 
+    /// <summary>
+    /// What <see cref="Unapply"/> took out of this count for one pickup: the item, how many, the zone and the enemy it had
+    /// been filed under, and its gathering figures, so <see cref="Restore"/> puts back exactly that.
+    /// </summary>
+    public sealed record Taken(long ItemId, int Count, bool Bound, string Zone, string? Mob, GatherFamily? Skill, bool Node, bool Plentiful, bool Bonus, bool Unconfirmed);
+
+    /// <summary>
+    /// "Not a drop" (Steven, 2026-11-13: two Wrathful Ego bought at the Market, counted as drops): one pickup the player says
+    /// was none, taken back out of this count: the item's total, its zone's (<paramref name="zone"/> first when it holds
+    /// them, else this count's zone, else any), an enemy's drops of it, or its gathering figures. Null when this count
+    /// doesn't hold that many of the item (another count's pickup, or one from before this count began, when
+    /// <paramref name="since"/> is given and the pickup is older).
+    /// </summary>
+    public Taken? Unapply(ItemAcquired a, string? zone = null, DateTime? since = null)
+    {
+        lock (_lock)
+        {
+            if (since is { } s0 && a.Time < s0) return null;
+            var d = a.Bound ? ItemsBound : Items;
+            if (d.GetValueOrDefault(a.ItemId) < a.Count) return null;
+            Dec(d, a.ItemId, a.Count);
+            string? zk = null;
+            foreach (var k in new[] { zone, _zone ?? UnknownZone }.Concat(Zones.Keys))
+                if (k != null && Zones.TryGetValue(k, out var zz) && (a.Bound ? zz.ItemsBound : zz.Items).GetValueOrDefault(a.ItemId) >= a.Count) { zk = k; break; }
+            var zs = zk != null ? Zones[zk] : null;
+            if (zs != null) Dec(a.Bound ? zs.ItemsBound : zs.Items, a.ItemId, a.Count);
+            bool unconfirmed = false;
+            if (_unconfirmed.GetValueOrDefault(a.ItemId) >= a.Count) { Dec(_unconfirmed, a.ItemId, a.Count); unconfirmed = true; }
+            var g = GatheringCatalog.Find(_items.NameOf(a.ItemId));
+            string? mob = null; bool node = false, plenty = false, bonus = false;
+            if (g != null)
+            {
+                var sk = Skill(g.Skill); sk.Items = Math.Max(0, sk.Items - a.Count);
+                if (g.IsNode && !AttemptsFromTally) { node = true; Nodes = Math.Max(0, Nodes - 1); sk.Nodes = Math.Max(0, sk.Nodes - 1); if (zs != null) zs.Nodes = Math.Max(0, zs.Nodes - 1); }
+                if (g.IsNode && a.Count >= 2) { plenty = true; Plentiful = Math.Max(0, Plentiful - 1); sk.Plentiful = Math.Max(0, sk.Plentiful - 1); }
+                if (g.Bonus) { bonus = true; BonusFinds = Math.Max(0, BonusFinds - a.Count); sk.Bonus = Math.Max(0, sk.Bonus - a.Count); }
+            }
+            else
+            {
+                if (zs != null) zs.Drops = Math.Max(0, zs.Drops - a.Count);
+                // the enemy it was filed under (not kept with the pickup): one of the zone's that holds that many of it
+                var m = _mobs.Where(kv => kv.Value.Drops.GetValueOrDefault(a.ItemId) >= a.Count).OrderByDescending(kv => kv.Value.Zone == zk).Select(kv => kv.Key).FirstOrDefault();
+                if (m != null) { Dec(_mobs[m].Drops, a.ItemId, a.Count); mob = m; }
+            }
+            return new Taken(a.ItemId, a.Count, a.Bound, zk ?? "", mob, g?.Skill, node, plenty, bonus, unconfirmed);
+        }
+    }
+
+    /// <summary>Undo of <see cref="Unapply"/>: the pickup counts again where it counted before.</summary>
+    public void Restore(Taken t)
+    {
+        lock (_lock)
+        {
+            var d = t.Bound ? ItemsBound : Items;
+            d[t.ItemId] = d.GetValueOrDefault(t.ItemId) + t.Count;
+            ZoneStats? zs = null;
+            if (t.Zone.Length > 0) { if (!Zones.TryGetValue(t.Zone, out zs)) Zones[t.Zone] = zs = new ZoneStats(); var zi = t.Bound ? zs.ItemsBound : zs.Items; zi[t.ItemId] = zi.GetValueOrDefault(t.ItemId) + t.Count; }
+            if (t.Unconfirmed) _unconfirmed[t.ItemId] = _unconfirmed.GetValueOrDefault(t.ItemId) + t.Count;
+            if (t.Skill is { } f)
+            {
+                var sk = Skill(f); sk.Items += t.Count;
+                if (t.Node) { Nodes++; sk.Nodes++; if (zs != null) zs.Nodes++; }
+                if (t.Plentiful) { Plentiful++; sk.Plentiful++; }
+                if (t.Bonus) { BonusFinds += t.Count; sk.Bonus += t.Count; }
+            }
+            else
+            {
+                if (zs != null) zs.Drops += t.Count;
+                if (t.Mob != null && _mobs.TryGetValue(t.Mob, out var m)) m.Drops[t.ItemId] = m.Drops.GetValueOrDefault(t.ItemId) + t.Count;
+            }
+        }
+    }
+
+    static void Dec(Dictionary<long, int> d, long id, int n) { int left = d.GetValueOrDefault(id) - n; if (left > 0) d[id] = left; else d.Remove(id); }
+
     /// <summary>An attempt counted under one node moved to another, once a better witness named it (the gather's own result).</summary>
     public void RefileAttempt(GatherFamily fromFamily, string fromNode, GatherFamily toFamily, string toNode, bool ok)
     {

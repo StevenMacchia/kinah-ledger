@@ -1623,6 +1623,41 @@ public sealed class InstanceLog
     /// <summary>A kept run changed (read again, parked, sent): its line in instances.jsonl is written again in place.</summary>
     public void Save(InstanceRun r) { lock (_lock) RewriteLocked(r); }
 
+    /// <summary>
+    /// "Not a drop" on a pickup a run counted: the run open at <paramref name="at"/> (or the newest finished one it falls in)
+    /// that holds that many of the item gives them back. A finished run is rewritten, and sent to the site again as a
+    /// correction when it went there. Returns the run's start, or null when no run holds it.
+    /// </summary>
+    public DateTime? TakeItem(DateTime at, long itemId, int count, bool bound)
+    {
+        lock (_lock)
+        {
+            bool Holds(InstanceRun r) => (bound ? r.BoundItems : r.Items).GetValueOrDefault(itemId) >= count
+                && at >= r.Start.AddSeconds(-5) && (r == _cur || at <= (r.LastLoot ?? r.Start).AddSeconds(RewardGraceSeconds + 60));
+            var run = _cur is { } c && Holds(c) ? c : _done.LastOrDefault(Holds);
+            if (run == null) return null;
+            var d = bound ? run.BoundItems : run.Items;
+            int left = d.GetValueOrDefault(itemId) - count; if (left > 0) d[itemId] = left; else d.Remove(itemId);
+            if (bound) run.Bound = Math.Max(0, run.Bound - count);
+            if (run != _cur) { if (WentToSite(run)) run.Resend = true; RewriteLocked(run); }
+            return run.Start;
+        }
+    }
+
+    /// <summary>Undo of <see cref="TakeItem"/>: the run that started at <paramref name="start"/> holds the item again.</summary>
+    public void PutItem(DateTime start, long itemId, int count, bool bound)
+    {
+        lock (_lock)
+        {
+            var run = _cur is { } c && c.Start == start ? c : _done.LastOrDefault(r => r.Start == start);
+            if (run == null) return;
+            var d = bound ? run.BoundItems : run.Items;
+            d[itemId] = d.GetValueOrDefault(itemId) + count;
+            if (bound) run.Bound += count;
+            if (run != _cur) { if (WentToSite(run)) run.Resend = true; RewriteLocked(run); }
+        }
+    }
+
     /// <summary>A run read from its pictures after the queue let it go (a retry on a start): back in the queue to be sent.</summary>
     public void Requeue(InstanceRun r) { lock (_lock) if (!_unshared.Contains(r)) _unshared.Add(r); }
 

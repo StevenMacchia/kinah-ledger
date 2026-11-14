@@ -1045,6 +1045,8 @@ options: --process aion[,other]");
                 .Concat(e.RewardSnapshot().Select(kv => ("reward " + kv.Key, kv.Value))).OrderBy(x => x.Item1, StringComparer.Ordinal))
                 Console.WriteLine($"    {n} = {c}");
         }
+        // --landed: every pickup counted, with its time and where it landed (to diff two builds' replays pickup by pickup)
+        if (opts.ContainsKey("landed")) foreach (var (at, what, where) in landed.OrderBy(x => x.At)) Console.WriteLine($"    landed {at.ToLocalTime():HH:mm:ss.f}  {what}  -> {where}");
         Console.WriteLine($"  loot list            {s.CrossCheck.Matched} matched the chat · {s.CrossCheck.Added} added (chat missed) · {s.CrossCheck.Duplicates} chat repeats skipped");
         Console.WriteLine("  by enemy:");
         foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
@@ -1659,6 +1661,7 @@ options: --process aion[,other]");
         ok &= Session.RunRecountTests.Run(items, s);
         ok &= Session.ReliabilityTests.Run(items, s);
         ok &= Session.QtySettleTests.Run(items, s);
+        ok &= Session.NotDropTests.Run(items, s);
         ok &= Session.PassCostTests.Run(items, s);
         ok &= Session.PageFollowTests.Run();
         ok &= SharePictureTest();

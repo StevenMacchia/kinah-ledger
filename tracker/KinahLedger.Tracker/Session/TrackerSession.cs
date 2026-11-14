@@ -1577,6 +1577,12 @@ public sealed partial class TrackerSession
                 // Orichalcum Ore x2 with its race, read as the Daeva Pass window opened)
                 bool gathered = reward && why == null && parsed is ItemAcquired gw && GatherVouched(gw.ItemId, parsed.Time);
                 var ev = (reward && !gathered || why != null || InBaseNotOdyle(parsed) || baseKina) && !made ? _parser.AsReward(parsed) : parsed;
+                // an item line set aside (bought at the Market, a reward, the inventory at work) is handled all the same: the
+                // repeat guard keeps it as a copy, so the chat showing it again after a window over it is never a drop
+                // (Steven, 2026-11-13 18:35: two Wrathful Ego bought, then counted as rare drops after the crafting window);
+                // and a set-aside line that is such a copy itself is left out, not set aside twice
+                if (parsed is ItemAcquired asideItem && ev is not ItemAcquired && !via.Contains("count read again")
+                    && AsideLine(asideItem, raw, why ?? (reward ? "a reward window was open" : "set aside"), meta, lines, meta?.At ?? parsed.Time, now)) { any = true; skipped++; continue; }
                 // counted as one from a line that showed no count: that one is no witness of a reward picture's count
                 if (ev is ItemAcquired or RewardReceived && !via.Contains("count read again") && _parser.CountUnsure(raw)) MarkAssumed(ev);
                 // an item that is a reward only because a window was open doesn't open a new one: a window would chain on

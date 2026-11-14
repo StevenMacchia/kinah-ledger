@@ -1,0 +1,11 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Wrathful Ego bought, read again after the crafting window, 2026-11-13 18:35:20 to 18:36:41 local (Steven: \"i bought the egos and they counted as drops it fucked up my totals\"): two \"Wrathful Ego acquired.\" lines at 18:35:51 with the Market just closed, set aside as bought. The crafting window then covered the chat (18:35:53 to 18:36:02); a garbled read at 18:36:13.3 showed one of the two lines and stood as the last read, so the clean read after it took the second copy for new, and at 18:36:16.9 \"the read shows 2 such lines\" took the other. Kills in the Abyss stood beside both, so 0.10.66 counted two rare Wrathful Ego drops and gave their quest points. Right: no Wrathful Ego drop (the two stay bought, set aside as rewards). A line set aside is a copy the repeat guard keeps (ItemRepeatGuard.Aside): read again with no more copies on screen, it is that line",
+  "source": "Steven's trace.log 2026-11-13 23:35:20 to 23:36:41 UTC (18:35:20 to 18:36:41 local, tracker 0.10.66): chat kept only for the game's own lines (pickups, Kina, Points, the Market's and the crafting window's words), every player's line and its wrapped words replaced by a filler keyed by its text's hash (a garbled reading of a line by its clean line's); list, zone and market reads as recorded. The proof crops 20261113-183615-368 and 183616-967 show the two lines",
+  "expect": {
+    "items": { "Wrathful Ego": 0 },
+    "rewards": { "Wrathful Ego": 2 }
+  }
+}
