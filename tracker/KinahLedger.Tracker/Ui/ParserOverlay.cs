@@ -26,6 +26,8 @@ public sealed class ParserOverlay : Window
     public event Action<ParserMode>? ModePicked;
     public event Action? HideAsked;
     public event Action? ClickThroughAsked;
+    /// <summary>Each member's Combat Power and item level beside their DPS (Options › In game › Parser › Group details).</summary>
+    public bool ShowDetails { get; set; }
     /// <summary>The mode the menu ticks (set by the window).</summary>
     public ParserMode Mode { get; set; }
 
@@ -197,7 +199,7 @@ public sealed class ParserOverlay : Window
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}";
+        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}";
         if (sig == _sig) return;
         _sig = sig;
         _body.Children.Clear();
@@ -293,7 +295,7 @@ public sealed class ParserOverlay : Window
         if (e.Roster.Count > 0)
         {
             bool dmg = e.HasDamage;
-            bool gear = e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0);
+            bool gear = ShowDetails && e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0);
             var rows = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
             Grid Row()
             {

@@ -19,8 +19,9 @@ public static partial class WpfApp
     {
         Ensure();
         Directory.CreateDirectory(dir);
-        var states = state is "true" or "all" or "" ? ParserStates.Append("overlay").ToArray() : new[] { state };
-        if (states.Any(st => st != "overlay" && !ParserStates.Contains(st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        // the default renders, then the PR's second set with every Parser option on ("-all")
+        var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
+        if (states.Any(st => st != "overlay" && !ParserStates.Contains(st.EndsWith("-all") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -60,7 +61,7 @@ public static partial class WpfApp
         var cleared = pastRun.Last(e => e.Outcome == "cleared");
         var pvp = pastFight.Last(e => e.PlayerKills > 0);
         var kill = past.Last(e => e.Outcome == "kill");
-        var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a gap in the game's traffic");
+        var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a moment the tracker missed");
         var shots = new List<(string File, Encounter E, DateTime At)>
         {
             ("ui-parser-overlay-live.png", live!, now),
@@ -140,6 +141,47 @@ public static partial class WpfApp
         Walk(w.ParserPage);
         check(meters.Count >= 4 && Math.Abs(meters.Max() - 1) < 1e-9 && meters.Zip(meters.Skip(1)).All(x => x.First >= x.Second - 1e-9),
             $"Parser: each group row on a meter bar, the top one full and the rest shorter in order: {string.Join(", ", meters.Select(x => x.ToString("0.00")))}");
+        // minimal by default (Steven, 2026-11-14): no CP, item level, damage or kills near you until Options turns them on
+        w.ShowParserDemo("live"); DoEvents();
+        var plain = ParserTexts(w.ParserPage);
+        w.ShowParserDemo("live-all"); DoEvents();
+        var every = ParserTexts(w.ParserPage);
+        // a class emblem's hover names its class: that stays (the emblem is the class, colour-blind or not)
+        var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0).ToList();
+        check(!plain.Texts.Contains("CP") && !plain.Texts.Contains("Damage") && !plain.Texts.Contains("Kills near you") && plain.Texts.Contains("DPS") && plainTips.Count == 0
+            && every.Texts.Contains("CP") && every.Texts.Contains("Item lvl") && every.Texts.Contains("Damage") && every.Texts.Contains("Kills near you") && every.Tips.Count > 3,
+            $"Parser: minimal by default (DPS, no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(plain.Texts.Contains("CP") ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(plain.Texts.Contains("Kills near you") ? "; kills near you shown" : "")}");
+        // no word for how the game is read, anywhere on the page or its hovers (only Options names it)
+        var banned = new[] { "packet", "traffic", "npcap", "decoder", "recording", "game's message", "game's own message", "from the game itself", "packet reading", "game's clock", "pc's clock" };
+        foreach (var st in new[] { "live-all", "detail-all", "run-all", "fight-history-all", "nogroup-all", "nodamage-all", "empty-all" })
+        {
+            w.ShowParserDemo(st); DoEvents();
+            var (texts, tips) = ParserTexts(w.ParserPage);
+            var hit = texts.Concat(tips).Where(t => banned.Any(b => t.Contains(b, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (hit.Count > 0) { check(false, $"Parser {st}: no word for how the game is read: \"{hit[0]}\""); return; }
+        }
+        check(true, "Parser: no word for how the game is read on the page or its hovers, in any state");
+        // Options › In game › Parser: four switches, off by default, before Rare drops
+        var opt = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        opt.Show(); DoEvents();
+        var sws = opt.ParserSwitchesForTest;
+        check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, Kills and deaths, List filters, Explanations on hover, all off by default");
+        opt.Close();
         w.ShowPartForTest("Farming"); w.ShowDemo(); DoEvents();
+    }
+
+    /// <summary>Every text and hover on the Parser page, for the checks above.</summary>
+    static (HashSet<string> Texts, List<string> Tips) ParserTexts(DependencyObject root)
+    {
+        var texts = new HashSet<string>(); var tips = new List<string>();
+        void Walk(DependencyObject d)
+        {
+            if (d is System.Windows.Controls.TextBlock t && t.Text.Length > 0) texts.Add(t.Text);
+            if (d is System.Windows.Controls.ContentControl cc && cc.Content is string cs) texts.Add(cs);
+            if (d is FrameworkElement fe && fe.ToolTip is string tip) tips.Add(tip);
+            foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
+        }
+        Walk(root);
+        return (texts, tips);
     }
 }

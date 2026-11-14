@@ -21,6 +21,21 @@ public sealed class ParserPrefs
     public string Mode { get; set; } = "boss";
     /// <summary>Which records the list shows ("boss", "run", "fight"); the mode's own when empty.</summary>
     public string ListMode { get; set; } = "";
+    /// <summary>
+    /// Minimal by default (Steven, 2026-11-14): the page and the overlay show the boss, the clock and each member's DPS;
+    /// these switches (Options › In game › Parser) add each member's class, Combat Power, item level and damage (Details),
+    /// kills near you and the group's deaths (KillsNear), the list's kind and boss pickers (Filters), and the explanations
+    /// on hover (Hovers).
+    /// </summary>
+    public bool Details { get; set; }
+    public bool KillsNear { get; set; }
+    public bool Filters { get; set; }
+    public bool Hovers { get; set; }
+
+    /// <summary>Options saved the Parser's switches: the window reads them again.</summary>
+    public static event Action? Saved;
+    public static void RaiseSaved() => Saved?.Invoke();
+
     /// <summary>The last filters on the Parser page's list.</summary>
     public string KindFilter { get; set; } = "";
     public string BossFilter { get; set; } = "";

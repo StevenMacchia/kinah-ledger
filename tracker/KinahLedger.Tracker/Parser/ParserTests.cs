@@ -102,7 +102,7 @@ public static class ParserTests
             p.Take(new BossEngaged(t.AddSeconds(5), "Ruthilis of Pain", 910));
             p.Take(new FeedGap(t.AddSeconds(30)));
             p.Take(new FeedGap(t.AddSeconds(40)));
-            Check(p.Live is { Partial: true } l && l.PartialWhy.Single() == "2 gaps in the game's traffic" && l.Kind == "Transcendence",
+            Check(p.Live is { Partial: true } l && l.PartialWhy.Single() == "2 moments the tracker missed" && l.Kind == "Transcendence",
                 $"lost traffic marks the fight partial, said once: {string.Join("; ", p.Live?.PartialWhy ?? new())}");
             p.Take(new InstanceEntered(t.AddSeconds(120), ContentKind.Transcendence, "Shattered Arkanis [Stage 2]", 78));   // reconnected, same copy
             p.Take(new GroupChanged(t.AddSeconds(121), new[] { Me, Ally, Ally2 }));
