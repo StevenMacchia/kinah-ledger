@@ -8,7 +8,7 @@ namespace KinahLedger.Ui;
 /// </summary>
 public sealed class HudPrefs
 {
-    /// <summary>Clicks go through the panel to the game and it never takes focus. On for new installs; an install from before keeps it draggable.</summary>
+    /// <summary>Clicks go through the panel to the game and it never takes focus. Off for new installs since 0.10.91 (the panel is dragged straight away); a choice in Options.</summary>
     public bool Locked { get; set; } = true;
     /// <summary>The panel's size, 0.7 to 2 (70 to 200%).</summary>
     public double Scale { get; set; } = 1;
@@ -36,6 +36,8 @@ public sealed class HudPrefs
     /// move, or the panel locked in Options. The first-session checklist's "Panel placed" (2026-11-04, Ui/MainWindow.Onboard.cs).
     /// </summary>
     public bool Placed { get; set; }
+    /// <summary>The one-time move from the old default look to Auto (0.10.91) is done; see Load.</summary>
+    public bool LookSettled { get; set; }
 
     public const double MinScale = 0.7, MaxScale = 2;
 
@@ -57,10 +59,22 @@ public sealed class HudPrefs
         try
         {
             var p = PathFor();
-            if (File.Exists(p) && JsonSerializer.Deserialize<HudPrefs>(File.ReadAllText(p)) is { } saved) return saved;
+            if (File.Exists(p) && JsonSerializer.Deserialize<HudPrefs>(File.ReadAllText(p)) is { } saved)
+            {
+                // 0.10.91 (Steven: the old look "looks cheap"): a player still on the old default, the strip, moves to Auto once;
+                // one who picked a look on purpose keeps it. LookSettled marks the move as done, so a later pick of the strip stays.
+                if (!saved.LookSettled)
+                {
+                    if (string.Equals(saved.Look, HudLooks.Strip, StringComparison.OrdinalIgnoreCase)) saved.Look = HudLooks.Auto;
+                    saved.LookSettled = true;
+                    saved.Save();
+                }
+                return saved;
+            }
         }
         catch (Exception) { /* corrupt: decide again */ }
-        var fresh = new HudPrefs { Locked = !existingInstall };
+        // overlays move by a plain drag, and click-through is a choice in Options, off at first (Steven, 2026-11-14)
+        var fresh = new HudPrefs { Locked = false, LookSettled = true };
         fresh.Save();
         return fresh;
     }
