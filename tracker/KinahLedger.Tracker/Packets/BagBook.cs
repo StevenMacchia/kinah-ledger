@@ -8,6 +8,11 @@ namespace KinahLedger.Packets;
 ///
 /// Stacks are kept by their id (the game gives them out again at each login, so totals are by item, never by stack across
 /// connections). Kinah, bound Kinah and Abyss Points are kept apart: the decoder says which rows they are.
+///
+/// The totals are the bag's only (Steven, 2026-11-14: "it should only show what's on my character in my bag"): the game's
+/// container 1, its Cube. On 2026-11-13 22:18 it held 73 stacks with the ten currencies the Cube shows in its first rows, and
+/// with the one new stack of 22:19 the 74 of 80 slots Steven's screenshot shows; the other containers (materials, the second
+/// tab, storage) are left out, and the gear worn is its own list. A new stack lands in the bag.
 /// Thread-safe: the reading thread writes, the window reads copies.
 /// </summary>
 public sealed class BagBook
@@ -68,7 +73,7 @@ public sealed class BagBook
             if (c.Op == ItemOp.Gone) _stacks.Remove(c.StackId);
             else
             {
-                int box = _stacks.TryGetValue(c.StackId, out var was) ? was.Container : 0;
+                int box = _stacks.TryGetValue(c.StackId, out var was) ? was.Container : InBag;   // a new stack is a pickup or a craft's: in the bag
                 _stacks[c.StackId] = (c.ItemId, c.Total, box);
             }
         }
@@ -77,18 +82,21 @@ public sealed class BagBook
     /// <summary>A currency's amount now.</summary>
     public void Take(CurrencyChange c) { lock (_gate) if (KnownAt != null && c.What != CurrencyKind.RankPoints) _money[c.What] = c.Amount; }
 
-    /// <summary>The items held now, by item id (stacks added up), leaving out the gear worn (<paramref name="worn"/> false); null when unknown.</summary>
-    public Dictionary<long, long>? Totals(bool worn = false) { lock (_gate) return KnownAt == null ? null : TotalsLocked(worn); }
+    /// <summary>The items in the bag now, by item id (stacks added up); every container's with <paramref name="all"/>; null when unknown.</summary>
+    public Dictionary<long, long>? Totals(bool all = false) { lock (_gate) return KnownAt == null ? null : TotalsLocked(all); }
 
-    Dictionary<long, long> TotalsLocked(bool worn = false)
+    Dictionary<long, long> TotalsLocked(bool all = false)
     {
         var t = new Dictionary<long, long>();
         foreach (var (id, n, box) in _stacks.Values)
-            if (n > 0 && (worn || box != Worn)) t[id] = t.GetValueOrDefault(id) + n;
+            if (n > 0 && (all || box == InBag)) t[id] = t.GetValueOrDefault(id) + n;
         return t;
     }
 
-    /// <summary>The items held at the first snapshot since the tracker started (gear worn left out); empty before one.</summary>
+    /// <summary>The stacks in the bag now, the currencies the Cube shows among them; null when unknown.</summary>
+    public int? BagStacks { get { lock (_gate) return KnownAt == null ? null : _stacks.Values.Count(s => s.Container == InBag) + _money.Count; } }
+
+    /// <summary>The bag's items at the first snapshot since the tracker started; empty before one.</summary>
     public Dictionary<long, long> FirstTotals { get { lock (_gate) return new Dictionary<long, long>(_first); } }
 
     /// <summary>The gear worn at the last snapshot, by slot, with its enhancement level; null when the inventory is unknown.</summary>
@@ -97,6 +105,6 @@ public sealed class BagBook
     /// <summary>A currency's amount now, null when unknown.</summary>
     public long? Money(CurrencyKind k) { lock (_gate) return KnownAt != null && _money.TryGetValue(k, out var v) ? v : null; }
 
-    /// <summary>The container the game keeps the gear worn in.</summary>
-    public const int Worn = 11;
+    /// <summary>The container the game keeps the gear worn in, and the bag's (its Cube).</summary>
+    public const int Worn = 11, InBag = 1;
 }

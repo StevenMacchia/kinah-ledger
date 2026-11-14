@@ -113,6 +113,7 @@ public partial class OptionsWindow : Window
         GrossChk.IsChecked = c.ShowGross;
         RecapChk.IsChecked = c.RunRecap;
         ExplainChk.IsChecked = c.ExplainCounts;
+        InvDetailsChk.IsChecked = c.InventoryDetails;
         PacketChk.IsChecked = c.PacketReading;
         PacketStateLbl.Text = c.PacketState.Length > 0 ? "Now: " + c.PacketState : "";
         GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
@@ -248,6 +249,7 @@ public partial class OptionsWindow : Window
         GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });
         RecapChk.Click += (_, _) => Edit(_edit with { RunRecap = RecapChk.IsChecked == true });
         ExplainChk.Click += (_, _) => Edit(_edit with { ExplainCounts = ExplainChk.IsChecked == true });
+        InvDetailsChk.Click += (_, _) => Edit(_edit with { InventoryDetails = InvDetailsChk.IsChecked == true });
         PacketChk.Click += (_, _) => Edit(_edit with { PacketReading = PacketChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {

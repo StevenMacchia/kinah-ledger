@@ -445,6 +445,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
         --timers-page           the Timers page in the window: live, none (timers-page-*.png)
         --timers                the timers' window (events and world bosses): live, getting ready, an hour old, none
                                 (timers-*.png); --bosses is the same
+        --inventory             the Inventory window: this session's drops, the bag, the bag not known yet, each with details (inventory-*.png)
         --wrapped week|day      the Week wrapped or Day wrapped sheet (with --state, over that state; KL_MOTION_AT holds its sequence)
         --recap                 the run-end recap card in each of its states (ui-recap-<state>.png); with KL_MOTION_AT=0..1,
                                 held at that point of its opening
@@ -1344,6 +1345,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        if (o.ContainsKey("inventory")) { WpfApp.ShotInventory(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("timers-page")) { WpfApp.ShotTimersPage(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("bosses") || o.ContainsKey("timers")) { WpfApp.ShotBosses(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("recap")) { WpfApp.ShotRecap(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }

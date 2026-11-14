@@ -339,6 +339,7 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.Reading);
         Check(o.PageReading.Visibility == Visibility.Visible && o.ExplainChk.IsChecked == false && !p.ExplainCounts, "Explain each count: on Game reading, off by default");
+        Check(o.InvDetailsChk.IsChecked == false && !p.InventoryDetails, "Inventory details: off by default (the window shows the worth and the items)");
         Check(!w.SampleLineReportExplains(), "a line's card has no WHY IT WAS COUNTED with it off");
         Flip(o.ExplainChk);
         Check(o.SaveBtn.IsEnabled && !p.ExplainCounts, "the explain switch waits for Save");

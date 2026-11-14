@@ -436,21 +436,22 @@ public static class PacketTests
                 new ItemChange(t0.AddSeconds(32), Id("Life Potion (Bound)"), ItemOp.Gone, 13, -364, 0, false, 3, 1, true));
             r.AmountForTest(CurrencyKind.Kinah, 4_727_973, t0.AddSeconds(29)); r.AmountForTest(CurrencyKind.Kinah, 4_728_099, t0.AddSeconds(30));
             var after = bag.Totals()!;
-            Check(unknownFirst && tot.GetValueOrDefault(Id("Orichalcum Ore")) == 773 && !tot.ContainsKey(Id("Orichalcum Guard")) && bag.Totals(worn: true)!.ContainsKey(Id("Orichalcum Guard"))
+            Check(unknownFirst && tot.GetValueOrDefault(Id("Orichalcum Ore")) == 31 && !tot.ContainsKey(Id("Orichalcum Guard")) && bag.Totals(all: true)!.GetValueOrDefault(Id("Orichalcum Ore")) == 774 && bag.BagStacks == 3
                 && bag.WornGear() is [{ Slot: 2, Level: 12 }]
-                && after.GetValueOrDefault(Id("Orichalcum Ore")) == 774 && after.GetValueOrDefault(Id("Odyle")) == 1 && !after.ContainsKey(Id("Life Potion (Bound)")) && bag.Money(CurrencyKind.Kinah) == 4_728_099 && bag.LastRows == (5, 5),
-                $"the inventory: unknown before its snapshot, then Orichalcum Ore {tot.GetValueOrDefault(Id("Orichalcum Ore"))} (two stacks), the gear worn apart; after the changes {after.GetValueOrDefault(Id("Orichalcum Ore"))} ore, {after.GetValueOrDefault(Id("Odyle"))} Odyle, the potions gone, Kinah {bag.Money(CurrencyKind.Kinah):N0}");
-            // its worth: tradable at the price, bound at its tradable twin's, unpriced counted; the change since the first snapshot
+                && after.GetValueOrDefault(Id("Orichalcum Ore")) == 32 && after.GetValueOrDefault(Id("Odyle")) == 1 && !after.ContainsKey(Id("Life Potion (Bound)")) && bag.Money(CurrencyKind.Kinah) == 4_728_099 && bag.LastRows == (5, 5),
+                $"the inventory: unknown before its snapshot, then the bag only: Orichalcum Ore {tot.GetValueOrDefault(Id("Orichalcum Ore"))} (the 742 in storage left out), the gear worn apart; after the changes {after.GetValueOrDefault(Id("Orichalcum Ore"))} ore, {after.GetValueOrDefault(Id("Odyle"))} Odyle, the potions gone, Kinah {bag.Money(CurrencyKind.Kinah):N0}");
+            // its worth: the tradable items at the price, a bound item no value (it can't be sold), unpriced counted; the change since the first snapshot
             var prices = new Dictionary<string, long> { ["Orichalcum Ore"] = 2_000, ["Life Potion"] = 100 };
             var w = Session.BagValue.Of(after, bag.FirstTotals, items, n => prices.TryGetValue(n, out var v) ? v : null, 0.9);
-            Check(w.Total == 774 * 2_000 && w.Sellable == (long)Math.Round(774 * 2_000 * 0.9) && w.Unpriced == 1 && w.Change == 2_000 - 364 * 100 && w.Lines[0].Name == "Orichalcum Ore",
-                $"...worth {w.Total:N0}, sellable {w.Sellable:N0} after a 10% cut, {w.Unpriced} kind without a price (Odyle), {w.Change:N0} since the first (one ore up, the bound potions gone at their twin's price)");
-            // a bound item counts at its twin's price and never as sellable
+            Check(w.Total == 32 * 2_000 && w.Sellable == (long)Math.Round(32 * 2_000 * 0.9) && w.Unpriced == 1 && w.Change == 2_000 && w.BoundKinds == 0 && w.Lines[0].Name == "Orichalcum Ore",
+                $"...worth {w.Total:N0}, sellable {w.Sellable:N0} after a 10% cut, {w.Unpriced} kind without a price (Odyle), {w.Change:N0} since the first (one ore up; the bound potions gone had no value)");
+            // a bound item has no value and is counted apart
             var wb = Session.BagValue.Of(new Dictionary<long, long> { [Id("Life Potion (Bound)")] = 10 }, null, items, n => prices.TryGetValue(n, out var v) ? v : null, 0.9);
-            Check(wb.Total == 1_000 && wb.Sellable == 0 && wb.Unpriced == 0 && wb.Change == null && wb.Lines[0].Bound, $"...a bound item: worth {wb.Total:N0} at its twin's price, sellable {wb.Sellable}");
+            Check(wb.Total == 0 && wb.Sellable == 0 && wb.Unpriced == 0 && wb.Change == null && wb.Lines[0].Bound && wb.Lines[0].Price == null && wb is { BoundKinds: 1, BoundCount: 10 },
+                $"...a bound item has no value (it can't be sold), counted apart: worth {wb.Total:N0}, {wb.BoundCount} bound");
             // a new connection: unknown until its own snapshot; the first snapshot stays the session's start
             r.Bag.Unknown();
-            Check(bag.Totals() == null && bag.FirstAt == t0 && bag.FirstTotals.GetValueOrDefault(Id("Orichalcum Ore")) == 773, "...a new connection makes it unknown again, and the session's start stays the first snapshot");
+            Check(bag.Totals() == null && bag.FirstAt == t0 && bag.FirstTotals.GetValueOrDefault(Id("Orichalcum Ore")) == 31, "...a new connection makes it unknown again, and the session's start stays the first snapshot");
         }
 
         // the inventory in the recordings of 2026-11-13 through this build's decoder: the 18:49:42 snapshot kept up with every
@@ -479,8 +480,8 @@ public static class PacketTests
                     foreach (var sl in new[] { 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 15, 16, 17, 19, 22 }) want[sl] = 10;
                     Check(worn.Count == 20 && want.All(kv => worn.GetValueOrDefault(kv.Key) == kv.Value),
                         $"the gear worn in the recordings, by slot: {string.Join(" ", worn.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:+{kv.Value}"))} (Steven's screenshot: 19 of 19 levels)");
-                    Check(differ == 0 && agree > 200 && kinahSame && a.LastRows.Said == a.LastRows.Read && b2.LastRows.Said == b2.LastRows.Read,
-                        $"the inventory in the recordings: the 18:49 snapshot ({a.LastRows.Read} of {a.LastRows.Said} stacks) kept up with every change equals the 20:01 one ({b2.LastRows.Read} of {b2.LastRows.Said}) for {agree} items, {differ} differ; Kinah at the first connection's end {a.Money(CurrencyKind.Kinah):N0} (the second snapshot says 4,922,940)");
+                    Check(differ == 0 && agree > 40 && kinahSame && a.LastRows.Said == a.LastRows.Read && b2.LastRows.Said == b2.LastRows.Read,
+                        $"the inventory in the recordings: the 18:49 snapshot ({a.LastRows.Read} of {a.LastRows.Said} stacks) kept up with every change equals the 20:01 one ({b2.LastRows.Read} of {b2.LastRows.Said}) for {agree} items in the bag, {differ} differ; Kinah at the first connection's end {a.Money(CurrencyKind.Kinah):N0} (the second snapshot says 4,922,940)");
                 }
                 else Check(false, $"the inventory in the recordings: {books.Count(b => b.Snapshots > 0)} connections with a snapshot (expected 2)");
             }

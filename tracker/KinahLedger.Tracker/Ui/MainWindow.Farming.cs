@@ -60,6 +60,8 @@ public partial class MainWindow
                 Sub: _fullTooWide && !FullShown ? "Needs a wider screen than this one" : "Twice as wide: the drop tables beside the loot",
                 Tip: "On: the window doubles in width, with the drops, Who pays and the odds beside the live card. Off (Compact): one column. Farming only; Crafting, Runs and Quests keep one column."),
             MenuEntry.Line,
+            // Inventory (0.10.85): this session's drops first, the whole bag when chosen, in a window of its own (Ui/MainWindow.Inventory.cs)
+            InventoryMenuEntry(),
             room ? new MenuEntry("Set a goal…", () => OpenGoalSheet(null, new GoalDraft(), MoreBtn), Tip: "Kinah, an item or runs to reach today. Up to three, shown over LOOT.")
                  : new MenuEntry("Set a goal…", Sub: "Three goals are set. Click one to change or remove it."),
             // Keep above other windows (0.10.26): the same switch as Options › General, for a windowed game on one screen
