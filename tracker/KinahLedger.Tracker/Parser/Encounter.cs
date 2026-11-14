@@ -128,8 +128,11 @@ public sealed class Encounter
     /// </summary>
     public double FarmDps() => You is { Damage: > 0 } me ? me.Damage / Math.Max(1, me.FightingSeconds) : 0;
 
-    /// <summary>A member's share of the group's damage, 0 to 1 (0 when damage isn't known).</summary>
-    public double Share(Fighter f) { long all = Roster.Sum(x => x.Damage); return HasDamage && all > 0 ? f.Damage / (double)all : 0; }
+    /// <summary>
+    /// A member's share of the group's damage, 0 to 1 (0 when damage isn't known). Over the members only (Steven, 2026-11-14:
+    /// "there should be no 'other' in the parser"): damage no hit named (damage over time) is in no row, so the rows add up to 100%.
+    /// </summary>
+    public double Share(Fighter f) { long all = Members.Sum(x => x.Damage); return HasDamage && all > 0 && !f.Other ? f.Damage / (double)all : 0; }
 
     /// <summary>A share as the rows say it: "25.1%", "100%".</summary>
     public static string Pct(double share) => share >= 0.9995 ? "100%" : (share * 100).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
@@ -151,20 +154,37 @@ public sealed class Encounter
     /// <summary>"Ferocious Horn Den · Conquest": the instance with the game's mode for it, when known.</summary>
     [JsonIgnore] public string Place { get { var i = BossBook.Strip(Instance); return GameMode.Length == 0 ? i : i.Length == 0 ? GameMode : $"{i} · {GameMode}"; } }
 
-    /// <summary>The group's damage per second.</summary>
-    public double GroupDps(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? Roster.Sum(f => f.Damage) / s : 0; }
+    /// <summary>The group's damage per second: the members' (the rows'), never damage no hit named.</summary>
+    public double GroupDps(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? Members.Sum(f => f.Damage) / s : 0; }
+
+    /// <summary>The meter's top: the biggest member's damage when known, else Combat Power (at least 1).</summary>
+    public double TopMeasure() => Math.Max(1, Members.Select(f => HasDamage ? (double)f.Damage : f.CombatPower).DefaultIfEmpty(1).Max());
+
+    /// <summary>
+    /// Not a record: the card the overlay shows in a dungeon before its first pull (Steven, 2026-11-14: "turn into the parser
+    /// when you're in a dungeon ... persist throughout the dungeon"). Never kept.
+    /// </summary>
+    [JsonIgnore] public bool Waiting { get; set; }
+
+    /// <summary>The dungeon's card before its first pull: the instance's name, no clock, no rows.</summary>
+    public static Encounter Ready(ContentKind kind, string instance, string gameMode, DateTime now) => new()
+    {
+        Id = "ready", Mode = "boss", Kind = KindName(kind), Instance = instance, GameMode = gameMode,
+        Boss = BossBook.Strip(instance).Length > 0 ? BossBook.Strip(instance) : KindName(kind),
+        Start = now, End = now, LastAt = now, Waiting = true,
+    };
 
     /// <summary>
     /// The rows the live card, the overlay and the list show (Steven, 2026-11-14: "don't count [a member] until they have at
-    /// least 1 [damage]"): with damage counted, only members who have dealt some (and Other); before any damage, everyone.
-    /// The detail's roster lists everyone.
+    /// least 1 [damage]"): with damage counted, only members who have dealt some; before any damage, everyone. The detail's
+    /// roster lists every member. Never an "Other" row (Steven, 2026-11-14).
     /// </summary>
     public IEnumerable<Fighter> Shown() => HasDamage ? Ranked().Where(f => f.Damage > 0) : Ranked();
 
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
-        ? Roster.OrderBy(f => f.Other).ThenByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-        : Roster.Where(f => !f.Other).OrderByDescending(f => f.You).ThenByDescending(f => f.CombatPower).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
+        ? Members.OrderByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+        : Members.OrderByDescending(f => f.You).ThenByDescending(f => f.CombatPower).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
 
     public static string KindName(ContentKind k) => k switch
     {

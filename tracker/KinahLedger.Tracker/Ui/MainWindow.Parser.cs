@@ -313,6 +313,10 @@ public partial class MainWindow
         }
         if (live != null) { _parserLastLiveId = live.Id; _parserJustEnded = null; }
         var show = live ?? ((now - _parserEndedAt).TotalSeconds <= OverlayResultSeconds ? _parserJustEnded : null);
+        // Steven, 2026-11-14: "turn into the parser when you're in a dungeon - it should not disappear after a fight and persist
+        // throughout the dungeon - it should reset each fight": in a Transcendence, an Expedition or a Sanctuary the meter stays,
+        // the last fight's result until the next one starts afresh, the dungeon's ready card before the first
+        if (show == null && DungeonMeter(now) is { } held) show = held;
         // Steven, 2026-11-14: big "only inside of expeditions and other runs": an open-world fight never opens the section or
         // the separate overlay; it is one small figure on the Kinah line instead (your DPS, Options › In game › Parser)
         if (show is { OpenWorld: true }) show = null;
@@ -353,6 +357,20 @@ public partial class MainWindow
         _parserOverlay.ShowWanted(true);
     }
 
+
+    /// <summary>
+    /// The meter to hold while in a dungeon with no fight under way: the last fight that ended in this dungeon, else its ready
+    /// card; null outside one.
+    /// </summary>
+    Encounter? DungeonMeter(DateTime now)
+    {
+        var (kind, instance) = ParserWhere;
+        if (kind is not (ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary)) return null;
+        if (_parserJustEnded is { OpenWorld: false } last && BossBook.Strip(last.Instance).Equals(BossBook.Strip(instance), StringComparison.OrdinalIgnoreCase)) return last;
+        if (_parserReady == null || !_parserReady.Instance.Equals(instance, StringComparison.Ordinal)) _parserReady = Encounter.Ready(kind, instance, "", now);
+        return _parserReady;
+    }
+    Encounter? _parserReady;
 
     /// <summary>Your live DPS in the open-world fight under way ("13.2K"), or "" (none, no hit of yours yet, or turned off in Options).</summary>
     string FarmDpsText(DateTime now)
@@ -713,7 +731,7 @@ public partial class MainWindow
         if (cols.Skip(2).Any(c => c.Head.Length > 0)) host.Children.Add(head);
         // what the bars measure: damage when the game gives it, else Combat Power (the group's strength before a hit lands)
         double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
-        double top = Math.Max(1, e.Roster.Max(Measure));
+        double top = e.TopMeasure();
         bool first = true;
         // Steven, 2026-11-14: "don't count [a member] until they have at least 1 [damage]": the live card shows those who
         // have; the detail lists everyone, those with none last and quiet
@@ -775,10 +793,10 @@ public partial class MainWindow
     FrameworkElement DpsFigure(Encounter e, Fighter f, DateTime now)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
-        sp.Children.Add(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, "Ink"));
+        sp.Children.Add(PT(Amounts.Short(e.Dps(f, now)), 15, FontWeights.Bold, "Ink"));
         sp.Children.Add(Margin(PT("DPS", 10.5, FontWeights.SemiBold, "Faint"), 3, 1, 0, 0));
         sp.Children.Add(Margin(PT("·", 12, FontWeights.SemiBold, "Faint"), 6, 0, 6, 0));
-        sp.Children.Add(PT(Encounter.Pct(e.Share(f)), 12.5, FontWeights.SemiBold, "Text2"));
+        sp.Children.Add(PT(Encounter.Pct(e.Share(f)), 13.5, FontWeights.SemiBold, "Text2"));
         // the figure behind them, always (a figure, not an explanation)
         sp.ToolTip = $"{Amounts.Short(f.Damage)} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(f, now)))}{(Encounter.ActiveBasis && !f.Other ? " active" : "")}";
         AutomationProperties.SetName(sp, $"{Amounts.Short(e.Dps(f, now))} DPS, {Encounter.Pct(e.Share(f))} of the damage");
