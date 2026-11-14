@@ -121,6 +121,7 @@ public partial class MainWindow : Window
         // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before; a render or
         // a self-test starts from the defaults, as with ui.json, so the player's look (hud.json) never changes what it draws
         _hudPrefs = watch ? HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0) : HudPrefs.Defaults();
+        InitTimers(watch);   // the header's Timers button, the timers overlay and its chime (Ui/MainWindow.Timers.cs)
         // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
         // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
         // never for a build run from its folder (the self-tests, dotnet run), which Windows must not start

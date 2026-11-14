@@ -14,6 +14,8 @@ namespace KinahLedger.Ui;
 sealed class BossWindow : Window
 {
     static Point? _at;
+    /// <summary>The window's height, whatever the card holds: 640 px, less on a short screen.</summary>
+    public static double FixedHeight => Math.Min(640, SystemParameters.WorkArea.Height - 24);
 
     readonly Grid _host = new();
     readonly ScrollViewer _scroll;
@@ -27,11 +29,13 @@ sealed class BossWindow : Window
         Background = Brushes.Transparent;
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
-        SizeToContent = SizeToContent.WidthAndHeight;
+        // a fixed size (Steven, 2026-11-14: "make sure that the windows are scrollable and a fixed size"): the card scrolls inside
+        SizeToContent = SizeToContent.Width;
+        Height = FixedHeight;
         Topmost = owner.Topmost;
         Content = _host;
         _host.Cursor = Cursors.SizeAll;
-        _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, MaxHeight = Math.Min(720, SystemParameters.WorkArea.Height - 24) };
+        _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
         _host.Children.Add(_scroll);
         var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 19, 19, 0), ToolTip = "Close (Esc)" };
         close.SetResourceReference(StyleProperty, "RoundBtn");
@@ -54,9 +58,9 @@ sealed class BossWindow : Window
         double y = _scroll.VerticalOffset;
         _scroll.Content = card;
         if (IsVisible) { _scroll.UpdateLayout(); _scroll.ScrollToVerticalOffset(y); return; }
-        if (offscreen) { _scroll.MaxHeight = double.PositiveInfinity; WindowStartupLocation = WindowStartupLocation.Manual; Left = -12000; Top = -12000; ShowActivated = false; Show(); return; }
+        if (offscreen) { WindowStartupLocation = WindowStartupLocation.Manual; Left = -12000; Top = -12000; ShowActivated = false; Show(); return; }
         card.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        double w = card.DesiredSize.Width, h = Math.Min(card.DesiredSize.Height, _scroll.MaxHeight);
+        double w = card.DesiredSize.Width, h = FixedHeight;
         var o = Owner;
         double left, top;
         if (_at is { } p) { left = p.X; top = p.Y; }

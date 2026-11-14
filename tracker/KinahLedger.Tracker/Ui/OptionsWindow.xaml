@@ -530,6 +530,9 @@
         </StackPanel>
 
         <!-- Shortcuts & tips (2026-11-04): the keys, where they work, and things a new player doesn't find on their own; rows built in OptionsWindow.Tips.cs -->
+        <!-- Timers (0.10.85, Ui/OptionsWindow.Timers.cs): the timers overlay, the chime, each timer's picks; built when shown -->
+        <StackPanel x:Name="PageTimers" Visibility="Collapsed"/>
+
         <StackPanel x:Name="PageTips" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="Shortcuts &amp; tips"/>
           <TextBlock Style="{StaticResource PageLead}" Text="The keys, where they work, and a few things that are easy to miss."/>

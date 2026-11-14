@@ -767,7 +767,7 @@ public static partial class WpfApp
             w.SharePrefsForTest = keep;
         }
 
-        // the header (UX pass 2026-11-13): the same two round buttons on every page, each with a tooltip in words; the character
+        // the header (UX pass 2026-11-13): the same round buttons on every page (Timers since 0.10.85), each with a tooltip in words; the character
         // chip shows the character counted for with its class icon; the switcher lists every character, the one counted for
         // first and marked, each with its icon, when it was played and its week, Rename on every row and Count for on the others
         {
@@ -778,9 +778,54 @@ public static partial class WpfApp
                 w.ShowPartForTest(page); DoEvents();
                 var shown = w.HeadButtons.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Visibility == Visibility.Visible).ToList();
                 seen.Add(page + ": " + string.Join(", ", shown.Select(b => System.Windows.Automation.AutomationProperties.GetName(b))));
-                Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20), $"the header's round buttons on {page}: the site and Settings, each with a tooltip ({seen[^1]})");
+                Check(shown.Count == 3 && shown.All(b => b.ToolTip is string t && t.Length > 20) && System.Windows.Automation.AutomationProperties.GetName(shown[0]) == "Timers",
+                    $"the header's round buttons on {page}: Timers, the site and Settings, each with a tooltip ({seen[^1]})");
             }
             Check(seen.Select(s => s[(s.IndexOf(':') + 1)..]).Distinct().Count() == 1, "...the same on every page");
+        // the timers (0.10.85, Ui/MainWindow.Timers.cs): a Timers button in the header opens the window; the overlay never
+        // takes focus, passes clicks through when asked, and Customize's switches land in the settings
+        {
+            var tw = w;
+            var btn = tw.TimersButtonForTest;
+            bool inHeader = btn != null && tw.HeadButtons.Children.IndexOf(btn) == 0 && System.Windows.Automation.AutomationProperties.GetName(btn) == "Timers";
+            if (btn != null) Click(btn);
+            DoEvents();
+            var open = Application.Current.Windows.OfType<BossWindow>().FirstOrDefault(x => x.Owner == tw && x.IsVisible);
+            Check(inHeader && open != null, $"timers: a Timers button first in the header ({inHeader}) opens the Timers window ({open != null})");
+            open?.Close();
+            tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
+            tw.SetTimersOverlay(true, save: false); DoEvents();
+            var ov = tw.TimersOverlayForTest;
+            long ex0 = ov?.ExStyleForTest ?? 0;
+            tw.SetTimersClickThrough(true); DoEvents();
+            long ex1 = ov?.ExStyleForTest ?? 0;
+            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) == 0 && (ex1 & Native.ExTransparent) != 0;
+            Check(ov != null && ov.Topmost && !ov.ShowActivated && ov.Owner == null && noFocus,
+                $"...the overlay: its own window (no owner), on top, never takes focus, out of Alt+Tab; click-through on demand ({noFocus})");
+            ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
+            bool hidden = ov != null && !ov.IsVisible;
+            ov?.Show(new List<Session.TimerBoard.Item> { new("boss:Heretic Layla", "Verteron", "Heretic Layla", "Rock Tomb Hill", Session.TimerBoard.Kind.Waiting, DateTime.UtcNow.AddMinutes(3), "3m 00s", "at 07:00") }, DateTime.UtcNow);
+            bool shown = ov != null && ov.IsVisible;
+            ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
+            Check(hidden && shown && ov != null && !ov.IsVisible, $"...hidden with nothing near, shown with a timer 3 min away, hidden again ({hidden} {shown})");
+            tw.SetTimersOverlay(false, save: false); DoEvents();
+            Check(tw.TimersOverlayForTest == null && !tw.TimerPrefsForTest.OverlayOn, "...and off again");
+            // Options › Timers: the overlay's switch and each timer's picks, saved as they change
+            var to = new OptionsWindow(tw, OptionsWindow.Page.Timers) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            to.Show(); DoEvents();
+            var kairaKey = Session.TimerBoard.AbyssKey("Watcher Kaira");
+            bool listed = to.TimerBoxes.ContainsKey(kairaKey) && to.TimerBoxes.ContainsKey(Session.TimerBoard.EventKey("Shugo Festival")) && to.TimerBoxes.Count >= Session.EventTimers.Schedule.Length + Session.AbyssBosses.Schedule.Length;
+            if (to.TimerBoxes.TryGetValue(kairaKey, out var kb)) { Flip(kb.Chime); Flip(kb.Overlay); }
+            bool picked = tw.TimerPrefsForTest.Chimes(kairaKey) && !tw.TimerPrefsForTest.Shows(kairaKey);
+            if (to.TimersOverlayChk != null) Flip(to.TimersOverlayChk);
+            DoEvents();
+            bool overlayOn = tw.TimersOverlayForTest != null && tw.TimerPrefsForTest.OverlayOn;
+            if (to.TimersOverlayChk != null) Flip(to.TimersOverlayChk);
+            DoEvents();
+            Check(listed && picked && overlayOn && tw.TimersOverlayForTest == null && to.Scroller.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Auto,
+                $"Options › Timers lists the timers ({to.TimerBoxes.Count}), a timer's Chime and Overlay boxes change its picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
+            to.Close();
+        }
             w.ShowPartForTest("Farming"); DoEvents();
             Check(w.MoreEntries().Any(e => e.Text == MainWindow.FullViewText && e.On != null), "Compact/Full is a switch in Farming's ⋯ menu");
             var whoChip = w.CharChipForTest();

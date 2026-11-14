@@ -522,6 +522,7 @@ public static class PacketTests
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
         BossTimerChecks(t);
+        TimerBoardChecks();
         EventTimerChecks(settings);
 
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
@@ -713,6 +714,90 @@ public static class PacketTests
         var unk = new TrackerSession(null, settings, items, "Test") { Packets = reader };
         reader.AreaForTest(new AreaEvent(e0, e0 - lag, AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay, null, "", "", "unknown-event", 9)); unk.DrainPacketsForTest();
         Check(unk.Instances.Current == null, "...an event the decoder doesn't know at all opens no run (the screen's to find)");
+    }
+
+    /// <summary>
+    /// The Abyss's bosses on their schedule against Steven's map of Chaotic Lower Reshanta (NA East, 2026-11-14, the game's
+    /// clock at 11:38:40 UTC): Watcher Kaira 21min 20s, the Executors 14h 51min 20s, Guardian Lord Nahma 1d 14h 21min. Then
+    /// the timers as one list for the overlay (what it keeps, how many), the chime (once per spawn, only for the timers picked,
+    /// not too late, not at volume 0) and the settings file.
+    /// </summary>
+    static void TimerBoardChecks()
+    {
+        var server = new DateTime(2026, 11, 14, 11, 38, 40, DateTimeKind.Utc);
+        var (zone, sure) = AbyssBosses.ZoneFor("na_e");
+        TimeSpan Left(string name) => AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == name), server, TimeSpan.Zero, zone).Left;
+        var kaira = Left("Watcher Kaira"); var tamasa = Left("Executor Tamasa"); var argo = Left("Executor Argo"); var nahma = Left("Guardian Lord Nahma");
+        Check(sure && kaira == new TimeSpan(0, 21, 20) && tamasa == new TimeSpan(14, 51, 20) && argo == tamasa && nahma == new TimeSpan(1, 14, 21, 20),
+            $"Abyss bosses on NA East's clock, as Steven's map read: Watcher Kaira {kaira} (21min 20s), the Executors {tamasa} (14h 51min 20s), Guardian Lord Nahma {nahma} (1d 14h 21min)");
+        var kst = TimeZoneInfo.CreateCustomTimeZone("kst", TimeSpan.FromHours(9), "kst", "kst");
+        var onKst = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Executor Tamasa"), server, TimeSpan.Zero, kst).Left;
+        Check(onKst != tamasa, $"...and not on UTC+9, which would say {onKst} for the Executors");
+        var spawned = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Watcher Kaira"), server.AddMinutes(31.5), TimeSpan.Zero, zone);
+        var after = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Watcher Kaira"), server.AddMinutes(52), TimeSpan.Zero, zone);
+        Check(spawned is { Spawned: true, When: "10 min ago" } && !after.Spawned && after.Left == new TimeSpan(2, 29, 20),
+            $"...Watcher Kaira \"Spawned, {spawned.When}\" 10 min after 07:00, then counting to 10:00 ({after.When})");
+
+        // the timers as one list
+        var lag = TimeSpan.FromSeconds(15);
+        var now = server + lag;
+        var ev = new EventTimers(); ev.SetForTest(lag, true, null);
+        var bt = new BossTimers();
+        bt.SetForTest(new[]
+        {
+            new BossTimers.Boss("k1", "Bloodfang Pnyn", "Northern Tolbas Forest", "Verteron", BossTimers.Kind.Up, now.AddMinutes(-14), now, false),
+            new BossTimers.Boss("k2", "Heretic Layla", "Rock Tomb Hill", "Verteron", BossTimers.Kind.Waiting, now.AddMinutes(4), now, false),
+            new BossTimers.Boss("k3", "Black Tentacle Lawa", "Altamia Canyon", "Verteron", BossTimers.Kind.Waiting, now.AddMinutes(40), now, false),
+        });
+        var items = TimerBoard.Build(now, ev, bt, "na_e");
+        var prefs = TimerPrefs.Defaults();
+        Check(items.Count == EventTimers.Schedule.Length + 3 + AbyssBosses.Schedule.Length && items[0].Key == TimerBoard.BossKey("Bloodfang Pnyn") && items[0].State == TimerBoard.Kind.On
+            && items.Any(i => i.Key == TimerBoard.AbyssKey("Guardian Lord Nahma") && i.Name == "Guardian Lord Nahma ×3"),
+            $"timers as one list: {items.Count} (events, world bosses, the Abyss), the boss that's up first ({items[0].Name})");
+        // the overlay shows only what is within 5 min (Steven, 2026-11-14), and hides with none
+        string Names(List<TimerBoard.Item> l) => l.Count == 0 ? "none" : string.Join(", ", l.Select(i => i.Name));
+        var near = TimerBoard.ForOverlay(items, prefs, now);
+        Check(near.Count == 1 && near[0].Name == "Heretic Layla",
+            $"...the overlay shows only a timer within 5 min: {Names(near)} (Heretic Layla 4 min away; not Bloodfang Pnyn, up 14 min; not Lawa, 40 min; not Watcher Kaira, 21 min)");
+        prefs.SetShows(TimerBoard.BossKey("Heretic Layla"), false);
+        var none = TimerBoard.ForOverlay(items, prefs, now);
+        var at38 = now.AddMinutes(38); var at21 = now.AddMinutes(21.5);
+        var lawa = TimerBoard.ForOverlay(TimerBoard.Build(at38, ev, bt, "na_e"), prefs, at38);
+        var kairaUp = TimerBoard.ForOverlay(TimerBoard.Build(at21, ev, bt, "na_e"), prefs, at21);
+        Check(none.Count == 0 && lawa.Count == 1 && lawa[0].Name == "Black Tentacle Lawa" && kairaUp.Any(i => i is { Name: "Watcher Kaira", Big: "Spawned" }),
+            $"...with Layla taken off it: nothing near, so it hides ({Names(none)}); 38 min later {Names(lawa)} (2 min away); at 12:00 Watcher Kaira \"Spawned\" with the events that start then ({Names(kairaUp)})");
+        prefs.ShowMinutes = 60; prefs.Count = 3;
+        var capped = TimerBoard.ForOverlay(items, prefs, now);
+        Check(capped.Count == 3, $"...within the hour and at most 3: {Names(capped)}");
+        prefs.ShowMinutes = 5;
+
+        // the chime
+        var ch = new TimerChimes();
+        prefs.SetChimes(TimerBoard.BossKey("Heretic Layla"), true); prefs.SetChimes(TimerBoard.AbyssKey("Watcher Kaira"), true);
+        prefs.ChimeMinutes = 5;
+        var first = ch.Due(now, items, prefs);
+        var again = ch.Due(now.AddSeconds(1), TimerBoard.Build(now.AddSeconds(1), ev, bt, "na_e"), prefs);
+        Check(first.Count == 1 && first[0].Name == "Heretic Layla" && again.Count == 0,
+            $"chime: Heretic Layla 4 min away, its chime on: one chime ({string.Join(", ", first.Select(i => i.Name))}), not again a second later; Watcher Kaira (21 min) not yet; the rest have none");
+        var at17 = now.AddMinutes(17).AddSeconds(30);   // Kaira 3min 50s away
+        var kairaChime = ch.Due(at17, TimerBoard.Build(at17, ev, bt, "na_e"), prefs);
+        var late = new TimerChimes().Due(now.AddMinutes(21).AddSeconds(10), TimerBoard.Build(now.AddMinutes(21).AddSeconds(10), ev, bt, "na_e"), prefs);
+        prefs.Volume = 0;
+        var mute = new TimerChimes().Due(at17, TimerBoard.Build(at17, ev, bt, "na_e"), prefs);
+        Check(kairaChime.Count == 1 && kairaChime[0].Name == "Watcher Kaira" && late.Count == 0 && mute.Count == 0,
+            "...Watcher Kaira's 5 min before; none 10 s before a spawn (too late to help), none at volume 0");
+
+        // the settings file
+        var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "timers.json"); File.Delete(file);
+        var saved = TimerPrefs.Load(file);
+        saved.OverlayOn = true; saved.ClickThrough = true; saved.X = 1500; saved.Y = 200; saved.Count = 8; saved.ChimeMinutes = 10; saved.Volume = 0.3;
+        saved.SetChimes(TimerBoard.EventKey("Dimensional Invasion"), true); saved.SetShows(TimerBoard.EventKey("Spacetime Rift"), false);
+        saved.Save();
+        var back = TimerPrefs.Load(file);
+        Check(back is { OverlayOn: true, ClickThrough: true, X: 1500, Y: 200, Count: 8, ChimeMinutes: 10, Volume: 0.3 } && back.Chimes(TimerBoard.EventKey("Dimensional Invasion"))
+            && !back.Shows(TimerBoard.EventKey("Spacetime Rift")) && back.Shows(TimerBoard.EventKey("Shugo Festival")) && !TimerPrefs.Load(Path.Combine(dir, "none.json")).OverlayOn,
+            "timers.json: the overlay, its place, click-through, how many, the chime's minutes and volume, the picks, read back; no file is the defaults (overlay off)");
     }
 
     static void BossTimerChecks(DateTime t)

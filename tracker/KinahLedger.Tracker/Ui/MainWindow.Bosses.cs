@@ -59,8 +59,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The card at <paramref name="now"/> (UTC): the heading and the clock it counts on; the event the player is in; the
-    /// scheduled events, soonest first; then the world bosses and how fresh their reading is.
+    /// The card at <paramref name="now"/> (UTC): the heading and the clock it counts on; the event the player is in; the scheduled events; then the world bosses map by map: the maps the game listed (Verteron),
+    /// then the Abyss's on their schedule (0.10.85).
     /// </summary>
     internal Border BuildBossCard(DateTime now)
     {
@@ -84,52 +84,51 @@ public partial class MainWindow
         body.Children.Add(CkSection("EVENTS"));
         foreach (var r in timers.Rows(now)) body.Children.Add(EventRow(r));
 
-        // the world bosses (0.10.82)
+        // the world bosses the game's map listed (0.10.82), a section a map
         var rows = Bosses.Rows(now);
-        string region = rows.Select(r => r.Boss.Region).FirstOrDefault(r => r.Length > 0) ?? "";
         bool live2 = Bosses.LastSeen is { } seen && (now - seen).TotalSeconds <= BossTimers.LiveSeconds;
         if (rows.Count == 0)
         {
             body.Children.Add(CkSection("WORLD BOSSES"));
-            body.Children.Add(CkNote("Open the world map in the game. While it is open the game sends every field boss's timer, and they count down here after you close it."));
+            body.Children.Add(CkNote("Open the world map in the game (Exploration › Field Boss). While it is open the game sends every field boss's timer, and they count down here after you close it."));
             body.Children.Add(CkNote(_watcher.Packets.Enabled ? "Packet reading: " + _watcher.Packets.State : "Packet reading is off (Options › Game reading), so the timers can't be read."));
-            body.Children.Add(new Border { Height = 16 });
-            return card;
         }
-        var up = rows.Where(r => r.Boss.State == BossTimers.Kind.Up || r.Due).ToList();
-        var waiting = rows.Where(r => r.Boss.State == BossTimers.Kind.Waiting && !r.Due).ToList();
-        var other = rows.Where(r => r.Boss.State == BossTimers.Kind.NoTimer).ToList();
-        var list = new StackPanel();
-        bool first = true;
-        void Head(string text)
+        foreach (var map in rows.GroupBy(r => r.Boss.Region.Length > 0 ? r.Boss.Region : "World"))
         {
-            list.Children.Add(CkSection(text));
-            if (!first) return;
-            first = false;
-            // under the first boss heading: where, and how fresh the reading is
-            var f = CkText((region.Length > 0 ? region + " · " : "") + Bosses.Freshness(now), live2 ? CkGood : CkMuted, 12.5);
+            body.Children.Add(CkSection(map.Key.ToUpperInvariant() + " · WORLD BOSSES"));
+            var f = CkText(Bosses.Freshness(now), live2 ? CkGood : CkMuted, 12.5);
             f.Margin = new Thickness(20, 0, 20, 4); f.TextWrapping = TextWrapping.Wrap; f.TextTrimming = TextTrimming.None;
-            list.Children.Add(f);
+            body.Children.Add(f);
+            var order = map.OrderBy(r => r.UpNow ? 0 : r.Due ? 1 : r.Boss.State == BossTimers.Kind.Waiting ? 2 : r.Boss.State == BossTimers.Kind.Up ? 3 : 4)
+                .ThenBy(r => r.Boss.State == BossTimers.Kind.Waiting ? r.Left : TimeSpan.Zero);
+            foreach (var r in order) body.Children.Add(BossRow(r));
         }
-        if (up.Count > 0)
+
+        // the Abyss's bosses, on their schedule (the game's map draws them from it too)
+        var (_, zoneChecked) = AbyssBosses.ZoneFor(_watcher.RegionKey);
+        foreach (var map in AbyssBosses.Rows(now, timers.Offset, _watcher.RegionKey).GroupBy(r => r.Boss.Map))
         {
-            Head(up.Any(r => r.UpNow) ? "WORLD BOSSES UP NOW" : "WORLD BOSSES UP OR DUE");
-            foreach (var r in up) list.Children.Add(BossRow(r));
+            body.Children.Add(CkSection(map.Key.ToUpperInvariant() + " · ABYSS"));
+            bool sure = zoneChecked && map.All(r => r.Boss.Checked);
+            var f = CkText(sure ? "On the Abyss schedule, as the game's map shows it" : "On the Abyss schedule (not checked against the game's map yet)", CkMuted, 12.5);
+            f.Margin = new Thickness(20, 0, 20, 4); f.TextWrapping = TextWrapping.Wrap; f.TextTrimming = TextTrimming.None;
+            body.Children.Add(f);
+            foreach (var r in map) body.Children.Add(AbyssRow(r));
         }
-        if (waiting.Count > 0)
-        {
-            Head("NEXT WORLD BOSSES");
-            foreach (var r in waiting) list.Children.Add(BossRow(r));
-        }
-        if (other.Count > 0)
-        {
-            Head("WORLD BOSSES WITH NO TIMER");
-            foreach (var r in other) list.Children.Add(BossRow(r));
-        }
-        body.Children.Add(list);
-        body.Children.Add(CkNote(live2 ? "The map is open: the bosses follow it live." : "Bosses: counted down on this PC since the map was last open. A kill nobody saw on the map doesn't show until it is opened again."));
+        body.Children.Add(CkNote(live2 ? "The map is open: the bosses follow it live." : "World bosses: counted down on this PC since the map was last open. A kill nobody saw on the map doesn't show until it is opened again."));
+        body.Children.Add(CkNote("The overlay over the game and the chime: Settings › Timers."));
         body.Children.Add(new Border { Height = 14 });
         return card;
+    }
+
+    /// <summary>An Abyss boss: its name (×3 for Nahma's three spots) and place, the countdown or "Spawned".</summary>
+    FrameworkElement AbyssRow(AbyssBosses.Row r)
+    {
+        bool soon = !r.Spawned && r.Left <= BossSoon;
+        string name = r.Boss.Spots > 1 ? $"{r.Boss.Name} ×{r.Boss.Spots}" : r.Boss.Name;
+        string small = r.Spawned ? $"spawned {r.When}" : r.Left.TotalHours >= 20 ? $"{r.SpawnPc.ToLocalTime():ddd HH:mm}" : $"at {r.SpawnPc.ToLocalTime():HH:mm}";
+        return TimerRow(name, $"{r.Boss.Place} · {r.Boss.Every}", r.Spawned ? "Spawned" : r.When, small,
+            r.Spawned ? CkWarn : soon ? CkGold : CkFaint, r.Spawned ? CkWarn : soon ? CkGold : CkInk, r.Spawned || soon);
     }
 
     /// <summary>A scheduled event: its name and how often on the left, the countdown to its start (or "On now") on the right.</summary>
@@ -212,6 +211,11 @@ public partial class MainWindow
         var now = DateTime.UtcNow;
         string sfx = skin != null ? "-" + skin : "";
         var lag = TimeSpan.FromSeconds(14.6);   // the game's clock behind this PC's, as on 2026-11-13
+        var keepPrefs = _timerPrefs;
+        _timerPrefs = TimerPrefs.Defaults();
+        _timerPrefs.SetChimes(TimerBoard.EventKey("Dimensional Invasion"), true);
+        _timerPrefs.SetChimes(TimerBoard.AbyssKey("Watcher Kaira"), true);
+        _timerPrefs.SetShows(TimerBoard.EventKey("Spacetime Rift"), false);
         foreach (var (state, age) in new[] { ("live", TimeSpan.FromSeconds(4)), ("getting-ready", TimeSpan.FromSeconds(4)), ("stale", TimeSpan.FromMinutes(64)), ("empty", TimeSpan.Zero) })
         {
             var t = new BossTimers();
@@ -239,7 +243,35 @@ public partial class MainWindow
             }
             win.Close();
         }
-        _bossesForShot = null; _eventsForShot = null;
+        // the overlay over the game, over the live reading (timers-overlay.png)
+        {
+            var t = new BossTimers(); t.SetForTest(SampleBosses(now - TimeSpan.FromSeconds(4)));
+            _bossesForShot = t;
+            var ev = new EventTimers(); ev.SetForTest(lag, true, null);
+            _eventsForShot = ev;
+            var at = now.AddMinutes(16);   // Chaser Taulo 4 min away, the bosses up for under 5 min: what the overlay shows near a spawn
+            var items = TimerBoard.ForOverlay(TimerItems(at), _timerPrefs, at);
+            var o = new TimersOverlay(_timerPrefs);
+            o.Left = -12000; o.Top = -12000;
+            o.Show(items, at);
+            if (!o.IsVisible) o.Show();
+            o.UpdateLayout();
+            Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+            if (o.Content is FrameworkElement root)
+            {
+                var page = new Border { Background = new SolidColorBrush(Color.FromRgb(0x5A, 0x6B, 0x4F)), Padding = new Thickness(18) };   // a game-like ground under it
+                var bmp0 = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                bmp0.Render(root);
+                page.Child = new System.Windows.Controls.Image { Source = bmp0, Width = root.ActualWidth, Height = root.ActualHeight };
+                page.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); page.Arrange(new Rect(page.DesiredSize)); page.UpdateLayout();
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(page.ActualWidth), (int)Math.Ceiling(page.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                bmp.Render(page);
+                var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                using var f = File.Create(Path.Combine(dir, $"timers-overlay{sfx}.png")); enc.Save(f);
+            }
+            o.Close();
+        }
+        _bossesForShot = null; _eventsForShot = null; _timerPrefs = keepPrefs;
     }
 
     /// <summary>A reading like the one of 2026-11-13 18:58 (Verteron, two bosses up), taken at <paramref name="seen"/>.</summary>
