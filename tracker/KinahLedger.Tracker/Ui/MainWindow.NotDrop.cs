@@ -124,6 +124,23 @@ public partial class MainWindow
         return tb;
     }
 
+    /// <summary>
+    /// The foot actions of a LOOT Today slot's card: "Not a drop: take one out of today" while Today holds the item, and an
+    /// Undo for each of its pickups taken out today. With no pickup time to go by, Today alone gives one back.
+    /// </summary>
+    IEnumerable<(string, Action)> NotDropActions(long id)
+    {
+        if (_demo || id <= 0 || IsCurrency(id)) yield break;
+        int tr = 0, bd = 0;
+        try { tr = _watcher.DayView.Items.GetValueOrDefault(id); bd = _watcher.DayView.ItemsBound.GetValueOrDefault(id); } catch (Exception) { }
+        if (tr + bd > 0) yield return ("Not a drop: take one out of today", () => NotADrop(id, 1, tr <= 0, DateTime.UtcNow, "Today", null, todayOnly: true));
+        foreach (var d in NotDrops.On(DayStore.Today).Where(d => d.ItemId == id))
+        {
+            var (at, n) = (d.At, d.Count);
+            yield return ($"Undo Not a drop ({d.At.ToLocalTime():HH:mm})", () => UndoNotADrop(at, id, n));
+        }
+    }
+
     /// <summary>The "Not a drop" link at the end of one of the card's last-pickup rows.</summary>
     UIElement NotDropLink(FeedLine l)
     {
