@@ -141,9 +141,18 @@ public sealed class EventTimers
                 case AreaEvent.Kind.Phase:
                     {
                         var started = e.PhaseStart is { } ps ? ps + _offset : (DateTime?)null;
-                        // the same event: its next part (getting ready, then under way); a name known now is kept
+                        // the same event: its next part (getting ready, then under way); a name known now is kept. The stage
+                        // never steps back: Hidden Lugi sends its game's part and its lobby in one bundle on arrival, the game's
+                        // first (2026-11-14), and "Getting ready" after "Under way" would be wrong
                         if (_live is { LeftAt: null } l && (Same(l, e) || (l.Family.Length > 0 && l.Family == e.Family)))
-                            _live = l with { Name = e.Name.Length > 0 ? e.Name : l.Name, Stage = e.Phase, StartedPc = started ?? l.StartedPc, SeenAt = e.At, OverAt = e.Phase == AreaEvent.Stage.Over ? e.At : l.OverAt };
+                        {
+                            bool back = Rank(e.Phase) < Rank(l.Stage);
+                            _live = l with
+                            {
+                                Name = e.Name.Length > 0 ? e.Name : l.Name, Stage = back ? l.Stage : e.Phase, StartedPc = back ? l.StartedPc ?? started : started ?? l.StartedPc,
+                                SeenAt = e.At, OverAt = e.Phase == AreaEvent.Stage.Over ? e.At : l.OverAt,
+                            };
+                        }
                         else _live = new Live(e.Family, e.Name, e.Phase, started, e.At, e.Phase == AreaEvent.Stage.Over ? e.At : null, null);
                         break;
                     }
@@ -159,6 +168,9 @@ public sealed class EventTimers
             }
         }
     }
+
+    /// <summary>The order an event's stages come in: getting ready, under way, over (not known counts as the first).</summary>
+    static int Rank(AreaEvent.Stage s) => s switch { AreaEvent.Stage.UnderWay => 2, AreaEvent.Stage.Over => 3, AreaEvent.Stage.Preparing => 1, _ => 0 };
 
     static bool Same(Live l, AreaEvent e) => string.Equals(l.Family, e.Family, StringComparison.OrdinalIgnoreCase) && string.Equals(l.Name, e.Name, StringComparison.OrdinalIgnoreCase);
 
