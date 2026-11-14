@@ -210,7 +210,16 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
         Check(w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled, "panel look: Auto by default (the pill, the group's meter above it in a fight); the Strip's figure chips greyed for it");
-        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && o.HudLookPreview.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7, $"every look drawn in Options, the design pass's Auto, Capsule, Meter and Float too ({o.HudLookPreview.Children.Count} of {HudLooks.All.Length})");
+        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7 && HudLooks.All[0].Key == HudLooks.Auto && HudLooks.All[4].Key == HudLooks.Strip && o.HudLookPreview.Children.Count == 1,
+            $"every look a live thumbnail in Options, the new ones first (Auto, Capsule, Meter, Float, then Badge, Buddy, Pop), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
+        {
+            // 0.10.91's move: a hud.json on the old default (Badge) goes to Auto once; Buddy and Pop stay; Badge picked again stays
+            var oldBadge = new HudPrefs { Look = HudLooks.Strip }; bool moved = oldBadge.MoveToAuto();
+            var oldPop = new HudPrefs { Look = HudLooks.Ticker }; oldPop.MoveToAuto();
+            var again = new HudPrefs { Look = HudLooks.Auto }; again.MoveToAuto(); again.Look = HudLooks.Strip; again.MoveToAuto();
+            Check(moved && oldBadge.Look == HudLooks.Auto && oldPop.Look == HudLooks.Ticker && again.Look == HudLooks.Strip && HudLooks.Parse("nonsense") == HudLooks.Auto,
+                $"the old default moves to Auto once (Badge to {oldBadge.Look}); Pop stays ({oldPop.Look}); Badge picked again stays ({again.Look}); an unknown look is Auto");
+        }
         // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
         // and Parser section stay folded, and the look shows the boss, the timer and the hour
         {
@@ -242,17 +251,17 @@ public static partial class WpfApp
             }
             Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
-        Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Ticker)]);
+        o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);
         DoEvents();
         Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Click((System.Windows.Controls.Button)o.HudLookHost.Children[0]);
+        o.PickHudLookForTest(HudLooks.Strip);
         Click(o.SaveBtn);
         DoEvents();
-        Check(w.HudLook == HudLooks.Strip, "back to the Strip");
+        Check(w.HudLook == HudLooks.Strip, "Badge picked from its thumbnail");
         // Badge's state lines each start with a sign (2026-11-08 audit: they differed by text colour alone): the stop's flash
         // the stop square, a waiting notice the gold "i", a start the run dot
         static IEnumerable<DependencyObject> BadgeTree(DependencyObject d) { yield return d; foreach (var c in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) foreach (var x in BadgeTree(c)) yield return x; }

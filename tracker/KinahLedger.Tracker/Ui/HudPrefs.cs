@@ -14,6 +14,22 @@ public sealed class HudPrefs
     public double Scale { get; set; } = 1;
     /// <summary>The panel's look (HudLooks: "strip", "card", "ticker"). The strip for everyone until they pick another.</summary>
     public string Look { get; set; } = HudLooks.Auto;   // Auto since 0.10.91: the pill while farming, the group's meter above it in a boss fight
+
+    /// <summary>
+    /// The look has been through 0.10.91's move: a hud.json from before it on the old default (Badge, "strip") goes to Auto,
+    /// once; Buddy and Pop, picked by hand, stay. A Badge picked again after the move stays too.
+    /// </summary>
+    public bool LookMoved { get; set; }
+
+    /// <summary>The move to Auto (see <see cref="LookMoved"/>); true when it changed the look.</summary>
+    public bool MoveToAuto()
+    {
+        if (LookMoved) return false;
+        LookMoved = true;
+        if (!string.Equals(Look, HudLooks.Strip, StringComparison.OrdinalIgnoreCase)) return false;
+        Look = HudLooks.Auto;
+        return true;
+    }
     /// <summary>
     /// Where the player left the Ticker, kept apart from the strip's and the Card's spot (UserPrefs.HudX/HudY): its toasts
     /// hang down, so its place is left of the target bar, not over it. Null until it is dragged.
@@ -57,10 +73,14 @@ public sealed class HudPrefs
         try
         {
             var p = PathFor();
-            if (File.Exists(p) && JsonSerializer.Deserialize<HudPrefs>(File.ReadAllText(p)) is { } saved) return saved;
+            if (File.Exists(p) && JsonSerializer.Deserialize<HudPrefs>(File.ReadAllText(p)) is { } saved)
+            {
+                if (!saved.LookMoved) { saved.MoveToAuto(); saved.Save(); }   // 0.10.91: the old default moves to Auto, once
+                return saved;
+            }
         }
         catch (Exception) { /* corrupt: decide again */ }
-        var fresh = new HudPrefs { Locked = !existingInstall };
+        var fresh = new HudPrefs { Locked = !existingInstall, LookMoved = true };
         fresh.Save();
         return fresh;
     }
