@@ -416,5 +416,5 @@ public sealed class PacketReader : IDisposable
     internal static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
     static string Signed(long v) => v >= 0 ? $"+{v:N0}" : $"−{-v:N0}";
 
-    public void Dispose() { StopCapture(); _decoder?.Dispose(); _decoder = null; }
+    public void Dispose() { StopCapture(); _decoder?.Dispose(); _decoder = null; Bosses.Save(); }
 }

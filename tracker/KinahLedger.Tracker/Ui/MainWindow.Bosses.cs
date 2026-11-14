@@ -8,7 +8,7 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// World boss timers (0.10.70): the field bosses the game's world map lists, as a card in a window of its own
+/// World boss timers (0.10.73): the field bosses the game's world map lists, as a card in a window of its own
 /// (Ui/BossWindow.cs), opened from the Events page's ⋯ menu. Each row is a boss and its place, with the time to its spawn
 /// counting down, "Up now" while the map is open and says it is, or "Due" once its time has passed with no newer reading.
 /// The timers come from the game's traffic (Session/BossTimers.cs), so they need packet reading on; they are as fresh as

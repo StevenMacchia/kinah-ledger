@@ -146,7 +146,10 @@ public sealed class BossTimers
     void SaveSoon(DateTime at, bool changed)
     {
         if (_path == null) return;
-        if (!changed && (at - _savedAt).TotalSeconds < 60) return;   // the map open: the same list once a second, saved once a minute
+        // the map open: the same list once a second, saved once a minute; a change at once, but not 24 times in the first list's
+        // burst (the next list, a second later, saves the rest; the app's close saves what is left)
+        double since = (at - _savedAt).TotalSeconds;
+        if (since >= 0 && since < (changed ? 2 : 60)) return;
         Save(at);
     }
 
