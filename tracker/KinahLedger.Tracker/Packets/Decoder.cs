@@ -109,7 +109,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_stats")] static extern int StatsN(nint h, KlStats* stats);
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
-    [DllImport("klnet", EntryPoint = "kl_next_fight")] static extern int NextBossN(nint h, KlFight* fight);
+    [DllImport("klnet", EntryPoint = "kl_next_fight")] static extern int NextBossEventN(nint h, KlFight* fight);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, more for later additions.</summary>
@@ -172,7 +172,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         while (true)
         {
             int got;
-            try { got = NextBossN(_h, &f); }
+            try { got = NextBossEventN(_h, &f); }
             catch (EntryPointNotFoundException) { _noBossExport = true; return null; }
             if (got != 1) break;
             var row = new BossRow(new DateTime(f.AtUtcTicks, DateTimeKind.Utc), f.Kind, f.Content, Text(f.Zone, 64), f.Encounter, Text(f.Boss, 64), f.BossEntity,
