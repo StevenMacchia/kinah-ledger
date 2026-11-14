@@ -216,6 +216,34 @@ public static class PacketTests
         }
         Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
 
+        // boss fights (klnet.dll version 3): a decoder that reads none hands out none; the reader queues the decoder's in order
+        // and keeps the queue bounded; the interface's record is the dll's 256 bytes and its text fields read back
+        {
+            IGameDecoder none = new NoFights();
+            Check(!none.ReadsFights && none.NextFight() == null, "a decoder without boss fights hands out none");
+            var r = new PacketReader();
+            var evs = new[]
+            {
+                new FightEvent(t, FightKind.ZoneEnter, ContentKind.Expedition, "Fire Temple", 0, "", 0, FightOutcome.None, 0, "", "", false, 0, 0, 0, 0),
+                new FightEvent(t.AddSeconds(5), FightKind.EncounterStart, ContentKind.Expedition, "Fire Temple", 1, "Kromede's Desire", 25495, FightOutcome.None, 0, "", "", false, 0, 0, 1000, 1000),
+                new FightEvent(t.AddSeconds(6), FightKind.Damage, ContentKind.Expedition, "Fire Temple", 1, "Kromede's Desire", 25495, FightOutcome.None, 14325, "Swoly", "", true, 0, 0, 1000, 1000),
+                new FightEvent(t.AddSeconds(6), FightKind.EncounterEnd, ContentKind.Expedition, "Fire Temple", 1, "Kromede's Desire", 25495, FightOutcome.Killed, 0, "", "", false, 0, 0, 1000, 1000),
+            };
+            foreach (var e in evs) r.TakeFight(e);
+            var back = new List<FightEvent>(); while (r.NextFight() is { } e) back.Add(e);
+            Check(back.SequenceEqual(evs) && !r.ReadsFights, $"the reader queues boss parser events in order ({back.Count}) and says it reads none without the dll");
+            for (int i = 0; i < 20_005; i++) r.TakeFight(evs[2]);
+            int n = 0; while (r.NextFight() != null) n++;
+            Check(n == 20_000, $"...and keeps at most 20,000 undrained ({n})");
+            unsafe
+            {
+                var buf = new byte[32]; var name = System.Text.Encoding.UTF8.GetBytes("Kromede's Desire"); name.CopyTo(buf, 0);
+                fixed (byte* p = buf) Check(NativeDecoder.Text(p, 32) == "Kromede's Desire" && NativeDecoder.FightSize == 256, $"a text field reads back, the record is {NativeDecoder.FightSize} bytes");
+                var full = Enumerable.Repeat((byte)'a', 16).ToArray();
+                fixed (byte* p = full) Check(NativeDecoder.Text(p, 16) == new string('a', 16), "...a field filled to the end stops at its size");
+            }
+        }
+
         // the local recording's keeping (Packets/PacketLog.cs): past 48 hours goes, then the oldest over the size, never the file being written
         {
             var keepFor = PacketLog.KeepFor; var keepBytes = PacketLog.KeepBytes;
@@ -527,4 +555,15 @@ public sealed class PcapngWriter : IDisposable
     }
 
     public void Dispose() { _w.Flush(); _w.Dispose(); }
+}
+
+/// <summary>A decoder that reads currencies only (klnet.dll before version 3): the interface's defaults for items and fights.</summary>
+sealed class NoFights : IGameDecoder
+{
+    public void Reset() { }
+    public void Gap() { }
+    public void Feed(byte[] data, DateTime at) { }
+    public CurrencyChange? Next() => null;
+    public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats => default;
+    public void Dispose() { }
 }

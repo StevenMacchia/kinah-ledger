@@ -49,6 +49,8 @@ public sealed class PacketReader : IDisposable
     IGameDecoder? _decoder;
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
+    readonly ConcurrentQueue<FightEvent> _fights = new();
+    const int MaxFights = 20_000;   // a tracker that never drains them doesn't grow without end
     readonly ConcurrentQueue<object> _uncovered = new();
     TcpStream _down = new();
     TcpTable.Link? _link;
@@ -107,6 +109,19 @@ public sealed class PacketReader : IDisposable
 
     /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
+
+    /// <summary>The next boss parser event (klnet.dll version 3), null when there is none. Only inside Transcendence, Expedition and Sanctuary.</summary>
+    public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
+    /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 3).</summary>
+    public bool ReadsFights => _decoder?.ReadsFights == true;
+    /// <summary>A boss parser event from the decoder, queued for the tracker; zone and encounter edges logged.</summary>
+    internal void TakeFight(FightEvent f)
+    {
+        while (_fights.Count >= MaxFights) _fights.TryDequeue(out _);
+        _fights.Enqueue(f);
+        if (f.Kind is FightKind.ZoneEnter or FightKind.ZoneLeave or FightKind.EncounterStart or FightKind.EncounterEnd)
+            Log($"{Local(f.At)}  boss parser: {f.Kind}{(f.Zone.Length > 0 ? " · " + f.Zone : "")}{(f.Boss.Length > 0 ? " · " + f.Boss : "")}{(f.Kind == FightKind.EncounterEnd ? $" · {f.Outcome}, {f.Amount:N0} HP" : "")}");
+    }
 
     /// <summary>A screen pickup the agreement check found the traffic didn't count (never showed it, or showed only a stack's first sight): the screen's to count after all.</summary>
     public object? NextUncovered() => _uncovered.TryDequeue(out var o) ? o : null;
@@ -220,6 +235,7 @@ public sealed class PacketReader : IDisposable
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
+                while (dec.NextFight() is { } fe) TakeFight(fe);
             },
             OnGap = () =>
             {
