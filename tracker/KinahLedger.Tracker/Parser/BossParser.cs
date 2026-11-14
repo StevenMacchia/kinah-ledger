@@ -42,6 +42,24 @@ public sealed class BossParser
     /// <summary>A record that has ended and is worth keeping: the caller saves it (Parser/EncounterStore.cs).</summary>
     public Action<Encounter>? Ended { get; set; }
 
+    /// <summary>
+    /// Something the window draws changed: said at once, on the thread that brought it (the packet reader's, for the game's
+    /// events), with the event's capture time (null when no event brought it: a record given up, the mode changed). The
+    /// window redraws on it, at most every few tens of ms (Ui/MainWindow.Parser.cs), and measures from that time.
+    /// </summary>
+    public event Action<DateTime?>? Changed;
+
+    /// <summary>The last record that ended and was kept: the overlay shows its result a few seconds, before it is saved.</summary>
+    public Encounter? LastEnded { get { lock (_gate) return _lastEnded; } }
+    Encounter? _lastEnded;
+
+    void Finish(List<Encounter> done, DateTime? at)
+    {
+        if (done.Count > 0) lock (_gate) _lastEnded = done[^1];
+        foreach (var e in done) Ended?.Invoke(e);
+        try { Changed?.Invoke(at); } catch (Exception ex) { CrashLog.Write("parser changed", ex); }
+    }
+
     /// <summary>A boss pull with nothing heard for this long is given up (left) at the last thing heard.</summary>
     public const double StaleMinutes = 10;
     /// <summary>A run with nothing heard for this long (the player went afk, the tracker lost the game) is given up.</summary>
@@ -152,7 +170,7 @@ public sealed class BossParser
             Log($"mode: {Name(mode)}");
             _version++;
         }
-        foreach (var e in done) Ended?.Invoke(e);
+        Finish(done, null);
     }
 
     public static string Name(ParserMode m) => m switch { ParserMode.Run => "Full run", ParserMode.Fights => "Every fight", _ => "Bosses only" };
@@ -179,7 +197,7 @@ public sealed class BossParser
             TakeLocked(ev, done);
             _version++;
         }
-        foreach (var e in done) Ended?.Invoke(e);
+        Finish(done, ev.At);
     }
 
     void TakeLocked(BossEvent ev, List<Encounter> done)
@@ -264,8 +282,8 @@ public sealed class BossParser
                 foreach (var e in Records())
                 {
                     e.Gaps++;
-                    e.PartialWhy.RemoveAll(w => w.EndsWith("in the game's traffic"));
-                    MarkPartial(e, e.Gaps == 1 ? "a gap in the game's traffic" : $"{e.Gaps} gaps in the game's traffic");
+                    e.PartialWhy.RemoveAll(w => w.EndsWith("the tracker missed"));
+                    MarkPartial(e, e.Gaps == 1 ? "a moment the tracker missed" : $"{e.Gaps} moments the tracker missed");
                 }
                 break;
         }
@@ -305,7 +323,7 @@ public sealed class BossParser
             if (death && _cur?.You is { } me) me.Deaths++;
             _version++;
         }
-        foreach (var e in done) Ended?.Invoke(e);
+        Finish(done, at);
     }
 
     /// <summary>Where the session reads the player is (its zone, and whether that is the Abyss): Every fight's place outside the three.</summary>
@@ -508,7 +526,7 @@ public sealed class BossParser
                 _version++;
             }
         }
-        foreach (var e in done) Ended?.Invoke(e);
+        if (done.Count > 0) Finish(done, null);
     }
 
     /// <summary>
@@ -570,7 +588,7 @@ public sealed class BossParser
             }
             _version++;
         }
-        foreach (var e in done) Ended?.Invoke(e);
+        Finish(done, null);
     }
 
     /// <summary>The single fight saved by 0.10.80's first builds (one record, a boss pull): as <see cref="Resume(IEnumerable{Encounter}, DateTime)"/>.</summary>

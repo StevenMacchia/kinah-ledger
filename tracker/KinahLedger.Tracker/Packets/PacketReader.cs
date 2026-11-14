@@ -125,11 +125,24 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public BossEvent? NextBossEvent() => _bosses.TryDequeue(out var b) ? b : null;
     /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 4).</summary>
     public bool ReadsBosses => _decoder?.ReadsBosses == true;
-    /// <summary>A boss parser event, queued for the Parser; instance and pull edges logged.</summary>
+    /// <summary>
+    /// Where the Parser takes its events as they are decoded, on this reader's own thread (Steven, 2026-11-14: "the parser
+    /// needs to be SUPER low delay ... it needs to register in real time"): set by the session, they skip the queue and the
+    /// session's pass. Unset (a test, before the session is up), they queue for <see cref="NextBossEvent"/>.
+    /// </summary>
+    public Action<BossEvent>? BossSink { get; set; }
+    /// <summary>The kill events as they are decoded, for the Parser's runs and fights (the kill tally's queue still gets them too).</summary>
+    public Action<FightEvent>? FightSink { get; set; }
+
+    /// <summary>A boss parser event: to the Parser at once when it is listening, else queued; instance and pull edges logged.</summary>
     internal void TakeBoss(BossEvent b)
     {
-        while (_bosses.Count >= MaxBosses) _bosses.TryDequeue(out _);
-        _bosses.Enqueue(b);
+        if (BossSink is { } sink) { try { sink(b); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
+        else
+        {
+            while (_bosses.Count >= MaxBosses) _bosses.TryDequeue(out _);
+            _bosses.Enqueue(b);
+        }
         string? line = b switch
         {
             InstanceEntered e => $"into {e.Name} ({e.Kind})",
@@ -145,6 +158,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     void TakeFight(FightEvent f)
     {
         _fights.Enqueue(f); Arrived();
+        if (FightSink is { } sink) { try { sink(f); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
         if (_fights.Count > 4096) _fights.TryDequeue(out _);
         Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
             : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"

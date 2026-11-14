@@ -431,6 +431,16 @@ public static class PacketTests
 
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
+        // the Parser in real time (2026-11-14): what the reader hands over is the Parser's, and on screen's, without delay
+        {
+            var (ok, line) = KinahLedger.Parser.ParserLatency.ProcessingPath(50);
+            Check(ok, line);
+            var r = new PacketReader(); var got = new List<BossEvent>();
+            r.BossSink = got.Add;
+            r.TakeBoss(new BossEngaged(DateTime.UtcNow, "Kaldrix", 1));
+            Check(got.Count == 1 && r.NextBossEvent() == null, "...the reader hands a boss event to the Parser as it comes, not to a queue for the next pass");
+        }
+
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }
