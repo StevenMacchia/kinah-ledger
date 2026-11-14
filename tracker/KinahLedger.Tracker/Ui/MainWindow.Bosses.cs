@@ -8,8 +8,8 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Timers (0.10.76): the game's timed events (the event the player is in, then when each scheduled one starts next,
-/// Session/EventTimers.cs) above the world boss timers (0.10.75), one card in a window of its own (Ui/BossWindow.cs), opened
+/// Timers (0.10.83): the game's timed events (the event the player is in, then when each scheduled one starts next,
+/// Session/EventTimers.cs) above the world boss timers (0.10.82), one card in a window of its own (Ui/BossWindow.cs), opened
 /// from the Events page's ⋯ menu.
 ///
 /// World boss timers: the field bosses the game's world map lists. Each row is a boss and its place, with the time to its spawn
@@ -84,7 +84,7 @@ public partial class MainWindow
         body.Children.Add(CkSection("EVENTS"));
         foreach (var r in timers.Rows(now)) body.Children.Add(EventRow(r));
 
-        // the world bosses (0.10.75)
+        // the world bosses (0.10.82)
         var rows = Bosses.Rows(now);
         string region = rows.Select(r => r.Boss.Region).FirstOrDefault(r => r.Length > 0) ?? "";
         bool live2 = Bosses.LastSeen is { } seen && (now - seen).TotalSeconds <= BossTimers.LiveSeconds;
@@ -254,7 +254,7 @@ public partial class MainWindow
         B("Neikel of the East", "Eastern Cantas Valley", 23.3);
         B("Centurion Demiros", "Destroyed Temple Site", 23.47);
         B("Scholar Aulla", "Aullaeu Village", 23.5);
-        B("A Verteron boss", "", 26.1);
+        B("Rotten Kutar", "Ellun River Marsh", 26.1);
         B("Kernon of the West", "Western Cantas Valley", 28.7);
         B("Black Tentacle Lawa", "Altamia Canyon", 32.2);
         B("Bodyguard Teegant", "Destroyed Abyss Gate", 33.6);

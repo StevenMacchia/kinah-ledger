@@ -20,6 +20,16 @@ public enum ItemOp { NewStack = 0, Changed = 1, Gone = 2 }
 /// </summary>
 public sealed record ItemChange(DateTime At, long ItemId, ItemOp Op, long StackId, long Delta, long Total, bool First, int Batch, int BatchRows, bool BatchFell);
 
+/// <summary>How a gathering attempt ended: it worked, its upgrade roll won (the better grade of the material), or it failed.</summary>
+public enum GatherEnd { Worked = 0, Upgrade = 1, Failed = 2 }
+
+/// <summary>
+/// One gathering attempt of the player's, from the game's messages: the node (its id on this connection; a new node has a
+/// new id), its kind when its appearance was seen (0 when not), how the attempt ended, what it gave and how many (0 on a
+/// fail; the item is then what the node gives), and the attempt's number on that node (1 to 3, 0 when not seen).
+/// </summary>
+public sealed record GatherResult(DateTime At, long NodeId, long NodeKind, GatherEnd Outcome, long ItemId, int Count, int Attempt);
+
 /// <summary>
 /// A field boss as the game's world map lists it (the decoder's interface version 5). Key: which boss, the same every time
 /// (opaque). Name, Place, Region: as the decoder knows them ("" when it doesn't). Time: for a dead boss its next spawn, for a
@@ -75,6 +85,10 @@ public interface IGameDecoder : IDisposable
     bool ReadsFights => false;
     /// <summary>The next fight event found, or null (always null for a decoder that reads no fights).</summary>
     FightEvent? NextFight() => null;
+    /// <summary>True when this decoder reads the player's gathering too (klnet.dll's interface version 7).</summary>
+    bool ReadsGathers => false;
+    /// <summary>The next gathering attempt found, or null (always null for a decoder that reads none).</summary>
+    GatherResult? NextGather() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
 }
 
@@ -95,6 +109,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         public fixed byte Tag[48]; public fixed byte Family[32]; public fixed byte Name[48];
     }
     [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
+    [StructLayout(LayoutKind.Sequential)] struct KlGather { public long AtUtcTicks; public uint NodeId; public uint TemplateId; public uint ItemId; public int Result; public int Count; public int Attempt; public int Flags; public float X, Y, Z; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -109,6 +124,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_boss")] static extern int NextBossN(nint h, KlBoss* boss);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
     [DllImport("klnet", EntryPoint = "kl_next_area_event")] static extern int NextAreaN(nint h, KlAreaEvent* ev);
+    [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
@@ -194,6 +210,18 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         static string Text(byte* b) { int n = 0; while (n < 32 && b[n] != 0) n++; return System.Text.Encoding.UTF8.GetString(b, n); }
         return new FightEvent(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), (FightKind)e.Kind, (FightFlags)e.Flags, e.VictimId, e.KillerId, e.MonsterId,
             e.Delta, e.Total, Text(e.VictimName), Text(e.KillerName));
+    }
+    // a dll that says 7 or more but was built without the gathering export (the interface numbers are shared between
+    // branches): asked once, then never again, and gathering stays the screen's
+    static bool _noGathers;
+    public bool ReadsGathers => Version >= 7 && !_noGathers;
+    public GatherResult? NextGather()
+    {
+        if (_h == 0 || !ReadsGathers) return null;
+        KlGather g;
+        try { if (NextGatherN(_h, &g) != 1 || g.Result is < 0 or > 2 || g.Count is < 0 or > 1000) return null; }
+        catch (EntryPointNotFoundException) { _noGathers = true; return null; }
+        return new GatherResult(new DateTime(g.AtUtcTicks, DateTimeKind.Utc), g.NodeId, (g.Flags & 1) != 0 ? g.TemplateId : 0, (GatherEnd)g.Result, g.ItemId, g.Count, (g.Flags & 2) != 0 ? g.Attempt : 0);
     }
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats
     {

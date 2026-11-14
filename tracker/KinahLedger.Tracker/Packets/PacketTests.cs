@@ -348,6 +348,72 @@ public static class PacketTests
                 $"...a one-material recipe whose two tries went in one update, then another queue: Strong Leather {sl?.Ok} worked {sl?.Fail} failed, {Recipe} {fm?.Ok} worked {fm?.Fail} failed");
         }
 
+        // gathering (0.10.80): each attempt from the game's messages is an attempt of its node's skill, a node when it is the
+        // first try on it, an upgrade or a fail as the game says; the screen's races for the same attempts are set aside and
+        // covered by them; a race the traffic never showed counts from the screen; three such and the screen counts again
+        {
+            const long Ore = 610620013, Fine = 610620014, Odyle = 610610013;
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var reader = new PacketReader(); reader.ReadingForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            s.Engine.SetZone("Ellun River Midstream");
+            var t0 = DateTime.UtcNow.AddMinutes(-4);
+            GatherResult G(double at, long node, long kind, GatherEnd end, long item, int n, int attempt) => new(t0.AddSeconds(at), node, kind, end, item, n, attempt);
+            reader.GathersForTest(G(0, 33768, 4, GatherEnd.Worked, Ore, 1, 1), G(11, 33768, 4, GatherEnd.Failed, Ore, 0, 2), G(21, 33768, 4, GatherEnd.Upgrade, Fine, 1, 3),
+                G(95, 20373, 0, GatherEnd.Worked, Ore, 1, 0), G(120, 41201, 5, GatherEnd.Worked, Odyle, 1, 1));
+            s.DrainPacketsForTest();
+            // the screen's races of the same attempts, then one of its own that the traffic never showed
+            s.GatherOutcome(t0.AddSeconds(0.3), true, false); s.GatherOutcome(t0.AddSeconds(12.9), false, false);
+            s.GatherOutcome(t0.AddSeconds(21.4), true, true); s.GatherOutcome(t0.AddSeconds(95.2), true, false);
+            s.GatherOutcome(t0.AddSeconds(150), true, false);
+            reader.AgreeGathersForTest(DateTime.UtcNow); s.DrainPacketsForTest();
+            var e = s.Engine; var tot = e.Totals(); var ns = e.NodeSnapshot(); var sk = e.SkillSnapshot();
+            string Ns(string n) => ns.TryGetValue(n, out var x) ? $"{x.Ok}/{x.Failed} up {x.Upgrades} nodes {x.Visits}" : "-";
+            Check(tot.Nodes == 6 && tot.Failed == 1 && e.Upgrades == 1 && e.NodeVisits == 3 && Ns("Orichalcum Ore") == "3/1 up 1 nodes 2" && Ns("Odyle") == "2/0 up 0 nodes 1"
+                && string.Join(" ", reader.GatherVerdicts) == "covered covered covered covered not shown" && reader.GathersBroken == null,
+                $"gathering from the game's messages: {tot.Nodes} tries ({tot.Failed} failed, {e.Upgrades} upgrade), {e.NodeVisits} nodes; Orichalcum Ore {Ns("Orichalcum Ore")}, Odyle {Ns("Odyle")} (the last a race the traffic never showed, counted from the screen); the screen's races: {string.Join(" ", reader.GatherVerdicts)}");
+            // today.json keeps the new figures: a restart carries them on
+            var carry = System.Text.Json.JsonSerializer.Deserialize<SessionEngine.Carry>(System.Text.Json.JsonSerializer.Serialize(e.ToCarry("2026-11-13"), SessionEngine.CarryJson), SessionEngine.CarryJson)!;
+            var e2 = new SessionEngine(items); e2.Seed(carry);
+            var sk2 = e2.SkillSnapshot(); var ns2 = e2.NodeSnapshot();
+            Check(e2.Upgrades == 1 && e2.NodeVisits == 3 && sk2.Values.Sum(x => x.Visits) == 3 && sk2.Values.Sum(x => x.Upgrades) == 1 && ns2["Orichalcum Ore"] is { Upgrades: 1, Visits: 2 },
+                $"...and today.json carries them across a restart: {e2.Upgrades} upgrade, {e2.NodeVisits} nodes");
+            // three races in five minutes the traffic never showed: gathering goes back to the screen
+            var r2 = new PacketReader(); r2.ReadingForTest(); r2.GathersForTest();
+            var s2 = new TrackerSession(null, settings, items, "Test") { Packets = r2 };
+            s2.Engine.SetZone("Ellun River Midstream");
+            foreach (var at in new[] { 0.0, 30, 60 }) s2.GatherOutcome(t0.AddSeconds(at), true, false);
+            r2.AgreeGathersForTest(DateTime.UtcNow); s2.DrainPacketsForTest();
+            int handed = s2.Engine.Totals().Nodes;
+            s2.GatherOutcome(t0.AddSeconds(200), true, false);   // now the screen's at once
+            r2.GathersForTest(G(210, 1, 4, GatherEnd.Worked, Ore, 1, 1)); s2.DrainPacketsForTest();   // and the traffic's left out
+            Check(handed == 3 && s2.Engine.Totals().Nodes == 4 && r2.GathersBroken != null,
+                $"...three races the traffic never showed in five minutes: counted from the screen ({handed}), and gathering is the screen's again ({s2.Engine.Totals().Nodes} after one more race and one game message; \"{r2.GathersBroken}\")");
+        }
+
+        // the tracker's recordings of 2026-11-13 (kinah-bench/packets/rec-*) through this build's decoder: the 22 attempts
+        // Steven made, 18:50 to 20:03, with their exact items and counts (the screen logged 19 of them)
+        {
+            string? bench = Environment.GetEnvironmentVariable("KL_BENCH");
+            for (var d = new DirectoryInfo(AppContext.BaseDirectory); bench == null && d != null; d = d.Parent)
+                if (Directory.Exists(Path.Combine(d.FullName, "kinah-bench", "packets"))) bench = Path.Combine(d.FullName, "kinah-bench", "packets");
+            var recs = new[] { "rec-20261113-18", "rec-20261113-19", "rec-20261113-19-2", "rec-20261113-20" }.Select(r => bench == null ? "" : Path.Combine(bench, r, "capture.pcapng")).ToList();
+            if (!NativeDecoder.Available || NativeDecoder.Version < 7) Console.WriteLine("skip  gathering in the recordings: this build's decoder reads no gathering");
+            else if (recs.Any(r => !File.Exists(r))) Console.WriteLine("skip  gathering in the recordings: kinah-bench/packets/rec-20261113-* not found (KL_BENCH)");
+            else
+            {
+                var all = recs.SelectMany(r => ReplayGathers(r, 13328)).ToList();
+                const long O = 610620013, F = 610620014, P = 610620015, D = 610610013;
+                var want = new (GatherEnd E, long Item, int N)[] { (GatherEnd.Worked, O, 1), (GatherEnd.Failed, O, 0), (GatherEnd.Upgrade, F, 1), (GatherEnd.Upgrade, F, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1),
+                    (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1),
+                    (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Upgrade, F, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1),
+                    (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Upgrade, P, 1), (GatherEnd.Worked, O, 1) };
+                bool same = all.Count == want.Length && all.Zip(want).All(x => x.First.Outcome == x.Second.E && x.First.ItemId == x.Second.Item && x.First.Count == x.Second.N);
+                Check(same && all.Select(g => g.NodeId).Distinct().Count() == 8,
+                    $"gathering in the recordings of 2026-11-13: {all.Count} attempts (expected 22) on {all.Select(g => g.NodeId).Distinct().Count()} nodes, {all.Count(g => g.Outcome == GatherEnd.Upgrade)} upgrades and {all.Count(g => g.Outcome == GatherEnd.Failed)} fail, items exact: {same}");
+            }
+        }
+
         // a build without the decoder reads no traffic and says so
         {
             var keep = PacketReader.Decoders;
@@ -436,6 +502,23 @@ public static class PacketTests
         return p;
     }
 
+    /// <summary>This build's decoder over a capture: every gathering attempt of the player's, each connection its own decoder.</summary>
+    internal static List<GatherResult> ReplayGathers(string pcapng, int serverPort)
+    {
+        var got = new List<GatherResult>();
+        if (!NativeDecoder.Available) return got;
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var (at, frame, link) in Pcapng.Read(pcapng))
+            if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var st = new TcpStream { OnData = (d, at) => { dec.Feed(d, at); while (dec.Next() is not null) { } while (dec.NextItem() is not null) { } while (dec.NextFight() is not null) { } while (dec.NextGather() is { } g) got.Add(g); }, OnGap = dec.Gap };
+            foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+        }
+        return got.OrderBy(g => g.At).ToList();
+    }
+
     /// <summary>
     /// World boss timers (Session/BossTimers.cs) from boss sightings as the decoder hands them out, the server's clock 15 s
     /// behind this PC's as it was on 2026-11-13: the countdown follows the server's time left, not the PC's wall time; a live
@@ -443,7 +526,7 @@ public static class PacketTests
     /// again changes nothing, a kill does; the order; the saved copy read back after a restart, with its age.
     /// </summary>
     /// <summary>
-    /// Timed events (Session/EventTimers.cs, InstanceLog.GameSaid; 0.10.76): the schedule counted on the game's clock (UTC+9,
+    /// Timed events (Session/EventTimers.cs, InstanceLog.GameSaid; 0.10.83): the schedule counted on the game's clock (UTC+9,
     /// 14.6 s behind this PC's as on 2026-11-13), on-now windows and weekdays; the event the player is in, part by part, from
     /// its own server; and an event run that starts at the game's message, keeps its start and name over the minimap's, is
     /// left when the game says so (the minimap's lagging reads neither undo that nor start a new run) and closes after the
@@ -643,6 +726,15 @@ public static class PacketTests
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
+        if (NativeDecoder.Version >= 7)
+        {
+            var items0 = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);
+            var gs = ReplayGathers(pcapng, serverPort);
+            foreach (var g in gs)
+                Console.WriteLine($"  {g.At.ToLocalTime():HH:mm:ss.ff}  gathered: {(g.Outcome == GatherEnd.Upgrade ? "the upgrade roll won" : g.Outcome == GatherEnd.Failed ? "failed" : "worked")}, {items0.NameOf(g.ItemId)}{(g.Outcome == GatherEnd.Failed ? "" : $" x{g.Count}")} · node {g.NodeId}{(g.NodeKind != 0 ? $" (kind {g.NodeKind})" : "")}{(g.Attempt > 0 ? $", try {g.Attempt}" : "")}");
+            Console.WriteLine($"gathering: {gs.Count} attempts on {gs.Select(g => g.NodeId).Distinct().Count()} nodes ({gs.Count(g => g.Outcome == GatherEnd.Worked)} worked, {gs.Count(g => g.Outcome == GatherEnd.Upgrade)} upgrade rolls won, {gs.Count(g => g.Outcome == GatherEnd.Failed)} failed); "
+                + string.Join(", ", gs.Where(g => g.Count > 0).GroupBy(g => g.ItemId).Select(x => $"{items0.NameOf(x.Key)} {x.Sum(g => g.Count)}")));
+        }
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;

@@ -170,7 +170,9 @@ public partial class MainWindow
             var rest = parts.Skip(1).ToList();
             var shown = rest.Count > 2 ? rest.Take(2).Append($"+{rest.Count - 2} more").ToList() : rest;
             QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), parts.Count > 0 ? parts[0] : "Gathered", shown.Count > 0 ? string.Join(" · ", shown) : "gathered " + CountWhere(), quiet: true);
-            GatherChip2.ToolTip = parts.Count > 0 ? "Gathered " + CountWhere() + ": " + string.Join(", ", parts) + ". Each skill's value is at the lowest Market price, " + PriceBook.Cut + "." : null;
+            GatherChip2.ToolTip = parts.Count > 0 ? "Gathered " + CountWhere() + ": " + string.Join(", ", parts) + ". Each skill's value is at the lowest Market price, " + PriceBook.Cut + "."
+                // the tries, nodes, upgrades and fails a skill and a kind of node, when the game's messages counted them (0.10.80)
+                + (Shown() is { NodeVisits: > 0 } ge ? GatherHow(ge, s, ge.Totals().Nodes, ge.Upgrades) : "") : null;
         }
     }
 }

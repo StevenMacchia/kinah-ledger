@@ -281,6 +281,22 @@ public partial class MainWindow
     /// a click opens what is behind it under the hero: Kinah by enemy, the bag, kills by enemy. A gathering stretch says its
     /// attempts, what they gave and the items instead, which would read 0 as Kinah and kills. Also the Just dropped head's note.
     /// </summary>
+    /// <summary>
+    /// The tries' hover when the game's messages counted them (0.10.80): how they ended, then a line a skill with its worth an
+    /// hour and a line a kind of node ("Orichalcum Ore · 75 tries on 25 nodes · 11 upgrades · 3 failed · 71 an hour").
+    /// </summary>
+    static string GatherHow(SessionEngine e, Tables s, int tries, int upgrades)
+    {
+        int failed = e.Totals().Failed;
+        var lines = new List<string> { $"\n{tries - failed - upgrades:N0} worked, {upgrades:N0} upgrade roll{(upgrades == 1 ? "" : "s")} won, {failed:N0} failed." };
+        foreach (var sk in s.Skills ?? new())
+        {
+            lines.Add($"\n{sk.Name.Split(" · ")[0]}: {sk.Attempts:N0} tr{(sk.Attempts == 1 ? "y" : "ies")}{(sk.Nodes > 0 ? $" on {sk.Nodes:N0} node{(sk.Nodes == 1 ? "" : "s")}" : "")}" + (sk.ValuePerHour > 0 ? $", {Fk(sk.ValuePerHour)} an hour" : ""));
+            foreach (var k in sk.Kinds ?? new()) if (k.Attempts > 0) lines.Add("\n  " + NodeKindText(k));
+        }
+        return string.Concat(lines);
+    }
+
     void FillChips(SessionEngine e, long kinah, Tables s, int kills, TimeSpan elapsed, long totalNow, int nodes = 0)
     {
         bool farm = _part == "Farming" && !_welcome && _hasSummary;
@@ -297,7 +313,8 @@ public partial class MainWindow
         int deaths = e.Deaths, deathsPvp = e.DeathsToPlayers;
         // Rank Points in the Abyss (0.10.76), beside the Abyss Points: earned, an hour, and what deaths cost on the hover
         long rank = _heroAbyss && !gather ? e.RankPoints : 0, rankLost = _heroAbyss && !gather ? e.RankPointsLost : 0;
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{pvp}|{deaths}|{hs}|{rank}|{rankLost}|{(int)elapsed.TotalMinutes}";
+        int visits = e.NodeVisits, upgrades = e.Upgrades;
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{visits}|{upgrades}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{pvp}|{deaths}|{hs}|{rank}|{rankLost}|{(int)elapsed.TotalMinutes}";
         if (!Changed("chips", sig)) return;
         var at = CountWhere();
         // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
@@ -312,8 +329,11 @@ public partial class MainWindow
         if (gather)
         {
             double perTry = nodes > 0 ? s.GatherCount / (double)nodes : 0;
-            parts.Add(new QStat(nodes.ToString("N0"), $"attempt{(nodes == 1 ? "" : "s")}",
-                $"{nodes:N0} gathering attempts {at}" + (elapsed.TotalMinutes >= 1 ? $", {Fk(nodes / elapsed.TotalHours)} an hour" : "") + "."));
+            // with the game's own messages (0.10.80): the nodes the tries were on, and on the hover how they ended and each
+            // skill's and each kind of node's tries, nodes, upgrades, fails and pace
+            parts.Add(new QStat(nodes.ToString("N0"), visits > 0 ? $"tr{(nodes == 1 ? "y" : "ies")} · {visits:N0} node{(visits == 1 ? "" : "s")}" : $"attempt{(nodes == 1 ? "" : "s")}",
+                $"{nodes:N0} gathering attempts{(visits > 0 ? $" on {visits:N0} nodes" : "")} {at}" + (elapsed.TotalMinutes >= 1 ? $", {Fk(nodes / elapsed.TotalHours)} an hour" : "") + "."
+                + (visits > 0 ? GatherHow(e, s, nodes, upgrades) : "")));
             parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 ? "gathered" : kinds > 0 ? (kinds == 1 ? "kind gathered" : "kinds gathered") : "gathered",
                 kinds == 0 ? "Nothing gathered yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (FullShown ? "." : ". Click for the bag."),
                 Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null));

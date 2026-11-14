@@ -3,7 +3,7 @@ using KinahLedger.Packets;
 namespace KinahLedger.Session;
 
 /// <summary>
-/// Timed event timers (0.10.76): when the game's scheduled events start next, and the event the player is in, part by part.
+/// Timed event timers (0.10.83): when the game's scheduled events start next, and the event the player is in, part by part.
 ///
 /// The game doesn't tell a player who isn't at an event anything about it, so the countdowns are the known schedule
 /// (<see cref="Schedule"/>, the same rules as the site's /events/ page: kinah-ledger-site data/events.json) counted on the game

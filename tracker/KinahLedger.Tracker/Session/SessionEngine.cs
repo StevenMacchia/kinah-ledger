@@ -44,10 +44,18 @@ public sealed partial class SessionEngine
     /// <summary>Gathering: node attempts, one per primary-resource line (ore, log, Odyle, herb, food) plus failed attempts.</summary>
     public int Nodes { get; private set; }
     public int NodesFailed { get; private set; }
+    /// <summary>Gathering attempts whose upgrade roll won, and the nodes gathered (an attempt is one of a node's three tries): from the game's messages only.</summary>
+    public int Upgrades { get; private set; }
+    public int NodeVisits { get; private set; }
     /// <summary>Gathering: lines with x2 or more, the Plentiful proc.</summary>
     public int Plentiful { get; private set; }
     /// <summary>Per gathering skill: nodes, failed attempts and Plentiful procs. Rates are computed inside a skill, never across skills.</summary>
-    public sealed class SkillStats { public int Nodes, Failed, Plentiful, Items, Bonus; }
+    /// <summary>
+    /// A gathering skill's figures. Nodes: its attempts (the name is the old one, kept for today.json and the site). Upgrades:
+    /// attempts whose upgrade roll won, and Visits: the nodes those attempts were on, both known only from the game's
+    /// messages (0 when the screen counted).
+    /// </summary>
+    public sealed class SkillStats { public int Nodes, Failed, Plentiful, Items, Bonus, Upgrades, Visits; }
     public Dictionary<GatherFamily, SkillStats> Skills { get; } = new();
     SkillStats Skill(GatherFamily f) { if (!Skills.TryGetValue(f, out var s)) Skills[f] = s = new SkillStats(); return s; }
     /// <summary>Gathering: gemstones and higher-tier materials, the finds worth tracking per node.</summary>
@@ -796,11 +804,15 @@ public sealed partial class SessionEngine
     public bool AttemptsFromTally { get; set; }
 
     /// <summary>Attempts per node ("Orichalcum Ore", "Kukuru", "unknown node"): the node's skill, how many worked and failed.</summary>
-    public sealed class NodeStats { public GatherFamily Family; public int Ok, Failed; public int Attempts => Ok + Failed; }
+    public sealed class NodeStats { public GatherFamily Family; public int Ok, Failed, Upgrades, Visits; public int Attempts => Ok + Failed; }
     public Dictionary<string, NodeStats> GatherNodes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>One gathering attempt, under its node's skill: a race the bar finished, a gather whose race went between passes, a failure line.</summary>
-    public void GatherAttempt(DateTime at, GatherFamily family, string node, bool ok)
+    /// <summary>
+    /// One gathering attempt, under its node's skill: a race the bar finished, a gather whose race went between passes, a
+    /// failure line, or the game's own message (which also says whether the upgrade roll won, <paramref name="upgrade"/>, and
+    /// whether this is the first attempt on a node, <paramref name="newNode"/>).
+    /// </summary>
+    public void GatherAttempt(DateTime at, GatherFamily family, string node, bool ok, bool upgrade = false, bool newNode = false)
     {
         lock (_lock)
         {
@@ -809,8 +821,12 @@ public sealed partial class SessionEngine
             Nodes++; Z().Nodes++; MarkGather(at);
             var sk = Skill(family); sk.Nodes++;
             if (!ok) { NodesFailed++; sk.Failed++; }
+            if (upgrade) { Upgrades++; sk.Upgrades++; }
+            if (newNode) { NodeVisits++; sk.Visits++; }
             if (!GatherNodes.TryGetValue(node, out var ns)) GatherNodes[node] = ns = new NodeStats { Family = family };
             if (ok) ns.Ok++; else ns.Failed++;
+            if (upgrade) ns.Upgrades++;
+            if (newNode) ns.Visits++;
         }
     }
 
@@ -908,13 +924,13 @@ public sealed partial class SessionEngine
     /// <summary>A copy of the per-node attempts, safe to read from the UI thread.</summary>
     public Dictionary<string, NodeStats> NodeSnapshot()
     {
-        lock (_lock) return GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed }, StringComparer.OrdinalIgnoreCase);
+        lock (_lock) return GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed, Upgrades = kv.Value.Upgrades, Visits = kv.Value.Visits }, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>A copy of the per-skill counters, safe to read from the UI thread.</summary>
     public Dictionary<GatherFamily, SkillStats> SkillSnapshot()
     {
-        lock (_lock) return Skills.ToDictionary(kv => kv.Key, kv => new SkillStats { Nodes = kv.Value.Nodes, Failed = kv.Value.Failed, Plentiful = kv.Value.Plentiful, Items = kv.Value.Items, Bonus = kv.Value.Bonus });
+        lock (_lock) return Skills.ToDictionary(kv => kv.Key, kv => new SkillStats { Nodes = kv.Value.Nodes, Failed = kv.Value.Failed, Plentiful = kv.Value.Plentiful, Items = kv.Value.Items, Bonus = kv.Value.Bonus, Upgrades = kv.Value.Upgrades, Visits = kv.Value.Visits });
     }
 
     public string ItemName(long id) => _items.NameOf(id);

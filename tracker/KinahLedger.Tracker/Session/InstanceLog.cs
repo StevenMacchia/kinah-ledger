@@ -261,7 +261,7 @@ public sealed class InstanceLog
     bool _byMinimap;
     // the event's own server named the open run (its game, not just the family): that name is kept over the screen's
     bool _gameNamed;
-    // when the event's own server said the player left it (0.10.76): the minimap names the event for some seconds more, and
+    // when the event's own server said the player left it (0.10.83): the minimap names the event for some seconds more, and
     // those reads neither undo the leaving nor count as a new entry
     DateTime? _leftByGame;
     /// <summary>How long after the game said the event was left the minimap may still name it (the loading screen, the minimap's lag).</summary>
@@ -506,7 +506,7 @@ public sealed class InstanceLog
     }
 
     /// <summary>
-    /// What the event's own server said (the game's traffic, 0.10.76; PacketReader): the surest witness of an event run. A
+    /// What the event's own server said (the game's traffic, 0.10.83; PacketReader): the surest witness of an event run. A
     /// part of the event opening starts the run, dated by the message (10 s before the minimap did on 2026-11-13), or confirms
     /// and names the open one; the event's part closing, or the game leaving the event's server, is leaving it, and the
     /// reward time after it runs as for the minimap. "Over" is noted: the rewards come next. An event the decoder can't name,
