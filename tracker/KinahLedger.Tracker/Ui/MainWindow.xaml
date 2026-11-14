@@ -294,24 +294,9 @@
             </StackPanel>
           </StackPanel>
         </StackPanel>
-        <!-- three pages that never mix: Farm (the run, the rate, the loot), Craft (recipes, cost, profit), Runs (expeditions and events) -->
-        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal">
-            <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
-              <TextBlock Text="Farm" VerticalAlignment="Center"/>
-            </Button>
-            <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Margin="2,0,0,0">
-              <TextBlock Text="Craft" VerticalAlignment="Center"/>
-            </Button>
-            <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot. Never on the Farming page.">
-              <TextBlock Text="Runs" VerticalAlignment="Center"/>
-            </Button>
-            <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): every quest, pins, daily and all time, done, your score -->
-            <Button x:Name="QuestsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Quests: every quest with its tree, pins for Next up, today's and all time, what you have done, your score.">
-              <TextBlock Text="Quests" VerticalAlignment="Center"/>
-            </Button>
-          </StackPanel>
-        </Border>
+        <!-- the overlays over the game, each separate and optional (redesign 2026-11-14, Ui/MainWindow.Overlays.cs): one pill each, lit
+             while it is on; a click switches it, from any page -->
+        <StackPanel x:Name="OverlaysGroup" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <!-- round buttons, the same on every page: the site and Options (each says what it opens in plain words) -->
         <StackPanel x:Name="HeadButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
           <Button x:Name="SiteBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" AutomationProperties.Name="Open kinahledger.com"
@@ -324,6 +309,32 @@
           </Button>
         </StackPanel>
       </Grid>
+      <!-- the pages, one row under the header (redesign 2026-11-14, Steven: "pages across the top"): Farm, Runs, Craft, Timers,
+           Quests (Parser joins between Timers and Quests); every feature lives on one of them -->
+      <Border x:Name="PartTabs" Margin="0,10,0,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+        <UniformGrid x:Name="PartTabRow" Rows="1">
+          <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
+            <TextBlock Text="Farm" VerticalAlignment="Center"/>
+          </Button>
+          <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot.">
+            <TextBlock Text="Runs" VerticalAlignment="Center"/>
+          </Button>
+          <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Margin="2,0,0,0">
+            <TextBlock Text="Craft" VerticalAlignment="Center"/>
+          </Button>
+          <!-- Timers (Ui/MainWindow.TimersPage.cs): events and world bosses; the next one's countdown rides on the tab -->
+          <Button x:Name="TimersTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Timers: when the events start and the world bosses spawn.">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Timers" VerticalAlignment="Center"/>
+              <TextBlock x:Name="TimersTabNext" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Visibility="Collapsed"/>
+            </StackPanel>
+          </Button>
+          <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): every quest, pins, daily and all time, done, your score -->
+          <Button x:Name="QuestsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Quests: every quest with its tree, pins for Next up, today's and all time, what you have done, your score.">
+            <TextBlock Text="Quests" VerticalAlignment="Center"/>
+          </Button>
+        </UniformGrid>
+      </Border>
       <!-- a newer version: downloaded on its own, installed when the window closes or on Restart now -->
       <!-- one line (2026-10-28, the calm Farming page): the ready notice fits beside its two actions -->
       <Border x:Name="UpdateCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,6,6,6" Visibility="Collapsed">
@@ -729,7 +740,7 @@
              with Options › Show accuracy details on: the "2 to look at" pill is gone for players (Steven, 2026-10-30) -->
         <Border x:Name="AccuracyChip" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="26" CornerRadius="8" BorderThickness="1" Padding="11,0,12,1"
                 Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
-                ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
+                ToolTip="How well the count held up. Click to see." ToolTipService.InitialShowDelay="400">
           <Border.Style>
             <Style TargetType="Border">
               <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
@@ -935,6 +946,9 @@
       <!-- the Crafting page (Quest, 2026-11-07, step 3, Ui/MainWindow.QuestCraft.cs): profit as the hero in mint with the ring of
            crafts that worked; three chips; Next up (the next round profit and the recipe that pays most today); Just crafted with
            a worked or failed dot on each item; the recipes this session as small cards; Best crafts today behind its head -->
+      <!-- Timers (redesign 2026-11-14, Ui/MainWindow.TimersPage.cs): events and world bosses, a page of the ledger column -->
+      <StackPanel x:Name="TimersPage" Margin="0,12,0,14" Visibility="Collapsed"/>
+
       <Border x:Name="CraftCard" Margin="0,10,0,0" Background="Transparent" BorderThickness="0" Visibility="Collapsed">
         <StackPanel>
           <Border x:Name="CraftHero" Style="{StaticResource QCard}" Background="{DynamicResource HeroBg}" Padding="16,12,16,12">

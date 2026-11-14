@@ -268,6 +268,7 @@ public partial class MainWindow
     {
         bool moved = _hudSpotPreview;
         _hudPreview = null; _hudSpotPreview = false;
+        DrawOverlayPills();   // the header's Kinah pill follows the saved switch
         if (!_prefs.Hud) { CloseHud(); return; }
         if (_hud == null) return;   // the next tick opens it, run or no run
         _hud.SetFields(Ui.HudFields.Parse(_prefs.HudFields));
