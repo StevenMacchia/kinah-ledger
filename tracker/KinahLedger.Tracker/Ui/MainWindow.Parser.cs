@@ -93,8 +93,9 @@ public partial class MainWindow
     void RegisterParserHotkey(IntPtr h)
     {
         if (Hotkey.Parse(_parserPrefs.Hotkey) is not { } key) return;
-        if (!Native.RegisterHotKey(h, ParserHotkeyId, key.NativeModifiers, key.VirtualKey))
-            CrashLog.Note($"parser: the overlay's shortcut {key} is taken by another program; switch it on the Parser page");
+        var got = key.Register(h, ParserHotkeyId);
+        if (got is Hotkey.Outcome.Taken or Hotkey.Outcome.TakenByTracker)
+            KeyTakenOnce($"parser: the overlay's shortcut {key}: {(got == Hotkey.Outcome.Taken ? "taken by another app" : "held by another Kinah Ledger")}, off");
     }
 
     IntPtr ParserWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -345,7 +346,9 @@ public partial class MainWindow
         if (!_parserPlacing) _parserOverlay?.ShowWanted(false);   // a fight under way shows it again on the next tick
         ParserOverlayTick();
         // where it was dropped last, else its default place over the game, else over the main screen (no game running yet)
-        if (_parserPlacing && _parserOverlay != null) { _parserOverlay.SetClickThrough(false); _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect ?? System.Windows.Forms.Screen.PrimaryScreen?.Bounds); }
+        // a test's window (the options test) keeps it off every screen
+        if (_parserPlacing && _parserOverlay != null && _demo) { _parserOverlay.Left = -12000; _parserOverlay.Top = -12000; }
+        else if (_parserPlacing && _parserOverlay != null) { _parserOverlay.SetClickThrough(false); _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect ?? System.Windows.Forms.Screen.PrimaryScreen?.Bounds); }
         RedrawParserPage();
     }
 

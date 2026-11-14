@@ -1873,7 +1873,8 @@ public partial class MainWindow : Window
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
         var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
         menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, clearAll, copyPic, new WF.ToolStripSeparator(), movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
-        _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
+        // the tray icon (and so its notices) only for the tracker itself, never a test or render command's window
+        _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = Platform.SingleInstance.Held;
         _tray.DoubleClick += (_, _) => Restore();
         // one left click toggles the window: shown (and not minimized) goes to the tray, else it comes up
         _tray.MouseClick += (_, e) => { if (e.Button == WF.MouseButtons.Left) ToggleFromTray(); };
@@ -1886,8 +1887,10 @@ public partial class MainWindow : Window
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
         RefitIfNeeded();   // Full view against the screen the window opened on, now that it has one
-        if (ApplyHotkey() is { } err) HotkeyProblemAtStart(err);   // the status line, a tray notice once, and the panel (Ui/MainWindow.Notices.cs)
-        if (ApplyMarkWrongKey() is { } markErr) HotkeyProblemAtStart(markErr, "The That was wrong shortcut is off");
+        // the shortcuts (only the tracker itself registers them: Platform/Hotkey.cs Register); one that's off is a quiet line
+        // beside it in Options › Shortcuts, never a notice (Steven, 2026-11-14: test runs and a second copy popped them up)
+        ApplyHotkey();
+        ApplyMarkWrongKey();
         _foregroundWatch ??= Native.WatchForeground(HudFollowGame);   // the panel fades with an alt-tab, not a tick later
     }
 

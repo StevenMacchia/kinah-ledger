@@ -174,17 +174,31 @@ public partial class MainWindow
         // one saved before the shortcut rules (Ctrl+K, say) is off, and says why (Platform/Hotkey.cs Refusal)
         if (Hotkey.Explain(_prefs.Hotkey) is { } why)
         {
-            _hotkeyProblem = ($"The shortcut {_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › Shortcuts & tips.", $"Shortcut {_prefs.Hotkey.Trim()} is off · pick another in Options");
-            return _hotkeyProblem.Value.Long;
+            _hotkeyProblem = ($"{_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another.", "");
+            return null;
         }
         if (Hotkey.Parse(_prefs.Hotkey) is not { } key) { _hotkeyProblem = null; return null; }
-        _hotkeyProblem = Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey) ? null
-            : ($"{key} is already used by another app, so the shortcut is off. Pick another in Options › Shortcuts & tips.", $"{key} is taken by another app · pick another in Options");
-        return _hotkeyProblem?.Long;
+        // taken: one quiet line beside the key in Options › Shortcuts (never a notice); by another Kinah Ledger, nothing
+        var got = key.Register(h, HotkeyId);
+        _hotkeyProblem = got == Hotkey.Outcome.Taken ? ($"{key} is used by another app here, so it is off. Pick another.", "") : null;
+        if (got is Hotkey.Outcome.Taken or Hotkey.Outcome.TakenByTracker) KeyTakenOnce($"start/stop shortcut {key}: {(got == Hotkey.Outcome.Taken ? "taken by another app" : "held by another Kinah Ledger")}, off");
+        return null;
     }
 
-    /// <summary>The shortcut couldn't be set: the status line's sentence and the panel's short line; null when it works or is off.</summary>
+    /// <summary>The shortcut couldn't be set: Options › Shortcuts' line beside it (Long); null when it works or is off.</summary>
     (string Long, string Short)? _hotkeyProblem;
+
+    /// <summary>For Options › Shortcuts: the quiet line beside each key when it is off (the rules, or another app has it); null when fine.</summary>
+    internal string? HotkeyNote => _hotkeyProblem?.Long;
+    internal string? MarkKeyNote => _markKeyProblem?.Long;
+    internal void ApplyHotkeyForTest() { ApplyHotkey(); ApplyMarkWrongKey(); }
+    internal string HudNoticeForTest => HudNotice();
+    internal string StatusTextForTest => Status.Text;
+    internal bool TrayShownForTest => _tray.Visible;
+
+    readonly HashSet<string> _keyTakenLogged = new();
+    /// <summary>A shortcut found taken, in reads.log once per key and holder (never on screen).</summary>
+    void KeyTakenOnce(string line) { if (_keyTakenLogged.Add(line)) CrashLog.Note(line); }
 
     /// <summary>While Options records a new shortcut, the current one must not fire (it would start a run).</summary>
     public void SuspendHotkey(bool suspend)
@@ -328,12 +342,12 @@ public partial class MainWindow
             _prefs.Hotkey = c.Hotkey;
             UpdateStartHint(Farming);
             ReleaseMarkWrongKey();   // two keys swapped: the start/stop one first, then That was wrong again below
-            if (ApplyHotkey() is { } err) problems.Add(err);
+            ApplyHotkey();   // a problem is the line beside the key in Options › Shortcuts (HotkeyNote)
         }
         if (c.MarkWrongKey != was.MarkWrongKey || c.Hotkey != was.Hotkey)
         {
             _hudPrefs.MarkWrongKey = c.MarkWrongKey;
-            if (ApplyMarkWrongKey() is { } err) problems.Add(err);
+            ApplyMarkWrongKey();   // likewise (MarkKeyNote)
         }
         _prefs.OnGameStart = c.OnGameStart;
         _prefs.HideWhenGameCloses = c.HideWhenGameCloses;
