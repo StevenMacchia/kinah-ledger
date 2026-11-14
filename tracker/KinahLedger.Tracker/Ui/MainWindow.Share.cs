@@ -15,10 +15,11 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// Share (0.9.3, ShareA of the canvas, Steven's pick 2026-10-31). The Farming card's Share button (it was "Copy for
-/// Discord") opens a sheet inside the card, under the actions: a dark panel with a gold rule, SHARE, a This session |
-/// Last run | This week switch and a close ✕; a live preview of the 1200×630 picture at half size (the mark, the day and
-/// server, the zone or run, the time and kills, Kinah an hour and what it made after the Market's cut, the top five drops
-/// with the best one named, kinahledger.com); "Show my character name", off until the player turns it on; then Copy
+/// Discord") opens a sheet inside the card, under the actions: a dark panel with a gold rule, SHARE, a Today | This
+/// session | Last run | This week switch and a close ✕; a live preview of the 1200×630 picture at half size (the mark,
+/// the day and server, the zone or run; what it made after the Market's cut, split into Kinah and loot; Kinah an hour, the
+/// time and the kills; a panel of the top five drops with their counts, worth and a bar each, or the week's days; today's
+/// zones or the best drop; kinahledger.com); "Show my character name", off until the player turns it on; then Copy
 /// picture, Save picture and Copy as text, and "Paste it in Discord or anywhere. Nothing is uploaded." The Events page's
 /// Share opens the same sheet on its last run. Every action is a visible button: no right-click, no Windows menu, no
 /// window of its own (Steven, 2026-10-31). The PNG is the preview's own visual drawn again with RenderTargetBitmap at twice
@@ -26,8 +27,8 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>The sheet's side: This session, Last run or This week.</summary>
-    string _shareScope = SharePicture.Session;
+    /// <summary>The sheet's side: Today, This session, Last run or This week.</summary>
+    string _shareScope = SharePicture.Today;
     /// <summary>The page the sheet is open on ("Farming" or "Events"), or null while it is closed.</summary>
     string? _shareOn;
     /// <summary>This session's picture, from the last FillNumbers: the same figures the card shows.</summary>
@@ -54,8 +55,8 @@ public partial class MainWindow
     {
         if (_shareOn == page) { CloseShare(); return; }
         _shareOn = page;
-        // Events shares its last run; Farming opens on This session
-        _shareScope = page == "Events" ? SharePicture.Run : SharePicture.Session;
+        // Events shares its last run; Farming opens on Today, the day's farming in every zone (0.10.67)
+        _shareScope = page == "Events" ? SharePicture.Run : SharePicture.Today;
         _shareSaved = "";
         DrawShare();
     }
@@ -103,8 +104,29 @@ public partial class MainWindow
     {
         SharePicture.Run => LastRunFacts(),
         SharePicture.Week => WeekShareFacts(),
+        SharePicture.Today => TodayShareFacts(),
         _ => _shareSession is { Made: > 0 } s ? s : null,
     };
+
+    /// <summary>Today: the day's farming in every zone, as LOOT's Today side counts it (drops and gathering, Kinah, the zones).</summary>
+    ShareFacts? TodayShareFacts()
+    {
+        if (TodayEngine is not { } day) return null;
+        var f = TodayLoot.Farm(day, _items);
+        if (f.Made <= 0) return null;
+        bool gather = f.Kills == 0 && f.Attempts > 0;
+        var drops = f.Drops.Concat(f.Gathered).Select(s => new ShareDrop(s.Name, GatheringCatalog.Find(s.Name)?.Grade ?? _items.Get(s.Id)?.Grade ?? "",
+            (int)Math.Min(s.Count, int.MaxValue), s.Worth) { Bound = (int)Math.Min(s.Bound, int.MaxValue) }).ToList();
+        var zones = f.Zones.Where(z => z.Made > 0).Select(z => new ShareZone(z.Zone == SessionEngine.UnknownZone ? "Zone not read" : z.Zone, z.Made, z.Active)).ToList();
+        var title = zones.Count switch
+        {
+            0 => ShareZone(day),
+            1 => zones[0].Name,
+            _ => $"{zones.Count} zones · most in {zones[0].Name}",
+        };
+        return new ShareFacts(SharePicture.Today, DateTime.Now, ShareServer(), title, gather ? "of gathering" : "of farming", f.Active,
+            gather ? f.Attempts : f.Kills, gather ? "attempt" : "kill", f.Made, drops) { Kinah = f.Kinah, Zones = zones };
+    }
 
     SharePic? CurrentSharePic() => ShareFactsFor(_shareScope) is { } f ? SharePicture.Compose(f, _prefs.ShareShowName, _prefs.ShareName, Fk) : null;
 
@@ -115,7 +137,7 @@ public partial class MainWindow
     List<ShareDrop> ShareDropsOf(SessionEngine e) => e.ItemRows()
         .Where(r => r.Count + r.Bound > 0)
         .Select(r => new ShareDrop(r.Name, GatheringCatalog.Find(r.Name)?.Grade ?? _items.Get(r.Id)?.Grade ?? "", r.Count + r.Bound,
-            r.Count > 0 && PriceBook.Price(r.Name) is long p ? (long)Math.Round(p * r.Count * PriceBook.SellerKeeps) : 0))
+            r.Count > 0 && PriceBook.Price(r.Name) is long p ? (long)Math.Round(p * r.Count * PriceBook.SellerKeeps) : 0) { Bound = r.Bound })
         .ToList();
 
     /// <summary>The zone a count is named by: its own, else the one on screen.</summary>
@@ -128,7 +150,7 @@ public partial class MainWindow
         var t = e.Totals();
         bool gather = t.Kills == 0 && t.Nodes > 0;
         string what = scope == SharePicture.Run ? (gather ? "Gathering run" : "Farming run") : gather ? "of gathering" : "of farming";
-        return new ShareFacts(scope, day, ShareServer(), ShareZone(e), what, seconds, gather ? t.Nodes : t.Kills, gather ? "attempt" : "kill", made, ShareDropsOf(e));
+        return new ShareFacts(scope, day, ShareServer(), ShareZone(e), what, seconds, gather ? t.Nodes : t.Kills, gather ? "attempt" : "kill", made, ShareDropsOf(e)) { Kinah = t.Kinah };
     }
 
     /// <summary>The last expedition or event finished (the Events page's, a pending Clear's runs left out).</summary>
@@ -141,17 +163,19 @@ public partial class MainWindow
 
     ShareFacts EventShareFacts(InstanceRun r)
     {
-        var drops = new Dictionary<long, (int N, long Worth)>();
+        var drops = new Dictionary<long, (int N, long Worth, int Bound)>();
         foreach (var (id, n) in r.Items)
         {
-            long worth = !_items.IsGear(id) && PriceBook.Price(_items.NameOf(id)) is long p ? (long)Math.Round(p * n * PriceBook.SellerKeeps) : 0;
-            drops[id] = (n, worth);
+            // gear from a run is bound to the character: worth nothing, as RunValue counts it
+            bool gear = _items.IsGear(id);
+            long worth = !gear && PriceBook.Price(_items.NameOf(id)) is long p ? (long)Math.Round(p * n * PriceBook.SellerKeeps) : 0;
+            drops[id] = (n, worth, gear ? n : 0);
         }
-        foreach (var (id, n) in r.BoundItems) { var had = drops.GetValueOrDefault(id); drops[id] = (had.N + n, had.Worth); }
-        var list = drops.Select(kv => new ShareDrop(_items.NameOf(kv.Key), _items.Get(kv.Key)?.Grade ?? "", kv.Value.N, kv.Value.Worth)).ToList();
+        foreach (var (id, n) in r.BoundItems) { var had = drops.GetValueOrDefault(id); drops[id] = (had.N + n, had.Worth, had.Bound + n); }
+        var list = drops.Select(kv => new ShareDrop(_items.NameOf(kv.Key), _items.Get(kv.Key)?.Grade ?? "", kv.Value.N, kv.Value.Worth) { Bound = kv.Value.Bound }).ToList();
         double secs = ((r.LastLoot ?? r.Start) - r.Start).TotalSeconds;
         var kind = DayHistory.KindOf(r.Kind) is { Length: > 0 } k ? k : r.Kind.Length > 0 ? r.Kind : "Run";
-        return new ShareFacts(SharePicture.Run, r.Start.ToLocalTime(), ShareServer(), r.Label, kind, secs, r.Kills, "kill", RunValue(r), list);
+        return new ShareFacts(SharePicture.Run, r.Start.ToLocalTime(), ShareServer(), r.Label, kind, secs, r.Kills, "kill", RunValue(r), list) { Kinah = r.Kinah };
     }
 
     /// <summary>Last run: the newer of the last farming run stopped and the last expedition or event.</summary>
@@ -171,7 +195,11 @@ public partial class MainWindow
         var best = days.Where(d => d.Farm.Made > 0).OrderByDescending(d => d.Farm.Made).FirstOrDefault();
         var zone = days.SelectMany(d => d.Farm.Zones).GroupBy(z => z.Zone).Select(g => (Zone: g.Key, Made: g.Sum(z => z.Made))).OrderByDescending(x => x.Made).FirstOrDefault();
         var note = SharePicture.WeekNote(best?.Date, best?.Farm.Made ?? 0, zone.Made > 0 ? zone.Zone : null, Fk);
-        return new ShareFacts(SharePicture.Week, DateTime.Now, ShareServer(), "This week", "of farming", t.Active, t.Kills, "kill", t.Made, new List<ShareDrop>(), note);
+        return new ShareFacts(SharePicture.Week, DateTime.Now, ShareServer(), "This week", "of farming", t.Active, t.Kills, "kill", t.Made, new List<ShareDrop>(), note)
+        {
+            Kinah = days.Sum(d => d.Farm.Kinah),
+            Days = days.Select(d => new ShareDay(d.Date, d.Farm.Made, d.IsToday)).ToList(),
+        };
     }
 
     /// <summary>From FillNumbers: this session's picture, the same zone, time and total the card shows.</summary>
@@ -213,6 +241,7 @@ public partial class MainWindow
         var seg = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (scope, text, tip) in new[]
         {
+            (SharePicture.Today, "Today", "Today's farming in every zone, as LOOT's Today side counts it."),
             (SharePicture.Session, "This session", "This zone since you came, as the card shows it."),
             (SharePicture.Run, "Last run", "The last run you stopped, or the last expedition or event."),
             (SharePicture.Week, "This week", "The last 7 days of farming on this PC."),
@@ -318,6 +347,7 @@ public partial class MainWindow
             {
                 SharePicture.Run => "No run yet. Stop a run, or finish an expedition or event, and it shows here.",
                 SharePicture.Week => "Nothing farmed in the last 7 days yet.",
+                SharePicture.Today => "Nothing farmed today yet. Kill or gather something and it shows here.",
                 _ => "Nothing counted yet. Kill or gather something and it shows here.",
             };
             var t = CkText(why, CkFaint, 12.5); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None; t.TextAlignment = TextAlignment.Center;
@@ -329,26 +359,43 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The picture, at half its pixel size (600×315; the PNG draws it at twice that): the ShareA card. Fixed colours, the
-    /// app's own fonts and item icons, so it looks the same whatever the window's look.
+    /// The picture, at half its pixel size (600×315; the PNG draws it at twice that). Fixed colours, the app's own fonts and
+    /// item icons, so it looks the same whatever the window's look. The head: the mark, Kinah Ledger, the day and server.
+    /// Then the side over the title; on the left the total after the Market's cut with its loot and Kinah bar, and the rate,
+    /// the time and the kills; on the right a panel of the top drops (icon, name in its grade, count, worth, a bar against
+    /// the biggest), or the week's days; at the foot today's zones or the best drop, and kinahledger.com (0.10.67).
     /// </summary>
     FrameworkElement SharePictureVisual(SharePic p)
     {
         var display = TryFindResource("DisplayFont") as FontFamily ?? new FontFamily("Segoe UI Variable Display, Segoe UI");
         var bodyFont = TryFindResource("BodyFont") as FontFamily ?? new FontFamily("Segoe UI Variable Text, Segoe UI");
         TextBlock T(string text, double size, Color c, FontWeight? w = null, FontFamily? f = null) =>
-            new() { Text = text, FontSize = size, Foreground = Ck(c), FontWeight = w ?? FontWeights.Normal, FontFamily = f ?? bodyFont, TextTrimming = TextTrimming.CharacterEllipsis };
+            new() { Text = text, FontSize = size, Foreground = Ck(c), FontWeight = w ?? FontWeights.Normal, FontFamily = f ?? bodyFont, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var kinahC = Color.FromRgb(0x7C, 0x86, 0xA3);
 
         var bg = new LinearGradientBrush { StartPoint = new Point(0.33, 0), EndPoint = new Point(0.67, 1) };
         bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x22, 0x25, 0x2F), 0));
         bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x10, 0x14), 0.6));
         bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x11, 0x15), 1));
         var page = new Grid();
-        for (int i = 0; i < 6; i++) page.RowDefinitions.Add(new RowDefinition { Height = i == 4 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+        page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        // a warm glow behind the total
+        var glow = new Border
+        {
+            Background = new RadialGradientBrush(Color.FromArgb(0x1E, CkGold.R, CkGold.G, CkGold.B), Color.FromArgb(0, CkGold.R, CkGold.G, CkGold.B))
+            { Center = new Point(0.18, 0.62), GradientOrigin = new Point(0.18, 0.62), RadiusX = 0.42, RadiusY = 0.7 },
+        };
+        var layers = new Grid();
+        layers.Children.Add(glow);
+        var inner = new Border { Padding = new Thickness(24, 18, 24, 16), Child = page };
+        layers.Children.Add(inner);
         var card = new Border
         {
             Width = PicW, Height = PicH, Background = bg, BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x2E, 0x33, 0x46)),
-            CornerRadius = new CornerRadius(10), Padding = new Thickness(26, 22, 26, 20), Child = page, ClipToBounds = true,
+            CornerRadius = new CornerRadius(10), Child = layers, ClipToBounds = true,
         };
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Ideal);
 
@@ -358,58 +405,146 @@ public partial class MainWindow
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         top.ColumnDefinitions.Add(new ColumnDefinition());
         var tileBg = new LinearGradientBrush(Color.FromRgb(0x27, 0x2A, 0x36), Color.FromRgb(0x16, 0x18, 0x1F), new Point(0.33, 0), new Point(0.67, 1));
-        var tile = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x35, 0x39, 0x49)), Background = tileBg };
+        var tile = new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x35, 0x39, 0x49)), Background = tileBg };
         tile.Child = TryFindResource("AppMark") is ImageSource mark
-            ? new Image { Source = mark, Width = 20, Height = 20, Stretch = Stretch.Uniform }
-            : new Path { Width = 16, Height = 16, Stretch = Stretch.Uniform, Fill = Ck(CkGoldRule), Data = Geometry.Parse("M6,3 H9.4 V10.2 L15.6,3 H19.7 L13.1,10.6 L20,21 H15.8 L10.8,13.2 L9.4,14.8 V21 H6 Z") };
+            ? new Image { Source = mark, Width = 18, Height = 18, Stretch = Stretch.Uniform }
+            : new Path { Width = 15, Height = 15, Stretch = Stretch.Uniform, Fill = Ck(CkGoldRule), Data = Geometry.Parse("M6,3 H9.4 V10.2 L15.6,3 H19.7 L13.1,10.6 L20,21 H15.8 L10.8,13.2 L9.4,14.8 V21 H6 Z") };
         top.Children.Add(tile);
-        var brand = T("Kinah Ledger", 13, CkInk, FontWeights.Medium, display); brand.VerticalAlignment = VerticalAlignment.Center; brand.Margin = new Thickness(10, 0, 0, 0);
+        var brand = T("Kinah Ledger", 13, CkInk, FontWeights.Medium, display); brand.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(brand, 1); top.Children.Add(brand);
-        var head = T(p.Head, 12, CkFaint); head.HorizontalAlignment = HorizontalAlignment.Right; head.VerticalAlignment = VerticalAlignment.Center; head.Margin = new Thickness(16, 0, 0, 0);
+        var head = T(p.Head, 12, CkFaint); head.HorizontalAlignment = HorizontalAlignment.Right; head.Margin = new Thickness(16, 0, 0, 0);
         head.Tag = "share-head";
         Grid.SetColumn(head, 2); top.Children.Add(head);
         page.Children.Add(top);
 
-        var title = T(p.Title, 22, CkInk, FontWeights.SemiBold, display); title.Margin = new Thickness(0, 16, 0, 2);
-        Grid.SetRow(title, 1); page.Children.Add(title);
-        var sub = T(p.Sub, 12.5, CkMuted);
-        Grid.SetRow(sub, 2); page.Children.Add(sub);
+        // the side over the title
+        var titles = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
+        if (p.Kicker.Length > 0) titles.Children.Add(T(p.Kicker, 10.5, CkGoldRule, FontWeights.SemiBold));
+        var title = T(p.Title, 21, CkInk, FontWeights.SemiBold, display); title.Margin = new Thickness(0, 1, 0, 0);
+        titles.Children.Add(title);
+        Grid.SetRow(titles, 1); page.Children.Add(titles);
 
-        // Kinah an hour, and what it made after the Market's cut
-        var figs = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 16, 0, 0) };
-        foreach (var (v, l) in new[] { (p.Rate, p.RateLabel), (p.Made, p.MadeLabel) })
+        // the body: the figures on the left, the panel on the right
+        var body = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(232) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        body.ColumnDefinitions.Add(new ColumnDefinition());
+        Grid.SetRow(body, 2); page.Children.Add(body);
+
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
+        var big = T(p.Made, 40, CkGold, FontWeights.SemiBold, display); big.LineHeight = 42; big.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        left.Children.Add(big);
+        var madeLabel = T(p.MadeLabel, 11.5, CkMuted); madeLabel.Margin = new Thickness(0, 2, 0, 0);
+        left.Children.Add(madeLabel);
+        if (p.Split is { } s)
         {
-            var cell = new StackPanel { Margin = new Thickness(0, 0, 30, 0) };
-            var big = T(v, 34, CkGold, FontWeights.SemiBold, display); big.LineHeight = 34; big.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
-            cell.Children.Add(big);
-            var small = T(l, 12, CkMuted); small.Margin = new Thickness(0, 5, 0, 0);
-            cell.Children.Add(small);
-            figs.Children.Add(cell);
+            // loot against loose Kinah: one bar, two parts, round at its ends
+            var bar = new Grid { Height = 5, Margin = new Thickness(0, 10, 0, 0) };
+            double lootW = Math.Clamp(s.LootShare, 0, 1);
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(lootW, 0.0001), GridUnitType.Star) });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(1 - lootW, 0.0001), GridUnitType.Star) });
+            bool both = lootW > 0.005 && lootW < 0.995;
+            var lootB = new Border { Background = Ck(CkGold), CornerRadius = both ? new CornerRadius(2.5, 0, 0, 2.5) : new CornerRadius(2.5) };
+            var kinahB = new Border { Background = Ck(kinahC), CornerRadius = both ? new CornerRadius(0, 2.5, 2.5, 0) : new CornerRadius(2.5), Margin = new Thickness(both ? 1.5 : 0, 0, 0, 0) };
+            Grid.SetColumn(kinahB, 1);
+            if (lootW > 0.005) bar.Children.Add(lootB);
+            if (lootW < 0.995) bar.Children.Add(kinahB);
+            left.Children.Add(bar);
+            var legend = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            void Key(Color c, string what, string fig)
+            {
+                legend.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Ck(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(legend.Children.Count > 0 ? 14 : 0, 0, 5, 0) });
+                legend.Children.Add(T(what + " ", 11, CkFaint));
+                legend.Children.Add(T(fig, 11, CkInk, FontWeights.Medium));
+            }
+            Key(CkGold, "Loot", s.Loot);
+            Key(kinahC, "Kinah", s.Kinah);
+            legend.Tag = "share-split";
+            left.Children.Add(legend);
         }
-        Grid.SetRow(figs, 3); page.Children.Add(figs);
+        // the rate, the time, the kills: three small figures, each as wide as it needs, with a hairline between
+        var stats = new Grid { Margin = new Thickness(0, 16, 0, 0) };
+        for (int i = 0; i < p.Stats.Count; i++)
+        {
+            stats.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var cell = new StackPanel();
+            cell.Children.Add(T(p.Stats[i].Fig, 16, CkInk, FontWeights.SemiBold, display));
+            var l = T(p.Stats[i].Label, 10.5, CkFaint); l.Margin = new Thickness(0, 1, 0, 0);
+            cell.Children.Add(l);
+            var box = new Border { Child = cell, Padding = new Thickness(i == 0 ? 0 : 12, 0, 14, 0), BorderThickness = new Thickness(i == 0 ? 0 : 1, 0, 0, 0), BorderBrush = Ck(CkSlotLine) };
+            Grid.SetColumn(box, i); stats.Children.Add(box);
+        }
+        stats.Tag = "share-stats";
+        left.Children.Add(stats);
+        body.Children.Add(left);
 
-        // the top five drops and the best one by name (the week: its best day and zone), the site on the right
-        var foot = new Grid();
+        // the panel: the top drops, or the week's days
+        var panel = new StackPanel();
+        var ph = new Grid { Margin = new Thickness(0, 0, 0, 5) };
+        ph.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        ph.ColumnDefinitions.Add(new ColumnDefinition());
+        ph.Children.Add(T(p.RowsHead, 10.5, CkMuted, FontWeights.SemiBold));
+        var side = T(p.RowsSide, 10.5, CkFaint); side.HorizontalAlignment = HorizontalAlignment.Right; side.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(side, 1); ph.Children.Add(side);
+        panel.Children.Add(ph);
+        foreach (var r in p.Rows)
+        {
+            double h = r.Item ? 24 : 16;
+            var row = new Grid { Height = h, Margin = new Thickness(0, 0, 0, 2), Tag = "share-row" };
+            // the bar behind the line: its worth against the panel's biggest
+            if (r.Bar > 0.004)
+            {
+                var barLayer = new Grid();
+                barLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Clamp(r.Bar, 0.004, 1), GridUnitType.Star) });
+                barLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(1 - r.Bar, 0.0001), GridUnitType.Star) });
+                var tint = r.Item && r.Best && SharePicture.GradeRank(r.Grade) > 0 ? GradeColor(r.Grade) : CkGold;
+                barLayer.Children.Add(new Border { Background = Ck(tint, r.Best ? (byte)0x30 : (byte)0x1C), CornerRadius = new CornerRadius(4) });
+                row.Children.Add(barLayer);
+            }
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = r.Item ? new GridLength(1, GridUnitType.Star) : new GridLength(54) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = r.Item ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (r.Item)
+            {
+                var ic = CkIcon(r.Name, 20, FrameOf(_items.IdOf(r.Name)), glow: r.Best && SharePicture.GradeRank(r.Grade) > 0);
+                ic.Margin = new Thickness(2, 0, 8, 0); ic.VerticalAlignment = VerticalAlignment.Center;
+                line.Children.Add(ic);
+            }
+            var nm = T(r.Name, 12, r.Item && r.Grade is not ("" or "Common") ? GradeColor(r.Grade) : r.Item || r.Best ? CkInk : CkMuted, r.Best ? FontWeights.SemiBold : FontWeights.Normal);
+            nm.Margin = new Thickness(r.Item ? 0 : 6, 0, 0, 0);
+            Grid.SetColumn(nm, 1); line.Children.Add(nm);
+            if (r.Count.Length > 0) { var ct = T(r.Count, 11.5, CkMuted); ct.Margin = new Thickness(6, 0, 10, 0); Grid.SetColumn(ct, 2); line.Children.Add(ct); }
+            var fig = T(r.Fig, 12, r.Dim ? CkFaint : r.Item || r.Best ? CkGold : CkInk, r.Dim ? FontWeights.Normal : FontWeights.SemiBold);
+            fig.HorizontalAlignment = HorizontalAlignment.Right; fig.Margin = new Thickness(0, 0, 7, 0); fig.MinWidth = 40; fig.TextAlignment = TextAlignment.Right;
+            Grid.SetColumn(fig, 3); line.Children.Add(fig);
+            row.Children.Add(line);
+            panel.Children.Add(row);
+        }
+        if (p.Rows.Count == 0) panel.Children.Add(T(p.Split != null ? "Only Kinah so far, no items." : "No items yet.", 12, CkFaint));
+        var box2 = new Border
+        {
+            Child = panel, Padding = new Thickness(11, 8, 11, 6), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+            BorderBrush = Ck(CkSlotLine), Background = Ck(CkSlot, 0x99), VerticalAlignment = VerticalAlignment.Top,
+        };
+        Grid.SetColumn(box2, 2); body.Children.Add(box2);
+
+        // the foot: today's zones (or the best drop, or the week's best day), the site on the right
+        var foot = new Grid { Margin = new Thickness(0, 10, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition());
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var drops = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Bottom };
-        foreach (var d in p.Icons)
+        var footText = new TextBlock { FontSize = 11.5, FontFamily = bodyFont, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Tag = "share-best" };
+        if (p.Zones.Length > 0)
         {
-            var id = _items.IdOf(d.Name);
-            var ic = CkIcon(d.Name, 34, FrameOf(id));
-            ic.Margin = new Thickness(0, 0, 8, 0);
-            drops.Children.Add(ic);
+            footText.Inlines.Add(new Run("ZONES  ") { Foreground = Ck(CkFaint), FontSize = 10.5, FontWeight = FontWeights.SemiBold });
+            footText.Inlines.Add(new Run(p.Zones) { Foreground = Ck(CkMuted) });
         }
-        if (p.Best.Length > 0)
-        {
-            var best = T(p.Best, 12, CkFaint); best.VerticalAlignment = VerticalAlignment.Center; best.Margin = new Thickness(p.Icons.Count > 0 ? 6 : 0, 0, 12, 0);
-            best.Tag = "share-best";
-            drops.Children.Add(best);
-        }
-        foot.Children.Add(drops);
-        var site = T(p.Site, 12, CkGoldRule, FontWeights.Normal); site.VerticalAlignment = VerticalAlignment.Bottom;
+        else footText.Inlines.Add(new Run(p.BestLine) { Foreground = Ck(CkMuted) });
+        foot.Children.Add(footText);
+        var site = T(p.Site, 12, CkGoldRule, FontWeights.Medium); site.Margin = new Thickness(16, 0, 0, 0);
         Grid.SetColumn(site, 1); foot.Children.Add(site);
-        Grid.SetRow(foot, 5); page.Children.Add(foot);
+        Grid.SetRow(foot, 3); page.Children.Add(foot);
         return card;
     }
 
@@ -483,7 +618,7 @@ public partial class MainWindow
     /* ---------------- layout renders and options-test ---------------- */
 
     /// <summary>
-    /// A layout render (KL_SHOT_STATE=share-session|share-run|share-week|share-picture): the sheet open on that side, with a
+    /// A layout render (KL_SHOT_STATE=share-today|share-session|share-run|share-week|share-picture): the sheet open on that side, with a
     /// sample farming run stopped for Last run; on the Events page, its last sample run. Example figures, never the player's.
     /// </summary>
     internal void OpenShareSample(string state, bool events = false)
@@ -492,16 +627,16 @@ public partial class MainWindow
             _shareFarmRun = (FarmShareFacts(_demoEngine, SharePicture.Run, _demoElapsed.TotalSeconds, BestRuns.Value(_demoEngine), DateTime.Now), DateTime.UtcNow);
         _shareOn = null;
         ToggleShare(events ? "Events" : "Farming");
-        _shareScope = state switch { "share-run" => SharePicture.Run, "share-week" => SharePicture.Week, _ => events ? SharePicture.Run : SharePicture.Session };
+        _shareScope = state switch { "share-run" => SharePicture.Run, "share-week" => SharePicture.Week, "share-session" => SharePicture.Session, _ => events ? SharePicture.Run : SharePicture.Today };
         DrawShare();
     }
 
     /// <summary>Layout renders: the 1200×630 pictures themselves (each side, and the session with a sample name shown).</summary>
     internal void ShotSharePictures(string dir)
     {
-        foreach (var scope in new[] { SharePicture.Session, SharePicture.Run, SharePicture.Week })
+        foreach (var scope in new[] { SharePicture.Today, SharePicture.Session, SharePicture.Run, SharePicture.Week })
             if (ShareFactsFor(scope) is { } f) SavePng(RenderSharePicture(SharePicture.Compose(f, false, null, Fk)), System.IO.Path.Combine(dir, $"ui-share-picture-{scope}.png"));
-        if (ShareFactsFor(SharePicture.Session) is { } s) SavePng(RenderSharePicture(SharePicture.Compose(s, true, "Aerin", Fk)), System.IO.Path.Combine(dir, "ui-share-picture-named.png"));
+        if (ShareFactsFor(SharePicture.Today) is { } s) SavePng(RenderSharePicture(SharePicture.Compose(s, true, "Aerin", Fk)), System.IO.Path.Combine(dir, "ui-share-picture-named.png"));
     }
 
     /// <summary>Layout renders: the open sheet drawn again on its own, whole, over <paramref name="page"/> (the window stops at the screen's height).</summary>
