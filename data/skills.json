@@ -1,0 +1,1121 @@
+{
+"source": "MetaBot.GG AION 2 skill pages (via kinahledger.com data/metabot-classes.json, fetched 2026-10-28)",
+"skills": {
+"11010000": {
+"name": "Rending Blow",
+"cls": "gladiator"
+},
+"11020000": {
+"name": "Keen Strike",
+"cls": "gladiator"
+},
+"11050000": {
+"name": "Crushing Wave",
+"cls": "gladiator"
+},
+"11080000": {
+"name": "Blade Toss",
+"cls": "gladiator"
+},
+"11100000": {
+"name": "Ruinous Blow",
+"cls": "gladiator"
+},
+"11110000": {
+"name": "Focused Block",
+"cls": "gladiator"
+},
+"11130000": {
+"name": "Armor of Balance",
+"cls": "gladiator"
+},
+"11170000": {
+"name": "Overhead Slam",
+"cls": "gladiator"
+},
+"11190000": {
+"name": "Leaping Slam",
+"cls": "gladiator"
+},
+"11200000": {
+"name": "Ankle Slice",
+"cls": "gladiator"
+},
+"11240000": {
+"name": "Wrath Wave",
+"cls": "gladiator"
+},
+"11250000": {
+"name": "Zikel's Blessing",
+"cls": "gladiator"
+},
+"11260000": {
+"name": "Defiance",
+"cls": "gladiator"
+},
+"11280000": {
+"name": "Sword Aura Rampage",
+"cls": "gladiator"
+},
+"11290000": {
+"name": "Mocking Blade",
+"cls": "gladiator"
+},
+"11300000": {
+"name": "Aerial Snare",
+"cls": "gladiator"
+},
+"11340000": {
+"name": "Lifestealing Blade",
+"cls": "gladiator"
+},
+"11360000": {
+"name": "Rush Strike",
+"cls": "gladiator"
+},
+"11380000": {
+"name": "Tenaciousness",
+"cls": "gladiator"
+},
+"11390000": {
+"name": "Rage Burst",
+"cls": "gladiator"
+},
+"11400000": {
+"name": "Lunge Stance",
+"cls": "gladiator"
+},
+"11410000": {
+"name": "Wave Armor",
+"cls": "gladiator"
+},
+"11430000": {
+"name": "Forced Restraint",
+"cls": "gladiator"
+},
+"11450000": {
+"name": "Fracturing Rush",
+"cls": "gladiator"
+},
+"11700000": {
+"name": "Assault Strike",
+"cls": "gladiator"
+},
+"11710000": {
+"name": "Survival Stance",
+"cls": "gladiator"
+},
+"11720000": {
+"name": "Protection Armor",
+"cls": "gladiator"
+},
+"11730000": {
+"name": "Blood Absorption",
+"cls": "gladiator"
+},
+"11740000": {
+"name": "Identify Weakness",
+"cls": "gladiator"
+},
+"11750000": {
+"name": "Attack Preparation",
+"cls": "gladiator"
+},
+"11760000": {
+"name": "Impact Hit",
+"cls": "gladiator"
+},
+"11770000": {
+"name": "Destructive Impulse",
+"cls": "gladiator"
+},
+"11780000": {
+"name": "Experienced Counterstrike",
+"cls": "gladiator"
+},
+"11790000": {
+"name": "Survival Willpower",
+"cls": "gladiator"
+},
+"11800000": {
+"name": "Murderous Burst",
+"cls": "gladiator"
+},
+"12010000": {
+"name": "Vicious Strike",
+"cls": "templar"
+},
+"12040000": {
+"name": "Pummel",
+"cls": "templar"
+},
+"12070000": {
+"name": "Doom Shield",
+"cls": "templar"
+},
+"12090000": {
+"name": "Punishment",
+"cls": "templar"
+},
+"12100000": {
+"name": "Shield Smite",
+"cls": "templar"
+},
+"12110000": {
+"name": "Shield of Protection",
+"cls": "templar"
+},
+"12120000": {
+"name": "Taunt",
+"cls": "templar"
+},
+"12130000": {
+"name": "Poach",
+"cls": "templar"
+},
+"12190000": {
+"name": "Second Skin",
+"cls": "templar"
+},
+"12200000": {
+"name": "Armor of Balance",
+"cls": "templar"
+},
+"12220000": {
+"name": "Grapple",
+"cls": "templar"
+},
+"12230000": {
+"name": "Noble Armor",
+"cls": "templar"
+},
+"12240000": {
+"name": "Judgment",
+"cls": "templar"
+},
+"12250000": {
+"name": "Comrade in Arms",
+"cls": "templar"
+},
+"12260000": {
+"name": "Defiance",
+"cls": "templar"
+},
+"12270000": {
+"name": "Debilitating Smash",
+"cls": "templar"
+},
+"12300000": {
+"name": "Annihilate",
+"cls": "templar"
+},
+"12310000": {
+"name": "Empyrean Lord's Punishment",
+"cls": "templar"
+},
+"12320000": {
+"name": "Nezekan's Shield",
+"cls": "templar"
+},
+"12340000": {
+"name": "Flash Rampage",
+"cls": "templar"
+},
+"12350000": {
+"name": "Warding Strike",
+"cls": "templar"
+},
+"12410000": {
+"name": "Executing Blade",
+"cls": "templar"
+},
+"12430000": {
+"name": "Shield Rush",
+"cls": "templar"
+},
+"12450000": {
+"name": "Battlefield Banner",
+"cls": "templar"
+},
+"12700000": {
+"name": "Assault Fury",
+"cls": "templar"
+},
+"12710000": {
+"name": "Enhance Health",
+"cls": "templar"
+},
+"12720000": {
+"name": "Warding Shield",
+"cls": "templar"
+},
+"12730000": {
+"name": "Punishing Benediction",
+"cls": "templar"
+},
+"12740000": {
+"name": "Ironclad Defense",
+"cls": "templar"
+},
+"12750000": {
+"name": "Guarding Seal",
+"cls": "templar"
+},
+"12760000": {
+"name": "Impact Hit",
+"cls": "templar"
+},
+"12770000": {
+"name": "Insulting Roar",
+"cls": "templar"
+},
+"12780000": {
+"name": "Fury",
+"cls": "templar"
+},
+"12790000": {
+"name": "Survival Willpower",
+"cls": "templar"
+},
+"12800000": {
+"name": "Block Pain",
+"cls": "templar"
+},
+"13010000": {
+"name": "Quick Slice",
+"cls": "assassin"
+},
+"13020000": {
+"name": "Throw Shadowblade",
+"cls": "assassin"
+},
+"13050000": {
+"name": "Flash Slice",
+"cls": "assassin"
+},
+"13060000": {
+"name": "Ambush",
+"cls": "assassin"
+},
+"13070000": {
+"name": "Shadowstrike",
+"cls": "assassin"
+},
+"13080000": {
+"name": "Evasion Stance",
+"cls": "assassin"
+},
+"13100000": {
+"name": "Savage Roar",
+"cls": "assassin"
+},
+"13130000": {
+"name": "Insignia Explosion",
+"cls": "assassin"
+},
+"13140000": {
+"name": "Shadowstep",
+"cls": "assassin"
+},
+"13180000": {
+"name": "Shadow Walk",
+"cls": "assassin"
+},
+"13210000": {
+"name": "Whirlwind Slice",
+"cls": "assassin"
+},
+"13220000": {
+"name": "Shadow Fall",
+"cls": "assassin"
+},
+"13230000": {
+"name": "Aerial Bind",
+"cls": "assassin"
+},
+"13250000": {
+"name": "Smoke Bomb",
+"cls": "assassin"
+},
+"13260000": {
+"name": "Defiance",
+"cls": "assassin"
+},
+"13270000": {
+"name": "Savage Fang",
+"cls": "assassin"
+},
+"13280000": {
+"name": "Spiral Slice",
+"cls": "assassin"
+},
+"13300000": {
+"name": "Triniel's Dagger",
+"cls": "assassin"
+},
+"13310000": {
+"name": "Illusive Clone",
+"cls": "assassin"
+},
+"13340000": {
+"name": "Storm Rampage",
+"cls": "assassin"
+},
+"13350000": {
+"name": "Heart Gore",
+"cls": "assassin"
+},
+"13360000": {
+"name": "Infiltrate",
+"cls": "assassin"
+},
+"13370000": {
+"name": "Evasion Contract",
+"cls": "assassin"
+},
+"13390000": {
+"name": "Swift Contract",
+"cls": "assassin"
+},
+"13700000": {
+"name": "Assault Ambush",
+"cls": "assassin"
+},
+"13710000": {
+"name": "Heightened Sixth Sense",
+"cls": "assassin"
+},
+"13720000": {
+"name": "Exploit Weakness",
+"cls": "assassin"
+},
+"13730000": {
+"name": "Apply Poison",
+"cls": "assassin"
+},
+"13740000": {
+"name": "Rear Smite",
+"cls": "assassin"
+},
+"13750000": {
+"name": "Assault Stance",
+"cls": "assassin"
+},
+"13760000": {
+"name": "Impact Hit",
+"cls": "assassin"
+},
+"13770000": {
+"name": "Ambush Stance",
+"cls": "assassin"
+},
+"13780000": {
+"name": "Defense Break",
+"cls": "assassin"
+},
+"13790000": {
+"name": "Revitalization Contract",
+"cls": "assassin"
+},
+"13800000": {
+"name": "Determination",
+"cls": "assassin"
+},
+"14010000": {
+"name": "Deadshot",
+"cls": "ranger"
+},
+"14020000": {
+"name": "Snipe",
+"cls": "ranger"
+},
+"14050000": {
+"name": "Drill Dart",
+"cls": "ranger"
+},
+"14060000": {
+"name": "Griffon Arrow",
+"cls": "ranger"
+},
+"14070000": {
+"name": "Suppressing Arrow",
+"cls": "ranger"
+},
+"14080000": {
+"name": "Burst Arrow",
+"cls": "ranger"
+},
+"14090000": {
+"name": "Marking Shot",
+"cls": "ranger"
+},
+"14110000": {
+"name": "Gale Arrow",
+"cls": "ranger"
+},
+"14120000": {
+"name": "Ambush Kick",
+"cls": "ranger"
+},
+"14130000": {
+"name": "Snare Shot",
+"cls": "ranger"
+},
+"14150000": {
+"name": "Illusory Arrow",
+"cls": "ranger"
+},
+"14160000": {
+"name": "Sealing Arrow",
+"cls": "ranger"
+},
+"14170000": {
+"name": "Explosion Trap",
+"cls": "ranger"
+},
+"14180000": {
+"name": "Ensnaring Trap",
+"cls": "ranger"
+},
+"14190000": {
+"name": "Stealth",
+"cls": "ranger"
+},
+"14220000": {
+"name": "Bow of Blessing",
+"cls": "ranger"
+},
+"14260000": {
+"name": "Defiance",
+"cls": "ranger"
+},
+"14270000": {
+"name": "Arrow Storm",
+"cls": "ranger"
+},
+"14310000": {
+"name": "Vaizel's Authority",
+"cls": "ranger"
+},
+"14330000": {
+"name": "Arrow Scattershot",
+"cls": "ranger"
+},
+"14340000": {
+"name": "Tempest Shot",
+"cls": "ranger"
+},
+"14350000": {
+"name": "Mother Nature's Breath",
+"cls": "ranger"
+},
+"14360000": {
+"name": "Explosive Arrow",
+"cls": "ranger"
+},
+"14380000": {
+"name": "Supporting Fire",
+"cls": "ranger"
+},
+"14700000": {
+"name": "Assault Smite",
+"cls": "ranger"
+},
+"14710000": {
+"name": "Vigilant Eye",
+"cls": "ranger"
+},
+"14720000": {
+"name": "Concentrated Fire",
+"cls": "ranger"
+},
+"14730000": {
+"name": "Wind Vigor",
+"cls": "ranger"
+},
+"14740000": {
+"name": "Focused Eye",
+"cls": "ranger"
+},
+"14750000": {
+"name": "Hunter's Resolve",
+"cls": "ranger"
+},
+"14760000": {
+"name": "Unyielding Resolve",
+"cls": "ranger"
+},
+"14770000": {
+"name": "Rooting Eye",
+"cls": "ranger"
+},
+"14780000": {
+"name": "Melee Fire",
+"cls": "ranger"
+},
+"14790000": {
+"name": "Revitalization Contract",
+"cls": "ranger"
+},
+"14800000": {
+"name": "Hunter's Soul",
+"cls": "ranger"
+},
+"15010000": {
+"name": "Flame Scattershot",
+"cls": "sorcerer"
+},
+"15040000": {
+"name": "Firestorm",
+"cls": "sorcerer"
+},
+"15050000": {
+"name": "Blaze",
+"cls": "sorcerer"
+},
+"15060000": {
+"name": "Hellfire",
+"cls": "sorcerer"
+},
+"15090000": {
+"name": "Ice Chain",
+"cls": "sorcerer"
+},
+"15110000": {
+"name": "Winter's Shackles",
+"cls": "sorcerer"
+},
+"15120000": {
+"name": "Glacial Smite",
+"cls": "sorcerer"
+},
+"15130000": {
+"name": "Soul Freeze",
+"cls": "sorcerer"
+},
+"15140000": {
+"name": "Curse: Tree",
+"cls": "sorcerer"
+},
+"15150000": {
+"name": "Frost",
+"cls": "sorcerer"
+},
+"15160000": {
+"name": "Steel Barrier",
+"cls": "sorcerer"
+},
+"15200000": {
+"name": "Cold Storm",
+"cls": "sorcerer"
+},
+"15210000": {
+"name": "Flame Arrow",
+"cls": "sorcerer"
+},
+"15220000": {
+"name": "Frost Burst",
+"cls": "sorcerer"
+},
+"15230000": {
+"name": "Arctic Armor",
+"cls": "sorcerer"
+},
+"15240000": {
+"name": "Defiance",
+"cls": "sorcerer"
+},
+"15280000": {
+"name": "Bittercold Wind",
+"cls": "sorcerer"
+},
+"15300000": {
+"name": "Lumiel's Space",
+"cls": "sorcerer"
+},
+"15310000": {
+"name": "Wish of Concentration",
+"cls": "sorcerer"
+},
+"15320000": {
+"name": "Delayed Explosion",
+"cls": "sorcerer"
+},
+"15360000": {
+"name": "Divine Burst",
+"cls": "sorcerer"
+},
+"15390000": {
+"name": "Fire Wall",
+"cls": "sorcerer"
+},
+"15400000": {
+"name": "Element Enhancement",
+"cls": "sorcerer"
+},
+"15410000": {
+"name": "Hibernation",
+"cls": "sorcerer"
+},
+"15700000": {
+"name": "Assault Bombardment",
+"cls": "sorcerer"
+},
+"15710000": {
+"name": "Fire Mark",
+"cls": "sorcerer"
+},
+"15720000": {
+"name": "Robe of Earth",
+"cls": "sorcerer"
+},
+"15730000": {
+"name": "Cold Snap",
+"cls": "sorcerer"
+},
+"15740000": {
+"name": "Robe of Flame",
+"cls": "sorcerer"
+},
+"15750000": {
+"name": "Robe of Cold",
+"cls": "sorcerer"
+},
+"15760000": {
+"name": "Absorb Essence",
+"cls": "sorcerer"
+},
+"15770000": {
+"name": "Grace of Resistance",
+"cls": "sorcerer"
+},
+"15780000": {
+"name": "Grace of Enhancement",
+"cls": "sorcerer"
+},
+"15790000": {
+"name": "Revitalization Contract",
+"cls": "sorcerer"
+},
+"15800000": {
+"name": "Vitality Evaporation",
+"cls": "sorcerer"
+},
+"16010000": {
+"name": "Cold Shock",
+"cls": "spiritmaster"
+},
+"16040000": {
+"name": "Combustion",
+"cls": "spiritmaster"
+},
+"16060000": {
+"name": "Siphon",
+"cls": "spiritmaster"
+},
+"16070000": {
+"name": "Soul's Cry",
+"cls": "spiritmaster"
+},
+"16080000": {
+"name": "Cry of Terror",
+"cls": "spiritmaster"
+},
+"16100000": {
+"name": "Summon: Fire Spirit",
+"cls": "spiritmaster"
+},
+"16110000": {
+"name": "Summon: Water Spirit",
+"cls": "spiritmaster"
+},
+"16120000": {
+"name": "Summon: Wind Spirit",
+"cls": "spiritmaster"
+},
+"16130000": {
+"name": "Summon: Earth Spirit",
+"cls": "spiritmaster"
+},
+"16140000": {
+"name": "Jointstrike: Curse",
+"cls": "spiritmaster"
+},
+"16150000": {
+"name": "Jointstrike: Corrode",
+"cls": "spiritmaster"
+},
+"16170000": {
+"name": "Command: Proxy",
+"cls": "spiritmaster"
+},
+"16190000": {
+"name": "Enhance: Spirit's Benediction",
+"cls": "spiritmaster"
+},
+"16200000": {
+"name": "Defiance",
+"cls": "spiritmaster"
+},
+"16220000": {
+"name": "Cursed Cloud",
+"cls": "spiritmaster"
+},
+"16230000": {
+"name": "Seize Magic",
+"cls": "spiritmaster"
+},
+"16240000": {
+"name": "Jointstrike: Destructive Attack",
+"cls": "spiritmaster"
+},
+"16250000": {
+"name": "Summon: Ancient Spirit",
+"cls": "spiritmaster"
+},
+"16260000": {
+"name": "Magic Block",
+"cls": "spiritmaster"
+},
+"16300000": {
+"name": "Elemental Fusion",
+"cls": "spiritmaster"
+},
+"16330000": {
+"name": "Dimensional Control",
+"cls": "spiritmaster"
+},
+"16340000": {
+"name": "Rapid Scattershot",
+"cls": "spiritmaster"
+},
+"16360000": {
+"name": "Kaisinel's Power",
+"cls": "spiritmaster"
+},
+"16370000": {
+"name": "Flame Blessing",
+"cls": "spiritmaster"
+},
+"16700000": {
+"name": "Assault Terror",
+"cls": "spiritmaster"
+},
+"16710000": {
+"name": "Spirit Strike",
+"cls": "spiritmaster"
+},
+"16720000": {
+"name": "Spirit Protection",
+"cls": "spiritmaster"
+},
+"16730000": {
+"name": "Spirit's Descent",
+"cls": "spiritmaster"
+},
+"16740000": {
+"name": "Corrode",
+"cls": "spiritmaster"
+},
+"16750000": {
+"name": "Spirit Revitalization",
+"cls": "spiritmaster"
+},
+"16760000": {
+"name": "Mental Focus",
+"cls": "spiritmaster"
+},
+"16770000": {
+"name": "Spirit Communion",
+"cls": "spiritmaster"
+},
+"16780000": {
+"name": "Element Unification",
+"cls": "spiritmaster"
+},
+"16790000": {
+"name": "Revitalization Contract",
+"cls": "spiritmaster"
+},
+"16800000": {
+"name": "Consecutive Countercurrent",
+"cls": "spiritmaster"
+},
+"17010000": {
+"name": "Earth's Retribution",
+"cls": "cleric"
+},
+"17040000": {
+"name": "Judgment Thunder",
+"cls": "cleric"
+},
+"17060000": {
+"name": "Bolt",
+"cls": "cleric"
+},
+"17070000": {
+"name": "Chain of Torment",
+"cls": "cleric"
+},
+"17080000": {
+"name": "Debilitating Mark",
+"cls": "cleric"
+},
+"17090000": {
+"name": "Light of Regeneration",
+"cls": "cleric"
+},
+"17100000": {
+"name": "Healing Light",
+"cls": "cleric"
+},
+"17120000": {
+"name": "Radiant Recovery",
+"cls": "cleric"
+},
+"17150000": {
+"name": "Divine Aura",
+"cls": "cleric"
+},
+"17160000": {
+"name": "Benevolence",
+"cls": "cleric"
+},
+"17190000": {
+"name": "Root",
+"cls": "cleric"
+},
+"17240000": {
+"name": "Defiance",
+"cls": "cleric"
+},
+"17270000": {
+"name": "Salvation",
+"cls": "cleric"
+},
+"17280000": {
+"name": "Power Burst",
+"cls": "cleric"
+},
+"17290000": {
+"name": "Absolution",
+"cls": "cleric"
+},
+"17300000": {
+"name": "Voice of Doom",
+"cls": "cleric"
+},
+"17350000": {
+"name": "Condemnation",
+"cls": "cleric"
+},
+"17370000": {
+"name": "Lightning Strike Scattershot",
+"cls": "cleric"
+},
+"17390000": {
+"name": "Summon Resurrection",
+"cls": "cleric"
+},
+"17400000": {
+"name": "Earth Punishment",
+"cls": "cleric"
+},
+"17410000": {
+"name": "Light of Protection",
+"cls": "cleric"
+},
+"17420000": {
+"name": "Yustiel's Power",
+"cls": "cleric"
+},
+"17430000": {
+"name": "Prayer of Amplification",
+"cls": "cleric"
+},
+"17440000": {
+"name": "Noble Aura",
+"cls": "cleric"
+},
+"17700000": {
+"name": "Assault Mark",
+"cls": "cleric"
+},
+"17710000": {
+"name": "Warm Benediction",
+"cls": "cleric"
+},
+"17720000": {
+"name": "Empyrean Lords' Benediction",
+"cls": "cleric"
+},
+"17730000": {
+"name": "Empyrean Lord's Grace",
+"cls": "cleric"
+},
+"17740000": {
+"name": "Healing Enhancement",
+"cls": "cleric"
+},
+"17750000": {
+"name": "Immortal Veil",
+"cls": "cleric"
+},
+"17760000": {
+"name": "Heal Block",
+"cls": "cleric"
+},
+"17770000": {
+"name": "Prayer of Concentration",
+"cls": "cleric"
+},
+"17780000": {
+"name": "Earth's Grace",
+"cls": "cleric"
+},
+"17790000": {
+"name": "Survival Willpower",
+"cls": "cleric"
+},
+"17800000": {
+"name": "Radiant Benediction",
+"cls": "cleric"
+},
+"18010000": {
+"name": "Onslaught",
+"cls": "chanter"
+},
+"18040000": {
+"name": "Incandescent Blow",
+"cls": "chanter"
+},
+"18060000": {
+"name": "Impactful Crush",
+"cls": "chanter"
+},
+"18080000": {
+"name": "Wave Blow",
+"cls": "chanter"
+},
+"18090000": {
+"name": "Rushing Smash",
+"cls": "chanter"
+},
+"18100000": {
+"name": "Dark Crush",
+"cls": "chanter"
+},
+"18120000": {
+"name": "Recuperation",
+"cls": "chanter"
+},
+"18130000": {
+"name": "Fracturing Blow",
+"cls": "chanter"
+},
+"18140000": {
+"name": "Focused Defense",
+"cls": "chanter"
+},
+"18150000": {
+"name": "Heat Wave Blow",
+"cls": "chanter"
+},
+"18160000": {
+"name": "Sprint Mantra",
+"cls": "chanter"
+},
+"18170000": {
+"name": "Healing Touch",
+"cls": "chanter"
+},
+"18190000": {
+"name": "Undefeated Mantra",
+"cls": "chanter"
+},
+"18200000": {
+"name": "Defiance",
+"cls": "chanter"
+},
+"18210000": {
+"name": "Tremor Crush",
+"cls": "chanter"
+},
+"18220000": {
+"name": "Obliterate",
+"cls": "chanter"
+},
+"18230000": {
+"name": "Ensnaring Mark",
+"cls": "chanter"
+},
+"18240000": {
+"name": "Impeding Authority",
+"cls": "chanter"
+},
+"18250000": {
+"name": "Power of the Storm",
+"cls": "chanter"
+},
+"18290000": {
+"name": "Spinning Strike",
+"cls": "chanter"
+},
+"18300000": {
+"name": "Gust Rampage",
+"cls": "chanter"
+},
+"18330000": {
+"name": "Marchutan's Wrath",
+"cls": "chanter"
+},
+"18420000": {
+"name": "Guardian Blessing",
+"cls": "chanter"
+},
+"18440000": {
+"name": "Barrier Spell",
+"cls": "chanter"
+},
+"18700000": {
+"name": "Assault Shock",
+"cls": "chanter"
+},
+"18710000": {
+"name": "Blessing of Life",
+"cls": "chanter"
+},
+"18720000": {
+"name": "Crossguard",
+"cls": "chanter"
+},
+"18730000": {
+"name": "Protection Circle",
+"cls": "chanter"
+},
+"18740000": {
+"name": "Inspiring Spell",
+"cls": "chanter"
+},
+"18750000": {
+"name": "Attack Preparation",
+"cls": "chanter"
+},
+"18760000": {
+"name": "Impact Hit",
+"cls": "chanter"
+},
+"18770000": {
+"name": "Raging Spell",
+"cls": "chanter"
+},
+"18780000": {
+"name": "Earth's Promise",
+"cls": "chanter"
+},
+"18800000": {
+"name": "Wind's Promise",
+"cls": "chanter"
+}
+}
+}

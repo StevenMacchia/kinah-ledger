@@ -17,7 +17,7 @@ public partial class MainWindow
     /// <summary>Window size (0.10.11, Ui/MainWindow.Fit.cs): a step bigger, a step smaller, back to 100%. The numeric keypad's + - 0 work too.</summary>
     public const string WindowBiggerKey = "Ctrl+=", WindowSmallerKey = "Ctrl+-", WindowResetKey = "Ctrl+0";
     /// <summary>The pages (0.10.26): Ctrl+1 Farming, Ctrl+2 Crafting, Ctrl+3 Events; the keypad's 1 2 3 too. Nothing before a server is chosen.</summary>
-    public const string PageKeys = "Ctrl+1 · 2 · 3";
+    public const string PageKeys = "Ctrl+1 to 5";
     /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
     public const string ClearAllText = "Clear everything";
 
@@ -38,9 +38,9 @@ public partial class MainWindow
             InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(s)), key, ModifierKeys.Control));
             if (key == Key.OemPlus) InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(1)), key, ModifierKeys.Control | ModifierKeys.Shift));
         }
-        // the pages: Ctrl+1 to 4 as the pills sit (Farm, Craft, Runs, Timers), a click by hand (the page then stays until something else starts)
+        // the pages: Ctrl+1 to 5 as the pills sit (Farm, Craft, Runs, Timers, Parser), a click by hand (the page then stays until something else starts)
         foreach (var (key, part) in new[] { (Key.D1, "Farming"), (Key.NumPad1, "Farming"), (Key.D2, "Crafting"), (Key.NumPad2, "Crafting"), (Key.D3, "Events"), (Key.NumPad3, "Events"),
-            (Key.D4, "Timers"), (Key.NumPad4, "Timers") })
+            (Key.D4, "Timers"), (Key.NumPad4, "Timers"), (Key.D5, "Parser"), (Key.NumPad5, "Parser") })
         {
             var p = part;
             InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!_welcome && _part != p) ShowPart(p); }), key, ModifierKeys.Control));

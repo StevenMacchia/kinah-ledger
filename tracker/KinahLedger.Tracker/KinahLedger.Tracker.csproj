@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.10.86</Version>
+    <Version>0.10.87</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -86,6 +86,10 @@
     <EmbeddedResource Include="..\..\data\zones.txt" LogicalName="zones.txt" />
     <!-- dungeons, trials, arenas and event areas, with the kind a run spent in one is filed under -->
     <EmbeddedResource Include="..\..\data\instances.txt" LogicalName="instances.txt" />
+    <!-- each instance's bosses: the Parser keeps fights with these only (Parser/BossBook.cs) -->
+    <EmbeddedResource Include="..\..\data\bosses.txt" LogicalName="bosses.txt" />
+    <!-- each ability's name by the game's skill id (MetaBot's skill pages): the Parser's damage by ability (Parser/Abilities.cs) -->
+    <EmbeddedResource Include="..\..\data\skills.json" LogicalName="skills.json" />
     <!-- the Abyss's areas and the part of Reshanta each is in: where the Abyss's rules apply -->
     <EmbeddedResource Include="..\..\data\abyss.txt" LogicalName="abyss.txt" />
     <!-- enemy names as the target bar prints them: the whitelist for Kinah by enemy -->

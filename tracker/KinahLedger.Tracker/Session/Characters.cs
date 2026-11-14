@@ -65,7 +65,7 @@ public static class Characters
     {
         "today.json", "days.json", "best.json", "goals.json", "quests.json", "quests.bad.json", "sessions.jsonl",
         "instances.jsonl", "instances.old.jsonl", "instances.removed.jsonl", "instances.repaired.jsonl", "instances.flagged.txt",
-        "instances.pre-recount.jsonl",
+        "instances.pre-recount.jsonl", "encounters.jsonl", "encounter-live.json",
     };
 
     static string BookPath => Path.Combine(CrashLog.Dir, "characters.json");

@@ -14,7 +14,7 @@ namespace KinahLedger.Packets;
 /// connection, found from the game's process id in Windows' connection table. Nothing is sent, the game is never touched,
 /// and no packet is kept: only the decoded changes go to the log (a PC that asked for a local recording keeps one, Packets/PacketLog.cs).
 /// </summary>
-public sealed class PacketReader : IDisposable
+public sealed class PacketReader : IDisposable, IBossFeed
 {
     /// <summary>Options › Game reading › Read the game's network traffic. On by default; with neither Npcap nor admin it just says why it is off.</summary>
     public bool Enabled { get; set; } = true;
@@ -73,6 +73,8 @@ public sealed class PacketReader : IDisposable
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
     readonly ConcurrentQueue<FightEvent> _fights = new();
+    readonly ConcurrentQueue<BossEvent> _bosses = new();
+    const int MaxBosses = 20_000;   // a tracker that never drains them doesn't grow without end
     readonly ConcurrentQueue<AreaEvent> _areas = new();
     readonly ConcurrentQueue<object> _uncovered = new();
     readonly ConcurrentQueue<GatherResult> _gathers = new();
@@ -161,10 +163,44 @@ public sealed class PacketReader : IDisposable
     }
     string ItemName(long id) { try { return NameOf?.Invoke(id) ?? $"item {id}"; } catch (Exception) { return $"item {id}"; } }
 
+    /// <summary>The next boss parser event (klnet.dll version 4), null when there is none: only inside Transcendence, Expedition and Sanctuary, and a FeedGap when traffic was lost or a connection began.</summary>
+    public BossEvent? NextBossEvent() => _bosses.TryDequeue(out var b) ? b : null;
+    /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 4).</summary>
+    public bool ReadsBosses => _decoder?.ReadsBosses == true;
+    /// <summary>
+    /// Where the Parser takes its events as they are decoded, on this reader's own thread (Steven, 2026-11-14: "the parser
+    /// needs to be SUPER low delay ... it needs to register in real time"): set by the session, they skip the queue and the
+    /// session's pass. Unset (a test, before the session is up), they queue for <see cref="NextBossEvent"/>.
+    /// </summary>
+    public Action<BossEvent>? BossSink { get; set; }
+    /// <summary>The kill events as they are decoded, for the Parser's runs and fights (the kill tally's queue still gets them too).</summary>
+    public Action<FightEvent>? FightSink { get; set; }
+
+    /// <summary>A boss parser event: to the Parser at once when it is listening, else queued; instance and pull edges logged.</summary>
+    internal void TakeBoss(BossEvent b)
+    {
+        if (BossSink is { } sink) { try { sink(b); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
+        else
+        {
+            while (_bosses.Count >= MaxBosses) _bosses.TryDequeue(out _);
+            _bosses.Enqueue(b);
+        }
+        string? line = b switch
+        {
+            InstanceEntered e => $"into {e.Name} ({e.Kind})",
+            InstanceLeft => "out of the instance",
+            BossEngaged e => $"pull: {(e.Boss.Length > 0 ? e.Boss : "a boss")}",
+            BossEnded e => $"pull ended: {e.Outcome}",
+            _ => null,
+        };
+        if (line != null) Log($"{Local(b.At)}  boss parser: {line}");
+    }
+
     /// <summary>A kill the player is in, a death or a Rank Points change: queued for the tracker, logged.</summary>
     void TakeFight(FightEvent f)
     {
         _fights.Enqueue(f); Arrived();
+        if (FightSink is { } sink) { try { sink(f); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
         if (_fights.Count > 4096) _fights.TryDequeue(out _);
         Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
             : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
@@ -412,6 +448,7 @@ public sealed class PacketReader : IDisposable
         // a new connection starts from a fresh amount: the chat counted while nothing was read, so the first message is a baseline
         var dec = _decoder;
         dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
+        if (dec.ReadsBosses) TakeBoss(new FeedGap(DateTime.UtcNow));   // a new connection: the Parser's pull, if any, doesn't continue
         Bag.Unknown();
         var rows = new List<ItemChange>();
         _down = new TcpStream
@@ -434,10 +471,12 @@ public sealed class PacketReader : IDisposable
                     if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0));
                     TakeFight(f);
                 }
+                while (dec.NextBossEvent() is { } b) TakeBoss(b);
             },
             OnGap = () =>
             {
                 dec.Gap();
+                if (dec.ReadsBosses) TakeBoss(new FeedGap(_dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt));
                 lock (_gate) { var at = _dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt; _gapsAt.Add(at); _gapsAt.RemoveAll(g => (at - g).TotalMinutes > 2); }
             },
         };
