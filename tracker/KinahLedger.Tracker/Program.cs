@@ -442,6 +442,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
         --state <name>          one review state (tracker/tests/ui/states/<name>.json): ""<page>-<state>.png"", whole, with
                                 the figures check beside an Events render (tools/ui-review.md)
         --sweep [events|all]    every state on the Events page, or on every page; exit 1 if a render fails or a figure is off
+        --bosses                the world boss timers' window: live, an hour old, none (bosses-*.png)
         --wrapped week|day      the Week wrapped or Day wrapped sheet (with --state, over that state; KL_MOTION_AT holds its sequence)
         --recap                 the run-end recap card in each of its states (ui-recap-<state>.png); with KL_MOTION_AT=0..1,
                                 held at that point of its opening
@@ -1334,6 +1335,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        if (o.ContainsKey("bosses")) { WpfApp.ShotBosses(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("recap")) { WpfApp.ShotRecap(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
         var statesDir = Ui.UiState.FindDir(o.GetValueOrDefault("states-dir"));
