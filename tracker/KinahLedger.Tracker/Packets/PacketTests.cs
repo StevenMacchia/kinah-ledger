@@ -644,12 +644,13 @@ public static class PacketTests
         DateTime U(int mo, int d, int h, int mi = 0) => new(2026, mo, d, h, mi, 0, DateTimeKind.Utc);
         var naE = EventTimers.ClockOf("na_e"); var eu = EventTimers.ClockOf("eu");
         var rift = EventTimers.Schedule.First(r => r.Name == "Spacetime Rift"); var siege = EventTimers.Schedule.First(r => r.Name == "Artifact Siege");
-        // NA East on US Eastern time (checked 2026-11-14); the regions not checked yet keep MetaBot's UTC+9, as 0.10.84 counted
+        // NA East on US Eastern time (checked 2026-11-14); the regions not checked yet on their own local time (Europe: Paris)
         string na = All(server, "na_e"), other = All(server, "eu");
         Check(naE.Checked && !eu.Checked && na == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 2h 31m 00s at 04:00:14.6Z | Artifact Siege in 1d 0h 31m at 02:00:14.6Z",
             $"event timers, NA East (US Eastern): {na} (the starts on this PC's clock, 14.6 s after the game's)");
-        Check(other == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 1h 31m 00s at 03:00:14.6Z | Artifact Siege in 10h 31m 00s at 12:00:14.6Z",
-            $"...a region not checked yet (Europe) stays on UTC+9, marked so: {other}");
+        Check(other == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 2h 31m 00s at 04:00:14.6Z | Artifact Siege in 18h 31m 00s at 20:00:14.6Z"
+            && eu.Note.Contains("not checked") && EventTimers.ClockOf("asia").Zone.BaseUtcOffset == TimeSpan.FromHours(9) && EventTimers.ClockOf("na_w").Zone.BaseUtcOffset == TimeSpan.FromHours(-8),
+            $"...a region not checked yet (Europe) on Central European time, marked so: {other}; NA West Pacific, Asia Korea");
         // the ground truth in NA East: the Abyss server's own next siege (sent Fri 17:15 ET: Sat 21:00 ET), the chat's Rift lines
         var (lastSiege, nextSiege) = EventTimers.Around(siege, U(11, 13, 22, 15), naE);
         Check(nextSiege == U(11, 15, 2) && lastSiege == U(11, 13, 2), $"...the Artifact Siege: next {nextSiege:ddd HH:mm}Z (the game's own message: Sat 21:00 ET = Sun 02:00Z), last {lastSiege:ddd HH:mm}Z (Thu 21:00 ET; it ended 21:16:51 ET)");
@@ -754,6 +755,10 @@ public static class PacketTests
         var kst = TimeZoneInfo.CreateCustomTimeZone("kst", TimeSpan.FromHours(9), "kst", "kst");
         var onKst = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Executor Tamasa"), server, TimeSpan.Zero, kst).Left;
         Check(onKst != tamasa, $"...and not on UTC+9, which would say {onKst} for the Executors");
+        var afterSat = AbyssBosses.Around(AbyssBosses.Schedule.First(b => b.Name == "Executor Tamasa"), new DateTime(2026, 11, 15, 2, 45, 0, DateTimeKind.Utc), zone).Next;
+        Check(afterSat == new DateTime(2026, 11, 20, 2, 30, 0, DateTimeKind.Utc), $"...the Artifact Bosses twice a week since the Nov 4 patch: after Saturday's, Thursday 21:30 ET ({afterSat:ddd dd HH:mm}Z), not Monday");
+        var dramos = AbyssBosses.Around(AbyssBosses.Schedule.First(b => b.Name == "Executioner Dramos"), new DateTime(2026, 11, 15, 2, 45, 0, DateTimeKind.Utc), zone).Next;
+        Check(dramos == new DateTime(2026, 11, 17, 2, 30, 0, DateTimeKind.Utc), $"...Middle Reshanta's, which the patch didn't name, still Monday too ({dramos:ddd dd HH:mm}Z)");
         var spawned = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Watcher Kaira"), server.AddMinutes(31.5), TimeSpan.Zero, zone);
         var after = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Watcher Kaira"), server.AddMinutes(52), TimeSpan.Zero, zone);
         Check(spawned is { Spawned: true, When: "10 min ago" } && !after.Spawned && after.Left == new TimeSpan(2, 29, 20),

@@ -34,25 +34,26 @@ public sealed class EventTimers
     /// </summary>
     public sealed record RegionClock(string Region, string Name, TimeZoneInfo Zone, bool Checked, string Note);
 
-    /// <summary>MetaBot's reading for every region (not checked in the game): one clock at UTC+9, no daylight saving.</summary>
+    /// <summary>The last resort when Windows has none of a region's zones: MetaBot's reading, UTC+9 with no daylight saving.</summary>
     static readonly TimeZoneInfo Utc9 = TimeZoneInfo.CreateCustomTimeZone("UTC+9", TimeSpan.FromHours(9), "UTC+9", "UTC+9");
 
     /// <summary>
     /// The clock of a region (Settings.Region: "na_e", "na_w", "eu", "latam", "asia"). NA East is US Eastern, checked
     /// 2026-11-14: the Abyss server's own next-siege time (Sat 21:00 ET), the chat's "A Spacetime Rift has appeared" at 11:00,
     /// 14:00 and 17:00 ET on 2026-11-13, and the field bosses on Steven's Lower Reshanta map (Watcher Kaira every 3 h from
-    /// 01:00 ET). The other regions are not checked: UTC+9, as before (Europe is likely Central
-    /// European time, but no reading tells it apart yet).
+    /// 01:00 ET). The other regions are not checked: each is taken as its own local time with its daylight saving (the
+    /// command center's call, 2026-11-14; Exitlag and PlayNews give the Rift at 02:00, 05:00 ... Paris time), marked so on the
+    /// card until a timer there is checked. The one table for every timer: the Abyss bosses (AbyssBosses.ZoneFor) read it too.
     /// </summary>
     public static RegionClock ClockOf(string? region) => region switch
     {
         // no region yet: NA East, Settings.Region's default
         null or "" or "na_e" => new("na_e", "NA East", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, true, "US Eastern time"),
-        "na_w" => new("na_w", "NA West", Utc9, false, "UTC+9, not checked for NA West yet"),
-        "eu" => new("eu", "Europe", Utc9, false, "UTC+9, not checked for Europe yet"),
-        "latam" => new("latam", "Latin America", Utc9, false, "UTC+9, not checked for Latin America yet"),
-        "asia" => new("asia", "Asia", Utc9, false, "UTC+9, not checked for Asia yet"),
-        _ => new(region ?? "", "this region", Utc9, false, "UTC+9, not checked yet"),
+        "na_w" => new("na_w", "NA West", Zone("Pacific Standard Time", "America/Los_Angeles") ?? Utc9, false, "US Pacific time, not checked for NA West yet"),
+        "eu" => new("eu", "Europe", Zone("Romance Standard Time", "Europe/Paris") ?? Utc9, false, "Central European time, not checked for Europe yet"),
+        "latam" => new("latam", "Latin America", Zone("E. South America Standard Time", "America/Sao_Paulo") ?? Utc9, false, "Brasília time, not checked for Latin America yet"),
+        "asia" => new("asia", "Asia", Zone("Korea Standard Time", "Asia/Seoul") ?? Utc9, false, "Korea time, not checked for Asia yet"),
+        _ => new(region, "this region", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, false, "US Eastern time, not checked for this region"),
     };
 
     static TimeZoneInfo? Zone(params string[] ids)
@@ -68,7 +69,7 @@ public sealed class EventTimers
     /// <summary>
     /// A recurring event in the region's wall-clock time: every <paramref name="EveryMinutes"/> from <paramref name="AtMinutes"/>
     /// past midnight, or once a day at <paramref name="AtMinutes"/> on <paramref name="Weekdays"/> (0 Sunday). OnMinutes: how
-    /// long it counts as on after its start. AtIn: a region whose first start of the day differs (NA East's Rift, 02:00).
+    /// long it counts as on after its start. AtIn: a region whose first start of the day differs (none since the Rift's 02:00 holds everywhere).
     /// </summary>
     public sealed record Recurring(string Name, string Every, int EveryMinutes, int AtMinutes, int[]? Weekdays, int OnMinutes, string Where, IReadOnlyDictionary<string, int>? AtIn = null)
     {
@@ -79,15 +80,15 @@ public sealed class EventTimers
     /// The schedule, as kinah-ledger-site data/events.json has it ("recurring"; keep the two in step). How long each counts as
     /// on: the Shugo Festival's rounds were over by :05 in the game's own messages (2026-11-13, 17:01 and 18:01); the
     /// Dimensional Invasion is a 3-minute lobby and up to 10 minutes of waves; the Artifact Siege a 10-minute warning, then the
-    /// cores; the Spacetime Rift's portal is given 10 minutes. The Rift in NA East: every 3 hours from 02:00 Eastern (the chat's
-    /// "A Spacetime Rift has appeared" at 11:00, 14:00, 17:00 ET on 2026-11-13; the same grid in summer time as aion2-data's
-    /// 00:00 UTC anchor of 2026-10-07), not from 00:00.
+    /// cores; the Spacetime Rift's portal is given 10 minutes. The Rift: every 3 hours from 02:00 local (NA East: the chat's
+    /// "A Spacetime Rift has appeared" at 11:00, 14:00, 17:00 ET on 2026-11-13, and aion2-data's 00:00 UTC anchor of
+    /// 2026-10-07 in summer time; Paris: PlayNews and Exitlag's 02:00, 05:00 ...), not from 00:00 as MetaBot has it.
     /// </summary>
     public static readonly Recurring[] Schedule =
     {
         new("Shugo Festival", "Every hour", 60, 0, null, 6, "Verteron and Altgard"),
         new("Dimensional Invasion", "Every hour at half past", 60, 30, null, 13, "Verteron and Altgard"),
-        new("Spacetime Rift", "Every 3 hours", 180, 0, null, 10, "One of ten zones", new Dictionary<string, int> { ["na_e"] = 120 }),
+        new("Spacetime Rift", "Every 3 hours", 180, 120, null, 10, "One of ten zones"),
         new("Artifact Siege", "Thu and Sat", 1440, 21 * 60, new[] { 4, 6 }, 20, "Chaotic Lower Reshanta"),   // twice a week since the Nov 4 patch
     };
 
