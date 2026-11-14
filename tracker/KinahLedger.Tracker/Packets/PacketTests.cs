@@ -513,6 +513,8 @@ public static class PacketTests
 
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
+        BossTimerChecks(t);
+
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }
@@ -611,6 +613,66 @@ public static class PacketTests
     }
 
     /// <summary>
+    /// World boss timers (Session/BossTimers.cs) from boss sightings as the decoder hands them out, the server's clock 15 s
+    /// behind this PC's as it was on 2026-11-13: the countdown follows the server's time left, not the PC's wall time; a live
+    /// boss is up while the map sends the list and "up when last seen" after; a spawn that passed is due; the same reading
+    /// again changes nothing, a kill does; the order; the saved copy read back after a restart, with its age.
+    /// </summary>
+    static void BossTimerChecks(DateTime t)
+    {
+        var lag = TimeSpan.FromSeconds(14.87);   // the server's clock behind this PC's
+        BossSighting Dead(string key, string name, DateTime at, TimeSpan left, string place = "Rock Tomb Hill") =>
+            new(at, at - lag, key, name, place, "Verteron", BossSighting.Kind.Dead, at - lag + left, false);
+        BossSighting Alive(string key, string name, DateTime at, TimeSpan since) =>
+            new(at, at - lag, key, name, "Northern Tolbas Forest", "Verteron", BossSighting.Kind.Alive, at - lag - since, false);
+
+        var bt = new BossTimers();
+        var layla = TimeSpan.FromSeconds(2 * 3600 + 40 * 60 + 1.2);
+        Check(bt.Take(Dead("a", "Heretic Layla", t, layla)), "boss timers: a boss first seen is a change");
+        var row = bt.Rows(t.AddSeconds(60)).Single();
+        Check(row.When == "2h 39m 02s" && row.Boss.SpawnPc == t + layla && !row.Stale,
+            $"...the countdown is the server's time left, from when the list came: {row.When} a minute later (not {BossTimers.Countdown(t - lag + layla - t.AddSeconds(60))} against this PC's clock)");
+        Check(!bt.Take(Dead("a", "Heretic Layla", t.AddSeconds(1), layla - TimeSpan.FromSeconds(1.003))) && bt.Rows(t.AddSeconds(60)).Single().Boss.SpawnPc == t + layla,
+            "...the same reading a second later (the map still open) changes nothing");
+        var later = BossTimers.RowOf(bt.Rows(t).Single().Boss, t + layla + TimeSpan.FromMinutes(4));
+        Check(later is { Due: true, Status: "Due", When: "4 min ago" }, $"...past its spawn with no newer list: {later.Status}, {later.When}");
+
+        Check(bt.Take(Alive("b", "Bloodfang Pnyn", t, TimeSpan.FromMinutes(14))), "...a live boss");
+        var up = bt.Rows(t.AddSeconds(30)).First();
+        Check(up is { UpNow: true, Status: "Up now", When: "up 14 min" } && up.Boss.Name == "Bloodfang Pnyn", $"...is up while the map sends the list ({up.Status}, {up.When}), and listed first");
+        var gone = BossTimers.RowOf(up.Boss, t.AddMinutes(30));
+        Check(gone is { UpNow: false, Stale: true, Status: "Up when last seen", When: "seen 30 min ago" }, $"...and after: {gone.Status}, {gone.When} (nobody knows it is still up)");
+        var killed = Dead("b", "Bloodfang Pnyn", t.AddSeconds(28), TimeSpan.FromHours(3));
+        Check(bt.Take(killed) && bt.Rows(t.AddSeconds(29)).Last().Boss.Name == "Bloodfang Pnyn", "...killed: a change, its 3 h wait puts it after Layla");
+
+        bt.Take(Dead("c", "Chaser Taulo", t, TimeSpan.FromMinutes(20), "Forest of Exiles"));
+        bt.Take(new BossSighting(t, t - lag, "d", "", "", "Verteron", BossSighting.Kind.Dead, t - lag + TimeSpan.FromMinutes(5), false));
+        var order = bt.Rows(t.AddSeconds(2)).Select(r => r.Boss.Name).ToList();
+        Check(order.SequenceEqual(new[] { "A Verteron boss", "Chaser Taulo", "Heretic Layla", "Bloodfang Pnyn" }), $"...in spawn order, a boss the decoder can't name kept as its region's: {string.Join(", ", order)}");
+        var guess = new BossTimers();
+        guess.Take(new BossSighting(t, null, "e", "Furious Saursus", "", "Verteron", BossSighting.Kind.Dead, t + TimeSpan.FromMinutes(10), false));
+        Check(guess.Rows(t).Single() is { Boss.ClockGuessed: true, When: "10m 00s" }, "...with no server clock yet, this PC's is taken (and marked)");
+        Check(BossTimers.Countdown(TimeSpan.FromSeconds(45.2)) == "46s" && BossTimers.Countdown(TimeSpan.FromSeconds(3600 * 5 + 61)) == "5h 01m 01s" && BossTimers.Countdown(TimeSpan.Zero) == "0s",
+            "...the countdown's form: 46s, 5h 01m 01s, 0s");
+
+        // the saved copy: a restart shows the timers and how old they are
+        var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "bosses.json"); File.Delete(file);
+        var now = DateTime.UtcNow;
+        var saved = new BossTimers(file);
+        saved.Take(Dead("a", "Heretic Layla", now.AddHours(-1), TimeSpan.FromHours(2)));
+        saved.Take(Alive("b", "Bloodfang Pnyn", now.AddHours(-1), TimeSpan.FromMinutes(5)));
+        saved.Save();
+        var back = new BossTimers(file);
+        var rows = back.Rows(now);
+        Check(back.Count == 2 && rows.Any(r => r.Boss.Name == "Heretic Layla" && Math.Abs((r.Left - TimeSpan.FromHours(1)).TotalSeconds) < 1) && rows.Any(r => r is { Status: "Up when last seen" })
+            && back.Freshness(now) == "Read 1 h ago: open the world map to refresh",
+            $"...saved and read back after a restart: {back.Count} bosses, \"{back.Freshness(now)}\"");
+        var old = new BossTimers();
+        Check(old.Freshness(now) == "No reading yet" && old.Rows(now).Count == 0, "...and before any reading: no rows, \"No reading yet\"");
+    }
+
+    /// <summary>
     /// The decoder over a capture file: every connection from <paramref name="serverPort"/> in turn (an event or the Abyss is
     /// another server), each its own decoder, every currency change, printed. Needs the decoder in the build.
     /// </summary>
@@ -624,6 +686,8 @@ public static class PacketTests
         var batches = new List<ItemBatch>();
         var fights = new FightTally(); var fought = new List<FightTally.Outcome>(); bool readsFights = false;
         var gaps = new List<DateTime>();
+        var bosses = new BossTimers();
+        var bossLines = new List<string>();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
@@ -641,6 +705,8 @@ public static class PacketTests
                     rows.Clear();
                     while (dec.NextItem() is { } it) rows.Add(it);
                     batches.AddRange(ItemBatch.Cut(rows));
+                    while (dec.NextBoss() is { } b)
+                        if (bosses.Take(b)) bossLines.Add($"{PacketReader.Local(b.At)}  world boss: {(b.Name.Length > 0 ? b.Name : "(not named)")} {b.State}{(b.Time is { } t && b.ServerNow is { } sv ? (b.State == BossSighting.Kind.Dead ? $", spawns in {BossTimers.Countdown(t - sv)}" : $", up {BossTimers.Span(sv - t)}") : "")}");
                     while (dec.NextFight() is { } f) fights.Add(f);
                 },
                 OnGap = () => { dec.Gap(); gaps.Add(last); },
@@ -651,6 +717,8 @@ public static class PacketTests
             Console.WriteLine($"{conn.Key.Item1}:{serverPort} → :{conn.Key.DstPort}: {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
         }
         foreach (var c in seen) Print(c);
+        foreach (var l in bossLines) Console.WriteLine(l);
+        if (bosses.Count > 0) Console.WriteLine($"world bosses: {bosses.Count} on the map's list, {bossLines.Count} readings (a boss's first, then each change)");
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
