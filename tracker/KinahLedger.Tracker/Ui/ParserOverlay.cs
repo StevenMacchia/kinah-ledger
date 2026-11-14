@@ -97,7 +97,15 @@ public sealed class ParserOverlay : Window
     }
 
     /// <summary>The overlay's shortcut, said in the drag hint ("Ctrl+Shift+P").</summary>
-    public string HotkeyText { get; set; } = "";
+    /// <summary>
+    /// The shortcut as the hint and the menu say it: "" when there is none ("Off", the default since 0.10.87, or anything that
+    /// isn't a usable shortcut), so they never say "Off hides it".
+    /// </summary>
+    public string HotkeyText { get => _hotkeyText; set => _hotkeyText = Platform.Hotkey.Parse(value)?.ToString() ?? ""; }
+    string _hotkeyText = "";
+
+    /// <summary>For the options test: the drag hint's words and the menu's hide line.</summary>
+    internal (string Hint, string Hide) HintForTest { get { ShowHint(); return (_hint.Text, (string)((System.Windows.Controls.MenuItem)BuildMenu().Items[5]).Header); } }
 
     /// <summary>The overlay's menu, in its own dark look: the three modes (the one on ticked, what each counts on hover), then hide and clicks through.</summary>
     internal ContextMenu BuildMenu()

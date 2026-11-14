@@ -89,8 +89,9 @@ public partial class MainWindow
     void RegisterParserHotkey(IntPtr h)
     {
         if (Hotkey.Parse(_parserPrefs.Hotkey) is not { } key) return;
-        if (!Native.RegisterHotKey(h, ParserHotkeyId, key.NativeModifiers, key.VirtualKey))
-            CrashLog.Note($"parser: the overlay's shortcut {key} is taken by another program; switch it on the Parser page");
+        var got = key.Register(h, ParserHotkeyId);
+        if (got is Hotkey.Outcome.Taken or Hotkey.Outcome.TakenByTracker)
+            KeyTakenOnce($"parser: the overlay's shortcut {key}: {(got == Hotkey.Outcome.Taken ? "taken by another app" : "held by another Kinah Ledger")}, off");
     }
 
     IntPtr ParserWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -305,7 +306,7 @@ public partial class MainWindow
         if (!want) { _parserOverlay?.ShowWanted(false); return; }
         if (_parserOverlay == null)
         {
-            _parserOverlay = new ParserOverlay { HotkeyText = Hotkey.Parse(_parserPrefs.Hotkey)?.ToString() ?? "" };
+            _parserOverlay = new ParserOverlay { HotkeyText = _parserPrefs.Hotkey };   // "Off" (the default) says no shortcut
             _parserOverlay.Dropped += (x, y) => { _parserPrefs.Left = x; _parserPrefs.Top = y; _parserPrefs.Save(); };
             _parserOverlay.ModePicked += SetParserMode;
             _parserOverlay.HideAsked += () => SetParserOverlay(false);

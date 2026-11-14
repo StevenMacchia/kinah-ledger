@@ -65,18 +65,19 @@ public partial class MainWindow
         var text = _hudPrefs.MarkWrongKey;
         if (Hotkey.Explain(text) is { } why)
         {
-            _markKeyProblem = ($"The That was wrong shortcut {text.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › Shortcuts & tips.", $"That was wrong key {text.Trim()} is off · pick another in Options");
-            return _markKeyProblem.Value.Long;
+            _markKeyProblem = ($"{text.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another.", "");
+            return null;
         }
         if (Hotkey.Parse(text) is not { } key) { _markKeyProblem = null; return null; }
         if (Hotkey.Same(text, _prefs.Hotkey))
         {
-            _markKeyProblem = ($"{key} is already the start/stop shortcut, so That was wrong is off. Pick another in Options › Shortcuts & tips.", $"{key} is the start/stop key · pick another in Options");
-            return _markKeyProblem.Value.Long;
+            _markKeyProblem = ($"{key} is already the start/stop shortcut, so this one is off. Pick another.", "");
+            return null;
         }
-        _markKeyProblem = Native.RegisterHotKey(h, Hotkey.MarkWrongId, key.NativeModifiers, key.VirtualKey) ? null
-            : ($"{key} is already used by another app, so That was wrong is off. Pick another in Options › Shortcuts & tips.", $"{key} is taken by another app · pick another in Options");
-        return _markKeyProblem?.Long;
+        var got = key.Register(h, Hotkey.MarkWrongId);
+        _markKeyProblem = got == Hotkey.Outcome.Taken ? ($"{key} is used by another app here, so it is off. Pick another.", "") : null;
+        if (got is Hotkey.Outcome.Taken or Hotkey.Outcome.TakenByTracker) KeyTakenOnce($"That was wrong shortcut {key}: {(got == Hotkey.Outcome.Taken ? "taken by another app" : "held by another Kinah Ledger")}, off");
+        return null;
     }
 
     /* ---------------- the key pressed ---------------- */

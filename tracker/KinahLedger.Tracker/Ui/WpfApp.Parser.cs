@@ -228,6 +228,11 @@ public static partial class WpfApp
             // click-through (off by default): a grab handle on the top edge shows with the pointer over it, and moves it
             po.SetClickThrough(true); po.ShowGrabForTest(); DoEvents();
             check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move"), "Parser: with click-through on, a grab handle on its top edge moves the overlay");
+            // the shortcut "Off" (the default): the hint and the menu name none; a real one is named
+            var off = new ParserOverlay(still: true) { HotkeyText = "Off" }.HintForTest;
+            var on = new ParserOverlay(still: true) { HotkeyText = "Ctrl+Shift+P" }.HintForTest;
+            check(!off.Hint.Contains("Off") && !off.Hide.Contains("(") && off.Hint.StartsWith("drag to move") && on.Hint.Contains("Ctrl+Shift+P") && on.Hide.Contains("Ctrl+Shift+P"),
+                $"Parser: with no shortcut (Off, the default) the overlay's hint and menu name none (\"{off.Hint}\" / \"{off.Hide}\"); with one, they name it");
             po.Close(); hud.Close();
         }
         static System.Windows.Controls.Border? FindPanel(DependencyObject root)
