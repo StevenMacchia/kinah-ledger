@@ -790,18 +790,24 @@ public static partial class WpfApp
             bool inHeader = btn != null && tw.HeadButtons.Children.IndexOf(btn) == 0 && System.Windows.Automation.AutomationProperties.GetName(btn) == "Timers";
             if (btn != null) Click(btn);
             DoEvents();
-            var open = Application.Current.Windows.OfType<BossWindow>().FirstOrDefault(x => x.Owner == tw && x.IsVisible);
-            Check(inHeader && open != null, $"timers: a Timers button first in the header ({inHeader}) opens the Timers window ({open != null})");
+            var open = Application.Current.Windows.OfType<BossWindow>().FirstOrDefault(x => x.IsVisible);
+            bool popOut = open != null && open.Owner == null && open.ShowInTaskbar && open.ResizeMode == ResizeMode.CanResizeWithGrip;
+            Check(inHeader && open != null && popOut, $"timers: a Timers button first in the header ({inHeader}) opens the Timers window ({open != null}), a pop-out of its own: no owner, in the taskbar, resizable ({popOut})");
             open?.Close();
             tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             tw.SetTimersOverlay(true, save: false); DoEvents();
             var ov = tw.TimersOverlayForTest;
-            long ex0 = ov?.ExStyleForTest ?? 0;
+            long ex0 = ov?.ExStyleForTest ?? 0;                 // click-through by default
+            ov?.InteractiveForTest(true); DoEvents();
+            long exCtrl = ov?.ExStyleForTest ?? 0;              // Ctrl held: it takes the mouse
+            ov?.InteractiveForTest(false);
+            tw.SetTimersClickThrough(false); DoEvents();
+            long ex1 = ov?.ExStyleForTest ?? 0;                 // click-through off
             tw.SetTimersClickThrough(true); DoEvents();
-            long ex1 = ov?.ExStyleForTest ?? 0;
-            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) == 0 && (ex1 & Native.ExTransparent) != 0;
+            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) != 0
+                && (exCtrl & Native.ExTransparent) == 0 && (exCtrl & Native.ExNoActivate) != 0 && (ex1 & Native.ExTransparent) == 0;
             Check(ov != null && ov.Topmost && !ov.ShowActivated && ov.Owner == null && noFocus,
-                $"...the overlay: its own window (no owner), on top, never takes focus, out of Alt+Tab; click-through on demand ({noFocus})");
+                $"...the overlay: its own window (no owner), on top, never takes focus, out of Alt+Tab; click-through by default, clickable while Ctrl is held or with click-through off ({noFocus})");
             ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
             bool hidden = ov != null && !ov.IsVisible;
             ov?.Show(new List<Session.TimerBoard.Item> { new("boss:Heretic Layla", "Verteron", "Heretic Layla", "Rock Tomb Hill", Session.TimerBoard.Kind.Waiting, DateTime.UtcNow.AddMinutes(3), "3m 00s", "at 07:00") }, DateTime.UtcNow);
@@ -815,15 +821,17 @@ public static partial class WpfApp
             to.Show(); DoEvents();
             var kairaKey = Session.TimerBoard.AbyssKey("Watcher Kaira");
             bool listed = to.TimerBoxes.ContainsKey(kairaKey) && to.TimerBoxes.ContainsKey(Session.TimerBoard.EventKey("Shugo Festival")) && to.TimerBoxes.Count >= Session.EventTimers.Schedule.Length + Session.AbyssBosses.Schedule.Length;
-            if (to.TimerBoxes.TryGetValue(kairaKey, out var kb)) { Flip(kb.Chime); Flip(kb.Overlay); }
-            bool picked = tw.TimerPrefsForTest.Chimes(kairaKey) && !tw.TimerPrefsForTest.Shows(kairaKey);
+            bool byDefault = to.TimerBoxes.TryGetValue(kairaKey, out var kb) && kb.Overlay.IsChecked == true && kb.Chime.IsChecked == true
+                && to.TimerBoxes.TryGetValue(Session.TimerBoard.EventKey("Shugo Festival"), out var sb) && sb.Overlay.IsChecked == true;
+            if (kb.Chime != null) { Flip(kb.Chime); Flip(kb.Overlay); }
+            bool picked = byDefault && !tw.TimerPrefsForTest.Chimes(kairaKey) && !tw.TimerPrefsForTest.Watched(kairaKey) && kb.Chime?.IsEnabled == false;
             if (to.TimersOverlayChk != null) Flip(to.TimersOverlayChk);
             DoEvents();
             bool overlayOn = tw.TimersOverlayForTest != null && tw.TimerPrefsForTest.OverlayOn;
             if (to.TimersOverlayChk != null) Flip(to.TimersOverlayChk);
             DoEvents();
             Check(listed && picked && overlayOn && tw.TimersOverlayForTest == null && to.Scroller.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Auto,
-                $"Options › Timers lists the timers ({to.TimerBoxes.Count}), a timer's Chime and Overlay boxes change its picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
+                $"Options › Timers lists the timers ({to.TimerBoxes.Count}), Watcher Kaira and Shugo watched by default; its Chime and Watch boxes change the picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
             to.Close();
         }
             w.ShowPartForTest("Farming"); DoEvents();

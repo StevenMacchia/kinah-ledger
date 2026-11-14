@@ -7,15 +7,16 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// Options › Timers (0.10.85, Steven 2026-11-14: "the toggles for the timers should be in the settings ... make them
 /// scrollable"): the timers overlay over the game (on, click-through, how close a timer must be to show, how many at once),
-/// the chime (on, how long before, how loud) and, timer by timer, which ones go on the overlay and which chime. The page
-/// scrolls with the rest of Options. These save as they change (timers.json), apart from Options' Save: the overlay and the
-/// chime act at once, as the player tries them.
+/// the chime (on, how long before, how loud), the Timers window's details and, timer by timer, which ones are watched (on the
+/// overlay, with the chime) and which of those chime. The page scrolls with the rest of Options. These save as they change
+/// (timers.json), apart from Options' Save: the overlay and the chime act at once, as the player tries them.
 /// </summary>
 public partial class OptionsWindow
 {
-    /// <summary>The page's switches per timer, by key: (on the overlay, chime). For the options self-test.</summary>
+    /// <summary>The page's boxes per timer, by key: (watched: on the overlay, its chime). For the options self-test.</summary>
     internal readonly Dictionary<string, (CheckBox Overlay, CheckBox Chime)> TimerBoxes = new();
     internal CheckBox? TimersOverlayChk { get; private set; }
+    internal CheckBox? TimersDetailsChk { get; private set; }
 
     void FillTimers()
     {
@@ -24,18 +25,18 @@ public partial class OptionsWindow
         var p = _host.TimerChoices;
         void Add(UIElement e) => PageTimers.Children.Add(e);
         Add(Styled(new TextBlock { Text = "Timers" }, "PageTitle"));
-        Add(Styled(new TextBlock { Text = "The game's events and the world bosses' spawns: an overlay over the game with the ones you pick, only when one is a few minutes away, and a soft chime before. These save as you change them." }, "PageLead"));
+        Add(Styled(new TextBlock { Text = "A small strip over the game with the events and world bosses you watch, shown only as one comes close, and a soft chime before. These save as you change them." }, "PageLead"));
 
         // the overlay
         Add(Styled(new TextBlock { Text = "OVERLAY" }, "GroupLabel"));
         var overlay = new StackPanel();
         TimersOverlayChk = Switch(p.OverlayOn, on => _host.SetTimersOverlay(on));
-        overlay.Children.Add(Row("Show the timers overlay", $"A small window over the game, apart from the panel and the parser. It appears when a timer you keep on it is {p.ShowMinutes} min away and hides again after.", TimersOverlayChk));
+        overlay.Children.Add(Row("Show the timers overlay", "Apart from the panel and the parser. Hidden until a watched timer is close; it hides again once the boss is up or the event starts.", TimersOverlayChk));
         overlay.Children.Add(Styled(new Border(), "Divider"));
-        overlay.Children.Add(Row("Clicks go through it", "On: clicks pass to the game. Off: drag it where you want it. It never takes focus either way.", Switch(p.ClickThrough, on => _host.SetTimersClickThrough(on))));
+        overlay.Children.Add(Row("Clicks go through it", "On: it never blocks the game. Hold Ctrl to drag it or to right-click it for its menu.", Switch(p.ClickThrough, on => _host.SetTimersClickThrough(on))));
         overlay.Children.Add(Styled(new Border(), "Divider"));
-        overlay.Children.Add(Row("Show a timer from", "How long before a timer starts or spawns it shows, and how long after.",
-            Choice(TimerPrefs.MinuteChoices.Where(m => m <= 15), m => $"{m} min before", p.ShowMinutes, m => { p.ShowMinutes = m; p.Save(); })));
+        overlay.Children.Add(Row("Show a timer from", "How long before it starts or spawns. A timer turns gold in its last 5 minutes.",
+            Choice(TimerPrefs.MinuteChoices, m => $"{m} min before", p.WindowMinutes, m => { p.WindowMinutes = m; p.Save(); })));
         overlay.Children.Add(Styled(new Border(), "Divider"));
         overlay.Children.Add(Row("At most", "Timers on the overlay at once.", Choice(TimerPrefs.CountChoices, c => $"{c} timers", p.Count, c => { p.Count = c; p.Save(); })));
         Add(Styled(new Border { Child = overlay }, "Group"));
@@ -43,7 +44,7 @@ public partial class OptionsWindow
         // the chime
         Add(Styled(new TextBlock { Text = "CHIME" }, "GroupLabel"));
         var chime = new StackPanel();
-        chime.Children.Add(Row("Chime before a timer", "A soft chime, only for the timers with Chime ticked below.", Switch(p.ChimeOn, on => { p.ChimeOn = on; p.Save(); })));
+        chime.Children.Add(Row("Chime before a watched timer", "A soft chime, once. Turn it off for one timer below.", Switch(p.ChimeOn, on => { p.ChimeOn = on; p.Save(); })));
         chime.Children.Add(Styled(new Border(), "Divider"));
         chime.Children.Add(Row("How long before", "", Choice(TimerPrefs.MinuteChoices, m => $"{m} min", p.ChimeMinutes, m => { p.ChimeMinutes = m; p.Save(); })));
         chime.Children.Add(Styled(new Border(), "Divider"));
@@ -57,11 +58,22 @@ public partial class OptionsWindow
         chime.Children.Add(Row("Volume", "", vol));
         Add(Styled(new Border { Child = chime }, "Group"));
 
+        // the Timers window
+        Add(Styled(new TextBlock { Text = "TIMERS WINDOW" }, "GroupLabel"));
+        var win = new StackPanel();
+        TimersDetailsChk = Switch(p.Details, on => { p.Details = on; p.Save(); });
+        win.Children.Add(Row("Details", "Each row's second line: the place, how often, the time it starts.", TimersDetailsChk));
+        win.Children.Add(Styled(new Border(), "Divider"));
+        var pop = new Button { Content = "Open" };
+        pop.Click += (_, _) => _host.OpenTimersPopOut();
+        win.Children.Add(Row("The full list", "Events and every map's world bosses, in a window you can keep on a second screen.", pop));
+        Add(Styled(new Border { Child = win }, "Group"));
+
         // timer by timer
         var items = _host.TimerItemsNow();
         foreach (var group in items.GroupBy(i => i.Group).OrderBy(g => g.Key == "Events" ? 0 : g.Key.Contains("Reshanta") ? 2 : 1))
         {
-            Add(Styled(new TextBlock { Text = (group.Key == "Events" ? "EVENTS" : group.Key.Contains("Reshanta") ? group.Key.ToUpperInvariant() + " · ABYSS" : group.Key.ToUpperInvariant() + " · WORLD BOSSES") }, "GroupLabel"));
+            Add(Styled(new TextBlock { Text = group.Key == "Events" ? "EVENTS" : group.Key.Contains("Reshanta") ? group.Key.ToUpperInvariant() + " · ABYSS" : group.Key.ToUpperInvariant() + " · WORLD BOSSES" }, "GroupLabel"));
             var list = new StackPanel();
             bool first = true;
             foreach (var i in group.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
@@ -70,11 +82,11 @@ public partial class OptionsWindow
                 if (!first) list.Children.Add(Styled(new Border(), "Divider"));
                 first = false;
                 var key = i.Key;
-                var ov = new CheckBox { Content = "Overlay", IsChecked = p.Shows(key), Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
-                ov.Click += (_, _) => { p.SetShows(key, ov.IsChecked == true); p.Save(); };
-                var ch = new CheckBox { Content = "Chime", IsChecked = p.Chimes(key), VerticalAlignment = VerticalAlignment.Center };
-                ch.Click += (_, _) => { p.SetChimes(key, ch.IsChecked == true); p.Save(); };
-                System.Windows.Automation.AutomationProperties.SetName(ov, $"{i.Name} on the overlay");
+                var ov = new CheckBox { Content = "Watch", IsChecked = p.Watched(key), Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
+                var ch = new CheckBox { Content = "Chime", IsChecked = p.Chimes(key), IsEnabled = p.Watched(key), VerticalAlignment = VerticalAlignment.Center };
+                ov.Click += (_, _) => { _host.SetTimerWatched(key, ov.IsChecked == true); ch.IsEnabled = ov.IsChecked == true; ch.IsChecked = p.Chimes(key); };
+                ch.Click += (_, _) => _host.SetTimerChime(key, ch.IsChecked == true);
+                System.Windows.Automation.AutomationProperties.SetName(ov, $"Watch {i.Name}");
                 System.Windows.Automation.AutomationProperties.SetName(ch, $"Chime before {i.Name}");
                 var boxes = new StackPanel { Orientation = Orientation.Horizontal };
                 boxes.Children.Add(ov); boxes.Children.Add(ch);
@@ -84,7 +96,7 @@ public partial class OptionsWindow
             Add(Styled(new Border { Child = list }, "Group"));
         }
         if (!items.Any(i => i.Key.StartsWith("boss:", StringComparison.Ordinal)))
-            Add(Styled(new TextBlock { Text = "World bosses show here once the game's world map has been opened (Exploration › Field Boss) with packet reading on.", Margin = new Thickness(4, 10, 0, 0), TextWrapping = TextWrapping.Wrap }, "RowHint"));
+            Add(Styled(new TextBlock { Text = "Verteron's world bosses show here once the game's world map has been opened (Exploration › Field Boss) with packet reading on (Game reading).", Margin = new Thickness(4, 10, 0, 0), TextWrapping = TextWrapping.Wrap }, "RowHint"));
     }
 
     /// <summary>A row in the page's look: a title and a hint on the left, a control on the right.</summary>
@@ -112,7 +124,9 @@ public partial class OptionsWindow
     static ComboBox Choice(IEnumerable<int> values, Func<int, string> text, int now, Action<int> set)
     {
         var list = values.ToList();
-        var box = new ComboBox { Width = 150, ItemsSource = list.Select(text).ToList(), SelectedIndex = Math.Max(0, list.IndexOf(now)) };
+        if (!list.Contains(now)) list.Add(now);
+        list.Sort();
+        var box = new ComboBox { Width = 150, ItemsSource = list.Select(text).ToList(), SelectedIndex = list.IndexOf(now) };
         box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0) set(list[box.SelectedIndex]); };
         return box;
     }
