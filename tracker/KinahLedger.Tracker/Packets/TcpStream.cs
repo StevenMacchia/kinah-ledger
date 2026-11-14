@@ -24,10 +24,12 @@ public readonly record struct TcpSegment(IPAddress Src, int SrcPort, IPAddress D
 /// One direction of a TCP connection put back in order: segments arrive out of order, twice, or not at all, and the bytes
 /// come out once each, in order. A segment missing for <see cref="GapSeconds"/> is given up on and the stream goes on
 /// after it (a gap: the decoder resyncs on its next marker). Joins a connection already running at its first segment.
+/// Half a second since 2026-11-14 (the Parser's real time: every count waits on a hole while it is held; 2 s before, and
+/// packets.log showed no gap in 400 minutes of play, so a retransmit later than that is rare).
 /// </summary>
 public sealed class TcpStream
 {
-    public const double GapSeconds = 2;
+    public const double GapSeconds = 0.5;
     const int MaxPending = 512;
 
     uint? _next;

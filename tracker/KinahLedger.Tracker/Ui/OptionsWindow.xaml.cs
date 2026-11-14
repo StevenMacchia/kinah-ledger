@@ -137,6 +137,7 @@ public partial class OptionsWindow : Window
         BuildHudFields(c.HudFields);
         BuildHudLooks(c.HudLook);
         LoadRareDrops(c);   // In game › Rare drops, built in Ui/OptionsWindow.RareDrops.cs
+        LoadParser();       // In game › Parser, built in Ui/OptionsWindow.Parser.cs
         _loading = false;
         Refresh();
     }
@@ -388,6 +389,7 @@ public partial class OptionsWindow : Window
             return;
         }
         var problem = _host.ApplyOptions(_edit);
+        SaveParser();   // In game › Parser's switches (Ui/OptionsWindow.Parser.cs)
         if (_resetSpot) { _host.ResetHudPosition(); _resetSpot = false; }   // Reset position, tried until now
         _saved = _edit = _host.CurrentOptions();
         Load(_edit);

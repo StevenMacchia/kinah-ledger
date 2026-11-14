@@ -1067,6 +1067,9 @@ public static partial class WpfApp
             w.ShowDemo(); DoEvents();
         }
 
+        // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
+        ParserChecks(w, Check);
+
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
         // a fresh install; Got it stores the version; Farming only; six bullets, then "and N more"; the link to the release
         {
@@ -1846,7 +1849,7 @@ public static partial class WpfApp
                 string[] bgFields = { "rate", "total", "feed" };
                 static string BgWords(System.Windows.Controls.TextBlock t) => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
                 List<System.Windows.Controls.TextBlock> BgTexts(HudWindow h) => BadgeTree((DependencyObject)h.Content).OfType<System.Windows.Controls.TextBlock>().ToList();
-                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Content).Children[0];
+                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.OwnContent!).Children[0];
                 var badge = new HudWindow(bgFields);
                 badge.Update(bgV1); badge.Update(bgV2);
                 var bgShown = BgTexts(badge).Select(BgWords).ToList();

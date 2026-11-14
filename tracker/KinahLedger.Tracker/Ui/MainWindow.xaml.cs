@@ -178,6 +178,7 @@ public partial class MainWindow : Window
         InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
         InitQuests(watch);   // the completed quests and the points, from quests.json (Ui/MainWindow.Quests.cs)
         InitQuestUpload();   // the completed quests ride the upload batch (Ui/MainWindow.QuestsPage.cs)
+        InitParser(watch);   // the Parser page, its overlay and its shortcut (Ui/MainWindow.Parser.cs)
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -763,6 +764,7 @@ public partial class MainWindow : Window
         GoalTick();   // a goal reached is said once, on the panel and in the status line (Ui/MainWindow.Goals.cs)
         QuestTick();   // a quest reached is credited and said once (Ui/MainWindow.Quests.cs)
         if (_part == "Quests") FillQuestsPage();   // the page follows the counts (Ui/MainWindow.QuestsPage.cs)
+        ParserTick();   // the Parser page and the fight overlay (Ui/MainWindow.Parser.cs)
         PriceAlertTick();
         UpdateHud();
     }
@@ -1224,7 +1226,7 @@ public partial class MainWindow : Window
     const double QuestsScrollFallback = 720;
 
     /// <summary>The window's height cap: the screen, or on the Quests page the Farming page's height, so that page scrolls instead of growing the window.</summary>
-    void ApplyMaxHeight() => MaxHeight = _part is "Quests" or "Timers" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
+    void ApplyMaxHeight() => MaxHeight = _part is "Quests" or "Timers" or "Parser" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
 
     void ShowPart(string part, bool byHand = true)
     {
@@ -1232,7 +1234,7 @@ public partial class MainWindow : Window
         if (byHand) Motion.PickedByHand();   // the tab's light slides to a page the player picked, not to one the page follow picked
         // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
         if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
-        _part = part is "Crafting" or "Events" or "Timers" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
+        _part = part is "Crafting" or "Events" or "Timers" or "Parser" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         // the page being left, as a picture for the cross-fade, before the new page's parts show (Ui/MainWindow.PageTurn.cs)
         var leaving = byHand && was != _part ? LeavingPage() : null;
@@ -1241,6 +1243,8 @@ public partial class MainWindow : Window
         CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "NavOn" : "SegOff");
         TimersTab.Style = (Style)FindResource(_part == "Timers" ? "NavOn" : "SegOff");
+        ParserTab.Style = (Style)FindResource(_part == "Parser" ? "NavOn" : "SegOff");
+        if (_part == "Parser") RedrawParserPage();
         if (_part == "Events") ShowInstances();
         FillTimersPage();
         if (_part == "Quests") RedrawQuestsPage();
@@ -1255,7 +1259,8 @@ public partial class MainWindow : Window
     /// </summary>
     void FollowActivity(Session.ActivityKind kind, DateTime now)
     {
-        if (_follow.Step(kind, now, _prefs.FollowActivity && !_welcome) is { } page && page != _part) ShowPart(page, byHand: false);
+        // the Parser page stays while it shows: a boss fight is an expedition's, and the page would follow it away
+        if (_follow.Step(kind, now, _prefs.FollowActivity && !_welcome) is { } page && page != _part && _part != "Parser") ShowPart(page, byHand: false);
     }
 
     /// <summary>For the options self-test: one tick of the page following an activity, and the page showing.</summary>
@@ -1281,11 +1286,12 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, timers = _part == "Timers" && !_welcome, farm = !craft && !events && !quests && !timers && !_welcome;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, timers = _part == "Timers" && !_welcome, parser = _part == "Parser" && !_welcome, farm = !craft && !events && !quests && !timers && !parser && !_welcome;
         // Full view scaled to the screen it is on, or Compact when even scaled it can't fit (Ui/MainWindow.Fit.cs)
         FitFull(farm && _prefs.FullView, _fullAsked);
         bool full = farm && FullShown;
-        LeftCol.Visibility = craft || events || quests || timers ? Visibility.Collapsed : Visibility.Visible;
+        LeftCol.Visibility = craft || events || quests || timers || parser ? Visibility.Collapsed : Visibility.Visible;
+        ParserPage.Visibility = parser ? Visibility.Visible : Visibility.Collapsed;   // Ui/MainWindow.Parser.cs
         TimersPage.Visibility = timers ? Visibility.Visible : Visibility.Collapsed;
         QuestsPage.Visibility = quests ? Visibility.Visible : Visibility.Collapsed;   // in the ledger column, as the Crafting and Events pages are
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
@@ -1298,12 +1304,12 @@ public partial class MainWindow : Window
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
 
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
-        LowerScroll.Visibility = full || craft || events || quests || timers ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = full || craft || events || quests || timers || parser ? Visibility.Visible : Visibility.Collapsed;
         // the Quests page never grows the window (Steven, 2026-11-08: "it shouldn't expand the thing to the size of my screen"):
         // the window keeps the Farming page's height and the page scrolls inside it; before Farming has been measured (a demo
         // render), the scroll area is capped instead
         ApplyMaxHeight();
-        LowerScroll.MaxHeight = (quests || timers) && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
+        LowerScroll.MaxHeight = (quests || timers || parser) && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
@@ -1633,7 +1639,7 @@ public partial class MainWindow : Window
         _hud.SetScale(_hudPreview?.HudScale ?? _hudPrefs.Scale);
         // where the player left it, kept on a screen that is still there; else the top centre of the game's monitor
         if (!_hudSpotPreview && SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
-        _hud.Dragged += () => { if (_hud != null) RememberHudSpot(_hud.Left, _hud.Top); };   // the Ticker's spot is its own (never in a render)
+        _hud.Dragged += () => { if (_hud != null) RememberHudSpot(_hud.Left, _hud.Top + _hud.ParserHeight); };   // the Kinah line's spot, the Parser's section (Ui/HudWindow.Parser.cs) left out   // the Ticker's spot is its own (never in a render)
         // it follows the game from the start: created while the game is behind another window, it waits out of sight
         UpdateHud();
         if (_hudValues.GetValueOrDefault("show", "") != "hidden") _hud.Show();

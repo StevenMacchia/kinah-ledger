@@ -1,0 +1,70 @@
+# Bosses of the instances the tracker's Parser keeps fights for (Parser/BossBook.cs): "Instance|Kind|Boss|final", in route
+# order, "final" on the instance's last boss (killing it clears the instance), "wave" on a wave stage (Ferocious Horn Den's
+# Totem room: six Mau Totem Shamans and their adds, no single boss): a split of its own in Full run, never a boss pull. Kinds: Expedition, Sanctuary (the game's
+# 10-player raids). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart.
+# An instance listed here keeps fights with its listed bosses only (trash, elites and adds never make one); an instance not
+# listed keeps fights with what the game itself marks a boss. A line "Instance|Kind" with no boss only files the instance.
+# Source: the per-dungeon pages of https://metabot.gg/en/aion-2/dungeons (2026-11-13); Snowfield of Sorrow from Inven Global
+# (2026-09). Unsure, left out: first-room machines in the Sanctuaries (Central Abyss Fusion Reactor, Muspel Guardian Statue,
+# Surveillance Device, Hydraulic Press); final flags for Deus Research Base and Fire Temple are from route order.
+Abyssal Horn Den|Expedition|Kapu|
+Abyssal Horn Den|Expedition|Dhakan|
+Abyssal Horn Den|Expedition|Gargaum|final
+Azure Breath Island|Expedition|Wise Baumnute|
+Azure Breath Island|Expedition|Expanding Xyrepe|
+Azure Breath Island|Expedition|Awakened Alturadon|final
+Citadel of the Fallen Daeva|Expedition|Willful Turgen|
+Citadel of the Fallen Daeva|Expedition|Forbidden Hexbeast Griosa|
+Citadel of the Fallen Daeva|Expedition|Basilus the False|final
+Cradle of Nihility|Expedition|Multiverse Veltiras|
+Cradle of Nihility|Expedition|Solemn Valkan|
+Cradle of Nihility|Expedition|Afflicted Bakarma|final
+Deus Research Base|Expedition|Atiel|
+Deus Research Base|Expedition|Gelcos|
+Deus Research Base|Expedition|Nazmun|final
+Draupnir|Expedition|Afflicted Bakarma|
+Draupnir|Expedition|Phantasmal Lakshmi|
+Draupnir|Expedition|Predator Saraswati|
+Draupnir|Expedition|Transcendent Bakarma|final
+Dying Dramata's Nest|Expedition|Broodkeeper Nayatman|
+Dying Dramata's Nest|Expedition|Manager Nasium|
+Dying Dramata's Nest|Expedition|Decaying Durvati|final
+Ferocious Horn Den|Expedition|Watchdog Kwapo|
+Ferocious Horn Den|Expedition|Totem room|wave
+Ferocious Horn Den|Expedition|Necromancer Duanka|
+Ferocious Horn Den|Expedition|Ferocious Horn Nuakum|final
+Fire Temple|Expedition|Silver Blade Rotan|
+Fire Temple|Expedition|Red Spark Ignus|
+Fire Temple|Expedition|Black Smoke Murute|
+Fire Temple|Expedition|Kromede's Desire|final
+Hall of Illusion|Expedition|Nazarak|
+Hall of Illusion|Expedition|Glassvein|
+Hall of Illusion|Expedition|Nathara|final
+Krao Cave|Expedition|Enhanced Harcon|
+Krao Cave|Expedition|Neglected Gadioton|
+Krao Cave|Expedition|Ultimate Berk|final
+Mirror of Scarlet Desire|Expedition|Robstino|
+Mirror of Scarlet Desire|Expedition|Ordeal of Love|
+Mirror of Scarlet Desire|Expedition|Rotar|
+Mirror of Scarlet Desire|Expedition|Kromede's Desolation|final
+Shattered Arkanis|Expedition|Talisra of the Void|
+Shattered Arkanis|Expedition|Siliator of Deceit|
+Shattered Arkanis|Expedition|Ruthilis of Pain|final
+Submerged Life Temple|Expedition|Deep Sea Pydeon|
+Submerged Life Temple|Expedition|Singing Ellyde|
+Submerged Life Temple|Expedition|Submerged Emon|final
+Urugugu Canyon|Expedition|Judge Urahum|
+Urugugu Canyon|Expedition|Guardian Captain Raur|
+Urugugu Canyon|Expedition|Divine Auldor|final
+Vakron Sky Island|Expedition|Tiere|
+Vakron Sky Island|Expedition|Thamon|
+Vakron Sky Island|Expedition|Vakron|final
+Abyssal Forge: Ludra|Sanctuary|Isolation Specialist Rahu|
+Abyssal Forge: Ludra|Sanctuary|Abyssal Wings Ketu|
+Abyssal Forge: Ludra|Sanctuary|Eternal Ludra|final
+Chalice of Muspel|Sanctuary|Iscariel|
+Chalice of Muspel|Sanctuary|Kaldrix|final
+Corroded Decontamination Facility|Sanctuary|Black Blood Blatt|
+Corroded Decontamination Facility|Sanctuary|Devouring Klawfly|
+Corroded Decontamination Facility|Sanctuary|Terminator Bargott|final
+Snowfield of Sorrow|Sanctuary|Storm Legion Commander Deltras|final
