@@ -49,6 +49,7 @@ public sealed class PacketReader : IDisposable
     IGameDecoder? _decoder;
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
+    readonly ConcurrentQueue<FightEvent> _fights = new();
     readonly ConcurrentQueue<object> _uncovered = new();
     TcpStream _down = new();
     TcpTable.Link? _link;
@@ -104,6 +105,23 @@ public sealed class PacketReader : IDisposable
         }
     }
     string ItemName(long id) { try { return NameOf?.Invoke(id) ?? $"item {id}"; } catch (Exception) { return $"item {id}"; } }
+
+    /// <summary>A kill the player is in, a death or a Rank Points change: queued for the tracker, logged.</summary>
+    void TakeFight(FightEvent f)
+    {
+        _fights.Enqueue(f);
+        if (_fights.Count > 4096) _fights.TryDequeue(out _);
+        Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
+            : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
+            : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));
+    }
+
+    /// <summary>The next fight event for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
+    /// <summary>True while the reader gets the player's kills and deaths from the game (a decoder of interface version 3).</summary>
+    public bool ReadsFights => On && (_testFights || _decoder?.ReadsFights == true);
+    bool _testFights;
+    internal void FightsForTest(FightEvent f) { _testFights = true; _fights.Enqueue(f); }
 
     /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
@@ -220,6 +238,7 @@ public sealed class PacketReader : IDisposable
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
+                while (dec.NextFight() is { } f) TakeFight(f);
             },
             OnGap = () =>
             {
@@ -230,7 +249,7 @@ public sealed class PacketReader : IDisposable
         _stop = false;
         _thread = new Thread(Run) { IsBackground = true, Name = "packet reading", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
-        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")} from the game's server {game.Remote}:{game.RemotePort}";
+        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")}{(dec.ReadsFights ? ", your kills and deaths" : "")} from the game's server {game.Remote}:{game.RemotePort}";
         Log($"{Local(DateTime.UtcNow)}  reading {game.Remote}:{game.RemotePort} → {game.Local}:{game.LocalPort} with {Kind}");
     }
 
