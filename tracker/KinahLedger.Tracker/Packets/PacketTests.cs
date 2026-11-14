@@ -763,6 +763,14 @@ public static class PacketTests
             && l2 is { Stage: AreaEvent.Stage.UnderWay, LeftAt: null } && l3 is { Stage: AreaEvent.Stage.Over } && l4 is { LeftAt: { } } && l5 == null
             && EventTimers.StageText(l1) == "Getting ready" && EventTimers.StageText(l2) == "Under way" && EventTimers.StageText(l3) == "Over: rewards next" && EventTimers.StageText(l4) == "Left",
             $"...the event you're in: {(l1 == null ? "-" : EventTimers.StageText(l1))}, {(l2 == null ? "-" : EventTimers.StageText(l2))} (its lobby closing is no leaving), {(l3 == null ? "-" : EventTimers.StageText(l3))}, {(l4 == null ? "-" : EventTimers.StageText(l4))}, gone {EventTimers.KeepLiveSeconds:0} s after");
+        // Hidden Lugi (2026-11-14, 11:03 ET): its game's part and its lobby come in one bundle on arrival, the game's first;
+        // the stage stays "Under way", with the game's start
+        var lugi = new EventTimers();
+        lugi.Take(A(0, AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay, -0.1, name: "Hidden Lugi"));
+        lugi.Take(A(0, AreaEvent.Kind.Phase, AreaEvent.Stage.Preparing, -12.2, name: "Hidden Lugi"));
+        var lg = lugi.Current(e0.AddSeconds(5));
+        Check(lg is { Stage: AreaEvent.Stage.UnderWay, Label: "Hidden Lugi" } && lg.StartedPc == e0.AddSeconds(-0.1) && EventTimers.StageText(lg) == "Under way",
+            $"...a lobby that comes after the game's own part never steps the stage back: {(lg == null ? "-" : EventTimers.StageText(lg))} (Hidden Lugi, 2026-11-14)");
         var mv = new EventTimers(); mv.Take(prep); mv.Take(A(30, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing, moved: true));
         Check(mv.Current(prep.At.AddSeconds(31)) is { LeftAt: { } }, "...the game moving off the event's server in its lobby is leaving it");
 
