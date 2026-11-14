@@ -10,99 +10,96 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The redesign proposal's prototype pages (2026-11-14, docs/ui/redesign-proposal/): the real window, filled by the demo,
-/// rearranged into the proposed layout. It has one nav row with every page, an overlays switch group in the header, a lean
-/// Farm page, and new Character, Timers and Overlays pages built from the window's own pieces and theme. Only
+/// rearranged into the proposed layout: the header's page pills with Timers (and Parser), one Overlays button, the Farm page
+/// as 0.10.80 drew it, and a Timers page built from the window's own pieces and theme. Only
 /// `ui-shot --proposal` calls it. Nothing here is wired to a live session.
 /// </summary>
 public partial class MainWindow
 {
-    static readonly (string Name, string Art)[] ProposalPages =
-    {
-        ("Farm", "kinah"), ("Runs", "dungeon"), ("Craft", "morph"), ("Character", "profile"), ("Timers", "boss"), ("Parser", "greatsword"), ("Quests", "checklist"),
-    };
-
     const double PW = 662;   // the ledger column's width
 
-    /// <summary>Rearranges the window into the proposal's <paramref name="page"/>; <paramref name="rail"/> puts the pages in a left rail instead of a row.</summary>
-    internal void ProposalPage(string page, bool rail = false)
+    /// <summary>Rearranges the window into the proposal's <paramref name="page"/>.</summary>
+    internal void ProposalPage(string page)
     {
-        ProposalShell(page, rail);
+        ProposalShell(page);
         switch (page)
         {
             case "Farm": ProposalFarm(); break;
-            case "Character": ProposalHost(ProposalCharacter()); break;
             case "Timers": ProposalHost(ProposalTimers()); break;
-            case "Overlays": ProposalHost(ProposalOverlays()); break;
         }
     }
 
-    // ---------------------------------------------------------------- the shell: header, overlays group, nav row
+    // ---------------------------------------------------------------- the shell: the header's pills and the Overlays button
 
-    void ProposalShell(string page, bool rail)
+    /// <summary>
+    /// The header as 0.10.80 drew it, with the page pills Farm · Craft · Runs · Timers · Parser · Quests (Parser and Quests
+    /// only while they're on), the Timers pill carrying the next watched countdown, and one round Overlays button left of
+    /// the site's.
+    /// </summary>
+    void ProposalShell(string page)
     {
-        PartTabs.Visibility = Visibility.Collapsed;
-        // the header's middle: the three overlays, each one click from any page
-        if (PartTabs.Parent is Grid head)
+        // the site's round button moves to the footer's links (kinahledger.com beside Discord), so five pills fit
+        SiteBtn.Visibility = Visibility.Collapsed;
+        var first = DiscordText.Inlines.FirstInline;
+        DiscordText.Inlines.InsertBefore(first, new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("kinahledger.com")) { Style = (Style)FindResource("LinkStyle") });
+        DiscordText.Inlines.InsertBefore(first, new System.Windows.Documents.Run("   "));
+        if (PartTabs.Child is StackPanel pills)
         {
-            var group = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-            var lbl = QT("Overlays", 11.5, FontWeights.SemiBold, "Faint"); lbl.Margin = new Thickness(0, 0, 8, 0); lbl.VerticalAlignment = VerticalAlignment.Center;
-            group.Children.Add(lbl);
-            group.Children.Add(OverlayPill("Kinah", true));
-            group.Children.Add(OverlayPill("Timers", true));
-            group.Children.Add(OverlayPill("Parser", false));
-            Grid.SetColumn(group, 1);
-            head.Children.Add(group);
+            pills.Children.Clear();
+            foreach (var name in new[] { "Farm", "Craft", "Runs", "Timers", "Parser" })
+            {
+                var content = new StackPanel { Orientation = Orientation.Horizontal };
+                content.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+                if (name == "Timers") { var tb = TabBadge("4:52", name == page ? "GoldInk" : "Gold"); if (name == page) tb.SetResourceReference(Border.BackgroundProperty, "Gold"); content.Children.Add(tb); }
+                var btn = new Button { Content = content, Style = (Style)FindResource(name == page ? "SegOn" : "SegOff"), Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(pills.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
+                pills.Children.Add(btn);
+            }
         }
-        if (rail) { ProposalRail(page); return; }
-        var nav = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(4), Margin = new Thickness(0, 10, 0, 0), Width = PW, HorizontalAlignment = HorizontalAlignment.Left };
-        nav.SetResourceReference(Border.BackgroundProperty, "Card");
-        nav.SetResourceReference(Border.BorderBrushProperty, "Line"); nav.BorderThickness = new Thickness(1);
-        var row = new Grid();
-        int i = 0;
-        foreach (var (name, art) in ProposalPages)
-        {
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(name switch { "Character" => 1.3, "Timers" => 1.4, "Quests" => 1.05, _ => 1 }, GridUnitType.Star) });
-            var tab = NavTab(name, art, name == page); Grid.SetColumn(tab, i++); row.Children.Add(tab);
-        }
-        nav.Child = row;
-        HeadStack.Children.Insert(1, nav);
+        var ov = new Button { Style = (Style)FindResource("RoundBtn"), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Overlays over the game: Kinah, Timers, Parser" };
+        var face = new Grid();
+        var icon = new System.Windows.Shapes.Path { Style = (Style)FindResource("QIconStyle"), Data = (Geometry)FindResource("IcPanels") };
+        face.Children.Add(icon);
+        var lit = new Ellipse { Width = 7, Height = 7, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -4, 0) };
+        lit.SetResourceReference(Shape.FillProperty, "Good");
+        face.Children.Add(lit);
+        ov.Content = face;
+        HeadButtons.Children.Insert(0, ov);
     }
 
-    FrameworkElement OverlayPill(string text, bool on)
+    /// <summary>The Overlays button's menu: the three overlays, each a switch, and where each one is set up.</summary>
+    internal Border ProposalOverlaysMenu()
     {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        var dot = new Ellipse { Width = 6, Height = 6, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
-        dot.SetResourceReference(Shape.FillProperty, on ? "Good" : "Faint");
-        if (!on) dot.Opacity = 0.6;
-        sp.Children.Add(dot);
-        sp.Children.Add(QT(text, 11.5, FontWeights.SemiBold, on ? "Ink" : "Faint"));
-        var b = new Border { Child = sp, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 3, 9, 3), Margin = new Thickness(4, 0, 0, 0), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
-        b.SetResourceReference(Border.BackgroundProperty, on ? "Card2" : "Bg");
-        b.SetResourceReference(Border.BorderBrushProperty, on ? "LineStrong" : "Line");
-        b.ToolTip = $"The {text} overlay over the game: {(on ? "on" : "off")}. Click to switch; right-click for its settings.";
-        return b;
-    }
-
-    FrameworkElement NavTab(string name, string art, bool on)
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        var pic = GameArt.Element(art, 16); pic.Margin = new Thickness(0, 0, 5, 0); pic.VerticalAlignment = VerticalAlignment.Center;
-        if (!on) pic.Opacity = 0.7;
-        sp.Children.Add(pic);
-        sp.Children.Add(QT(name, 12.5, FontWeights.SemiBold, on ? "Ink" : "Muted"));
-        // a page with something about to happen says so on its tab: the next watched boss, a fight under way
-        if (name == "Timers") sp.Children.Add(TabBadge("4:52", "Gold"));
-        var b = new Border { Child = sp, CornerRadius = new CornerRadius(9), Height = 32, Padding = new Thickness(4, 0, 4, 0) };
-        b.SetResourceReference(Border.BackgroundProperty, on ? "ItemSel" : "Card");
-        if (on)
+        var body = new StackPanel { Width = 300 };
+        var head = QT("Overlays over the game", 12.5, FontWeights.SemiBold, "Ink"); head.Margin = new Thickness(14, 12, 14, 2);
+        body.Children.Add(head);
+        var sub = QT("Each one is separate. Drag it to move it.", 11.5, FontWeights.Medium, "Faint"); sub.Margin = new Thickness(14, 0, 14, 8);
+        body.Children.Add(sub);
+        foreach (var (name, what, on, where) in new[]
         {
-            b.Child = null; var g = new Grid(); g.Children.Add(sp);
-            var bar = new Border { Height = 2, Width = 22, CornerRadius = new CornerRadius(1), VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 1) };
-            bar.SetResourceReference(Border.BackgroundProperty, "Gold");
-            g.Children.Add(bar);
-            b.Child = g;
+            ("Kinah", "your hour, pickups, best", true, "Look: Options › In game"),
+            ("Timers", "events and world bosses, chime 5 min before", true, "Set up on the Timers page"),
+            ("Parser", "boss fights, DPS by member", false, "Set up on the Parser page"),
+        })
+        {
+            var g = new Grid { Margin = new Thickness(14, 0, 14, 0), Height = 50 };
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var t = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            t.Children.Add(QT(name, 12.5, FontWeights.SemiBold, on ? "Ink" : "Muted"));
+            t.Children.Add(QT(what, 11, FontWeights.Medium, "Faint", trim: true));
+            t.Children.Add(QT(where, 11, FontWeights.Medium, "Link", trim: true));
+            g.Children.Add(t);
+            var sw = Switch("", on); sw.Margin = new Thickness(0); Grid.SetColumn(sw, 1); g.Children.Add(sw);
+            var rule = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(14, 0, 14, 0) }; rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
+            var host = new Grid(); host.Children.Add(rule); host.Children.Add(g);
+            body.Children.Add(host);
         }
-        return b;
+        var foot = new Border { Height = 8 };
+        body.Children.Add(foot);
+        var card = new Border { Child = body, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1) };
+        card.SetResourceReference(Border.BackgroundProperty, "Card2");
+        card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
+        return card;
     }
 
     static Border TabBadge(string text, string tone)
@@ -114,77 +111,12 @@ public partial class MainWindow
         return b;
     }
 
-    /// <summary>The rail variant: the pages down the left edge, icon over label; the page itself keeps its width.</summary>
-    void ProposalRail(string page)
-    {
-        var outer = FitHost;
-        outer.ColumnDefinitions.Clear();
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        foreach (UIElement c in outer.Children) Grid.SetColumn(c, 1);
-        var rail = new StackPanel { Margin = new Thickness(0, 56, 12, 0) };
-        foreach (var (name, art) in ProposalPages)
-        {
-            bool on = name == page;
-            var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            var pic = GameArt.Element(art, 24); pic.HorizontalAlignment = HorizontalAlignment.Center; if (!on) pic.Opacity = 0.65;
-            sp.Children.Add(pic);
-            var t = QT(name, 10.5, FontWeights.SemiBold, on ? "Ink" : "Muted"); t.HorizontalAlignment = HorizontalAlignment.Center; t.Margin = new Thickness(0, 3, 0, 0);
-            sp.Children.Add(t);
-            var g = new Grid(); g.Children.Add(sp);
-            if (name == "Timers") { var badge = TabBadge("4:52", "Gold"); badge.Margin = new Thickness(0, 3, 0, 0); badge.HorizontalAlignment = HorizontalAlignment.Center; sp.Children.Add(badge); }
-            var b = new Border { Child = g, CornerRadius = new CornerRadius(10), Padding = new Thickness(0, 8, 0, 7), Margin = new Thickness(0, 0, 0, 4) };
-            b.SetResourceReference(Border.BackgroundProperty, on ? "ItemSel" : "Bg");
-            if (on) { b.BorderThickness = new Thickness(2, 0, 0, 0); b.SetResourceReference(Border.BorderBrushProperty, "Gold"); }
-            rail.Children.Add(b);
-        }
-        outer.Children.Add(rail);
-    }
-
-    // ---------------------------------------------------------------- Farm: the live run and only what a farmer glances at
+    // ---------------------------------------------------------------- Farm: as 0.10.80 drew it
 
     void ProposalFarm()
     {
+        // Steven, 2026-11-14: "I loved everything until you added inventory and gear worn": the page stays as it was
         InvCard.Visibility = Visibility.Collapsed;
-        GoalsCard.Visibility = Visibility.Collapsed;
-        WhereSection.Visibility = Visibility.Collapsed;
-        foreach (var t in Descendants<TextBlock>(BagStripHead)) if (t.Text == "The bag") t.Text = "Loot this session";
-        var row = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        var a = GlanceChip("Q", "Next up: 1M this session", "367.7K to go · about 24 min · 6 pts", 0.63);
-        var b = GlanceChip("Flag", "Northern Tolbas Forest pays more", "1.82M an hour · 43% more than here", null);
-        Grid.SetColumn(b, 2);
-        row.Children.Add(a); row.Children.Add(b);
-        int at = LeftCol.Children.IndexOf(FeedCard);
-        LeftCol.Children.Insert(at + 1, row);
-    }
-
-    Border GlanceChip(string glyph, string title, string sub, double? bar)
-    {
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
-        g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var ic = QGlyph(glyph, 18, "Muted"); ic.VerticalAlignment = VerticalAlignment.Center;
-        g.Children.Add(ic);
-        var txt = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        txt.Children.Add(QT(title, 12.5, FontWeights.SemiBold, "Ink", trim: true));
-        txt.Children.Add(QT(sub, 11.5, FontWeights.Medium, "Faint", trim: true));
-        if (bar is double share)
-        {
-            var track = new Grid { Height = 3, Margin = new Thickness(0, 6, 0, 0) };
-            var bg = new Border { CornerRadius = new CornerRadius(2) }; bg.SetResourceReference(Border.BackgroundProperty, "Line");
-            var fill = new Border { CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, Width = 250 * share }; fill.SetResourceReference(Border.BackgroundProperty, "Gold");
-            track.Children.Add(bg); track.Children.Add(fill);
-            txt.Children.Add(track);
-        }
-        Grid.SetColumn(txt, 1); g.Children.Add(txt);
-        var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L4,4 L0,8"), StrokeThickness = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 2, 0) };
-        chev.SetResourceReference(Shape.StrokeProperty, "Faint");
-        Grid.SetColumn(chev, 2); g.Children.Add(chev);
-        return ProposalCard(g, new Thickness(12, 10, 12, 10));
     }
 
     // ---------------------------------------------------------------- a page of its own in the ledger column
@@ -276,116 +208,6 @@ public partial class MainWindow
         g.SetResourceReference(Border.BackgroundProperty, "Card");
         g.SetResourceReference(Border.BorderBrushProperty, "Line");
         return g;
-    }
-
-    // ---------------------------------------------------------------- Character: gear worn, then the bag
-
-    FrameworkElement ProposalCharacter()
-    {
-        var page = new StackPanel { Width = PW };
-        var bag = _demoBag;
-        var now = bag?.Totals();
-        var w = now != null ? BagValue.Of(now, bag!.FirstAt != null ? bag.FirstTotals : null, _items, n => PriceBook.Price(n), PriceBook.SellerKeeps) : null;
-        long kinah = bag?.Money(Packets.CurrencyKind.Kinah) ?? 0;
-        page.Children.Add(PageHead("Lysandra", "Gladiator · Siel (Elyos) · as the game sent it at 05:57, kept up since",
-            Seg("Bag", "Bag", "Storage", "Both")));
-
-        // gear: every slot in the game's order, a dashed slot where nothing is worn or the reader hasn't named it
-        var worn = bag?.WornGear() ?? new();
-        var bySlot = worn.GroupBy(g => g.Slot).ToDictionary(g => g.Key, g => g.First());
-        var slots = new (string Label, int Slot)[]
-        {
-            ("Weapon", 1), ("Guard", 2), ("Helm", 3), ("Pauldrons", 4), ("Breastplate", 5), ("Greaves", 6), ("Gloves", 7),
-            ("Boots", 8), ("Cloak", 19), ("Necklace", 10), ("Earring", 11), ("Earring", 12), ("Ring", 13), ("Ring", 14),
-        };
-        var levels = worn.Where(g => g.Level is >= 1 and <= MaxShownLevel).Select(g => g.Level).ToList();
-        var avg = levels.Count > 0 ? $"+{levels.Average():0.0} average" : "";
-        var gearBody = new StackPanel();
-        var sum = new StackPanel { Orientation = Orientation.Horizontal };
-        sum.Children.Add(QT(avg, 12.5, FontWeights.SemiBold, "Gold"));
-        var cnt = QT($" · {worn.Count} of {slots.Length} slots read", 12, FontWeights.Medium, "Faint"); sum.Children.Add(cnt);
-        gearBody.Children.Add(CardHead("Shield", "Gear worn", "", sum));
-        var grid = new UniformGrid { Columns = 7 };
-        foreach (var (label, slot) in slots)
-        {
-            var cell = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-            FrameworkElement tile;
-            string name = "";
-            if (bySlot.TryGetValue(slot, out var g))
-            {
-                var info = _items.Get(g.ItemId);
-                name = info?.Name ?? _items.NameOf(g.ItemId);
-                tile = QSlot(QItemIcon(name, g.ItemId, 50, round: false, grade: info?.Grade ?? ""), g.Level is >= 1 and <= MaxShownLevel ? $"+{g.Level}" : "");
-                ((FrameworkElement)tile).Width = 56; ((FrameworkElement)tile).Height = 56;
-            }
-            else
-            {
-                var empty = new Border { Width = 50, Height = 50, CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(1.5), Margin = new Thickness(0, 0, 6, 6) };
-                empty.BorderBrush = new DrawingBrush(new GeometryDrawing(null, new Pen((Brush)FindResource("LineStrong"), 1.5) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) }, new RectangleGeometry(new Rect(0, 0, 50, 50), 15, 15)));
-                empty.SetResourceReference(Border.BackgroundProperty, "CardQuiet");
-                tile = empty;
-            }
-            tile.HorizontalAlignment = HorizontalAlignment.Center;
-            cell.Children.Add(tile);
-            var l = QT(label, 11, FontWeights.SemiBold, name.Length > 0 ? "Muted" : "Faint"); l.HorizontalAlignment = HorizontalAlignment.Center;
-            cell.Children.Add(l);
-            if (name.Length > 0) tile.ToolTip = name;
-            grid.Children.Add(cell);
-        }
-        gearBody.Children.Add(grid);
-        page.Children.Add(ProposalCard(gearBody, margin: new Thickness(0, 0, 0, 10)));
-
-        // the bag: what it is worth, then every kind by worth
-        var bagBody = new StackPanel();
-        var total = QT(w != null ? Fk(w.Total) : "", 22, FontWeights.SemiBold, "Gold"); total.FontFamily = (FontFamily)FindResource("DisplayFont");
-        bagBody.Children.Add(CardHead("Bag", "Bag", w != null ? $"{w.Kinds} kinds" : "", total));
-        var figs = new UniformGrid { Rows = 1, Columns = 4, Margin = new Thickness(0, -2, 0, 12) };
-        figs.Children.Add(Fig(w != null ? Fk(w.Sellable) : "", "sellable after the 12% fee"));
-        figs.Children.Add(Fig(Fk(kinah), "Kinah held"));
-        figs.Children.Add(Fig(w?.Change is long c && c != 0 ? (c > 0 ? "+" : "−") + Fk(Math.Abs(c)) : "0", "since 05:57", w?.Change > 0 ? "Good" : "Ink"));
-        figs.Children.Add(Fig(w != null ? w.Unpriced.ToString() : "", "without a price yet"));
-        bagBody.Children.Add(figs);
-        var tiles = new WrapPanel();
-        if (w != null)
-            foreach (var l in w.Lines.Take(24))
-            {
-                var info = _items.Get(l.Id);
-                tiles.Children.Add(QSlot(QItemIcon(l.Name, l.Id, 42, round: false, grade: info?.Grade ?? ""), CountBadge(l.Count)));
-            }
-        bagBody.Children.Add(tiles);
-        // the five worth the most, with what each is worth
-        if (w != null)
-            foreach (var l in w.Lines.Take(5))
-            {
-                var r = new Grid { Height = 30 };
-                r.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
-                r.ColumnDefinitions.Add(new ColumnDefinition());
-                r.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-                r.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-                var ic = QItemIcon(l.Name, l.Id, 22, round: false, grade: _items.Get(l.Id)?.Grade ?? ""); ic.HorizontalAlignment = HorizontalAlignment.Left;
-                r.Children.Add(ic);
-                var nm = QT($"{l.Name} ×{l.Count:N0}", 12.5, FontWeights.SemiBold, "Ink", trim: true); Grid.SetColumn(nm, 1); r.Children.Add(nm);
-                var each = QT(l.Price is long p ? $"{Fk(p)} each" : "no price", 12, FontWeights.Medium, "Faint"); each.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(each, 2); r.Children.Add(each);
-                var val = QT(l.Price != null ? Fk(l.Value) : "–", 12.5, FontWeights.SemiBold, "Gold"); val.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(val, 3); r.Children.Add(val);
-                var rule = new Border { BorderThickness = new Thickness(0, 1, 0, 0) }; rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
-                var host = new Grid(); host.Children.Add(rule); host.Children.Add(r);
-                bagBody.Children.Add(host);
-            }
-        var foot = QT("Your character's bag only: storage and the account warehouse are left out unless you pick them above.", 11.5, FontWeights.Medium, "Faint");
-        foot.Margin = new Thickness(0, 8, 0, 0); foot.TextWrapping = TextWrapping.Wrap;
-        bagBody.Children.Add(foot);
-        page.Children.Add(ProposalCard(bagBody));
-        return page;
-    }
-
-
-    static FrameworkElement Fig(string big, string small, string tone = "Ink")
-    {
-        var sp = new StackPanel();
-        var t = QT(big, 15, FontWeights.SemiBold, tone);
-        sp.Children.Add(t);
-        sp.Children.Add(QT(small, 11.5, FontWeights.Medium, "Faint"));
-        return sp;
     }
 
     // ---------------------------------------------------------------- Timers: events and world bosses, bells, the overlay
@@ -537,51 +359,4 @@ public partial class MainWindow
 
     static TextBlock HudText(string s, double size, FontWeight w, Color c) =>
         new() { Text = s, FontSize = size, FontWeight = w, Foreground = new SolidColorBrush(c), FontFamily = HudKit.Text, TextTrimming = TextTrimming.CharacterEllipsis };
-
-    // ---------------------------------------------------------------- Overlays: the three, side by side, in Options
-
-    FrameworkElement ProposalOverlays()
-    {
-        var page = new StackPanel { Width = PW };
-        page.Children.Add(PageHead("Overlays", "Three panels over the game, each separate. Drag one to move it; right-click it for these settings.", SmallBtn("Place them")));
-        page.Children.Add(OverlayBlock("Kinah", "Your run's Kinah an hour, pickups and best, over the game.", true,
-            ("Look", Seg("Buddy", "Badge", "Buddy", "Pop")), ("Shows", QT("an hour · session · top drop · rare drops", 12, FontWeights.Medium, "Muted")), ("Click-through", Switch("", true))));
-        page.Children.Add(OverlayBlock("Timers", "Hidden until a belled boss or event is near; then it shows the countdown, with a chime.", true,
-            ("Pops up", Seg("5 min", "1", "3", "5 min", "10")), ("Chime", Switch("", true)), ("Belled", QT("Kashapa, Gartua, Lagta, Abyss (8) · edit on Timers", 12, FontWeights.Medium, "Muted"))));
-        page.Children.Add(OverlayBlock("Parser", "Boss fights: DPS by member, the boss's HP, the pull timer.", false,
-            ("Mode", Seg("Bosses only", "Bosses only", "Full run", "Every fight")), ("Shows", QT("group DPS · top 6 · boss HP", 12, FontWeights.Medium, "Muted")), ("Click-through", Switch("", false))));
-        return page;
-    }
-
-    FrameworkElement OverlayBlock(string name, string what, bool on, params (string Label, FrameworkElement Ctl)[] rows)
-    {
-        var body = new StackPanel();
-        body.Children.Add(CardHead(name switch { "Kinah" => "Coin", "Timers" => "Flag", _ => "Sword" }, $"{name} overlay", "", Switch(on ? "On" : "Off", on)));
-        var w = QT(what, 12, FontWeights.Medium, "Faint"); w.Margin = new Thickness(0, -4, 0, 8); w.TextWrapping = TextWrapping.Wrap;
-        body.Children.Add(w);
-        foreach (var (label, ctl) in rows)
-        {
-            var g = new Grid { Height = 34 };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
-            g.ColumnDefinitions.Add(new ColumnDefinition());
-            g.Children.Add(QT(label, 12.5, FontWeights.SemiBold, "Text2"));
-            ctl.HorizontalAlignment = HorizontalAlignment.Left;
-            if (ctl is StackPanel sp && sp.Margin.Left == 12) sp.Margin = new Thickness(-8, 0, 0, 0);
-            Grid.SetColumn(ctl, 1); g.Children.Add(ctl);
-            var rule = new Border { BorderThickness = new Thickness(0, 1, 0, 0) }; rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
-            var host = new Grid(); host.Children.Add(rule); host.Children.Add(g);
-            body.Children.Add(host);
-        }
-        return ProposalCard(body, new Thickness(14, 12, 14, 6), new Thickness(0, 0, 0, 10));
-    }
-
-    static IEnumerable<T> Descendants<T>(DependencyObject d) where T : DependencyObject
-    {
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
-        {
-            var c = VisualTreeHelper.GetChild(d, i);
-            if (c is T t) yield return t;
-            foreach (var x in Descendants<T>(c)) yield return x;
-        }
-    }
 }
