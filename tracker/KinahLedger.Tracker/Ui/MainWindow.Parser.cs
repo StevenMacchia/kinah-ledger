@@ -39,9 +39,6 @@ public partial class MainWindow
     DateTime _parserEndedAt = DateTime.MinValue;
     string _parserLastLiveId = "";
     const double OverlayResultSeconds = 15;
-    /// <summary>"Move overlay" is on: the separate overlay shows sample rows, never click-through, so it can be placed before any fight.</summary>
-    bool _parserPlacing;
-    (Encounter? Live, DateTime At) _parserPlaceSample;
     const int ParserHotkeyId = 3;
     const int ParserRowsAtRest = 10;
 
@@ -59,7 +56,6 @@ public partial class MainWindow
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive;
-            if (!fresh.Separate) _parserPlacing = false;
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
@@ -284,7 +280,7 @@ public partial class MainWindow
     /// </summary>
     void ParserOverlayTick()
     {
-        if (_demo && !_parserPlacing) return;
+        if (_demo) return;
         var now = DateTime.UtcNow;
         var live = ParserLive;
         // the fight that just ended: its result shows a little while
@@ -304,15 +300,8 @@ public partial class MainWindow
             return;
         }
         _hud?.ShowParser(null, now, ParserModeNow, PDetails);
-        if (_parserPlacing)
-        {
-            // placing: sample rows wherever the game is, held still and draggable until Done
-            if (_parserPlaceSample.Live == null) _parserPlaceSample = (ParserDemo.Sample(now).Live, now);
-            show = _parserPlaceSample.Live;
-            now = _parserPlaceSample.At;
-        }
         bool inFront = ParserOverlayForceForTest || (_watcher.GameRect != null && (Native.ForegroundPid() == (uint)Environment.ProcessId || GameInFront()));
-        bool want = _parserPlacing ? show != null : _parserPrefs.Overlay && show != null && inFront;
+        bool want = _parserPrefs.Overlay && show != null && inFront;
         if (!want) { _parserOverlay?.ShowWanted(false); return; }
         if (_parserOverlay == null)
         {
@@ -322,6 +311,9 @@ public partial class MainWindow
             _parserOverlay.HideAsked += () => SetParserOverlay(false);
             _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
+            _parserOverlay.SetOpacity(_hudPreview?.HudOpacity ?? _prefs.HudOpacity);
+            var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(_prefs.HudFields));
+            _parserOverlay.SetFrame(radius, pad);
             _parserOverlay.Mode = ParserModeNow;
             _parserOverlay.ShowDetails = PDetails;
             _parserOverlay.Draw(show!, now);
@@ -336,20 +328,6 @@ public partial class MainWindow
         _parserOverlay.ShowWanted(true);
     }
 
-    /// <summary>"Move overlay" on or off: on, the separate overlay shows sample rows and takes the pointer; off (Done), it goes back to its fights and its click-through.</summary>
-    internal void SetParserPlacing(bool on)
-    {
-        _parserPlacing = on && _parserPrefs.Separate;
-        _parserPlaceSample = (null, default);
-        _parserOverlay?.SetClickThrough(!_parserPlacing && _parserPrefs.ClickThrough);
-        if (!_parserPlacing) _parserOverlay?.ShowWanted(false);   // a fight under way shows it again on the next tick
-        ParserOverlayTick();
-        // where it was dropped last, else its default place over the game, else over the main screen (no game running yet)
-        if (_parserPlacing && _parserOverlay != null) { _parserOverlay.SetClickThrough(false); _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect ?? System.Windows.Forms.Screen.PrimaryScreen?.Bounds); }
-        RedrawParserPage();
-    }
-
-    internal bool ParserPlacingForTest => _parserPlacing;
 
     void FillParserPage()
     {
@@ -360,7 +338,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{_parserPlacing}:{Encounter.ActiveBasis}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear();
@@ -385,17 +363,8 @@ public partial class MainWindow
             $"The record under way over the game: the boss or the run, the clock and the group. {(_parserPrefs.Separate ? "Its own overlay (Settings › In game › Parser); right-click it for the mode." : "It opens above the Kinah overlay when a fight starts and folds away after.")}{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
         // click-through and the drag are the separate overlay's; above the Kinah line it follows the Kinah overlay's own
         if (_parserPrefs.Separate)
-        {
-            var move = new Button { Content = _parserPlacing ? "Done" : "Move overlay", Height = 26, FontSize = 12, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = Tip("Shows the overlay with sample rows: drag it where you want it over the game, then press Done. It opens there for every fight.") };
-            move.SetResourceReference(StyleProperty, "PillBtn");
-            AutomationProperties.SetName(move, _parserPlacing ? "Done moving the overlay" : "Move overlay");
-            move.Click += (_, _) => SetParserPlacing(!_parserPlacing);
-            right.Children.Insert(0, move);
-        }
-        if (_parserPrefs.Separate)
             right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
-                "On: clicks go through the overlay to the game. Off: drag the overlay where you want it; it stays there.", "Overlay click-through"), 14, 0, 0, 0));
+                "Off (the default): drag the overlay anywhere to move it; it stays there. On: clicks go through it to the game, and a handle on its top edge moves it.", "Overlay click-through"), 14, 0, 0, 0));
         Grid.SetColumn(right, 1);
         g.Children.Add(right);
         box.Children.Add(g);
@@ -1265,5 +1234,5 @@ public partial class MainWindow
     internal List<Encounter> ParserPastForTest => ParserPast();
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;
     internal void SetParserOverlayForTest(bool on) => SetParserOverlay(on);
-    internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; if (!on) _parserPlacing = false; DrawOverlayPills(); RedrawParserPage(); }
+    internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; DrawOverlayPills(); RedrawParserPage(); }
 }

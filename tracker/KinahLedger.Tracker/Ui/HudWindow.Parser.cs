@@ -19,6 +19,9 @@ public sealed partial class HudWindow
     ParserPanel? _parserPanel;
     bool _parserFolding;
 
+    double _parserOpacity = -1;
+    void ParserOpacity(double opacity) { _parserOpacity = opacity; _parserPanel?.SetOpacity(opacity); }
+
     /// <summary>The overlay's own content, under the Parser's slot (what Content was before the section came).</summary>
     internal UIElement? OwnContent { get; private set; }
 
@@ -68,7 +71,13 @@ public sealed partial class HudWindow
             _parserSlot.BeginAnimation(OpacityProperty, fade);
             return;
         }
-        _parserPanel ??= new ParserPanel();
+        if (_parserPanel == null)
+        {
+            // the Kinah overlay's own frame: its corner, its padding, its background at its opacity
+            _parserPanel = new ParserPanel();
+            _parserPanel.SetFrame(_frame.CornerRadius.TopLeft, _frame.Padding);
+            if (_parserOpacity >= 0) _parserPanel.SetOpacity(_parserOpacity);
+        }
         if (_parserSlot.Child != _parserPanel) _parserSlot.Child = _parserPanel;
         _parserPanel.Mode = mode; _parserPanel.ShowDetails = details;
         _parserPanel.Draw(e, now);

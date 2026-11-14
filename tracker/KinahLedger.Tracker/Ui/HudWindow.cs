@@ -174,7 +174,7 @@ public sealed partial class HudWindow : Window
         var badge = new Grid();
         badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         badge.Children.Add(_ringHost); Grid.SetColumn(lines, 1); badge.Children.Add(lines);
-        var pad = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(14, 9, 18, 9);
+        var (radius, pad) = FrameShape(_fields);
         // the hot streak bar along the bottom edge, in the frame's padding under the lines: it takes no room (Ui/HudStreak.cs)
         _streak.Root.Margin = new Thickness(0, 0, 0, StreakEdge - pad.Bottom);
         Grid.SetColumnSpan(_streak.Root, 2); badge.Children.Add(_streak.Root);
@@ -182,7 +182,7 @@ public sealed partial class HudWindow : Window
         {
             Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0B, 0x0C, 0x10)),
             BorderBrush = FrameBrush,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 10 : 12),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(radius),
             Padding = pad,
             Child = _look == null ? badge : null
         };
@@ -210,6 +210,10 @@ public sealed partial class HudWindow : Window
         SizeChanged += (_, _) => PlacePending();
         AddParserSection();   // the Parser's section above the Kinah line (Ui/HudWindow.Parser.cs)
     }
+
+    /// <summary>The frame's corner and padding for these figures: the one-line feed (the default) is the tighter one. The Parser's panel takes the same (Ui/ParserOverlay.cs).</summary>
+    public static (double Radius, Thickness Padding) FrameShape(IReadOnlyList<string> fields) =>
+        fields.Count == 1 && fields[0] == "feed" ? (10, new Thickness(10, 6, 12, 6)) : (12, new Thickness(14, 9, 18, 9));
 
     /// <summary>The player dropped the panel somewhere (unlocked): the window remembers Left and Top.</summary>
     public event Action? Dragged;
@@ -339,6 +343,7 @@ public sealed partial class HudWindow : Window
         var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
         _frame.Background = Frozen(Color.FromArgb(a, 0x0B, 0x0C, 0x10));
         _look?.SetOpacity(opacity);
+        ParserOpacity(opacity);   // the Parser's section above the Kinah line, the same surface (Ui/HudWindow.Parser.cs)
     }
 
     /// <summary>Shows these figures, in panel order; the next Update fills them.</summary>

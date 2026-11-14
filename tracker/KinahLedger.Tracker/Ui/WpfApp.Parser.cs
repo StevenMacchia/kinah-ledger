@@ -103,6 +103,28 @@ public static partial class WpfApp
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x4A, 0x52, 0x5C));
             h.Close();
         }
+        // side by side (Steven, 2026-11-14: the separate overlay looks exactly like the Kinah overlay): the Kinah overlay and the
+        // separate Parser overlay on one game-like grey, each drawn by its own window and lifted into one picture
+        {
+            var h = new HudWindow(null, HudLooks.Strip, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Update(kinah); h.Show(); DoEvents();
+            var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = live!.ModeKind };
+            o.Draw(live, now); o.Show(); DoEvents();
+            var left = (UIElement)h.Content; h.Content = null;
+            var right = (UIElement)o.Content; o.Content = null;
+            var row = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            var pic = new System.Windows.Controls.Border { Padding = new Thickness(16), Child = row };
+            var l = new System.Windows.Controls.Border { Child = left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 24, 0) };
+            System.Windows.Documents.TextElement.SetFontFamily(l, HudKit.Text); System.Windows.Documents.TextElement.SetFontWeight(l, FontWeights.Medium);
+            row.Children.Add(l);
+            row.Children.Add(new System.Windows.Controls.Border { Child = right, VerticalAlignment = VerticalAlignment.Bottom });
+            var host = new Window { WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, ShowInTaskbar = false, ShowActivated = false,
+                SizeToContent = SizeToContent.WidthAndHeight, Left = -12000, Top = -12000, Content = pic, FontFamily = HudKit.Text, FontWeight = FontWeights.Medium };
+            TextOptions.SetTextFormattingMode(host, TextFormattingMode.Display);
+            host.Show(); DoEvents();
+            Save(pic, Path.Combine(dir, "ui-parser-side-by-side.png"), 0, Color.FromRgb(0x4A, 0x52, 0x5C));
+            host.Close(); h.Close(); o.Close();
+        }
     }
 
     /// <summary>options-test's Parser checks (Ui/MainWindow.Parser.cs): the tab, the live fight, the list, a fight opened, the page staying put, the overlay.</summary>
@@ -184,19 +206,35 @@ public static partial class WpfApp
         // the header: the instance with the game's mode for it
         w.ShowParserDemo("live"); DoEvents();
         check(ParserTexts(w.ParserPage).Texts.Contains("Ferocious Horn Den · Conquest"), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
-        // separated, "Move overlay" shows the overlay with sample rows to place it before any fight; Done puts it away
+        // separated (Steven, 2026-11-14: overlays move by a plain drag, no Move button or placement mode; the Kinah overlay's look exactly)
         {
             w.SetParserSeparateForTest(true); DoEvents();
-            var move = FindButton(w.ParserPage, "Move overlay");
             check(w.OverlaysForTest().Any(o => o.Name == "Parser"), "Parser: separated, it is in the header's Overlays menu (registered with the Kinah and Timers overlays)");
-            w.SetParserPlacing(true); DoEvents();
-            var ov = w.ParserOverlayForTest;
-            bool shown = ov?.IsVisible == true && w.ParserPlacingForTest && ov.Content is FrameworkElement oc && ParserTexts(oc).Texts.Contains("Ferocious Horn Nuakum");
-            var done = FindButton(w.ParserPage, "Done");
-            w.SetParserPlacing(false); DoEvents();
-            check(move != null && shown && done != null && ov?.IsVisible != true && !w.ParserPlacingForTest,
-                $"Parser: separated, Move overlay shows it with sample rows to drag into place, and Done puts it away ({(move != null ? "button" : "no button")}, {(shown ? "shown" : "not shown")})");
+            check(FindButton(w.ParserPage, "Move overlay") == null, "Parser: separated, no Move button or placement mode: the overlay moves by a plain drag");
             w.SetParserSeparateForTest(false); DoEvents();
+            // the same frame as the Kinah overlay's: surface, line, radius, padding, face
+            var hud = new HudWindow(null, HudLooks.Strip, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            hud.Show(); DoEvents();
+            var kinahFrame = (hud.OwnContent as System.Windows.Controls.Grid)?.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault();
+            var po = new ParserOverlay(still: true) { Left = -12000, Top = -12000 };
+            var (_, pull1) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
+            po.Draw(pull1!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); po.Show(); DoEvents();
+            var panel = FindPanel(po);
+            string Look(System.Windows.Controls.Border? b) => b == null ? "none" : $"{(b.Background as SolidColorBrush)?.Color} {(b.BorderBrush as SolidColorBrush)?.Color} {b.BorderThickness} {b.CornerRadius} {b.Padding} {System.Windows.Documents.TextElement.GetFontFamily(b)}";
+            check(kinahFrame != null && panel != null && Look(kinahFrame) == Look(panel),
+                $"Parser: the separate overlay has the Kinah overlay's frame exactly (Kinah {Look(kinahFrame)}; Parser {Look(panel)})");
+            hud.SetOpacity(0.5); po.SetOpacity(0.5);
+            check(Look(kinahFrame) == Look(panel), "...and the same background at the Kinah overlay's opacity setting");
+            // click-through (off by default): a grab handle on the top edge shows with the pointer over it, and moves it
+            po.SetClickThrough(true); po.ShowGrabForTest(); DoEvents();
+            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move"), "Parser: with click-through on, a grab handle on its top edge moves the overlay");
+            po.Close(); hud.Close();
+        }
+        static System.Windows.Controls.Border? FindPanel(DependencyObject root)
+        {
+            if (root is ParserPanel pp) return pp;
+            foreach (var ch in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>()) if (FindPanel(ch) is { } f) return f;
+            return null;
         }
         static System.Windows.Controls.Button? FindButton(DependencyObject root, string text)
         {
