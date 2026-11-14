@@ -27,6 +27,12 @@ public sealed partial class SessionEngine
     /// <summary>Abyss Points picked up in the Abyss's zones (<see cref="Ocr.ZoneLocator.IsAbyss"/>), shown like Kinah; elsewhere they stay in <see cref="Currencies"/> only.</summary>
     public long AbyssPoints { get; private set; }
     static readonly System.Text.RegularExpressions.Regex AbyssPointsName = new(@"^abyss\s*po[i1l]nts?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    /// <summary>Rank Points earned in the Abyss's zones (each kill there pays some), and those lost there (a death costs some).</summary>
+    public long RankPoints { get; private set; }
+    public long RankPointsLost { get; private set; }
+    static readonly System.Text.RegularExpressions.Regex RankPointsName = new(@"^ran[kc]\s*po[i1l]nts?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    /// <summary>True for a currency line naming Rank Points.</summary>
+    public static bool IsRankPoints(string name) => RankPointsName.IsMatch(name.Trim());
     /// <summary>True for a currency line naming Abyss Points, as the recognizer may read it ("Abyss Point", "Abyss Poi1ts").</summary>
     public static bool IsAbyssPoints(string name) => AbyssPointsName.IsMatch(name.Trim());
     /// <summary>Quest, title and box rewards seen and deliberately left out of the farming numbers.</summary>
@@ -38,10 +44,18 @@ public sealed partial class SessionEngine
     /// <summary>Gathering: node attempts, one per primary-resource line (ore, log, Odyle, herb, food) plus failed attempts.</summary>
     public int Nodes { get; private set; }
     public int NodesFailed { get; private set; }
+    /// <summary>Gathering attempts whose upgrade roll won, and the nodes gathered (an attempt is one of a node's three tries): from the game's messages only.</summary>
+    public int Upgrades { get; private set; }
+    public int NodeVisits { get; private set; }
     /// <summary>Gathering: lines with x2 or more, the Plentiful proc.</summary>
     public int Plentiful { get; private set; }
     /// <summary>Per gathering skill: nodes, failed attempts and Plentiful procs. Rates are computed inside a skill, never across skills.</summary>
-    public sealed class SkillStats { public int Nodes, Failed, Plentiful, Items, Bonus; }
+    /// <summary>
+    /// A gathering skill's figures. Nodes: its attempts (the name is the old one, kept for today.json and the site). Upgrades:
+    /// attempts whose upgrade roll won, and Visits: the nodes those attempts were on, both known only from the game's
+    /// messages (0 when the screen counted).
+    /// </summary>
+    public sealed class SkillStats { public int Nodes, Failed, Plentiful, Items, Bonus, Upgrades, Visits; }
     public Dictionary<GatherFamily, SkillStats> Skills { get; } = new();
     SkillStats Skill(GatherFamily f) { if (!Skills.TryGetValue(f, out var s)) Skills[f] = s = new SkillStats(); return s; }
     /// <summary>Gathering: gemstones and higher-tier materials, the finds worth tracking per node.</summary>
@@ -175,6 +189,8 @@ public sealed partial class SessionEngine
         public double Seconds; public long Kinah, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
         /// <summary>The player's kills and deaths here, as the game's own messages tell them.</summary>
         public int PlayerKills, MonsterKills, Deaths;
+        /// <summary>Rank Points earned and lost here (the Abyss only).</summary>
+        public long RankPoints, RankLost;
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
@@ -657,6 +673,9 @@ public sealed partial class SessionEngine
                     RewardsSkipped++;
                     _rewardItems[rr.Name] = _rewardItems.GetValueOrDefault(rr.Name) + rr.Count;
                     break;
+                case RankPointsLost rl when rl.Amount > 0 && Ocr.ZoneLocator.IsAbyss(_zone):
+                    RankPointsLost += rl.Amount; Z().RankLost += rl.Amount;
+                    break;
                 case FightCounted fc:
                 {
                     var zf = Z();
@@ -687,6 +706,8 @@ public sealed partial class SessionEngine
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
                     if (IsAbyssPoints(c.Name) && Ocr.ZoneLocator.IsAbyss(_zone))
                     { AbyssPoints += c.Amount; Z().AbyssPoints += c.Amount; }
+                    if (IsRankPoints(c.Name) && c.Amount > 0 && Ocr.ZoneLocator.IsAbyss(_zone))
+                    { RankPoints += c.Amount; Z().RankPoints += c.Amount; }
                     break;
                 case EnemySoul es:
                     // a "Soul: <enemy>" row in the loot list beside the character: every enemy drops its soul, so a new row is a kill of it
@@ -767,7 +788,7 @@ public sealed partial class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PlayerKills = v.PlayerKills, MonsterKills = v.MonsterKills, Deaths = v.Deaths, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PlayerKills = v.PlayerKills, MonsterKills = v.MonsterKills, Deaths = v.Deaths, RankPoints = v.RankPoints, RankLost = v.RankLost, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }
@@ -783,11 +804,15 @@ public sealed partial class SessionEngine
     public bool AttemptsFromTally { get; set; }
 
     /// <summary>Attempts per node ("Orichalcum Ore", "Kukuru", "unknown node"): the node's skill, how many worked and failed.</summary>
-    public sealed class NodeStats { public GatherFamily Family; public int Ok, Failed; public int Attempts => Ok + Failed; }
+    public sealed class NodeStats { public GatherFamily Family; public int Ok, Failed, Upgrades, Visits; public int Attempts => Ok + Failed; }
     public Dictionary<string, NodeStats> GatherNodes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>One gathering attempt, under its node's skill: a race the bar finished, a gather whose race went between passes, a failure line.</summary>
-    public void GatherAttempt(DateTime at, GatherFamily family, string node, bool ok)
+    /// <summary>
+    /// One gathering attempt, under its node's skill: a race the bar finished, a gather whose race went between passes, a
+    /// failure line, or the game's own message (which also says whether the upgrade roll won, <paramref name="upgrade"/>, and
+    /// whether this is the first attempt on a node, <paramref name="newNode"/>).
+    /// </summary>
+    public void GatherAttempt(DateTime at, GatherFamily family, string node, bool ok, bool upgrade = false, bool newNode = false)
     {
         lock (_lock)
         {
@@ -796,8 +821,12 @@ public sealed partial class SessionEngine
             Nodes++; Z().Nodes++; MarkGather(at);
             var sk = Skill(family); sk.Nodes++;
             if (!ok) { NodesFailed++; sk.Failed++; }
+            if (upgrade) { Upgrades++; sk.Upgrades++; }
+            if (newNode) { NodeVisits++; sk.Visits++; }
             if (!GatherNodes.TryGetValue(node, out var ns)) GatherNodes[node] = ns = new NodeStats { Family = family };
             if (ok) ns.Ok++; else ns.Failed++;
+            if (upgrade) ns.Upgrades++;
+            if (newNode) ns.Visits++;
         }
     }
 
@@ -895,13 +924,13 @@ public sealed partial class SessionEngine
     /// <summary>A copy of the per-node attempts, safe to read from the UI thread.</summary>
     public Dictionary<string, NodeStats> NodeSnapshot()
     {
-        lock (_lock) return GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed }, StringComparer.OrdinalIgnoreCase);
+        lock (_lock) return GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed, Upgrades = kv.Value.Upgrades, Visits = kv.Value.Visits }, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>A copy of the per-skill counters, safe to read from the UI thread.</summary>
     public Dictionary<GatherFamily, SkillStats> SkillSnapshot()
     {
-        lock (_lock) return Skills.ToDictionary(kv => kv.Key, kv => new SkillStats { Nodes = kv.Value.Nodes, Failed = kv.Value.Failed, Plentiful = kv.Value.Plentiful, Items = kv.Value.Items, Bonus = kv.Value.Bonus });
+        lock (_lock) return Skills.ToDictionary(kv => kv.Key, kv => new SkillStats { Nodes = kv.Value.Nodes, Failed = kv.Value.Failed, Plentiful = kv.Value.Plentiful, Items = kv.Value.Items, Bonus = kv.Value.Bonus, Upgrades = kv.Value.Upgrades, Visits = kv.Value.Visits });
     }
 
     public string ItemName(long id) => _items.NameOf(id);

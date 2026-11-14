@@ -8,7 +8,7 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// World boss timers (0.10.75): the field bosses the game's world map lists, as a card in a window of its own
+/// World boss timers (0.10.81): the field bosses the game's world map lists, as a card in a window of its own
 /// (Ui/BossWindow.cs), opened from the Events page's ⋯ menu. Each row is a boss and its place, with the time to its spawn
 /// counting down, "Up now" while the map is open and says it is, or "Due" once its time has passed with no newer reading.
 /// The timers come from the game's traffic (Session/BossTimers.cs), so they need packet reading on; they are as fresh as
@@ -169,7 +169,7 @@ public partial class MainWindow
         B("Neikel of the East", "Eastern Cantas Valley", 23.3);
         B("Centurion Demiros", "Destroyed Temple Site", 23.47);
         B("Scholar Aulla", "Aullaeu Village", 23.5);
-        B("A Verteron boss", "", 26.1);
+        B("Rotten Kutar", "Ellun River Marsh", 26.1);
         B("Kernon of the West", "Western Cantas Valley", 28.7);
         B("Black Tentacle Lawa", "Altamia Canyon", 32.2);
         B("Bodyguard Teegant", "Destroyed Abyss Gate", 33.6);

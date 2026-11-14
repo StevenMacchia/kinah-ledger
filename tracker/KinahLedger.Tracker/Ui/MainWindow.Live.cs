@@ -364,6 +364,7 @@ public partial class MainWindow
             : ap ? (abyss > 0 ? $"{Amounts.Full(abyss / h)} Abyss Points an hour: {abyss:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it." : "No Abyss Points picked up yet.")
             : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
         FillHeroTicket(ap, total, h, priced, loot, _rateWarming && total > 0);
+        FillRankTicket(ap, e.RankPoints, e.RankPointsLost, h, _rateWarming);
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
         // a clear that can still be undone draws no line and keeps the real one's samples for Undo
@@ -698,8 +699,13 @@ public partial class MainWindow
         catch (Exception ex) { CrashLog.Write("gather limit", ex); }
     }
 
+    /// <summary>For a layout render: the chip to open (KL_SHOT_EXTRA: "Gather", "Pet", "Mob" or a skill's chip, "skill:Mining"), taken once.</summary>
+    string? _shotExtra = Environment.GetEnvironmentVariable("KL_SHOT_EXTRA");
+
     void FillExtras(List<DropRow> gathered, List<SkillBox> skills, List<DropRow> pets, List<DropRow> mobs, long kinah)
     {
+        if (_shotExtra is { Length: > 0 } want && skills.Select(x => "skill:" + x.Name).Concat(new[] { "Gather", "Pet", "Mob" }).FirstOrDefault(k => k.StartsWith(want, StringComparison.OrdinalIgnoreCase)) is { } hit)
+        { _extraOpen = hit; _shotExtra = null; }
         var keys = new List<string>();
         var words = new System.Text.StringBuilder(_extraOpen).Append('|').Append(_lastMobKinah).Append('|');
         bool build = false;   // set once the chips' words are known to differ from the last draw
@@ -769,8 +775,16 @@ public partial class MainWindow
                 var sk = skills.First(x => "skill:" + x.Name == s);
                 int ok = sk.Attempts - sk.Failed;
                 Heads("Qty", "Per try", "Value");
-                InPlaceLead.Text = $"{sk.Attempts:N0} tr{(sk.Attempts == 1 ? "y" : "ies")}, {ok:N0} worked · {Whole(sk.PerHour)} an hour" + (ok > 0 && sk.Plentiful > 0 ? $" · {Math.Round(100.0 * sk.Plentiful / ok)}% plentiful" : "");
+                InPlaceLead.Text = SkillLead(sk);
                 InPlaceLead.Visibility = Visibility.Visible;
+                // a line per kind of node when there is more than one, or when the game's messages said the nodes and upgrades
+                foreach (var k in sk.Kinds ?? new())
+                {
+                    if ((sk.Kinds!.Count < 2 && sk.Nodes == 0) || k.Attempts == 0) break;
+                    var line = new TextBlock { FontSize = 12, Margin = new Thickness(0, 0, 0, 3), TextWrapping = TextWrapping.Wrap, Text = NodeKindText(k) };
+                    line.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+                    SkillLines.Children.Add(line);
+                }
                 gatherRows = Top(gathered.Where(g => SkillOf(g.Name) == sk.Name).Select(r => r with { Sub = "" }).ToList());
                 break;
             }
@@ -795,6 +809,36 @@ public partial class MainWindow
     }
 
     string SkillOf(string item) => GatheringCatalog.Find(item) is { } g ? GatherSkills.Label(g.Skill) : "";
+
+    /// <summary>
+    /// A skill's lead line: its tries (and the nodes they were on, from the game's messages), how they ended (the upgrade rolls
+    /// won and the fails, from the game's messages; else worked and plentiful as the screen read them), the tries an hour and
+    /// the worth an hour.
+    /// </summary>
+    static string SkillLead(SkillBox sk)
+    {
+        int ok = sk.Attempts - sk.Failed;
+        string tries = $"{sk.Attempts:N0} tr{(sk.Attempts == 1 ? "y" : "ies")}";
+        string worth = sk.ValuePerHour > 0 ? $" · {Amounts.Short((long)Math.Round(sk.ValuePerHour))} an hour" : "";
+        if (sk.Nodes > 0)
+        {
+            var ends = new List<string> { $"{ok - sk.Upgrades:N0} worked" };
+            if (sk.Upgrades > 0) ends.Add($"{sk.Upgrades:N0} upgrade{(sk.Upgrades == 1 ? "" : "s")}");
+            if (sk.Failed > 0) ends.Add($"{sk.Failed:N0} failed");
+            return $"{tries} on {sk.Nodes:N0} node{(sk.Nodes == 1 ? "" : "s")} · {string.Join(", ", ends)} · {Whole(sk.PerHour)} tries an hour{worth}";
+        }
+        return $"{tries}, {ok:N0} worked · {Whole(sk.PerHour)} an hour" + (ok > 0 && sk.Plentiful > 0 ? $" · {Math.Round(100.0 * sk.Plentiful / ok)}% plentiful" : "") + worth;
+    }
+
+    /// <summary>One kind of node's line under its skill ("Orichalcum Ore nodes · 12 tries on 4 · 3 upgrades · 1 failed · 71 an hour").</summary>
+    static string NodeKindText(NodeKindLine k)
+    {
+        var parts = new List<string> { k.Nodes > 0 ? $"{k.Node} · {k.Attempts:N0} tr{(k.Attempts == 1 ? "y" : "ies")} on {k.Nodes:N0} node{(k.Nodes == 1 ? "" : "s")}" : $"{k.Node} · {k.Attempts:N0} tr{(k.Attempts == 1 ? "y" : "ies")}" };
+        if (k.Upgrades > 0) parts.Add($"{k.Upgrades:N0} upgrade{(k.Upgrades == 1 ? "" : "s")}");
+        if (k.Failed > 0) parts.Add($"{k.Failed:N0} failed");
+        parts.Add($"{Whole(k.PerHour)} an hour");
+        return string.Join(" · ", parts);
+    }
 
     /// <summary>A rate as a whole number ("58", "10"; under one, "under 1").</summary>
     static string Whole(double v) => v <= 0 ? "0" : v < 0.5 ? "under 1" : Math.Round(v).ToString("N0");

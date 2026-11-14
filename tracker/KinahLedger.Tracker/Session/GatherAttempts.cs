@@ -35,6 +35,8 @@ public sealed partial class TrackerSession
         public bool Race;
         /// <summary>Its result has come: a later result is another gather's.</summary>
         public bool Claimed;
+        /// <summary>Set aside while the game's messages count gathering (0.10.80): the farming counts never got it, unless the agreement check hands it back.</summary>
+        public bool Held;
     }
     readonly List<Attempt> _attempts = new();
     /// <summary>Chat results waiting a moment for the race they belong to (the chat can show a line before the bar's race is read).</summary>
@@ -74,6 +76,14 @@ public sealed partial class TrackerSession
         Named(a.Family, a.Node, a.By, a.At);
         // inside an open run its gathers are the run's loot (TrackerSession.Count), so its attempts aren't farming's either
         if (GatherInRun) CrashLog.NoteBurst($"gather attempt at {a.At.ToLocalTime():HH:mm:ss}: inside the run, not farming's gathering");
+        // the game's messages count gathering: the screen's attempt waits for the agreement check, which hands it back if
+        // the traffic never showed it (TrackerSession.DrainGathers)
+        else if (Packets is { } p && p.CountingGathers(a.At))
+        {
+            a.Held = true;
+            p.ScreenSawGather(a.At, a.Ok, a);
+            why += "; counted from the game's messages instead";
+        }
         else foreach (var e in FarmEngines()) { e.AttemptsFromTally = true; e.GatherAttempt(a.At, a.Family, a.Node, a.Ok); }
         CrashLog.Note($"gather attempt at {a.At.ToLocalTime():HH:mm:ss.f}: {a.Node} ({GatherSkills.Label(a.Family)}), {(a.Ok ? "success" : "failed")}, {why}; named by {a.By switch { "panel" => "the gathering panel", "result" => "its result", "target" => "the target bar", "recent" => "the last node named", _ => "nothing: no node read" }}");
     }
@@ -144,7 +154,7 @@ public sealed partial class TrackerSession
             if (race != null)
             {
                 // a gemstone rides along with ore: it names only a race nothing else named
-                if (!race.Claimed && race.By is not ("panel" or "result") && (node.Name != GatheringCatalog.GemNode || race.By == "unknown") && !string.Equals(race.Node, node.Name, StringComparison.OrdinalIgnoreCase))
+                if (!race.Claimed && !race.Held && race.By is not ("panel" or "result") && (node.Name != GatheringCatalog.GemNode || race.By == "unknown") && !string.Equals(race.Node, node.Name, StringComparison.OrdinalIgnoreCase))
                 {
                     foreach (var e in FarmEngines()) e.RefileAttempt(race.Family, race.Node, node.Family, node.Name, true);
                     CrashLog.Note($"gather attempt of {race.At.ToLocalTime():HH:mm:ss} named {node.Name} by its result (was {race.Node}, named by {race.By})");

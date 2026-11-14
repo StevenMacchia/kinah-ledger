@@ -21,6 +21,8 @@ public sealed record MobKilled(DateTime Time, long MobId) : GameEvent(Time);
 /// (<paramref name="Player"/>) or of a monster, or the player's death (<paramref name="Death"/>; Player then means a
 /// player killed them). <paramref name="Name"/> is the other player's, when the game named one.
 /// </summary>
+/// <summary>Rank Points the player lost (a death in the Abyss costs some), as the game's own messages tell it.</summary>
+public sealed record RankPointsLost(DateTime Time, long Amount) : GameEvent(Time);
 public sealed record FightCounted(DateTime Time, bool Player, bool Death, string Name) : GameEvent(Time);
 /// <summary>Points-type pickups (Soul Points, Abyss Points). Guaranteed per kill, so they mark kills and never count as drops.</summary>
 /// <param name="Enemy">For Soul Points: the kind of enemy the line names, as read ("Obtained 1 Drakan Probe Soul Points."). One line per kill, so it says which enemy died.</param>

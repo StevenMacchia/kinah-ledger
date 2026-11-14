@@ -807,8 +807,15 @@ public partial class MainWindow : Window
     /// <param name="Gross">What the priced tradeable items sell for before the Market's fee and tax.</param>
     sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0, int Unsure = 0, int DropsUnsure = 0);
 
-    /// <summary>A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its items are worth.</summary>
-    sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value);
+    /// <summary>
+    /// A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its
+    /// items are worth; from the game's messages also the nodes they were on and the upgrade rolls won (0 when the screen
+    /// counted), the worth an hour, and a line per kind of node.
+    /// </summary>
+    sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value, int Nodes = 0, int Upgrades = 0, double ValuePerHour = 0, List<NodeKindLine>? Kinds = null);
+
+    /// <summary>One kind of node under a skill (an Orichalcum Ore node): its attempts, the nodes, upgrades won, fails and the attempts an hour.</summary>
+    sealed record NodeKindLine(string Node, int Attempts, int Nodes, int Upgrades, int Failed, double PerHour);
 
     /// <summary>A crafting material (the item list's "Craft Resource" or "Crafting Material"): listed under its own sub-line in the drops.</summary>
     static bool IsMaterial(string category) => category.Contains("Craft", StringComparison.OrdinalIgnoreCase) || category.Contains("Material", StringComparison.OrdinalIgnoreCase);
@@ -905,6 +912,7 @@ public partial class MainWindow : Window
             petRows.Add(new DropRow(name, n.ToString("N0"), "", Whole(n / hours), Initial: InitialOf(name), Sub: "Soul Crystal"));
         var gathered = new List<DropRow>(); var skills = new List<SkillBox>();
         var stats = e.SkillSnapshot();
+        var nodeStats = e.NodeSnapshot();
         foreach (var skill in GatherSkills.Order)
         {
             if (!bySkill.TryGetValue(skill, out var items) && !stats.ContainsKey(skill)) continue;
@@ -913,7 +921,10 @@ public partial class MainWindow : Window
             // the skill, its attempts and the hour's pace; failed and plentiful gathers on hover
             // the skill gets its own box (attempts, failed, plentiful, the pace); its items list under Gathered with the rest
             // the skill's worth after the Market's cut, like the rows under it
-            skills.Add(new SkillBox(GatherSkills.Label(skill), st.Nodes, st.Failed, ok > 0 ? st.Plentiful : 0, st.Nodes / hours, (items ?? new()).Sum(x => keptN.GetValueOrDefault(x.name))));
+            long skillValue = (items ?? new()).Sum(x => keptN.GetValueOrDefault(x.name));
+            var kinds = nodeStats.Where(kv => kv.Value.Family == skill && kv.Value.Attempts > 0).OrderByDescending(kv => kv.Value.Attempts)
+                .Select(kv => new NodeKindLine(kv.Key, kv.Value.Attempts, kv.Value.Visits, kv.Value.Upgrades, kv.Value.Failed, kv.Value.Attempts / hours)).ToList();
+            skills.Add(new SkillBox(GatherSkills.Label(skill), st.Nodes, st.Failed, ok > 0 ? st.Plentiful : 0, st.Nodes / hours, skillValue, st.Visits, st.Upgrades, skillValue / hours, kinds));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
             {
                 bool rep = ReportedDrops.Has(name);
@@ -2080,6 +2091,23 @@ public partial class MainWindow : Window
                 Drop("Orichalcum Ore", 38); Drop("Sapphire Gemstone", 4); Drop("Odyle", 12);
                 for (int i = 0; i < 5; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
                 break;
+            case Mode.Gather when Environment.GetEnvironmentVariable("KL_DEMO_GATHER") == "packets":
+            {
+                // a layout render of gathering counted from the game's messages (0.10.80): every attempt with its node, upgrade
+                // rolls and fails, the items as the inventory said them
+                e.CreditZone("Ellun River Midstream", 42 * 60 + 17);
+                e.AttemptsFromTally = true;
+                Drop("Orichalcum Ore", 61); Drop("Fine Orichalcum Ore", 9); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 5);
+                Drop("Odyle", 33); Drop("Fine Odyle", 3); Drop("Kukuru", 8);
+                void Node(GatherFamily f, string node, int tries, int up, int fail)
+                {
+                    for (int i = 0; i < tries; i++) e.GatherAttempt(t, f, node, i >= tries - fail, up > 0 && i < up, i % 3 == 0);
+                }
+                Node(GatherFamily.Ore, "Orichalcum Ore", 75, 11, 3);
+                Node(GatherFamily.Odyle, "Odyle", 36, 3, 0);
+                Node(GatherFamily.Food, "Kukuru", 9, 0, 1);
+                break;
+            }
             case Mode.Gather:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
                 Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
@@ -2098,6 +2126,9 @@ public partial class MainWindow : Window
                 // the game's messages tell the kills apart (0.10.72): 9 of the 118 were players; two deaths, one to a player
                 for (int i = 0; i < 118; i++) e.Apply(new FightCounted(t, i < 9, false, ""));
                 e.Apply(new FightCounted(t, true, true, "Nana")); e.Apply(new FightCounted(t, false, true, ""));
+                // Rank Points (0.10.76): 13 to 18 a monster, 46 a player, 32 lost at each death
+                for (int i = 0; i < 118; i++) e.Apply(new CurrencyGained(t, "Rank Points", i < 9 ? 46 : 13 + i % 6));
+                e.Apply(new RankPointsLost(t, 32)); e.Apply(new RankPointsLost(t, 32));
                 break;
             default:
                 // two zones (0.10.70, one screen): the first half hour next door, then here, so each figure has its "here"
