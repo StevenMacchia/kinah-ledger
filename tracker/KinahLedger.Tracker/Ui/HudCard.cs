@@ -172,7 +172,7 @@ public sealed partial class HudCard : IHudLook
             // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
             if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
             // your DPS while farming in the open world: small, on the session's line, never more (HudWindow.SetFarmDps)
-            if (V("farmDps").Length > 0) { if (_total.Inlines.Count > 0) _total.Inlines.Add(R("  ·  ", 11.5, Faint)); _total.Inlines.Add(R(V("farmDps"), 12, Ink, weight: FontWeights.SemiBold)); _total.Inlines.Add(R(" DPS", 11, Muted, weight: FontWeights.SemiBold)); }
+            if (V("farmDps").Length > 0) { if (_total.Inlines.Count > 0) _total.Inlines.Add(R("  ·  ", 11.5, Faint)); var fr = R(V("farmDps"), 12, Ink, weight: FontWeights.SemiBold); System.Windows.Documents.Typography.SetNumeralAlignment(fr, FontNumeralAlignment.Tabular); _total.Inlines.Add(fr); _total.Inlines.Add(R(" DPS", 11, Muted, weight: FontWeights.SemiBold)); }
             if (rose && Moves) EdgeGlow();
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten

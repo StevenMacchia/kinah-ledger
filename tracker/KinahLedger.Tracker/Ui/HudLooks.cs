@@ -20,20 +20,20 @@ public static class HudLooks
 
     public static readonly Look[] All =
     {
-        // the design pass's (2026-11-14, Ui/HudStackLooks.cs) first: each draws the timers due and the fight itself; Auto, the default,
-        // mixes the two favourites
+        // the design pass's (2026-11-14, Ui/HudStackLooks.cs) first: each draws the timers due and the fight itself; Auto mixes the two favourites
         new(Auto, "Auto", "The pill while you farm; in a boss fight the group's meter opens above it"),
         new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
         new(Meter, "Meter", "A raid meter: the boss and its HP up top, the group in class colours, your Kinah at the foot"),
         new(Float, "Float", "No panel: crisp figures straight over the game"),
-        // the Quest look's names (2026-11-07): Badge is the strip, Buddy the card, Pop the ticker; the keys stay, so hud.json keeps its choice
+        // the older looks, listed last (Steven, 2026-11-14). The Quest look's names (2026-11-07): Badge is the strip, Buddy the card,
+        // Pop the ticker; the keys stay, so hud.json keeps its choice
         new(Strip, "Badge", "One line with the figures you pick, and the ring of your best here"),
         new(Card, "Buddy", "The ring, the hour, your best here and the last three pickups"),
         new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
     };
 
-    /// <summary>A saved look, or Auto for anything unknown (an older or edited hud.json).</summary>
-    public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Auto;
+    /// <summary>A saved look, or the Strip for anything unknown (an older or edited hud.json).</summary>
+    public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Strip;
 
     /// <summary>How many pickups the window hands the looks ("pick0" to "pick3"): the Card shows three, the Ticker four.</summary>
     public const int Picks = 4;

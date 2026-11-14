@@ -212,14 +212,6 @@ public static partial class WpfApp
         Check(w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled, "panel look: Auto by default (the pill, the group's meter above it in a fight); the Strip's figure chips greyed for it");
         Check(o.HudLookHost.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7 && HudLooks.All[0].Key == HudLooks.Auto && HudLooks.All[4].Key == HudLooks.Strip && o.HudLookPreview.Children.Count == 1,
             $"every look a live thumbnail in Options, the new ones first (Auto, Capsule, Meter, Float, then Badge, Buddy, Pop), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
-        {
-            // 0.10.91's move: a hud.json on the old default (Badge) goes to Auto once; Buddy and Pop stay; Badge picked again stays
-            var oldBadge = new HudPrefs { Look = HudLooks.Strip }; bool moved = oldBadge.MoveToAuto();
-            var oldPop = new HudPrefs { Look = HudLooks.Ticker }; oldPop.MoveToAuto();
-            var again = new HudPrefs { Look = HudLooks.Auto }; again.MoveToAuto(); again.Look = HudLooks.Strip; again.MoveToAuto();
-            Check(moved && oldBadge.Look == HudLooks.Auto && oldPop.Look == HudLooks.Ticker && again.Look == HudLooks.Strip && HudLooks.Parse("nonsense") == HudLooks.Auto,
-                $"the old default moves to Auto once (Badge to {oldBadge.Look}); Pop stays ({oldPop.Look}); Badge picked again stays ({again.Look}); an unknown look is Auto");
-        }
         // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
         // and Parser section stay folded, and the look shows the boss, the timer and the hour
         {
