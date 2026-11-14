@@ -27,7 +27,7 @@ public partial class MainWindow
     static readonly TimeSpan TimerSoon = TimeSpan.FromMinutes(10);
     /// <summary>The maps whose folded bosses the player opened on the page (this session only).</summary>
     readonly HashSet<string> _timerGroupsOpen = new(StringComparer.Ordinal);
-    Button? _timersPopOutBtn, _timersMoveBtn;
+    Button? _timersPopOutBtn;
 
     /// <summary>Starts the second's tick that keeps the tab's countdown, and the page while it shows, up to date.</summary>
     void StartTimersTick()
@@ -105,14 +105,6 @@ public partial class MainWindow
         System.Windows.Automation.AutomationProperties.SetName(_timersPopOutBtn, "Pop out the timers");
         _timersPopOutBtn.Click += (_, _) => OpenTimersPopOut();
         right.Children.Add(_timersPopOutBtn);
-        // Move overlay (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up")
-        _timersMoveBtn = new Button { Content = "Move overlay", Height = 30, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "Shows the overlay now so you can drag it where you want it. Done or Esc keeps the spot." };
-        System.Windows.Automation.AutomationProperties.SetName(_timersMoveBtn, "Move the timers overlay");
-        _timersMoveBtn.Click += (_, _) => StartTimersPlacement();
-        // only where the timers have a strip of their own (Settings › Timers › Separate timer overlay, or the Kinah overlay off):
-        // on top of the Kinah overlay they go where it goes
-        if (_timerPrefs.Separate || _hud == null) right.Children.Add(_timersMoveBtn);
         var gear = new Button { Margin = new Thickness(6, 0, 0, 0), ToolTip = "The timers' settings: how far ahead the overlay shows, the chime, which timers ring." };
         gear.SetResourceReference(StyleProperty, "RoundBtn");
         var gi = new System.Windows.Shapes.Path(); gi.SetResourceReference(StyleProperty, "QIconStyle"); gi.SetResourceReference(System.Windows.Shapes.Path.DataProperty, "IcGear");
@@ -265,7 +257,6 @@ public partial class MainWindow
 
     /// <summary>For the options self-test: the page's Pop out button, and the bells drawn (key, watched).</summary>
     internal Button? TimersPopOutForTest => _timersPopOutBtn;
-    internal Button? TimersMoveForTest => _timersMoveBtn;
     internal List<(string Key, bool On)> TimerBellsForTest() =>
         Descendants<Border>(TimersPage).Where(b => b.Tag is string t && t.StartsWith("bell:", StringComparison.Ordinal)).Select(b => (((string)b.Tag)[5..], IsTimerWatched(((string)b.Tag)[5..]))).ToList();
     /// <summary>For the options self-test: a map's folded bosses opened, as a click on its line does.</summary>

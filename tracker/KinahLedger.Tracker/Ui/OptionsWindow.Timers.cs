@@ -17,7 +17,6 @@ public partial class OptionsWindow
     internal readonly Dictionary<string, (CheckBox Overlay, CheckBox Chime)> TimerBoxes = new();
     internal CheckBox? TimersOverlayChk { get; private set; }
     internal CheckBox? TimersSeparateChk { get; private set; }
-    internal Button? TimersMoveBtn { get; private set; }
     internal Button? TimersResetBtn { get; private set; }
     internal CheckBox? TimersDetailsChk { get; private set; }
 
@@ -39,21 +38,17 @@ public partial class OptionsWindow
         TimersSeparateChk = Switch(p.Separate, on => { _host.SetTimersSeparate(on); FillTimers(); });
         overlay.Children.Add(Row("Separate timer overlay", "The timers in a small strip of their own, apart from the Kinah overlay and the parser, to place anywhere. With the Kinah overlay off they use it anyway.", TimersSeparateChk));
         overlay.Children.Add(Styled(new Border(), "Divider"));
-        var place = new StackPanel { Orientation = Orientation.Horizontal };
-        TimersMoveBtn = new Button { Content = "Move", Margin = new Thickness(0, 0, 8, 0), ToolTip = "Shows the overlay now so you can drag it where you want it. Done or Esc keeps the spot." };
-        TimersMoveBtn.Click += (_, _) => _host.StartTimersPlacement();
-        TimersResetBtn = new Button { Content = "Reset position", ToolTip = "Back to the top right of the main screen." };
+        TimersResetBtn = new Button { Content = "Reset position", ToolTip = "Back to just above the Kinah overlay." };
         TimersResetBtn.Click += (_, _) => _host.ResetTimersOverlayPosition();
-        place.Children.Add(TimersMoveBtn); place.Children.Add(TimersResetBtn);
         bool strip = p.Separate || !_host.KinahOverlayOn;
         if (strip)
         {
-            overlay.Children.Add(Row("Where it sits", "Shows the strip now, with the next timers, to drag anywhere on any screen.", place));
+            overlay.Children.Add(Row("Where it sits", "Drag the strip anywhere, as the Kinah overlay. It starts just above the Kinah overlay.", TimersResetBtn));
             overlay.Children.Add(Styled(new Border(), "Divider"));
         }
         if (strip)
         {
-            overlay.Children.Add(Row("Clicks go through it", "On: it never blocks the game. Hold Ctrl to drag it or to right-click it for its menu.", Switch(p.ClickThrough, on => _host.SetTimersClickThrough(on))));
+            overlay.Children.Add(Row("Clicks go through it", "On: clicks pass through it to the game; its left edge stays grabbable, with a grip when you point at it.", Switch(p.ClickThrough, on => _host.SetTimersClickThrough(on))));
             overlay.Children.Add(Styled(new Border(), "Divider"));
         }
         overlay.Children.Add(Row("Show a timer from", "How long before it starts or spawns. A timer turns gold in its last 5 minutes.",

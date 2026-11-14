@@ -828,7 +828,7 @@ public static partial class WpfApp
         // takes focus, passes clicks through when asked, and Customize's switches land in the settings
         {
             var tw = w;
-            tw.TimerPrefsForTest = Session.TimerPrefs.Defaults(); tw.TimerPrefsForTest.PlacedOnce = true;   // placed already: a timer near now must not open the first-time placement mid-test
+            tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             tw.TimersSampleForShot("live");
             Click(tw.TimersTab); DoEvents();
             var btn = tw.TimersPopOutForTest;
@@ -857,17 +857,20 @@ public static partial class WpfApp
             tw.SetTimersOverlay(true, save: false); DoEvents();
             Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on (separated), and the button its green dot");
             var ov = tw.TimersOverlayForTest;
-            long ex0 = ov?.ExStyleForTest ?? 0;                 // click-through by default
-            ov?.InteractiveForTest(true); DoEvents();
-            long exCtrl = ov?.ExStyleForTest ?? 0;              // Ctrl held: it takes the mouse
-            ov?.InteractiveForTest(false);
-            tw.SetTimersClickThrough(false); DoEvents();
-            long ex1 = ov?.ExStyleForTest ?? 0;                 // click-through off
+            long ex0 = ov?.ExStyleForTest ?? 0;                 // by default it takes the mouse: plain click and drag, as the Kinah overlay
             tw.SetTimersClickThrough(true); DoEvents();
-            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) != 0
-                && (exCtrl & Native.ExTransparent) == 0 && (exCtrl & Native.ExNoActivate) != 0 && (ex1 & Native.ExTransparent) == 0;
+            long ex1 = ov?.ExStyleForTest ?? 0;                 // click-through on
+            ov?.GripForTest(true, true); DoEvents();
+            long exGrip = ov?.ExStyleForTest ?? 0;              // the pointer on its grip: grabbable there
+            bool gripShown = ov?.GripShownForTest == true;
+            ov?.GripForTest(false, false); DoEvents();
+            long exAway = ov?.ExStyleForTest ?? 0;
+            tw.SetTimersClickThrough(false); DoEvents();
+            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) == 0
+                && (ex1 & Native.ExTransparent) != 0 && (exGrip & Native.ExTransparent) == 0 && gripShown && (exAway & Native.ExTransparent) != 0
+                && !tw.TimerPrefsForTest.ClickThrough && !Session.TimerPrefs.Defaults().ClickThrough;
             Check(ov != null && ov.Topmost && !ov.ShowActivated && ov.Owner == null && noFocus,
-                $"...the overlay: its own window (no owner), on top, never takes focus, out of Alt+Tab; click-through by default, clickable while Ctrl is held or with click-through off ({noFocus})");
+                $"...the strip: its own window (no owner), on top, never takes focus, out of Alt+Tab; it takes the mouse by default (dragged like the Kinah overlay); click-through only as a setting, its grip still grabbable then ({noFocus})");
             ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
             bool hidden = ov != null && !ov.IsVisible;
             ov?.Show(new List<Session.TimerBoard.Item> { new("boss:Heretic Layla", "Verteron", "Heretic Layla", "Rock Tomb Hill", Session.TimerBoard.Kind.Waiting, DateTime.UtcNow.AddMinutes(3), "3m 00s", "at 07:00") }, DateTime.UtcNow);
@@ -916,33 +919,38 @@ public static partial class WpfApp
                 Check(anchored && lineFolded && home == "strip" && sepHome == "strip",
                     $"timer line on top of the Kinah overlay: \"{line}\", {lineH:0} px; the window up by as much ({up:0}), the Kinah line where it was ({anchored}); folded with nothing due, back where it was ({lineFolded}); without the Kinah overlay, or separated, the strip ({home}, {sepHome})");
             }
-            // placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay
-            // shows the strip now, outlined and clickable, with the next watched timers or a sample; Done keeps the spot on a
-            // screen and it hides again with nothing due; with the overlay off it closes after; Reset forgets the spot
+            // the strip as a sibling of the Kinah overlay (Steven, 2026-11-14: "it doesnt match aesthetic of the kinah tracker at
+            // all"; "just click and drag"): the Kinah strip's surface, corner, padding and line; the first time it shows it sits
+            // just above the Kinah overlay; no Move button or placement mode anywhere; Reset position in Settings puts it back
             {
-                var pp = Session.TimerPrefs.Defaults();
-                foreach (var i in tw.TimerItemsNow()) pp.SetWatched(i.Key, false);   // nothing watched: nothing due, so only placement shows it
-                pp.OverlayOn = false;
+                var pp = Session.TimerPrefs.Defaults(); pp.Separate = true;
                 tw.TimerPrefsForTest = pp;
-                bool buttons = tw.TimersMoveForTest != null && to.TimersMoveBtn != null && to.TimersResetBtn != null;
-                tw.StartTimersPlacement(); DoEvents();
-                var po = tw.TimersOverlayForTest;
-                long ex = po?.ExStyleForTest ?? 0;
-                bool placed = po != null && po.Placing && po.IsVisible && (ex & Native.ExTransparent) == 0 && (ex & Native.ExNoActivate) != 0 && po.RowsForTest == 2;
-                if (po != null) { po.Left = SystemParameters.VirtualScreenLeft - 60000; po.Top = 300; po.FinishPlacing(); }
+                var strip = new TimersOverlay(pp) { KinahBox = () => new Rect(400, 500, 320, 40) };
+                var tnow = DateTime.UtcNow;
+                strip.Show(new[] { new Session.TimerBoard.Item("event:Shugo Festival", "Events", "Shugo Festival", "", Session.TimerBoard.Kind.Waiting, tnow.AddSeconds(292), "", "") { Short = "Shugo" } }, tnow);
                 DoEvents();
-                bool kept = pp.X is double px && px >= SystemParameters.VirtualScreenLeft && px < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth && pp.Y is double;
-                bool closedAfter = tw.TimersOverlayForTest == null && !pp.OverlayOn;
-                pp.OverlayOn = true; tw.SetTimersOverlay(true, save: false); DoEvents();
-                tw.StartTimersPlacement(); DoEvents();
-                var po2 = tw.TimersOverlayForTest;
-                po2?.FinishPlacing(); DoEvents();
-                bool hiddenAfter = po2 != null && !po2.IsVisible && !po2.Placing && ((po2.ExStyleForTest & Native.ExTransparent) != 0);
+                bool above = Math.Abs(strip.Left - 400) < 1 && Math.Abs(strip.Top + strip.ActualHeight + 6 - 500) < 1;
+                var kinah = new HudWindow(still: true) { Left = -12000, Top = -12000 };
+                kinah.Show(); DoEvents();
+                var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.Face!).Children[0];
+                var sf = strip.FrameForTest;
+                bool sibling = sf.CornerRadius == kf.CornerRadius && sf.Padding == kf.Padding && sf.BorderThickness == kf.BorderThickness
+                    && (sf.BorderBrush as SolidColorBrush)?.Color == (kf.BorderBrush as SolidColorBrush)?.Color && (sf.Background as SolidColorBrush)?.Color == (kf.Background as SolidColorBrush)?.Color
+                    && strip.FontFamily.Source == kinah.FontFamily.Source;
+                kinah.Close();
+                pp.X = 1200; pp.Y = 300;
                 tw.ResetTimersOverlayPosition();
                 bool reset = pp.X == null && pp.Y == null;
-                tw.SetTimersOverlay(false, save: false); DoEvents();
-                Check(buttons && placed && kept && closedAfter && hiddenAfter && reset,
-                    $"Move overlay (the Timers page and Settings): the strip shows at once, outlined and clickable, with a sample when nothing is due ({placed}); Done keeps the spot on a screen ({kept}), closes it again with the overlay off ({closedAfter}), hides it with the overlay on, clicks through again ({hiddenAfter}); Reset forgets the spot ({reset})");
+                strip.ResetSpot();
+                bool backAbove = Math.Abs(strip.Left - 400) < 1;
+                strip.Close();
+                var to2 = new OptionsWindow(tw, OptionsWindow.Page.Timers) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+                to2.Show(); DoEvents();
+                bool resetOnly = to2.TimersResetBtn != null && to2.TimersSeparateChk?.IsChecked == true;
+                to2.Close();
+                Check(above && sibling && reset && backAbove && resetOnly,
+                    $"the separate strip: first shown just above the Kinah overlay ({above}); the Kinah strip's surface, corner, padding, line and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
+                tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             }
             to.Close();
         }

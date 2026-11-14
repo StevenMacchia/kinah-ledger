@@ -48,8 +48,7 @@ public partial class MainWindow
 
     /// <summary>
     /// A second's work: the timer line where it goes (on top of the Kinah overlay by default; its own strip when separated or
-    /// with the Kinah overlay off), and the chime for any watched timer now close enough. The first time the strip is needed
-    /// because the Kinah overlay is off, it opens to be placed.
+    /// with the Kinah overlay off), and the chime for any watched timer now close enough.
     /// </summary>
     void TimersTick(DateTime now)
     {
@@ -62,15 +61,9 @@ public partial class MainWindow
         if (host == "strip")
         {
             if (_timersOverlay == null) OpenTimersStrip();
-            if (!_timerPrefs.Separate && !_timerPrefs.PlacedOnce && near.Count > 0 && _timersOverlay is { Placing: false } first)
-            {
-                // the line needs a home of its own (the Kinah overlay is off): the strip opens once to be placed
-                _timerPrefs.PlacedOnce = true; _timerPrefs.Save();
-                first.StartPlacing(PlacementSample(now), now);
-            }
             _timersOverlay?.Show(near, now);
         }
-        else if (_timersOverlay is { Placing: false }) { _timersOverlay.Close(); _timersOverlay = null; }
+        else if (_timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; }
         var ring = _timerChimes.Due(now, items, _timerPrefs);
         if (ring.Count == 0) return;
         PlayChime(_timerPrefs.Volume);
@@ -112,60 +105,32 @@ public partial class MainWindow
     internal void SetTimersSeparate(bool on)
     {
         _timerPrefs.Separate = on; _timerPrefs.Save();
-        if (!on && _timersOverlay is { Placing: false }) { _timersOverlay.Close(); _timersOverlay = null; }
+        if (!on && _timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; }
         TimersTick(DateTime.UtcNow);
         DrawOverlayPills();
         if (_part == "Timers") FillTimersPage();
     }
 
-    /// <summary>The strip's window, made when the timers need it (separated, the Kinah overlay off, or to place it).</summary>
+    /// <summary>
+    /// The strip's window, made when the timers need it (separated, or the Kinah overlay off): the Kinah overlay's look, its
+    /// opacity and size; the first time with no spot kept, it sits just above the Kinah overlay.
+    /// </summary>
     void OpenTimersStrip()
     {
         if (_timersOverlay != null) return;
         _timersOverlay = new TimersOverlay(_timerPrefs)
         {
-            OpenSettings = () => OpenOptions(OptionsWindow.Page.Timers),
-            HideOverlay = () => SetTimersOverlay(false),
-            SetClickThroughPref = SetTimersClickThrough,
+            KinahBox = () => _hud is { IsVisible: true } h && h.ActualWidth > 0 ? new Rect(h.Left, h.Top, h.ActualWidth, h.ActualHeight) : null,
         };
+        _timersOverlay.Match(_prefs.HudOpacity, _hudPrefs.Scale);
         _timersOverlay.Closed += (_, _) => _timersOverlay = null;
     }
 
-    /// <summary>
-    /// Move overlay (Steven, 2026-11-14): the strip shown now to be dragged, even with nothing due and with the overlay
-    /// off; Done or Esc keeps the spot. With the overlay off it closes again after.
-    /// </summary>
-    internal void StartTimersPlacement()
-    {
-        OpenTimersStrip();
-        var o = _timersOverlay!;
-        // after Done the strip stays only where it is the timers' home (separated, or the Kinah overlay off)
-        o.PlacementDone = () => { if (TimersHost != "strip" && _timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; } };
-        var now = DateTime.UtcNow;
-        o.StartPlacing(PlacementSample(now), now);
-    }
-
-    /// <summary>Reset position: the overlay back to its default spot (top right of the main screen), saved.</summary>
+    /// <summary>Reset position (Settings › Timers): the strip's spot forgotten; it sits just above the Kinah overlay again.</summary>
     internal void ResetTimersOverlayPosition()
     {
         _timerPrefs.X = null; _timerPrefs.Y = null; _timerPrefs.Save();
         _timersOverlay?.ResetSpot();
-    }
-
-    /// <summary>What stands in while placing with nothing due: the next watched timers, else "Shugo 4:52 · Kashapa 12:10".</summary>
-    List<TimerBoard.Item> PlacementSample(DateTime now)
-    {
-        List<TimerBoard.Item> next;
-        try
-        {
-            next = TimerItems(now).Where(i => i.State == TimerBoard.Kind.Waiting && i.AtPc is { } at && at > now && _timerPrefs.Watched(i.Key))
-                .OrderBy(i => i.AtPc).Take(Math.Max(1, _timerPrefs.Count)).ToList();
-        }
-        catch (Exception) { next = new(); }
-        if (next.Count > 0) return next;
-        TimerBoard.Item Fake(string name, string shortName, double seconds) =>
-            new(TimerBoard.EventKey(name), "Events", name, "", TimerBoard.Kind.Waiting, now.AddSeconds(seconds), "", "") { Short = shortName };
-        return new() { Fake("Shugo Festival", "Shugo", 292), Fake("Soul Ruler Kashapa", "Kashapa", 730) };
     }
 
     internal void SetTimersClickThrough(bool on)

@@ -4,52 +4,45 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using KinahLedger.Session;
 
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The timers overlay (0.10.85, Steven 2026-11-14: "the timers for events + world bosses ... in the same overlay window.
-/// 5 min til shugo, dimensional invasion, spacetime rift and the bosses, and it should be minimal where you can just put
-/// it somewhere out of sight out of mind"): a narrow translucent strip of short rows, "Shugo 4:52", "Kusan 12:10", soonest
-/// first, gold in a timer's last 5 minutes. It shows only while a watched timer is within the minutes set (5 by default)
-/// and is hidden otherwise.
+/// The separate timer strip (Settings › Timers › Separate timer overlay; by default the timers are a line on top of the Kinah
+/// overlay, Ui/HudWindow.Timers.cs). A sibling of the Kinah overlay (Steven, 2026-11-14: "it doesnt match aesthetic of the
+/// kinah tracker at all"): the Kinah strip's own surface, corner, padding, faces, sizes and colours, and its opacity and size
+/// from Options › In game. One line, "● Shugo 4:52 | Kashapa 11:59", soonest first, gold in a timer's last 5 minutes;
+/// shown only while a watched timer is within the minutes set, hidden otherwise.
 ///
-/// Its own window, apart from the Kinah panel and the parser: always on top, never takes focus, out of Alt+Tab, and
-/// click-through by default, so it never blocks the game. While Ctrl is held it takes the mouse: drag it anywhere (it
-/// remembers where), right-click for its small menu (click-through, Settings, hide). Which timers it shows and the chime are
-/// set in Options › Timers.
-///
-/// Placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay, on
-/// the Timers page and in Settings › Timers, shows the strip at once, outlined and clickable, with the next watched timers
-/// (or a sample when none are queued) and a Done button. Drag it anywhere; Done or Esc keeps the spot (inside the nearest
-/// screen's work area, whatever the monitors), and it goes back to hidden until a timer is due.
+/// It moves the way the Kinah overlay does ("Nothing else do u have to go in options to move ui, just click and drag"):
+/// press anywhere on it and drag; it remembers the spot. The first time it shows, with no spot kept, it sits just above the
+/// Kinah overlay. Click-through is a setting, off by default; with it on, the strip's left edge stays grabbable and shows a
+/// grip while the pointer is over the strip, so it can still be dragged. It never takes focus and stays out of Alt+Tab.
 /// </summary>
 sealed class TimersOverlay : Window
 {
-    readonly StackPanel _rows = new();
-    readonly StackPanel _menu = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
-    readonly StackPanel _placeBar = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+    readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _frame;
-    bool _placing;
-    IReadOnlyList<TimerBoard.Item> _sample = Array.Empty<TimerBoard.Item>();
-    /// <summary>Placement ended (Done or Esc); the spot is saved.</summary>
-    public Action? PlacementDone { get; set; }
-    /// <summary>Reset was pressed in the placement bar (the spot is back at its default).</summary>
-    public Action? ResetPressed { get; set; }
+    readonly FrameworkElement _grip;
+    readonly Ellipse _dot;
     readonly TimerPrefs _prefs;
-    readonly DispatcherTimer _keys;
+    readonly DispatcherTimer _hover;
     IntPtr _hwnd;
-    bool _interactive, _hasRows;
+    bool _gripLive, _placed;
 
-    /// <summary>The menu's actions, given by the main window.</summary>
-    public Action? OpenSettings { get; set; }
-    public Action? HideOverlay { get; set; }
-    public Action<bool>? SetClickThroughPref { get; set; }
+    /// <summary>Where the Kinah overlay is now (WPF units, its window's box), null when it isn't shown: the first spot is just above it.</summary>
+    public Func<Rect?>? KinahBox { get; set; }
 
-    static readonly Color Ink = Color.FromRgb(0xE4, 0xE7, 0xEE), Faint = Color.FromRgb(0x9A, 0xA1, 0xB4), Gold = Color.FromRgb(0xF5, 0xB9, 0x42);
-    const double StripWidth = 150;
+    // the Kinah strip's own (Ui/HudWindow.cs): surface, line, faces and colours
+    static readonly Color Surface = Color.FromRgb(0x0B, 0x0C, 0x10);
+    static readonly SolidColorBrush FrameLine = Frozen(Color.FromRgb(0x23, 0x27, 0x36)), Ink = Frozen(Color.FromRgb(0xED, 0xEF, 0xF5)),
+        Gold = Frozen(Color.FromRgb(0xF5, 0xB9, 0x42)), Muted = Frozen(Color.FromRgb(0xA2, 0xA8, 0xBA)), Rule = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
+    static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+    /// <summary>The grabbable left edge with click-through on, in WPF units at 1x.</summary>
+    const double GripWidth = 16;
 
     public TimersOverlay(TimerPrefs prefs)
     {
@@ -63,64 +56,133 @@ sealed class TimersOverlay : Window
         Topmost = true;
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
-        var body = new StackPanel { Width = StripWidth };
-        body.Children.Add(_rows);
-        body.Children.Add(_menu);
-        body.Children.Add(_placeBar);
+        FontFamily = HudKit.Text;
+        FontWeight = FontWeights.Medium;
+        TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+        _dot = new Ellipse { Width = 6, Height = 6, Fill = Gold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Color.FromRgb(0xF5, 0xB9, 0x42), BlurRadius = 8, ShadowDepth = 0, Opacity = 0.7 } };
+        // the grip: two columns of three dots, shown at the left edge while it can be grabbed there (click-through on)
+        var grip = new Canvas { Width = 7, Height = 11, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        for (int c = 0; c < 2; c++) for (int r = 0; r < 3; r++)
+        {
+            var d = new Ellipse { Width = 2.4, Height = 2.4, Fill = Muted };
+            Canvas.SetLeft(d, c * 4.2); Canvas.SetTop(d, r * 4.2); grip.Children.Add(d);
+        }
+        _grip = grip;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { _grip, _dot, _line } };
         _frame = new Border
         {
-            Child = body, Padding = new Thickness(9, 5, 9, 6), CornerRadius = new CornerRadius(7),
-            Background = new SolidColorBrush(Color.FromArgb(0xA6, 0x0B, 0x0C, 0x10)),
-            BorderThickness = new Thickness(1.5), BorderBrush = Brushes.Transparent,
+            Background = Frozen(Color.FromArgb(0xF0, Surface.R, Surface.G, Surface.B)), BorderBrush = FrameLine, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 6, 12, 6), Child = row, Cursor = Cursors.SizeAll,
         };
         Content = _frame;
-        BuildMenu();
-        BuildPlaceBar();
         SourceInitialized += (_, _) => { _hwnd = new WindowInteropHelper(this).Handle; ApplyStyle(); };
-        MouseLeftButtonDown += (_, e) =>
+        // plain click and drag, as the Kinah overlay: the spot is kept on a screen and remembered
+        MouseLeftButtonDown += (_, _) =>
         {
-            if (e.OriginalSource is DependencyObject d && CraftWindow.Interactive(d)) return;
             try { DragMove(); } catch (InvalidOperationException) { }
             KeepOnScreen();
             _prefs.X = Left; _prefs.Y = Top; _prefs.Save();
+            _placed = true;
         };
-        MouseRightButtonUp += (_, e) => { if (!_placing) ToggleMenu(_menu.Visibility != Visibility.Visible); e.Handled = true; };
-        // Ctrl held: the strip takes the mouse to be moved or set; let go, clicks pass to the game again
-        _keys = new DispatcherTimer(TimeSpan.FromMilliseconds(120), DispatcherPriority.Background, (_, _) => PollKeys(), Dispatcher);
-        _keys.Stop();
-        Place();
+        // with click-through on, the pointer over the strip shows the grip, and over the grip the strip takes the mouse
+        _hover = new DispatcherTimer(TimeSpan.FromMilliseconds(60), DispatcherPriority.Background, (_, _) => PollHover(), Dispatcher);
+        _hover.Stop();
+        IsVisibleChanged += (_, _) => { if (IsVisible && _prefs.ClickThrough) _hover.Start(); else _hover.Stop(); };
+        Closed += (_, _) => _hover.Stop();
         new WindowInteropHelper(this).EnsureHandle();   // the never-focus style is set before it is ever shown
-        IsVisibleChanged += (_, _) => { if (IsVisible) _keys.Start(); else _keys.Stop(); };
-        Closed += (_, _) => _keys.Stop();
-    }
-
-    /// <summary>The spot it starts at with none saved: the top right of the main screen's work area.</summary>
-    public static Point DefaultSpot => new(SystemParameters.WorkArea.Right - StripWidth - 40, SystemParameters.WorkArea.Top + 160);
-
-    /// <summary>Where it was left, else the default spot; always on a screen.</summary>
-    void Place()
-    {
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Left = _prefs.X ?? DefaultSpot.X; Top = _prefs.Y ?? DefaultSpot.Y;
-        KeepOnScreen();
+        if (_prefs.X is { } x && _prefs.Y is { } y) { Left = x; Top = y; _placed = true; KeepOnScreen(); }
+        else { Left = -32000; Top = -32000; }   // placed above the Kinah overlay once it has laid out (PlaceFirst)
     }
 
-    /// <summary>Back to the default spot, and that saved (no spot kept).</summary>
-    public void ResetSpot()
+    /// <summary>Opacity of the surface and the size, as the Kinah overlay's (Options › In game).</summary>
+    public void Match(double opacity, double scale)
     {
-        _prefs.X = null; _prefs.Y = null; _prefs.Save();
-        Place();
+        var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
+        _frame.Background = Frozen(Color.FromArgb(a, Surface.R, Surface.G, Surface.B));
+        var s = Math.Clamp(scale, HudPrefs.MinScale, HudPrefs.MaxScale);
+        _frame.LayoutTransform = Math.Abs(s - 1) < 0.001 ? Transform.Identity : new ScaleTransform(s, s);
+    }
+
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+
+    /// <summary>The pointer in WPF units, through this window's DPI.</summary>
+    Point? Pointer()
+    {
+        if (!GetCursorPos(out var p)) return null;
+        double k = 1;
+        try { k = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch (Exception) { }
+        return new Point(p.X / k, p.Y / k);
+    }
+
+    void PollHover()
+    {
+        if (!_prefs.ClickThrough) { SetGrip(false, false); return; }
+        if (Pointer() is not { } p) return;
+        bool over = p.X >= Left && p.X < Left + ActualWidth && p.Y >= Top && p.Y < Top + ActualHeight;
+        double gripEdge = Left + (GripWidth + 10) * Scale;
+        SetGrip(over, over && p.X < gripEdge);
+    }
+
+    double Scale => _frame.LayoutTransform is ScaleTransform t ? t.ScaleX : 1;
+
+    /// <summary>The grip shown (pointer over the strip) and live (pointer on it: the strip takes the mouse for a drag).</summary>
+    void SetGrip(bool shown, bool live)
+    {
+        _grip.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        if (live == _gripLive) return;
+        _gripLive = live;
+        ApplyStyle();
+    }
+
+    void ApplyStyle()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        Native.SetClickThrough(_hwnd, _prefs.ClickThrough && !_gripLive);
+    }
+
+    /// <summary>Click-through as the settings say, now (off by default: it drags like the Kinah overlay).</summary>
+    public void SetClickThrough(bool on)
+    {
+        _gripLive = false;
+        _grip.Visibility = Visibility.Collapsed;
+        ApplyStyle();
+        if (on && IsVisible) _hover.Start(); else _hover.Stop();
     }
 
     /// <summary>
-    /// The strip wholly inside one screen's work area: the screen it overlaps most, else the nearest (a monitor unplugged, a
-    /// spot from a bigger desktop). Screens are in device pixels and the window in WPF units, so through this window's DPI.
+    /// The first spot, with none kept: just above the Kinah overlay, their left edges lined up (6 px between, as the timer
+    /// line sits on it); with the Kinah overlay off, the top centre of the main screen, where the Kinah overlay would start.
+    /// </summary>
+    void PlaceFirst()
+    {
+        UpdateLayout();
+        double w = ActualWidth, h = ActualHeight;
+        if (KinahBox?.Invoke() is { } k) { Left = k.Left; Top = k.Top - h - 6; }
+        else { Left = SystemParameters.WorkArea.Left + (SystemParameters.WorkArea.Width - w) / 2; Top = SystemParameters.WorkArea.Top + 12; }
+        KeepOnScreen();
+        _placed = true;
+    }
+
+    /// <summary>Reset position: the spot forgotten; it sits above the Kinah overlay again (now if shown, else the next time).</summary>
+    public void ResetSpot()
+    {
+        _prefs.X = null; _prefs.Y = null; _prefs.Save();
+        _placed = false;
+        if (IsVisible) PlaceFirst();
+    }
+
+    /// <summary>
+    /// The strip wholly inside one screen's work area: the screen it overlaps most, else the nearest. Screens are in device
+    /// pixels and the window in WPF units, so through this window's DPI.
     /// </summary>
     public void KeepOnScreen()
     {
         double scale = 1;
         try { scale = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch (Exception) { }
-        double w = ActualWidth > 0 ? ActualWidth : StripWidth + 20, h = ActualHeight > 0 ? ActualHeight : 60;
+        double w = ActualWidth > 0 ? ActualWidth : 180, h = ActualHeight > 0 ? ActualHeight : 30;
         var px = new System.Drawing.Rectangle((int)Math.Round(Left * scale), (int)Math.Round(Top * scale), (int)Math.Round(w * scale), (int)Math.Round(h * scale));
         var area = System.Windows.Forms.Screen.FromRectangle(px).WorkingArea;
         int x = Math.Clamp(px.X, area.Left, Math.Max(area.Left, area.Right - px.Width));
@@ -128,155 +190,36 @@ sealed class TimersOverlay : Window
         Left = x / scale; Top = y / scale;
     }
 
-    /* ---------------- placement ---------------- */
-
-    /// <summary>True while the player is placing it: shown, outlined, clickable.</summary>
-    public bool Placing => _placing;
-
-    void BuildPlaceBar()
-    {
-        _placeBar.Children.Clear();
-        _placeBar.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(0x50, 0x9A, 0xA1, 0xB4)), Margin = new Thickness(0, 0, 0, 4) });
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.Children.Add(Text("Drag to place", Faint, 10.5));
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var reset = MenuButton("Reset", () => { ResetSpot(); ResetPressed?.Invoke(); });
-        reset.Margin = new Thickness(0, 0, 10, 0);
-        var done = MenuButton("Done", () => FinishPlacing());
-        done.FontWeight = FontWeights.SemiBold;
-        buttons.Children.Add(reset); buttons.Children.Add(done);
-        Grid.SetColumn(buttons, 1); g.Children.Add(buttons);
-        _placeBar.Children.Add(g);
-    }
-
-    /// <summary>Shown now, outlined and clickable, with <paramref name="sample"/> when no timer is due; Done or Esc ends it.</summary>
-    public void StartPlacing(IReadOnlyList<TimerBoard.Item> sample, DateTime now)
-    {
-        _sample = sample;
-        _placing = true;
-        ToggleMenu(false);
-        _frame.BorderBrush = new SolidColorBrush(Gold);
-        _placeBar.Visibility = Visibility.Visible;
-        ApplyStyle();
-        Show(Array.Empty<TimerBoard.Item>(), now);
-        KeepOnScreen();
-    }
-
-    /// <summary>Placement over: the spot kept (on a screen) and saved, clicks through again, hidden until a timer is due.</summary>
-    public void FinishPlacing()
-    {
-        if (!_placing) return;
-        _placing = false;
-        _frame.BorderBrush = Brushes.Transparent;
-        _placeBar.Visibility = Visibility.Collapsed;
-        KeepOnScreen();
-        _prefs.X = Left; _prefs.Y = Top; _prefs.Save();
-        ApplyStyle();
-        if (!_hasRows && IsVisible) Hide();
-        PlacementDone?.Invoke();
-    }
-
-    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
-    const int VK_CONTROL = 0x11, VK_ESCAPE = 0x1B;
-
-    void PollKeys()
-    {
-        if (_placing && (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0) { FinishPlacing(); return; }   // it never has focus, so Esc is read like Ctrl
-        bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-        if (ctrl != _interactive) { _interactive = ctrl; ApplyStyle(); }
-    }
-
-    void ApplyStyle()
-    {
-        if (_hwnd == IntPtr.Zero) return;
-        Native.SetClickThrough(_hwnd, _prefs.ClickThrough && !_interactive && !_placing && _menu.Visibility != Visibility.Visible);
-    }
-
-    /// <summary>Click-through as the settings say, now.</summary>
-    public void SetClickThrough(bool on) { BuildMenu(); ApplyStyle(); }
-
-    Button MenuButton(string text, Action act)
-    {
-            var b = new Button
-            {
-                Content = text, FontSize = 11, Padding = new Thickness(0, 2, 0, 2), HorizontalContentAlignment = HorizontalAlignment.Left,
-                Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = new SolidColorBrush(Ink), Cursor = Cursors.Hand,
-                FontFamily = HudKit.Text, Focusable = false,
-            };
-            // plain text, not the app's button look: a bare presenter, a faint tint on hover
-            var face = new FrameworkElementFactory(typeof(Border));
-            face.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-            face.SetValue(Border.PaddingProperty, new Thickness(0, 2, 0, 2));
-            var content = new FrameworkElementFactory(typeof(ContentPresenter));
-            content.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Left);
-            face.AppendChild(content);
-            b.Template = new ControlTemplate(typeof(Button)) { VisualTree = face };
-            b.MouseEnter += (_, _) => b.Foreground = new SolidColorBrush(Gold);
-            b.MouseLeave += (_, _) => b.Foreground = new SolidColorBrush(Ink);
-            b.Click += (_, _) => act();
-            return b;
-    }
-
-    void BuildMenu()
-    {
-        _menu.Children.Clear();
-        Button Item(string text, Action act) => MenuButton(text, act);
-        _menu.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(0x50, 0x9A, 0xA1, 0xB4)), Margin = new Thickness(0, 0, 0, 4) });
-        _menu.Children.Add(Item(_prefs.ClickThrough ? "Click-through: on" : "Click-through: off", () => { SetClickThroughPref?.Invoke(!_prefs.ClickThrough); BuildMenu(); ApplyStyle(); }));
-        _menu.Children.Add(Item("Settings…", () => { ToggleMenu(false); OpenSettings?.Invoke(); }));
-        _menu.Children.Add(Item("Hide the overlay", () => { ToggleMenu(false); HideOverlay?.Invoke(); }));
-        _menu.Children.Add(Item("Done", () => ToggleMenu(false)));
-        _menu.Children.Add(Text("Hold Ctrl to move or set it.", Faint, 10, wrap: true));
-    }
-
-    /// <summary>The small menu open or shut (open, the strip stays clickable and shown).</summary>
-    public void ToggleMenu(bool open)
-    {
-        if (open) BuildMenu();
-        _menu.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-        ApplyStyle();
-        if (!open && !_hasRows && !_placing && IsVisible) Hide();
-    }
-
-    /// <summary>The rows: the watched timers near now, soonest first. None: hidden until one comes near (unless its menu is open).</summary>
+    /// <summary>The watched timers near now, soonest first. None: hidden until one comes near.</summary>
     public void Show(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        _rows.Children.Clear();
-        _hasRows = items.Count > 0;
-        // placing with nothing due: the next watched timers (or a sample) stand in, so there is a strip to place
-        foreach (var i in _hasRows || !_placing ? items : _sample)
+        if (items.Count == 0) { if (IsVisible) Hide(); return; }
+        _line.Children.Clear();
+        bool anyGold = false;
+        for (int n = 0; n < items.Count; n++)
         {
+            var i = items[n];
+            if (n > 0) _line.Children.Add(new Border { Width = 1, Height = 16, Background = Rule, Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
             var left = i.AtPc is { } at ? at - now : TimeSpan.Zero;
-            var tone = left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes) ? Gold : Ink;
-            var g = new Grid { Margin = new Thickness(0, 1, 0, 1) };
-            g.ColumnDefinitions.Add(new ColumnDefinition());
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            g.Children.Add(Text(i.Short, tone, 12));
-            var c = Text(TimerBoard.Clock(left), tone, 12, FontWeights.Medium);
-            c.Margin = new Thickness(8, 0, 0, 0);
+            bool gold = left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes);
+            anyGold |= gold;
+            _line.Children.Add(new TextBlock { Text = i.Short, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center });
+            var c = new TextBlock { Text = TimerBoard.Clock(left), FontSize = 13, FontWeight = FontWeights.Bold, Foreground = gold ? Gold : Muted, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             System.Windows.Documents.Typography.SetNumeralAlignment(c, FontNumeralAlignment.Tabular);
-            Grid.SetColumn(c, 1); g.Children.Add(c);
-            _rows.Children.Add(g);
+            _line.Children.Add(c);
         }
-        bool show = _hasRows || _placing || _menu.Visibility == Visibility.Visible;
-        if (!show) { if (IsVisible) Hide(); return; }
-        if (!_hasRows && !(_placing && _sample.Count > 0)) _rows.Children.Add(Text("Nothing due", Faint, 11));
+        _dot.Fill = anyGold ? Gold : Muted;
         if (!IsVisible) Show();   // never activated (ShowActivated off, and the window's style)
+        if (!_placed) PlaceFirst();
     }
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
     /// <summary>For the options self-test: the window's extended style (never activates; click-through when set).</summary>
     internal long ExStyleForTest => _hwnd == IntPtr.Zero ? 0 : GetWindowLongPtr(_hwnd, -20).ToInt64();
-    /// <summary>For the options self-test and renders: the strip as if Ctrl were held, or let go.</summary>
-    internal void InteractiveForTest(bool on) { _interactive = on; ApplyStyle(); }
-    /// <summary>For the options self-test: the rows drawn.</summary>
-    internal int RowsForTest => _rows.Children.OfType<Grid>().Count();
-
-    static TextBlock Text(string s, Color c, double size, FontWeight? w = null, bool wrap = false) => new()
-    {
-        Text = s, FontSize = size, Foreground = new SolidColorBrush(c), FontFamily = HudKit.Text, FontWeight = w ?? FontWeights.Normal,
-        TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
-    };
+    /// <summary>For the options self-test and renders: the pointer over the strip (shown) and on its grip (live).</summary>
+    internal void GripForTest(bool shown, bool live) => SetGrip(shown, live);
+    internal bool GripShownForTest => _grip.Visibility == Visibility.Visible;
+    /// <summary>For the options self-test: the timers on the line, and the surface (corner, padding, line colour).</summary>
+    internal int ItemsForTest => _line.Children.OfType<TextBlock>().Count() / 2;
+    internal Border FrameForTest => _frame;
 }
