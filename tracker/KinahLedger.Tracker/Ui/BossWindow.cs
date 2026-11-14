@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The world boss timers' window (Ui/MainWindow.Bosses.cs), in the recipe window's way (Ui/CraftWindow.cs): a card that
+/// The timers' window (events and world bosses, Ui/MainWindow.Bosses.cs), in the recipe window's way (Ui/CraftWindow.cs): a card that
 /// drags from anywhere that isn't a control, to sit beside the game, and stays open while the player plays. Esc or the cross
 /// closes it; it remembers where it was put until the app closes, and minimizes and closes with the main window (its owner).
 /// The card is redrawn in place each second, keeping where the list was scrolled to.
@@ -21,7 +21,7 @@ sealed class BossWindow : Window
     public BossWindow(Window owner)
     {
         Owner = owner;
-        Title = "World bosses";
+        Title = "Timers";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -35,7 +35,7 @@ sealed class BossWindow : Window
         _host.Children.Add(_scroll);
         var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 19, 19, 0), ToolTip = "Close (Esc)" };
         close.SetResourceReference(StyleProperty, "RoundBtn");
-        System.Windows.Automation.AutomationProperties.SetName(close, "Close the world boss timers");
+        System.Windows.Automation.AutomationProperties.SetName(close, "Close the timers");
         close.Click += (_, _) => Close();
         _host.Children.Add(close);
         MouseLeftButtonDown += (_, e) =>

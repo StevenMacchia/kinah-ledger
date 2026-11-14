@@ -6,8 +6,9 @@ namespace KinahLedger.Ui;
 public static partial class WpfApp
 {
     /// <summary>
-    /// ui-shot --bosses: the world boss timers' window (Ui/MainWindow.Bosses.cs) over a made-up reading: live from the map,
-    /// an hour old, and none yet (bosses-live.png, bosses-stale.png, bosses-empty.png). Nothing is read, saved or sent.
+    /// ui-shot --timers (or --bosses): the timers' window (Ui/MainWindow.Bosses.cs) over made-up readings: in an event with
+    /// the map open, an event getting ready, an hour old, and none yet (timers-live.png, timers-getting-ready.png,
+    /// timers-stale.png, timers-empty.png). Nothing is read, saved or sent.
     /// </summary>
     public static void ShotBosses(Settings settings, string dir, string? skin)
     {
