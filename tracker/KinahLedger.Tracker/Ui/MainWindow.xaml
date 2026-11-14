@@ -758,7 +758,7 @@
              with Options › Show accuracy details on: the "2 to look at" pill is gone for players (Steven, 2026-10-30) -->
         <Border x:Name="AccuracyChip" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="26" CornerRadius="8" BorderThickness="1" Padding="11,0,12,1"
                 Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
-                ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
+                ToolTip="How well the count held up. Click to see." ToolTipService.InitialShowDelay="400">
           <Border.Style>
             <Style TargetType="Border">
               <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
