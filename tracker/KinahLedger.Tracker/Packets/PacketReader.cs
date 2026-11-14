@@ -43,6 +43,11 @@ public sealed class PacketReader : IDisposable
     public long Packets => Interlocked.Read(ref _packets);
     /// <summary>Messages and bundles the decoder read, its resyncs and its currency messages, for the log.</summary>
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) DecoderStats => _decoder?.Stats ?? default;
+    /// <summary>
+    /// World boss timers from the game's world map (the decoder's version 5, Session/BossTimers.cs): filled while the map is
+    /// open, saved, counted down in between. Read from any thread.
+    /// </summary>
+    public BossTimers Bosses { get; } = new(BossTimers.DefaultPath);
     /// <summary>Where the decoder comes from: the release build's native one; a test hands in its own.</summary>
     public static Func<IGameDecoder?> Decoders { get; set; } = NativeDecoder.TryOpen;
 
@@ -105,6 +110,20 @@ public sealed class PacketReader : IDisposable
         }
         _changes.Enqueue(c); Arrived();
         Log($"{Local(c.At)}  {Name(c.What)} {(c.First ? "now" : Signed(c.Delta))} · {c.Amount:N0}");
+    }
+
+    /// <summary>A field boss from the world map's list: into the timers, and a line in packets.log when its state or spawn changed.</summary>
+    void TakeBoss(BossSighting b)
+    {
+        if (!Bosses.Take(b)) return;
+        string name = b.Name.Length > 0 ? b.Name : "a boss not named yet";
+        string what = b.State switch
+        {
+            BossSighting.Kind.Alive => "up" + (b.Time is { } t1 ? $" since {Local(t1 + (b.ServerNow is { } s1 ? b.At - s1 : TimeSpan.Zero))}" : ""),
+            BossSighting.Kind.Dead => b.Time is { } t2 && b.ServerNow is { } s2 ? $"spawns in {BossTimers.Countdown(t2 - s2)}" : "waiting",
+            _ => "no timer",
+        };
+        Log($"{Local(b.At)}  world boss: {name}{(b.Place.Length > 0 ? $" ({b.Place})" : "")} {what}");
     }
 
     /// <summary>The next change for the tracker to count (TrackerSession.DrainPackets), null when there is none.</summary>
@@ -368,6 +387,7 @@ public sealed class PacketReader : IDisposable
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
+                while (dec.NextBoss() is { } boss) TakeBoss(boss);
                 while (dec.NextGather() is { } gr) TakeGather(gr);
                 while (dec.NextFight() is { } f)
                 {
@@ -590,5 +610,5 @@ public sealed class PacketReader : IDisposable
     internal static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
     static string Signed(long v) => v >= 0 ? $"+{v:N0}" : $"−{-v:N0}";
 
-    public void Dispose() { _watch?.Dispose(); _watch = null; StopCapture(); _decoder?.Dispose(); _decoder = null; }
+    public void Dispose() { _watch?.Dispose(); _watch = null; StopCapture(); _decoder?.Dispose(); _decoder = null; Bosses.Save(); }
 }

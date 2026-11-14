@@ -31,6 +31,17 @@ public enum GatherEnd { Worked = 0, Upgrade = 1, Failed = 2 }
 public sealed record GatherResult(DateTime At, long NodeId, long NodeKind, GatherEnd Outcome, long ItemId, int Count, int Attempt);
 
 /// <summary>
+/// A field boss as the game's world map lists it (the decoder's interface version 5). Key: which boss, the same every time
+/// (opaque). Name, Place, Region: as the decoder knows them ("" when it doesn't). Time: for a dead boss its next spawn, for a
+/// live one when it spawned, on the game server's clock; ServerNow: the server's clock when the list came (null when not
+/// known yet), so the time left is Time minus ServerNow, whatever this PC's clock says.
+/// </summary>
+public sealed record BossSighting(DateTime At, DateTime? ServerNow, string Key, string Name, string Place, string Region, BossSighting.Kind State, DateTime? Time, bool First)
+{
+    public enum Kind { Dead = 0, Alive = 1, NoTimer = 2 }
+}
+
+/// <summary>
 /// One record of the inventory's snapshot (the game sends the whole inventory at the start of each connection to its
 /// server): Begin (Count: the stacks the game says it holds), Stack (an item's stack: its id on this connection, the amount,
 /// the container; Currency when it is Kinah, bound Kinah or Abyss Points; Level a piece of gear's enhancement level, 0 for
@@ -59,6 +70,8 @@ public interface IGameDecoder : IDisposable
     bool ReadsItems => false;
     /// <summary>The next item change found, or null (always null for a decoder that reads no items).</summary>
     ItemChange? NextItem() => null;
+    /// <summary>The next field boss from the world map's boss list, or null (always null for a decoder without it).</summary>
+    BossSighting? NextBoss() => null;
     /// <summary>True when this decoder reads the player's kills and deaths too (klnet.dll's interface version 3).</summary>
     bool ReadsFights => false;
     /// <summary>The next fight event found, or null (always null for a decoder that reads no fights).</summary>
@@ -79,6 +92,12 @@ public sealed unsafe class NativeDecoder : IGameDecoder
 {
     [StructLayout(LayoutKind.Sequential)] struct KlChange { public int Kind; public int First; public long Delta; public long Amount; public long AtUtcTicks; }
     [StructLayout(LayoutKind.Sequential)] struct KlItem { public long AtUtcTicks; public uint ItemId; public int Op; public long StackId; public long Delta; public long Total; public int First; public int Batch; public int BatchRows; public int BatchFell; }
+    [StructLayout(LayoutKind.Sequential)] struct KlBoss
+    {
+        public long AtUtcTicks; public long ServerUtcMs; public long TimeUtcMs; public uint MapId; public uint BossId; public int State; public int Flags;
+        public float X, Y, Z; public int Reserved;
+        public fixed byte Name[48]; public fixed byte Place[48]; public fixed byte Region[24];
+    }
     [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
     [StructLayout(LayoutKind.Sequential)] struct KlBagRow { public long AtUtcTicks; public int Kind; public int Count; public uint ItemId; public int Container; public int Slot; public int Gear; public int Currency; public int Reserved; public long StackId; public long Amount; }
     [StructLayout(LayoutKind.Sequential)] struct KlGather { public long AtUtcTicks; public uint NodeId; public uint TemplateId; public uint ItemId; public int Result; public int Count; public int Attempt; public int Flags; public float X, Y, Z; }
@@ -93,12 +112,13 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next")] static extern int NextN(nint h, KlChange* change);
     [DllImport("klnet", EntryPoint = "kl_stats")] static extern int StatsN(nint h, KlStats* stats);
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
+    [DllImport("klnet", EntryPoint = "kl_next_boss")] static extern int NextBossN(nint h, KlBoss* boss);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
     [DllImport("klnet", EntryPoint = "kl_next_bag")] static extern int NextBagN(nint h, KlBagRow* row);
     [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
 
     static int? _abi;
-    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, more for later additions.</summary>
+    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
     public static int Version
     {
         get
@@ -110,7 +130,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
             return _abi.Value;
         }
     }
-    /// <summary>True when this build carries the decoder (klnet.dll, interface version 1 or 2).</summary>
+    /// <summary>True when this build carries the decoder (klnet.dll, any interface version).</summary>
     public static bool Available => Version > 0;
 
     /// <summary>A decoder, or null when this build has none.</summary>
@@ -145,6 +165,19 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         KlItem c;
         if (NextItemN(_h, &c) != 1 || c.Op is < 0 or > 2) return null;
         return new ItemChange(new DateTime(c.AtUtcTicks, DateTimeKind.Utc), c.ItemId, (ItemOp)c.Op, c.StackId, c.Delta, c.Total, c.First != 0, c.Batch, c.BatchRows, c.BatchFell != 0);
+    }
+    // a dll that says 5 or more but was built without the boss list (versions are numbered as branches merge): asked once
+    static bool _noBosses;
+    public BossSighting? NextBoss()
+    {
+        if (_h == 0 || Version < 5 || _noBosses) return null;
+        KlBoss b;
+        try { if (NextBossN(_h, &b) != 1 || b.State is < 0 or > 2) return null; }
+        catch (EntryPointNotFoundException) { _noBosses = true; return null; }
+        static string Str(byte* p, int n) { int len = 0; while (len < n && p[len] != 0) len++; return System.Text.Encoding.UTF8.GetString(p, len); }
+        static DateTime? Ms(long ms) => ms > 0 && ms < 4_102_444_800_000 ? DateTime.UnixEpoch.AddMilliseconds(ms) : null;
+        return new BossSighting(new DateTime(b.AtUtcTicks, DateTimeKind.Utc), Ms(b.ServerUtcMs), $"{b.MapId}:{b.BossId}",
+            Str(b.Name, 48), Str(b.Place, 48), Str(b.Region, 24), (BossSighting.Kind)b.State, Ms(b.TimeUtcMs), (b.Flags & 1) != 0);
     }
     public bool ReadsFights => Version >= 3;
     public FightEvent? NextFight()
