@@ -264,42 +264,63 @@ public partial class MainWindow
             if (win.Content is FrameworkElement root) Save(root, $"timers-{state}{sfx}.png");
             win.Close();
         }
-        // the overlay over the game (a game-like ground under it), watching the defaults
+        // the overlays over the game (a game-like ground under them), every timer watched, the window set to 15 min
         {
-            _timerPrefs = TimerPrefs.Defaults();
             var t = new BossTimers(); t.SetForTest(SampleBosses(now - TimeSpan.FromSeconds(4)));
             _bossesForShot = t;
             var ev = new EventTimers(); ev.SetForTest(lag, true, null);
             _eventsForShot = ev; _eventRegionForShot = "na_e";
             var ground = Color.FromRgb(0x5A, 0x6B, 0x4F);
-            foreach (var (state, window, menu, watchAll) in new[] { ("overlay-rest", 15, false, true), ("overlay-close", 5, false, true), ("overlay-menu", 15, true, true) })
+            _timerPrefs = TimerPrefs.Defaults(); _timerPrefs.WindowMinutes = 15;
+            foreach (var i in TimerItems(now)) _timerPrefs.SetWatched(i.Key, true);
+            var at = now.AddMinutes(16);   // Chaser Taulo 4 min away (gold), others further off
+            var near = TimerBoard.ForOverlay(TimerItems(at), _timerPrefs, at);
+            void Draw(FrameworkElement root, string file)
             {
-                _timerPrefs.WindowMinutes = window;
-                if (watchAll) foreach (var i in TimerItems(now)) _timerPrefs.SetWatched(i.Key, true);
-                var at = now.AddMinutes(state == "overlay-close" ? 17 : 8);   // rest: Chaser Taulo 12 min away and others; close: Taulo 3 min
-                var items = TimerBoard.ForOverlay(TimerItems(at), _timerPrefs, at);
-                var o = new TimersOverlay(_timerPrefs) { Left = -12000, Top = -12000 };
-                o.Show(items, at);
-                if (menu) o.ToggleMenu(true);
-                if (!o.IsVisible) o.Show();
-                o.UpdateLayout();
-                Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
-                if (o.Content is FrameworkElement root) Save(root, $"timers-{state}{sfx}.png", ground);
-                o.Close();
+                var page = new Border { Background = new SolidColorBrush(ground), Padding = new Thickness(18), Child = root };
+                page.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); page.Arrange(new Rect(page.DesiredSize)); page.UpdateLayout();
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(page.ActualWidth), (int)Math.Ceiling(page.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                bmp.Render(page);
+                var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                using var f = File.Create(Path.Combine(dir, file)); enc.Save(f);
             }
-            // Move overlay: the strip outlined to be placed, with the next watched timers standing in (none is due yet), and
-            // with the sample when nothing is watched at all
-            foreach (var (state, none) in new[] { ("overlay-placing", false), ("overlay-placing-sample", true) })
+            // the default (Steven, 2026-11-14): the timer line popped out on top of the Kinah overlay, in the strip look and the Card
+            foreach (var look in new[] { HudLooks.Strip, HudLooks.Card })
             {
-                _timerPrefs = TimerPrefs.Defaults();
-                foreach (var i in TimerItems(now)) _timerPrefs.SetWatched(i.Key, !none);
-                var o = new TimersOverlay(_timerPrefs) { Left = -12000, Top = -12000 };
-                o.StartPlacing(PlacementSample(now), now);
-                o.Left = -12000; o.Top = -12000;   // never on a screen in a render
-                o.UpdateLayout();
+                var h = new HudWindow(HudFields.Parse(_prefs.HudFields), look, still: true) { Left = -12000, Top = -12000 };
+                h.Update(HudSample());
+                h.ShowTimers(near, at);
+                h.Show(); h.UpdateLayout();
                 Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
-                if (o.Content is FrameworkElement root) Save(root, $"timers-{state}{sfx}.png", ground);
-                o.Close();
+                var face = (FrameworkElement)h.Content; h.Content = null;
+                Draw(face, $"timers-kinah-{look}{sfx}.png");
+                h.Close();
+            }
+            // Separate timer overlay: the strip beside the Kinah overlay (its first spot, just above it), drawn the same way;
+            // then the strip alone with click-through on and the pointer over it (the grip at its left edge)
+            {
+                var o = new TimersOverlay(_timerPrefs) { Left = -12000, Top = -12000 };
+                o.Show(near, at);
+                o.Left = -12000; o.Top = -12000;
+                o.UpdateLayout();
+                var stripFace = (FrameworkElement)o.Content; o.Content = null;
+                var h = new HudWindow(HudFields.Parse(_prefs.HudFields), HudLooks.Strip, still: true) { Left = -12000, Top = -12000 };
+                h.Update(HudSample());
+                h.Show(); h.UpdateLayout();
+                var kinahFace = (FrameworkElement)h.Content; h.Content = null;
+                stripFace.HorizontalAlignment = HorizontalAlignment.Left; kinahFace.HorizontalAlignment = HorizontalAlignment.Left;
+                var pair = new StackPanel { Children = { stripFace, new Border { Height = 6 }, kinahFace } };
+                Draw(pair, $"timers-strip-beside-kinah{sfx}.png");
+                pair.Children.Clear();
+                h.Close(); o.Close();
+                var g = new TimersOverlay(_timerPrefs) { Left = -12000, Top = -12000 };
+                g.Show(near, at);
+                g.Left = -12000; g.Top = -12000;
+                g.GripForTest(true, true);
+                g.UpdateLayout();
+                var gripFace = (FrameworkElement)g.Content; g.Content = null;
+                Draw(gripFace, $"timers-strip-grip{sfx}.png");
+                g.Close();
             }
         }
         _bossesForShot = null; _eventsForShot = null; _eventRegionForShot = null; _timerPrefs = keepPrefs;

@@ -788,8 +788,8 @@ public static class PacketTests
         // watched by default (Steven, 2026-11-14): the events, Kashapa, Gartua, Lagta and the Abyss; every other boss off
         Check(prefs.Watched(TimerBoard.EventKey("Shugo Festival")) && prefs.Watched(TimerBoard.BossKey("Soul Ruler Kashapa")) && prefs.Watched(TimerBoard.BossKey("Eternal Gartua"))
             && prefs.Watched(TimerBoard.BossKey("High Commander Lagta")) && prefs.Watched(TimerBoard.AbyssKey("Executor Tamasa"))
-            && !prefs.Watched(TimerBoard.BossKey("Heretic Layla")) && !prefs.Watched(TimerBoard.BossKey("Kusan the Mad Gladiator")) && prefs.OverlayOn && prefs.ClickThrough && prefs.Count == 4,
-            "watched by default: the events, Kashapa, Gartua, Lagta and every Abyss boss; Layla and Kusan off; the overlay on, click-through, 4 at most");
+            && !prefs.Watched(TimerBoard.BossKey("Heretic Layla")) && !prefs.Watched(TimerBoard.BossKey("Kusan the Mad Gladiator")) && prefs.OverlayOn && !prefs.ClickThrough && prefs.Count == 4,
+            "watched by default: the events, Kashapa, Gartua, Lagta and every Abyss boss; Layla and Kusan off; the overlay on, not click-through (it drags), 4 at most");
 
         // the overlay: only watched timers within 5 min, soonest first; gone once up; hidden with none
         string Names(List<TimerBoard.Item> l) => l.Count == 0 ? "none" : string.Join(", ", l.Select(i => i.Short));
@@ -831,19 +831,25 @@ public static class PacketTests
         Check(kairaChime.Any(i => i.Short == "Watcher Kaira") && !muted.Any(i => i.Short == "Watcher Kaira") && !late.Any(i => i.Short == "Watcher Kaira") && silent.Count == 0,
             "...Watcher Kaira's 5 min before (watched by default); none with her chime off, none 10 s before (too late to help), none at volume 0");
 
+        // where the line goes (Steven, 2026-11-14): on top of the Kinah overlay by default; its own strip when separated or
+        // with the Kinah overlay off; nowhere with the timers off
+        Check(!TimerPrefs.Defaults().Separate && TimerPrefs.Host(true, false, true) == "kinah" && TimerPrefs.Host(true, true, true) == "strip"
+            && TimerPrefs.Host(true, false, false) == "strip" && TimerPrefs.Host(false, false, true) == "" && TimerPrefs.Host(false, true, false) == "",
+            "the timer line's home: on top of the Kinah overlay by default, its own strip when separated or with the Kinah overlay off, nowhere when off");
+
         // the settings file
         var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, "timers.json"); File.Delete(file);
         var saved = TimerPrefs.Load(file);
-        saved.OverlayOn = false; saved.ClickThrough = false; saved.X = 1500; saved.Y = 200; saved.Count = 6; saved.WindowMinutes = 10; saved.ChimeMinutes = 2; saved.Volume = 0.3; saved.Details = true;
+        saved.OverlayOn = false; saved.ClickThrough = true; saved.X = 1500; saved.Y = 200; saved.Count = 6; saved.WindowMinutes = 10; saved.ChimeMinutes = 2; saved.Volume = 0.3; saved.Details = true;
         saved.WinX = 2000; saved.WinY = 100; saved.WinW = 500; saved.WinH = 900;
         saved.SetWatched(TimerBoard.BossKey("Heretic Layla"), true); saved.SetWatched(TimerBoard.EventKey("Spacetime Rift"), false); saved.SetChimes(TimerBoard.EventKey("Shugo Festival"), false);
         saved.Save();
         var back = TimerPrefs.Load(file);
-        Check(back is { OverlayOn: false, ClickThrough: false, X: 1500, Y: 200, Count: 6, WindowMinutes: 10, ChimeMinutes: 2, Volume: 0.3, Details: true, WinX: 2000, WinW: 500, WinH: 900 }
+        Check(back is { OverlayOn: false, ClickThrough: true, X: 1500, Y: 200, Count: 6, WindowMinutes: 10, ChimeMinutes: 2, Volume: 0.3, Details: true, WinX: 2000, WinW: 500, WinH: 900 }
             && back.Watched(TimerBoard.BossKey("Heretic Layla")) && !back.Watched(TimerBoard.EventKey("Spacetime Rift")) && back.Watched(TimerBoard.EventKey("Shugo Festival")) && !back.Chimes(TimerBoard.EventKey("Shugo Festival"))
-            && TimerPrefs.Load(Path.Combine(dir, "none.json")) is { OverlayOn: true, ClickThrough: true },
-            "timers.json: the overlay, its place, click-through, minutes, how many, the chime, the Timers window's place, size and details, the watched and muted timers, read back; no file is the defaults (overlay on, click-through)");
+            && TimerPrefs.Load(Path.Combine(dir, "none.json")) is { OverlayOn: true, ClickThrough: false },
+            "timers.json: the overlay, its place, click-through, minutes, how many, the chime, the Timers window's place, size and details, the watched and muted timers, read back; no file is the defaults (overlay on, not click-through)");
     }
 
     static void BossTimerChecks(DateTime t)

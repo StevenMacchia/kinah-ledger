@@ -153,7 +153,8 @@ public sealed class TimerChimes
 public sealed class TimerPrefs
 {
     public bool OverlayOn { get; set; } = true;
-    public bool ClickThrough { get; set; } = true;
+    /// <summary>Clicks pass through the separate strip to the game. Off by default: it drags like the Kinah overlay (Steven, 2026-11-14).</summary>
+    public bool ClickThrough { get; set; }
     public double? X { get; set; }
     public double? Y { get; set; }
     public int Count { get; set; } = 4;
@@ -167,6 +168,15 @@ public sealed class TimerPrefs
     public HashSet<string> Unwatch { get; set; } = new();
     /// <summary>Watched timers whose chime the player turned off.</summary>
     public HashSet<string> Mute { get; set; } = new();
+    /// <summary>
+    /// The timers in their own strip (Ui/TimersOverlay.cs), apart from the Kinah overlay. Off by default (Steven, 2026-11-14:
+    /// "have the tracker kinah [overlay] pop out at the top tiny"): the timer line sits on top of the Kinah overlay.
+    /// </summary>
+    public bool Separate { get; set; }
+
+    /// <summary>Where the timer line goes: "kinah" (on top of the Kinah overlay), "strip" (its own) or "" (nowhere).</summary>
+    public static string Host(bool overlayOn, bool separate, bool kinahOn) => !overlayOn ? "" : separate || !kinahOn ? "strip" : "kinah";
+
     /// <summary>The Timers window's rows show their second line (place, how often, the start time). Off by default.</summary>
     public bool Details { get; set; }
     public double? WinX { get; set; }

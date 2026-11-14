@@ -206,6 +206,7 @@ public sealed partial class HudWindow : Window
         MouseEnter += (_, _) => ShowDragHint(); MouseLeave += (_, _) => ShowDragHint();
         SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _unlock.Length == 0);
         SizeChanged += (_, _) => PlacePending();
+        AddTimerSection();   // the timer line on top (Ui/HudWindow.Timers.cs); after any other section, so it wraps outermost
     }
 
     /// <summary>The player dropped the panel somewhere (unlocked): the window remembers Left and Top.</summary>

@@ -31,7 +31,9 @@ public partial class MainWindow
     void InitTimers(bool watch)
     {
         // the redesign's Timers tab replaced the header button (AddTimersButton); the overlay joins the header's Overlays group
-        RegisterOverlay("Timers", () => TimersOverlayOn, on => SetTimersOverlay(on), "Events and world bosses you watch, over the game: hidden until one is near, with a chime.");
+        // listed only while the timers have a strip of their own: by default they are a line on top of the Kinah overlay
+        RegisterOverlay("Timers", () => TimersOverlayOn, on => SetTimersOverlay(on), "Events and world bosses you watch, in a strip of their own: hidden until one is near, with a chime.",
+            visible: () => TimersSeparate);
         if (!watch) return;
         _timerPrefs = TimerPrefs.Load();
         _timersTick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => TimersTick(DateTime.UtcNow), Dispatcher);
@@ -41,13 +43,27 @@ public partial class MainWindow
         Closed += (_, _) => { _timersTick?.Stop(); _timersOverlay?.Close(); _timersOverlay = null; _bossWin?.Close(); };
     }
 
-    /// <summary>A second's work: the overlay's rows, and the chime for any watched timer now close enough.</summary>
+    /// <summary>Where the timer line goes now: on top of the Kinah overlay, in its own strip, or nowhere.</summary>
+    string TimersHost => TimerPrefs.Host(_timerPrefs.OverlayOn, _timerPrefs.Separate, _hud != null);
+
+    /// <summary>
+    /// A second's work: the timer line where it goes (on top of the Kinah overlay by default; its own strip when separated or
+    /// with the Kinah overlay off), and the chime for any watched timer now close enough.
+    /// </summary>
     void TimersTick(DateTime now)
     {
-        if (_timersOverlay == null && !_timerPrefs.ChimeOn) return;
+        if (!_timerPrefs.OverlayOn && !_timerPrefs.ChimeOn) { _hud?.ShowTimers(Array.Empty<TimerBoard.Item>(), now); return; }
         List<TimerBoard.Item> items;
         try { items = TimerItems(now); } catch (Exception ex) { CrashLog.Write("timers", ex); return; }
-        _timersOverlay?.Show(TimerBoard.ForOverlay(items, _timerPrefs, now), now);
+        var near = TimerBoard.ForOverlay(items, _timerPrefs, now);
+        string host = TimersHost;
+        _hud?.ShowTimers(host == "kinah" ? near : Array.Empty<TimerBoard.Item>(), now);
+        if (host == "strip")
+        {
+            if (_timersOverlay == null) OpenTimersStrip();
+            _timersOverlay?.Show(near, now);
+        }
+        else if (_timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; }
         var ring = _timerChimes.Due(now, items, _timerPrefs);
         if (ring.Count == 0) return;
         PlayChime(_timerPrefs.Volume);
@@ -66,69 +82,55 @@ public partial class MainWindow
     /// <summary>A watched timer's chime on or off, saved.</summary>
     internal void SetTimerChime(string key, bool on) { _timerPrefs.SetChimes(key, on); _timerPrefs.Save(); }
     internal bool TimersOverlayOn => _timerPrefs.OverlayOn;
+    /// <summary>The timers are in their own strip (Settings › Timers › Separate timer overlay): the Overlays menu lists them then.</summary>
+    internal bool TimersSeparate => _timerPrefs.Separate;
+    /// <summary>The Kinah overlay is up (the timer line's home unless separated).</summary>
+    internal bool KinahOverlayOn => _hud != null;
+    /// <summary>For the options self-test: where the timer line goes now.</summary>
+    internal string TimersHostForTest => TimersHost;
     /// <summary>The full timers window, to keep open beside the game or on a second screen.</summary>
     internal void OpenTimersPopOut() => OpenBossWindow();
 
-    /// <summary>The overlay on or off (and saved).</summary>
+    /// <summary>The timers overlay on or off (and saved): the line on the Kinah overlay, or the separate strip.</summary>
     internal void SetTimersOverlay(bool on, bool save = true)
     {
         _timerPrefs.OverlayOn = on;
         if (save) _timerPrefs.Save();
-        if (on && _timersOverlay == null)
-        {
-            _timersOverlay = new TimersOverlay(_timerPrefs)
-            {
-                OpenSettings = () => OpenOptions(OptionsWindow.Page.Timers),
-                HideOverlay = () => SetTimersOverlay(false),
-                SetClickThroughPref = SetTimersClickThrough,
-            };
-            _timersOverlay.Closed += (_, _) => _timersOverlay = null;
-            TimersTick(DateTime.UtcNow);   // it shows itself only while a watched timer is near
-        }
-        else if (!on && _timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; }
+        if (!on && _timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; }
+        TimersTick(DateTime.UtcNow);   // the line shows itself only while a watched timer is near
         DrawOverlayPills();
     }
 
-    /// <summary>
-    /// Move overlay (Steven, 2026-11-14): the strip shown now to be dragged, even with nothing due and with the overlay
-    /// off; Done or Esc keeps the spot. With the overlay off it closes again after.
-    /// </summary>
-    internal void StartTimersPlacement()
+    /// <summary>Settings › Timers › Separate timer overlay: the timers in their own strip, or back on top of the Kinah overlay.</summary>
+    internal void SetTimersSeparate(bool on)
     {
-        bool wasOn = _timerPrefs.OverlayOn;
-        if (_timersOverlay == null)
-        {
-            SetTimersOverlay(true, save: false);
-            _timerPrefs.OverlayOn = wasOn;
-            DrawOverlayPills();
-        }
-        var o = _timersOverlay!;
-        o.PlacementDone = () => { if (!_timerPrefs.OverlayOn) SetTimersOverlay(false, save: false); };
-        var now = DateTime.UtcNow;
-        o.StartPlacing(PlacementSample(now), now);
+        _timerPrefs.Separate = on; _timerPrefs.Save();
+        if (!on && _timersOverlay != null) { _timersOverlay.Close(); _timersOverlay = null; }
+        TimersTick(DateTime.UtcNow);
+        DrawOverlayPills();
+        if (_part == "Timers") FillTimersPage();
     }
 
-    /// <summary>Reset position: the overlay back to its default spot (top right of the main screen), saved.</summary>
+    /// <summary>
+    /// The strip's window, made when the timers need it (separated, or the Kinah overlay off): the Kinah overlay's look, its
+    /// opacity and size; the first time with no spot kept, it sits just above the Kinah overlay.
+    /// </summary>
+    void OpenTimersStrip()
+    {
+        if (_timersOverlay != null) return;
+        _timersOverlay = new TimersOverlay(_timerPrefs)
+        {
+            KinahBox = () => _hud is { IsVisible: true } h && h.ActualWidth > 0 ? new Rect(h.Left, h.Top, h.ActualWidth, h.ActualHeight) : null,
+        };
+        _timersOverlay.Match(_prefs.HudOpacity, _hudPrefs.Scale);
+        _timersOverlay.Closed += (_, _) => _timersOverlay = null;
+    }
+
+    /// <summary>Reset position (Settings › Timers): the strip's spot forgotten; it sits just above the Kinah overlay again.</summary>
     internal void ResetTimersOverlayPosition()
     {
         _timerPrefs.X = null; _timerPrefs.Y = null; _timerPrefs.Save();
         _timersOverlay?.ResetSpot();
-    }
-
-    /// <summary>What stands in while placing with nothing due: the next watched timers, else "Shugo 4:52 · Kashapa 12:10".</summary>
-    List<TimerBoard.Item> PlacementSample(DateTime now)
-    {
-        List<TimerBoard.Item> next;
-        try
-        {
-            next = TimerItems(now).Where(i => i.State == TimerBoard.Kind.Waiting && i.AtPc is { } at && at > now && _timerPrefs.Watched(i.Key))
-                .OrderBy(i => i.AtPc).Take(Math.Max(1, _timerPrefs.Count)).ToList();
-        }
-        catch (Exception) { next = new(); }
-        if (next.Count > 0) return next;
-        TimerBoard.Item Fake(string name, string shortName, double seconds) =>
-            new(TimerBoard.EventKey(name), "Events", name, "", TimerBoard.Kind.Waiting, now.AddSeconds(seconds), "", "") { Short = shortName };
-        return new() { Fake("Shugo Festival", "Shugo", 292), Fake("Soul Ruler Kashapa", "Kashapa", 730) };
     }
 
     internal void SetTimersClickThrough(bool on)
