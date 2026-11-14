@@ -480,7 +480,7 @@
                 <StackPanel Orientation="Horizontal">
                   <!-- the light that crosses the figure on a new best or a day's milestone, and their tags after the unit, drawn over the card (Ui/MainWindow.Bests.cs) -->
                   <Grid>
-                    <TextBlock x:Name="HeadRate" Cursor="Hand" MouseLeftButtonUp="HeadRate_Click" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                    <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
                     <Rectangle x:Name="HeadLight" IsHitTestVisible="False" Visibility="Collapsed"/>
                   </Grid>
                   <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
@@ -610,7 +610,7 @@
             <!-- one period at a time: this zone (or the run, or All zones), today, or the week -->
             <Border x:Name="LootScope" Grid.Column="3" Padding="3" CornerRadius="10" Background="{DynamicResource Bg}" VerticalAlignment="Center" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
-                <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="24" FontSize="12" Padding="10,0" ToolTip="Since you came to this zone. It starts over when you change zone."/>
+                <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This session" Height="24" FontSize="12" Padding="10,0" ToolTip="Every zone since your last break (15 minutes with nothing farmed)."/>
                 <Button x:Name="LootTodayBtn" Style="{StaticResource SegOff}" Content="Today" Height="24" FontSize="12" Padding="10,0" Margin="2,0,0,0" ToolTip="Today's farming since midnight on this PC, every zone."/>
                 <!-- the last 7 days (0.9, History A of kinah-bench/mock-goals-history): Ui/MainWindow.Week.cs -->
                 <Button x:Name="LootWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="24" FontSize="12" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of farming on this PC, a bar a day."/>
@@ -782,7 +782,7 @@
                      Text="Loot shows here as it comes in: drops from kills, gathering, Kinah by enemy and Soul Crystals."/>
           <!-- loot from other zones for the sections empty here, in one line; All zones counts them together -->
           <TextBlock x:Name="OtherZones" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="20,14,20,4" TextWrapping="Wrap" Visibility="Collapsed" Background="Transparent"
-                     ToolTip="The tables show this zone only, and start over when you change zone. Turn on All zones (the … button) to count every zone together."/>
+                     ToolTip="Loot from other zones for the sections empty here."/>
 
           <!-- Drops from kills: open by default; one aligned table, the crafting materials under their own sub-line -->
           <Border x:Name="DropsSection" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">

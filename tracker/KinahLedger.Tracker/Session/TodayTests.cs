@@ -39,13 +39,29 @@ public static class TodayTests
             Check("zone A: the zone view counted the Kinah", zoneA.ToString(), "819");
             Check("zone A: all zones and today counted the same", $"{all.Totals().Kinah == zoneA} {day.Totals().Kinah == zoneA}", "True True");
             var t1 = t0.AddSeconds(30);
+            // 0.10.70 (Steven, 2026-11-13: "dont restart the area every time u go somewhere else"): a new zone is a move only
+            // once it has been read for a minute (or behind a loading screen); until then the zone view goes on
             s.ApplyZone("Eastern Cantas Valley", t1);
-            Check("zone B: the zone view starts over", s.ZoneView.Totals().Kinah.ToString(), "0");
+            Check("zone B read: the zone view goes on until the move holds", s.ZoneView.Totals().Kinah.ToString(), "819");
             Check("zone B: all zones and today keep zone A", $"{all.Totals().Kinah == zoneA} {day.Totals().Kinah == zoneA}", "True True");
             s.Count(new KinahChanged(t1.AddSeconds(1), 977, false));
+            s.ApplyZone("Eastern Cantas Valley", t1.AddSeconds(TrackerSession.SteadySeconds + 3));
             long zoneB = s.ZoneView.Totals().Kinah;
-            Check("zone B counted on top of A in both", $"{zoneB} {all.Totals().Kinah} {day.Totals().Kinah}", "977 1796 1796");
+            Check("zone B for a minute: the zone view starts over from its first read; B counted on top of A in both", $"{zoneB} {all.Totals().Kinah} {day.Totals().Kinah} {s.Place}", "977 1796 1796 Eastern Cantas Valley");
             Check("today knows both zones", string.Join(",", day.ZoneSnapshot().Where(kv => kv.Value.Kinah > 0).Select(kv => kv.Key).OrderBy(x => x)), "Eastern Cantas Valley,Western Cantas Valley");
+            // a walk into a neighbour and back, or a read gone wrong: nothing starts over
+            var t2 = t1.AddMinutes(3);
+            s.ApplyZone("Eastern Cantas Campsite", t2); s.Count(new KinahChanged(t2.AddSeconds(5), 100, false));
+            s.ApplyZone("Eastern Cantas Valley", t2.AddSeconds(25));
+            Check("...20 s in a neighbouring zone and back: the zone view goes on, its pickup in it", $"{s.ZoneView.Totals().Kinah} {s.Place}", "1077 Eastern Cantas Valley");
+            // behind a loading screen (a teleport), at once
+            var t3 = t2.AddMinutes(2);
+            s.LoadingSeen(t3); s.ApplyZone("Western Cantas Valley", t3.AddSeconds(4));
+            Check("...after a loading screen the move is at once", $"{s.ZoneView.Totals().Kinah} {s.Place}", "0 Western Cantas Valley");
+            // an expedition's areas are one place: its own zone view, never started over between its rooms
+            s.ApplyZone("Path of Atonement", t3.AddMinutes(1)); var inRun = s.ZoneView;
+            s.ApplyZone("Fire Corridor", t3.AddMinutes(3)); s.ApplyZone("Mirror Altar", t3.AddMinutes(3.5));
+            Check("...an expedition's areas are one place, its zone view kept between its rooms", $"{ReferenceEquals(inRun, s.ZoneView)} {s.Place}", "True Fire Temple");
 
             // b. a day's count through today.json and back: the same figures, and it counts on
             var e = new SessionEngine(items); var t = DateTime.UtcNow;
