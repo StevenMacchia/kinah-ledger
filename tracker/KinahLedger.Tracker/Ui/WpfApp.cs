@@ -798,7 +798,12 @@ public static partial class WpfApp
                 Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20) && System.Windows.Automation.AutomationProperties.GetName(shown[0]) == "Overlays" && w.SiteText.IsVisible,
                     $"the header's round buttons on {page}: Overlays and Settings, each with a tooltip; the site is a footer link ({seen[^1]})");
             }
-            // the Overlays button's menu: a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            // the Overlays button's menu: by default just Kinah (the timers are a line on top of it); with Settings › Timers ›
+            // Separate timer overlay on, a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
+            bool defaultOne = defaultMenu == "Kinah" && w.OverlayEntries().Count == 1;
+            Check(defaultOne && !w.TimersSeparate, $"the header's Overlays menu by default: just Kinah ({defaultMenu}), the timers being a line on top of it");
+            w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
             var entries = w.OverlayEntries();
             Check(string.Join(",", ovs.Select(p => p.Name)) == "Kinah,Timers" && entries.Count == 2 && entries.All(e => e.On != null && e.Sub.Length > 0),
@@ -823,7 +828,7 @@ public static partial class WpfApp
         // takes focus, passes clicks through when asked, and Customize's switches land in the settings
         {
             var tw = w;
-            tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
+            tw.TimerPrefsForTest = Session.TimerPrefs.Defaults(); tw.TimerPrefsForTest.PlacedOnce = true;   // placed already: a timer near now must not open the first-time placement mid-test
             tw.TimersSampleForShot("live");
             Click(tw.TimersTab); DoEvents();
             var btn = tw.TimersPopOutForTest;
@@ -848,8 +853,9 @@ public static partial class WpfApp
             Check(off && tw.TimerPrefsForTest.Watched(gartua), $"...a bell's click stops watching Gartua ({off}); it moves into Verteron's list, where its bell watches it again");
             tw.TimersSampleForShot("off");
             tw.ShowPartForTest("Farming"); DoEvents();
+            tw.TimerPrefsForTest.Separate = true;   // the menu lists Timers only while it is a strip of its own
             tw.SetTimersOverlay(true, save: false); DoEvents();
-            Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on, and the button its green dot");
+            Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on (separated), and the button its green dot");
             var ov = tw.TimersOverlayForTest;
             long ex0 = ov?.ExStyleForTest ?? 0;                 // click-through by default
             ov?.InteractiveForTest(true); DoEvents();
@@ -906,9 +912,9 @@ public static partial class WpfApp
                 tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
                 string home = tw.TimersHostForTest;   // no Kinah overlay in this window: the strip
                 tw.TimerPrefsForTest.Separate = true;
-                string sep = tw.TimersHostForTest;
-                Check(anchored && lineFolded && home == "strip" && sep == "strip",
-                    $"timer line on top of the Kinah overlay: \"{line}\", {lineH:0} px; the window up by as much ({up:0}), the Kinah line where it was ({anchored}); folded with nothing due, back where it was ({lineFolded}); without the Kinah overlay, or separated, the strip ({home}, {sep})");
+                string sepHome = tw.TimersHostForTest;
+                Check(anchored && lineFolded && home == "strip" && sepHome == "strip",
+                    $"timer line on top of the Kinah overlay: \"{line}\", {lineH:0} px; the window up by as much ({up:0}), the Kinah line where it was ({anchored}); folded with nothing due, back where it was ({lineFolded}); without the Kinah overlay, or separated, the strip ({home}, {sepHome})");
             }
             // placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay
             // shows the strip now, outlined and clickable, with the next watched timers or a sample; Done keeps the spot on a
