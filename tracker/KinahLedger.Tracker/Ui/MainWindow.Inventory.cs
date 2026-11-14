@@ -28,6 +28,7 @@ public partial class MainWindow
         {
             if (!Changed("inventory", "unknown|" + Skins.Current)) return;
             InvNote.Text = ""; InvTotal.Text = ""; InvTotal.ToolTip = null; InvHost.Children.Clear(); InvHost.Visibility = Visibility.Collapsed;
+            InvWornHost.Children.Clear(); InvWornHost.Visibility = InvWornHead.Visibility = Visibility.Collapsed;
             InvSub.Text = "Known at your next teleport or Abyss trip, when the game sends your whole inventory.";
             return;
         }
@@ -35,7 +36,8 @@ public partial class MainWindow
         var w = BagValue.Of(now, first, _items, n => PriceBook.Price(n), PriceBook.SellerKeeps);
         long? kinah = bag.Money(CurrencyKind.Kinah);
         var top = w.Lines.Take(8).ToList();
-        var sig = $"{w.Total}|{w.Sellable}|{w.Unpriced}|{w.Kinds}|{w.Change}|{kinah}|{string.Join(";", top.Select(l => $"{l.Id}:{l.Count}:{l.Value}"))}|{Skins.Current}";
+        var worn = bag.WornGear() ?? new();
+        var sig = $"{w.Total}|{w.Sellable}|{w.Unpriced}|{w.Kinds}|{w.Change}|{kinah}|{string.Join(";", top.Select(l => $"{l.Id}:{l.Count}:{l.Value}"))}|{string.Join(";", worn.Select(g => $"{g.ItemId}:{g.Level}"))}|{Skins.Current}";
         if (!Changed("inventory", sig)) return;
         InvTotal.Text = w.Total > 0 ? Fk(w.Total) : "";
         InvNote.Text = $"{w.Kinds:N0} kind{(w.Kinds == 1 ? "" : "s")}";
@@ -58,7 +60,23 @@ public partial class MainWindow
                 + (first != null && l.Change != 0 ? $"\n{(l.Change > 0 ? "+" : "−")}{Math.Abs(l.Change):N0} since {bag.FirstAt!.Value.ToLocalTime():HH:mm}" : "");
             InvHost.Children.Add(slot);
         }
+        // the gear worn with its enhancement level, as the game sent it (confirmed for +1 to +12 against the game's window on
+        // 2026-11-13; a level over +15, the weapon's 18 there, showed as a badge of the game's own and stays unsaid)
+        InvWornHost.Children.Clear();
+        InvWornHost.Visibility = InvWornHead.Visibility = worn.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var g in worn)
+        {
+            var info = _items.Get(g.ItemId);
+            string name = info?.Name ?? _items.NameOf(g.ItemId);
+            string level = g.Level is >= 1 and <= MaxShownLevel ? $"+{g.Level}" : "";
+            var slot = QSlot(QItemIcon(name, g.ItemId, 42, round: false, grade: info?.Grade ?? ""), level);
+            slot.ToolTip = level.Length > 0 ? $"{name} {level}" : name;
+            InvWornHost.Children.Add(slot);
+        }
     }
+
+    /// <summary>The highest enhancement level said on a worn piece (the game showed the weapon's 18 as a badge of its own, not "+18").</summary>
+    const int MaxShownLevel = 15;
 
     /// <summary>The render sample's inventory: a snapshot of a gatherer's bag, then two gathers and a sale since.</summary>
     void DemoInventory(string how)
@@ -73,6 +91,9 @@ public partial class MainWindow
         rows.Add(new(t, BagRecord.Stack, 0, 0, stack++, 4_922_940, 1, 0, CurrencyKind.Kinah));
         S("Orichalcum Ore", 773); S("Fine Orichalcum Ore", 658); S("Odyle", 52); S("Radiant Odyle", 11); S("Amplify Stone (Unique)", 112, 1);
         S("Superior Manastone", 5); S("Lesser Manastone", 5); S("Spiritstone", 256); S("Life Potion (Bound)", 364, 1); S("Strong Leather", 313);
+        void G(string name, int slot, int level) { if (_items.IdOf(name) is long id and > 0) rows.Add(new(t, BagRecord.Stack, 0, id, stack++, 1, BagBook.Worn, slot, null, level)); }
+        G("Nuakum Guard", 2, 12); G("Nuakum Helm", 3, 10); G("Nuakum Pauldrons", 4, 10); G("Nuakum Breastplate", 5, 10); G("Nuakum Greaves", 6, 10);
+        G("Nuakum Gloves", 7, 10); G("Nuakum Boots", 8, 10); G("Enraged Kromede Ring", 13, 11); G("Enraged Kromede Ring", 14, 10); G("Nuakum Cloak", 19, 10);
         rows.Add(new(t, BagRecord.End, rows.Count - 1, 0, 0, 0, 0, 0, null));
         foreach (var r in rows) _demoBag.Take(r);
         if (stackOf.TryGetValue("Orichalcum Ore", out var so)) _demoBag.Take(new ItemChange(t.AddMinutes(30), _items.IdOf("Orichalcum Ore"), ItemOp.Changed, so, 9, 782, false, 1, 1, false));

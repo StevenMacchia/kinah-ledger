@@ -15,6 +15,7 @@ public sealed class BagBook
     readonly object _gate = new();
     readonly Dictionary<long, (long ItemId, long Amount, int Container)> _stacks = new();
     readonly Dictionary<CurrencyKind, long> _money = new();
+    readonly List<(long ItemId, int Slot, int Level)> _worn = new();
     List<BagRecord>? _filling;
     int _said;
 
@@ -29,7 +30,7 @@ public sealed class BagBook
     public (int Said, int Read) LastRows { get; private set; }
 
     /// <summary>A new connection: the inventory is unknown until its snapshot comes.</summary>
-    public void Unknown() { lock (_gate) { KnownAt = null; _stacks.Clear(); _money.Clear(); _filling = null; } }
+    public void Unknown() { lock (_gate) { KnownAt = null; _stacks.Clear(); _money.Clear(); _worn.Clear(); _filling = null; } }
 
     /// <summary>One record of a snapshot: its start, a stack, its end (which makes it the inventory).</summary>
     public void Take(BagRecord r)
@@ -41,9 +42,11 @@ public sealed class BagBook
                 case BagRecord.Begin: _filling = new List<BagRecord>(); _said = r.Count; break;
                 case BagRecord.Stack: _filling?.Add(r); break;
                 case BagRecord.End when _filling != null:
-                    _stacks.Clear(); _money.Clear();
+                    _stacks.Clear(); _money.Clear(); _worn.Clear();
                     foreach (var s in _filling)
                     {
+                        // the gear worn, with its enhancement level (slots past 40 are the game's other worn things, no gear)
+                        if (s.Container == Worn && s.Slot is > 0 and < 40) _worn.Add((s.ItemId, s.Slot, s.Level));
                         if (s.Currency is CurrencyKind k) _money[k] = _money.GetValueOrDefault(k) + s.Amount;
                         else _stacks[s.StackId] = (s.ItemId, s.Amount, s.Container);
                     }
@@ -87,6 +90,9 @@ public sealed class BagBook
 
     /// <summary>The items held at the first snapshot since the tracker started (gear worn left out); empty before one.</summary>
     public Dictionary<long, long> FirstTotals { get { lock (_gate) return new Dictionary<long, long>(_first); } }
+
+    /// <summary>The gear worn at the last snapshot, by slot, with its enhancement level; null when the inventory is unknown.</summary>
+    public List<(long ItemId, int Slot, int Level)>? WornGear() { lock (_gate) return KnownAt == null ? null : _worn.OrderBy(w => w.Slot).ToList(); }
 
     /// <summary>A currency's amount now, null when unknown.</summary>
     public long? Money(CurrencyKind k) { lock (_gate) return KnownAt != null && _money.TryGetValue(k, out var v) ? v : null; }
