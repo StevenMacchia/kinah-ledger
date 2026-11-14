@@ -1,3 +1,4 @@
+using KinahLedger.Data;
 using KinahLedger.Ocr;
 using KinahLedger.Packets;
 
@@ -74,6 +75,8 @@ public sealed partial class TrackerSession
         var now = DateTime.UtcNow;
         // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
         DrainFights(p, now);
+        // the player's gathering next: a gather is the "gather nearby" its item's rise is checked against
+        DrainGathers(p, now);
         DrainItems(p, now);
         while (_packetHeld.Count > 0)
         {
@@ -317,6 +320,48 @@ public sealed partial class TrackerSession
                 : $"killed {(o.Player ? "the player " + (o.Name.Length > 0 ? o.Name : "(unnamed)") : "a monster")}{(o.Credited ? " (the game named no killer; your Rank Points rose with it)" : "")}";
             CrashLog.Note($"packets: {what}");
             CommitWith(new FightCounted(o.At, o.Player, o.Death, o.Name) { Via = "packets" }, "counter");
+        }
+    }
+
+    // ---- gathering (0.10.80) ----
+    long _lastGatherNode = -1;
+
+    /// <summary>
+    /// The player's gathering from the game's messages (Steven, 2026-11-13: "exact gathering results"): every attempt, how it
+    /// ended (worked, the upgrade roll won, failed), its node, what it gave and how many. Each is one attempt under its
+    /// node's skill (named from what it gave, GatheringCatalog), a node when it is the first attempt on it. Meanwhile the
+    /// screen's attempts (the bar's races, results whose race went unseen, failure lines) are set aside for the agreement
+    /// check (Tally): one the traffic didn't show is counted from the screen after all, and three of them in five minutes
+    /// hand gathering back to the screen. The items gathered still count from the inventory's updates, as every pickup does.
+    /// </summary>
+    void DrainGathers(PacketReader p, DateTime now)
+    {
+        while (p.NextGather() is { } g)
+        {
+            string item = _items.NameOf(g.ItemId);
+            var node = GatheringCatalog.NodeOf(item);
+            var family = node?.Family ?? GatherFamily.Unknown;
+            string name = node?.Name ?? UnknownNode;
+            bool newNode = g.Attempt == 1 || (g.Attempt == 0 && g.NodeId != _lastGatherNode);
+            _lastGatherNode = g.NodeId;
+            // its item's rise in the inventory, in the same moment, is a gather's: it counts at once
+            if (g.At > _lastGatherAt) _lastGatherAt = g.At;
+            string how = g.Outcome switch { GatherEnd.Upgrade => "the upgrade roll won", GatherEnd.Failed => "failed", _ => "worked" };
+            string what = g.Outcome == GatherEnd.Failed ? $"a {name} node" : $"{item} x{g.Count}";
+            if (!p.CountingGathers(g.At)) { CrashLog.Note($"packets: gathering {how}, {what}: the screen counts gathering now ({p.GathersBroken ?? "the reading just began"})"); continue; }
+            lock (_tallyLock) Named(family, name, "result", g.At);
+            if (GatherInRun) { CrashLog.Note($"packets: gathering {how}, {what}: inside the run, not farming's gathering"); continue; }
+            foreach (var e in FarmEngines()) { e.AttemptsFromTally = true; e.GatherAttempt(g.At, family, name, g.Outcome != GatherEnd.Failed, g.Outcome == GatherEnd.Upgrade, newNode); }
+            CrashLog.Note($"packets: gathering {how}, {what}{(g.Attempt > 0 ? $", try {g.Attempt} on the node" : "")}{(newNode ? " (a new node)" : "")}: counted from the game's message, {After(g.At)}");
+            NotePacketDelay(g.At);
+        }
+        // the screen's attempts the traffic never showed: the screen's after all
+        while (p.NextUncoveredGather() is Attempt a)
+        {
+            a.Held = false;
+            CrashLog.Note($"gather attempt at {a.At.ToLocalTime():HH:mm:ss.f}: {a.Node}, {(a.Ok ? "success" : "failed")}: the game's messages didn't show it, so the screen's count does");
+            if (GatherInRun) continue;
+            foreach (var e in FarmEngines()) { e.AttemptsFromTally = true; e.GatherAttempt(a.At, a.Family, a.Node, a.Ok); }
         }
     }
 

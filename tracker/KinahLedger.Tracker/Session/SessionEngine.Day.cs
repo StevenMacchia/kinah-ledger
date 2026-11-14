@@ -39,6 +39,8 @@ public sealed partial class SessionEngine
         public int Events { get; set; }
         public int Nodes { get; set; }
         public int NodesFailed { get; set; }
+        public int Upgrades { get; set; }
+        public int NodeVisits { get; set; }
         public int Plentiful { get; set; }
         public int Bonus { get; set; }
         public int Rewards { get; set; }
@@ -73,13 +75,13 @@ public sealed partial class SessionEngine
                 Active = _active + TrailingLocked(),
                 Kinah = Kinah, KinahBound = KinahBound, KinahSkipped = KinahSkipped, AbyssPoints = AbyssPoints,
                 KillsSeen = KillsSeen, Defeated = KillsDefeated, Xp = KillsXp, KinahDrops = KinahDrops, CurrencyLines = CurrencyLines,
-                Events = Events, Nodes = Nodes, NodesFailed = NodesFailed, Plentiful = Plentiful, Bonus = BonusFinds, Rewards = RewardsSkipped, PetCrystals = PetCrystals,
+                Events = Events, Nodes = Nodes, NodesFailed = NodesFailed, Upgrades = Upgrades, NodeVisits = NodeVisits, Plentiful = Plentiful, Bonus = BonusFinds, Rewards = RewardsSkipped, PetCrystals = PetCrystals,
                 PlayerKills = PlayerKills, MonsterKills = MonsterKills, Deaths = Deaths, DeathsToPlayers = DeathsToPlayers, RankPoints = RankPoints, RankPointsLost = RankPointsLost,
                 Items = new Dictionary<long, int>(Items), ItemsBound = new Dictionary<long, int>(ItemsBound), Pets = new Dictionary<string, int>(Pets),
                 Zones = zones,
                 Mobs = _mobs.Values.Select(m => new MobStats { Name = m.Name, Zone = m.Zone, KinahDrops = m.KinahDrops, CurrencyLines = m.CurrencyLines, Crystals = m.Crystals, Kinah = m.Kinah, Drops = new Dictionary<long, int>(m.Drops) }).ToList(),
-                Skills = Skills.ToDictionary(kv => kv.Key.ToString(), kv => new SkillStats { Nodes = kv.Value.Nodes, Failed = kv.Value.Failed, Plentiful = kv.Value.Plentiful, Items = kv.Value.Items, Bonus = kv.Value.Bonus }),
-                GatherNodes = GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed }, StringComparer.OrdinalIgnoreCase),
+                Skills = Skills.ToDictionary(kv => kv.Key.ToString(), kv => new SkillStats { Nodes = kv.Value.Nodes, Failed = kv.Value.Failed, Plentiful = kv.Value.Plentiful, Items = kv.Value.Items, Bonus = kv.Value.Bonus, Upgrades = kv.Value.Upgrades, Visits = kv.Value.Visits }),
+                GatherNodes = GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed, Upgrades = kv.Value.Upgrades, Visits = kv.Value.Visits }, StringComparer.OrdinalIgnoreCase),
             };
         }
     }
@@ -96,7 +98,7 @@ public sealed partial class SessionEngine
             _active += Math.Max(0, c.Active);
             Kinah += c.Kinah; KinahBound += c.KinahBound; KinahSkipped += c.KinahSkipped; AbyssPoints += c.AbyssPoints;
             KillsSeen += c.KillsSeen; KillsDefeated += c.Defeated; KillsXp += c.Xp; KinahDrops += c.KinahDrops; CurrencyLines += c.CurrencyLines;
-            Events += c.Events; Nodes += c.Nodes; NodesFailed += c.NodesFailed; Plentiful += c.Plentiful; BonusFinds += c.Bonus; RewardsSkipped += c.Rewards; PetCrystals += c.PetCrystals;
+            Events += c.Events; Nodes += c.Nodes; NodesFailed += c.NodesFailed; Upgrades += c.Upgrades; NodeVisits += c.NodeVisits; Plentiful += c.Plentiful; BonusFinds += c.Bonus; RewardsSkipped += c.Rewards; PetCrystals += c.PetCrystals;
             PlayerKills += c.PlayerKills; MonsterKills += c.MonsterKills; Deaths += c.Deaths; DeathsToPlayers += c.DeathsToPlayers; RankPoints += c.RankPoints; RankPointsLost += c.RankPointsLost;
             foreach (var (id, n) in c.Items) Items[id] = Items.GetValueOrDefault(id) + n;
             foreach (var (id, n) in c.ItemsBound) ItemsBound[id] = ItemsBound.GetValueOrDefault(id) + n;
@@ -122,12 +124,12 @@ public sealed partial class SessionEngine
             {
                 if (!Enum.TryParse<KinahLedger.Data.GatherFamily>(k, out var f)) continue;
                 var to = Skill(f);
-                to.Nodes += s.Nodes; to.Failed += s.Failed; to.Plentiful += s.Plentiful; to.Items += s.Items; to.Bonus += s.Bonus;
+                to.Nodes += s.Nodes; to.Failed += s.Failed; to.Plentiful += s.Plentiful; to.Items += s.Items; to.Bonus += s.Bonus; to.Upgrades += s.Upgrades; to.Visits += s.Visits;
             }
             foreach (var (k, s) in c.GatherNodes)
             {
                 if (!GatherNodes.TryGetValue(k, out var to)) GatherNodes[k] = to = new NodeStats { Family = s.Family };
-                to.Ok += s.Ok; to.Failed += s.Failed;
+                to.Ok += s.Ok; to.Failed += s.Failed; to.Upgrades += s.Upgrades; to.Visits += s.Visits;
             }
         }
     }
