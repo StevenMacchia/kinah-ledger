@@ -20,6 +20,16 @@ public enum ItemOp { NewStack = 0, Changed = 1, Gone = 2 }
 /// </summary>
 public sealed record ItemChange(DateTime At, long ItemId, ItemOp Op, long StackId, long Delta, long Total, bool First, int Batch, int BatchRows, bool BatchFell);
 
+/// <summary>How a gathering attempt ended: it worked, its upgrade roll won (the better grade of the material), or it failed.</summary>
+public enum GatherEnd { Worked = 0, Upgrade = 1, Failed = 2 }
+
+/// <summary>
+/// One gathering attempt of the player's, from the game's messages: the node (its id on this connection; a new node has a
+/// new id), its kind when its appearance was seen (0 when not), how the attempt ended, what it gave and how many (0 on a
+/// fail; the item is then what the node gives), and the attempt's number on that node (1 to 3, 0 when not seen).
+/// </summary>
+public sealed record GatherResult(DateTime At, long NodeId, long NodeKind, GatherEnd Outcome, long ItemId, int Count, int Attempt);
+
 /// <summary>
 /// One record of the inventory's snapshot (the game sends the whole inventory at the start of each connection to its
 /// server): Begin (Count: the stacks the game says it holds), Stack (an item's stack: its id on this connection, the amount,
@@ -56,6 +66,10 @@ public interface IGameDecoder : IDisposable
     bool ReadsBag => false;
     /// <summary>The next record of an inventory snapshot, or null (always null for a decoder that reads none).</summary>
     BagRecord? NextBag() => null;
+    /// <summary>True when this decoder reads the player's gathering too (klnet.dll's interface version 7).</summary>
+    bool ReadsGathers => false;
+    /// <summary>The next gathering attempt found, or null (always null for a decoder that reads none).</summary>
+    GatherResult? NextGather() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
 }
 
@@ -66,6 +80,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [StructLayout(LayoutKind.Sequential)] struct KlItem { public long AtUtcTicks; public uint ItemId; public int Op; public long StackId; public long Delta; public long Total; public int First; public int Batch; public int BatchRows; public int BatchFell; }
     [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
     [StructLayout(LayoutKind.Sequential)] struct KlBagRow { public long AtUtcTicks; public int Kind; public int Count; public uint ItemId; public int Container; public int Slot; public int Gear; public int Currency; public int Reserved; public long StackId; public long Amount; }
+    [StructLayout(LayoutKind.Sequential)] struct KlGather { public long AtUtcTicks; public uint NodeId; public uint TemplateId; public uint ItemId; public int Result; public int Count; public int Attempt; public int Flags; public float X, Y, Z; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -79,6 +94,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
     [DllImport("klnet", EntryPoint = "kl_next_bag")] static extern int NextBagN(nint h, KlBagRow* row);
+    [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, more for later additions.</summary>
@@ -151,6 +167,18 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         catch (EntryPointNotFoundException) { _noBag = true; return null; }
         // the gear byte (r.Gear) is left out: what it means isn't confirmed
         return new BagRecord(new DateTime(r.AtUtcTicks, DateTimeKind.Utc), r.Kind, r.Count, r.ItemId, r.StackId, r.Amount, r.Container, r.Slot, r.Currency is >= 0 and <= 2 ? (CurrencyKind)r.Currency : null);
+    }
+    // a dll that says 7 or more but was built without the gathering export (the interface numbers are shared between
+    // branches): asked once, then never again, and gathering stays the screen's
+    static bool _noGathers;
+    public bool ReadsGathers => Version >= 7 && !_noGathers;
+    public GatherResult? NextGather()
+    {
+        if (_h == 0 || !ReadsGathers) return null;
+        KlGather g;
+        try { if (NextGatherN(_h, &g) != 1 || g.Result is < 0 or > 2 || g.Count is < 0 or > 1000) return null; }
+        catch (EntryPointNotFoundException) { _noGathers = true; return null; }
+        return new GatherResult(new DateTime(g.AtUtcTicks, DateTimeKind.Utc), g.NodeId, (g.Flags & 1) != 0 ? g.TemplateId : 0, (GatherEnd)g.Result, g.ItemId, g.Count, (g.Flags & 2) != 0 ? g.Attempt : 0);
     }
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats
     {
