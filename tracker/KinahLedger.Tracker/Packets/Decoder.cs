@@ -78,13 +78,14 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_boss")] static extern int NextBossN(nint h, KlBoss* boss);
 
     static int? _abi;
-    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list (later versions keep every earlier export).</summary>
+    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
     public static int Version
     {
         get
         {
             if (_abi is int v) return v;
-            try { int a = Abi(); _abi = a >= 1 ? a : 0; }
+            // a later version only adds exports (every one of 1 and 2 stays as it is): it reads what this build knows
+            try { int a = Abi(); _abi = a >= 1 && a < 100 ? a : 0; }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { _abi = 0; }
             return _abi.Value;
         }
