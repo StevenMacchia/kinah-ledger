@@ -317,6 +317,9 @@ public static class PacketTests
             Check(rec is { Ok: 4, Fail: 1, Upgraded: 1 } && M2(Dish) == 0,
                 $"crafts from the game's traffic: {Recipe} {rec?.Ok} worked, {rec?.Fail} failed, {rec?.Upgraded} combo won, {rec?.MadeCount} made (the panel's race and the dish's chat line left out; {M2(Dish)} counted as pickups)");
             int M2(long id) => c.Engine.Items.GetValueOrDefault(id) + c.Engine.ItemsBound.GetValueOrDefault(id);
+            // a craft the game told is a craft done: the activity is Crafting (0.10.87), as it is from the panel's own race
+            c.UpdateDoing(t0.AddSeconds(48));
+            Check(c.Doing.Current.Kind == Session.ActivityKind.Crafting, $"...a craft told by the game makes the activity Crafting: {c.Doing.Current.Label}");
 
             // one material, two crafts' worth of it gone in one update, then the next queue's first update all first sights:
             // no fail from either

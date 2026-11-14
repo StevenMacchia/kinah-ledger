@@ -40,7 +40,7 @@ public static class PageFollowTests
             bool pass = got == expect; ok &= pass;
             Console.WriteLine($"  {what,-62} -> {(got.Length > 60 ? got[..60] + "…" : got),-40} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
-        Console.WriteLine("\nThe page follows the activity: opens on Farming, holds 5 s, a pick by hand stays, off stops it (0.8.55):");
+        Console.WriteLine("\nThe page follows the activity: opens on Farming, Events after 5 s, Crafting and Farming at once (0.10.87), a pick by hand stays, off stops it (0.8.55):");
 
         // which activity belongs to which page; a base, the Market, a reward screen, idle and not read belong to none
         var kinds = Enum.GetValues<ActivityKind>();
@@ -52,46 +52,45 @@ public static class PageFollowTests
         Check("the window opens on Farming", s.Shown, "Farming");
         s.For(2, ActivityKind.NotRead).For(60, ActivityKind.Farming);
         Check("...and a minute of farming leaves it there", $"{s.Shown} | {s.Log}", "Farming | none");
-        // opened in the middle of crafting: Crafting once the crafting window has held 5 s
+        // opened in the middle of crafting: Crafting at once (0.10.87: the activity is Crafting only once a craft is done)
         s = new Sim().For(2, ActivityKind.NotRead).For(10, ActivityKind.Crafting);
-        Check("opened while crafting: Crafting after 5 s", $"{s.Shown} | {s.Log}", "Crafting | 7s Crafting");
+        Check("opened while crafting: Crafting at once", $"{s.Shown} | {s.Log}", "Crafting | 2s Crafting");
 
         // b. it follows a change: farming, crafting, an expedition, its reward screen (no page), farming again
         s = new Sim().For(60, ActivityKind.Farming).For(10, ActivityKind.Crafting).For(20, ActivityKind.Expedition)
             .For(8, ActivityKind.RewardScreen).For(12, ActivityKind.Farming);
-        Check("follows farming → crafting → expedition → farming", s.Log, "65s Crafting, 75s Events, 103s Farming");
+        Check("follows farming → crafting → expedition → farming", s.Log, "60s Crafting, 75s Events, 98s Farming");
         // an event, a world boss and the Market: the event and the boss are Events, the Market switches nothing
         s = new Sim().For(10, ActivityKind.Farming).For(10, ActivityKind.Event).For(10, ActivityKind.Farming)
             .For(10, ActivityKind.WorldBoss).For(10, ActivityKind.Town).For(20, ActivityKind.Market);
-        Check("an event and a world boss show Events; a base and the Market nothing", $"{s.Shown} | {s.Log}", "Events | 15s Events, 25s Farming, 35s Events");
+        Check("an event and a world boss show Events; a base and the Market nothing", $"{s.Shown} | {s.Log}", "Events | 15s Events, 20s Farming, 35s Events");
 
-        // c. a blip never moves it: 3 s of crafting, two short stretches with something between, a dropped read
-        s = new Sim().For(30, ActivityKind.Farming).For(3, ActivityKind.Crafting).For(10, ActivityKind.Farming)
-            .For(3, ActivityKind.Crafting).For(0.5, ActivityKind.Town).For(3, ActivityKind.Crafting)
-            .For(3, ActivityKind.Expedition).For(1, ActivityKind.NotRead).For(3, ActivityKind.Expedition).For(10, ActivityKind.Farming);
-        Check("a blip of crafting or an expedition never switches", $"{s.Shown} | {s.Log}", "Farming | none");
-        // crafting that ends 4 s after its first read isn't long enough; at 5 s it switches
-        s = new Sim().For(10, ActivityKind.Farming).For(4.5, ActivityKind.Crafting).For(10, ActivityKind.Farming).For(5.5, ActivityKind.Crafting);
-        Check("crafting gone after 4 s stays; at 5 s it switches", s.Log, "29.5s Crafting");
+        // c. a blip of an expedition never moves it: two short stretches with a dropped read between
+        s = new Sim().For(30, ActivityKind.Farming).For(3, ActivityKind.Expedition).For(1, ActivityKind.NotRead).For(3, ActivityKind.Expedition).For(10, ActivityKind.Farming);
+        Check("a blip of an expedition never switches", $"{s.Shown} | {s.Log}", "Farming | none");
+        // crafting (a craft done) and farming (a kill, a drop, a gather) are never blips: each switches at once (Steven,
+        // 2026-11-14: "Farming should always switch back on gather or kill")
+        s = new Sim().For(10, ActivityKind.Farming).For(4.5, ActivityKind.Crafting).For(10, ActivityKind.Farming);
+        Check("a craft done shows Crafting at once; a kill or gather Farming at once", s.Log, "10s Crafting, 14.5s Farming");
 
         // d. a page picked by hand stays until the activity moves on
         s = new Sim().For(10, ActivityKind.Farming).Pick(PageFollow.Events).For(60, ActivityKind.Farming);
         Check("Events picked while farming: a minute of farming keeps it", $"{s.Shown} | {s.Log}", "Events | 10s picked Events");
         s.For(10, ActivityKind.Crafting);
-        Check("...until crafting starts", $"{s.Shown} | {s.Log}", "Crafting | 10s picked Events, 75s Crafting");
-        // picked just after crafting began (before it held 5 s): the crafting under way is what was picked over
+        Check("...until crafting starts", $"{s.Shown} | {s.Log}", "Crafting | 10s picked Events, 70s Crafting");
+        // picked during crafting: the crafting under way is what was picked over
         s = new Sim().For(10, ActivityKind.Farming).For(3, ActivityKind.Crafting).Pick(PageFollow.Farming).For(30, ActivityKind.Crafting);
-        Check("Farming picked 3 s into crafting: the crafting doesn't take it", $"{s.Shown} | {s.Log}", "Farming | 13s picked Farming");
+        Check("Farming picked during crafting: the crafting doesn't take it back", $"{s.Shown} | {s.Log}", "Farming | 10s Crafting, 13s picked Farming");
         s.For(10, ActivityKind.Farming).For(10, ActivityKind.Crafting);
-        Check("...farming, then crafting again, does", $"{s.Shown} | {s.Log}", "Crafting | 13s picked Farming, 58s Crafting");
+        Check("...farming, then crafting again, does", $"{s.Shown} | {s.Log}", "Crafting | 10s Crafting, 13s picked Farming, 53s Crafting");
         // picked in a base: starting to farm is the next change
         s = new Sim().For(10, ActivityKind.Town).Pick(PageFollow.Crafting).For(10, ActivityKind.Town).For(10, ActivityKind.Farming);
-        Check("Crafting picked in a base: farming takes it back", s.Log, "10s picked Crafting, 25s Farming");
+        Check("Crafting picked in a base: farming takes it back", s.Log, "10s picked Crafting, 20s Farming");
         // picked before anything was read: the first activity read was already under way, so it isn't a change
         s = new Sim().For(3, ActivityKind.NotRead).Pick(PageFollow.Events).For(30, ActivityKind.Farming);
         Check("Events picked before the first read: farming keeps it", $"{s.Shown} | {s.Log}", "Events | 3s picked Events");
         s.For(10, ActivityKind.Crafting);
-        Check("...until crafting starts", s.Log, "3s picked Events, 38s Crafting");
+        Check("...until crafting starts", s.Log, "3s picked Events, 33s Crafting");
 
         // e. the setting off: nothing switches, whatever happens
         s = new Sim { On = false };

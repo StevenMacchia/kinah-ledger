@@ -1340,8 +1340,9 @@ public static partial class WpfApp
             }
             bool Lit(System.Windows.Controls.Button tab) => ReferenceEquals(tab.Style, w.FindResource("NavOn"));
             Check(Follow(Session.ActivityKind.Farming, 10) == "Farming", "the page: farming leaves it on Farming");
-            Check(Follow(Session.ActivityKind.Crafting, 3) == "Farming" && Follow(Session.ActivityKind.Farming, 5) == "Farming", "...3 s of crafting doesn't move it");
-            Check(Follow(Session.ActivityKind.Crafting, 6) == "Crafting" && Lit(w.CraftTab) && !Lit(w.FarmTab), "...crafting that holds shows Crafting, its tab lit");
+            // 0.10.87: the activity is Crafting only once a craft is done, and Farming on a kill or gather, so the page follows each at once
+            Check(Follow(Session.ActivityKind.Crafting, 0.5) == "Crafting" && Lit(w.CraftTab) && !Lit(w.FarmTab), "...a craft done shows Crafting at once, its tab lit");
+            Check(Follow(Session.ActivityKind.Farming, 0.5) == "Farming" && Follow(Session.ActivityKind.Crafting, 0.5) == "Crafting", "...a kill or gather shows Farming at once, a craft Crafting again");
             Check(Follow(Session.ActivityKind.Expedition, 6) == "Events" && Lit(w.EventsTab), "...an expedition shows Events");
             Click(w.FarmTab);
             Check(w.PartForTest == "Farming" && Follow(Session.ActivityKind.Expedition, 30) == "Farming", "Farming clicked in the expedition stays through it");
