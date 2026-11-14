@@ -84,6 +84,13 @@ public sealed class Encounter
     };
 
     [JsonIgnore] public bool Live => End == null;
+
+    /// <summary>
+    /// A fight outside Transcendence, Expeditions and Sanctuaries (the open world, the Abyss). Steven, 2026-11-14: "you can
+    /// have open world count for the parser inside of the app but it shouldn't log it anywhere ever": counted live, never
+    /// kept (no record, no file, no log line with its figures), gone when it ends.
+    /// </summary>
+    [JsonIgnore] public bool OpenWorld => ModeKind == ParserMode.Fights && KindOf(Kind) == ContentKind.Other;
     [JsonIgnore] public BossOutcome? Result => Outcome switch { "kill" => BossOutcome.Kill, "wipe" => BossOutcome.Wipe, "left" => BossOutcome.Left, _ => null };
 
     /// <summary>How long the fight took (to now while it is under way, never less than 0).</summary>

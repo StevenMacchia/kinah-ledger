@@ -92,6 +92,11 @@ public sealed class BossParser
     List<GroupMember> _group = new();
     /// <summary>The boss pull under way (any mode), the run under way (Run), the fight under way (Fights).</summary>
     Encounter? _cur, _run, _fight;
+    /// <summary>
+    /// The open-world fight under way in Bosses only and Full run (in Every fight it is _fight itself): its your-DPS is the
+    /// small figure on the Kinah line while farming. Never kept, never written, dropped after its pause.
+    /// </summary>
+    Encounter? _farm;
     DateTime _lastEventAt = DateTime.MinValue;
     ParserMode _mode;
 
@@ -145,7 +150,20 @@ public sealed class BossParser
     }
 
     /// <summary>Copies of every record under way (the pull, the run, the fight), for encounter-live.json.</summary>
-    public List<Encounter> LiveAll { get { lock (_gate) return new[] { _cur, _run, _fight }.Where(e => e != null).Select(e => Copy(e!)).ToList(); } }
+    public List<Encounter> LiveAll { get { lock (_gate) return new[] { _cur, _run, _fight }.Where(e => e != null && !e.OpenWorld).Select(e => Copy(e!)).ToList(); } }
+
+    /// <summary>The open-world fight under way, in any mode (null when none, or inside an instance): the Kinah line's small DPS. Never kept.</summary>
+    public Encounter? Farm
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var f = _mode == ParserMode.Fights ? (_fight is { OpenWorld: true } ? _fight : null) : _farm;
+                return f == null ? null : Copy(f);
+            }
+        }
+    }
 
     public static Encounter Copy(Encounter e) => JsonSerializer.Deserialize<Encounter>(JsonSerializer.Serialize(e))!;
 
@@ -167,6 +185,7 @@ public sealed class BossParser
             const string why = "the Parser's mode changed";
             if (_run != null) { MarkPartial(_run, why); CloseRun(RunEnd(_run), Max(_run.LastAt, Min(now, _run.LastAt.AddMinutes(1))), done, why); }
             if (_fight != null) { MarkPartial(_fight, why); CloseFight(_fight.LastAt, done, why); }
+            _farm = null;
             _mode = mode;
             if (mode == ParserMode.Run && Kept(_kind)) OpenRun(now, midway: true);
             Log($"mode: {Name(mode)}");
@@ -181,7 +200,7 @@ public sealed class BossParser
     public static string Counts(ParserMode m) => m switch
     {
         ParserMode.Run => "Each Transcendence, Expedition or Sanctuary run, from entering to leaving, trash included, with every boss as a split.",
-        ParserMode.Fights => $"Every fight anywhere, the open world and the Abyss too: from the first hit or kill to {PauseSeconds:0} seconds without one.",
+        ParserMode.Fights => $"Every fight anywhere, the open world and the Abyss too: from the first hit or kill to {PauseSeconds:0} seconds without one. Open-world and Abyss fights show while they last and are never kept.",
         _ => "Each boss pull in Transcendence, Expeditions and Sanctuaries; trash and the open world never count.",
     };
 
@@ -228,6 +247,7 @@ public sealed class BossParser
                 _instanceId = ie.InstanceId;
                 if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: the screen's place names it"); break; }
                 _kind = kind; _instance = ie.Name.Trim(); _instanceFromGame = Kept(kind);
+                if (Kept(kind)) _farm = null;   // farming is over: an instance's fights are its runs and pulls
                 if (_mode == ParserMode.Run && _run == null && Kept(kind)) OpenRun(ie.At, midway: false);
                 if (_fight != null && !Kept(kind)) { } // a fight carries on through a loading screen only by its own pause
                 Log($"entered {(_instance.Length > 0 ? _instance : "a place")}{(Kept(kind) ? $" ({Encounter.KindName(kind)})" : "")}");
@@ -276,6 +296,7 @@ public sealed class BossParser
             case DamageDealt dd:
                 if (dd.Amount <= 0) break;
                 if (_mode == ParserMode.Fights && _fight == null) OpenFight(dd.At);
+                FarmAt(dd.At);
                 foreach (var e in Records())
                 {
                     e.LastAt = Max(e.LastAt, dd.At);
@@ -307,7 +328,13 @@ public sealed class BossParser
     }
 
     /// <summary>The records under way, the pull first.</summary>
-    IEnumerable<Encounter> Records() { if (_cur != null) yield return _cur; if (_run != null) yield return _run; if (_fight != null) yield return _fight; }
+    IEnumerable<Encounter> Records() { if (_cur != null) yield return _cur; if (_run != null) yield return _run; if (_fight != null) yield return _fight; if (_farm != null) yield return _farm; }
+
+    /// <summary>A hit, kill or pull outside an instance in Bosses only or Full run: the open-world fight (Farm) opens if none is under way.</summary>
+    void FarmAt(DateTime at)
+    {
+        if (_mode != ParserMode.Fights && _farm == null && !Kept(_kind)) _farm = NewFight(at);
+    }
 
     void Rejoined(Encounter e, InstanceEntered ie)
     {
@@ -328,7 +355,8 @@ public sealed class BossParser
         {
             _lastEventAt = Max(_lastEventAt, at);
             if (_mode == ParserMode.Fights && _fight == null) OpenFight(at);
-            foreach (var e in new[] { _run, _fight })
+            FarmAt(at);
+            foreach (var e in new[] { _run, _fight, _farm })
             {
                 if (e == null) continue;
                 e.LastAt = Max(e.LastAt, at);
@@ -447,6 +475,8 @@ public sealed class BossParser
         {
             Log($"{name}: not in a Transcendence, Expedition or Sanctuary{(_instance.Length > 0 ? $" ({_instance})" : "")}, no boss pull kept");
             if (_mode == ParserMode.Fights) { if (_fight == null) OpenFight(be.At); _fight!.LastAt = Max(_fight.LastAt, be.At); if (_fight.Boss.Length == 0) _fight.Boss = name; }
+            FarmAt(be.At);
+            if (_farm != null) { _farm.LastAt = Max(_farm.LastAt, be.At); if (_farm.Boss.Length == 0) _farm.Boss = name; }
             return;
         }
         BossBook.Boss? listed = _book.Find(_instance, name);
@@ -489,16 +519,20 @@ public sealed class BossParser
         Log($"run: {_instance} ({_run.Kind}){(midway ? ", from partway through" : "")}");
     }
 
-    void OpenFight(DateTime at)
+    void OpenFight(DateTime at) => _fight = NewFight(at);
+
+    /// <summary>A fight starting now, where the player is: inside an instance it is the instance's; else the open world's or the Abyss's.</summary>
+    Encounter NewFight(DateTime at)
     {
         bool inside = Kept(_kind);
-        _fight = new Encounter
+        var f = new Encounter
         {
             Mode = "fight", Kind = inside ? Encounter.KindName(_kind) : _abyss ? "Abyss" : "Open world",
             Instance = inside ? _instance : _zone, InstanceId = inside ? _instanceId : 0, GameMode = inside ? _gameMode : "",
             Start = at, LastAt = at, App = Upload.RunPayload.AppVersion,
         };
-        MergeGroup(_fight, _group, late: false);
+        MergeGroup(f, _group, late: false);
+        return f;
     }
 
     /// <summary>
@@ -602,6 +636,8 @@ public sealed class BossParser
         f.LastAt = Max(f.LastAt, f.End.Value);
         // a fight around a boss ends as its pull did (a wipe is a wipe, whatever the trash before it); else a death, your kills, or nothing
         f.Outcome = f.Boss.Length > 0 && f.BossResult.Length > 0 ? f.BossResult : f.YourDeaths > 0 ? "died" : f.YourKills > 0 || f.Kills.Any(k => k.Boss) ? "kill" : "ended";
+        // open world and the Abyss: shown while it lasted, never kept, and the log says no more than that it ended
+        if (f.OpenWorld) { Log("fight: an open-world fight ended (shown live only, not kept)"); return; }
         bool worth = f.YourKills > 0 || f.YourDeaths > 0 || f.Boss.Length > 0 || (f.HasDamage && f.Duration(f.End.Value).TotalSeconds >= MinSeconds);
         Log($"fight: {f.Title} in {f.Instance} {f.OutcomeLabel.ToLowerInvariant()} after {Clock(f.Duration(f.End.Value))}{(why != null ? $" ({why})" : "")}{(worth ? "" : ", nothing to keep")}");
         if (worth) done.Add(Copy(f));
@@ -634,6 +670,8 @@ public sealed class BossParser
                 CloseFight(f.LastAt, done, null);
                 _version++;
             }
+            // the open-world fight of Bosses only and Full run: gone after its pause, nothing kept
+            if (_farm is { } fm && (now - fm.LastAt).TotalSeconds >= PauseSeconds) { _farm = null; _version++; }
         }
         if (done.Count > 0) Finish(done, null);
     }
@@ -669,7 +707,7 @@ public sealed class BossParser
         {
             foreach (var s0 in saved)
             {
-                if (s0.End != null) continue;
+                if (s0.End != null || s0.OpenWorld) continue;   // an open-world fight is never kept, nor carried over
                 var s = Copy(s0);
                 var m = ModeOf(s.Mode);
                 bool fresh = (now - s.LastAt).TotalMinutes <= ResumeMinutes && (m != ParserMode.Fights || (now - s.LastAt).TotalSeconds < PauseSeconds);

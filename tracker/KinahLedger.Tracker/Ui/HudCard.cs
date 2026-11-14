@@ -157,7 +157,7 @@ public sealed partial class HudCard : IHudLook
         var (share, words, beat) = Chase(values);
         bool picked = _picks.Next(values, out _) != null;   // only a pickup just made flips, sweeps and lights (Ui/HudFreshPicks.cs)
         _streak.Show(values, counted, Moves);   // the hot streak bar fills and drains (Ui/HudStreak.cs)
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}"))
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{V("farmDps")}"))
         {
             // a pickup: the hour and the session flip to their new figures and the edge lights (Ui/HudCard.Motion.cs)
             bool rose = TotalRose(V("total")) && picked;
@@ -170,6 +170,8 @@ public sealed partial class HudCard : IHudLook
             _total.Inlines.Clear();
             // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
             if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
+            // your DPS while farming in the open world: small, on the session's line, never more (HudWindow.SetFarmDps)
+            if (V("farmDps").Length > 0) { if (_total.Inlines.Count > 0) _total.Inlines.Add(R("  ·  ", 11.5, Faint)); _total.Inlines.Add(R(V("farmDps"), 12, Ink, weight: FontWeights.SemiBold)); _total.Inlines.Add(R(" DPS", 11, Muted, weight: FontWeights.SemiBold)); }
             if (rose && Moves) EdgeGlow();
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten

@@ -216,6 +216,38 @@ public sealed partial class HudWindow : Window
     public static (double Radius, Thickness Padding) FrameShape(IReadOnlyList<string> fields) =>
         fields.Count == 1 && fields[0] == "feed" ? (10, new Thickness(10, 6, 12, 6)) : (12, new Thickness(14, 9, 18, 9));
 
+    IReadOnlyDictionary<string, string>? _lastValues;
+    string _farmDps = "";
+    StackPanel? _farmCell;
+    TextBlock? _farmValue;
+
+    /// <summary>
+    /// Your DPS in the open-world fight under way ("1.2K"), or "" for none (Steven, 2026-11-14: "show on the overlay for the
+    /// kinah tracker in a small number somewhere when they're farming enemies but never large"): one small figure on the
+    /// Kinah line, in its secondary type; the overlay never grows for it. Its words are always "DPS".
+    /// </summary>
+    public void SetFarmDps(string dps)
+    {
+        dps ??= "";
+        if (dps == _farmDps) return;
+        _farmDps = dps;
+        if (_lastValues != null) Update(_lastValues);
+    }
+
+    /// <summary>The strip's small DPS: a rule, the figure, "DPS", at the end of its line (shown only with the "farmDps" value).</summary>
+    StackPanel FarmCell()
+    {
+        _farmValue = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center };
+        var unit = new TextBlock { Text = "DPS", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var rule = new Border { Width = 1, Height = 14, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Children = { rule, _farmValue, unit } };
+        System.Windows.Automation.AutomationProperties.SetName(cell, "Your DPS");
+        return cell;
+    }
+
+    /// <summary>For tests and renders: the small DPS the line shows now ("" when none).</summary>
+    internal string FarmDpsShown => _look == null ? (_farmCell?.Visibility == Visibility.Visible ? _farmValue!.Text : "") : _farmDps;
+
     /// <summary>The player dropped the panel somewhere (unlocked): the window remembers Left and Top.</summary>
     public event Action? Dragged;
 
@@ -401,6 +433,8 @@ public sealed partial class HudWindow : Window
             _row.Children.Add(cell);
             _cells[key] = number;
         }
+        _farmCell = FarmCell();
+        _row.Children.Add(_farmCell);
     }
 
     /// <summary>The rate while it warms up: there, but plainly not the figure yet.</summary>
@@ -453,6 +487,9 @@ public sealed partial class HudWindow : Window
 
     public void Update(IReadOnlyDictionary<string, string> values)
     {
+        _lastValues = values;
+        // your DPS while farming in the open world (SetFarmDps): the "farmDps" value, small on the line, in every look
+        if (_farmDps.Length > 0) values = new Dictionary<string, string>(values) { ["farmDps"] = _farmDps };
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
@@ -513,10 +550,16 @@ public sealed partial class HudWindow : Window
         // warming up ("warm"): the hour's figure reads "warming up", dimmed and without its "/ hr"
         if (_cells.TryGetValue("rate", out var rate)) rate.Opacity = warm ? WarmOpacity : 1;
         if (_labels.TryGetValue("rate", out var rateLabel)) rateLabel.Visibility = warm ? Visibility.Collapsed : Visibility.Visible;
+        if (_farmCell != null)
+        {
+            _farmValue!.Text = V("farmDps");
+            _farmCell.Visibility = V("farmDps").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
         bool first = true;
         foreach (FrameworkElement c in _row.Children)
         {
             if (c.Visibility != Visibility.Visible) continue;
+            if (c == _farmCell) { c.Margin = new Thickness(10, 0, 0, 0); continue; }   // small, close after the line
             c.Margin = new Thickness(first ? 0 : 20, 0, 0, 0); first = false;
         }
         BadgeMoved(values, picked);

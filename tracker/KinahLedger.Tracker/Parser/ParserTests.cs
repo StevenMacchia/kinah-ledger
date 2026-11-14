@@ -335,14 +335,17 @@ public static class ParserTests
             p.Kill(t.AddSeconds(8), player: false, death: false, "");
             p.Tick(t.AddSeconds(20));
             Check(p.Live is { ModeKind: ParserMode.Fights, Kind: "Abyss", YourKills: 2, PlayerKills: 1, Title: "vs Rhavos" }, $"Every fight: kills in the Abyss make a fight: {p.Live?.Title} in {p.Live?.Kind}");
+            Check(p.Live is { OpenWorld: true } && p.LiveAll.Count == 0 && p.Farm is { Kind: "Abyss" },
+                "...shown while it lasts, but an open-world or Abyss fight is never among the records kept under way (nothing to write)");
             p.Tick(t.AddSeconds(8 + BossParser.PauseSeconds));
-            Check(kept.Count == 1 && kept[0] is { Outcome: "kill", Instance: "Abyss", OutcomeLabel: "2 kills" } && kept[0].Duration(t).TotalSeconds == 8,
-                $"...ended {BossParser.PauseSeconds:0} s after its last kill, at the last kill: {kept.FirstOrDefault()?.OutcomeLabel}");
+            // Steven, 2026-11-14: "you can have open world count for the parser inside of the app but it shouldn't log it anywhere ever"
+            Check(kept.Count == 0 && p.Live == null && p.LastEnded == null && p.Farm == null,
+                $"...and gone {BossParser.PauseSeconds:0} s after its last kill: an Abyss fight is never kept");
             p.Place("Western Cantas Valley", abyss: false);
             p.Kill(t.AddSeconds(100), player: false, death: false, "");
             p.Kill(t.AddSeconds(110), player: true, death: true, "Rhavos");
             p.Tick(t.AddSeconds(140));
-            Check(kept.Count == 2 && kept[1] is { Kind: "Open world", Outcome: "died", YourDeaths: 1 }, "...a death ends one as Died, in the open world");
+            Check(kept.Count == 0, "...nor an open-world one, a death and all");
             p.Take(new InstanceEntered(t.AddSeconds(200), ContentKind.Sanctuary, "Chalice of Muspel", 88));
             p.Take(new BossEngaged(t.AddSeconds(210), "Kaldrix", 970));
             p.Take(new DamageDealt(t.AddSeconds(215), 1, 970, 10_000));
@@ -350,10 +353,58 @@ public static class ParserTests
             Check(p.Live is { Title: "Kaldrix", Kind: "Sanctuary" }, "...a boss pull keeps its fight open past the pause, named for the boss");
             p.Take(new BossEnded(t.AddSeconds(320), 970, BossOutcome.Kill));
             p.Tick(t.AddSeconds(345));
-            Check(kept.Count == 3 && kept[2] is { Title: "Kaldrix", Outcome: "kill", HasDamage: true }, "...and ends after it, kept as one fight");
+            Check(kept.Count == 1 && kept[0] is { Title: "Kaldrix", Outcome: "kill", HasDamage: true, OpenWorld: false }, "...and ends after it, kept as one fight: a fight inside an instance is kept as before");
             p.Take(new DamageDealt(t.AddSeconds(400), 1, 0, 50));
             p.Tick(t.AddSeconds(401 + BossParser.PauseSeconds));
-            Check(kept.Count == 3, "a stray hit with no kill, death or pull isn't kept");
+            Check(kept.Count == 1, "a stray hit with no kill, death or pull isn't kept");
+        }
+
+        // farming in the open world in Bosses only and Full run: a live fight for the Kinah line's small DPS, never a record
+        {
+            var (p, kept) = New();
+            p.Place("Western Cantas Valley", abyss: false);
+            p.Take(new GroupChanged(t, new[] { new GroupMember(1, "Swoly", "Gladiator", 0, 0, true) }));
+            for (int i = 0; i <= 10; i++) p.Take(new DamageDealt(t.AddSeconds(i), 1, 5000 + i, 12_000, SourceIsYou: true));
+            var farm = p.Farm;
+            Check(p.Live == null && farm is { OpenWorld: true, Kind: "Open world" } && farm.You is { Damage: 132_000 } && Math.Abs(farm.Dps(farm.You!, t.AddSeconds(10)) - 13_200) < 0.01,
+                $"farming in the open world in Bosses only: no pull, but a live fight with your DPS for the Kinah line ({(farm?.You != null ? farm.Dps(farm.You, t.AddSeconds(10)) : 0):0})");
+            p.Tick(t.AddSeconds(10 + BossParser.PauseSeconds));
+            Check(p.Farm == null && kept.Count == 0 && p.LiveAll.Count == 0, "...gone after its pause, nothing kept");
+            p.Take(new DamageDealt(t.AddSeconds(100), 1, 6000, 5_000, SourceIsYou: true));
+            p.Take(new InstanceEntered(t.AddSeconds(105), ContentKind.Expedition, "Fire Temple", 89));
+            Check(p.Farm == null, "...and entering an instance ends it: an instance's fights are its pulls and runs");
+            p.Take(new DamageDealt(t.AddSeconds(110), 1, 6001, 5_000, SourceIsYou: true));
+            Check(p.Farm == null, "...trash inside an instance is never farming");
+        }
+
+        // open-world fights write nothing to disk: not on ending, not while under way, and an older version's are removed
+        {
+            var dir = TestTemp.Path("KinahLedger-parser-openworld-" + Guid.NewGuid().ToString("N")[..8]);
+            var store = new EncounterStore(() => dir);
+            var p = new BossParser(BossBook.Shared) { Ended = store.Add };
+            p.SetMode(ParserMode.Fights, t);
+            p.Place("Western Cantas Valley", abyss: false);
+            p.Take(new GroupChanged(t, new[] { new GroupMember(1, "Swoly", "Gladiator", 0, 0, true) }));
+            p.Take(new DamageDealt(t.AddSeconds(1), 1, 5000, 40_000, SourceIsYou: true));
+            p.Kill(t.AddSeconds(2), player: false, death: false, "Kobold");
+            store.SaveLive(p.LiveAll);
+            bool nothingLive = !Directory.Exists(dir) || Directory.GetFiles(dir).Length == 0;
+            p.Tick(t.AddSeconds(2 + BossParser.PauseSeconds));
+            var ow = new Encounter { Mode = "fight", Kind = "Open world", Instance = "Western Cantas Valley", Start = t, End = t.AddSeconds(30), LastAt = t.AddSeconds(30), YourKills = 3 };
+            store.Add(ow);
+            store.SaveLive(new[] { new Encounter { Mode = "fight", Kind = "Abyss", Start = t, LastAt = t } });
+            bool nothing = !Directory.Exists(dir) || Directory.GetFiles(dir).Length == 0;
+            Check(nothingLive && nothing, $"open-world fights write nothing to disk: ending, under way, or handed to the store ({(Directory.Exists(dir) ? Directory.GetFiles(dir).Length : 0)} files)");
+            // a file an older version wrote: its open-world fights are dropped from it, the rest kept as they were
+            Directory.CreateDirectory(dir);
+            var boss = new Encounter { Mode = "boss", Kind = "Sanctuary", Instance = "Chalice of Muspel", Boss = "Kaldrix", Start = t, End = t.AddSeconds(90), LastAt = t.AddSeconds(90), Outcome = "kill" };
+            var jo = new System.Text.Json.JsonSerializerOptions();
+            File.WriteAllLines(Path.Combine(dir, EncounterStore.FileName), new[] { System.Text.Json.JsonSerializer.Serialize(ow, jo), System.Text.Json.JsonSerializer.Serialize(boss, jo) });
+            var again = new EncounterStore(() => dir).All();
+            var lines = File.ReadAllLines(Path.Combine(dir, EncounterStore.FileName));
+            Check(again.Count == 1 && again[0].Boss == "Kaldrix" && lines.Length == 1 && !lines[0].Contains("Open world"),
+                $"...and the open-world fights an older version kept are removed from the file, the rest left as they were ({again.Count} read, {lines.Length} lines)");
+            try { Directory.Delete(dir, true); } catch (IOException) { }
         }
 
         // changing the mode ends the old mode's record where it is and starts the new one there
