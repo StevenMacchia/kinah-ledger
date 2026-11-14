@@ -1074,7 +1074,8 @@ public partial class MainWindow : Window
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
         // "farming 5:19", minutes and seconds, under a Today line whose "0:21" was hours and minutes); what it covers on hover
         var verb = _mode == Mode.Gather ? "gathering · " : "";
-        TableTitle.Text = $"{ZoneLocator.KindOf(e.Zone) ?? (inAbyss ? "Abyss" : "Open world")} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
+        // in the Abyss the zone beside it already says "Abyss": the head is its time alone
+        TableTitle.Text = (ZoneLocator.KindOf(e.Zone) ?? (inAbyss ? null : "Open world")) is { } kindWord ? $"{kindWord} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}" : $"{verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
         TableTitle.ToolTip = _tableWhat.Length > 0 ? "Counting " + _tableWhat + "." : null;
         long totalNow = kinah + s.Value;
         // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line
@@ -2080,7 +2081,7 @@ public partial class MainWindow : Window
             case Mode.Open when kind == "Abyss":
                 // a layout render of the Abyss (2026-11-13): kills that pay bound Kinah (all the Abyss pays) and Abyss Points, so the hero is the points'
                 // hour and the Kinah ticket shows under it (FillHeroTicket)
-                _demoZone = ZoneLbl.Text = "Chaotic Lower Reshanta";
+                _demoZone = ZoneLbl.Text = ZoneLocator.Abyss;   // every Abyss area is the one zone "Abyss" (0.10.71)
                 e.CreditZone(_demoZone, 42 * 60 + 17);
                 e.SetTarget("Shadowclaw Mauler", t);
                 for (int i = 0; i < 118; i++) { e.Apply(new KinahChanged(t, 2_140 + (i % 5) * 60, true)); e.Apply(new CurrencyGained(t, "Shadowclaw Mauler Soul Points", 1)); e.Apply(new CurrencyGained(t, "Abyss Points", 180 + (i % 4) * 20)); }
