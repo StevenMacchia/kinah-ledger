@@ -174,7 +174,8 @@ public sealed partial class TrackerSession
                 : _rewardLines.Any(r => Math.Abs((r.At - b.At).TotalSeconds) <= PacketNearSeconds && string.Equals(r.Name, un, StringComparison.OrdinalIgnoreCase)) ? "with the chat calling it a reward"
                 : bound && !screenSaw && Instances.Current == null ? "bound, with no pickup line for it (a quest's or a box's reward)"
                 : !near && !screenSaw && Instances.Current == null ? "with no kill, gather or pickup line around it" : null;
-            if (why != null) { CrashLog.Note($"packets: {name} +{n:N0} {why}: not a pickup; not counted"); continue; }
+            // ...and the chat's line for it, however late it shows (a window over the chat), is covered by this rise: never a pickup
+            if (why != null) { CrashLog.Note($"packets: {name} +{n:N0} {why}: not a pickup; not counted"); p.ItemExcluded(id, b.At, why); continue; }
             var ev = new ItemAcquired(b.At, id, (int)Math.Min(n, 99999), bound) { Via = "packets" };
             CrashLog.Note($"packets: {name} +{n:N0}: counted from the game's message");
             CommitWith(ev, "counter");

@@ -148,6 +148,49 @@ public static class PacketTests
             s.CommitForTest(new ItemAcquired(t0.AddSeconds(150), Odyle, 2, false) { Via = "chat" });
             Check(broken && M(Odyle) == 5, $"...three chat pickups the traffic never showed: items are the screen's again (Odyle {M(Odyle)}, every chat line counted)");
 
+            // a bought item read again (Steven, 2026-11-13 18:35: two Wrathful Ego bought, the crafting window over the chat, the
+            // same two lines read again 23 s later with a kill beside them, counted as rare drops): a rise the tracker didn't
+            // count covers the item's chat line however late it shows; a rise one line took covers that line read again; and
+            // with no rise at all (the game's messages showed nothing for it), the chat's line set aside
+            // covers its later reading. Only a line no rise and no handled line stands behind is "not shown", from the chat
+            {
+                const long Ego = 610511015;
+                var t1 = DateTime.UtcNow.AddMinutes(-10);
+                ItemChange R(double at, long id, long delta, long total) => new(t1.AddSeconds(at), id, ItemOp.Changed, 6, delta, total, false, ++batch, 1, false);
+                var pkA = new PacketReader(); pkA.ReadingForTest();
+                bool marketOpen = true;
+                var m = new TrackerSession(null, settings, items, "Test") { Packets = pkA, MarketOpen = _ => marketOpen };
+                m.Engine.SetZone("Chaotic Lower Reshanta");
+                int E(long id) => m.Engine.Items.GetValueOrDefault(id) + m.Engine.ItemsBound.GetValueOrDefault(id);
+                pkA.ItemsForTest(R(2, Ego, 1, 3));   // bought: the Market open
+                m.DrainPacketsForTest();
+                marketOpen = false;
+                m.CommitForTest(new CurrencyGained(t1.AddSeconds(24), "Modified Karnif Soul Points", 1, "Modified Karnif") { Via = "chat" });   // a kill
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(25), Ego, 1, false) { Via = "chat" });   // its line, read again 23 s later
+                m.DrainPacketsForTest(); pkA.AgreeItemsForTest(DateTime.UtcNow); m.DrainPacketsForTest();
+                Check(E(Ego) == 0 && pkA.Verdicts.LastOrDefault()?.StartsWith("covered: with the Market open") == true,
+                    $"a bought item's rise covers its chat line read 23 s later: Wrathful Ego {E(Ego)} ({pkA.Verdicts.LastOrDefault()})");
+                // a rise counted, its line covered, then the same line read again 20 s on: not a second pickup
+                m.CommitForTest(new CurrencyGained(t1.AddSeconds(40), "Modified Karnif Soul Points", 1, "Modified Karnif") { Via = "chat" });
+                pkA.ItemsForTest(R(41, Meat, 1, 4));
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(42.5), Meat, 1, false) { Via = "chat" });
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(62), Meat, 1, false) { Via = "chat" });
+                m.DrainPacketsForTest(); pkA.AgreeItemsForTest(DateTime.UtcNow); m.DrainPacketsForTest();
+                Check(E(Meat) == 1 && string.Join(",", pkA.Verdicts.TakeLast(2)) == "covered,covered: read again",
+                    $"a rise counted once, its line read again 20 s later: Fresh Raw Meat {E(Meat)} ({string.Join(", ", pkA.Verdicts.TakeLast(2))})");
+                // a line no rise or handled line stands behind is still the chat's (nothing lost), past the bought one's time
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(2 + PacketReader.ExcludedSeconds + 20), Ego, 1, false) { Via = "chat" });
+                pkA.AgreeItemsForTest(DateTime.UtcNow); m.DrainPacketsForTest();
+                Check(E(Ego) == 1 && pkA.Verdicts.LastOrDefault() == "not shown", $"...and a line the traffic never showed, minutes later, counts from the chat: Wrathful Ego {E(Ego)} ({pkA.Verdicts.LastOrDefault()})");
+                // the chat's line set aside (bought), no rise at all, then read again as new: covered by the set-aside line
+                var pkB = new PacketReader(); pkB.ReadingForTest();
+                pkB.ItemExcluded(Ego, t1.AddSeconds(200), "the chat's line for it was set aside: bought at the Market (its window was open)");
+                pkB.ScreenSawItem(Ego, 1, t1.AddSeconds(223), true, new object());
+                pkB.AgreeItemsForTest(DateTime.UtcNow);
+                Check(pkB.NextUncovered() == null && pkB.Verdicts.LastOrDefault()?.StartsWith("covered: the chat's line for it was set aside") == true,
+                    $"no rise for a bought item, its set-aside line read again: not counted ({pkB.Verdicts.LastOrDefault()})");
+            }
+
             // crafting: materials going down start a try, the item going up ends it; nothing made before the next try is a
             // fail, twice the yield is a won combo; the panel's races are left out, and no craft's item is a pickup
             var r2 = new PacketReader(); r2.ReadingForTest();

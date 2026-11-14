@@ -301,6 +301,25 @@ public sealed class PacketReader : IDisposable
     readonly HashSet<(long Id, DateTime At)> _risesTaken = new();
 
     /// <summary>
+    /// How long before a chat line a rise of its item that already covered a line still covers this one (the same line read
+    /// again: a window over the chat, then the chat shown once more), and how long a rise the tracker didn't count (the
+    /// Market open, a reward screen, a base) covers the item's lines: a window over the chat can hide a bought item's line
+    /// for minutes, and when it shows it is no pickup (Steven, 2026-11-13 18:35: two Wrathful Ego bought, counted as drops
+    /// 23 s later).
+    /// </summary>
+    public const double RereadSeconds = 60, ExcludedSeconds = 300;
+    readonly List<(long Id, DateTime At, string Why)> _itemExcluded = new();
+
+    /// <summary>A rise of an item the tracker didn't count as a pickup (<paramref name="why"/>: with the Market open, ...): it covers that item's chat lines for <see cref="ExcludedSeconds"/>.</summary>
+    public void ItemExcluded(long id, DateTime at, string why)
+    {
+        lock (_gate) { _itemExcluded.Add((id, at, why)); _itemExcluded.RemoveAll(x => (at - x.At).TotalSeconds > ExcludedSeconds * 2); }
+    }
+
+    /// <summary>For packet-test: what the agreement check decided for each screen pickup it judged, oldest first ("covered", "covered: ...", "first sight", "not shown").</summary>
+    public List<string> Verdicts { get; } = new();
+
+    /// <summary>
     /// The agreement check for items and crafts (under _gate). A screen pickup 15 s old or more is covered by a rise of that
     /// item the traffic showed around it (left out: the traffic counted it); during a craft it is the craft's item (left
     /// out); a first sight of that item's stack around it is the pickup the traffic couldn't count, and the screen counts
@@ -320,9 +339,26 @@ public sealed class PacketReader : IDisposable
             // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
             // screen's to count, no miss); another item's rise (the line misread its name)
             var own = _itemSeen.Where(p => Near(p) && p.Id == s.Id && !p.First && p.Delta > 0 && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ToList();
-            if (own.Count > 0) { _risesTaken.Add((own[0].Id, own[0].At)); continue; }
-            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First)) { if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag); continue; }
-            if (_itemSeen.Any(p => Near(p) && !p.First && p.Delta > 0)) continue;
+            if (own.Count > 0) { _risesTaken.Add((own[0].Id, own[0].At)); Verdicts.Add("covered"); continue; }
+            // a rise the tracker didn't count (bought, a reward, in a base) before the line: the line is that item's, read
+            // now, never a pickup, however late the chat showed it
+            if (_itemExcluded.LastOrDefault(x => x.Id == s.Id && (s.At - x.At).TotalSeconds is >= -ItemAfter and <= ExcludedSeconds) is { Why: not null } ex)
+            {
+                Verdicts.Add($"covered: {ex.Why}");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)}: the game's update of it at {Local(ex.At)} wasn't a pickup ({ex.Why}): not counted");
+                continue;
+            }
+            // a rise of the item that already covered a line, a little before this one, and no new rise: the same line read
+            // again (the chat covered by a window, then shown once more), not a second pickup
+            if (_itemSeen.Any(p => p.Id == s.Id && !p.First && p.Delta > 0 && _risesTaken.Contains((p.Id, p.At)) && (s.At - p.At).TotalSeconds is >= 0 and <= RereadSeconds))
+            {
+                Verdicts.Add("covered: read again");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)} again: its update was taken by an earlier line; not counted");
+                continue;
+            }
+            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First)) { Verdicts.Add("first sight"); if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag); continue; }
+            if (_itemSeen.Any(p => Near(p) && !p.First && p.Delta > 0)) { Verdicts.Add("covered: another item"); continue; }
+            Verdicts.Add("not shown");
             if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag);
             if (!s.Late) continue;   // the loot list alone: no miss, nothing counted
             _itemMisses.Add(now); _itemMisses.RemoveAll(m => (now - m).TotalMinutes > 5);

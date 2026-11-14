@@ -531,6 +531,30 @@ public static class Quests
         return done;
     }
 
+    /// <summary>
+    /// "Not a drop" on a pickup of <paramref name="subject"/> counted at <paramref name="pickupUtc"/>: the material quests of
+    /// it completed then or since whose target the counts no longer reach (<paramref name="have"/>: the count now, by
+    /// horizon) come out of the log, their points with them. Returned, for <see cref="Restore"/>. The caller saves the log. A
+    /// step already carried to the site stays there (the site keeps what it was sent); here it is taken back all the same.
+    /// </summary>
+    public static List<QuestDone> Revoke(QuestLog log, string subject, DateTime pickupUtc, Func<string, long> have)
+    {
+        var gone = log.Done.Where(d => d.Kind == QuestKind.Material && string.Equals(d.Subject, subject, StringComparison.OrdinalIgnoreCase)
+            && d.DoneAtUtc >= pickupUtc.AddSeconds(-5) && d.Target > have(d.Horizon)).ToList();
+        foreach (var d in gone) { log.Done.Remove(d); log.AllTimePoints = Math.Max(0, log.AllTimePoints - d.Points); }
+        return gone;
+    }
+
+    /// <summary>Undo of <see cref="Revoke"/>: the steps and their points are back (none twice).</summary>
+    public static void Restore(QuestLog log, IEnumerable<QuestDone> back)
+    {
+        foreach (var d in back)
+        {
+            if (log.Done.Any(x => x.Key == d.Key && x.Scope == d.Scope)) continue;
+            log.Done.Add(d); log.AllTimePoints += d.Points;
+        }
+    }
+
     /// <summary>What the session's quests can still earn under the cap: the hours played (rounded up) × the cap, less what they have earned.</summary>
     public static int CapLeft(QuestLog log, QuestInputs x)
     {
