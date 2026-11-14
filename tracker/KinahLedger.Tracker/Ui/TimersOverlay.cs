@@ -44,9 +44,13 @@ sealed class TimersOverlay : Window
     /// <summary>The grabbable left edge with click-through on, in WPF units at 1x.</summary>
     const double GripWidth = 16;
 
+    /// <summary>For the options self-test: strips made while it is set are fully transparent, so a test never flashes one on the player's screen.</summary>
+    internal static bool InvisibleForTest;
+
     public TimersOverlay(TimerPrefs prefs)
     {
         _prefs = prefs;
+        if (InvisibleForTest) Opacity = 0;
         Title = "Kinah Ledger timers";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;

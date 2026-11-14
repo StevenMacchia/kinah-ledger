@@ -828,6 +828,7 @@ public static partial class WpfApp
         // takes focus, passes clicks through when asked, and Customize's switches land in the settings
         {
             var tw = w;
+            TimersOverlay.InvisibleForTest = true;   // the strips these checks open are never seen on the player's screen
             tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             tw.TimersSampleForShot("live");
             Click(tw.TimersTab); DoEvents();
@@ -952,6 +953,7 @@ public static partial class WpfApp
                     $"the separate strip: first shown just above the Kinah overlay ({above}); the Kinah strip's surface, corner, padding, line and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
                 tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             }
+            TimersOverlay.InvisibleForTest = false;
             to.Close();
         }
             w.ShowPartForTest("Farming"); DoEvents();
