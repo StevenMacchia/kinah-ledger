@@ -33,11 +33,12 @@ public sealed partial class TrackerSession
     /// <summary>The fight events since the last pass, then the screen's place (when the game's messages haven't said), the stale check, and the fight under way kept.</summary>
     void DrainFights()
     {
-        var feed = FightFeed ?? (object?)Packets as IFightFeed;   // the packet reader is a feed once its decoder reads fights
+        // a test's feed, else the packet reader's fights (the release build's decoder, interface version 4)
+        Func<FightEvent?>? next = FightFeed != null ? FightFeed.NextFight : Packets != null ? Packets.NextFight : null;
         var p = Fights;
         try
         {
-            if (feed != null) for (int i = 0; i < 5000 && feed.NextFight() is { } ev; i++) p.Take(ev);
+            if (next != null) for (int i = 0; i < 20_000 && next() is { } ev; i++) p.Take(ev);
             var cur = Instances.Current;
             p.ScreenPlace(cur?.Kind, cur?.Zone);
             var now = DateTime.UtcNow;

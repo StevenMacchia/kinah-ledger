@@ -217,6 +217,47 @@ public static class PacketTests
         }
         Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
 
+        // boss fights (klnet.dll version 4): a decoder that reads none hands out none; the decoder's rows become the tracker's
+        // events (the roster whole each time, deaths, pulls); the reader queues them in order and keeps the queue bounded; the
+        // interface's record is the dll's 256 bytes and its text fields read back
+        {
+            IGameDecoder none = new NoFights();
+            Check(!none.ReadsFights && none.NextFight() == null, "a decoder without boss fights hands out none");
+            var map = new FightMapper();
+            FightRow Row(int kind, int s, long boss = 0, long who = 0, string name = "", bool self = false, long cp = 0, long il = 0, long amount = 0, long max = 0, int outcome = 0, string bossName = "") =>
+                new(t.AddSeconds(s), kind, 2, "Fire Temple", 1, bossName, boss, outcome, who, name, "Gladiator", self, cp, il, amount, max);
+            var got = new[]
+            {
+                Row(1, 0), Row(6, 1, who: 14325, name: "Swoly", self: true, cp: 2637, il: 2637), Row(6, 1, who: 7093, name: "Frankss", cp: 2400, il: 2500),
+                Row(3, 2, boss: 25495, amount: 1000, max: 1000, bossName: "Kromede's Desire"), Row(4, 3, boss: 25495, bossName: "Kromede's Desire"),
+                Row(8, 3, boss: 25495, who: 14325, name: "Swoly", self: true, amount: 600), Row(8, 3, boss: 25495, amount: 400), Row(9, 3, boss: 25495, amount: 0, max: 1000),
+                Row(10, 3, boss: 25495, who: 25495, amount: 1, bossName: "Kromede's Desire"), Row(5, 3, boss: 25495, outcome: 1), Row(7, 4, who: 7093), Row(7, 4, who: 999), Row(2, 5), Row(42, 6),
+            }.Select(map.Map).Where(e => e != null).ToList();
+            var roster = got.OfType<GroupChanged>().ToList();
+            var dmg = got.OfType<DamageDealt>().ToList();
+            Check(got[0] is InstanceEntered { Kind: ContentKind.Expedition, Name: "Fire Temple", InstanceId: 1 } && roster.Count == 3 && roster[1].Members.Count == 2
+                && roster[1].Members.Any(m => m is { Name: "Swoly", You: true, CombatPower: 2637 }) && roster[2].Members.Single().Name == "Swoly",
+                $"the decoder's rows: an instance, the roster whole each time ({string.Join(" ", roster.Select(r => r.Members.Count))}), a leaver gone, an unknown leaver nothing");
+            Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, SourceIsYou: true, Amount: 600, TargetId: 25495 }
+                && dmg[1] is { SourceId: 0, Amount: 400 } && got.OfType<BossHealth>().Single() is { Hp: 0, Max: 1000 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
+                && got.OfType<BossEnded>().Single().Outcome == BossOutcome.Kill && got[^1] is InstanceLeft && !got.Any(e => e is null),
+                $"...a pull, its damage (yours and other), its HP, the boss's death and a kill; a boss sighting and an unknown kind make nothing ({got.Count} events)");
+            var r = new PacketReader();
+            foreach (var e in got) r.TakeFight(e);
+            var back = new List<FightEvent>(); while (r.NextFight() is { } e) back.Add(e);
+            Check(back.SequenceEqual(got) && !r.ReadsFights, $"the reader queues boss parser events in order ({back.Count}) and says it reads none without the dll");
+            for (int i = 0; i < 20_005; i++) r.TakeFight(new FeedGap(t));
+            int n = 0; while (r.NextFight() != null) n++;
+            Check(n == 20_000, $"...and keeps at most 20,000 undrained ({n})");
+            unsafe
+            {
+                var buf = new byte[32]; var name = System.Text.Encoding.UTF8.GetBytes("Kromede's Desire"); name.CopyTo(buf, 0);
+                fixed (byte* p = buf) Check(NativeDecoder.Text(p, 32) == "Kromede's Desire" && NativeDecoder.FightSize == 256, $"a text field reads back, the record is {NativeDecoder.FightSize} bytes");
+                var full = Enumerable.Repeat((byte)'a', 16).ToArray();
+                fixed (byte* p = full) Check(NativeDecoder.Text(p, 16) == new string('a', 16), "...a field filled to the end stops at its size");
+            }
+        }
+
         // the local recording's keeping (Packets/PacketLog.cs): past 48 hours goes, then the oldest over the size, never the file being written
         {
             var keepFor = PacketLog.KeepFor; var keepBytes = PacketLog.KeepBytes;
@@ -528,4 +569,15 @@ public sealed class PcapngWriter : IDisposable
     }
 
     public void Dispose() { _w.Flush(); _w.Dispose(); }
+}
+
+/// <summary>A decoder that reads currencies only (klnet.dll before version 3): the interface's defaults for items and fights.</summary>
+sealed class NoFights : IGameDecoder
+{
+    public void Reset() { }
+    public void Gap() { }
+    public void Feed(byte[] data, DateTime at) { }
+    public CurrencyChange? Next() => null;
+    public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats => default;
+    public void Dispose() { }
 }
