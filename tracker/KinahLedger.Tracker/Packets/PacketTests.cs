@@ -414,6 +414,70 @@ public static class PacketTests
             }
         }
 
+        // the inventory (0.10.81): the game's snapshot makes it known, every change after it keeps it exact, a new connection
+        // makes it unknown again; its worth at the known prices, the sellable part after the cut, the change since the first
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            long Id(string n) => items.IdOf(n);
+            var t0 = DateTime.UtcNow.AddMinutes(-10);
+            var r = new PacketReader(); r.ReadingForTest();
+            var bag = r.Bag;
+            bool unknownFirst = bag.Totals() == null;
+            r.BagForTest(new BagRecord(t0, BagRecord.Begin, 5, 0, 0, 0, 0, 0, null),
+                new BagRecord(t0, BagRecord.Stack, 0, 1, 10, 4_727_973, 1, 0, CurrencyKind.Kinah),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Ore"), 11, 31, 1, 40, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Ore"), 12, 742, 18, 79, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Life Potion (Bound)"), 13, 364, 1, 2, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Guard"), 14, 1, BagBook.Worn, 2, null),
+                new BagRecord(t0, BagRecord.End, 5, 0, 0, 0, 0, 0, null));
+            var tot = bag.Totals()!;
+            r.ItemsForTest(new ItemChange(t0.AddSeconds(30), Id("Orichalcum Ore"), ItemOp.Changed, 11, 1, 32, false, 1, 1, false),
+                new ItemChange(t0.AddSeconds(31), Id("Odyle"), ItemOp.NewStack, 15, 1, 1, false, 2, 1, false),
+                new ItemChange(t0.AddSeconds(32), Id("Life Potion (Bound)"), ItemOp.Gone, 13, -364, 0, false, 3, 1, true));
+            r.AmountForTest(CurrencyKind.Kinah, 4_727_973, t0.AddSeconds(29)); r.AmountForTest(CurrencyKind.Kinah, 4_728_099, t0.AddSeconds(30));
+            var after = bag.Totals()!;
+            Check(unknownFirst && tot.GetValueOrDefault(Id("Orichalcum Ore")) == 773 && !tot.ContainsKey(Id("Orichalcum Guard")) && bag.Totals(worn: true)!.ContainsKey(Id("Orichalcum Guard"))
+                && after.GetValueOrDefault(Id("Orichalcum Ore")) == 774 && after.GetValueOrDefault(Id("Odyle")) == 1 && !after.ContainsKey(Id("Life Potion (Bound)")) && bag.Money(CurrencyKind.Kinah) == 4_728_099 && bag.LastRows == (5, 5),
+                $"the inventory: unknown before its snapshot, then Orichalcum Ore {tot.GetValueOrDefault(Id("Orichalcum Ore"))} (two stacks), the gear worn apart; after the changes {after.GetValueOrDefault(Id("Orichalcum Ore"))} ore, {after.GetValueOrDefault(Id("Odyle"))} Odyle, the potions gone, Kinah {bag.Money(CurrencyKind.Kinah):N0}");
+            // its worth: tradable at the price, bound at its tradable twin's, unpriced counted; the change since the first snapshot
+            var prices = new Dictionary<string, long> { ["Orichalcum Ore"] = 2_000, ["Life Potion"] = 100 };
+            var w = Session.BagValue.Of(after, bag.FirstTotals, items, n => prices.TryGetValue(n, out var v) ? v : null, 0.9);
+            Check(w.Total == 774 * 2_000 && w.Sellable == (long)Math.Round(774 * 2_000 * 0.9) && w.Unpriced == 1 && w.Change == 2_000 - 364 * 100 && w.Lines[0].Name == "Orichalcum Ore",
+                $"...worth {w.Total:N0}, sellable {w.Sellable:N0} after a 10% cut, {w.Unpriced} kind without a price (Odyle), {w.Change:N0} since the first (one ore up, the bound potions gone at their twin's price)");
+            // a bound item counts at its twin's price and never as sellable
+            var wb = Session.BagValue.Of(new Dictionary<long, long> { [Id("Life Potion (Bound)")] = 10 }, null, items, n => prices.TryGetValue(n, out var v) ? v : null, 0.9);
+            Check(wb.Total == 1_000 && wb.Sellable == 0 && wb.Unpriced == 0 && wb.Change == null && wb.Lines[0].Bound, $"...a bound item: worth {wb.Total:N0} at its twin's price, sellable {wb.Sellable}");
+            // a new connection: unknown until its own snapshot; the first snapshot stays the session's start
+            r.Bag.Unknown();
+            Check(bag.Totals() == null && bag.FirstAt == t0 && bag.FirstTotals.GetValueOrDefault(Id("Orichalcum Ore")) == 773, "...a new connection makes it unknown again, and the session's start stays the first snapshot");
+        }
+
+        // the inventory in the recordings of 2026-11-13 through this build's decoder: the 18:49:42 snapshot kept up with every
+        // change is the 20:01:47 snapshot, item by item
+        {
+            string? bench = Environment.GetEnvironmentVariable("KL_BENCH");
+            for (var d = new DirectoryInfo(AppContext.BaseDirectory); bench == null && d != null; d = d.Parent)
+                if (Directory.Exists(Path.Combine(d.FullName, "kinah-bench", "packets"))) bench = Path.Combine(d.FullName, "kinah-bench", "packets");
+            var recs = new[] { "rec-20261113-18", "rec-20261113-19", "rec-20261113-19-2", "rec-20261113-20" }.Select(x => bench == null ? "" : Path.Combine(bench, x, "capture.pcapng")).ToList();
+            if (!NativeDecoder.Available || NativeDecoder.Version < 8) Console.WriteLine("skip  the inventory in the recordings: this build's decoder reads no inventory");
+            else if (recs.Any(x => !File.Exists(x))) Console.WriteLine("skip  the inventory in the recordings: kinah-bench/packets/rec-20261113-* not found (KL_BENCH)");
+            else
+            {
+                var books = ReplayBags(recs, 13328);
+                var a = books.FirstOrDefault(b => b.Snapshots > 0); var b2 = books.LastOrDefault(b => b.Snapshots > 0);
+                int agree = 0, differ = 0;
+                if (a != null && b2 != null && a != b2)
+                {
+                    var x = a.Totals()!; var y = b2.FirstTotals;   // the first connection at its end; the second at its snapshot (gear worn apart in both)
+                    foreach (var id in x.Keys.Union(y.Keys)) { if (x.GetValueOrDefault(id) == y.GetValueOrDefault(id)) agree++; else differ++; }
+                    bool kinahSame = a.Money(CurrencyKind.Kinah) == 4_922_940;   // the Kinah the 20:01:47 snapshot holds
+                    Check(differ == 0 && agree > 200 && kinahSame && a.LastRows.Said == a.LastRows.Read && b2.LastRows.Said == b2.LastRows.Read,
+                        $"the inventory in the recordings: the 18:49 snapshot ({a.LastRows.Read} of {a.LastRows.Said} stacks) kept up with every change equals the 20:01 one ({b2.LastRows.Read} of {b2.LastRows.Said}) for {agree} items, {differ} differ; Kinah at the first connection's end {a.Money(CurrencyKind.Kinah):N0} (the second snapshot says 4,922,940)");
+                }
+                else Check(false, $"the inventory in the recordings: {books.Count(b => b.Snapshots > 0)} connections with a snapshot (expected 2)");
+            }
+        }
+
         // a build without the decoder reads no traffic and says so
         {
             var keep = PacketReader.Decoders;
@@ -517,6 +581,36 @@ public static class PacketTests
             foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
         }
         return got.OrderBy(g => g.At).ToList();
+    }
+
+    /// <summary>This build's decoder over capture files, one stream per connection across the files: each connection's inventory at its end.</summary>
+    internal static List<BagBook> ReplayBags(IEnumerable<string> files, int serverPort)
+    {
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var f in files)
+            foreach (var (at, frame, link) in Pcapng.Read(f))
+                if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
+        var books = new List<BagBook>();
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var book = new BagBook();
+            var st = new TcpStream
+            {
+                OnData = (d, at) =>
+                {
+                    dec.Feed(d, at);
+                    while (dec.NextBag() is { } b) book.Take(b);
+                    while (dec.Next() is { } c) book.Take(c);
+                    while (dec.NextItem() is { } i) book.Take(i);
+                    while (dec.NextFight() is not null) { }
+                },
+                OnGap = dec.Gap,
+            };
+            foreach (var (at, s) in conn.OrderBy(x => x.At)) st.Add(s.Seq, s.Payload, at, s.Syn);
+            books.Add(book);
+        }
+        return books;
     }
 
     /// <summary>
