@@ -497,6 +497,54 @@ public static class PacketTests
             Check(!r.On && r.State.Length > 0, $"no game connection: \"{r.State}\"");
         }
         Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
+        if (NativeDecoder.Available)
+            using (var nd = NativeDecoder.TryOpen())
+            {
+                // a dll of a later version without the boss export reads no boss fights and doesn't throw
+                bool threw = false; try { while (nd?.NextBossEvent() != null) { } } catch (Exception) { threw = true; }
+                Check(!threw, $"klnet.dll version {NativeDecoder.Version}: boss fights {(nd?.ReadsBosses == true ? "read" : "not read")}, asking for them never throws");
+            }
+
+        // boss fights (klnet.dll version 4): a decoder that reads none hands out none; the decoder's rows become the tracker's
+        // events (the roster whole each time, deaths, pulls); the reader queues them in order and keeps the queue bounded; the
+        // interface's record is the dll's 256 bytes and its text fields read back
+        {
+            IGameDecoder none = new NoBosses();
+            Check(!none.ReadsBosses && none.NextBossEvent() == null, "a decoder without boss fights hands out none");
+            var map = new BossMapper();
+            BossRow Row(int kind, int s, long boss = 0, long who = 0, string name = "", bool self = false, long cp = 0, long il = 0, long amount = 0, long max = 0, int outcome = 0, string bossName = "") =>
+                new(t.AddSeconds(s), kind, 2, "Fire Temple", 1, bossName, boss, outcome, who, name, "Gladiator", self, cp, il, amount, max);
+            var got = new[]
+            {
+                Row(1, 0), Row(11, 0, bossName: "Conquest"), Row(6, 1, who: 14325, name: "Swoly", self: true, cp: 2637, il: 2637, bossName: "Siel"), Row(6, 1, who: 7093, name: "Frankss", cp: 2400, il: 2500),
+                Row(3, 2, boss: 25495, amount: 1000, max: 1000, bossName: "Kromede's Desire"), Row(4, 3, boss: 25495, bossName: "Kromede's Desire"),
+                Row(8, 3, boss: 25495, who: 14325, name: "Swoly", self: true, amount: 600), Row(8, 3, boss: 25495, amount: 400), Row(9, 3, boss: 25495, amount: 0, max: 1000),
+                Row(10, 3, boss: 25495, who: 25495, amount: 1, bossName: "Kromede's Desire"), Row(5, 3, boss: 25495, outcome: 1), Row(7, 4, who: 7093), Row(7, 4, who: 999), Row(2, 5), Row(42, 6),
+            }.Select(map.Map).Where(e => e != null).ToList();
+            var roster = got.OfType<GroupChanged>().ToList();
+            var dmg = got.OfType<DamageDealt>().ToList();
+            Check(got[0] is InstanceEntered { Kind: ContentKind.Expedition, Name: "Fire Temple", InstanceId: 1 } && roster.Count == 3 && roster[1].Members.Count == 2
+                && roster[1].Members.Any(m => m is { Name: "Swoly", You: true, CombatPower: 2637, Server: "Siel" }) && got[1] is InstanceMode { Mode: "Conquest" } && roster[2].Members.Single().Name == "Swoly",
+                $"the decoder's rows: an instance, the roster whole each time ({string.Join(" ", roster.Select(r => r.Members.Count))}), a leaver gone, an unknown leaver nothing");
+            Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, SourceName: "Swoly", SourceIsYou: true, Amount: 600, TargetId: 25495 }
+                && dmg[1] is { SourceId: 0, Amount: 400, SourceIsYou: false } && got.OfType<BossHealth>().Single() is { BossId: 25495, Hp: 0, Max: 1000 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
+                && got.OfType<BossEnded>().Single().Outcome == BossOutcome.Kill && got[^1] is InstanceLeft && !got.Any(e => e is null),
+                $"...a pull, its damage (yours, named, and other: source 0), its HP, the boss's death and the kill; a boss sighting and an unknown kind make nothing ({got.Count} events)");
+            var r = new PacketReader();
+            foreach (var e in got) r.TakeBoss(e);
+            var back = new List<BossEvent>(); while (r.NextBossEvent() is { } e) back.Add(e);
+            Check(back.SequenceEqual(got) && !r.ReadsBosses, $"the reader queues boss parser events in order ({back.Count}) and says it reads none without the dll");
+            for (int i = 0; i < 20_005; i++) r.TakeBoss(new FeedGap(t));
+            int n = 0; while (r.NextBossEvent() != null) n++;
+            Check(n == 20_000, $"...and keeps at most 20,000 undrained ({n})");
+            unsafe
+            {
+                var buf = new byte[32]; var name = System.Text.Encoding.UTF8.GetBytes("Kromede's Desire"); name.CopyTo(buf, 0);
+                fixed (byte* p = buf) Check(NativeDecoder.Text(p, 32) == "Kromede's Desire" && NativeDecoder.BossRecordSize == 256, $"a text field reads back, the record is {NativeDecoder.BossRecordSize} bytes");
+                var full = Enumerable.Repeat((byte)'a', 16).ToArray();
+                fixed (byte* p = full) Check(NativeDecoder.Text(p, 16) == new string('a', 16), "...a field filled to the end stops at its size");
+            }
+        }
 
         // the local recording's keeping (Packets/PacketLog.cs): past 48 hours goes, then the oldest over the size, never the file being written
         {
@@ -522,6 +570,15 @@ public static class PacketTests
 
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
+        // the Parser in real time (2026-11-14): what the reader hands over is the Parser's, and on screen's, without delay
+        {
+            var (ok, line) = KinahLedger.Parser.ParserLatency.ProcessingPath(50);
+            Check(ok, line);
+            var r = new PacketReader(); var got = new List<BossEvent>();
+            r.BossSink = got.Add;
+            r.TakeBoss(new BossEngaged(DateTime.UtcNow, "Kaldrix", 1));
+            Check(got.Count == 1 && r.NextBossEvent() == null, "...the reader hands a boss event to the Parser as it comes, not to a queue for the next pass");
+        }
         BossTimerChecks(t);
         TimerBoardChecks();
         EventTimerChecks(settings);
@@ -906,6 +963,7 @@ public static class PacketTests
     /// </summary>
     public static int Replay(string pcapng, int serverPort, Settings? settings = null)
     {
+        var bossEvents = new List<BossEvent>();
         if (!NativeDecoder.Available) { Console.WriteLine("this build has no decoder (klnet.dll)"); return 1; }
         var segs = new List<(DateTime At, TcpSegment S)>();
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
@@ -937,6 +995,7 @@ public static class PacketTests
                     while (dec.NextBoss() is { } b)
                         if (bosses.Take(b)) bossLines.Add($"{PacketReader.Local(b.At)}  world boss: {(b.Name.Length > 0 ? b.Name : "(not named)")} {b.State}{(b.Time is { } t && b.ServerNow is { } sv ? (b.State == BossSighting.Kind.Dead ? $", spawns in {BossTimers.Countdown(t - sv)}" : $", up {BossTimers.Span(sv - t)}") : "")}");
                     while (dec.NextFight() is { } f) fights.Add(f);
+                    while (dec.NextBossEvent() is { } b) bossEvents.Add(b);
                     while (dec.NextAreaEvent() is { } ae)
                     {
                         timers.Take(ae);
@@ -959,6 +1018,7 @@ public static class PacketTests
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
+        ReplayBosses(bossEvents);
         if (NativeDecoder.Version >= 7)
         {
             var items0 = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);
@@ -972,6 +1032,44 @@ public static class PacketTests
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;
     }
+
+    /// <summary>packet-replay's boss fights: each instance, the group, and each pull with its damage by member (the decoder's, version 4 and later).</summary>
+    static void ReplayBosses(List<BossEvent> ev)
+    {
+        if (ev.Count == 0) { Console.WriteLine("boss fights: none (no Transcendence, Expedition or Sanctuary boss in this recording, or the decoder reads none)"); return; }
+        var names = new Dictionary<long, string>();
+        var dmg = new Dictionary<long, Dictionary<long, long>>();
+        var mine = new Dictionary<long, Dictionary<int, (long Total, int Hits)>>();
+        string? boss = null; long open = 0;   // the pull under way: a wave's damage lands on many targets
+        foreach (var e in ev)
+            switch (e)
+            {
+                case InstanceEntered i: Console.WriteLine($"{Local(i.At)}  into {i.Name} ({i.Kind})"); break;
+                case InstanceLeft l: Console.WriteLine($"{Local(l.At)}  out of the instance"); break;
+                case InstanceMode md: Console.WriteLine($"{Local(md.At)}  mode: {md.Mode}"); break;
+                case GroupChanged g:
+                    foreach (var m in g.Members) names[m.Id] = m.Name;
+                    Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Server.Length > 0 ? $"[{m.Server}] " : "")}{(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
+                    break;
+                case BossEngaged b: boss = b.Boss; open = b.BossId; dmg[b.BossId] = new(); mine[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
+                case DamageDealt d:
+                    long pull = dmg.ContainsKey(d.TargetId) ? d.TargetId : open;
+                    if (dmg.TryGetValue(pull, out var by)) by[d.SourceId] = by.GetValueOrDefault(d.SourceId) + d.Amount;
+                    if (d.SourceIsYou && mine.TryGetValue(pull, out var sk)) { var w = sk.GetValueOrDefault(d.Skill); sk[d.Skill] = (w.Total + d.Amount, w.Hits + d.Hits); }
+                    break;
+                case BossEnded x:
+                    var t = dmg.GetValueOrDefault(x.BossId) ?? new();
+                    long total = t.Values.Sum();
+                    Console.WriteLine($"{Local(x.At)}  {x.Outcome}: {boss}, {total:N0} damage: " + string.Join(", ", t.OrderByDescending(kv => kv.Value)
+                        .Select(kv => $"{(kv.Key == 0 ? "other" : names.GetValueOrDefault(kv.Key, kv.Key.ToString()))} {kv.Value:N0} ({kv.Value * 100.0 / Math.Max(1, total):F1}%)")));
+                    if (mine.GetValueOrDefault(x.BossId) is { Count: > 0 } yours)
+                        Console.WriteLine("            your abilities: " + string.Join(", ", yours.OrderByDescending(kv => kv.Value.Total).Take(8)
+                            .Select(kv => $"{(kv.Key == 0 ? "over time" : "skill " + kv.Key)} {kv.Value.Total:N0}{(kv.Value.Hits > 0 ? $" in {kv.Value.Hits} hits, {kv.Value.Total / kv.Value.Hits:N0} a hit" : "")}")));
+                    break;
+            }
+    }
+
+    static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
 
     /// <summary>
     /// The player's kills, told apart, and deaths, as the tracker would count them from a capture, against the capture's
@@ -1189,4 +1287,15 @@ public sealed class PcapngWriter : IDisposable
     }
 
     public void Dispose() { _w.Flush(); _w.Dispose(); }
+}
+
+/// <summary>A decoder that reads currencies only: the interface's defaults for items, kills and boss fights.</summary>
+sealed class NoBosses : IGameDecoder
+{
+    public void Reset() { }
+    public void Gap() { }
+    public void Feed(byte[] data, DateTime at) { }
+    public CurrencyChange? Next() => null;
+    public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats => default;
+    public void Dispose() { }
 }

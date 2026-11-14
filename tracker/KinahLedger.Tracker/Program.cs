@@ -52,7 +52,7 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "packet-replay" or "packet-live" or "packet-record")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "packet-replay" or "packet-live" or "packet-record")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -135,6 +135,15 @@ internal static class Program
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 // packet reading (Packets/): its parts on made-up bytes, and the reader over a saved capture
                 case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
+                // the boss-fight Parser (Parser/): its rules on made-up fight events
+                case "parser-test": return KinahLedger.Parser.ParserTests.Run(settings);
+                // a recording through the decoder and the Parser at full speed: each record and its members' shares (Parser/ParserTests.cs)
+                case "parser-replay": if (pos.Count == 0) { Console.WriteLine("parser-replay <capture.pcapng> [--mode boss|run|fight] [--port 13328]"); return 2; } return KinahLedger.Parser.ParserTests.ParserReplay(pos[0], opts.GetValueOrDefault("mode") ?? "boss", int.TryParse(opts.GetValueOrDefault("port"), out var prp) ? prp : 13328);
+                // the party list's classes over a folder of game pictures (Ocr/PartyFrame.cs): totals by class, --rows for each picture's
+                case "party-scan": if (pos.Count == 0) { Console.WriteLine("party-scan <folder of pictures> [--rows]"); return 2; } return KinahLedger.Parser.ParserTests.PartyScan(pos[0], opts.ContainsKey("rows") || opts.ContainsKey("names"), opts.ContainsKey("names"));
+                // the Parser's capture-to-screen time over recordings replayed at their own speed (Ui/WpfApp.Parser.cs)
+                case "parser-latency": if (pos.Count == 0) { Console.WriteLine("parser-latency <capture.pcapng>...|synthetic [--mode boss|run|fight] [--minutes N] [--port 13328]"); return 2; }
+                    return Ui.WpfApp.ParserLatencyReplay(settings, pos, opts.GetValueOrDefault("mode") ?? "fight", double.TryParse(opts.GetValueOrDefault("minutes"), out var plm) ? plm : 0, int.TryParse(opts.GetValueOrDefault("port"), out var plp) ? plp : 13328);
                 case "packet-live": return KinahLedger.Packets.PacketTests.Live(settings.ProcessHints, int.TryParse(opts.GetValueOrDefault("seconds"), out var psec) ? psec : 30);
                 case "packet-replay": if (pos.Count == 0) { Console.WriteLine("packet-replay <capture.pcapng> [--port 13328]"); return 2; } return KinahLedger.Packets.PacketTests.Replay(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var pport) ? pport : 13328, settings);
                 case "packet-record": return KinahLedger.Packets.PacketRecord.Run(settings.ProcessHints, opts);
@@ -462,6 +471,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
                                 --dry-run writes nothing; run it on a copy of the KinahLedger folder
 Network reading (a copy of the game server's traffic through Npcap, npcap.com; only listens, needs no admin):
   packet-test                   self-test of the packet reader's parts and its counting (made-up packets)
+  parser-test                   self-test of the boss-fight Parser's rules (made-up fight events)
   packet-live [--seconds 30]    the packet reader against the game running now, each change as it comes
   packet-replay <capture.pcapng> [--port 13328]  the packet reader over a saved capture
   packet-record [--minutes 10] [--out folder]  record the game server's traffic for a few minutes, with reads.log's lines
@@ -1345,6 +1355,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        if (o.TryGetValue("parser", out var parserState)) return WpfApp.ShotParser(s, dir, parserState, o.GetValueOrDefault("skin"));   // Ui/WpfApp.Parser.cs
         if (o.ContainsKey("inventory")) { WpfApp.ShotInventory(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("timers-page")) { WpfApp.ShotTimersPage(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("bosses") || o.ContainsKey("timers")) { WpfApp.ShotBosses(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }

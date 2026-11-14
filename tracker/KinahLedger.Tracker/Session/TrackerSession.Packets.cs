@@ -322,6 +322,7 @@ public sealed partial class TrackerSession
                 : $"killed {(o.Player ? "the player " + (o.Name.Length > 0 ? o.Name : "(unnamed)") : "a monster")}{(o.Credited ? " (the game named no killer; your Rank Points rose with it)" : "")}";
             CrashLog.Note($"packets: {what}");
             CommitWith(new FightCounted(o.At, o.Player, o.Death, o.Name) { Via = "packets" }, "counter");
+            FightToParser(o);   // the Parser's runs and fights (TrackerSession.Parser.cs)
         }
     }
 
