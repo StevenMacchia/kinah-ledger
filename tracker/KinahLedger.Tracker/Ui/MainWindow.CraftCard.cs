@@ -250,15 +250,9 @@ public partial class MainWindow
         // the verdict, in the top band: profit per craft at the success chance (the same sum as the site's best crafts: CraftMath),
         // then profit an hour and the break-even price; the materials-for-sale line closes the card
         var (rate, kind) = CraftMath.SuccessUsed(recipe.SuccessRate, mine?.Attempts ?? 0, mine?.Ok ?? 0);
-        // made from your bound stock (RecipeBook.BoundCraft): no Market value in or out, so no profit or loss to show; what a
-        // try costs is what you paid for (an NPC's ink), said as such (Steven, 2026-11-12: "they cant even be sold")
-        if (RecipeBook.BoundCraft(recipe.Output))
-        {
-            top.Children.Add(CkKv("Bound craft", unpriced == 0 ? (total > 0 ? Amounts.Short(total) + " a try" : "free") : "", CkGood,
-                $"made from your bound {RecipeBook.BoundMain(recipe.Output)}: it costs nothing, and what it makes is bound and can't be sold", rightSize: 15));
-            top.Children.Add(new Border { Height = 6 });
-        }
-        else if (unpriced == 0 && CraftMath.Judge(recipe, Price, total, rate, PriceBook.SellerKeeps) is { } v)
+        // made with your bound stock (RecipeBook.MadeFromBound): the bound materials are "bound · 0" above and left out of the
+        // total; what it makes isn't bound (2026-11-13, Steven's guards), so the profit is judged as for any craft
+        if (unpriced == 0 && CraftMath.Judge(recipe, Price, total, rate, PriceBook.SellerKeeps) is { } v)
         {
             double per = v.Profit;
             // the chance counted: the listed one, the player's own once it differs over 20 crafts, or measured; unknown is an upper bound
