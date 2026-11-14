@@ -61,6 +61,7 @@ public partial class MainWindow
             Encounter.ActiveBasis = fresh.DpsActive;
             if (!fresh.Separate) _parserPlacing = false;
             ParserOverlayTick();
+            DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
             RedrawParserPage();
         });
@@ -68,6 +69,11 @@ public partial class MainWindow
         Encounter.ActiveBasis = _parserPrefs.DpsActive;
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
         ParserTab.Click += (_, _) => ShowPart("Parser");
+        // five pills and the Timers countdown in the header's tab column: a little less room each, so Parser isn't cut off
+        foreach (var tab in PartTabRow.Children.OfType<Button>()) tab.Padding = new Thickness(8, 0, 8, 0);
+        // the header's Overlays menu (Ui/MainWindow.Overlays.cs): the Parser is a section of the Kinah overlay by default, and
+        // an overlay of its own in the menu only once Settings › In game › Parser separates it
+        RegisterOverlay("Parser", () => ParserOverlayOn, on => ParserOverlayOn = on, "Boss fights: DPS by member, the boss's HP, the pull timer.", visible: () => _parserPrefs.Separate || !HudWanted);
         if (!watch) return;
         SourceInitialized += (_, _) =>
         {
@@ -103,6 +109,7 @@ public partial class MainWindow
         if (!_demo) _parserPrefs.Save();
         Say(on ? "Fight overlay on: it shows over the game during boss fights." : "Fight overlay off.", "Faint");
         ParserOverlayTick();
+        DrawOverlayPills();
         RedrawParserPage();
     }
 
@@ -1258,5 +1265,5 @@ public partial class MainWindow
     internal List<Encounter> ParserPastForTest => ParserPast();
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;
     internal void SetParserOverlayForTest(bool on) => SetParserOverlay(on);
-    internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; if (!on) _parserPlacing = false; RedrawParserPage(); }
+    internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; if (!on) _parserPlacing = false; DrawOverlayPills(); RedrawParserPage(); }
 }

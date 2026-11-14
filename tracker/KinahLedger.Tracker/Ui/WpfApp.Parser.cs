@@ -188,6 +188,7 @@ public static partial class WpfApp
         {
             w.SetParserSeparateForTest(true); DoEvents();
             var move = FindButton(w.ParserPage, "Move overlay");
+            check(w.OverlaysForTest().Any(o => o.Name == "Parser"), "Parser: separated, it is in the header's Overlays menu (registered with the Kinah and Timers overlays)");
             w.SetParserPlacing(true); DoEvents();
             var ov = w.ParserOverlayForTest;
             bool shown = ov?.IsVisible == true && w.ParserPlacingForTest && ov.Content is FrameworkElement oc && ParserTexts(oc).Texts.Contains("Ferocious Horn Nuakum");
