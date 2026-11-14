@@ -549,6 +549,7 @@ public static class PacketTests
         if (ev.Count == 0) { Console.WriteLine("boss fights: none (no Transcendence, Expedition or Sanctuary boss in this recording, or the decoder reads none)"); return; }
         var names = new Dictionary<long, string>();
         var dmg = new Dictionary<long, Dictionary<long, long>>();
+        var mine = new Dictionary<long, Dictionary<int, (long Total, int Hits)>>();
         string? boss = null;
         foreach (var e in ev)
             switch (e)
@@ -559,13 +560,19 @@ public static class PacketTests
                     foreach (var m in g.Members) names[m.Id] = m.Name;
                     Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
                     break;
-                case BossEngaged b: boss = b.Boss; dmg[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
-                case DamageDealt d: if (dmg.TryGetValue(d.TargetId, out var by)) by[d.SourceId] = by.GetValueOrDefault(d.SourceId) + d.Amount; break;
+                case BossEngaged b: boss = b.Boss; dmg[b.BossId] = new(); mine[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
+                case DamageDealt d:
+                    if (dmg.TryGetValue(d.TargetId, out var by)) by[d.SourceId] = by.GetValueOrDefault(d.SourceId) + d.Amount;
+                    if (d.SourceIsYou && mine.TryGetValue(d.TargetId, out var sk)) { var w = sk.GetValueOrDefault(d.Skill); sk[d.Skill] = (w.Total + d.Amount, w.Hits + d.Hits); }
+                    break;
                 case BossEnded x:
                     var t = dmg.GetValueOrDefault(x.BossId) ?? new();
                     long total = t.Values.Sum();
                     Console.WriteLine($"{Local(x.At)}  {x.Outcome}: {boss}, {total:N0} damage: " + string.Join(", ", t.OrderByDescending(kv => kv.Value)
                         .Select(kv => $"{(kv.Key == 0 ? "other" : names.GetValueOrDefault(kv.Key, kv.Key.ToString()))} {kv.Value:N0} ({kv.Value * 100.0 / Math.Max(1, total):F1}%)")));
+                    if (mine.GetValueOrDefault(x.BossId) is { Count: > 0 } yours)
+                        Console.WriteLine("            your abilities: " + string.Join(", ", yours.OrderByDescending(kv => kv.Value.Total).Take(8)
+                            .Select(kv => $"{(kv.Key == 0 ? "over time" : "skill " + kv.Key)} {kv.Value.Total:N0}{(kv.Value.Hits > 0 ? $" in {kv.Value.Hits} hits, {kv.Value.Total / kv.Value.Hits:N0} a hit" : "")}")));
                     break;
             }
     }
