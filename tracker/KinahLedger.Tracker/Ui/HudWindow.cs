@@ -161,7 +161,7 @@ public sealed partial class HudWindow : Window
         FontFamily = HudKit.Text;   // Nunito, the window's face (the Quest look)
         FontWeight = FontWeights.Medium;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
-        if (HudGlass.OldLooks) System.Windows.Documents.Typography.SetNumeralAlignment(this, FontNumeralAlignment.Tabular);   // figures that tick never shift the line
+        if (HudGlass.OldLooks || _look is IHudStackLook) System.Windows.Documents.Typography.SetNumeralAlignment(this, FontNumeralAlignment.Tabular);   // figures that tick never shift the line
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
         Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 260; Top = SystemParameters.WorkArea.Top + 12;
 

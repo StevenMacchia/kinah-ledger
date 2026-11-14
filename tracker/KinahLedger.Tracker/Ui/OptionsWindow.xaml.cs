@@ -189,38 +189,61 @@ public partial class OptionsWindow : Window
     /// </summary>
     void BuildHudLooks(string current)
     {
+        // a live thumbnail of each look (2026-11-14), drawn from the window's sample figures and picked with a click; the
+        // one in use is outlined, and drawn again at its real size under them with what it shows
         current = HudLooks.Parse(current);
         HudLookHost.Children.Clear();
-        foreach (var l in HudLooks.All)
-        {
-            var key = l.Key;
-            HudLookHost.Children.Add(_host.Chip(l.Name, current == key, () => PickHudLook(key), l.Hint));
-        }
-        HudLookPreview.Children.Clear();
         var sample = _host.HudSample();
+        var fields = HudFields.Parse(_edit.HudFields);
+        var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);   // a dark game scene, whatever the window's skin
+        scene.Freeze();
         foreach (var l in HudLooks.All)
         {
             var key = l.Key;
             bool on = key == current;
             FrameworkElement face;
-            try { face = HudWindow.Preview(key, HudFields.Parse(_edit.HudFields), sample); }
-            catch (Exception ex) { CrashLog.Write("panel look preview", ex); continue; }
-            face.HorizontalAlignment = HorizontalAlignment.Left;
-            // drawn as over the game: a dark scene whatever the window's theme, with the look's name and what it shows
-            var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
-            label.Inlines.Add(new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
-            label.Inlines.Add(new System.Windows.Documents.Run((on ? "  ·  in use  ·  " : "  ·  ") + l.Hint) { Foreground = new SolidColorBrush(on ? Color.FromRgb(0xC9, 0xD6, 0xF7) : Color.FromRgb(0xAF, 0xB5, 0xC6)) });
-            var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);   // a dark game scene, whatever the window's skin
-            var box = new Border
+            try { face = HudWindow.Preview(key, fields, sample); }
+            catch (Exception ex) { CrashLog.Write("panel look thumbnail", ex); continue; }
+            var thumb = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxWidth = key == HudLooks.Auto ? 340 : 150, Height = 54, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            // the look on a small dark game scene, whatever the window's skin; the card and its name in the skin's own tones
+            var stage = new Border { Child = thumb, Background = scene, CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 5, 8, 5), HorizontalAlignment = HorizontalAlignment.Stretch };
+            var name = new TextBlock { FontSize = 12, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) };
+            name.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
+            name.Inlines.Add(new System.Windows.Documents.Run(l.Name));
+            if (on) { var r = new System.Windows.Documents.Run("  ·  in use") { FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Link"); name.Inlines.Add(r); }
+            var card = new Border
             {
-                CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 6, 0, 0), Background = scene, Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(on ? 2 : 1), BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0x9D, 0xB2, 0xE8) : Color.FromRgb(0x23, 0x27, 0x36)),   // the one in use: the link tone (gold until the colour pass)
-                Child = new StackPanel { Children = { label, face } }, ToolTip = on ? null : "Use the " + l.Name,
+                Width = key == HudLooks.Auto ? 388 : 190, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,   // Auto, the default, across the row: the other six two by two
+                BorderThickness = new Thickness(on ? 2 : 1),
+                Child = new StackPanel { Margin = new Thickness(10, 8, 10, 9), Children = { name, stage } },
             };
-            System.Windows.Automation.AutomationProperties.SetName(box, l.Name + " panel look");
-            box.MouseLeftButtonUp += (_, _) => PickHudLook(key);
-            HudLookPreview.Children.Add(box);
+            card.SetResourceReference(Border.BackgroundProperty, "Card2");
+            card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
+            // the card itself is the pick (a Button's own style would draw its frame over the card in Daylight): a click, or
+            // Enter or Space with the keyboard
+            card.ToolTip = l.Hint; card.Focusable = true; card.Tag = key;
+            card.FocusVisualStyle = (Style)FindResource("FocusRing");
+            System.Windows.Automation.AutomationProperties.SetName(card, l.Name + " panel look" + (on ? ", in use" : ""));
+            card.MouseLeftButtonUp += (_, _) => PickHudLook(key);
+            card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { PickHudLook(key); e.Handled = true; } };
+            HudLookHost.Children.Add(card);
         }
+        HudLookPreview.Children.Clear();
+        var chosen = HudLooks.All.First(x => x.Key == current);
+        try
+        {
+            var big = HudWindow.Preview(current, fields, sample);
+            big.HorizontalAlignment = HorizontalAlignment.Left;
+            var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
+            label.Inlines.Add(new System.Windows.Documents.Run(chosen.Name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
+            label.Inlines.Add(new System.Windows.Documents.Run("  ·  at its real size  ·  " + chosen.Hint) { Foreground = new SolidColorBrush(Color.FromRgb(0xAF, 0xB5, 0xC6)) });
+            HudLookPreview.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 2, 0, 0), Background = scene,
+                BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromRgb(0x23, 0x27, 0x36)), Child = new StackPanel { Children = { label, big } },
+            });
+        }
+        catch (Exception ex) { CrashLog.Write("panel look preview", ex); }
         bool strip = current == HudLooks.Strip;
         HudFieldHost.IsEnabled = strip;
         HudFieldHost.Opacity = strip ? 1 : .45;
@@ -229,6 +252,9 @@ public partial class OptionsWindow : Window
             ? "Back to the left of the target bar, at the top of the game's screen. Pop keeps its own spot."
             : "Back to the top centre of the game's screen, clear of the minimap and the chat.";
     }
+
+    /// <summary>For the options self-test: a look's thumbnail clicked.</summary>
+    internal void PickHudLookForTest(string key) => PickHudLook(key);
 
     void PickHudLook(string key)
     {

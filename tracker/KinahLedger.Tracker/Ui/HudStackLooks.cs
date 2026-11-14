@@ -58,7 +58,11 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     protected static StackPanel Fig(string big, string unit, Brush fg, double size)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        sp.Children.Add(Tx(big, size, fg, FontWeights.Bold));
+        var t = Tx(big, size, fg, FontWeights.Bold);
+        System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        // your DPS rolls up to ten times a second (the Parser's rolling DPS): a fixed width, so the words after it never shift
+        if (unit == "DPS") { t.MinWidth = Math.Round(size * 2.9); t.TextAlignment = TextAlignment.Right; }
+        sp.Children.Add(t);
         if (unit.Length > 0) { var u = Tx(unit, Math.Round(size * 0.68, 1), Muted, FontWeights.Medium); u.Margin = new Thickness(4, Math.Round(size * 0.18), 0, 0); sp.Children.Add(u); }
         return sp;
     }
