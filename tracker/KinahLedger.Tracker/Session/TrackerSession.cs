@@ -236,6 +236,9 @@ public sealed partial class TrackerSession
         if (DayView is { } d) yield return d;
         if (HeldZone is { } hz) yield return hz;
         if (HeldAll is { } ha) yield return ha;
+        // a move to another place, held until it is steady (SteadyDue)
+        if (_moveZone is { } pz) yield return pz;
+        if (_moveAll is { } pa) yield return pa;
     }
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
@@ -641,22 +644,91 @@ public sealed partial class TrackerSession
             ReadTrace.Signal(now, "zone", zone);
             Report.Lines("zone", new[] { zone }, now);
         }
-        // into the Abyss from the world, or back out (Steven, 2026-11-11: "switching to Abyss from normal world should change
-        // it, though it shouldn't persist there"): another kind of farming, so the overall count starts over
-        if (AllView != null && OpenWorld(ZoneView.Zone) && OpenWorld(zone) && ZoneLocator.IsAbyss(ZoneView.Zone) != ZoneLocator.IsAbyss(zone))
-        {
-            CrashLog.Note($"{ZoneView.Zone} → {zone}: {(ZoneLocator.IsAbyss(zone) ? "into the Abyss" : "out of the Abyss")}, so the overall count starts over");
-            OverallRestart?.Invoke(now);
-        }
         Engine.SetZone(zone);
         Secondary?.SetZone(zone);
         Instances.Zone(zone, now);
-        // a new zone starts the zone view over: its tables are this zone's alone
-        if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { OfferBest(); var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
-        else ZoneView.SetZone(zone);
+        // the zone view and the overall count follow the place the player is in for real, not each read (Place)
+        SteadyDue(zone, now);
+        ZoneView.SetZone(zone); _moveZone?.SetZone(zone); _moveAll?.SetZone(zone);
         // the all-zones and Today counts only move on: a zone change never starts them over
         AllView?.SetZone(zone); DayView?.SetZone(zone); HeldZone?.SetZone(zone); HeldAll?.SetZone(zone);
     }
+
+    // ---- the place, steadily (0.10.70) ----
+    // Steven, 2026-11-13: "we gotta stop switching between zones its really fucking everything up for farming", "dont restart
+    // the area every time u go somewhere else". Until 0.10.70 every zone read that differed started the zone view over, and a
+    // read across the Abyss's edge started the overall count over: on his log of that day 18 zone-view restarts an hour, and
+    // the overall count 10 times in one hour of flying between the Abyss's areas.
+
+    /// <summary>How long a new place must be read before the player is taken to be there (no loading screen, no instance's edge).</summary>
+    public const double SteadySeconds = 60;
+    string? _place, _placeZone;
+    (string Place, string Zone, DateTime Since)? _placeNext;
+    SessionEngine? _moveZone, _moveAll;
+    DateTime _loadedAt = DateTime.MinValue;
+
+    /// <summary>
+    /// The place the player is farming: an expedition's areas are one place (its name, ZoneLocator.RunName), and a new place
+    /// counts only once it was read for <see cref="SteadySeconds"/>, or right away behind a loading screen (a teleport, a
+    /// portal) or across an instance's edge. A walk into a neighbouring zone and back, or a misread, moves nothing. What the
+    /// window's "here" and the zone view are about; null before any zone was read.
+    /// </summary>
+    public string? Place => _place;
+    /// <summary>A place on the zone's whole: an expedition's areas are the expedition.</summary>
+    public static string? PlaceOf(string? zone) => zone == null || zone == SessionEngine.UnknownZone ? zone : ZoneLocator.RunName(zone);
+    /// <summary>A loading screen was up (the scene reader, or replay's "scene Loading" note): a zone read after it is a real move.</summary>
+    internal void LoadingSeen(DateTime at) { if (at > _loadedAt) _loadedAt = at; }
+
+    void SteadyDue(string? zone, DateTime now)
+    {
+        if (Scene.Current == KinahLedger.Session.Scene.Loading) LoadingSeen(now);
+        // a move held long enough is made first: the read that comes after it is judged from there
+        if (_placeNext is { } held && (now - held.Since).TotalSeconds >= SteadySeconds) MoveTo(held.Place, held.Zone, held.Since.AddSeconds(SteadySeconds), $"read for {SteadySeconds:0} s");
+        string? place = PlaceOf(zone);
+        if (place != null && place != SessionEngine.UnknownZone)
+        {
+            if (_place == null) { _place = place; _placeZone = zone; }
+            else if (place == _place)
+            {
+                if (_placeNext is { } back) CrashLog.Note($"place: back in {_place} after {(now - back.Since).TotalSeconds:0} s in {back.Place}: nothing starts over");
+                _placeNext = null; _moveZone = null; _moveAll = null;
+            }
+            else if ((now - _loadedAt).TotalSeconds is >= 0 and <= 30) MoveTo(place, zone!, now, "after a loading screen");
+            else if (ZoneLocator.KindOf(zone) != null || ZoneLocator.KindOf(_place) != null) MoveTo(place, zone!, now, "an instance's edge");
+            else if (_placeNext?.Place != place)
+            {
+                // the counts from this read on, held in case the move is real: the zone view, and the overall count if it crosses the Abyss's edge
+                bool crossing = OpenWorld(_placeZone) && OpenWorld(zone) && ZoneLocator.IsAbyss(_placeZone) != ZoneLocator.IsAbyss(zone);
+                if (_moveZone == null) { _moveZone = new SessionEngine(_items); _moveZone.SetZone(zone); }
+                if (crossing && AllView != null) { if (_moveAll == null) { _moveAll = new SessionEngine(_items); _moveAll.SetZone(zone); } }
+                else _moveAll = null;
+                _placeNext = (place, zone!, _placeNext?.Since ?? now);
+            }
+        }
+    }
+
+    void MoveTo(string place, string zone, DateTime now, string why)
+    {
+        string? was = _place, wasZone = _placeZone;
+        _place = place; _placeZone = zone; _placeNext = null;
+        PlaceMoves++;
+        // a new place starts the zone view over (its tables are this place's alone), from the move's first read when it was held
+        OfferBest();
+        var z = _moveZone;
+        if (z == null) { z = new SessionEngine(_items); z.SetZone(zone); }
+        ZoneView = z; _moveZone = null;
+        // into the Abyss from the world, or back out (Steven, 2026-11-11: "switching to Abyss from normal world should change
+        // it, though it shouldn't persist there"): another kind of farming, so the overall count starts over, but only on a real move
+        bool crossing = AllView != null && OpenWorld(wasZone) && OpenWorld(zone) && ZoneLocator.IsAbyss(wasZone) != ZoneLocator.IsAbyss(zone);
+        CrashLog.Note($"place: {was} → {place} ({why})" + (crossing ? $": {(ZoneLocator.IsAbyss(zone) ? "into the Abyss" : "out of the Abyss")}, so the overall count starts over" : ""));
+        if (crossing) { _freshAll = _moveAll; OverallRestart?.Invoke(now); _freshAll = null; }
+        _moveAll = null;
+    }
+    SessionEngine? _freshAll;
+    /// <summary>Moves to another place since the session started: the zone view started over this often (replay's console says it).</summary>
+    public int PlaceMoves { get; private set; }
+    /// <summary>For the watcher's <see cref="OverallRestart"/>: the overall count held since the move's first read, when there is one (else null: a new one).</summary>
+    public SessionEngine? FreshAll => _freshAll;
 
     int _emptyReads;
     /// <summary>The Abyss area the minimap last named (the zone is "Abyss" for all of them): for the log only.</summary>
@@ -844,16 +916,21 @@ public sealed partial class TrackerSession
                     var off = Update.RemoteConfig.Current;
                     // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
                     await ScenePassAsync(p0);
+                    PacketsDue();   // the game's messages between the readers too (0.10.70): a pass of half a second holds no count
                     var listGate = Verdict("loot_list");
                     var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
                     if (listGate == Gate.Skip) _rows.Reset();
                     var chatGate = Verdict("chat");
                     if (chatGate != Gate.Skip) await Times.Time("chat", () => ReadOnce(chatGate, () => PeekList(list)));
+                    PacketsDue();
                     await RefindKeptChatAsync();
                     if (!off.Off("target") && Runs("target")) await Times.Time("target", TargetDueAsync);
+                    PacketsDue();
                     if (!off.Off("craft_panel")) await Times.Time("craft", CraftPanelDue);
                     var listRead = await list;
+                    PacketsDue();
                     await Times.Time("list", () => LootGated(listRead, listGate));
+                    PacketsDue();
                     Times.Time("grid", RewardShot);
                     if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
                     if (!off.Off("nameplates") && Runs("nameplates")) await Times.Time("nameplates", PlatesDue);
@@ -887,7 +964,9 @@ public sealed partial class TrackerSession
             // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
             // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
             int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, Update.RemoteConfig.Current.FightIntervalMs) : _interval;
-            if (spent < every) { try { await Task.Delay(every - spent, ct); } catch (TaskCanceledException) { } }
+            // the wait ends early for the game's messages, which are counted as they come (TrackerSession.Packets.cs)
+            if (spent < every) await WaitWithPacketsAsync(every - spent, ct);
+            else PacketsDue();
             // reading time for the health numbers: the passes the game was read, wait included
             if (reading) Accuracy.AddReading((DateTime.UtcNow - t0).TotalSeconds);
         }
@@ -1499,6 +1578,12 @@ public sealed partial class TrackerSession
                 // Orichalcum Ore x2 with its race, read as the Daeva Pass window opened)
                 bool gathered = reward && why == null && parsed is ItemAcquired gw && GatherVouched(gw.ItemId, parsed.Time);
                 var ev = (reward && !gathered || why != null || InBaseNotOdyle(parsed) || baseKina) && !made ? _parser.AsReward(parsed) : parsed;
+                // an item line set aside (bought at the Market, a reward, the inventory at work) is handled all the same: the
+                // repeat guard keeps it as a copy, so the chat showing it again after a window over it is never a drop
+                // (Steven, 2026-11-13 18:35: two Wrathful Ego bought, then counted as rare drops after the crafting window);
+                // and a set-aside line that is such a copy itself is left out, not set aside twice
+                if (parsed is ItemAcquired asideItem && ev is not ItemAcquired && !via.Contains("count read again")
+                    && AsideLine(asideItem, raw, why ?? (reward ? "a reward window was open" : "set aside"), meta, lines, meta?.At ?? parsed.Time, now)) { any = true; skipped++; continue; }
                 // counted as one from a line that showed no count: that one is no witness of a reward picture's count
                 if (ev is ItemAcquired or RewardReceived && !via.Contains("count read again") && _parser.CountUnsure(raw)) MarkAssumed(ev);
                 // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
@@ -2986,6 +3071,8 @@ public sealed partial class TrackerSession
     /// </summary>
     internal string Count(GameEvent ev)
     {
+        // a move held long enough is made before this count lands (the zone is read only every few seconds)
+        if (_placeNext != null) SteadyDue(null, ev.Time);
         // a "(Bound)" item line, a reward out of a run or a bound pickup inside one: the item came bound (the table's witness)
         if (ev is RewardReceived or ItemAcquired { Bound: true })
         {
@@ -5258,8 +5345,12 @@ public sealed class UserPrefs
     public bool MobsOpen { get; set; } = true;
     /// <summary>Soul Crystals sit folded at the bottom until opened.</summary>
     public bool PetsOpen { get; set; }
-    /// <summary>On (the default since 0.10.43): the tables keep counting across zones until a break. Off: they start over when the zone changes. A click on the hour switches. What is shared is split by zone either way.</summary>
-    public bool AllZones { get; set; } = true;
+    /// <summary>
+    /// Always on since 0.10.70 (Steven, 2026-11-13: "i dont like the 'this zone' toggle - just have it be a sub number of the
+    /// greater number and have one screen"): the window counts across zones until a break, and says the place's share beside
+    /// each figure. Kept so an older ui.json still reads; what it says is ignored.
+    /// </summary>
+    public bool AllZones { get => true; set { } }
     /// <summary>True once AllZones took its 0.10.43 default: a ui.json from before has it off only because off was the old default.</summary>
     public bool AllZonesDefaulted { get; set; }
     /// <summary>The Today strip over Farming and Events (0.8.50) opened to its loot; folded to its one line until opened.</summary>

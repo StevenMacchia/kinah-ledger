@@ -91,6 +91,23 @@ public sealed class LiveFeed
         }
     }
 
+    /// <summary>Takes the line out ("Not a drop"); returns where it stood, or -1 when it isn't there (scrolled out of the last <see cref="Keep"/>).</summary>
+    public int Remove(FeedLine line)
+    {
+        lock (_lock)
+        {
+            int i = _lines.IndexOf(line);
+            if (i >= 0) _lines.RemoveAt(i);
+            return i;
+        }
+    }
+
+    /// <summary>Undo of <see cref="Remove"/>: the line back where it stood.</summary>
+    public void PutBack(FeedLine line, int at)
+    {
+        lock (_lock) { if (!_lines.Contains(line)) _lines.Insert(Math.Clamp(at, 0, _lines.Count), line); }
+    }
+
     /// <summary>
     /// The tab an activity label belongs to: a run's (event, expedition, arena, legion, world boss) is Events, the
     /// crafting panel's is Crafting, everything else (farming, town, a reward screen, the Market) is Farming.

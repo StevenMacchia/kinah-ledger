@@ -242,7 +242,7 @@ public partial class MainWindow
         foreach (var (scope, text, tip) in new[]
         {
             (SharePicture.Today, "Today", "Today's farming in every zone, as LOOT's Today side counts it."),
-            (SharePicture.Session, "This session", "This zone since you came, as the card shows it."),
+            (SharePicture.Session, "This session", "Every zone since your last break, as the card shows it."),
             (SharePicture.Run, "Last run", "The last run you stopped, or the last expedition or event."),
             (SharePicture.Week, "This week", "The last 7 days of farming on this PC."),
         })

@@ -174,7 +174,9 @@ public partial class MainWindow
             s.Worth > 0 ? Fk(s.Worth) : s.Gear || (s.Bound > 0 && s.Bound >= s.Count) ? "bound" : s.Currency ? "a currency" : "no price yet", s.Worth > 0 ? "Gold" : "Faint");
         CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs, when));
         // a click pins the card with Set a goal at its foot (0.9; a right-click until 2026-10-31); a currency is an amount, not something picked up
-        if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs, when), ("Set a goal for this", () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile)));
+        // ...and, on today's farming loot, "Not a drop" (Ui/MainWindow.NotDrop.cs): one of it out of today's totals, or its Undo
+        if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs, when),
+            new[] { ("Set a goal for this", (Action)(() => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile))) }.Concat(!runs && when == "today" ? NotDropActions(s.Id) : Enumerable.Empty<(string, Action)>()).ToArray());
         return tile;
     }
 

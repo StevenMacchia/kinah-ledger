@@ -76,6 +76,9 @@ public sealed unsafe class NpcapSource : IPacketSource
     static delegate* unmanaged[Cdecl]<IntPtr, int> _dataLink;
     static delegate* unmanaged[Cdecl]<IntPtr, void> _close;
     static delegate* unmanaged[Cdecl]<IntPtr, IntPtr> _getErr;
+    // Npcap's pcap_setmintocopy: 0 hands each frame over as it comes (immediate mode); left at its default, the card's
+    // buffer is handed over once 16 KB are in or the read's 250 ms timeout passes, so a pickup's message could wait a quarter second
+    static delegate* unmanaged[Cdecl]<IntPtr, int, int> _setMinToCopy;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern bool SetDllDirectory(string? path);
@@ -98,6 +101,7 @@ public sealed unsafe class NpcapSource : IPacketSource
         _dataLink = (delegate* unmanaged[Cdecl]<IntPtr, int>)F("pcap_datalink");
         _close = (delegate* unmanaged[Cdecl]<IntPtr, void>)F("pcap_close");
         _getErr = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr>)F("pcap_geterr");
+        if (NativeLibrary.TryGetExport(_lib, "pcap_setmintocopy", out var mtc)) _setMinToCopy = (delegate* unmanaged[Cdecl]<IntPtr, int, int>)mtc;
     }
 
     IntPtr _pcap;
@@ -125,6 +129,7 @@ public sealed unsafe class NpcapSource : IPacketSource
         fixed (byte* d = dev) _pcap = _openLive(d, SnapLen, 0, 250, err);
         if (_pcap == IntPtr.Zero) throw new InvalidOperationException(Marshal.PtrToStringAnsi((IntPtr)err) ?? "couldn't open the network card");
         _link = _dataLink(_pcap);
+        if (_setMinToCopy != null) _setMinToCopy(_pcap, 0);
         try { Filter(filter); }
         catch { Dispose(); throw; }
     }

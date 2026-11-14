@@ -89,12 +89,25 @@ public sealed class PacketReader : IDisposable, IBossFeed
             if (c.First) _baseAt[c.What] = c.At;
             else _seen.Add((c.What, c.Delta, c.At));
         }
-        _changes.Enqueue(c);
+        _changes.Enqueue(c); Arrived();
         Log($"{Local(c.At)}  {Name(c.What)} {(c.First ? "now" : Signed(c.Delta))} · {c.Amount:N0}");
     }
 
     /// <summary>The next change for the tracker to count (TrackerSession.DrainPackets), null when there is none.</summary>
     public CurrencyChange? Next() => _changes.TryDequeue(out var c) ? c : null;
+
+    // set when a change or an update is queued: the session's wait between screen passes ends on it, so a pickup's amount is
+    // counted as it comes, not at the next pass (Steven, 2026-11-13: "if we're using packets these numbers should be instantaneous")
+    readonly SemaphoreSlim _arrived = new(0, 1);
+    void Arrived() { if (_arrived.CurrentCount == 0) try { _arrived.Release(); } catch (SemaphoreFullException) { } }
+    /// <summary>Waits up to <paramref name="ms"/> for a change or an update to be queued; true when one was.</summary>
+    public async Task<bool> WaitArrivedAsync(int ms, CancellationToken ct)
+    {
+        try { return await _arrived.WaitAsync(ms, ct); }
+        catch (OperationCanceledException) { return false; }
+    }
+    /// <summary>True when changes or updates wait to be drained.</summary>
+    public bool Pending => !_changes.IsEmpty || !_items.IsEmpty || !_fights.IsEmpty;
 
     /// <summary>Item changes the decoder found, cut into the game's updates: kept for the agreement check, queued, logged.</summary>
     void TakeItems(IReadOnlyList<ItemChange> rows)
@@ -102,13 +115,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
         foreach (var b in ItemBatch.Cut(rows))
         {
             lock (_gate) foreach (var r in b.Rows) _itemSeen.Add((r.ItemId, r.Delta, r.First, r.At));
-            _items.Enqueue(b);
+            _items.Enqueue(b); Arrived();
             Log($"{Local(b.At)}  {string.Join(", ", b.Rows.Select(r => $"{ItemName(r.ItemId)} {(r.First ? "now" : Signed(r.Delta))} · {r.Total:N0}"))}{(b.Rows.Count > 1 ? $" (one update{(b.Fell ? ", something went down" : "")})" : "")}");
         }
     }
     string ItemName(long id) { try { return NameOf?.Invoke(id) ?? $"item {id}"; } catch (Exception) { return $"item {id}"; } }
 
-    /// <summary>A kill the player is in, a death or a Rank Points change: queued for the tracker, logged.</summary>
     /// <summary>The next boss parser event (klnet.dll version 4), null when there is none: only inside Transcendence, Expedition and Sanctuary, and a FeedGap when traffic was lost or a connection began.</summary>
     public BossEvent? NextBossEvent() => _bosses.TryDequeue(out var b) ? b : null;
     /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 4).</summary>
@@ -129,9 +141,10 @@ public sealed class PacketReader : IDisposable, IBossFeed
         if (line != null) Log($"{Local(b.At)}  boss parser: {line}");
     }
 
+    /// <summary>A kill the player is in, a death or a Rank Points change: queued for the tracker, logged.</summary>
     void TakeFight(FightEvent f)
     {
-        _fights.Enqueue(f);
+        _fights.Enqueue(f); Arrived();
         if (_fights.Count > 4096) _fights.TryDequeue(out _);
         Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
             : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
@@ -143,7 +156,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// <summary>True while the reader gets the player's kills and deaths from the game (a decoder of interface version 3).</summary>
     public bool ReadsFights => On && (_testFights || _decoder?.ReadsFights == true);
     bool _testFights;
-    internal void FightsForTest(FightEvent f) { _testFights = true; _fights.Enqueue(f); }
+    internal void FightsForTest(FightEvent f) { _testFights = true; if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0)); _fights.Enqueue(f); }
 
     /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
@@ -172,8 +185,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
         {
             _screenItems.Add((id, count, at, late, tag));
             _screenItemsAll.Add((id, at)); _screenItemsAll.RemoveAll(s => (at - s.At).TotalMinutes > 2);
+            if (tag != null) { _chatItemsAll.Add((id, at)); _chatItemsAll.RemoveAll(s => (at - s.At).TotalMinutes > 2); }
         }
     }
+    readonly List<(long Id, DateTime At)> _chatItemsAll = new();
+    /// <summary>Whether the chat (not the loot list) said a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>: its say on the pickup is in.</summary>
+    public bool ChatNearItem(long id, DateTime at, double seconds) { lock (_gate) return _chatItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }
 
     /// <summary>Whether the screen read a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>.</summary>
     public bool ScreenNearItem(long id, DateTime at, double seconds) { lock (_gate) return _screenItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }
@@ -261,7 +278,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
-                while (dec.NextFight() is { } f) TakeFight(f);
+                while (dec.NextFight() is { } f)
+                {
+                    // Rank Points are a currency too (0.10.76): counted, checked against the chat and logged like Abyss Points
+                    if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0));
+                    TakeFight(f);
+                }
                 while (dec.NextBossEvent() is { } b) TakeBoss(b);
             },
             OnGap = () =>
@@ -345,6 +367,25 @@ public sealed class PacketReader : IDisposable, IBossFeed
     readonly HashSet<(long Id, DateTime At)> _risesTaken = new();
 
     /// <summary>
+    /// How long before a chat line a rise of its item that already covered a line still covers this one (the same line read
+    /// again: a window over the chat, then the chat shown once more), and how long a rise the tracker didn't count (the
+    /// Market open, a reward screen, a base) covers the item's lines: a window over the chat can hide a bought item's line
+    /// for minutes, and when it shows it is no pickup (Steven, 2026-11-13 18:35: two Wrathful Ego bought, counted as drops
+    /// 23 s later).
+    /// </summary>
+    public const double RereadSeconds = 60, ExcludedSeconds = 300;
+    readonly List<(long Id, DateTime At, string Why)> _itemExcluded = new();
+
+    /// <summary>A rise of an item the tracker didn't count as a pickup (<paramref name="why"/>: with the Market open, ...): it covers that item's chat lines for <see cref="ExcludedSeconds"/>.</summary>
+    public void ItemExcluded(long id, DateTime at, string why)
+    {
+        lock (_gate) { _itemExcluded.Add((id, at, why)); _itemExcluded.RemoveAll(x => (at - x.At).TotalSeconds > ExcludedSeconds * 2); }
+    }
+
+    /// <summary>For packet-test: what the agreement check decided for each screen pickup it judged, oldest first ("covered", "covered: ...", "first sight", "not shown").</summary>
+    public List<string> Verdicts { get; } = new();
+
+    /// <summary>
     /// The agreement check for items and crafts (under _gate). A screen pickup 15 s old or more is covered by a rise of that
     /// item the traffic showed around it (left out: the traffic counted it); during a craft it is the craft's item (left
     /// out); a first sight of that item's stack around it is the pickup the traffic couldn't count, and the screen counts
@@ -364,9 +405,26 @@ public sealed class PacketReader : IDisposable, IBossFeed
             // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
             // screen's to count, no miss); another item's rise (the line misread its name)
             var own = _itemSeen.Where(p => Near(p) && p.Id == s.Id && !p.First && p.Delta > 0 && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ToList();
-            if (own.Count > 0) { _risesTaken.Add((own[0].Id, own[0].At)); continue; }
-            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First)) { if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag); continue; }
-            if (_itemSeen.Any(p => Near(p) && !p.First && p.Delta > 0)) continue;
+            if (own.Count > 0) { _risesTaken.Add((own[0].Id, own[0].At)); Verdicts.Add("covered"); continue; }
+            // a rise the tracker didn't count (bought, a reward, in a base) before the line: the line is that item's, read
+            // now, never a pickup, however late the chat showed it
+            if (_itemExcluded.LastOrDefault(x => x.Id == s.Id && (s.At - x.At).TotalSeconds is >= -ItemAfter and <= ExcludedSeconds) is { Why: not null } ex)
+            {
+                Verdicts.Add($"covered: {ex.Why}");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)}: the game's update of it at {Local(ex.At)} wasn't a pickup ({ex.Why}): not counted");
+                continue;
+            }
+            // a rise of the item that already covered a line, a little before this one, and no new rise: the same line read
+            // again (the chat covered by a window, then shown once more), not a second pickup
+            if (_itemSeen.Any(p => p.Id == s.Id && !p.First && p.Delta > 0 && _risesTaken.Contains((p.Id, p.At)) && (s.At - p.At).TotalSeconds is >= 0 and <= RereadSeconds))
+            {
+                Verdicts.Add("covered: read again");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)} again: its update was taken by an earlier line; not counted");
+                continue;
+            }
+            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First)) { Verdicts.Add("first sight"); if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag); continue; }
+            if (_itemSeen.Any(p => Near(p) && !p.First && p.Delta > 0)) { Verdicts.Add("covered: another item"); continue; }
+            Verdicts.Add("not shown");
             if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag);
             if (!s.Late) continue;   // the loot list alone: no miss, nothing counted
             _itemMisses.Add(now); _itemMisses.RemoveAll(m => (now - m).TotalMinutes > 5);
@@ -414,7 +472,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
         Log($"{Local(now)}  minute: {(parts.Count == 0 ? "nothing picked up" : string.Join("; ", parts))} · {Packets:N0} packets, {DecoderStats.Messages:N0} messages, {_down.Gaps} gaps, {DecoderStats.Resyncs} resyncs");
     }
 
-    static string Name(CurrencyKind k) => k switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", _ => "Abyss Points" };
+    static string Name(CurrencyKind k) => k switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", CurrencyKind.RankPoints => "Rank Points", _ => "Abyss Points" };
 
     /* ---------------- packets.log ---------------- */
 
