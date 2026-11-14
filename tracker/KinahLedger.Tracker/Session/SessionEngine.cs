@@ -159,7 +159,7 @@ public sealed partial class SessionEngine
     /// <summary>What happened in one zone: time spent there plus the counters the "best spot" tables need.</summary>
     public sealed class ZoneStats
     {
-        public double Seconds; public long Kinah, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
+        public double Seconds; public long Kinah, KinahBound, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
@@ -618,7 +618,7 @@ public sealed partial class SessionEngine
                     break;
                 case KinahChanged k:
                     // bound Kinah comes from quests, titles and rewards, not from mobs: tracked, but not farming income or a kill
-                    if (k.Bound) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; }
+                    if (k.Bound) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; if (k.Delta > 0) Z().KinahBound += k.Delta; }
                     else
                     {
                         Kinah += k.Delta;
@@ -740,7 +740,7 @@ public sealed partial class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahBound = v.KinahBound, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }

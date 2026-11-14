@@ -94,7 +94,7 @@ public sealed partial class SessionEngine
             foreach (var (k, z) in c.Zones)
             {
                 if (!Zones.TryGetValue(k, out var to)) Zones[k] = to = new ZoneStats();
-                to.Seconds += z.Seconds; to.Active += z.Active; to.Kinah += z.Kinah; to.AbyssPoints += z.AbyssPoints; to.KinahDrops += z.KinahDrops; to.CurrencyLines += z.CurrencyLines;
+                to.Seconds += z.Seconds; to.Active += z.Active; to.Kinah += z.Kinah; to.KinahBound += z.KinahBound; to.AbyssPoints += z.AbyssPoints; to.KinahDrops += z.KinahDrops; to.CurrencyLines += z.CurrencyLines;
                 to.Defeated += z.Defeated; to.Xp += z.Xp; to.Pets += z.Pets; to.Drops += z.Drops; to.Nodes += z.Nodes; to.KillsSeen += z.KillsSeen;
                 foreach (var (p, n) in z.PetsByName) to.PetsByName[p] = to.PetsByName.GetValueOrDefault(p) + n;
                 foreach (var (id, n) in z.Items) to.Items[id] = to.Items.GetValueOrDefault(id) + n;

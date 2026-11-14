@@ -35,7 +35,7 @@ public partial class MainWindow
     bool RunShown => RunEngine != null || (_demo && _demoRun);
 
     /// <summary>The first side's name, for what the count on screen covers.</summary>
-    string LootHereName => _prefs.AllZones ? "All zones" : RunShown ? "This run" : "This zone";
+    string LootHereName => RunShown ? "This run" : "This session";
 
     void InitLoot()
     {
@@ -103,7 +103,7 @@ public partial class MainWindow
         SummaryCard.Visibility = show && (FullShown || _qChip == "bag") ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         LootHereBtn.Content = LootHereName;
-        LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since your last break (15 minutes with nothing farmed). Click the hour to see this zone only." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
+        LootHereBtn.ToolTip = RunShown ? "This run." : "Every zone since your last break (15 minutes with nothing farmed). The figures at the top say how much of it came here.";
         LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");

@@ -346,9 +346,11 @@ public partial class MainWindow
         string heroKey = "hero|" + _part + "|" + CountWhere() + (ap ? "|ap" : "");
         if (hero > 0) Motion.Number(HeadRate, heroKey, hero / h, v => Fk(v), _rateWarming ? -1 : 0.01, roll: counted);
         else Motion.Blank(HeadRate, heroKey, " ");
-        // which count it is, on the first line: overall (every zone since a break, the default) or this zone; a click on the
-        // figure switches. What it adds up, on the second
-        string which = RunShown ? "an hour" : _prefs.AllZones ? "an hour · all zones" : "an hour · this zone";
+        // the first line: the hour, and the place's own hour beside it once the session has been in more than one place
+        // (0.10.70: one screen, the place a sub-number of the whole). What it adds up, on the second
+        string hereHr = _here is { Hours: >= HereRateHours } hr && (ap ? hr.Abyss : hr.Kinah + hr.Value) > 0
+            ? $" · {Fk((ap ? hr.Abyss : hr.Kinah + hr.Value) / hr.Hours)} here" : "";
+        string which = "an hour" + hereHr;
         HeadRateLbl.Text = ap ? (abyss <= 0 ? "Abyss Points an hour, once some are picked up" : which + "\nAbyss Points")
             : total <= 0 ? "Kinah and loot an hour, once something is counted"
             : priced > 0 || loot > 0 ? which + "\n" + (_mode == Mode.Gather && kinah == 0 ? "loot after tax" : "Kinah and loot after tax")
@@ -357,9 +359,8 @@ public partial class MainWindow
         bool warm = _rateWarming && hero > 0;
         HeadRate.Opacity = warm ? 0.4 : 1;
         if (warm) HeadRateLbl.Text += " · warming up";
-        string flip = RunShown ? "" : _prefs.AllZones
-            ? $"\nEvery zone since your last break ({TrackerSession.BreakMinutes:0} minutes with nothing farmed). Click for this zone only."
-            : "\nThis zone only: it starts over when you change zone. Click for every zone.";
+        string flip = RunShown ? "" : $"\nEvery zone since your last break ({TrackerSession.BreakMinutes:0} minutes with nothing farmed)."
+            + (hereHr.Length > 0 && _here is { } hh ? $" {hereHr[3..]}: the hour in {hh.Place} alone, over its {TodayLoot.Dur(hh.Hours * 3600)}." : "");
         HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted."
             : ap ? (abyss > 0 ? $"{Amounts.Full(abyss / h)} Abyss Points an hour: {abyss:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it." : "No Abyss Points picked up yet.")
             : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
@@ -399,14 +400,30 @@ public partial class MainWindow
         FillHealth(HealthText, HealthMark, hideOk: true);
     }
 
-    /// <summary>A click on the hour: overall (every zone since a break) or this zone, the same switch as ⋯ › All zones.</summary>
-    void HeadRate_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    /// <summary>
+    /// The place's share of the count on screen (0.10.70; Steven, 2026-11-13: "just have it be a sub number of the greater
+    /// number and have one screen"): what came in the place the player is in now (TrackerSession.Place: an expedition's
+    /// areas together), counted from the same engine, so it is part of the figure it sits beside.
+    /// </summary>
+    sealed record HereShare(string Place, long Kinah, long Value, int Kills, long Abyss, double Hours);
+    HereShare? _here;
+    /// <summary>The place's hour shows once it has this long behind it: a few minutes' hour swings too much to say.</summary>
+    const double HereRateHours = 10 / 60.0;
+
+    /// <summary>The share of <paramref name="e"/> that came in the place the player is in; null while the count has only been there (it would say the same figure twice).</summary>
+    HereShare? HereOf(SessionEngine e, bool inAbyss)
     {
-        if (_welcome || RunShown) return;
-        _prefs.AllZones = !_prefs.AllZones;
-        if (!_demo) _prefs.Save();
-        Redraw(); Tick();
-        e.Handled = true;
+        string? place = _demo ? TrackerSession.PlaceOf(_demoZone) : _watcher.Chat?.Place ?? TrackerSession.PlaceOf(_watcher.Chat?.Zone);
+        if (place == null || place == SessionEngine.UnknownZone || RunShown && RunEngine == null) return null;
+        var zones = e.ZoneSnapshot();
+        static bool Any(SessionEngine.ZoneStats z) => z.Kinah > 0 || z.KinahBound > 0 || z.AbyssPoints > 0 || z.Kills > 0 || z.Drops > 0 || z.Nodes > 0;
+        var mine = zones.Where(kv => TrackerSession.PlaceOf(kv.Key) == place).Select(kv => kv.Value).ToList();
+        if (mine.Count == 0 || !zones.Any(kv => TrackerSession.PlaceOf(kv.Key) != place && Any(kv.Value))) return null;
+        long kinah = mine.Sum(z => z.Kinah + (inAbyss ? z.KinahBound : 0)), abyss = mine.Sum(z => z.AbyssPoints), value = 0;
+        foreach (var z in mine)
+            foreach (var (id, n) in z.Items)
+                if (n > 0 && PriceBook.Price(_items.NameOf(id)) is long p) value += (long)Math.Round(p * n * PriceBook.SellerKeeps);
+        return new HereShare(place, kinah, value, mine.Sum(z => z.Kills), abyss, mine.Sum(z => z.Seconds) / 3600);
     }
 
     static string AgoMinutes(DateTime minuteUtc) => TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds) + " ago";

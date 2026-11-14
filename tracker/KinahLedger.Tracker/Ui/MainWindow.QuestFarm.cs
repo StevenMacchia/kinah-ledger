@@ -267,7 +267,8 @@ public partial class MainWindow
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);
         bool gather = _mode == Mode.Gather;
         long abyss = _heroAbyss && !gather ? _lootHere?.Abyss ?? 0 : 0;
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}";
+        var hs = _here;
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{hs}";
         if (!Changed("chips", sig)) return;
         var at = CountWhere();
         // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
@@ -276,6 +277,9 @@ public partial class MainWindow
         // how Kinah and loot add up (the bag's total said it on hover until it went): on the loot figure's hover
         string total = _lootHere?.TotalTip is { Length: > 0 } tt ? "\n\n" + tt : "";
         var parts = new List<QStat>();
+        // the place's share beside each figure (0.10.70), and on its hover
+        string Here(long v, bool money) => hs == null ? "" : (money ? Fk(v) : v.ToString("N0")) + " here";
+        string In(long v, bool money, string what) => hs == null ? "" : $"\n{(money ? Fk(v) : v.ToString("N0"))} {what} in {hs.Place}.";
         if (gather)
         {
             double perTry = nodes > 0 ? s.GatherCount / (double)nodes : 0;
@@ -292,18 +296,18 @@ public partial class MainWindow
             double perMin = elapsed.TotalMinutes >= 1 ? kills / elapsed.TotalMinutes : 0;
             // in the Abyss the points the hero is the hour of lead the line (2026-11-13): their one home on the page, as Kinah's is
             if (abyss > 0)
-                parts.Add(new QStat(Fk(abyss), "Abyss Points", $"{abyss:N0} Abyss Points picked up {at}" + (kills > 0 ? $", {Fk(abyss / (double)kills)} a kill" : "") + ".",
-                    null, false, "Sky", ("chip-abyss|" + at, abyss, false)));
+                parts.Add(new QStat(Fk(abyss), "Abyss Points", $"{abyss:N0} Abyss Points picked up {at}" + (kills > 0 ? $", {Fk(abyss / (double)kills)} a kill" : "") + "." + In(hs?.Abyss ?? 0, true, "of them"),
+                    null, false, "Sky", ("chip-abyss|" + at, abyss, false), Here(hs?.Abyss ?? 0, true)));
             parts.Add(new QStat(Fk(kinah), "Kinah",
-                $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + (_boundInKinah ? ". Bound Kinah is in it: in the Abyss every Kinah drop is bound." : ". Quest rewards and bound Kinah are left out.") + (FullShown ? "" : " Click for Kinah by enemy."),
-                Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null));
+                $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + (_boundInKinah ? ". Bound Kinah is in it: in the Abyss every Kinah drop is bound." : ". Quest rewards and bound Kinah are left out.") + (FullShown ? "" : " Click for Kinah by enemy.") + In(hs?.Kinah ?? 0, true, "of it"),
+                Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null, Here(hs?.Kinah ?? 0, true)));
             parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 || kinds == 0 ? "loot" : (kinds == 1 ? "kind of loot" : "kinds of loot"),
                 (kinds == 0 ? "Nothing picked up yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ".")
-                + (FullShown ? "" : " Click for the bag.") + total,
-                Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null));
+                + (FullShown ? "" : " Click for the bag.") + (s.Value > 0 ? In(hs?.Value ?? 0, true, "of it") : "") + total,
+                Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null, s.Value > 0 ? Here(hs?.Value ?? 0, true) : ""));
             parts.Add(new QStat(kills.ToString("N0"), kills == 1 ? "kill" : "kills",
                 kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + $", {Fk(kinah / (double)kills)} Kinah a kill." + (FullShown ? "" : " Click for kills by enemy.") : "Kills show here as enemies pay out.",
-                Open("kills"), _qChip == "kills", "Coral", kills > 0 ? ("chip-kills|" + at, kills, false) : null));
+                Open("kills"), _qChip == "kills", "Coral", kills > 0 ? ("chip-kills|" + at, kills, false) : null, kills > 0 ? Here(hs?.Kills ?? 0, false) : ""));
         }
         QStatsFill(HeroStats, parts);
         FillChipPanel();
@@ -324,7 +328,7 @@ public partial class MainWindow
     /// <summary>For options-test: a chip's click.</summary>
     internal void ToggleChipForTest(string key) => ToggleChip(key);
 
-    string CountWhere() => _prefs.AllZones ? "since your last break" : RunShown ? "this run" : "here";
+    string CountWhere() => RunShown ? "this run" : "since your last break";
 
     void ToggleChip(string key)
     {
