@@ -1,0 +1,18 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "farming the Abyss (Chaotic Lower Reshanta), 2026-11-13 18:44:10 to 18:45:20 local, Devastated Remnants and then Sulfur Tree Island on the minimap: every kill drops bound Kina, and until 0.10.69 each bound Kina line opened a payout's window, so the drops and soul crystals printed beside the kills (Earth Spellbook, Earth Greaves, Spiritstone, Earth Pauldrons, Varian, Fera and Cogni Soul Crystals) were set aside as a payout's, the bound Kina counted nowhere and neither area was known as the Abyss. Both areas count as one zone, the Abyss",
+  "source": "Steven's trace.log, 23:44:10 to 23:45:20 UTC, chat, loot list and zone reads as recorded (a zone read of the area shown since 18:40:20 added at the start); other players' lines replaced by filler",
+  "expect": {
+    "items": {
+      "Earth Spellbook": 1,
+      "Earth Greaves": 1,
+      "Spiritstone": 1,
+      "Earth Pauldrons": 1
+    },
+    "pets": 10,
+    "kinah": 13586,
+    "zones": "Abyss"
+  }
+}

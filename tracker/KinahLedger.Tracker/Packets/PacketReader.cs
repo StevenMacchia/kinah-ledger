@@ -14,7 +14,7 @@ namespace KinahLedger.Packets;
 /// connection, found from the game's process id in Windows' connection table. Nothing is sent, the game is never touched,
 /// and no packet is kept: only the decoded changes go to the log (a PC that asked for a local recording keeps one, Packets/PacketLog.cs).
 /// </summary>
-public sealed class PacketReader : IDisposable
+public sealed class PacketReader : IDisposable, IBossFeed
 {
     /// <summary>Options › Game reading › Read the game's network traffic. On by default; with neither Npcap nor admin it just says why it is off.</summary>
     public bool Enabled { get; set; } = true;
@@ -50,7 +50,8 @@ public sealed class PacketReader : IDisposable
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
     readonly ConcurrentQueue<FightEvent> _fights = new();
-    const int MaxFights = 20_000;   // a tracker that never drains them doesn't grow without end
+    readonly ConcurrentQueue<BossEvent> _bosses = new();
+    const int MaxBosses = 20_000;   // a tracker that never drains them doesn't grow without end
     readonly ConcurrentQueue<object> _uncovered = new();
     TcpStream _down = new();
     TcpTable.Link? _link;
@@ -107,19 +108,17 @@ public sealed class PacketReader : IDisposable
     }
     string ItemName(long id) { try { return NameOf?.Invoke(id) ?? $"item {id}"; } catch (Exception) { return $"item {id}"; } }
 
-    /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
-    public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
-
-    /// <summary>The next boss parser event (klnet.dll version 4), null when there is none. Only inside Transcendence, Expedition and Sanctuary, plus a FeedGap when traffic was lost.</summary>
-    public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
+    /// <summary>A kill the player is in, a death or a Rank Points change: queued for the tracker, logged.</summary>
+    /// <summary>The next boss parser event (klnet.dll version 4), null when there is none: only inside Transcendence, Expedition and Sanctuary, and a FeedGap when traffic was lost or a connection began.</summary>
+    public BossEvent? NextBossEvent() => _bosses.TryDequeue(out var b) ? b : null;
     /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 4).</summary>
-    public bool ReadsFights => _decoder?.ReadsFights == true;
-    /// <summary>A boss parser event from the decoder, queued for the tracker; zone and encounter edges logged.</summary>
-    internal void TakeFight(FightEvent f)
+    public bool ReadsBosses => _decoder?.ReadsBosses == true;
+    /// <summary>A boss parser event, queued for the Parser; instance and pull edges logged.</summary>
+    internal void TakeBoss(BossEvent b)
     {
-        while (_fights.Count >= MaxFights) _fights.TryDequeue(out _);
-        _fights.Enqueue(f);
-        string? line = f switch
+        while (_bosses.Count >= MaxBosses) _bosses.TryDequeue(out _);
+        _bosses.Enqueue(b);
+        string? line = b switch
         {
             InstanceEntered e => $"into {e.Name} ({e.Kind})",
             InstanceLeft => "out of the instance",
@@ -127,8 +126,27 @@ public sealed class PacketReader : IDisposable
             BossEnded e => $"pull ended: {e.Outcome}",
             _ => null,
         };
-        if (line != null) Log($"{Local(f.At)}  boss parser: {line}");
+        if (line != null) Log($"{Local(b.At)}  boss parser: {line}");
     }
+
+    void TakeFight(FightEvent f)
+    {
+        _fights.Enqueue(f);
+        if (_fights.Count > 4096) _fights.TryDequeue(out _);
+        Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
+            : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
+            : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));
+    }
+
+    /// <summary>The next fight event for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
+    /// <summary>True while the reader gets the player's kills and deaths from the game (a decoder of interface version 3).</summary>
+    public bool ReadsFights => On && (_testFights || _decoder?.ReadsFights == true);
+    bool _testFights;
+    internal void FightsForTest(FightEvent f) { _testFights = true; _fights.Enqueue(f); }
+
+    /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
 
     /// <summary>A screen pickup the agreement check found the traffic didn't count (never showed it, or showed only a stack's first sight): the screen's to count after all.</summary>
     public object? NextUncovered() => _uncovered.TryDequeue(out var o) ? o : null;
@@ -231,6 +249,7 @@ public sealed class PacketReader : IDisposable
         // a new connection starts from a fresh amount: the chat counted while nothing was read, so the first message is a baseline
         var dec = _decoder;
         dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
+        if (dec.ReadsBosses) TakeBoss(new FeedGap(DateTime.UtcNow));   // a new connection: the Parser's pull, if any, doesn't continue
         var rows = new List<ItemChange>();
         _down = new TcpStream
         {
@@ -242,19 +261,20 @@ public sealed class PacketReader : IDisposable
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
-                while (dec.NextFight() is { } fe) TakeFight(fe);
+                while (dec.NextFight() is { } f) TakeFight(f);
+                while (dec.NextBossEvent() is { } b) TakeBoss(b);
             },
             OnGap = () =>
             {
                 dec.Gap();
-                if (dec.ReadsFights) TakeFight(new FeedGap(_dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt));
+                if (dec.ReadsBosses) TakeBoss(new FeedGap(_dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt));
                 lock (_gate) { var at = _dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt; _gapsAt.Add(at); _gapsAt.RemoveAll(g => (at - g).TotalMinutes > 2); }
             },
         };
         _stop = false;
         _thread = new Thread(Run) { IsBackground = true, Name = "packet reading", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
-        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")} from the game's server {game.Remote}:{game.RemotePort}";
+        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")}{(dec.ReadsFights ? ", your kills and deaths" : "")} from the game's server {game.Remote}:{game.RemotePort}";
         Log($"{Local(DateTime.UtcNow)}  reading {game.Remote}:{game.RemotePort} → {game.Local}:{game.LocalPort} with {Kind}");
     }
 

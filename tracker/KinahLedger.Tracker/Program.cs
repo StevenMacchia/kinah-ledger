@@ -3270,6 +3270,17 @@ options: --process aion[,other]");
             sbk.ApplyZone("Southern Tolbas Forest", ab.AddMinutes(4));
             Check("...into the Abyss it starts over, within it it goes on, back out it starts over",
                 $"{inAbyss} · {breaks} {sbk.AllView.Kinah}", "2 500 · 3 0");
+            // the Abyss's areas, as the minimap names them (Steven, 2026-11-13: 0.10.68 knew none of them), are one zone, "Abyss":
+            // walking from one to the next starts nothing over and the count and the zone view say "Abyss"
+            var ab2 = ab.AddMinutes(10);
+            sbk.ApplyZone("Sulfur Tree Island", ab2);
+            sayBk(ab2.AddMinutes(1), new[] { "Acquired 501 Kina (Bound)." });
+            sbk.ApplyZone("Devastated Remnants", ab2.AddMinutes(2));
+            sayBk(ab2.AddMinutes(3), new[] { "Acquired 631 Kina (Bound)." });
+            sbk.ApplyZone("Black Fragments Area - Lonely Island", ab2.AddMinutes(4));
+            Check("...every Abyss area is the zone Abyss: one count, its kills' bound Kina in it",
+                $"{breaks} {sbk.Zone} {sbk.ZoneView.Zone} {sbk.AllView.Kinah} {sbk.ZoneView.Kinah} | {string.Join(",", sbk.Engine.ZoneSnapshot().Keys.Where(k => k.Contains("Sulfur") || k.Contains("Remnants") || k.Contains("Fragments")))}",
+                "4 Abyss Abyss 1132 1132 | ");
         }
         {
             // Poko's Skin Bundle from an Orichalcum Ore node (reads.log 2026-11-11 13:51:36, Steven: "ayyy at least i got a poko
@@ -5075,6 +5086,19 @@ options: --process aion[,other]");
                 ae.SetZone("Altam"); ae.Apply(new CurrencyGained(at0, "Abyss Points", 50));
                 ae.SetZone("Chaotic Upper Reshanta"); ae.Apply(new CurrencyGained(at0.AddSeconds(5), "Abyss Points", 360)); ae.Apply(new CurrencyGained(at0.AddSeconds(9), "Abyss Point", 40));
                 var back = new SessionEngine(items); back.Seed(ae.ToCarry(DayStore.Today));
+                // the Abyss's areas (data/abyss.txt) and only them: Destroyed Abyss Gate is a field of Verteron; Contaminated Marsh is
+                // in both, so it goes with the last area that is in one only
+                ZoneLocator.SawZone("Sulfur Tree Island"); bool marshInAbyss = ZoneLocator.IsAbyss("Contaminated Marsh");
+                ZoneLocator.SawZone("Contaminated Sanctum"); bool marshInWorld = ZoneLocator.IsAbyss("Contaminated Marsh");
+                Check("the Abyss's areas are the Abyss, with their region; the world's aren't",
+                    string.Join(" | ", new[] { "Sulfur Tree Island", "Devastated Remnants", "Black Fragments Area", "Latesran Western Root", "Steel Titan's Grave", "Krotan Fortress", "Chaotic Outer Reshanta", "Abyss", "Destroyed Abyss Gate", "Eternal Isle", "Ellun River Midstream", "Abyss Corridor" }.Select(z => $"{z}: {ZoneLocator.AbyssRegion(z) ?? (ZoneLocator.IsAbyss(z) ? "Abyss" : "no")}")) + $" | Marsh {marshInAbyss} {marshInWorld}",
+                    "Sulfur Tree Island: Chaotic Lower Reshanta | Devastated Remnants: Chaotic Lower Reshanta | Black Fragments Area: Chaotic Lower Reshanta | Latesran Western Root: Chaotic Lower Reshanta | Steel Titan's Grave: Chaotic Middle Reshanta | Krotan Fortress: Chaotic Upper Reshanta | Chaotic Outer Reshanta: Chaotic Outer Reshanta | Abyss: Abyss | Destroyed Abyss Gate: no | Eternal Isle: no | Ellun River Midstream: no | Abyss Corridor: no | Marsh True False");
+                // in the Abyss a kill's bound Kina is its Kinah (a kill drops 100 to 2,100); a bigger bound sum is a quest's, set aside
+                var bk = new SessionEngine(items); bk.SetZone("Abyss");
+                bk.Apply(new KinahChanged(at0, 1_245, true)); bk.Apply(new KinahChanged(at0.AddSeconds(2), 380, true)); bk.Apply(new KinahChanged(at0.AddSeconds(4), 8_000, true));
+                var bw = new SessionEngine(items); bw.SetZone("Ellun River Midstream"); bw.Apply(new KinahChanged(at0, 1_245, true));
+                Check("a kill's bound Kina in the Abyss is Kinah, by zone; a quest's isn't, nor bound Kina out of it",
+                    $"{bk.Kinah} {bk.AbyssBoundKinah} {bk.KinahBound} {bk.ZoneSnapshot()["Abyss"].Kinah} {bk.Kills} | {bw.Kinah} {bw.KinahBound}", "1625 1625 8000 1625 2 | 0 1245");
                 Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
             }
             {
