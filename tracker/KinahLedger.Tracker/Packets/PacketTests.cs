@@ -377,7 +377,7 @@ public static class PacketTests
                 new(t.AddSeconds(s), kind, 2, "Fire Temple", 1, bossName, boss, outcome, who, name, "Gladiator", self, cp, il, amount, max);
             var got = new[]
             {
-                Row(1, 0), Row(6, 1, who: 14325, name: "Swoly", self: true, cp: 2637, il: 2637), Row(6, 1, who: 7093, name: "Frankss", cp: 2400, il: 2500),
+                Row(1, 0), Row(11, 0, bossName: "Conquest"), Row(6, 1, who: 14325, name: "Swoly", self: true, cp: 2637, il: 2637, bossName: "Siel"), Row(6, 1, who: 7093, name: "Frankss", cp: 2400, il: 2500),
                 Row(3, 2, boss: 25495, amount: 1000, max: 1000, bossName: "Kromede's Desire"), Row(4, 3, boss: 25495, bossName: "Kromede's Desire"),
                 Row(8, 3, boss: 25495, who: 14325, name: "Swoly", self: true, amount: 600), Row(8, 3, boss: 25495, amount: 400), Row(9, 3, boss: 25495, amount: 0, max: 1000),
                 Row(10, 3, boss: 25495, who: 25495, amount: 1, bossName: "Kromede's Desire"), Row(5, 3, boss: 25495, outcome: 1), Row(7, 4, who: 7093), Row(7, 4, who: 999), Row(2, 5), Row(42, 6),
@@ -385,7 +385,7 @@ public static class PacketTests
             var roster = got.OfType<GroupChanged>().ToList();
             var dmg = got.OfType<DamageDealt>().ToList();
             Check(got[0] is InstanceEntered { Kind: ContentKind.Expedition, Name: "Fire Temple", InstanceId: 1 } && roster.Count == 3 && roster[1].Members.Count == 2
-                && roster[1].Members.Any(m => m is { Name: "Swoly", You: true, CombatPower: 2637 }) && roster[2].Members.Single().Name == "Swoly",
+                && roster[1].Members.Any(m => m is { Name: "Swoly", You: true, CombatPower: 2637, Server: "Siel" }) && got[1] is InstanceMode { Mode: "Conquest" } && roster[2].Members.Single().Name == "Swoly",
                 $"the decoder's rows: an instance, the roster whole each time ({string.Join(" ", roster.Select(r => r.Members.Count))}), a leaver gone, an unknown leaver nothing");
             Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, SourceName: "Swoly", SourceIsYou: true, Amount: 600, TargetId: 25495 }
                 && dmg[1] is { SourceId: 0, Amount: 400, SourceIsYou: false } && got.OfType<BossHealth>().Single() is { BossId: 25495, Hp: 0, Max: 1000 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
@@ -556,9 +556,10 @@ public static class PacketTests
             {
                 case InstanceEntered i: Console.WriteLine($"{Local(i.At)}  into {i.Name} ({i.Kind})"); break;
                 case InstanceLeft l: Console.WriteLine($"{Local(l.At)}  out of the instance"); break;
+                case InstanceMode md: Console.WriteLine($"{Local(md.At)}  mode: {md.Mode}"); break;
                 case GroupChanged g:
                     foreach (var m in g.Members) names[m.Id] = m.Name;
-                    Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
+                    Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Server.Length > 0 ? $"[{m.Server}] " : "")}{(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
                     break;
                 case BossEngaged b: boss = b.Boss; open = b.BossId; dmg[b.BossId] = new(); mine[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
                 case DamageDealt d:
