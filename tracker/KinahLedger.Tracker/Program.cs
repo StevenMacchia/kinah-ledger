@@ -5757,6 +5757,39 @@ options: --process aion[,other]");
                     string.Join(" | ", lb.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts}, made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")),
                     "1/1, made Orichalcum Ingot x10");
                 Check("...its feed line says what it made", string.Join(" | ", lb.Live.Recent(FeedTab.Crafting).Select(l => $"{l.Text} (amount {l.Amount})")), "Orichalcum Ingot ×10 worked (amount 10)");
+
+                // Steven's 2026-11-13 18:17:37 queue of 15 Wind Serum, as reads.log has it (bars by their samples where a race
+                // was dropped as too quick, else as each race ended). The game's own record of his bag that evening: 15 crafts,
+                // all worked, three of them combos, 18 serums. 0.10.67 took one read of "3 / 45" for the queue's size (a queue
+                // of 45 over one of 15, the crafts counted back to 0), so the next craft's count made a craft "not seen"; and
+                // the roll after the craft at 18:19:03.9, its bars blue and its title the recipe (a serum's roll has no upgrade
+                // to name), was taken for a craft. What the reader still gets wrong here is the bars themselves: the first
+                // craft, 2 s long, is dropped as too quick and the second read as a fail.
+                static DateTime W(int m, double s) => new DateTime(2026, 11, 13, 23, m, 0, DateTimeKind.Utc).AddSeconds(s);   // 18:mm, UTC-5
+                var ws = new TrackerSession(null, new Settings(), items, "Test"); ws.Engine.SetZone("Ellun River Midstream");
+                ws.PanelLook(W(17, 37.9), true, false, new[] { "Crafting in Progress 1 / 15", "Wind Serum (Novice Lv. 10)" });
+                void Samples(TrackerSession s, params (DateTime At, double Ok, double Fail, bool Tint)[] ss) { foreach (var (at, sb, fb, tn) in ss) { s.CraftingPass(at); s.PanelSample(at, new CraftPanel.Sample(true, sb, fb, tn)); } }
+                // 18:17:40.5 the bar full 1.8 s after both were empty (dropped); 18:17:48.8 the fail
+                Samples(ws, (W(17, 38.7), 0, 0, false), (W(17, 40.5), 0.98, 0, false), (W(17, 41.2), 0, 0, false), (W(17, 45.0), 0.2, 0.6, false), (W(17, 48.8), 0.32, 0.98, false));
+                // 18:17:51.9 the misread count; 18:17:53.5 the critical success (dropped, credited once the count passes it); 18:18:00.0 the craft with the count at 3
+                ws.PanelLook(W(17, 51.9), true, false, new[] { "Crafting in Progress 3 / 45" });
+                Samples(ws, (W(17, 51.8), 0, 0, false), (W(17, 53.5), 1.0, 0, false), (W(17, 54.0), 0, 0, false), (W(17, 57.0), 0.5, 0.1, false), (W(18, 0.0), 1.0, 0, false));
+                Check("crafting: Steven's 15 Wind Serum: one read of \"3 / 45\" is the queue's 15 misread, no craft \"not seen\"",
+                    $"{ws.CraftQueue?.Of} | " + string.Join(" | ", ws.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts}, {r.Unseen} unseen")), "15 | 2/3, 0 unseen");
+                // the races as reads.log ended them; 18:18:12.2 the roll told by its blue tint, 18:19:09.2 the roll whose title was read
+                ws.PanelBars(W(18, 6.7), true, false);
+                ws.PanelBars(W(18, 12.2), true, true);
+                foreach (var at in new[] { W(18, 17.6), W(18, 24.6), W(18, 32.0), W(18, 37.1), W(18, 43.6), W(18, 54.6), W(18, 59.4), W(19, 3.9) }) ws.PanelBars(at, true, false);
+                ws.PanelLook(W(19, 8.6), true, false, new[] { "Wind Serum (Novice Lv. 10)" });
+                ws.PanelBars(W(19, 9.2), true, true);
+                foreach (var at in new[] { 9.9, 10.4, 10.9, 11.4 }) ws.ProcessList(new List<(int, string)> { (1197, "Wind Serum x2") }, W(19, at));
+                ws.PanelBars(W(19, 14.2), true, false);
+                foreach (var at in new[] { 19.4, 19.9, 20.4, 20.9 }) ws.ProcessList(new List<(int, string)> { (1197, "Wind Serum x2") }, W(19, at));
+                ws.PanelBars(W(19, 23.6), true, false);
+                Away(ws, W(19, 28.3), 14);
+                Check("...the blue roll with the serum's title is the roll, not a craft; three combos credited once each",
+                    string.Join(" | ", ws.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts}, rolls {r.Upgraded}/{r.Upgraded + r.NotUpgraded}, {r.Unseen} unseen, made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")),
+                    "13/14, rolls 3/3, 0 unseen, made Wind Serum x16");
             }
             {
                 // Steven's 2026-11-04 09:48 Artisan's Inina Pasta: the combo's "x2" pop-up beside the character while the panel is
@@ -6061,8 +6094,8 @@ options: --process aion[,other]");
         ok &= PriceUploadTests(items);
         Console.WriteLine("\nPlayer features (best crafts, where to farm, gear score, price alerts):");
         ok &= PlayerTests.Run();
-        Console.WriteLine("\nBound crafts (materials you hold bound cost nothing; what they make is bound):");
-        ok &= BoundCraftTests();
+        Console.WriteLine("\nBound crafts (materials you hold bound cost nothing; what they make keeps its value):");
+        ok &= BoundCraftTests(items);
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -6071,9 +6104,11 @@ options: --process aion[,other]");
     /// Steven, 2026-11-12: "prices for crafting are still SO off i cant be losing 500m on bound items to make manastones";
     /// "the point is that they cant even be sold". Siel's board that day: Lesser Manastone 55,542, Spiritstone Powder 230,
     /// Intermediate Manastone 51,220, Superior Manastone 900,000; Professional Ink (Bound) 1,200 at the NPC. Once his bound
-    /// Lesser Manastones are picked up, the Intermediate Manastone craft costs its powder and ink only and is a bound craft.
+    /// Lesser Manastones are picked up, the Intermediate Manastone craft costs its powder and ink only. 2026-11-13, Steven:
+    /// "The guard shouldn't be bound": his five Orichalcum Guards took his bound Refining Stones and came out tradeable, so
+    /// what a craft makes from bound stock keeps its Market value (0.10.59 to 0.10.67 valued it at nothing, as bound).
     /// </summary>
-    static bool BoundCraftTests()
+    static bool BoundCraftTests(ItemDictionary items)
     {
         bool ok = true;
         void Check(string what, string got, string expect) { bool pass = got == expect; ok &= pass; Console.WriteLine($"  {what,-78} -> {got} {(pass ? "ok" : "MISMATCH, expected " + expect)}"); }
@@ -6086,17 +6121,38 @@ options: --process aion[,other]");
             PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[" + string.Join(",", new[] { ("Lesser Manastone", 55542), ("Spiritstone Powder", 230), ("Intermediate Manastone", 51220), ("Superior Manastone", 900000) }
                 .Select(p => $"{{\"item\":\"{p.Item1}\",\"price\":{p.Item2},\"price_from\":\"feed\",\"readings\":20,\"sure\":true}}")) + "]}", null));
             string Cost(string output) => RecipeBook.CostPerTry(output, 0, out _, out _, out _) is long c ? c.ToString("N0") : "-";
-            Check("before: an Intermediate Manastone try at the Market's prices, not bound", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")}", "280,800 False");
+            Check("before: an Intermediate Manastone try at the Market's prices, not bound", $"{Cost("Intermediate Manastone")} {RecipeBook.MadeFromBound("Intermediate Manastone")}", "280,800 False");
             // a bound powder from a quest: powder is free, but the Manastone isn't a bound craft (its main material is the Manastone)
             var powder = PriceBook.NoteBoundHeld(new[] { "Spiritstone Powder (Bound)" });
-            Check("a bound powder alone: powder costs nothing, the craft is not bound", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")} {string.Join(",", powder)}", "280,110 False Spiritstone Powder");
+            Check("a bound powder alone: powder costs nothing, not made from bound stock", $"{Cost("Intermediate Manastone")} {RecipeBook.MadeFromBound("Intermediate Manastone")} {string.Join(",", powder)}", "280,110 False Spiritstone Powder");
             var added = PriceBook.NoteBoundHeld(new[] { "Lesser Manastone (Bound)", "Lesser Manastone (Bound)", "Spiritstone Powder (Bound)" });
-            Check("bound Lesser Manastones picked up: the try costs the NPC's ink, a bound craft", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")} {string.Join(",", added)}", "2,400 True Lesser Manastone");
-            Check("  Superior Manastone stays a Market craft until bound Intermediates are picked up", $"{RecipeBook.BoundCraft("Superior Manastone")} {RecipeBook.BoundMain("Superior Manastone")}", "False Intermediate Manastone");
+            Check("bound Lesser Manastones picked up: the try costs the NPC's ink, made from bound stock", $"{Cost("Intermediate Manastone")} {RecipeBook.MadeFromBound("Intermediate Manastone")} {string.Join(",", added)}", "2,400 True Lesser Manastone");
+            Check("  Superior Manastone stays a Market craft until bound Intermediates are picked up", $"{RecipeBook.MadeFromBound("Superior Manastone")} {RecipeBook.BoundMain("Superior Manastone")}", "False Intermediate Manastone");
             PriceBook.Reset();
             Check("  the bound stock is kept on this PC (read back after a restart)", $"{PriceBook.BoundHeld("Lesser Manastone")} {PriceBook.Farmed("Lesser Manastone")} {File.Exists(Path.Combine(tmp, "bound-held.json"))}", "True True True");
             PriceBook.SetFarmed("Lesser Manastone", false);
-            Check("  unticking I have these lets it go: Market price again", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")}", "280,110 False");
+            Check("  unticking I have these lets it go: Market price again", $"{Cost("Intermediate Manastone")} {RecipeBook.MadeFromBound("Intermediate Manastone")}", "280,110 False");
+
+            // Steven's 2026-11-13 18:19:58 queue of 5 Orichalcum Guard (reads.log): his bound Refining Stones from the 18:05
+            // event cards, noted at 18:20:37 ("crafting: bound Refining Stone picked up"), five races counted. Steven had no
+            // guards before the queue and 5 after, none bound. The guards sell: the Crafting part values them at the Market's
+            // price, and only the stones cost nothing
+            PriceBook.Reset();
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[" + string.Join(",", new[] { ("Orichalcum Guard", 60000), ("Orichalcum Ingot", 3000), ("Refining Stone", 2000), ("Odyle", 1500) }
+                .Select(p => $"{{\"item\":\"{p.Item1}\",\"price\":{p.Item2},\"price_from\":\"feed\",\"readings\":20,\"sure\":true}}")) + "]}", null));
+            Check("Orichalcum Guard before the bound stones: ingots, stones and Odyle at the Market's prices", $"{Cost("Orichalcum Guard")} {RecipeBook.MadeFromBound("Orichalcum Guard")} {RecipeBook.BoundMain("Orichalcum Guard")}", "22,000 False Refining Stone");
+            var gs = new TrackerSession(null, new Settings(), items, "Test"); gs.Engine.SetZone("Ellun River Midstream");
+            static DateTime G(int m, double s) => new DateTime(2026, 11, 13, 23, m, 0, DateTimeKind.Utc).AddSeconds(s);   // 18:mm, UTC-5
+            gs.PanelLook(G(19, 58.8), true, false, new[] { "Crafting in Progress 1 / 5", "Orichalcum Guard (Novice Lv. 5)" });
+            foreach (var at in new[] { G(20, 4.7), G(20, 12.6), G(20, 27.4) }) gs.PanelBars(at, true, false);
+            var stones = PriceBook.NoteBoundHeld(new[] { "Refining Stone (Bound)" });
+            foreach (var at in new[] { G(20, 38.8), G(20, 46.8) }) gs.PanelBars(at, true, false);
+            for (int qi = 0; qi < 14; qi++) gs.PanelLook(G(20, 50.9).AddSeconds(qi * 0.4), false, false, null);
+            var sums = MainWindow.SumCrafts(gs.CraftView);
+            Check("...the bound stones picked up: they cost nothing, the guard is made from bound stock", $"{Cost("Orichalcum Guard")} {RecipeBook.MadeFromBound("Orichalcum Guard")} {string.Join(",", stones)}", "12,000 True Refining Stone");
+            Check("...the five guards are not bound: worth 5 at the Market's price after its cut, spent the ingots and Odyle",
+                $"{sums.Ok}/{sums.Tries} spent {sums.Spent:N0} worth {sums.Worth:N0} profit {sums.Worth - sums.Spent:N0}",
+                $"5/5 spent 60,000 worth {Math.Round(60000 * 5 * PriceBook.SellerKeeps):N0} profit {Math.Round(60000 * 5 * PriceBook.SellerKeeps) - 60000:N0}");
         }
         finally { PriceBook.PathOverride = keep; PriceBook.Reset(); try { Directory.Delete(tmp, true); } catch (IOException) { } }
         return ok;

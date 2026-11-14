@@ -225,13 +225,15 @@ public static class RecipeBook
     }
 
     /// <summary>
-    /// A craft made from the player's bound stock: the recipe's main material (the Market one that costs the most, not an
-    /// NPC's "(Bound)" ink) is held bound (PriceBook.BoundHeld). It cost nothing, and what it makes is bound too: it can't
-    /// be sold, so it isn't valued at the Market's price either (2026-11-12, Steven's Manastones: 5 bound Lesser Manastone
-    /// charged at 55,542 each against an Intermediate Manastone at 51,220). A bound powder from a quest doesn't make every
-    /// recipe that uses powder a bound one: only the main material decides.
+    /// A craft made with the player's bound stock: the recipe's main material (the Market one that costs the most, not an
+    /// NPC's "(Bound)" ink) is held bound (PriceBook.BoundHeld), so it costs nothing in the craft (PriceBook.Farmed;
+    /// 2026-11-12, Steven's Manastones: 5 bound Lesser Manastone charged at 55,542 each against an Intermediate Manastone
+    /// at 51,220). What it makes is NOT taken for bound: 0.10.59 to 0.10.67 did, and on 2026-11-13 Steven's five Orichalcum
+    /// Guards ("The guard shouldn't be bound") came out tradeable although his bound Refining Stones went into them (the
+    /// bag's bound stones fell 5 a craft). Nothing has shown the game binding a craft's output, so the output keeps its
+    /// Market value. Only for the notes: a bound powder from a quest doesn't make every recipe with powder one of these.
     /// </summary>
-    public static bool BoundCraft(string recipeOutput) => BoundMain(recipeOutput) is { Length: > 0 } m && PriceBook.BoundHeld(m);
+    public static bool MadeFromBound(string recipeOutput) => BoundMain(recipeOutput) is { Length: > 0 } m && PriceBook.BoundHeld(m);
 
     /// <summary>The recipe's main material: the Market one that costs the most for a try ("" when the book doesn't have it).</summary>
     public static string BoundMain(string recipeOutput) =>
