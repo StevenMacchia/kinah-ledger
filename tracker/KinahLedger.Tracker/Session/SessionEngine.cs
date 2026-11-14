@@ -47,7 +47,14 @@ public sealed partial class SessionEngine
     /// <summary>Gathering: gemstones and higher-tier materials, the finds worth tracking per node.</summary>
     public int BonusFinds { get; private set; }
     /// <summary>Best available kill count: kill lines, experience lines, or Kinah pickups (one per mob in open-world farming).</summary>
-    public int Kills => Math.Max(KillsSeen, Math.Max(Math.Max(KillsDefeated, KillsXp), Math.Max(KinahDrops, CurrencyLines)));
+    public int Kills => Math.Max(PlayerKills + MonsterKills, Math.Max(KillsSeen, Math.Max(Math.Max(KillsDefeated, KillsXp), Math.Max(KinahDrops, CurrencyLines))));
+    /// <summary>The player's kills of other players, as the game's own messages tell them (<see cref="FightCounted"/>).</summary>
+    public int PlayerKills { get; private set; }
+    /// <summary>The player's kills of monsters, as the game's own messages tell them.</summary>
+    public int MonsterKills { get; private set; }
+    /// <summary>The player's deaths, as the game's own messages tell them; of them, those a player dealt.</summary>
+    public int Deaths { get; private set; }
+    public int DeathsToPlayers { get; private set; }
     /// <summary>Kills as separate pieces of evidence agree on them: see <see cref="KillEvidence"/>.</summary>
     public int KillsSeen { get; private set; }
     public int Events { get; private set; }
@@ -166,12 +173,14 @@ public sealed partial class SessionEngine
     public sealed class ZoneStats
     {
         public double Seconds; public long Kinah, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
+        /// <summary>The player's kills and deaths here, as the game's own messages tell them.</summary>
+        public int PlayerKills, MonsterKills, Deaths;
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
         /// <summary>Items picked up in this zone, by item id, tradeable and bound apart like the run-level maps. What the site files under this zone, so a run that moved zones never credits one zone with another's drops.</summary>
         public Dictionary<long, int> Items = new(), ItemsBound = new();
-        public int Kills => Math.Max(KillsSeen, Math.Max(Math.Max(Defeated, Xp), Math.Max(KinahDrops, CurrencyLines)));
+        public int Kills => Math.Max(PlayerKills + MonsterKills, Math.Max(KillsSeen, Math.Max(Math.Max(Defeated, Xp), Math.Max(KinahDrops, CurrencyLines))));
         public double Hours => Math.Max(Seconds / 3600, 1.0 / 3600);
     }
     public const string UnknownZone = "Unknown zone";
@@ -648,6 +657,14 @@ public sealed partial class SessionEngine
                     RewardsSkipped++;
                     _rewardItems[rr.Name] = _rewardItems.GetValueOrDefault(rr.Name) + rr.Count;
                     break;
+                case FightCounted fc:
+                {
+                    var zf = Z();
+                    if (fc.Death) { Deaths++; zf.Deaths++; if (fc.Player) DeathsToPlayers++; }
+                    else if (fc.Player) { PlayerKills++; zf.PlayerKills++; MarkKill(fc.Time); }
+                    else { MonsterKills++; zf.MonsterKills++; MarkKill(fc.Time); }
+                    break;
+                }
                 case MobKilled mk:
                     KillsDefeated++; Z().Defeated++; MarkKill(mk.Time);
                     KillEvidence(mk.Time, 'd');
@@ -750,7 +767,7 @@ public sealed partial class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PlayerKills = v.PlayerKills, MonsterKills = v.MonsterKills, Deaths = v.Deaths, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }
