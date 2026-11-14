@@ -497,6 +497,7 @@ public static class PacketTests
     /// </summary>
     public static int Replay(string pcapng, int serverPort, Settings? settings = null)
     {
+        var bossEvents = new List<BossEvent>();
         if (!NativeDecoder.Available) { Console.WriteLine("this build has no decoder (klnet.dll)"); return 1; }
         var segs = new List<(DateTime At, TcpSegment S)>();
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
@@ -523,6 +524,7 @@ public static class PacketTests
                     while (dec.NextItem() is { } it) rows.Add(it);
                     batches.AddRange(ItemBatch.Cut(rows));
                     while (dec.NextFight() is { } f) fights.Add(f);
+                    while (dec.NextBossEvent() is { } b) bossEvents.Add(b);
                 },
                 OnGap = () => { dec.Gap(); gaps.Add(last); },
             };
@@ -535,10 +537,40 @@ public static class PacketTests
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
+        ReplayBosses(bossEvents);
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;
     }
+
+    /// <summary>packet-replay's boss fights: each instance, the group, and each pull with its damage by member (the decoder's, version 4 and later).</summary>
+    static void ReplayBosses(List<BossEvent> ev)
+    {
+        if (ev.Count == 0) { Console.WriteLine("boss fights: none (no Transcendence, Expedition or Sanctuary boss in this recording, or the decoder reads none)"); return; }
+        var names = new Dictionary<long, string>();
+        var dmg = new Dictionary<long, Dictionary<long, long>>();
+        string? boss = null;
+        foreach (var e in ev)
+            switch (e)
+            {
+                case InstanceEntered i: Console.WriteLine($"{Local(i.At)}  into {i.Name} ({i.Kind})"); break;
+                case InstanceLeft l: Console.WriteLine($"{Local(l.At)}  out of the instance"); break;
+                case GroupChanged g:
+                    foreach (var m in g.Members) names[m.Id] = m.Name;
+                    Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
+                    break;
+                case BossEngaged b: boss = b.Boss; dmg[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
+                case DamageDealt d: if (dmg.TryGetValue(d.TargetId, out var by)) by[d.SourceId] = by.GetValueOrDefault(d.SourceId) + d.Amount; break;
+                case BossEnded x:
+                    var t = dmg.GetValueOrDefault(x.BossId) ?? new();
+                    long total = t.Values.Sum();
+                    Console.WriteLine($"{Local(x.At)}  {x.Outcome}: {boss}, {total:N0} damage: " + string.Join(", ", t.OrderByDescending(kv => kv.Value)
+                        .Select(kv => $"{(kv.Key == 0 ? "other" : names.GetValueOrDefault(kv.Key, kv.Key.ToString()))} {kv.Value:N0} ({kv.Value * 100.0 / Math.Max(1, total):F1}%)")));
+                    break;
+            }
+    }
+
+    static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
 
     /// <summary>
     /// The player's kills, told apart, and deaths, as the tracker would count them from a capture, against the capture's
