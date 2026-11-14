@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     readonly WF.NotifyIcon _tray = new();
     readonly WF.ToolStripMenuItem _trayToggle = new("Start run");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    int _packetTickQueued;
     bool _framing; int _ticks;
 
     // a timer tick after the window closed (the off-screen renders) finds no theme: grey rather than a crash
@@ -208,6 +209,13 @@ public partial class MainWindow : Window
         ApplyModeLabels(); ResetTiles();
         BuildTray();
         _timer.Tick += (_, _) => Tick();
+        // a count from the game's messages shows at once (Steven, 2026-11-13: "these numbers should be instantaneous"): one
+        // redraw queued at a time, so a burst of pickups is one redraw, not one each
+        _watcher.PacketCounted += () =>
+        {
+            if (Interlocked.Exchange(ref _packetTickQueued, 1) == 1) return;
+            Dispatcher.BeginInvoke(() => { Interlocked.Exchange(ref _packetTickQueued, 0); Tick(); }, DispatcherPriority.Render);
+        };
         _timer.Start();
         SourceInitialized += OnSourceInitialized;
         StateChanged += OnStateChanged;

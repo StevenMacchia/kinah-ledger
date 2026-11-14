@@ -86,12 +86,25 @@ public sealed class PacketReader : IDisposable
             if (c.First) _baseAt[c.What] = c.At;
             else _seen.Add((c.What, c.Delta, c.At));
         }
-        _changes.Enqueue(c);
+        _changes.Enqueue(c); Arrived();
         Log($"{Local(c.At)}  {Name(c.What)} {(c.First ? "now" : Signed(c.Delta))} · {c.Amount:N0}");
     }
 
     /// <summary>The next change for the tracker to count (TrackerSession.DrainPackets), null when there is none.</summary>
     public CurrencyChange? Next() => _changes.TryDequeue(out var c) ? c : null;
+
+    // set when a change or an update is queued: the session's wait between screen passes ends on it, so a pickup's amount is
+    // counted as it comes, not at the next pass (Steven, 2026-11-13: "if we're using packets these numbers should be instantaneous")
+    readonly SemaphoreSlim _arrived = new(0, 1);
+    void Arrived() { if (_arrived.CurrentCount == 0) try { _arrived.Release(); } catch (SemaphoreFullException) { } }
+    /// <summary>Waits up to <paramref name="ms"/> for a change or an update to be queued; true when one was.</summary>
+    public async Task<bool> WaitArrivedAsync(int ms, CancellationToken ct)
+    {
+        try { return await _arrived.WaitAsync(ms, ct); }
+        catch (OperationCanceledException) { return false; }
+    }
+    /// <summary>True when changes or updates wait to be drained.</summary>
+    public bool Pending => !_changes.IsEmpty || !_items.IsEmpty;
 
     /// <summary>Item changes the decoder found, cut into the game's updates: kept for the agreement check, queued, logged.</summary>
     void TakeItems(IReadOnlyList<ItemChange> rows)
@@ -99,7 +112,7 @@ public sealed class PacketReader : IDisposable
         foreach (var b in ItemBatch.Cut(rows))
         {
             lock (_gate) foreach (var r in b.Rows) _itemSeen.Add((r.ItemId, r.Delta, r.First, r.At));
-            _items.Enqueue(b);
+            _items.Enqueue(b); Arrived();
             Log($"{Local(b.At)}  {string.Join(", ", b.Rows.Select(r => $"{ItemName(r.ItemId)} {(r.First ? "now" : Signed(r.Delta))} · {r.Total:N0}"))}{(b.Rows.Count > 1 ? $" (one update{(b.Fell ? ", something went down" : "")})" : "")}");
         }
     }
@@ -132,8 +145,12 @@ public sealed class PacketReader : IDisposable
         {
             _screenItems.Add((id, count, at, late, tag));
             _screenItemsAll.Add((id, at)); _screenItemsAll.RemoveAll(s => (at - s.At).TotalMinutes > 2);
+            if (tag != null) { _chatItemsAll.Add((id, at)); _chatItemsAll.RemoveAll(s => (at - s.At).TotalMinutes > 2); }
         }
     }
+    readonly List<(long Id, DateTime At)> _chatItemsAll = new();
+    /// <summary>Whether the chat (not the loot list) said a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>: its say on the pickup is in.</summary>
+    public bool ChatNearItem(long id, DateTime at, double seconds) { lock (_gate) return _chatItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }
 
     /// <summary>Whether the screen read a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>.</summary>
     public bool ScreenNearItem(long id, DateTime at, double seconds) { lock (_gate) return _screenItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }

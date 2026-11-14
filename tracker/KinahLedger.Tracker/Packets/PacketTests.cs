@@ -109,6 +109,50 @@ public static class PacketTests
             Check(broken && s.Engine.Kinah == 1_894 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
         }
 
+        // at once (0.10.70; Steven, 2026-11-13: "these numbers should be instantaneous"): a rise with a kill already in counts
+        // as it comes, not 3 s later; one with no kill yet waits for the kill's line (it lags the message) and counts when it
+        // comes; a pickup the traffic counted a few seconds before is a kill's evidence too; an item counts once its chat line is in
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            TrackerSession Fresh(out PacketReader r)
+            {
+                r = new PacketReader(); r.ReadingForTest();
+                var x = new TrackerSession(null, settings, items, "Test") { Packets = r };
+                x.Engine.SetZone("Western Cantas Valley");
+                r.AmountForTest(CurrencyKind.Kinah, 10_000_000, DateTime.UtcNow.AddSeconds(-60));   // the baseline
+                return x;
+            }
+            var now = DateTime.UtcNow;
+            var a = Fresh(out var ra);
+            a.CommitForTest(new CurrencyGained(now.AddSeconds(-2), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            ra.AmountForTest(CurrencyKind.Kinah, 10_000_400, now); a.DrainPacketsForTest();
+            Check(a.Engine.Kinah == 400, $"a rise with a kill just before counts as it comes: {a.Engine.Kinah:N0} at once (400)");
+            var b = Fresh(out var rb);
+            rb.AmountForTest(CurrencyKind.Kinah, 10_000_400, now); b.DrainPacketsForTest();
+            long held = b.Engine.Kinah;
+            b.CommitForTest(new CurrencyGained(now.AddSeconds(1.5), "Fera Soul Points", 1, "Fera") { Via = "chat" }); b.DrainPacketsForTest();
+            Check(held == 0 && b.Engine.Kinah == 400, $"...one with no kill yet waits for the kill's line and counts as it comes: {held:N0}, then {b.Engine.Kinah:N0}");
+            var c = Fresh(out var rc);
+            c.CommitForTest(new CurrencyGained(now.AddSeconds(-14.5), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            rc.AmountForTest(CurrencyKind.Kinah, 10_000_400, now.AddSeconds(-5)); rc.AmountForTest(CurrencyKind.Kinah, 10_000_650, now); c.DrainPacketsForTest();
+            Check(c.Engine.Kinah == 650, $"...a pickup counted 5 s before (the kill 14.5 s back, out of reach) is evidence too: {c.Engine.Kinah:N0} at once (400 + 250)");
+            const long Manastone = 511360001;
+            var d = Fresh(out var rd);
+            d.CommitForTest(new CurrencyGained(now.AddSeconds(-2), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            rd.ItemsForTest(new ItemChange(now.AddSeconds(-0.2), Manastone, ItemOp.Changed, 1, 1, 3, false, 1, 1, false)); d.DrainPacketsForTest();
+            int before = d.Engine.Items.GetValueOrDefault(Manastone);
+            d.CommitForTest(new ItemAcquired(now.AddSeconds(1.2), Manastone, 1, false) { Via = "chat" }); d.DrainPacketsForTest();
+            Check(before == 0 && d.Engine.Items.GetValueOrDefault(Manastone) == 1, $"...an item waits for the chat's say on it (a drop, or a box's contents) and counts once its line is in: {before}, then {d.Engine.Items.GetValueOrDefault(Manastone)}");
+            // the live path: the loop's wait between passes ends on the message, which is counted within a fraction of a second
+            var e = Fresh(out var re);
+            e.CommitForTest(new CurrencyGained(DateTime.UtcNow.AddSeconds(-1), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            var feed = Task.Run(async () => { for (int i = 1; i <= 5; i++) { await Task.Delay(150); re.AmountForTest(CurrencyKind.Kinah, 10_000_000 + i * 100, DateTime.UtcNow); } });
+            e.WaitForTest(1200);
+            feed.Wait();
+            double worst = e.PacketDelays.Count > 0 ? e.PacketDelays.Max() : 99;
+            Check(e.Engine.Kinah == 500 && worst < 0.3, $"...the reading loop's wait counts each message as it comes: {e.PacketDelays.Count} of 5 counted, the slowest {worst * 1000:0} ms after its message (under 300)");
+        }
+
         // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
         // and a line the traffic never showed are the chat's, a rise with nothing around it or with something going down is
         // no pickup, and three chat pickups the traffic never showed hand items back to the screen

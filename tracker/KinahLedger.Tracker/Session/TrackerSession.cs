@@ -831,16 +831,21 @@ public sealed partial class TrackerSession
                     var off = Update.RemoteConfig.Current;
                     // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
                     await ScenePassAsync(p0);
+                    PacketsDue();   // the game's messages between the readers too (0.10.70): a pass of half a second holds no count
                     var listGate = Verdict("loot_list");
                     var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
                     if (listGate == Gate.Skip) _rows.Reset();
                     var chatGate = Verdict("chat");
                     if (chatGate != Gate.Skip) await Times.Time("chat", () => ReadOnce(chatGate, () => PeekList(list)));
+                    PacketsDue();
                     await RefindKeptChatAsync();
                     if (!off.Off("target") && Runs("target")) await Times.Time("target", TargetDueAsync);
+                    PacketsDue();
                     if (!off.Off("craft_panel")) await Times.Time("craft", CraftPanelDue);
                     var listRead = await list;
+                    PacketsDue();
                     await Times.Time("list", () => LootGated(listRead, listGate));
+                    PacketsDue();
                     Times.Time("grid", RewardShot);
                     if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
                     if (!off.Off("nameplates") && Runs("nameplates")) await Times.Time("nameplates", PlatesDue);
@@ -874,7 +879,9 @@ public sealed partial class TrackerSession
             // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
             // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
             int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, Update.RemoteConfig.Current.FightIntervalMs) : _interval;
-            if (spent < every) { try { await Task.Delay(every - spent, ct); } catch (TaskCanceledException) { } }
+            // the wait ends early for the game's messages, which are counted as they come (TrackerSession.Packets.cs)
+            if (spent < every) await WaitWithPacketsAsync(every - spent, ct);
+            else PacketsDue();
             // reading time for the health numbers: the passes the game was read, wait included
             if (reading) Accuracy.AddReading((DateTime.UtcNow - t0).TotalSeconds);
         }
