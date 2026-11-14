@@ -164,6 +164,8 @@ public partial class MainWindow
     DateTime _parserStatsAt = DateTime.UtcNow;
     /// <summary>Capture to screen, in ms, of the Parser's redraws.</summary>
     internal static ParserLatency ParserLatencyStats { get; } = new();
+    /// <summary>The same since the last line in reads.log (the line a minute starts it again; the one above keeps everything).</summary>
+    static readonly ParserLatency ParserLatencyMinute = new();
     /// <summary>A replay's Parser (parser-latency), in place of the session's; the overlay shows whatever is in front.</summary>
     internal BossParser? ParserSourceForTest { get; set; }
     internal bool ParserOverlayForceForTest { get; set; }
@@ -216,7 +218,12 @@ public partial class MainWindow
         if (oldest is not { } o || !shown) return;
         Interlocked.Increment(ref ParserDrawsShown);
         EventHandler? h = null;
-        h = (_, _) => { System.Windows.Media.CompositionTarget.Rendering -= h; ParserLatencyStats.Add(Math.Max(0, (DateTime.UtcNow - o).TotalMilliseconds)); };
+        h = (_, _) =>
+        {
+            System.Windows.Media.CompositionTarget.Rendering -= h;
+            double ms = Math.Max(0, (DateTime.UtcNow - o).TotalMilliseconds);
+            ParserLatencyStats.Add(ms); ParserLatencyMinute.Add(ms);
+        };
         System.Windows.Media.CompositionTarget.Rendering += h;
     }
 
@@ -225,10 +232,10 @@ public partial class MainWindow
     {
         if ((DateTime.UtcNow - _parserStatsAt).TotalSeconds < 60) return;
         _parserStatsAt = DateTime.UtcNow;
-        var (p50, p95, max, n) = ParserLatencyStats.Stats();
+        var (p50, p95, max, n) = ParserLatencyMinute.Stats();
         if (n == 0) return;
         CrashLog.Note($"parser: {n} redraws, capture to screen median {p50:0} ms, 95th percentile {p95:0} ms, worst {max:0} ms");
-        ParserLatencyStats.Clear();
+        ParserLatencyMinute.Clear();
     }
     DateTime ParserNow => _demo ? _parserDemoNow : DateTime.UtcNow;
     Encounter? ParserLive => _demo ? _parserDemoLive : ParserFights?.Live;
