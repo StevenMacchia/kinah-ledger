@@ -33,7 +33,7 @@ public sealed class ParserOverlay : Window
     public ParserMode Mode { get; set; }
 
     readonly bool _still;
-    readonly ParserPanel _panel = new();
+    readonly ParserPanel _panel = new(glass: HudGlass.On);   // the separate overlay: the overlays' glass (Ui/HudGlass.cs)
     readonly TextBlock _hint;
     /// <summary>
     /// Clicks go through to the game (Click-through, off by default). The overlay can still be moved: with the pointer over
@@ -77,7 +77,7 @@ public sealed class ParserOverlay : Window
             Child = new TextBlock { Text = "• • •", FontSize = 8, Foreground = HudKit.Muted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) },
         };
         System.Windows.Automation.AutomationProperties.SetName(_grab, "Drag to move the overlay");
-        Content = new StackPanel { Children = { new Grid { Children = { _panel, _grab } }, _hint } };
+        Content = new StackPanel { Children = { new Grid { Children = { HudGlass.On ? HudGlass.Ring(_panel) : _panel, _grab } }, _hint } };   // the glass's dark outer hairline round it
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
         IsVisibleChanged += (_, _) => { if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
@@ -291,14 +291,18 @@ public sealed class ParserPanel : Border
 
     static readonly SolidColorBrush Coral = HudKit.B(HudKit.RecC), Text2 = HudKit.B(0xC9CDDA), Track = HudKit.B(0xFFFFFF, 0.08);
 
-    public ParserPanel()
+    /// <summary>The glass (Ui/HudGlass.cs): the separate Parser overlay's; inside Badge, Buddy or Pop the panel takes their frame.</summary>
+    readonly bool _glass;
+
+    public ParserPanel(bool glass = false)
     {
+        _glass = glass;
         Width = ParserOverlay.Width0;
         // the Kinah overlay's frame exactly (Ui/HudWindow.cs): its surface at the same opacity, its 1 px line, radius 12, its padding
         Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0B, 0x0C, 0x10)); BorderBrush = HudKit.FrameLine; BorderThickness = new Thickness(1);
         var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(null));
         CornerRadius = new CornerRadius(radius); Padding = pad;
-        if (HudGlass.On) { HudGlass.Apply(this, 0.94); Typography.SetNumeralAlignment(this, FontNumeralAlignment.Tabular); }
+        if (_glass) { HudGlass.Apply(this, 0.94); Typography.SetNumeralAlignment(this, FontNumeralAlignment.Tabular); }
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         TextElement.SetFontFamily(this, HudKit.Text);
         TextElement.SetFontWeight(this, FontWeights.Medium);
@@ -307,13 +311,13 @@ public sealed class ParserPanel : Border
     }
 
     /// <summary>The Kinah overlay's corner and padding (HudWindow.FrameShape for its figures).</summary>
-    public void SetFrame(double radius, Thickness padding) { CornerRadius = new CornerRadius(HudGlass.On ? HudGlass.Radius : radius); Padding = padding; }
+    public void SetFrame(double radius, Thickness padding) { CornerRadius = new CornerRadius(_glass ? HudGlass.Radius : radius); Padding = padding; }
 
     /// <summary>How solid the background is, 0.3 to 1: the Kinah overlay's own setting (Options › In game), so the two match.</summary>
     public void SetOpacity(double opacity)
     {
         var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
-        if (HudGlass.On) { Background = HudGlass.Fill(opacity); return; }
+        if (_glass) { Background = HudGlass.Fill(opacity); return; }
         var b = new SolidColorBrush(Color.FromArgb(a, 0x0B, 0x0C, 0x10)); b.Freeze();
         Background = b;
     }
@@ -334,9 +338,9 @@ public sealed class ParserPanel : Border
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var art = GameArt.Element(e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss", 22); art.Margin = new Thickness(0, 0, 8, 0);
         head.Children.Add(art);
-        var name = T(e.Title, HudGlass.On ? 14 : 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center;
+        var name = T(e.Title, _glass ? 14 : 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(name, 1); head.Children.Add(name);
-        var clock = T(BossParser.Clock(e.Duration(now)), HudGlass.On ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
+        var clock = T(BossParser.Clock(e.Duration(now)), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
@@ -403,8 +407,8 @@ public sealed class ParserPanel : Border
             var hp = new Grid { Margin = new Thickness(0, 7, 0, 0) };
             hp.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             hp.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var track = new Grid { Height = HudGlass.On ? 4 : 6, VerticalAlignment = VerticalAlignment.Center };
-            track.Children.Add(new Border { Background = HudGlass.On ? HudGlass.Track : Track, CornerRadius = new CornerRadius(3) });
+            var track = new Grid { Height = _glass ? 4 : 6, VerticalAlignment = VerticalAlignment.Center };
+            track.Children.Add(new Border { Background = _glass ? HudGlass.Track : Track, CornerRadius = new CornerRadius(3) });
             var fill = new Border { Background = left < 0.34 ? Coral : HudKit.Gold, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left };
             track.SizeChanged += (_, _) => fill.Width = Math.Max(left > 0 ? 3 : 0, track.ActualWidth * left);
             track.Children.Add(fill);
@@ -441,13 +445,13 @@ public sealed class ParserPanel : Border
             double top = Math.Max(1, e.Roster.Max(Measure));
             foreach (var f in e.Shown().Take(8))
             {
-                var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = HudGlass.On ? 22 : 24;
-                var mark = f.Other ? MainWindow.OtherMark(HudGlass.On ? 17 : 19) : MainWindow.ClassMark(f.Class, HudGlass.On ? 17 : 19, f.Name);
+                var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = _glass ? 22 : 24;
+                var mark = f.Other ? MainWindow.OtherMark(_glass ? 17 : 19) : MainWindow.ClassMark(f.Class, _glass ? 17 : 19, f.Name);
                 g.Children.Add(mark);
                 var nm = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-                var n = T(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.Other || f.Name.Length == 0 ? HudKit.Muted : HudGlass.On && f.You ? HudKit.Gold : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
+                var n = T(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.Other || f.Name.Length == 0 ? HudKit.Muted : _glass && f.You ? HudKit.Gold : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
                 nm.Children.Add(n);
-                if (f.You && HudGlass.On) nm.Children.Add(HudGlass.YouChip());
+                if (f.You && _glass) nm.Children.Add(HudGlass.YouChip());
                 else if (f.You) nm.Children.Add(new Border { Background = HudKit.Gold, CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                     Child = T("you", 9.5, FontWeights.Bold, HudKit.B(0x1D1300)) });
                 Grid.SetColumn(nm, 1); g.Children.Add(nm);
@@ -458,8 +462,8 @@ public sealed class ParserPanel : Border
                     C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
                 }
                 if (dmg) { C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold); }
-                var meter = HudGlass.On ? ClassArt.ThinMeterRow(g, f.Class, Measure(f) / top, other: f.Other) : ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: f.Other, radius: 5);
-                meter.Margin = new Thickness(0, HudGlass.On ? 2 : 3, 0, 0);
+                var meter = _glass ? ClassArt.ThinMeterRow(g, f.Class, Measure(f) / top, other: f.Other) : ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: f.Other, radius: 5);
+                meter.Margin = new Thickness(0, _glass ? 2 : 3, 0, 0);
                 rows.Children.Add(meter);
             }
             if (e.Shown().Count() > 8) rows.Children.Add(T($"+{e.Shown().Count() - 8} more on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint));
@@ -469,7 +473,7 @@ public sealed class ParserPanel : Border
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var sep = new Border { Height = 1, Background = HudGlass.On ? HudGlass.Rule : HudKit.Sep, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, 0, 0) };
+        var sep = new Border { Height = 1, Background = _glass ? HudGlass.Rule : HudKit.Sep, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, 0, 0) };
         Grid.SetColumnSpan(sep, 2); foot.Children.Add(sep);
         if (e.Live)
         {
@@ -497,7 +501,7 @@ public sealed class ParserPanel : Border
             Grid.SetColumn(s, 1); foot.Children.Add(s);
         }
         _body.Children.Add(foot);
-        BorderBrush = e.Live ? HudKit.FrameLine : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : HudKit.FrameLine;
+        BorderBrush = e.Live ? (_glass ? HudGlass.Edge : HudKit.FrameLine) : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : _glass ? HudGlass.Edge : HudKit.FrameLine;
     }
 
     static TextBlock Pad(TextBlock t) { t.Margin = new Thickness(0); return t; }

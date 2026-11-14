@@ -13,7 +13,7 @@ public sealed class HudPrefs
     /// <summary>The panel's size, 0.7 to 2 (70 to 200%).</summary>
     public double Scale { get; set; } = 1;
     /// <summary>The panel's look (HudLooks: "strip", "card", "ticker"). The strip for everyone until they pick another.</summary>
-    public string Look { get; set; } = HudLooks.Strip;
+    public string Look { get; set; } = HudLooks.Auto;   // Auto since 0.10.91: the pill while farming, the group's meter above it in a boss fight
     /// <summary>
     /// Where the player left the Ticker, kept apart from the strip's and the Card's spot (UserPrefs.HudX/HudY): its toasts
     /// hang down, so its place is left of the target bar, not over it. Null until it is dragged.

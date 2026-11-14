@@ -33,7 +33,7 @@ public sealed partial class HudWindow
         OwnContent = own;
         Content = null;
         var stack = new StackPanel();
-        if (HudGlass.On && _look == null) { _parserSlot.Padding = new Thickness(0); _parserSlot.HorizontalAlignment = HorizontalAlignment.Stretch; if (own is FrameworkElement of) of.HorizontalAlignment = HorizontalAlignment.Stretch; }
+        if (HudGlass.OldLooks && _look == null) { _parserSlot.Padding = new Thickness(0); _parserSlot.HorizontalAlignment = HorizontalAlignment.Stretch; if (own is FrameworkElement of) of.HorizontalAlignment = HorizontalAlignment.Stretch; }
         stack.Children.Add(_parserSlot);
         stack.Children.Add(own);
         Content = stack;
@@ -74,7 +74,10 @@ public sealed partial class HudWindow
     /// <summary>The record to show above the Kinah line, or null to fold the section away.</summary>
     public void ShowParser(Encounter? e, DateTime now, ParserMode mode, bool details)
     {
-        if (_look is IHudStackLook own) { own.ShowFight(e, now); return; }   // the Capsule, the Meter and the Float draw the fight themselves
+        // Auto (Ui/HudStackLooks.cs): its fight panel goes above the pill in the Parser's slot, so the pill never moves
+        UIElement? above = null;
+        if (_look is IHudFightAbove fa) { above = fa.FightAbove(e, now); if (above == null) e = null; }
+        else if (_look is IHudStackLook own) { own.ShowFight(e, now); return; }   // the Capsule, the Meter and the Float draw the fight themselves
         if (e == null)
         {
             if (_parserSlot.Visibility != Visibility.Visible || _parserFolding) return;
@@ -85,17 +88,24 @@ public sealed partial class HudWindow
             _parserSlot.BeginAnimation(OpacityProperty, fade);
             return;
         }
+        if (above != null) { if (_parserSlot.Child != above) _parserSlot.Child = above; ShowSlot(); return; }
         if (_parserPanel == null)
         {
             // the Kinah overlay's own frame: its corner, its padding, its background at its opacity
-            _parserPanel = new ParserPanel();
+            _parserPanel = new ParserPanel(glass: HudGlass.OldLooks);
             _parserPanel.SetFrame(_frame.CornerRadius.TopLeft, _frame.Padding);
             if (_parserOpacity >= 0) _parserPanel.SetOpacity(_parserOpacity);
         }
-        UIElement slotChild = HudGlass.On ? (_parserRing ??= HudGlass.Ring(_parserPanel)) : _parserPanel;
+        UIElement slotChild = HudGlass.OldLooks ? (_parserRing ??= HudGlass.Ring(_parserPanel)) : _parserPanel;
         if (_parserSlot.Child != slotChild) _parserSlot.Child = slotChild;
         _parserPanel.Mode = mode; _parserPanel.ShowDetails = details;
         _parserPanel.Draw(e, now);
+        ShowSlot();
+    }
+
+    /// <summary>The slot shown (if it isn't): the window up by its height, a 120 ms fade in.</summary>
+    void ShowSlot()
+    {
         if (_parserSlot.Visibility == Visibility.Visible && !_parserFolding) return;
         _parserFolding = false;
         _parserSlot.Visibility = Visibility.Visible;

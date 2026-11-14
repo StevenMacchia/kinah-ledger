@@ -209,8 +209,8 @@ public static partial class WpfApp
         // the panel's look (2026-10-25): the Strip until another is picked; the three drawn in Options; the Strip's figures grey out for the others
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Check(w.HudLook == HudLooks.Strip && o.HudFieldHost.IsEnabled, "panel look: the Strip, with its figures to pick");
-        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && o.HudLookPreview.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 6, $"every look drawn in Options, the design pass's Capsule, Meter and Float too ({o.HudLookPreview.Children.Count} of {HudLooks.All.Length})");
+        Check(w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled, "panel look: Auto by default (the pill, the group's meter above it in a fight); the Strip's figure chips greyed for it");
+        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && o.HudLookPreview.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7, $"every look drawn in Options, the design pass's Auto, Capsule, Meter and Float too ({o.HudLookPreview.Children.Count} of {HudLooks.All.Length})");
         // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
         // and Parser section stay folded, and the look shows the boss, the timer and the hour
         {
@@ -243,7 +243,7 @@ public static partial class WpfApp
             Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
         Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Ticker)]);
-        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Strip && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
+        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);
         DoEvents();
         Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
@@ -1009,8 +1009,8 @@ public static partial class WpfApp
                 kinah.Show(); DoEvents();
                 var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.OwnContent!).Children[0];
                 var sf = strip.FrameForTest;
-                bool sibling = sf.CornerRadius == kf.CornerRadius && sf.Padding == kf.Padding && sf.BorderThickness == kf.BorderThickness
-                    && (sf.BorderBrush as SolidColorBrush)?.Color == (kf.BorderBrush as SolidColorBrush)?.Color && (sf.Background as SolidColorBrush)?.Color == (kf.Background as SolidColorBrush)?.Color
+                // the glass, as Auto's pill (the default look since 0.10.91): the gradient fill, the lit edge, the panel's corner and face
+                bool sibling = sf.Background is LinearGradientBrush && ReferenceEquals(sf.BorderBrush, HudGlass.Edge) && sf.CornerRadius.TopLeft == HudGlass.Radius
                     && strip.FontFamily.Source == kinah.FontFamily.Source;
                 kinah.Close();
                 pp.X = 1200; pp.Y = 300;
@@ -1024,7 +1024,7 @@ public static partial class WpfApp
                 bool resetOnly = to2.TimersResetBtn != null && to2.TimersSeparateChk?.IsChecked == true;
                 to2.Close();
                 Check(above && sibling && reset && backAbove && resetOnly,
-                    $"the separate strip: first shown just above the Kinah overlay ({above}); the Kinah strip's surface, corner, padding, line and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
+                    $"the separate strip: first shown just above the Kinah overlay ({above}); the overlays' glass, corner and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
                 tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             }
             TimersOverlay.InvisibleForTest = false;

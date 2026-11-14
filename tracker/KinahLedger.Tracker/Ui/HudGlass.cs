@@ -15,8 +15,7 @@ namespace KinahLedger.Ui;
 /// <item>There is one corner radius, and joints where parts stack read as one panel.</item>
 /// </list>
 /// There is no blurred shadow: it would be drawn again on every update of a window that sits over the game all session.
-/// While it is being proposed it is behind <see cref="On"/> (KL_HUD_V3=1), so a render shows the old and the new from
-/// one build.
+/// On since 0.10.91; KL_HUD_V3=0 turns it off (<see cref="On"/>), so a render shows the old and the new from one build.
 /// </summary>
 static class HudGlass
 {
@@ -25,10 +24,16 @@ static class HudGlass
     /// "slate" (solid and crisp, small corners, a pro meter's look) or "edge" (darker and see-through, one gold line along
     /// the top, no frame on the sides); "" is the look before the design pass.
     /// </summary>
-    public static string Variant = Environment.GetEnvironmentVariable("KL_HUD_V3") switch { "slate" => "slate", "edge" => "edge", "1" or "glass" => "glass", _ => "" };
+    public static string Variant = Environment.GetEnvironmentVariable("KL_HUD_V3") switch { "slate" => "slate", "edge" => "edge", "0" => "", _ => "glass" };   // on since 0.10.91; KL_HUD_V3=0 renders the look before
 
-    /// <summary>The design pass's surface on.</summary>
+    /// <summary>The design pass's surface on (the new looks, the separate timer strip and Parser overlay).</summary>
     public static bool On => Variant.Length > 0;
+
+    /// <summary>
+    /// The surface on Badge, Buddy and Pop too: only when a render asks for it (KL_HUD_V3 set). They keep their own frames,
+    /// whose edge lights up with a pickup (Ui/HudWindow.BadgeMotion.cs).
+    /// </summary>
+    public static bool OldLooks = On && Environment.GetEnvironmentVariable("KL_HUD_V3") is { Length: > 0 } v && v != "0";
 
     /// <summary>Every panel's corner.</summary>
     public static double Radius => Variant switch { "slate" => 6, "edge" => 10, _ => 12 };
@@ -126,7 +131,7 @@ public sealed partial class HudWindow
     /// </summary>
     void ComposeStack()
     {
-        if (!HudGlass.On || _look != null) return;
+        if (!HudGlass.OldLooks || _look != null) return;
         var parts = new List<(Border Ring, Border Frame)>();
         if (_timerSlot.Visibility == Visibility.Visible && _timerRing is { Child: Border tf }) parts.Add((_timerRing, tf));
         if (_parserSlot.Visibility == Visibility.Visible && _parserRing is { Child: Border pf }) parts.Add((_parserRing, pf));

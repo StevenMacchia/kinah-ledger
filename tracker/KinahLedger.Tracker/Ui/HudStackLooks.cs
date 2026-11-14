@@ -22,6 +22,12 @@ public interface IHudStackLook
     void ShowFight(Encounter? e, DateTime now);
 }
 
+/// <summary>A look whose fight goes above it, in the window's own slot that grows upward (Auto): the panel to show, or null for none.</summary>
+public interface IHudFightAbove
+{
+    FrameworkElement? FightAbove(Encounter? e, DateTime now);
+}
+
 /// <summary>
 /// The three looks of the overlay's design pass (2026-11-14, Steven of the three redesigns: "I love all of them can we
 /// just make them options for people in the settings"), picked in Options › In game › Panel look. Their shared parts:
@@ -287,7 +293,12 @@ sealed class HudMeter : HudStackLook
     bool _fight;
     string _figSig = "", _fightSig = "";
 
-    public HudMeter()
+    /// <summary>False: the header and the members only, no Kinah foot (Auto puts it above the Capsule's pill).</summary>
+    readonly bool _withFoot = true;
+
+    public HudMeter(bool withFoot = true) : this((byte)0) { _withFoot = withFoot; if (!withFoot) { _foot.Visibility = Visibility.Collapsed; _note.Visibility = Visibility.Collapsed; } }
+
+    HudMeter(byte _)
     {
         var body = new StackPanel { Width = W };
         _head.Children.Add(new Border { Background = B(0xFFFFFF, .05) });
@@ -327,11 +338,12 @@ sealed class HudMeter : HudStackLook
         if (!_fight) { _title.Text = f.Zone.Length > 0 ? f.Zone : "Kinah Ledger"; _clock.Text = f.Clock; _clock.Foreground = Muted; }
         DrawFoot(f);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
-        _note.Visibility = f.Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _note.Visibility = f.Note.Length > 0 && _withFoot ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void DrawFoot(Figures f)
     {
+        if (!_withFoot) return;
         _foot.Children.Clear(); _foot.ColumnDefinitions.Clear();
         _foot.Margin = new Thickness(10, _fight ? 6 : 9, 10, _fight ? 7 : 9);
         _foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _foot.ColumnDefinitions.Add(new ColumnDefinition()); _foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -511,5 +523,39 @@ sealed class HudFloat : HudStackLook
         foreach (var f in e.Shown().Take(5)) rows.Children.Add(MemberLine(e, f, now, top, 11.5, 1.5));
         _fight.Children.Add(rows);
         _fight.Visibility = Visibility.Visible;
+    }
+}
+
+// ================================================================ Auto
+
+/// <summary>
+/// Auto, the default since the design pass (2026-11-14, the command center's mix of Steven's two favourites): the Capsule's
+/// pill while there is no fight; in a boss fight or a run, the Meter's header (the boss, its HP as the header's red fill,
+/// the timer tab, the clock) and its class-coloured rows open above the pill, which stays where it is as their foot. The
+/// window grows upward for them (the Parser's slot, Ui/HudWindow.Parser.cs) and they fade in and out in 120 ms.
+/// </summary>
+sealed class HudAuto : HudStackLook, IHudFightAbove
+{
+    readonly HudCapsule _pill = new();
+    readonly HudMeter _meter = new(withFoot: false);
+
+    public HudAuto() { _meter.Root.Margin = new Thickness(0, 0, 0, 4); }
+
+    public override FrameworkElement Root => _pill.Root;
+    public override double Corner => _pill.Corner;
+    public override void SetOpacity(double opacity) { _pill.SetOpacity(opacity); _meter.SetOpacity(opacity); }
+    public override void Update(IReadOnlyDictionary<string, string> values) { _pill.Update(values); _meter.Update(values); }
+    public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
+    {
+        _pill.ShowTimers(items, now);
+        _meter.ShowTimers(System.Array.Empty<TimerBoard.Item>(), now);   // the pill's chip says it once
+    }
+    /// <summary>A fight comes through FightAbove; the pill never draws one of its own.</summary>
+    public override void ShowFight(Encounter? e, DateTime now) => FightAbove(e, now);
+
+    public FrameworkElement? FightAbove(Encounter? e, DateTime now)
+    {
+        _meter.ShowFight(e, now);
+        return e == null ? null : _meter.Root;
     }
 }

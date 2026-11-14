@@ -126,7 +126,7 @@ public static partial class WpfApp
                 ("ui-parser-kinah-timer.png", HudLooks.Strip, false, true), ("ui-parser-kinah-stack.png", HudLooks.Strip, true, true), ("ui-parser-kinah-stack-card.png", HudLooks.Card, true, true),
             };
             // the design pass's looks (Ui/HudStackLooks.cs): farming (your DPS), a timer due, a boss fight with a timer due
-            foreach (var look in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+            foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
                 stackShots.AddRange(new[] { ($"ui-hud-{look}-farming.png", look, false, false), ($"ui-hud-{look}-timer.png", look, false, true), ($"ui-hud-{look}-boss.png", look, true, true) });
             foreach (var (file, look, withParser, withTimers) in stackShots)
             {
@@ -259,10 +259,14 @@ public static partial class WpfApp
             po.Draw(pull1!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); po.Show(); DoEvents();
             var panel = FindPanel(po);
             string Look(System.Windows.Controls.Border? b) => b == null ? "none" : $"{(b.Background as SolidColorBrush)?.Color} {(b.BorderBrush as SolidColorBrush)?.Color} {b.BorderThickness} {b.CornerRadius} {b.Padding} {System.Windows.Documents.TextElement.GetFontFamily(b)}";
-            check(kinahFrame != null && panel != null && Look(kinahFrame) == Look(panel),
-                $"Parser: the separate overlay has the Kinah overlay's frame exactly (Kinah {Look(kinahFrame)}; Parser {Look(panel)})");
-            hud.SetOpacity(0.5); po.SetOpacity(0.5);
-            check(Look(kinahFrame) == Look(panel), "...and the same background at the Kinah overlay's opacity setting");
+            // the overlays' glass (Ui/HudGlass.cs), as the default look's pill: the gradient fill, the lit edge, the corner, the face
+            bool glass = panel != null && panel.Background is LinearGradientBrush && ReferenceEquals(panel.BorderBrush, HudGlass.Edge) && panel.CornerRadius.TopLeft == HudGlass.Radius
+                && System.Windows.Documents.TextElement.GetFontFamily(panel).Source == HudKit.Text.Source;
+            check(kinahFrame != null && glass, $"Parser: the separate overlay has the overlays' glass, corner and face (Parser {Look(panel)})");
+            var before = (panel?.Background as LinearGradientBrush)?.GradientStops.LastOrDefault()?.Color.A;
+            po.SetOpacity(0.5);
+            var after = (panel?.Background as LinearGradientBrush)?.GradientStops.LastOrDefault()?.Color.A;
+            check(before > after && after > 0, $"...and its fill follows the opacity setting ({before} to {after})");
             // click-through (off by default): a grab handle on the top edge shows with the pointer over it, and moves it
             po.SetClickThrough(true); po.ShowGrabForTest(); DoEvents();
             check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move"), "Parser: with click-through on, a grab handle on its top edge moves the overlay");

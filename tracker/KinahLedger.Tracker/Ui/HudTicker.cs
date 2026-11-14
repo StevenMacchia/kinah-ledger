@@ -88,7 +88,7 @@ public sealed partial class HudTicker : IHudLook
 
     void Paint()
     {
-        if (HudGlass.On) { _pill.Background = HudGlass.Fill(.94 * _alpha + .06); _pill.BorderBrush = HudGlass.Edge; _pill.CornerRadius = new CornerRadius(HudGlass.Radius); return; }
+        if (HudGlass.OldLooks) { _pill.Background = HudGlass.Fill(.94 * _alpha + .06); _pill.BorderBrush = HudGlass.Edge; _pill.CornerRadius = new CornerRadius(HudGlass.Radius); return; }
         _pill.Background = B(PanelC, .94 * _alpha);
     }
 
