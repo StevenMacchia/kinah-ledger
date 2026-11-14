@@ -672,11 +672,11 @@ public static class PacketTests
 
         var et = new EventTimers();
         var pc = server + lag;
-        Check(!et.ClockKnown && et.ClockLine(pc).StartsWith("On this PC's clock"), "...before the traffic says, this PC's clock (and the card says so)");
+        Check(!et.ClockKnown && !et.ClockLive(pc), "...before the traffic says, this PC's clock");
         et.Take(new AreaEvent(pc, server, AreaEvent.Kind.Clock, AreaEvent.Stage.Unknown, null, "", "", "", 0));
         var sf = et.Rows(pc, "na_e").First(r => r.Event.Name == "Shugo Festival");
-        Check(et.ClockKnown && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31) && et.ClockLine(pc) == "On the game's clock (15 s behind this PC's)",
-            $"...the game's clock from its traffic: {et.Offset.TotalSeconds:F1} s; the Shugo Festival in {BossTimers.Countdown(sf.Left)}; \"{et.ClockLine(pc)}\"");
+        Check(et.ClockKnown && et.ClockLive(pc) && !et.ClockLive(pc.AddMinutes(5)) && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31),
+            $"...the game's clock from its traffic: {et.Offset.TotalSeconds:F1} s; the Shugo Festival in {BossTimers.Countdown(sf.Left)}");
 
         // the event the player is in: 17:01, 2026-11-13 (UTC 22:01), as the event server said it
         var e0 = new DateTime(2026, 11, 13, 22, 1, 20, 361, DateTimeKind.Utc);

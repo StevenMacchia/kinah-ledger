@@ -42,7 +42,7 @@ public partial class MainWindow
             : EventClock.Rows(now, EventRegion).FirstOrDefault() is { } next ? $"{next.Event.Name} {(next.OnNow ? "on now" : "in " + BossTimers.Span(next.Left))}" : "";
         return new MenuEntry("Timers", OpenBossWindow,
             Sub: sub.Length > 0 ? $"{sub} · world bosses" : "Events and world bosses",
-            Tip: "When the game's events start next (Shugo Festival, Dimensional Invasion, Spacetime Rift, Artifact Siege), on the game's own clock, and the event you're in; then the field bosses' spawn timers from the world map. The game's clock, the event you're in and the bosses need packet reading (Options › Game reading).");
+            Tip: "When the game's events start next in your region's time (Shugo Festival, Dimensional Invasion, Spacetime Rift, Artifact Siege) and the event you're in; then the field bosses' spawn timers from the world map. The event you're in and the bosses need Options › Game reading.");
     }
 
     /// <summary>Opens the timers' window, or brings it forward; it redraws every second while open.</summary>
@@ -70,16 +70,13 @@ public partial class MainWindow
         var (card, body) = CkShell(BossCardWidth);
         var timers = EventClock;
 
-        // the band: what this is, and which clock the countdowns follow
+        // the band: what this is, and the region's time the events are in (Session/EventTimers.ClockOf). Nothing outside
+        // Options names how the times are read (Steven, 2026-11-14)
         var band = new StackPanel { Margin = new Thickness(20, 16, 56, 4) };
         band.Children.Add(CkText("Timers", CkInk, 18, FontWeights.Normal, display: true));
-        var clock = CkText(timers.ClockLine(now), CkMuted, 12.5);
-        clock.Margin = new Thickness(0, 3, 0, 0); clock.TextWrapping = TextWrapping.Wrap; clock.TextTrimming = TextTrimming.None;
-        band.Children.Add(clock);
-        // the region's zone: the schedule's times are its wall-clock times (Session/EventTimers.ClockOf)
         var zone = EventTimers.ClockOf(EventRegion);
         var zt = CkText(zone.Checked ? $"{zone.Name} times: {zone.Note}" : $"Event times: {zone.Note}", zone.Checked ? CkMuted : CkWarn, 12.5);
-        zt.Margin = new Thickness(0, 1, 0, 0); zt.TextWrapping = TextWrapping.Wrap; zt.TextTrimming = TextTrimming.None;
+        zt.Margin = new Thickness(0, 3, 0, 0); zt.TextWrapping = TextWrapping.Wrap; zt.TextTrimming = TextTrimming.None;
         band.Children.Add(zt);
         body.Children.Add(band);
 
@@ -99,8 +96,8 @@ public partial class MainWindow
         if (rows.Count == 0)
         {
             body.Children.Add(CkSection("WORLD BOSSES"));
-            body.Children.Add(CkNote("Open the world map in the game. While it is open the game sends every field boss's timer, and they count down here after you close it."));
-            body.Children.Add(CkNote(_watcher.Packets.Enabled ? "Packet reading: " + _watcher.Packets.State : "Packet reading is off (Options › Game reading), so the timers can't be read."));
+            body.Children.Add(CkNote("Open the world map in the game once. Its field boss timers show here, and keep counting down after you close it."));
+            if (!_watcher.Packets.Enabled) body.Children.Add(CkNote("They need Options › Game reading, which is off."));
             body.Children.Add(new Border { Height = 16 });
             return card;
         }
@@ -135,7 +132,7 @@ public partial class MainWindow
             foreach (var r in other) list.Children.Add(BossRow(r));
         }
         body.Children.Add(list);
-        body.Children.Add(CkNote(live2 ? "The map is open: the bosses follow it live." : "Bosses: counted down on this PC since the map was last open. A kill nobody saw on the map doesn't show until it is opened again."));
+        body.Children.Add(CkNote(live2 ? "The map is open: the bosses follow it live." : "Bosses: counted down since the map was last open. A kill nobody saw on the map doesn't show until it is opened again."));
         body.Children.Add(new Border { Height = 14 });
         return card;
     }
@@ -156,7 +153,7 @@ public partial class MainWindow
         string stage = EventTimers.StageText(l);
         bool on = l.LeftAt == null && l.Stage is Packets.AreaEvent.Stage.Preparing or Packets.AreaEvent.Stage.UnderWay;
         var tone = l.LeftAt != null ? CkFaint : l.Stage == Packets.AreaEvent.Stage.UnderWay ? CkGood : l.Stage == Packets.AreaEvent.Stage.Preparing ? CkGold : CkMuted;
-        string sub = l.Name.Length > 0 && l.Family.Length > 0 ? l.Family : "From the game's own messages";
+        string sub = l.Name.Length > 0 && l.Family.Length > 0 ? l.Family : "Event";
         string small = l.LeftAt is { } left ? $"{BossTimers.Ago(now - left)}" : l.OverAt is { } over ? $"{BossTimers.Ago(now - over)}" : l.StartedPc is { } st ? $"began {BossTimers.Ago(now - st)}" : "";
         return TimerRow(l.Label, sub, stage, small, tone, tone == CkFaint ? CkMuted : tone, on);
     }

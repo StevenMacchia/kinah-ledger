@@ -14,7 +14,8 @@ namespace KinahLedger.Session;
 /// Until 0.10.85 every region was counted on UTC+9 (MetaBot's reading), which put NA East's Artifact Siege at 07:00 instead of
 /// 21:00 and its Spacetime Rift an hour early. Regions not checked yet keep UTC+9, and the card says so;</item>
 /// <item>its gap to this PC's clock (about 15 s behind on 2026-11-13), taken from the game's traffic (<see cref="TakeClock"/>),
-/// so the countdown can't be off by it. With packet reading off, this PC's clock is used, and the card says so.</item>
+/// so the countdown can't be off by it. Without it this PC's clock is used. The card names neither clock: no text outside
+/// Options says how the times are read (Steven, 2026-11-14).</item>
 /// </list>
 ///
 /// The event the player is in comes from the event's own server (<see cref="Take"/>): getting ready, under way, over, left.
@@ -114,17 +115,8 @@ public sealed class EventTimers
         lock (_gate) { _offset = at - serverNow; _clockAt = at; }
     }
 
-    /// <summary>"Game clock, live" / "Game clock, read 2 h ago" / "This PC's clock (packet reading is off)".</summary>
-    public string ClockLine(DateTime now)
-    {
-        lock (_gate)
-        {
-            if (_clockAt == DateTime.MinValue) return "On this PC's clock: the game's own clock comes with packet reading";
-            double gap = _offset.TotalSeconds;
-            string g = Math.Abs(gap) < 1 ? "" : $" ({Math.Abs(gap):0} s {(gap > 0 ? "behind" : "ahead of")} this PC's)";
-            return (now - _clockAt).TotalSeconds <= ClockLiveSeconds ? $"On the game's clock{g}" : $"On the game's clock as last read{g}, {BossTimers.Ago(now - _clockAt)}";
-        }
-    }
+    /// <summary>True while the server's clock was sampled in the last <see cref="ClockLiveSeconds"/> (for the log and tests; the card says nothing about it).</summary>
+    public bool ClockLive(DateTime now) { lock (_gate) return _clockAt != DateTime.MinValue && (now - _clockAt).TotalSeconds <= ClockLiveSeconds; }
 
     /// <summary>What the game's traffic said about events: the clock, and the event the player is in.</summary>
     public void Take(AreaEvent e)
