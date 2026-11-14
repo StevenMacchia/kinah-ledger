@@ -637,24 +637,44 @@ public static class PacketTests
     static void EventTimerChecks(Settings settings)
     {
         var lag = TimeSpan.FromSeconds(14.6);
-        var server = new DateTime(2026, 11, 14, 1, 29, 0, DateTimeKind.Utc);   // Sat 10:29 on the game's clock, Fri 20:29 at UTC-5
+        var server = new DateTime(2026, 11, 14, 1, 29, 0, DateTimeKind.Utc);   // Fri 20:29 US Eastern (Sat 10:29 at UTC+9)
         string Say(EventTimers.Row r) => r.OnNow ? $"{r.Event.Name} on, {r.When}" : $"{r.Event.Name} in {r.When} at {r.StartPc:HH:mm:ss.f}Z";
-        var rows = EventTimers.Schedule.Select(r => EventTimers.RowOf(r, server, lag)).ToList();
-        Check(string.Join(" | ", rows.Select(Say)) == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 1h 31m 00s at 03:00:14.6Z | Artifact Siege in 10h 31m 00s at 12:00:14.6Z",
-            $"event timers: {string.Join(" | ", rows.Select(Say))} (the starts on this PC's clock, 14.6 s after the game's)");
-        var at3 = EventTimers.RowOf(EventTimers.Schedule[0], new DateTime(2026, 11, 14, 2, 3, 0, DateTimeKind.Utc), lag);
-        var at6 = EventTimers.RowOf(EventTimers.Schedule[0], new DateTime(2026, 11, 14, 2, 6, 0, DateTimeKind.Utc), lag);
+        string All(DateTime sv, string region) => string.Join(" | ", EventTimers.Schedule.Select(r => EventTimers.RowOf(r, sv, lag, EventTimers.ClockOf(region))).Select(Say));
+        DateTime U(int mo, int d, int h, int mi = 0) => new(2026, mo, d, h, mi, 0, DateTimeKind.Utc);
+        var naE = EventTimers.ClockOf("na_e"); var eu = EventTimers.ClockOf("eu");
+        var rift = EventTimers.Schedule.First(r => r.Name == "Spacetime Rift"); var siege = EventTimers.Schedule.First(r => r.Name == "Artifact Siege");
+        // NA East on US Eastern time (checked 2026-11-14); the regions not checked yet keep MetaBot's UTC+9, as 0.10.84 counted
+        string na = All(server, "na_e"), other = All(server, "eu");
+        Check(naE.Checked && !eu.Checked && na == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 2h 31m 00s at 04:00:14.6Z | Artifact Siege in 1d 0h 31m at 02:00:14.6Z",
+            $"event timers, NA East (US Eastern): {na} (the starts on this PC's clock, 14.6 s after the game's)");
+        Check(other == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 1h 31m 00s at 03:00:14.6Z | Artifact Siege in 10h 31m 00s at 12:00:14.6Z",
+            $"...a region not checked yet (Europe) stays on UTC+9, marked so: {other}");
+        // the ground truth in NA East: the Abyss server's own next siege (sent Fri 17:15 ET: Sat 21:00 ET), the chat's Rift lines
+        var (lastSiege, nextSiege) = EventTimers.Around(siege, U(11, 13, 22, 15), naE);
+        Check(nextSiege == U(11, 15, 2) && lastSiege == U(11, 13, 2), $"...the Artifact Siege: next {nextSiege:ddd HH:mm}Z (the game's own message: Sat 21:00 ET = Sun 02:00Z), last {lastSiege:ddd HH:mm}Z (Thu 21:00 ET; it ended 21:16:51 ET)");
+        var rifts = new[] { U(11, 13, 15, 59), U(11, 13, 18, 59), U(11, 13, 21, 59) }.Select(t0 => EventTimers.Around(rift, t0, naE).Next).ToList();
+        Check(rifts.SequenceEqual(new[] { U(11, 13, 16), U(11, 13, 19), U(11, 13, 22) }), $"...the Spacetime Rift at {string.Join(", ", rifts.Select(x => x.AddHours(-5).ToString("HH:mm")))} ET (the chat: \"A Spacetime Rift has appeared\" 11:00:17, 14:00:26, 17:00:18 ET)");
+        // daylight saving: the same Eastern wall-clock grid in October (aion2-data's 00:00 UTC Rift anchor of 2026-10-07), across
+        // the autumn change, and over the hour skipped in spring
+        var summer = EventTimers.Around(rift, U(10, 7, 22, 30), naE).Next;
+        var mon = EventTimers.Around(siege, U(10, 12, 12), naE).Next;
+        var (fallLast, fallNext) = EventTimers.Around(rift, U(11, 1, 4), naE);
+        var spring = EventTimers.Around(rift, new DateTime(2027, 3, 14, 5, 0, 0, DateTimeKind.Utc), naE).Next;
+        Check(summer == U(10, 8, 0) && mon == U(10, 13, 1) && fallLast == U(11, 1, 3) && fallNext == U(11, 1, 7) && spring == new DateTime(2027, 3, 14, 7, 0, 0, DateTimeKind.Utc),
+            $"...daylight saving: the Rift at {summer:HH:mm}Z on 2026-10-07 (20:00 EDT), the siege Mon 21:00 EDT = {mon:ddd HH:mm}Z; on 2026-11-01 {fallLast:HH:mm}Z then {fallNext:HH:mm}Z (23:00 EDT, 02:00 EST); on 2027-03-14 02:00 doesn't exist: {spring:HH:mm}Z (03:00 EDT)");
+        var at3 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 3), lag, naE);
+        var at6 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 6), lag, naE);
         Check(at3 is { OnNow: true, When: "started 3 min ago" } && at6 is { OnNow: false, When: "54m 00s" }, $"...the Shugo Festival 3 min past the hour: {Say(at3)}; at 6 past: {Say(at6)}");
-        var siegeOn = EventTimers.RowOf(EventTimers.Schedule[3], new DateTime(2026, 11, 14, 12, 5, 0, DateTimeKind.Utc), lag);
-        var siegeNext = EventTimers.RowOf(EventTimers.Schedule[3], new DateTime(2026, 11, 14, 12, 25, 0, DateTimeKind.Utc), lag);
-        Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc) + lag && siegeNext.When == "1d 23h 35m",
-            $"...the Artifact Siege on Saturday 21:05 on the game's clock, then next on Monday: {Say(siegeNext)}");
+        var siegeOn = EventTimers.RowOf(siege, U(11, 15, 2, 5), lag, naE);
+        var siegeNext = EventTimers.RowOf(siege, U(11, 15, 2, 25), lag, naE);
+        Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == U(11, 17, 2) + lag && siegeNext.When == "1d 23h 35m",
+            $"...the Artifact Siege on Saturday 21:05 ET, then next on Monday 21:00 ET: {Say(siegeNext)}");
 
         var et = new EventTimers();
         var pc = server + lag;
         Check(!et.ClockKnown && et.ClockLine(pc).StartsWith("On this PC's clock"), "...before the traffic says, this PC's clock (and the card says so)");
         et.Take(new AreaEvent(pc, server, AreaEvent.Kind.Clock, AreaEvent.Stage.Unknown, null, "", "", "", 0));
-        var sf = et.Rows(pc).First(r => r.Event.Name == "Shugo Festival");
+        var sf = et.Rows(pc, "na_e").First(r => r.Event.Name == "Shugo Festival");
         Check(et.ClockKnown && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31) && et.ClockLine(pc) == "On the game's clock (15 s behind this PC's)",
             $"...the game's clock from its traffic: {et.Offset.TotalSeconds:F1} s; the Shugo Festival in {BossTimers.Countdown(sf.Left)}; \"{et.ClockLine(pc)}\"");
 

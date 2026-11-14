@@ -28,6 +28,9 @@ public partial class MainWindow
     /// <summary>The event timers the card shows: the packet reader's, or a render's own.</summary>
     EventTimers EventClock => _eventsForShot ?? _watcher.Packets.Timers;
     EventTimers? _eventsForShot;
+    /// <summary>The region whose schedule the events follow (Settings.Region; a render may set its own).</summary>
+    string EventRegion => _eventRegionForShot ?? _settings.Region;
+    string? _eventRegionForShot;
 
     const double BossCardWidth = 400;
     static readonly TimeSpan BossSoon = TimeSpan.FromMinutes(10);
@@ -36,7 +39,7 @@ public partial class MainWindow
     {
         var now = DateTime.UtcNow;
         string sub = EventClock.Current(now) is { LeftAt: null } live ? $"{live.Label}: {EventTimers.StageText(live).ToLowerInvariant()}"
-            : EventClock.Rows(now).FirstOrDefault() is { } next ? $"{next.Event.Name} {(next.OnNow ? "on now" : "in " + BossTimers.Span(next.Left))}" : "";
+            : EventClock.Rows(now, EventRegion).FirstOrDefault() is { } next ? $"{next.Event.Name} {(next.OnNow ? "on now" : "in " + BossTimers.Span(next.Left))}" : "";
         return new MenuEntry("Timers", OpenBossWindow,
             Sub: sub.Length > 0 ? $"{sub} · world bosses" : "Events and world bosses",
             Tip: "When the game's events start next (Shugo Festival, Dimensional Invasion, Spacetime Rift, Artifact Siege), on the game's own clock, and the event you're in; then the field bosses' spawn timers from the world map. The game's clock, the event you're in and the bosses need packet reading (Options › Game reading).");
@@ -73,6 +76,11 @@ public partial class MainWindow
         var clock = CkText(timers.ClockLine(now), CkMuted, 12.5);
         clock.Margin = new Thickness(0, 3, 0, 0); clock.TextWrapping = TextWrapping.Wrap; clock.TextTrimming = TextTrimming.None;
         band.Children.Add(clock);
+        // the region's zone: the schedule's times are its wall-clock times (Session/EventTimers.ClockOf)
+        var zone = EventTimers.ClockOf(EventRegion);
+        var zt = CkText(zone.Checked ? $"{zone.Name} times: {zone.Note}" : $"Event times: {zone.Note}", zone.Checked ? CkMuted : CkWarn, 12.5);
+        zt.Margin = new Thickness(0, 1, 0, 0); zt.TextWrapping = TextWrapping.Wrap; zt.TextTrimming = TextTrimming.None;
+        band.Children.Add(zt);
         body.Children.Add(band);
 
         // the event the player is in, part by part, as its own server says
@@ -82,7 +90,7 @@ public partial class MainWindow
             body.Children.Add(LiveEventRow(live, now));
         }
         body.Children.Add(CkSection("EVENTS"));
-        foreach (var r in timers.Rows(now)) body.Children.Add(EventRow(r));
+        foreach (var r in timers.Rows(now, EventRegion)) body.Children.Add(EventRow(r));
 
         // the world bosses (0.10.82)
         var rows = Bosses.Rows(now);
@@ -225,6 +233,7 @@ public partial class MainWindow
                 _ => null,
             });
             _eventsForShot = ev;
+            _eventRegionForShot = state == "empty" ? "eu" : "na_e";   // the empty state: a region whose times aren't checked yet
             var card = BuildBossCard(now);
             var win = new BossWindow(this);
             win.ShowCard(card, offscreen: true);
@@ -239,7 +248,7 @@ public partial class MainWindow
             }
             win.Close();
         }
-        _bossesForShot = null; _eventsForShot = null;
+        _bossesForShot = null; _eventsForShot = null; _eventRegionForShot = null;
     }
 
     /// <summary>A reading like the one of 2026-11-13 18:58 (Verteron, two bosses up), taken at <paramref name="seen"/>.</summary>
