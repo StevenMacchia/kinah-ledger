@@ -86,7 +86,11 @@ public sealed partial class HudTicker : IHudLook
         Root = new StackPanel { Margin = Inset, Width = 270, Children = { _pill, _stack } };
     }
 
-    void Paint() => _pill.Background = B(PanelC, .94 * _alpha);
+    void Paint()
+    {
+        if (HudGlass.On) { _pill.Background = HudGlass.Fill(.94 * _alpha + .06); _pill.BorderBrush = HudGlass.Edge; _pill.CornerRadius = new CornerRadius(HudGlass.Radius); return; }
+        _pill.Background = B(PanelC, .94 * _alpha);
+    }
 
     public void SetOpacity(double opacity)
     {

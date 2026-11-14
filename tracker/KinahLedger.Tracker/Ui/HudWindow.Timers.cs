@@ -31,11 +31,21 @@ public sealed partial class HudWindow
     /// <summary>Called at the end of the constructor, after the Parser's section: the line goes above it, at the top of the same stack.</summary>
     void AddTimerSection()
     {
-        _timerSlot.Child = new Border
+        var lineFrame = new Border
         {
             Child = _timerText, Padding = new Thickness(8, 2, 8, 3), CornerRadius = new CornerRadius(8),
             Background = Frozen(Color.FromArgb(0xE6, 0x0B, 0x0C, 0x10)), BorderBrush = FrameBrush, BorderThickness = new Thickness(1),
         };
+        if (HudGlass.On)
+        {
+            // the glass, the panel's own padding, a step bigger type; on the strip it is the stack's top part
+            var (_, pad) = FrameShape(_fields);
+            HudGlass.Apply(lineFrame, 0.94, new CornerRadius(_look == null ? HudGlass.Radius : 9));
+            lineFrame.Padding = _look == null ? new Thickness(pad.Left, 4, pad.Right, 4) : new Thickness(9, 3, 9, 3);
+            _timerText.FontSize = 11.5;
+        }
+        _timerSlot.Child = HudGlass.On ? _timerRing = HudGlass.Ring(lineFrame, lineFrame.CornerRadius) : lineFrame;
+        if (HudGlass.On && _look == null) { _timerSlot.Padding = new Thickness(0); _timerSlot.HorizontalAlignment = HorizontalAlignment.Stretch; }
         // flush with the Card's or the Ticker's edge, not its shadow: as close to the overlay as on the strip (Steven, 2026-11-14:
         // "i like the closest one to the tracker"). The line's own box reaches down over the look's empty inset, so the slot's
         // height (what the window moves up by) is only what it adds above the look's visible edge
@@ -79,6 +89,7 @@ public sealed partial class HudWindow
     /// </summary>
     void FitTimerLine()
     {
+        if (HudGlass.On && _timerSlot.Child is Border r) { if (_look != null) r.Margin = new Thickness(0, 0, 0, _parserSlot.Visibility == Visibility.Visible ? 0 : 4); return; }
         if (_timerSlot.Child is not FrameworkElement line || _look == null) return;
         double under = _parserSlot.Visibility == Visibility.Visible ? 0 : -_look.Inset.Top;
         if (line.Margin.Bottom != under) line.Margin = new Thickness(0, 0, 0, under);
@@ -107,6 +118,7 @@ public sealed partial class HudWindow
     void FoldTimers()
     {
         _timerSlot.Visibility = Visibility.Collapsed;
+        ComposeStack();
         double before = _timerTaken + _parserTaken;
         if (_timerTaken > 0) { _timerTaken = 0; Restack(before); }
     }
@@ -114,6 +126,7 @@ public sealed partial class HudWindow
     /// <summary>The watched timers due within the minutes set, soonest first (the first <see cref="TimerLineMax"/>); none folds the line.</summary>
     public void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
+        if (_look is IHudStackLook own) { own.ShowTimers(items, now); return; }   // the Capsule, the Meter and the Float draw their own
         if (items.Count == 0) { if (TimersShown) FoldTimers(); return; }
         _timerText.Inlines.Clear();
         foreach (var (i, n) in items.Take(TimerLineMax).Select((i, n) => (i, n)))
@@ -129,6 +142,7 @@ public sealed partial class HudWindow
         FitTimerLine();
         if (TimersShown) return;
         _timerSlot.Visibility = Visibility.Visible;
+        ComposeStack();
         if (IsLoaded && !_still) { UpdateLayout(); SettleTimerLine(); }
     }
 }

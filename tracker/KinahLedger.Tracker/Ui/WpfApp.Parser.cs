@@ -50,6 +50,9 @@ public static partial class WpfApp
         return 0;
     }
 
+    /// <summary>The game-like grey under the overlays' renders; KL_SHOT_CLEAR=1 leaves them clear, to lay over real game pictures.</summary>
+    static Color? ShotGround => Environment.GetEnvironmentVariable("KL_SHOT_CLEAR") == "1" ? null : Color.FromRgb(0x4A, 0x52, 0x5C);
+
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
@@ -81,7 +84,7 @@ public static partial class WpfApp
             o.Show();
             DoEvents();
             // over a game-like mid grey, the way it sits over a bright scene
-            Save((FrameworkElement)o.Content, Path.Combine(dir, file), ParserOverlay.Width0, Color.FromRgb(0x4A, 0x52, 0x5C));
+            Save((FrameworkElement)o.Content, Path.Combine(dir, file), ParserOverlay.Width0, ShotGround);
             o.Close();
         }
         // expanded by default (Steven, 2026-11-14): the Kinah overlay alone, then with the Parser's section above the Kinah
@@ -107,8 +110,36 @@ public static partial class WpfApp
             h.ShowParser(e, at, e?.ModeKind ?? ParserMode.Bosses, details: false);
             h.Show();
             DoEvents();
-            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x4A, 0x52, 0x5C));
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
             h.Close();
+        }
+        // a timer due on the Kinah line, and all three stacked (the timer line, the Parser's section, the Kinah line), on the
+        // strip and on the Card (2026-11-14, the overlay's design pass)
+        {
+            var due = new List<Session.TimerBoard.Item>
+            {
+                new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" },
+                new("boss:Soul Ruler Kashapa", "Verteron", "Soul Ruler Kashapa", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(719), "11m 59s", "") { Short = "Kashapa" },
+            };
+            var stackShots = new List<(string File, string Look, bool WithParser, bool WithTimers)>
+            {
+                ("ui-parser-kinah-timer.png", HudLooks.Strip, false, true), ("ui-parser-kinah-stack.png", HudLooks.Strip, true, true), ("ui-parser-kinah-stack-card.png", HudLooks.Card, true, true),
+            };
+            // the design pass's looks (Ui/HudStackLooks.cs): farming (your DPS), a timer due, a boss fight with a timer due
+            foreach (var look in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+                stackShots.AddRange(new[] { ($"ui-hud-{look}-farming.png", look, false, false), ($"ui-hud-{look}-timer.png", look, false, true), ($"ui-hud-{look}-boss.png", look, true, true) });
+            foreach (var (file, look, withParser, withTimers) in stackShots)
+            {
+                var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                h.Update(kinah);
+                h.SetFarmDps(withParser ? "" : "13.2K");
+                if (withTimers) h.ShowTimers(due, now);
+                if (withParser) h.ShowParser(live, now, live!.ModeKind, details: false);
+                h.Show();
+                DoEvents();
+                Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
+                h.Close();
+            }
         }
         // side by side (Steven, 2026-11-14: the separate overlay looks exactly like the Kinah overlay): the Kinah overlay and the
         // separate Parser overlay on one game-like grey, each drawn by its own window and lifted into one picture
@@ -129,7 +160,7 @@ public static partial class WpfApp
                 SizeToContent = SizeToContent.WidthAndHeight, Left = -12000, Top = -12000, Content = pic, FontFamily = HudKit.Text, FontWeight = FontWeights.Medium };
             TextOptions.SetTextFormattingMode(host, TextFormattingMode.Display);
             host.Show(); DoEvents();
-            Save(pic, Path.Combine(dir, "ui-parser-side-by-side.png"), 0, Color.FromRgb(0x4A, 0x52, 0x5C));
+            Save(pic, Path.Combine(dir, "ui-parser-side-by-side.png"), 0, ShotGround);
             host.Close(); h.Close(); o.Close();
         }
     }

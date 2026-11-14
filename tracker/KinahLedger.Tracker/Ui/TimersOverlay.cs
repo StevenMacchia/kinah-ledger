@@ -79,7 +79,14 @@ sealed class TimersOverlay : Window
             Background = Frozen(Color.FromArgb(0xF0, Surface.R, Surface.G, Surface.B)), BorderBrush = FrameLine, BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 6, 12, 6), Child = row, Cursor = Cursors.SizeAll,
         };
-        Content = _frame;
+        if (HudGlass.On)
+        {
+            HudGlass.Apply(_frame, 0.94);
+            _dot.Effect = null;
+            System.Windows.Documents.Typography.SetNumeralAlignment(this, FontNumeralAlignment.Tabular);
+            Content = HudGlass.Ring(_frame);
+        }
+        else Content = _frame;
         SourceInitialized += (_, _) => { _hwnd = new WindowInteropHelper(this).Handle; ApplyStyle(); };
         // plain click and drag, as the Kinah overlay: the spot is kept on a screen and remembered
         MouseLeftButtonDown += (_, _) =>
@@ -104,7 +111,7 @@ sealed class TimersOverlay : Window
     public void Match(double opacity, double scale)
     {
         var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
-        _frame.Background = Frozen(Color.FromArgb(a, Surface.R, Surface.G, Surface.B));
+        _frame.Background = HudGlass.On ? HudGlass.Fill(opacity) : Frozen(Color.FromArgb(a, Surface.R, Surface.G, Surface.B));
         var s = Math.Clamp(scale, HudPrefs.MinScale, HudPrefs.MaxScale);
         _frame.LayoutTransform = Math.Abs(s - 1) < 0.001 ? Transform.Identity : new ScaleTransform(s, s);
     }

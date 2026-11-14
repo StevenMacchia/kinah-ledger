@@ -188,7 +188,7 @@ public partial class MainWindow
         var idle = new Dictionary<string, string>(normal) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["zone"] = "", ["last"] = "", ["feedText"] = "", ["feedValue"] = "", ["chase"] = "", ["toBest"] = "" };
         foreach (var k in normal.Keys.Where(k => k.StartsWith("pick") || k.StartsWith("top"))) idle[k] = "";
         var list = new List<(string, string, Dictionary<string, string>)>();
-        foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker })
+        foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
             foreach (var (state, v) in new[] { ("normal", normal), ("notice", notice), ("rare", rare), ("idle", idle) })
                 list.Add(($"ui-hud-{look}-{state}.png", look, v));
         list.AddRange(HudRareStates());   // the watched drop with its price (Ui/MainWindow.RareWatch.cs)

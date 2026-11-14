@@ -109,6 +109,7 @@ public sealed partial class HudCard : IHudLook
     /// <summary>The card's background (the mock's tooltip wash: warm in the top-right corner to the frame's navy), at the chosen opacity.</summary>
     void Paint()
     {
+        if (HudGlass.On) { _card.Background = HudGlass.Fill(.94 * _alpha + .06); _card.BorderBrush = HudGlass.Edge; return; }
         // the hero's wash (Ui/Skins.cs HeroBg): a lift of violet at the top-right corner over the plum
         var b = new RadialGradientBrush { Center = new Point(1, 0), GradientOrigin = new Point(1, 0), RadiusX = 1.1, RadiusY = 1.4 };
         b.GradientStops.Add(new GradientStop(Rgb(0x1E2230, .94 * _alpha), 0));

@@ -210,7 +210,38 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
         Check(w.HudLook == HudLooks.Strip && o.HudFieldHost.IsEnabled, "panel look: the Strip, with its figures to pick");
-        Check(o.HudLookHost.Children.Count == 3 && o.HudLookPreview.Children.Count == 3, $"the three looks drawn in Options ({o.HudLookPreview.Children.Count})");
+        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && o.HudLookPreview.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 6, $"every look drawn in Options, the design pass's Capsule, Meter and Float too ({o.HudLookPreview.Children.Count} of {HudLooks.All.Length})");
+        // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
+        // and Parser section stay folded, and the look shows the boss, the timer and the hour
+        {
+            var now = DateTime.UtcNow;
+            var (_, fight) = KinahLedger.Parser.ParserDemo.Sample(now, live: true, damage: true);
+            var due = new List<Session.TimerBoard.Item> { new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" } };
+            var said = new List<string>();
+            foreach (var key in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+            {
+                var hw = new HudWindow(null, key, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                hw.Update(w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value));
+                hw.ShowTimers(due, now);
+                hw.ShowParser(fight, now, fight!.ModeKind, details: false);
+                hw.Show(); DoEvents();
+                static IEnumerable<string> Texts(DependencyObject d)
+                {
+                    if (d is System.Windows.Controls.TextBlock t) yield return MainWindow.InlineText(t);
+                    for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d); i++)
+                        foreach (var x in Texts(System.Windows.Media.VisualTreeHelper.GetChild(d, i))) yield return x;
+                }
+                var texts = Texts(hw).ToList();
+                bool own = !hw.TimersShown && !hw.ParserShown;
+                bool shows = texts.Any(t => t.Contains(fight.Title)) && texts.Any(t => t.Contains("Invasion")) && texts.Any(t => t.Contains("/h"));
+                said.Add($"{key}: {(own && shows ? "ok" : $"own {own}, shows {shows}")}");
+                hw.ShowParser(null, now, fight.ModeKind, details: false); DoEvents();
+                bool folded = !Texts(hw).Any(t => t.Contains(fight.Title));
+                if (!folded) said[^1] += ", the fight stays after it ends";
+                hw.Close();
+            }
+            Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
+        }
         Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Ticker)]);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Strip && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);

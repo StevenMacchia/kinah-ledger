@@ -270,7 +270,7 @@ public partial class MainWindow
             _bossesForShot = t;
             var ev = new EventTimers(); ev.SetForTest(lag, true, null);
             _eventsForShot = ev; _eventRegionForShot = "na_e";
-            var ground = Color.FromRgb(0x5A, 0x6B, 0x4F);
+            var ground = Environment.GetEnvironmentVariable("KL_SHOT_CLEAR") == "1" ? Colors.Transparent : Color.FromRgb(0x5A, 0x6B, 0x4F);   // clear: to lay over real game pictures
             _timerPrefs = TimerPrefs.Defaults(); _timerPrefs.WindowMinutes = 15;
             foreach (var i in TimerItems(now)) _timerPrefs.SetWatched(i.Key, true);
             var at = now.AddMinutes(16);   // Chaser Taulo 4 min away (gold), others further off
