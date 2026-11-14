@@ -121,6 +121,8 @@ public partial class MainWindow : Window
         // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before; a render or
         // a self-test starts from the defaults, as with ui.json, so the player's look (hud.json) never changes what it draws
         _hudPrefs = watch ? HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0) : HudPrefs.Defaults();
+        RegisterKinahOverlay();   // the header's Overlays group: Kinah first, then Timers (Ui/MainWindow.Overlays.cs)
+        InitTimers(watch);   // the timers overlay and its chime (Ui/MainWindow.Timers.cs); the Timers page is Ui/MainWindow.TimersPage.cs
         // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
         // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
         // never for a build run from its folder (the self-tests, dotnet run), which Windows must not start
@@ -199,7 +201,6 @@ public partial class MainWindow : Window
         EventsTab.Click += (_, _) => ShowPart("Events");
         QuestsTab.Click += (_, _) => ShowPart("Quests");
         TimersTab.Click += (_, _) => ShowPart("Timers");
-        RegisterKinahOverlay();
         Loaded += (_, _) => StartTimersTick();
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
