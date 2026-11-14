@@ -1021,8 +1021,8 @@ public partial class MainWindow : Window
         // in the Abyss every Kinah drop is bound (Steven, 2026-11-13: "kinah and abyss points are not being properly tracked"):
         // its Kinah figures count the bound Kinah too; out of it bound Kinah stays reward money, left out
         bool inAbyss = ZoneLocator.IsAbyss(_demo ? _demoZone : e.Zone ?? _watcher.Chat?.ZoneView?.Zone);
-        if (inAbyss) kinah += e.KinahBound;
-        _boundInKinah = inAbyss && e.KinahBound > 0;
+        // (the engine counts a kill's bound Kina as Kinah in the Abyss's zones since 0.10.69: SessionEngine.IsAbyssKillKina)
+        _boundInKinah = inAbyss && e.AbyssBoundKinah > 0;
         var s = Build(e, h, t.Kills);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         // quest and payment rewards: bound Kinah, a payment line, or one line far above what the mobs pay. Never farming income.
@@ -1074,7 +1074,7 @@ public partial class MainWindow : Window
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
         // "farming 5:19", minutes and seconds, under a Today line whose "0:21" was hours and minutes); what it covers on hover
         var verb = _mode == Mode.Gather ? "gathering · " : "";
-        TableTitle.Text = $"{ZoneLocator.KindOf(e.Zone) ?? "Open world"} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
+        TableTitle.Text = $"{ZoneLocator.KindOf(e.Zone) ?? (inAbyss ? "Abyss" : "Open world")} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
         TableTitle.ToolTip = _tableWhat.Length > 0 ? "Counting " + _tableWhat + "." : null;
         long totalNow = kinah + s.Value;
         // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line

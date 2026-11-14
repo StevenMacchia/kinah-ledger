@@ -624,6 +624,16 @@ public sealed partial class TrackerSession
     /// </summary>
     internal void ApplyZone(string? zone, DateTime now)
     {
+        // every area of the Abyss is one zone, "Abyss" (Steven, 2026-11-13: "count all abyss as 1 zone for tracking"): moving
+        // from Sulfur Tree Island to Devastated Remnants ends nothing and starts nothing; the area is only said in the log
+        if (zone != null && zone != ZoneLocator.Abyss && ZoneLocator.IsAbyss(zone))
+        {
+            if (!string.Equals(zone, _abyssArea, StringComparison.OrdinalIgnoreCase))
+                CrashLog.Note($"zone: {zone} ({ZoneLocator.AbyssRegion(zone) ?? "Reshanta"}), counted as the Abyss");
+            _abyssArea = zone;
+            zone = ZoneLocator.Abyss;
+        }
+        else if (zone != null && zone != SessionEngine.UnknownZone) _abyssArea = null;
         if (zone != null && zone != Engine.Zone)
         {
             if (zone != SessionEngine.UnknownZone) CrashLog.Note($"zone: {zone}" + (ZoneLocator.KindOf(zone) is { } kind ? $" ({kind})" : ""));
@@ -649,6 +659,8 @@ public sealed partial class TrackerSession
     }
 
     int _emptyReads;
+    /// <summary>The Abyss area the minimap last named (the zone is "Abyss" for all of them): for the log only.</summary>
+    string? _abyssArea;
 
     // the game window as it was when the chat area was found (auto mode): the area is kept relative to it, so the game
     // moving (a tab out and back, a drag) moves the area with it, and the game changing size (fullscreen to windowed,
@@ -2649,8 +2661,11 @@ public sealed partial class TrackerSession
         if (InRunFor(ev) || _boss != null) return;
         // a Kina payout marked (Bound) (a quest, a pass or a claim): an item printed with it, in the same read or the next
         // few seconds, is the payout's too (Steven, 2026-10-23 12:39: 11,000 Kina (Bound) and a refining stone, counted as a drop)
-        if (ev is KinahChanged { Bound: true, Delta: > 0 })
+        if (ev is KinahChanged { Bound: true, Delta: > 0 } kb)
         {
+            // in the Abyss every kill's Kina is bound: a kill's is no payout, and the drops printed with it are drops (Steven,
+            // 2026-11-13 18:44: Earth Spellbook, Earth Greaves and the soul crystals beside each kill's bound Kina were set aside)
+            if (SessionEngine.IsAbyssKillKina(kb.Delta, Zone)) return;
             var until = now.AddSeconds(PayoutWindowSeconds);
             if (until > _boxUntil) _boxUntil = until;
             return;
