@@ -7,7 +7,7 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The timer line on top of the Kinah overlay (0.10.86, Steven 2026-11-14: "maybe we should just have the tracker kinah
+/// The timer line on top of the Kinah overlay (Steven 2026-11-14: "maybe we should just have the tracker kinah
 /// [overlay] pop out at the top tiny"): while a watched timer is within the minutes set, one tiny line pops out at the
 /// overlay's top edge, "Invasion 4:39 · Kashapa 11:59", soonest first, gold in its last 5 minutes; it folds away when
 /// nothing is due. The overlay grows upward: as the line takes height the window moves up by as much, and down again when
