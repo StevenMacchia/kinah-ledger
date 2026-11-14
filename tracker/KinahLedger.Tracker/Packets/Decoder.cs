@@ -48,9 +48,10 @@ internal sealed class BossMapper
                 _group[r.Entity] = new GroupMember(r.Entity, r.Name, r.Class, (int)Math.Clamp(r.CombatPower, 0, int.MaxValue), (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), r.Self);
                 return new GroupChanged(r.At, _group.Values.ToList());
             case 7: return _group.Remove(r.Entity) ? new GroupChanged(r.At, _group.Values.ToList()) : null;
-            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount);   // source 0: HP lost with no hit (damage over time, lost traffic)
+            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self);   // source 0: HP lost with no hit (damage over time, lost traffic)
+            case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
             case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1);
-            default: return null;   // a boss seen, its HP (the Parser counts the damage), or a kind this build doesn't know
+            default: return null;   // a boss seen (its HP comes with the pull), or a kind this build doesn't know
         }
     }
 }

@@ -279,10 +279,10 @@ public static class PacketTests
             Check(got[0] is InstanceEntered { Kind: ContentKind.Expedition, Name: "Fire Temple", InstanceId: 1 } && roster.Count == 3 && roster[1].Members.Count == 2
                 && roster[1].Members.Any(m => m is { Name: "Swoly", You: true, CombatPower: 2637 }) && roster[2].Members.Single().Name == "Swoly",
                 $"the decoder's rows: an instance, the roster whole each time ({string.Join(" ", roster.Select(r => r.Members.Count))}), a leaver gone, an unknown leaver nothing");
-            Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, Amount: 600, TargetId: 25495 }
-                && dmg[1] is { SourceId: 0, Amount: 400 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
+            Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, SourceName: "Swoly", SourceIsYou: true, Amount: 600, TargetId: 25495 }
+                && dmg[1] is { SourceId: 0, Amount: 400, SourceIsYou: false } && got.OfType<BossHealth>().Single() is { BossId: 25495, Hp: 0, Max: 1000 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
                 && got.OfType<BossEnded>().Single().Outcome == BossOutcome.Kill && got[^1] is InstanceLeft && !got.Any(e => e is null),
-                $"...a pull, its damage (yours and other: source 0), the boss's death and the kill; a boss sighting, its HP and an unknown kind make nothing ({got.Count} events)");
+                $"...a pull, its damage (yours, named, and other: source 0), its HP, the boss's death and the kill; a boss sighting and an unknown kind make nothing ({got.Count} events)");
             var r = new PacketReader();
             foreach (var e in got) r.TakeBoss(e);
             var back = new List<BossEvent>(); while (r.NextBossEvent() is { } e) back.Add(e);
