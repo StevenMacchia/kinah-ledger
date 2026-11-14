@@ -24,10 +24,10 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public bool On => _testOn || _thread is { IsAlive: true };
     bool _testOn;
     /// <summary>For packet-test: reading as if a capture ran, the messages handed in by hand.</summary>
-    internal void ReadingForTest() { _testOn = true; _testItems = true; _packetAt = DateTime.UtcNow; }
+    internal void ReadingForTest() { _testOn = true; _testItems = true; _packetAt = PacketClock.Now; }
     bool _testItems;
     /// <summary>For packet-test: item changes as the decoder would report them (cut into updates by their batch).</summary>
-    internal void ItemsForTest(params ItemChange[] changes) { _packetAt = DateTime.UtcNow; TakeItems(changes); }
+    internal void ItemsForTest(params ItemChange[] changes) { _packetAt = PacketClock.Now; TakeItems(changes); }
     internal void AgreeItemsForTest(DateTime now) { lock (_gate) AgreeItems(now); }
     readonly Dictionary<CurrencyKind, long> _testAmounts = new();
     /// <summary>For packet-test: an amount as the decoder would report it (the change from the last one, or a baseline).</summary>
@@ -258,7 +258,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
         Log($"{Local(g.At)}  gathered: {how}, {ItemName(g.ItemId)}{(g.Outcome == GatherEnd.Failed ? "" : $" x{g.Count}")}{(g.Attempt > 0 ? $" (try {g.Attempt} on this node)" : "")}");
     }
     /// <summary>For packet-test: gathering attempts as the decoder would report them.</summary>
-    internal void GathersForTest(params GatherResult[] gs) { _testGathers = true; _packetAt = DateTime.UtcNow; foreach (var g in gs) TakeGather(g); }
+    internal void GathersForTest(params GatherResult[] gs) { _testGathers = true; _packetAt = PacketClock.Now; foreach (var g in gs) TakeGather(g); }
     internal void AgreeGathersForTest(DateTime now) { lock (_gate) AgreeGathers(now); }
 
     /// <summary>The next gathering attempt for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
@@ -268,7 +268,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// <summary>Whether the packets count gathering attempts at <paramref name="at"/>: reading them on a live connection since a while before, and not stopped.</summary>
     public bool CountingGathers(DateTime at)
     {
-        if (!ReadsGathers || (DateTime.UtcNow - _packetAt).TotalSeconds > 15) return false;
+        if (!ReadsGathers || (PacketClock.Now - _packetAt).TotalSeconds > 15) return false;
         lock (_gate) return _gathersBroken == null && at > (_testGathers ? DateTime.MinValue : _readingSince).AddSeconds(4);
     }
     /// <summary>Why the packets stopped counting gathering, or null while they count.</summary>
@@ -315,7 +315,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public object? NextUncovered() => _uncovered.TryDequeue(out var o) ? o : null;
 
     /// <summary>True while the decoder reads item changes on a live connection (the release build's klnet.dll, version 2).</summary>
-    bool ItemsOn => On && (DateTime.UtcNow - _packetAt).TotalSeconds <= 15 && (_testItems || _decoder?.ReadsItems == true);
+    bool ItemsOn => On && (PacketClock.Now - _packetAt).TotalSeconds <= 15 && (_testItems || _decoder?.ReadsItems == true);
     DateTime ReadingSince => _testItems ? DateTime.MinValue : _readingSince;
 
     /// <summary>Whether the packets count item pickups at <paramref name="at"/>: reading items since a while before, and not stopped.</summary>
@@ -365,7 +365,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// </summary>
     public bool Counting(CurrencyKind k, DateTime at)
     {
-        if (!On || (DateTime.UtcNow - _packetAt).TotalSeconds > 15) return false;
+        if (!On || (PacketClock.Now - _packetAt).TotalSeconds > 15) return false;
         lock (_gate) return !_broken.ContainsKey(k) && _baseAt.TryGetValue(k, out var b) && at > b.AddSeconds(4);
     }
 
@@ -526,7 +526,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// </summary>
     void Agree()
     {
-        var now = DateTime.UtcNow;
+        var now = PacketClock.Now;
         lock (_gate)
         {
             foreach (var s in _screen.Where(s => (now - s.At).TotalSeconds >= 15).ToList())
@@ -563,6 +563,24 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// </summary>
     public const double RereadSeconds = 60, ExcludedSeconds = 300;
     readonly List<(long Id, DateTime At, string Why)> _itemExcluded = new();
+
+    /// <summary>
+    /// The session counted a stack's first sight itself (a gather's own report said what it gave): the item's lines are
+    /// covered by that count as by any rise, and none is counted again from the chat.
+    /// </summary>
+    public void CountedFirstSight(long id, long n, DateTime at) { lock (_gate) _itemSeen.Add((id, n, false, at)); }
+
+    /// <summary>
+    /// Whether the traffic showed <paramref name="id"/>'s stack only for the first time just before <paramref name="at"/>
+    /// (its earlier amount not known, so the update couldn't say how many came) and nothing counted it: a chat line for it
+    /// then is that pickup, and counts at once, not after the agreement check's 15 s.
+    /// </summary>
+    public bool FirstSightNear(long id, DateTime at)
+    {
+        lock (_gate)
+            return _itemSeen.Any(p => p.Id == id && p.First && (p.At - at).TotalSeconds is >= -ItemBefore and <= ItemAfter)
+                && !_itemSeen.Any(p => p.Id == id && !p.First && p.Delta > 0 && (p.At - at).TotalSeconds is >= -ItemBefore and <= ItemAfter);
+    }
 
     /// <summary>A rise of an item the tracker didn't count as a pickup (<paramref name="why"/>: with the Market open, ...): it covers that item's chat lines for <see cref="ExcludedSeconds"/>.</summary>
     public void ItemExcluded(long id, DateTime at, string why)
@@ -610,8 +628,24 @@ public sealed class PacketReader : IDisposable, IBossFeed
                 Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)} again: its update was taken by an earlier line; not counted");
                 continue;
             }
-            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First)) { Verdicts.Add("first sight"); if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag); continue; }
-            if (_itemSeen.Any(p => Near(p) && !p.First && p.Delta > 0)) { Verdicts.Add("covered: another item"); continue; }
+            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First))
+            {
+                Verdicts.Add("first sight");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)}: the game's messages showed its stack only for the first time, so the screen counts it");
+                if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag);
+                continue;
+            }
+            // another item's rise no line took (the line misread the name): it takes that rise. One gather that gives two
+            // items (an ore and a Poko's Skin Bundle, 2026-11-14 13:09:57) is two rises, each its own line's: the ore's rise,
+            // taken by the ore's line, never covered the bundle's line as well
+            var other = _itemSeen.Where(p => Near(p) && p.Id != s.Id && !p.First && p.Delta > 0 && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).FirstOrDefault();
+            if (other.At != default)
+            {
+                _risesTaken.Add((other.Id, other.At));
+                Verdicts.Add("covered: another item");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)}: taken as a misread of {ItemName(other.Id)}'s rise at {Local(other.At)}, which no line had: not counted again");
+                continue;
+            }
             Verdicts.Add("not shown");
             if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag);
             if (!s.Late) continue;   // the loot list alone: no miss, nothing counted

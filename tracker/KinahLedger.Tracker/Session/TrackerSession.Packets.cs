@@ -53,11 +53,11 @@ public sealed partial class TrackerSession
     internal readonly List<double> PacketDelays = new();
     void NotePacketDelay(DateTime at)
     {
-        double d = Math.Max(0, (DateTime.UtcNow - at).TotalSeconds);
+        double d = Math.Max(0, (PacketClock.Now - at).TotalSeconds);
         PacketDelays.Add(d); if (PacketDelays.Count > 200) PacketDelays.RemoveAt(0);
         _packetCountedNow = true;
     }
-    static string After(DateTime at) => $"{Math.Max(0, (DateTime.UtcNow - at).TotalSeconds):0.00} s after it came";
+    static string After(DateTime at) => $"{Math.Max(0, (PacketClock.Now - at).TotalSeconds):0.00} s after it came";
 
     /// <summary>
     /// The packet reader's changes, counted in order as they come. Each is decided at once when what decides it is in: in a
@@ -72,7 +72,7 @@ public sealed partial class TrackerSession
         if (Packets is not { } p) return;
         _packetCountedNow = false;
         while (p.Next() is { } next) _packetHeld.Add(next);
-        var now = DateTime.UtcNow;
+        var now = PacketClock.Now;
         // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
         DrainFights(p, now);
         // the player's gathering next: a gather is the "gather nearby" its item's rise is checked against
@@ -157,6 +157,21 @@ public sealed partial class TrackerSession
         // an item pickup from the screen while the packets count items: the agreement check decides whether the chat's line counts after all
         if (ev is ItemAcquired { Count: > 0 } ia && p.CountingItems(ev.Time) && !_screenLate.Contains(ev))
         {
+            // a first sight the session counted from a gather's report: the line says how many really came
+            int pi = _provisional.FindIndex(x => x.Id == ia.ItemId && (ev.Time - x.At).TotalSeconds is >= -1 and <= 8);
+            if (pi >= 0 && ia.Count > _provisional[pi].Counted && !ev.Via.Contains("loot list"))
+            {
+                var (pid, pat, had) = _provisional[pi];
+                _provisional[pi] = (pid, pat, ia.Count);
+                CrashLog.Note($"{Describe(ev)} (chat): its stack's first sight was counted as {had} from the gather's report; the line says {ia.Count}: {ia.Count - had} more");
+                CommitWith(new ItemAcquired(pat, pid, ia.Count - had, ia.Bound) { Via = "packets" }, "counter");
+            }
+            // the traffic showed the stack only for the first time and counted nothing: this line is that pickup, now
+            else if (pi < 0 && !ev.Via.Contains("loot list") && p.FirstSightNear(ia.ItemId, ev.Time))
+            {
+                CrashLog.Note($"{Describe(ev)} (chat): the game's message showed its stack only for the first time, so the chat's line counts it now");
+                return false;
+            }
             bool chat = !ev.Via.Contains("loot list");
             p.ScreenSawItem(ia.ItemId, ia.Count, ev.Time, chat, chat ? ev : null);
             CrashLog.Note($"{Describe(ev)} ({(ev.Via.Length > 0 ? ev.Via : "chat")}): counted from the game's messages instead{(chat ? " (the chat's, if they didn't show it)" : "")}");
@@ -224,6 +239,9 @@ public sealed partial class TrackerSession
     bool ChatHadItsSay(PacketReader p, ItemBatch b)
     {
         if (b.Fell || CraftingAt(b.At)) return true;
+        // a gather's yield: the gather's report is its evidence, and the chat has nothing to add (2026-11-14: a Fine
+        // Orichalcum Ore waited 1.7 s for its line)
+        if (GatherOf(b) != null) return true;
         foreach (var (id, n, unknown) in b.Net())
         {
             if (unknown || n <= 0 || _items.Get(id) == null) continue;
@@ -250,13 +268,34 @@ public sealed partial class TrackerSession
         if (!p.CountingItems(b.At)) return;
         // something went down with it: a craft's materials, a box opened, a stack moved or something used, never a pickup
         if (b.Fell) { CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup"); return; }
-        foreach (var (id, n, unknown) in b.Net())
+        var gather = GatherOf(b);
+        foreach (var (id, n0, unknown) in b.Net())
         {
             string name = _items.NameOf(id);
-            if (unknown) { CrashLog.Note($"packets: {name} first seen (its earlier amount not known): its pickup is the chat's"); continue; }
+            long n = n0;
+            bool find = IsRareFind(name);
+            if (_items.Get(id) == null) { CrashLog.Note($"packets: {name} {(unknown ? "first seen" : $"+{n:N0}")} is not on the item list: the chat's"); continue; }
+            if (unknown)
+            {
+                // a stack seen for the first time (the reading began mid-connection, after an update): no change known. A
+                // gather's yield counts all the same, with the gather's own count (one for a rare find); the chat's line
+                // tops it up if it says more (CountTopUp)
+                if (gather is not { } g0) { CrashLog.Note($"packets: {name} first seen (its earlier amount not known): its pickup is the chat's"); continue; }
+                n = g0.ItemId == id ? Math.Max(1, g0.Count) : 1;
+            }
             if (n <= 0) continue;
-            if (_items.Get(id) == null) { CrashLog.Note($"packets: {name} +{n:N0} is not on the item list: the chat's"); continue; }
             bool bound = name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase);
+            if (gather != null && !InBase)
+            {
+                // a gather's yield: the gather is its evidence, bound or not, a rare find or not, and it counts now
+                var gev = new ItemAcquired(b.At, id, (int)Math.Min(n, 99999), bound) { Via = "packets" };
+                CrashLog.Note($"packets: {name} +{n:N0}{(unknown ? " (its stack first seen: the gather's own count)" : "")}{(find ? ", a rare find" : "")}: gathered, counted from the game's message, {After(b.At)}");
+                CommitWith(gev, "counter");
+                if (unknown) { p.CountedFirstSight(id, n, b.At); _provisional.Add((id, b.At, (int)n)); _provisional.RemoveAll(x => (b.At - x.At).TotalMinutes > 1); }
+                NotePacketDelay(b.At);
+                if (b.At > _packetPickupAt) _packetPickupAt = b.At;
+                continue;
+            }
             bool screenSaw = p.ScreenNearItem(id, b.At, PacketNearSeconds);
             bool near = (_lastKillAt - b.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - b.At).TotalSeconds >= -PacketNearSeconds
                 || (_gatherRaces.Count > 0 && (_gatherRaces[^1].At - b.At).TotalSeconds >= -PacketNearSeconds);
@@ -328,6 +367,28 @@ public sealed partial class TrackerSession
 
     // ---- gathering (0.10.80) ----
     long _lastGatherNode = -1;
+    /// <summary>The gathers that gave something lately (when, what, how many the game's report said), for their items' updates.</summary>
+    readonly List<(DateTime At, long ItemId, int Count)> _gathered = new();
+    /// <summary>How near a gather's report its items' update comes: the same moment (13:10:48.3, 2026-11-14), or the next message.</summary>
+    const double GatherItemSeconds = 1.5;
+
+    /// <summary>The gather an inventory update is the yield of: one that gave something within <see cref="GatherItemSeconds"/>, or none.</summary>
+    (DateTime At, long ItemId, int Count)? GatherOf(ItemBatch b)
+    {
+        var g = _gathered.Where(x => Math.Abs((x.At - b.At).TotalSeconds) <= GatherItemSeconds).OrderBy(x => Math.Abs((x.At - b.At).TotalSeconds)).ToList();
+        if (g.Count == 0) return null;
+        // its own item in the update first, else the nearest
+        return g.FirstOrDefault(x => b.Rows.Any(r => r.ItemId == x.ItemId)) is { At.Ticks: > 0 } own ? own : g[0];
+    }
+
+    /// <summary>Gathering's rare finds (Poko's Skin Bundle): from any node, one at a time, counted even unpriced.</summary>
+    bool IsRareFind(string name) => GatheringCatalog.Find(name) is { Family: GatherFamily.Find };
+
+    /// <summary>
+    /// Counts a provisional pickup's top-up: a stack seen for the first time was counted at the gather's report (its own
+    /// count, or one for a rare find), and the chat's line, a moment later, says more came (the upgrade roll's two).
+    /// </summary>
+    readonly List<(long Id, DateTime At, int Counted)> _provisional = new();
 
     /// <summary>
     /// The player's gathering from the game's messages (Steven, 2026-11-13: "exact gathering results"): every attempt, how it
@@ -347,6 +408,7 @@ public sealed partial class TrackerSession
             string name = node?.Name ?? UnknownNode;
             bool newNode = g.Attempt == 1 || (g.Attempt == 0 && g.NodeId != _lastGatherNode);
             _lastGatherNode = g.NodeId;
+            if (g.Outcome != GatherEnd.Failed) { _gathered.Add((g.At, g.ItemId, g.Count)); _gathered.RemoveAll(x => (g.At - x.At).TotalMinutes > 1); }
             // its item's rise in the inventory, in the same moment, is a gather's: it counts at once
             if (g.At > _lastGatherAt) _lastGatherAt = g.At;
             string how = g.Outcome switch { GatherEnd.Upgrade => "the upgrade roll won", GatherEnd.Failed => "failed", _ => "worked" };

@@ -2,8 +2,8 @@
   "min_tracker": "0.8.0",
   "files": {
     "zones.txt": {
-      "sha256": "33fece0c131e2a6f23941649d3cceb4bbbb7cb7d45dc7defae69821b28ab0ec9",
-      "size": 7381
+      "sha256": "ad6e3a3bbedd945bb0729ebdf1d914265352075c34361aea0db6911b047c8899",
+      "size": 7387
     },
     "instances.txt": {
       "sha256": "c95ba2a3bd8cb2f4daf3faf9d7086c992ca9a8d76e4866ba3aadc9bda42061dc",

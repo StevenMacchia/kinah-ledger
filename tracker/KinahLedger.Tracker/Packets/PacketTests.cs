@@ -490,6 +490,78 @@ public static class PacketTests
             }
         }
 
+        // a gather's yield counts at once with the gather as its evidence, a first-seen stack too (the gather's count, one
+        // for a rare find), topped up when the chat's line says more; one gather's two items are two rises, so the ore's line
+        // never covers the bundle's; a first-seen kill drop counts at its chat line, not 15 s later (2026-11-14 13:09:57)
+        {
+            const long Ore = 610620013, Fine = 610620014, Poko = 533700110, Spirit = 0;
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            long spirit = items.Find("Spiritstone") ?? Spirit;
+            var t0 = DateTime.UtcNow.AddMinutes(-2);
+            var clock = t0;
+            PacketClock.Fixed = () => clock;
+            try
+            {
+                var reader = new PacketReader(); reader.ReadingForTest(); reader.GathersForTest();
+                var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+                s.Engine.SetZone("Ellun River Midstream");
+                var when = new Dictionary<long, double>();
+                s.Parsed += ev => { if (ev is ItemAcquired ia && !when.ContainsKey(ia.ItemId)) when[ia.ItemId] = (clock - ia.Time).TotalSeconds; };
+                ItemChange R(double at, long id, ItemOp op, long stack, long d, long total, bool first, int batch, int rows) => new(t0.AddSeconds(at), id, op, stack, d, total, first, batch, rows, false);
+                void At(double sec) { clock = t0.AddSeconds(sec); reader.ReadingForTest(); s.DrainPacketsForTest(); }
+                // 1 s: the gather (an ore) and, in the same update, the ore +1 and the bundle's stack seen for the first time
+                At(1); reader.GathersForTest(new GatherResult(t0.AddSeconds(1), 7, 1, GatherEnd.Worked, Ore, 1, 2));
+                reader.ItemsForTest(R(1, Ore, ItemOp.Changed, 1, 1, 195, false, 1, 2), R(1, Poko, ItemOp.Changed, 2, 0, 2, true, 1, 2));
+                At(1.05);
+                // the chat's lines, 0.8 and 1.7 s later
+                At(1.8); s.CommitForTest(new ItemAcquired(t0.AddSeconds(1.8), Ore, 1, false) { Via = "chat" });
+                At(2.7); s.CommitForTest(new ItemAcquired(t0.AddSeconds(2.7), Poko, 1, true) { Via = "chat" });
+                // 10 s: an upgrade roll's Fine Orichalcum Ore, its stack first seen; the gather says one, the chat says two
+                At(10); reader.GathersForTest(new GatherResult(t0.AddSeconds(10), 8, 1, GatherEnd.Upgrade, Fine, 1, 1));
+                reader.ItemsForTest(R(10, Fine, ItemOp.Changed, 3, 0, 38, true, 2, 1));
+                At(10.05);
+                At(11.5); s.CommitForTest(new ItemAcquired(t0.AddSeconds(11.5), Fine, 2, false) { Via = "chat" });
+                // 30 s: a kill's Spiritstone, its stack first seen (no gather): its chat line 1 s later counts it then
+                At(29); reader.FightsForTest(new FightEvent(t0.AddSeconds(29), FightKind.Kill, FightFlags.Mine, 1, 2, 3, 0, 0, "", ""));
+                At(30); reader.ItemsForTest(R(30, spirit, ItemOp.Changed, 4, 0, 6, true, 3, 1));
+                At(31); s.CommitForTest(new ItemAcquired(t0.AddSeconds(31), spirit, 1, false) { Via = "chat" });
+                for (double x = 32; x <= 60; x += 1) { At(x); reader.AgreeItemsForTest(clock); s.DrainPacketsForTest(); }
+                int M(long id) => s.Engine.Items.GetValueOrDefault(id) + s.Engine.ItemsBound.GetValueOrDefault(id);
+                Check(M(Ore) == 1 && M(Poko) == 1 && M(Fine) == 2 && (spirit == 0 || M(spirit) == 1)
+                        && when.GetValueOrDefault(Ore, 9) <= 0.1 && when.GetValueOrDefault(Poko, 9) <= 0.1 && when.GetValueOrDefault(Fine, 9) <= 0.1 && (spirit == 0 || when.GetValueOrDefault(spirit, 9) <= 1.1),
+                    $"a gather's yield counts at once: Orichalcum Ore {M(Ore)} and Poko's Skin Bundle {M(Poko)} (one gather, its first sight; {when.GetValueOrDefault(Poko, -1):0.00} s), Fine Orichalcum Ore {M(Fine)} (the gather's one, the chat's line topped it up to two), a kill's first-seen Spiritstone {(spirit == 0 ? "(not on this list)" : $"{M(spirit)} at its chat line ({when.GetValueOrDefault(spirit, -1):0.00} s)")}");
+            }
+            finally { PacketClock.Fixed = null; }
+        }
+
+        // Steven's gathering of 2026-11-14 13:00-13:15 (kinah-bench/packets/rec-20261114-13 and -13-2, the tracker's own
+        // recording, with reads.log's lines of those minutes): through this build's decoder and a whole session, stepped on
+        // the recording's clock. The Poko's Skin Bundle (Bound) of 13:09:57 counts (0.10.92 dropped it: a stack seen for the
+        // first time, its chat line taken as a misread of the ore's), and every gathered item counts within 0.3 s of the
+        // game's message (a Fine Orichalcum Ore waited 1.7 s for its line, the first-seen ones 17 and 19 s)
+        {
+            string? bench2 = Environment.GetEnvironmentVariable("KL_BENCH") is { Length: > 0 } kb2 ? kb2 : BenchPackets();
+            var recs = new[] { "rec-20261114-13", "rec-20261114-13-2" }.Select(r => bench2 == null ? "" : Path.Combine(bench2, r)).ToList();
+            if (!NativeDecoder.Available || NativeDecoder.Version < 7) Console.WriteLine("skip  the 13:00 gathering replay: this build's decoder reads no gathering");
+            else if (recs.Any(r => !File.Exists(Path.Combine(r, "capture.pcapng")))) Console.WriteLine("skip  the 13:00 gathering replay: kinah-bench/packets/rec-20261114-13* not found (KL_BENCH)");
+            else
+            {
+                var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+                var res = ReplaySession(settings, recs, "Ellun River Midstream");
+                const long Poko = 533700110;
+                bool poko = res.Counted.Any(c => c.Ev.ItemId == Poko);
+                var gathered = res.Reported.Where(r => r.Gathered).ToList();
+                var late = gathered.Where(r => r.Delay is not double d || d > 0.3).ToList();
+                var all = res.Reported.Where(r => r.Delay is double).Select(r => r.Delay!.Value).OrderBy(d => d).ToList();
+                Console.WriteLine($"      the 13:00-13:15 recording: the game reported {res.Reported.Count} pickups ({gathered.Count} gathered), {res.Reported.Count(r => r.Delay != null)} counted; delay median {(all.Count > 0 ? all[all.Count / 2] : 0):0.00} s, max {(all.Count > 0 ? all[^1] : 0):0.00} s; {res.Counted.Count} counts, {res.Counted.Sum(c => c.Ev.Count)} items");
+                foreach (var r in res.Reported.Where(r => r.Delay is not double d || d > 0.3 || !r.Gathered))
+                    Console.WriteLine($"      {r.At.ToLocalTime():HH:mm:ss.ff} {items.NameOf(r.Id)} {(r.Delay is double d ? $"counted {d:0.00} s after" : "NOT counted")}{(r.Gathered ? " (gathered)" : "")}");
+                // a first sight no gather gave (a kill's drop) can only count from its chat line: counted, at the line's lag
+                Check(poko && late.Count == 0 && res.Reported.All(r => r.Delay != null),
+                    $"the 13:00 gathering, replayed: Poko's Skin Bundle (Bound) {(poko ? "counted" : "NOT counted")}; {gathered.Count - late.Count} of {gathered.Count} gathered items within 0.3 s of the game's message; {res.Reported.Count(r => r.Delay != null)} of {res.Reported.Count} pickups the game reported counted");
+            }
+        }
+
         // a build without the decoder reads no traffic and says so
         {
             var keep = PacketReader.Decoders;
@@ -637,6 +709,134 @@ public static class PacketTests
     }
 
     /// <summary>This build's decoder over a capture: every gathering attempt of the player's, each connection its own decoder.</summary>
+    /// <summary>kinah-bench/packets beside the repo, or null.</summary>
+    static string? BenchPackets()
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine(d.FullName, "kinah-bench", "packets");
+            if (Directory.Exists(p)) return p;
+        }
+        return null;
+    }
+
+    /// <summary>A pickup the game reported in a replay: its item, when, whether a gather gave it, and how long after its message it counted (null: never).</summary>
+    internal sealed record Reported(DateTime At, long Id, bool Gathered, double? Delay);
+    internal sealed record SessionReplayResult(List<Reported> Reported, List<(ItemAcquired Ev, DateTime CountedAt)> Counted);
+
+    /// <summary>
+    /// Recordings (folders with capture.pcapng, info.json and the reads.log lines of their minutes as chat.log) through this
+    /// build's decoder and a whole session, on the recording's own clock (PacketClock): the game's gathering, kills and
+    /// inventory updates go in at their times, the chat's pickup lines at theirs, and the session drains every 50 ms. Each
+    /// file is its own reading (as live: the reader starts again with the tracker).
+    /// </summary>
+    internal static SessionReplayResult ReplaySession(Settings settings, IList<string> folders, string zone)
+    {
+        var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        var evs = new List<(DateTime At, int Kind, object What)>();   // 0 items, 1 gather, 2 fight, 3 chat line
+        foreach (var dir in folders)
+        {
+            var segs = new List<(DateTime At, TcpSegment S)>();
+            foreach (var (at, frame, link) in Pcapng.Read(Path.Combine(dir, "capture.pcapng")))
+                if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == 13328) segs.Add((at, s));
+            foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+            {
+                using var dec = NativeDecoder.TryOpen()!;
+                var rows = new List<ItemChange>();
+                var st = new TcpStream
+                {
+                    OnData = (d, at) =>
+                    {
+                        dec.Feed(d, at);
+                        while (dec.Next() is not null) { }
+                        rows.Clear();
+                        while (dec.NextItem() is { } it) rows.Add(it);
+                        if (rows.Count > 0) evs.Add((rows[0].At, 0, rows.ToArray()));
+                        while (dec.NextFight() is { } f) evs.Add((f.At, 2, f));
+                        while (dec.NextGather() is { } g) evs.Add((g.At, 1, g));
+                    },
+                    OnGap = dec.Gap,
+                };
+                foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+            }
+            var log = Path.Combine(dir, "chat.log");
+            if (dir == folders[^1] && File.Exists(log) && File.Exists(Path.Combine(dir, "info.json")))
+            {
+                using var j = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "info.json")));
+                var start = j.RootElement.GetProperty("startUtc").GetDateTime().ToUniversalTime();
+                int off = j.RootElement.GetProperty("utcOffsetMinutes").GetInt32();
+                var day = start.AddMinutes(off).Date;
+                var line = new System.Text.RegularExpressions.Regex(@"^﻿?(\d\d):(\d\d):(\d\d\.\d)\s+ok\s+(.*)$");
+                var acq = new System.Text.RegularExpressions.Regex(@"^(?:Acquired (?<n1>.+?) x(?<c>\d+)|(?<n2>.+?) acquired)\W*$");
+                foreach (var l in File.ReadLines(log))
+                {
+                    var m = line.Match(l);
+                    if (!m.Success) continue;
+                    var text = System.Text.RegularExpressions.Regex.Replace(m.Groups[4].Value, @"\s{2,}\(.*$", "").Trim();
+                    if (System.Text.RegularExpressions.Regex.IsMatch(text, "Kina|Rank|Abyss|Soul|Point", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
+                    var a = acq.Match(text);
+                    if (!a.Success) continue;
+                    var name = a.Groups["n1"].Success ? a.Groups["n1"].Value : a.Groups["n2"].Value;
+                    if ((items.Find(name) ?? items.Guess(name)) is not long id) continue;
+                    var at = DateTime.SpecifyKind(day.AddHours(int.Parse(m.Groups[1].Value)).AddMinutes(int.Parse(m.Groups[2].Value))
+                        .AddSeconds(double.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture)).AddMinutes(-off), DateTimeKind.Utc);
+                    int n = a.Groups["c"].Success ? int.Parse(a.Groups["c"].Value) : 1;
+                    evs.Add((at, 3, new ItemAcquired(at, id, n, items.NameOf(id).EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase)) { Via = "chat" }));
+                }
+            }
+        }
+        evs = evs.OrderBy(e => e.At).ThenBy(e => e.Kind).ToList();
+        var counted = new List<(ItemAcquired Ev, DateTime CountedAt)>();
+        if (evs.Count == 0) return new SessionReplayResult(new(), counted);
+        var clock = evs[0].At;
+        PacketClock.Fixed = () => clock;
+        try
+        {
+            var reader = new PacketReader(); reader.ReadingForTest(); reader.GathersForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            s.Engine.SetZone(zone);
+            s.Parsed += ev => { if (ev is ItemAcquired ia) counted.Add((ia, clock)); };
+            var batches = new List<ItemBatch>();
+            int i = 0;
+            var end = evs[^1].At.AddSeconds(20);
+            DateTime agreedAt = clock;
+            for (; clock <= end; clock = clock.AddMilliseconds(50))
+            {
+                reader.ReadingForTest();
+                for (; i < evs.Count && evs[i].At <= clock; i++)
+                {
+                    switch (evs[i].What)
+                    {
+                        case ItemChange[] rs: reader.ItemsForTest(rs); batches.AddRange(ItemBatch.Cut(rs)); break;
+                        case GatherResult g: reader.GathersForTest(g); break;
+                        case FightEvent f: reader.FightsForTest(f); break;
+                        case ItemAcquired line: s.CommitForTest(line); break;
+                    }
+                }
+                s.DrainPacketsForTest();
+                if ((clock - agreedAt).TotalSeconds >= 1) { agreedAt = clock; reader.AgreeItemsForTest(clock); reader.AgreeGathersForTest(clock); s.DrainPacketsForTest(); }
+            }
+            // what the game reported: each item that went up in an update with nothing going down (a first sight too, when a
+            // gather gave it), and whether a count of it landed: from its message, or from its chat line within 8 s
+            var gathers = evs.Where(e => e.What is GatherResult { Outcome: not GatherEnd.Failed }).Select(e => e.At).ToList();
+            var reported = new List<Reported>();
+            var taken = new HashSet<int>();
+            foreach (var b in batches.Where(b => !b.Fell))
+            {
+                bool gathered = gathers.Any(g => Math.Abs((g - b.At).TotalSeconds) <= 1.5);
+                foreach (var (id, n, unknown) in b.Net())
+                {
+                    if (items.Get(id) == null || (!unknown && n <= 0)) continue;
+                    int k = counted.FindIndex(c => !taken.Contains(counted.IndexOf(c)) && c.Ev.ItemId == id && (c.Ev.Time - b.At).TotalSeconds is >= -0.01 and <= 8);
+                    if (k >= 0) taken.Add(k);
+                    reported.Add(new Reported(b.At, id, gathered, k >= 0 ? Math.Max(0, (counted[k].CountedAt - b.At).TotalSeconds) : null));
+                }
+            }
+            return new SessionReplayResult(reported, counted);
+        }
+        finally { PacketClock.Fixed = null; }
+    }
+
     internal static List<GatherResult> ReplayGathers(string pcapng, int serverPort)
     {
         var got = new List<GatherResult>();
