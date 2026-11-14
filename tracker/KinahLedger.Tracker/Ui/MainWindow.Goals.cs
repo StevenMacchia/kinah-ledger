@@ -626,7 +626,9 @@ public partial class MainWindow
     {
         // Quest (2026-11-07): Next up sits after the bag and before Just dropped; its rows at rest and the rest behind the chevron count alike
         int at = LeftCol.Children.IndexOf(GoalsCard);
-        bool placed = at > 0 && LeftCol.Children.IndexOf(SummaryCard) == at - 1 && LeftCol.Children.IndexOf(FeedCard) == at + 1;
+        // the Inventory card (0.10.81, Ui/MainWindow.Inventory.cs) may sit between the bag and Next up
+        int bagAt = LeftCol.Children.IndexOf(SummaryCard);
+        bool placed = at > 0 && (bagAt == at - 1 || (bagAt == at - 2 && LeftCol.Children[at - 1] == InvCard)) && LeftCol.Children.IndexOf(FeedCard) == at + 1;
         var slots = GoalsHost.Children.OfType<FrameworkElement>().ToList();
         var note = string.Concat(GoalsNote.Inlines.OfType<Run>().Select(r => r.Text));
         bool card = GoalsCard.Visibility == Visibility.Visible;
