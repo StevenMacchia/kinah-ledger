@@ -34,7 +34,7 @@ public partial class MainWindow
     /// <summary>The page's ⋯ menu: Share the last run, every run on its line, Save as CSV, Clear.</summary>
     List<MenuEntry> EventsMoreEntries()
     {
-        var list = new List<MenuEntry>();
+        var list = new List<MenuEntry>();   // the timers have their own page since the redesign (Ui/MainWindow.TimersPage.cs)
         if (EventsShareBtn.IsEnabled) list.Add(new MenuEntry("Share the last run", () => ToggleShare("Events"), "A picture of the last run, to paste in Discord or anywhere. Nothing is uploaded."));
         list.Add(new MenuEntry(_runListShown ? "Hide every run" : "Show every run", () => { _runListShown = !_runListShown; _drawnSig.Remove("runs"); ShowInstances(); }, "Each run on its line with what it gave, in a box under the place's. A click on a run opens it in the place's box."));
         list.Add(new MenuEntry(SaveRunsText + "…", () => SaveRunsCsv(_shownRuns), "The runs shown, one line each, for a spreadsheet. A dialog asks where; nothing is uploaded."));

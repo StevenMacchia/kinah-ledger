@@ -43,16 +43,42 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public long Packets => Interlocked.Read(ref _packets);
     /// <summary>Messages and bundles the decoder read, its resyncs and its currency messages, for the log.</summary>
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) DecoderStats => _decoder?.Stats ?? default;
+    /// <summary>
+    /// World boss timers from the game's world map (the decoder's version 5, Session/BossTimers.cs): filled while the map is
+    /// open, saved, counted down in between. Read from any thread.
+    /// </summary>
+    public BossTimers Bosses { get; } = new(BossTimers.DefaultPath);
+    /// <summary>
+    /// Timed event timers (the decoder's version 6, Session/EventTimers.cs): the game's clock for the schedule's countdowns,
+    /// and the event the player is in, from the event's own server. Read from any thread.
+    /// </summary>
+    public EventTimers Timers { get; } = new();
     /// <summary>Where the decoder comes from: the release build's native one; a test hands in its own.</summary>
     public static Func<IGameDecoder?> Decoders { get; set; } = NativeDecoder.TryOpen;
 
     IGameDecoder? _decoder;
+    /// <summary>The character's whole inventory from the game's messages (Packets/BagBook.cs): unknown until a connection's snapshot.</summary>
+    public BagBook Bag { get; } = new();
+    /// <summary>True while the reader gets the inventory from the game (a decoder of interface version 8).</summary>
+    public bool ReadsBag => On && (_testBag || _decoder?.ReadsBag == true);
+    bool _testBag;
+    /// <summary>For packet-test: inventory records as the decoder would report them.</summary>
+    internal void BagForTest(params BagRecord[] rs) { _testBag = true; foreach (var r in rs) TakeBag(r); }
+
+    void TakeBag(BagRecord r)
+    {
+        Bag.Take(r);
+        if (r.Kind == BagRecord.End) Log($"{Local(r.At)}  the inventory: {r.Count:N0} stacks, from the game's message");
+    }
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
     readonly ConcurrentQueue<FightEvent> _fights = new();
     readonly ConcurrentQueue<BossEvent> _bosses = new();
     const int MaxBosses = 20_000;   // a tracker that never drains them doesn't grow without end
+    readonly ConcurrentQueue<AreaEvent> _areas = new();
     readonly ConcurrentQueue<object> _uncovered = new();
+    readonly ConcurrentQueue<GatherResult> _gathers = new();
+    readonly ConcurrentQueue<object> _uncoveredGathers = new();
     TcpStream _down = new();
     TcpTable.Link? _link;
     IPacketSource? _source;
@@ -84,6 +110,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// <summary>A change the decoder found: kept for the agreement check, queued for counting, logged.</summary>
     void Take(CurrencyChange c)
     {
+        Bag.Take(c);
         lock (_gate)
         {
             if (c.First) _baseAt[c.What] = c.At;
@@ -91,6 +118,20 @@ public sealed class PacketReader : IDisposable, IBossFeed
         }
         _changes.Enqueue(c); Arrived();
         Log($"{Local(c.At)}  {Name(c.What)} {(c.First ? "now" : Signed(c.Delta))} · {c.Amount:N0}");
+    }
+
+    /// <summary>A field boss from the world map's list: into the timers, and a line in packets.log when its state or spawn changed.</summary>
+    void TakeBoss(BossSighting b)
+    {
+        if (!Bosses.Take(b)) return;
+        string name = b.Name.Length > 0 ? b.Name : "a boss not named yet";
+        string what = b.State switch
+        {
+            BossSighting.Kind.Alive => "up" + (b.Time is { } t1 ? $" since {Local(t1 + (b.ServerNow is { } s1 ? b.At - s1 : TimeSpan.Zero))}" : ""),
+            BossSighting.Kind.Dead => b.Time is { } t2 && b.ServerNow is { } s2 ? $"spawns in {BossTimers.Countdown(t2 - s2)}" : "waiting",
+            _ => "no timer",
+        };
+        Log($"{Local(b.At)}  world boss: {name}{(b.Place.Length > 0 ? $" ({b.Place})" : "")} {what}");
     }
 
     /// <summary>The next change for the tracker to count (TrackerSession.DrainPackets), null when there is none.</summary>
@@ -107,11 +148,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
         catch (OperationCanceledException) { return false; }
     }
     /// <summary>True when changes or updates wait to be drained.</summary>
-    public bool Pending => !_changes.IsEmpty || !_items.IsEmpty || !_fights.IsEmpty;
+    public bool Pending => !_changes.IsEmpty || !_items.IsEmpty || !_fights.IsEmpty || !_areas.IsEmpty || !_gathers.IsEmpty;
 
     /// <summary>Item changes the decoder found, cut into the game's updates: kept for the agreement check, queued, logged.</summary>
     void TakeItems(IReadOnlyList<ItemChange> rows)
     {
+        foreach (var r in rows) Bag.Take(r);
         foreach (var b in ItemBatch.Cut(rows))
         {
             lock (_gate) foreach (var r in b.Rows) _itemSeen.Add((r.ItemId, r.Delta, r.First, r.At));
@@ -165,12 +207,106 @@ public sealed class PacketReader : IDisposable, IBossFeed
             : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));
     }
 
+    /// <summary>
+    /// A timed event's part from its server, or a sample of the game's clock: into the timers; a part is queued for the
+    /// session (an event run starts and ends from it, InstanceLog.GameSaid) and logged.
+    /// </summary>
+    void TakeArea(AreaEvent a)
+    {
+        Timers.Take(a);
+        if (a.What == AreaEvent.Kind.Clock) return;
+        _areas.Enqueue(a); Arrived();
+        if (_areas.Count > 256) _areas.TryDequeue(out _);
+        string name = a.Label.Length > 0 ? a.Label : $"an event the tracker doesn't know yet ({a.Code})";
+        string what = a.What switch
+        {
+            AreaEvent.Kind.Phase => (a.Phase == AreaEvent.Stage.Preparing ? "getting ready" : a.Phase == AreaEvent.Stage.Over ? "over" : "under way")
+                + (a.PhaseStart is { } ps && a.ServerNow is { } sv ? $" since {Local(ps + (a.At - sv))}" : ""),
+            AreaEvent.Kind.Over => "over",
+            _ => a.ServerMoved ? "left (the game moved to another server)" : "left",
+        };
+        Log($"{Local(a.At)}  event: {name} {what}");
+    }
+
+    /// <summary>The next part of a timed event for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public AreaEvent? NextArea() => _areas.TryDequeue(out var a) ? a : null;
+    internal void AreaForTest(AreaEvent a) => TakeArea(a);
+
     /// <summary>The next fight event for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
     /// <summary>True while the reader gets the player's kills and deaths from the game (a decoder of interface version 3).</summary>
     public bool ReadsFights => On && (_testFights || _decoder?.ReadsFights == true);
     bool _testFights;
     internal void FightsForTest(FightEvent f) { _testFights = true; if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0)); _fights.Enqueue(f); }
+
+    // ---- gathering (interface version 7) ----
+    // the attempts the traffic showed, the screen's attempts set aside for the agreement check, its misses, and why it stopped
+    readonly List<DateTime> _gatherSeen = new();
+    readonly HashSet<DateTime> _gatherTaken = new();
+    readonly List<(DateTime At, bool Ok, object? Tag)> _screenGathers = new();
+    readonly List<DateTime> _gatherMisses = new();
+    string? _gathersBroken;
+    bool _testGathers;
+
+    /// <summary>A gathering attempt of the player's: kept for the agreement check, queued for counting, logged.</summary>
+    void TakeGather(GatherResult g)
+    {
+        lock (_gate) { _gatherSeen.Add(g.At); }
+        _gathers.Enqueue(g); Arrived();
+        if (_gathers.Count > 4096) _gathers.TryDequeue(out _);
+        string how = g.Outcome switch { GatherEnd.Upgrade => "the upgrade roll won", GatherEnd.Failed => "failed", _ => "worked" };
+        Log($"{Local(g.At)}  gathered: {how}, {ItemName(g.ItemId)}{(g.Outcome == GatherEnd.Failed ? "" : $" x{g.Count}")}{(g.Attempt > 0 ? $" (try {g.Attempt} on this node)" : "")}");
+    }
+    /// <summary>For packet-test: gathering attempts as the decoder would report them.</summary>
+    internal void GathersForTest(params GatherResult[] gs) { _testGathers = true; _packetAt = DateTime.UtcNow; foreach (var g in gs) TakeGather(g); }
+    internal void AgreeGathersForTest(DateTime now) { lock (_gate) AgreeGathers(now); }
+
+    /// <summary>The next gathering attempt for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public GatherResult? NextGather() => _gathers.TryDequeue(out var g) ? g : null;
+    /// <summary>True while the reader gets the player's gathering from the game (a decoder of interface version 7).</summary>
+    public bool ReadsGathers => On && (_testGathers || _decoder?.ReadsGathers == true);
+    /// <summary>Whether the packets count gathering attempts at <paramref name="at"/>: reading them on a live connection since a while before, and not stopped.</summary>
+    public bool CountingGathers(DateTime at)
+    {
+        if (!ReadsGathers || (DateTime.UtcNow - _packetAt).TotalSeconds > 15) return false;
+        lock (_gate) return _gathersBroken == null && at > (_testGathers ? DateTime.MinValue : _readingSince).AddSeconds(4);
+    }
+    /// <summary>Why the packets stopped counting gathering, or null while they count.</summary>
+    public string? GathersBroken { get { lock (_gate) return _gathersBroken; } }
+    /// <summary>A gathering attempt the screen read (a bar race, a result whose race went unseen, a failure line) while the packets count them, for the agreement check. Tag: the attempt, handed back by <see cref="NextUncoveredGather"/> when the traffic didn't show it.</summary>
+    public void ScreenSawGather(DateTime at, bool ok, object? tag) { lock (_gate) _screenGathers.Add((at, ok, tag)); }
+    /// <summary>A screen attempt the agreement check found the traffic didn't show: the screen's to count after all.</summary>
+    public object? NextUncoveredGather() => _uncoveredGathers.TryDequeue(out var o) ? o : null;
+    /// <summary>For packet-test: what the agreement check decided for each screen attempt it judged ("covered", "not shown").</summary>
+    public List<string> GatherVerdicts { get; } = new();
+
+    /// <summary>
+    /// The agreement check for gathering (under _gate): a screen attempt 15 s old or more is covered by an attempt of the
+    /// traffic's from 10 s before it to 3 s after (the bar's race lands a moment after the game's result, a failure line up to
+    /// 2 s, a result read late is dated by the result), each covering one; nothing there is a miss, and the screen's attempt
+    /// counts after all. Three misses in five minutes and gathering goes back to the screen.
+    /// </summary>
+    void AgreeGathers(DateTime now)
+    {
+        foreach (var s in _screenGathers.Where(s => (now - s.At).TotalSeconds >= 15).ToList())
+        {
+            _screenGathers.Remove(s);
+            var own = _gatherSeen.Where(g => (s.At - g).TotalSeconds is >= -3 and <= 10 && !_gatherTaken.Contains(g)).OrderBy(g => Math.Abs((s.At - g).TotalSeconds)).ToList();
+            if (own.Count > 0) { _gatherTaken.Add(own[0]); GatherVerdicts.Add("covered"); continue; }
+            GatherVerdicts.Add("not shown");
+            if (s.Tag != null) _uncoveredGathers.Enqueue(s.Tag);
+            _gatherMisses.Add(now); _gatherMisses.RemoveAll(m => (now - m).TotalMinutes > 5);
+            Log($"{Local(now)}  the screen read a gathering attempt ({(s.Ok ? "worked" : "failed")}) at {Local(s.At)} that the game's messages didn't show: counted from the screen");
+            if (_gatherMisses.Count >= 3 && _gathersBroken == null)
+            {
+                _gathersBroken = "the screen read three gathering attempts in five minutes that the game's messages didn't show";
+                Log($"{Local(now)}  gathering: {_gathersBroken}; the screen counts it again");
+                CrashLog.Note($"packets: {_gathersBroken}; the screen counts it again");
+            }
+        }
+        _gatherSeen.RemoveAll(g => (now - g).TotalMinutes > 2);
+        _gatherTaken.RemoveWhere(g => (now - g).TotalMinutes > 2);
+    }
 
     /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
@@ -247,8 +383,33 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// <summary>Every few seconds from the game watcher: follows the game's server connection, checks agreement, writes the minute's line.</summary>
     public void Tick(IReadOnlyCollection<uint> gamePids, SessionEngine? chat)
     {
-        try { TickCore(gamePids); Agree(); Minute(); }
+        _pids = gamePids;
+        try { lock (_tickGate) TickCore(gamePids); Agree(); Minute(); }
         catch (Exception ex) { CrashLog.Write("packet reading", ex); State = "Off: " + ex.Message; StopCapture(); }
+        _watch ??= new Timer(_ => Watch(), null, WatchMs, WatchMs);
+    }
+
+    // the game sends the whole inventory a second or two after it connects to a server (18:49:42.4 for a connection opened
+    // at 18:49:40.8 on 2026-11-13), and the watcher's tick comes every 5 s: so a quarter-second look at the game's
+    // connections between ticks, which starts reading a new one at once
+    const int WatchMs = 250;
+    Timer? _watch;
+    IReadOnlyCollection<uint>? _pids;
+    readonly object _tickGate = new();
+    void Watch()
+    {
+        if (!Enabled || _pids is not { Count: > 0 } pids || _testOn) return;
+        try
+        {
+            if (!Monitor.TryEnter(_tickGate)) return;
+            try
+            {
+                var game = TcpTable.GameServer(TcpTable.Of(pids));
+                if (game != null && game != _link) TickCore(pids);
+            }
+            finally { Monitor.Exit(_tickGate); }
+        }
+        catch (Exception ex) { CrashLog.Write("packet reading (the quick look)", ex); }
     }
 
     void TickCore(IReadOnlyCollection<uint> gamePids)
@@ -258,7 +419,14 @@ public sealed class PacketReader : IDisposable, IBossFeed
         var game = TcpTable.GameServer(TcpTable.Of(gamePids));
         if (game == null) { StopCapture(); State = "Waiting for the game to connect to its server"; return; }
         // another server (an event, the Abyss, a relog): a new stream; the amounts carry on across it
-        if (_link != null && game != _link) { Log($"{Local(DateTime.UtcNow)}  the game moved to {game.Remote}:{game.RemotePort}"); StopCapture(); }
+        if (_link != null && game != _link)
+        {
+            var now = DateTime.UtcNow;
+            Log($"{Local(now)}  the game moved to {game.Remote}:{game.RemotePort}");
+            StopCapture();
+            // off the event's server without its "closed": the event is left all the same
+            if (Timers.Current(now) is { LeftAt: null } live) TakeArea(new AreaEvent(now, null, AreaEvent.Kind.Closed, live.Stage, null, live.Family, live.Name, "", 0, ServerMoved: true));
+        }
         if (!On && (DateTime.UtcNow - _failedAt).TotalSeconds >= 60) StartCapture(game);
     }
 
@@ -281,6 +449,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
         var dec = _decoder;
         dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
         if (dec.ReadsBosses) TakeBoss(new FeedGap(DateTime.UtcNow));   // a new connection: the Parser's pull, if any, doesn't continue
+        Bag.Unknown();
         var rows = new List<ItemChange>();
         _down = new TcpStream
         {
@@ -288,10 +457,14 @@ public sealed class PacketReader : IDisposable, IBossFeed
             {
                 _dataAt = at;
                 dec.Feed(d, at);
+                while (dec.NextBag() is { } bg) TakeBag(bg);
                 while (dec.Next() is { } ch) Take(ch);
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
+                while (dec.NextBoss() is { } boss) TakeBoss(boss);
+                while (dec.NextAreaEvent() is { } area) TakeArea(area);
+                while (dec.NextGather() is { } gr) TakeGather(gr);
                 while (dec.NextFight() is { } f)
                 {
                     // Rank Points are a currency too (0.10.76): counted, checked against the chat and logged like Abyss Points
@@ -310,7 +483,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
         _stop = false;
         _thread = new Thread(Run) { IsBackground = true, Name = "packet reading", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
-        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")}{(dec.ReadsFights ? ", your kills and deaths" : "")} from the game's server {game.Remote}:{game.RemotePort}";
+        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")}{(dec.ReadsFights ? ", your kills and deaths" : "")}{(dec.ReadsGathers ? ", your gathering" : "")}{(dec.ReadsBag ? ", your inventory" : "")} from the game's server {game.Remote}:{game.RemotePort}";
         Log($"{Local(DateTime.UtcNow)}  reading {game.Remote}:{game.RemotePort} → {game.Local}:{game.LocalPort} with {Kind}");
     }
 
@@ -371,6 +544,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
             }
             _seen.RemoveAll(p => (now - p.At).TotalMinutes > 2);
             AgreeItems(now);
+            AgreeGathers(now);
             _itemSeen.RemoveAll(p => (now - p.At).TotalMinutes > 2);
             _risesTaken.RemoveWhere(r => (now - r.At).TotalMinutes > 2);
         }
@@ -481,6 +655,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
             }).Where(s => s.Length > 0).ToList();
             var rises = _itemSeen.Where(p => p.At >= from && !p.First && p.Delta > 0).ToList();
             if (rises.Count > 0) parts.Add($"items +{rises.Sum(p => p.Delta):N0} in {rises.Count} rises");
+            int gathers = _gatherSeen.Count(g => g >= from);
+            if (gathers > 0) parts.Add($"{gathers} gathering attempt{(gathers == 1 ? "" : "s")}");
         }
         if (!On && parts.Count == 0) return;
         Log($"{Local(now)}  minute: {(parts.Count == 0 ? "nothing picked up" : string.Join("; ", parts))} · {Packets:N0} packets, {DecoderStats.Messages:N0} messages, {_down.Gaps} gaps, {DecoderStats.Resyncs} resyncs");
@@ -512,5 +688,5 @@ public sealed class PacketReader : IDisposable, IBossFeed
     internal static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
     static string Signed(long v) => v >= 0 ? $"+{v:N0}" : $"−{-v:N0}";
 
-    public void Dispose() { StopCapture(); _decoder?.Dispose(); _decoder = null; }
+    public void Dispose() { _watch?.Dispose(); _watch = null; StopCapture(); _decoder?.Dispose(); _decoder = null; Bosses.Save(); }
 }

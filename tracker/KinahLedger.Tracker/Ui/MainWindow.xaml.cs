@@ -121,6 +121,8 @@ public partial class MainWindow : Window
         // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before; a render or
         // a self-test starts from the defaults, as with ui.json, so the player's look (hud.json) never changes what it draws
         _hudPrefs = watch ? HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0) : HudPrefs.Defaults();
+        RegisterKinahOverlay();   // the header's Overlays group: Kinah first, then Timers (Ui/MainWindow.Overlays.cs)
+        InitTimers(watch);   // the timers overlay and its chime (Ui/MainWindow.Timers.cs); the Timers page is Ui/MainWindow.TimersPage.cs
         // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
         // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
         // never for a build run from its folder (the self-tests, dotnet run), which Windows must not start
@@ -146,7 +148,8 @@ public partial class MainWindow : Window
         StartBtn.Click += async (_, _) => await Toggle(fromWindow: true);
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
-        SiteBtn.Click += (_, _) => Open(SiteUrl);
+        SiteLink.Click += (_, _) => Open(SiteUrl);
+        OverlaysBtn.Click += (_, _) => OpenOverlaysMenu();
         CharChip.Click += (_, _) => ShowCharacterMenu();   // the character chip and the server line open the switcher (Ui/MainWindow.Characters.cs)
         ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();
         FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
@@ -175,7 +178,6 @@ public partial class MainWindow : Window
         InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
         InitQuests(watch);   // the completed quests and the points, from quests.json (Ui/MainWindow.Quests.cs)
         InitQuestUpload();   // the completed quests ride the upload batch (Ui/MainWindow.QuestsPage.cs)
-        QuestsTab.Visibility = _prefs.Quests ? Visibility.Visible : Visibility.Collapsed;
         InitParser(watch);   // the Parser page, its overlay and its shortcut (Ui/MainWindow.Parser.cs)
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
@@ -198,7 +200,8 @@ public partial class MainWindow : Window
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
         EventsTab.Click += (_, _) => ShowPart("Events");
-        QuestsTab.Click += (_, _) => ShowPart("Quests");
+        TimersTab.Click += (_, _) => ShowPart("Timers");
+        Loaded += (_, _) => StartTimersTick();
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
@@ -809,8 +812,15 @@ public partial class MainWindow : Window
     /// <param name="Gross">What the priced tradeable items sell for before the Market's fee and tax.</param>
     sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0, int Unsure = 0, int DropsUnsure = 0);
 
-    /// <summary>A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its items are worth.</summary>
-    sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value);
+    /// <summary>
+    /// A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its
+    /// items are worth; from the game's messages also the nodes they were on and the upgrade rolls won (0 when the screen
+    /// counted), the worth an hour, and a line per kind of node.
+    /// </summary>
+    sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value, int Nodes = 0, int Upgrades = 0, double ValuePerHour = 0, List<NodeKindLine>? Kinds = null);
+
+    /// <summary>One kind of node under a skill (an Orichalcum Ore node): its attempts, the nodes, upgrades won, fails and the attempts an hour.</summary>
+    sealed record NodeKindLine(string Node, int Attempts, int Nodes, int Upgrades, int Failed, double PerHour);
 
     /// <summary>A crafting material (the item list's "Craft Resource" or "Crafting Material"): listed under its own sub-line in the drops.</summary>
     static bool IsMaterial(string category) => category.Contains("Craft", StringComparison.OrdinalIgnoreCase) || category.Contains("Material", StringComparison.OrdinalIgnoreCase);
@@ -907,6 +917,7 @@ public partial class MainWindow : Window
             petRows.Add(new DropRow(name, n.ToString("N0"), "", Whole(n / hours), Initial: InitialOf(name), Sub: "Soul Crystal"));
         var gathered = new List<DropRow>(); var skills = new List<SkillBox>();
         var stats = e.SkillSnapshot();
+        var nodeStats = e.NodeSnapshot();
         foreach (var skill in GatherSkills.Order)
         {
             if (!bySkill.TryGetValue(skill, out var items) && !stats.ContainsKey(skill)) continue;
@@ -915,7 +926,10 @@ public partial class MainWindow : Window
             // the skill, its attempts and the hour's pace; failed and plentiful gathers on hover
             // the skill gets its own box (attempts, failed, plentiful, the pace); its items list under Gathered with the rest
             // the skill's worth after the Market's cut, like the rows under it
-            skills.Add(new SkillBox(GatherSkills.Label(skill), st.Nodes, st.Failed, ok > 0 ? st.Plentiful : 0, st.Nodes / hours, (items ?? new()).Sum(x => keptN.GetValueOrDefault(x.name))));
+            long skillValue = (items ?? new()).Sum(x => keptN.GetValueOrDefault(x.name));
+            var kinds = nodeStats.Where(kv => kv.Value.Family == skill && kv.Value.Attempts > 0).OrderByDescending(kv => kv.Value.Attempts)
+                .Select(kv => new NodeKindLine(kv.Key, kv.Value.Attempts, kv.Value.Visits, kv.Value.Upgrades, kv.Value.Failed, kv.Value.Attempts / hours)).ToList();
+            skills.Add(new SkillBox(GatherSkills.Label(skill), st.Nodes, st.Failed, ok > 0 ? st.Plentiful : 0, st.Nodes / hours, skillValue, st.Visits, st.Upgrades, skillValue / hours, kinds));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
             {
                 bool rep = ReportedDrops.Has(name);
@@ -1212,7 +1226,7 @@ public partial class MainWindow : Window
     const double QuestsScrollFallback = 720;
 
     /// <summary>The window's height cap: the screen, or on the Quests page the Farming page's height, so that page scrolls instead of growing the window.</summary>
-    void ApplyMaxHeight() => MaxHeight = _part is "Quests" or "Parser" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
+    void ApplyMaxHeight() => MaxHeight = _part is "Quests" or "Timers" or "Parser" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
 
     void ShowPart(string part, bool byHand = true)
     {
@@ -1220,7 +1234,7 @@ public partial class MainWindow : Window
         if (byHand) Motion.PickedByHand();   // the tab's light slides to a page the player picked, not to one the page follow picked
         // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
         if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
-        _part = part is "Crafting" or "Events" or "Parser" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
+        _part = part is "Crafting" or "Events" or "Timers" or "Parser" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         // the page being left, as a picture for the cross-fade, before the new page's parts show (Ui/MainWindow.PageTurn.cs)
         var leaving = byHand && was != _part ? LeavingPage() : null;
@@ -1228,10 +1242,11 @@ public partial class MainWindow : Window
         FarmTab.Style = (Style)FindResource(_part == "Farming" ? "NavOn" : "SegOff");
         CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "NavOn" : "SegOff");
-        QuestsTab.Style = (Style)FindResource(_part == "Quests" ? "NavOn" : "SegOff");
+        TimersTab.Style = (Style)FindResource(_part == "Timers" ? "NavOn" : "SegOff");
         ParserTab.Style = (Style)FindResource(_part == "Parser" ? "NavOn" : "SegOff");
         if (_part == "Parser") RedrawParserPage();
         if (_part == "Events") ShowInstances();
+        FillTimersPage();
         if (_part == "Quests") RedrawQuestsPage();
         if (byHand) _follow.Picked();
         if (craft && !_demo) FillCraft(CraftShown);
@@ -1271,13 +1286,14 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, parser = _part == "Parser" && !_welcome, farm = !craft && !events && !quests && !parser && !_welcome;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, timers = _part == "Timers" && !_welcome, parser = _part == "Parser" && !_welcome, farm = !craft && !events && !quests && !timers && !parser && !_welcome;
         // Full view scaled to the screen it is on, or Compact when even scaled it can't fit (Ui/MainWindow.Fit.cs)
         FitFull(farm && _prefs.FullView, _fullAsked);
         bool full = farm && FullShown;
-        LeftCol.Visibility = craft || events || quests || parser ? Visibility.Collapsed : Visibility.Visible;
-        QuestsPage.Visibility = quests ? Visibility.Visible : Visibility.Collapsed;
-        ParserPage.Visibility = parser ? Visibility.Visible : Visibility.Collapsed;   // Ui/MainWindow.Parser.cs   // in the ledger column, as the Crafting and Events pages are
+        LeftCol.Visibility = craft || events || quests || timers || parser ? Visibility.Collapsed : Visibility.Visible;
+        ParserPage.Visibility = parser ? Visibility.Visible : Visibility.Collapsed;   // Ui/MainWindow.Parser.cs
+        TimersPage.Visibility = timers ? Visibility.Visible : Visibility.Collapsed;
+        QuestsPage.Visibility = quests ? Visibility.Visible : Visibility.Collapsed;   // in the ledger column, as the Crafting and Events pages are
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
         if (!farm) GoalsCard.Visibility = Visibility.Collapsed;     // GOALS too (FillGoals)
@@ -1288,12 +1304,12 @@ public partial class MainWindow : Window
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
 
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
-        LowerScroll.Visibility = full || craft || events || quests || parser ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = full || craft || events || quests || timers || parser ? Visibility.Visible : Visibility.Collapsed;
         // the Quests page never grows the window (Steven, 2026-11-08: "it shouldn't expand the thing to the size of my screen"):
         // the window keeps the Farming page's height and the page scrolls inside it; before Farming has been measured (a demo
         // render), the scroll area is capped instead
         ApplyMaxHeight();
-        LowerScroll.MaxHeight = (quests || parser) && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
+        LowerScroll.MaxHeight = (quests || timers || parser) && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
@@ -2086,6 +2102,23 @@ public partial class MainWindow : Window
                 Drop("Orichalcum Ore", 38); Drop("Sapphire Gemstone", 4); Drop("Odyle", 12);
                 for (int i = 0; i < 5; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
                 break;
+            case Mode.Gather when Environment.GetEnvironmentVariable("KL_DEMO_GATHER") == "packets":
+            {
+                // a layout render of gathering counted from the game's messages (0.10.80): every attempt with its node, upgrade
+                // rolls and fails, the items as the inventory said them
+                e.CreditZone("Ellun River Midstream", 42 * 60 + 17);
+                e.AttemptsFromTally = true;
+                Drop("Orichalcum Ore", 61); Drop("Fine Orichalcum Ore", 9); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 5);
+                Drop("Odyle", 33); Drop("Fine Odyle", 3); Drop("Kukuru", 8);
+                void Node(GatherFamily f, string node, int tries, int up, int fail)
+                {
+                    for (int i = 0; i < tries; i++) e.GatherAttempt(t, f, node, i >= tries - fail, up > 0 && i < up, i % 3 == 0);
+                }
+                Node(GatherFamily.Ore, "Orichalcum Ore", 75, 11, 3);
+                Node(GatherFamily.Odyle, "Odyle", 36, 3, 0);
+                Node(GatherFamily.Food, "Kukuru", 9, 0, 1);
+                break;
+            }
             case Mode.Gather:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
                 Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
@@ -2128,6 +2161,8 @@ public partial class MainWindow : Window
                 e.Apply(new MarketSold(t, "Spiritstone", 10, 75_200));
                 break;
         }
+        // KL_DEMO_BAG=known|unknown: a sample inventory for the character card's gear (Ui/MainWindow.Inventory.cs, CharacterGear)
+        if (Environment.GetEnvironmentVariable("KL_DEMO_BAG") is { Length: > 0 } demoBag) DemoInventory(demoBag);
         // KL_DEMO_DROP=Radiant Orichalcum Ore:3 (0.10.30): drops added to the sample, to render a rarer grade's quest row
         if (Environment.GetEnvironmentVariable("KL_DEMO_DROP") is { Length: > 0 } dd)
             foreach (var kv in dd.Split(',').Select(p => p.Split(':')).Where(kv => kv.Length == 2)) if (int.TryParse(kv[1], out var c)) Drop(kv[0].Trim(), c);

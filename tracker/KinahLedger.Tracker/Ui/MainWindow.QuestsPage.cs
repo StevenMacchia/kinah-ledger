@@ -29,7 +29,6 @@ public partial class MainWindow
     void ApplyQuestsSwitch(bool on)
     {
         _prefs.Quests = on;
-        QuestsTab.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (!on && _part == "Quests") ShowPart("Farming");
         _questIn = null; _questsNow = new(); _qTree = null;
         _drawnSig.Remove("goals"); _drawnSig.Remove("questspage");
@@ -152,7 +151,7 @@ public partial class MainWindow
         // All time: the long chains from this PC's tally, the nearest to done first; two at rest, the rest behind "N more"
         // (2026-11-08 review: seven "1,000 X · 5 pts" rows read as one)
         QuestsAllTimeHost.Children.Clear();
-        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "this PC's tally since quests began", quiet: true));
+        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "tally since quests began", quiet: true));
         var atRows = allTime.Where(q => !Repeats(q)).OrderByDescending(q => q.Share).ToList();
         bool atOpen = QOpen("quests-alltime");
         int atShow = atOpen || atRows.Count <= AllTimeAtRest + 1 ? atRows.Count : AllTimeAtRest;

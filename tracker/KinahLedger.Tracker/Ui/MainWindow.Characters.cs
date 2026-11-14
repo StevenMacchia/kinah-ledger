@@ -272,6 +272,9 @@ public partial class MainWindow
         var where = CkText(Server is { } sv ? $"{sv.Label} · {sv.Region.Name}" : _prefs.Server ?? "", CkFaint, 12);
         where.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(where, 1); head.Children.Add(where);
         body.Children.Add(head);
+        // the gear the character wears, with its +levels (Steven, 2026-11-14: "if you click on your name in the menu it can show
+        // it"), from the game's own messages; nothing when they haven't sent it (Ui/MainWindow.Inventory.cs, CharacterGear)
+        if (CharacterGear(rows.FirstOrDefault(r => r.Counting)?.Name ?? "") is { } gear) { body.Children.Add(gear); body.Children.Add(MenuRow(MenuEntry.Line)); }
         if (rows.Count == 0)
         {
             var none = CkText("Your character shows here once you're in the world: the tracker reads the class icon between the health and mana bars. Each character you play keeps its own days, runs, goals and bests.", CkMuted, 12);

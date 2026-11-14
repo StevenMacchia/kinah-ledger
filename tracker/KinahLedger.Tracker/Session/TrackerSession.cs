@@ -5384,6 +5384,12 @@ public sealed class UserPrefs
     /// </summary>
     public bool ExplainCounts { get; set; }
     /// <summary>
+    /// Options › Game reading › Inventory details (2026-11-14, Steven: minimal by default): the Inventory window also says what is
+    /// bound, what has no price and the change since the start, and the items' prices on hover. Off by default: the window
+    /// shows the worth and the items.
+    /// </summary>
+    public bool InventoryDetails { get; set; }
+    /// <summary>
     /// Options › Game reading › Read the game's network traffic (2026-11-13, Packets/PacketReader.cs): the Kinah balance from
     /// the game server's own messages, beside the screen, logged against the chat's count. On by default; it changes no
     /// count yet, and with neither Npcap nor administrator it is simply off.

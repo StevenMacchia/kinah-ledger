@@ -339,6 +339,7 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.Reading);
         Check(o.PageReading.Visibility == Visibility.Visible && o.ExplainChk.IsChecked == false && !p.ExplainCounts, "Explain each count: on Game reading, off by default");
+        Check(o.InvDetailsChk.IsChecked == false && !p.InventoryDetails, "Inventory details: off by default (the window shows the worth and the items)");
         Check(!w.SampleLineReportExplains(), "a line's card has no WHY IT WAS COUNTED with it off");
         Flip(o.ExplainChk);
         Check(o.SaveBtn.IsEnabled && !p.ExplainCounts, "the explain switch waits for Save");
@@ -430,10 +431,26 @@ public static partial class WpfApp
         Check(o.TopmostChk.IsChecked == false, "Options opens with it off again");
         Click(o.CancelBtn);
         DoEvents();
-        // the pages by key (0.10.26): Ctrl+2 Crafting, Ctrl+3 Events, Ctrl+1 Farming
+        // the pages by key (0.10.26; redesign 2026-11-14: as the pills sit, Farm, Craft, Runs, Timers)
         w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
-        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Events");
+        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Runs");
+        w.PressForTest(Key.D4, ModifierKeys.Control); Check(w.PartForTest == "Timers" && w.TimersPage.Visibility == Visibility.Visible && w.TimersPage.Children.Count > 0, "Ctrl+4 shows the Timers page, drawn");
         w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
+        // no page names where its figures come from (Steven, 2026-11-14: only Options may); every page, the timers live and empty
+        foreach (var timers in new[] { "live", "empty" })
+        {
+            w.TimersSampleForShot(timers);
+            var said = new List<string>();
+            foreach (var page in new[] { "Farming", "Events", "Crafting", "Timers", "Quests" })
+            {
+                w.ShowPartForTest(page); DoEvents();
+                said.AddRange(w.SourceWordsShown().Select(h => $"{page}: {h}"));
+            }
+            said.AddRange(w.SourceWordsShown(w.BuildBossCard(DateTime.UtcNow)).Select(h => $"timers window: {h}"));
+            Check(said.Count == 0, $"no page or hover outside Options names the reading's source (timers {timers}){(said.Count > 0 ? ": " + string.Join(" | ", said.Take(6)) : "")}");
+        }
+        w.TimersSampleForShot("off");
+        w.ShowPartForTest("Farming"); DoEvents();
 
         // Save as CSV (0.10.11): the ⋯ menu's entry, today's loot as the file holds it, and the runs the Events page shows
         Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveLootText), "the ⋯ menu has Save today's loot as CSV…");
@@ -767,20 +784,130 @@ public static partial class WpfApp
             w.SharePrefsForTest = keep;
         }
 
-        // the header (UX pass 2026-11-13): the same two round buttons on every page, each with a tooltip in words; the character
+        // the header (UX pass 2026-11-13): the same round buttons on every page (Timers since 0.10.85), each with a tooltip in words; the character
         // chip shows the character counted for with its class icon; the switcher lists every character, the one counted for
         // first and marked, each with its icon, when it was played and its week, Rename on every row and Count for on the others
         {
             static IEnumerable<DependencyObject> Tree(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Tree));
             var seen = new List<string>();
-            foreach (var page in new[] { "Farming", "Crafting", "Events", "Quests" })
+            foreach (var page in new[] { "Farming", "Crafting", "Events", "Timers", "Quests" })
             {
                 w.ShowPartForTest(page); DoEvents();
                 var shown = w.HeadButtons.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Visibility == Visibility.Visible).ToList();
                 seen.Add(page + ": " + string.Join(", ", shown.Select(b => System.Windows.Automation.AutomationProperties.GetName(b))));
-                Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20), $"the header's round buttons on {page}: the site and Settings, each with a tooltip ({seen[^1]})");
+                Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20) && System.Windows.Automation.AutomationProperties.GetName(shown[0]) == "Overlays" && w.SiteText.IsVisible,
+                    $"the header's round buttons on {page}: Overlays and Settings, each with a tooltip; the site is a footer link ({seen[^1]})");
             }
+            // the Overlays button's menu: a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            var ovs = w.OverlaysForTest();
+            var entries = w.OverlayEntries();
+            Check(string.Join(",", ovs.Select(p => p.Name)) == "Kinah,Timers" && entries.Count == 2 && entries.All(e => e.On != null && e.Sub.Length > 0),
+                $"the header's Overlays menu: a switch each for Kinah, then Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
+            bool kinahWas = ovs[0].On;
+            entries[0].Do!(); DoEvents();
+            bool flipped = w.OverlaysForTest()[0].On != kinahWas;
+            bool dotOff = !w.OverlaysForTest().Any(o => o.On) ? !w.OverlaysDotForTest : w.OverlaysDotForTest;
+            w.OverlayEntries()[0].Do!(); DoEvents();
+            Check(flipped && dotOff && w.OverlaysForTest()[0].On == kinahWas && w.OverlaysDotForTest == w.OverlaysForTest().Any(o => o.On),
+                $"...its Kinah switch turns the panel {(kinahWas ? "off" : "on")} and back; the button's green dot shows while any overlay is on ({flipped} {dotOff})");
             Check(seen.Select(s => s[(s.IndexOf(':') + 1)..]).Distinct().Count() == 1, "...the same on every page");
+        // the timers (0.10.85, Ui/MainWindow.Timers.cs): a Timers button in the header opens the window; the overlay never
+        // takes focus, passes clicks through when asked, and Customize's switches land in the settings
+        {
+            var tw = w;
+            tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
+            tw.TimersSampleForShot("live");
+            Click(tw.TimersTab); DoEvents();
+            var btn = tw.TimersPopOutForTest;
+            bool onPage = tw.PartForTest == "Timers" && btn != null && btn.IsVisible;
+            if (btn != null) Click(btn);
+            DoEvents();
+            var open = Application.Current.Windows.OfType<BossWindow>().FirstOrDefault(x => x.IsVisible);
+            bool popOut = open != null && open.Owner == null && open.ShowInTaskbar && open.ResizeMode == ResizeMode.CanResizeWithGrip;
+            Check(onPage && open != null && popOut, $"timers: the Timers tab shows the page ({onPage}); its Pop out opens the Timers window ({open != null}), a pop-out of its own: no owner, in the taskbar, resizable ({popOut})");
+            open?.Close();
+            // the page's bells: the watched timers by default, a click on a bell watches a timer, again stops it
+            var bells = tw.TimerBellsForTest();
+            var gartua = Session.TimerBoard.BossKey("Eternal Gartua");
+            var unwatched = bells.FirstOrDefault(b => !b.On && b.Key.StartsWith("boss:")).Key;
+            bool defaults = bells.Any(b => b.Key == gartua && b.On) && bells.Any(b => b.Key == Session.TimerBoard.EventKey("Shugo Festival") && b.On);
+            bool folded = unwatched == null;   // the other bosses fold under their map's line until opened
+            Check(defaults && folded, $"...the page: Gartua and Shugo belled by default ({defaults}), the other bosses folded away ({folded}; {bells.Count} bells)");
+            tw.ClickTimerBellForTest(gartua); DoEvents();
+            bool off = !tw.TimerPrefsForTest.Watched(gartua);
+            tw.OpenTimerGroupForTest("Verteron"); DoEvents();   // unwatched, Gartua went into its map's folded list
+            tw.ClickTimerBellForTest(gartua); DoEvents();
+            Check(off && tw.TimerPrefsForTest.Watched(gartua), $"...a bell's click stops watching Gartua ({off}); it moves into Verteron's list, where its bell watches it again");
+            tw.TimersSampleForShot("off");
+            tw.ShowPartForTest("Farming"); DoEvents();
+            tw.SetTimersOverlay(true, save: false); DoEvents();
+            Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on, and the button its green dot");
+            var ov = tw.TimersOverlayForTest;
+            long ex0 = ov?.ExStyleForTest ?? 0;                 // click-through by default
+            ov?.InteractiveForTest(true); DoEvents();
+            long exCtrl = ov?.ExStyleForTest ?? 0;              // Ctrl held: it takes the mouse
+            ov?.InteractiveForTest(false);
+            tw.SetTimersClickThrough(false); DoEvents();
+            long ex1 = ov?.ExStyleForTest ?? 0;                 // click-through off
+            tw.SetTimersClickThrough(true); DoEvents();
+            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) != 0
+                && (exCtrl & Native.ExTransparent) == 0 && (exCtrl & Native.ExNoActivate) != 0 && (ex1 & Native.ExTransparent) == 0;
+            Check(ov != null && ov.Topmost && !ov.ShowActivated && ov.Owner == null && noFocus,
+                $"...the overlay: its own window (no owner), on top, never takes focus, out of Alt+Tab; click-through by default, clickable while Ctrl is held or with click-through off ({noFocus})");
+            ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
+            bool hidden = ov != null && !ov.IsVisible;
+            ov?.Show(new List<Session.TimerBoard.Item> { new("boss:Heretic Layla", "Verteron", "Heretic Layla", "Rock Tomb Hill", Session.TimerBoard.Kind.Waiting, DateTime.UtcNow.AddMinutes(3), "3m 00s", "at 07:00") }, DateTime.UtcNow);
+            bool shown = ov != null && ov.IsVisible;
+            ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
+            Check(hidden && shown && ov != null && !ov.IsVisible, $"...hidden with nothing near, shown with a timer 3 min away, hidden again ({hidden} {shown})");
+            tw.SetTimersOverlay(false, save: false); DoEvents();
+            Check(tw.TimersOverlayForTest == null && !tw.TimerPrefsForTest.OverlayOn, "...and off again");
+            // Options › Timers: the overlay's switch and each timer's picks, saved as they change
+            var to = new OptionsWindow(tw, OptionsWindow.Page.Timers) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            to.Show(); DoEvents();
+            var kairaKey = Session.TimerBoard.AbyssKey("Watcher Kaira");
+            bool listed = to.TimerBoxes.ContainsKey(kairaKey) && to.TimerBoxes.ContainsKey(Session.TimerBoard.EventKey("Shugo Festival")) && to.TimerBoxes.Count >= Session.EventTimers.Schedule.Length + Session.AbyssBosses.Schedule.Length;
+            bool byDefault = to.TimerBoxes.TryGetValue(kairaKey, out var kb) && kb.Overlay.IsChecked == true && kb.Chime.IsChecked == true
+                && to.TimerBoxes.TryGetValue(Session.TimerBoard.EventKey("Shugo Festival"), out var sb) && sb.Overlay.IsChecked == true;
+            if (kb.Chime != null) { Flip(kb.Chime); Flip(kb.Overlay); }
+            bool picked = byDefault && !tw.TimerPrefsForTest.Chimes(kairaKey) && !tw.TimerPrefsForTest.Watched(kairaKey) && kb.Chime?.IsEnabled == false;
+            if (to.TimersOverlayChk != null) Flip(to.TimersOverlayChk);
+            DoEvents();
+            bool overlayOn = tw.TimersOverlayForTest != null && tw.TimerPrefsForTest.OverlayOn;
+            if (to.TimersOverlayChk != null) Flip(to.TimersOverlayChk);
+            DoEvents();
+            Check(listed && picked && overlayOn && tw.TimersOverlayForTest == null && to.Scroller.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Auto,
+                $"Options › Timers lists the timers ({to.TimerBoxes.Count}), Watcher Kaira and Shugo watched by default; its Chime and Watch boxes change the picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
+            // placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay
+            // shows the strip now, outlined and clickable, with the next watched timers or a sample; Done keeps the spot on a
+            // screen and it hides again with nothing due; with the overlay off it closes after; Reset forgets the spot
+            {
+                var pp = Session.TimerPrefs.Defaults();
+                foreach (var i in tw.TimerItemsNow()) pp.SetWatched(i.Key, false);   // nothing watched: nothing due, so only placement shows it
+                pp.OverlayOn = false;
+                tw.TimerPrefsForTest = pp;
+                bool buttons = tw.TimersMoveForTest != null && to.TimersMoveBtn != null && to.TimersResetBtn != null;
+                tw.StartTimersPlacement(); DoEvents();
+                var po = tw.TimersOverlayForTest;
+                long ex = po?.ExStyleForTest ?? 0;
+                bool placed = po != null && po.Placing && po.IsVisible && (ex & Native.ExTransparent) == 0 && (ex & Native.ExNoActivate) != 0 && po.RowsForTest == 2;
+                if (po != null) { po.Left = SystemParameters.VirtualScreenLeft - 60000; po.Top = 300; po.FinishPlacing(); }
+                DoEvents();
+                bool kept = pp.X is double px && px >= SystemParameters.VirtualScreenLeft && px < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth && pp.Y is double;
+                bool closedAfter = tw.TimersOverlayForTest == null && !pp.OverlayOn;
+                pp.OverlayOn = true; tw.SetTimersOverlay(true, save: false); DoEvents();
+                tw.StartTimersPlacement(); DoEvents();
+                var po2 = tw.TimersOverlayForTest;
+                po2?.FinishPlacing(); DoEvents();
+                bool hiddenAfter = po2 != null && !po2.IsVisible && !po2.Placing && ((po2.ExStyleForTest & Native.ExTransparent) != 0);
+                tw.ResetTimersOverlayPosition();
+                bool reset = pp.X == null && pp.Y == null;
+                tw.SetTimersOverlay(false, save: false); DoEvents();
+                Check(buttons && placed && kept && closedAfter && hiddenAfter && reset,
+                    $"Move overlay (the Timers page and Settings): the strip shows at once, outlined and clickable, with a sample when nothing is due ({placed}); Done keeps the spot on a screen ({kept}), closes it again with the overlay off ({closedAfter}), hides it with the overlay on, clicks through again ({hiddenAfter}); Reset forgets the spot ({reset})");
+            }
+            to.Close();
+        }
             w.ShowPartForTest("Farming"); DoEvents();
             Check(w.MoreEntries().Any(e => e.Text == MainWindow.FullViewText && e.On != null), "Compact/Full is a switch in Farming's ⋯ menu");
             var whoChip = w.CharChipForTest();
@@ -898,11 +1025,11 @@ public static partial class WpfApp
             Check(so.ScoreText.Text == w.QuestScoreLine() && so.ScoreText.Text.Contains("pts"), $"Options > Sharing: Your score under the profile link card: \"{so.ScoreText.Text}\"");
             so.Close();
             Check(w.QuestCard(w.QuestsNowForTest[1]) is { } qc && qc.Child is System.Windows.Controls.StackPanel qb && qb.Children.Count >= 8, "a quest's hover card: band, bar, the horizon, Have, To go, pace, POINTS, Worth, Tier, unlocks");
-            // Options > General > Quests off: the tab and the rows go; on again brings them back
+            // Options > General > Quests off: the rows go (Quests has no tab: Next up's head opens it); on again brings them back
             var og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
-            Check(w.QuestsTab.Visibility != Visibility.Visible && w.QuestsForTest().Rows == 0, "Options > General > Quests off: no tab, no quest rows on Next up");
+            Check(w.QuestsForTest().Rows == 0, "Options > General > Quests off: no quest rows on Next up");
             og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
-            Check(w.QuestsTab.Visibility == Visibility.Visible && w.QuestsForTest().Rows > 0, "...and on again");
+            Check(w.QuestsForTest().Rows > 0, "...and on again");
             // the Crafting page's Next up carries the two materials' quests while the farming count is on
             w.ShowDemo("Crafting"); DoEvents();
             Check(w.CraftNextForTest().Split(',').Count(x => x == "quest") == 2, $"Crafting's Next up: the two materials' quest rows: {w.CraftNextForTest()}");
@@ -1228,7 +1355,7 @@ public static partial class WpfApp
         {
             var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
             static Rect Near(Rect r) => new(Math.Round(r.X, 3), Math.Round(r.Y, 3), Math.Round(r.Width, 3), Math.Round(r.Height, 3));
-            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.QuestsTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
+            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.TimersTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
             var tabRow = (System.Windows.Controls.Panel)System.Windows.Media.VisualTreeHelper.GetParent(w.FarmTab);
             // where a tab's face draws its light, as the screen has it: the tab's box in its row, inside its one-pixel edge
             Rect Face(System.Windows.Controls.Button b)

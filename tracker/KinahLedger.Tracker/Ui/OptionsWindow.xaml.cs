@@ -17,12 +17,12 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class OptionsWindow : Window
 {
-    public enum Page { General, Server, Sharing, Reading, InGame, Tips, Updates, About }
+    public enum Page { General, Server, Sharing, Reading, InGame, Timers, Tips, Updates, About }
 
     static readonly (Page Page, string Name)[] Pages =
     {
         (Page.General, "General"), (Page.Server, "Server"), (Page.Sharing, "Sharing"), (Page.Reading, "Game reading"),
-        (Page.InGame, "In game"), (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates"), (Page.About, "About"),
+        (Page.InGame, "In game"), (Page.Timers, "Timers"), (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates"), (Page.About, "About"),
     };
     static readonly string[] GameStartChoices = { "Open the window", "Stay in the tray" };
 
@@ -79,11 +79,12 @@ public partial class OptionsWindow : Window
     {
         _page = page;
         foreach (var (p, el) in new (Page, FrameworkElement)[] { (Page.General, PageGeneral), (Page.Server, PageServer), (Page.Sharing, PageSharing),
-                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Tips, PageTips), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
+                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Timers, PageTimers), (Page.Tips, PageTips), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
             el.Visibility = p == page ? Visibility.Visible : Visibility.Collapsed;
         // the style's trigger matches the text "True" (Tag holds an object, so a bool would not match it)
         for (int i = 0; i < Nav.Children.Count; i++) ((Button)Nav.Children[i]).Tag = Pages[i].Page == page ? "True" : "False";
-        if (page == Page.Tips) FillTips();   // the keys as they are now (Ui/OptionsWindow.Tips.cs)
+        if (page == Page.Tips) FillTips();
+        if (page == Page.Timers) FillTimers();   // the timers overlay, the chime and each timer's picks (Ui/OptionsWindow.Timers.cs)   // the keys as they are now (Ui/OptionsWindow.Tips.cs)
         Scroller.ScrollToTop();
         RefreshLive();
         RefreshPreview();
@@ -112,6 +113,7 @@ public partial class OptionsWindow : Window
         GrossChk.IsChecked = c.ShowGross;
         RecapChk.IsChecked = c.RunRecap;
         ExplainChk.IsChecked = c.ExplainCounts;
+        InvDetailsChk.IsChecked = c.InventoryDetails;
         PacketChk.IsChecked = c.PacketReading;
         PacketStateLbl.Text = c.PacketState.Length > 0 ? "Now: " + c.PacketState : "";
         GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
@@ -248,6 +250,7 @@ public partial class OptionsWindow : Window
         GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });
         RecapChk.Click += (_, _) => Edit(_edit with { RunRecap = RecapChk.IsChecked == true });
         ExplainChk.Click += (_, _) => Edit(_edit with { ExplainCounts = ExplainChk.IsChecked == true });
+        InvDetailsChk.Click += (_, _) => Edit(_edit with { InventoryDetails = InvDetailsChk.IsChecked == true });
         PacketChk.Click += (_, _) => Edit(_edit with { PacketReading = PacketChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {

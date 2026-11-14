@@ -348,6 +348,145 @@ public static class PacketTests
                 $"...a one-material recipe whose two tries went in one update, then another queue: Strong Leather {sl?.Ok} worked {sl?.Fail} failed, {Recipe} {fm?.Ok} worked {fm?.Fail} failed");
         }
 
+        // gathering (0.10.80): each attempt from the game's messages is an attempt of its node's skill, a node when it is the
+        // first try on it, an upgrade or a fail as the game says; the screen's races for the same attempts are set aside and
+        // covered by them; a race the traffic never showed counts from the screen; three such and the screen counts again
+        {
+            const long Ore = 610620013, Fine = 610620014, Odyle = 610610013;
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var reader = new PacketReader(); reader.ReadingForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            s.Engine.SetZone("Ellun River Midstream");
+            var t0 = DateTime.UtcNow.AddMinutes(-4);
+            GatherResult G(double at, long node, long kind, GatherEnd end, long item, int n, int attempt) => new(t0.AddSeconds(at), node, kind, end, item, n, attempt);
+            reader.GathersForTest(G(0, 33768, 4, GatherEnd.Worked, Ore, 1, 1), G(11, 33768, 4, GatherEnd.Failed, Ore, 0, 2), G(21, 33768, 4, GatherEnd.Upgrade, Fine, 1, 3),
+                G(95, 20373, 0, GatherEnd.Worked, Ore, 1, 0), G(120, 41201, 5, GatherEnd.Worked, Odyle, 1, 1));
+            s.DrainPacketsForTest();
+            // the screen's races of the same attempts, then one of its own that the traffic never showed
+            s.GatherOutcome(t0.AddSeconds(0.3), true, false); s.GatherOutcome(t0.AddSeconds(12.9), false, false);
+            s.GatherOutcome(t0.AddSeconds(21.4), true, true); s.GatherOutcome(t0.AddSeconds(95.2), true, false);
+            s.GatherOutcome(t0.AddSeconds(150), true, false);
+            reader.AgreeGathersForTest(DateTime.UtcNow); s.DrainPacketsForTest();
+            var e = s.Engine; var tot = e.Totals(); var ns = e.NodeSnapshot(); var sk = e.SkillSnapshot();
+            string Ns(string n) => ns.TryGetValue(n, out var x) ? $"{x.Ok}/{x.Failed} up {x.Upgrades} nodes {x.Visits}" : "-";
+            Check(tot.Nodes == 6 && tot.Failed == 1 && e.Upgrades == 1 && e.NodeVisits == 3 && Ns("Orichalcum Ore") == "3/1 up 1 nodes 2" && Ns("Odyle") == "2/0 up 0 nodes 1"
+                && string.Join(" ", reader.GatherVerdicts) == "covered covered covered covered not shown" && reader.GathersBroken == null,
+                $"gathering from the game's messages: {tot.Nodes} tries ({tot.Failed} failed, {e.Upgrades} upgrade), {e.NodeVisits} nodes; Orichalcum Ore {Ns("Orichalcum Ore")}, Odyle {Ns("Odyle")} (the last a race the traffic never showed, counted from the screen); the screen's races: {string.Join(" ", reader.GatherVerdicts)}");
+            // today.json keeps the new figures: a restart carries them on
+            var carry = System.Text.Json.JsonSerializer.Deserialize<SessionEngine.Carry>(System.Text.Json.JsonSerializer.Serialize(e.ToCarry("2026-11-13"), SessionEngine.CarryJson), SessionEngine.CarryJson)!;
+            var e2 = new SessionEngine(items); e2.Seed(carry);
+            var sk2 = e2.SkillSnapshot(); var ns2 = e2.NodeSnapshot();
+            Check(e2.Upgrades == 1 && e2.NodeVisits == 3 && sk2.Values.Sum(x => x.Visits) == 3 && sk2.Values.Sum(x => x.Upgrades) == 1 && ns2["Orichalcum Ore"] is { Upgrades: 1, Visits: 2 },
+                $"...and today.json carries them across a restart: {e2.Upgrades} upgrade, {e2.NodeVisits} nodes");
+            // three races in five minutes the traffic never showed: gathering goes back to the screen
+            var r2 = new PacketReader(); r2.ReadingForTest(); r2.GathersForTest();
+            var s2 = new TrackerSession(null, settings, items, "Test") { Packets = r2 };
+            s2.Engine.SetZone("Ellun River Midstream");
+            foreach (var at in new[] { 0.0, 30, 60 }) s2.GatherOutcome(t0.AddSeconds(at), true, false);
+            r2.AgreeGathersForTest(DateTime.UtcNow); s2.DrainPacketsForTest();
+            int handed = s2.Engine.Totals().Nodes;
+            s2.GatherOutcome(t0.AddSeconds(200), true, false);   // now the screen's at once
+            r2.GathersForTest(G(210, 1, 4, GatherEnd.Worked, Ore, 1, 1)); s2.DrainPacketsForTest();   // and the traffic's left out
+            Check(handed == 3 && s2.Engine.Totals().Nodes == 4 && r2.GathersBroken != null,
+                $"...three races the traffic never showed in five minutes: counted from the screen ({handed}), and gathering is the screen's again ({s2.Engine.Totals().Nodes} after one more race and one game message; \"{r2.GathersBroken}\")");
+        }
+
+        // the tracker's recordings of 2026-11-13 (kinah-bench/packets/rec-*) through this build's decoder: the 22 attempts
+        // Steven made, 18:50 to 20:03, with their exact items and counts (the screen logged 19 of them)
+        {
+            string? bench = Environment.GetEnvironmentVariable("KL_BENCH");
+            for (var d = new DirectoryInfo(AppContext.BaseDirectory); bench == null && d != null; d = d.Parent)
+                if (Directory.Exists(Path.Combine(d.FullName, "kinah-bench", "packets"))) bench = Path.Combine(d.FullName, "kinah-bench", "packets");
+            var recs = new[] { "rec-20261113-18", "rec-20261113-19", "rec-20261113-19-2", "rec-20261113-20" }.Select(r => bench == null ? "" : Path.Combine(bench, r, "capture.pcapng")).ToList();
+            if (!NativeDecoder.Available || NativeDecoder.Version < 7) Console.WriteLine("skip  gathering in the recordings: this build's decoder reads no gathering");
+            else if (recs.Any(r => !File.Exists(r))) Console.WriteLine("skip  gathering in the recordings: kinah-bench/packets/rec-20261113-* not found (KL_BENCH)");
+            else
+            {
+                var all = recs.SelectMany(r => ReplayGathers(r, 13328)).ToList();
+                const long O = 610620013, F = 610620014, P = 610620015, D = 610610013;
+                var want = new (GatherEnd E, long Item, int N)[] { (GatherEnd.Worked, O, 1), (GatherEnd.Failed, O, 0), (GatherEnd.Upgrade, F, 1), (GatherEnd.Upgrade, F, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1),
+                    (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1), (GatherEnd.Worked, D, 1),
+                    (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Upgrade, F, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1),
+                    (GatherEnd.Worked, O, 1), (GatherEnd.Worked, O, 1), (GatherEnd.Upgrade, P, 1), (GatherEnd.Worked, O, 1) };
+                bool same = all.Count == want.Length && all.Zip(want).All(x => x.First.Outcome == x.Second.E && x.First.ItemId == x.Second.Item && x.First.Count == x.Second.N);
+                Check(same && all.Select(g => g.NodeId).Distinct().Count() == 8,
+                    $"gathering in the recordings of 2026-11-13: {all.Count} attempts (expected 22) on {all.Select(g => g.NodeId).Distinct().Count()} nodes, {all.Count(g => g.Outcome == GatherEnd.Upgrade)} upgrades and {all.Count(g => g.Outcome == GatherEnd.Failed)} fail, items exact: {same}");
+            }
+        }
+
+        // the inventory (0.10.81): the game's snapshot makes it known, every change after it keeps it exact, a new connection
+        // makes it unknown again; its worth at the known prices, the sellable part after the cut, the change since the first
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            long Id(string n) => items.IdOf(n);
+            var t0 = DateTime.UtcNow.AddMinutes(-10);
+            var r = new PacketReader(); r.ReadingForTest();
+            var bag = r.Bag;
+            bool unknownFirst = bag.Totals() == null;
+            r.BagForTest(new BagRecord(t0, BagRecord.Begin, 5, 0, 0, 0, 0, 0, null),
+                new BagRecord(t0, BagRecord.Stack, 0, 1, 10, 4_727_973, 1, 0, CurrencyKind.Kinah),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Ore"), 11, 31, 1, 40, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Ore"), 12, 742, 18, 79, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Life Potion (Bound)"), 13, 364, 1, 2, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Guard"), 14, 1, BagBook.Worn, 2, null, 12),
+                new BagRecord(t0, BagRecord.End, 5, 0, 0, 0, 0, 0, null));
+            var tot = bag.Totals()!;
+            r.ItemsForTest(new ItemChange(t0.AddSeconds(30), Id("Orichalcum Ore"), ItemOp.Changed, 11, 1, 32, false, 1, 1, false),
+                new ItemChange(t0.AddSeconds(31), Id("Odyle"), ItemOp.NewStack, 15, 1, 1, false, 2, 1, false),
+                new ItemChange(t0.AddSeconds(32), Id("Life Potion (Bound)"), ItemOp.Gone, 13, -364, 0, false, 3, 1, true));
+            r.AmountForTest(CurrencyKind.Kinah, 4_727_973, t0.AddSeconds(29)); r.AmountForTest(CurrencyKind.Kinah, 4_728_099, t0.AddSeconds(30));
+            var after = bag.Totals()!;
+            Check(unknownFirst && tot.GetValueOrDefault(Id("Orichalcum Ore")) == 31 && !tot.ContainsKey(Id("Orichalcum Guard")) && bag.Totals(all: true)!.GetValueOrDefault(Id("Orichalcum Ore")) == 774 && bag.BagStacks == 3
+                && bag.WornGear() is [{ Slot: 2, Level: 12 }]
+                && after.GetValueOrDefault(Id("Orichalcum Ore")) == 32 && after.GetValueOrDefault(Id("Odyle")) == 1 && !after.ContainsKey(Id("Life Potion (Bound)")) && bag.Money(CurrencyKind.Kinah) == 4_728_099 && bag.LastRows == (5, 5),
+                $"the inventory: unknown before its snapshot, then the bag only: Orichalcum Ore {tot.GetValueOrDefault(Id("Orichalcum Ore"))} (the 742 in storage left out), the gear worn apart; after the changes {after.GetValueOrDefault(Id("Orichalcum Ore"))} ore, {after.GetValueOrDefault(Id("Odyle"))} Odyle, the potions gone, Kinah {bag.Money(CurrencyKind.Kinah):N0}");
+            // its worth: the tradable items at the price, a bound item no value (it can't be sold), unpriced counted; the change since the first snapshot
+            var prices = new Dictionary<string, long> { ["Orichalcum Ore"] = 2_000, ["Life Potion"] = 100 };
+            var w = Session.BagValue.Of(after, bag.FirstTotals, items, n => prices.TryGetValue(n, out var v) ? v : null, 0.9);
+            Check(w.Total == 32 * 2_000 && w.Sellable == (long)Math.Round(32 * 2_000 * 0.9) && w.Unpriced == 1 && w.Change == 2_000 && w.BoundKinds == 0 && w.Lines[0].Name == "Orichalcum Ore",
+                $"...worth {w.Total:N0}, sellable {w.Sellable:N0} after a 10% cut, {w.Unpriced} kind without a price (Odyle), {w.Change:N0} since the first (one ore up; the bound potions gone had no value)");
+            // a bound item has no value and is counted apart
+            var wb = Session.BagValue.Of(new Dictionary<long, long> { [Id("Life Potion (Bound)")] = 10 }, null, items, n => prices.TryGetValue(n, out var v) ? v : null, 0.9);
+            Check(wb.Total == 0 && wb.Sellable == 0 && wb.Unpriced == 0 && wb.Change == null && wb.Lines[0].Bound && wb.Lines[0].Price == null && wb is { BoundKinds: 1, BoundCount: 10 },
+                $"...a bound item has no value (it can't be sold), counted apart: worth {wb.Total:N0}, {wb.BoundCount} bound");
+            // a new connection: unknown until its own snapshot; the first snapshot stays the session's start
+            r.Bag.Unknown();
+            Check(bag.Totals() == null && bag.FirstAt == t0 && bag.FirstTotals.GetValueOrDefault(Id("Orichalcum Ore")) == 31, "...a new connection makes it unknown again, and the session's start stays the first snapshot");
+        }
+
+        // the inventory in the recordings of 2026-11-13 through this build's decoder: the 18:49:42 snapshot kept up with every
+        // change is the 20:01:47 snapshot, item by item
+        {
+            string? bench = Environment.GetEnvironmentVariable("KL_BENCH");
+            for (var d = new DirectoryInfo(AppContext.BaseDirectory); bench == null && d != null; d = d.Parent)
+                if (Directory.Exists(Path.Combine(d.FullName, "kinah-bench", "packets"))) bench = Path.Combine(d.FullName, "kinah-bench", "packets");
+            var recs = new[] { "rec-20261113-18", "rec-20261113-19", "rec-20261113-19-2", "rec-20261113-20" }.Select(x => bench == null ? "" : Path.Combine(bench, x, "capture.pcapng")).ToList();
+            if (!NativeDecoder.Available || NativeDecoder.Version < 8) Console.WriteLine("skip  the inventory in the recordings: this build's decoder reads no inventory");
+            else if (recs.Any(x => !File.Exists(x))) Console.WriteLine("skip  the inventory in the recordings: kinah-bench/packets/rec-20261113-* not found (KL_BENCH)");
+            else
+            {
+                var books = ReplayBags(recs, 13328);
+                var a = books.FirstOrDefault(b => b.Snapshots > 0); var b2 = books.LastOrDefault(b => b.Snapshots > 0);
+                int agree = 0, differ = 0;
+                if (a != null && b2 != null && a != b2)
+                {
+                    var x = a.Totals()!; var y = b2.FirstTotals;   // the first connection at its end; the second at its snapshot (gear worn apart in both)
+                    foreach (var id in x.Keys.Union(y.Keys)) { if (x.GetValueOrDefault(id) == y.GetValueOrDefault(id)) agree++; else differ++; }
+                    bool kinahSame = a.Money(CurrencyKind.Kinah) == 4_922_940;   // the Kinah the 20:01:47 snapshot holds
+                    // the gear worn and its levels, against Steven's screenshot of 22:20 (the same gear): +12 the guard, +11 a ring,
+                    // +1 and +2 the two teal pieces, +10 the other fifteen, and the weapon's 18 (a badge in the game)
+                    var worn = b2.WornGear()!.ToDictionary(g => g.Slot, g => g.Level);
+                    var want = new Dictionary<int, int> { [1] = 18, [2] = 12, [13] = 11, [23] = 1, [24] = 2 };
+                    foreach (var sl in new[] { 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 15, 16, 17, 19, 22 }) want[sl] = 10;
+                    Check(worn.Count == 20 && want.All(kv => worn.GetValueOrDefault(kv.Key) == kv.Value),
+                        $"the gear worn in the recordings, by slot: {string.Join(" ", worn.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:+{kv.Value}"))} (Steven's screenshot: 19 of 19 levels)");
+                    Check(differ == 0 && agree > 40 && kinahSame && a.LastRows.Said == a.LastRows.Read && b2.LastRows.Said == b2.LastRows.Read,
+                        $"the inventory in the recordings: the 18:49 snapshot ({a.LastRows.Read} of {a.LastRows.Said} stacks) kept up with every change equals the 20:01 one ({b2.LastRows.Read} of {b2.LastRows.Said}) for {agree} items in the bag, {differ} differ; Kinah at the first connection's end {a.Money(CurrencyKind.Kinah):N0} (the second snapshot says 4,922,940)");
+                }
+                else Check(false, $"the inventory in the recordings: {books.Count(b => b.Snapshots > 0)} connections with a snapshot (expected 2)");
+            }
+        }
+
         // a build without the decoder reads no traffic and says so
         {
             var keep = PacketReader.Decoders;
@@ -440,6 +579,9 @@ public static class PacketTests
             r.TakeBoss(new BossEngaged(DateTime.UtcNow, "Kaldrix", 1));
             Check(got.Count == 1 && r.NextBossEvent() == null, "...the reader hands a boss event to the Parser as it comes, not to a queue for the next pass");
         }
+        BossTimerChecks(t);
+        TimerBoardChecks();
+        EventTimerChecks(settings);
 
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
@@ -491,6 +633,330 @@ public static class PacketTests
         return p;
     }
 
+    /// <summary>This build's decoder over a capture: every gathering attempt of the player's, each connection its own decoder.</summary>
+    internal static List<GatherResult> ReplayGathers(string pcapng, int serverPort)
+    {
+        var got = new List<GatherResult>();
+        if (!NativeDecoder.Available) return got;
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var (at, frame, link) in Pcapng.Read(pcapng))
+            if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var st = new TcpStream { OnData = (d, at) => { dec.Feed(d, at); while (dec.Next() is not null) { } while (dec.NextItem() is not null) { } while (dec.NextFight() is not null) { } while (dec.NextGather() is { } g) got.Add(g); }, OnGap = dec.Gap };
+            foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+        }
+        return got.OrderBy(g => g.At).ToList();
+    }
+
+    /// <summary>This build's decoder over capture files, one stream per connection across the files: each connection's inventory at its end.</summary>
+    internal static List<BagBook> ReplayBags(IEnumerable<string> files, int serverPort)
+    {
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var f in files)
+            foreach (var (at, frame, link) in Pcapng.Read(f))
+                if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
+        var books = new List<BagBook>();
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var book = new BagBook();
+            var st = new TcpStream
+            {
+                OnData = (d, at) =>
+                {
+                    dec.Feed(d, at);
+                    while (dec.NextBag() is { } b) book.Take(b);
+                    while (dec.Next() is { } c) book.Take(c);
+                    while (dec.NextItem() is { } i) book.Take(i);
+                    while (dec.NextFight() is not null) { }
+                },
+                OnGap = dec.Gap,
+            };
+            foreach (var (at, s) in conn.OrderBy(x => x.At)) st.Add(s.Seq, s.Payload, at, s.Syn);
+            books.Add(book);
+        }
+        return books;
+    }
+
+    /// <summary>
+    /// World boss timers (Session/BossTimers.cs) from boss sightings as the decoder hands them out, the server's clock 15 s
+    /// behind this PC's as it was on 2026-11-13: the countdown follows the server's time left, not the PC's wall time; a live
+    /// boss is up while the map sends the list and "up when last seen" after; a spawn that passed is due; the same reading
+    /// again changes nothing, a kill does; the order; the saved copy read back after a restart, with its age.
+    /// </summary>
+    /// <summary>
+    /// Timed events (Session/EventTimers.cs, InstanceLog.GameSaid; 0.10.83): the schedule counted on the game's clock (UTC+9,
+    /// 14.6 s behind this PC's as on 2026-11-13), on-now windows and weekdays; the event the player is in, part by part, from
+    /// its own server; and an event run that starts at the game's message, keeps its start and name over the minimap's, is
+    /// left when the game says so (the minimap's lagging reads neither undo that nor start a new run) and closes after the
+    /// reward time, as the 17:01 Defend Shugo Merchants run of 2026-11-13 came.
+    /// </summary>
+    static void EventTimerChecks(Settings settings)
+    {
+        var lag = TimeSpan.FromSeconds(14.6);
+        var server = new DateTime(2026, 11, 14, 1, 29, 0, DateTimeKind.Utc);   // Fri 20:29 US Eastern (Sat 10:29 at UTC+9)
+        string Say(EventTimers.Row r) => r.OnNow ? $"{r.Event.Name} on, {r.When}" : $"{r.Event.Name} in {r.When} at {r.StartPc:HH:mm:ss.f}Z";
+        string All(DateTime sv, string region) => string.Join(" | ", EventTimers.Schedule.Select(r => EventTimers.RowOf(r, sv, lag, EventTimers.ClockOf(region))).Select(Say));
+        DateTime U(int mo, int d, int h, int mi = 0) => new(2026, mo, d, h, mi, 0, DateTimeKind.Utc);
+        var naE = EventTimers.ClockOf("na_e"); var eu = EventTimers.ClockOf("eu");
+        var rift = EventTimers.Schedule.First(r => r.Name == "Spacetime Rift"); var siege = EventTimers.Schedule.First(r => r.Name == "Artifact Siege");
+        // NA East on US Eastern time (checked 2026-11-14); the regions not checked yet on their own local time (Europe: Paris)
+        string na = All(server, "na_e"), other = All(server, "eu");
+        Check(naE.Checked && !eu.Checked && na == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 2h 31m 00s at 04:00:14.6Z | Artifact Siege in 1d 0h 31m at 02:00:14.6Z",
+            $"event timers, NA East (US Eastern): {na} (the starts on this PC's clock, 14.6 s after the game's)");
+        Check(other == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 2h 31m 00s at 04:00:14.6Z | Artifact Siege in 18h 31m 00s at 20:00:14.6Z"
+            && eu.Note.Contains("not checked") && EventTimers.ClockOf("asia").Zone.BaseUtcOffset == TimeSpan.FromHours(9) && EventTimers.ClockOf("na_w").Zone.BaseUtcOffset == TimeSpan.FromHours(-8),
+            $"...a region not checked yet (Europe) on Central European time, marked so: {other}; NA West Pacific, Asia Korea");
+        // the ground truth in NA East: the Abyss server's own next siege (sent Fri 17:15 ET: Sat 21:00 ET), the chat's Rift lines
+        var (lastSiege, nextSiege) = EventTimers.Around(siege, U(11, 13, 22, 15), naE);
+        Check(nextSiege == U(11, 15, 2) && lastSiege == U(11, 13, 2), $"...the Artifact Siege: next {nextSiege:ddd HH:mm}Z (the game's own message: Sat 21:00 ET = Sun 02:00Z), last {lastSiege:ddd HH:mm}Z (Thu 21:00 ET; it ended 21:16:51 ET)");
+        var rifts = new[] { U(11, 13, 15, 59), U(11, 13, 18, 59), U(11, 13, 21, 59) }.Select(t0 => EventTimers.Around(rift, t0, naE).Next).ToList();
+        Check(rifts.SequenceEqual(new[] { U(11, 13, 16), U(11, 13, 19), U(11, 13, 22) }), $"...the Spacetime Rift at {string.Join(", ", rifts.Select(x => x.AddHours(-5).ToString("HH:mm")))} ET (the chat: \"A Spacetime Rift has appeared\" 11:00:17, 14:00:26, 17:00:18 ET)");
+        // daylight saving: the same Eastern wall-clock grid in October (aion2-data's 00:00 UTC Rift anchor of 2026-10-07), across
+        // the autumn change, and over the hour skipped in spring
+        var summer = EventTimers.Around(rift, U(10, 7, 22, 30), naE).Next;
+        var thu = EventTimers.Around(siege, U(10, 15, 12), naE).Next;
+        var (fallLast, fallNext) = EventTimers.Around(rift, U(11, 1, 4), naE);
+        var spring = EventTimers.Around(rift, new DateTime(2027, 3, 14, 5, 0, 0, DateTimeKind.Utc), naE).Next;
+        Check(summer == U(10, 8, 0) && thu == U(10, 16, 1) && fallLast == U(11, 1, 3) && fallNext == U(11, 1, 7) && spring == new DateTime(2027, 3, 14, 7, 0, 0, DateTimeKind.Utc),
+            $"...daylight saving: the Rift at {summer:HH:mm}Z on 2026-10-07 (20:00 EDT), the siege Thu 21:00 EDT = {thu:ddd HH:mm}Z; on 2026-11-01 {fallLast:HH:mm}Z then {fallNext:HH:mm}Z (23:00 EDT, 02:00 EST); on 2027-03-14 02:00 doesn't exist: {spring:HH:mm}Z (03:00 EDT)");
+        var at3 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 3), lag, naE);
+        var at6 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 6), lag, naE);
+        Check(at3 is { OnNow: true, When: "started 3 min ago" } && at6 is { OnNow: false, When: "54m 00s" }, $"...the Shugo Festival 3 min past the hour: {Say(at3)}; at 6 past: {Say(at6)}");
+        var siegeOn = EventTimers.RowOf(siege, U(11, 15, 2, 5), lag, naE);
+        var siegeNext = EventTimers.RowOf(siege, U(11, 15, 2, 25), lag, naE);
+        Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == U(11, 20, 2) + lag && siegeNext.When == "4d 23h 35m",
+            $"...the Artifact Siege on Saturday 21:05 ET, then next on Thursday 21:00 ET (twice a week since the Nov 4 patch): {Say(siegeNext)}");
+
+        var et = new EventTimers();
+        var pc = server + lag;
+        Check(!et.ClockKnown && !et.ClockLive(pc) && et.ClockLine(pc) == "", "...before the clock is known, this PC's clock, and the card says nothing of it");
+        et.Take(new AreaEvent(pc, server, AreaEvent.Kind.Clock, AreaEvent.Stage.Unknown, null, "", "", "", 0));
+        var sf = et.Rows(pc, "na_e").First(r => r.Event.Name == "Shugo Festival");
+        Check(et.ClockKnown && et.ClockLive(pc) && !et.ClockLive(pc.AddMinutes(5)) && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31)
+            && et.ClockLine(pc) == "" && et.ClockLine(pc.AddSeconds(3600)).StartsWith("Last read"),
+            $"...the game's clock from its traffic: {et.Offset.TotalSeconds:F1} s; the Shugo Festival in {BossTimers.Countdown(sf.Left)}; \"{et.ClockLine(pc)}\"");
+
+        // the event the player is in: 17:01, 2026-11-13 (UTC 22:01), as the event server said it
+        var e0 = new DateTime(2026, 11, 13, 22, 1, 20, 361, DateTimeKind.Utc);
+        AreaEvent A(double sec, AreaEvent.Kind k, AreaEvent.Stage st, double? startSec = null, bool moved = false, string name = "Defend Shugo Merchants") =>
+            new(e0.AddSeconds(sec), e0.AddSeconds(sec) - lag, k, st, startSec is { } ss ? e0.AddSeconds(ss) - lag : null, "Shugo Festival", name, "", 1, moved);
+        var prep = A(0, AreaEvent.Kind.Phase, AreaEvent.Stage.Preparing, -16.1);
+        var main = A(116.5, AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay, 116.5);
+        var over = A(185.9, AreaEvent.Kind.Over, AreaEvent.Stage.Over);
+        var shut = A(207.3, AreaEvent.Kind.Closed, AreaEvent.Stage.Over);
+        var shutPrep = A(207.3, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing);
+        var lv = new EventTimers();
+        lv.Take(prep);
+        var l1 = lv.Current(prep.At);
+        lv.Take(main); lv.Take(A(120, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing));   // a getting-ready part closing as the event begins
+        var l2 = lv.Current(main.At.AddSeconds(5));
+        lv.Take(over); var l3 = lv.Current(over.At);
+        lv.Take(shut); lv.Take(shutPrep);
+        var l4 = lv.Current(shut.At.AddSeconds(10)); var l5 = lv.Current(shut.At.AddSeconds(EventTimers.KeepLiveSeconds + 1));
+        Check(l1 is { Stage: AreaEvent.Stage.Preparing, Label: "Defend Shugo Merchants" } && l1.StartedPc == e0.AddSeconds(-16.1)
+            && l2 is { Stage: AreaEvent.Stage.UnderWay, LeftAt: null } && l3 is { Stage: AreaEvent.Stage.Over } && l4 is { LeftAt: { } } && l5 == null
+            && EventTimers.StageText(l1) == "Getting ready" && EventTimers.StageText(l2) == "Under way" && EventTimers.StageText(l3) == "Over: rewards next" && EventTimers.StageText(l4) == "Left",
+            $"...the event you're in: {(l1 == null ? "-" : EventTimers.StageText(l1))}, {(l2 == null ? "-" : EventTimers.StageText(l2))} (its lobby closing is no leaving), {(l3 == null ? "-" : EventTimers.StageText(l3))}, {(l4 == null ? "-" : EventTimers.StageText(l4))}, gone {EventTimers.KeepLiveSeconds:0} s after");
+        var mv = new EventTimers(); mv.Take(prep); mv.Take(A(30, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing, moved: true));
+        Check(mv.Current(prep.At.AddSeconds(31)) is { LeftAt: { } }, "...the game moving off the event's server in its lobby is leaving it");
+
+        // the run, through the session: started by the game's message 10 s before the minimap, left by it, closed after the reward time
+        var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        var reader = new PacketReader(); reader.ReadingForTest();
+        var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+        s.ApplyZone("Ellun River Midstream", e0.AddSeconds(-60));
+        reader.AreaForTest(prep); s.DrainPacketsForTest();
+        var r1 = s.Instances.Current;
+        s.ApplyZone("Defend Shugo Merchants", e0.AddSeconds(9.9));   // the minimap, 17:01:30.3 on that day
+        reader.AreaForTest(main); s.DrainPacketsForTest();
+        var r2 = s.Instances.Current;
+        reader.AreaForTest(over); reader.AreaForTest(shut); reader.AreaForTest(shutPrep); s.DrainPacketsForTest();
+        var r3 = s.Instances.Current;
+        s.ApplyZone("Defend Shugo Merchants", shut.At.AddSeconds(12));   // the minimap, still on the event 12 s later
+        var r4 = s.Instances.Current;
+        s.ApplyZone("Ellun River Midstream", shut.At.AddSeconds(20));
+        s.ApplyZone("Ellun River Midstream", shut.At.AddSeconds(InstanceLog.RewardGraceSeconds + 1));
+        var r5 = s.Instances.Current;
+        Check(r1 is { Kind: "Event", Zone: "Shugo Festival", Event: "Defend Shugo Merchants", Leaving: false } && r1.Value.Start == prep.At
+            && r2 is { Leaving: false } && r2.Value.Start == prep.At && r3 is { Leaving: true } && r4 is { Leaving: true } && r4.Value.Start == prep.At && r5 == null,
+            $"...the run: opened by the game at {prep.At:HH:mm:ss.f}Z as {r1?.Label} (the minimap's read 10 s later keeps it), left at its close ({(r3?.Leaving == true ? "leaving" : "open")}), the minimap still on it 12 s on: {(r4?.Leaving == true ? "still leaving, no new run" : "undone")}; closed after the reward time: {(r5 == null ? "yes" : "no")}");
+        // only the family known: the run files under it, and the header names the game
+        var fam = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+        fam.ApplyZone("Ellun River Midstream", e0.AddHours(1).AddSeconds(-60));
+        reader.AreaForTest(A(3600, AreaEvent.Kind.Phase, AreaEvent.Stage.Preparing, 3584, name: "")); fam.DrainPacketsForTest();
+        var f1 = fam.Instances.Current;
+        fam.Instances.Witness("header", "Hidden Lugi", e0.AddHours(1).AddSeconds(5), "Ellun River Midstream");
+        var f2 = fam.Instances.Current;
+        Check(f1 is { Zone: "Shugo Festival", Event: "" } && f2 is { Event: "Hidden Lugi" }, $"...a game the decoder can't name yet: {f1?.Label}, then the header names it: {f2?.Label}");
+        var unk = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+        reader.AreaForTest(new AreaEvent(e0, e0 - lag, AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay, null, "", "", "unknown-event", 9)); unk.DrainPacketsForTest();
+        Check(unk.Instances.Current == null, "...an event the decoder doesn't know at all opens no run (the screen's to find)");
+    }
+
+    /// <summary>
+    /// The Abyss's bosses on their schedule against Steven's map of Chaotic Lower Reshanta (NA East, 2026-11-14, the game's
+    /// clock at 11:38:40 UTC): Watcher Kaira 21min 20s, the Executors 14h 51min 20s, Guardian Lord Nahma 1d 14h 21min. Then
+    /// the timers as one list for the overlay (what it keeps, how many), the chime (once per spawn, only for the timers picked,
+    /// not too late, not at volume 0) and the settings file.
+    /// </summary>
+    static void TimerBoardChecks()
+    {
+        var server = new DateTime(2026, 11, 14, 11, 38, 40, DateTimeKind.Utc);
+        var (zone, sure) = AbyssBosses.ZoneFor("na_e");
+        TimeSpan Left(string name) => AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == name), server, TimeSpan.Zero, zone).Left;
+        var kaira = Left("Watcher Kaira"); var tamasa = Left("Executor Tamasa"); var argo = Left("Executor Argo"); var nahma = Left("Guardian Lord Nahma");
+        Check(sure && kaira == new TimeSpan(0, 21, 20) && tamasa == new TimeSpan(14, 51, 20) && argo == tamasa && nahma == new TimeSpan(1, 14, 21, 20),
+            $"Abyss bosses on NA East's clock, as Steven's map read: Watcher Kaira {kaira} (21min 20s), the Executors {tamasa} (14h 51min 20s), Guardian Lord Nahma {nahma} (1d 14h 21min)");
+        var kst = TimeZoneInfo.CreateCustomTimeZone("kst", TimeSpan.FromHours(9), "kst", "kst");
+        var onKst = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Executor Tamasa"), server, TimeSpan.Zero, kst).Left;
+        Check(onKst != tamasa, $"...and not on UTC+9, which would say {onKst} for the Executors");
+        var afterSat = AbyssBosses.Around(AbyssBosses.Schedule.First(b => b.Name == "Executor Tamasa"), new DateTime(2026, 11, 15, 2, 45, 0, DateTimeKind.Utc), zone).Next;
+        Check(afterSat == new DateTime(2026, 11, 20, 2, 30, 0, DateTimeKind.Utc), $"...the Artifact Bosses twice a week since the Nov 4 patch: after Saturday's, Thursday 21:30 ET ({afterSat:ddd dd HH:mm}Z), not Monday");
+        var dramos = AbyssBosses.Around(AbyssBosses.Schedule.First(b => b.Name == "Executioner Dramos"), new DateTime(2026, 11, 15, 2, 45, 0, DateTimeKind.Utc), zone).Next;
+        Check(dramos == new DateTime(2026, 11, 17, 2, 30, 0, DateTimeKind.Utc), $"...Middle Reshanta's, which the patch didn't name, still Monday too ({dramos:ddd dd HH:mm}Z)");
+        var spawned = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Watcher Kaira"), server.AddMinutes(31.5), TimeSpan.Zero, zone);
+        var after = AbyssBosses.RowOf(AbyssBosses.Schedule.First(b => b.Name == "Watcher Kaira"), server.AddMinutes(52), TimeSpan.Zero, zone);
+        Check(spawned is { Spawned: true, When: "10 min ago" } && !after.Spawned && after.Left == new TimeSpan(2, 29, 20),
+            $"...Watcher Kaira \"Spawned, {spawned.When}\" 10 min after 07:00, then counting to 10:00 ({after.When})");
+
+        // the timers as one list
+        var lag = TimeSpan.FromSeconds(15);
+        var now = server + lag;
+        var ev = new EventTimers(); ev.SetForTest(lag, true, null);
+        var bt = new BossTimers();
+        bt.SetForTest(new[]
+        {
+            new BossTimers.Boss("k1", "Bloodfang Pnyn", "Northern Tolbas Forest", "Verteron", BossTimers.Kind.Up, now.AddMinutes(-14), now, false),
+            new BossTimers.Boss("k2", "Heretic Layla", "Rock Tomb Hill", "Verteron", BossTimers.Kind.Waiting, now.AddMinutes(4), now, false),
+            new BossTimers.Boss("k3", "Kusan the Mad Gladiator", "Verteron Fortress Ruins", "Verteron", BossTimers.Kind.Waiting, now.AddMinutes(12), now, false),
+            new BossTimers.Boss("k4", "Soul Ruler Kashapa", "Eastern Altamia Highland", "Verteron", BossTimers.Kind.Waiting, now.AddMinutes(3), now, false),
+        });
+        var items = TimerBoard.Build(now, ev, bt, "na_e");
+        var prefs = TimerPrefs.Defaults();
+        string Short(string name) => items.First(i => i.Name.StartsWith(name, StringComparison.Ordinal)).Short;
+        Check(items.Count == EventTimers.Schedule.Length + 4 + AbyssBosses.Schedule.Length && items[0].Key == TimerBoard.BossKey("Bloodfang Pnyn") && items[0].State == TimerBoard.Kind.On
+            && Short("Kusan") == "Kusan" && Short("Soul Ruler") == "Kashapa" && Short("Shugo") == "Shugo" && Short("Watcher Kaira") == "Watcher Kaira" && Short("Executor Kaira") == "Executor Kaira"
+            && Short("Guardian Lord Nahma") == "Nahma ×3" && Short("Bloodfang") == "Bloodfang" && Short("Dimensional") == "Invasion",
+            $"timers as one list: {items.Count} (events, world bosses, the Abyss), the boss that's up first; short names {Short("Kusan")}, {Short("Soul Ruler")}, {Short("Shugo")}, {Short("Watcher Kaira")} / {Short("Executor Kaira")}, {Short("Guardian Lord Nahma")}");
+
+        // watched by default (Steven, 2026-11-14): the events, Kashapa, Gartua, Lagta and the Abyss; every other boss off
+        Check(prefs.Watched(TimerBoard.EventKey("Shugo Festival")) && prefs.Watched(TimerBoard.BossKey("Soul Ruler Kashapa")) && prefs.Watched(TimerBoard.BossKey("Eternal Gartua"))
+            && prefs.Watched(TimerBoard.BossKey("High Commander Lagta")) && prefs.Watched(TimerBoard.AbyssKey("Executor Tamasa"))
+            && !prefs.Watched(TimerBoard.BossKey("Heretic Layla")) && !prefs.Watched(TimerBoard.BossKey("Kusan the Mad Gladiator")) && prefs.OverlayOn && prefs.ClickThrough && prefs.Count == 4,
+            "watched by default: the events, Kashapa, Gartua, Lagta and every Abyss boss; Layla and Kusan off; the overlay on, click-through, 4 at most");
+
+        // the overlay: only watched timers within 5 min, soonest first; gone once up; hidden with none
+        string Names(List<TimerBoard.Item> l) => l.Count == 0 ? "none" : string.Join(", ", l.Select(i => i.Short));
+        var near = TimerBoard.ForOverlay(items, prefs, now);
+        Check(near.Count == 1 && near[0].Short == "Kashapa",
+            $"...the overlay shows only watched timers within 5 min: {Names(near)} (Kashapa 3 min; not Layla 4 min, not watched; not Kusan 12 min; not Bloodfang, up)");
+        prefs.SetWatched(TimerBoard.BossKey("Heretic Layla"), true);
+        prefs.SetWatched(TimerBoard.BossKey("Soul Ruler Kashapa"), false);
+        var swapped = TimerBoard.ForOverlay(items, prefs, now);
+        var at21 = now.AddMinutes(19);
+        var kairaNear = TimerBoard.ForOverlay(TimerBoard.Build(at21, ev, bt, "na_e"), prefs, at21);
+        var at22 = now.AddMinutes(21.5);
+        var up = TimerBoard.ForOverlay(TimerBoard.Build(at22, ev, bt, "na_e"), prefs, at22);
+        Check(swapped.Count == 1 && swapped[0].Short == "Layla" && kairaNear.Any(i => i.Short == "Watcher Kaira") && !up.Any(i => i.Short == "Watcher Kaira")
+            && prefs.Watched(TimerBoard.BossKey("Heretic Layla")) && !prefs.Watched(TimerBoard.BossKey("Soul Ruler Kashapa")),
+            $"...Layla turned on and Kashapa off: {Names(swapped)}; 2 min before 12:00 {Names(kairaNear)}; once Kaira is up she's gone ({Names(up)})");
+        prefs.WindowMinutes = 15;
+        var wide = TimerBoard.ForOverlay(items, prefs, now);
+        prefs.SetWatched(TimerBoard.BossKey("Kusan the Mad Gladiator"), true); prefs.Count = 1;
+        var capped = TimerBoard.ForOverlay(items, prefs, now);
+        Check(wide.Count == 1 && wide[0].Short == "Layla" && capped.Count == 1 && capped[0].Short == "Layla" && TimerBoard.Clock(TimeSpan.FromSeconds(292)) == "4:52" && TimerBoard.Clock(TimeSpan.FromSeconds(730)) == "12:10" && TimerBoard.Clock(TimeSpan.FromSeconds(3920)) == "1:05:20",
+            $"...within 15 min ({Names(wide)}), at most 1 ({Names(capped)}); the countdown reads 4:52, 12:10, 1:05:20");
+        prefs.WindowMinutes = 5; prefs.Count = 4;
+
+        // the chime: once per spawn, for watched timers not muted, not too late, not at volume 0
+        var ch = new TimerChimes();
+        var first = ch.Due(now, items, prefs);
+        var again = ch.Due(now.AddSeconds(1), TimerBoard.Build(now.AddSeconds(1), ev, bt, "na_e"), prefs);
+        Check(first.Count == 1 && first[0].Short == "Layla" && again.Count == 0,
+            $"chime: Layla, watched, 4 min away: one chime ({Names(first)}), not again a second later; Kashapa (turned off) and Kusan (12 min) none");
+        var at17 = now.AddMinutes(17).AddSeconds(30);   // Kaira 3min 50s away
+        var kairaChime = ch.Due(at17, TimerBoard.Build(at17, ev, bt, "na_e"), prefs);
+        prefs.SetChimes(TimerBoard.AbyssKey("Watcher Kaira"), false);
+        var muted = new TimerChimes().Due(at17, TimerBoard.Build(at17, ev, bt, "na_e"), prefs);
+        prefs.SetChimes(TimerBoard.AbyssKey("Watcher Kaira"), true);
+        var late = new TimerChimes().Due(now.AddMinutes(21).AddSeconds(10), TimerBoard.Build(now.AddMinutes(21).AddSeconds(10), ev, bt, "na_e"), prefs);
+        prefs.Volume = 0;
+        var silent = new TimerChimes().Due(at17, TimerBoard.Build(at17, ev, bt, "na_e"), prefs);
+        Check(kairaChime.Any(i => i.Short == "Watcher Kaira") && !muted.Any(i => i.Short == "Watcher Kaira") && !late.Any(i => i.Short == "Watcher Kaira") && silent.Count == 0,
+            "...Watcher Kaira's 5 min before (watched by default); none with her chime off, none 10 s before (too late to help), none at volume 0");
+
+        // the settings file
+        var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "timers.json"); File.Delete(file);
+        var saved = TimerPrefs.Load(file);
+        saved.OverlayOn = false; saved.ClickThrough = false; saved.X = 1500; saved.Y = 200; saved.Count = 6; saved.WindowMinutes = 10; saved.ChimeMinutes = 2; saved.Volume = 0.3; saved.Details = true;
+        saved.WinX = 2000; saved.WinY = 100; saved.WinW = 500; saved.WinH = 900;
+        saved.SetWatched(TimerBoard.BossKey("Heretic Layla"), true); saved.SetWatched(TimerBoard.EventKey("Spacetime Rift"), false); saved.SetChimes(TimerBoard.EventKey("Shugo Festival"), false);
+        saved.Save();
+        var back = TimerPrefs.Load(file);
+        Check(back is { OverlayOn: false, ClickThrough: false, X: 1500, Y: 200, Count: 6, WindowMinutes: 10, ChimeMinutes: 2, Volume: 0.3, Details: true, WinX: 2000, WinW: 500, WinH: 900 }
+            && back.Watched(TimerBoard.BossKey("Heretic Layla")) && !back.Watched(TimerBoard.EventKey("Spacetime Rift")) && back.Watched(TimerBoard.EventKey("Shugo Festival")) && !back.Chimes(TimerBoard.EventKey("Shugo Festival"))
+            && TimerPrefs.Load(Path.Combine(dir, "none.json")) is { OverlayOn: true, ClickThrough: true },
+            "timers.json: the overlay, its place, click-through, minutes, how many, the chime, the Timers window's place, size and details, the watched and muted timers, read back; no file is the defaults (overlay on, click-through)");
+    }
+
+    static void BossTimerChecks(DateTime t)
+    {
+        var lag = TimeSpan.FromSeconds(14.87);   // the server's clock behind this PC's
+        BossSighting Dead(string key, string name, DateTime at, TimeSpan left, string place = "Rock Tomb Hill") =>
+            new(at, at - lag, key, name, place, "Verteron", BossSighting.Kind.Dead, at - lag + left, false);
+        BossSighting Alive(string key, string name, DateTime at, TimeSpan since) =>
+            new(at, at - lag, key, name, "Northern Tolbas Forest", "Verteron", BossSighting.Kind.Alive, at - lag - since, false);
+
+        var bt = new BossTimers();
+        var layla = TimeSpan.FromSeconds(2 * 3600 + 40 * 60 + 1.2);
+        Check(bt.Take(Dead("a", "Heretic Layla", t, layla)), "boss timers: a boss first seen is a change");
+        var row = bt.Rows(t.AddSeconds(60)).Single();
+        Check(row.When == "2h 39m 02s" && row.Boss.SpawnPc == t + layla && !row.Stale,
+            $"...the countdown is the server's time left, from when the list came: {row.When} a minute later (not {BossTimers.Countdown(t - lag + layla - t.AddSeconds(60))} against this PC's clock)");
+        Check(!bt.Take(Dead("a", "Heretic Layla", t.AddSeconds(1), layla - TimeSpan.FromSeconds(1.003))) && bt.Rows(t.AddSeconds(60)).Single().Boss.SpawnPc == t + layla,
+            "...the same reading a second later (the map still open) changes nothing");
+        var later = BossTimers.RowOf(bt.Rows(t).Single().Boss, t + layla + TimeSpan.FromMinutes(4));
+        Check(later is { Due: true, Status: "Due", When: "4 min ago" }, $"...past its spawn with no newer list: {later.Status}, {later.When}");
+
+        Check(bt.Take(Alive("b", "Bloodfang Pnyn", t, TimeSpan.FromMinutes(14))), "...a live boss");
+        var up = bt.Rows(t.AddSeconds(30)).First();
+        Check(up is { UpNow: true, Status: "Up now", When: "up 14 min" } && up.Boss.Name == "Bloodfang Pnyn", $"...is up while the map sends the list ({up.Status}, {up.When}), and listed first");
+        var gone = BossTimers.RowOf(up.Boss, t.AddMinutes(30));
+        Check(gone is { UpNow: false, Stale: true, Status: "Up when last seen", When: "seen 30 min ago" }, $"...and after: {gone.Status}, {gone.When} (nobody knows it is still up)");
+        var killed = Dead("b", "Bloodfang Pnyn", t.AddSeconds(28), TimeSpan.FromHours(3));
+        Check(bt.Take(killed) && bt.Rows(t.AddSeconds(29)).Last().Boss.Name == "Bloodfang Pnyn", "...killed: a change, its 3 h wait puts it after Layla");
+
+        bt.Take(Dead("c", "Chaser Taulo", t, TimeSpan.FromMinutes(20), "Forest of Exiles"));
+        bt.Take(new BossSighting(t, t - lag, "d", "", "", "Verteron", BossSighting.Kind.Dead, t - lag + TimeSpan.FromMinutes(5), false));
+        var order = bt.Rows(t.AddSeconds(2)).Select(r => r.Boss.Name).ToList();
+        Check(order.SequenceEqual(new[] { "A Verteron boss", "Chaser Taulo", "Heretic Layla", "Bloodfang Pnyn" }), $"...in spawn order, a boss the decoder can't name kept as its region's: {string.Join(", ", order)}");
+        var guess = new BossTimers();
+        guess.Take(new BossSighting(t, null, "e", "Furious Saursus", "", "Verteron", BossSighting.Kind.Dead, t + TimeSpan.FromMinutes(10), false));
+        Check(guess.Rows(t).Single() is { Boss.ClockGuessed: true, When: "10m 00s" }, "...with no server clock yet, this PC's is taken (and marked)");
+        Check(BossTimers.Countdown(TimeSpan.FromSeconds(45.2)) == "46s" && BossTimers.Countdown(TimeSpan.FromSeconds(3600 * 5 + 61)) == "5h 01m 01s" && BossTimers.Countdown(TimeSpan.Zero) == "0s",
+            "...the countdown's form: 46s, 5h 01m 01s, 0s");
+
+        // the saved copy: a restart shows the timers and how old they are
+        var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "bosses.json"); File.Delete(file);
+        var now = DateTime.UtcNow;
+        var saved = new BossTimers(file);
+        saved.Take(Dead("a", "Heretic Layla", now.AddHours(-1), TimeSpan.FromHours(2)));
+        saved.Take(Alive("b", "Bloodfang Pnyn", now.AddHours(-1), TimeSpan.FromMinutes(5)));
+        saved.Save();
+        var back = new BossTimers(file);
+        var rows = back.Rows(now);
+        Check(back.Count == 2 && rows.Any(r => r.Boss.Name == "Heretic Layla" && Math.Abs((r.Left - TimeSpan.FromHours(1)).TotalSeconds) < 1) && rows.Any(r => r is { Status: "Up when last seen" })
+            && back.Freshness(now) == "Read 1 h ago: open the world map to refresh",
+            $"...saved and read back after a restart: {back.Count} bosses, \"{back.Freshness(now)}\"");
+        var old = new BossTimers();
+        Check(old.Freshness(now) == "No reading yet" && old.Rows(now).Count == 0, "...and before any reading: no rows, \"No reading yet\"");
+    }
+
     /// <summary>
     /// The decoder over a capture file: every connection from <paramref name="serverPort"/> in turn (an event or the Abyss is
     /// another server), each its own decoder, every currency change, printed. Needs the decoder in the build.
@@ -506,6 +972,9 @@ public static class PacketTests
         var batches = new List<ItemBatch>();
         var fights = new FightTally(); var fought = new List<FightTally.Outcome>(); bool readsFights = false;
         var gaps = new List<DateTime>();
+        var bosses = new BossTimers();
+        var bossLines = new List<string>();
+        var eventLines = new List<string>(); var timers = new EventTimers();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
@@ -523,8 +992,16 @@ public static class PacketTests
                     rows.Clear();
                     while (dec.NextItem() is { } it) rows.Add(it);
                     batches.AddRange(ItemBatch.Cut(rows));
+                    while (dec.NextBoss() is { } b)
+                        if (bosses.Take(b)) bossLines.Add($"{PacketReader.Local(b.At)}  world boss: {(b.Name.Length > 0 ? b.Name : "(not named)")} {b.State}{(b.Time is { } t && b.ServerNow is { } sv ? (b.State == BossSighting.Kind.Dead ? $", spawns in {BossTimers.Countdown(t - sv)}" : $", up {BossTimers.Span(sv - t)}") : "")}");
                     while (dec.NextFight() is { } f) fights.Add(f);
                     while (dec.NextBossEvent() is { } b) bossEvents.Add(b);
+                    while (dec.NextAreaEvent() is { } ae)
+                    {
+                        timers.Take(ae);
+                        if (ae.What != AreaEvent.Kind.Clock)
+                            eventLines.Add($"{PacketReader.Local(ae.At)}  event: {(ae.Label.Length > 0 ? ae.Label : "(not known: " + ae.Code + ")")} {ae.What}{(ae.What == AreaEvent.Kind.Phase ? " " + ae.Phase : "")}{(ae.PhaseStart is { } ps && ae.ServerNow is { } sv ? $", began {PacketReader.Local(ps + (ae.At - sv))}" : "")}");
+                    }
                 },
                 OnGap = () => { dec.Gap(); gaps.Add(last); },
             };
@@ -534,10 +1011,23 @@ public static class PacketTests
             Console.WriteLine($"{conn.Key.Item1}:{serverPort} → :{conn.Key.DstPort}: {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
         }
         foreach (var c in seen) Print(c);
+        foreach (var l in bossLines) Console.WriteLine(l);
+        foreach (var l in eventLines) Console.WriteLine(l);
+        if (timers.ClockKnown) Console.WriteLine($"the game's clock: {timers.Offset.TotalSeconds:F1} s behind the capture's");
+        if (bosses.Count > 0) Console.WriteLine($"world bosses: {bosses.Count} on the map's list, {bossLines.Count} readings (a boss's first, then each change)");
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
         ReplayBosses(bossEvents);
+        if (NativeDecoder.Version >= 7)
+        {
+            var items0 = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);
+            var gs = ReplayGathers(pcapng, serverPort);
+            foreach (var g in gs)
+                Console.WriteLine($"  {g.At.ToLocalTime():HH:mm:ss.ff}  gathered: {(g.Outcome == GatherEnd.Upgrade ? "the upgrade roll won" : g.Outcome == GatherEnd.Failed ? "failed" : "worked")}, {items0.NameOf(g.ItemId)}{(g.Outcome == GatherEnd.Failed ? "" : $" x{g.Count}")} · node {g.NodeId}{(g.NodeKind != 0 ? $" (kind {g.NodeKind})" : "")}{(g.Attempt > 0 ? $", try {g.Attempt}" : "")}");
+            Console.WriteLine($"gathering: {gs.Count} attempts on {gs.Select(g => g.NodeId).Distinct().Count()} nodes ({gs.Count(g => g.Outcome == GatherEnd.Worked)} worked, {gs.Count(g => g.Outcome == GatherEnd.Upgrade)} upgrade rolls won, {gs.Count(g => g.Outcome == GatherEnd.Failed)} failed); "
+                + string.Join(", ", gs.Where(g => g.Count > 0).GroupBy(g => g.ItemId).Select(x => $"{items0.NameOf(x.Key)} {x.Sum(g => g.Count)}")));
+        }
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;
