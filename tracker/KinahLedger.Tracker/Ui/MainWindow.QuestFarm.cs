@@ -315,7 +315,7 @@ public partial class MainWindow
 
     /// <summary>For options-test: the hover text of the hero line's part whose word is <paramref name="word"/>.</summary>
     internal string HeroStatTipForTest(string word) => HeroStats.Children.OfType<Border>()
-        .FirstOrDefault(b => b.Tag as string == "stat" && ((StackPanel)b.Child).Children.OfType<TextBlock>().Last().Text == word)?.ToolTip as string ?? "";
+        .FirstOrDefault(b => b.Tag as string == "stat" && ((StackPanel)b.Child).Children.OfType<TextBlock>().Last(t => t.Tag as string != "here").Text == word)?.ToolTip as string ?? "";
 
     /// <summary>For options-test: the bag strip's slots as drawn, and the hero's trend (shown, its points).</summary>
     internal (bool Strip, int Slots, bool Spark, int SparkPoints) BagStripForTest() =>
@@ -323,7 +323,11 @@ public partial class MainWindow
 
     /// <summary>For options-test: the hero line's parts as drawn, figure and word ("632.3K Kinah").</summary>
     internal List<string> HeroStatsForTest() => HeroStats.Children.OfType<Border>().Where(b => b.Tag as string == "stat")
-        .Select(b => string.Join(" ", ((StackPanel)b.Child).Children.OfType<TextBlock>().Select(t => t.Text))).ToList();
+        .Select(b => string.Join(" ", ((StackPanel)b.Child).Children.OfType<TextBlock>().Where(t => t.Tag as string != "here").Select(t => t.Text))).ToList();
+
+    /// <summary>For options-test: the place's share beside each part of the hero line ("274.4K here"), "" where there is none.</summary>
+    internal List<string> HeroHereForTest() => HeroStats.Children.OfType<Border>().Where(b => b.Tag as string == "stat")
+        .Select(b => string.Concat(((StackPanel)b.Child).Children.OfType<TextBlock>().Where(t => t.Tag as string == "here").Select(t => t.Text))).ToList();
 
     /// <summary>For options-test: a chip's click.</summary>
     internal void ToggleChipForTest(string key) => ToggleChip(key);

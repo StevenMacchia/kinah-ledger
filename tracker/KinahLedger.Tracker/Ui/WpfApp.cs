@@ -530,11 +530,18 @@ public static partial class WpfApp
         // the overall count across zones is the default since 0.10.43 (Steven, 2026-11-11), so LOOT's heading is All zones
         // UX pass (2026-11-13): each figure one home. The hero's line says the Kinah, the loot and the kills; LOOT's first side
         // no longer repeats them as a Kinah slot, a total (the two added up) and the hero's "42 min", so its line is the kinds alone
-        Check(here.Here == "All zones" && here.Slots >= 8 && here.Note.EndsWith(" kinds") && !here.Note.Contains("min") && here.Total.Trim().Length == 0,
+        // one screen (0.10.70; Steven, 2026-11-13: "i dont like the 'this zone' toggle"): LOOT's first side is This session
+        Check(here.Here == "This session" && here.Slots >= 8 && here.Note.EndsWith(" kinds") && !here.Note.Contains("min") && here.Total.Trim().Length == 0,
             $"LOOT, {here.Here}: {here.Slots} slots, \"{here.Note}\", no total (the hero's line has the Kinah and the loot)");
         var heroLine = w.HeroStatsForTest();
         Check(heroLine.Count == 3 && heroLine[0].EndsWith(" Kinah") && heroLine[1].EndsWith(" loot") && heroLine[2].EndsWith(" kills") && heroLine.All(p => "KMB0123456789".Contains(p.Split(' ')[0][^1])),
             "the hero's line: " + string.Join(" · ", heroLine));
+        // the place's share beside each figure, and the place's own hour beside the session's (0.10.70): the sample farmed
+        // Eastern Cantas Valley first, then Western, where it is now
+        var heroHere = w.HeroHereForTest(); var heroTop = w.HeroForTest();
+        Check(heroHere.Count == 3 && heroHere.All(x => x.EndsWith(" here") && x.Length > 6) && heroTop.Label.StartsWith("an hour · ") && heroTop.Label.Split('\n')[0].EndsWith(" here")
+            && w.HeroStatTipForTest("Kinah").Contains("in Western Cantas Valley."),
+            $"one screen: the place's share beside each figure ({string.Join(" / ", heroHere)}), its hour beside the session's (\"{heroTop.Label.Split('\n')[0]}\")");
         // how the total adds up moved with it: from the bag's total to the loot figure's hover
         Check(w.HeroStatTipForTest("loot") is var tt && tt.Contains("Kinah picked up") && tt.Contains("Total, " + Data.PriceBook.Fee), "the hero's loot figure says how Kinah and loot add up on hover");
         var bagStrip = w.BagStripForTest();
@@ -635,7 +642,7 @@ public static partial class WpfApp
         w.PickZonesForTest(false); w.SetCompareForTest(false); DoEvents();
         Check(!w.CompareForTest().Switch && w.CompareForTest().Usual == "", "...off again: Week as before, no usual line");
         w.PickLootForTest(false); DoEvents();
-        Check(w.LootForTest().Note == here.Note, "back to This zone");
+        Check(w.LootForTest().Note == here.Note, "back to This session");
         // 0.9.0 (Steven, 2026-10-30): no "1 to look at" pill, though the sample has a refused line; Report a miscount stays
         Check(w.AccuracyChip.Visibility == Visibility.Collapsed && ReferenceEquals(w.AccuracyChip.Parent, w.StatusRow) && w.MiscountText.Visibility == Visibility.Visible,
             "Accuracy: no pill in the footer for the sample's refused line, Report a miscount shown");
@@ -834,8 +841,8 @@ public static partial class WpfApp
             Check(Tree(change).OfType<System.Windows.Controls.Button>().Any(b => b.Content as string == "Remove goal") && Tree(change).OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text == "Change this goal"),
                 "a goal's click: the sheet says Change this goal and has Remove goal");
             var more = w.MoreEntries();
-            Check(more.Any(e => e.Text == "All zones" && e.On != null) && more.Any(e => e.Text == "Clear everything" && e.Do != null) && more.Any(e => e.Text == "Set a goal…" && e.Do == null && e.Sub.Length > 0),
-                "the ⋯ menu: All zones a switch, Clear everything, Set a goal off (with why) once three are set: " + string.Join(" | ", more.Select(e => e.Text)));
+            Check(!more.Any(e => e.Text == "All zones") && more.Any(e => e.Text == "Clear everything" && e.Do != null) && more.Any(e => e.Text == "Set a goal…" && e.Do == null && e.Sub.Length > 0),
+                "the ⋯ menu: no All zones switch (one screen), Clear everything, Set a goal off (with why) once three are set: " + string.Join(" | ", more.Select(e => e.Text)));
             Check(w.BuildMenu(more) is { } menuCard && Tree(menuCard).OfType<System.Windows.Controls.ContextMenu>().Count() == 0 && Tree(menuCard).OfType<System.Windows.Controls.MenuItem>().Count() == 0,
                 "the ⋯ menu is drawn in the card kit, no Windows menu items");
             w.ShowGoalsSample(2); DoEvents();

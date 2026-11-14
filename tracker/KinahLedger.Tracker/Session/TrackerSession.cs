@@ -711,6 +711,7 @@ public sealed partial class TrackerSession
     {
         string? was = _place, wasZone = _placeZone;
         _place = place; _placeZone = zone; _placeNext = null;
+        PlaceMoves++;
         // a new place starts the zone view over (its tables are this place's alone), from the move's first read when it was held
         OfferBest();
         var z = _moveZone;
@@ -724,6 +725,8 @@ public sealed partial class TrackerSession
         _moveAll = null;
     }
     SessionEngine? _freshAll;
+    /// <summary>Moves to another place since the session started: the zone view started over this often (replay's console says it).</summary>
+    public int PlaceMoves { get; private set; }
     /// <summary>For the watcher's <see cref="OverallRestart"/>: the overall count held since the move's first read, when there is one (else null: a new one).</summary>
     public SessionEngine? FreshAll => _freshAll;
 

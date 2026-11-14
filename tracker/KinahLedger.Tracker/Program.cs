@@ -925,6 +925,9 @@ options: --process aion[,other]");
         try { File.Delete(Path.Combine(CrashLog.DirOverride, "instances.jsonl")); } catch (Exception) { }
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         var s = new TrackerSession(null, settings, items, "Replay");
+        // the window's overall count, so a replay says how often it would have started over (0.10.70: how steady a day was)
+        s.AllView = new SessionEngine(items);
+        s.OverallRestart += _ => { var a = s.FreshAll ?? new SessionEngine(items); if (s.FreshAll == null) a.SetZone(s.Zone); s.AllView = a; };
         s.Vote = !opts.ContainsKey("novote");
         var landed = new List<(DateTime At, string What, string Where)>();
         s.Landed = (ev, where) =>
@@ -1047,6 +1050,7 @@ options: --process aion[,other]");
         foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
         var notes = File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log"));
         Console.WriteLine($"  reads that didn't line up: {notes.Count(n => n.Contains("couldn't line"))}");
+        Console.WriteLine($"  place moves (the zone view started over): {s.PlaceMoves} · overall count started over: {notes.Count(n => n.Contains("so the overall count starts over"))} at a zone change, {notes.Count(n => n.Contains("back from a break"))} after a break");
         PrintRuns(s, items, landed, first, signals);
         if (opts.TryGetValue("notes", out var notesOut)) File.Copy(Path.Combine(CrashLog.DirOverride, "reads.log"), notesOut, true);
         CrashLog.DirOverride = null; CrashLog.Clock = null; _ = real;
