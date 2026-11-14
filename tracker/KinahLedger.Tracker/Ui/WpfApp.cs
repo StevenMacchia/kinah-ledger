@@ -810,6 +810,14 @@ public static partial class WpfApp
             w.OverlayEntries()[0].Do!(); DoEvents();
             Check(flipped && dotOff && w.OverlaysForTest()[0].On == kinahWas && w.OverlaysDotForTest == w.OverlaysForTest().Any(o => o.On),
                 $"...its Kinah switch turns the panel {(kinahWas ? "off" : "on")} and back; the button's green dot shows while any overlay is on ({flipped} {dotOff})");
+            // an overlay that isn't one of its own just now (the Parser inside the Kinah overlay) is left out of the menu
+            bool sep = false;
+            w.RegisterOverlay("Test", () => true, _ => { }, "a test overlay", visible: () => sep);
+            bool hiddenOut = !w.OverlayEntries().Any(e => e.Text == "Test overlay");
+            sep = true;
+            bool shownIn = w.OverlayEntries().Any(e => e.Text == "Test overlay");
+            w.UnregisterOverlayForTest("Test");
+            Check(hiddenOut && shownIn, $"...an overlay registered with a visible switch is in the menu only while it is one of its own ({hiddenOut} {shownIn})");
             Check(seen.Select(s => s[(s.IndexOf(':') + 1)..]).Distinct().Count() == 1, "...the same on every page");
         // the timers (0.10.85, Ui/MainWindow.Timers.cs): a Timers button in the header opens the window; the overlay never
         // takes focus, passes clicks through when asked, and Customize's switches land in the settings
