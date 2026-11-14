@@ -73,8 +73,20 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<QuestDonePayload>? quests = null,
     // since 0.10.55: which of the player's characters ran it (CharacterPayload), so the profile on the site can show each
     // apart; absent before the first character was seen. A site from before ignores it
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CharacterPayload? character = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CharacterPayload? character = null,
+    // since 0.10.79: what the Abyss paid and cost (SessionEngine: Abyss Points, Rank Points earned and lost on deaths), and
+    // the kills split into players and monsters with the deaths beside them (0.10.72), so the profile can show them. Each
+    // is absent when zero; a site from before ignores them
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? abyss_points = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? rank_points = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? rank_lost = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? pvp_kills = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? mob_kills = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths_pvp = null)
 {
+    static long? Nz(long v) => v > 0 ? v : null;
+    static int? Nz(int v) => v > 0 ? v : null;
     /// <summary>The completed quests the next batch should carry (the window keeps them, Ui/MainWindow.QuestsPage.cs); null for none or with quests off.</summary>
     public static Func<List<QuestDonePayload>?>? QuestsPending { get; set; }
     /// <summary>A batch the site took, with the quests it carried: the window marks them sent.</summary>
@@ -127,8 +139,9 @@ public sealed record RunPayload(
             Merge(s.ItemsBound, Key, Off),
             s.PetSnapshot(),
             // each zone carries its own items, so the site files them under the zone they dropped in, never all under the main one
-            zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0 || kv.Value.Items.Count > 0 || kv.Value.ItemsBound.Count > 0)
-                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, Math.Max(0, kv.Value.Drops - Flagged(kv.Value)), kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key, Off), Merge(kv.Value.ItemsBound, Key, Off))),
+            zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0 || kv.Value.Items.Count > 0 || kv.Value.ItemsBound.Count > 0 || kv.Value.AbyssPoints > 0 || kv.Value.Deaths > 0)
+                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, Math.Max(0, kv.Value.Drops - Flagged(kv.Value)), kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key, Off), Merge(kv.Value.ItemsBound, Key, Off),
+                     Nz(kv.Value.AbyssPoints), Nz(kv.Value.RankPoints), Nz(kv.Value.RankLost), Nz(kv.Value.PlayerKills), Nz(kv.Value.MonsterKills), Nz(kv.Value.Deaths))),
             InstallId.Get(),
             net,
             OddsPayload.From(s),
@@ -136,7 +149,9 @@ public sealed record RunPayload(
             InstanceRunPayload.From(instances, Key, Off),
             s.Focus,
             quests: quests is { Count: > 0 } ? quests : null,
-            character: CharacterPayload.Now());
+            character: CharacterPayload.Now(),
+            abyss_points: Nz(s.AbyssPoints), rank_points: Nz(s.RankPoints), rank_lost: Nz(s.RankPointsLost),
+            pvp_kills: Nz(s.PlayerKills), mob_kills: Nz(s.MonsterKills), deaths: Nz(s.Deaths), deaths_pvp: Nz(s.DeathsToPlayers));
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
@@ -174,6 +189,7 @@ public sealed record RunPayload(
             if (!outp.TryGetValue(k, out var z)) { outp[k] = z = new SessionEngine.ZoneStats(); }
             z.Seconds += v.Seconds; z.Active += v.Active; z.Kinah += v.Kinah; z.KinahDrops += v.KinahDrops; z.CurrencyLines += v.CurrencyLines; z.KillsSeen += v.KillsSeen;
             z.Defeated += v.Defeated; z.Xp += v.Xp; z.Pets += v.Pets; z.Drops += v.Drops; z.Nodes += v.Nodes;
+            z.AbyssPoints += v.AbyssPoints; z.RankPoints += v.RankPoints; z.RankLost += v.RankLost; z.PlayerKills += v.PlayerKills; z.MonsterKills += v.MonsterKills; z.Deaths += v.Deaths;
             foreach (var (n, c) in v.PetsByName) z.PetsByName[n] = z.PetsByName.GetValueOrDefault(n) + c;
             foreach (var (id, c) in v.Items) z.Items[id] = z.Items.GetValueOrDefault(id) + c;
             foreach (var (id, c) in v.ItemsBound) z.ItemsBound[id] = z.ItemsBound.GetValueOrDefault(id) + c;
@@ -183,7 +199,15 @@ public sealed record RunPayload(
 }
 
 /// <summary>One zone's share of a run: how long, and what came out of it. This is what the "best spot per hour" tables are built from.</summary>
-public sealed record ZoneRun(int minutes, int kills, int nodes, long kinah, int drops, int pets, Dictionary<string, int> pets_by_name, Dictionary<string, int> items, Dictionary<string, int> items_bound);
+/// Since 0.10.79 an Abyss zone also carries its Abyss Points, Rank Points earned and lost, kills of players and of monsters and
+/// deaths, each absent when zero.
+public sealed record ZoneRun(int minutes, int kills, int nodes, long kinah, int drops, int pets, Dictionary<string, int> pets_by_name, Dictionary<string, int> items, Dictionary<string, int> items_bound,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? abyss_points = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? rank_points = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? rank_lost = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? pvp_kills = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? mob_kills = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths = null);
 
 /// <summary>
 /// Kinah by enemy, a best guess: what came within a few seconds of the target bar showing this enemy. Only names on the

@@ -5120,6 +5120,17 @@ options: --process aion[,other]");
                 Check("a kill's bound Kina in the Abyss is Kinah, by zone; a quest's isn't, nor bound Kina out of it",
                     $"{bk.Kinah} {bk.AbyssBoundKinah} {bk.KinahBound} {bk.ZoneSnapshot()["Abyss"].Kinah} {bk.Kills} | {bw.Kinah} {bw.KinahBound}", "1625 1625 8000 1625 2 | 0 1245");
                 Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
+                // 0.10.79: the upload carries the Abyss's figures, in all and per zone, each only when there is any, so the profile
+                // on the site can show them; a run out of the Abyss sends none of them
+                ae.Apply(new CurrencyGained(at0.AddSeconds(12), "Rank Points", 120)); ae.Apply(new RankPointsLost(at0.AddSeconds(14), 30));
+                ae.Apply(new FightCounted(at0.AddSeconds(15), true, false, "Asmodian")); ae.Apply(new FightCounted(at0.AddSeconds(16), false, false, "Krall"));
+                ae.Apply(new FightCounted(at0.AddSeconds(17), false, false, "Krall")); ae.Apply(new FightCounted(at0.AddSeconds(18), true, true, "Asmodian"));
+                var ap = RunPayload.Build(ae, new Settings(), "Abyss", "Abyss", "na_e", "", items);
+                var apz = ap.zones.GetValueOrDefault("Chaotic Upper Reshanta");
+                var apj = System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(bw, new Settings(), "Open world", "Open world", "na_e", "", items));
+                Check("the upload carries the Abyss's points, ranks, kills and deaths, by zone too; a run out of it none",
+                    $"{ap.abyss_points} {ap.rank_points} {ap.rank_lost} {ap.pvp_kills} {ap.mob_kills} {ap.deaths} {ap.deaths_pvp} | {apz?.abyss_points} {apz?.rank_points} {apz?.rank_lost} {apz?.pvp_kills} {apz?.mob_kills} {apz?.deaths} | {(new[] { "abyss_points", "rank_points", "rank_lost", "pvp_kills", "mob_kills", "deaths" }.Any(apj.Contains) ? "some" : "none")}",
+                    "400 120 30 1 2 1 1 | 400 120 30 1 2 1 | none");
             }
             {
                 // Diamond Powder: x3 at mastery 20 (1 Gemstone), x30 at 45 (10); the panel's "(Novice Lv. 45)" says which was crafted
