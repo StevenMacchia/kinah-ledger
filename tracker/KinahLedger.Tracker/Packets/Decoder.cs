@@ -19,38 +19,42 @@ public enum ItemOp { NewStack = 0, Changed = 1, Gone = 2 }
 /// </summary>
 public sealed record ItemChange(DateTime At, long ItemId, ItemOp Op, long StackId, long Delta, long Total, bool First, int Batch, int BatchRows, bool BatchFell);
 
-/// <summary>Which boss content a fight is in. The boss parser runs only in these.</summary>
-public enum ContentKind { None = 0, Transcendence = 1, Expedition = 2, Sanctuary = 3 }
-
-/// <summary>What a boss parser event is.</summary>
-public enum FightKind { ZoneEnter = 1, ZoneLeave = 2, BossSeen = 3, EncounterStart = 4, EncounterEnd = 5, Member = 6, MemberLeft = 7, Damage = 8, BossHp = 9 }
-
-/// <summary>How an encounter ended.</summary>
-public enum FightOutcome { None = 0, Killed = 1, Wipe = 2, Left = 3 }
-
 /// <summary>
-/// One boss parser event (klnet.dll's interface version 3). Events come only inside a Transcendence, Expedition or Sanctuary
-/// instance, between its ZoneEnter and ZoneLeave. Every EncounterStart gets exactly one EncounterEnd (Left when the zone or
-/// the connection ends first), and an encounter's events carry its Encounter serial (a new one per boss pull).
-/// <list type="bullet">
-/// <item>BossSeen, BossHp: Amount is the boss's HP now, Max its max HP. EncounterStart: Max is the max HP.</item>
-/// <item>Damage: one share of an HP fall of the boss, to Entity (Name when known; Self when it is the player). Amount is this
-/// share, Max that attacker's total in the encounter. Entity 0 is "other": a fall no hit came with (damage over time, or
-/// lost traffic). An encounter's Damage adds up to the HP it lost.</item>
-/// <item>EncounterEnd: Outcome, and Amount the HP the boss lost in it.</item>
-/// <item>Member, MemberLeft: a group member (Entity, Name, Class, CombatPower, ItemLevel); a later Member for the same Entity
-/// replaces the earlier one. Not sent yet (the group isn't read yet): a fight shows without it.</item>
-/// </list>
+/// The decoder's boss parser row (klnet.dll version 4) before it becomes a <see cref="FightEvent"/>. Kind: 1 instance entered,
+/// 2 left, 3 boss seen, 4 pull started, 5 pull ended, 6 group member, 7 member left, 8 damage, 9 boss HP, 10 a death.
 /// </summary>
-public sealed record FightEvent(
-    DateTime At, FightKind Kind,
-    ContentKind Content, string Zone,
-    int Encounter,
-    string Boss, long BossEntity,
-    FightOutcome Outcome,
-    long Entity, string Name, string Class, bool Self,
-    long CombatPower, long ItemLevel,
-    long Amount, long Max);
+internal sealed record FightRow(DateTime At, int Kind, int Content, string Zone, int Pull, string Boss, long BossEntity, int Outcome,
+    long Entity, string Name, string Class, bool Self, long CombatPower, long ItemLevel, long Amount, long Max);
+
+/// <summary>Turns the decoder's rows into the tracker's events: keeps the roster (GroupChanged is the whole list) and the instance serial.</summary>
+internal sealed class FightMapper
+{
+    readonly Dictionary<long, GroupMember> _group = new();
+    long _instance;
+
+    public void Reset() => _group.Clear();
+
+    public FightEvent? Map(FightRow r)
+    {
+        switch (r.Kind)
+        {
+            case 1:
+                _group.Clear();
+                return new InstanceEntered(r.At, r.Content is >= 1 and <= 3 ? (ContentKind)r.Content : ContentKind.Other, r.Zone, ++_instance);
+            case 2: _group.Clear(); return new InstanceLeft(r.At);
+            case 4: return new BossEngaged(r.At, r.Boss, r.BossEntity);
+            case 5: return new BossEnded(r.At, r.BossEntity, r.Outcome switch { 1 => BossOutcome.Kill, 2 => BossOutcome.Wipe, _ => BossOutcome.Left });
+            case 6:
+                _group[r.Entity] = new GroupMember(r.Entity, r.Name, r.Class, (int)Math.Clamp(r.CombatPower, 0, int.MaxValue), (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), r.Self);
+                return new GroupChanged(r.At, _group.Values.ToList());
+            case 7: return _group.Remove(r.Entity) ? new GroupChanged(r.At, _group.Values.ToList()) : null;
+            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self);
+            case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
+            case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1);
+            default: return null;   // boss seen (its HP comes with the pull), or a kind this build doesn't know
+        }
+    }
+}
 
 /// <summary>
 /// What turns the game server's stream into currency changes. The decoder is not part of this source: release builds carry
@@ -70,7 +74,7 @@ public interface IGameDecoder : IDisposable
     bool ReadsItems => false;
     /// <summary>The next item change found, or null (always null for a decoder that reads no items).</summary>
     ItemChange? NextItem() => null;
-    /// <summary>True when this decoder reads boss fights too (klnet.dll's interface version 3).</summary>
+    /// <summary>True when this decoder reads boss fights too (klnet.dll's interface version 4).</summary>
     bool ReadsFights => false;
     /// <summary>The next boss parser event, or null (always null for a decoder that reads no fights).</summary>
     FightEvent? NextFight() => null;
@@ -103,18 +107,18 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_fight")] static extern int NextFightN(nint h, KlFight* fight);
 
     static int? _abi;
-    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 3 with boss fights.</summary>
+    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 4 with boss fights (each version keeps the earlier exports).</summary>
     public static int Version
     {
         get
         {
             if (_abi is int v) return v;
-            try { int a = Abi(); _abi = a is >= 1 and <= 3 ? a : 0; }
+            try { int a = Abi(); _abi = a >= 1 ? a : 0; }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { _abi = 0; }
             return _abi.Value;
         }
     }
-    /// <summary>True when this build carries the decoder (klnet.dll, interface version 1 to 3).</summary>
+    /// <summary>True when this build carries the decoder (klnet.dll, any interface version).</summary>
     public static bool Available => Version > 0;
 
     /// <summary>A decoder, or null when this build has none.</summary>
@@ -128,7 +132,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     nint _h;
     NativeDecoder(nint h) => _h = h;
 
-    public void Reset() { if (_h != 0) ResetN(_h); }
+    public void Reset() { if (_h != 0) ResetN(_h); _fights.Reset(); }
     public void Gap() { if (_h != 0) GapN(_h); }
     public void Feed(byte[] data, DateTime at)
     {
@@ -150,16 +154,19 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         if (NextItemN(_h, &c) != 1 || c.Op is < 0 or > 2) return null;
         return new ItemChange(new DateTime(c.AtUtcTicks, DateTimeKind.Utc), c.ItemId, (ItemOp)c.Op, c.StackId, c.Delta, c.Total, c.First != 0, c.Batch, c.BatchRows, c.BatchFell != 0);
     }
-    public bool ReadsFights => Version >= 3;
+    readonly FightMapper _fights = new();
+    public bool ReadsFights => Version >= 4;
     public FightEvent? NextFight()
     {
-        if (_h == 0 || Version < 3) return null;
+        if (_h == 0 || Version < 4) return null;
         KlFight f;
-        if (NextFightN(_h, &f) != 1 || f.Kind is < 1 or > 9) return null;
-        return new FightEvent(new DateTime(f.AtUtcTicks, DateTimeKind.Utc), (FightKind)f.Kind,
-            f.Content is >= 0 and <= 3 ? (ContentKind)f.Content : ContentKind.None, Text(f.Zone, 64), f.Encounter, Text(f.Boss, 64), f.BossEntity,
-            f.Outcome is >= 0 and <= 3 ? (FightOutcome)f.Outcome : FightOutcome.None, f.Entity, Text(f.Name, 32), Text(f.Class, 16), f.Self != 0,
-            f.CombatPower, f.ItemLevel, f.Amount, f.Max);
+        while (NextFightN(_h, &f) == 1)
+        {
+            var row = new FightRow(new DateTime(f.AtUtcTicks, DateTimeKind.Utc), f.Kind, f.Content, Text(f.Zone, 64), f.Encounter, Text(f.Boss, 64), f.BossEntity,
+                f.Outcome, f.Entity, Text(f.Name, 32), Text(f.Class, 16), f.Self != 0, f.CombatPower, f.ItemLevel, f.Amount, f.Max);
+            if (_fights.Map(row) is { } e) return e;
+        }
+        return null;
     }
     /// <summary>A NUL-padded UTF-8 field.</summary>
     internal static string Text(byte* p, int size)

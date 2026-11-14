@@ -110,17 +110,24 @@ public sealed class PacketReader : IDisposable
     /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
 
-    /// <summary>The next boss parser event (klnet.dll version 3), null when there is none. Only inside Transcendence, Expedition and Sanctuary.</summary>
+    /// <summary>The next boss parser event (klnet.dll version 4), null when there is none. Only inside Transcendence, Expedition and Sanctuary, plus a FeedGap when traffic was lost.</summary>
     public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
-    /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 3).</summary>
+    /// <summary>True when the decoder reads boss fights (the release build's klnet.dll, version 4).</summary>
     public bool ReadsFights => _decoder?.ReadsFights == true;
     /// <summary>A boss parser event from the decoder, queued for the tracker; zone and encounter edges logged.</summary>
     internal void TakeFight(FightEvent f)
     {
         while (_fights.Count >= MaxFights) _fights.TryDequeue(out _);
         _fights.Enqueue(f);
-        if (f.Kind is FightKind.ZoneEnter or FightKind.ZoneLeave or FightKind.EncounterStart or FightKind.EncounterEnd)
-            Log($"{Local(f.At)}  boss parser: {f.Kind}{(f.Zone.Length > 0 ? " · " + f.Zone : "")}{(f.Boss.Length > 0 ? " · " + f.Boss : "")}{(f.Kind == FightKind.EncounterEnd ? $" · {f.Outcome}, {f.Amount:N0} HP" : "")}");
+        string? line = f switch
+        {
+            InstanceEntered e => $"into {e.Name} ({e.Kind})",
+            InstanceLeft => "out of the instance",
+            BossEngaged e => $"pull: {(e.Boss.Length > 0 ? e.Boss : "a boss")}",
+            BossEnded e => $"pull ended: {e.Outcome}",
+            _ => null,
+        };
+        if (line != null) Log($"{Local(f.At)}  boss parser: {line}");
     }
 
     /// <summary>A screen pickup the agreement check found the traffic didn't count (never showed it, or showed only a stack's first sight): the screen's to count after all.</summary>
@@ -240,6 +247,7 @@ public sealed class PacketReader : IDisposable
             OnGap = () =>
             {
                 dec.Gap();
+                if (dec.ReadsFights) TakeFight(new FeedGap(_dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt));
                 lock (_gate) { var at = _dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt; _gapsAt.Add(at); _gapsAt.RemoveAll(g => (at - g).TotalMinutes > 2); }
             },
         };
