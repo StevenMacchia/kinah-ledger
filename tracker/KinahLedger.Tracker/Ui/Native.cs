@@ -11,8 +11,17 @@ namespace KinahLedger.Ui;
 internal static class Native
 {
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-    [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint mods, uint vk);
-    [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+    [DllImport("user32.dll", EntryPoint = "RegisterHotKey")] static extern bool RegisterHotKeyNative(IntPtr hWnd, int id, uint mods, uint vk);
+    [DllImport("user32.dll", EntryPoint = "UnregisterHotKey")] static extern bool UnregisterHotKeyNative(IntPtr hWnd, int id);
+
+    /// <summary>
+    /// Set by options-test and ui-shot: their windows take no shortcut from the PC (2026-11-14: a test window registering the
+    /// player's own Ctrl+Shift+K made the installed tracker say it was already used by another app). Registering then says yes.
+    /// </summary>
+    public static bool NoHotkeys;
+
+    public static bool RegisterHotKey(IntPtr hWnd, int id, uint mods, uint vk) => NoHotkeys || RegisterHotKeyNative(hWnd, id, mods, vk);
+    public static bool UnregisterHotKey(IntPtr hWnd, int id) => NoHotkeys || UnregisterHotKeyNative(hWnd, id);
     [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr h);
 
     public const int WM_HOTKEY = 0x0312, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
