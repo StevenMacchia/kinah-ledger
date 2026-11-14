@@ -17,6 +17,47 @@ public readonly record struct Hotkey(ModifierKeys Modifiers, Key Key)
     const uint MOD_NOREPEAT = 0x4000;
 
     public uint NativeModifiers => (uint)Modifiers | MOD_NOREPEAT;
+
+    /// <summary>What registering a shortcut came to.</summary>
+    public enum Outcome { Registered, Skipped, Taken, TakenByTracker }
+
+    /// <summary>
+    /// Shortcuts are registered only by the tracker that holds the one-per-session claim (SingleInstance.Held): never by a
+    /// test or render command, never by a second copy (a dev build beside the installed one). <see cref="AllowForTest"/> lets
+    /// the options test try the real path.
+    /// </summary>
+    public static bool Allowed => SingleInstance.Held || AllowForTest;
+    internal static bool AllowForTest;
+    /// <summary>Windows' RegisterHotKey (the options test puts a fake in its place).</summary>
+    internal static Func<IntPtr, int, uint, uint, bool> RegisterNative = (h, id, mods, vk) => KinahLedger.Ui.Native.RegisterHotKey(h, id, mods, vk);
+    /// <summary>Another Kinah Ledger is running on this PC (the installed one beside a dev build, an old one closing).</summary>
+    internal static Func<bool> OtherTracker = () =>
+    {
+        try
+        {
+            int me = Environment.ProcessId;
+            return System.Diagnostics.Process.GetProcesses().Any(p =>
+            {
+                try { return p.Id != me && p.ProcessName.StartsWith("KinahLedger", StringComparison.OrdinalIgnoreCase); }
+                catch (Exception) { return false; }
+                finally { p.Dispose(); }
+            });
+        }
+        catch (Exception) { return false; }
+    };
+    /// <summary>How many shortcuts this process has registered (the options test checks a test run registers none).</summary>
+    public static int RegisteredCount { get; private set; }
+
+    /// <summary>
+    /// The one way a shortcut is registered: skipped unless this is the tracker (<see cref="Allowed"/>); taken when Windows
+    /// refuses it, and TakenByTracker when another Kinah Ledger is running (likely the holder: then nothing is said at all).
+    /// </summary>
+    public Outcome Register(IntPtr hwnd, int id)
+    {
+        if (!Allowed || hwnd == IntPtr.Zero) return Outcome.Skipped;
+        if (RegisterNative(hwnd, id, NativeModifiers, VirtualKey)) { RegisteredCount++; return Outcome.Registered; }
+        return OtherTracker() ? Outcome.TakenByTracker : Outcome.Taken;
+    }
     public uint VirtualKey => (uint)KeyInterop.VirtualKeyFromKey(Key);
 
     /// <summary>"Ctrl+Shift+K", "Alt+F9", "Ctrl+Alt+1". Null for empty, "Off", or anything without a modifier and a key.</summary>

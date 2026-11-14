@@ -138,6 +138,7 @@ public partial class OptionsWindow : Window
         BuildHudLooks(c.HudLook);
         LoadRareDrops(c);   // In game › Rare drops, built in Ui/OptionsWindow.RareDrops.cs
         LoadParser();       // In game › Parser, built in Ui/OptionsWindow.Parser.cs
+        ShowKeyNotes();     // a shortcut that is off: its quiet line under it
         _loading = false;
         Refresh();
     }
@@ -519,8 +520,29 @@ public partial class OptionsWindow : Window
         _host.SuspendHotkey(false);
         CaptureHint.Text = _capMark ? MarkHintText : HotkeyHintText;
         CaptureHint.Foreground = (Brush)FindResource("Muted");
+        ShowKeyNotes();
         Refresh();
     }
+
+    /// <summary>
+    /// A shortcut that is off (another app has it, or it breaks the rules) says so in the line under it, quietly: the only
+    /// place it is ever said (Steven, 2026-11-14: never a pop-up, a tray notice or a line on the panel). One held by another
+    /// Kinah Ledger says nothing at all.
+    /// </summary>
+    void ShowKeyNotes()
+    {
+        if (_capturing) return;
+        void Note(TextBlock hint, string? note, string plain)
+        {
+            hint.Text = note ?? plain;
+            hint.Foreground = (Brush)FindResource(note != null ? "Warn" : "Muted");
+        }
+        Note(HotkeyHint, _host.HotkeyNote, HotkeyHintText);
+        Note(MarkKeyHint, _host.MarkKeyNote, MarkHintText);
+    }
+
+    /// <summary>For the options test: the lines under the two shortcuts.</summary>
+    internal (string StartStop, string Mark) KeyHintsForTest => (HotkeyHint.Text, MarkKeyHint.Text);
 
     void OnHotkeyKey(object sender, KeyEventArgs e)
     {
