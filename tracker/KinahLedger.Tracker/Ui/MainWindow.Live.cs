@@ -364,6 +364,7 @@ public partial class MainWindow
             : ap ? (abyss > 0 ? $"{Amounts.Full(abyss / h)} Abyss Points an hour: {abyss:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it." : "No Abyss Points picked up yet.")
             : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
         FillHeroTicket(ap, total, h, priced, loot, _rateWarming && total > 0);
+        FillRankTicket(ap, e.RankPoints, e.RankPointsLost, h, _rateWarming);
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
         // a clear that can still be undone draws no line and keeps the real one's samples for Undo

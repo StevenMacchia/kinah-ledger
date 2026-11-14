@@ -78,8 +78,16 @@ public sealed partial class TrackerSession
         while (_packetHeld.Count > 0)
         {
             var c = _packetHeld[0];
+            // Rank Points going down: a death's cost in the Abyss (the game takes them at the death, 32 each on 2026-11-13)
+            if (c.What == CurrencyKind.RankPoints && !c.First && c.Delta < 0)
+            {
+                _packetHeld.RemoveAt(0);
+                CrashLog.Note($"packets: Rank Points {c.Delta:N0} (now {c.Amount:N0}): lost");
+                CommitWith(new RankPointsLost(c.At, -c.Delta) { Via = "packets" }, "counter");
+                continue;
+            }
             if (c.First || c.Delta <= 0) { _packetHeld.RemoveAt(0); continue; }   // a baseline, or spending: nothing picked up
-            string what = c.What switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", _ => "Abyss Points" };
+            string what = c.What switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", CurrencyKind.RankPoints => "Rank Points", _ => "Abyss Points" };
             bool nearKill = (_lastKillAt - c.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - c.At).TotalSeconds >= -PacketNearSeconds
                 // a pickup the traffic counted in the last few seconds: still farming (in the Abyss the kill's lines are few and
                 // late, so on Steven's 2026-11-13 log this decided 38 of the 51 pickups that would otherwise have waited)
@@ -101,6 +109,7 @@ public sealed partial class TrackerSession
             }
             GameEvent ev = c.What == CurrencyKind.AbyssPoints
                 ? new CurrencyGained(c.At, "Abyss Points", c.Delta) { Via = "packets" }
+                : c.What == CurrencyKind.RankPoints ? new CurrencyGained(c.At, "Rank Points", c.Delta) { Via = "packets" }
                 : new KinahChanged(c.At, c.Delta, c.What == CurrencyKind.BoundKinah) { Via = "packets" };
             CrashLog.Note($"packets: {what} +{c.Delta:N0} (now {c.Amount:N0}): counted from the game's message, {After(c.At)}");
             CommitWith(ev, "counter");
@@ -152,6 +161,7 @@ public sealed partial class TrackerSession
         {
             KinahChanged { Delta: > 0 } k => k.Bound ? CurrencyKind.BoundKinah : CurrencyKind.Kinah,
             CurrencyGained { Amount: > 0 } cg when SessionEngine.IsAbyssPoints(cg.Name) => CurrencyKind.AbyssPoints,
+            CurrencyGained { Amount: > 0 } cg when SessionEngine.IsRankPoints(cg.Name) => CurrencyKind.RankPoints,
             _ => null,
         };
         if (kind is not { } k2 || !p.Counting(k2, ev.Time)) return false;

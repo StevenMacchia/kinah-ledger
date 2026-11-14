@@ -2098,6 +2098,9 @@ public partial class MainWindow : Window
                 // the game's messages tell the kills apart (0.10.72): 9 of the 118 were players; two deaths, one to a player
                 for (int i = 0; i < 118; i++) e.Apply(new FightCounted(t, i < 9, false, ""));
                 e.Apply(new FightCounted(t, true, true, "Nana")); e.Apply(new FightCounted(t, false, true, ""));
+                // Rank Points (0.10.76): 13 to 18 a monster, 46 a player, 32 lost at each death
+                for (int i = 0; i < 118; i++) e.Apply(new CurrencyGained(t, "Rank Points", i < 9 ? 46 : 13 + i % 6));
+                e.Apply(new RankPointsLost(t, 32)); e.Apply(new RankPointsLost(t, 32));
                 break;
             default:
                 // two zones (0.10.70, one screen): the first half hour next door, then here, so each figure has its "here"

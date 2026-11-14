@@ -695,14 +695,18 @@ public static partial class WpfApp
         Check(abyssHero.Abyss && abyssHero.Hero == apHour && abyssHero.Label.EndsWith("Abyss Points") && abyssHero.Ticket.Contains(" Kinah and loot an hour") && !abyssHero.Ticket.StartsWith(apHour),
             $"the Abyss: the hero is {abyssHero.Hero} (expected {apHour}) \"{abyssHero.Label.Replace('\n', ' ')}\", the ticket \"{abyssHero.Ticket}\"");
         var abyssLine = w.HeroStatsForTest();
-        Check(abyssLine.Count == 4 + 1 && abyssLine[0] == "24,740 Abyss Points" && abyssLine[1].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        Check(abyssLine.Count == 6 && abyssLine[0] == "24,740 AP" && abyssLine[2].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        // Rank Points (0.10.76): beside the Abyss Points, their hour on a ticket beside the Kinah one, deaths' cost on the hovers
+        string rankTip = w.HeroStatTipForTest("Rank"), rankTicket = w.RankTicketForTest();
+        Check(abyssLine[1] == "2,104 Rank" && rankTicket == "2,986 Rank an hour" && rankTip.Contains("2,104 Rank Points earned") && rankTip.Contains("2,986 an hour") && rankTip.Contains("64 lost on 2 deaths (1 to players): 2,040 kept"),
+            $"...Rank Points: {abyssLine.ElementAtOrDefault(1)}, the ticket \"{rankTicket}\", on hover \"{rankTip.Replace('\n', ' ')}\"");
         // the game's messages told the kills apart (0.10.72): PvP and mobs in place of kills, players, monsters and deaths on hover
         string pvpTip = w.HeroStatTipForTest("PvP");
-        Check(abyssLine[3] == "9 PvP" && abyssLine[4] == "109 mobs" && pvpTip.Contains("9 players and 109 monsters") && pvpTip.Contains("You died 2 times, 1 of them to players"),
-            $"...kills told apart: {abyssLine.ElementAtOrDefault(3)} · {abyssLine.ElementAtOrDefault(4)}, on hover \"{pvpTip}\"");
+        Check(abyssLine[4] == "9 PvP" && abyssLine[5] == "109 mobs" && pvpTip.Contains("9 players and 109 monsters") && pvpTip.Contains("You died 2 times, 1 of them to players"),
+            $"...kills told apart: {abyssLine.ElementAtOrDefault(4)} · {abyssLine.ElementAtOrDefault(5)}, on hover \"{pvpTip}\"");
         w.ShowDemo(); DoEvents();
         var worldHero = w.HeroForTest();
-        Check(!worldHero.Abyss && worldHero.Ticket == "" && worldHero.Label.Contains("Kinah and loot"), $"...out of the Abyss: the Kinah hour {worldHero.Hero}, no ticket");
+        Check(!worldHero.Abyss && worldHero.Ticket == "" && w.RankTicketForTest() == "" && worldHero.Label.Contains("Kinah and loot"), $"...out of the Abyss: the Kinah hour {worldHero.Hero}, no ticket");
 
         // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
         w.ShowDemo(); DoEvents();

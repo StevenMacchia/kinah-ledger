@@ -191,6 +191,22 @@ public static class PacketTests
             var z = s.Engine.ZoneSnapshot().GetValueOrDefault("Abyss");
             Check(s.Engine.PlayerKills == 1 && s.Engine.MonsterKills == 2 && s.Engine.Deaths == 1 && s.Engine.DeathsToPlayers == 1 && s.Engine.Kills == 3 && z?.PlayerKills == 1 && z.MonsterKills == 2 && z.Deaths == 1,
                 $"...counted in the Abyss: {s.Engine.PlayerKills} player, {s.Engine.MonsterKills} monsters, {s.Engine.Deaths} death ({s.Engine.DeathsToPlayers} to a player); kills {s.Engine.Kills} (the chat saw 1); zone Abyss {z?.PlayerKills}/{z?.MonsterKills}/{z?.Deaths}");
+            // Rank Points (0.10.76): each rise counted from the game's message like Abyss Points, the chat's own line for it left
+            // out; a fall is a death's cost (32 at each of the four deaths of 2026-11-13 18:45 to 18:48), counted as lost
+            var r2 = new PacketReader(); r2.ReadingForTest();
+            var s2 = new TrackerSession(null, settings, items, "Test") { Packets = r2 };
+            s2.ApplyZone("Devastated Remnants", t0);
+            FightEvent RT(double sec, long d, long total) => new(t0.AddSeconds(sec), FightKind.RankPoints, FightFlags.None, 0, 0, 0, d, total, "", "");
+            foreach (var e in new[] { RT(0, 0, 262_900), K(10, FightFlags.Mine | FightFlags.VictimMonster), RT(10, 13, 262_913), K(20, FightFlags.VictimMe, killer: "Nana"), RT(20, -32, 262_881), K(30, FightFlags.Mine | FightFlags.VictimMonster), RT(30, 15, 262_896) })
+                r2.FightsForTest(e);
+            s2.CommitForTest(new CurrencyGained(t0.AddSeconds(11), "Rank Points", 13) { Via = "chat" });   // the chat's line for the first rise
+            s2.DrainPacketsForTest();
+            var z2 = s2.Engine.ZoneSnapshot().GetValueOrDefault("Abyss");
+            Check(s2.Engine.RankPoints == 28 && s2.Engine.RankPointsLost == 32 && z2?.RankPoints == 28 && z2.RankLost == 32 && s2.Engine.Deaths == 1,
+                $"...Rank Points from the game: +{s2.Engine.RankPoints} (13 + 15, the chat's 13 left out), {s2.Engine.RankPointsLost} lost at the death; zone Abyss +{z2?.RankPoints} −{z2?.RankLost}");
+            // out of the Abyss Rank Points are no income of their own (a quest's, an event's)
+            var e3 = new SessionEngine(items); e3.SetZone("Ellun River Midstream"); e3.Apply(new CurrencyGained(t0, "Rank Points", 50)); e3.Apply(new RankPointsLost(t0, 32));
+            Check(e3.RankPoints == 0 && e3.RankPointsLost == 0, "...and out of the Abyss neither counts");
         }
 
         // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
