@@ -690,6 +690,7 @@ public sealed class BossParser
             var name = instance?.Trim() ?? "";
             if (k == _kind && name == _instance) return;
             _kind = instance == null ? ContentKind.Other : k; _instance = name;
+            if (Kept(_kind)) _farm = null;   // the minimap says an instance: whatever was counted as farming is over
             if (_mode == ParserMode.Run && _run == null && Kept(_kind)) OpenRun(DateTime.UtcNow, midway: false);
             _version++;
         }

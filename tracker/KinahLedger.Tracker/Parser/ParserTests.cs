@@ -48,6 +48,22 @@ public static class ParserTests
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == port) segs.Add((at, s));
         DateTime last = DateTime.MinValue;
+        // the open world's farming as the Kinah line would show it, sampled each second of the recording (never kept: only printed here)
+        var farms = new List<(DateTime Start, DateTime Last, long Yours, double Fighting, List<double> Shown)>();
+        Encounter? farmNow = null; var shown = new List<double>(); DateTime sampled = DateTime.MinValue;
+        void Sample(DateTime at)
+        {
+            if ((at - sampled).TotalSeconds < 1) return;
+            sampled = at;
+            var f = p.Farm;
+            if (f != null && f.FarmDps() > 0) shown.Add(f.FarmDps());
+            if (farmNow != null && (f == null || f.Start != farmNow.Start))
+            {
+                farms.Add((farmNow.Start, farmNow.LastAt, farmNow.You?.Damage ?? 0, farmNow.You?.FightingSeconds ?? 0, shown));
+                shown = new();
+            }
+            farmNow = f;
+        }
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
@@ -64,9 +80,16 @@ public static class ParserTests
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
             };
-            foreach (var (at, s) in conn) { st.Add(s.Seq, s.Payload, at, s.Syn); p.Tick(at); }
+            foreach (var (at, s) in conn) { st.Add(s.Seq, s.Payload, at, s.Syn); p.Tick(at); Sample(at); }
         }
         p.Tick(DateTime.MaxValue.AddDays(-1));
+        Sample(DateTime.MaxValue.AddDays(-1));
+        foreach (var f in farms)
+        {
+            var sorted = f.Shown.OrderBy(x => x).ToList();
+            string Q(double q) => sorted.Count == 0 ? "-" : Ui.Amounts.Short(sorted[(int)Math.Min(sorted.Count - 1, Math.Floor(q * sorted.Count))]);
+            Console.WriteLine($"farming {f.Start.ToLocalTime():HH:mm:ss}-{f.Last.ToLocalTime():HH:mm:ss}: your damage {Ui.Amounts.Short(f.Yours)} in {f.Fighting:0} s fighting = {(f.Fighting > 0 ? Ui.Amounts.Short(f.Yours / Math.Max(1, f.Fighting)) : "-")}/s; the Kinah line read {Q(0.1)} / {Q(0.5)} / {Q(0.9)} (10th / median / 90th, {sorted.Count} s)");
+        }
         foreach (var e in kept)
         {
             var end = e.End ?? e.LastAt;
@@ -368,7 +391,12 @@ public static class ParserTests
             var farm = p.Farm;
             Check(p.Live == null && farm is { OpenWorld: true, Kind: "Open world" } && farm.You is { Damage: 132_000 } && Math.Abs(farm.Dps(farm.You!, t.AddSeconds(10)) - 13_200) < 0.01,
                 $"farming in the open world in Bosses only: no pull, but a live fight with your DPS for the Kinah line ({(farm?.You != null ? farm.Dps(farm.You, t.AddSeconds(10)) : 0):0})");
-            p.Tick(t.AddSeconds(10 + BossParser.PauseSeconds));
+            // a 14 s walk to the next monster, then 5 s on it: the Kinah line's DPS is over the fighting, not the walk
+            for (int i = 24; i <= 29; i++) p.Take(new DamageDealt(t.AddSeconds(i), 1, 5100, 12_000, SourceIsYou: true));
+            var walked = p.Farm!;
+            Check(walked.You!.FightingSeconds == 15 && Math.Abs(walked.FarmDps() - 17 * 12_000 / 15.0) < 0.01 && walked.Dps(walked.You, t.AddSeconds(29)) < walked.FarmDps(),
+                $"...its DPS on the Kinah line is over your fighting time ({walked.You.FightingSeconds:0} s of 29: stretches of hits with gaps up to {Fighter.StretchGapSeconds:0} s), so walking between monsters doesn't pull it down ({walked.FarmDps():0})");
+            p.Tick(t.AddSeconds(29 + BossParser.PauseSeconds));
             Check(p.Farm == null && kept.Count == 0 && p.LiveAll.Count == 0, "...gone after its pause, nothing kept");
             p.Take(new DamageDealt(t.AddSeconds(100), 1, 6000, 5_000, SourceIsYou: true));
             p.Take(new InstanceEntered(t.AddSeconds(105), ContentKind.Expedition, "Fire Temple", 89));

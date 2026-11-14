@@ -337,8 +337,8 @@ public partial class MainWindow
     /// <summary>Your DPS in the open-world fight under way ("1.2K"), or "" (none, no damage of yours yet, or turned off in Options).</summary>
     string FarmDpsText(DateTime now)
     {
-        if (!_parserPrefs.FarmDps || ParserFights?.Farm is not { HasDamage: true } farm || farm.You is not { Damage: > 0 } me) return "";
-        var dps = farm.Dps(me, now);
+        if (!_parserPrefs.FarmDps || ParserFights?.Farm is not { HasDamage: true } farm) return "";
+        var dps = farm.FarmDps();   // over your fighting time: the walk between monsters doesn't pull it down
         return dps > 0 ? Amounts.Short(dps) : "";
     }
 
