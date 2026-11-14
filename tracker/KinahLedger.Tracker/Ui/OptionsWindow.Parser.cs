@@ -13,7 +13,7 @@ namespace KinahLedger.Ui;
 public partial class OptionsWindow
 {
     TextBlock? _parserLabel;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!;
 
     void LoadParser()
     {
@@ -24,6 +24,7 @@ public partial class OptionsWindow
         _parserFiltersChk.IsChecked = p.Filters;
         _parserHoversChk.IsChecked = p.Hovers;
         _parserSeparateChk.IsChecked = p.Separate;
+        _parserActiveChk.IsChecked = p.DpsActive;
     }
 
     void SaveParser()
@@ -35,6 +36,7 @@ public partial class OptionsWindow
         p.Filters = _parserFiltersChk.IsChecked == true;
         p.Hovers = _parserHoversChk.IsChecked == true;
         p.Separate = _parserSeparateChk.IsChecked == true;
+        p.DpsActive = _parserActiveChk.IsChecked == true;
         p.Save();
         ParserPrefs.RaiseSaved();
     }
@@ -61,6 +63,7 @@ public partial class OptionsWindow
             return cb;
         }
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
+        _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out.", "Parser DPS over active time");
         _parserKillsChk = Row("Kills and deaths", "Kills near you and the group's deaths on boss pulls and runs. Every fight always shows your kills and deaths.", "Parser kills and deaths");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
@@ -72,6 +75,6 @@ public partial class OptionsWindow
         else { PageInGame.Children.Insert(at, group); PageInGame.Children.Insert(at, _parserLabel); }
     }
 
-    /// <summary>For the options test: the Parser group's four switches.</summary>
-    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers, CheckBox Separate) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk);
+    /// <summary>For the options test: the Parser group's switches.</summary>
+    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk);
 }

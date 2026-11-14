@@ -39,6 +39,9 @@ public partial class MainWindow
     DateTime _parserEndedAt = DateTime.MinValue;
     string _parserLastLiveId = "";
     const double OverlayResultSeconds = 15;
+    /// <summary>"Move overlay" is on: the separate overlay shows sample rows, never click-through, so it can be placed before any fight.</summary>
+    bool _parserPlacing;
+    (Encounter? Live, DateTime At) _parserPlaceSample;
     const int ParserHotkeyId = 3;
     const int ParserRowsAtRest = 10;
 
@@ -54,12 +57,15 @@ public partial class MainWindow
         ParserPrefs.Saved += () => Dispatcher.BeginInvoke(() =>
         {
             var fresh = ParserPrefs.Load();
-            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate;
+            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive;
+            Encounter.ActiveBasis = fresh.DpsActive;
+            if (!fresh.Separate) _parserPlacing = false;
             ParserOverlayTick();
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
             RedrawParserPage();
         });
         _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
+        Encounter.ActiveBasis = _parserPrefs.DpsActive;
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
         ParserTab.Click += (_, _) => ShowPart("Parser");
         if (!watch) return;
@@ -271,7 +277,7 @@ public partial class MainWindow
     /// </summary>
     void ParserOverlayTick()
     {
-        if (_demo) return;
+        if (_demo && !_parserPlacing) return;
         var now = DateTime.UtcNow;
         var live = ParserLive;
         // the fight that just ended: its result shows a little while
@@ -291,8 +297,15 @@ public partial class MainWindow
             return;
         }
         _hud?.ShowParser(null, now, ParserModeNow, PDetails);
+        if (_parserPlacing)
+        {
+            // placing: sample rows wherever the game is, held still and draggable until Done
+            if (_parserPlaceSample.Live == null) _parserPlaceSample = (ParserDemo.Sample(now).Live, now);
+            show = _parserPlaceSample.Live;
+            now = _parserPlaceSample.At;
+        }
         bool inFront = ParserOverlayForceForTest || (_watcher.GameRect != null && (Native.ForegroundPid() == (uint)Environment.ProcessId || GameInFront()));
-        bool want = _parserPrefs.Overlay && show != null && inFront;
+        bool want = _parserPlacing ? show != null : _parserPrefs.Overlay && show != null && inFront;
         if (!want) { _parserOverlay?.ShowWanted(false); return; }
         if (_parserOverlay == null)
         {
@@ -316,6 +329,21 @@ public partial class MainWindow
         _parserOverlay.ShowWanted(true);
     }
 
+    /// <summary>"Move overlay" on or off: on, the separate overlay shows sample rows and takes the pointer; off (Done), it goes back to its fights and its click-through.</summary>
+    internal void SetParserPlacing(bool on)
+    {
+        _parserPlacing = on && _parserPrefs.Separate;
+        _parserPlaceSample = (null, default);
+        _parserOverlay?.SetClickThrough(!_parserPlacing && _parserPrefs.ClickThrough);
+        if (!_parserPlacing) _parserOverlay?.ShowWanted(false);   // a fight under way shows it again on the next tick
+        ParserOverlayTick();
+        // where it was dropped last, else its default place over the game, else over the main screen (no game running yet)
+        if (_parserPlacing && _parserOverlay != null) { _parserOverlay.SetClickThrough(false); _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect ?? System.Windows.Forms.Screen.PrimaryScreen?.Bounds); }
+        RedrawParserPage();
+    }
+
+    internal bool ParserPlacingForTest => _parserPlacing;
+
     void FillParserPage()
     {
         bool show = _part == "Parser" && !_welcome;
@@ -325,7 +353,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{_parserPlacing}:{Encounter.ActiveBasis}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear();
@@ -349,6 +377,15 @@ public partial class MainWindow
         right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
             $"The record under way over the game: the boss or the run, the clock and the group. {(_parserPrefs.Separate ? "Its own overlay (Settings › In game › Parser); right-click it for the mode." : "It opens above the Kinah overlay when a fight starts and folds away after.")}{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
         // click-through and the drag are the separate overlay's; above the Kinah line it follows the Kinah overlay's own
+        if (_parserPrefs.Separate)
+        {
+            var move = new Button { Content = _parserPlacing ? "Done" : "Move overlay", Height = 26, FontSize = 12, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = Tip("Shows the overlay with sample rows: drag it where you want it over the game, then press Done. It opens there for every fight.") };
+            move.SetResourceReference(StyleProperty, "PillBtn");
+            AutomationProperties.SetName(move, _parserPlacing ? "Done moving the overlay" : "Move overlay");
+            move.Click += (_, _) => SetParserPlacing(!_parserPlacing);
+            right.Children.Insert(0, move);
+        }
         if (_parserPrefs.Separate)
             right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
                 "On: clicks go through the overlay to the game. Off: drag the overlay where you want it; it stays there.", "Overlay click-through"), 14, 0, 0, 0));
@@ -500,8 +537,10 @@ public partial class MainWindow
         var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
         var place = BossBook.Strip(e.Instance);
         bool showPlace = place.Length > 0 && place != e.Title && place != e.Kind;
-        if (showPlace) sub.Children.Add(PT(place, 12, FontWeights.Medium, "Muted", trim: true));
-        sub.Children.Add(PT((showPlace ? "  ·  " : "") + KindLabel(e), 12, FontWeights.Medium, showPlace ? "Faint" : "Muted"));
+        // "Ferocious Horn Den · Conquest": the instance and the game's mode for it, then the kind
+        var lead = showPlace ? (e.GameMode.Length > 0 ? $"{place} · {e.GameMode}" : place) : e.GameMode;
+        if (lead.Length > 0) sub.Children.Add(PT(lead, 12, FontWeights.Medium, "Muted", trim: true));
+        sub.Children.Add(PT((lead.Length > 0 ? "  ·  " : "") + KindLabel(e), 12, FontWeights.Medium, lead.Length > 0 ? "Faint" : "Muted"));
         if (e.ModeKind != ParserMode.Run && e.FinalBoss) sub.Children.Add(PT("  ·  final boss", 12, FontWeights.Medium, "Faint"));
         if (e.ModeKind == ParserMode.Run) sub.Children.Add(PT($"  ·  {e.Splits.Count(x => x.Outcome == "kill")} of {e.Splits.Select(x => x.Boss).Distinct().Count()} bosses down", 12, FontWeights.Medium, "Faint"));
         mid.Children.Add(sub);
@@ -583,7 +622,10 @@ public partial class MainWindow
         // before the group list comes (damage only), the rows are who hit the boss: no class, CP or item level to show
         bool gear = PDetails && e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0 || f.Class.Length > 0);
         var cols = new List<(double Width, string Head, bool Right)> { (34, "", false), (0, "Member", false), (gear ? 92 : 0.01, gear ? "Class" : "", false), (gear ? 64 : 0.01, gear ? "CP" : "", true), (gear ? 62 : 0.01, gear ? "Item lvl" : "", true) };
-        if (dmg) { cols.Add((PDetails ? 76 : 0.01, PDetails ? "Damage" : "", true)); cols.Add((66, "DPS", true)); }
+        // Steven, 2026-11-14: "should give DPS and % not just a %": each row says "48.2K DPS · 25.1%"; its damage on hover,
+        // and as a column of its own in the detail view (and with Group details)
+        bool dmgCol = dmg && (detail || PDetails);
+        if (dmg) { cols.Add((dmgCol ? 76 : 0.01, dmgCol ? "Damage" : "", true)); cols.Add((150, "", true)); }
         if (deaths) cols.Add((50, "Deaths", true));
         Grid Row()
         {
@@ -601,7 +643,8 @@ public partial class MainWindow
             if (cols[i].Right) t.HorizontalAlignment = HorizontalAlignment.Right;
             Cell(head, i, t);
         }
-        host.Children.Add(head);
+        // minimal (no column but the name's): no head row, the rows say what their figures are
+        if (cols.Skip(2).Any(c => c.Head.Length > 0)) host.Children.Add(head);
         // what the bars measure: damage when the game gives it, else Combat Power (the group's strength before a hit lands)
         double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
         double top = Math.Max(1, e.Roster.Max(Measure));
@@ -651,15 +694,29 @@ public partial class MainWindow
             int c = 5;
             if (dmg)
             {
-                if (PDetails) Cell(row, c, Right(PT(Amounts.Short(f.Damage), 13, FontWeights.Medium, "Text2")));
+                if (dmgCol) Cell(row, c, Right(PT(Amounts.Short(f.Damage), 13, FontWeights.Medium, "Text2")));
                 c++;
-                Cell(row, c++, Right(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, "Ink")));
+                Cell(row, c++, DpsFigure(e, f, now));
             }
             if (deaths) Cell(row, c, Right(PT(f.Deaths > 0 ? f.Deaths.ToString(CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, f.Deaths > 0 ? "Coral" : "Faint")));
             host.Children.Add(rule);
             if (open && f.Abilities.Count > 0) host.Children.Add(AbilityTable(f, e, now));
         }
         return host;
+    }
+
+    /// <summary>"48.2K DPS · 25.1%": a member's DPS (over the fight, or their active time) and share; their damage on hover.</summary>
+    FrameworkElement DpsFigure(Encounter e, Fighter f, DateTime now)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+        sp.Children.Add(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, "Ink"));
+        sp.Children.Add(Margin(PT("DPS", 10.5, FontWeights.SemiBold, "Faint"), 3, 1, 0, 0));
+        sp.Children.Add(Margin(PT("·", 12, FontWeights.SemiBold, "Faint"), 6, 0, 6, 0));
+        sp.Children.Add(PT(Encounter.Pct(e.Share(f)), 12.5, FontWeights.SemiBold, "Text2"));
+        // the figure behind them, always (a figure, not an explanation)
+        sp.ToolTip = $"{Amounts.Short(f.Damage)} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(f, now)))}{(Encounter.ActiveBasis && !f.Other ? " active" : "")}";
+        AutomationProperties.SetName(sp, $"{Amounts.Short(e.Dps(f, now))} DPS, {Encounter.Pct(e.Share(f))} of the damage");
+        return sp;
     }
 
     /// <summary>Which members' abilities are open ("record id:member id").</summary>
@@ -673,6 +730,13 @@ public partial class MainWindow
     FrameworkElement AbilityTable(Fighter f, Encounter e, DateTime now)
     {
         var host = new StackPanel { Margin = new Thickness(40, 2, 4, 6) };
+        // the member first: item level, Combat Power, server, their damage and the time it's over
+        var who = new List<string>();
+        if (f.ItemLevel > 0) who.Add($"Item level {f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)}");
+        if (f.CombatPower > 0) who.Add($"Combat Power {f.CombatPower.ToString("N0", CultureInfo.InvariantCulture)}");
+        if (f.Server.Length > 0) who.Add(f.Server);
+        who.Add($"{Amounts.Short(f.Damage)} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(f, now)))}{(Encounter.ActiveBasis ? " active" : "")}");
+        host.Children.Add(Margin(PT(string.Join("  ·  ", who), 11.5, FontWeights.Medium, "Muted", trim: true), 6, 0, 4, 5));
         Grid Row()
         {
             var g = new Grid();
@@ -971,9 +1035,9 @@ public partial class MainWindow
         var place = BossBook.Strip(e.Instance);
         string sub = e.ModeKind switch
         {
-            ParserMode.Run => $"{KindLabel(e)} · {e.Splits.Count(x => x.Outcome == "kill")} of {e.Splits.Select(x => x.Boss).Distinct().Count()} bosses{(e.YourKills > 0 ? $" · {e.YourKills} kills" : "")}",
+            ParserMode.Run => $"{(e.GameMode.Length > 0 ? e.GameMode + " · " : "")}{KindLabel(e)} · {e.Splits.Count(x => x.Outcome == "kill")} of {e.Splits.Select(x => x.Boss).Distinct().Count()} bosses{(e.YourKills > 0 ? $" · {e.YourKills} kills" : "")}",
             ParserMode.Fights => $"{(place.Length > 0 && place != e.Kind && place != e.Title ? place + " · " : "")}{KindLabel(e)}{(e.YourDeaths > 0 && e.YourKills > 0 ? $" · {e.YourKills} kill{(e.YourKills == 1 ? "" : "s")}" : "")}",
-            _ => $"{place} · {KindLabel(e)}",
+            _ => $"{e.Place} · {KindLabel(e)}",
         };
         mid.Children.Add(PT(sub, 11.5, FontWeights.Medium, "Muted", trim: true));
         Grid.SetColumn(mid, 1); g.Children.Add(mid);
@@ -1143,7 +1207,7 @@ public partial class MainWindow
                 if (md == mode) now = l;
             }
         _parserDemoPast = all.OrderBy(e => e.Start).ToList(); _parserDemoLive = now;
-        _parserDemoWhere = state == "empty" || state == "fight-history" ? (ContentKind.Other, "") : (ContentKind.Transcendence, "Shattered Arkanis [Stage 3]");
+        _parserDemoWhere = state == "empty" || state == "fight-history" ? (ContentKind.Other, "") : (ContentKind.Expedition, "Ferocious Horn Den");
         _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = "";
         _parserOpen = state switch
         {
@@ -1194,4 +1258,5 @@ public partial class MainWindow
     internal List<Encounter> ParserPastForTest => ParserPast();
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;
     internal void SetParserOverlayForTest(bool on) => SetParserOverlay(on);
+    internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; if (!on) _parserPlacing = false; RedrawParserPage(); }
 }

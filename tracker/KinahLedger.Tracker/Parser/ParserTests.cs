@@ -407,6 +407,40 @@ public static class ParserTests
                 "in Full run it is a split of its own, its time and its result");
         }
 
+        // the instance's mode, each member's server, DPS and share, DPS over the fight or over each member's active time
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 72));
+            p.Take(new GroupChanged(t, new[] { new GroupMember(1, "Swoly", "templar", 0, 0, true, "Siel"), new GroupMember(2, "Felicity", "Chanter", 0, 0, false, "Israphel") }));
+            p.Take(new BossEngaged(t.AddSeconds(2), "Watchdog Kwapo", 720));
+            p.Take(new InstanceMode(t.AddSeconds(3), "Conquest"));
+            var l = p.Live!;
+            Check(l.GameMode == "Conquest" && l.Place == "Ferocious Horn Den · Conquest" && l.Where == "Ferocious Horn Den · Conquest · Expedition",
+                $"the instance's mode, when it comes after the pull: the header says {l.Place}");
+            Check(l.Roster.Single(f => f.Id == 1) is { Server: "Siel", Class: "templar" } && KinahLedger.Ui.ClassArt.Key("templar") == "templar" && l.Roster.Single(f => f.Id == 2).Server == "Israphel",
+                "each member's server from the group list; a class name in any case is the class");
+            // Swoly hits from 0 to 100 s; Felicity from 0 to 20 s, then once more at 90 s after a long pause
+            for (int i = 0; i <= 100; i += 10) p.Take(new DamageDealt(t.AddSeconds(2 + i), 1, 720, 30_000));
+            p.Take(new DamageDealt(t.AddSeconds(2), 2, 720, 10_000));
+            p.Take(new DamageDealt(t.AddSeconds(22), 2, 720, 10_000));
+            p.Take(new DamageDealt(t.AddSeconds(92), 2, 720, 10_000));
+            p.Take(new UnitDied(t.AddSeconds(102), 720, "Watchdog Kwapo", true));
+            var e = kept.Single();
+            var me = e.Roster.Single(f => f.Id == 1); var fel = e.Roster.Single(f => f.Id == 2);
+            var end = e.End!.Value;
+            bool basis = Encounter.ActiveBasis;
+            Encounter.ActiveBasis = false;
+            double fightDps = e.Dps(fel, end);
+            Encounter.ActiveBasis = true;
+            double activeDps = e.Dps(fel, end), myActive = e.Dps(me, end);
+            Encounter.ActiveBasis = basis;
+            Check(e.GameMode == "Conquest" && Math.Abs(fightDps - 30_000 / 100.0) < 0.01 && fel.ActiveSeconds == 20 && Math.Abs(activeDps - 30_000 / 20.0) < 0.01
+                && me.ActiveSeconds == 100 && Math.Abs(myActive - 330_000 / 100.0) < 0.01,
+                $"DPS over the fight by default ({fightDps:0}); over a member's active time, a pause over 20 s left out ({activeDps:0}, {fel.ActiveSeconds:0} s)");
+            Check(Math.Abs(e.Share(me) - 330 / 360.0) < 1e-9 && Encounter.Pct(e.Share(me)) == "91.7%" && Encounter.Pct(1) == "100%" && Encounter.Pct(0.2512) == "25.1%",
+                $"each row's share of the group's damage: {Encounter.Pct(e.Share(me))} and {Encounter.Pct(e.Share(fel))}");
+        }
+
         // a fight with nothing heard for ten minutes is given up at the last thing heard
         {
             var (p, kept) = New();

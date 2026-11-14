@@ -168,10 +168,41 @@ public static partial class WpfApp
         w.ShowParserDemo("live-all"); DoEvents();
         var every = ParserTexts(w.ParserPage);
         // a class emblem's hover names its class: that stays (the emblem is the class, colour-blind or not)
-        var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0).ToList();
+        // and a row's figure says the damage behind it ("1.2M damage in 2:42"): a figure, not an explanation
+        var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ")).ToList();
         check(!plain.Texts.Contains("CP") && !plain.Texts.Contains("Damage") && !plain.Texts.Contains("Kills near you") && plain.Texts.Contains("DPS") && plainTips.Count == 0
             && every.Texts.Contains("CP") && every.Texts.Contains("Item lvl") && every.Texts.Contains("Damage") && every.Texts.Contains("Kills near you") && every.Tips.Count > 3,
             $"Parser: minimal by default (DPS, no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(plain.Texts.Contains("CP") ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(plain.Texts.Contains("Kills near you") ? "; kills near you shown" : "")}");
+        // each row: "48.2K DPS · 25.1%" (Steven, 2026-11-14: "should give DPS and % not just a %")
+        check(plain.Texts.Contains("DPS") && plain.Texts.Count(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+(\.\d)?%$")) >= 3 && plain.Tips.Count(t => t.Contains(" damage in ")) >= 3,
+            $"Parser: each row says its DPS and its share of the damage, its damage on hover: {string.Join(", ", plain.Texts.Where(t => t.EndsWith('%')).Take(4))}");
+        // the expanded row: the member's item level, Combat Power and server over their abilities
+        w.ShowParserDemo("detail-all"); DoEvents();
+        var opened = ParserTexts(w.ParserPage);
+        check(opened.Texts.Any(t => t.Contains("Item level") && t.Contains("Combat Power") && t.Contains(" damage in ") && (t.Contains("Siel") || t.Contains("Israphel") || t.Contains("Fregion") || t.Contains("Zikel"))) && opened.Texts.Contains("Average"),
+            "Parser: a member's expanded row says their item level, Combat Power and server over their abilities");
+        // the header: the instance with the game's mode for it
+        w.ShowParserDemo("live"); DoEvents();
+        check(ParserTexts(w.ParserPage).Texts.Contains("Ferocious Horn Den · Conquest"), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
+        // separated, "Move overlay" shows the overlay with sample rows to place it before any fight; Done puts it away
+        {
+            w.SetParserSeparateForTest(true); DoEvents();
+            var move = FindButton(w.ParserPage, "Move overlay");
+            w.SetParserPlacing(true); DoEvents();
+            var ov = w.ParserOverlayForTest;
+            bool shown = ov?.IsVisible == true && w.ParserPlacingForTest && ov.Content is FrameworkElement oc && ParserTexts(oc).Texts.Contains("Ferocious Horn Nuakum");
+            var done = FindButton(w.ParserPage, "Done");
+            w.SetParserPlacing(false); DoEvents();
+            check(move != null && shown && done != null && ov?.IsVisible != true && !w.ParserPlacingForTest,
+                $"Parser: separated, Move overlay shows it with sample rows to drag into place, and Done puts it away ({(move != null ? "button" : "no button")}, {(shown ? "shown" : "not shown")})");
+            w.SetParserSeparateForTest(false); DoEvents();
+        }
+        static System.Windows.Controls.Button? FindButton(DependencyObject root, string text)
+        {
+            if (root is System.Windows.Controls.Button b && b.Content as string == text) return b;
+            foreach (var ch in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>()) if (FindButton(ch, text) is { } f) return f;
+            return null;
+        }
         // no word for how the game is read, anywhere on the page or its hovers (only Options names it)
         var banned = new[] { "packet", "traffic", "npcap", "decoder", "recording", "game's message", "game's own message", "from the game itself", "packet reading", "game's clock", "pc's clock" };
         foreach (var st in new[] { "live-all", "detail-all", "run-all", "fight-history-all", "nogroup-all", "nodamage-all", "empty-all" })
@@ -186,7 +217,7 @@ public static partial class WpfApp
         var opt = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
-        check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers, sws.Separate }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, Kills and deaths, List filters, Explanations on hover, Separate parser overlay, all off by default");
+        check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers, sws.Separate, sws.Active }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, DPS over active time, Kills and deaths, List filters, Explanations on hover, Separate parser overlay, all off by default");
         // expanded by default: the Parser's section opens above the Kinah line and the Kinah line stays where it is
         {
             bool still = Motion.Still; Motion.Still = true;

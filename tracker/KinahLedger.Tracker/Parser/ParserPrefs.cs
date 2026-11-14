@@ -30,6 +30,8 @@ public sealed class ParserPrefs
     public bool Details { get; set; }
     /// <summary>The Parser in its own overlay window (draggable, its own place, click-through) instead of the Kinah overlay's section above the Kinah line (Steven, 2026-11-14: "expand by default but give option in settings to separate"). Off by default.</summary>
     public bool Separate { get; set; }
+    /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
+    public bool DpsActive { get; set; }
     public bool KillsNear { get; set; }
     public bool Filters { get; set; }
     public bool Hovers { get; set; }

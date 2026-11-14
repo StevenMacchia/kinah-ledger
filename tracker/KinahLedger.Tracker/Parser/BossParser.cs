@@ -83,6 +83,8 @@ public sealed class BossParser
     // where the player is
     ContentKind _kind;
     string _instance = "";
+    /// <summary>The instance's mode as the game named it (InstanceMode), "" until it comes.</summary>
+    string _gameMode = "";
     long _instanceId;
     bool _instanceFromGame;
     string _zone = "";
@@ -222,7 +224,7 @@ public sealed class BossParser
                     if (SameCopy(_run)) Rejoined(_run, ie);
                     else CloseRun(RunEnd(_run), _run.LastAt, done, "left for another place");
                 }
-                if (ie.InstanceId == 0 || ie.InstanceId != _instanceId) { _bossNames.Clear(); _downHere.Clear(); }
+                if (ie.InstanceId == 0 || ie.InstanceId != _instanceId) { _bossNames.Clear(); _downHere.Clear(); _gameMode = ""; }
                 _instanceId = ie.InstanceId;
                 if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: the screen's place names it"); break; }
                 _kind = kind; _instance = ie.Name.Trim(); _instanceFromGame = Kept(kind);
@@ -234,7 +236,13 @@ public sealed class BossParser
             case InstanceLeft il:
                 if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance");
                 if (_run != null) CloseRun(RunEnd(_run), il.At, done, "left the instance");
-                _kind = ContentKind.Other; _instance = ""; _instanceId = 0;
+                _kind = ContentKind.Other; _instance = ""; _instanceId = 0; _gameMode = "";
+                break;
+            case InstanceMode im:
+                _gameMode = im.Mode.Trim();
+                foreach (var e in Records())
+                    if (e.ModeKind != ParserMode.Fights || Kept(_kind)) e.GameMode = _gameMode;
+                Log($"{(_instance.Length > 0 ? _instance : "the instance")}: {(_gameMode.Length > 0 ? _gameMode : "no mode named")}");
                 break;
             case BossEngaged be:
                 Engage(be, done);
@@ -274,8 +282,9 @@ public sealed class BossParser
                     e.HasDamage = true;
                     if (dd.TargetId != 0 && _cur != null && dd.TargetId == _cur.BossId) e.BossDamage += dd.Amount;
                     var src = SourceOf(e, dd);
-                src.Damage += dd.Amount;
-                src.AddAbility(dd.Skill, dd.Amount, dd.Hits);
+                    src.Damage += dd.Amount;
+                    src.AddAbility(dd.Skill, dd.Amount, dd.Hits);
+                    if (!src.Other) src.Hit(dd.At);
                 }
                 break;
             case BossHealth bh:
@@ -451,7 +460,7 @@ public sealed class BossParser
         }
         _cur = new Encounter
         {
-            Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId,
+            Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
             Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true, Wave = listed?.Wave == true,
             Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion,
         };
@@ -472,7 +481,7 @@ public sealed class BossParser
     {
         _run = new Encounter
         {
-            Mode = "run", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId,
+            Mode = "run", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
             Start = at, LastAt = at, App = Upload.RunPayload.AppVersion,
         };
         if (midway) MarkPartial(_run, "counted from partway through the run");
@@ -486,7 +495,7 @@ public sealed class BossParser
         _fight = new Encounter
         {
             Mode = "fight", Kind = inside ? Encounter.KindName(_kind) : _abyss ? "Abyss" : "Open world",
-            Instance = inside ? _instance : _zone, InstanceId = inside ? _instanceId : 0,
+            Instance = inside ? _instance : _zone, InstanceId = inside ? _instanceId : 0, GameMode = inside ? _gameMode : "",
             Start = at, LastAt = at, App = Upload.RunPayload.AppVersion,
         };
         MergeGroup(_fight, _group, late: false);
@@ -528,6 +537,7 @@ public sealed class BossParser
             if (m.Class.Trim().Length > 0) f.SetClass(m.Class);
             if (m.CombatPower > 0) f.CombatPower = m.CombatPower;
             if (m.ItemLevel > 0) f.ItemLevel = m.ItemLevel;
+            if (m.Server?.Trim() is { Length: > 0 } server) f.Server = server;
             f.You |= m.You;
         }
         if (late)

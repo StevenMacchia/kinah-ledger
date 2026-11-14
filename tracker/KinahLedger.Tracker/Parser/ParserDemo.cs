@@ -12,10 +12,10 @@ public static class ParserDemo
 {
     static readonly GroupMember[] Group =
     {
-        new(1, "Swoly", "Gladiator", 4_812, 5_640, true),
-        new(2, "Aerinwyn", "Cleric", 4_655, 5_610, false),
-        new(3, "Thornecrest", "Templar", 4_590, 5_585, false),
-        new(4, "Kaelith", "Sorcerer", 4_730, 5_620, false),
+        new(1, "Swoly", "Gladiator", 4_812, 5_640, true, "Siel"),
+        new(2, "Aerinwyn", "Cleric", 4_655, 5_610, false, "Israphel"),
+        new(3, "Thornecrest", "Templar", 4_590, 5_585, false, "Fregion"),
+        new(4, "Kaelith", "Sorcerer", 4_730, 5_620, false, "Zikel"),
     };
 
     /// <summary>A few real skills of each sample class (data/skills.json), so the demo has damage by ability.</summary>
@@ -114,17 +114,20 @@ public static class ParserDemo
         Pull("Kaldrix", 202, 301, BossOutcome.Wipe);
         p.Take(new InstanceLeft(t)); p.Tick(t.AddMinutes(1));
         t = now.AddMinutes(-14);
-        p.Take(new InstanceEntered(t, ContentKind.Transcendence, "Shattered Arkanis [Stage 3]", 13));
+        // the run under way: Steven's Ferocious Horn Den, in its Conquest mode (the header says "Ferocious Horn Den · Conquest")
+        p.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 13));
+        p.Take(new InstanceMode(t.AddSeconds(4), "Conquest"));
         if (group) p.Take(new GroupChanged(t, Group));
         Trash(3);
-        Pull("Talisra of the Void", 301, 118, BossOutcome.Kill, adds: 2, deaths: true);
+        Pull("Watchdog Kwapo", 301, 118, BossOutcome.Kill, adds: 2, deaths: true);
+        Pull("Totem room", 304, 64, BossOutcome.Kill, adds: 4);
         Trash(2);
-        Pull("Siliator of Deceit", 302, 142, BossOutcome.Kill);
+        Pull("Necromancer Duanka", 302, 142, BossOutcome.Kill);
         if (live)
         {
             p.Tick(now.AddSeconds(-163));
             t = now.AddSeconds(-163);
-            Pull("Ruthilis of Pain", 303, 162, null, adds: 3);
+            Pull("Ferocious Horn Nuakum", 303, 162, null, adds: 3);
         }
         else { p.Take(new InstanceLeft(t)); p.Tick(t.AddMinutes(1)); }
         return (past, p.LiveAt(now));

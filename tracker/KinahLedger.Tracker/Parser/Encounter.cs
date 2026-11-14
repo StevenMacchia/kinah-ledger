@@ -20,6 +20,8 @@ public sealed class Encounter
     public string Kind { get; set; } = "";
     /// <summary>The instance's name ("Shattered Arkanis").</summary>
     public string Instance { get; set; } = "";
+    /// <summary>The instance's mode as the game names it ("Conquest"), "" when not known: the header says "Ferocious Horn Den · Conquest".</summary>
+    public string GameMode { get; set; } = "";
     /// <summary>The game's id for this copy of the instance (0 = unknown): a re-entry after a disconnect is the same copy.</summary>
     public long InstanceId { get; set; }
     public string Boss { get; set; } = "";
@@ -96,8 +98,45 @@ public sealed class Encounter
     /// <summary>The seconds DPS is over: a run's boss pulls (its damage is the bosses'), else the whole record.</summary>
     public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
 
-    /// <summary>A member's damage per second (a run's over its boss pulls); 0 when damage isn't known.</summary>
-    public double Dps(Fighter f, DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? f.Damage / s : 0; }
+    /// <summary>
+    /// DPS over each member's active time (Settings › In game › Parser › DPS over active time, parser.json DpsActive):
+    /// off (the default), every member's DPS is over the fight's length (a run's: its boss pulls); on, over the time they
+    /// were dealing damage, first hit to last with pauses over <see cref="Fighter.PauseSeconds"/> s left out. Set by the window.
+    /// </summary>
+    public static bool ActiveBasis { get; set; }
+
+    /// <summary>The seconds a member's DPS is over, by <see cref="ActiveBasis"/>.</summary>
+    public double DpsSeconds(Fighter f, DateTime now) => ActiveBasis && !f.Other && f.Damage > 0 ? Math.Max(1, f.ActiveSeconds) : DpsSeconds(now);
+
+    /// <summary>A member's damage per second (over the fight, a run's over its boss pulls, or over their active time); 0 when damage isn't known.</summary>
+    public double Dps(Fighter f, DateTime now)
+    {
+        if (!HasDamage || DpsSeconds(now) < 1) return 0;
+        return f.Damage / DpsSeconds(f, now);
+    }
+
+    /// <summary>A member's share of the group's damage, 0 to 1 (0 when damage isn't known).</summary>
+    public double Share(Fighter f) { long all = Roster.Sum(x => x.Damage); return HasDamage && all > 0 ? f.Damage / (double)all : 0; }
+
+    /// <summary>A share as the rows say it: "25.1%", "100%".</summary>
+    public static string Pct(double share) => share >= 0.9995 ? "100%" : (share * 100).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>The sub line under a record's title: its instance (when the title isn't it), the game's mode for it, its kind.</summary>
+    [JsonIgnore] public string Where
+    {
+        get
+        {
+            var bits = new List<string>();
+            var i = BossBook.Strip(Instance);
+            if (i.Length > 0 && i != Title && i != Kind) bits.Add(i);
+            if (GameMode.Length > 0) bits.Add(GameMode);
+            if (Kind.Length > 0) bits.Add(Kind);
+            return string.Join(" · ", bits);
+        }
+    }
+
+    /// <summary>"Ferocious Horn Den · Conquest": the instance with the game's mode for it, when known.</summary>
+    [JsonIgnore] public string Place { get { var i = BossBook.Strip(Instance); return GameMode.Length == 0 ? i : i.Length == 0 ? GameMode : $"{i} · {GameMode}"; } }
 
     /// <summary>The group's damage per second.</summary>
     public double GroupDps(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? Roster.Sum(f => f.Damage) / s : 0; }
@@ -149,6 +188,8 @@ public sealed class Fighter
     /// <summary>Item level; 0 = not known.</summary>
     public int ItemLevel { get; set; }
     public bool You { get; set; }
+    /// <summary>The member's server ("Israphel"), "" when not known: the expanded row and hover only.</summary>
+    public string Server { get; set; } = "";
     /// <summary>Joined after the pull.</summary>
     public bool Late { get; set; }
     /// <summary>Left the group during the fight.</summary>
@@ -161,6 +202,26 @@ public sealed class Fighter
     public int Deaths { get; set; }
     /// <summary>Damage by ability (the game's skill id; 0: damage over time and the rest), with its hits: a member's breakdown.</summary>
     public List<AbilityShare> Abilities { get; set; } = new();
+
+    /// <summary>A pause in a member's damage longer than this (seconds) is left out of their active time.</summary>
+    public const double PauseSeconds = 20;
+    /// <summary>The member's first and last hit in this record; null before any.</summary>
+    public DateTime? FirstHit { get; set; }
+    public DateTime? LastHit { get; set; }
+    /// <summary>Seconds the member was dealing damage: first hit to last, pauses over <see cref="PauseSeconds"/> left out.</summary>
+    public double ActiveSeconds { get; set; }
+
+    /// <summary>A hit of the member's at <paramref name="at"/>: their active time grows by the time since their last, unless that was a pause.</summary>
+    public void Hit(DateTime at)
+    {
+        FirstHit ??= at;
+        if (LastHit is { } last && at > last)
+        {
+            double gap = (at - last).TotalSeconds;
+            if (gap <= PauseSeconds) ActiveSeconds += gap;
+        }
+        if (LastHit == null || at > LastHit) LastHit = at;
+    }
 
     public void AddAbility(int skill, long amount, int hits)
     {
@@ -175,7 +236,7 @@ public sealed class Fighter
 
     public static Fighter From(GroupMember m)
     {
-        var f = new Fighter { Id = m.Id, Name = m.Name.Trim(), CombatPower = Math.Max(0, m.CombatPower), ItemLevel = m.ItemLevel > 0 ? m.ItemLevel : 0, You = m.You };
+        var f = new Fighter { Id = m.Id, Name = m.Name.Trim(), CombatPower = Math.Max(0, m.CombatPower), ItemLevel = m.ItemLevel > 0 ? m.ItemLevel : 0, You = m.You, Server = m.Server?.Trim() ?? "" };
         f.SetClass(m.Class);
         return f;
     }

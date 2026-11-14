@@ -228,7 +228,7 @@ public sealed class ParserPanel : Border
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}";
+        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}";
         if (sig == _sig) return;
         _sig = sig;
         _body.Children.Clear();
@@ -245,8 +245,7 @@ public sealed class ParserPanel : Border
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
-        var place = BossBook.Strip(e.Instance);
-        var where = place.Length > 0 && place != e.Title && place != e.Kind ? $"{place} · {e.Kind}" : e.Kind;
+        var where = e.Where;
         // the mode, said once at the head of the sub line, so a glance tells a run from a pull
         var sub = T($"{BossParser.Name(e.ModeKind)} · {where}", 11, FontWeights.Medium, HudKit.Faint);
         sub.TextTrimming = TextTrimming.CharacterEllipsis; sub.Margin = new Thickness(30, 1, 0, 0);
@@ -333,13 +332,13 @@ public sealed class ParserPanel : Border
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 50 : 60) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 44 : 52) });
-                if (dmg) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+                if (dmg) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) }); }
                 return g;
             }
             var hdr = Row();
             void H(int col, string text) { var t = T(text, 10, FontWeights.SemiBold, HudKit.Faint); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); hdr.Children.Add(t); }
             if (gear) { H(2, "CP"); H(3, "iLvl"); }
-            if (dmg) H(4, "DPS");
+            if (dmg) { H(4, "DPS"); H(5, "%"); }
             hdr.Margin = new Thickness(4, 0, 4, 1);
             rows.Children.Add(hdr);
             // each row on a meter bar in its class's colour (damage, else Combat Power), the class's emblem at its left
@@ -362,7 +361,7 @@ public sealed class ParserPanel : Border
                     C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
                     C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
                 }
-                if (dmg) C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold);
+                if (dmg) { C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold); }
                 var meter = ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: f.Other, radius: 5);
                 meter.Margin = new Thickness(0, 3, 0, 0);
                 rows.Children.Add(meter);
