@@ -9,7 +9,9 @@ namespace KinahLedger.Session;
 /// <item>Farming shows Farming; the crafting window or panel shows Crafting; an expedition, event, arena, Legion run or
 /// world boss shows Events. A base, the Market, a reward screen and idle belong to no page: they never switch it.</item>
 /// <item>The page follows only when the activity has moved and held there for <see cref="HoldSeconds"/>, so a read or two
-/// of something else (a blip) never moves it.</item>
+/// of something else (a blip) never moves it. Crafting and Farming follow at once (0.10.87; Steven, 2026-11-14: "crafting
+/// session shouldn't open on tracker until a craft is complete. Farming should always switch back on gather or kill"):
+/// Crafting starts only on a finished craft and Farming on a kill, a drop or a gather, so neither is a blip.</item>
 /// <item>A page the player picks by hand stays until the activity moves on from what it was at that moment.</item>
 /// <item>With the setting off nothing switches, but this keeps up, so turning it back on doesn't jump to something old.</item>
 /// </list>
@@ -49,8 +51,9 @@ public sealed class PageFollow
         if (kind == ActivityKind.NotRead) { _candidate = null; return null; }
         var page = PageOf(kind) ?? None;
         if (page == _basis) { _candidate = null; return null; }
-        if (page != _candidate) { _candidate = page; _since = now; return null; }
-        if ((now - _since).TotalSeconds < HoldSeconds) return null;
+        double hold = page is Crafting or Farming ? 0 : HoldSeconds;
+        if (page != _candidate) { _candidate = page; _since = now; if (hold > 0) return null; }
+        if ((now - _since).TotalSeconds < hold) return null;
         bool first = _basis == Unknown;
         _basis = page;
         _candidate = null;

@@ -1685,6 +1685,7 @@ options: --process aion[,other]");
         ok &= Session.NotDropTests.Run(items, s);
         ok &= Session.PassCostTests.Run(items, s);
         ok &= Session.PageFollowTests.Run();
+        ok &= Session.CraftActivityTests.Run(items, s);
         ok &= SharePictureTest();
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
