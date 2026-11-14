@@ -11,7 +11,7 @@ namespace KinahLedger.Session;
 public sealed partial class TrackerSession
 {
     /// <summary>Where the fight events come from: the packet reader when its decoder reads them (or a test's list).</summary>
-    public IFightFeed? FightFeed { get; set; }
+    public IBossFeed? FightFeed { get; set; }
 
     /// <summary>The boss fights: the one under way and where the player is.</summary>
     public BossParser Fights => _fights ??= NewFights();
@@ -34,7 +34,7 @@ public sealed partial class TrackerSession
     void DrainFights()
     {
         // a test's feed, else the packet reader's fights (the release build's decoder, interface version 4)
-        Func<FightEvent?>? next = FightFeed != null ? FightFeed.NextFight : Packets != null ? Packets.NextFight : null;
+        Func<BossEvent?>? next = FightFeed != null ? FightFeed.NextBossEvent : Packets != null ? Packets.NextBossEvent : null;
         var p = Fights;
         try
         {

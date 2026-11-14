@@ -688,7 +688,11 @@ public static partial class WpfApp
         Check(abyssHero.Abyss && abyssHero.Hero == apHour && abyssHero.Label.EndsWith("Abyss Points") && abyssHero.Ticket.Contains(" Kinah and loot an hour") && !abyssHero.Ticket.StartsWith(apHour),
             $"the Abyss: the hero is {abyssHero.Hero} (expected {apHour}) \"{abyssHero.Label.Replace('\n', ' ')}\", the ticket \"{abyssHero.Ticket}\"");
         var abyssLine = w.HeroStatsForTest();
-        Check(abyssLine.Count == 4 && abyssLine[0] == "24,740 Abyss Points" && abyssLine[1].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        Check(abyssLine.Count == 4 + 1 && abyssLine[0] == "24,740 Abyss Points" && abyssLine[1].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        // the game's messages told the kills apart (0.10.72): PvP and mobs in place of kills, players, monsters and deaths on hover
+        string pvpTip = w.HeroStatTipForTest("PvP");
+        Check(abyssLine[3] == "9 PvP" && abyssLine[4] == "109 mobs" && pvpTip.Contains("9 players and 109 monsters") && pvpTip.Contains("You died 2 times, 1 of them to players"),
+            $"...kills told apart: {abyssLine.ElementAtOrDefault(3)} · {abyssLine.ElementAtOrDefault(4)}, on hover \"{pvpTip}\"");
         w.ShowDemo(); DoEvents();
         var worldHero = w.HeroForTest();
         Check(!worldHero.Abyss && worldHero.Ticket == "" && worldHero.Label.Contains("Kinah and loot"), $"...out of the Abyss: the Kinah hour {worldHero.Hero}, no ticket");

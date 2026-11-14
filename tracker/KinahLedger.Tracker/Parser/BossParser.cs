@@ -70,7 +70,7 @@ public sealed class BossParser
 
     static bool Kept(ContentKind k) => k is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
 
-    public void Take(FightEvent ev)
+    public void Take(BossEvent ev)
     {
         List<Encounter> done = new();
         lock (_gate)
@@ -82,7 +82,7 @@ public sealed class BossParser
         foreach (var e in done) Ended?.Invoke(e);
     }
 
-    void TakeLocked(FightEvent ev, List<Encounter> done)
+    void TakeLocked(BossEvent ev, List<Encounter> done)
     {
         switch (ev)
         {

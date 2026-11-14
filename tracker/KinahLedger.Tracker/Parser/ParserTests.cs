@@ -215,7 +215,7 @@ public static class ParserTests
         // the session: the feed drained on its pass, the screen's place used until the game's messages say one
         {
             var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
-            var feed = new ListFightFeed(Array.Empty<FightEvent>());
+            var feed = new ListBossFeed(Array.Empty<BossEvent>());
             var s = new TrackerSession(null, settings, items, "Test") { FightFeed = feed };
             var now = DateTime.UtcNow;
             feed.Add(new InstanceEntered(now.AddSeconds(-30), ContentKind.Expedition, "Shattered Arkanis", 90));

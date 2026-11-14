@@ -110,6 +110,40 @@ public static class PacketTests
             Check(broken && s.Engine.Kinah == 1_894 + 278 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
         }
 
+        // kills and deaths (0.10.72): the game says whose kill it was and what died; a kill naming no killer is the player's
+        // when their Rank Points rose with it and no kill of their own took that rise; a death counts once
+        {
+            var t0 = DateTime.UtcNow.AddMinutes(-2);
+            FightEvent K(double s, FightFlags f, string victim = "", string killer = "") => new(t0.AddSeconds(s), FightKind.Kill, f, 1, 2, f.HasFlag(FightFlags.VictimMonster) ? 7u : 0, 0, 0, victim, killer);
+            FightEvent R(double s, long d) => new(t0.AddSeconds(s), FightKind.RankPoints, FightFlags.None, 0, 0, 0, d, 0, "", "");
+            var ft = new FightTally();
+            foreach (var e in new[] {
+                K(0, FightFlags.Mine | FightFlags.VictimMonster), R(0, 13),                      // mine, a monster, its own rise
+                K(5, FightFlags.NoKiller), R(5.3, 13),                                           // no killer named, my points rose: mine
+                K(10, FightFlags.NoKiller | FightFlags.VictimPlayer, "Zev"),                     // a player died, no rise: not mine
+                K(15, FightFlags.Mine | FightFlags.VictimMonster), K(15.2, FightFlags.NoKiller), R(15.2, 12),   // one rise, taken by my own kill
+                K(20, FightFlags.Mine | FightFlags.VictimPlayer, "Pecked"), R(20, 46),
+                K(25, FightFlags.VictimMe, killer: "Nana"), K(30, FightFlags.VictimMe | FightFlags.NoKiller) })
+                ft.Add(e);
+            var early = ft.Take(t0.AddSeconds(2));
+            var all = early.Concat(ft.Take(t0.AddSeconds(60))).ToList();
+            string Say(FightTally.Outcome o) => o.Death ? $"death{(o.Name.Length > 0 ? ":" + o.Name : "")}" : $"{(o.Player ? "player" : "monster")}{(o.Credited ? "*" : "")}{(o.Name.Length > 0 ? ":" + o.Name : "")}";
+            Check(early.Count == 0 && string.Join(" ", all.Select(Say)) == "monster monster* monster player:Pecked death:Nana death" && ft.RankPoints == 84,
+                $"fights: held until the points after them are in, then {string.Join(" ", all.Select(Say))}; Rank Points +{ft.RankPoints}");
+            // through the session: the counts, the kills the larger of the chat's and the game's, the kill marked for the pickup gate
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var reader = new PacketReader(); reader.ReadingForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            s.ApplyZone("Sulfur Tree Island", t0);
+            foreach (var e in new[] { K(0, FightFlags.Mine | FightFlags.VictimMonster), R(0, 13), K(4, FightFlags.Mine | FightFlags.VictimMonster), K(8, FightFlags.Mine | FightFlags.VictimPlayer, "Pecked"), K(12, FightFlags.VictimMe, killer: "Nana") })
+                reader.FightsForTest(e);
+            s.CommitForTest(new CurrencyGained(t0.AddSeconds(1), "Abyss Swarm Soul Points", 1) { Via = "chat" });
+            s.DrainPacketsForTest();
+            var z = s.Engine.ZoneSnapshot().GetValueOrDefault("Abyss");
+            Check(s.Engine.PlayerKills == 1 && s.Engine.MonsterKills == 2 && s.Engine.Deaths == 1 && s.Engine.DeathsToPlayers == 1 && s.Engine.Kills == 3 && z?.PlayerKills == 1 && z.MonsterKills == 2 && z.Deaths == 1,
+                $"...counted in the Abyss: {s.Engine.PlayerKills} player, {s.Engine.MonsterKills} monsters, {s.Engine.Deaths} death ({s.Engine.DeathsToPlayers} to a player); kills {s.Engine.Kills} (the chat saw 1); zone Abyss {z?.PlayerKills}/{z?.MonsterKills}/{z?.Deaths}");
+        }
+
         // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
         // and a line the traffic never showed are the chat's, a rise with nothing around it or with something going down is
         // no pickup, and three chat pickups the traffic never showed hand items back to the screen
@@ -216,15 +250,22 @@ public static class PacketTests
             Check(!r.On && r.State.Length > 0, $"no game connection: \"{r.State}\"");
         }
         Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
+        if (NativeDecoder.Available)
+            using (var nd = NativeDecoder.TryOpen())
+            {
+                // a dll of a later version without the boss export reads no boss fights and doesn't throw
+                bool threw = false; try { while (nd?.NextBossEvent() != null) { } } catch (Exception) { threw = true; }
+                Check(!threw, $"klnet.dll version {NativeDecoder.Version}: boss fights {(nd?.ReadsBosses == true ? "read" : "not read")}, asking for them never throws");
+            }
 
         // boss fights (klnet.dll version 4): a decoder that reads none hands out none; the decoder's rows become the tracker's
         // events (the roster whole each time, deaths, pulls); the reader queues them in order and keeps the queue bounded; the
         // interface's record is the dll's 256 bytes and its text fields read back
         {
-            IGameDecoder none = new NoFights();
-            Check(!none.ReadsFights && none.NextFight() == null, "a decoder without boss fights hands out none");
-            var map = new FightMapper();
-            FightRow Row(int kind, int s, long boss = 0, long who = 0, string name = "", bool self = false, long cp = 0, long il = 0, long amount = 0, long max = 0, int outcome = 0, string bossName = "") =>
+            IGameDecoder none = new NoBosses();
+            Check(!none.ReadsBosses && none.NextBossEvent() == null, "a decoder without boss fights hands out none");
+            var map = new BossMapper();
+            BossRow Row(int kind, int s, long boss = 0, long who = 0, string name = "", bool self = false, long cp = 0, long il = 0, long amount = 0, long max = 0, int outcome = 0, string bossName = "") =>
                 new(t.AddSeconds(s), kind, 2, "Fire Temple", 1, bossName, boss, outcome, who, name, "Gladiator", self, cp, il, amount, max);
             var got = new[]
             {
@@ -238,21 +279,21 @@ public static class PacketTests
             Check(got[0] is InstanceEntered { Kind: ContentKind.Expedition, Name: "Fire Temple", InstanceId: 1 } && roster.Count == 3 && roster[1].Members.Count == 2
                 && roster[1].Members.Any(m => m is { Name: "Swoly", You: true, CombatPower: 2637 }) && roster[2].Members.Single().Name == "Swoly",
                 $"the decoder's rows: an instance, the roster whole each time ({string.Join(" ", roster.Select(r => r.Members.Count))}), a leaver gone, an unknown leaver nothing");
-            Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, SourceIsYou: true, Amount: 600, TargetId: 25495 }
-                && dmg[1] is { SourceId: 0, Amount: 400 } && got.OfType<BossHealth>().Single() is { Hp: 0, Max: 1000 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
+            Check(got.OfType<BossEngaged>().Single() is { Boss: "Kromede's Desire", BossId: 25495 } && dmg.Count == 2 && dmg[0] is { SourceId: 14325, Amount: 600, TargetId: 25495 }
+                && dmg[1] is { SourceId: 0, Amount: 400 } && got.OfType<UnitDied>().Single() is { Boss: true, Name: "Kromede's Desire" }
                 && got.OfType<BossEnded>().Single().Outcome == BossOutcome.Kill && got[^1] is InstanceLeft && !got.Any(e => e is null),
-                $"...a pull, its damage (yours and other), its HP, the boss's death and a kill; a boss sighting and an unknown kind make nothing ({got.Count} events)");
+                $"...a pull, its damage (yours and other: source 0), the boss's death and the kill; a boss sighting, its HP and an unknown kind make nothing ({got.Count} events)");
             var r = new PacketReader();
-            foreach (var e in got) r.TakeFight(e);
-            var back = new List<FightEvent>(); while (r.NextFight() is { } e) back.Add(e);
-            Check(back.SequenceEqual(got) && !r.ReadsFights, $"the reader queues boss parser events in order ({back.Count}) and says it reads none without the dll");
-            for (int i = 0; i < 20_005; i++) r.TakeFight(new FeedGap(t));
-            int n = 0; while (r.NextFight() != null) n++;
+            foreach (var e in got) r.TakeBoss(e);
+            var back = new List<BossEvent>(); while (r.NextBossEvent() is { } e) back.Add(e);
+            Check(back.SequenceEqual(got) && !r.ReadsBosses, $"the reader queues boss parser events in order ({back.Count}) and says it reads none without the dll");
+            for (int i = 0; i < 20_005; i++) r.TakeBoss(new FeedGap(t));
+            int n = 0; while (r.NextBossEvent() != null) n++;
             Check(n == 20_000, $"...and keeps at most 20,000 undrained ({n})");
             unsafe
             {
                 var buf = new byte[32]; var name = System.Text.Encoding.UTF8.GetBytes("Kromede's Desire"); name.CopyTo(buf, 0);
-                fixed (byte* p = buf) Check(NativeDecoder.Text(p, 32) == "Kromede's Desire" && NativeDecoder.FightSize == 256, $"a text field reads back, the record is {NativeDecoder.FightSize} bytes");
+                fixed (byte* p = buf) Check(NativeDecoder.Text(p, 32) == "Kromede's Desire" && NativeDecoder.BossRecordSize == 256, $"a text field reads back, the record is {NativeDecoder.BossRecordSize} bytes");
                 var full = Enumerable.Repeat((byte)'a', 16).ToArray();
                 fixed (byte* p = full) Check(NativeDecoder.Text(p, 16) == new string('a', 16), "...a field filled to the end stops at its size");
             }
@@ -344,12 +385,13 @@ public static class PacketTests
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
         var seen = new List<CurrencyChange>();
         var batches = new List<ItemBatch>();
+        var fights = new FightTally(); var fought = new List<FightTally.Outcome>(); bool readsFights = false;
         var gaps = new List<DateTime>();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
-            reads = dec.ReadsItems;
+            reads = dec.ReadsItems; readsFights = dec.ReadsFights;
             var rows = new List<ItemChange>();
             DateTime last = DateTime.MinValue;
             var st = new TcpStream
@@ -362,19 +404,46 @@ public static class PacketTests
                     rows.Clear();
                     while (dec.NextItem() is { } it) rows.Add(it);
                     batches.AddRange(ItemBatch.Cut(rows));
+                    while (dec.NextFight() is { } f) fights.Add(f);
                 },
                 OnGap = () => { dec.Gap(); gaps.Add(last); },
             };
             foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+            fought.AddRange(fights.Flush());   // the next connection's ids are other entities
             var stats = dec.Stats;
             Console.WriteLine($"{conn.Key.Item1}:{serverPort} → :{conn.Key.DstPort}: {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
         }
         foreach (var c in seen) Print(c);
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
+        if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;
+    }
+
+    /// <summary>
+    /// The player's kills, told apart, and deaths, as the tracker would count them from a capture, against the capture's
+    /// chat.log (beside it, as kinah-bench's capture.ps1 keeps it): its Rank Point and Soul Points lines the reader counted,
+    /// one a kill, and its resurrection lines, one a death.
+    /// </summary>
+    static void ReplayFights(string pcapng, List<FightTally.Outcome> fought, long rank)
+    {
+        foreach (var o in fought)
+            Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  {(o.Death ? $"died{(o.Name.Length > 0 ? " to " + o.Name : "")}" : $"killed {(o.Player ? "the player " + o.Name : $"a monster{(o.MonsterId != 0 ? $" ({o.MonsterId})" : "")}")}{(o.Credited ? ", no killer named, Rank Points rose with it" : "")}")}");
+        var kills = fought.Where(o => !o.Death).ToList();
+        int players = kills.Count(o => o.Player), deaths = fought.Count(o => o.Death);
+        Console.WriteLine($"kills: {kills.Count} ({players} players, {kills.Count - players} monsters; {kills.Count(o => o.Credited)} with no killer named), {deaths} deaths ({fought.Count(o => o.Death && o.Player)} to players), Rank Points +{rank:N0}");
+        var log = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(pcapng)) ?? ".", "chat.log");
+        if (!File.Exists(log)) return;
+        int rankLines = 0, soulLines = 0, rez = 0;
+        foreach (var l in File.ReadLines(log))
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(l, @"^\S+\s+ok\s+Acquired .*R\w{2,3}.?\s*Point", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) rankLines++;
+            else if (System.Text.RegularExpressions.Regex.IsMatch(l, @"^\S+\s+ok\s+Obtained .*Soul\s*Points", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) soulLines++;
+            if (System.Text.RegularExpressions.Regex.IsMatch(l, @"Character has resurrected", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) rez++;
+        }
+        Console.WriteLine($"chat.log: {rankLines} Rank Point lines and {soulLines} Soul Points lines counted (a kill each), {rez} resurrection lines");
     }
 
     /// <summary>
@@ -571,8 +640,8 @@ public sealed class PcapngWriter : IDisposable
     public void Dispose() { _w.Flush(); _w.Dispose(); }
 }
 
-/// <summary>A decoder that reads currencies only (klnet.dll before version 3): the interface's defaults for items and fights.</summary>
-sealed class NoFights : IGameDecoder
+/// <summary>A decoder that reads currencies only: the interface's defaults for items, kills and boss fights.</summary>
+sealed class NoBosses : IGameDecoder
 {
     public void Reset() { }
     public void Gap() { }
