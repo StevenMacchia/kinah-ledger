@@ -84,6 +84,13 @@ public sealed class Encounter
     };
 
     [JsonIgnore] public bool Live => End == null;
+
+    /// <summary>
+    /// A fight outside Transcendence, Expeditions and Sanctuaries (the open world, the Abyss). Steven, 2026-11-14: "you can
+    /// have open world count for the parser inside of the app but it shouldn't log it anywhere ever": counted live, never
+    /// kept (no record, no file, no log line with its figures), gone when it ends.
+    /// </summary>
+    [JsonIgnore] public bool OpenWorld => ModeKind == ParserMode.Fights && KindOf(Kind) == ContentKind.Other;
     [JsonIgnore] public BossOutcome? Result => Outcome switch { "kill" => BossOutcome.Kill, "wipe" => BossOutcome.Wipe, "left" => BossOutcome.Left, _ => null };
 
     /// <summary>How long the fight took (to now while it is under way, never less than 0).</summary>
@@ -114,6 +121,12 @@ public sealed class Encounter
         if (!HasDamage || DpsSeconds(now) < 1) return 0;
         return f.Damage / DpsSeconds(f, now);
     }
+
+    /// <summary>
+    /// Your DPS while farming (the Kinah line's small figure): your damage over your fighting time (Fighter.FightingSeconds),
+    /// so the walk between monsters doesn't pull it down; 0 before a hit of yours.
+    /// </summary>
+    public double FarmDps() => You is { Damage: > 0 } me ? me.Damage / Math.Max(1, me.FightingSeconds) : 0;
 
     /// <summary>A member's share of the group's damage, 0 to 1 (0 when damage isn't known).</summary>
     public double Share(Fighter f) { long all = Roster.Sum(x => x.Damage); return HasDamage && all > 0 ? f.Damage / (double)all : 0; }
@@ -219,9 +232,24 @@ public sealed class Fighter
         {
             double gap = (at - last).TotalSeconds;
             if (gap <= PauseSeconds) ActiveSeconds += gap;
+            // fighting time: a gap over StretchGapSeconds (walking to the next monster) closes the stretch of hits
+            if (gap > StretchGapSeconds) { StretchesSeconds += Math.Max(1, (last - (StretchStart ?? last)).TotalSeconds); StretchStart = at; }
         }
+        StretchStart ??= at;
         if (LastHit == null || at > LastHit) LastHit = at;
     }
+
+    /// <summary>A gap in a member's hits longer than this (seconds) is time between fights, not fighting: the farming DPS leaves it out.</summary>
+    public const double StretchGapSeconds = 5;
+    /// <summary>The fighting time of the stretches of hits already closed, and the start of the one under way.</summary>
+    public double StretchesSeconds { get; set; }
+    public DateTime? StretchStart { get; set; }
+
+    /// <summary>
+    /// Seconds spent fighting: stretches of hits with gaps of at most <see cref="StretchGapSeconds"/>, each at least 1 s, the
+    /// one under way included. The Kinah line's farming DPS is over this, so walking between monsters doesn't lower it.
+    /// </summary>
+    public double FightingSeconds => StretchesSeconds + (StretchStart is { } s && LastHit is { } l ? Math.Max(1, (l - s).TotalSeconds) : 0);
 
     public void AddAbility(int skill, long amount, int hits)
     {

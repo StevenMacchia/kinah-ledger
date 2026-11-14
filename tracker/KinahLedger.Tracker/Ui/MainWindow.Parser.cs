@@ -54,7 +54,7 @@ public partial class MainWindow
         ParserPrefs.Saved += () => Dispatcher.BeginInvoke(() =>
         {
             var fresh = ParserPrefs.Load();
-            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive;
+            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps;
             Encounter.ActiveBasis = fresh.DpsActive;
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
@@ -225,7 +225,7 @@ public partial class MainWindow
             ParserOverlayTick();
         }
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
-        bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true };
+        bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true } || _hud is { IsVisible: true, FarmDpsShown.Length: > 0 };
         if (oldest is not { } o || !shown) return;
         Interlocked.Increment(ref ParserDrawsShown);
         EventHandler? h = null;
@@ -293,6 +293,10 @@ public partial class MainWindow
         }
         if (live != null) { _parserLastLiveId = live.Id; _parserJustEnded = null; }
         var show = live ?? ((now - _parserEndedAt).TotalSeconds <= OverlayResultSeconds ? _parserJustEnded : null);
+        // Steven, 2026-11-14: big "only inside of expeditions and other runs": an open-world fight never opens the section or
+        // the separate overlay; it is one small figure on the Kinah line instead (your DPS, Options › In game › Parser)
+        if (show is { OpenWorld: true }) show = null;
+        _hud?.SetFarmDps(FarmDpsText(now));
         if (!ParserOverlaySeparate)
         {
             // expanded by default: the section above the Kinah line; its own window stays away
@@ -329,6 +333,14 @@ public partial class MainWindow
         _parserOverlay.ShowWanted(true);
     }
 
+
+    /// <summary>Your DPS in the open-world fight under way ("1.2K"), or "" (none, no damage of yours yet, or turned off in Options).</summary>
+    string FarmDpsText(DateTime now)
+    {
+        if (!_parserPrefs.FarmDps || ParserFights?.Farm is not { HasDamage: true } farm) return "";
+        var dps = farm.FarmDps();   // over your fighting time: the walk between monsters doesn't pull it down
+        return dps > 0 ? Amounts.Short(dps) : "";
+    }
 
     void FillParserPage()
     {
@@ -420,6 +432,8 @@ public partial class MainWindow
         }
         else if (e.BossHpLeft is { } left) body.Children.Add(Margin(BossHpBar(e, left), 0, 10, 0, 0));
         if (FightChips(e, now, live: true) is { } chips) body.Children.Add(Margin(chips, 0, 10, 0, 0));
+        // the open world and the Abyss: here while it lasts, never in the list below
+        if (e.OpenWorld) body.Children.Add(Margin(PT("Shown while it lasts. Open-world and Abyss fights are never kept.", 11.5, FontWeights.Medium, "Faint"), 0, 8, 0, 0));
         if (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) body.Children.Add(Margin(RosterTable(e, now, detail: false), 0, 10, 0, 0));
         card.Child = body;
         return card;

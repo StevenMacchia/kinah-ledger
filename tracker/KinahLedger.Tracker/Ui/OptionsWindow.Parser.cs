@@ -13,7 +13,7 @@ namespace KinahLedger.Ui;
 public partial class OptionsWindow
 {
     TextBlock? _parserLabel;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!;
 
     void LoadParser()
     {
@@ -25,6 +25,7 @@ public partial class OptionsWindow
         _parserHoversChk.IsChecked = p.Hovers;
         _parserSeparateChk.IsChecked = p.Separate;
         _parserActiveChk.IsChecked = p.DpsActive;
+        _parserFarmChk.IsChecked = p.FarmDps;
     }
 
     void SaveParser()
@@ -37,6 +38,7 @@ public partial class OptionsWindow
         p.Hovers = _parserHoversChk.IsChecked == true;
         p.Separate = _parserSeparateChk.IsChecked == true;
         p.DpsActive = _parserActiveChk.IsChecked == true;
+        p.FarmDps = _parserFarmChk.IsChecked == true;
         p.Save();
         ParserPrefs.RaiseSaved();
     }
@@ -67,6 +69,7 @@ public partial class OptionsWindow
         _parserKillsChk = Row("Kills and deaths", "Kills near you and the group's deaths on boss pulls and runs. Every fight always shows your kills and deaths.", "Parser kills and deaths");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
+        _parserFarmChk = Row("Open-world DPS on the Kinah line", "While you fight in the open world or the Abyss, your DPS shows small on the Kinah overlay's line. Those fights are counted while they last and never kept.", "Parser open-world DPS");
         _parserSeparateChk = Row("Separate parser overlay", "The Parser in its own overlay you can drag anywhere. Off, it opens above the Kinah overlay when a fight starts and folds away after.", "Separate parser overlay");
         var group = Styled(new Border { Child = stack }, "Group");
         // before Rare drops, which stays the page's last group
@@ -76,5 +79,5 @@ public partial class OptionsWindow
     }
 
     /// <summary>For the options test: the Parser group's switches.</summary>
-    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk);
+    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active, CheckBox Farm) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserFarmChk);
 }

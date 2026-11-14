@@ -29,6 +29,7 @@ public sealed class EncounterStore
 
     public void Add(Encounter e)
     {
+        if (e.OpenWorld) return;   // never kept (Encounter.OpenWorld)
         lock (_gate)
         {
             try
@@ -51,6 +52,7 @@ public sealed class EncounterStore
             var dir = _dir();
             if (_cache != null && _cacheDir == dir) return _cache.ToList();
             var list = new List<Encounter>();
+            int openWorld = 0;
             try
             {
                 var p = System.IO.Path.Combine(dir, FileName);
@@ -58,9 +60,16 @@ public sealed class EncounterStore
                     foreach (var line in File.ReadLines(p))
                     {
                         if (line.Length < 2) continue;
-                        try { if (JsonSerializer.Deserialize<Encounter>(line, Json) is { End: not null } e && (e.Boss.Length > 0 || e.ModeKind != ParserMode.Bosses)) list.Add(e); }
+                        try
+                        {
+                            if (JsonSerializer.Deserialize<Encounter>(line, Json) is not { End: not null } e) continue;
+                            if (e.OpenWorld) { openWorld++; continue; }   // kept by 0.10.87 to 0.10.89: dropped below
+                            if (e.Boss.Length > 0 || e.ModeKind != ParserMode.Bosses) list.Add(e);
+                        }
                         catch (JsonException) { /* a line cut by a crash: the rest still reads */ }
                     }
+                // open-world fights an older version kept are taken out of the file, so none stays on this PC
+                if (openWorld > 0) DropOpenWorld(p);
             }
             catch (Exception ex) { CrashLog.Write("parser: reading the fights", ex); }
             var byId = new Dictionary<string, Encounter>();
@@ -70,6 +79,24 @@ public sealed class EncounterStore
             _cache = unique; _cacheDir = dir;
             return unique.ToList();
         }
+    }
+
+    /// <summary>The file again without its open-world fights (each other line as it was), through a temp file.</summary>
+    static void DropOpenWorld(string path)
+    {
+        try
+        {
+            var keep = File.ReadLines(path).Where(line =>
+            {
+                try { return JsonSerializer.Deserialize<Encounter>(line, Json) is not { OpenWorld: true }; }
+                catch (JsonException) { return true; }
+            }).ToList();
+            var tmp = path + ".tmp";
+            File.WriteAllLines(tmp, keep);
+            File.Move(tmp, path, overwrite: true);
+            CrashLog.Note("parser: open-world fights an older version kept were removed");
+        }
+        catch (Exception ex) { CrashLog.Write("parser: removing open-world fights", ex); }
     }
 
     /// <summary>Forget the cache (a character switch, a test).</summary>
@@ -83,6 +110,7 @@ public sealed class EncounterStore
             try
             {
                 var p = PathIn(LiveName);
+                live = live.Where(e => !e.OpenWorld).ToList();   // never kept, not even while under way
                 if (live.Count == 0) { if (File.Exists(p)) File.Delete(p); return; }
                 Directory.CreateDirectory(_dir());
                 var tmp = p + ".tmp";
@@ -105,7 +133,7 @@ public sealed class EncounterStore
                 var text = File.ReadAllText(p).TrimStart();
                 var list = text.StartsWith('[') ? JsonSerializer.Deserialize<List<Encounter>>(text, Json) ?? new()
                     : JsonSerializer.Deserialize<Encounter>(text, Json) is { } one ? new List<Encounter> { one } : new();
-                return list.Where(e => e is { End: null } && (e.Boss.Length > 0 || e.ModeKind != ParserMode.Bosses)).ToList();
+                return list.Where(e => e is { End: null, OpenWorld: false } && (e.Boss.Length > 0 || e.ModeKind != ParserMode.Bosses)).ToList();
             }
             catch (Exception) { return new(); }
         }

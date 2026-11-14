@@ -59,7 +59,8 @@ public static partial class WpfApp
         var (pastRun, liveRun) = ParserDemo.Sample(now, live: true, mode: ParserMode.Run);
         var (pastFight, _) = ParserDemo.Sample(now, live: false, mode: ParserMode.Fights);
         var cleared = pastRun.Last(e => e.Outcome == "cleared");
-        var pvp = pastFight.Last(e => e.PlayerKills > 0);
+        // Every fight keeps only fights inside instances now (open-world and Abyss ones are never kept)
+        var pvp = pastFight.LastOrDefault(e => e.PlayerKills > 0) ?? pastFight.Last();
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a moment the tracker missed");
         var shots = new List<(string File, Encounter E, DateTime At)>
@@ -85,18 +86,24 @@ public static partial class WpfApp
         }
         // expanded by default (Steven, 2026-11-14): the Kinah overlay alone, then with the Parser's section above the Kinah
         // line (a pull under way, a run, the result held after a kill), the Strip and the Card looks
-        var kinahShots = new List<(string File, string Look, Encounter? E, DateTime At)>
+        // and farming in the open world (Steven, 2026-11-14: "in a small number somewhere ... never large"): your DPS, small on
+        // the Kinah line in each look, the overlay no bigger
+        var kinahShots = new List<(string File, string Look, Encounter? E, DateTime At, string Farm)>
         {
-            ("ui-parser-kinah-overlay.png", HudLooks.Strip, null, now),
-            ("ui-parser-kinah-overlay-live.png", HudLooks.Strip, live, now),
-            ("ui-parser-kinah-overlay-run.png", HudLooks.Strip, liveRun, now),
-            ("ui-parser-kinah-overlay-killed.png", HudLooks.Strip, kill, kill.End!.Value),
-            ("ui-parser-kinah-overlay-card-live.png", HudLooks.Card, live, now),
+            ("ui-parser-kinah-overlay.png", HudLooks.Strip, null, now, ""),
+            ("ui-parser-kinah-overlay-live.png", HudLooks.Strip, live, now, ""),
+            ("ui-parser-kinah-overlay-run.png", HudLooks.Strip, liveRun, now, ""),
+            ("ui-parser-kinah-overlay-killed.png", HudLooks.Strip, kill, kill.End!.Value, ""),
+            ("ui-parser-kinah-overlay-card-live.png", HudLooks.Card, live, now, ""),
+            ("ui-parser-kinah-farming.png", HudLooks.Strip, null, now, "13.2K"),
+            ("ui-parser-kinah-farming-card.png", HudLooks.Card, null, now, "13.2K"),
+            ("ui-parser-kinah-farming-ticker.png", HudLooks.Ticker, null, now, "13.2K"),
         };
-        foreach (var (file, look, e, at) in kinahShots)
+        foreach (var (file, look, e, at, farm) in kinahShots)
         {
             var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Update(kinah);
+            h.SetFarmDps(farm);
             h.ShowParser(e, at, e?.ModeKind ?? ParserMode.Bosses, details: false);
             h.Show();
             DoEvents();
@@ -159,8 +166,8 @@ public static partial class WpfApp
         check(w.ParserModeForTest == ParserMode.Run && run is { ModeKind: ParserMode.Run } && run.Splits.Count >= 3 && run.Splits[^1].Outcome == "" && w.ParserPageForTest().Rows >= 2,
             $"Parser, Full run: the run under way with {run?.Splits.Count} splits (the last under way), the kept runs listed ({w.ParserPageForTest().Rows})");
         w.ShowParserDemo("fight-history"); DoEvents();
-        check(w.ParserModeForTest == ParserMode.Fights && w.ParserPageForTest().Rows >= 4 && w.ParserPastForTest.Any(e => e.ModeKind == ParserMode.Fights && e.Kind == "Abyss" && e.PlayerKills > 0),
-            $"Parser, Every fight: the fights kept, the Abyss's PvP among them ({w.ParserPageForTest().Rows} rows)");
+        check(w.ParserModeForTest == ParserMode.Fights && w.ParserPageForTest().Rows >= 4 && w.ParserPastForTest.All(e => !e.OpenWorld) && w.ParserPastForTest.Any(e => e.ModeKind == ParserMode.Fights),
+            $"Parser, Every fight: the fights kept are the instances' only, none of the open world's or the Abyss's ({w.ParserPageForTest().Rows} rows)");
         w.ShowParserDemo("live"); DoEvents();
         w.SetParserModeForTest(ParserMode.Run); DoEvents();
         check(w.ParserModeForTest == ParserMode.Run && w.ParserLiveForTest?.ModeKind == ParserMode.Run, "Parser: picking Full run switches the page to the run under way");
@@ -262,6 +269,24 @@ public static partial class WpfApp
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
         check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers, sws.Separate, sws.Active }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, DPS over active time, Kills and deaths, List filters, Explanations on hover, Separate parser overlay, all off by default");
+        check(sws.Farm?.IsChecked == true, "Options › In game › Parser: Open-world DPS on the Kinah line, on by default (Steven asked for it)");
+        // farming: your DPS small on the Kinah line in each look; the overlay never grows for it
+        foreach (var look in new[] { HudLooks.Strip, HudLooks.Card, HudLooks.Ticker })
+        {
+            bool still0 = Motion.Still; Motion.Still = true;
+            var hf = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+            hf.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour", ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04" });
+            hf.Show(); DoEvents();
+            double h0 = hf.ActualHeight;
+            hf.SetFarmDps("1.2K"); DoEvents();
+            bool shown = ParserTexts((DependencyObject)hf.Content).Texts.Any(x => x.Contains("1.2K"));
+            double h1 = hf.ActualHeight;
+            hf.SetFarmDps(""); DoEvents();
+            bool gone = !ParserTexts((DependencyObject)hf.Content).Texts.Any(x => x.Contains("1.2K"));
+            check(shown && gone && Math.Abs(h1 - h0) < 1.5 && hf.ParserHeight == 0,
+                $"farming ({look}): your DPS small on the Kinah line, gone with the fight, the overlay no taller ({h0:0} / {h1:0})");
+            hf.Close(); Motion.Still = still0;
+        }
         // expanded by default: the Parser's section opens above the Kinah line and the Kinah line stays where it is
         {
             bool still = Motion.Still; Motion.Still = true;
