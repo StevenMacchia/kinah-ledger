@@ -15,7 +15,7 @@ public sealed class ParserPrefs
     /// <summary>Where the overlay was dropped, in screen pixels; null until it is dragged once.</summary>
     public int? Left { get; set; }
     public int? Top { get; set; }
-    /// <summary>The overlay's shortcut ("Ctrl+Shift+P"; "Off" for none).</summary>
+    /// <summary>The overlay's shortcut ("Off", the default, for none; e.g. "Ctrl+Shift+P").</summary>
     public string Hotkey { get; set; } = DefaultHotkey;
     /// <summary>What the Parser keeps: "boss" (Bosses only, the default), "run" (Full run), "fight" (Every fight).</summary>
     public string Mode { get; set; } = "boss";
@@ -44,7 +44,8 @@ public sealed class ParserPrefs
     public string KindFilter { get; set; } = "";
     public string BossFilter { get; set; } = "";
 
-    public const string DefaultHotkey = "Ctrl+Shift+P";
+    // no system-wide shortcut by default (2026-11-14): one would take the keys from every other app on the PC; the player sets one in Options
+    public const string DefaultHotkey = "Off";
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
     static string PathNow => System.IO.Path.Combine(CrashLog.Dir, "parser.json");
