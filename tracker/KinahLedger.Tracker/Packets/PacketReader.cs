@@ -48,6 +48,11 @@ public sealed class PacketReader : IDisposable
     /// open, saved, counted down in between. Read from any thread.
     /// </summary>
     public BossTimers Bosses { get; } = new(BossTimers.DefaultPath);
+    /// <summary>
+    /// Timed event timers (the decoder's version 6, Session/EventTimers.cs): the game's clock for the schedule's countdowns,
+    /// and the event the player is in, from the event's own server. Read from any thread.
+    /// </summary>
+    public EventTimers Timers { get; } = new();
     /// <summary>Where the decoder comes from: the release build's native one; a test hands in its own.</summary>
     public static Func<IGameDecoder?> Decoders { get; set; } = NativeDecoder.TryOpen;
 
@@ -55,6 +60,7 @@ public sealed class PacketReader : IDisposable
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
     readonly ConcurrentQueue<FightEvent> _fights = new();
+    readonly ConcurrentQueue<AreaEvent> _areas = new();
     readonly ConcurrentQueue<object> _uncovered = new();
     TcpStream _down = new();
     TcpTable.Link? _link;
@@ -124,7 +130,7 @@ public sealed class PacketReader : IDisposable
         catch (OperationCanceledException) { return false; }
     }
     /// <summary>True when changes or updates wait to be drained.</summary>
-    public bool Pending => !_changes.IsEmpty || !_items.IsEmpty || !_fights.IsEmpty;
+    public bool Pending => !_changes.IsEmpty || !_items.IsEmpty || !_fights.IsEmpty || !_areas.IsEmpty;
 
     /// <summary>Item changes the decoder found, cut into the game's updates: kept for the agreement check, queued, logged.</summary>
     void TakeItems(IReadOnlyList<ItemChange> rows)
@@ -147,6 +153,31 @@ public sealed class PacketReader : IDisposable
             : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
             : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));
     }
+
+    /// <summary>
+    /// A timed event's part from its server, or a sample of the game's clock: into the timers; a part is queued for the
+    /// session (an event run starts and ends from it, InstanceLog.GameSaid) and logged.
+    /// </summary>
+    void TakeArea(AreaEvent a)
+    {
+        Timers.Take(a);
+        if (a.What == AreaEvent.Kind.Clock) return;
+        _areas.Enqueue(a); Arrived();
+        if (_areas.Count > 256) _areas.TryDequeue(out _);
+        string name = a.Label.Length > 0 ? a.Label : $"an event the tracker doesn't know yet ({a.Code})";
+        string what = a.What switch
+        {
+            AreaEvent.Kind.Phase => (a.Phase == AreaEvent.Stage.Preparing ? "getting ready" : a.Phase == AreaEvent.Stage.Over ? "over" : "under way")
+                + (a.PhaseStart is { } ps && a.ServerNow is { } sv ? $" since {Local(ps + (a.At - sv))}" : ""),
+            AreaEvent.Kind.Over => "over",
+            _ => a.ServerMoved ? "left (the game moved to another server)" : "left",
+        };
+        Log($"{Local(a.At)}  event: {name} {what}");
+    }
+
+    /// <summary>The next part of a timed event for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public AreaEvent? NextArea() => _areas.TryDequeue(out var a) ? a : null;
+    internal void AreaForTest(AreaEvent a) => TakeArea(a);
 
     /// <summary>The next fight event for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public FightEvent? NextFight() => _fights.TryDequeue(out var f) ? f : null;
@@ -241,7 +272,14 @@ public sealed class PacketReader : IDisposable
         var game = TcpTable.GameServer(TcpTable.Of(gamePids));
         if (game == null) { StopCapture(); State = "Waiting for the game to connect to its server"; return; }
         // another server (an event, the Abyss, a relog): a new stream; the amounts carry on across it
-        if (_link != null && game != _link) { Log($"{Local(DateTime.UtcNow)}  the game moved to {game.Remote}:{game.RemotePort}"); StopCapture(); }
+        if (_link != null && game != _link)
+        {
+            var now = DateTime.UtcNow;
+            Log($"{Local(now)}  the game moved to {game.Remote}:{game.RemotePort}");
+            StopCapture();
+            // off the event's server without its "closed": the event is left all the same
+            if (Timers.Current(now) is { LeftAt: null } live) TakeArea(new AreaEvent(now, null, AreaEvent.Kind.Closed, live.Stage, null, live.Family, live.Name, "", 0, ServerMoved: true));
+        }
         if (!On && (DateTime.UtcNow - _failedAt).TotalSeconds >= 60) StartCapture(game);
     }
 
@@ -275,6 +313,7 @@ public sealed class PacketReader : IDisposable
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
                 while (dec.NextBoss() is { } boss) TakeBoss(boss);
+                while (dec.NextAreaEvent() is { } area) TakeArea(area);
                 while (dec.NextFight() is { } f) TakeFight(f);
             },
             OnGap = () =>

@@ -74,6 +74,8 @@ public sealed partial class TrackerSession
         var now = DateTime.UtcNow;
         // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
         DrainFights(p, now);
+        // the event the player is in, from its own server: an event run starts and ends from it (InstanceLog.GameSaid)
+        while (p.NextArea() is { } area) Instances.GameSaid(area, Zone);
         DrainItems(p, now);
         while (_packetHeld.Count > 0)
         {

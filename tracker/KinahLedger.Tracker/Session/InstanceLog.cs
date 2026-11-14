@@ -1,6 +1,7 @@
 using System.Text.Json;
 using KinahLedger.Ocr;
 using KinahLedger.Data;
+using KinahLedger.Packets;
 
 namespace KinahLedger.Session;
 
@@ -258,6 +259,13 @@ public sealed class InstanceLog
     InstanceRun? _cur;
     /// <summary>True when the minimap itself named the open run (not only the chat or the header).</summary>
     bool _byMinimap;
+    // the event's own server named the open run (its game, not just the family): that name is kept over the screen's
+    bool _gameNamed;
+    // when the event's own server said the player left it (0.10.76): the minimap names the event for some seconds more, and
+    // those reads neither undo the leaving nor count as a new entry
+    DateTime? _leftByGame;
+    /// <summary>How long after the game said the event was left the minimap may still name it (the loading screen, the minimap's lag).</summary>
+    public const double GameLeftHoldSeconds = 60;
     // the current character's runs (Session/Characters.cs); the top folder before any character was seen
     static string PathOf => System.IO.Path.Combine(Characters.DataDir, "instances.jsonl");
 
@@ -372,6 +380,8 @@ public sealed class InstanceLog
                 var ev = kind == "Event" && !string.Equals(name, zone, StringComparison.OrdinalIgnoreCase) ? zone : kind == "Event" && ZoneLocator.FamilyOf(zone) == "" ? zone : "";
                 // the event just closed by the open world's Kina or a kill, still on the minimap for a read: not a new run
                 if (_cur == null && _outZone != null && string.Equals(_outZone, name, StringComparison.OrdinalIgnoreCase) && (now - _outAt).TotalSeconds <= 30) return;
+                // the event the game said was left, still on the minimap: its lag (the game moves the player out first)
+                if (_cur != null && _leftByGame is { } lg && (now - lg).TotalSeconds <= GameLeftHoldSeconds && string.Equals(_cur.Zone, name, StringComparison.OrdinalIgnoreCase)) return;
                 // back in the same instance after leaving it: a flicker of the minimap keeps the run; ten seconds out in the open
                 // world and a new entry is a new run (Urugugu Canyon, 2026-10-22: out at 19:19:56, in again at 19:20:39)
                 bool reentry = _cur != null && _leftAt is { } out0 && (now - out0).TotalSeconds >= 10;
@@ -383,6 +393,7 @@ public sealed class InstanceLog
                     if (ev.Length > 0 && _cur.Event.Length == 0) { _cur.Event = ev; CrashLog.Note($"the minimap names the event: {ev}"); }
                     else if (ev.Length > 0 && !string.Equals(_cur.Event, ev, StringComparison.OrdinalIgnoreCase))
                     {
+                        if (_gameNamed) { CrashLog.Note($"witnesses disagree: the game's own message says {_cur.Event}, the minimap says {ev}; the game's is kept"); return; }
                         CrashLog.Note($"witnesses disagree: the run says {_cur.Event}, the minimap says {ev}; the minimap is kept");
                         _cur.Event = ev;
                     }
@@ -452,6 +463,7 @@ public sealed class InstanceLog
                     else if (name != null && _cur.Event.Length > 0 && !string.Equals(name, _cur.Zone, StringComparison.OrdinalIgnoreCase) && !string.Equals(name, _cur.Event, StringComparison.OrdinalIgnoreCase))
                     {
                         // a witness that disagrees is logged, not listed with the ones that saw the run
+                        if (_gameNamed) { CrashLog.Note($"witnesses disagree: the game's own message says {_cur.Event}, {source} says {name}; the game's is kept"); return; }
                         if (_byMinimap) { CrashLog.Note($"witnesses disagree: the minimap says {_cur.Event}, {source} says {name}; the minimap is kept"); return; }
                         CrashLog.Note($"witnesses disagree: the run said {_cur.Event}, {source} says {name}; now {name}"); _cur.Event = name;
                     }
@@ -489,6 +501,64 @@ public sealed class InstanceLog
                 _byMinimap = false;
                 ClearPending();
                 CrashLog.Note($"event run started: {_cur.Label}, from {source} (the minimap names {zone ?? "no zone yet"})");
+            }
+        }
+    }
+
+    /// <summary>
+    /// What the event's own server said (the game's traffic, 0.10.76; PacketReader): the surest witness of an event run. A
+    /// part of the event opening starts the run, dated by the message (10 s before the minimap did on 2026-11-13), or confirms
+    /// and names the open one; the event's part closing, or the game leaving the event's server, is leaving it, and the
+    /// reward time after it runs as for the minimap. "Over" is noted: the rewards come next. An event the decoder can't name,
+    /// or that isn't on the list, is left to the screen.
+    /// </summary>
+    public void GameSaid(AreaEvent e, string? zone)
+    {
+        if (e.What == AreaEvent.Kind.Clock || e.Label.Length == 0) return;
+        lock (_lock)
+        {
+            ExpirePending(e.At);
+            var name = ZoneLocator.MatchEvent(e.Label) ?? e.Label;
+            if (ZoneLocator.KindOf(name) != "Event") { CrashLog.Note($"the game's own message names an event not on the list: {e.Label}; left to the screen"); return; }
+            var fam = ZoneLocator.FamilyOf(name);
+            var filed = fam.Length > 0 ? fam : name;
+            var game = string.Equals(name, filed, StringComparison.OrdinalIgnoreCase) ? "" : name;
+            bool same = _cur != null && _cur.Kind == "Event" && string.Equals(_cur.Zone, filed, StringComparison.OrdinalIgnoreCase);
+            switch (e.What)
+            {
+                case AreaEvent.Kind.Phase:
+                    if (same && _leftAt == null)
+                    {
+                        if (game.Length > 0 && !string.Equals(_cur!.Event, game, StringComparison.OrdinalIgnoreCase))
+                        {
+                            CrashLog.Note(_cur.Event.Length == 0 ? $"the game's own message names the event: {game}" : $"witnesses disagree: the run said {_cur.Event}, the game's own message says {game}; now {game}");
+                            _cur.Event = game;
+                        }
+                        if (game.Length > 0) _gameNamed = true;
+                        if (e.At < _cur!.Start) { CrashLog.Note($"{_cur.Label}: the game's own message dates its start {(_cur.Start - e.At).TotalSeconds:0} s earlier ({e.At.ToLocalTime():HH:mm:ss})"); _cur.Start = e.At; }
+                        Witness(_cur, "game", e.At);
+                        return;
+                    }
+                    // another run open (or this event's, left: a new round) ends here; the event's run begins at the message
+                    CloseLocked(same ? "left, then a new entry" : "another run began");
+                    var start = _pendingSince is { } since && since < e.At && (e.At - since).TotalSeconds <= PendingSeconds ? since : e.At;
+                    _cur = new InstanceRun { Zone = filed, Kind = "Event", Event = game, Family = fam, Start = start, Witnesses = string.Join(" · ", _pendingSeen) };
+                    Witness(_cur, "game", e.At);
+                    _byMinimap = false; _gameNamed = game.Length > 0;
+                    ClearPending();
+                    CrashLog.Note($"event run started: {_cur.Label}, from the game's own message (the minimap names {zone ?? "no zone yet"})");
+                    return;
+                case AreaEvent.Kind.Over:
+                    if (!same) return;
+                    Witness(_cur!, "game: over", e.At);
+                    CrashLog.Note($"the game's own message says {_cur!.Label} is over: its rewards come next");
+                    return;
+                case AreaEvent.Kind.Closed:
+                    // a part getting ready that closes as the event begins is no leaving: only the event's own part, or a move
+                    if (!same || _leftAt != null || (!e.ServerMoved && e.Phase == AreaEvent.Stage.Preparing)) return;
+                    _leftAt = e.At; _cur!.Left = e.At; _leftByGame = e.At;
+                    CrashLog.Note($"left {_cur.Label} ({(e.ServerMoved ? "the game moved off the event's server" : "the game's own message")}): rewards that land in the next {RewardGraceSeconds:0} s are still its own" + (_cur.PaidAt != null ? " (its rewards came already)" : ""));
+                    return;
             }
         }
     }
@@ -1129,6 +1199,7 @@ public sealed class InstanceLog
     void CloseLocked(string why)
     {
         ResetEdgesLocked();
+        _gameNamed = false; _leftByGame = null;
         if (_cur != null) _cur.Ended = why;
         if (_cur != null && PictureOnly(_cur) && !_cur.FromPicture)
         {

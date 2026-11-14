@@ -31,6 +31,24 @@ public sealed record BossSighting(DateTime At, DateTime? ServerNow, string Key, 
 }
 
 /// <summary>
+/// A timed event as the game's event server tells it (the decoder's interface version 6), or a sample of the game server's
+/// clock. Clock: only ServerNow says anything (the server's clock at At; it comes on any server, a minute apart). Phase: a
+/// part of the event opened (or was open when the player arrived), with PhaseStart its start on the server's clock when
+/// known. Over: the event is over (its rewards come next). Closed: the part closed, the player left it; ServerMoved when the
+/// tracker saw the game leave the event's server without being told. Family and Name: the event as the tracker's list names it
+/// ("Shugo Festival", "Defend Shugo Merchants"), "" when not known. Code: the game's own name for the part, for the log when
+/// the event isn't known yet.
+/// </summary>
+public sealed record AreaEvent(DateTime At, DateTime? ServerNow, AreaEvent.Kind What, AreaEvent.Stage Phase, DateTime? PhaseStart, string Family, string Name, string Code, uint Id, bool ServerMoved = false)
+{
+    public enum Kind { Clock = 0, Phase = 1, Over = 2, Closed = 3 }
+    /// <summary>Where the event stands: getting ready (the lobby's countdown), under way, over.</summary>
+    public enum Stage { Unknown = 0, Preparing = 1, UnderWay = 2, Over = 3 }
+    /// <summary>The event's name to show: the game, else its family, else "".</summary>
+    public string Label => Name.Length > 0 ? Name : Family;
+}
+
+/// <summary>
 /// What turns the game server's stream into currency changes. The decoder is not part of this source: release builds carry
 /// it as a native library (klnet.dll), and a build without it reads no traffic (the screen counts, as before).
 /// </summary>
@@ -50,6 +68,8 @@ public interface IGameDecoder : IDisposable
     ItemChange? NextItem() => null;
     /// <summary>The next field boss from the world map's boss list, or null (always null for a decoder without it).</summary>
     BossSighting? NextBoss() => null;
+    /// <summary>The next timed event's part or clock sample, or null (always null for a decoder without them).</summary>
+    AreaEvent? NextAreaEvent() => null;
     /// <summary>True when this decoder reads the player's kills and deaths too (klnet.dll's interface version 3).</summary>
     bool ReadsFights => false;
     /// <summary>The next fight event found, or null (always null for a decoder that reads no fights).</summary>
@@ -68,6 +88,11 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         public float X, Y, Z; public int Reserved;
         public fixed byte Name[48]; public fixed byte Place[48]; public fixed byte Region[24];
     }
+    [StructLayout(LayoutKind.Sequential)] struct KlAreaEvent
+    {
+        public long AtUtcTicks; public long ServerUtcMs; public long StartUtcMs; public uint Id; public int Kind; public int Stage; public int State; public int Flags; public int Reserved;
+        public fixed byte Tag[48]; public fixed byte Family[32]; public fixed byte Name[48];
+    }
     [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
@@ -82,6 +107,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
     [DllImport("klnet", EntryPoint = "kl_next_boss")] static extern int NextBossN(nint h, KlBoss* boss);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
+    [DllImport("klnet", EntryPoint = "kl_next_area_event")] static extern int NextAreaN(nint h, KlAreaEvent* ev);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
@@ -144,6 +170,19 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         static DateTime? Ms(long ms) => ms > 0 && ms < 4_102_444_800_000 ? DateTime.UnixEpoch.AddMilliseconds(ms) : null;
         return new BossSighting(new DateTime(b.AtUtcTicks, DateTimeKind.Utc), Ms(b.ServerUtcMs), $"{b.MapId}:{b.BossId}",
             Str(b.Name, 48), Str(b.Place, 48), Str(b.Region, 24), (BossSighting.Kind)b.State, Ms(b.TimeUtcMs), (b.Flags & 1) != 0);
+    }
+    // as for the bosses: a dll that says 6 or more but was built without the events, asked once
+    static bool _noAreas;
+    public AreaEvent? NextAreaEvent()
+    {
+        if (_h == 0 || Version < 6 || _noAreas) return null;
+        KlAreaEvent e;
+        try { if (NextAreaN(_h, &e) != 1 || e.Kind is < 0 or > 3 || e.Stage is < 0 or > 3) return null; }
+        catch (EntryPointNotFoundException) { _noAreas = true; return null; }
+        static string Str(byte* p, int n) { int len = 0; while (len < n && p[len] != 0) len++; return System.Text.Encoding.UTF8.GetString(p, len); }
+        static DateTime? Ms(long ms) => ms > 0 && ms < 4_102_444_800_000 ? DateTime.UnixEpoch.AddMilliseconds(ms) : null;
+        return new AreaEvent(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), Ms(e.ServerUtcMs), (AreaEvent.Kind)e.Kind, (AreaEvent.Stage)e.Stage, Ms(e.StartUtcMs),
+            Str(e.Family, 32), Str(e.Name, 48), Str(e.Tag, 48), e.Id);
     }
     public bool ReadsFights => Version >= 3;
     public FightEvent? NextFight()

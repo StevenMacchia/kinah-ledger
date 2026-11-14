@@ -368,6 +368,7 @@ public static class PacketTests
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
         BossTimerChecks(t);
+        EventTimerChecks(settings);
 
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
@@ -425,6 +426,94 @@ public static class PacketTests
     /// boss is up while the map sends the list and "up when last seen" after; a spawn that passed is due; the same reading
     /// again changes nothing, a kill does; the order; the saved copy read back after a restart, with its age.
     /// </summary>
+    /// <summary>
+    /// Timed events (Session/EventTimers.cs, InstanceLog.GameSaid; 0.10.76): the schedule counted on the game's clock (UTC+9,
+    /// 14.6 s behind this PC's as on 2026-11-13), on-now windows and weekdays; the event the player is in, part by part, from
+    /// its own server; and an event run that starts at the game's message, keeps its start and name over the minimap's, is
+    /// left when the game says so (the minimap's lagging reads neither undo that nor start a new run) and closes after the
+    /// reward time, as the 17:01 Defend Shugo Merchants run of 2026-11-13 came.
+    /// </summary>
+    static void EventTimerChecks(Settings settings)
+    {
+        var lag = TimeSpan.FromSeconds(14.6);
+        var server = new DateTime(2026, 11, 14, 1, 29, 0, DateTimeKind.Utc);   // Sat 10:29 on the game's clock, Fri 20:29 at UTC-5
+        string Say(EventTimers.Row r) => r.OnNow ? $"{r.Event.Name} on, {r.When}" : $"{r.Event.Name} in {r.When} at {r.StartPc:HH:mm:ss.f}Z";
+        var rows = EventTimers.Schedule.Select(r => EventTimers.RowOf(r, server, lag)).ToList();
+        Check(string.Join(" | ", rows.Select(Say)) == "Shugo Festival in 31m 00s at 02:00:14.6Z | Dimensional Invasion in 1m 00s at 01:30:14.6Z | Spacetime Rift in 1h 31m 00s at 03:00:14.6Z | Artifact Siege in 10h 31m 00s at 12:00:14.6Z",
+            $"event timers: {string.Join(" | ", rows.Select(Say))} (the starts on this PC's clock, 14.6 s after the game's)");
+        var at3 = EventTimers.RowOf(EventTimers.Schedule[0], new DateTime(2026, 11, 14, 2, 3, 0, DateTimeKind.Utc), lag);
+        var at6 = EventTimers.RowOf(EventTimers.Schedule[0], new DateTime(2026, 11, 14, 2, 6, 0, DateTimeKind.Utc), lag);
+        Check(at3 is { OnNow: true, When: "started 3 min ago" } && at6 is { OnNow: false, When: "54m 00s" }, $"...the Shugo Festival 3 min past the hour: {Say(at3)}; at 6 past: {Say(at6)}");
+        var siegeOn = EventTimers.RowOf(EventTimers.Schedule[3], new DateTime(2026, 11, 14, 12, 5, 0, DateTimeKind.Utc), lag);
+        var siegeNext = EventTimers.RowOf(EventTimers.Schedule[3], new DateTime(2026, 11, 14, 12, 25, 0, DateTimeKind.Utc), lag);
+        Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc) + lag && siegeNext.When == "1d 23h 35m",
+            $"...the Artifact Siege on Saturday 21:05 on the game's clock, then next on Monday: {Say(siegeNext)}");
+
+        var et = new EventTimers();
+        var pc = server + lag;
+        Check(!et.ClockKnown && et.ClockLine(pc).StartsWith("On this PC's clock"), "...before the traffic says, this PC's clock (and the card says so)");
+        et.Take(new AreaEvent(pc, server, AreaEvent.Kind.Clock, AreaEvent.Stage.Unknown, null, "", "", "", 0));
+        var sf = et.Rows(pc).First(r => r.Event.Name == "Shugo Festival");
+        Check(et.ClockKnown && Math.Abs(et.Offset.TotalSeconds - 14.6) < 0.01 && sf.Left == TimeSpan.FromMinutes(31) && et.ClockLine(pc) == "On the game's clock (15 s behind this PC's)",
+            $"...the game's clock from its traffic: {et.Offset.TotalSeconds:F1} s; the Shugo Festival in {BossTimers.Countdown(sf.Left)}; \"{et.ClockLine(pc)}\"");
+
+        // the event the player is in: 17:01, 2026-11-13 (UTC 22:01), as the event server said it
+        var e0 = new DateTime(2026, 11, 13, 22, 1, 20, 361, DateTimeKind.Utc);
+        AreaEvent A(double sec, AreaEvent.Kind k, AreaEvent.Stage st, double? startSec = null, bool moved = false, string name = "Defend Shugo Merchants") =>
+            new(e0.AddSeconds(sec), e0.AddSeconds(sec) - lag, k, st, startSec is { } ss ? e0.AddSeconds(ss) - lag : null, "Shugo Festival", name, "", 1, moved);
+        var prep = A(0, AreaEvent.Kind.Phase, AreaEvent.Stage.Preparing, -16.1);
+        var main = A(116.5, AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay, 116.5);
+        var over = A(185.9, AreaEvent.Kind.Over, AreaEvent.Stage.Over);
+        var shut = A(207.3, AreaEvent.Kind.Closed, AreaEvent.Stage.Over);
+        var shutPrep = A(207.3, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing);
+        var lv = new EventTimers();
+        lv.Take(prep);
+        var l1 = lv.Current(prep.At);
+        lv.Take(main); lv.Take(A(120, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing));   // a getting-ready part closing as the event begins
+        var l2 = lv.Current(main.At.AddSeconds(5));
+        lv.Take(over); var l3 = lv.Current(over.At);
+        lv.Take(shut); lv.Take(shutPrep);
+        var l4 = lv.Current(shut.At.AddSeconds(10)); var l5 = lv.Current(shut.At.AddSeconds(EventTimers.KeepLiveSeconds + 1));
+        Check(l1 is { Stage: AreaEvent.Stage.Preparing, Label: "Defend Shugo Merchants" } && l1.StartedPc == e0.AddSeconds(-16.1)
+            && l2 is { Stage: AreaEvent.Stage.UnderWay, LeftAt: null } && l3 is { Stage: AreaEvent.Stage.Over } && l4 is { LeftAt: { } } && l5 == null
+            && EventTimers.StageText(l1) == "Getting ready" && EventTimers.StageText(l2) == "Under way" && EventTimers.StageText(l3) == "Over: rewards next" && EventTimers.StageText(l4) == "Left",
+            $"...the event you're in: {(l1 == null ? "-" : EventTimers.StageText(l1))}, {(l2 == null ? "-" : EventTimers.StageText(l2))} (its lobby closing is no leaving), {(l3 == null ? "-" : EventTimers.StageText(l3))}, {(l4 == null ? "-" : EventTimers.StageText(l4))}, gone {EventTimers.KeepLiveSeconds:0} s after");
+        var mv = new EventTimers(); mv.Take(prep); mv.Take(A(30, AreaEvent.Kind.Closed, AreaEvent.Stage.Preparing, moved: true));
+        Check(mv.Current(prep.At.AddSeconds(31)) is { LeftAt: { } }, "...the game moving off the event's server in its lobby is leaving it");
+
+        // the run, through the session: started by the game's message 10 s before the minimap, left by it, closed after the reward time
+        var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        var reader = new PacketReader(); reader.ReadingForTest();
+        var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+        s.ApplyZone("Ellun River Midstream", e0.AddSeconds(-60));
+        reader.AreaForTest(prep); s.DrainPacketsForTest();
+        var r1 = s.Instances.Current;
+        s.ApplyZone("Defend Shugo Merchants", e0.AddSeconds(9.9));   // the minimap, 17:01:30.3 on that day
+        reader.AreaForTest(main); s.DrainPacketsForTest();
+        var r2 = s.Instances.Current;
+        reader.AreaForTest(over); reader.AreaForTest(shut); reader.AreaForTest(shutPrep); s.DrainPacketsForTest();
+        var r3 = s.Instances.Current;
+        s.ApplyZone("Defend Shugo Merchants", shut.At.AddSeconds(12));   // the minimap, still on the event 12 s later
+        var r4 = s.Instances.Current;
+        s.ApplyZone("Ellun River Midstream", shut.At.AddSeconds(20));
+        s.ApplyZone("Ellun River Midstream", shut.At.AddSeconds(InstanceLog.RewardGraceSeconds + 1));
+        var r5 = s.Instances.Current;
+        Check(r1 is { Kind: "Event", Zone: "Shugo Festival", Event: "Defend Shugo Merchants", Leaving: false } && r1.Value.Start == prep.At
+            && r2 is { Leaving: false } && r2.Value.Start == prep.At && r3 is { Leaving: true } && r4 is { Leaving: true } && r4.Value.Start == prep.At && r5 == null,
+            $"...the run: opened by the game at {prep.At:HH:mm:ss.f}Z as {r1?.Label} (the minimap's read 10 s later keeps it), left at its close ({(r3?.Leaving == true ? "leaving" : "open")}), the minimap still on it 12 s on: {(r4?.Leaving == true ? "still leaving, no new run" : "undone")}; closed after the reward time: {(r5 == null ? "yes" : "no")}");
+        // only the family known: the run files under it, and the header names the game
+        var fam = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+        fam.ApplyZone("Ellun River Midstream", e0.AddHours(1).AddSeconds(-60));
+        reader.AreaForTest(A(3600, AreaEvent.Kind.Phase, AreaEvent.Stage.Preparing, 3584, name: "")); fam.DrainPacketsForTest();
+        var f1 = fam.Instances.Current;
+        fam.Instances.Witness("header", "Hidden Lugi", e0.AddHours(1).AddSeconds(5), "Ellun River Midstream");
+        var f2 = fam.Instances.Current;
+        Check(f1 is { Zone: "Shugo Festival", Event: "" } && f2 is { Event: "Hidden Lugi" }, $"...a game the decoder can't name yet: {f1?.Label}, then the header names it: {f2?.Label}");
+        var unk = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+        reader.AreaForTest(new AreaEvent(e0, e0 - lag, AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay, null, "", "", "unknown-event", 9)); unk.DrainPacketsForTest();
+        Check(unk.Instances.Current == null, "...an event the decoder doesn't know at all opens no run (the screen's to find)");
+    }
+
     static void BossTimerChecks(DateTime t)
     {
         var lag = TimeSpan.FromSeconds(14.87);   // the server's clock behind this PC's
@@ -495,6 +584,7 @@ public static class PacketTests
         var gaps = new List<DateTime>();
         var bosses = new BossTimers();
         var bossLines = new List<string>();
+        var eventLines = new List<string>(); var timers = new EventTimers();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
@@ -515,6 +605,12 @@ public static class PacketTests
                     while (dec.NextBoss() is { } b)
                         if (bosses.Take(b)) bossLines.Add($"{PacketReader.Local(b.At)}  world boss: {(b.Name.Length > 0 ? b.Name : "(not named)")} {b.State}{(b.Time is { } t && b.ServerNow is { } sv ? (b.State == BossSighting.Kind.Dead ? $", spawns in {BossTimers.Countdown(t - sv)}" : $", up {BossTimers.Span(sv - t)}") : "")}");
                     while (dec.NextFight() is { } f) fights.Add(f);
+                    while (dec.NextAreaEvent() is { } ae)
+                    {
+                        timers.Take(ae);
+                        if (ae.What != AreaEvent.Kind.Clock)
+                            eventLines.Add($"{PacketReader.Local(ae.At)}  event: {(ae.Label.Length > 0 ? ae.Label : "(not known: " + ae.Code + ")")} {ae.What}{(ae.What == AreaEvent.Kind.Phase ? " " + ae.Phase : "")}{(ae.PhaseStart is { } ps && ae.ServerNow is { } sv ? $", began {PacketReader.Local(ps + (ae.At - sv))}" : "")}");
+                    }
                 },
                 OnGap = () => { dec.Gap(); gaps.Add(last); },
             };
@@ -525,6 +621,8 @@ public static class PacketTests
         }
         foreach (var c in seen) Print(c);
         foreach (var l in bossLines) Console.WriteLine(l);
+        foreach (var l in eventLines) Console.WriteLine(l);
+        if (timers.ClockKnown) Console.WriteLine($"the game's clock: {timers.Offset.TotalSeconds:F1} s behind the capture's");
         if (bosses.Count > 0) Console.WriteLine($"world bosses: {bosses.Count} on the map's list, {bossLines.Count} readings (a boss's first, then each change)");
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
