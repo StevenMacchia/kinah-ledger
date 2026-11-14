@@ -25,7 +25,7 @@ public sealed record ItemChange(DateTime At, long ItemId, ItemOp Op, long StackI
 /// 2 left, 3 boss seen, 4 pull started, 5 pull ended, 6 group member, 7 member left, 8 damage, 9 boss HP, 10 a death.
 /// </summary>
 internal sealed record BossRow(DateTime At, int Kind, int Content, string Zone, int Pull, string Boss, long BossEntity, int Outcome,
-    long Entity, string Name, string Class, bool Self, long CombatPower, long ItemLevel, long Amount, long Max);
+    long Entity, string Name, string Class, bool Self, long CombatPower, long ItemLevel, long Amount, long Max, int Skill = 0);
 
 /// <summary>Turns the decoder's boss rows into the Parser's events: keeps the roster (GroupChanged is the whole list) and the instance serial.</summary>
 internal sealed class BossMapper
@@ -49,7 +49,7 @@ internal sealed class BossMapper
                 _group[r.Entity] = new GroupMember(r.Entity, r.Name, r.Class, (int)Math.Clamp(r.CombatPower, 0, int.MaxValue), (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), r.Self);
                 return new GroupChanged(r.At, _group.Values.ToList());
             case 7: return _group.Remove(r.Entity) ? new GroupChanged(r.At, _group.Values.ToList()) : null;
-            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self);   // source 0: HP lost with no hit (damage over time, lost traffic)
+            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue));   // ItemLevel carries the hits for a damage row   // source 0: HP lost with no hit (damage over time, lost traffic)
             case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
             case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1);
             default: return null;   // a boss seen (its HP comes with the pull), or a kind this build doesn't know
@@ -94,7 +94,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [StructLayout(LayoutKind.Sequential)]
     struct KlFight
     {
-        public long AtUtcTicks; public int Kind, Content, Encounter, Outcome, Self, Reserved;
+        public long AtUtcTicks; public int Kind, Content, Encounter, Outcome, Self, Skill;
         public long BossEntity, Entity, CombatPower, ItemLevel, Amount, Max;
         public fixed byte Zone[64]; public fixed byte Boss[64]; public fixed byte Name[32]; public fixed byte Class[16];
     }
@@ -178,7 +178,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
             catch (EntryPointNotFoundException) { _noBossExport = true; return null; }
             if (got != 1) break;
             var row = new BossRow(new DateTime(f.AtUtcTicks, DateTimeKind.Utc), f.Kind, f.Content, Text(f.Zone, 64), f.Encounter, Text(f.Boss, 64), f.BossEntity,
-                f.Outcome, f.Entity, Text(f.Name, 32), Text(f.Class, 16), f.Self != 0, f.CombatPower, f.ItemLevel, f.Amount, f.Max);
+                f.Outcome, f.Entity, Text(f.Name, 32), Text(f.Class, 16), f.Self != 0, f.CombatPower, f.ItemLevel, f.Amount, f.Max, f.Skill);
             if (_bosses.Map(row) is { } e) return e;
         }
         return null;
