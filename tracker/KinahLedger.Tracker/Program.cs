@@ -1343,6 +1343,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        if (o.ContainsKey("proposal")) { WpfApp.ShotProposal(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("bosses") || o.ContainsKey("timers")) { WpfApp.ShotBosses(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("recap")) { WpfApp.ShotRecap(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
