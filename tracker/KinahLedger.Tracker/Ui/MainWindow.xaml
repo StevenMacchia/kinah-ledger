@@ -601,6 +601,22 @@
         </StackPanel>
       </Border>
 
+      <!-- the whole inventory from the game's messages (Ui/MainWindow.Inventory.cs): its worth, the sellable part, what has no
+           price, the change since the tracker first saw it, the most valuable items; only while the reader gets it -->
+      <Border x:Name="InvCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Padding="14,10,14,10" Visibility="Collapsed">
+        <StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Image Source="/Art/kinah.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <TextBlock Grid.Column="1" Text="Inventory" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="InvNote" Grid.Column="2" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="InvTotal" Grid.Column="3" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
+          </Grid>
+          <TextBlock x:Name="InvSub" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+          <WrapPanel x:Name="InvHost" Margin="0,8,0,-6"/>
+        </StackPanel>
+      </Border>
+
       <!-- the bag (LOOT since 2026-10-28, Ui/MainWindow.Loot.cs): what was picked up, as slots with the game-tooltip card on
            hover, for one period at a time: this zone since you arrived (or the run, or every zone), Today, or the Week. It
            opens from the loot chip in Compact; in Full view it is a column of its own -->

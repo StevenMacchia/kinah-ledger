@@ -2122,6 +2122,8 @@ public partial class MainWindow : Window
                 e.Apply(new MarketSold(t, "Spiritstone", 10, 75_200));
                 break;
         }
+        // KL_DEMO_BAG=known|unknown: the Inventory card with a sample inventory, or before the game sent one (Ui/MainWindow.Inventory.cs)
+        if (Environment.GetEnvironmentVariable("KL_DEMO_BAG") is { Length: > 0 } demoBag) DemoInventory(demoBag);
         // KL_DEMO_DROP=Radiant Orichalcum Ore:3 (0.10.30): drops added to the sample, to render a rarer grade's quest row
         if (Environment.GetEnvironmentVariable("KL_DEMO_DROP") is { Length: > 0 } dd)
             foreach (var kv in dd.Split(',').Select(p => p.Split(':')).Where(kv => kv.Length == 2)) if (int.TryParse(kv[1], out var c)) Drop(kv[0].Trim(), c);
