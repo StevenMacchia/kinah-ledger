@@ -238,6 +238,8 @@ public sealed partial class HudWindow : Window
     {
         dps ??= "";
         if (dps == _farmDps) return;
+        // the strip, already showing one: just the figure (ten times a second, so not the whole line again)
+        if (_look == null && _farmCell is { Visibility: Visibility.Visible } && _farmDps.Length > 0 && dps.Length > 0) { _farmDps = dps; _farmValue!.Text = dps; return; }
         _farmDps = dps;
         if (_lastValues != null) Update(_lastValues);
     }
@@ -245,7 +247,9 @@ public sealed partial class HudWindow : Window
     /// <summary>The strip's small DPS: a rule, the figure, "DPS", at the end of its line (shown only with the "farmDps" value).</summary>
     StackPanel FarmCell()
     {
-        _farmValue = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center };
+        // tabular digits and a floor on the width: the figure rolls ten times a second without the line twitching
+        _farmValue = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MinWidth = 34, TextAlignment = TextAlignment.Right };
+        System.Windows.Documents.Typography.SetNumeralAlignment(_farmValue, FontNumeralAlignment.Tabular);
         var unit = new TextBlock { Text = "DPS", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var rule = new Border { Width = 1, Height = 14, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Children = { rule, _farmValue, unit } };

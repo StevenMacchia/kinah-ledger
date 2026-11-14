@@ -56,7 +56,7 @@ public static class ParserTests
             if ((at - sampled).TotalSeconds < 1) return;
             sampled = at;
             var f = p.Farm;
-            if (f != null && f.FarmDps() > 0) shown.Add(f.FarmDps());
+            if (f != null && p.FarmDpsNow(at) is { } now0 && now0 > 0) shown.Add(now0);   // what the Kinah line reads now (the live readout)
             if (farmNow != null && (f == null || f.Start != farmNow.Start))
             {
                 farms.Add((farmNow.Start, farmNow.LastAt, farmNow.You?.Damage ?? 0, farmNow.You?.FightingSeconds ?? 0, shown));
@@ -403,6 +403,33 @@ public static class ParserTests
             Check(p.Farm == null, "...and entering an instance ends it: an instance's fights are its pulls and runs");
             p.Take(new DamageDealt(t.AddSeconds(110), 1, 6001, 5_000, SourceIsYou: true));
             Check(p.Farm == null, "...trash inside an instance is never farming");
+        }
+
+        // the live farming readout (Steven, 2026-11-14: "the dps figure needs to be rolling all the time"): every hit lifts it,
+        // it slides down between hits, and when you stop it eases onto the fight's figure, never down to nothing
+        {
+            var (p, _) = New();
+            p.Place("Western Cantas Valley", abyss: false);
+            p.Take(new GroupChanged(t, new[] { new GroupMember(1, "Swoly", "Gladiator", 0, 0, true) }));
+            for (int i = 0; i <= 20; i++) p.Take(new DamageDealt(t.AddSeconds(i * 0.5), 1, 5000, 10_000, SourceIsYou: true));   // 20K a second for 10 s
+            var at = t.AddSeconds(10);
+            double steady = p.FarmDpsNow(at.AddMilliseconds(250)) ?? 0;
+            Check(Math.Abs(steady - 20_000) < 2_000, $"farming readout: a steady 20K a second reads about that ({steady:0})");
+            double before = p.FarmDpsNow(at.AddMilliseconds(490)) ?? 0;
+            p.Take(new DamageDealt(at.AddMilliseconds(500), 1, 5000, 10_000, SourceIsYou: true));
+            double after = p.FarmDpsNow(at.AddMilliseconds(500)) ?? 0;
+            Check(after > before + 1_000, $"...each hit lifts it at once ({before:0} to {after:0})");
+            var slide = Enumerable.Range(1, 9).Select(k => p.FarmDpsNow(at.AddMilliseconds(500 + k * 100)) ?? 0).ToList();
+            Check(slide.Zip(slide.Skip(1)).All(x => x.Second < x.First && x.First - x.Second < 1_000), $"...and slides down smoothly between hits, a little each tenth of a second ({slide[0]:0} to {slide[^1]:0})");
+            var fight = p.Farm!.FarmDps();
+            var stop = at.AddMilliseconds(500);
+            var eased = Enumerable.Range(0, 60).Select(k => p.FarmDpsNow(stop.AddMilliseconds(k * 100)) ?? 0).ToList();
+            Check(eased.All(v => v > fight * 0.5) && Math.Abs(eased[^1] - fight) < 1 && eased.Zip(eased.Skip(1)).All(x => Math.Abs(x.First - x.Second) < 1_500),
+                $"...when you stop it eases onto the fight's figure ({fight:0}) within {BossParser.EaseAfterSeconds + BossParser.EaseSeconds:0} s, never jumping and never down to 0 (lowest {eased.Min():0})");
+            Check(Ui.MainWindow.FarmFigure(850) == "850" && Ui.MainWindow.FarmFigure(9_940) == "9.9K" && Ui.MainWindow.FarmFigure(13_240) == "13.2K" && Ui.MainWindow.FarmFigure(1_254_000) == "1.25M",
+                "...in one steady format: 850, 9.9K, 13.2K, 1.25M");
+            p.Tick(stop.AddSeconds(BossParser.PauseSeconds + 1));
+            Check(p.FarmDpsNow(stop.AddSeconds(BossParser.PauseSeconds + 1)) == null && !p.FarmLive, "...and is gone with the fight");
         }
 
         // open-world fights write nothing to disk: not on ending, not while under way, and an older version's are removed

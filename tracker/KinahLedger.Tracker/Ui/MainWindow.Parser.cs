@@ -62,6 +62,7 @@ public partial class MainWindow
             RedrawParserPage();
         });
         _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
+        if (watch) StartFarmTicker();
         Encounter.ActiveBasis = _parserPrefs.DpsActive;
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
         ParserTab.Click += (_, _) => ShowPart("Parser");
@@ -194,6 +195,11 @@ public partial class MainWindow
     /// <summary>A change, from any thread: one redraw is queued, now or when the last one is <see cref="ParserFrameMs"/> old.</summary>
     /// <summary>For parser-latency: changes the Parser said, frames drawn for them, of which on screen.</summary>
     internal static int ParserChangesSeen, ParserDraws, ParserDrawsShown;
+    /// <summary>For parser-latency: the Kinah line's farming figure, each time its text changed, and the time from the game event to that frame.</summary>
+    internal static int FarmTextChanges;
+    internal static ParserLatency FarmLatencyStats { get; } = new();
+    /// <summary>For parser-latency: the replay's own Kinah overlay (hidden, off-screen), so the line's figure is drawn as live.</summary>
+    internal void AttachHudForTest(HudWindow h) => _hud = h;
     void OnParserChanged(DateTime? at)
     {
         Interlocked.Increment(ref ParserChangesSeen);
@@ -219,12 +225,14 @@ public partial class MainWindow
         Interlocked.Increment(ref ParserDraws);
         lock (_parserDrawGate) { oldest = _parserOldest; _parserOldest = null; _parserDrawQueued = false; }
         _parserLastDraw = System.Diagnostics.Stopwatch.GetTimestamp();
+        string farmWas = _hud?.FarmDpsShown ?? "";
         try
         {
             if (_part == "Parser") FillParserPage();
             ParserOverlayTick();
         }
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
+        FarmDrawn(farmWas, oldest);
         bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true } || _hud is { IsVisible: true, FarmDpsShown.Length: > 0 };
         if (oldest is not { } o || !shown) return;
         Interlocked.Increment(ref ParserDrawsShown);
@@ -235,6 +243,18 @@ public partial class MainWindow
             double ms = Math.Max(0, (DateTime.UtcNow - o).TotalMilliseconds);
             ParserLatencyStats.Add(ms); ParserLatencyMinute.Add(ms);
         };
+        System.Windows.Media.CompositionTarget.Rendering += h;
+    }
+
+    /// <summary>The Kinah line's farming figure after a draw: counted when its text changed, timed from the event that brought it (if any) to the frame.</summary>
+    void FarmDrawn(string was, DateTime? from)
+    {
+        var now = _hud?.FarmDpsShown ?? "";
+        if (now == was) return;
+        Interlocked.Increment(ref FarmTextChanges);
+        if (from is not { } o) return;
+        EventHandler? h = null;
+        h = (_, _) => { System.Windows.Media.CompositionTarget.Rendering -= h; FarmLatencyStats.Add(Math.Max(0, (DateTime.UtcNow - o).TotalMilliseconds)); };
         System.Windows.Media.CompositionTarget.Rendering += h;
     }
 
@@ -334,12 +354,57 @@ public partial class MainWindow
     }
 
 
-    /// <summary>Your DPS in the open-world fight under way ("1.2K"), or "" (none, no damage of yours yet, or turned off in Options).</summary>
+    /// <summary>Your live DPS in the open-world fight under way ("13.2K"), or "" (none, no hit of yours yet, or turned off in Options).</summary>
     string FarmDpsText(DateTime now)
     {
-        if (!_parserPrefs.FarmDps || ParserFights?.Farm is not { HasDamage: true } farm) return "";
-        var dps = farm.FarmDps();   // over your fighting time: the walk between monsters doesn't pull it down
-        return dps > 0 ? Amounts.Short(dps) : "";
+        if (!_parserPrefs.FarmDps || ParserFights?.FarmDpsNow(now) is not { } dps || dps <= 0) return "";
+        return FarmFigure(dps);
+    }
+
+    /// <summary>
+    /// The readout's one format, so its width holds while it rolls (tabular digits do the rest): under 1,000 as is, then
+    /// thousands with one decimal ("13.2K"), millions with two ("1.25M").
+    /// </summary>
+    internal static string FarmFigure(double v) => v < 1_000 ? Math.Round(v).ToString("0", CultureInfo.InvariantCulture)
+        : v < 999_950 ? (v / 1_000).ToString("0.0", CultureInfo.InvariantCulture) + "K" : (v / 1_000_000).ToString("0.00", CultureInfo.InvariantCulture) + "M";
+
+    System.Windows.Threading.DispatcherTimer? _farmTicker;
+    /// <summary>The tab's own live readout of your farming DPS (the open-world fight's card), refreshed with the Kinah line's.</summary>
+    TextBlock? _parserFarmNow;
+
+    /// <summary>
+    /// The live readout's clock (Steven, 2026-11-14: "rolling all the time"): ten times a second while you farm, the Kinah
+    /// line's figure (and the tab's) is worked out again, so it slides between hits and eases off when you stop; each hit
+    /// also redraws it at once (the Parser's change, ParserDrawNow). Idle otherwise: one cheap check a tick.
+    /// </summary>
+    void StartFarmTicker()
+    {
+        if (_farmTicker != null) return;
+        _farmTicker = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(100) };
+        _farmTicker.Tick += (_, _) => FarmTick();
+        _farmTicker.Start();
+    }
+
+    void FarmTick()
+    {
+        try
+        {
+            bool live = ParserFights?.FarmLive == true;
+            if (!live && (_hud?.FarmDpsShown ?? "").Length == 0 && _parserFarmNow == null) return;
+            var text = FarmDpsText(DateTime.UtcNow);
+            if (_hud != null)
+            {
+                var was = _hud.FarmDpsShown;
+                _hud.SetFarmDps(text);
+                if (_hud.FarmDpsShown != was) Interlocked.Increment(ref FarmTextChanges);
+            }
+            if (_parserFarmNow != null)
+            {
+                if (!_parserFarmNow.IsLoaded && _parserFarmNow.Parent == null) _parserFarmNow = null;
+                else _parserFarmNow.Text = text.Length > 0 ? text : "–";
+            }
+        }
+        catch (Exception ex) { CrashLog.Write("parser farming readout", ex); }
     }
 
     void FillParserPage()
@@ -354,7 +419,7 @@ public partial class MainWindow
         var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
-        ParserPage.Children.Clear();
+        ParserPage.Children.Clear(); _parserFarmNow = null;
         ParserPage.Children.Add(ParserHead(past));
         var open = _parserOpen != null ? past.FirstOrDefault(e => e.Id == _parserOpen) : null;
         if (open != null) { ParserPage.Children.Add(ParserDetail(open)); return; }
@@ -432,6 +497,16 @@ public partial class MainWindow
         }
         else if (e.BossHpLeft is { } left) body.Children.Add(Margin(BossHpBar(e, left), 0, 10, 0, 0));
         if (FightChips(e, now, live: true) is { } chips) body.Children.Add(Margin(chips, 0, 10, 0, 0));
+        // farming: your live DPS, rolling as the Kinah line's (refreshed ten times a second by FarmTick)
+        if (e.OpenWorld && e.You is { Damage: > 0 })
+        {
+            var stat = PStat("Your DPS now", FarmDpsText(now) is { Length: > 0 } t0 ? t0 : FarmFigure(e.FarmDps()), "Ink", $"last {BossParser.RollSeconds:0} s");
+            _parserFarmNow = ((StackPanel)stat.Child).Children.OfType<TextBlock>().ElementAt(1);
+            System.Windows.Documents.Typography.SetNumeralAlignment(_parserFarmNow, FontNumeralAlignment.Tabular);
+            _parserFarmNow.MinWidth = 44;
+            body.Children.Add(Margin(stat, 0, 8, 0, 0));
+        }
+        else _parserFarmNow = null;
         // the open world and the Abyss: here while it lasts, never in the list below
         if (e.OpenWorld) body.Children.Add(Margin(PT("Shown while it lasts. Open-world and Abyss fights are never kept.", 11.5, FontWeights.Medium, "Faint"), 0, 8, 0, 0));
         if (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) body.Children.Add(Margin(RosterTable(e, now, detail: false), 0, 10, 0, 0));
@@ -1220,6 +1295,7 @@ public partial class MainWindow
     {
         _demo = false;
         ParserSourceForTest = parser; ParserOverlayForceForTest = true;
+        StartFarmTicker();
         _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = ""; _parserPrefs.Overlay = true;
         ShowPart("Parser", byHand: false);
         WatchParser();

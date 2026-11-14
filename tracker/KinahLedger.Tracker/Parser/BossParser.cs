@@ -97,6 +97,70 @@ public sealed class BossParser
     /// small figure on the Kinah line while farming. Never kept, never written, dropped after its pause.
     /// </summary>
     Encounter? _farm;
+    /// <summary>Your hits in the farming fight under way (the last few seconds of them), for the live readout (FarmDpsNow).</summary>
+    readonly Queue<(DateTime At, long Amount)> _farmHits = new();
+    Encounter? _farmHitsOf;
+    DateTime _farmFirstHit, _farmLastHit;
+
+    /// <summary>The window the live farming DPS is over: each hit counts fully when it lands and fades out linearly over this many seconds.</summary>
+    public const double RollSeconds = 5;
+    /// <summary>With no hit of yours for this long the readout starts easing onto the fight's figure, and is on it after <see cref="EaseSeconds"/> more.</summary>
+    public const double EaseAfterSeconds = 1, EaseSeconds = 2;
+
+    /// <summary>The farming fight under way (Every fight's own when it is the open world's), else null.</summary>
+    Encounter? FarmRecord => _mode == ParserMode.Fights ? (_fight is { OpenWorld: true } ? _fight : null) : _farm;
+
+    /// <summary>True while a farming fight of yours is under way (a cheap check for the window's 10-a-second readout).</summary>
+    public bool FarmLive => Volatile.Read(ref _farmHitsOf) != null;
+
+    /// <summary>
+    /// The live farming DPS (Steven, 2026-11-14: "the dps figure needs to be rolling all the time"), or null when you aren't
+    /// farming: your hits weighted by how recent they are, each counting fully as it lands and fading out over
+    /// <see cref="RollSeconds"/> (since the first hit, when that is shorter), so every hit lifts it at once and it slides down
+    /// smoothly between hits. When you stop hitting it eases onto the fight's figure (Encounter.FarmDps) instead of falling
+    /// to nothing.
+    /// </summary>
+    public double? FarmDpsNow(DateTime now)
+    {
+        lock (_gate)
+        {
+            var f = FarmRecord;
+            if (f == null || !ReferenceEquals(f, _farmHitsOf) || _farmHits.Count == 0) { if (f == null) _farmHitsOf = null; return null; }
+            return Rolling(_farmHits, _farmFirstHit, _farmLastHit, f.FarmDps(), now);
+        }
+    }
+
+    /// <summary>The readout from the hits (oldest first): the rolling rate, eased onto <paramref name="fight"/> once the hits stop.</summary>
+    public static double Rolling(IEnumerable<(DateTime At, long Amount)> hits, DateTime first, DateTime last, double fight, DateTime now)
+    {
+        double At(DateTime when)
+        {
+            double sum = 0;
+            foreach (var (at, amount) in hits)
+            {
+                double age = Math.Max(0, (when - at).TotalSeconds);
+                if (age < RollSeconds) sum += amount * (1 - age / RollSeconds);
+            }
+            // the weights' area over the time there has been (at least 1 s, at most the window): the rate a steady hitter would read
+            double span = Math.Clamp((when - first).TotalSeconds, 1, RollSeconds);
+            return sum / (span - span * span / (2 * RollSeconds));
+        }
+        double idle = Math.Max(0, (now - last).TotalSeconds);
+        if (idle <= EaseAfterSeconds) return At(now);
+        // stopped: from where the rolling figure stood then, a smooth glide onto the fight's figure (no dip, no drop to 0)
+        double from = At(last.AddSeconds(EaseAfterSeconds));
+        double k = Math.Clamp((idle - EaseAfterSeconds) / EaseSeconds, 0, 1);
+        k = k * k * (3 - 2 * k);
+        return from + (fight - from) * k;
+    }
+
+    void FarmHit(Encounter farm, DateTime at, long amount)
+    {
+        if (!ReferenceEquals(farm, _farmHitsOf)) { _farmHits.Clear(); Volatile.Write(ref _farmHitsOf, farm); _farmFirstHit = at; _farmLastHit = at; }
+        _farmHits.Enqueue((at, amount));
+        if (at > _farmLastHit) _farmLastHit = at;
+        while (_farmHits.Count > 0 && (_farmLastHit - _farmHits.Peek().At).TotalSeconds > RollSeconds + 1) _farmHits.Dequeue();
+    }
     DateTime _lastEventAt = DateTime.MinValue;
     ParserMode _mode;
 
@@ -307,6 +371,8 @@ public sealed class BossParser
                     src.AddAbility(dd.Skill, dd.Amount, dd.Hits);
                     if (!src.Other) src.Hit(dd.At);
                 }
+                // your hit while farming: the live readout's (FarmDpsNow)
+                if (FarmRecord is { } fr && (dd.SourceIsYou || fr.Roster.Any(x => x.You && x.Id == dd.SourceId && dd.SourceId != 0))) FarmHit(fr, dd.At, dd.Amount);
                 break;
             case BossHealth bh:
                 if (_cur == null || (bh.BossId != 0 && _cur.BossId != 0 && bh.BossId != _cur.BossId)) break;
