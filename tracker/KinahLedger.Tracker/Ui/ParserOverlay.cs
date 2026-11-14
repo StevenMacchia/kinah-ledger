@@ -137,7 +137,7 @@ public sealed class ParserOverlay : Window
     (int X, int Y)? _placeAt;
     System.Drawing.Rectangle? _placeIn;
 
-    /// <summary>Puts it where it was dropped last, or by default at the game's left edge a third of the way down: clear of the minimap (top-right), the chat (bottom-left) and the skill bar (bottom).</summary>
+    /// <summary>Puts it where it was dropped last, or by default near the top left, right of the party list: clear of the party list, the minimap (top-right), the chat (bottom-left) and the skill bar (bottom).</summary>
     public void Place(int? left, int? top, System.Drawing.Rectangle? game)
     {
         // a place on a screen that is still there (a monitor unplugged since: the default place)
@@ -154,7 +154,8 @@ public sealed class ParserOverlay : Window
         if (_placeIn is not { } a) return;
         _placeIn = null;
         var dpi = VisualTreeHelper.GetDpi(this);
-        Native.MoveTo(h, a.Left + (int)Math.Round(24 * dpi.DpiScaleX), a.Top + (int)Math.Round(a.Height * 0.30));
+        // right of the party list and its effects (the left edge to about a third of the height across), under the currencies
+        Native.MoveTo(h, a.Left + (int)Math.Round(a.Height * 0.36), a.Top + (int)Math.Round(a.Height * 0.16));
     }
 
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);

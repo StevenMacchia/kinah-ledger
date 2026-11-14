@@ -151,7 +151,24 @@ public sealed class Fighter
     public long Damage { get; set; }
     public int Deaths { get; set; }
 
-    public static Fighter From(GroupMember m) => new() { Id = m.Id, Name = m.Name.Trim(), Class = m.Class.Trim(), CombatPower = Math.Max(0, m.CombatPower), ItemLevel = Math.Max(0, m.ItemLevel), You = m.You };
+    /// <summary>The game's number for the class, when it came as one (0 = not); the class itself once it is paired (Parser/ClassNumbers.cs).</summary>
+    public int ClassNumber { get; set; }
+
+    public static Fighter From(GroupMember m)
+    {
+        var f = new Fighter { Id = m.Id, Name = m.Name.Trim(), CombatPower = Math.Max(0, m.CombatPower), ItemLevel = m.ItemLevel > 0 ? m.ItemLevel : 0, You = m.You };
+        f.SetClass(m.Class);
+        return f;
+    }
+
+    /// <summary>A class as it came: a name, or the game's number (named when paired).</summary>
+    public void SetClass(string cls)
+    {
+        var c = cls.Trim();
+        if (c.Length == 0) return;
+        if (int.TryParse(c, out var n)) { ClassNumber = n; if (ClassNumbers.Name(n) is { } known) Class = known; }
+        else Class = c;
+    }
 }
 
 /// <summary>An enemy that died near the player during a record, or one the player killed (Yours; a player when Player).</summary>

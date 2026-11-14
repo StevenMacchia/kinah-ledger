@@ -29,6 +29,62 @@ public static class ParserTests
     static readonly GroupMember Ally = new(2, "Aerin", "Cleric", 298_100, 5_580, false);
     static readonly GroupMember Ally2 = new(3, "Thorne", "Templar", 305_000, 5_600, false);
 
+    /// <summary>party-scan: the party list read from each picture in a folder (5120 × 2160 reward pictures and the like); classes counted.</summary>
+    public static int PartyScan(string dir, bool rows, bool names = false)
+    {
+        var counts = new SortedDictionary<string, int>(); int frames = 0, withParty = 0, members = 0, unnamed = 0;
+        foreach (var f in Directory.EnumerateFiles(dir).Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).OrderBy(f => f))
+        {
+            using var full = new System.Drawing.Bitmap(f);
+            frames++;
+            var region = Ocr.PartyFrame.Region(new System.Drawing.Rectangle(0, 0, full.Width, full.Height));
+            using var crop = full.Clone(region, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            var list = Ocr.PartyFrame.Read(crop, full.Height);
+            if (list.Count == 0) continue;
+            withParty++;
+            foreach (var m in list) { members++; if (m.Class.Length == 0) unnamed++; else counts[m.Class] = counts.GetValueOrDefault(m.Class) + 1; }
+            var read = new List<string>();
+            if (names)
+                foreach (var m in list)
+                {
+                    var box = System.Drawing.Rectangle.Intersect(m.NameBox, new System.Drawing.Rectangle(0, 0, crop.Width, crop.Height));
+                    using var nb = crop.Clone(box, crop.PixelFormat);
+                    read.Add(Ocr.PartyFrame.CleanName(Ocr.ScreenReader.ReadBitmapAsync(nb, boost: false, scale: 2).GetAwaiter().GetResult().FirstOrDefault() ?? ""));
+                }
+            if (rows) Console.WriteLine($"{Path.GetFileName(f)}: {string.Join(", ", list.Select((m, i) => $"{(names ? (read[i].Length > 0 ? read[i] : "?") + " " : "")}{(m.Class.Length > 0 ? m.Class : "?")}{(m.Online ? "" : " (away)")} {m.Score:0.00}"))}");
+        }
+        Console.WriteLine($"{frames} pictures, {withParty} with a party list, {members} members: {string.Join(", ", counts.Select(kv => $"{kv.Key} {kv.Value}"))}, unnamed {unnamed}");
+        return 0;
+    }
+
+    /// <summary>The party list's test icons: tracker/tests/party, looked for upward from the exe.</summary>
+    static string? PartyFixtures()
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine(d.FullName, "tracker", "tests", "party");
+            if (Directory.Exists(p)) return p;
+            p = Path.Combine(d.FullName, "tests", "party");
+            if (Directory.Exists(p)) return p;
+        }
+        return null;
+    }
+
+    /// <summary>An icon as the party list draws an away member's: grey.</summary>
+    static System.Drawing.Bitmap Grey(System.Drawing.Bitmap src)
+    {
+        var b = new System.Drawing.Bitmap(src.Width, src.Height);
+        for (int y = 0; y < src.Height; y++)
+            for (int x = 0; x < src.Width; x++)
+            {
+                var c = src.GetPixel(x, y);
+                int l = (int)(0.299 * c.R + 0.587 * c.G + 0.114 * c.B);
+                l = (int)(l * 0.8);
+                b.SetPixel(x, y, System.Drawing.Color.FromArgb(c.A, l, l, l));
+            }
+        return b;
+    }
+
     public static int Run(Settings settings)
     {
         _fails = 0;
@@ -304,6 +360,60 @@ public static class ParserTests
             var old = new EncounterStore(() => dir).LoadLive();
             Check(old.Count == 1 && old[0].Boss == "Siliator of Deceit" && old[0].ModeKind == ParserMode.Bosses, "a live file of one record (the first builds) still reads, as a boss pull");
             try { Directory.Delete(dir, true); } catch (Exception) { }
+        }
+
+        // the party list in the top-left corner: rows by their mana bars, each class from its icon (the game's own icons, cut from
+        // Steven's pictures: tracker/tests/party), an away member's row from the spacing; then the Parser's members named by it
+        {
+            var dir = PartyFixtures();
+            Check(dir != null, "the party list's test icons are found (tracker/tests/party)");
+            if (dir != null)
+            {
+                const int gh = 2160;
+                string[] want = { "chanter", "templar", "cleric", "gladiator", "ranger", "sorcerer", "spiritmaster", "assassin" };
+                var region = Ocr.PartyFrame.Region(new System.Drawing.Rectangle(0, 0, 5120, gh));
+                using var frame = new System.Drawing.Bitmap(region.Width, region.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var gfx = System.Drawing.Graphics.FromImage(frame))
+                {
+                    gfx.Clear(System.Drawing.Color.FromArgb(48, 40, 34));
+                    for (int k = 0; k < want.Length; k++)
+                    {
+                        int y = 375 - region.Top + k * 96;   // the rows as Steven's pictures have them at 2160: 96 px apart, the bars from x 100
+                        using var icon = new System.Drawing.Bitmap(Path.Combine(dir, want[k] + ".png"));
+                        var away = k == 3;   // the fourth member is away: a grey icon, no bars
+                        using var draw = away ? Grey(icon) : (System.Drawing.Bitmap)icon.Clone();
+                        gfx.DrawImage(draw, 100 - 72, y - 23 - 36, icon.Width, icon.Height);   // the icon 36 px left of the bars and 23 up, 72 square
+                        if (away) continue;
+                        gfx.FillRectangle(new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(232, 60, 72)), 100, y - 16, 290, 10);
+                        gfx.FillRectangle(new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 180, 230)), 100, y - 5, k == 5 ? 60 : 290, 10);   // the sixth low on mana
+                    }
+                }
+                var rows = Ocr.PartyFrame.Read(frame, gh);
+                Check(rows.Select(r => r.Class).SequenceEqual(want) && rows.Count(r => !r.Online) == 1 && !rows[3].Online,
+                    $"the party list: eight rows, each class from its icon, the away member's row from the spacing: {string.Join(", ", rows.Select(r => r.Class + (r.Online ? "" : " (away)")))}");
+            }
+            Check(Ocr.PartyFrame.CleanName(".ııl SwolyDaBooly") == "SwolyDaBooly" && Ocr.PartyFrame.CleanName("OHaa[ISR]") == "OHaa" && Ocr.PartyFrame.CleanName("... Goldlemon[ISR]") == "Goldlemon",
+                "a name as the party list prints it: the signal bars before it and the guild's tag after it dropped");
+
+            var path = Path.Combine(TestTemp.Path("KinahLedger-parser-test-classes"), "class-numbers.json");
+            if (File.Exists(path)) File.Delete(path);
+            ClassNumbers.PathOverride = path; ClassNumbers.Reset();
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Fire Temple", 99));
+            p.Take(new GroupChanged(t, new[] { new GroupMember(11, "Swoly", "", 0, 0, true), new GroupMember(12, "LMZ111", "7", 0, 0, false), new GroupMember(13, "ImBrickedUp", "", 0, 0, false) }));
+            p.Take(new BossEngaged(t.AddSeconds(5), "Silver Blade Rotan", 990));
+            p.Take(new DamageDealt(t.AddSeconds(6), 14, 990, 1_000, "Felicity"));
+            p.ScreenParty(new[] { ("", "templar", true), ("LMZI 11", "cleric", false), ("lmBrickedUp", "templar", false), ("Felicity", "chanter", false) });
+            var l = p.Live!;
+            Check(l.Roster.Single(f => f.You).Class == "templar" && l.Roster.Single(f => f.Id == 12).Class == "cleric" && l.Roster.Single(f => f.Id == 13).Class == "templar" && l.Roster.Single(f => f.Id == 14).Class == "chanter",
+                $"the Parser's members take their class from the party list: you from the first row, the others by name, misreads forgiven: {string.Join(", ", l.Roster.Select(f => f.Name + " " + f.Class))}");
+            Check(ClassNumbers.Name(7) == "cleric", "...and a class that came as a number is paired with the class the party list shows");
+            var (q, _) = New();
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Fire Temple", 98));
+            q.Take(new GroupChanged(t, new[] { new GroupMember(21, "Another", "7", 0, 0, false) }));
+            q.Take(new BossEngaged(t.AddSeconds(5), "Silver Blade Rotan", 991));
+            Check(q.Live?.Roster.Single().Class == "cleric", "...so the number alone names the class afterwards, with no party list in view");
+            ClassNumbers.PathOverride = null; ClassNumbers.Reset();
         }
 
         // the session: the feed drained on its pass, the screen's place used until the game's messages say one

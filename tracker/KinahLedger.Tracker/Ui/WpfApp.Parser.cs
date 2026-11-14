@@ -134,7 +134,8 @@ public static partial class WpfApp
         check(missing.Count == 0 && ClassArt.Key("Spirit Master") == "spiritmaster" && ClassArt.Image("") == null, $"Parser: the game's class emblem for each of the eight classes{(missing.Count > 0 ? ", missing " + string.Join(", ", missing) : "")}");
         double Dist(Color a, Color b) => Math.Sqrt(Math.Pow(a.R - b.R, 2) + Math.Pow(a.G - b.G, 2) + Math.Pow(a.B - b.B, 2));
         var pairs = ClassArt.Keys.SelectMany((a, i) => ClassArt.Keys.Skip(i + 1).Select(b => (a, b, d: Dist(ClassArt.ColorOf(a), ClassArt.ColorOf(b))))).OrderBy(x => x.d).ToList();
-        check(pairs[0].d >= 60, $"Parser: one colour per class, the nearest two {pairs[0].a} and {pairs[0].b} {pairs[0].d:0} apart");
+        // the game's own colours (its party list's): the nearest two (Cleric's gold, Chanter's orange) are the game's choice; the emblem tells them apart
+        check(pairs[0].d >= 35, $"Parser: one colour per class, the game's own, the nearest two {pairs[0].a} and {pairs[0].b} {pairs[0].d:0} apart");
         w.ShowParserDemo("live"); DoEvents();
         var meters = new List<double>();
         void Walk(DependencyObject d) { if (d is System.Windows.Controls.Grid g && g.Tag is double share) meters.Add(share); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch); }

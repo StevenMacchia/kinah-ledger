@@ -109,6 +109,70 @@ public sealed partial class TrackerSession
 
     internal void DrainFightsForTest() => DrainFights();
 
+    // ---- the party list in the top-left corner (Ocr/PartyFrame.cs): each member's class for the Parser ----
+    DateTime _partyAt = DateTime.MinValue, _partyNamesAt = DateTime.MinValue;
+    bool _partySeen;
+    int _partyGroupCount;
+    string _partySig = "";
+    List<string> _partyNames = new();
+    /// <summary>Read again this often while a party list was seen last time, and this often to look for one otherwise.</summary>
+    const double PartyEverySeconds = 5, PartyLookSeconds = 20, PartyNamesSeconds = 30;
+
+    /// <summary>
+    /// The party list, now and then (never in the Parser's path): once when the group changes, every few seconds while a
+    /// party list shows, every twenty to look for one. The names are read only when the rows change (and at most every half
+    /// minute); the classes come from the icons each time. The overlays step aside while it is read.
+    /// </summary>
+    async Task PartyFrameDue()
+    {
+        if (GameRect is not { } g || g.Height < 200) return;
+        var now = DateTime.UtcNow;
+        int count = Fights.Group.Count;
+        bool changed = count != _partyGroupCount;
+        _partyGroupCount = count;
+        if (!changed && (now - _partyAt).TotalSeconds < (_partySeen || count > 1 ? PartyEverySeconds : PartyLookSeconds)) return;
+        _partyAt = now;
+        var region = Ocr.PartyFrame.Region(g);
+        if (Cover(region) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+        System.Drawing.Bitmap? bmp = null;
+        try
+        {
+            await Ui.HudWindow.HiddenIfOver(region, () => { bmp = Ocr.ScreenReader.Capture(region); return Task.CompletedTask; });
+            if (bmp == null) return;
+            var rows = Ocr.PartyFrame.Read(bmp, g.Height);
+            bool was = _partySeen;
+            _partySeen = rows.Count >= 2;
+            if (!_partySeen) { if (was) CrashLog.Note("parser: the party list is gone"); return; }
+            string sig = string.Join(",", rows.Select(r => r.Class + (r.Online ? "" : "~")));
+            if (sig != _partySig || _partyNames.Count != rows.Count || (now - _partyNamesAt).TotalSeconds >= PartyNamesSeconds * 10)
+            {
+                if (sig != _partySig || (now - _partyNamesAt).TotalSeconds >= PartyNamesSeconds)
+                {
+                    _partyNamesAt = now;
+                    var names = new List<string>();
+                    foreach (var r in rows)
+                    {
+                        var box = System.Drawing.Rectangle.Intersect(r.NameBox, new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height));
+                        string name = "";
+                        if (box.Width > 8 && box.Height > 4)
+                        {
+                            using var crop = bmp.Clone(box, bmp.PixelFormat);
+                            try { name = Ocr.PartyFrame.CleanName((await Ocr.ScreenReader.ReadBitmapAsync(crop, boost: false, scale: 2)).FirstOrDefault() ?? ""); }
+                            catch (Exception) { name = ""; }
+                        }
+                        names.Add(name);
+                    }
+                    _partyNames = names;
+                    CrashLog.Note($"parser: the party list: {string.Join(", ", rows.Select((r, i) => $"{(names[i].Length > 0 ? names[i] : "?")} {(r.Class.Length > 0 ? r.Class : "unknown class")}{(r.Online ? "" : " (away)")}"))}");
+                }
+                _partySig = sig;
+            }
+            Fights.ScreenParty(rows.Select((r, i) => (i < _partyNames.Count ? _partyNames[i] : "", r.Class, i == 0)).ToList());
+        }
+        catch (Exception ex) { CrashLog.Write("party list", ex); }
+        finally { bmp?.Dispose(); }
+    }
+
     /// <summary>What the Parser keeps (the Parser page's mode, parser.json), set by the window; a new session starts in it.</summary>
     public static ParserMode ParserMode { get; set; } = ParserMode.Bosses;
 
