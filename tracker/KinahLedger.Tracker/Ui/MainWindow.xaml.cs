@@ -148,7 +148,8 @@ public partial class MainWindow : Window
         StartBtn.Click += async (_, _) => await Toggle(fromWindow: true);
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
-        SiteBtn.Click += (_, _) => Open(SiteUrl);
+        SiteLink.Click += (_, _) => Open(SiteUrl);
+        OverlaysBtn.Click += (_, _) => OpenOverlaysMenu();
         CharChip.Click += (_, _) => ShowCharacterMenu();   // the character chip and the server line open the switcher (Ui/MainWindow.Characters.cs)
         ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();
         FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
@@ -177,7 +178,6 @@ public partial class MainWindow : Window
         InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
         InitQuests(watch);   // the completed quests and the points, from quests.json (Ui/MainWindow.Quests.cs)
         InitQuestUpload();   // the completed quests ride the upload batch (Ui/MainWindow.QuestsPage.cs)
-        QuestsTab.Visibility = _prefs.Quests ? Visibility.Visible : Visibility.Collapsed;
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -199,7 +199,6 @@ public partial class MainWindow : Window
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
         EventsTab.Click += (_, _) => ShowPart("Events");
-        QuestsTab.Click += (_, _) => ShowPart("Quests");
         TimersTab.Click += (_, _) => ShowPart("Timers");
         Loaded += (_, _) => StartTimersTick();
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
@@ -1241,7 +1240,6 @@ public partial class MainWindow : Window
         FarmTab.Style = (Style)FindResource(_part == "Farming" ? "NavOn" : "SegOff");
         CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "NavOn" : "SegOff");
-        QuestsTab.Style = (Style)FindResource(_part == "Quests" ? "NavOn" : "SegOff");
         TimersTab.Style = (Style)FindResource(_part == "Timers" ? "NavOn" : "SegOff");
         if (_part == "Events") ShowInstances();
         FillTimersPage();

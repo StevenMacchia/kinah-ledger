@@ -38,9 +38,9 @@ public partial class MainWindow
             InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(s)), key, ModifierKeys.Control));
             if (key == Key.OemPlus) InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(1)), key, ModifierKeys.Control | ModifierKeys.Shift));
         }
-        // the pages: Ctrl+1 to 5 as the tabs sit (Farm, Runs, Craft, Timers, Quests), a click by hand (the page then stays until something else starts)
-        foreach (var (key, part) in new[] { (Key.D1, "Farming"), (Key.NumPad1, "Farming"), (Key.D2, "Events"), (Key.NumPad2, "Events"), (Key.D3, "Crafting"), (Key.NumPad3, "Crafting"),
-            (Key.D4, "Timers"), (Key.NumPad4, "Timers"), (Key.D5, "Quests"), (Key.NumPad5, "Quests") })
+        // the pages: Ctrl+1 to 4 as the pills sit (Farm, Craft, Runs, Timers), a click by hand (the page then stays until something else starts)
+        foreach (var (key, part) in new[] { (Key.D1, "Farming"), (Key.NumPad1, "Farming"), (Key.D2, "Crafting"), (Key.NumPad2, "Crafting"), (Key.D3, "Events"), (Key.NumPad3, "Events"),
+            (Key.D4, "Timers"), (Key.NumPad4, "Timers") })
         {
             var p = part;
             InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!_welcome && _part != p) ShowPart(p); }), key, ModifierKeys.Control));
