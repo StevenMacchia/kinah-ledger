@@ -22,7 +22,7 @@ public sealed record ItemChange(DateTime At, long ItemId, ItemOp Op, long StackI
 
 /// <summary>
 /// The decoder's boss parser row (klnet.dll version 4) before it becomes a <see cref="BossEvent"/>. Kind: 1 instance entered,
-/// 2 left, 3 boss seen, 4 pull started, 5 pull ended, 6 group member, 7 member left, 8 damage, 9 boss HP, 10 a death.
+/// 2 left, 3 boss seen, 4 pull started, 5 pull ended, 6 group member, 7 member left, 8 damage, 9 boss HP, 10 a death, 11 the instance's mode.
 /// </summary>
 internal sealed record BossRow(DateTime At, int Kind, int Content, string Zone, int Pull, string Boss, long BossEntity, int Outcome,
     long Entity, string Name, string Class, bool Self, long CombatPower, long ItemLevel, long Amount, long Max, int Skill = 0);
@@ -46,9 +46,10 @@ internal sealed class BossMapper
             case 4: return new BossEngaged(r.At, r.Boss, r.BossEntity);
             case 5: return new BossEnded(r.At, r.BossEntity, r.Outcome switch { 1 => BossOutcome.Kill, 2 => BossOutcome.Wipe, _ => BossOutcome.Left });
             case 6:
-                _group[r.Entity] = new GroupMember(r.Entity, r.Name, r.Class, (int)Math.Clamp(r.CombatPower, 0, int.MaxValue), (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), r.Self);
+                _group[r.Entity] = new GroupMember(r.Entity, r.Name, r.Class, (int)Math.Clamp(r.CombatPower, 0, int.MaxValue), (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), r.Self, r.Boss);   // a member row's boss field is its server
                 return new GroupChanged(r.At, _group.Values.ToList());
             case 7: return _group.Remove(r.Entity) ? new GroupChanged(r.At, _group.Values.ToList()) : null;
+            case 11: return r.Boss.Length > 0 ? new InstanceMode(r.At, r.Boss) : null;   // the mode rides in the boss field
             case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue));   // ItemLevel carries the hits for a damage row   // source 0: HP lost with no hit (damage over time, lost traffic)
             case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
             case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1);

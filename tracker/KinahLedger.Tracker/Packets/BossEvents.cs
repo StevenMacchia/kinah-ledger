@@ -19,6 +19,9 @@ public sealed record InstanceEntered(DateTime At, ContentKind Kind, string Name,
 /// <summary>The player left the instance (back to the world, a town, the character screen).</summary>
 public sealed record InstanceLeft(DateTime At) : BossEvent(At);
 
+/// <summary>The instance's mode as the game names it (Conquest, Exploration ...), once, a few seconds after InstanceEntered.</summary>
+public sealed record InstanceMode(DateTime At, string Mode) : BossEvent(At);
+
 /// <summary>A boss was engaged: its name and the game's id for this spawn of it.</summary>
 public sealed record BossEngaged(DateTime At, string Boss, long BossId) : BossEvent(At);
 
@@ -26,7 +29,7 @@ public sealed record BossEngaged(DateTime At, string Boss, long BossId) : BossEv
 public sealed record BossEnded(DateTime At, long BossId, BossOutcome Outcome) : BossEvent(At);
 
 /// <summary>One member of the player's group. 0 = not known (Combat Power, item level); You marks the player.</summary>
-public sealed record GroupMember(long Id, string Name, string Class, int CombatPower, int ItemLevel, bool You);
+public sealed record GroupMember(long Id, string Name, string Class, int CombatPower, int ItemLevel, bool You, string Server = "");
 
 /// <summary>The whole group as it is now, the player included (alone: just the player).</summary>
 public sealed record GroupChanged(DateTime At, IReadOnlyList<GroupMember> Members) : BossEvent(At);
