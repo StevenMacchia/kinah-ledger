@@ -526,7 +526,10 @@ public sealed class ItemDictionary
             {
                 var name = Str(e, "name");
                 if (name.Length == 0 || !Free(Norm(name))) continue;
-                long id = -(long)(Fnv("extra:" + Norm(name)) & 0x7FFFFFFF) - 1;
+                // the game's own id when the entry has one (the item's updates in the traffic carry it: Poko's Skin Bundle
+                // (Bound) is 533700110, 2026-11-14), else one made from the name
+                long id = e.TryGetProperty("id", out var ide) && ide.ValueKind == JsonValueKind.Number && ide.TryGetInt64(out var real) && real > 0 && !_byId.ContainsKey(real)
+                    ? real : -(long)(Fnv("extra:" + Norm(name)) & 0x7FFFFFFF) - 1;
                 bool tradable = !(e.TryGetProperty("tradable", out var t) && t.ValueKind == JsonValueKind.False);
                 var cat = Str(e, "category"); if (cat.Length == 0) cat = "Currency";
                 _byId[id] = new ItemInfo(id, name, Str(e, "grade"), tradable, Str(e, "icon"), cat);
