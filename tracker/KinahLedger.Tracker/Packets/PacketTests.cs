@@ -831,6 +831,12 @@ public static class PacketTests
         Check(kairaChime.Any(i => i.Short == "Watcher Kaira") && !muted.Any(i => i.Short == "Watcher Kaira") && !late.Any(i => i.Short == "Watcher Kaira") && silent.Count == 0,
             "...Watcher Kaira's 5 min before (watched by default); none with her chime off, none 10 s before (too late to help), none at volume 0");
 
+        // where the line goes (Steven, 2026-11-14): on top of the Kinah overlay by default; its own strip when separated or
+        // with the Kinah overlay off; nowhere with the timers off
+        Check(!TimerPrefs.Defaults().Separate && TimerPrefs.Host(true, false, true) == "kinah" && TimerPrefs.Host(true, true, true) == "strip"
+            && TimerPrefs.Host(true, false, false) == "strip" && TimerPrefs.Host(false, false, true) == "" && TimerPrefs.Host(false, true, false) == "",
+            "the timer line's home: on top of the Kinah overlay by default, its own strip when separated or with the Kinah overlay off, nowhere when off");
+
         // the settings file
         var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, "timers.json"); File.Delete(file);

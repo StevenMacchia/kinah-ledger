@@ -287,6 +287,23 @@ public partial class MainWindow
                 if (o.Content is FrameworkElement root) Save(root, $"timers-{state}{sfx}.png", ground);
                 o.Close();
             }
+            // the default home (Steven, 2026-11-14): the timer line popped out on top of the Kinah overlay, in the strip look
+            // and the Card, with two timers inside 5 minutes and one further off (the window set to 15 min)
+            foreach (var look in new[] { HudLooks.Strip, HudLooks.Card })
+            {
+                _timerPrefs = TimerPrefs.Defaults(); _timerPrefs.WindowMinutes = 15;
+                foreach (var i in TimerItems(now)) _timerPrefs.SetWatched(i.Key, true);
+                var at = now.AddMinutes(16);
+                var near = TimerBoard.ForOverlay(TimerItems(at), _timerPrefs, at);
+                var h = new HudWindow(HudFields.Parse(_prefs.HudFields), look, still: true) { Left = -12000, Top = -12000 };
+                h.Update(HudSample());
+                h.ShowTimers(near, at);
+                h.Show();
+                h.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+                if (h.Content is FrameworkElement root) Save(root, $"timers-kinah-{look}{sfx}.png", ground);
+                h.Close();
+            }
             // Move overlay: the strip outlined to be placed, with the next watched timers standing in (none is due yet), and
             // with the sample when nothing is watched at all
             foreach (var (state, none) in new[] { ("overlay-placing", false), ("overlay-placing-sample", true) })

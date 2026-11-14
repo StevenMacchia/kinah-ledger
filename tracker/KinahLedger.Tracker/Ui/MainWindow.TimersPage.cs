@@ -95,7 +95,7 @@ public partial class MainWindow
         var ol = QT("Overlay", 12.5, FontWeights.SemiBold, "Muted"); ol.Margin = new Thickness(0, 0, 8, 0);
         right.Children.Add(ol);
         var overlay = new CheckBox { IsChecked = TimersOverlayOn, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
-            ToolTip = "The timers over the game: hidden until a watched timer is near, then its countdown, with a chime." };
+            ToolTip = "The timers over the game: a tiny line on top of the Kinah overlay when a watched timer is near, with a chime." };
         overlay.SetResourceReference(StyleProperty, "Switch");
         overlay.Click += (_, _) => { SetTimersOverlay(overlay.IsChecked == true); DrawOverlayPills(); };
         right.Children.Add(overlay);
@@ -110,7 +110,9 @@ public partial class MainWindow
             ToolTip = "Shows the overlay now so you can drag it where you want it. Done or Esc keeps the spot." };
         System.Windows.Automation.AutomationProperties.SetName(_timersMoveBtn, "Move the timers overlay");
         _timersMoveBtn.Click += (_, _) => StartTimersPlacement();
-        right.Children.Add(_timersMoveBtn);
+        // only where the timers have a strip of their own (Settings › Timers › Separate timer overlay, or the Kinah overlay off):
+        // on top of the Kinah overlay they go where it goes
+        if (_timerPrefs.Separate || _hud == null) right.Children.Add(_timersMoveBtn);
         var gear = new Button { Margin = new Thickness(6, 0, 0, 0), ToolTip = "The timers' settings: how far ahead the overlay shows, the chime, which timers ring." };
         gear.SetResourceReference(StyleProperty, "RoundBtn");
         var gi = new System.Windows.Shapes.Path(); gi.SetResourceReference(StyleProperty, "QIconStyle"); gi.SetResourceReference(System.Windows.Shapes.Path.DataProperty, "IcGear");

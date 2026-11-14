@@ -878,6 +878,30 @@ public static partial class WpfApp
             DoEvents();
             Check(listed && picked && overlayOn && tw.TimersOverlayForTest == null && to.Scroller.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Auto,
                 $"Options › Timers lists the timers ({to.TimerBoxes.Count}), Watcher Kaira and Shugo watched by default; its Chime and Watch boxes change the picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
+            // the timer line on top of the Kinah overlay (Steven, 2026-11-14: "pop out at the top tiny"): it shows the soonest
+            // watched timers, gold in their last 5 minutes; the window moves up by its height so the Kinah line stays where it
+            // is (AnchorTop, the spot a drag remembers, doesn't move); it folds away with nothing due
+            {
+                var hud = new HudWindow { Left = -12000, Top = -11000 };
+                hud.Show(); DoEvents();
+                double top0 = hud.Top, anchor0 = hud.AnchorTop;
+                var tnow = DateTime.UtcNow;
+                Session.TimerBoard.Item Due(string name, string shortName, double s) =>
+                    new(Session.TimerBoard.EventKey(name), "Events", name, "", Session.TimerBoard.Kind.Waiting, tnow.AddSeconds(s), "", "") { Short = shortName };
+                hud.ShowTimers(new[] { Due("Dimensional Invasion", "Invasion", 279), Due("Soul Ruler Kashapa", "Kashapa", 719) }, tnow); DoEvents();
+                double up = top0 - hud.Top, lineH = hud.TimerLineHeight;
+                string line = hud.TimerLineForTest;
+                bool anchored = hud.TimersShown && lineH > 8 && Math.Abs(up - lineH) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1 && line == "Invasion 4:39 · Kashapa 11:59";
+                hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); DoEvents();
+                bool lineFolded = !hud.TimersShown && Math.Abs(hud.Top - top0) < 1 && hud.TimerLineHeight == 0;
+                hud.Close();
+                tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
+                string home = tw.TimersHostForTest;   // no Kinah overlay in this window: the strip
+                tw.TimerPrefsForTest.Separate = true;
+                string sep = tw.TimersHostForTest;
+                Check(anchored && lineFolded && home == "strip" && sep == "strip",
+                    $"timer line on top of the Kinah overlay: \"{line}\", {lineH:0} px; the window up by as much ({up:0}), the Kinah line where it was ({anchored}); folded with nothing due, back where it was ({lineFolded}); without the Kinah overlay, or separated, the strip ({home}, {sep})");
+            }
             // placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay
             // shows the strip now, outlined and clickable, with the next watched timers or a sample; Done keeps the spot on a
             // screen and it hides again with nothing due; with the overlay off it closes after; Reset forgets the spot
@@ -1815,7 +1839,7 @@ public static partial class WpfApp
                 string[] bgFields = { "rate", "total", "feed" };
                 static string BgWords(System.Windows.Controls.TextBlock t) => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
                 List<System.Windows.Controls.TextBlock> BgTexts(HudWindow h) => BadgeTree((DependencyObject)h.Content).OfType<System.Windows.Controls.TextBlock>().ToList();
-                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Content).Children[0];
+                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Face!).Children[0];
                 var badge = new HudWindow(bgFields);
                 badge.Update(bgV1); badge.Update(bgV2);
                 var bgShown = BgTexts(badge).Select(BgWords).ToList();
