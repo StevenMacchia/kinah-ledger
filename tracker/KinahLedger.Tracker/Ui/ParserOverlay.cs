@@ -298,7 +298,7 @@ public sealed class ParserOverlay : Window
             Grid Row()
             {
                 var g = new Grid();
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(25) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 50 : 60) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 44 : 52) });
@@ -309,27 +309,21 @@ public sealed class ParserOverlay : Window
             void H(int col, string text) { var t = T(text, 10, FontWeights.SemiBold, HudKit.Faint); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); hdr.Children.Add(t); }
             if (gear) { H(2, "CP"); H(3, "iLvl"); }
             if (dmg) H(4, "DPS");
-            hdr.Margin = new Thickness(0, 0, 0, 2);
+            hdr.Margin = new Thickness(4, 0, 4, 1);
             rows.Children.Add(hdr);
-            long top = Math.Max(1, e.Roster.Max(f => f.Damage));
+            // each row on a meter bar in its class's colour (damage, else Combat Power), the class's emblem at its left
+            double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
+            double top = Math.Max(1, e.Roster.Max(Measure));
             foreach (var f in e.Ranked().Take(8))
             {
-                var g = Row(); g.Margin = new Thickness(0, 3, 0, 0);
-                var mark = f.Other ? MainWindow.OtherMark(16) : MainWindow.ClassMark(f.Class, 16, f.Name);
+                var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = 24;
+                var mark = f.Other ? MainWindow.OtherMark(19) : MainWindow.ClassMark(f.Class, 19, f.Name);
                 g.Children.Add(mark);
-                var nm = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-                var n = T(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.You ? HudKit.Gold : f.Other || f.Name.Length == 0 ? HudKit.Muted : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
+                var nm = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+                var n = T(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.Other || f.Name.Length == 0 ? HudKit.Muted : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
                 nm.Children.Add(n);
-                if (dmg)
-                {
-                    var bar = new Grid { Height = 2, Margin = new Thickness(0, 2, 0, 0) };
-                    bar.Children.Add(new Border { Background = Track, CornerRadius = new CornerRadius(1) });
-                    var fill = new Border { Background = f.You ? HudKit.Gold : HudKit.Muted, CornerRadius = new CornerRadius(1), HorizontalAlignment = HorizontalAlignment.Left };
-                    double share = f.Damage / (double)top;
-                    bar.SizeChanged += (_, _) => fill.Width = Math.Max(2, bar.ActualWidth * share);
-                    bar.Children.Add(fill);
-                    nm.Children.Add(bar);
-                }
+                if (f.You) nm.Children.Add(new Border { Background = HudKit.Gold, CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                    Child = T("you", 9.5, FontWeights.Bold, HudKit.B(0x1D1300)) });
                 Grid.SetColumn(nm, 1); g.Children.Add(nm);
                 void C(int col, string text, Brush b, FontWeight w) { var t = T(text, 11.5, w, b); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); g.Children.Add(t); }
                 if (gear && !f.Other)
@@ -337,8 +331,10 @@ public sealed class ParserOverlay : Window
                     C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
                     C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
                 }
-                if (dmg) C(4, Amounts.Short(e.Dps(f, now)), f.You ? HudKit.Gold : HudKit.Ink, FontWeights.Bold);
-                rows.Children.Add(g);
+                if (dmg) C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold);
+                var meter = ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: f.Other, radius: 5);
+                meter.Margin = new Thickness(0, 3, 0, 0);
+                rows.Children.Add(meter);
             }
             if (e.Roster.Count > 8) rows.Children.Add(T($"+{e.Roster.Count - 8} more on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint));
             _body.Children.Add(rows);

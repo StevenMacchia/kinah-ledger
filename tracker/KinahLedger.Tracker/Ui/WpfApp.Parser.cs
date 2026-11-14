@@ -128,6 +128,18 @@ public static partial class WpfApp
             "Parser: the overlay's menu has the three modes, the one on ticked, each saying what it counts");
         mo.Close();
         w.SetParserModeForTest(ParserMode.Bosses); DoEvents();
+        // the classes (Steven, 2026-11-14): the game's emblem for each of the eight, one colour each, far enough apart; a meter bar's share
+        var missing = ClassArt.Keys.Where(k => ClassArt.Image(k) == null).ToList();
+        check(missing.Count == 0 && ClassArt.Key("Spirit Master") == "spiritmaster" && ClassArt.Image("") == null, $"Parser: the game's class emblem for each of the eight classes{(missing.Count > 0 ? ", missing " + string.Join(", ", missing) : "")}");
+        double Dist(Color a, Color b) => Math.Sqrt(Math.Pow(a.R - b.R, 2) + Math.Pow(a.G - b.G, 2) + Math.Pow(a.B - b.B, 2));
+        var pairs = ClassArt.Keys.SelectMany((a, i) => ClassArt.Keys.Skip(i + 1).Select(b => (a, b, d: Dist(ClassArt.ColorOf(a), ClassArt.ColorOf(b))))).OrderBy(x => x.d).ToList();
+        check(pairs[0].d >= 60, $"Parser: one colour per class, the nearest two {pairs[0].a} and {pairs[0].b} {pairs[0].d:0} apart");
+        w.ShowParserDemo("live"); DoEvents();
+        var meters = new List<double>();
+        void Walk(DependencyObject d) { if (d is System.Windows.Controls.Grid g && g.Tag is double share) meters.Add(share); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch); }
+        Walk(w.ParserPage);
+        check(meters.Count >= 4 && Math.Abs(meters.Max() - 1) < 1e-9 && meters.Zip(meters.Skip(1)).All(x => x.First >= x.Second - 1e-9),
+            $"Parser: each group row on a meter bar, the top one full and the rest shorter in order: {string.Join(", ", meters.Select(x => x.ToString("0.00")))}");
         w.ShowPartForTest("Farming"); w.ShowDemo(); DoEvents();
     }
 }

@@ -85,6 +85,19 @@ public partial class MainWindow
         RedrawParserPage();
     }
 
+    /// <summary>
+    /// The Parser overlay's switches for the window's header Overlays group and Options › Overlays (the redesign's shell):
+    /// on/off, click-through and a reset of the spot it was dragged to, all kept in parser.json.
+    /// </summary>
+    internal bool ParserOverlayOn { get => _parserPrefs.Overlay; set { if (value != _parserPrefs.Overlay) SetParserOverlay(value); } }
+    internal bool ParserOverlayClickThrough { get => _parserPrefs.ClickThrough; set { if (value != _parserPrefs.ClickThrough) SetParserClickThrough(value); } }
+    internal void ResetParserOverlayPosition()
+    {
+        _parserPrefs.Left = null; _parserPrefs.Top = null;
+        if (!_demo) _parserPrefs.Save();
+        _parserOverlay?.Place(null, null, _watcher.GameRect);
+    }
+
     void SetParserClickThrough(bool on)
     {
         _parserPrefs.ClickThrough = on;
@@ -425,8 +438,11 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The group: class mark, name (you marked), class, Combat Power, item level; with damage from the game, damage, DPS
-    /// and a share bar under the name; in the detail view, deaths too. Unknown figures say "–", never 0.
+    /// The group (Steven, 2026-11-14: "thicker bars that act as a background for the character ... show the icon for what
+    /// class they are in the game ... Color coordinate it"): each row on a meter bar in its class's colour (Ui/ClassArt.cs),
+    /// as long as its share of the top row's damage (its Combat Power before any damage), the class's own emblem at its left,
+    /// then name (you marked), class, Combat Power, item level; with damage, damage and DPS; in the detail view, deaths too.
+    /// Unknown figures say "–", never 0.
     /// </summary>
     FrameworkElement RosterTable(Encounter e, DateTime now, bool detail)
     {
@@ -440,7 +456,7 @@ public partial class MainWindow
         bool deaths = detail && e.Roster.Any(f => f.Deaths > 0);
         // before the group list comes (damage only), the rows are who hit the boss: no class, CP or item level to show
         bool gear = e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0 || f.Class.Length > 0);
-        var cols = new List<(double Width, string Head, bool Right)> { (28, "", false), (0, "Member", false), (gear ? 92 : 0.01, gear ? "Class" : "", false), (gear ? 64 : 0.01, gear ? "CP" : "", true), (gear ? 62 : 0.01, gear ? "Item lvl" : "", true) };
+        var cols = new List<(double Width, string Head, bool Right)> { (34, "", false), (0, "Member", false), (gear ? 92 : 0.01, gear ? "Class" : "", false), (gear ? 64 : 0.01, gear ? "CP" : "", true), (gear ? 62 : 0.01, gear ? "Item lvl" : "", true) };
         if (dmg) { cols.Add((76, "Damage", true)); cols.Add((66, "DPS", true)); }
         if (deaths) cols.Add((50, "Deaths", true));
         Grid Row()
@@ -451,7 +467,7 @@ public partial class MainWindow
         }
         void Cell(Grid g, int col, FrameworkElement el) { Grid.SetColumn(el, col); g.Children.Add(el); }
 
-        var head = Row(); head.Margin = new Thickness(0, 0, 0, 4);
+        var head = Row(); head.Margin = new Thickness(6, 0, 4, 4);
         for (int i = 0; i < cols.Count; i++)
         {
             if (cols[i].Head.Length == 0) continue;
@@ -460,35 +476,35 @@ public partial class MainWindow
             Cell(head, i, t);
         }
         host.Children.Add(head);
-        long top = Math.Max(1, e.Roster.Max(f => f.Damage));
+        // what the bars measure: damage when the game gives it, else Combat Power (the group's strength before a hit lands)
+        double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
+        double top = Math.Max(1, e.Roster.Max(Measure));
         bool first = true;
         foreach (var f in e.Ranked())
         {
             var row = Row();
-            var rule = new Border { BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0), Padding = new Thickness(0, 6, 0, 6), Child = row };
-            rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
+            row.Margin = new Thickness(6, 0, 4, 0);
+            var meter = ClassArt.MeterRow(row, f.Class, Measure(f) / top, other: f.Other);
+            meter.Margin = new Thickness(0, first ? 0 : 3, 0, 0);
+            var rule = new Border { Padding = new Thickness(0), Child = meter, MinHeight = 34 };
+            row.MinHeight = 34;
             first = false;
-            Cell(row, 0, f.Other ? OtherMark(20) : ClassMark(f.Class, 20, f.Name));
+            Cell(row, 0, f.Other ? OtherMark(24) : ClassArt.Icon(f.Class, 24, f.Name));
             var nameBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
-            var nm = PT(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 13, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.You ? "Gold" : f.Other || f.Name.Length == 0 ? "Muted" : "Ink", trim: true);
+            var nm = PT(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 13, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.Other || f.Name.Length == 0 ? "Muted" : "Ink", trim: true);
             if (f.Other) nm.ToolTip = "HP the boss lost with no hit to name a source: damage over time, or traffic that was lost. Shown so the rows add up to the HP it lost.";
             else if (f.Name.Length == 0) nm.ToolTip = "A source the game's messages didn't name yet (a pet, or a player not seen up close).";
             nameLine.Children.Add(nm);
-            if (f.You) nameLine.Children.Add(Margin(PT("you", 11, FontWeights.SemiBold, "Faint"), 6, 1, 0, 0));
+            // you: a gold pill (the name stays in ink: gold would read as a class colour on the bars)
+            if (f.You) { var you = PChip("you", "GoldInk", "Gold"); you.Margin = new Thickness(7, 0, 0, 0); you.Padding = new Thickness(6, 0, 6, 1); nameLine.Children.Add(you); }
             if (f.Late) nameLine.Children.Add(Margin(PT("joined late", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             if (f.Gone) nameLine.Children.Add(Margin(PT("left", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             nameBox.Children.Add(nameLine);
-            if (dmg)
-            {
-                var bar = ShareBar(f.Damage / (double)top, f.You);
-                nameBox.SizeChanged += (_, _) => bar.Width = Math.Min(220, nameBox.ActualWidth);   // left-aligned, never past the column
-                nameBox.Children.Add(bar);
-            }
             Cell(row, 1, nameBox);
             if (gear && !f.Other)
             {
-                Cell(row, 2, PT(f.Class.Length > 0 ? f.Class : "–", 12, FontWeights.Medium, "Muted", trim: true));
+                Cell(row, 2, PT(f.Class.Length > 0 ? ClassArt.Title(f.Class) : "–", 12, FontWeights.SemiBold, "Text2", trim: true));
                 Cell(row, 3, Right(PT(f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.SemiBold, "Ink")));
                 Cell(row, 4, Right(PT(f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, "Text2")));
             }
@@ -496,7 +512,7 @@ public partial class MainWindow
             if (dmg)
             {
                 Cell(row, c++, Right(PT(Amounts.Short(f.Damage), 13, FontWeights.Medium, "Text2")));
-                Cell(row, c++, Right(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, f.You ? "Gold" : "Ink")));
+                Cell(row, c++, Right(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, "Ink")));
             }
             if (deaths) Cell(row, c, Right(PT(f.Deaths > 0 ? f.Deaths.ToString(CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, f.Deaths > 0 ? "Coral" : "Faint")));
             host.Children.Add(rule);
@@ -531,7 +547,7 @@ public partial class MainWindow
         var c = Color.FromRgb(0x86, 0x8D, 0xA1);
         return new Border
         {
-            Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.28), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
+            Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
             Background = Frozen(Color.FromArgb(0x18, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x50, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = "···", FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -size * 0.12, 0, 0) },
         };
@@ -548,33 +564,8 @@ public partial class MainWindow
         return track;
     }
 
-    /// <summary>
-    /// A class's mark: its two letters on a tile in the class's role colour (no class art in the tracker yet). Tanks blue,
-    /// healers and support green, melee coral, casters and ranged violet; an unknown class a quiet tile.
-    /// </summary>
-    internal static FrameworkElement ClassMark(string cls, double size, string name = "")
-    {
-        var c = ClassColor(cls);
-        var b = new Border
-        {
-            Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.28), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Background = Frozen(Color.FromArgb(0x2E, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x80, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
-            ToolTip = cls.Length > 0 ? cls : null,
-        };
-        // no class yet (the damage rows before a group list): the name's first letter on the quiet tile
-        var letters = cls.Trim().Length >= 2 ? cls.Trim()[..2] : cls.Trim().Length == 1 ? cls.Trim() : name.Trim().Length > 0 ? name.Trim()[..1].ToUpperInvariant() : "·";
-        b.Child = new TextBlock { Text = letters, FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        return b;
-    }
-
-    internal static Color ClassColor(string cls) => cls.Trim().ToLowerInvariant() switch
-    {
-        "templar" or "gladiator" => Color.FromRgb(0x6F, 0xA8, 0xF0),
-        "cleric" or "chanter" => Color.FromRgb(0x3D, 0xD6, 0x8C),
-        "assassin" => Color.FromRgb(0xF2, 0x8A, 0x6D),
-        "ranger" or "sorcerer" or "spiritmaster" => Color.FromRgb(0xB3, 0x8C, 0xF5),
-        _ => Color.FromRgb(0x86, 0x8D, 0xA1),
-    };
+    /// <summary>A class's mark: the game's emblem on a ring in the class's colour (Ui/ClassArt.cs).</summary>
+    internal static FrameworkElement ClassMark(string cls, double size, string name = "") => ClassArt.Icon(cls, size, name);
 
     static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
@@ -774,6 +765,14 @@ public partial class MainWindow
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(PT(e.Title, 13, FontWeights.SemiBold, "Ink", trim: true));
         if (e.Partial) nameLine.Children.Add(Margin(PT("partial", 11, FontWeights.SemiBold, "Warn"), 6, 1, 0, 0));
+        // the group at a glance: each member's class emblem, small, in the same colours as the tab and the overlay
+        var classes = e.Members.Where(f => ClassArt.Key(f.Class).Length > 0).OrderByDescending(f => f.You).Take(8).ToList();
+        if (classes.Count > 0)
+        {
+            var icons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            foreach (var f in classes) { var ic = ClassArt.Icon(f.Class, 15, f.Name); ic.Margin = new Thickness(0, 0, 2, 0); icons.Children.Add(ic); }
+            nameLine.Children.Add(icons);
+        }
         mid.Children.Add(nameLine);
         var place = BossBook.Strip(e.Instance);
         string sub = e.ModeKind switch
