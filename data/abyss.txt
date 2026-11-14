@@ -1,0 +1,48 @@
+# The Abyss's areas, as the minimap prints them, and the part of Reshanta each lies in: Area|Region.
+# The tracker (ZoneLocator.IsAbyss, built into the exe) reads it: in these areas the Abyss's rules apply (Abyss Points are
+# an income of their own, every kill's Kina is bound and is the kill's Kinah, the Kina a kill drops opens no payout window).
+# Source: metabot.gg/en/aion-2/zones (the site's data/zones-extra.json, each zone's "map"), 2026-10-31; names checked
+# against data/zones.txt. A name also used outside the Abyss gets a third field "shared" (Contaminated Marsh is in
+# Verteron too): it is the Abyss only when the last unshared area read was.
+# Chaotic Outer Reshanta (the Nov 4 2026 patch): its area names are not known yet; any name with "Reshanta" in it is the Abyss.
+# A new area goes here and in zones.txt.
+Chaotic Lower Reshanta|Chaotic Lower Reshanta
+Archipelago of Siel's Wings|Chaotic Lower Reshanta
+Archipelago of Siel's Wings - Grave of Steel|Chaotic Lower Reshanta
+Archipelago of Siel's Wings - Siel's Heart|Chaotic Lower Reshanta
+Archipelago of Siel's Wings - Siel's Left Wing|Chaotic Lower Reshanta
+Archipelago of Siel's Wings - Siel's Right Wing|Chaotic Lower Reshanta
+Black Fragments Area|Chaotic Lower Reshanta
+Black Fragments Area - Abandoned Island|Chaotic Lower Reshanta
+Black Fragments Area - Kibelium Fragment|Chaotic Lower Reshanta
+Black Fragments Area - Kration Conflict Zone|Chaotic Lower Reshanta
+Black Fragments Area - Lonely Island|Chaotic Lower Reshanta
+Devastated Remnants|Chaotic Lower Reshanta
+Devastated Remnants - Dusk Battlefield|Chaotic Lower Reshanta
+Devastated Remnants - Exile Island|Chaotic Lower Reshanta
+Devastated Remnants - Shade Island|Chaotic Lower Reshanta
+Devastated Remnants - Weathered Outcrop|Chaotic Lower Reshanta
+Latesran Eastern Root|Chaotic Lower Reshanta
+Latesran Western Root|Chaotic Lower Reshanta
+Reshanta's Root|Chaotic Lower Reshanta
+Sulfur Tree Island|Chaotic Lower Reshanta
+Sulfur Tree Island - Branding Island|Chaotic Lower Reshanta
+Sulfur Tree Island - River of Rotten Sap|Chaotic Lower Reshanta
+Sulfur Tree Island - Sulfur Swamp|Chaotic Lower Reshanta
+Chaotic Middle Reshanta|Chaotic Middle Reshanta
+Contaminated Marsh|Chaotic Middle Reshanta|shared
+Corroded Heart|Chaotic Middle Reshanta
+Distorted Old Growth Forest|Chaotic Middle Reshanta
+Eroded Fragment Area|Chaotic Middle Reshanta
+Latesran Eastern Ridge|Chaotic Middle Reshanta
+Latesran Western Ridge|Chaotic Middle Reshanta
+Steel Titan's Grave|Chaotic Middle Reshanta
+Chaotic Upper Reshanta|Chaotic Upper Reshanta
+Dukysas Fortress|Chaotic Upper Reshanta
+Fractured Northern Crash Site|Chaotic Upper Reshanta
+Fractured Southern Crash Site|Chaotic Upper Reshanta
+Krotan Fortress|Chaotic Upper Reshanta
+La Miren Fortress Northern Remnants|Chaotic Upper Reshanta
+La Miren Fortress Southern Remnants|Chaotic Upper Reshanta
+Red Thorn Crown Isle|Chaotic Upper Reshanta
+Chaotic Outer Reshanta|Chaotic Outer Reshanta

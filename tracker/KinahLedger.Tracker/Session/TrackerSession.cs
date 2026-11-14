@@ -627,6 +627,16 @@ public sealed partial class TrackerSession
     /// </summary>
     internal void ApplyZone(string? zone, DateTime now)
     {
+        // every area of the Abyss is one zone, "Abyss" (Steven, 2026-11-13: "count all abyss as 1 zone for tracking"): moving
+        // from Sulfur Tree Island to Devastated Remnants ends nothing and starts nothing; the area is only said in the log
+        if (zone != null && zone != ZoneLocator.Abyss && ZoneLocator.IsAbyss(zone))
+        {
+            if (!string.Equals(zone, _abyssArea, StringComparison.OrdinalIgnoreCase))
+                CrashLog.Note($"zone: {zone} ({ZoneLocator.AbyssRegion(zone) ?? "Reshanta"}), counted as the Abyss");
+            _abyssArea = zone;
+            zone = ZoneLocator.Abyss;
+        }
+        else if (zone != null && zone != SessionEngine.UnknownZone) _abyssArea = null;
         if (zone != null && zone != Engine.Zone)
         {
             if (zone != SessionEngine.UnknownZone) CrashLog.Note($"zone: {zone}" + (ZoneLocator.KindOf(zone) is { } kind ? $" ({kind})" : ""));
@@ -718,6 +728,8 @@ public sealed partial class TrackerSession
     public SessionEngine? FreshAll => _freshAll;
 
     int _emptyReads;
+    /// <summary>The Abyss area the minimap last named (the zone is "Abyss" for all of them): for the log only.</summary>
+    string? _abyssArea;
 
     // the game window as it was when the chat area was found (auto mode): the area is kept relative to it, so the game
     // moving (a tab out and back, a drag) moves the area with it, and the game changing size (fullscreen to windowed,
@@ -2725,8 +2737,11 @@ public sealed partial class TrackerSession
         if (InRunFor(ev) || _boss != null) return;
         // a Kina payout marked (Bound) (a quest, a pass or a claim): an item printed with it, in the same read or the next
         // few seconds, is the payout's too (Steven, 2026-10-23 12:39: 11,000 Kina (Bound) and a refining stone, counted as a drop)
-        if (ev is KinahChanged { Bound: true, Delta: > 0 })
+        if (ev is KinahChanged { Bound: true, Delta: > 0 } kb)
         {
+            // in the Abyss every kill's Kina is bound: a kill's is no payout, and the drops printed with it are drops (Steven,
+            // 2026-11-13 18:44: Earth Spellbook, Earth Greaves and the soul crystals beside each kill's bound Kina were set aside)
+            if (SessionEngine.IsAbyssKillKina(kb.Delta, Zone)) return;
             var until = now.AddSeconds(PayoutWindowSeconds);
             if (until > _boxUntil) _boxUntil = until;
             return;
@@ -4394,17 +4409,34 @@ public sealed partial class TrackerSession
         if (now < _raceReadsFrom) return;
         if (t.Of > 0 && t.Done >= 1 && t.Done <= t.Of)
         {
+            // the queue's size is the N read most; a tie keeps the size it had (2026-11-13 18:17:51, Steven's queue of 15 Wind
+            // Serum: one read of "3 / 45" took over from one "1 / 15" as the latest, the crafts counted went back to 0, and the
+            // next craft's count of 3 made 2 crafts "not seen" where one was)
             _ofReads[t.Of] = _ofReads.GetValueOrDefault(t.Of) + 1;
-            int of = _ofReads.OrderByDescending(kv => kv.Value).ThenByDescending(kv => kv.Key == t.Of).First().Key;
-            if (_queueOf > 0 && of != _queueOf) { CrashLog.Note($"crafting panel: the queue's count reads {t.Done} / {t.Of} after {_queueOf}: a queue of {of}"); _queueCrafts = 0; }
+            int of = _ofReads.OrderByDescending(kv => kv.Value).ThenByDescending(kv => _queueOf > 0 ? kv.Key == _queueOf : kv.Key == t.Of).First().Key;
+            if (_queueOf > 0 && of != _queueOf)
+            {
+                // a size one digit off the one before is a misread of it (15 / 45, 10 / 16), not a new queue: the crafts stay
+                bool misread = OneDigitOff(of, _queueOf);
+                CrashLog.Note($"crafting panel: the queue's count reads {t.Done} / {t.Of} after {_queueOf}: a queue of {of}" + (misread ? " (one digit off: the size misread before, the crafts counted kept)" : ""));
+                if (!misread) _queueCrafts = 0;
+            }
             _queueOf = of;
-            if (t.Of == of) _raceCount = t.Done;
+            // the craft's number counts from a read whose size is the queue's or one digit off it ("3 / 45" in a queue of 15)
+            if (t.Of == of || OneDigitOff(t.Of, of) && t.Done <= of) _raceCount = t.Done;
             QueueViewNow();
         }
         var cur = _queueName.Length >= 2 ? _queueName : PanelShows;
         if (t.Recipe.Length < 3 || cur.Length < 2) return;
         if (CraftPanel.NamesUpgrade(t.Recipe, cur)) _raceUpgradeTitle = true;
         else if (CraftPanel.IsRecipeLine(t.Recipe) && string.Equals(CraftPanel.Settle(t.Recipe, cur).Recipe, cur, StringComparison.OrdinalIgnoreCase)) _raceBaseTitle = true;
+    }
+
+    /// <summary>Two counts of as many digits that differ in one of them (15 and 45): the panel's small digits misread.</summary>
+    internal static bool OneDigitOff(int a, int b)
+    {
+        string x = a.ToString(System.Globalization.CultureInfo.InvariantCulture), y = b.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return x.Length == y.Length && x.Length > 1 && x.Zip(y).Count(p => p.First != p.Second) == 1;
     }
 
     /// <summary>
@@ -4430,7 +4462,11 @@ public sealed partial class TrackerSession
         }
         else if (_queueOf > 0 && c >= _queueOf) k = (true, $"past the queue's {_queueOf} craft{(_queueOf == 1 ? "" : "s")}");
         else if (_raceUpgradeTitle) k = (true, "the panel's title named the upgrade");
-        else if (_raceBaseTitle) k = (false, tint ? "the panel's title named the recipe, its blue tint left out" : "");
+        // the title naming the recipe says "not the roll" only when the roll's title would name an upgrade item; a dish's or
+        // a serum's roll keeps the recipe's title (2026-11-13 18:19:09, Steven's Wind Serum: the blue roll after a craft, its
+        // title the recipe, was taken for a craft, and its x2 pop-up then credited to it)
+        else if (_raceBaseTitle && RecipeBook.ForOutput(_queueName.Length >= 2 ? _queueName : PanelShows) is not { Combo: not RecipeBook.ComboMakes.Upgrade })
+            k = (false, tint ? "the panel's title named the recipe, its blue tint left out" : "");
         else if (tint) k = (true, "the panel's blue tint");
         else k = (false, "");
         if (!k.Roll) c++;

@@ -313,8 +313,7 @@ public partial class MainWindow
         if (cost == null) return ("", true);
         bool floor = unpriced + vendor > 0;
         if (!l.Ok) return ((floor ? "≤ " : "") + FeedK(-cost.Value), true);
-        // made from bound stock: bound, not for sale; what the try cost (the NPC's ink) is all there is to say
-        if (RecipeBook.BoundCraft(l.Name)) return (cost.Value > 0 ? FeedK(-cost.Value) + " · bound" : "bound", true);
+        // made with bound stock: its bound materials cost nothing (in cost already), what it made sells as usual
         int makes = CraftMakes(l) ?? 1;
         if (PriceBook.Price(l.Name) is not long p) return ("", true);
         var worth = FeedK(p * makes * PriceBook.SellerKeeps - cost.Value);
@@ -416,10 +415,10 @@ public partial class MainWindow
         string? place = _demo ? TrackerSession.PlaceOf(_demoZone) : _watcher.Chat?.Place ?? TrackerSession.PlaceOf(_watcher.Chat?.Zone);
         if (place == null || place == SessionEngine.UnknownZone || RunShown && RunEngine == null) return null;
         var zones = e.ZoneSnapshot();
-        static bool Any(SessionEngine.ZoneStats z) => z.Kinah > 0 || z.KinahBound > 0 || z.AbyssPoints > 0 || z.Kills > 0 || z.Drops > 0 || z.Nodes > 0;
+        static bool Any(SessionEngine.ZoneStats z) => z.Kinah > 0 || z.AbyssPoints > 0 || z.Kills > 0 || z.Drops > 0 || z.Nodes > 0;
         var mine = zones.Where(kv => TrackerSession.PlaceOf(kv.Key) == place).Select(kv => kv.Value).ToList();
         if (mine.Count == 0 || !zones.Any(kv => TrackerSession.PlaceOf(kv.Key) != place && Any(kv.Value))) return null;
-        long kinah = mine.Sum(z => z.Kinah + (inAbyss ? z.KinahBound : 0)), abyss = mine.Sum(z => z.AbyssPoints), value = 0;
+        long kinah = mine.Sum(z => z.Kinah), abyss = mine.Sum(z => z.AbyssPoints), value = 0;
         foreach (var z in mine)
             foreach (var (id, n) in z.Items)
                 if (n > 0 && PriceBook.Price(_items.NameOf(id)) is long p) value += (long)Math.Round(p * n * PriceBook.SellerKeeps);

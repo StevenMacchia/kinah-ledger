@@ -93,20 +93,21 @@ public static class PacketTests
             s.CommitForTest(new CurrencyGained(t0.AddSeconds(31), "Abyss Points", 7) { Via = "chat" });   // "Acquired M 7 Abyss Point(s)"
             s.CommitForTest(new KinahChanged(t0.AddSeconds(31), 278, true) { Via = "chat" });
             s.DrainPacketsForTest();
-            Check(s.Engine.KinahBound == 278 && s.Engine.AbyssPoints == 12, $"...bound Kinah +{s.Engine.KinahBound} and Abyss Points +{s.Engine.AbyssPoints} from the game's traffic, the chat's misread 7 left out");
+            // (a kill's bound Kina in the Abyss is its Kinah since 0.10.71: SessionEngine.IsAbyssKillKina)
+            Check(s.Engine.AbyssBoundKinah == 278 && s.Engine.KinahBound == 0 && s.Engine.Kinah == 1_394 + 278 && s.Engine.AbyssPoints == 12, $"...bound Kinah +{s.Engine.AbyssBoundKinah} (the kill's Kinah: {s.Engine.Kinah:N0}) and Abyss Points +{s.Engine.AbyssPoints} from the game's traffic, the chat's misread 7 left out");
             // a sale (an NPC in town, nothing killed around it) and a rise in a base are no pickups
             s.Engine.SetZone("Western Cantas Valley");
             reader.AmountForTest(CurrencyKind.Kinah, 30_001_594, t0.AddSeconds(50)); s.DrainPacketsForTest();
             s.Engine.SetZone("Test Base");
             reader.AmountForTest(CurrencyKind.Kinah, 30_002_094, t0.AddSeconds(52)); s.CommitForTest(new CurrencyGained(t0.AddSeconds(52), "Fera Soul Points", 1) { Via = "chat" }); s.DrainPacketsForTest();
-            Check(s.Engine.Kinah == 1_394, $"...a rise with nothing killed around it (a sale) and one in a base count nothing: {s.Engine.Kinah:N0}");
+            Check(s.Engine.Kinah == 1_394 + 278, $"...a rise with nothing killed around it (a sale) and one in a base count nothing: {s.Engine.Kinah:N0}");
             // three chat pickups the traffic never showed: Kinah goes back to the screen
             s.Engine.SetZone("Western Cantas Valley");
             for (int i = 0; i < 3; i++) s.CommitForTest(new KinahChanged(t0.AddSeconds(70 + i * 20), 400 + i, false) { Via = "chat" });
             reader.AgreeForTest();
             bool broken = reader.Broken(CurrencyKind.Kinah) != null;
             s.CommitForTest(new KinahChanged(t0.AddSeconds(135), 500, false) { Via = "chat" });
-            Check(broken && s.Engine.Kinah == 1_894 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
+            Check(broken && s.Engine.Kinah == 1_894 + 278 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
         }
 
         // at once (0.10.70; Steven, 2026-11-13: "these numbers should be instantaneous"): a rise with a kill already in counts

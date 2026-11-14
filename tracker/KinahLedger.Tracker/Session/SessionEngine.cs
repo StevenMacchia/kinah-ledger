@@ -18,6 +18,12 @@ public sealed partial class SessionEngine
     /// <summary>Points pickups (Soul Points and the like): one line per kill, never a drop.</summary>
     public int CurrencyLines { get; private set; }
     public Dictionary<string, long> Currencies { get; } = new();
+    /// <summary>The bound Kina kills dropped in the Abyss's zones, counted in <see cref="Kinah"/> (a kill's Kina is bound there).</summary>
+    public long AbyssBoundKinah { get; private set; }
+    /// <summary>The most bound Kina one Abyss kill drops (2026-11-13: 100 to 2,100): more is a quest's or a reward's, set aside as anywhere.</summary>
+    public const long AbyssKillKinaMax = 5_000;
+    /// <summary>True for bound Kina a kill dropped: in an Abyss zone, and no more than a kill drops.</summary>
+    public static bool IsAbyssKillKina(long delta, string? zone) => delta > 0 && delta <= AbyssKillKinaMax && Ocr.ZoneLocator.IsAbyss(zone);
     /// <summary>Abyss Points picked up in the Abyss's zones (<see cref="Ocr.ZoneLocator.IsAbyss"/>), shown like Kinah; elsewhere they stay in <see cref="Currencies"/> only.</summary>
     public long AbyssPoints { get; private set; }
     static readonly System.Text.RegularExpressions.Regex AbyssPointsName = new(@"^abyss\s*po[i1l]nts?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -159,7 +165,7 @@ public sealed partial class SessionEngine
     /// <summary>What happened in one zone: time spent there plus the counters the "best spot" tables need.</summary>
     public sealed class ZoneStats
     {
-        public double Seconds; public long Kinah, KinahBound, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
+        public double Seconds; public long Kinah, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
@@ -469,7 +475,7 @@ public sealed partial class SessionEngine
         {
             var now = DateTime.UtcNow;
             if (_pausedAt == null) Z().Seconds += (now - _zoneSince).TotalSeconds;   // time before the first successful read lands on "Unknown zone"
-            if (zone != null) _zone = zone;
+            if (zone != null) { _zone = zone; Ocr.ZoneLocator.SawZone(zone); }
             _zoneSince = now;
         }
     }
@@ -617,10 +623,14 @@ public sealed partial class SessionEngine
                     if (ff != null) { var sk = Skill(ff.Value); sk.Nodes++; sk.Failed++; }
                     break;
                 case KinahChanged k:
-                    // bound Kinah comes from quests, titles and rewards, not from mobs: tracked, but not farming income or a kill
-                    if (k.Bound) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; if (k.Delta > 0) Z().KinahBound += k.Delta; }
+                    // bound Kinah comes from quests, titles and rewards, not from mobs: tracked, but not farming income or a kill...
+                    // ...except in the Abyss, where every kill's Kina is bound: there a kill's bound Kina is the kill's Kinah, in
+                    // the count, its zone and the enemy's (Steven, 2026-11-13: none of his Abyss Kinah showed in Sulfur Tree Island)
+                    bool abyssKill = k.Bound && IsAbyssKillKina(k.Delta, _zone);
+                    if (k.Bound && !abyssKill) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; }
                     else
                     {
+                        if (abyssKill) AbyssBoundKinah += k.Delta;
                         Kinah += k.Delta;
                         if (k.Delta > 0)
                         {
@@ -740,7 +750,7 @@ public sealed partial class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahBound = v.KinahBound, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }

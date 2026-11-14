@@ -246,14 +246,69 @@ public static class ZoneLocator
     /// Zone and area names as the game prints them on the minimap: data/zones.txt, built into the exe (about 330 names,
     /// both factions and the Abyss). The whitelist for zones; a name not here counts as Unknown zone. The site reads the same file.
     /// </summary>
-    public static readonly string[] Known = LoadZones().Concat(LoadInstances().Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    public static readonly string[] Known = LoadZones().Concat(LoadInstances().Keys).Concat(LoadAbyss().Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <summary>
-    /// A zone of the Abyss (Reshanta, and the Abyss gates): the only open-world zones where Abyss Points are an income of their
-    /// own, shown like Kinah. Elsewhere the points come from quests and events, which aren't farming.
+    /// A zone of the Abyss: "Abyss", the one zone all of them count under (<see cref="Abyss"/>), an area of Reshanta
+    /// (data/abyss.txt: "Sulfur Tree Island", "Devastated Remnants", the minimap's names, which never say "Reshanta"), and any
+    /// name with "Reshanta" in it. The only open-world zones
+    /// where Abyss Points are an income of their own, shown like Kinah, and where a kill's Kina is bound and still the kill's.
+    /// Elsewhere the points come from quests and events, which aren't farming. Until 0.10.69 only names with "Reshanta" in
+    /// them were the Abyss, so Steven's Abyss Points and bound Kina in Sulfur Tree Island counted nowhere (2026-11-13).
+    /// A name used outside the Abyss too ("Contaminated Marsh", also in Verteron) is the Abyss when the last area
+    /// <see cref="SawZone"/> was told that isn't shared was.
     /// </summary>
-    public static bool IsAbyss(string? zone) =>
-        zone != null && (zone.Contains("Reshanta", StringComparison.OrdinalIgnoreCase) || zone.Contains("Abyss Gate", StringComparison.OrdinalIgnoreCase));
+    public static bool IsAbyss(string? zone)
+    {
+        if (zone == null) return false;
+        if (string.Equals(zone.Trim(), Abyss, StringComparison.OrdinalIgnoreCase)) return true;
+        if (AbyssAreas.TryGetValue(zone.Trim(), out var a)) return !a.Shared || _lastSureAbyss;
+        // (until 0.10.69 "Destroyed Abyss Gate" was too; it is a field of Verteron, MetaBot's map says, not of the Abyss)
+        return zone.Contains("Reshanta", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The one zone every Abyss area counts under (TrackerSession.ApplyZone): runs, tallies, rates and uploads.</summary>
+    public const string Abyss = "Abyss";
+
+    /// <summary>The part of Reshanta an Abyss area lies in ("Chaotic Lower Reshanta"), or null for a zone that isn't the Abyss.</summary>
+    public static string? AbyssRegion(string? zone) =>
+        zone == null || !IsAbyss(zone) ? null
+        : AbyssAreas.TryGetValue(zone.Trim(), out var a) ? a.Region
+        : zone.Contains("Reshanta", StringComparison.OrdinalIgnoreCase) ? zone.Trim() : null;
+
+    /// <summary>A zone the player is in now (the session's zone changing): what a shared Abyss name means follows the last unshared one.</summary>
+    public static void SawZone(string? zone)
+    {
+        if (zone == null || zone == "Unknown zone") return;
+        if (AbyssAreas.TryGetValue(zone.Trim(), out var a) && a.Shared) return;
+        if (Instances.ContainsKey(zone.Trim())) return;   // an instance is reached from either side
+        _lastSureAbyss = IsAbyss(zone);
+    }
+    static volatile bool _lastSureAbyss;
+
+    /// <summary>The Abyss's areas and their region, from data/abyss.txt ("Area|Region[|shared]").</summary>
+    public static readonly Dictionary<string, (string Region, bool Shared)> AbyssAreas = LoadAbyss();
+
+    static Dictionary<string, (string Region, bool Shared)> LoadAbyss()
+    {
+        var d = new Dictionary<string, (string, bool)>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var stream = KinahLedger.Data.DataFiles.Open("abyss.txt");
+            if (stream == null) return d;
+            using var r = new StreamReader(stream);
+            while (r.ReadLine() is { } line)
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.StartsWith('#')) continue;
+                var parts = t.Split('|');
+                if (parts.Length >= 2 && parts[0].Trim().Length > 0)
+                    d[parts[0].Trim()] = (parts[1].Trim(), parts.Length >= 3 && string.Equals(parts[2].Trim(), "shared", StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        catch (Exception) { /* without the list only names with "Reshanta" in them are the Abyss, as before 0.10.69 */ }
+        return d;
+    }
 
     /// <summary>Instanced areas (dungeons, trials, arenas, event areas) and the kind a run in one is filed under: data/instances.txt.</summary>
     public static readonly Dictionary<string, string> Instances = LoadInstances();
