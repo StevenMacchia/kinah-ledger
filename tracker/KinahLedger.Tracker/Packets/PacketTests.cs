@@ -110,6 +110,55 @@ public static class PacketTests
             Check(broken && s.Engine.Kinah == 1_894 + 278 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
         }
 
+        // at once (0.10.70; Steven, 2026-11-13: "these numbers should be instantaneous"): a rise with a kill already in counts
+        // as it comes, not 3 s later; one with no kill yet waits for the kill's line (it lags the message) and counts when it
+        // comes; a pickup the traffic counted a few seconds before is a kill's evidence too; an item counts once its chat line is in
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            TrackerSession Fresh(out PacketReader r)
+            {
+                r = new PacketReader(); r.ReadingForTest();
+                var x = new TrackerSession(null, settings, items, "Test") { Packets = r };
+                x.Engine.SetZone("Western Cantas Valley");
+                r.AmountForTest(CurrencyKind.Kinah, 10_000_000, DateTime.UtcNow.AddSeconds(-60));   // the baseline
+                return x;
+            }
+            var now = DateTime.UtcNow;
+            var a = Fresh(out var ra);
+            a.CommitForTest(new CurrencyGained(now.AddSeconds(-2), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            ra.AmountForTest(CurrencyKind.Kinah, 10_000_400, now); a.DrainPacketsForTest();
+            Check(a.Engine.Kinah == 400, $"a rise with a kill just before counts as it comes: {a.Engine.Kinah:N0} at once (400)");
+            var b = Fresh(out var rb);
+            rb.AmountForTest(CurrencyKind.Kinah, 10_000_400, now); b.DrainPacketsForTest();
+            long held = b.Engine.Kinah;
+            b.CommitForTest(new CurrencyGained(now.AddSeconds(1.5), "Fera Soul Points", 1, "Fera") { Via = "chat" }); b.DrainPacketsForTest();
+            Check(held == 0 && b.Engine.Kinah == 400, $"...one with no kill yet waits for the kill's line and counts as it comes: {held:N0}, then {b.Engine.Kinah:N0}");
+            var c = Fresh(out var rc);
+            c.CommitForTest(new CurrencyGained(now.AddSeconds(-14.5), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            rc.AmountForTest(CurrencyKind.Kinah, 10_000_400, now.AddSeconds(-5)); rc.AmountForTest(CurrencyKind.Kinah, 10_000_650, now); c.DrainPacketsForTest();
+            Check(c.Engine.Kinah == 650, $"...a pickup counted 5 s before (the kill 14.5 s back, out of reach) is evidence too: {c.Engine.Kinah:N0} at once (400 + 250)");
+            const long Manastone = 511360001;
+            var d = Fresh(out var rd);
+            d.CommitForTest(new CurrencyGained(now.AddSeconds(-2), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            rd.ItemsForTest(new ItemChange(now.AddSeconds(-0.2), Manastone, ItemOp.Changed, 1, 1, 3, false, 1, 1, false)); d.DrainPacketsForTest();
+            int before = d.Engine.Items.GetValueOrDefault(Manastone);
+            d.CommitForTest(new ItemAcquired(now.AddSeconds(1.2), Manastone, 1, false) { Via = "chat" }); d.DrainPacketsForTest();
+            Check(before == 0 && d.Engine.Items.GetValueOrDefault(Manastone) == 1, $"...an item waits for the chat's say on it (a drop, or a box's contents) and counts once its line is in: {before}, then {d.Engine.Items.GetValueOrDefault(Manastone)}");
+            // the game's own kill (0.10.72's fight events) is the evidence as it comes: the fight's first Kinah counts at once
+            var f = Fresh(out var rf);
+            rf.FightsForTest(new FightEvent(now.AddSeconds(-0.1), FightKind.Kill, FightFlags.Mine | FightFlags.VictimMonster, 0, 0, 7, 0, 0, "", ""));
+            rf.AmountForTest(CurrencyKind.Kinah, 10_000_400, now); f.DrainPacketsForTest();
+            Check(f.Engine.Kinah == 400, $"...the game's own kill, just in, is the evidence: the fight's first pickup counts at once ({f.Engine.Kinah:N0}), no chat line needed");
+            // the live path: the loop's wait between passes ends on the message, which is counted within a fraction of a second
+            var e = Fresh(out var re);
+            e.CommitForTest(new CurrencyGained(DateTime.UtcNow.AddSeconds(-1), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            var feed = Task.Run(async () => { for (int i = 1; i <= 5; i++) { await Task.Delay(150); re.AmountForTest(CurrencyKind.Kinah, 10_000_000 + i * 100, DateTime.UtcNow); } });
+            e.WaitForTest(1200);
+            feed.Wait();
+            double worst = e.PacketDelays.Count > 0 ? e.PacketDelays.Max() : 99;
+            Check(e.Engine.Kinah == 500 && worst < 0.3, $"...the reading loop's wait counts each message as it comes: {e.PacketDelays.Count} of 5 counted, the slowest {worst * 1000:0} ms after its message (under 300)");
+        }
+
         // kills and deaths (0.10.72): the game says whose kill it was and what died; a kill naming no killer is the player's
         // when their Rank Points rose with it and no kill of their own took that rise; a death counts once
         {
@@ -182,6 +231,49 @@ public static class PacketTests
             bool broken = reader.ItemsBroken != null;
             s.CommitForTest(new ItemAcquired(t0.AddSeconds(150), Odyle, 2, false) { Via = "chat" });
             Check(broken && M(Odyle) == 5, $"...three chat pickups the traffic never showed: items are the screen's again (Odyle {M(Odyle)}, every chat line counted)");
+
+            // a bought item read again (Steven, 2026-11-13 18:35: two Wrathful Ego bought, the crafting window over the chat, the
+            // same two lines read again 23 s later with a kill beside them, counted as rare drops): a rise the tracker didn't
+            // count covers the item's chat line however late it shows; a rise one line took covers that line read again; and
+            // with no rise at all (the game's messages showed nothing for it), the chat's line set aside
+            // covers its later reading. Only a line no rise and no handled line stands behind is "not shown", from the chat
+            {
+                const long Ego = 610511015;
+                var t1 = DateTime.UtcNow.AddMinutes(-10);
+                ItemChange R(double at, long id, long delta, long total) => new(t1.AddSeconds(at), id, ItemOp.Changed, 6, delta, total, false, ++batch, 1, false);
+                var pkA = new PacketReader(); pkA.ReadingForTest();
+                bool marketOpen = true;
+                var m = new TrackerSession(null, settings, items, "Test") { Packets = pkA, MarketOpen = _ => marketOpen };
+                m.Engine.SetZone("Chaotic Lower Reshanta");
+                int E(long id) => m.Engine.Items.GetValueOrDefault(id) + m.Engine.ItemsBound.GetValueOrDefault(id);
+                pkA.ItemsForTest(R(2, Ego, 1, 3));   // bought: the Market open
+                m.DrainPacketsForTest();
+                marketOpen = false;
+                m.CommitForTest(new CurrencyGained(t1.AddSeconds(24), "Modified Karnif Soul Points", 1, "Modified Karnif") { Via = "chat" });   // a kill
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(25), Ego, 1, false) { Via = "chat" });   // its line, read again 23 s later
+                m.DrainPacketsForTest(); pkA.AgreeItemsForTest(DateTime.UtcNow); m.DrainPacketsForTest();
+                Check(E(Ego) == 0 && pkA.Verdicts.LastOrDefault()?.StartsWith("covered: with the Market open") == true,
+                    $"a bought item's rise covers its chat line read 23 s later: Wrathful Ego {E(Ego)} ({pkA.Verdicts.LastOrDefault()})");
+                // a rise counted, its line covered, then the same line read again 20 s on: not a second pickup
+                m.CommitForTest(new CurrencyGained(t1.AddSeconds(40), "Modified Karnif Soul Points", 1, "Modified Karnif") { Via = "chat" });
+                pkA.ItemsForTest(R(41, Meat, 1, 4));
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(42.5), Meat, 1, false) { Via = "chat" });
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(62), Meat, 1, false) { Via = "chat" });
+                m.DrainPacketsForTest(); pkA.AgreeItemsForTest(DateTime.UtcNow); m.DrainPacketsForTest();
+                Check(E(Meat) == 1 && string.Join(",", pkA.Verdicts.TakeLast(2)) == "covered,covered: read again",
+                    $"a rise counted once, its line read again 20 s later: Fresh Raw Meat {E(Meat)} ({string.Join(", ", pkA.Verdicts.TakeLast(2))})");
+                // a line no rise or handled line stands behind is still the chat's (nothing lost), past the bought one's time
+                m.CommitForTest(new ItemAcquired(t1.AddSeconds(2 + PacketReader.ExcludedSeconds + 20), Ego, 1, false) { Via = "chat" });
+                pkA.AgreeItemsForTest(DateTime.UtcNow); m.DrainPacketsForTest();
+                Check(E(Ego) == 1 && pkA.Verdicts.LastOrDefault() == "not shown", $"...and a line the traffic never showed, minutes later, counts from the chat: Wrathful Ego {E(Ego)} ({pkA.Verdicts.LastOrDefault()})");
+                // the chat's line set aside (bought), no rise at all, then read again as new: covered by the set-aside line
+                var pkB = new PacketReader(); pkB.ReadingForTest();
+                pkB.ItemExcluded(Ego, t1.AddSeconds(200), "the chat's line for it was set aside: bought at the Market (its window was open)");
+                pkB.ScreenSawItem(Ego, 1, t1.AddSeconds(223), true, new object());
+                pkB.AgreeItemsForTest(DateTime.UtcNow);
+                Check(pkB.NextUncovered() == null && pkB.Verdicts.LastOrDefault()?.StartsWith("covered: the chat's line for it was set aside") == true,
+                    $"no rise for a bought item, its set-aside line read again: not counted ({pkB.Verdicts.LastOrDefault()})");
+            }
 
             // crafting: materials going down start a try, the item going up ends it; nothing made before the next try is a
             // fail, twice the yield is a won combo; the panel's races are left out, and no craft's item is a pickup

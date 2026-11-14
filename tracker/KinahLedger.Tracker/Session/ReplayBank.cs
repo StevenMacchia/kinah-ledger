@@ -419,6 +419,8 @@ public static class ReplayBank
                     case "cover": session.ListGated(new List<LootLine>(), t, Gate.Skip); break;
                     // a pass, shop or reward window's title in the top band (reads.log's "reward screen open (...)")
                     case "reward": if (ls.FirstOrDefault() is { Length: > 0 } title) session.Target.MarkReward(t, title); break;
+                    // the Market's listings seen open (reads.log's "scene Market since"; the trace's own "market" line since 0.10.12)
+                    case "market": session.MarketSeen(t); break;
                     // a reward table as voted (reads.log's "voted slot by slot" line), one slot per entry:
                     // "grade|count as read|closest icon|its distance", through ApplyGrid as RewardGridDue files it
                     case "table":

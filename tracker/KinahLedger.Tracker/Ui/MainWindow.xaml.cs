@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     readonly WF.NotifyIcon _tray = new();
     readonly WF.ToolStripMenuItem _trayToggle = new("Start run");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    int _packetTickQueued;
     bool _framing; int _ticks;
 
     // a timer tick after the window closed (the off-screen renders) finds no theme: grey rather than a crash
@@ -208,6 +209,13 @@ public partial class MainWindow : Window
         ApplyModeLabels(); ResetTiles();
         BuildTray();
         _timer.Tick += (_, _) => Tick();
+        // a count from the game's messages shows at once (Steven, 2026-11-13: "these numbers should be instantaneous"): one
+        // redraw queued at a time, so a burst of pickups is one redraw, not one each
+        _watcher.PacketCounted += () =>
+        {
+            if (Interlocked.Exchange(ref _packetTickQueued, 1) == 1) return;
+            Dispatcher.BeginInvoke(() => { Interlocked.Exchange(ref _packetTickQueued, 0); Tick(); }, DispatcherPriority.Render);
+        };
         _timer.Start();
         SourceInitialized += OnSourceInitialized;
         StateChanged += OnStateChanged;
@@ -428,13 +436,13 @@ public partial class MainWindow : Window
         if (_clearedView != null) return _clearedView;   // Clear everything, while it can still be undone
         var chat = _watcher.Chat; var farm = RunEngine;
         if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
-        if (!_prefs.AllZones && chat != null) return chat.ZoneView;
-        // All zones: the run, or every zone since the tracker started (GameWatcher.AllView). It showed the always-on count
-        // before 0.8.50, which is shared and started over every 15 minutes, so All zones emptied itself on its own
+        // one screen (0.10.70): the run, or every zone since the last break (GameWatcher.AllView), with the place's share
+        // beside each figure (HereOf). It showed the always-on count before 0.8.50, which is shared and started over every
+        // 15 minutes, so the overall count emptied itself on its own
         return farm ?? (chat != null ? _watcher.AllView : null);
     }
 
-    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "every zone since your last break" : "this zone");
+    string ViewTitle() => RunEngine != null ? "this run" : "every zone since your last break";
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
@@ -1024,6 +1032,7 @@ public partial class MainWindow : Window
         // (the engine counts a kill's bound Kina as Kinah in the Abyss's zones since 0.10.69: SessionEngine.IsAbyssKillKina)
         _boundInKinah = inAbyss && e.AbyssBoundKinah > 0;
         var s = Build(e, h, t.Kills);
+        _here = HereOf(e, inAbyss);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         // quest and payment rewards: bound Kinah, a payment line, or one line far above what the mobs pay. Never farming income.
         // said in ⋯ since 2026-10-28, not on the page: the player doesn't need it while counting goes right
@@ -2091,12 +2100,15 @@ public partial class MainWindow : Window
                 e.Apply(new FightCounted(t, true, true, "Nana")); e.Apply(new FightCounted(t, false, true, ""));
                 break;
             default:
-                e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
+                // two zones (0.10.70, one screen): the first half hour next door, then here, so each figure has its "here"
+                e.SetZone("Eastern Cantas Valley"); e.CreditZone("Eastern Cantas Valley", 27 * 60 + 40);
                 // Kinah by enemy: the target bar named these while their Kinah landed
                 e.SetTarget("Abyss Drakan Scout", t); Kills(94, 3690);
+                Drop("Raw Leather", 25); Drop("Spiritstone", 12);
+                e.SetZone("Western Cantas Valley"); e.CreditZone("Western Cantas Valley", 14 * 60 + 37);
                 e.SetTarget("Abyss Drakan Striker", t); Kills(52, 4120);
                 e.SetTarget("Abyss Drakan Striker", t.AddMinutes(-5)); Kills(15, 3500);   // the bar went quiet: nobody's
-                Drop("Raw Leather", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Power Shard", 8); Drop("Superior Power Shard", 7); Drop("Abyssal Power Shard", 3); Drop("Lesser Abyssal Manastone", 1);
+                Drop("Raw Leather", 16); Drop("Spiritstone", 14); Drop("Fresh Fruit", 19); Drop("Power Shard", 8); Drop("Superior Power Shard", 7); Drop("Abyssal Power Shard", 3); Drop("Lesser Abyssal Manastone", 1);
                 Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
                 // on both Drakans' tables: their odds pool the kills of the two
                 Drop("Soft Balaur Meat", 3); Drop("Refining Stone", 4);

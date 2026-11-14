@@ -194,6 +194,7 @@ public static class BenchReplay
                     case "zone": zoneNow = sg.Value; tickAt = sg.At; s.ApplyZone(sg.Value, sg.At); break;
                     case "reward": if (sg.Value.Length > 0) s.Target.MarkReward(sg.At, sg.Value); break;
                     case "header": s.EventHeaderSeen(sg.Value, sg.At); break;
+                    case "loading": s.LoadingSeen(sg.At); break;
                 }
             }
         }

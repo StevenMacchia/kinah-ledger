@@ -36,34 +36,64 @@ public sealed partial class TrackerSession
 
     const long PacketPickupMax = 1_000_000;
 
-    /// <summary>Changes held until the lines around them are in (a kill's lines come a second or two after its Kinah).</summary>
+    /// <summary>Changes waiting for the lines around them (a kill's lines come a second or two after its Kinah).</summary>
     readonly List<CurrencyChange> _packetHeld = new();
     const double PacketHoldSeconds = 3, PacketNearSeconds = 10;
 
     /// <summary>
-    /// The packet reader's changes, counted in order once <see cref="PacketHoldSeconds"/> old: a rise is a pickup when a kill
-    /// or a gather was seen within <see cref="PacketNearSeconds"/>, the screen read a pickup of it then, or a run is open.
-    /// Otherwise it is a sale, the mail or a quest's pay (an NPC in town, the Market): logged, not counted.
+    /// A packet amount counted (or a craft or an item): the window redraws now rather than at its next half-second tick
+    /// (Steven, 2026-11-13: "if we're using packets these numbers should be instantaneous"). Raised on the reading loop.
+    /// </summary>
+    public event Action? PacketCounted;
+    bool _packetCountedNow;
+    /// <summary>When the last pickup the traffic counted came (its message's time).</summary>
+    DateTime _packetPickupAt = DateTime.MinValue;
+    /// <summary>How long after its message came each of the last packet counts landed (seconds), for the log's minute line and packet-test.</summary>
+    internal readonly List<double> PacketDelays = new();
+    void NotePacketDelay(DateTime at)
+    {
+        double d = Math.Max(0, (DateTime.UtcNow - at).TotalSeconds);
+        PacketDelays.Add(d); if (PacketDelays.Count > 200) PacketDelays.RemoveAt(0);
+        _packetCountedNow = true;
+    }
+    static string After(DateTime at) => $"{Math.Max(0, (DateTime.UtcNow - at).TotalSeconds):0.00} s after it came";
+
+    /// <summary>
+    /// The packet reader's changes, counted in order as they come. Each is decided at once when what decides it is in: in a
+    /// base, with the Market open or over a million at once it is a sale, the mail or a reward (logged, not counted); with a
+    /// kill or a gather in the last <see cref="PacketNearSeconds"/>, the screen's own reading of it, or a run open it is a
+    /// pickup and counts now. Only a rise with none of those waits, up to <see cref="PacketHoldSeconds"/>, for a kill's
+    /// lines to come in (they lag the game's message by a second or two); then it counts, or is left out as before. Until
+    /// 0.10.70 every change waited the full <see cref="PacketHoldSeconds"/>, so the window showed a pickup 3 to 4 s late.
     /// </summary>
     void DrainPackets()
     {
         if (Packets is not { } p) return;
+        _packetCountedNow = false;
         while (p.Next() is { } next) _packetHeld.Add(next);
         var now = DateTime.UtcNow;
         // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
         DrainFights(p, now);
         DrainItems(p, now);
-        while (_packetHeld.Count > 0 && (now - _packetHeld[0].At).TotalSeconds >= PacketHoldSeconds)
+        while (_packetHeld.Count > 0)
         {
-            var c = _packetHeld[0]; _packetHeld.RemoveAt(0);
-            if (c.First || c.Delta <= 0) continue;   // a baseline, or spending: nothing picked up
+            var c = _packetHeld[0];
+            if (c.First || c.Delta <= 0) { _packetHeld.RemoveAt(0); continue; }   // a baseline, or spending: nothing picked up
             string what = c.What switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", _ => "Abyss Points" };
-            bool nearKill = (_lastKillAt - c.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - c.At).TotalSeconds >= -PacketNearSeconds;
+            bool nearKill = (_lastKillAt - c.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - c.At).TotalSeconds >= -PacketNearSeconds
+                // a pickup the traffic counted in the last few seconds: still farming (in the Abyss the kill's lines are few and
+                // late, so on Steven's 2026-11-13 log this decided 38 of the 51 pickups that would otherwise have waited)
+                || (c.At - _packetPickupAt).TotalSeconds is >= 0 and <= PacketNearSeconds;
             bool screenSaw = p.ScreenNear(c.What, c.At, PacketNearSeconds);
+            bool waited = (now - c.At).TotalSeconds >= PacketHoldSeconds;
             string? why = InBase ? $"in a base ({Zone})"
                 : MarketOpen?.Invoke(c.At) == true ? "with the Market open"
                 : c.Delta > PacketPickupMax ? "at once"
-                : !nearKill && !screenSaw && Instances.Current == null ? "with no kill, gather or pickup line around it" : null;
+                : nearKill || screenSaw || Instances.Current != null ? null
+                : waited ? "with no kill, gather or pickup line around it"
+                : "";
+            if (why == "") break;   // its lines may still come: it waits, and the ones after it with it, so they count in order
+            _packetHeld.RemoveAt(0);
             if (why != null)
             {
                 CrashLog.Note($"packets: {what} +{c.Delta:N0} {why}: a sale, the mail or a reward, not a pickup; not counted");
@@ -72,10 +102,34 @@ public sealed partial class TrackerSession
             GameEvent ev = c.What == CurrencyKind.AbyssPoints
                 ? new CurrencyGained(c.At, "Abyss Points", c.Delta) { Via = "packets" }
                 : new KinahChanged(c.At, c.Delta, c.What == CurrencyKind.BoundKinah) { Via = "packets" };
-            CrashLog.Note($"packets: {what} +{c.Delta:N0} (now {c.Amount:N0}): counted from the game's message");
+            CrashLog.Note($"packets: {what} +{c.Delta:N0} (now {c.Amount:N0}): counted from the game's message, {After(c.At)}");
             CommitWith(ev, "counter");
+            NotePacketDelay(c.At);
+            if (c.At > _packetPickupAt) _packetPickupAt = c.At;
+        }
+        if (_packetCountedNow) try { PacketCounted?.Invoke(); } catch (Exception ex) { CrashLog.Write("packet counted", ex); }
+    }
+
+    /// <summary>
+    /// The reading loop's wait between screen passes, cut short whenever the packet reader queues something: what came is
+    /// drained at once, and the wait goes on to its end (TrackerSession.Loop).
+    /// </summary>
+    async Task WaitWithPacketsAsync(int ms, CancellationToken ct)
+    {
+        if (Packets is not { } p) { try { await Task.Delay(ms, ct); } catch (TaskCanceledException) { } return; }
+        var until = DateTime.UtcNow.AddMilliseconds(ms);
+        while (!ct.IsCancellationRequested)
+        {
+            // what is held for its lines is looked at again every quarter second, so it counts as soon as they are in
+            int left = (int)(until - DateTime.UtcNow).TotalMilliseconds;
+            if (left <= 0) break;
+            await p.WaitArrivedAsync(_packetHeld.Count > 0 || _itemHeld.Count > 0 ? Math.Min(left, 250) : left, ct);
+            DrainPackets();
         }
     }
+
+    /// <summary>Between the screen pass's readers: the packets drained when there is something to drain, so a pass of half a second doesn't hold a count.</summary>
+    void PacketsDue() { if (Packets is { } p && (p.Pending || _packetHeld.Count > 0 || _itemHeld.Count > 0)) DrainPackets(); }
 
     /// <summary>
     /// True when <paramref name="ev"/> is Kinah, bound Kinah or Abyss Points from the screen (a chat line, the Kinah counter,
@@ -126,7 +180,10 @@ public sealed partial class TrackerSession
         p.NameOf ??= id => _items.NameOf(id);
         p.CraftingAt ??= CraftingAt;
         while (p.NextItems() is { } b) _itemHeld.Add(b);
-        while (_itemHeld.Count > 0 && (now - _itemHeld[0].At).TotalSeconds >= PacketHoldSeconds)
+        // an update is taken once the chat had its say on each item that went up (a pickup line, or a box's or a reward's
+        // contents), else once PacketHoldSeconds old as before: the chat tells a drop from a box's contents, and lags the
+        // game's update by a second or two, so an item counts as fast as its line, not a fixed 3 s later
+        while (_itemHeld.Count > 0 && ((now - _itemHeld[0].At).TotalSeconds >= PacketHoldSeconds || ChatHadItsSay(p, _itemHeld[0])))
         {
             var b = _itemHeld[0]; _itemHeld.RemoveAt(0);
             TakeItems(p, b);
@@ -142,6 +199,25 @@ public sealed partial class TrackerSession
             Commit(late);
             _screenLate.Remove(late);
         }
+    }
+
+    /// <summary>
+    /// Whether every item that went up in <paramref name="b"/> has had the chat's say: a chat pickup line for it, or the chat
+    /// calling it a reward or a box's contents, near the update. An update with nothing going up, or something going down, or
+    /// while crafting, has nothing to wait for.
+    /// </summary>
+    bool ChatHadItsSay(PacketReader p, ItemBatch b)
+    {
+        if (b.Fell || CraftingAt(b.At)) return true;
+        foreach (var (id, n, unknown) in b.Net())
+        {
+            if (unknown || n <= 0 || _items.Get(id) == null) continue;
+            string un = Unbound(_items.NameOf(id));
+            if (p.ChatNearItem(id, b.At, PacketNearSeconds)) continue;
+            if (_rewardLines.Any(r => Math.Abs((r.At - b.At).TotalSeconds) <= PacketNearSeconds && string.Equals(r.Name, un, StringComparison.OrdinalIgnoreCase))) continue;
+            return false;
+        }
+        return true;
     }
 
     /// <summary>One inventory update, once the lines around it are in: a craft's while crafting, else each item that went up a pickup if the gate lets it.</summary>
@@ -176,10 +252,13 @@ public sealed partial class TrackerSession
                 : _rewardLines.Any(r => Math.Abs((r.At - b.At).TotalSeconds) <= PacketNearSeconds && string.Equals(r.Name, un, StringComparison.OrdinalIgnoreCase)) ? "with the chat calling it a reward"
                 : bound && !screenSaw && Instances.Current == null ? "bound, with no pickup line for it (a quest's or a box's reward)"
                 : !near && !screenSaw && Instances.Current == null ? "with no kill, gather or pickup line around it" : null;
-            if (why != null) { CrashLog.Note($"packets: {name} +{n:N0} {why}: not a pickup; not counted"); continue; }
+            // ...and the chat's line for it, however late it shows (a window over the chat), is covered by this rise: never a pickup
+            if (why != null) { CrashLog.Note($"packets: {name} +{n:N0} {why}: not a pickup; not counted"); p.ItemExcluded(id, b.At, why); continue; }
             var ev = new ItemAcquired(b.At, id, (int)Math.Min(n, 99999), bound) { Via = "packets" };
-            CrashLog.Note($"packets: {name} +{n:N0}: counted from the game's message");
+            CrashLog.Note($"packets: {name} +{n:N0}: counted from the game's message, {After(b.At)}");
             CommitWith(ev, "counter");
+            NotePacketDelay(b.At);
+            if (b.At > _packetPickupAt) _packetPickupAt = b.At;
         }
     }
 
@@ -190,6 +269,7 @@ public sealed partial class TrackerSession
         if (o.Lost) { CrashLog.Note($"packets: a try of {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}; not counted"); return; }
         CrashLog.Note($"packets: craft {(o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} for {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}");
         PanelRace(recipe, o.Ok, o.Combo, o.At, _panelLevel, _queueOpen ? _queueId : 0, makes: o.Makes, why: "the game's messages: " + o.Why, fromPackets: true);
+        _packetCountedNow = true;
     }
 
     /// <summary>True when the packets count crafts now: a race of the crafting panel is logged, kept for the agreement check and left out.</summary>
@@ -213,7 +293,13 @@ public sealed partial class TrackerSession
     /// </summary>
     void DrainFights(PacketReader p, DateTime now)
     {
-        while (p.NextFight() is { } f) _fightTally.Add(f);
+        while (p.NextFight() is { } f)
+        {
+            _fightTally.Add(f);
+            // the player's own kill is its Kinah's and drops' evidence as it comes (0.10.73), not once the tally decides it
+            // 3 s later: the first pickup of a fight counts at once too
+            if (f.Kind == FightKind.Kill && f.Flags.HasFlag(FightFlags.Mine) && !f.Flags.HasFlag(FightFlags.VictimMe) && f.At > _lastKillAt) _lastKillAt = f.At;
+        }
         foreach (var o in _fightTally.Take(now))
         {
             if (!o.Death && (o.At - _lastKillAt).TotalSeconds > 0) _lastKillAt = o.At;
@@ -227,4 +313,6 @@ public sealed partial class TrackerSession
     /// <summary>For packet-test: a pickup through Commit, as a chat line or the counter would come, and a pass's drain.</summary>
     internal void CommitForTest(GameEvent ev) => Commit(ev);
     internal void DrainPacketsForTest() => DrainPackets();
+    /// <summary>For packet-test: the reading loop's wait between passes, run for <paramref name="ms"/>.</summary>
+    internal void WaitForTest(int ms) => WaitWithPacketsAsync(ms, CancellationToken.None).GetAwaiter().GetResult();
 }
