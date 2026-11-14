@@ -224,34 +224,56 @@ public partial class MainWindow
             expect.Add(("place name", picked, false));
             // the band's line and pill, as PlaceBand writes them: the runs, the open run's number and start, its step and clock (or when the place was last run)
             var open = string.Equals(live, picked, StringComparison.OrdinalIgnoreCase) ? runs.OrderBy(r => r.Start).LastOrDefault() : null;
-            var meta = RunBandLine(runs, open);
-            place["band"] = meta;
-            expect.Add(("band line", meta, true));
+            // the top card: the latest run (the default since 2026-11-14, Ui/MainWindow.LatestRun.cs) or All runs
+            bool allView = _runsView == "all";
+            place["view"] = allView ? "all runs" : "latest run";
             var newest = runs.OrderByDescending(r => r.LastLoot ?? r.Start).First();
-            var lastAt = (newest.LastLoot ?? newest.Start).ToLocalTime();
-            var pill = open != null ? RunPillText(open)
-                : lastAt.Date == DateTime.Today ? $"last {lastAt:HH:mm}" : $"last {lastAt.ToString("MMM d", CultureInfo.InvariantCulture)}";
-            place["pill"] = pill;
-            expect.Add(("band pill", pill, true));
-            if (n > 0)
+            if (allView)
+            {
+                var meta = RunBandLine(runs, open);
+                place["band"] = meta;
+                expect.Add(("band line", meta, true));
+                var lastAt = (newest.LastLoot ?? newest.Start).ToLocalTime();
+                var pill = open != null ? RunPillText(open)
+                    : lastAt.Date == DateTime.Today ? $"last {lastAt:HH:mm}" : $"last {lastAt.ToString("MMM d", CultureInfo.InvariantCulture)}";
+                place["pill"] = pill;
+                expect.Add(("band pill", pill, true));
+            }
+            else
+            {
+                var latest = LatestRunOf(runs, open)!;
+                int number = runs.OrderBy(r => r.Start).ToList().IndexOf(latest) + 1;
+                var lv = RunValue(latest);
+                place["latest"] = new Dictionary<string, object?> { ["number"] = number, ["value"] = lv > 0 || latest.Kinah > 0 ? Fk(lv) : null, ["kinah"] = latest.Kinah > 0 ? Fk(latest.Kinah) : null, ["kills"] = latest.Kills };
+                expect.Add(("latest run's number", $"Run {number} · ", false));
+                if (lv > 0 || latest.Kinah > 0) expect.Add(("latest run's worth", Fk(lv), false));
+                if (latest.Kinah > 0) expect.Add(("latest run's Kinah", Fk(latest.Kinah) + " Kinah", false));
+                if (latest.Kills > 0) expect.Add(("latest run's kills", latest.Kills.ToString("N0", CultureInfo.InvariantCulture) + (latest.Kills == 1 ? " kill" : " kills"), false));
+            }
+            if (n > 0 && allView)
             {
                 if (known && secs > 10) { place["anHour"] = Fk(value / secs * 3600); expect.Add(("an hour", Fk(value / secs * 3600) + " an hour", false)); }
                 if (known) { place["aRun"] = Fk(value / (double)n); expect.Add(("a run", Fk(value / (double)n) + " a run", false)); }
                 place["aRunTime"] = Clock(TimeSpan.FromSeconds(secs / n)); expect.Add(("a run's time", Clock(TimeSpan.FromSeconds(secs / n)) + " a run", false));
                 if (known && n > 1) { place["bestRun"] = Fk(pc.Max(RunValue)); expect.Add(("best run", Fk(pc.Max(RunValue)) + " best run", false)); }
                 if (!known) { place["noPrices"] = true; expect.Add(("no prices", "no prices yet", false)); }
+                var trAll = TodayLoot.Runs(pc, _items, IsCurrency);
+                place["kinah"] = trAll.Kinah > 0 ? Fk(trAll.Kinah) : null;
+                if (trAll.Kinah > 0) expect.Add(("Kinah chip", Fk(trAll.Kinah), true));
+            }
+            if (n > 0)
+            {
+                // Paid out here, under either top card
                 var tr = TodayLoot.Runs(pc, _items, IsCurrency);
-                place["kinah"] = tr.Kinah > 0 ? Fk(tr.Kinah) : null;
-                if (tr.Kinah > 0) expect.Add(("Kinah chip", Fk(tr.Kinah), true));
                 place["lootWorth"] = tr.Value > 0 ? Fk(tr.Value) : null;
                 if (tr.Value > 0) expect.Add(("loot worth", Fk(tr.Value), true));
                 place["loot"] = tr.Items.ToDictionary(s => s.Name, s => s.Count);
-                // the slot badges: the first two rows are drawn, the rest sit behind Show all
-                int shown = RunSlotsPerRow * TodayRows;   // Paid out here (Ui/MainWindow.QuestRuns.cs): two rows of slots, then Show all
+                // the slot badges: the first row is drawn, the rest sit behind Show all
+                int shown = RunSlotsPerRow;   // Paid out here (Ui/MainWindow.QuestRuns.cs): one row of slots, then Show all
                 foreach (var s in tr.Items.Take(_todayAll.Contains("place:" + picked) ? int.MaxValue : shown)) expect.Add(($"loot {s.Name}", CountBadge(s.Count), true));
                 expect.Add(("loot line", n == 1 ? "from the run here" : $"from the {n} runs here", false));
             }
-            else expect.Add(("no run counted", runs.Count == 0 ? "No run here yet." : "No run counted yet.", false));
+            else if (allView) expect.Add(("no run counted", runs.Count == 0 ? "No run here yet." : "No run counted yet.", false));   // the latest run's card shows the run itself
             fig["place"] = place;
         }
         // the TODAY strip's line and sum (the Today side is its line since 0.10.21; the day's loot is the place box's)
