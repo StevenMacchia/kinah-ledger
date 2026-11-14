@@ -50,6 +50,8 @@ public sealed partial class TrackerSession
         if (Packets is not { } p) return;
         while (p.Next() is { } next) _packetHeld.Add(next);
         var now = DateTime.UtcNow;
+        // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
+        DrainFights(p, now);
         DrainItems(p, now);
         while (_packetHeld.Count > 0 && (now - _packetHeld[0].At).TotalSeconds >= PacketHoldSeconds)
         {
@@ -198,6 +200,29 @@ public sealed partial class TrackerSession
         p.ScreenSawCraft(at);
         CrashLog.Note($"crafting panel: {what}: counted from the game's messages instead");
         return true;
+    }
+
+    // ---- kills and deaths (0.10.72) ----
+    readonly FightTally _fightTally = new();
+    /// <summary>Rank Points the player gained since the tracker started, from the game's messages.</summary>
+    public long PacketRankPoints => _fightTally.RankPoints;
+
+    /// <summary>
+    /// The player's kills and deaths from the game's messages (Steven, 2026-11-13: "count abyss pvp kills vs. mob kills"):
+    /// each one counted as <see cref="FightCounted"/>, a player or a monster, so the Abyss can say "3 players · 48 monsters".
+    /// The chat's kill count stays: the kills shown are the larger of the two (SessionEngine.Kills).
+    /// </summary>
+    void DrainFights(PacketReader p, DateTime now)
+    {
+        while (p.NextFight() is { } f) _fightTally.Add(f);
+        foreach (var o in _fightTally.Take(now))
+        {
+            if (!o.Death && (o.At - _lastKillAt).TotalSeconds > 0) _lastKillAt = o.At;
+            string what = o.Death ? $"died{(o.Name.Length > 0 ? " to " + o.Name : "")}"
+                : $"killed {(o.Player ? "the player " + (o.Name.Length > 0 ? o.Name : "(unnamed)") : "a monster")}{(o.Credited ? " (the game named no killer; your Rank Points rose with it)" : "")}";
+            CrashLog.Note($"packets: {what}");
+            CommitWith(new FightCounted(o.At, o.Player, o.Death, o.Name) { Via = "packets" }, "counter");
+        }
     }
 
     /// <summary>For packet-test: a pickup through Commit, as a chat line or the counter would come, and a pass's drain.</summary>

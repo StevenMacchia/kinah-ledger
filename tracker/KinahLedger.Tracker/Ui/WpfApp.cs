@@ -688,7 +688,11 @@ public static partial class WpfApp
         Check(abyssHero.Abyss && abyssHero.Hero == apHour && abyssHero.Label.EndsWith("Abyss Points") && abyssHero.Ticket.Contains(" Kinah and loot an hour") && !abyssHero.Ticket.StartsWith(apHour),
             $"the Abyss: the hero is {abyssHero.Hero} (expected {apHour}) \"{abyssHero.Label.Replace('\n', ' ')}\", the ticket \"{abyssHero.Ticket}\"");
         var abyssLine = w.HeroStatsForTest();
-        Check(abyssLine.Count == 4 && abyssLine[0] == "24,740 Abyss Points" && abyssLine[1].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        Check(abyssLine.Count == 4 + 1 && abyssLine[0] == "24,740 Abyss Points" && abyssLine[1].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        // the game's messages told the kills apart (0.10.72): PvP and mobs in place of kills, players, monsters and deaths on hover
+        string pvpTip = w.HeroStatTipForTest("PvP");
+        Check(abyssLine[3] == "9 PvP" && abyssLine[4] == "109 mobs" && pvpTip.Contains("9 players and 109 monsters") && pvpTip.Contains("You died 2 times, 1 of them to players"),
+            $"...kills told apart: {abyssLine.ElementAtOrDefault(3)} · {abyssLine.ElementAtOrDefault(4)}, on hover \"{pvpTip}\"");
         w.ShowDemo(); DoEvents();
         var worldHero = w.HeroForTest();
         Check(!worldHero.Abyss && worldHero.Ticket == "" && worldHero.Label.Contains("Kinah and loot"), $"...out of the Abyss: the Kinah hour {worldHero.Hero}, no ticket");
@@ -733,11 +737,13 @@ public static partial class WpfApp
             Check(w.MoreEntries().FirstOrDefault(e => e.Text == MainWindow.ShareText) is { Do: not null }, "Farming's ⋯ › Share a picture… opens the sheet");
             w.ToggleShareForTest("Farming"); DoEvents();
             var sh = w.ShareForTest();
-            Check(sh.Open && sh.Host == "ShareHost" && sh.Scope == KinahLedger.Session.SharePicture.Session && !sh.Switch, $"Share opens inside the farming card on This session, name off ({sh.Host} {sh.Scope})");
-            Check(new[] { "Copy picture", "Save picture", "Copy as text", "Close Share", "This session", "Last run", "This week" }.All(sh.Buttons.Contains),
+            Check(sh.Open && sh.Host == "ShareHost" && sh.Scope == KinahLedger.Session.SharePicture.Today && !sh.Switch, $"Share opens inside the farming card on Today, name off ({sh.Host} {sh.Scope})");
+            Check(new[] { "Copy picture", "Save picture", "Copy as text", "Close Share", "Today", "This session", "Last run", "This week" }.All(sh.Buttons.Contains),
                 "...with the switch, Copy picture, Save picture, Copy as text and ✕: " + string.Join(", ", sh.Buttons));
             Check(w.SharePicForTest(KinahLedger.Session.SharePicture.Session) is { } sp && sp.Made != "0" && sp.Sub.Contains("kill") && sp.Site == "kinahledger.com",
                 "This session's picture has the count's total and kills");
+            Check(w.SharePicForTest(KinahLedger.Session.SharePicture.Today) is { } td && td.Kicker.StartsWith("TODAY") && td.Rows.Count > 0 && td.Rows[0].Item && td.Split != null && td.Stats.Count == 3,
+                "Today's picture: the day's total split into loot and Kinah, three figures, the top drops");
             w.SharePrefsForTest = (false, "Aerin"); DoEvents();
             Check(!w.ShareForTest().Head.Contains("Aerin") && w.SharePicForTest(KinahLedger.Session.SharePicture.Session) is { } off && !KinahLedger.Session.SharePicture.Text(off).Contains("Aerin"),
                 "a name typed but the switch off: on neither the picture nor the text");

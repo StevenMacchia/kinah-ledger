@@ -106,6 +106,7 @@ public static class ReplayBank
                                     "counter_found", "counter_agreed", "counter_over" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         // the chat's alignment (2026-10-25): reads that couldn't be lined up, and lines the settle took that came after them
+        if (expect["zones"] is { } ez && ez.ToString() != (got["zones"]?.ToString() ?? "")) d.Add($"zones: expected {ez}, counted {got["zones"]?.ToString() ?? "none"}");
         foreach (var k in new[] { "chat_unaligned", "chat_settled_late" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         // a run's items by name: each one expect names must match (the others aren't checked)
@@ -407,7 +408,8 @@ public static class ReplayBank
                     case "bar":
                         foreach (var b in ls) session.PanelBars(t, b.EndsWith("ok", StringComparison.OrdinalIgnoreCase), b.StartsWith("combo", StringComparison.OrdinalIgnoreCase) || b.StartsWith("upgrade", StringComparison.OrdinalIgnoreCase));
                         break;
-                    case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
+                    // through the session's own zone handling, as a live read goes (every Abyss area is the one zone "Abyss", 0.10.69)
+                    case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) session.ApplyZone(z, t); break;
                     // a nameplate or the target bar's name on screen then (LootNotRow)
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
                     // the target bar's text that names no enemy on the list (reads.log's "target bar:" lines): a gathering node
@@ -586,6 +588,9 @@ public static class ReplayBank
         if (stripFixed.Count > 0) { res["strip"] = string.Join(" | ", stripFixed); res["strip_anchored"] = string.Join(" | ", stripAnchored); res["strip_words"] = string.Join(" || ", stripWords); }
         // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
         if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;
+        // the zones the count went under, with what each got (2026-11-13: every Abyss area is the one zone "Abyss")
+        var zs = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone && (kv.Value.Kinah != 0 || kv.Value.AbyssPoints != 0 || kv.Value.Kills > 0 || kv.Value.Items.Count + kv.Value.ItemsBound.Count > 0)).Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        if (zs.Count > 0) res["zones"] = string.Join(" | ", zs);
         if (e.Totals().Kills > 0) res["kills"] = e.Totals().Kills;
         // loot list rows that went before their text settled: logged as unsure, never counted (LootRows)
         if (session.ListUnsure > 0) res["list_unsure"] = session.ListUnsure;

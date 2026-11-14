@@ -93,20 +93,55 @@ public static class PacketTests
             s.CommitForTest(new CurrencyGained(t0.AddSeconds(31), "Abyss Points", 7) { Via = "chat" });   // "Acquired M 7 Abyss Point(s)"
             s.CommitForTest(new KinahChanged(t0.AddSeconds(31), 278, true) { Via = "chat" });
             s.DrainPacketsForTest();
-            Check(s.Engine.KinahBound == 278 && s.Engine.AbyssPoints == 12, $"...bound Kinah +{s.Engine.KinahBound} and Abyss Points +{s.Engine.AbyssPoints} from the game's traffic, the chat's misread 7 left out");
+            // (a kill's bound Kina in the Abyss is its Kinah since 0.10.71: SessionEngine.IsAbyssKillKina)
+            Check(s.Engine.AbyssBoundKinah == 278 && s.Engine.KinahBound == 0 && s.Engine.Kinah == 1_394 + 278 && s.Engine.AbyssPoints == 12, $"...bound Kinah +{s.Engine.AbyssBoundKinah} (the kill's Kinah: {s.Engine.Kinah:N0}) and Abyss Points +{s.Engine.AbyssPoints} from the game's traffic, the chat's misread 7 left out");
             // a sale (an NPC in town, nothing killed around it) and a rise in a base are no pickups
             s.Engine.SetZone("Western Cantas Valley");
             reader.AmountForTest(CurrencyKind.Kinah, 30_001_594, t0.AddSeconds(50)); s.DrainPacketsForTest();
             s.Engine.SetZone("Test Base");
             reader.AmountForTest(CurrencyKind.Kinah, 30_002_094, t0.AddSeconds(52)); s.CommitForTest(new CurrencyGained(t0.AddSeconds(52), "Fera Soul Points", 1) { Via = "chat" }); s.DrainPacketsForTest();
-            Check(s.Engine.Kinah == 1_394, $"...a rise with nothing killed around it (a sale) and one in a base count nothing: {s.Engine.Kinah:N0}");
+            Check(s.Engine.Kinah == 1_394 + 278, $"...a rise with nothing killed around it (a sale) and one in a base count nothing: {s.Engine.Kinah:N0}");
             // three chat pickups the traffic never showed: Kinah goes back to the screen
             s.Engine.SetZone("Western Cantas Valley");
             for (int i = 0; i < 3; i++) s.CommitForTest(new KinahChanged(t0.AddSeconds(70 + i * 20), 400 + i, false) { Via = "chat" });
             reader.AgreeForTest();
             bool broken = reader.Broken(CurrencyKind.Kinah) != null;
             s.CommitForTest(new KinahChanged(t0.AddSeconds(135), 500, false) { Via = "chat" });
-            Check(broken && s.Engine.Kinah == 1_894 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
+            Check(broken && s.Engine.Kinah == 1_894 + 278 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
+        }
+
+        // kills and deaths (0.10.72): the game says whose kill it was and what died; a kill naming no killer is the player's
+        // when their Rank Points rose with it and no kill of their own took that rise; a death counts once
+        {
+            var t0 = DateTime.UtcNow.AddMinutes(-2);
+            FightEvent K(double s, FightFlags f, string victim = "", string killer = "") => new(t0.AddSeconds(s), FightKind.Kill, f, 1, 2, f.HasFlag(FightFlags.VictimMonster) ? 7u : 0, 0, 0, victim, killer);
+            FightEvent R(double s, long d) => new(t0.AddSeconds(s), FightKind.RankPoints, FightFlags.None, 0, 0, 0, d, 0, "", "");
+            var ft = new FightTally();
+            foreach (var e in new[] {
+                K(0, FightFlags.Mine | FightFlags.VictimMonster), R(0, 13),                      // mine, a monster, its own rise
+                K(5, FightFlags.NoKiller), R(5.3, 13),                                           // no killer named, my points rose: mine
+                K(10, FightFlags.NoKiller | FightFlags.VictimPlayer, "Zev"),                     // a player died, no rise: not mine
+                K(15, FightFlags.Mine | FightFlags.VictimMonster), K(15.2, FightFlags.NoKiller), R(15.2, 12),   // one rise, taken by my own kill
+                K(20, FightFlags.Mine | FightFlags.VictimPlayer, "Pecked"), R(20, 46),
+                K(25, FightFlags.VictimMe, killer: "Nana"), K(30, FightFlags.VictimMe | FightFlags.NoKiller) })
+                ft.Add(e);
+            var early = ft.Take(t0.AddSeconds(2));
+            var all = early.Concat(ft.Take(t0.AddSeconds(60))).ToList();
+            string Say(FightTally.Outcome o) => o.Death ? $"death{(o.Name.Length > 0 ? ":" + o.Name : "")}" : $"{(o.Player ? "player" : "monster")}{(o.Credited ? "*" : "")}{(o.Name.Length > 0 ? ":" + o.Name : "")}";
+            Check(early.Count == 0 && string.Join(" ", all.Select(Say)) == "monster monster* monster player:Pecked death:Nana death" && ft.RankPoints == 84,
+                $"fights: held until the points after them are in, then {string.Join(" ", all.Select(Say))}; Rank Points +{ft.RankPoints}");
+            // through the session: the counts, the kills the larger of the chat's and the game's, the kill marked for the pickup gate
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var reader = new PacketReader(); reader.ReadingForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            s.ApplyZone("Sulfur Tree Island", t0);
+            foreach (var e in new[] { K(0, FightFlags.Mine | FightFlags.VictimMonster), R(0, 13), K(4, FightFlags.Mine | FightFlags.VictimMonster), K(8, FightFlags.Mine | FightFlags.VictimPlayer, "Pecked"), K(12, FightFlags.VictimMe, killer: "Nana") })
+                reader.FightsForTest(e);
+            s.CommitForTest(new CurrencyGained(t0.AddSeconds(1), "Abyss Swarm Soul Points", 1) { Via = "chat" });
+            s.DrainPacketsForTest();
+            var z = s.Engine.ZoneSnapshot().GetValueOrDefault("Abyss");
+            Check(s.Engine.PlayerKills == 1 && s.Engine.MonsterKills == 2 && s.Engine.Deaths == 1 && s.Engine.DeathsToPlayers == 1 && s.Engine.Kills == 3 && z?.PlayerKills == 1 && z.MonsterKills == 2 && z.Deaths == 1,
+                $"...counted in the Abyss: {s.Engine.PlayerKills} player, {s.Engine.MonsterKills} monsters, {s.Engine.Deaths} death ({s.Engine.DeathsToPlayers} to a player); kills {s.Engine.Kills} (the chat saw 1); zone Abyss {z?.PlayerKills}/{z?.MonsterKills}/{z?.Deaths}");
         }
 
         // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
@@ -345,12 +380,13 @@ public static class PacketTests
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
         var seen = new List<CurrencyChange>();
         var batches = new List<ItemBatch>();
+        var fights = new FightTally(); var fought = new List<FightTally.Outcome>(); bool readsFights = false;
         var gaps = new List<DateTime>();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
-            reads = dec.ReadsItems;
+            reads = dec.ReadsItems; readsFights = dec.ReadsFights;
             var rows = new List<ItemChange>();
             DateTime last = DateTime.MinValue;
             var st = new TcpStream
@@ -363,19 +399,46 @@ public static class PacketTests
                     rows.Clear();
                     while (dec.NextItem() is { } it) rows.Add(it);
                     batches.AddRange(ItemBatch.Cut(rows));
+                    while (dec.NextFight() is { } f) fights.Add(f);
                 },
                 OnGap = () => { dec.Gap(); gaps.Add(last); },
             };
             foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+            fought.AddRange(fights.Flush());   // the next connection's ids are other entities
             var stats = dec.Stats;
             Console.WriteLine($"{conn.Key.Item1}:{serverPort} → :{conn.Key.DstPort}: {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
         }
         foreach (var c in seen) Print(c);
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
+        if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;
+    }
+
+    /// <summary>
+    /// The player's kills, told apart, and deaths, as the tracker would count them from a capture, against the capture's
+    /// chat.log (beside it, as kinah-bench's capture.ps1 keeps it): its Rank Point and Soul Points lines the reader counted,
+    /// one a kill, and its resurrection lines, one a death.
+    /// </summary>
+    static void ReplayFights(string pcapng, List<FightTally.Outcome> fought, long rank)
+    {
+        foreach (var o in fought)
+            Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  {(o.Death ? $"died{(o.Name.Length > 0 ? " to " + o.Name : "")}" : $"killed {(o.Player ? "the player " + o.Name : $"a monster{(o.MonsterId != 0 ? $" ({o.MonsterId})" : "")}")}{(o.Credited ? ", no killer named, Rank Points rose with it" : "")}")}");
+        var kills = fought.Where(o => !o.Death).ToList();
+        int players = kills.Count(o => o.Player), deaths = fought.Count(o => o.Death);
+        Console.WriteLine($"kills: {kills.Count} ({players} players, {kills.Count - players} monsters; {kills.Count(o => o.Credited)} with no killer named), {deaths} deaths ({fought.Count(o => o.Death && o.Player)} to players), Rank Points +{rank:N0}");
+        var log = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(pcapng)) ?? ".", "chat.log");
+        if (!File.Exists(log)) return;
+        int rankLines = 0, soulLines = 0, rez = 0;
+        foreach (var l in File.ReadLines(log))
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(l, @"^\S+\s+ok\s+Acquired .*R\w{2,3}.?\s*Point", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) rankLines++;
+            else if (System.Text.RegularExpressions.Regex.IsMatch(l, @"^\S+\s+ok\s+Obtained .*Soul\s*Points", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) soulLines++;
+            if (System.Text.RegularExpressions.Regex.IsMatch(l, @"Character has resurrected", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) rez++;
+        }
+        Console.WriteLine($"chat.log: {rankLines} Rank Point lines and {soulLines} Soul Points lines counted (a kill each), {rez} resurrection lines");
     }
 
     /// <summary>
