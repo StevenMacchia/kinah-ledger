@@ -52,6 +52,19 @@ public sealed class PacketReader : IDisposable
     public static Func<IGameDecoder?> Decoders { get; set; } = NativeDecoder.TryOpen;
 
     IGameDecoder? _decoder;
+    /// <summary>The character's whole inventory from the game's messages (Packets/BagBook.cs): unknown until a connection's snapshot.</summary>
+    public BagBook Bag { get; } = new();
+    /// <summary>True while the reader gets the inventory from the game (a decoder of interface version 8).</summary>
+    public bool ReadsBag => On && (_testBag || _decoder?.ReadsBag == true);
+    bool _testBag;
+    /// <summary>For packet-test: inventory records as the decoder would report them.</summary>
+    internal void BagForTest(params BagRecord[] rs) { _testBag = true; foreach (var r in rs) TakeBag(r); }
+
+    void TakeBag(BagRecord r)
+    {
+        Bag.Take(r);
+        if (r.Kind == BagRecord.End) Log($"{Local(r.At)}  the inventory: {r.Count:N0} stacks, from the game's message");
+    }
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
     readonly ConcurrentQueue<ItemBatch> _items = new();
     readonly ConcurrentQueue<FightEvent> _fights = new();
@@ -89,6 +102,7 @@ public sealed class PacketReader : IDisposable
     /// <summary>A change the decoder found: kept for the agreement check, queued for counting, logged.</summary>
     void Take(CurrencyChange c)
     {
+        Bag.Take(c);
         lock (_gate)
         {
             if (c.First) _baseAt[c.What] = c.At;
@@ -131,6 +145,7 @@ public sealed class PacketReader : IDisposable
     /// <summary>Item changes the decoder found, cut into the game's updates: kept for the agreement check, queued, logged.</summary>
     void TakeItems(IReadOnlyList<ItemChange> rows)
     {
+        foreach (var r in rows) Bag.Take(r);
         foreach (var b in ItemBatch.Cut(rows))
         {
             lock (_gate) foreach (var r in b.Rows) _itemSeen.Add((r.ItemId, r.Delta, r.First, r.At));
@@ -301,8 +316,33 @@ public sealed class PacketReader : IDisposable
     /// <summary>Every few seconds from the game watcher: follows the game's server connection, checks agreement, writes the minute's line.</summary>
     public void Tick(IReadOnlyCollection<uint> gamePids, SessionEngine? chat)
     {
-        try { TickCore(gamePids); Agree(); Minute(); }
+        _pids = gamePids;
+        try { lock (_tickGate) TickCore(gamePids); Agree(); Minute(); }
         catch (Exception ex) { CrashLog.Write("packet reading", ex); State = "Off: " + ex.Message; StopCapture(); }
+        _watch ??= new Timer(_ => Watch(), null, WatchMs, WatchMs);
+    }
+
+    // the game sends the whole inventory a second or two after it connects to a server (18:49:42.4 for a connection opened
+    // at 18:49:40.8 on 2026-11-13), and the watcher's tick comes every 5 s: so a quarter-second look at the game's
+    // connections between ticks, which starts reading a new one at once
+    const int WatchMs = 250;
+    Timer? _watch;
+    IReadOnlyCollection<uint>? _pids;
+    readonly object _tickGate = new();
+    void Watch()
+    {
+        if (!Enabled || _pids is not { Count: > 0 } pids || _testOn) return;
+        try
+        {
+            if (!Monitor.TryEnter(_tickGate)) return;
+            try
+            {
+                var game = TcpTable.GameServer(TcpTable.Of(pids));
+                if (game != null && game != _link) TickCore(pids);
+            }
+            finally { Monitor.Exit(_tickGate); }
+        }
+        catch (Exception ex) { CrashLog.Write("packet reading (the quick look)", ex); }
     }
 
     void TickCore(IReadOnlyCollection<uint> gamePids)
@@ -334,6 +374,7 @@ public sealed class PacketReader : IDisposable
         // a new connection starts from a fresh amount: the chat counted while nothing was read, so the first message is a baseline
         var dec = _decoder;
         dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
+        Bag.Unknown();
         var rows = new List<ItemChange>();
         _down = new TcpStream
         {
@@ -341,6 +382,7 @@ public sealed class PacketReader : IDisposable
             {
                 _dataAt = at;
                 dec.Feed(d, at);
+                while (dec.NextBag() is { } bg) TakeBag(bg);
                 while (dec.Next() is { } ch) Take(ch);
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
@@ -363,7 +405,7 @@ public sealed class PacketReader : IDisposable
         _stop = false;
         _thread = new Thread(Run) { IsBackground = true, Name = "packet reading", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
-        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")}{(dec.ReadsFights ? ", your kills and deaths" : "")}{(dec.ReadsGathers ? ", your gathering" : "")} from the game's server {game.Remote}:{game.RemotePort}";
+        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")}{(dec.ReadsFights ? ", your kills and deaths" : "")}{(dec.ReadsGathers ? ", your gathering" : "")}{(dec.ReadsBag ? ", your inventory" : "")} from the game's server {game.Remote}:{game.RemotePort}";
         Log($"{Local(DateTime.UtcNow)}  reading {game.Remote}:{game.RemotePort} → {game.Local}:{game.LocalPort} with {Kind}");
     }
 
@@ -568,5 +610,5 @@ public sealed class PacketReader : IDisposable
     internal static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
     static string Signed(long v) => v >= 0 ? $"+{v:N0}" : $"−{-v:N0}";
 
-    public void Dispose() { StopCapture(); _decoder?.Dispose(); _decoder = null; Bosses.Save(); }
+    public void Dispose() { _watch?.Dispose(); _watch = null; StopCapture(); _decoder?.Dispose(); _decoder = null; Bosses.Save(); }
 }
