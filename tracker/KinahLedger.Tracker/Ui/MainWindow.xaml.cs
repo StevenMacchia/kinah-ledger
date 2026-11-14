@@ -2095,6 +2095,9 @@ public partial class MainWindow : Window
                 e.SetTarget("Shadowclaw Mauler", t);
                 for (int i = 0; i < 118; i++) { e.Apply(new KinahChanged(t, 2_140 + (i % 5) * 60, true)); e.Apply(new CurrencyGained(t, "Shadowclaw Mauler Soul Points", 1)); e.Apply(new CurrencyGained(t, "Abyss Points", 180 + (i % 4) * 20)); }
                 Drop("Lesser Abyssal Manastone", 6); Drop("Spiritstone", 9); Drop("Power Shard", 5); Drop("Refining Stone", 3);
+                // the game's messages tell the kills apart (0.10.72): 9 of the 118 were players; two deaths, one to a player
+                for (int i = 0; i < 118; i++) e.Apply(new FightCounted(t, i < 9, false, ""));
+                e.Apply(new FightCounted(t, true, true, "Nana")); e.Apply(new FightCounted(t, false, true, ""));
                 break;
             default:
                 // two zones (0.10.70, one screen): the first half hour next door, then here, so each figure has its "here"

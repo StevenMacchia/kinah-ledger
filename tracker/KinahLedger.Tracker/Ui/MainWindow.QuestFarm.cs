@@ -268,7 +268,10 @@ public partial class MainWindow
         bool gather = _mode == Mode.Gather;
         long abyss = _heroAbyss && !gather ? _lootHere?.Abyss ?? 0 : 0;
         var hs = _here;
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{hs}";
+        // in the Abyss, with the game's own messages telling kills apart (0.10.72): players and monsters, in place of kills
+        int pvp = _heroAbyss && !gather && e.PlayerKills + e.MonsterKills > 0 ? e.PlayerKills : -1;
+        int deaths = e.Deaths, deathsPvp = e.DeathsToPlayers;
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{pvp}|{deaths}|{hs}";
         if (!Changed("chips", sig)) return;
         var at = CountWhere();
         // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
@@ -305,8 +308,19 @@ public partial class MainWindow
                 (kinds == 0 ? "Nothing picked up yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ".")
                 + (FullShown ? "" : " Click for the bag.") + (s.Value > 0 ? In(hs?.Value ?? 0, true, "of it") : "") + total,
                 Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null, s.Value > 0 ? Here(hs?.Value ?? 0, true) : ""));
+            string died = deaths > 0 ? $" You died {deaths:N0} time{(deaths == 1 ? "" : "s")}{(deathsPvp > 0 ? $", {deathsPvp:N0} of them to players" : "")}." : "";
+            if (pvp >= 0)
+            {
+                int monsters = Math.Max(0, kills - pvp);
+                string both = $"{kills:N0} kills {at} in {TodayLoot.Dur(elapsed.TotalSeconds)}: {pvp:N0} player{(pvp == 1 ? "" : "s")} and {monsters:N0} monster{(monsters == 1 ? "" : "s")}, told apart by the game's own messages." + died;
+                // in Steven's words ("pvp kills vs. mob kills"): short enough for the line beside Abyss Points, Kinah and loot
+                parts.Add(new QStat(pvp.ToString("N0"), "PvP", both, null, false, "Coral", ("chip-pvp|" + at, pvp, false)));
+                parts.Add(new QStat(monsters.ToString("N0"), monsters == 1 ? "mob" : "mobs", both + (FullShown ? "" : " Click for kills by enemy."),
+                    Open("kills"), _qChip == "kills", "Coral", monsters > 0 ? ("chip-kills|" + at, monsters, false) : null));
+            }
+            else
             parts.Add(new QStat(kills.ToString("N0"), kills == 1 ? "kill" : "kills",
-                kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + $", {Fk(kinah / (double)kills)} Kinah a kill." + (FullShown ? "" : " Click for kills by enemy.") : "Kills show here as enemies pay out.",
+                (kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + $", {Fk(kinah / (double)kills)} Kinah a kill." + (FullShown ? "" : " Click for kills by enemy.") : "Kills show here as enemies pay out.") + died,
                 Open("kills"), _qChip == "kills", "Coral", kills > 0 ? ("chip-kills|" + at, kills, false) : null, kills > 0 ? Here(hs?.Kills ?? 0, false) : ""));
         }
         QStatsFill(HeroStats, parts);
