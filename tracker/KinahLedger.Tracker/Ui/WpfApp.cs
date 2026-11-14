@@ -470,6 +470,29 @@ public static partial class WpfApp
         Check(runsLines.Length == w.ShownRunsForTest().Count + 1 && runsLines[0].TrimStart('\uFEFF') == Session.CsvExport.RunsHeader, $"...one line a run: {runsLines.Length - 1} runs, after the header");
         Check(runsLines.Skip(1).All(l => l.Split(',')[1] is "Expedition" or "Event"), "...each an expedition or an event");
         MainWindow.SaveCsvForTest = null;
+        // the Runs page (Steven, 2026-11-14: "It should show the latest run ... Paid out here ... an expandable 'Best drops' that
+        // is sortable"): the latest run's card first by default, Best drops folded; open it and sort it by each column
+        {
+            Check(w.RunsViewForTest == "latest" && w.LatestRunShownForTest && w.BestDropsCardShownForTest && w.BestDropRowsForTest().Count == 0,
+                "Runs: the latest run's card first by default, Best drops there and folded");
+            w.RunsViewForTest = "all"; DoEvents();
+            bool allHero = !w.LatestRunShownForTest;
+            w.RunsViewForTest = "latest"; DoEvents();
+            Check(allHero && w.LatestRunShownForTest, "...its switch turns it to All runs (the place's hour and averages) and back");
+            foreach (var by in new[] { "value", "count", "name", "when" })
+            {
+                w.BestDropsForTest(true, by); DoEvents();
+                var rows = w.BestDropRowsForTest();
+                var want = w.BestDropsExpectedForTest(by).Take(rows.Count).ToList();
+                Check(rows.Count > 0 && rows.SequenceEqual(want), $"...Best drops opened, sorted by {by}: {string.Join(", ", rows.Take(4))}{(rows.Count > 4 ? ", ..." : "")}");
+            }
+            var byName = w.BestDropRowsForTest();
+            w.BestDropsForTest(true, "name"); DoEvents();
+            Check(w.BestDropRowsForTest().SequenceEqual(w.BestDropsExpectedForTest("name").Take(w.BestDropRowsForTest().Count)) && byName.Count > 0
+                && w.BestDropsExpectedForTest("name").SequenceEqual(w.BestDropsExpectedForTest("name").OrderBy(x => x, StringComparer.OrdinalIgnoreCase)),
+                "...by name is A to Z");
+            w.BestDropsForTest(false, "value"); DoEvents();
+        }
         // the week (0.10.26): a row a day, seven days
         var weekLines = w.WeekCsvForTest().Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Check(weekLines.Length == 8 && weekLines[0].TrimEnd('\r') == Session.CsvExport.WeekHeader, $"the week as CSV: {weekLines.Length - 1} days after the header");
@@ -2182,6 +2205,13 @@ public static partial class WpfApp
         if (kind == "Events" && shotState is not ("week" or "share-run" or "week-places" or "run-vs-average")) shotState = "";
         if (shotState == "share-run" && kind == "Events") w.OpenShareSample(shotState, events: true);
         else if (shotState.Length > 0 && kind == "Events") w.ShowEventsStateSample(shotState);
+        // KL_RUNS=all|best-value|best-count|best-name|best-when (2026-11-14, Ui/MainWindow.LatestRun.cs): the Runs page's top card on
+        // All runs, or Best drops opened in that order
+        if (demo && kind == "Events" && Environment.GetEnvironmentVariable("KL_RUNS") is { Length: > 0 } runsView)
+        {
+            if (runsView == "all") w.RunsViewForTest = "all";
+            else if (runsView.StartsWith("best-")) w.BestDropsForTest(true, runsView[5..]);
+        }
         else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
