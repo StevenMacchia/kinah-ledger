@@ -296,6 +296,19 @@ public partial class MainWindow
                 Draw(face, $"timers-kinah-{look}{sfx}.png");
                 h.Close();
             }
+            // ...and with the Parser's section expanded (a pull under way): the timer line at the very top, above the section
+            {
+                var h = new HudWindow(HudFields.Parse(_prefs.HudFields), HudLooks.Strip, still: true) { Left = -12000, Top = -12000 };
+                h.Update(HudSample());
+                var (_, pull) = KinahLedger.Parser.ParserDemo.Sample(at);
+                h.ShowParser(pull, at, KinahLedger.Parser.ParserMode.Bosses, details: false);
+                h.ShowTimers(near, at);
+                h.Show(); h.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+                var face = (FrameworkElement)h.Content; h.Content = null;
+                Draw(face, $"timers-kinah-with-parser{sfx}.png");
+                h.Close();
+            }
             // Separate timer overlay: the strip beside the Kinah overlay (its first spot, just above it), drawn the same way;
             // then the strip alone with click-through on and the pointer over it (the grip at its left edge)
             {

@@ -28,12 +28,9 @@ public sealed partial class HudWindow
     /// <summary>At most this many timers on the line.</summary>
     public const int TimerLineMax = 3;
 
-    /// <summary>Called at the end of the constructor (after the Parser's section, when there is one): the line goes above all.</summary>
+    /// <summary>Called at the end of the constructor, after the Parser's section: the line goes above it, at the top of the same stack.</summary>
     void AddTimerSection()
     {
-        var own = (UIElement)Content;
-        Face = own;
-        Content = null;
         _timerSlot.Child = new Border
         {
             Child = _timerText, Padding = new Thickness(8, 2, 8, 3), CornerRadius = new CornerRadius(8),
@@ -43,28 +40,49 @@ public sealed partial class HudWindow
         // "i like the closest one to the tracker"). The line's own box reaches down over the look's empty inset, so the slot's
         // height (what the window moves up by) is only what it adds above the look's visible edge
         _timerSlot.Margin = new Thickness(_look?.Inset.Left ?? 0, 0, 0, 0);
-        if (_timerSlot.Child is FrameworkElement line && _look != null) line.Margin = new Thickness(0, 0, 0, -_look.Inset.Top);
-        var stack = new StackPanel();
-        stack.Children.Add(_timerSlot);
-        stack.Children.Add(own);
-        Content = stack;
-        // anchored at the bottom: the line's height comes off the top
-        _timerSlot.SizeChanged += (_, e) =>
+        FitTimerLine();
+        if (Content is StackPanel stack) stack.Children.Insert(0, _timerSlot);   // the Parser's stack: the timer line, its section, the Kinah line
+        else
         {
-            if (e.NewSize.Height <= 0) return;   // folding is FoldTimers' (a collapsed element says no size)
-            double d = e.NewSize.Height - e.PreviousSize.Height;
-            if (Math.Abs(d) > 0.5 && IsLoaded && !_still) Top -= d;
-        };
+            var own = (UIElement)Content;
+            OwnContent = own;
+            Content = null;
+            Content = new StackPanel { Children = { _timerSlot, own } };
+        }
+        // anchored at the bottom: the line's height comes off the top (as it grows, and when it is shown: see SettleTimerLine)
+        _timerSlot.SizeChanged += (_, e) => { if (e.NewSize.Height > 0) SettleTimerLine(); };
     }
-
-    /// <summary>The overlay's own content, under the timer line (what Content was before the line came).</summary>
-    internal UIElement? Face { get; private set; }
 
     /// <summary>The height the timer line adds above the overlay now (0 when folded).</summary>
     public double TimerLineHeight => _timerSlot.Visibility == Visibility.Visible ? _timerSlot.ActualHeight : 0;
 
-    /// <summary>Where the overlay's own content starts: Top without what is stacked above it. A remembered spot is this one.</summary>
-    public double AnchorTop => Top + TimerLineHeight;
+    /// <summary>Where the overlay's own content starts: Top without the timer line and the Parser's section. A remembered spot is this one.</summary>
+    public double AnchorTop => StackAnchorValid ? _stackAnchor!.Value : Top + _timerTaken + _parserTaken;
+
+    // The Kinah line's exact top while sections stack above it. Top is set from it, not nudged by each change: Windows puts the
+    // window on whole pixels, and nudging would let the Kinah line creep a pixel with each show and fold
+    double? _stackAnchor;
+    double _stackTopSet;
+    bool StackAnchorValid => _stackAnchor != null && Math.Abs(Top - _stackTopSet) <= 1.5;   // moved further: dragged
+
+    /// <summary>What the timer line and the Parser's section take above the Kinah line changed: the window's top from the anchor.</summary>
+    void Restack(double takenBefore)
+    {
+        if (!StackAnchorValid) _stackAnchor = Top + takenBefore;
+        _stackTopSet = _stackAnchor!.Value - _timerTaken - _parserTaken;
+        Top = _stackTopSet;
+    }
+
+    /// <summary>
+    /// Flush on what is right under the line: over the look's empty inset when on the Kinah overlay, not into the Parser's
+    /// section while it shows (its own gap under the line).
+    /// </summary>
+    void FitTimerLine()
+    {
+        if (_timerSlot.Child is not FrameworkElement line || _look == null) return;
+        double under = _parserSlot.Visibility == Visibility.Visible ? 0 : -_look.Inset.Top;
+        if (line.Margin.Bottom != under) line.Margin = new Thickness(0, 0, 0, under);
+    }
 
     /// <summary>True while the timer line shows.</summary>
     public bool TimersShown => _timerSlot.Visibility == Visibility.Visible;
@@ -72,11 +90,25 @@ public sealed partial class HudWindow
     /// <summary>The line's text, for the options self-test.</summary>
     internal string TimerLineForTest => new TextRange(_timerText.ContentStart, _timerText.ContentEnd).Text;
 
+    /// <summary>The height the window has moved up by for the line (what folding gives back).</summary>
+    double _timerTaken;
+
+    /// <summary>
+    /// The window up by what the line adds beyond what it has already taken. Counted against that, not the slot's last size:
+    /// a line shown again at the size it had raises no size change, and the Kinah line would drop by its height.
+    /// </summary>
+    void SettleTimerLine()
+    {
+        if (!IsLoaded || _still || _timerSlot.Visibility != Visibility.Visible) return;
+        double before = _timerTaken + _parserTaken;
+        if (Math.Abs(_timerSlot.ActualHeight - _timerTaken) > 0.5) { _timerTaken = _timerSlot.ActualHeight; Restack(before); }
+    }
+
     void FoldTimers()
     {
-        double h = _timerSlot.ActualHeight;
         _timerSlot.Visibility = Visibility.Collapsed;
-        if (h > 0 && IsLoaded && !_still) Top += h;
+        double before = _timerTaken + _parserTaken;
+        if (_timerTaken > 0) { _timerTaken = 0; Restack(before); }
     }
 
     /// <summary>The watched timers due within the minutes set, soonest first (the first <see cref="TimerLineMax"/>); none folds the line.</summary>
@@ -94,6 +126,9 @@ public sealed partial class HudWindow
         System.Windows.Documents.Typography.SetNumeralAlignment(_timerText, FontNumeralAlignment.Tabular);
         // the line grows and shrinks with the overlay's size (Options › In game)
         _timerSlot.LayoutTransform = _content.LayoutTransform;
+        FitTimerLine();
+        if (TimersShown) return;
         _timerSlot.Visibility = Visibility.Visible;
+        if (IsLoaded && !_still) { UpdateLayout(); SettleTimerLine(); }
     }
 }

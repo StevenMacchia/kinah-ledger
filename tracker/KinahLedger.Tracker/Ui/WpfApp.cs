@@ -912,6 +912,26 @@ public static partial class WpfApp
                 bool anchored = hud.TimersShown && lineH > 8 && Math.Abs(up - lineH) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1 && line == "Invasion 4:39 · Kashapa 11:59";
                 hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); DoEvents();
                 bool lineFolded = !hud.TimersShown && Math.Abs(hud.Top - top0) < 1 && hud.TimerLineHeight == 0;
+                // with the Parser's section expanded too: the timer line at the very top, the section under it, the Kinah line
+                // where it was (its own content still at AnchorTop); both folded, the window back where it was
+                bool still0 = Motion.Still; Motion.Still = true;
+                var (_, pull) = KinahLedger.Parser.ParserDemo.Sample(tnow);
+                // (each shown, folded and shown again: a fold must give back exactly what showing took)
+                for (int k = 0; k < 2; k++)
+                {
+                    hud.ShowParser(pull, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents();
+                    hud.ShowTimers(new[] { Due("Dimensional Invasion", "Invasion", 279) }, tnow); DoEvents();
+                    if (k == 0) { hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); hud.ShowParser(null, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents(); }
+                }
+                double Y(UIElement e) => hud.Top + e.TransformToAncestor(hud).Transform(new Point(0, 0)).Y;
+                var stackRows = ((System.Windows.Controls.StackPanel)hud.Content).Children.OfType<FrameworkElement>().ToList();
+                bool stacked = stackRows.Count == 3 && stackRows[2] == hud.OwnContent && hud.TimersShown && hud.ParserShown && hud.ParserHeight > 100
+                    && Y(stackRows[0]) + stackRows[0].ActualHeight <= Y(stackRows[1]) + 0.5 && Math.Abs(Y(stackRows[2]) - anchor0) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1
+                    && Math.Abs(top0 - hud.Top - hud.TimerLineHeight - hud.ParserHeight) < 1;
+                hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); hud.ShowParser(null, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents();
+                bool bothFolded = Math.Abs(hud.Top - top0) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1;
+                Motion.Still = still0;
+                Check(stacked && bothFolded, $"timer line with the Parser's section expanded: the line on top, the section under it, the Kinah line where it was, shown a second time too ({stacked}); both folded, the window back ({bothFolded})");
                 hud.Close();
                 tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
                 string home = tw.TimersHostForTest;   // no Kinah overlay in this window: the strip
@@ -933,7 +953,7 @@ public static partial class WpfApp
                 bool above = Math.Abs(strip.Left - 400) < 1 && Math.Abs(strip.Top + strip.ActualHeight + 6 - 500) < 1;
                 var kinah = new HudWindow(still: true) { Left = -12000, Top = -12000 };
                 kinah.Show(); DoEvents();
-                var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.Face!).Children[0];
+                var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.OwnContent!).Children[0];
                 var sf = strip.FrameForTest;
                 bool sibling = sf.CornerRadius == kf.CornerRadius && sf.Padding == kf.Padding && sf.BorderThickness == kf.BorderThickness
                     && (sf.BorderBrush as SolidColorBrush)?.Color == (kf.BorderBrush as SolidColorBrush)?.Color && (sf.Background as SolidColorBrush)?.Color == (kf.Background as SolidColorBrush)?.Color
@@ -1083,6 +1103,9 @@ public static partial class WpfApp
             Check(w.CraftNextForTest().Split(',').Count(x => x == "quest") == 2, $"Crafting's Next up: the two materials' quest rows: {w.CraftNextForTest()}");
             w.ShowDemo(); DoEvents();
         }
+
+        // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
+        ParserChecks(w, Check);
 
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
         // a fresh install; Got it stores the version; Farming only; six bullets, then "and N more"; the link to the release
@@ -1863,7 +1886,7 @@ public static partial class WpfApp
                 string[] bgFields = { "rate", "total", "feed" };
                 static string BgWords(System.Windows.Controls.TextBlock t) => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
                 List<System.Windows.Controls.TextBlock> BgTexts(HudWindow h) => BadgeTree((DependencyObject)h.Content).OfType<System.Windows.Controls.TextBlock>().ToList();
-                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Face!).Children[0];
+                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.OwnContent!).Children[0];
                 var badge = new HudWindow(bgFields);
                 badge.Update(bgV1); badge.Update(bgV2);
                 var bgShown = BgTexts(badge).Select(BgWords).ToList();
