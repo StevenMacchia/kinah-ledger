@@ -366,7 +366,7 @@ public partial class MainWindow
             if (pvp >= 0)
             {
                 int monsters = Math.Max(0, kills - pvp);
-                string both = $"{kills:N0} kills {at} in {TodayLoot.Dur(elapsed.TotalSeconds)}: {pvp:N0} player{(pvp == 1 ? "" : "s")} and {monsters:N0} monster{(monsters == 1 ? "" : "s")}, told apart by the game's own messages." + died;
+                string both = $"{kills:N0} kills {at} in {TodayLoot.Dur(elapsed.TotalSeconds)}: {pvp:N0} player{(pvp == 1 ? "" : "s")} and {monsters:N0} monster{(monsters == 1 ? "" : "s")}." + died;
                 // in Steven's words ("pvp kills vs. mob kills"): short enough for the line beside Abyss Points, Kinah and loot
                 parts.Add(new QStat(pvp.ToString("N0"), "PvP", both, null, false, "Coral", ("chip-pvp|" + at, pvp, false)));
                 parts.Add(new QStat(monsters.ToString("N0"), monsters == 1 ? "mob" : "mobs", both + (FullShown ? "" : " Click for kills by enemy."),

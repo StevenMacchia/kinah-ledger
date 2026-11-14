@@ -29,7 +29,7 @@ public partial class MainWindow
             if (!Changed("inventory", "unknown|" + Skins.Current)) return;
             InvNote.Text = ""; InvTotal.Text = ""; InvTotal.ToolTip = null; InvHost.Children.Clear(); InvHost.Visibility = Visibility.Collapsed;
             InvWornHost.Children.Clear(); InvWornHost.Visibility = InvWornHead.Visibility = Visibility.Collapsed;
-            InvSub.Text = "Known at your next teleport or Abyss trip, when the game sends your whole inventory.";
+            InvSub.Text = "Known at your next teleport or Abyss trip.";
             return;
         }
         var first = bag.FirstAt != null ? bag.FirstTotals : null;
@@ -49,7 +49,7 @@ public partial class MainWindow
         InvTotal.ToolTip = "Everything the game lists for this character, the gear worn left out, at the lowest Market price the tracker knows; a bound item at its tradable twin's price."
             + (w.Sellable > 0 ? $"\nSellable: {Fk(w.Sellable)}, the tradable items {PriceBook.Cut}." : "")
             + (kinah is long k ? $"\nKinah held: {k:N0} (not in the worth)." : "")
-            + (bag.KnownAt is DateTime ka ? $"\nAs the game sent it at {ka.ToLocalTime():HH:mm}, kept up with every change since." : "");
+            + (bag.KnownAt is DateTime ka ? $"\nKnown since {ka.ToLocalTime():HH:mm}, kept up with every change since." : "");
         InvHost.Children.Clear();
         InvHost.Visibility = top.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var l in top)
