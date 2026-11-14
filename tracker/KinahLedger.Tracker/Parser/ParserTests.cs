@@ -280,8 +280,13 @@ public static class ParserTests
             var l = p.Live!;
             Check(l.Roster.Count == 4 && l.Members.Count() == 3 && l.You?.Name == "Swoly" && l.Roster.Any(f => f.Id == 13 && f.Name == "" && f.FromDamage),
                 $"with no group list, who hit the boss is the group (you marked, an unnamed source kept): {string.Join(", ", l.Ranked().Select(f => (f.Other ? "Other" : f.Name) + " " + f.Damage))}");
-            Check(l.Ranked().Last().Other && l.Roster.Sum(f => f.Damage) == 60_000 && l.BossDamage == 60_000 && l.BossHpLeft == 0.4,
-                $"...Other last, the rows adding up to the HP lost ({l.Roster.Sum(f => f.Damage):N0}), the boss at {l.BossHpLeft:P0}");
+            Check(!l.Ranked().Any(f => f.Other) && !l.Shown().Any(f => f.Other) && l.Roster.Sum(f => f.Damage) == 60_000 && l.BossDamage == 60_000 && l.BossHpLeft == 0.4,
+                $"...no Other row shown (its {l.Roster.Single(f => f.Other).Damage:N0} kept in the record), the boss at {l.BossHpLeft:P0}");
+            Check(Math.Abs(l.Members.Sum(f => l.Share(f)) - 1) < 1e-9 && l.Share(l.Roster.Single(f => f.Other)) == 0 && Math.Abs(l.Share(l.You!) - 30.0 / 59) < 1e-9,
+                $"...the shares are of the members' damage and add up to 100% ({string.Join(", ", l.Members.Select(f => Encounter.Pct(l.Share(f))))})");
+            var ready = Encounter.Ready(ContentKind.Expedition, "Vakron Sky Island", "", t);
+            Check(ready is { Waiting: true, Live: false, Title: "Vakron Sky Island", Kind: "Expedition" } && ready.Duration(t.AddMinutes(3)) == TimeSpan.Zero && !ready.Shown().Any(),
+                "a dungeon's ready card (the overlay before its first pull): its name, no clock, no rows");
             p.Take(new GroupChanged(t.AddSeconds(9), new[] { new GroupMember(11, "Swoly", "Gladiator", 4_800, 5_640, true), new GroupMember(12, "Aerin", "Cleric", 4_600, 5_600, false) }));
             l = p.Live!;
             var me = l.Roster.Single(f => f.Id == 11);

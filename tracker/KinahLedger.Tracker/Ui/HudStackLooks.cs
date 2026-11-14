@@ -48,6 +48,17 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     protected bool _accCheck;
     public void SetAccuracy(string? text, bool toCheck) { _acc = text ?? ""; _accCheck = toCheck; }
 
+    /// <summary>A meter's figure (DPS, a share, a clock): tabular digits, so a figure that changes as hits land never shifts its column.</summary>
+    protected static TextBlock Num(string s, double size, Brush fg, FontWeight? w = null)
+    {
+        var t = Tx(s, size, fg, w);
+        System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        return t;
+    }
+
+    /// <summary>The line a dungeon's ready card shows where the members will be.</summary>
+    protected const string ReadyLine = "Waiting for the first pull";
+
     protected static TextBlock Tx(string s, double size, Brush fg, FontWeight? w = null) => new()
     {
         Text = s, FontSize = size, Foreground = fg, FontWeight = w ?? FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
@@ -151,23 +162,23 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     {
         var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
         var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) }); g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-        var mark = f.Other ? MainWindow.OtherMark(15) : MainWindow.ClassMark(f.Class, 15, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(mark);
-        var nm = Tx(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", size, f.Other ? Muted : f.You ? Gold : Ink, f.Other ? FontWeights.Medium : FontWeights.SemiBold); Grid.SetColumn(nm, 1); g.Children.Add(nm);
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) }); g.ColumnDefinitions.Add(new ColumnDefinition());
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+        var mark = MainWindow.ClassMark(f.Class, 17, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(mark);
+        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", size, f.You ? Gold : Ink, FontWeights.SemiBold); nm.TextTrimming = TextTrimming.CharacterEllipsis; Grid.SetColumn(nm, 1); g.Children.Add(nm);
         if (e.HasDamage)
         {
-            var d = Tx(Amounts.Short(e.Dps(f, now)), size, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 2); g.Children.Add(d);
-            var s = Tx(Encounter.Pct(e.Share(f)), size - 1.5, Faint, FontWeights.Medium); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 3); g.Children.Add(s);
+            var d = Num(Amounts.Short(e.Dps(f, now)), size + 1.5, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 2); g.Children.Add(d);
+            var s = Num(Encounter.Pct(e.Share(f)), size - 0.5, Muted, FontWeights.SemiBold); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 3); g.Children.Add(s);
         }
         sp.Children.Add(g);
-        var c = f.Other ? Color.FromRgb(0x86, 0x8D, 0xA1) : ClassArt.ColorOf(f.Class);
+        var c = ClassArt.ColorOf(f.Class);
         double measure = e.HasDamage ? f.Damage : f.CombatPower;
-        sp.Children.Add(Bar(measure / Math.Max(1, top), Frozen(c), bar, new Thickness(20, 2, 0, 0)));
+        sp.Children.Add(Bar(measure / Math.Max(1, top), Frozen(c), bar, new Thickness(22, 2, 0, 0)));
         return sp;
     }
 
-    protected static double Top(Encounter e) => Math.Max(1, e.Roster.Count == 0 ? 1 : e.Roster.Max(f => e.HasDamage ? (double)f.Damage : f.CombatPower));
+    protected static double Top(Encounter e) => e.TopMeasure();
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
     protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}";
@@ -259,14 +270,15 @@ sealed class HudCapsule : HudStackLook
         if (e == null) { _meter.Visibility = Visibility.Collapsed; return; }
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(Tx(e.Title, 12.5, Ink, FontWeights.Bold));
-        var clk = Tx(Clock(e.Duration(now)), 13, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 1); head.Children.Add(clk);
+        head.Children.Add(Tx(e.Title, 13.5, Ink, FontWeights.Bold));
+        var clk = e.Waiting ? Tx("Ready", 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 1); head.Children.Add(clk);
         _meterBody.Children.Add(head);
+        if (e.Waiting) { var w = Tx(ReadyLine, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w); _meter.Visibility = Visibility.Visible; return; }
         _meterBody.Children.Add(e.BossHpLeft is { } hp && e.Live ? Bar(hp, hp < .34 ? B(RecC) : Gold, 3, new Thickness(0, 5, 0, 7)) : new Border { Height = 6 });
         double top = Top(e);
-        foreach (var f in e.Shown().Take(6)) _meterBody.Children.Add(MemberLine(e, f, now, top, 11.5, 2));
+        foreach (var f in e.Shown().Take(6)) _meterBody.Children.Add(MemberLine(e, f, now, top, 13, 2));
         if (!e.Live && e.Outcome.Length > 0)
-            _meterBody.Children.Add(Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 11.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold));
+            _meterBody.Children.Add(Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold));
         _meter.Visibility = Visibility.Visible;
     }
 }
@@ -281,13 +293,13 @@ sealed class HudCapsule : HudStackLook
 /// </summary>
 sealed class HudMeter : HudStackLook
 {
-    const double W = 300;
+    const double W = 330;
     readonly Border _ring, _frame;
-    readonly Grid _head = new() { Height = 28 };
+    readonly Grid _head = new() { Height = 32 };
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 }, _hpLine = new() { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
-    readonly TextBlock _title = new() { FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-    readonly TextBlock _hpPct = new() { FontSize = 11, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
-    readonly TextBlock _clock = new() { FontSize = 12.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock _title = new() { FontSize = 13.5, FontWeight = FontWeights.Bold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+    readonly TextBlock _hpPct = new() { FontSize = 12.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
+    readonly TextBlock _clock = new() { FontSize = 15, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _tab = new() { CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly TextBlock _tabText = new() { FontSize = 10.5, FontWeight = FontWeights.Bold };
     readonly StackPanel _rows = new() { Visibility = Visibility.Collapsed };
@@ -313,7 +325,8 @@ sealed class HudMeter : HudStackLook
         var hg = new Grid { Margin = new Thickness(10, 0, 10, 0) };
         hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = new StackPanel { Orientation = Orientation.Horizontal, Children = { _title, _hpPct } };
-        _title.MaxWidth = 170;
+        _title.MaxWidth = 190;
+        System.Windows.Documents.Typography.SetNumeralAlignment(_clock, FontNumeralAlignment.Tabular); System.Windows.Documents.Typography.SetNumeralAlignment(_hpPct, FontNumeralAlignment.Tabular);
         hg.Children.Add(title);
         _tab.Child = _tabText;
         var right = new StackPanel { Orientation = Orientation.Horizontal, Children = { _tab, _clock } };
@@ -391,6 +404,18 @@ sealed class HudMeter : HudStackLook
             return;
         }
         _title.Text = e.Title;
+        if (e.Waiting)
+        {
+            // a dungeon before its first pull: its name, Ready, and where the members will be
+            _clock.Text = "Ready"; _clock.Foreground = Muted;
+            _hpFill.Width = _hpLine.Width = 0; _hpPct.Text = "";
+            var w = Tx(ReadyLine, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(10, 7, 10, 8);
+            _rows.Children.Add(w);
+            _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
+            _rows.Visibility = Visibility.Visible;
+            if (_figs is { } fw && !was) { DrawFoot(fw); _figSig = ""; }
+            return;
+        }
         _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold : Ink;
         double hp = e.BossHpLeft is { } h && e.Live ? h : 0;
         _hpFill.Width = _hpLine.Width = W * hp;
@@ -398,13 +423,13 @@ sealed class HudMeter : HudStackLook
         _hpPct.Foreground = !e.Live && e.Outcome == "kill" ? Mint : B(RecC);
         double top = Top(e);
         int rank = 1;
-        foreach (var f in e.Shown().Take(6)) _rows.Children.Add(Row(e, f, now, top, f.Other ? 0 : rank++));
+        foreach (var f in e.Shown().Take(6)) _rows.Children.Add(Row(e, f, now, top, rank++));
         if (e.HasDamage)
         {
-            var gl = new Grid { Margin = new Thickness(10, 4, 10, 4) };
+            var gl = new Grid { Margin = new Thickness(10, 5, 10, 5) };
             gl.ColumnDefinitions.Add(new ColumnDefinition()); gl.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            gl.Children.Add(Tx("Group", 11, Faint, FontWeights.Medium));
-            var gv = Tx(Amounts.Short(e.GroupDps(now)) + " DPS", 11.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
+            gl.Children.Add(Tx("Group", 12, Muted, FontWeights.SemiBold));
+            var gv = Num(Amounts.Short(e.GroupDps(now)) + " DPS", 13.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
             _rows.Children.Add(gl);
         }
         _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
@@ -414,23 +439,23 @@ sealed class HudMeter : HudStackLook
 
     static FrameworkElement Row(Encounter e, Fighter f, DateTime now, double top, int rank)
     {
-        var host = new Grid { Height = 23, Margin = new Thickness(0, 0, 0, 1) };
-        var c = f.Other ? Color.FromRgb(0x86, 0x8D, 0xA1) : ClassArt.ColorOf(f.Class);
+        var host = new Grid { Height = 28, Margin = new Thickness(0, 0, 0, 1) };
+        var c = ClassArt.ColorOf(f.Class);
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x70, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x30, c.R, c.G, c.B), 1)); fill.Freeze();
         double measure = e.HasDamage ? f.Damage : f.CombatPower;
         host.Children.Add(new Border { Background = fill, Width = W * Math.Clamp(measure / top, 0, 1), HorizontalAlignment = HorizontalAlignment.Left });
         host.Children.Add(new Border { Width = 2, Background = Frozen(c), HorizontalAlignment = HorizontalAlignment.Left });
         var g = new Grid { Margin = new Thickness(8, 0, 10, 0) };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
-        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-        g.Children.Add(Tx(rank > 0 ? rank.ToString(CultureInfo.InvariantCulture) : "", 10.5, Faint, FontWeights.Bold));
-        var mark = f.Other ? MainWindow.OtherMark(15) : MainWindow.ClassMark(f.Class, 15, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(mark, 1); g.Children.Add(mark);
-        var nm = Tx(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? Muted : f.You ? Gold : Ink, f.Other ? FontWeights.Medium : FontWeights.SemiBold); Grid.SetColumn(nm, 2); g.Children.Add(nm);
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+        g.Children.Add(Num(rank > 0 ? rank.ToString(CultureInfo.InvariantCulture) : "", 11.5, Faint, FontWeights.Bold));
+        var mark = MainWindow.ClassMark(f.Class, 18, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(mark, 1); g.Children.Add(mark);
+        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, f.You ? Gold : Ink, FontWeights.SemiBold); nm.TextTrimming = TextTrimming.CharacterEllipsis; Grid.SetColumn(nm, 2); g.Children.Add(nm);
         if (e.HasDamage)
         {
-            var d = Tx(Amounts.Short(e.Dps(f, now)), 12, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 3); g.Children.Add(d);
-            var s = Tx(Encounter.Pct(e.Share(f)), 10.5, Muted, FontWeights.Medium); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 4); g.Children.Add(s);
+            var d = Num(Amounts.Short(e.Dps(f, now)), 15, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 3); g.Children.Add(d);
+            var s = Num(Encounter.Pct(e.Share(f)), 12, Muted, FontWeights.SemiBold); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 4); g.Children.Add(s);
         }
         host.Children.Add(g);
         return host;
@@ -515,16 +540,17 @@ sealed class HudFloat : HudStackLook
         _fight.Children.Clear();
         if (e == null) { _fight.Visibility = Visibility.Collapsed; return; }
         var head = new StackPanel { Orientation = Orientation.Horizontal };
-        head.Children.Add(Tx(e.Title, 13, Ink, FontWeights.Bold));
-        head.Children.Add(Tx("  " + Clock(e.Duration(now)), 13, e.Live ? Gold : Ink, FontWeights.Bold));
+        head.Children.Add(Tx(e.Title, 14, Ink, FontWeights.Bold));
+        head.Children.Add(e.Waiting ? Tx("  Ready", 12.5, Muted, FontWeights.SemiBold) : Num("  " + Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold));
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
             head.Children.Add(Tx(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed", 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);
         if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = 250; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); }
         else _fight.Children.Add(new Border { Height = 6 });
-        var rows = new StackPanel { Width = 250, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
+        var rows = new StackPanel { Width = 280, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         double top = Top(e);
-        foreach (var f in e.Shown().Take(5)) rows.Children.Add(MemberLine(e, f, now, top, 11.5, 1.5));
+        if (e.Waiting) rows.Children.Add(Tx(ReadyLine, 12.5, Muted, FontWeights.SemiBold));
+        foreach (var f in e.Shown().Take(5)) rows.Children.Add(MemberLine(e, f, now, top, 13, 1.5));
         _fight.Children.Add(rows);
         _fight.Visibility = Visibility.Visible;
     }

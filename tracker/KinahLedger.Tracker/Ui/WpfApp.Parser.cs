@@ -76,6 +76,7 @@ public static partial class WpfApp
             ("ui-parser-overlay-fight.png", pvp, pvp.End!.Value),
             ("ui-parser-overlay-killed.png", kill, kill.End!.Value),
             ("ui-parser-overlay-wiped.png", wipe, wipe.End!.Value),
+            ("ui-parser-overlay-ready.png", Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), now),
         };
         foreach (var (file, e, at) in shots)
         {
@@ -140,6 +141,20 @@ public static partial class WpfApp
                 Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
                 h.Close();
             }
+            // in a dungeon the overlay stays the Parser (Steven, 2026-11-14): its ready card before the first pull, and the last
+            // fight's result held until the next one starts
+            var ready = Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now);
+            foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+                foreach (var (tag, e, at) in new[] { ("ready", ready, now), ("held", kill, kill.End!.Value.AddMinutes(2)) })
+                {
+                    var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                    h.Update(kinah);
+                    h.ShowParser(e, at, ParserMode.Bosses, details: false);
+                    h.Show();
+                    DoEvents();
+                    Save((FrameworkElement)h.Content, Path.Combine(dir, $"ui-hud-{look}-{tag}.png"), 0, ShotGround);
+                    h.Close();
+                }
         }
         // side by side (Steven, 2026-11-14: the separate overlay looks exactly like the Kinah overlay): the Kinah overlay and the
         // separate Parser overlay on one game-like grey, each drawn by its own window and lifted into one picture

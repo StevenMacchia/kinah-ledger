@@ -340,7 +340,7 @@ public sealed class ParserPanel : Border
         head.Children.Add(art);
         var name = T(e.Title, _glass ? 14 : 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(name, 1); head.Children.Add(name);
-        var clock = T(BossParser.Clock(e.Duration(now)), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
+        var clock = e.Waiting ? T("Ready", 13, FontWeights.SemiBold, HudKit.Muted) : Num(BossParser.Clock(e.Duration(now)), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
@@ -358,6 +358,14 @@ public sealed class ParserPanel : Border
             _body.Children.Add(row);
         }
         else _body.Children.Add(sub);
+        // a dungeon before its first pull (Ui/MainWindow.Parser.cs DungeonMeter): the meter waits here, no rows, no foot
+        if (e.Waiting)
+        {
+            var w = T("Waiting for the first pull", 12.5, FontWeights.SemiBold, HudKit.Muted); w.Margin = new Thickness(30, 8, 0, 2);
+            _body.Children.Add(w);
+            BorderBrush = _glass ? HudGlass.Edge : HudKit.FrameLine;
+            return;
+        }
 
         // a run: the pull under way ("Now: the boss" and its clock) and the bosses done so far
         if (e.ModeKind == ParserMode.Run && e.Live)
@@ -431,7 +439,7 @@ public sealed class ParserPanel : Border
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 50 : 60) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 44 : 52) });
-                if (dmg) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) }); }
+                if (dmg) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) }); }
                 return g;
             }
             var hdr = Row();
@@ -442,27 +450,27 @@ public sealed class ParserPanel : Border
             rows.Children.Add(hdr);
             // each row on a meter bar in its class's colour (damage, else Combat Power), the class's emblem at its left
             double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
-            double top = Math.Max(1, e.Roster.Max(Measure));
+            double top = e.TopMeasure();
             foreach (var f in e.Shown().Take(8))
             {
-                var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = _glass ? 22 : 24;
-                var mark = f.Other ? MainWindow.OtherMark(_glass ? 17 : 19) : MainWindow.ClassMark(f.Class, _glass ? 17 : 19, f.Name);
+                var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = _glass ? 26 : 28;
+                var mark = MainWindow.ClassMark(f.Class, _glass ? 18 : 20, f.Name);
                 g.Children.Add(mark);
                 var nm = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-                var n = T(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 12, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.Other || f.Name.Length == 0 ? HudKit.Muted : _glass && f.You ? HudKit.Gold : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
+                var n = T(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, FontWeights.SemiBold, f.Name.Length == 0 ? HudKit.Muted : _glass && f.You ? HudKit.Gold : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
                 nm.Children.Add(n);
                 if (f.You && _glass) nm.Children.Add(HudGlass.YouChip());
                 else if (f.You) nm.Children.Add(new Border { Background = HudKit.Gold, CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                     Child = T("you", 9.5, FontWeights.Bold, HudKit.B(0x1D1300)) });
                 Grid.SetColumn(nm, 1); g.Children.Add(nm);
-                void C(int col, string text, Brush b, FontWeight w) { var t = T(text, 11.5, w, b); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); g.Children.Add(t); }
-                if (gear && !f.Other)
+                void C(int col, string text, Brush b, FontWeight w, double size = 12) { var t = Num(text, size, w, b); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); g.Children.Add(t); }
+                if (gear)
                 {
                     C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
                     C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
                 }
-                if (dmg) { C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold); }
-                var meter = _glass ? ClassArt.ThinMeterRow(g, f.Class, Measure(f) / top, other: f.Other) : ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: f.Other, radius: 5);
+                if (dmg) { C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold, 15); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold, 12.5); }
+                var meter = _glass ? ClassArt.ThinMeterRow(g, f.Class, Measure(f) / top, other: false) : ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: false, radius: 5);
                 meter.Margin = new Thickness(0, _glass ? 2 : 3, 0, 0);
                 rows.Children.Add(meter);
             }
@@ -478,9 +486,10 @@ public sealed class ParserPanel : Border
         if (e.Live)
         {
             int near = e.Kills.Count(k => !k.Boss && !k.Yours);
-            var l = T(e.HasDamage ? (e.ModeKind == ParserMode.Run ? "Group DPS (boss pulls)" : "Group DPS") : e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 11, FontWeights.Medium, HudKit.Muted);
+            var l = T(e.HasDamage ? (e.ModeKind == ParserMode.Run ? "Group DPS (boss pulls)" : "Group DPS") : e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 12, FontWeights.SemiBold, HudKit.Muted);
             foot.Children.Add(l);
-            var v = T(e.HasDamage ? Amounts.Short(e.GroupDps(now)) : e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 12, FontWeights.Bold, HudKit.Ink);
+            var v = T(e.HasDamage ? Amounts.Short(e.GroupDps(now)) : e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 14, FontWeights.Bold, HudKit.Ink);
+            Typography.SetNumeralAlignment(v, FontNumeralAlignment.Tabular);
             Grid.SetColumn(v, 1); foot.Children.Add(v);
         }
         else
@@ -515,4 +524,6 @@ public sealed class ParserPanel : Border
         return w.Length <= 2 ? boss : w[^1];
     }
     static TextBlock T(string text, double size, FontWeight w, Brush b) => new() { Text = text, FontSize = size, FontWeight = w, Foreground = b, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>A figure that changes as hits land: tabular digits, so its column never twitches.</summary>
+    static TextBlock Num(string text, double size, FontWeight w, Brush b) { var t = T(text, size, w, b); Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
 }
