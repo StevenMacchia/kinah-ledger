@@ -25,8 +25,11 @@ public sealed partial class TrackerSession
 
     BossParser NewFights()
     {
-        var p = new BossParser { Ended = e => { FightStore.Add(e); FightStore.SaveLive(null); } };
-        if (FightStore.LoadLive() is { } live) p.Resume(live, DateTime.UtcNow);
+        var p = new BossParser();
+        p.Ended = e => { FightStore.Add(e); FightStore.SaveLive(p.LiveAll); };
+        p.SetMode(ParserMode, DateTime.UtcNow);
+        var live = FightStore.LoadLive();
+        if (live.Count > 0) p.Resume(live, DateTime.UtcNow);
         return p;
     }
 
@@ -41,6 +44,7 @@ public sealed partial class TrackerSession
             if (next != null) for (int i = 0; i < 20_000 && next() is { } ev; i++) p.Take(ev);
             var cur = Instances.Current;
             p.ScreenPlace(cur?.Kind, cur?.Zone);
+            p.Place(Zone, Ocr.ZoneLocator.IsAbyss(Zone));
             var now = DateTime.UtcNow;
             p.Tick(now);
             // the fight under way, at most every 5 s while it changes
@@ -48,11 +52,17 @@ public sealed partial class TrackerSession
             if (v != _fightSaved && (now - _fightSavedAt).TotalSeconds >= 5)
             {
                 _fightSaved = v; _fightSavedAt = now;
-                if (p.Live is { } live) FightStore.SaveLive(live);
+                FightStore.SaveLive(p.LiveAll);
             }
         }
         catch (Exception ex) { CrashLog.Write("parser", ex); }
     }
 
     internal void DrainFightsForTest() => DrainFights();
+
+    /// <summary>What the Parser keeps (the Parser page's mode, parser.json), set by the window; a new session starts in it.</summary>
+    public static ParserMode ParserMode { get; set; } = ParserMode.Bosses;
+
+    /// <summary>A kill or death of the player's from the game's kill events (TrackerSession.Packets.cs): to the Parser's run and fight.</summary>
+    void FightToParser(FightTally.Outcome o) { try { Fights.Kill(o.At, o.Player, o.Death, o.Name); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
 }

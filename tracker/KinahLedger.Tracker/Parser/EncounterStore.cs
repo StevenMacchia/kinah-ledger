@@ -58,7 +58,7 @@ public sealed class EncounterStore
                     foreach (var line in File.ReadLines(p))
                     {
                         if (line.Length < 2) continue;
-                        try { if (JsonSerializer.Deserialize<Encounter>(line, Json) is { Boss.Length: > 0, End: not null } e) list.Add(e); }
+                        try { if (JsonSerializer.Deserialize<Encounter>(line, Json) is { End: not null } e && (e.Boss.Length > 0 || e.ModeKind != ParserMode.Bosses)) list.Add(e); }
                         catch (JsonException) { /* a line cut by a crash: the rest still reads */ }
                     }
             }
@@ -75,15 +75,15 @@ public sealed class EncounterStore
     /// <summary>Forget the cache (a character switch, a test).</summary>
     public void Reload() { lock (_gate) { _cache = null; _version++; } }
 
-    /// <summary>Keeps the fight under way (null: none, the file goes).</summary>
-    public void SaveLive(Encounter? live)
+    /// <summary>Keeps the records under way (none: the file goes).</summary>
+    public void SaveLive(IReadOnlyCollection<Encounter> live)
     {
         lock (_gate)
         {
             try
             {
                 var p = PathIn(LiveName);
-                if (live == null) { if (File.Exists(p)) File.Delete(p); return; }
+                if (live.Count == 0) { if (File.Exists(p)) File.Delete(p); return; }
                 Directory.CreateDirectory(_dir());
                 var tmp = p + ".tmp";
                 File.WriteAllText(tmp, JsonSerializer.Serialize(live, Json));
@@ -93,19 +93,21 @@ public sealed class EncounterStore
         }
     }
 
-    /// <summary>The fight that was under way when the tracker closed, or null.</summary>
-    public Encounter? LoadLive()
+    /// <summary>The records that were under way when the tracker closed (a list; one record from the first builds).</summary>
+    public List<Encounter> LoadLive()
     {
         lock (_gate)
         {
             try
             {
                 var p = PathIn(LiveName);
-                if (!File.Exists(p)) return null;
-                var e = JsonSerializer.Deserialize<Encounter>(File.ReadAllText(p), Json);
-                return e is { Boss.Length: > 0, End: null } ? e : null;
+                if (!File.Exists(p)) return new();
+                var text = File.ReadAllText(p).TrimStart();
+                var list = text.StartsWith('[') ? JsonSerializer.Deserialize<List<Encounter>>(text, Json) ?? new()
+                    : JsonSerializer.Deserialize<Encounter>(text, Json) is { } one ? new List<Encounter> { one } : new();
+                return list.Where(e => e is { End: null } && (e.Boss.Length > 0 || e.ModeKind != ParserMode.Bosses)).ToList();
             }
-            catch (Exception) { return null; }
+            catch (Exception) { return new(); }
         }
     }
 }
