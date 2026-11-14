@@ -30,7 +30,7 @@ public static class TimerBoard
     public static List<Item> Build(DateTime now, EventTimers events, BossTimers bosses, string? region)
     {
         var list = new List<Item>();
-        foreach (var r in events.Rows(now))
+        foreach (var r in events.Rows(now, region))
             list.Add(new Item(EventKey(r.Event.Name), "Events", r.Event.Name, r.Event.Every, r.OnNow ? Kind.On : Kind.Waiting,
                 r.OnNow ? null : r.StartPc, r.OnNow ? "On now" : r.When, r.OnNow ? r.When : $"at {r.StartPc.ToLocalTime():HH:mm}", r.OnNow ? r.StartPc : null));
         foreach (var r in bosses.Rows(now))

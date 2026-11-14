@@ -7,9 +7,16 @@ namespace KinahLedger.Session;
 ///
 /// The game doesn't tell a player who isn't at an event anything about it, so the countdowns are the known schedule
 /// (<see cref="Schedule"/>, the same rules as the site's /events/ page: kinah-ledger-site data/events.json) counted on the game
-/// server's own clock. That clock runs some seconds off this PC's (about 15 s behind on 2026-11-13), and the events start on it,
-/// so the gap is taken from the game's traffic (<see cref="TakeClock"/>) and the countdown can't be off by it. With packet
-/// reading off, this PC's clock is used, and the card says so.
+/// server's own clock. Two things set that clock, kept apart:
+/// <list type="bullet">
+/// <item>its time zone, per region (<see cref="ClockOf"/>): the schedule's times are wall-clock times in the region's own zone,
+/// with its daylight saving time (NA East: US Eastern; checked against the game's own messages and Steven's map, 2026-11-14).
+/// Until 0.10.85 every region was counted on UTC+9 (MetaBot's reading), which put NA East's Artifact Siege at 07:00 instead of
+/// 21:00 and its Spacetime Rift an hour early. Regions not checked yet keep UTC+9, and the card says so;</item>
+/// <item>its gap to this PC's clock (about 15 s behind on 2026-11-13), taken from the game's traffic (<see cref="TakeClock"/>),
+/// so the countdown can't be off by it. Without it this PC's clock is used. The card names neither clock: no text outside
+/// Options says how the times are read (Steven, 2026-11-14).</item>
+/// </list>
 ///
 /// The event the player is in comes from the event's own server (<see cref="Take"/>): getting ready, under way, over, left.
 /// </summary>
@@ -21,28 +28,68 @@ public sealed class EventTimers
     public const double KeepLiveSeconds = 120;
     /// <summary>An event part no message came for in this long is taken as left (the reading stopped, the game closed).</summary>
     public const double StaleLiveMinutes = 15;
-    /// <summary>The game's schedule is on this clock (every Global region runs one server clock, UTC+9).</summary>
-    public static readonly TimeSpan ServerZone = TimeSpan.FromHours(9);
+    /// <summary>
+    /// The clock a region's schedule runs on: its time zone (daylight saving included), whether that was checked against the
+    /// game, and what to say about it.
+    /// </summary>
+    public sealed record RegionClock(string Region, string Name, TimeZoneInfo Zone, bool Checked, string Note);
+
+    /// <summary>The last resort when Windows has none of a region's zones: MetaBot's reading, UTC+9 with no daylight saving.</summary>
+    static readonly TimeZoneInfo Utc9 = TimeZoneInfo.CreateCustomTimeZone("UTC+9", TimeSpan.FromHours(9), "UTC+9", "UTC+9");
 
     /// <summary>
-    /// A recurring event in server time: every <paramref name="EveryMinutes"/> from <paramref name="AtMinutes"/> past midnight,
-    /// or once a day at <paramref name="AtMinutes"/> on <paramref name="Weekdays"/> (0 Sunday). OnMinutes: how long it counts as
-    /// on after its start.
+    /// The clock of a region (Settings.Region: "na_e", "na_w", "eu", "latam", "asia"). NA East is US Eastern, checked
+    /// 2026-11-14: the Abyss server's own next-siege time (Sat 21:00 ET), the chat's "A Spacetime Rift has appeared" at 11:00,
+    /// 14:00 and 17:00 ET on 2026-11-13, and the field bosses on Steven's Lower Reshanta map (Watcher Kaira every 3 h from
+    /// 01:00 ET). The other regions are not checked: each is taken as its own local time with its daylight saving (the
+    /// command center's call, 2026-11-14; Exitlag and PlayNews give the Rift at 02:00, 05:00 ... Paris time), marked so on the
+    /// card until a timer there is checked. The one table for every timer: the Abyss bosses (AbyssBosses.ZoneFor) read it too.
     /// </summary>
-    public sealed record Recurring(string Name, string Every, int EveryMinutes, int AtMinutes, int[]? Weekdays, int OnMinutes, string Where);
+    public static RegionClock ClockOf(string? region) => region switch
+    {
+        // no region yet: NA East, Settings.Region's default
+        null or "" or "na_e" => new("na_e", "NA East", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, true, "US Eastern time"),
+        "na_w" => new("na_w", "NA West", Zone("Pacific Standard Time", "America/Los_Angeles") ?? Utc9, false, "US Pacific time, not checked for NA West yet"),
+        "eu" => new("eu", "Europe", Zone("Romance Standard Time", "Europe/Paris") ?? Utc9, false, "Central European time, not checked for Europe yet"),
+        "latam" => new("latam", "Latin America", Zone("E. South America Standard Time", "America/Sao_Paulo") ?? Utc9, false, "Brasília time, not checked for Latin America yet"),
+        "asia" => new("asia", "Asia", Zone("Korea Standard Time", "Asia/Seoul") ?? Utc9, false, "Korea time, not checked for Asia yet"),
+        _ => new(region, "this region", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, false, "US Eastern time, not checked for this region"),
+    };
+
+    static TimeZoneInfo? Zone(params string[] ids)
+    {
+        foreach (var id in ids)
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A recurring event in the region's wall-clock time: every <paramref name="EveryMinutes"/> from <paramref name="AtMinutes"/>
+    /// past midnight, or once a day at <paramref name="AtMinutes"/> on <paramref name="Weekdays"/> (0 Sunday). OnMinutes: how
+    /// long it counts as on after its start. AtIn: a region whose first start of the day differs (none since the Rift's 02:00 holds everywhere).
+    /// </summary>
+    public sealed record Recurring(string Name, string Every, int EveryMinutes, int AtMinutes, int[]? Weekdays, int OnMinutes, string Where, IReadOnlyDictionary<string, int>? AtIn = null)
+    {
+        public int AtFor(string region) => AtIn != null && AtIn.TryGetValue(region, out var at) ? at : AtMinutes;
+    }
 
     /// <summary>
     /// The schedule, as kinah-ledger-site data/events.json has it ("recurring"; keep the two in step). How long each counts as
     /// on: the Shugo Festival's rounds were over by :05 in the game's own messages (2026-11-13, 17:01 and 18:01); the
     /// Dimensional Invasion is a 3-minute lobby and up to 10 minutes of waves; the Artifact Siege a 10-minute warning, then the
-    /// cores; the Spacetime Rift's portal is given 10 minutes.
+    /// cores; the Spacetime Rift's portal is given 10 minutes. The Rift: every 3 hours from 02:00 local (NA East: the chat's
+    /// "A Spacetime Rift has appeared" at 11:00, 14:00, 17:00 ET on 2026-11-13, and aion2-data's 00:00 UTC anchor of
+    /// 2026-10-07 in summer time; Paris: PlayNews and Exitlag's 02:00, 05:00 ...), not from 00:00 as MetaBot has it.
     /// </summary>
     public static readonly Recurring[] Schedule =
     {
         new("Shugo Festival", "Every hour", 60, 0, null, 6, "Verteron and Altgard"),
         new("Dimensional Invasion", "Every hour at half past", 60, 30, null, 13, "Verteron and Altgard"),
-        new("Spacetime Rift", "Every 3 hours", 180, 0, null, 10, "One of ten zones"),
-        new("Artifact Siege", "Mon, Thu and Sat", 1440, 21 * 60, new[] { 1, 4, 6 }, 20, "Chaotic Lower Reshanta"),
+        new("Spacetime Rift", "Every 3 hours", 180, 120, null, 10, "One of ten zones"),
+        new("Artifact Siege", "Thu and Sat", 1440, 21 * 60, new[] { 4, 6 }, 20, "Chaotic Lower Reshanta"),   // twice a week since the Nov 4 patch
     };
 
     /// <summary>The event the player is in, as its server told it. Times are UTC on this PC's clock.</summary>
@@ -70,7 +117,10 @@ public sealed class EventTimers
         lock (_gate) { _offset = at - serverNow; _clockAt = at; }
     }
 
-    /// <summary>"Game clock, live" / "Game clock, read 2 h ago" / "This PC's clock (packet reading is off)".</summary>
+    /// <summary>True while the server's clock was sampled in the last <see cref="ClockLiveSeconds"/> (for the log and tests; the card says nothing about it).</summary>
+    public bool ClockLive(DateTime now) { lock (_gate) return _clockAt != DateTime.MinValue && (now - _clockAt).TotalSeconds <= ClockLiveSeconds; }
+
+    /// <summary>Nothing while the clock is fresh (or never read); "Last read 2 h ago" when it is old.</summary>
     public string ClockLine(DateTime now)
     {
         lock (_gate)
@@ -124,18 +174,19 @@ public sealed class EventTimers
         }
     }
 
-    /// <summary>Every scheduled event at <paramref name="now"/> (UTC, this PC's clock): on now first, then the soonest.</summary>
-    public List<Row> Rows(DateTime now)
+    /// <summary>Every scheduled event at <paramref name="now"/> (UTC, this PC's clock) in <paramref name="region"/>: on now first, then the soonest.</summary>
+    public List<Row> Rows(DateTime now, string? region)
     {
         TimeSpan off; lock (_gate) off = _offset;
         var server = now - off;
-        return Schedule.Select(r => RowOf(r, server, off)).OrderBy(r => r.OnNow ? 0 : 1).ThenBy(r => r.OnNow ? -r.Since : r.Left).ToList();
+        var clock = ClockOf(region);
+        return Schedule.Select(r => RowOf(r, server, off, clock)).OrderBy(r => r.OnNow ? 0 : 1).ThenBy(r => r.OnNow ? -r.Since : r.Left).ToList();
     }
 
-    /// <summary>One event's row at <paramref name="serverUtc"/> (the game's clock), its times put back on this PC's by <paramref name="offset"/>.</summary>
-    public static Row RowOf(Recurring r, DateTime serverUtc, TimeSpan offset)
+    /// <summary>One event's row at <paramref name="serverUtc"/> (the game's clock) in a region, its times put back on this PC's by <paramref name="offset"/>.</summary>
+    public static Row RowOf(Recurring r, DateTime serverUtc, TimeSpan offset, RegionClock clock)
     {
-        var (last, next) = Around(r, serverUtc);
+        var (last, next) = Around(r, serverUtc, clock);
         var since = serverUtc - last;
         if (since >= TimeSpan.Zero && since.TotalMinutes < r.OnMinutes)
             return new Row(r, true, last + offset, TimeSpan.Zero, since, $"started {BossTimers.Span(since)} ago");
@@ -145,31 +196,43 @@ public sealed class EventTimers
         return new Row(r, false, next + offset, left, TimeSpan.Zero, when);
     }
 
-    /// <summary>The event's last start at or before <paramref name="serverUtc"/>, and its next start after it (UTC, the game's clock).</summary>
-    public static (DateTime Last, DateTime Next) Around(Recurring r, DateTime serverUtc)
+    /// <summary>
+    /// The event's last start at or before <paramref name="serverUtc"/>, and its next start after it (UTC, the game's clock):
+    /// its starts are wall-clock times in the region's zone, day by day, so a daylight saving change moves them with the region.
+    /// A start that falls in the hour skipped in spring is taken an hour on; one in the hour repeated in autumn, the first time.
+    /// </summary>
+    public static (DateTime Last, DateTime Next) Around(Recurring r, DateTime serverUtc, RegionClock clock)
     {
-        var local = serverUtc + ServerZone;   // the server's wall clock
+        var utc = DateTime.SpecifyKind(serverUtc, DateTimeKind.Utc);
+        var today = TimeZoneInfo.ConvertTimeFromUtc(utc, clock.Zone).Date;
+        int at = r.AtFor(clock.Region);
         DateTime last = DateTime.MinValue, next = DateTime.MaxValue;
-        if (r.Weekdays == null)
+        int span = r.Weekdays == null ? 1 : 7;
+        for (int d = -span; d <= span; d++)
         {
-            var midnight = local.Date;
-            double m = (local - midnight).TotalMinutes - r.AtMinutes;
-            long k = (long)Math.Floor(m / r.EveryMinutes);
-            last = midnight.AddMinutes(r.AtMinutes + k * r.EveryMinutes);
-            next = last.AddMinutes(r.EveryMinutes);
-        }
-        else
-        {
-            for (int d = -7; d <= 7; d++)
+            var day = today.AddDays(d);
+            if (r.Weekdays != null && !r.Weekdays.Contains((int)day.DayOfWeek)) continue;
+            for (int m = at; m < 1440; m += r.EveryMinutes)
             {
-                var day = local.Date.AddDays(d);
-                if (!r.Weekdays.Contains((int)day.DayOfWeek)) continue;
-                var s = day.AddMinutes(r.AtMinutes);
-                if (s <= local) last = s;
+                var s = ToUtc(day.AddMinutes(m), clock.Zone);
+                if (s <= utc) { if (s > last) last = s; }
                 else if (s < next) next = s;
             }
         }
-        return (DateTime.SpecifyKind(last - ServerZone, DateTimeKind.Utc), DateTime.SpecifyKind(next - ServerZone, DateTimeKind.Utc));
+        return (last, next);
+    }
+
+    static DateTime ToUtc(DateTime wall, TimeZoneInfo zone)
+    {
+        wall = DateTime.SpecifyKind(wall, DateTimeKind.Unspecified);
+        if (zone.IsInvalidTime(wall)) wall = wall.AddHours(1);   // spring forward: the hour doesn't exist
+        if (zone.IsAmbiguousTime(wall))                           // autumn: the hour comes twice; the first (daylight) time
+        {
+            var offs = zone.GetAmbiguousTimeOffsets(wall);
+            var off = offs.Max();
+            return DateTime.SpecifyKind(wall - off, DateTimeKind.Utc);
+        }
+        return TimeZoneInfo.ConvertTimeToUtc(wall, zone);
     }
 
     /// <summary>What the event the player is in says now: "Getting ready" / "Under way" / "Over: rewards next" / "Left".</summary>

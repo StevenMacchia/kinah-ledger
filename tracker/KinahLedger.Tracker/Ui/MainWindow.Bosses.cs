@@ -28,6 +28,9 @@ public partial class MainWindow
     /// <summary>The event timers the card shows: the packet reader's, or a render's own.</summary>
     EventTimers EventClock => _eventsForShot ?? _watcher.Packets.Timers;
     EventTimers? _eventsForShot;
+    /// <summary>The region whose schedule the events follow (Settings.Region; a render may set its own).</summary>
+    string EventRegion => _eventRegionForShot ?? (_watcher.RegionKey is { Length: > 0 } k ? k : _settings.Region);
+    string? _eventRegionForShot;
 
     const double BossCardWidth = 400;
     static readonly TimeSpan BossSoon = TimeSpan.FromMinutes(10);
@@ -36,7 +39,7 @@ public partial class MainWindow
     {
         var now = DateTime.UtcNow;
         string sub = EventClock.Current(now) is { LeftAt: null } live ? $"{live.Label}: {EventTimers.StageText(live).ToLowerInvariant()}"
-            : EventClock.Rows(now).FirstOrDefault() is { } next ? $"{next.Event.Name} {(next.OnNow ? "on now" : "in " + BossTimers.Span(next.Left))}" : "";
+            : EventClock.Rows(now, EventRegion).FirstOrDefault() is { } next ? $"{next.Event.Name} {(next.OnNow ? "on now" : "in " + BossTimers.Span(next.Left))}" : "";
         return new MenuEntry("Timers", OpenBossWindow,
             Sub: sub.Length > 0 ? $"{sub} · world bosses" : "Events and world bosses",
             Tip: "When the events start next (Shugo Festival, Dimensional Invasion, Spacetime Rift, Artifact Siege) and the world bosses spawn.");
@@ -74,6 +77,11 @@ public partial class MainWindow
 
         var band = new StackPanel { Margin = new Thickness(20, 16, 56, 4) };
         band.Children.Add(CkText("Timers", CkInk, 18, FontWeights.Normal, display: true));
+        // the region's time the events are in (Session/EventTimers.ClockOf); orange while that region isn't checked yet
+        var zone = EventTimers.ClockOf(EventRegion);
+        var zt = CkText(zone.Checked ? $"{zone.Name} times: {zone.Note}" : $"Event times: {zone.Note}", zone.Checked ? CkMuted : CkWarn, 12.5);
+        zt.Margin = new Thickness(0, 3, 0, 0); zt.TextWrapping = TextWrapping.Wrap; zt.TextTrimming = TextTrimming.None;
+        band.Children.Add(zt);
         body.Children.Add(band);
 
         // the event the player is in, part by part, as its own server says
@@ -83,7 +91,7 @@ public partial class MainWindow
             body.Children.Add(LiveEventRow(live, now));
         }
         body.Children.Add(CkSection("EVENTS"));
-        foreach (var r in timers.Rows(now)) body.Children.Add(EventRow(r));
+        foreach (var r in timers.Rows(now, EventRegion)) body.Children.Add(EventRow(r));
 
         // the world bosses the game's map listed (0.10.82), a section a map
         var rows = Bosses.Rows(now);
@@ -105,8 +113,8 @@ public partial class MainWindow
         }
 
         // the Abyss's bosses, on their schedule (the game's map draws them from it too)
-        var (_, zoneChecked) = AbyssBosses.ZoneFor(_watcher.RegionKey);
-        foreach (var map in AbyssBosses.Rows(now, timers.Offset, _watcher.RegionKey).GroupBy(r => r.Boss.Map))
+        var (_, zoneChecked) = AbyssBosses.ZoneFor(EventRegion);
+        foreach (var map in AbyssBosses.Rows(now, timers.Offset, EventRegion).GroupBy(r => r.Boss.Map))
         {
             body.Children.Add(CkSection(map.Key.ToUpperInvariant() + " · ABYSS"));
             bool sure = zoneChecked && map.All(r => r.Boss.Checked);
@@ -248,6 +256,7 @@ public partial class MainWindow
                 _ => null,
             });
             _eventsForShot = ev;
+            _eventRegionForShot = state == "empty" ? "eu" : "na_e";   // the empty state: a region whose times aren't checked yet
             var win = new BossWindow(this, _timerPrefs);
             win.ShowCard(BuildBossCard(now, win.CardWidth), offscreen: true);
             win.UpdateLayout();
@@ -261,7 +270,7 @@ public partial class MainWindow
             var t = new BossTimers(); t.SetForTest(SampleBosses(now - TimeSpan.FromSeconds(4)));
             _bossesForShot = t;
             var ev = new EventTimers(); ev.SetForTest(lag, true, null);
-            _eventsForShot = ev;
+            _eventsForShot = ev; _eventRegionForShot = "na_e";
             var ground = Color.FromRgb(0x5A, 0x6B, 0x4F);
             foreach (var (state, window, menu, watchAll) in new[] { ("overlay-rest", 15, false, true), ("overlay-close", 5, false, true), ("overlay-menu", 15, true, true) })
             {
@@ -279,7 +288,7 @@ public partial class MainWindow
                 o.Close();
             }
         }
-        _bossesForShot = null; _eventsForShot = null; _timerPrefs = keepPrefs;
+        _bossesForShot = null; _eventsForShot = null; _eventRegionForShot = null; _timerPrefs = keepPrefs;
     }
 
     /// <summary>A reading like the one of 2026-11-13 18:58 (Verteron, two bosses up), taken at <paramref name="seen"/>.</summary>

@@ -25,7 +25,7 @@ public partial class MainWindow
     DispatcherTimer? _timersTick;
 
     /// <summary>The timers for the overlay and the chime at <paramref name="now"/>.</summary>
-    List<TimerBoard.Item> TimerItems(DateTime now) => TimerBoard.Build(now, EventClock, Bosses, _watcher.RegionKey);
+    List<TimerBoard.Item> TimerItems(DateTime now) => TimerBoard.Build(now, EventClock, Bosses, EventRegion);
 
     /// <summary>Once, as the window opens: the header button; for a watching window the settings, the overlay and the tick.</summary>
     void InitTimers(bool watch)

@@ -7,7 +7,8 @@ namespace KinahLedger.Session;
 ///
 /// The schedule's hours are the region's own wall clock. Steven's map of Chaotic Lower Reshanta on NA East (2026-11-14,
 /// 06:38 Eastern) matched it to the second: Watcher Kaira every 3 hours from 01:00 (21min 20s left, so 07:00), the three
-/// Executors Mon, Thu and Sat at 21:30 (14h 51min 20s), Guardian Lord Nahma, three spots, Sun and Fri at 21:00
+/// Executors at 21:30 (14h 51min 20s; the three Artifact Bosses are Thursday and Saturday since the Nov 4 patch, as the
+/// site has them; that Saturday reading fits Mon/Thu/Sat too, Monday 16 Nov settles it), Guardian Lord Nahma, three spots, Sun and Fri at 21:00
 /// (1d 14h 21min). NA East's clock is checked; the other regions' are taken as their own time zone until someone checks.
 /// Middle Reshanta's bosses are on the same schedule as MetaBot gives it, not checked on the map yet.
 /// </summary>
@@ -21,15 +22,18 @@ public static class AbyssBosses
     public sealed record Boss(string Name, string Place, string Map, string Every, int EveryMinutes, int AtMinutes, int[]? Weekdays, int Spots, bool Checked);
 
     public const string Lower = "Lower Reshanta", Middle = "Middle Reshanta";
-    static readonly int[] MonThuSat = { 1, 4, 6 }, SunFri = { 0, 5 };
+    // the three Artifact Bosses: Thursday and Saturday since the Nov 4 patch ("the schedules for the three Artifact Bosses
+    // (Executor Kaira, Executor Argo, and Executor Tamasa) will also be changed to twice a week"); Middle Reshanta's not named
+    // there, so still Monday, Thursday and Saturday (MetaBot and the site agree)
+    static readonly int[] ThuSat = { 4, 6 }, MonThuSat = { 1, 4, 6 }, SunFri = { 0, 5 };
 
     public static readonly Boss[] Schedule =
     {
         new("Watcher Kaira", "Black Fragments Area", Lower, "Every 3 hours", 180, 60, null, 1, true),
         new("Guardian Lord Nahma", "Reshanta's Root", Lower, "Sun and Fri", 1440, 21 * 60, SunFri, 3, true),
-        new("Executor Tamasa", "Reshanta's Root", Lower, "Mon, Thu and Sat", 1440, 21 * 60 + 30, MonThuSat, 1, true),
-        new("Executor Argo", "Siel's Heart", Lower, "Mon, Thu and Sat", 1440, 21 * 60 + 30, MonThuSat, 1, true),
-        new("Executor Kaira", "Branding Island", Lower, "Mon, Thu and Sat", 1440, 21 * 60 + 30, MonThuSat, 1, true),
+        new("Executor Tamasa", "Reshanta's Root", Lower, "Thu and Sat", 1440, 21 * 60 + 30, ThuSat, 1, true),
+        new("Executor Argo", "Siel's Heart", Lower, "Thu and Sat", 1440, 21 * 60 + 30, ThuSat, 1, true),
+        new("Executor Kaira", "Branding Island", Lower, "Thu and Sat", 1440, 21 * 60 + 30, ThuSat, 1, true),
         new("Enraged Guardian Lord Nahma", "Steel Titan's Grave", Middle, "Sun and Fri", 1440, 21 * 60, SunFri, 1, false),
         new("Executioner Dramos", "Corroded Heart", Middle, "Mon, Thu and Sat", 1440, 21 * 60 + 30, MonThuSat, 1, false),
         new("Turncoat Ducal", "Eroded Fragment Area", Middle, "Mon, Thu and Sat", 1440, 21 * 60 + 30, MonThuSat, 1, false),
@@ -39,21 +43,11 @@ public static class AbyssBosses
     /// <summary>A spawn counts as "Spawned" this long after its time: the map can't say when it is killed.</summary>
     public const int SpawnedMinutes = 30;
 
-    /// <summary>The region's clock (Windows time zone ids), and whether it was checked against the game's map.</summary>
+    /// <summary>The region's clock and whether it was checked: the one table every timer reads (EventTimers.ClockOf).</summary>
     public static (TimeZoneInfo Zone, bool Checked) ZoneFor(string? region)
     {
-        string id = region switch
-        {
-            "na_w" => "Pacific Standard Time",
-            "eu" => "W. Europe Standard Time",
-            "latam" => "E. South America Standard Time",
-            "asia" => "Korea Standard Time",
-            _ => "Eastern Standard Time",
-        };
-        TimeZoneInfo zone;
-        try { zone = TimeZoneInfo.FindSystemTimeZoneById(id); }
-        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { zone = TimeZoneInfo.CreateCustomTimeZone(id, TimeSpan.FromHours(-5), id, id); }
-        return (zone, region is null or "" or "na_e");
+        var c = EventTimers.ClockOf(region);
+        return (c.Zone, c.Checked);
     }
 
     /// <summary>A boss's row at a moment. SpawnPc: its spawn on this PC's clock (UTC); Spawned: its time passed under <see cref="SpawnedMinutes"/> ago.</summary>
