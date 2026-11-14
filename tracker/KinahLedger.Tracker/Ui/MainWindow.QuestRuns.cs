@@ -100,7 +100,7 @@ public partial class MainWindow
     /// run's pill on the right; the hour big in gold; the chase (the open run against the average run here, or the last
     /// run against the best); the figures line; and the ring.
     /// </summary>
-    Border QRunHero(string zone, List<InstanceRun> runs, List<InstanceRun> counted, bool live, string kind, InstanceRun? open, InstanceRun? newest, Func<List<MenuEntry>>? pickPlace, Action redraw)
+    Border QRunHero(string zone, List<InstanceRun> runs, List<InstanceRun> counted, bool live, string kind, InstanceRun? open, InstanceRun? newest, Func<List<MenuEntry>>? pickPlace, Action redraw, FrameworkElement? corner = null)
     {
         int n = counted.Count;
         double secs = counted.Sum(r => r.Seconds);
@@ -231,7 +231,11 @@ public partial class MainWindow
             if (known) left.Children.Add(QRunStats(counted, value));
         }
         g.Children.Add(left);
-        if (ring != null) { ring.VerticalAlignment = VerticalAlignment.Top; ring.Margin = new Thickness(0, 2, 0, 0); Grid.SetColumn(ring, 2); g.Children.Add(ring); }
+        // the corner: the Latest run / All runs switch (Ui/MainWindow.LatestRun.cs), and under it the ring
+        var side = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        if (corner != null) side.Children.Add(corner);
+        if (ring != null) { ring.VerticalAlignment = VerticalAlignment.Top; ring.HorizontalAlignment = HorizontalAlignment.Right; ring.Margin = new Thickness(0, corner != null ? 10 : 2, 0, 0); side.Children.Add(ring); }
+        if (side.Children.Count > 0) { Grid.SetColumn(side, 2); g.Children.Add(side); }
         card.Child = g;
         // lit by the art of the place's best loot (v2, Ui/Quest.cs HeroArt); "Name ×3" from RunsBestDrop
         var bestDrop = RunsBestDrop(counted);
@@ -360,7 +364,7 @@ public partial class MainWindow
         if (items.Count >= 2) { var links = SortLinks("runs", redraw); links.HorizontalAlignment = HorizontalAlignment.Right; links.Margin = new Thickness(0, 2, 0, 0); sp.Children.Add(links); }
         string key = "place:" + zone;
         bool all = _todayAll.Contains(key);
-        int max = RunSlotsPerRow * TodayRows;
+        int max = RunSlotsPerRow;   // one row, then Show all (Steven, 2026-11-14: "CONCISE dont make people have to scroll a ton")
         var wrap = new WrapPanel { Margin = new Thickness(0, 8, -6, 0) };
         foreach (var s in all ? slots : slots.Take(max)) wrap.Children.Add(s);
         sp.Children.Add(wrap);
@@ -372,7 +376,8 @@ public partial class MainWindow
             sp.Children.Add(m);
         }
         if (slots.Count == 0 && tr.Gear == 0) { var t = QT(n == 0 ? "The rewards show here once a run is counted." : tr.Kinah > 0 ? "Kinah only: nothing else read from the reward screens yet." : "Nothing read from the reward screens yet.", 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
-        if (GearRow(tr, "here") is FrameworkElement gn) { gn.Margin = new Thickness(0, slots.Count == 0 ? 8 : 6, 0, 2); sp.Children.Add(gn); }
+        // the gear as its count line; each piece with its count is in Best drops
+        if (GearRow(tr, "here", slots: false) is FrameworkElement gn) { gn.Margin = new Thickness(0, slots.Count == 0 ? 8 : 6, 0, 2); sp.Children.Add(gn); }
         return card;
     }
 
