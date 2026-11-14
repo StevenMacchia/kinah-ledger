@@ -310,6 +310,10 @@
             <Button x:Name="QuestsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Quests: every quest with its tree, pins for Next up, today's and all time, what you have done, your score.">
               <TextBlock Text="Quests" VerticalAlignment="Center"/>
             </Button>
+            <!-- Parser (2026-11-13, Ui/MainWindow.Parser.cs): boss fights in Transcendence, Expeditions and Sanctuaries -->
+            <Button x:Name="ParserTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Parser: boss fights in Transcendence, Expeditions and Sanctuaries, one per boss, with your group, the clock and the fights kept on this PC.">
+              <TextBlock Text="Parser" VerticalAlignment="Center"/>
+            </Button>
           </StackPanel>
         </Border>
         <!-- round buttons, the same on every page: the site and Options (each says what it opens in plain words) -->
@@ -903,6 +907,9 @@
       </Border>
 
       <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): the score on the head, This session, Daily, All time, Your goals, Done -->
+      <!-- Parser (2026-11-13, Ui/MainWindow.Parser.cs): the head, the fight under way, the fights kept; drawn in code -->
+      <StackPanel x:Name="ParserPage" Margin="0,12,0,14" Visibility="Collapsed"/>
+
       <StackPanel x:Name="QuestsPage" Margin="0,12,0,14" Visibility="Collapsed">
         <Grid Margin="2,0,0,12">
           <StackPanel>

@@ -803,6 +803,7 @@ public sealed partial class TrackerSession
             {
                 await FollowGameAsync();
                 DrainPackets();   // what the game's own messages said since the last pass (TrackerSession.Packets.cs)
+                DrainFights();    // ...about boss fights, for the Parser (TrackerSession.Parser.cs)
                 if (Region == null) await FindChatAsync();
                 if (Region == null)
                 {

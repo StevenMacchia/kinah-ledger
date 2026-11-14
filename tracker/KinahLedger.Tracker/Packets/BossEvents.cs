@@ -31,8 +31,11 @@ public sealed record GroupMember(long Id, string Name, string Class, int CombatP
 /// <summary>The whole group as it is now, the player included (alone: just the player).</summary>
 public sealed record GroupChanged(DateTime At, IReadOnlyList<GroupMember> Members) : BossEvent(At);
 
-/// <summary>Damage one unit dealt another (SourceId matches a GroupMember's Id).</summary>
-public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long Amount) : BossEvent(At);
+/// <summary>Damage one unit dealt another (SourceId matches a GroupMember's Id; 0 = HP lost with no hit to name a source). SourceName and SourceIsYou when known.</summary>
+public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long Amount, string SourceName = "", bool SourceIsYou = false) : BossEvent(At);
+
+/// <summary>A boss's HP now and its max, after a change while it is fought (the Parser's HP bar); 0 = not known.</summary>
+public sealed record BossHealth(DateTime At, long BossId, long Hp, long Max) : BossEvent(At);
 
 /// <summary>A unit near the player died: an enemy (Boss when the game marks it so) or a group member.</summary>
 public sealed record UnitDied(DateTime At, long Id, string Name, bool Boss) : BossEvent(At);
