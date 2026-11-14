@@ -31,6 +31,16 @@ public enum GatherEnd { Worked = 0, Upgrade = 1, Failed = 2 }
 public sealed record GatherResult(DateTime At, long NodeId, long NodeKind, GatherEnd Outcome, long ItemId, int Count, int Attempt);
 
 /// <summary>
+/// One record of the inventory's snapshot (the game sends the whole inventory at the start of each connection to its
+/// server): Begin (Count: the stacks the game says it holds), Stack (an item's stack: its id on this connection, the amount,
+/// the container; Currency when it is Kinah, bound Kinah or Abyss Points), End (Count: the stacks read).
+/// </summary>
+public sealed record BagRecord(DateTime At, int Kind, int Count, long ItemId, long StackId, long Amount, int Container, int Slot, CurrencyKind? Currency)
+{
+    public const int Begin = 0, Stack = 1, End = 2;
+}
+
+/// <summary>
 /// What turns the game server's stream into currency changes. The decoder is not part of this source: release builds carry
 /// it as a native library (klnet.dll), and a build without it reads no traffic (the screen counts, as before).
 /// </summary>
@@ -52,6 +62,10 @@ public interface IGameDecoder : IDisposable
     bool ReadsFights => false;
     /// <summary>The next fight event found, or null (always null for a decoder that reads no fights).</summary>
     FightEvent? NextFight() => null;
+    /// <summary>True when this decoder reads the inventory's snapshot too (klnet.dll's interface version 8).</summary>
+    bool ReadsBag => false;
+    /// <summary>The next record of an inventory snapshot, or null (always null for a decoder that reads none).</summary>
+    BagRecord? NextBag() => null;
     /// <summary>True when this decoder reads the player's gathering too (klnet.dll's interface version 7).</summary>
     bool ReadsGathers => false;
     /// <summary>The next gathering attempt found, or null (always null for a decoder that reads none).</summary>
@@ -65,6 +79,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [StructLayout(LayoutKind.Sequential)] struct KlChange { public int Kind; public int First; public long Delta; public long Amount; public long AtUtcTicks; }
     [StructLayout(LayoutKind.Sequential)] struct KlItem { public long AtUtcTicks; public uint ItemId; public int Op; public long StackId; public long Delta; public long Total; public int First; public int Batch; public int BatchRows; public int BatchFell; }
     [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
+    [StructLayout(LayoutKind.Sequential)] struct KlBagRow { public long AtUtcTicks; public int Kind; public int Count; public uint ItemId; public int Container; public int Slot; public int Gear; public int Currency; public int Reserved; public long StackId; public long Amount; }
     [StructLayout(LayoutKind.Sequential)] struct KlGather { public long AtUtcTicks; public uint NodeId; public uint TemplateId; public uint ItemId; public int Result; public int Count; public int Attempt; public int Flags; public float X, Y, Z; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
@@ -78,6 +93,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_stats")] static extern int StatsN(nint h, KlStats* stats);
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
+    [DllImport("klnet", EntryPoint = "kl_next_bag")] static extern int NextBagN(nint h, KlBagRow* row);
     [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
 
     static int? _abi;
@@ -138,6 +154,19 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         static string Text(byte* b) { int n = 0; while (n < 32 && b[n] != 0) n++; return System.Text.Encoding.UTF8.GetString(b, n); }
         return new FightEvent(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), (FightKind)e.Kind, (FightFlags)e.Flags, e.VictimId, e.KillerId, e.MonsterId,
             e.Delta, e.Total, Text(e.VictimName), Text(e.KillerName));
+    }
+    // a dll that says 8 or more but was built without the inventory export (the interface numbers are shared between
+    // branches): asked once, then never again, and the inventory stays unknown
+    static bool _noBag;
+    public bool ReadsBag => Version >= 8 && !_noBag;
+    public BagRecord? NextBag()
+    {
+        if (_h == 0 || !ReadsBag) return null;
+        KlBagRow r;
+        try { if (NextBagN(_h, &r) != 1 || r.Kind is < 0 or > 2) return null; }
+        catch (EntryPointNotFoundException) { _noBag = true; return null; }
+        // the gear byte (r.Gear) is left out: what it means isn't confirmed
+        return new BagRecord(new DateTime(r.AtUtcTicks, DateTimeKind.Utc), r.Kind, r.Count, r.ItemId, r.StackId, r.Amount, r.Container, r.Slot, r.Currency is >= 0 and <= 2 ? (CurrencyKind)r.Currency : null);
     }
     // a dll that says 7 or more but was built without the gathering export (the interface numbers are shared between
     // branches): asked once, then never again, and gathering stays the screen's
