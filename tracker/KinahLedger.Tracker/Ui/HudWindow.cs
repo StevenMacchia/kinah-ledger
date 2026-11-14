@@ -79,6 +79,8 @@ public sealed partial class HudWindow : Window
     /// </summary>
     public static async Task HiddenIfOver(System.Drawing.Rectangle area, Func<Task> read)
     {
+        // the fight overlay steps aside the same way (Ui/ParserOverlay.cs)
+        if (ParserOverlay.Current != null) { var inner = read; read = () => ParserOverlay.HiddenIfOver(area, inner); }
         var h = Current;
         bool hide = false;
         if (h != null) { try { hide = await h.Dispatcher.InvokeAsync(() => h.PixelBounds().IntersectsWith(area)); } catch (Exception) { hide = false; } }
