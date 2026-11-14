@@ -8,8 +8,8 @@ namespace KinahLedger.Ui;
 /// The game's eight classes as the Parser draws them (Steven, 2026-11-14: "make sure you know and show the icon for what
 /// class they are in the game, its super important. Color coordinate it"): the game's own class emblem (Art/class-*.png,
 /// 64 px copies of the site's /img/mb/classes art, MetaBot's copies of the game's) on a ring in the class's colour, and one
-/// colour per class for its meter bar, the same in the Parser tab, its overlay and the list. The colours follow the
-/// Okabe-Ito colour-blind-safe set, lightened for the dark looks; the emblem tells the class apart where two colours are near.
+/// colour per class for its meter bar, the same in the Parser tab, its overlay and the list: the game's own colour for the
+/// class, as its party list draws the class's glyph (Ocr/PartyFrame.cs); the emblem tells the class apart where two are near.
 /// </summary>
 public static class ClassArt
 {
@@ -23,17 +23,18 @@ public static class ClassArt
         return Keys.Contains(k) ? k : "";
     }
 
-    /// <summary>The class's colour: Gladiator vermillion, Templar blue, Assassin reddish purple, Ranger bluish green, Sorcerer sky blue, Spiritmaster violet, Cleric yellow, Chanter lime.</summary>
+    /// <summary>The class's colour, the game's own (its party list's): Gladiator light blue, Templar blue, Assassin green, Ranger teal, Sorcerer purple, Spiritmaster magenta, Cleric gold, Chanter orange.</summary>
     public static Color ColorOf(string? cls) => Key(cls) switch
     {
-        "gladiator" => Color.FromRgb(0xE3, 0x6A, 0x2E),     // vermillion
-        "templar" => Color.FromRgb(0x3A, 0x7B, 0xD5),       // blue
-        "assassin" => Color.FromRgb(0xD0, 0x7C, 0xAB),      // reddish purple
-        "ranger" => Color.FromRgb(0x18, 0xAD, 0x86),        // bluish green
-        "sorcerer" => Color.FromRgb(0x5B, 0xC0, 0xEB),      // sky blue
-        "spiritmaster" => Color.FromRgb(0x9B, 0x7D, 0xEB),  // violet
-        "cleric" => Color.FromRgb(0xE6, 0xD3, 0x4E),        // yellow
-        "chanter" => Color.FromRgb(0x9C, 0xC8, 0x3C),       // lime
+        // the glyph colours of the game's own party list (Ocr/PartyFrame.Refs), so the Parser's colours are the game's
+        "gladiator" => Color.FromRgb(0x7A, 0xC5, 0xD9),     // light blue
+        "templar" => Color.FromRgb(0x71, 0x8D, 0xD5),       // blue
+        "assassin" => Color.FromRgb(0x89, 0xCE, 0x79),      // green
+        "ranger" => Color.FromRgb(0x60, 0xAB, 0x8B),        // teal
+        "sorcerer" => Color.FromRgb(0xA2, 0x7D, 0xD8),      // purple
+        "spiritmaster" => Color.FromRgb(0xB7, 0x66, 0xB7),  // magenta
+        "cleric" => Color.FromRgb(0xCC, 0xB9, 0x72),        // gold
+        "chanter" => Color.FromRgb(0xCC, 0x99, 0x5C),       // orange
         _ => Color.FromRgb(0x86, 0x8D, 0xA1),               // unknown: the quiet grey
     };
 

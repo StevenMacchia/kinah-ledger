@@ -137,6 +137,8 @@ internal static class Program
                 case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
                 // the boss-fight Parser (Parser/): its rules on made-up fight events
                 case "parser-test": return KinahLedger.Parser.ParserTests.Run(settings);
+                // the party list's classes over a folder of game pictures (Ocr/PartyFrame.cs): totals by class, --rows for each picture's
+                case "party-scan": if (pos.Count == 0) { Console.WriteLine("party-scan <folder of pictures> [--rows]"); return 2; } return KinahLedger.Parser.ParserTests.PartyScan(pos[0], opts.ContainsKey("rows") || opts.ContainsKey("names"), opts.ContainsKey("names"));
                 // the Parser's capture-to-screen time over recordings replayed at their own speed (Ui/WpfApp.Parser.cs)
                 case "parser-latency": if (pos.Count == 0) { Console.WriteLine("parser-latency <capture.pcapng>...|synthetic [--mode boss|run|fight] [--minutes N] [--port 13328]"); return 2; }
                     return Ui.WpfApp.ParserLatencyReplay(settings, pos, opts.GetValueOrDefault("mode") ?? "fight", double.TryParse(opts.GetValueOrDefault("minutes"), out var plm) ? plm : 0, int.TryParse(opts.GetValueOrDefault("port"), out var plp) ? plp : 13328);

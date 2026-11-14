@@ -202,6 +202,7 @@ public sealed class BossParser
 
     void TakeLocked(BossEvent ev, List<Encounter> done)
     {
+        ClassOf = _screenClass.Count > 0 || _youClass.Length > 0 ? ApplyClass : null;
         switch (ev)
         {
             case InstanceEntered ie:
@@ -257,7 +258,7 @@ public sealed class BossParser
             }
             case GroupChanged gc:
                 _group = gc.Members.Where(m => m.Name.Trim().Length > 0 || m.You).ToList();
-                foreach (var e in Records()) MergeGroup(e, _group, late: (gc.At - e.Start).TotalSeconds > 30);
+                foreach (var e in Records()) { MergeGroup(e, _group, late: (gc.At - e.Start).TotalSeconds > 30); ApplyClasses(e); }
                 break;
             case DamageDealt dd:
                 if (dd.Amount <= 0) break;
@@ -326,6 +327,68 @@ public sealed class BossParser
         Finish(done, at);
     }
 
+    // ---- the party list's classes (Ocr/PartyFrame.cs, Steven 2026-11-14: "it's literally an icon in the top left") ----
+    readonly Dictionary<string, string> _screenClass = new(StringComparer.OrdinalIgnoreCase);
+    string _youClass = "";
+
+    /// <summary>
+    /// The party list as the screen shows it: each member's name (when read) and class, the player first. A member of a record
+    /// whose class isn't known takes it: the player's from the first row, the others' by name (one letter off allowed, for a
+    /// misread). A member whose class came as a number pairs that number with the class (Parser/ClassNumbers.cs).
+    /// </summary>
+    public void ScreenParty(IReadOnlyList<(string Name, string Class, bool You)> rows)
+    {
+        lock (_gate)
+        {
+            foreach (var (name, cls, you) in rows)
+            {
+                if (cls.Length == 0) continue;
+                if (you) _youClass = cls;
+                if (name.Length > 0) _screenClass[name] = cls;
+            }
+            foreach (var e in Records()) ApplyClasses(e);
+            _version++;
+        }
+        try { Changed?.Invoke(null); } catch (Exception ex) { CrashLog.Write("parser changed", ex); }
+    }
+
+    /// <summary>The class the party list gives a name, or "".</summary>
+    string ScreenClassOf(string name)
+    {
+        if (name.Length == 0) return "";
+        if (_screenClass.TryGetValue(name, out var c)) return c;
+        var want = NameKey(name);
+        if (want.Length < 4) return "";
+        foreach (var (n, cls) in _screenClass)
+        {
+            var have = NameKey(n);
+            if (have == want || (have.Length >= 5 && want.Length >= 5 && Data.NameMatch.Distance(have, want, 1) <= 1)) return cls;
+        }
+        return "";
+    }
+
+    /// <summary>A name as the matching sees it: lower case, no spaces, I, l, 1 and | one letter, 0 an o (the party list's usual misreads).</summary>
+    public static string NameKey(string name)
+    {
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var ch in name.Trim().ToLowerInvariant())
+        {
+            if (char.IsWhiteSpace(ch)) continue;
+            sb.Append(ch is 'i' or '1' or '|' or 'ı' ? 'l' : ch == '0' ? 'o' : ch);
+        }
+        return sb.ToString();
+    }
+
+    void ApplyClasses(Encounter e) { foreach (var f in e.Roster) if (!f.Other) ApplyClass(f); }
+
+    void ApplyClass(Fighter f)
+    {
+        string cls = f.You && _youClass.Length > 0 ? _youClass : ScreenClassOf(f.Name);
+        if (cls.Length == 0) return;
+        if (f.ClassNumber != 0) ClassNumbers.Pair(f.ClassNumber, cls);
+        if (f.Class.Length == 0 || f.ClassNumber != 0) f.Class = cls;
+    }
+
     /// <summary>Where the session reads the player is (its zone, and whether that is the Abyss): Every fight's place outside the three.</summary>
     public void Place(string? zone, bool abyss)
     {
@@ -364,6 +427,7 @@ public sealed class BossParser
             Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion,
         };
         MergeGroup(_cur, _group, late: false);
+        ApplyClasses(_cur);
         if (_mode == ParserMode.Run && _run == null) OpenRun(be.At, midway: true);
         if (_mode == ParserMode.Fights)
         {
@@ -403,6 +467,9 @@ public sealed class BossParser
     /// The row a hit goes to: the member by id; else a row made from the hit (its name when the decoder knows it, you
     /// marked), so the damage rows are the group until a group list comes. Id 0 is the Other row.
     /// </summary>
+    /// <summary>Names a fighter's class from the party list on the screen, when there is one (set per parser: <see cref="ScreenParty"/>).</summary>
+    [ThreadStatic] static Action<Fighter>? ClassOf;
+
     static Fighter SourceOf(Encounter e, DamageDealt dd)
     {
         if (dd.SourceId == 0)
@@ -412,9 +479,11 @@ public sealed class BossParser
             return other;
         }
         var f = e.Roster.FirstOrDefault(r => r.Id == dd.SourceId && !r.Other);
+        bool fresh = f == null;
         if (f == null) e.Roster.Add(f = new Fighter { Id = dd.SourceId, FromDamage = true });
-        if (f.Name.Length == 0 && dd.SourceName.Trim().Length > 0) f.Name = dd.SourceName.Trim();
+        if (f.Name.Length == 0 && dd.SourceName.Trim().Length > 0) { f.Name = dd.SourceName.Trim(); fresh = true; }
         f.You |= dd.SourceIsYou;
+        if (fresh && f.Class.Length == 0) ClassOf?.Invoke(f);
         return f;
     }
 
@@ -427,7 +496,7 @@ public sealed class BossParser
             if (f == null) { f = Fighter.From(m); f.Late = late && !e.HasDamage; e.Roster.Add(f); continue; }
             f.Gone = false; f.FromDamage = false;
             if (m.Name.Trim().Length > 0) f.Name = m.Name.Trim();
-            if (m.Class.Trim().Length > 0) f.Class = m.Class.Trim();
+            if (m.Class.Trim().Length > 0) f.SetClass(m.Class);
             if (m.CombatPower > 0) f.CombatPower = m.CombatPower;
             if (m.ItemLevel > 0) f.ItemLevel = m.ItemLevel;
             f.You |= m.You;
