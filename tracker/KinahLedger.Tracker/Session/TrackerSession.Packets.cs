@@ -213,7 +213,13 @@ public sealed partial class TrackerSession
     /// </summary>
     void DrainFights(PacketReader p, DateTime now)
     {
-        while (p.NextFight() is { } f) _fightTally.Add(f);
+        while (p.NextFight() is { } f)
+        {
+            // a kill the game calls the player's is a kill nearby at once, before the tally's hold: its own Kinah and drops
+            // needn't wait for a chat line (the one-screen worker's instant counting, 2026-11-13)
+            if (f.Kind == FightKind.Kill && f.Flags.HasFlag(FightFlags.Mine) && !f.Flags.HasFlag(FightFlags.VictimMe) && f.At > _lastKillAt) _lastKillAt = f.At;
+            _fightTally.Add(f);
+        }
         foreach (var o in _fightTally.Take(now))
         {
             if (!o.Death && (o.At - _lastKillAt).TotalSeconds > 0) _lastKillAt = o.At;
