@@ -89,6 +89,48 @@ public partial class MainWindow
         DrawOverlayPills();
     }
 
+    /// <summary>
+    /// Move overlay (Steven, 2026-11-14): the strip shown now to be dragged, even with nothing due and with the overlay
+    /// off; Done or Esc keeps the spot. With the overlay off it closes again after.
+    /// </summary>
+    internal void StartTimersPlacement()
+    {
+        bool wasOn = _timerPrefs.OverlayOn;
+        if (_timersOverlay == null)
+        {
+            SetTimersOverlay(true, save: false);
+            _timerPrefs.OverlayOn = wasOn;
+            DrawOverlayPills();
+        }
+        var o = _timersOverlay!;
+        o.PlacementDone = () => { if (!_timerPrefs.OverlayOn) SetTimersOverlay(false, save: false); };
+        var now = DateTime.UtcNow;
+        o.StartPlacing(PlacementSample(now), now);
+    }
+
+    /// <summary>Reset position: the overlay back to its default spot (top right of the main screen), saved.</summary>
+    internal void ResetTimersOverlayPosition()
+    {
+        _timerPrefs.X = null; _timerPrefs.Y = null; _timerPrefs.Save();
+        _timersOverlay?.ResetSpot();
+    }
+
+    /// <summary>What stands in while placing with nothing due: the next watched timers, else "Shugo 4:52 · Kashapa 12:10".</summary>
+    List<TimerBoard.Item> PlacementSample(DateTime now)
+    {
+        List<TimerBoard.Item> next;
+        try
+        {
+            next = TimerItems(now).Where(i => i.State == TimerBoard.Kind.Waiting && i.AtPc is { } at && at > now && _timerPrefs.Watched(i.Key))
+                .OrderBy(i => i.AtPc).Take(Math.Max(1, _timerPrefs.Count)).ToList();
+        }
+        catch (Exception) { next = new(); }
+        if (next.Count > 0) return next;
+        TimerBoard.Item Fake(string name, string shortName, double seconds) =>
+            new(TimerBoard.EventKey(name), "Events", name, "", TimerBoard.Kind.Waiting, now.AddSeconds(seconds), "", "") { Short = shortName };
+        return new() { Fake("Shugo Festival", "Shugo", 292), Fake("Soul Ruler Kashapa", "Kashapa", 730) };
+    }
+
     internal void SetTimersClickThrough(bool on)
     {
         _timerPrefs.ClickThrough = on; _timerPrefs.Save();

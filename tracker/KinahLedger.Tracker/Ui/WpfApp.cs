@@ -878,6 +878,34 @@ public static partial class WpfApp
             DoEvents();
             Check(listed && picked && overlayOn && tw.TimersOverlayForTest == null && to.Scroller.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Auto,
                 $"Options › Timers lists the timers ({to.TimerBoxes.Count}), Watcher Kaira and Shugo watched by default; its Chime and Watch boxes change the picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
+            // placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay
+            // shows the strip now, outlined and clickable, with the next watched timers or a sample; Done keeps the spot on a
+            // screen and it hides again with nothing due; with the overlay off it closes after; Reset forgets the spot
+            {
+                var pp = Session.TimerPrefs.Defaults();
+                foreach (var i in tw.TimerItemsNow()) pp.SetWatched(i.Key, false);   // nothing watched: nothing due, so only placement shows it
+                pp.OverlayOn = false;
+                tw.TimerPrefsForTest = pp;
+                bool buttons = tw.TimersMoveForTest != null && to.TimersMoveBtn != null && to.TimersResetBtn != null;
+                tw.StartTimersPlacement(); DoEvents();
+                var po = tw.TimersOverlayForTest;
+                long ex = po?.ExStyleForTest ?? 0;
+                bool placed = po != null && po.Placing && po.IsVisible && (ex & Native.ExTransparent) == 0 && (ex & Native.ExNoActivate) != 0 && po.RowsForTest == 2;
+                if (po != null) { po.Left = SystemParameters.VirtualScreenLeft - 60000; po.Top = 300; po.FinishPlacing(); }
+                DoEvents();
+                bool kept = pp.X is double px && px >= SystemParameters.VirtualScreenLeft && px < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth && pp.Y is double;
+                bool closedAfter = tw.TimersOverlayForTest == null && !pp.OverlayOn;
+                pp.OverlayOn = true; tw.SetTimersOverlay(true, save: false); DoEvents();
+                tw.StartTimersPlacement(); DoEvents();
+                var po2 = tw.TimersOverlayForTest;
+                po2?.FinishPlacing(); DoEvents();
+                bool hiddenAfter = po2 != null && !po2.IsVisible && !po2.Placing && ((po2.ExStyleForTest & Native.ExTransparent) != 0);
+                tw.ResetTimersOverlayPosition();
+                bool reset = pp.X == null && pp.Y == null;
+                tw.SetTimersOverlay(false, save: false); DoEvents();
+                Check(buttons && placed && kept && closedAfter && hiddenAfter && reset,
+                    $"Move overlay (the Timers page and Settings): the strip shows at once, outlined and clickable, with a sample when nothing is due ({placed}); Done keeps the spot on a screen ({kept}), closes it again with the overlay off ({closedAfter}), hides it with the overlay on, clicks through again ({hiddenAfter}); Reset forgets the spot ({reset})");
+            }
             to.Close();
         }
             w.ShowPartForTest("Farming"); DoEvents();
