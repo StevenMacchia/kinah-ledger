@@ -466,7 +466,10 @@ public static partial class WpfApp
         // the pages by key (0.10.26; redesign 2026-11-14: as the pills sit, Farm, Craft, Runs, Timers)
         w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
         w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Runs");
-        w.PressForTest(Key.D4, ModifierKeys.Control); Check(w.PartForTest == "Timers" && w.TimersPage.Visibility == Visibility.Visible && w.TimersPage.Children.Count > 0, "Ctrl+4 shows the Timers page, drawn");
+        w.PressForTest(Key.D4, ModifierKeys.Control); Check(w.PartForTest == "Parser", "Ctrl+4 shows the Parser (after Runs since 0.10.93)");
+        w.PressForTest(Key.D5, ModifierKeys.Control); Check(w.PartForTest == "Timers" && w.TimersPage.Visibility == Visibility.Visible && w.TimersPage.Children.Count > 0, "Ctrl+5 shows the Timers page, drawn");
+        Check(string.Join(",", w.PartTabRow.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Visibility == Visibility.Visible).Select(b => b.Name)) == "FarmTab,CraftTab,EventsTab,ParserTab,TimersTab",
+            "the pills: Farm, Craft, Runs, Parser, Timers, the Parser always there: " + string.Join(", ", w.PartTabRow.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Visibility == Visibility.Visible).Select(b => b.Name)));
         w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
         // no page names where its figures come from (Steven, 2026-11-14: only Options may); every page, the timers live and empty
         foreach (var timers in new[] { "live", "empty" })
@@ -1480,7 +1483,7 @@ public static partial class WpfApp
         {
             var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
             static Rect Near(Rect r) => new(Math.Round(r.X, 3), Math.Round(r.Y, 3), Math.Round(r.Width, 3), Math.Round(r.Height, 3));
-            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.TimersTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
+            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.ParserTab, w.TimersTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
             var tabRow = (System.Windows.Controls.Panel)System.Windows.Media.VisualTreeHelper.GetParent(w.FarmTab);
             // where a tab's face draws its light, as the screen has it: the tab's box in its row, inside its one-pixel edge
             Rect Face(System.Windows.Controls.Button b)

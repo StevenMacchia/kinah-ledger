@@ -294,8 +294,8 @@
             </StackPanel>
           </StackPanel>
         </StackPanel>
-        <!-- the pages as pills (redesign 2026-11-14, Steven's pick): Farm, Craft, Runs, Timers (the next watched countdown rides on
-             it), and Parser while it is on; Quests is reached from Next up's head. Every feature lives on one of them -->
+        <!-- the pages as pills (redesign 2026-11-14, Steven's pick): Farm, Craft, Runs, Parser, Timers (the next watched countdown
+             rides on it); Quests is reached from Next up's head. Every feature lives on one of them -->
         <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" VerticalAlignment="Center">
           <StackPanel x:Name="PartTabRow" Orientation="Horizontal">
             <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
@@ -307,16 +307,16 @@
             <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot.">
               <TextBlock Text="Runs" VerticalAlignment="Center"/>
             </Button>
+            <!-- Parser (2026-11-13, Ui/MainWindow.Parser.cs; after Runs since 0.10.93, Steven: "move the parser button next to the craft and runs"): boss fights in Transcendence, Expeditions and Sanctuaries -->
+            <Button x:Name="ParserTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Parser: boss fights in Transcendence, Expeditions and Sanctuaries, one per boss, with your group, the clock and the fights kept on this PC.">
+              <TextBlock Text="Parser" VerticalAlignment="Center"/>
+            </Button>
             <!-- Timers (Ui/MainWindow.TimersPage.cs): events and world bosses; the next watched one's countdown rides on the tab -->
             <Button x:Name="TimersTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Timers: when the events start and the world bosses spawn.">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Timers" VerticalAlignment="Center"/>
                 <TextBlock x:Name="TimersTabNext" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Visibility="Collapsed"/>
               </StackPanel>
-            </Button>
-            <!-- Parser (2026-11-13, Ui/MainWindow.Parser.cs): boss fights in Transcendence, Expeditions and Sanctuaries -->
-            <Button x:Name="ParserTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Parser: boss fights in Transcendence, Expeditions and Sanctuaries, one per boss, with your group, the clock and the fights kept on this PC.">
-              <TextBlock Text="Parser" VerticalAlignment="Center"/>
             </Button>
           </StackPanel>
         </Border>
