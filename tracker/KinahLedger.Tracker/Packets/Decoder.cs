@@ -44,9 +44,10 @@ public sealed record BossSighting(DateTime At, DateTime? ServerNow, string Key, 
 /// <summary>
 /// One record of the inventory's snapshot (the game sends the whole inventory at the start of each connection to its
 /// server): Begin (Count: the stacks the game says it holds), Stack (an item's stack: its id on this connection, the amount,
-/// the container; Currency when it is Kinah, bound Kinah or Abyss Points), End (Count: the stacks read).
+/// the container; Currency when it is Kinah, bound Kinah or Abyss Points; Level a piece of gear's enhancement level, 0 for
+/// anything else), End (Count: the stacks read).
 /// </summary>
-public sealed record BagRecord(DateTime At, int Kind, int Count, long ItemId, long StackId, long Amount, int Container, int Slot, CurrencyKind? Currency)
+public sealed record BagRecord(DateTime At, int Kind, int Count, long ItemId, long StackId, long Amount, int Container, int Slot, CurrencyKind? Currency, int Level = 0)
 {
     public const int Begin = 0, Stack = 1, End = 2;
 }
@@ -198,8 +199,8 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         KlBagRow r;
         try { if (NextBagN(_h, &r) != 1 || r.Kind is < 0 or > 2) return null; }
         catch (EntryPointNotFoundException) { _noBag = true; return null; }
-        // the gear byte (r.Gear) is left out: what it means isn't confirmed
-        return new BagRecord(new DateTime(r.AtUtcTicks, DateTimeKind.Utc), r.Kind, r.Count, r.ItemId, r.StackId, r.Amount, r.Container, r.Slot, r.Currency is >= 0 and <= 2 ? (CurrencyKind)r.Currency : null);
+        // the gear's enhancement level (confirmed against the game's window on 2026-11-13 for +1 to +12)
+        return new BagRecord(new DateTime(r.AtUtcTicks, DateTimeKind.Utc), r.Kind, r.Count, r.ItemId, r.StackId, r.Amount, r.Container, r.Slot, r.Currency is >= 0 and <= 2 ? (CurrencyKind)r.Currency : null, r.Gear is > 0 and < 100 ? r.Gear : 0);
     }
     // a dll that says 7 or more but was built without the gathering export (the interface numbers are shared between
     // branches): asked once, then never again, and gathering stays the screen's

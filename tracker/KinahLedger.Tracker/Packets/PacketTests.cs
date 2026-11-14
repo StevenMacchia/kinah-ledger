@@ -428,7 +428,7 @@ public static class PacketTests
                 new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Ore"), 11, 31, 1, 40, null),
                 new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Ore"), 12, 742, 18, 79, null),
                 new BagRecord(t0, BagRecord.Stack, 0, Id("Life Potion (Bound)"), 13, 364, 1, 2, null),
-                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Guard"), 14, 1, BagBook.Worn, 2, null),
+                new BagRecord(t0, BagRecord.Stack, 0, Id("Orichalcum Guard"), 14, 1, BagBook.Worn, 2, null, 12),
                 new BagRecord(t0, BagRecord.End, 5, 0, 0, 0, 0, 0, null));
             var tot = bag.Totals()!;
             r.ItemsForTest(new ItemChange(t0.AddSeconds(30), Id("Orichalcum Ore"), ItemOp.Changed, 11, 1, 32, false, 1, 1, false),
@@ -437,6 +437,7 @@ public static class PacketTests
             r.AmountForTest(CurrencyKind.Kinah, 4_727_973, t0.AddSeconds(29)); r.AmountForTest(CurrencyKind.Kinah, 4_728_099, t0.AddSeconds(30));
             var after = bag.Totals()!;
             Check(unknownFirst && tot.GetValueOrDefault(Id("Orichalcum Ore")) == 773 && !tot.ContainsKey(Id("Orichalcum Guard")) && bag.Totals(worn: true)!.ContainsKey(Id("Orichalcum Guard"))
+                && bag.WornGear() is [{ Slot: 2, Level: 12 }]
                 && after.GetValueOrDefault(Id("Orichalcum Ore")) == 774 && after.GetValueOrDefault(Id("Odyle")) == 1 && !after.ContainsKey(Id("Life Potion (Bound)")) && bag.Money(CurrencyKind.Kinah) == 4_728_099 && bag.LastRows == (5, 5),
                 $"the inventory: unknown before its snapshot, then Orichalcum Ore {tot.GetValueOrDefault(Id("Orichalcum Ore"))} (two stacks), the gear worn apart; after the changes {after.GetValueOrDefault(Id("Orichalcum Ore"))} ore, {after.GetValueOrDefault(Id("Odyle"))} Odyle, the potions gone, Kinah {bag.Money(CurrencyKind.Kinah):N0}");
             // its worth: tradable at the price, bound at its tradable twin's, unpriced counted; the change since the first snapshot
@@ -471,6 +472,13 @@ public static class PacketTests
                     var x = a.Totals()!; var y = b2.FirstTotals;   // the first connection at its end; the second at its snapshot (gear worn apart in both)
                     foreach (var id in x.Keys.Union(y.Keys)) { if (x.GetValueOrDefault(id) == y.GetValueOrDefault(id)) agree++; else differ++; }
                     bool kinahSame = a.Money(CurrencyKind.Kinah) == 4_922_940;   // the Kinah the 20:01:47 snapshot holds
+                    // the gear worn and its levels, against Steven's screenshot of 22:20 (the same gear): +12 the guard, +11 a ring,
+                    // +1 and +2 the two teal pieces, +10 the other fifteen, and the weapon's 18 (a badge in the game)
+                    var worn = b2.WornGear()!.ToDictionary(g => g.Slot, g => g.Level);
+                    var want = new Dictionary<int, int> { [1] = 18, [2] = 12, [13] = 11, [23] = 1, [24] = 2 };
+                    foreach (var sl in new[] { 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 15, 16, 17, 19, 22 }) want[sl] = 10;
+                    Check(worn.Count == 20 && want.All(kv => worn.GetValueOrDefault(kv.Key) == kv.Value),
+                        $"the gear worn in the recordings, by slot: {string.Join(" ", worn.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:+{kv.Value}"))} (Steven's screenshot: 19 of 19 levels)");
                     Check(differ == 0 && agree > 200 && kinahSame && a.LastRows.Said == a.LastRows.Read && b2.LastRows.Said == b2.LastRows.Read,
                         $"the inventory in the recordings: the 18:49 snapshot ({a.LastRows.Read} of {a.LastRows.Said} stacks) kept up with every change equals the 20:01 one ({b2.LastRows.Read} of {b2.LastRows.Said}) for {agree} items, {differ} differ; Kinah at the first connection's end {a.Money(CurrencyKind.Kinah):N0} (the second snapshot says 4,922,940)");
                 }
