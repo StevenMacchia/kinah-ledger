@@ -470,6 +470,29 @@ public static partial class WpfApp
         Check(runsLines.Length == w.ShownRunsForTest().Count + 1 && runsLines[0].TrimStart('\uFEFF') == Session.CsvExport.RunsHeader, $"...one line a run: {runsLines.Length - 1} runs, after the header");
         Check(runsLines.Skip(1).All(l => l.Split(',')[1] is "Expedition" or "Event"), "...each an expedition or an event");
         MainWindow.SaveCsvForTest = null;
+        // the Runs page (Steven, 2026-11-14: "It should show the latest run ... Paid out here ... an expandable 'Best drops' that
+        // is sortable"): the latest run's card first by default, Best drops folded; open it and sort it by each column
+        {
+            Check(w.RunsViewForTest == "latest" && w.LatestRunShownForTest && w.BestDropsCardShownForTest && w.BestDropRowsForTest().Count == 0,
+                "Runs: the latest run's card first by default, Best drops there and folded");
+            w.RunsViewForTest = "all"; DoEvents();
+            bool allHero = !w.LatestRunShownForTest;
+            w.RunsViewForTest = "latest"; DoEvents();
+            Check(allHero && w.LatestRunShownForTest, "...its switch turns it to All runs (the place's hour and averages) and back");
+            foreach (var by in new[] { "value", "count", "name", "when" })
+            {
+                w.BestDropsForTest(true, by); DoEvents();
+                var rows = w.BestDropRowsForTest();
+                var want = w.BestDropsExpectedForTest(by).Take(rows.Count).ToList();
+                Check(rows.Count > 0 && rows.SequenceEqual(want), $"...Best drops opened, sorted by {by}: {string.Join(", ", rows.Take(4))}{(rows.Count > 4 ? ", ..." : "")}");
+            }
+            var byName = w.BestDropRowsForTest();
+            w.BestDropsForTest(true, "name"); DoEvents();
+            Check(w.BestDropRowsForTest().SequenceEqual(w.BestDropsExpectedForTest("name").Take(w.BestDropRowsForTest().Count)) && byName.Count > 0
+                && w.BestDropsExpectedForTest("name").SequenceEqual(w.BestDropsExpectedForTest("name").OrderBy(x => x, StringComparer.OrdinalIgnoreCase)),
+                "...by name is A to Z");
+            w.BestDropsForTest(false, "value"); DoEvents();
+        }
         // the week (0.10.26): a row a day, seven days
         var weekLines = w.WeekCsvForTest().Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Check(weekLines.Length == 8 && weekLines[0].TrimEnd('\r') == Session.CsvExport.WeekHeader, $"the week as CSV: {weekLines.Length - 1} days after the header");
@@ -798,7 +821,12 @@ public static partial class WpfApp
                 Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20) && System.Windows.Automation.AutomationProperties.GetName(shown[0]) == "Overlays" && w.SiteText.IsVisible,
                     $"the header's round buttons on {page}: Overlays and Settings, each with a tooltip; the site is a footer link ({seen[^1]})");
             }
-            // the Overlays button's menu: a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            // the Overlays button's menu: by default just Kinah (the timers are a line on top of it); with Settings › Timers ›
+            // Separate timer overlay on, a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
+            bool defaultOne = defaultMenu == "Kinah" && w.OverlayEntries().Count == 1;
+            Check(defaultOne && !w.TimersSeparate, $"the header's Overlays menu by default: just Kinah ({defaultMenu}), the timers being a line on top of it");
+            w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
             var entries = w.OverlayEntries();
             Check(string.Join(",", ovs.Select(p => p.Name)) == "Kinah,Timers" && entries.Count == 2 && entries.All(e => e.On != null && e.Sub.Length > 0),
@@ -823,6 +851,7 @@ public static partial class WpfApp
         // takes focus, passes clicks through when asked, and Customize's switches land in the settings
         {
             var tw = w;
+            TimersOverlay.InvisibleForTest = true;   // the strips these checks open are never seen on the player's screen
             tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             tw.TimersSampleForShot("live");
             Click(tw.TimersTab); DoEvents();
@@ -848,20 +877,24 @@ public static partial class WpfApp
             Check(off && tw.TimerPrefsForTest.Watched(gartua), $"...a bell's click stops watching Gartua ({off}); it moves into Verteron's list, where its bell watches it again");
             tw.TimersSampleForShot("off");
             tw.ShowPartForTest("Farming"); DoEvents();
+            tw.TimerPrefsForTest.Separate = true;   // the menu lists Timers only while it is a strip of its own
             tw.SetTimersOverlay(true, save: false); DoEvents();
-            Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on, and the button its green dot");
+            Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on (separated), and the button its green dot");
             var ov = tw.TimersOverlayForTest;
-            long ex0 = ov?.ExStyleForTest ?? 0;                 // click-through by default
-            ov?.InteractiveForTest(true); DoEvents();
-            long exCtrl = ov?.ExStyleForTest ?? 0;              // Ctrl held: it takes the mouse
-            ov?.InteractiveForTest(false);
-            tw.SetTimersClickThrough(false); DoEvents();
-            long ex1 = ov?.ExStyleForTest ?? 0;                 // click-through off
+            long ex0 = ov?.ExStyleForTest ?? 0;                 // by default it takes the mouse: plain click and drag, as the Kinah overlay
             tw.SetTimersClickThrough(true); DoEvents();
-            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) != 0
-                && (exCtrl & Native.ExTransparent) == 0 && (exCtrl & Native.ExNoActivate) != 0 && (ex1 & Native.ExTransparent) == 0;
+            long ex1 = ov?.ExStyleForTest ?? 0;                 // click-through on
+            ov?.GripForTest(true, true); DoEvents();
+            long exGrip = ov?.ExStyleForTest ?? 0;              // the pointer on its grip: grabbable there
+            bool gripShown = ov?.GripShownForTest == true;
+            ov?.GripForTest(false, false); DoEvents();
+            long exAway = ov?.ExStyleForTest ?? 0;
+            tw.SetTimersClickThrough(false); DoEvents();
+            bool noFocus = (ex0 & Native.ExNoActivate) != 0 && (ex0 & Native.ExToolWindow) != 0 && (ex0 & Native.ExTransparent) == 0
+                && (ex1 & Native.ExTransparent) != 0 && (exGrip & Native.ExTransparent) == 0 && gripShown && (exAway & Native.ExTransparent) != 0
+                && !tw.TimerPrefsForTest.ClickThrough && !Session.TimerPrefs.Defaults().ClickThrough;
             Check(ov != null && ov.Topmost && !ov.ShowActivated && ov.Owner == null && noFocus,
-                $"...the overlay: its own window (no owner), on top, never takes focus, out of Alt+Tab; click-through by default, clickable while Ctrl is held or with click-through off ({noFocus})");
+                $"...the strip: its own window (no owner), on top, never takes focus, out of Alt+Tab; it takes the mouse by default (dragged like the Kinah overlay); click-through only as a setting, its grip still grabbable then ({noFocus})");
             ov?.Show(new List<Session.TimerBoard.Item>(), DateTime.UtcNow);
             bool hidden = ov != null && !ov.IsVisible;
             ov?.Show(new List<Session.TimerBoard.Item> { new("boss:Heretic Layla", "Verteron", "Heretic Layla", "Rock Tomb Hill", Session.TimerBoard.Kind.Waiting, DateTime.UtcNow.AddMinutes(3), "3m 00s", "at 07:00") }, DateTime.UtcNow);
@@ -886,34 +919,84 @@ public static partial class WpfApp
             DoEvents();
             Check(listed && picked && overlayOn && tw.TimersOverlayForTest == null && to.Scroller.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Auto,
                 $"Options › Timers lists the timers ({to.TimerBoxes.Count}), Watcher Kaira and Shugo watched by default; its Chime and Watch boxes change the picks ({picked}), the overlay's switch turns it on and off ({overlayOn}); the page scrolls");
-            // placement (Steven, 2026-11-14: "let the user customize where the timer goes even if one is not up"): Move overlay
-            // shows the strip now, outlined and clickable, with the next watched timers or a sample; Done keeps the spot on a
-            // screen and it hides again with nothing due; with the overlay off it closes after; Reset forgets the spot
+            // the timer line on top of the Kinah overlay (Steven, 2026-11-14: "pop out at the top tiny"): it shows the soonest
+            // watched timers, gold in their last 5 minutes; the window moves up by its height so the Kinah line stays where it
+            // is (AnchorTop, the spot a drag remembers, doesn't move); it folds away with nothing due
             {
-                var pp = Session.TimerPrefs.Defaults();
-                foreach (var i in tw.TimerItemsNow()) pp.SetWatched(i.Key, false);   // nothing watched: nothing due, so only placement shows it
-                pp.OverlayOn = false;
+                var hud = new HudWindow { Left = -12000, Top = -11000 };
+                hud.Show(); DoEvents();
+                double top0 = hud.Top, anchor0 = hud.AnchorTop;
+                var tnow = DateTime.UtcNow;
+                Session.TimerBoard.Item Due(string name, string shortName, double s) =>
+                    new(Session.TimerBoard.EventKey(name), "Events", name, "", Session.TimerBoard.Kind.Waiting, tnow.AddSeconds(s), "", "") { Short = shortName };
+                hud.ShowTimers(new[] { Due("Dimensional Invasion", "Invasion", 279), Due("Soul Ruler Kashapa", "Kashapa", 719) }, tnow); DoEvents();
+                double up = top0 - hud.Top, lineH = hud.TimerLineHeight;
+                string line = hud.TimerLineForTest;
+                bool anchored = hud.TimersShown && lineH > 8 && Math.Abs(up - lineH) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1 && line == "Invasion 4:39 · Kashapa 11:59";
+                hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); DoEvents();
+                bool lineFolded = !hud.TimersShown && Math.Abs(hud.Top - top0) < 1 && hud.TimerLineHeight == 0;
+                // with the Parser's section expanded too: the timer line at the very top, the section under it, the Kinah line
+                // where it was (its own content still at AnchorTop); both folded, the window back where it was
+                bool still0 = Motion.Still; Motion.Still = true;
+                var (_, pull) = KinahLedger.Parser.ParserDemo.Sample(tnow);
+                // (each shown, folded and shown again: a fold must give back exactly what showing took)
+                for (int k = 0; k < 2; k++)
+                {
+                    hud.ShowParser(pull, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents();
+                    hud.ShowTimers(new[] { Due("Dimensional Invasion", "Invasion", 279) }, tnow); DoEvents();
+                    if (k == 0) { hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); hud.ShowParser(null, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents(); }
+                }
+                double Y(UIElement e) => hud.Top + e.TransformToAncestor(hud).Transform(new Point(0, 0)).Y;
+                var stackRows = ((System.Windows.Controls.StackPanel)hud.Content).Children.OfType<FrameworkElement>().ToList();
+                bool stacked = stackRows.Count == 3 && stackRows[2] == hud.OwnContent && hud.TimersShown && hud.ParserShown && hud.ParserHeight > 100
+                    && Y(stackRows[0]) + stackRows[0].ActualHeight <= Y(stackRows[1]) + 0.5 && Math.Abs(Y(stackRows[2]) - anchor0) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1
+                    && Math.Abs(top0 - hud.Top - hud.TimerLineHeight - hud.ParserHeight) < 1;
+                hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); hud.ShowParser(null, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents();
+                bool bothFolded = Math.Abs(hud.Top - top0) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1;
+                Motion.Still = still0;
+                Check(stacked && bothFolded, $"timer line with the Parser's section expanded: the line on top, the section under it, the Kinah line where it was, shown a second time too ({stacked}); both folded, the window back ({bothFolded})");
+                hud.Close();
+                tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
+                string home = tw.TimersHostForTest;   // no Kinah overlay in this window: the strip
+                tw.TimerPrefsForTest.Separate = true;
+                string sepHome = tw.TimersHostForTest;
+                Check(anchored && lineFolded && home == "strip" && sepHome == "strip",
+                    $"timer line on top of the Kinah overlay: \"{line}\", {lineH:0} px; the window up by as much ({up:0}), the Kinah line where it was ({anchored}); folded with nothing due, back where it was ({lineFolded}); without the Kinah overlay, or separated, the strip ({home}, {sepHome})");
+            }
+            // the strip as a sibling of the Kinah overlay (Steven, 2026-11-14: "it doesnt match aesthetic of the kinah tracker at
+            // all"; "just click and drag"): the Kinah strip's surface, corner, padding and line; the first time it shows it sits
+            // just above the Kinah overlay; no Move button or placement mode anywhere; Reset position in Settings puts it back
+            {
+                var pp = Session.TimerPrefs.Defaults(); pp.Separate = true;
                 tw.TimerPrefsForTest = pp;
-                bool buttons = tw.TimersMoveForTest != null && to.TimersMoveBtn != null && to.TimersResetBtn != null;
-                tw.StartTimersPlacement(); DoEvents();
-                var po = tw.TimersOverlayForTest;
-                long ex = po?.ExStyleForTest ?? 0;
-                bool placed = po != null && po.Placing && po.IsVisible && (ex & Native.ExTransparent) == 0 && (ex & Native.ExNoActivate) != 0 && po.RowsForTest == 2;
-                if (po != null) { po.Left = SystemParameters.VirtualScreenLeft - 60000; po.Top = 300; po.FinishPlacing(); }
+                var strip = new TimersOverlay(pp) { KinahBox = () => new Rect(400, 500, 320, 40) };
+                var tnow = DateTime.UtcNow;
+                strip.Show(new[] { new Session.TimerBoard.Item("event:Shugo Festival", "Events", "Shugo Festival", "", Session.TimerBoard.Kind.Waiting, tnow.AddSeconds(292), "", "") { Short = "Shugo" } }, tnow);
                 DoEvents();
-                bool kept = pp.X is double px && px >= SystemParameters.VirtualScreenLeft && px < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth && pp.Y is double;
-                bool closedAfter = tw.TimersOverlayForTest == null && !pp.OverlayOn;
-                pp.OverlayOn = true; tw.SetTimersOverlay(true, save: false); DoEvents();
-                tw.StartTimersPlacement(); DoEvents();
-                var po2 = tw.TimersOverlayForTest;
-                po2?.FinishPlacing(); DoEvents();
-                bool hiddenAfter = po2 != null && !po2.IsVisible && !po2.Placing && ((po2.ExStyleForTest & Native.ExTransparent) != 0);
+                bool above = Math.Abs(strip.Left - 400) < 1 && Math.Abs(strip.Top + strip.ActualHeight + 6 - 500) < 1;
+                var kinah = new HudWindow(still: true) { Left = -12000, Top = -12000 };
+                kinah.Show(); DoEvents();
+                var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.OwnContent!).Children[0];
+                var sf = strip.FrameForTest;
+                bool sibling = sf.CornerRadius == kf.CornerRadius && sf.Padding == kf.Padding && sf.BorderThickness == kf.BorderThickness
+                    && (sf.BorderBrush as SolidColorBrush)?.Color == (kf.BorderBrush as SolidColorBrush)?.Color && (sf.Background as SolidColorBrush)?.Color == (kf.Background as SolidColorBrush)?.Color
+                    && strip.FontFamily.Source == kinah.FontFamily.Source;
+                kinah.Close();
+                pp.X = 1200; pp.Y = 300;
                 tw.ResetTimersOverlayPosition();
                 bool reset = pp.X == null && pp.Y == null;
-                tw.SetTimersOverlay(false, save: false); DoEvents();
-                Check(buttons && placed && kept && closedAfter && hiddenAfter && reset,
-                    $"Move overlay (the Timers page and Settings): the strip shows at once, outlined and clickable, with a sample when nothing is due ({placed}); Done keeps the spot on a screen ({kept}), closes it again with the overlay off ({closedAfter}), hides it with the overlay on, clicks through again ({hiddenAfter}); Reset forgets the spot ({reset})");
+                strip.ResetSpot();
+                bool backAbove = Math.Abs(strip.Left - 400) < 1;
+                strip.Close();
+                var to2 = new OptionsWindow(tw, OptionsWindow.Page.Timers) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+                to2.Show(); DoEvents();
+                bool resetOnly = to2.TimersResetBtn != null && to2.TimersSeparateChk?.IsChecked == true;
+                to2.Close();
+                Check(above && sibling && reset && backAbove && resetOnly,
+                    $"the separate strip: first shown just above the Kinah overlay ({above}); the Kinah strip's surface, corner, padding, line and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
+                tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             }
+            TimersOverlay.InvisibleForTest = false;
             to.Close();
         }
             w.ShowPartForTest("Farming"); DoEvents();
@@ -1344,8 +1427,9 @@ public static partial class WpfApp
             }
             bool Lit(System.Windows.Controls.Button tab) => ReferenceEquals(tab.Style, w.FindResource("NavOn"));
             Check(Follow(Session.ActivityKind.Farming, 10) == "Farming", "the page: farming leaves it on Farming");
-            Check(Follow(Session.ActivityKind.Crafting, 3) == "Farming" && Follow(Session.ActivityKind.Farming, 5) == "Farming", "...3 s of crafting doesn't move it");
-            Check(Follow(Session.ActivityKind.Crafting, 6) == "Crafting" && Lit(w.CraftTab) && !Lit(w.FarmTab), "...crafting that holds shows Crafting, its tab lit");
+            // 0.10.87: the activity is Crafting only once a craft is done, and Farming on a kill or gather, so the page follows each at once
+            Check(Follow(Session.ActivityKind.Crafting, 0.5) == "Crafting" && Lit(w.CraftTab) && !Lit(w.FarmTab), "...a craft done shows Crafting at once, its tab lit");
+            Check(Follow(Session.ActivityKind.Farming, 0.5) == "Farming" && Follow(Session.ActivityKind.Crafting, 0.5) == "Crafting", "...a kill or gather shows Farming at once, a craft Crafting again");
             Check(Follow(Session.ActivityKind.Expedition, 6) == "Events" && Lit(w.EventsTab), "...an expedition shows Events");
             Click(w.FarmTab);
             Check(w.PartForTest == "Farming" && Follow(Session.ActivityKind.Expedition, 30) == "Farming", "Farming clicked in the expedition stays through it");
@@ -2183,6 +2267,13 @@ public static partial class WpfApp
         if (kind == "Events" && shotState is not ("week" or "share-run" or "week-places" or "run-vs-average")) shotState = "";
         if (shotState == "share-run" && kind == "Events") w.OpenShareSample(shotState, events: true);
         else if (shotState.Length > 0 && kind == "Events") w.ShowEventsStateSample(shotState);
+        // KL_RUNS=all|best-value|best-count|best-name|best-when (2026-11-14, Ui/MainWindow.LatestRun.cs): the Runs page's top card on
+        // All runs, or Best drops opened in that order
+        if (demo && kind == "Events" && Environment.GetEnvironmentVariable("KL_RUNS") is { Length: > 0 } runsView)
+        {
+            if (runsView == "all") w.RunsViewForTest = "all";
+            else if (runsView.StartsWith("best-")) w.BestDropsForTest(true, runsView[5..]);
+        }
         else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();

@@ -245,6 +245,7 @@ public partial class MainWindow
     public void PreviewHud(double opacity, double scale)
     {
         _hud?.SetOpacity(opacity);
+        _parserOverlay?.SetOpacity(opacity);   // the separate Parser overlay: the same surface
         _hud?.SetScale(scale);
     }
 

@@ -1884,6 +1884,42 @@ public sealed partial class TrackerSession
         if (now > _seenAt) _seenAt = now;
     }
 
+    // ---- crafting, from a finished craft (0.10.87) ----
+    // Steven, 2026-11-14: "crafting session shouldn't open on tracker until a craft is complete. Farming should always switch
+    // back on gather or kill". Until then the crafting window alone made the activity Crafting, so browsing recipes flipped
+    // the window to Crafting (2026-11-13 18:35:55, a minute of it with nothing crafted), and Crafting held while he gathered
+    // (18:24:53 to 18:25:57, eight gathers under it).
+
+    /// <summary>When the last craft finished (the panel's race, or the craft counted from the game), by its own time.</summary>
+    DateTime _craftDoneAt = DateTime.MinValue;
+    /// <summary>When the crafting window or panel came up this time (gaps under <see cref="CraftGapSeconds"/> are one stretch), and when it was last up.</summary>
+    DateTime _craftUpSince = DateTime.MinValue, _craftUpAt = DateTime.MinValue;
+    /// <summary>The crafting window or panel gone this long ends a stretch: the next opening needs a finished craft again.</summary>
+    const double CraftGapSeconds = 30;
+    /// <summary>A craft finished just before the panel was seen (the race read as the panel came into view) is still this stretch's.</summary>
+    const double CraftEarlySeconds = 10;
+
+    /// <summary>A craft finished at <paramref name="at"/>: what lets the activity be Crafting.</summary>
+    void CraftDone(DateTime at) { if (at > _craftDoneAt) _craftDoneAt = at; }
+
+    /// <summary>
+    /// Crafting: the crafting window or panel is up, a craft finished since it came up, and no kill or gather came after
+    /// that craft. Opening the window, browsing recipes or a queue still waiting never makes it Crafting; a kill or a
+    /// gather ends it at once (the next count's UpdateDoing).
+    /// </summary>
+    bool CraftingNow(DateTime now)
+    {
+        bool up = CraftView.CraftPanelActive(now) || (TargetReader.CraftOpen(Target.CraftAt, now) && now >= Target.CraftAt);
+        if (up)
+        {
+            if ((now - _craftUpAt).TotalSeconds > CraftGapSeconds) _craftUpSince = now;
+            if (now > _craftUpAt) _craftUpAt = now;
+        }
+        if (!up || _craftDoneAt == DateTime.MinValue || _craftDoneAt < _craftUpSince.AddSeconds(-CraftEarlySeconds)) return false;
+        var farmed = _lastKillAt > _lastGatherAt ? _lastKillAt : _lastGatherAt;
+        return farmed <= _craftDoneAt;
+    }
+
     /// <summary>Works out the activity from every signal (InstanceLog, the boss, crafting, the Market, reward screens, farming signs, the zone) and logs a change.</summary>
     internal void UpdateDoing(DateTime now)
     {
@@ -1902,7 +1938,7 @@ public sealed partial class TrackerSession
             next = new Activity(kind, run.Zone, run.Event, run.Family, Leaving: run.Leaving);
             why = run.Leaving ? $"the minimap names {zone}" : "the run";
         }
-        else if (CraftView.CraftPanelActive(now) || (TargetReader.CraftOpen(Target.CraftAt, now) && now >= Target.CraftAt)) { next = new Activity(ActivityKind.Crafting); why = "the crafting window or panel"; }
+        else if (CraftingNow(now)) { next = new Activity(ActivityKind.Crafting); why = "a craft finished"; }
         else if (MarketOpen?.Invoke(now) == true) { next = new Activity(ActivityKind.Market); why = "the Market's listings"; }
         else if (Target.RewardOpen(now) && Target.RewardTitle.Length > 0) { next = new Activity(ActivityKind.RewardScreen, Target.RewardTitle); why = "its title at the top"; }
         else if (zone == null) { next = new Activity(ActivityKind.NotRead); why = "no zone read"; }
@@ -4958,6 +4994,9 @@ public sealed partial class TrackerSession
     // fromPackets: told by the game's traffic (TrackerSession.Packets.cs); while that counts crafts, the panel's own races are left out
     internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null, int unseen = 0, string why = "", bool fromPackets = false)
     {
+        // a craft finished, on screen or in the game's word: the activity may be Crafting now (CraftingNow), whichever counts it
+        CraftDone(now);
+        if (!fromPackets) UpdateDoing(now);   // the game's craft is told a little after it happened: the next pass's look picks it up
         if (!fromPackets && PacketsHaveCraft(now, $"{(combo ? "combo roll " : "")}{(ok ? "success" : "fail")} for {(recipe.Length > 0 ? recipe : "an unread recipe")}")) return;
         // this queue's tallies for the live line on the HUD and the Crafting page (CraftQueue)
         if (queue > 0 && queue == _queueId && _queueOpen) { if (ok && !combo) _queueOk++; if (ok && combo) _queueCombo++; QueueViewNow(); }

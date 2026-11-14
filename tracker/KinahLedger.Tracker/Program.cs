@@ -60,7 +60,10 @@ internal static class Program
         // (2026-11-13: that copy names a category "Conversion Resource" where the built-in list says "Substance Morph Material", so the
         // sample had four plain drops on Steven's PC and three on CI, and two Full view checks failed there only)
         if (cmd is "options-test" or "ui-shot")
+        {
             KinahLedger.Data.DictionaryCache.DirOverride = TestTemp.Path("KinahLedger-test-items");
+            KinahLedger.Ui.Native.NoHotkeys = true;   // ...and their windows take no shortcut from the player's PC
+        }
         if (cmd is "parse-test" or "replay" or "replay-bank" or "bench" or "log-mine")
             KinahLedger.Data.DataFiles.DirOverride ??= TestTemp.Path("KinahLedger-test-data");
         try
@@ -1682,6 +1685,7 @@ options: --process aion[,other]");
         ok &= Session.NotDropTests.Run(items, s);
         ok &= Session.PassCostTests.Run(items, s);
         ok &= Session.PageFollowTests.Run();
+        ok &= Session.CraftActivityTests.Run(items, s);
         ok &= SharePictureTest();
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;

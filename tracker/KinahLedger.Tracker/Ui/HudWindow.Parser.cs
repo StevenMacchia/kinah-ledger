@@ -19,6 +19,9 @@ public sealed partial class HudWindow
     ParserPanel? _parserPanel;
     bool _parserFolding;
 
+    double _parserOpacity = -1;
+    void ParserOpacity(double opacity) { _parserOpacity = opacity; _parserPanel?.SetOpacity(opacity); }
+
     /// <summary>The overlay's own content, under the Parser's slot (what Content was before the section came).</summary>
     internal UIElement? OwnContent { get; private set; }
 
@@ -33,12 +36,8 @@ public sealed partial class HudWindow
         stack.Children.Add(own);
         Content = stack;
         // anchored at the bottom: the section's height comes off the top
-        _parserSlot.SizeChanged += (_, e) =>
-        {
-            if (e.NewSize.Height <= 0) return;   // folding is Fold's (a collapsed element says no size)
-            double d = e.NewSize.Height - e.PreviousSize.Height;
-            if (Math.Abs(d) > 0.5 && IsLoaded && !_still) Top -= d;
-        };
+        // (as it grows, and when it is shown: see SettleParser)
+        _parserSlot.SizeChanged += (_, e) => { if (e.NewSize.Height > 0) SettleParser(); };
     }
 
     /// <summary>The height the section adds above the Kinah line now (0 when folded): a remembered spot is the Kinah line's.</summary>
@@ -50,9 +49,23 @@ public sealed partial class HudWindow
     /// <summary>The section away, the window down by its height: the Kinah line stays where it was.</summary>
     void Fold()
     {
-        double h = _parserSlot.ActualHeight;
         _parserSlot.Visibility = Visibility.Collapsed;
-        if (h > 0 && IsLoaded && !_still) Top += h;
+        double before = _timerTaken + _parserTaken;
+        if (_parserTaken > 0) { _parserTaken = 0; Restack(before); }
+    }
+
+    /// <summary>The height the window has moved up by for the section (what folding gives back).</summary>
+    double _parserTaken;
+
+    /// <summary>
+    /// The window up by what the section adds beyond what it has already taken. Counted against that, not the slot's last size:
+    /// a section shown again at the size it had raises no size change, and the Kinah line would drop by its height.
+    /// </summary>
+    void SettleParser()
+    {
+        if (!IsLoaded || _still || _parserSlot.Visibility != Visibility.Visible) return;
+        double before = _timerTaken + _parserTaken;
+        if (Math.Abs(_parserSlot.ActualHeight - _parserTaken) > 0.5) { _parserTaken = _parserSlot.ActualHeight; Restack(before); }
     }
 
     /// <summary>The record to show above the Kinah line, or null to fold the section away.</summary>
@@ -68,13 +81,20 @@ public sealed partial class HudWindow
             _parserSlot.BeginAnimation(OpacityProperty, fade);
             return;
         }
-        _parserPanel ??= new ParserPanel();
+        if (_parserPanel == null)
+        {
+            // the Kinah overlay's own frame: its corner, its padding, its background at its opacity
+            _parserPanel = new ParserPanel();
+            _parserPanel.SetFrame(_frame.CornerRadius.TopLeft, _frame.Padding);
+            if (_parserOpacity >= 0) _parserPanel.SetOpacity(_parserOpacity);
+        }
         if (_parserSlot.Child != _parserPanel) _parserSlot.Child = _parserPanel;
         _parserPanel.Mode = mode; _parserPanel.ShowDetails = details;
         _parserPanel.Draw(e, now);
         if (_parserSlot.Visibility == Visibility.Visible && !_parserFolding) return;
         _parserFolding = false;
         _parserSlot.Visibility = Visibility.Visible;
+        if (IsLoaded && !_still) { UpdateLayout(); SettleParser(); }
         if (_still || Motion.Still) { _parserSlot.BeginAnimation(OpacityProperty, null); _parserSlot.Opacity = 1; return; }
         _parserSlot.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
     }
