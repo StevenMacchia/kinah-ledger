@@ -35,7 +35,14 @@ public sealed class ParserOverlay : Window
     readonly bool _still;
     readonly ParserPanel _panel = new();
     readonly TextBlock _hint;
+    /// <summary>
+    /// Clicks go through to the game (Click-through, off by default). The overlay can still be moved: with the pointer over
+    /// it a grab handle shows on its top edge, and the handle alone takes the pointer, so a drag from it moves the overlay.
+    /// </summary>
     bool _clickThrough;
+    readonly Border _grab;
+    readonly System.Windows.Threading.DispatcherTimer _grabWatch;
+    bool _grabbing;
     public const double Width0 = 340;
 
     /// <param name="still">A drawing (layout renders): not the overlay the readers step around.</param>
@@ -59,14 +66,28 @@ public sealed class ParserOverlay : Window
         FontWeight = FontWeights.Medium;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         Left = -10000; Top = -10000;   // placed once it has laid out (Place)
-        _hint = new TextBlock { FontSize = 10.5, Foreground = HudKit.Faint, Margin = new Thickness(8, 3, 0, 0), Visibility = Visibility.Collapsed };
-        Content = new StackPanel { Children = { _panel, _hint } };
+        // the hint under it, as the Kinah overlay's "drag me": a small dark pill, shown with the pointer over it
+        _hint = new TextBlock { FontSize = 11.5, Foreground = HudKit.Muted, Padding = new Thickness(8, 2, 8, 3), Background = HudKit.B(HudKit.PanelC, 0.88), Margin = new Thickness(0, 3, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+        // the grab handle: a short tab hanging from the top edge, only while clicks go through and the pointer is over it
+        _grab = new Border
+        {
+            Width = 46, Height = 13, CornerRadius = new CornerRadius(0, 0, 7, 7), Background = HudKit.B(HudKit.BadgeLineC), HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0), Visibility = Visibility.Collapsed, Cursor = System.Windows.Input.Cursors.SizeAll,
+            Child = new TextBlock { Text = "• • •", FontSize = 8, Foreground = HudKit.Muted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) },
+        };
+        System.Windows.Automation.AutomationProperties.SetName(_grab, "Drag to move the overlay");
+        Content = new StackPanel { Children = { new Grid { Children = { _panel, _grab } }, _hint } };
+        _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
+        _grabWatch.Tick += (_, _) => WatchGrab();
+        IsVisibleChanged += (_, _) => { if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
         MouseLeftButtonDown += (_, _) =>
         {
-            if (_clickThrough || _still) return;
+            if ((_clickThrough && !_grabbing) || _still) return;
             try { DragMove(); } catch (InvalidOperationException) { return; }
             var h = new WindowInteropHelper(this).Handle;
             if (h != IntPtr.Zero && GetWindowRect(h, out var r)) Dropped?.Invoke(r.Left, r.Top);
+            if (_clickThrough) WatchGrab();
         };
         MouseEnter += (_, _) => ShowHint(); MouseLeave += (_, _) => ShowHint();
         // its small menu: what the Parser keeps, hide, clicks through (never while clicks go through: the game has them)
@@ -94,7 +115,7 @@ public sealed class ParserOverlay : Window
         var hide = new MenuItem { Header = HotkeyText.Length > 0 ? $"Hide the overlay ({HotkeyText})" : "Hide the overlay", Foreground = HudKit.Ink };
         hide.Click += (_, _) => HideAsked?.Invoke();
         menu.Items.Add(hide);
-        var through = new MenuItem { Header = "Let clicks through to the game", Foreground = HudKit.Ink, ToolTip = "Turn it off again on the Parser tab" };
+        var through = new MenuItem { Header = "Let clicks through to the game", Foreground = HudKit.Ink, ToolTip = "Drag the handle on its top edge to move it then; turn it off again on the Parser tab" };
         through.Click += (_, _) => ClickThroughAsked?.Invoke();
         menu.Items.Add(through);
         return menu;
@@ -109,18 +130,69 @@ public sealed class ParserOverlay : Window
 
     void ShowHint()
     {
-        _hint.Text = _clickThrough ? "" : HotkeyText.Length > 0 ? $"drag to move  ·  right-click for the mode  ·  {HotkeyText} hides it" : "drag to move  ·  right-click for the mode";
-        _hint.Visibility = !_clickThrough && IsMouseOver && !_still ? Visibility.Visible : Visibility.Collapsed;
+        _hint.Text = _clickThrough ? "drag the handle to move" : HotkeyText.Length > 0 ? $"drag to move  ·  right-click for the mode  ·  {HotkeyText} hides it" : "drag to move  ·  right-click for the mode";
+        _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void SetClickThrough(bool on)
     {
         _clickThrough = on;
+        _grabbing = false;
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.SetClickThrough(h, on);
         Cursor = on ? null : System.Windows.Input.Cursors.SizeAll;
+        if (on && IsVisible && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); }
         ShowHint();
     }
+
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+
+    /// <summary>
+    /// While clicks go through: the pointer over the overlay shows the grab handle, and over the handle the window takes the
+    /// pointer (so a press there drags it); anywhere else the game has it. A window that lets clicks through hears no mouse,
+    /// so the pointer is looked at a dozen times a second while the overlay shows.
+    /// </summary>
+    void WatchGrab()
+    {
+        if (!_clickThrough || !IsVisible || _still) { HideGrab(); return; }
+        var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero || !GetCursorPos(out var c) || !GetWindowRect(h, out var r)) return;
+        bool over = c.X >= r.Left && c.X < r.Right && c.Y >= r.Top && c.Y < r.Bottom;
+        bool onGrab = false;
+        if (over)
+        {
+            if (_grab.Visibility != Visibility.Visible) { _grab.Visibility = Visibility.Visible; UpdateLayout(); }
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var tl = _grab.TranslatePoint(new Point(0, 0), this);
+            int gx = r.Left + (int)Math.Round(tl.X * dpi.DpiScaleX), gy = r.Top + (int)Math.Round(tl.Y * dpi.DpiScaleY);
+            int gw = (int)Math.Round(_grab.ActualWidth * dpi.DpiScaleX), gh = (int)Math.Round(_grab.ActualHeight * dpi.DpiScaleY);
+            onGrab = c.X >= gx - 4 && c.X < gx + gw + 4 && c.Y >= gy - 2 && c.Y < gy + gh + 4;
+        }
+        else HideGrab();
+        if (onGrab != _grabbing)
+        {
+            _grabbing = onGrab;
+            Native.SetClickThrough(h, !onGrab);
+        }
+        ShowHint();
+    }
+
+    void HideGrab()
+    {
+        _grab.Visibility = Visibility.Collapsed;
+        if (_grabbing) { _grabbing = false; var h = new WindowInteropHelper(this).Handle; if (h != IntPtr.Zero) Native.SetClickThrough(h, _clickThrough); }
+        ShowHint();
+    }
+
+    /// <summary>How solid the background is, as the Kinah overlay's (Options › In game): the same setting for both.</summary>
+    public void SetOpacity(double opacity) => _panel.SetOpacity(opacity);
+    /// <summary>The Kinah overlay's frame (its corner and padding for the figures picked), so the two look alike.</summary>
+    public void SetFrame(double radius, Thickness padding) => _panel.SetFrame(radius, padding);
+
+    /// <summary>For the options test: the grab handle shows (while clicks go through and the pointer is over the overlay).</summary>
+    internal bool GrabShownForTest => _grab.Visibility == Visibility.Visible;
+    internal void ShowGrabForTest() { _grab.Visibility = Visibility.Visible; ShowHint(); }
 
     // ---- where it goes ----
 
@@ -214,13 +286,26 @@ public sealed class ParserPanel : Border
     public ParserPanel()
     {
         Width = ParserOverlay.Width0;
-        Background = HudKit.B(HudKit.PanelC, 0.94); BorderBrush = HudKit.FrameLine; BorderThickness = new Thickness(1);
-        CornerRadius = new CornerRadius(12); Padding = new Thickness(12, 10, 12, 10);
+        // the Kinah overlay's frame exactly (Ui/HudWindow.cs): its surface at the same opacity, its 1 px line, radius 12, its padding
+        Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0B, 0x0C, 0x10)); BorderBrush = HudKit.FrameLine; BorderThickness = new Thickness(1);
+        var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(null));
+        CornerRadius = new CornerRadius(radius); Padding = pad;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         TextElement.SetFontFamily(this, HudKit.Text);
         TextElement.SetFontWeight(this, FontWeights.Medium);
         Child = _body;
         foreach (var art in new[] { "boss", "dungeon", "medal", "rift" }) GameArt.Image(art);
+    }
+
+    /// <summary>The Kinah overlay's corner and padding (HudWindow.FrameShape for its figures).</summary>
+    public void SetFrame(double radius, Thickness padding) { CornerRadius = new CornerRadius(radius); Padding = padding; }
+
+    /// <summary>How solid the background is, 0.3 to 1: the Kinah overlay's own setting (Options › In game), so the two match.</summary>
+    public void SetOpacity(double opacity)
+    {
+        var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
+        var b = new SolidColorBrush(Color.FromArgb(a, 0x0B, 0x0C, 0x10)); b.Freeze();
+        Background = b;
     }
 
     // ---- what it shows ----
