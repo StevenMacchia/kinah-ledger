@@ -184,7 +184,7 @@ public sealed class PacketReader : IDisposable
     /// <summary>True while the reader gets the player's kills and deaths from the game (a decoder of interface version 3).</summary>
     public bool ReadsFights => On && (_testFights || _decoder?.ReadsFights == true);
     bool _testFights;
-    internal void FightsForTest(FightEvent f) { _testFights = true; _fights.Enqueue(f); }
+    internal void FightsForTest(FightEvent f) { _testFights = true; if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0)); _fights.Enqueue(f); }
 
     /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
     public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
@@ -314,7 +314,12 @@ public sealed class PacketReader : IDisposable
                 if (rows.Count > 0) TakeItems(rows);
                 while (dec.NextBoss() is { } boss) TakeBoss(boss);
                 while (dec.NextAreaEvent() is { } area) TakeArea(area);
-                while (dec.NextFight() is { } f) TakeFight(f);
+                while (dec.NextFight() is { } f)
+                {
+                    // Rank Points are a currency too (0.10.76): counted, checked against the chat and logged like Abyss Points
+                    if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0));
+                    TakeFight(f);
+                }
             },
             OnGap = () =>
             {
@@ -501,7 +506,7 @@ public sealed class PacketReader : IDisposable
         Log($"{Local(now)}  minute: {(parts.Count == 0 ? "nothing picked up" : string.Join("; ", parts))} · {Packets:N0} packets, {DecoderStats.Messages:N0} messages, {_down.Gaps} gaps, {DecoderStats.Resyncs} resyncs");
     }
 
-    static string Name(CurrencyKind k) => k switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", _ => "Abyss Points" };
+    static string Name(CurrencyKind k) => k switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", CurrencyKind.RankPoints => "Rank Points", _ => "Abyss Points" };
 
     /* ---------------- packets.log ---------------- */
 

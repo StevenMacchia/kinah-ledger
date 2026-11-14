@@ -3,7 +3,8 @@ using System.Runtime.InteropServices;
 namespace KinahLedger.Packets;
 
 /// <summary>The currencies counted from the game's traffic.</summary>
-public enum CurrencyKind { Kinah = 0, BoundKinah = 1, AbyssPoints = 2 }
+/// <summary>The currencies counted from the game's traffic. Rank Points (0.10.76) come with the player's fights (interface version 3), not from <see cref="IGameDecoder.Next"/>.</summary>
+public enum CurrencyKind { Kinah = 0, BoundKinah = 1, AbyssPoints = 2, RankPoints = 3 }
 
 /// <summary>A change of a currency: how much, the amount now, and whether it is the first seen on a connection (a baseline, no change known).</summary>
 public sealed record CurrencyChange(DateTime At, CurrencyKind What, long Delta, long Amount, bool First);
