@@ -47,6 +47,8 @@ public sealed class ParserPrefs
     public bool KillsNear { get; set; }
     public bool Filters { get; set; }
     public bool Hovers { get; set; }
+    /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, four rows. A click on the meter switches it.</summary>
+    public bool Expanded { get; set; }
 
     /// <summary>Options saved the Parser's switches: the window reads them again.</summary>
     public static event Action? Saved;

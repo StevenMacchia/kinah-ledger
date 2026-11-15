@@ -223,7 +223,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     }
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
-    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}";
+    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}";
 
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
@@ -243,6 +243,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 /// </summary>
 sealed class HudCapsule : HudStackLook
 {
+    readonly ParserRows _prows = new();
     readonly StackPanel _root = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly Border _pill, _pillFrame;
     readonly StackPanel _row = new() { Orientation = Orientation.Horizontal };
@@ -352,8 +353,9 @@ sealed class HudCapsule : HudStackLook
             _meterBody.Children.Add(hpRow);
         }
         else _meterBody.Children.Add(new Border { Height = 6 });
-        double top = Top(e);
-        foreach (var f in e.Shown().Take(6)) _meterBody.Children.Add(MemberLine(e, f, now, top, 13, 2));
+        // the rows (Parser v2, Ui/ParserRows.cs): kept between draws, so a change moves
+        _meterBody.Children.Add(_prows);
+        _prows.Show(e, now);
         if (!e.Live && e.Outcome.Length > 0)
             _meterBody.Children.Add(Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold));
         _meter.Visibility = Visibility.Visible;
@@ -370,6 +372,7 @@ sealed class HudCapsule : HudStackLook
 /// </summary>
 sealed class HudMeter : HudStackLook
 {
+    readonly ParserRows _prows = new();
     static double W => FightWidth;
     readonly Border _ring, _frame;
     readonly StackPanel _body = new();
@@ -529,9 +532,10 @@ sealed class HudMeter : HudStackLook
         _hpNow = hp > 0 ? ($"{Math.Round(hp * 100):0}%", ParserPanel.HpLeft(e), true) : (!e.Live && e.Outcome == "kill" ? "Killed" : !e.Live && e.Outcome == "wipe" ? "Wiped" : "", "", false);
         _hpPct.Tag = !e.Live && e.Outcome == "kill";
         PlaceHp();
-        double top = Top(e);
-        int rank = 1;
-        foreach (var f in e.Shown().Take(6)) _rows.Children.Add(Row(e, f, now, top, rank++));
+        // the rows (Parser v2, Ui/ParserRows.cs): kept between draws, so a change moves
+        _prows.Margin = new Thickness(4, 4, 4, 2);
+        _rows.Children.Add(_prows);
+        _prows.Show(e, now);
         if (e.HasDamage)
         {
             var gl = new Grid { Margin = new Thickness(10, 5, 10, 5) };
@@ -595,6 +599,7 @@ sealed class HudMeter : HudStackLook
 /// </summary>
 sealed class HudFloat : HudStackLook
 {
+    readonly ParserRows _prows = new(ParserRows.Kind.Bare);
     readonly Border _host;
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6), Visibility = Visibility.Collapsed };
@@ -688,9 +693,8 @@ sealed class HudFloat : HudStackLook
         if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); }
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
-        double top = Top(e);
         if (e.Waiting) rows.Children.Add(Tx(ReadyLine, 12.5, Muted, FontWeights.SemiBold));
-        foreach (var f in e.Shown().Take(5)) rows.Children.Add(MemberLine(e, f, now, top, 13, 1.5));
+        else { rows.Children.Add(_prows); _prows.Show(e, now); }
         _fight.Children.Add(rows);
         _fight.Visibility = Visibility.Visible;
     }
