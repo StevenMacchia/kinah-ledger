@@ -160,14 +160,23 @@ public sealed partial class TrackerSession
         // an item pickup from the screen while the packets count items: the agreement check decides whether the chat's line counts after all
         if (ev is ItemAcquired { Count: > 0 } ia && p.CountingItems(ev.Time) && !_screenLate.Contains(ev))
         {
-            // a first sight the session counted from a gather's report: the line says how many really came
-            int pi = _provisional.FindIndex(x => x.Id == ia.ItemId && (ev.Time - x.At).TotalSeconds is >= -1 and <= 8);
-            if (pi >= 0 && ia.Count > _provisional[pi].Counted && !ev.Via.Contains("loot list"))
+            // a first sight the session counted from a gather's report: the gather's chat lines say how many really came. Two
+            // procs on one gather can print two lines for the item ("Acquired Orichalcum Ore x2." and "Orichalcum Ore
+            // acquired.", Steven 2026-11-15: "if plentiful and bountiful harvest proc at same time it only logs 1 of the
+            // resources"), so the lines add up; the chat's repeat guard has already left out a line read twice. A line read
+            // after the item went up again is the next pickup's, even before that rise is drained (2026-11-15 12:13:24.2: the
+            // next gather's "Acquired Fine Orichalcum Ore x2." was read 0.3 s after its rise, ahead of it)
+            int pi = _provisional.FindIndex(x => x.Id == ia.ItemId && (ev.Time - x.At).TotalSeconds is >= -1 and <= ProvisionalSeconds && !p.RoseAfter(x.Id, x.At, ev.Time));
+            if (pi >= 0 && !ev.Via.Contains("loot list"))
             {
-                var (pid, pat, had) = _provisional[pi];
-                _provisional[pi] = (pid, pat, ia.Count);
-                CrashLog.Note($"{Describe(ev)} (chat): its stack's first sight was counted as {had} from the gather's report; the line says {ia.Count}: {ia.Count - had} more");
-                CommitWith(new ItemAcquired(pat, pid, ia.Count - had, ia.Bound) { Via = "packets" }, "counter");
+                var pv = _provisional[pi];
+                int lines = pv.Lines + ia.Count;
+                _provisional[pi] = pv with { Lines = lines, Counted = Math.Max(pv.Counted, lines) };
+                if (lines > pv.Counted)
+                {
+                    CrashLog.Note($"{Describe(ev)} (chat): its stack's first sight was counted as {pv.Counted} from the gather's report; its lines say {lines}{(pv.Lines > 0 ? $" ({pv.Lines} before this one)" : "")}: {lines - pv.Counted} more");
+                    CommitWith(new ItemAcquired(pv.At, pv.Id, lines - pv.Counted, ia.Bound) { Via = "packets" }, "counter");
+                }
             }
             // the traffic showed the stack only for the first time and counted nothing: this line is that pickup, now
             else if (pi < 0 && !ev.Via.Contains("loot list") && p.FirstSightNear(ia.ItemId, ev.Time))
@@ -318,6 +327,9 @@ public sealed partial class TrackerSession
                 n = g0.ItemId == id ? Math.Max(1, g0.Count) : 1;
             }
             if (n <= 0) continue;
+            // the item's next rise is the next pickup's: the lines after it are that one's, never a top-up of the first sight
+            // (a first-seen ore counted as one, the next gather's "Acquired Orichalcum Ore x2." 5 s later topped it up to two)
+            if (!unknown) _provisional.RemoveAll(x => x.Id == id && x.At < b.At);
             bool bound = name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase);
             if (gather != null && !InBase)
             {
@@ -325,7 +337,7 @@ public sealed partial class TrackerSession
                 var gev = new ItemAcquired(b.At, id, (int)Math.Min(n, 99999), bound) { Via = "packets" };
                 CrashLog.Note($"packets: {name} +{n:N0}{(unknown ? " (its stack first seen: the gather's own count)" : "")}{(find ? ", a rare find" : "")}: gathered, counted from the game's message, {After(b.At)}");
                 CommitWith(gev, "counter");
-                if (unknown) { p.CountedFirstSight(id, n, b.At); _provisional.Add((id, b.At, (int)n)); _provisional.RemoveAll(x => (b.At - x.At).TotalMinutes > 1); }
+                if (unknown) { p.CountedFirstSight(id, n, b.At); _provisional.Add(new Provisional(id, b.At, (int)n, 0)); _provisional.RemoveAll(x => (b.At - x.At).TotalMinutes > 1); }
                 NotePacketDelay(b.At);
                 if (b.At > _packetPickupAt) _packetPickupAt = b.At;
                 continue;
@@ -420,9 +432,14 @@ public sealed partial class TrackerSession
 
     /// <summary>
     /// Counts a provisional pickup's top-up: a stack seen for the first time was counted at the gather's report (its own
-    /// count, or one for a rare find), and the chat's line, a moment later, says more came (the upgrade roll's two).
+    /// count, or one for a rare find), and the chat's lines, a moment later, say more came (the upgrade roll's two; two
+    /// procs' lines on one gather, added up). Counted: what the session has counted for it; Lines: what its lines said so far.
+    /// The item's next rise ends it: the lines after that are the next pickup's.
     /// </summary>
-    readonly List<(long Id, DateTime At, int Counted)> _provisional = new();
+    readonly List<Provisional> _provisional = new();
+    readonly record struct Provisional(long Id, DateTime At, int Counted, int Lines);
+    /// <summary>How long after a first sight a chat line for its item can still be that gather's (the chat lags the game by a second or two).</summary>
+    const double ProvisionalSeconds = 8;
 
     /// <summary>
     /// The player's gathering from the game's messages (Steven, 2026-11-13: "exact gathering results"): every attempt, how it

@@ -575,6 +575,15 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public void CountedFirstSight(long id, long n, DateTime at) { lock (_gate) _itemSeen.Add((id, n, false, at)); }
 
     /// <summary>
+    /// Whether <paramref name="id"/> went up again after <paramref name="after"/> and by <paramref name="upTo"/>, by the
+    /// game's own time, drained by the session or not yet: a chat line read after that rise is the next pickup's.
+    /// </summary>
+    public bool RoseAfter(long id, DateTime after, DateTime upTo)
+    {
+        lock (_gate) return _itemSeen.Any(p => p.Id == id && !p.First && p.Delta > 0 && p.At > after && p.At <= upTo);
+    }
+
+    /// <summary>
     /// Whether the traffic showed <paramref name="id"/>'s stack only for the first time just before <paramref name="at"/>
     /// (its earlier amount not known, so the update couldn't say how many came) and nothing counted it: a chat line for it
     /// then is that pickup, and counts at once, not after the agreement check's 15 s.
