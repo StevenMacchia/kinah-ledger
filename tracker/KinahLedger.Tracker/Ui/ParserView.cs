@@ -61,7 +61,11 @@ public sealed class FightView
     /// </summary>
     static void Depth(MemberView m, Fighter f)
     {
-        // the record has no such fields yet: each one lights up here as the store carries it
+        // the record has no such fields yet: each one lights up here as the store carries it. The names agreed with the record's
+        // side: AbilityShare Casts, Max, Min, StreamHits (Kinds stays unshown until it is proven); Fighter PerSecond and
+        // BossPerSecond (picked as Encounter.BossView picks), Taken (TakenShare: Skill, Source, Damage, Hits), DeathLog
+        // (DeathRecord: At, BossHpLeft, KillerSkill, Killer, Last of TakenHit: At, Skill, Source, Amount, HpAfter), Buffs
+        // (BuffUptime: Skill, Seconds, Share; named by Abilities.Name); Encounter BossHpPerSecond. No crit until it is proven.
     }
 
     /// <summary>Your best kill of this boss and your last pull of it before this record (yours only: other members' figures stay on this PC and in this view).</summary>
