@@ -1,0 +1,3 @@
+- **Every ability by name.** The Parser's ability list now names chain skills like Punishing Strike and Bursting Blow, each Spiritmaster spirit's own attacks and commands, and Theostone strikes, most with their game icon. A spirit's attacks at different ranks show as one row.
+- **Never a number.** If an ability isn't in the list yet, it shows as "Spiritmaster skill" (or the member's class) with the class emblem, or "Unknown skill", and the next list update adds it. Spirit commands in fights saved before this version show as "Spiritmaster skill".
+- **Damage over time by skill.** Damage that ticks after a hit now shows under the skill that caused it, like "Punishing Strike (over time)", with that skill's icon.
