@@ -674,6 +674,7 @@ public sealed class ParserRows : Grid
     {
         ((TextBlock)r.Pb.Child).Text = $"PB {PK.Signed(d)}";
         r.Pb.Visibility = Visibility.Visible;
+        FitName(r);   // the chip takes room on the name's line: the name trims and YOU gives way, so a TOP DPS plate beside it shows whole
         var st = new ScaleTransform(1, 1); r.Pb.RenderTransform = st;
         if (!Motion.On) return;
         // the figure flares gold with it
