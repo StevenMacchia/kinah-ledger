@@ -181,10 +181,14 @@ public static partial class WpfApp
                 {
                     case "ghost": check(mid.Ghost && mid.Chunk == true, $"meter motion (ghost): part-way the bars' ghost and the boss HP's red chunk show (ghost {mid.Ghost}, chunk {mid.Chunk})"); break;
                     case "pops":
-                        int perRow = mid.Pops.GroupBy(p => p.Row).Select(g => g.Count()).DefaultIfEmpty(0).Max();
-                        check(mid.Pops.Count == ParserRows.PopsInAll && perRow <= ParserRows.PopsPerRow && mid.Pops.Count(p => p.Word.StartsWith("pop-crit:+858K")) == 1 && !mid.Pops.Any(p => p.Word.StartsWith("pop-crit:+531K")) && mid.Pops.All(p => p.Right <= p.DpsLeft + 0.5)
-                            && mid.Pops.GroupBy(p => p.Row).All(g => g.Count() < 2 || Math.Abs(g.First().Top - g.Last().Top) >= 11),
-                            $"meter motion (pops): four pop-ups at most, two a row, gold only for a crit, never over the DPS or each other ({string.Join(", ", mid.Pops.Select(p => $"{p.Row}:{p.Word}"))})");
+                        var rowsOf = mid.Pops.GroupBy(p => p.Row).ToList();
+                        int perRow = rowsOf.Select(g => g.Count()).DefaultIfEmpty(0).Max();
+                        bool apart = rowsOf.All(g => g.OrderBy(p => p.Left).Zip(g.OrderBy(p => p.Left).Skip(1)).All(z => z.Second.Left - z.First.Right >= ParserRows.PopGap - 0.5));
+                        bool clear = mid.Pops.All(p => p.Left >= p.NameEnd - 0.5 && p.Right <= p.DpsLeft + 0.5);
+                        bool inRow = mid.Pops.All(p => Math.Abs(p.BandTop - p.RowTop) < 0.5 && Math.Abs(p.BandBottom - p.RowBottom) < 0.5 && p.Top >= p.BandTop - 0.5 && p.Bottom <= p.BandBottom + 0.5);
+                        bool gold = mid.Pops.Any(p => p.Word == "pop-crit:+299K") && !mid.Pops.Any(p => p.Word.Contains("+858K")) && mid.Pops.All(p => p.Word.StartsWith("pop-crit:") == (p.Word.EndsWith("+858K") || p.Word.EndsWith("+299K")));
+                        check(mid.Pops.Count > 0 && mid.Pops.Count <= ParserRows.PopsInAll && perRow <= ParserRows.PopsPerRow && apart && clear && inRow && gold,
+                            $"meter motion (pops): four at most, two a row (a third takes the oldest's place), apart, in their own row, clear of the name and the DPS, gold only for a crit (count {mid.Pops.Count}, per row {perRow}, apart {apart}, clear {clear}, in row {inRow}, gold {gold}: {string.Join(", ", mid.Pops.Select(p => $"{p.Row}:{p.Word}@{p.Left:0}-{p.Right:0}/{p.NameEnd:0}-{p.DpsLeft:0}"))})");
                         break;
                     case "overtake": check(mid.Lifted, "meter motion (overtake): part-way the one who passed is lifted, with its shadow"); break;
                     case "finish": check(mid.Sweep == "sweep-good" && mid.Badge is { } b && b.Opacity > 0 && Math.Abs(b.Scale - 1) > 0.01 && !mid.PlateAtRest, $"meter motion (finish): part-way the light sweeps, the AVG. DPS badge stamps, the TOP DPS plate slides in (sweep {mid.Sweep}, badge {mid.Badge}, plate at rest {mid.PlateAtRest})"); break;
@@ -261,7 +265,7 @@ public static partial class WpfApp
         }
     }
 
-    sealed record MeterProbe(bool Moving, List<(string Row, string Word, double Left, double Right, double DpsLeft, double Top)> Pops, (double Opacity, double Scale)? Badge, bool PlateAtRest, bool? Chunk,
+    sealed record MeterProbe(bool Moving, List<(string Row, string Word, double Left, double Right, double Top, double Bottom, double BandTop, double BandBottom, double RowTop, double RowBottom, double NameEnd, double DpsLeft)> Pops, (double Opacity, double Scale)? Badge, bool PlateAtRest, bool? Chunk,
         Dictionary<string, (string Figure, string Odometer)> Dps, List<double> DpsRights, List<double> OdoRights, bool Lifted, bool Ghost, string? Sweep, bool Flare, string? Heat);
 
     /// <summary>One change drawn in the Parser's own window (the standard look), held at <paramref name="t"/> (null: still), and what shows.</summary>
@@ -275,15 +279,7 @@ public static partial class WpfApp
         o.Draw(c.To, c.ToAt); DoEvents();
         var root = (FrameworkElement)o.Content;
         var rows = Find<ParserRows>(root).First();
-        var pops = new List<(string, string, double, double, double, double)>();
-        foreach (var tb in Find<Canvas>(rows).SelectMany(cv => cv.Children.OfType<TextBlock>()))
-        {
-            double left = Canvas.GetLeft(tb), top = Canvas.GetTop(tb);
-            // the row it popped from: the one whose top is where it started
-            // the row it popped from: the one whose top is where it started (the second place is a line above)
-            var y0 = rows.RowNameAt(top - 5).Length > 0 ? top - 5 : top + 7;
-            pops.Add((rows.RowNameAt(y0), $"{tb.Tag}:{tb.Text}", left, left + tb.ActualWidth, rows.DpsLeftAt(y0), top));
-        }
+        var pops = rows.PopsForTest();
         var badges = TaggedShown(root, "avg-badge");
         (double, double)? badge = badges.Count == 0 ? null : (Math.Round(badges[0].Opacity, 3), badges[0].RenderTransform is ScaleTransform s ? Math.Round(s.ScaleX, 3) : 1);
         var plates = TaggedShown(root, "top-dps");

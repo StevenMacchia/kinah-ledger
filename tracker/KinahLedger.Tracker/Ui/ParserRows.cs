@@ -45,7 +45,9 @@ public sealed class ParserRows : Grid
     /// <summary>The big hits' pop-ups over the rows (never taking a click); at most <see cref="PopsPerRow"/> a row, <see cref="PopsInAll"/> in all.</summary>
     readonly Canvas _pops = new() { IsHitTestVisible = false };
     public const int PopsPerRow = 2, PopsInAll = 4;
-    public const double PopMs = 800;
+    public const double PopMs = 700;
+    /// <summary>A pop-up: its band (the row's open bar, clipped to the row), its words, where they sit across the row.</summary>
+    sealed class PopEl { public required Canvas Band; public required TextBlock Text; public required TranslateTransform Rise; public double Left, Right; public int Gen; }
     long _popSeq;
     int _popsOn, _popGen;
     string _fightId = "";
@@ -107,9 +109,8 @@ public sealed class ParserRows : Grid
         /// </summary>
         public DropShadowEffect? LiftShadow, ChipOwn, ChipGlow, FrameGlow;
         public double ChipBlur0, ChipOpacity0, FrameBlur0, FrameOpacity0;
-        public int Pops;
-        /// <summary>The row's two pop-up places left of the DPS (the second a line above the first): which are taken.</summary>
-        public readonly bool[] PopSlot = new bool[ParserRows.PopsPerRow];
+        /// <summary>The row's pop-ups on screen, oldest first (at most <see cref="ParserRows.PopsPerRow"/>).</summary>
+        public readonly List<PopEl> Live = new();
     }
 
     /// <summary>The fight now: each member's row updated in place, moved to their rank.</summary>
@@ -120,7 +121,7 @@ public sealed class ParserRows : Grid
         {
             foreach (var r in _rows.Values) _host.Children.Remove(r.Root);
             _rows.Clear();
-            _pops.Children.Clear(); _popsOn = 0; _popGen++;   // the rows go too, and their pop-up places with them
+            _pops.Children.Clear(); _popsOn = 0; _popGen++;   // the rows go too, and their pop-ups with them
             // a fight drawn first here: its big hits so far are history, never popped
             if (e.Id != _fightId) { _pbShown = ""; _wasLive = e.Live; _sawLive = e.Live; _popSeq = e.BigHits?.LastOrDefault()?.Seq ?? 0; }
             _fightId = e.Id; _expanded = expanded;
@@ -181,6 +182,7 @@ public sealed class ParserRows : Grid
             }
             if (double.IsNaN(row.Y) || fresh) { row.Y = y; row.Root.Margin = new Thickness(0, y, 0, 0); }
             else if (Math.Abs(row.Y - y) > 0.5) Glide(row, y, passed: rankWas > 0 && rank < rankWas);
+            foreach (var lp in row.Live) Canvas.SetTop(lp.Band, row.Y);   // its pop-ups go with a row that moved
             // your heat: your pace against your best on this boss, warmer as it nears it, gold once you beat it
             if (f.You) SetHeat(row, Heat(e, f, now));
             // a death: the coral tick lands on the row
@@ -566,40 +568,77 @@ public sealed class ParserRows : Grid
     /// </summary>
     void Pop(RowEl r, BigHit h)
     {
-        if (!Motion.On || r.Pops >= PopsPerRow || _popsOn >= PopsInAll) return;
+        if (!Motion.On) return;
         double tw = r.Track.ActualWidth;
         if (tw <= 0) return;
-        int slot = Array.IndexOf(r.PopSlot, false);
-        if (slot < 0) return;
+        // a full meter: a row that shows one already takes the new one in its place; any other waits for none
+        if (_popsOn >= PopsInAll && r.Live.Count == 0) return;
         bool crit = h.Crit == true;
-        var t = new TextBlock { Text = "+" + Amounts.Short(h.Amount), FontSize = 12.5, FontWeight = FontWeights.Bold, Tag = crit ? "pop-crit" : "pop",
-            Foreground = crit ? HudKit.B(0xFFD36B) : HudKit.Ink, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 1),
-            Effect = crit ? new DropShadowEffect { Color = Color.FromRgb(0x6B, 0x3A, 0x00), BlurRadius = 6, ShadowDepth = 0, Opacity = 1 } : TextHalo() };
+        var t = new TextBlock { Text = "+" + Amounts.Short(h.Amount), FontSize = 11.5, FontWeight = FontWeights.Bold, Tag = crit ? "pop-crit" : "pop",
+            Foreground = crit ? HudKit.B(0xFFD36B) : HudKit.Ink, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5),
+            Effect = crit ? new DropShadowEffect { Color = Color.FromRgb(0x6B, 0x3A, 0x00), BlurRadius = 5, ShadowDepth = 0, Opacity = 1 } : TextHalo() };
         System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
         t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        double pw = t.DesiredSize.Width;
-        // in the row's open bar, right-aligned just left of the DPS's column (never on the figures, never on the chip and
-        // emblem); a second one at once sits a line above the first, a little further left, so the two never read as one
-        double minX = r.Cols.Margin.Left + 52, right = DpsLeft(r, tw) - 8 - (slot == 1 ? 10 : 0);
-        double x = Math.Max(minX, right - pw);
-        Canvas.SetLeft(t, x); Canvas.SetTop(t, r.Y + 5 - (slot == 1 ? 12 : 0));
+        double pw = t.DesiredSize.Width, ph = t.DesiredSize.Height;
+        // the open bar: from past the name's line (the name, YOU, the plates) to just short of the DPS's column; no room, no pop-up
+        double lo = Math.Max(r.Cols.Margin.Left + 52, NameEnd(r) + 8), hi = DpsLeft(r, tw) - 6;
+        if (hi - lo < pw) return;
+        // next to the DPS first; else left of the one there with a clear gap; else the oldest gives way (never more than two a row)
+        while (true)
+        {
+            double? x = null;
+            if (r.Live.Count < PopsPerRow)
+            {
+                double right = hi;
+                foreach (var o in r.Live) right = Math.Min(right, o.Left - PopGap);
+                if (r.Live.Count == 0 || right - pw >= lo) x = right - pw;
+            }
+            if (x is double at) { Place(r, t, at, pw, ph, lo, hi); return; }
+            if (r.Live.Count == 0) return;
+            Drop(r, r.Live[0]);
+        }
+    }
+
+    /// <summary>The space kept between two pop-ups on a row.</summary>
+    public const double PopGap = 10;
+
+    void Place(RowEl r, TextBlock t, double x, double pw, double ph, double lo, double hi)
+    {
+        double bandH = _rowH - 2;
+        var band = new Canvas { Width = hi - lo, Height = bandH, ClipToBounds = true, IsHitTestVisible = false };
+        Canvas.SetLeft(band, lo); Canvas.SetTop(band, r.Y);
+        double top = Math.Round((bandH - ph) / 2) + 3;
+        Canvas.SetLeft(t, x - lo); Canvas.SetTop(t, top);
         var st = new ScaleTransform(1, 1); var tt = new TranslateTransform();
         t.RenderTransform = new TransformGroup { Children = { st, tt } };
-        _pops.Children.Add(t);
-        r.Pops++; _popsOn++; r.PopSlot[slot] = true;
-        int gen = _popGen;
+        band.Children.Add(t);
+        _pops.Children.Add(band);
+        var pop = new PopEl { Band = band, Text = t, Rise = tt, Left = x, Right = x + pw, Gen = _popGen };
+        r.Live.Add(pop); _popsOn++;
+        // up 6 px inside its own row (never into the row above or the header), in quickly, out over the second half
         Motion.Play(t, PopMs, p =>
         {
-            tt.Y = -14 * Motion.Out(p);
-            t.Opacity = p < 0.12 ? p / 0.12 : p > 0.55 ? 1 - (p - 0.55) / 0.45 : 1;
-            double sc = p < 0.25 ? 0.7 + 0.45 * Motion.Out(p / 0.25) : 1.15 - 0.15 * Motion.Out((p - 0.25) / 0.75);
-            st.ScaleX = st.ScaleY = sc;
-        }, () =>
-        {
-            _pops.Children.Remove(t);
-            r.Pops = Math.Max(0, r.Pops - 1); r.PopSlot[slot] = false;
-            if (gen == _popGen) _popsOn = Math.Max(0, _popsOn - 1);   // a pop-up of a fight drawn before counts for nothing now
-        });
+            tt.Y = -6 * Motion.Out(p);
+            t.Opacity = p < 0.12 ? p / 0.12 : p > 0.5 ? 1 - (p - 0.5) / 0.5 : 1;
+            st.ScaleX = st.ScaleY = p < 0.2 ? 0.85 + 0.15 * Motion.Out(p / 0.2) : 1;
+        }, () => Drop(r, pop));
+    }
+
+    /// <summary>A pop-up away (its course over, or a newer one on its row in its place).</summary>
+    void Drop(RowEl r, PopEl pop)
+    {
+        if (!r.Live.Remove(pop)) return;
+        Motion.Halt(pop.Text);
+        _pops.Children.Remove(pop.Band);
+        if (pop.Gen == _popGen) _popsOn = Math.Max(0, _popsOn - 1);   // a pop-up of a fight drawn before counts for nothing now
+    }
+
+    /// <summary>Where the name's line ends across the row (the name, YOU, PB, the plates: what a pop-up must never cover).</summary>
+    static double NameEnd(RowEl r)
+    {
+        var defs = r.Cols.ColumnDefinitions;
+        double start = r.Cols.Margin.Left + (defs.Count > 1 ? defs[0].ActualWidth + defs[1].ActualWidth : 52);
+        return start + r.NameLine.DesiredSize.Width;
     }
 
     /// <summary>Where the DPS's column starts across the row (the figures after it too, expanded or not).</summary>
@@ -611,7 +650,13 @@ public sealed class ParserRows : Grid
     }
 
     /// <summary>For the tests: the pop-ups on the rows now (their words), and whether any part of a row is moving.</summary>
-    internal List<string> PopsForTest() => _pops.Children.OfType<TextBlock>().Select(t => $"{t.Tag}:{t.Text}").ToList();
+    /// <summary>For the tests: each pop-up on screen, where its words are across and down the meter (rise included), its band, and its row's limits.</summary>
+    internal List<(string Row, string Word, double Left, double Right, double Top, double Bottom, double BandTop, double BandBottom, double RowTop, double RowBottom, double NameEnd, double DpsLeft)> PopsForTest() =>
+        _rows.Values.SelectMany(r => r.Live.Select(p =>
+        {
+            double bl = Canvas.GetLeft(p.Band), bt = Canvas.GetTop(p.Band), top = bt + Canvas.GetTop(p.Text) + p.Rise.Y;
+            return (r.Name.Text, $"{p.Text.Tag}:{p.Text.Text}", bl + Canvas.GetLeft(p.Text), bl + Canvas.GetLeft(p.Text) + p.Text.ActualWidth, top, top + p.Text.ActualHeight, bt, bt + p.Band.Height, r.Y, r.Y + _rowH - 2, NameEnd(r), DpsLeft(r, r.Track.ActualWidth));
+        })).ToList();
     internal string? HeatForTest() => _rows.Values.FirstOrDefault(r => r.You)?.Heat is { Visibility: Visibility.Visible } h ? h.Tag as string : null;
     internal bool AnyMotionForTest() => _pops.Children.Count > 0 || _sweep.Visibility == Visibility.Visible
         || _rows.Values.Any(r => r.Ghost.Visibility == Visibility.Visible || r.Odo.Visibility == Visibility.Visible || r.Odo.Rolling || Math.Abs(r.Lift.Y) > 0.01 || r.Rise.ScaleX != 1 || r.Root.Effect != null
