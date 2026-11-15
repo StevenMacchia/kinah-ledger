@@ -14,6 +14,8 @@ public partial class MainWindow
 {
     /// <summary>The saved look (HudLooks), for Options and the self-test.</summary>
     public string HudLook => HudLooks.Parse(_hudPrefs.Look);
+    /// <summary>For the options self-test: the panel's choices (HudPrefs.LookPicked).</summary>
+    internal HudPrefs HudPrefsForTest => _hudPrefs;
 
     /// <summary>The coin the game draws for Kinah (data/extra-items.json, "Kina"): the Kinah pickups' tile.</summary>
     const string KinahIcon = ItemDictionary.IconBase + "Icon_gold.png";
@@ -207,10 +209,14 @@ public partial class MainWindow
         MarkPanelPlaced();   // dragged there on purpose (Move the panel, or unlocked): the checklist's "Panel placed"
     }
 
-    /// <summary>Options' Save with a new look: the panel is made again in it, where that look was last left.</summary>
+    /// <summary>
+    /// Options' Save with a new look, or the first-run look step: the panel is made again in it, where that look was last
+    /// left. Either is a pick by hand (HudPrefs.LookPicked), so a later change of the default leaves it alone.
+    /// </summary>
     void ApplyHudLook(string look)
     {
         look = HudLooks.Parse(look);
+        _hudPrefs.LookPicked = true;
         if (look == HudLook) return;
         _hudPrefs.Look = look;
         bool had = _hud != null;

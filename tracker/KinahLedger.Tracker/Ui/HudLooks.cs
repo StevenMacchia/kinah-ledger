@@ -9,11 +9,14 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// How the panel over the game looks (Options › In game › Panel look, 2026-10-25): the Strip it has always been, the Card
 /// (a game tooltip: run, rate, session and the last three pickups) or the Ticker (a small pill and pickups as toasts, the
-/// way the game shows loot). The Strip stays the default, so nothing changes until a player picks another.
+/// way the game shows loot). The Card, named Buddy, is the default since 0.10.102 (Default).
 /// </summary>
 public static class HudLooks
 {
     public const string Strip = "strip", Card = "card", Ticker = "ticker", Capsule = "capsule", Meter = "meter", Float = "float", Auto = "auto";
+
+    /// <summary>A new install's look, and one never picked by hand (HudPrefs.Load): Buddy since 0.10.102 (Steven, 2026-11-15).</summary>
+    public const string Default = Card;
 
     /// <param name="Key">Kept in hud.json (HudPrefs.Look).</param>
     public sealed record Look(string Key, string Name, string Hint);
@@ -35,8 +38,8 @@ public static class HudLooks
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
     public static readonly string[] FightLooks = { Auto, Capsule, Meter, Float };
 
-    /// <summary>A saved look, or the Strip for anything unknown (an older or edited hud.json).</summary>
-    public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Strip;
+    /// <summary>A saved look, or the default (Buddy) for anything unknown (an edited hud.json).</summary>
+    public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Default;
 
     /// <summary>How many pickups the window hands the looks ("pick0" to "pick3"): the Card shows three, the Ticker four.</summary>
     public const int Picks = 4;

@@ -12,8 +12,8 @@ public sealed class HudPrefs
     public bool Locked { get; set; } = true;
     /// <summary>The panel's size, 0.7 to 2 (70 to 200%).</summary>
     public double Scale { get; set; } = 1;
-    /// <summary>The panel's look (HudLooks: "strip", "card", "ticker"). The strip for everyone until they pick another.</summary>
-    public string Look { get; set; } = HudLooks.Auto;   // Auto since 0.10.91: the pill while farming, the group's meter above it in a boss fight
+    /// <summary>The panel's look (HudLooks' keys). Buddy ("card") for everyone until they pick another.</summary>
+    public string Look { get; set; } = HudLooks.Default;   // Buddy since 0.10.102 (Steven, 2026-11-15); Auto from 0.10.91, the Strip before
     /// <summary>
     /// Where the player left the Ticker, kept apart from the strip's and the Card's spot (UserPrefs.HudX/HudY): its toasts
     /// hang down, so its place is left of the target bar, not over it. Null until it is dragged.
@@ -38,6 +38,13 @@ public sealed class HudPrefs
     public bool Placed { get; set; }
     /// <summary>The one-time move from the old default look to Auto (0.10.91) is done; see Load.</summary>
     public bool LookSettled { get; set; }
+    /// <summary>The one-time move from Auto to Buddy (0.10.102) is done; see Load.</summary>
+    public bool BuddySettled { get; set; }
+    /// <summary>
+    /// The player picked the look by hand (Options' Save with a new look, or the first-run look step), so a later change
+    /// of the default leaves it alone. False in every hud.json before 0.10.102.
+    /// </summary>
+    public bool LookPicked { get; set; }
 
     public const double MinScale = 0.7, MaxScale = 2;
 
@@ -59,24 +66,42 @@ public sealed class HudPrefs
         try
         {
             var p = PathFor();
-            if (File.Exists(p) && JsonSerializer.Deserialize<HudPrefs>(File.ReadAllText(p)) is { } saved)
+            if (File.Exists(p) && FromText(File.ReadAllText(p), out bool moved) is { } saved)
             {
-                // 0.10.91 (Steven: the old look "looks cheap"): a player still on the old default, the strip, moves to Auto once;
-                // one who picked a look on purpose keeps it. LookSettled marks the move as done, so a later pick of the strip stays.
-                if (!saved.LookSettled)
-                {
-                    if (string.Equals(saved.Look, HudLooks.Strip, StringComparison.OrdinalIgnoreCase)) saved.Look = HudLooks.Auto;
-                    saved.LookSettled = true;
-                    saved.Save();
-                }
+                if (moved) saved.Save();
                 return saved;
             }
         }
         catch (Exception) { /* corrupt: decide again */ }
         // overlays move by a plain drag, and click-through is a choice in Options, off at first (Steven, 2026-11-14)
-        var fresh = new HudPrefs { Locked = false, LookSettled = true };
+        var fresh = new HudPrefs { Locked = false, LookSettled = true, BuddySettled = true };
         fresh.Save();
         return fresh;
+    }
+
+    /// <summary>A saved hud.json with the one-time look moves made (<paramref name="moved"/>: one was, so it is written back); null for a corrupt file.</summary>
+    internal static HudPrefs? FromText(string json, out bool moved)
+    {
+        moved = false;
+        if (JsonSerializer.Deserialize<HudPrefs>(json) is not { } saved) return null;
+        // 0.10.91 (Steven: the old look "looks cheap"): a player still on the old default, the strip, moves to Auto once;
+        // one who picked a look on purpose keeps it. LookSettled marks the move as done, so a later pick of the strip stays.
+        if (!saved.LookSettled)
+        {
+            if (string.Equals(saved.Look, HudLooks.Strip, StringComparison.OrdinalIgnoreCase)) saved.Look = HudLooks.Auto;
+            saved.LookSettled = true;
+            moved = true;
+        }
+        // 0.10.102 (Steven, 2026-11-15: "make buddy the default view"): a player on Auto, the default before, moves to Buddy
+        // once. hud.json never said whether Auto was picked or defaulted, so Auto counts as the default; any other look stays,
+        // and from now on LookPicked says it was picked
+        if (!saved.BuddySettled)
+        {
+            if (!saved.LookPicked && string.Equals(saved.Look, HudLooks.Auto, StringComparison.OrdinalIgnoreCase)) saved.Look = HudLooks.Default;
+            saved.BuddySettled = true;
+            moved = true;
+        }
+        return saved;
     }
 
     public void Save()
