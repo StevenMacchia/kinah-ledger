@@ -885,6 +885,19 @@ public static partial class WpfApp
                 $"...{HudLooks.All.First(l => l.Key == look).Name} back on the Kinah hour {worldHero.Hero} after the Abyss: {all}");
             hk.Close();
         }
+        // only the Abyss (Steven, 2026-11-15): the overlay's Abyss view follows ZoneLocator.IsAbyss on the zone the player is in,
+        // so no dungeon, no PvE zone and no misread or unknown zone ever turns it on; a name the Abyss shares with a PvE map
+        // (Contaminated Marsh) is the PvE one after a PvE zone
+        {
+            KinahLedger.Ocr.ZoneLocator.SawZone("Western Cantas Valley");
+            var notAbyss = KinahLedger.Ocr.ZoneLocator.Instances.Keys
+                .Concat(KinahLedger.Ocr.ZoneLocator.Known.Where(z => !KinahLedger.Ocr.ZoneLocator.AbyssAreas.ContainsKey(z) && !z.Contains("Reshanta", StringComparison.OrdinalIgnoreCase) && z != KinahLedger.Ocr.ZoneLocator.Abyss))
+                .Concat(KinahLedger.Ocr.ZoneLocator.AbyssAreas.Where(a => a.Value.Shared).Select(a => a.Key))
+                .Concat(new[] { "Unknown zone", "", "Westem Cantas Va11ey" }).Distinct().ToList();
+            var leaked = notAbyss.Where(KinahLedger.Ocr.ZoneLocator.IsAbyss).ToList();
+            Check(leaked.Count == 0 && !KinahLedger.Ocr.ZoneLocator.IsAbyss(null) && KinahLedger.Ocr.ZoneLocator.Instances.Count > 0,
+                $"the Abyss view only in the Abyss: none of {notAbyss.Count} dungeons, PvE zones, shared names after a PvE zone and misreads counts as the Abyss{(leaked.Count > 0 ? ": " + string.Join(", ", leaked.Take(5)) : "")}");
+        }
 
         // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
         w.ShowDemo(); DoEvents();
