@@ -992,7 +992,7 @@ public partial class MainWindow
         Cell(head, 4, Right(PT("Average", 11, FontWeights.SemiBold, "Faint")));
         Cell(head, 5, Right(PT("Share", 11, FontWeights.SemiBold, "Faint")));
         host.Children.Add(head);
-        var list = f.Abilities.OrderByDescending(a => a.Damage).ToList();
+        var list = Abilities.Merged(f.Abilities);   // the ids of one ability as one row (a spirit's attack at each rank)
         string allKey = $"{e.Id}:{f.Id}:all";
         bool all = _parserAbilitiesOpen.Contains(allKey);
         long total = Math.Max(1, f.Damage);
@@ -1003,9 +1003,9 @@ public partial class MainWindow
             var g = Row(); g.MinHeight = 28;
             var rule = new Border { Child = g, BorderThickness = new Thickness(0, i++ == 0 ? 0 : 1, 0, 0), Padding = new Thickness(0, 2, 0, 2) };
             rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
-            Cell(g, 0, SkillArt.Icon(a.Skill, f.Class, 24));
+            Cell(g, 0, SkillArt.Icon(a.Skill, f.Class, 24));   // the ability's icon; an unnamed one the class's emblem
             var nameCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-            nameCol.Children.Add(PT(Abilities.Name(a.Skill), 12.5, FontWeights.SemiBold, a.Skill == 0 ? "Muted" : "Ink", trim: true));
+            nameCol.Children.Add(PT(Abilities.Name(a.Skill, f.Class), 12.5, FontWeights.SemiBold, a.Skill == 0 ? "Muted" : "Ink", trim: true));
             // the ability's bar: its part of the top ability's damage, the class's colour deeper the bigger the part
             double part = a.Damage / top;
             var track = new Grid { Height = 4, Margin = new Thickness(0, 4, 0, 0) };
