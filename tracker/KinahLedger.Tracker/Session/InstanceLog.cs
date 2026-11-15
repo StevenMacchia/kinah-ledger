@@ -106,6 +106,45 @@ public sealed class InstanceRun
     /// whole screen (TrackerSession.TakeReread). Kept on this PC, never sent.
     /// </summary>
     public string CardsReceived { get; set; } = "";
+
+    // ---- the game's own item data (2026-11-15) ----
+    // Steven, 2026-11-15: "all shugo festival runs right now are requiring review - it shouldn't". A Shugo card's list runs
+    // past its window, so every live read left slots not read (11:05 that day: 12 of 40) and the run was one to check. The
+    // game's inventory update gives the whole reward at once, every item with its count (11:04:59, 16 items, Abyss Points
+    // +2,000 where the cards read 800), so when the tracker reads it an event's rewards are the game's, complete.
+
+    /// <summary>What the inventory gained inside the run by the game's own item data (tradeable ones), by item id. Kept on this PC, never sent.</summary>
+    public Dictionary<long, int> GameItems { get; set; } = new();
+    /// <summary>The bound ones among the game's item data (no value), by item id.</summary>
+    public Dictionary<long, int> GameBoundItems { get; set; } = new();
+    /// <summary>Kinah (bound or not) and Abyss Points the game's data said came in the run, each rise with its time.</summary>
+    public List<GameCoin> GameCoins { get; set; } = new();
+    /// <summary>The item id Abyss Points are filed under (the extras' own).</summary>
+    public long GameAbyssId { get; set; }
+    /// <summary>
+    /// The run's Kinah by the game's data: only what came with its rewards, within <see cref="GameCoinSeconds"/> of their
+    /// update. Kinah at another moment of the run is someone else's (2026-11-14 12:04:34, 10 s after a Defend Shugo
+    /// Merchants reward: "A total payment of 849,969 Kina", a Market sale's payout; the cards rightly showed no coin).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long GameKinah => GameRewardAt is DateTime g ? GameCoins.Where(c => !c.Abyss && Math.Abs((c.At - g).TotalSeconds) <= GameCoinSeconds).Sum(c => c.Delta) : 0;
+    /// <summary>The run's Abyss Points by the game's data: all that came before it was left (an event's kills), and what came with its rewards.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long GameAbyss => GameCoins.Where(c => c.Abyss && (c.Inside || GameRewardAt is DateTime g && Math.Abs((c.At - g).TotalSeconds) <= GameCoinSeconds)).Sum(c => c.Delta);
+    public const double GameCoinSeconds = 3;
+    /// <summary>When the game's data gave the run's rewards: an update of three or more items going up at once. Null when it never did.</summary>
+    public DateTime? GameRewardAt { get; set; }
+    /// <summary>Items in the game's data the item list lacks ("item 930100099 x3"), or whose earlier amount wasn't known: each one item not read.</summary>
+    public List<string> GameUnknown { get; set; } = new();
+    /// <summary>Of <see cref="GameUnknown"/>, the stacks seen for the first time (their count isn't known): each a slot not read.</summary>
+    public int GameGaps { get; set; }
+    /// <summary>The game's data counted Kinah when its rewards came (a baseline on the connection): its Kinah is the run's, else the picture's coin stands.</summary>
+    public bool GameKinahCounted { get; set; }
+    /// <summary>Items whose amount the game's data didn't count when its rewards came (Abyss Points before their baseline): the picture's count of them stays.</summary>
+    public List<long> GameKept { get; set; } = new();
+    /// <summary>The run's rewards are the game's own item data, not its reward picture's slots: nothing to read, nothing to check.</summary>
+    public bool FromGame { get; set; }
+
     /// <summary>A run counted from its picture with anything on it to look at: slots not read, gear not named, a count in doubt.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool ToLookAt => FromPicture && (PartlyRead || SlotsUnread > 0 || UnknownGear > 0 || SlotDoubts.Count > 0);
@@ -144,6 +183,29 @@ public sealed class InstanceRun
     /// slots are gone. Its counts before are in <see cref="RepairedFrom"/>, sent to the site as a correction like the gear repair's.
     /// </summary>
     public DateTime? Recounted { get; set; }
+
+    /// <summary>
+    /// The game's own item data in place of the reward picture's slots (an event whose rewards the game's data gave, see
+    /// <see cref="GameRewardAt"/>): its items and bound items, its Kinah when the game's data counted Kinah then
+    /// (<see cref="GameKinahCounted"/>; else the picture's coin stands), and nothing not read but what the game's data itself
+    /// left unknown. <see cref="GameKept"/>: items whose amount the game's data didn't count then (Abyss Points with no
+    /// baseline yet): the picture's count of them stays. False when the game's data gave no rewards.
+    /// </summary>
+    public bool TakeGameRewards()
+    {
+        if (GameRewardAt == null) return false;
+        var items = new Dictionary<long, int>(GameItems);
+        if (GameAbyssId != 0 && GameAbyss > 0) items[GameAbyssId] = (int)Math.Min(int.MaxValue, items.GetValueOrDefault(GameAbyssId) + GameAbyss);
+        foreach (var id in GameKept) if (!items.ContainsKey(id) && Items.TryGetValue(id, out var n)) items[id] = n;
+        Items = items; BoundItems = new(GameBoundItems); Bound = GameBoundItems.Values.Sum();
+        // the game's Kinah is the run's: no longer among what the chat had set aside (Loot set the same pickups aside as they came)
+        if (GameKinahCounted) { ChatKinahSetAside = Math.Max(0, ChatKinahSetAside - (GameKinah - (FromGame ? Kinah : 0))); Kinah = GameKinah; }
+        FromPicture = true; FromGame = true; RewardsNotRead = false; KinahNotRead = false;
+        SlotsUnread = GameGaps; UnknownItems = GameUnknown.Count; UnknownSlots = new(GameUnknown);
+        PartlyRead = GameGaps > 0; UnknownGear = 0; GearNotes = new(); SlotDoubts = new(); PictureCounts = new(); PictureSlots = 0;
+        if (LastLoot is not DateTime l || l < GameRewardAt) LastLoot = GameRewardAt;
+        return true;
+    }
 
     /// <summary>
     /// What a read of its pictures found, onto this run: the items, the Kinah, the slots not read and the flags. Its times,
@@ -234,6 +296,9 @@ public sealed class InstanceRun
         if (Family.Length == 0) Family = ZoneLocator.FamilyOf(Zone);
     }
 }
+
+/// <summary>A rise of Kinah (bound or not) or of Abyss Points in a run by the game's own data: when, how much, and whether before the run was left.</summary>
+public sealed record GameCoin(DateTime At, long Delta, bool Abyss = false, bool Inside = true);
 
 /// <summary>Where a pickup goes while a run is being left: the run, or not (farming, or a reward screen's).</summary>
 public enum RunRoute { Run, NotRun }
@@ -771,6 +836,73 @@ public sealed class InstanceLog
         }
     }
 
+    // ---- the game's own item data (2026-11-15) ----
+
+    /// <summary>
+    /// What the game's data counts at a moment (set by the session): whether it counted Kinah then, and the items whose
+    /// amount it didn't (Abyss Points before their baseline), whose reward picture's count stays. Null: Kinah counted, none kept.
+    /// </summary>
+    public Func<DateTime, (bool Kinah, long[] Keep)>? GameCounts { get; set; }
+
+    /// <summary>The open run is an event the game's item data counts into: the run's own, as <see cref="Loot"/> decides, never after its time for rewards.</summary>
+    bool GameRunLocked(DateTime at) => _cur is { Kind: "Event" } c && at >= c.Start && !(_leftAt is { } left && (at - left).TotalSeconds > RewardGraceSeconds);
+
+    /// <summary>
+    /// One inventory update inside an event run, by the game's own item data (TrackerSession.Packets.cs): each item that
+    /// went up, with its count (0 and <c>FirstSeen</c> for a stack whose earlier amount isn't known; <c>Listed</c> false for
+    /// an id the item list lacks). Three or more items at once are the event's rewards coming in. Once the run's reward
+    /// picture is filed, an update after it is taken at once, so the order of the two doesn't matter.
+    /// </summary>
+    public void GameLoot(DateTime at, IReadOnlyList<(long Id, long Count, bool Bound, bool Listed, bool FirstSeen, string Name)> rises)
+    {
+        lock (_lock)
+        {
+            if (!GameRunLocked(at) || rises.Count == 0) return;
+            var c = _cur!;
+            // once the run was left, only its rewards' own update is its (an open-world kill's drops are farming's)
+            if (_leftAt != null && (rises.Count < 3 || c.GameRewardAt != null)) return;
+            foreach (var (id, n, bound, listed, first, name) in rises)
+            {
+                if (first) { c.GameGaps++; c.GameUnknown.Add($"{name}: its stack first seen, its count not known"); continue; }
+                if (!listed) { c.GameUnknown.Add($"{name} x{n:N0}: not on the item list"); continue; }
+                var into = bound ? c.GameBoundItems : c.GameItems;
+                into[id] = (int)Math.Min(int.MaxValue, into.GetValueOrDefault(id) + n);
+            }
+            if (rises.Count >= 3 && c.GameRewardAt == null)
+            {
+                c.GameRewardAt = at;
+                var (kinah, keep) = GameCounts?.Invoke(at) ?? (true, Array.Empty<long>());
+                c.GameKinahCounted = kinah; c.GameKept = keep.ToList();
+                CrashLog.Note($"{c.Label}: its rewards came in the game's own item data ({at.ToLocalTime():HH:mm:ss.f}): {rises.Count} item(s) at once");
+            }
+            if (c.Tables > 0) UseGameLocked(c, "a game update after its reward picture");
+        }
+    }
+
+    /// <summary>Kinah (bound or not) or Abyss Points the game's data counted inside an event run: Abyss Points under their item id.</summary>
+    public void GameCurrency(DateTime at, long delta, long abyssId = 0)
+    {
+        lock (_lock)
+        {
+            if (!GameRunLocked(at) || delta <= 0) return;
+            var c = _cur!;
+            if (abyssId != 0) c.GameAbyssId = abyssId;
+            c.GameCoins.Add(new GameCoin(at, delta, abyssId != 0, _leftAt == null));
+            if (c.Tables > 0 || c.FromGame) UseGameLocked(c, "a game update after its reward picture");
+        }
+    }
+
+    /// <summary>The event run's rewards from the game's item data, when it gave them: in place of its reward picture's slots.</summary>
+    void UseGameLocked(InstanceRun r, string when)
+    {
+        if (r.Kind != "Event" || r.GameRewardAt == null) return;
+        int slots = r.PictureSlots, unread = r.SlotsUnread, gear = r.UnknownGear;
+        if (!r.TakeGameRewards()) return;
+        CrashLog.Note($"{r.Label}: its rewards from the game's own item data ({when}): {PiecesNote(r)}, {r.Kinah:N0} Kinah{(r.GameKinahCounted ? "" : " (the picture's: the game's Kinah not counted then)")}"
+            + (slots > 0 || unread > 0 ? $", in place of the picture's {slots} slot(s) ({unread} not read, {gear} gear not named)" : "")
+            + (r.GameUnknown.Count > 0 ? $"; {r.GameUnknown.Count} not known: {string.Join("; ", r.GameUnknown.Take(4))}" : "; complete"));
+    }
+
     void Paid(DateTime t)
     {
         if (_cur == null || _cur.PaidAt != null) return;
@@ -1103,6 +1235,8 @@ public sealed class InstanceLog
             _cur.PictureCounts = pictureCounts?.ToList() ?? new();
             if (partly) _cur.PartlyRead = true;
             CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, counted with what was read)" : "")}; the chat's {chatItems} set aside");
+            // an event whose rewards the game's own item data gave: those, complete, in place of the cards' slots
+            UseGameLocked(_cur, "its reward cards filed");
         }
     }
 
@@ -1118,6 +1252,13 @@ public sealed class InstanceLog
         {
             var r = _cur is { } c && c.Start == runStart ? c : _done.LastOrDefault(x => x.Start == runStart);
             if (r == null) return false;
+            // its rewards are the game's own item data: the chat's word on the picture's slots changes nothing
+            if (r.FromGame)
+            {
+                r.TableChat = chat.ToList();
+                if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's {decisions.Count} decision(s) on its reward picture left out: its rewards are the game's own item data");
+                return true;
+            }
             bool closed = !ReferenceEquals(r, _cur);
             if (closed && !_unshared.Contains(r) && !_parked.Contains(r))
             {
@@ -1201,6 +1342,8 @@ public sealed class InstanceLog
         ResetEdgesLocked();
         _gameNamed = false; _leftByGame = null;
         if (_cur != null) _cur.Ended = why;
+        // an event whose reward cards weren't read (or not yet taken) but whose rewards the game's own item data gave
+        if (_cur != null && !_cur.FromGame) UseGameLocked(_cur, "the run closing");
         if (_cur != null && PictureOnly(_cur) && !_cur.FromPicture)
         {
             _cur.RewardsNotRead = true;

@@ -40,6 +40,16 @@ public sealed class ItemDictionary
     public ItemInfo? Get(long id) { lock (_lock) return _byId.GetValueOrDefault(id); }
 
     /// <summary>
+    /// The game's own item ids of extras that go to the site by name (data/extra-items.json "gameId": Enhance Stone,
+    /// Centuryroot Token, Soul Codex), each to the extra's id here, so an inventory update that names one by the game's id
+    /// is that extra (since 2026-11-15).
+    /// </summary>
+    readonly Dictionary<long, long> _gameAlias = new();
+
+    /// <summary>The id this list keeps for the game's item id <paramref name="id"/>: an extra's own for its game id, else the id itself.</summary>
+    public long FromGame(long id) { lock (_lock) return _gameAlias.TryGetValue(id, out var x) ? x : id; }
+
+    /// <summary>
     /// A synthetic id's name, as a kept run wrote it (InstanceRun.Names): known again after a restart even before the
     /// name is read off the screen again. A real id, or one the list already names, is left as it is.
     /// </summary>
@@ -534,6 +544,7 @@ public sealed class ItemDictionary
                 var cat = Str(e, "category"); if (cat.Length == 0) cat = "Currency";
                 _byId[id] = new ItemInfo(id, name, Str(e, "grade"), tradable, Str(e, "icon"), cat);
                 _byName[Norm(name)] = id;
+                if (e.TryGetProperty("gameId", out var gid) && gid.ValueKind == JsonValueKind.Number && gid.TryGetInt64(out var g) && g > 0 && g != id && !_byId.ContainsKey(g)) _gameAlias[g] = id;
                 var plain = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
                 if (plain != name && Free(Norm(plain))) _byName[Norm(plain)] = id;
             }

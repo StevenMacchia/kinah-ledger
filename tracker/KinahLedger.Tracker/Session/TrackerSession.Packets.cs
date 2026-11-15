@@ -107,6 +107,9 @@ public sealed partial class TrackerSession
                 : "";
             if (why == "") break;   // its lines may still come: it waits, and the ones after it with it, so they count in order
             _packetHeld.RemoveAt(0);
+            // inside an event, the game's own count of its Kinah and Abyss Points: the run's rewards (InstanceLog.GameCurrency)
+            if (c.What is CurrencyKind.Kinah or CurrencyKind.BoundKinah or CurrencyKind.AbyssPoints)
+                Instances.GameCurrency(c.At, c.Delta, c.What == CurrencyKind.AbyssPoints ? _items.IdOf("Abyss Points") : 0);
             if (why != null)
             {
                 CrashLog.Note($"packets: {what} +{c.Delta:N0} {why}: a sale, the mail or a reward, not a pickup; not counted");
@@ -209,6 +212,9 @@ public sealed partial class TrackerSession
     {
         p.NameOf ??= id => _items.NameOf(id);
         p.CraftingAt ??= CraftingAt;
+        // what the game's data counted when an event's rewards came: its Kinah, and Abyss Points (the picture's count stays without them)
+        Instances.GameCounts ??= at => (p.Counting(CurrencyKind.Kinah, at) && p.Counting(CurrencyKind.BoundKinah, at),
+            p.Counting(CurrencyKind.AbyssPoints, at) ? Array.Empty<long>() : new[] { _items.IdOf("Abyss Points") });
         while (p.NextItems() is { } b) _itemHeld.Add(b);
         // an update is taken once the chat had its say on each item that went up (a pickup line, or a box's or a reward's
         // contents), else once PacketHoldSeconds old as before: the chat tells a drop from a box's contents, and lags the
@@ -253,6 +259,30 @@ public sealed partial class TrackerSession
         return true;
     }
 
+    /// <summary>
+    /// Inside an event run, an inventory update is the run's by the game's own item data (2026-11-15, Steven: "all shugo
+    /// festival runs right now are requiring review - it shouldn't.... fix it based on packets"): each item that went up,
+    /// bound or not by its id (a bound item has its own), with an id the item list lacks or a stack first seen kept as not
+    /// known. This comes before the pickup gate, which leaves an update out with a reward screen open or the chat calling it
+    /// a reward (both are what an event's reward is), and before the agreement check stops counting farming's pickups: the
+    /// run's rewards are its own reading (InstanceLog.GameLoot). An update with something going down in it is not taken (a
+    /// box opened, a stack moved): its rises may be a box's contents.
+    /// </summary>
+    void GameRewards(PacketReader p, ItemBatch b)
+    {
+        if (Instances.CurrentKind != "Event" || !p.ReadsItemsAt(b.At)) return;
+        if (b.Fell) { CrashLog.Note($"packets: an update with something going down inside {Instances.Open}: not the run's rewards"); return; }
+        var rises = new List<(long Id, long Count, bool Bound, bool Listed, bool FirstSeen, string Name)>();
+        foreach (var (gid, n, unknown) in b.Net())
+        {
+            if (!unknown && n <= 0) continue;
+            long id = _items.FromGame(gid);
+            string name = _items.NameOf(id);
+            rises.Add((id, unknown ? 0 : n, name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase), _items.Get(id) != null, unknown, name));
+        }
+        Instances.GameLoot(b.At, rises);
+    }
+
     /// <summary>One inventory update, once the lines around it are in: a craft's while crafting, else each item that went up a pickup if the gate lets it.</summary>
     void TakeItems(PacketReader p, ItemBatch b)
     {
@@ -265,6 +295,7 @@ public sealed partial class TrackerSession
             foreach (var o in _packetCrafts.Take(b, PanelRecipeNow)) CountPacketCraft(o);
             return;
         }
+        GameRewards(p, b);
         if (!p.CountingItems(b.At)) return;
         // something went down with it: a craft's materials, a box opened, a stack moved or something used, never a pickup
         if (b.Fell) { CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup"); return; }

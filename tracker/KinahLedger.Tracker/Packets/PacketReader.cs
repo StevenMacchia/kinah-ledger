@@ -321,6 +321,9 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// <summary>Whether the packets count item pickups at <paramref name="at"/>: reading items since a while before, and not stopped.</summary>
     public bool CountingItems(DateTime at) { if (!ItemsOn) return false; lock (_gate) return _itemsBroken == null && at > ReadingSince.AddSeconds(4); }
 
+    /// <summary>Whether the packets read the inventory's updates at <paramref name="at"/>, counting farming's pickups or not (an event's rewards are read either way).</summary>
+    public bool ReadsItemsAt(DateTime at) => ItemsOn && at > ReadingSince.AddSeconds(4);
+
     /// <summary>Whether the packets count crafts at <paramref name="at"/>: what each craft made, and the tries that made nothing.</summary>
     public bool CountingCrafts(DateTime at) { if (!ItemsOn) return false; lock (_gate) return _craftsBroken == null && at > ReadingSince.AddSeconds(4); }
 

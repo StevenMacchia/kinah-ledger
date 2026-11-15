@@ -562,6 +562,147 @@ public static class PacketTests
             }
         }
 
+        // the Shugo Festival runs of 2026-11-15 (07:03 and 11:03 local) and 2026-11-14 (11:03, 12:03), each hour's recording through this build's
+        // decoder and a whole session with its currencies and the event's own parts: the run opens, its rewards come and it
+        // closes as live, with no reward cards read at all. Live, both were filed from the cards as partly read (07:05: 4 of
+        // 40 places not read, Abyss Points x1,020; 11:05: 12 of 40, Abyss Points x800) and each was one to check
+        {
+            string? bench3 = Environment.GetEnvironmentVariable("KL_BENCH") is { Length: > 0 } kb3 ? kb3 : BenchPackets();
+            var want = new (string Rec, long Stone, long Root, long Ap, int Gear, string Hour, string Event)[]
+            {
+                ("rec-20261115-07", 2100, 150, 1000, 11, "Nov 15 07:03", "Defend Shugo Merchants"), ("rec-20261115-11", 3300, 190, 2000, 10, "Nov 15 11:03", "Defend Shugo Merchants"),
+                // and the day before's (live: 4 and 6 places not read): Hidden Lugi, whose cards read Abyss Points x2,100 for the game's 2,080
+                ("rec-20261114-11", 3300, 190, 2080, 10, "Nov 14 11:03", "Hidden Lugi"), ("rec-20261114-12", 3300, 180, 2000, 10, "Nov 14 12:03", "Defend Shugo Merchants"),
+            };
+            if (!NativeDecoder.Available || NativeDecoder.Version < 8) Console.WriteLine("skip  the Shugo Festival replays: this build's decoder reads no inventory");
+            else foreach (var w in want)
+            {
+                var rec = bench3 == null ? "" : Path.Combine(bench3, w.Rec);
+                if (!File.Exists(Path.Combine(rec, "capture.pcapng"))) { Console.WriteLine($"skip  the {w.Hour} Shugo Festival replay: kinah-bench/packets/{w.Rec} not found (KL_BENCH)"); continue; }
+                var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+                var res = ReplaySession(settings, new[] { rec }, "Eastern Cantas Valley", events: true);
+                var run = res.Runs?.LastOrDefault(r => r.Event == w.Event);
+                long Of(string name) => run == null ? -1 : run.Items.GetValueOrDefault(items.IdOf(name)) + run.BoundItems.GetValueOrDefault(items.IdOf(name));
+                int gear = run?.Items.Where(kv => items.IsGear(kv.Key)).Sum(kv => kv.Value) ?? -1;
+                Check(run is { FromGame: true, PartlyRead: false, SlotsUnread: 0, ToLookAt: false, KinahUnknown: false, Kinah: 0 } && run.GameUnknown.Count == 0
+                    && Of("Enhance Stone") == w.Stone && Of("Centuryroot Token") == w.Root && Of("Abyss Points") == w.Ap && gear == w.Gear,
+                    $"the {w.Hour} {w.Event}, replayed: {(run == null ? "no run" : $"{(run.FromGame ? "from the game" : "not from the game")}, {(run.PartlyRead ? "partly read" : "complete")}, {(run.ToLookAt ? "to check" : "nothing to check")}")}; "
+                    + $"{gear} gear, Enhance Stone x{Of("Enhance Stone"):N0}, Centuryroot Token x{Of("Centuryroot Token")}, Abyss Points x{Of("Abyss Points"):N0}, {run?.Kinah:N0} Kinah, {run?.GameUnknown.Count} not known");
+            }
+        }
+
+        // an event's rewards from the game's own item data (2026-11-15, Steven: "all shugo festival runs right now are requiring
+        // review - it shouldn't"). Defend Shugo Merchants, 11:03 to 11:05:39 local that day: the reward cards' lists run past
+        // their windows, so the live read filed "23 piece(s) (8 gear, 11 unknown item(s)); currencies: Enhance Stone x2,500,
+        // Abyss Points x800, Centuryroot Token x100 from its slots, 12 slot(s) not read (partly read ...)", one to check. The
+        // recording of that hour (packets\20261115-11.pcapng, replayed) has the whole reward in one update at 11:04:59.04 and
+        // Abyss Points +2,000; no Kinah came. These are its rows.
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            DateTime L(string hms) => new DateTime(2026, 11, 15, 5, 0, 0, DateTimeKind.Utc) + TimeSpan.Parse(hms);   // local (UTC-5) to UTC
+            var reward = new (string Name, long Id, long N)[]
+            {
+                ("Forgotten Mace", 0, 1), ("item 930100023", 930100023, 3300), ("item 930100011", 930100011, 190), ("Ethereal Helm", 0, 1), ("Temple Guardian Helm", 0, 1),
+                ("Forgotten Breastplate", 0, 1), ("Forgotten Spellbook", 0, 1), ("Ethereal Spellbook", 0, 2), ("Riverside Gloves", 0, 2), ("Forgotten Cloak", 0, 1),
+                ("Fine Odyle", 0, 3), ("Odyle", 0, 7), ("Expert's Refining Stone", 0, 1), ("Refining Stone", 0, 5), ("item 535400001", 535400001, 3), ("Seed of Detection", 0, 1),
+            };
+            long IdOf(string name, long id) => id != 0 ? id : items.IdOf(name);
+            int batch = 900;
+            ItemChange[] Rows(DateTime at, IEnumerable<(string Name, long Id, long N)> rs, bool first = false)
+            {
+                batch++; var l = rs.ToList();
+                return l.Select((r, i) => new ItemChange(at, IdOf(r.Name, r.Id), ItemOp.Changed, 7000 + i, first ? 0 : r.N, 50 + r.N, first, batch, l.Count, false)).ToArray();
+            }
+            AreaEvent Area(string hms, AreaEvent.Kind k, AreaEvent.Stage st) => new(L(hms), null, k, st, L("11:03:07"), "Shugo Festival", "Defend Shugo Merchants", "", 1);
+            // the live read's filing of its cards (TrackerSession.ApplyGrid): what it named, 12 of 40 places not read
+            void Cards(TrackerSession s, string hms)
+            {
+                var at = L(hms);
+                var slots = new GameEvent[]
+                {
+                    new ItemAcquired(at, items.IdOf("Abyss Points"), 800, false) { Via = "reward table" }, new ItemAcquired(at, items.IdOf("Enhance Stone"), 2500, false) { Via = "reward table" },
+                    new ItemAcquired(at, items.IdOf("Centuryroot Token"), 100, false) { Via = "reward table" }, new ItemAcquired(at, items.IdOf("Forgotten Mace"), 1, false) { Via = "reward table" },
+                };
+                s.Instances.RewardTable(at, slots, 12, Enumerable.Range(0, 12).Select(i => $"c3.{i} · not read").ToList(), false, 11, null, partly: true, pictureSlots: 40);
+            }
+            (TrackerSession S, PacketReader R) Run(bool cardsFirst, IEnumerable<(string Name, long Id, long N)>? rs = null, bool firstSeen = false, long kinah = 0, bool farmAfter = false)
+            {
+                var r = new PacketReader(); r.ReadingForTest();
+                var s = new TrackerSession(null, settings, items, "Test") { Packets = r };
+                s.ApplyZone("Shugo Festival", L("11:03:18"));
+                r.AmountForTest(CurrencyKind.AbyssPoints, 10_348, L("11:03:03.59")); r.AmountForTest(CurrencyKind.Kinah, 6_063_883, L("11:03:03.59")); r.AmountForTest(CurrencyKind.BoundKinah, 32_640, L("11:03:03.59"));
+                s.Instances.GameSaid(Area("11:03:08.3", AreaEvent.Kind.Phase, AreaEvent.Stage.Preparing), "Shugo Festival");
+                s.Instances.GameSaid(Area("11:03:21.1", AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay), "Shugo Festival");
+                s.Instances.GameSaid(Area("11:04:48.7", AreaEvent.Kind.Over, AreaEvent.Stage.Over), "Shugo Festival");
+                if (cardsFirst) Cards(s, "11:04:58.9");
+                r.AmountForTest(CurrencyKind.AbyssPoints, 12_348, L("11:04:59.04"));
+                if (kinah > 0) r.AmountForTest(CurrencyKind.Kinah, 6_063_883 + kinah, L("11:04:59.04"));
+                r.ItemsForTest(Rows(L("11:04:59.04"), rs ?? reward, firstSeen));
+                s.DrainPacketsForTest();
+                if (!cardsFirst) Cards(s, "11:05:12.1");
+                s.Instances.GameSaid(Area("11:05:39.7", AreaEvent.Kind.Closed, AreaEvent.Stage.UnderWay), "Shugo Festival");
+                if (farmAfter)
+                {
+                    // out in the open world within its time for rewards: a kill's Abyss Points and a gathered Odyle are farming's
+                    r.AmountForTest(CurrencyKind.AbyssPoints, 12_398, L("11:05:50"));
+                    r.ItemsForTest(Rows(L("11:05:50"), new[] { ("Odyle", 0L, 1L) }));
+                    s.DrainPacketsForTest();
+                }
+                s.Instances.Close();
+                return (s, r);
+            }
+            string Say(InstanceRun? x) => x == null ? "no run" : $"{(x.FromGame ? "from the game" : "from the cards")}, {(x.PartlyRead ? "partly read" : "complete")}, {x.SlotsUnread} not read, {(x.ToLookAt ? "to check" : "nothing to check")}";
+            long N(InstanceRun? x, string name) => x == null ? -1 : x.Items.GetValueOrDefault(items.IdOf(name)) + x.BoundItems.GetValueOrDefault(items.IdOf(name));
+
+            var (s1, _) = Run(cardsFirst: false);
+            var r1 = s1.Instances.Snapshot().LastOrDefault();
+            var sum1 = s1.Score.Snapshot(r1 == null ? null : new[] { r1 });
+            int gear1 = r1?.Items.Where(kv => items.IsGear(kv.Key)).Sum(kv => kv.Value) ?? -1;
+            Check(r1 is { FromGame: true, PartlyRead: false, SlotsUnread: 0, ToLookAt: false, KinahUnknown: false, Kinah: 0 } && sum1.RunsPartly == 0 && sum1.RunsFull == 1,
+                $"11:05 Defend Shugo Merchants, its cards read in part (12 of 40 not read): {Say(r1)}; {sum1.RunsPartly} run(s) to check");
+            Check(N(r1, "Enhance Stone") == 3300 && N(r1, "Centuryroot Token") == 190 && N(r1, "Abyss Points") == 2000 && gear1 == 10 && N(r1, "Odyle") == 7 && N(r1, "Fine Odyle") == 3 && N(r1, "Refining Stone") == 5,
+                $"...the game's counts: Enhance Stone x{N(r1, "Enhance Stone"):N0} (cards 2,500), Centuryroot Token x{N(r1, "Centuryroot Token")} (cards 100), Abyss Points x{N(r1, "Abyss Points"):N0} (cards 800), {gear1} gear, Odyle x{N(r1, "Odyle")}");
+            long codex = items.IdOf("Soul Codex (Bound)");
+            Check(r1 != null && r1.BoundItems.GetValueOrDefault(codex) == 3 && !r1.Items.ContainsKey(codex) && r1.Bound == 3,
+                $"...Soul Codex (Bound) x{r1?.BoundItems.GetValueOrDefault(codex)} among the bound items (no value), {r1?.Bound} bound in all");
+            // the cards filed before the game's update came: the update replaces them all the same
+            var (s2, _) = Run(cardsFirst: true);
+            var r2 = s2.Instances.Snapshot().LastOrDefault();
+            Check(r2 is { FromGame: true, PartlyRead: false, SlotsUnread: 0 } && N(r2, "Abyss Points") == 2000 && N(r2, "Enhance Stone") == 3300,
+                $"...the cards filed first, the game's update after: {Say(r2)}, Abyss Points x{N(r2, "Abyss Points"):N0}");
+            var (s7, _) = Run(cardsFirst: false, farmAfter: true);
+            var r7 = s7.Instances.Snapshot().LastOrDefault();
+            Check(r7 is { FromGame: true } && N(r7, "Abyss Points") == 2000 && N(r7, "Odyle") == 7, $"...after leaving it, a kill's Abyss Points and a gathered Odyle aren't its: Abyss Points x{N(r7, "Abyss Points"):N0}, Odyle x{N(r7, "Odyle")}");
+            // an event's Kinah, by the game's count: the run's, not set aside
+            var (s3, _) = Run(cardsFirst: false, kinah: 12_000);
+            var r3 = s3.Instances.Snapshot().LastOrDefault();
+            Check(r3 is { Kinah: 12_000, KinahUnknown: false, FromGame: true, ChatKinahSetAside: 0 }, $"...an event's Kinah with its rewards, by the game's count: {r3?.Kinah:N0} the run's, {r3?.ChatKinahSetAside:N0} set aside");
+            // a stack the game's data shows for the first time (its count not known): that one item not read, the rest the game's
+            var (s4, _) = Run(cardsFirst: false, rs: reward.Take(15));
+            var r4a = s4.Instances.Snapshot().LastOrDefault();
+            var r5 = new PacketReader(); r5.ReadingForTest();
+            var s5 = new TrackerSession(null, settings, items, "Test") { Packets = r5 };
+            s5.ApplyZone("Shugo Festival", L("11:03:18"));
+            s5.Instances.GameSaid(Area("11:03:21.1", AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay), "Shugo Festival");
+            r5.ItemsForTest(Rows(L("11:04:59.04"), reward.Take(15)).Concat(Rows(L("11:04:59.04"), reward.Skip(15), first: true).Select(x => x with { Batch = batch - 1, BatchRows = 16 })).ToArray());
+            s5.DrainPacketsForTest(); Cards(s5, "11:05:12.1"); s5.Instances.Close();
+            var r5r = s5.Instances.Snapshot().LastOrDefault();
+            Check(r4a is { FromGame: true, SlotsUnread: 0 } && r5r is { FromGame: true, SlotsUnread: 1, PartlyRead: true } && r5r.UnknownSlots.Single().StartsWith("Seed of Detection"),
+                $"...a stack first seen: {Say(r5r)} ({r5r?.UnknownSlots.FirstOrDefault()})");
+            // without the decoder the cards stand, read in part as before
+            var s6 = new TrackerSession(null, settings, items, "Test");
+            s6.ApplyZone("Shugo Festival", L("11:03:18"));
+            s6.Instances.GameSaid(Area("11:03:21.1", AreaEvent.Kind.Phase, AreaEvent.Stage.UnderWay), "Shugo Festival");
+            Cards(s6, "11:05:12.1"); s6.Instances.Close();
+            var r6 = s6.Instances.Snapshot().LastOrDefault();
+            Check(r6 is { FromGame: false, PartlyRead: true, SlotsUnread: 12, ToLookAt: true }, $"...a build without the decoder: {Say(r6)}");
+            // the chat's word on the picture's slots, and a read again of the kept pictures, leave the game's rewards alone
+            var amend = s1.Instances.AmendTable(r1!.Start, "event cards", new[] { new TableWitness.Decision(new TableWitness.Slot(0, "Common", "Odyle", 7, items.IdOf("Odyle"), false, false, new List<string> { "Odyle" }, "Common x7"), TableWitness.Unread, "Odyle", items.IdOf("Odyle"), false, "the chat said x8") }, new List<TableWitness.Line>());
+            var reread = new InstanceRun { Kind = "Event", FromPicture = true, PictureSlots = 54, SlotsUnread = 0 };
+            Check(amend && !TrackerSession.TakeReread(r1, reread) && r1 is { PartlyRead: false, SlotsUnread: 0 } && N(r1, "Odyle") == 7,
+                $"...the chat's decisions and a read of the kept pictures change nothing: {Say(r1)}, Odyle x{N(r1, "Odyle")}");
+        }
+
         // a build without the decoder reads no traffic and says so
         {
             var keep = PacketReader.Decoders;
@@ -722,15 +863,17 @@ public static class PacketTests
 
     /// <summary>A pickup the game reported in a replay: its item, when, whether a gather gave it, and how long after its message it counted (null: never).</summary>
     internal sealed record Reported(DateTime At, long Id, bool Gathered, double? Delay);
-    internal sealed record SessionReplayResult(List<Reported> Reported, List<(ItemAcquired Ev, DateTime CountedAt)> Counted);
+    internal sealed record SessionReplayResult(List<Reported> Reported, List<(ItemAcquired Ev, DateTime CountedAt)> Counted, List<InstanceRun>? Runs = null);
 
     /// <summary>
     /// Recordings (folders with capture.pcapng, info.json and the reads.log lines of their minutes as chat.log) through this
     /// build's decoder and a whole session, on the recording's own clock (PacketClock): the game's gathering, kills and
     /// inventory updates go in at their times, the chat's pickup lines at theirs, and the session drains every 50 ms. Each
-    /// file is its own reading (as live: the reader starts again with the tracker).
+    /// file is its own reading (as live: the reader starts again with the tracker). With <paramref name="events"/>, the
+    /// currencies and the timed events' own parts go in too (an event run opens, gets its rewards and closes as live), and
+    /// the session's runs come back once the reader stops.
     /// </summary>
-    internal static SessionReplayResult ReplaySession(Settings settings, IList<string> folders, string zone)
+    internal static SessionReplayResult ReplaySession(Settings settings, IList<string> folders, string zone, bool events = false)
     {
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         var evs = new List<(DateTime At, int Kind, object What)>();   // 0 items, 1 gather, 2 fight, 3 chat line
@@ -748,7 +891,8 @@ public static class PacketTests
                     OnData = (d, at) =>
                     {
                         dec.Feed(d, at);
-                        while (dec.Next() is not null) { }
+                        while (dec.Next() is { } c) if (events) evs.Add((c.At, 4, c));
+                        while (events && dec.NextAreaEvent() is { } a) evs.Add((a.At, 5, a));
                         rows.Clear();
                         while (dec.NextItem() is { } it) rows.Add(it);
                         if (rows.Count > 0) evs.Add((rows[0].At, 0, rows.ToArray()));
@@ -811,6 +955,8 @@ public static class PacketTests
                         case GatherResult g: reader.GathersForTest(g); break;
                         case FightEvent f: reader.FightsForTest(f); break;
                         case ItemAcquired line: s.CommitForTest(line); break;
+                        case CurrencyChange c: reader.AmountForTest(c.What, c.Amount, c.At); break;
+                        case AreaEvent a: reader.AreaForTest(a); break;
                     }
                 }
                 s.DrainPacketsForTest();
@@ -832,7 +978,8 @@ public static class PacketTests
                     reported.Add(new Reported(b.At, id, gathered, k >= 0 ? Math.Max(0, (counted[k].CountedAt - b.At).TotalSeconds) : null));
                 }
             }
-            return new SessionReplayResult(reported, counted);
+            s.Instances.Close();
+            return new SessionReplayResult(reported, counted, s.Instances.Snapshot());
         }
         finally { PacketClock.Fixed = null; }
     }
