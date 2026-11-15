@@ -59,6 +59,7 @@ public static class Abilities
     /// </summary>
     public static int? Resolve(int skill)
     {
+        if (skill < 0) return BaseOf(skill) is > 0 and var b ? Resolve(b) : null;   // damage over time: its skill's
         if (skill == 0) return null;
         var map = Map;
         if (map.ContainsKey(skill)) return skill;
@@ -69,24 +70,35 @@ public static class Abilities
     /// <summary>The one id every id of the same ability shares (by name and class), for one row per ability; an unnamed id is its own.</summary>
     public static int Canon(int skill)
     {
+        // damage over time: one row per skill, whichever of its effects ticked (-(the skill's own id x 100))
+        if (skill < 0) return BaseOf(skill) is > 0 and var b && (long)Canon(b) * 100 is var dc and <= int.MaxValue ? (int)-dc : skill;
         if (Resolve(skill) is not { } id) return skill;
         _ = Map;
         return _canon!.TryGetValue(id, out var c) ? c : id;
     }
 
-    /// <summary>A class by its skills' family, the id's first two digits (11 Gladiator ... 18 Chanter, 19 Brawler); "" for anything else.</summary>
-    public static string ClassOfFamily(int skill) => skill is >= 10_000_000 and < 20_000_000 ? (skill / 1_000_000) switch
+    /// <summary>
+    /// Damage over time comes as a negative skill: minus its effect's id, the skill's id x 100 plus the effect's number
+    /// (-1206000003 is Punishing Strike's, 12060000). The skill's id; a skill as it is.
+    /// </summary>
+    public static int BaseOf(int skill) => skill < 0 ? (int)(-(long)skill / 100) : skill;
+
+    /// <summary>A class by its skills' family, the id's first two digits (11 Gladiator ... 18 Chanter, 19 Brawler); "" for anything else (damage over time: its skill's).</summary>
+    public static string ClassOfFamily(int skill) => skill < 0 ? ClassOfFamily(BaseOf(skill)) : skill is >= 10_000_000 and < 20_000_000 ? (skill / 1_000_000) switch
     {
         11 => "Gladiator", 12 => "Templar", 13 => "Assassin", 14 => "Ranger", 15 => "Sorcerer", 16 => "Spiritmaster",
         17 => "Cleric", 18 => "Chanter", 19 => "Brawler", _ => "",
     } : "";
 
     /// <summary>
-    /// "Judgment"; "Damage over time and more" for 0; for an id the list doesn't name, "Spiritmaster skill" (the class from the
-    /// id's family, else <paramref name="casterClass"/>, the member's) or "Unknown skill", noted once in reads.log.
+    /// "Judgment"; "Damage over time and more" for 0 (records from before damage over time came by skill); for an id the
+    /// list doesn't name, "Spiritmaster skill" (the class from the id's family, else <paramref name="casterClass"/>, the
+    /// member's) or "Unknown skill", noted once in reads.log. Damage over time (a negative skill): its skill's name with
+    /// " (over time)", "Punishing Strike (over time)", "Templar skill (over time)", "Unknown skill (over time)".
     /// </summary>
     public static string Name(int skill, string? casterClass = null)
     {
+        if (skill < 0) return (BaseOf(skill) is > 0 and var b ? Name(b, casterClass) : Title(casterClass) is { Length: > 0 } c ? c + " skill" : "Unknown skill") + " (over time)";
         if (skill == 0) return "Damage over time and more";
         if (Resolve(skill) is { } id) return Map[id].Name;
         var cls = ClassOfFamily(skill);
@@ -98,7 +110,7 @@ public static class Abilities
     }
 
     /// <summary>The ability's class ("templar"), from the list or the id's family; "" when neither says.</summary>
-    public static string ClassOf(int skill) => Resolve(skill) is { } id && Map[id].Cls.Length > 0 ? Map[id].Cls : ClassOfFamily(skill).ToLowerInvariant();
+    public static string ClassOf(int skill) => skill < 0 ? ClassOf(BaseOf(skill)) : Resolve(skill) is { } id && Map[id].Cls.Length > 0 ? Map[id].Cls : ClassOfFamily(skill).ToLowerInvariant();
 
     /// <summary>A member's abilities with the ids of one ability as one row (<see cref="Canon"/>), the biggest first.</summary>
     public static List<AbilityShare> Merged(IEnumerable<AbilityShare> abilities) => abilities

@@ -83,8 +83,12 @@ async function table(src) {
   return JSON.parse(text);
 }
 
-/** The Parser's own rule (tracker Parser/Abilities.cs Resolve): the id itself, else a class skill's rank or variant under its base. */
+/**
+ * The Parser's own rule (tracker Parser/Abilities.cs Resolve): the id itself, else a class skill's rank or variant under its
+ * base; damage over time (a negative id: minus the skill's id x 100 + n) is its skill's.
+ */
 function resolve(skills, id) {
+  if (id < 0) { const b = Math.floor(-id / 100); return b > 0 ? resolve(skills, b) : null; }
   if (skills[id]) return id;
   if (id >= 10_000_000 && id < 20_000_000 && id % 10_000 && skills[id - id % 10_000]) return id - id % 10_000;
   return null;

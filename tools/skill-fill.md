@@ -32,7 +32,9 @@ A class skill's hits come under the skill without its rank (the last four digits
 (12060000). The tracker does the same when it looks a name up (`Parser/Abilities.cs` `Resolve`), so a rank the list
 lacks still gets its skill's name and icon. A class's own block (`xx00xxxx`, the Spiritmaster's spirit commands such as
 16001101 Fire Spirit: Flame Explosion) stays whole; the spirits' basic attacks (`1000xx`) and the Theostones (`30xxxxx`)
-come under their own ids. Ids that name the same ability (a spirit's attack at each rank) are one row in the view
+come under their own ids. Damage over time comes as a negative id, minus the effect's id (the skill's id x 100 plus its
+number): it is named for its skill with " (over time)" ("Punishing Strike (over time)", one row per skill), and old
+records' 0 stays "Damage over time and more". Ids that name the same ability (a spirit's attack at each rank) are one row in the view
 (`Abilities.Merged`).
 
 Fights saved before this change (2026-11-14) have the spirit commands under one id, 16000000; those rows read

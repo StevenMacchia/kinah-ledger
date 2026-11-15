@@ -527,6 +527,39 @@ public static class ParserTests
                     && notes.Count(n => n.StartsWith("ability unnamed: 16000000 (Spiritmaster)")) == 1 && notes.Count(n => n.StartsWith("ability unnamed: 2999998 (no class)")) == 1 && notes.Count == 5,
                     $"an unnamed ability: {string.Join(" / ", fallbacks)}, each id noted once ({notes.Count} notes)");
             }
+            // damage over time by skill: minus the effect's id (the skill's id x 100 + n), named for its skill with " (over time)", one row per skill
+            Check(Abilities.Name(-1206000003) == "Punishing Strike (over time)" && Abilities.Name(-1206000301) == "Punishing Strike (over time)" && Abilities.Name(-1605000001, "Spiritmaster") == "Ashy Call (over time)"
+                && Abilities.Canon(-1206000003) == -1206000000 && Abilities.Canon(-1206000301) == -1206000000 && Abilities.ClassOf(-1206000003) == "templar"
+                && Ui.SkillArt.Image(-1206000003) != null && Ui.SkillArt.Image(-1206000003) == Ui.SkillArt.Image(12060000) && Abilities.Name(0) == "Damage over time and more",
+                "damage over time: -1206000003 and a rank's -1206000301 are Punishing Strike (over time) with its icon; old records' 0 keeps its row");
+            var dots = Abilities.Merged(new[] { new AbilityShare { Skill = -1206000003, Damage = 300, Hits = 3 }, new AbilityShare { Skill = -1206000301, Damage = 200, Hits = 2 },
+                new AbilityShare { Skill = 12060000, Damage = 1_000, Hits = 4 } });
+            Check(dots.Count == 2 && dots[0].Skill == 12060000 && dots[1] is { Skill: -1206000000, Damage: 500, Hits: 5 } && Abilities.Name(dots[1].Skill) == "Punishing Strike (over time)",
+                $"...one row per skill's damage over time, beside the skill's own ({string.Join(", ", dots.Select(a => $"{Abilities.Name(a.Skill)} {a.Damage}"))})");
+            var dotNotes = new List<string>();
+            using (CrashLog.CaptureNotes(dotNotes))
+            {
+                var unknownDots = new[] { Abilities.Name(-1298888801), Abilities.Name(-299999901, "Chanter"), Abilities.Name(-299999801), Abilities.Name(-5), Abilities.Name(-5, "Cleric"), Abilities.Name(int.MinValue) };
+                Check(unknownDots.SequenceEqual(new[] { "Templar skill (over time)", "Chanter skill (over time)", "Unknown skill (over time)", "Unknown skill (over time)", "Cleric skill (over time)", "Unknown skill (over time)" })
+                    && unknownDots.All(n => !n.Any(char.IsDigit)) && dotNotes.Any(n => n.StartsWith("ability unnamed: 12988888 (Templar)")) && Ui.SkillArt.Image(-1298888801) == null,
+                    $"...over time from a skill the list doesn't name: {string.Join(" / ", unknownDots)}, never a number, its skill noted ({dotNotes.Count} notes)");
+            }
+            {
+                // through the Parser and a saved record: the negative id is kept as it came, and named on the way out
+                var (pd, keptDot) = New();
+                pd.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 90));
+                pd.Take(new GroupChanged(t, new[] { new GroupMember(1, "Swoly", "Templar", 0, 0, true) }));
+                pd.Take(new BossEngaged(t.AddSeconds(5), "Watchdog Kwapo", 900));
+                pd.Take(new DamageDealt(t.AddSeconds(6), 1, 900, 40_000, Skill: 12060000, Hits: 2));
+                pd.Take(new DamageDealt(t.AddSeconds(7), 1, 900, 9_000, Skill: -1206000003, Hits: 3));
+                pd.Take(new DamageDealt(t.AddSeconds(8), 1, 900, 1_000, Skill: -1206000301, Hits: 1));
+                pd.Take(new BossEnded(t.AddSeconds(20), 900, BossOutcome.Kill));
+                var saved = System.Text.Json.JsonSerializer.Deserialize<Encounter>(System.Text.Json.JsonSerializer.Serialize(keptDot.Single()))!;
+                var rows = Abilities.Merged(saved.Roster.Single(f => f.Id == 1).Abilities);
+                Check(rows.Count == 2 && rows[1] is { Damage: 10_000, Hits: 4 } && rows.Select(a => Abilities.Name(a.Skill, "Templar")).SequenceEqual(new[] { "Punishing Strike", "Punishing Strike (over time)" })
+                    && saved.Roster.Single(f => f.Id == 1).Abilities.Any(a => a.Skill == -1206000003),
+                    $"...through a pull and its saved record: {string.Join(", ", rows.Select(a => $"{Abilities.Name(a.Skill)} {a.Damage} in {a.Hits}"))}");
+            }
             // each ability the skill list names that has art carries its icon in the exe; an unnamed one and damage over time have none (the class's emblem / a glyph stands in)
             Check(Ui.SkillArt.Count >= 350 && Ui.SkillArt.Image(12240000) != null && Ui.SkillArt.Image(16050000) != null && Ui.SkillArt.Image(3000117) != null && Ui.SkillArt.Image(16000000) == null && Ui.SkillArt.Image(0) == null,
                 $"ability icons: {Ui.SkillArt.Count} of the {Abilities.Count} listed skills carry their icon; an unlisted one and damage over time have none");
