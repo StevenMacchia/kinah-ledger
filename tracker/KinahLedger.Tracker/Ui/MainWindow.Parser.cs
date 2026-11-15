@@ -288,7 +288,7 @@ public partial class MainWindow
         ParserLatencyMinute.Clear();
     }
     DateTime ParserNow => _demo ? _parserDemoNow : DateTime.UtcNow;
-    Encounter? ParserLive => _demo ? _parserDemoLive : ParserFights?.Live;
+    Encounter? ParserLive => _demo ? _parserDemoLive : _parserPrefs.AlwaysOn ? ParserFights?.AlwaysLive : ParserFights?.Live;
     (ContentKind Kind, string Instance) ParserWhere => _demo ? _parserDemoWhere : ParserFights?.Where ?? (ContentKind.Other, "");
     List<Encounter> ParserPast() => _demo ? _parserDemoPast ?? new() : TrackerSession.FightStore.All();
     /// <summary>The session's parser in the mode the page says (a session made before the pick, or after a restart of the reader).</summary>
@@ -339,7 +339,10 @@ public partial class MainWindow
         // Steven, 2026-11-14: big "only inside of expeditions and other runs": an open-world fight never opens the section or
         // the separate overlay; it is one small figure on the Kinah line instead (your DPS, Options › In game › Parser)
         if (show is { OpenWorld: true }) show = null;
-        _hud?.SetFarmDps(FarmDpsText(now));
+        // Steven, 2026-11-15: "Always on": the meter is always up, anywhere, and starts from 0 by the parser's rules
+        if (_parserPrefs.AlwaysOn) show = AlwaysMeter(now);
+        // the small DPS on the Kinah line is the meter's figure: not twice
+        _hud?.SetFarmDps(_parserPrefs.AlwaysOn ? "" : FarmDpsText(now));
         if (!ParserOverlaySeparate)
         {
             // expanded by default: the section above the Kinah line; its own window stays away
@@ -396,6 +399,46 @@ public partial class MainWindow
         return _parserReady;
     }
     Encounter? _parserReady;
+
+    /// <summary>
+    /// The Always on meter: the pull or the tally under way, else what ended last while it is from where the player is (a
+    /// dungeon's own, or the open world's), else the place's ready card. Never blank, and never another place's figures.
+    /// </summary>
+    Encounter? AlwaysMeter(DateTime now)
+    {
+        if (ParserFights is not { } pf) return null;
+        if (pf.AlwaysLive is { } live) return live;
+        var held = pf.AlwaysEnded;
+        var (kind, instance) = ParserWhere;
+        bool dungeon = kind is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
+        static bool Kept(Encounter e) => Encounter.KindOf(e.Kind) is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
+        if (dungeon)
+        {
+            if (held != null && Kept(held) && BossBook.Strip(held.Instance).Equals(BossBook.Strip(instance), StringComparison.OrdinalIgnoreCase)) return held;
+            if (_parserReady == null || _parserReady.ModeKind != ParserMode.Bosses || !_parserReady.Instance.Equals(instance, StringComparison.Ordinal)) _parserReady = Encounter.Ready(kind, instance, "", now);
+            return _parserReady;
+        }
+        if (held != null && !Kept(held)) return held;
+        var place = pf.Zone.Trim().Length > 0 ? pf.Zone.Trim() : "Open world";
+        if (_parserReady == null || _parserReady.ModeKind != ParserMode.Fights || _parserReady.Instance != place) _parserReady = Encounter.ReadyAnywhere(place, now);
+        return _parserReady;
+    }
+
+    /// <summary>Always on or Only boss fights (the Parser page's head): remembered, the meter follows at once.</summary>
+    void SetParserAlwaysOn(bool on)
+    {
+        if (_parserPrefs.AlwaysOn == on) return;
+        _parserPrefs.AlwaysOn = on;
+        if (!_demo) _parserPrefs.Save();
+        Say(on ? "Parser meter: always on" : "Parser meter: boss fights only", "Faint");
+        ParserOverlayTick();
+        RedrawParserPage();
+    }
+
+    /// <summary>For the options test: the meter's pick on the page, and the meter it would draw now.</summary>
+    internal void SetParserAlwaysOnForTest(bool on) => SetParserAlwaysOn(on);
+    internal bool ParserAlwaysOnForTest => _parserPrefs.AlwaysOn;
+    internal Encounter? AlwaysMeterForTest(DateTime now) => AlwaysMeter(now);
 
     /// <summary>Settings › In game › Parser › Width moved: the meter at that width now (Save keeps it).</summary>
     public void PreviewFightWidth(double w)
@@ -470,7 +513,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{live?.Uncredited}|{_parserTab}:{_parserInspect}:{_parserSort}:{_parserPrefs.Details}:{_parserPrefs.KillsNear}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{live?.Uncredited}|{_parserTab}:{_parserInspect}:{_parserSort}:{_parserPrefs.Details}:{_parserPrefs.KillsNear}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}:{_parserPrefs.AlwaysOn}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear(); _parserFarmNow = null;
@@ -508,19 +551,40 @@ public partial class MainWindow
             b.Click += (_, _) => SetParserMode(pick);
             modes.Children.Add(b);
         }
-        g.Children.Add(seg);
+        // the meter (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss fights'")
+        var meters = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var (always, label, tip) in new[]
+        {
+            (false, "Only boss fights", "The meter shows in boss fights and in Transcendence, Expeditions and Sanctuaries; outside them your DPS is one small figure on the Kinah line."),
+            (true, "Always on", $"The meter is always up, the open world and the Abyss too. It starts from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after {BossParser.AlwaysIdleSeconds / 60:0} minutes without fighting."),
+        })
+        {
+            var b = new Button { Content = label, Height = 26, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(meters.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = Tip(tip) };
+            b.SetResourceReference(StyleProperty, always == _parserPrefs.AlwaysOn ? "SegOn" : "SegOff");
+            AutomationProperties.SetName(b, "Parser meter: " + label);
+            var pick = always;
+            b.Click += (_, _) => SetParserAlwaysOn(pick);
+            meters.Children.Add(b);
+        }
+        var mseg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+        AutomationProperties.SetName(mseg, "When the Parser's meter shows");
+        var left = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { seg, mseg } };
+        g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         // the overlay's look, one click from here (Steven, 2026-11-14: "idk how to change the style"): its name, a click opens
         // Settings › In game at the Parser's look row. Separated, the Parser's own overlay has one look, so no link
+        // (the look's link sits under it, beside what the mode counts: the head's row holds the two picks and the switch)
+        TextBlock? lookLink = null;
         if (!_parserPrefs.Separate)
         {
             var look = HudLooks.All.First(l => l.Key == HudLook);
-            var link = QLinkify(PT($"Overlay look: {look.Name}  ›", 12, FontWeights.SemiBold, "Link"));
-            link.ToolTip = Tip("How the Parser draws over the game (the Kinah overlay's look): pick another in Settings › In game.");
-            link.Margin = new Thickness(0, 0, 16, 0);
-            AutomationProperties.SetName(link, $"Overlay look: {look.Name}. Change it");
-            link.MouseLeftButtonUp += (_, _) => OpenParserLook();
-            right.Children.Add(link);
+            lookLink = QLinkify(PT($"Overlay look: {look.Name}  ›", 12, FontWeights.SemiBold, "Link"));
+            lookLink.ToolTip = Tip("How the Parser draws over the game (the Kinah overlay's look): pick another in Settings › In game.");
+            lookLink.Margin = new Thickness(16, 7, 0, 0);
+            lookLink.VerticalAlignment = VerticalAlignment.Top;
+            AutomationProperties.SetName(lookLink, $"Overlay look: {look.Name}. Change it");
+            lookLink.MouseLeftButtonUp += (_, _) => OpenParserLook();
         }
         right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
             $"The record under way over the game: the boss or the run, the clock and the group. {(_parserPrefs.Separate ? "Its own overlay (Settings › In game › Parser); right-click it for the mode." : "It opens above the Kinah overlay when a fight starts and folds away after.")}{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
@@ -531,9 +595,17 @@ public partial class MainWindow
         Grid.SetColumn(right, 1);
         g.Children.Add(right);
         box.Children.Add(g);
-        var counts = PT(BossParser.Counts(ParserModeNow), 12, FontWeights.Medium, "Muted");
+        // Always on: what is kept, then the meter's rule (Bosses only's own sentence says the open world never counts: it is still never kept)
+        var kept = !_parserPrefs.AlwaysOn ? BossParser.Counts(ParserModeNow)
+            : ParserModeNow == ParserMode.Bosses ? "Keeps each boss pull in Transcendence, Expeditions and Sanctuaries." : BossParser.Counts(ParserModeNow);
+        var counts = PT(kept + (_parserPrefs.AlwaysOn ? $" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {BossParser.AlwaysIdleSeconds / 60:0} minutes without fighting." : ""), 12, FontWeights.Medium, "Muted");
         counts.TextWrapping = TextWrapping.Wrap; counts.Margin = new Thickness(2, 7, 0, 0);
-        box.Children.Add(counts);
+        var under = new Grid();
+        under.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        under.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        under.Children.Add(counts);
+        if (lookLink != null) { Grid.SetColumn(lookLink, 1); under.Children.Add(lookLink); }
+        box.Children.Add(under);
         return box;
     }
 

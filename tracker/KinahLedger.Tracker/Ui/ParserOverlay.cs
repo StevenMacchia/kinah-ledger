@@ -354,7 +354,8 @@ public sealed class ParserPanel : Border
         _body.Children.Add(head);
         var where = e.Where;
         // the mode, said once at the head of the sub line, so a glance tells a run from a pull
-        var sub = T($"{BossParser.Name(e.ModeKind)} · {where}", 11, FontWeights.Medium, HudKit.Faint);
+        var mode = e.Always ? "Always on" : BossParser.Name(e.ModeKind);
+        var sub = T(where.Length > 0 ? $"{mode} · {where}" : mode, 11, FontWeights.Medium, HudKit.Faint);
         sub.TextTrimming = TextTrimming.CharacterEllipsis; sub.Margin = new Thickness(30, 1, 0, 0);
         if (e.Partial)
         {
@@ -369,7 +370,7 @@ public sealed class ParserPanel : Border
         // a dungeon before its first pull (Ui/MainWindow.Parser.cs DungeonMeter): the meter waits here, no rows, no foot
         if (e.Waiting)
         {
-            var w = T("Waiting for the first pull", 12.5, FontWeights.SemiBold, HudKit.Muted); w.Margin = new Thickness(30, 8, 0, 2);
+            var w = T(e.ReadyText, 12.5, FontWeights.SemiBold, HudKit.Muted); w.Margin = new Thickness(30, 8, 0, 2);
             _body.Children.Add(w);
             BorderBrush = _glass ? HudGlass.Edge : HudKit.FrameLine;
             return;

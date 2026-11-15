@@ -20,6 +20,10 @@ public partial class OptionsWindow
     FrameworkElement? _parserLookRow;
     UniformGrid? _parserLookHost;
     TextBlock? _parserLookHint;
+    /// <summary>The big preview under the look buttons (Steven, 2026-11-15: "can't really see the previews... they're so small"):
+    /// the look under the mouse, else the one picked, drawn at the size it has over the game.</summary>
+    Border? _parserLookStage;
+    string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
     CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!, _parserExpandedChk = null!;
@@ -132,6 +136,9 @@ public partial class OptionsWindow
         box.Children.Add(_parserLookHint);
         _parserLookHost = new UniformGrid { Columns = 4, Margin = new Thickness(0, 10, 0, 0) };
         box.Children.Add(_parserLookHost);
+        _parserLookStage = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 8, 0, 0), MinHeight = 200 };
+        AutomationProperties.SetName(_parserLookStage, "Overlay look preview");
+        box.Children.Add(_parserLookStage);
         _parserLookRow = box;
         return box;
     }
@@ -176,6 +183,7 @@ public partial class OptionsWindow
     {
         if (_parserLookHost == null || _parserLookHint == null) return;
         _parserLookHost.Children.Clear();
+        if (_parserLookStage != null) _parserLookStage.Tag = null;
         var current = HudLooks.Parse(_edit.HudLook);
         bool separate = _parserSeparateChk?.IsChecked == true;
         var inUse = HudLooks.All.First(l => l.Key == current);
@@ -188,21 +196,18 @@ public partial class OptionsWindow
         var (_, fight) = ParserDemo.Sample(now, live: true);
         var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);
         scene.Freeze();
+        _parserLookShown = HudLooks.FightLooks.Contains(current) && !separate ? current : HudLooks.FightLooks[0];
         foreach (var key in HudLooks.FightLooks)
         {
             var l = HudLooks.All.First(x => x.Key == key);
             bool on = key == current && !separate;
-            FrameworkElement face;
-            try { face = HudWindow.PreviewFight(key, sample, fight!, now); }
-            catch (Exception ex) { CrashLog.Write("parser look thumbnail", ex); continue; }
-            var thumb = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Height = 112, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom };
-            var stage = new Border { Child = thumb, Background = scene, CornerRadius = new CornerRadius(6), Padding = new Thickness(5), Height = 122 };
-            var name = new TextBlock { Text = l.Name, FontSize = 12, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, Margin = new Thickness(1, 0, 0, 5) };
+            // a button per look, the big stage below draws it: four thumbnails side by side came out ~110 px tall, unreadable
+            var name = new TextBlock { Text = l.Name, FontSize = 13, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
             name.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
             var card = new Border
             {
-                CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(6, 6, 6, 6), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
-                Child = new StackPanel { Children = { name, stage } }, ToolTip = l.Hint, Focusable = true, Tag = key, Opacity = separate ? 0.45 : 1,
+                CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 7, 8, 7), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
+                Child = name, ToolTip = l.Hint, Focusable = true, Tag = key, Opacity = separate ? 0.45 : 1,
             };
             card.SetResourceReference(Border.BackgroundProperty, "Card2");
             card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
@@ -210,8 +215,27 @@ public partial class OptionsWindow
             AutomationProperties.SetName(card, l.Name + " overlay look" + (on ? ", in use" : ""));
             card.MouseLeftButtonUp += (_, _) => PickHudLook(key);
             card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { PickHudLook(key); e.Handled = true; } };
+            card.MouseEnter += (_, _) => ShowParserLook(key, sample, fight!, now, scene);
+            card.GotKeyboardFocus += (_, _) => ShowParserLook(key, sample, fight!, now, scene);
+            card.MouseLeave += (_, _) => ShowParserLook(_parserLookShown, sample, fight!, now, scene);
             _parserLookHost.Children.Add(card);
         }
+        ShowParserLook(_parserLookShown, sample, fight!, now, scene);
+    }
+
+    /// <summary>The stage: one look in a boss fight at its real size over a dark game scene, scaled down only past the page's width.</summary>
+    void ShowParserLook(string? key, IReadOnlyDictionary<string, string> sample, Encounter fight, DateTime now, Brush scene)
+    {
+        if (_parserLookStage == null || key == null) return;
+        if (_parserLookStage.Tag as string == key) return;
+        FrameworkElement face;
+        try { face = HudWindow.PreviewFight(key, sample, fight, now); }
+        catch (Exception ex) { CrashLog.Write("parser look preview", ex); return; }
+        face.HorizontalAlignment = HorizontalAlignment.Center;
+        face.VerticalAlignment = VerticalAlignment.Center;
+        _parserLookStage.Background = scene;
+        _parserLookStage.Tag = key;
+        _parserLookStage.Child = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     }
 
     /// <summary>In game, scrolled to the Parser's look row (the Parser page's "Look" link).</summary>
@@ -228,6 +252,16 @@ public partial class OptionsWindow
     }
 
     /// <summary>For the options test: the Parser's look tiles (their keys) and which is outlined.</summary>
+    /// <summary>For the options test: the look the big preview draws.</summary>
+    internal string? ParserLookStageForTest => _parserLookStage?.Tag as string;
+
+    /// <summary>For the options test: the mouse entering a look button (a key), or leaving it (null).</summary>
+    internal void HoverParserLookForTest(string? key)
+    {
+        var card = _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => key == null ? b.IsMouseOver == false : (string)b.Tag == key);
+        card?.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = key == null ? UIElement.MouseLeaveEvent : UIElement.MouseEnterEvent });
+    }
+
     internal (List<string> Keys, string? On) ParserLooksForTest => (_parserLookHost?.Children.OfType<Border>().Select(b => (string)b.Tag).ToList() ?? new(),
         _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
 

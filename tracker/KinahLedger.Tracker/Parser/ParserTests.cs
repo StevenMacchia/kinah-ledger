@@ -38,7 +38,7 @@ public static class ParserTests
     /// fast as it goes, each piece stamped with its own capture time: every record kept, with each member's share of the
     /// damage (as the tab shows it) and their top abilities. Needs a decoder of interface version 4 or later beside the exe.
     /// </summary>
-    public static int ParserReplay(string pcapng, string mode, int port = 13328, string? save = null, bool crit = false)
+    public static int ParserReplay(string pcapng, string mode, int port = 13328, string? save = null, bool crit = false, bool always = false)
     {
         if (NativeDecoder.Version < 4) { Console.WriteLine($"this build's decoder reads no fights for the Parser (interface version {NativeDecoder.Version})"); return 1; }
         var kept = new List<Encounter>();
@@ -52,8 +52,18 @@ public static class ParserTests
         var farms = new List<(DateTime Start, DateTime Last, long Yours, double Fighting, List<double> Shown)>();
         var farmRecords = new List<Encounter>();   // the open-world fights themselves, for --save
         Encounter? farmNow = null; var shown = new List<double>(); DateTime sampled = DateTime.MinValue;
+        // --always: the Always on meter's stretches, each from its start (from 0) to what ended it
+        Encounter? alwaysNow = null;
+        var stretches = new List<Encounter>();
+        void Stretch(Encounter? a)
+        {
+            bool same = a != null && alwaysNow != null && a.Start == alwaysNow.Start && a.Mode == alwaysNow.Mode;
+            if (alwaysNow != null && !same) stretches.Add(p.AlwaysEnded is { } en && en.Start == alwaysNow.Start && en.Mode == alwaysNow.Mode ? en : alwaysNow);
+            if (a != null) alwaysNow = a; else if (!same) alwaysNow = null;
+        }
         void Sample(DateTime at)
         {
+            if (always) Stretch(p.AlwaysLive);
             if ((at - sampled).TotalSeconds < 1) return;
             sampled = at;
             var f = p.Farm;
@@ -87,6 +97,13 @@ public static class ParserTests
         }
         p.Tick(DateTime.MaxValue.AddDays(-1));
         Sample(DateTime.MaxValue.AddDays(-1));
+        if (always)
+            foreach (var a in stretches)
+            {
+                var end = a.End ?? a.LastAt;
+                Console.WriteLine($"always on {a.Start.ToLocalTime():HH:mm:ss}-{end.ToLocalTime():HH:mm:ss} ({BossParser.Clock(a.Duration(end))}) · {(a.Mode == "boss" ? "boss pull " + a.Boss : a.Boss.Length > 0 ? "fight, " + a.Boss : "fight")} · {(a.Kind.Length > 0 ? a.Kind : "?")} {a.Instance}"
+                    + $" · group {Ui.Amounts.Short(a.Members.Sum(f => f.Damage))}, you {Ui.Amounts.Short(a.You?.Damage ?? 0)}{(a.Outcome.Length > 0 ? " · " + a.Outcome : "")}");
+            }
         foreach (var f in farms)
         {
             var sorted = f.Shown.OrderBy(x => x).ToList();
@@ -1298,6 +1315,112 @@ public static class ParserTests
             var chosenOff = ParserPrefs.FromText("{\"Details\":false,\"DetailsSettled\":true}");
             Check(fresh.Details && old.Details && old.DetailsSettled && !chosenOff.Details,
                 $"Group details: on for a new player ({fresh.Details}), moved to on once for a player from before ({old.Details}), an off chosen after that kept ({!chosenOff.Details})");
+        }
+
+        // Always on (Steven, 2026-11-15: "always be on and then reset to 0 during a boss fight ... in the open world it will
+        // reset after 2 min of not fighting anything. Same w/ abyss. If you enter a dungeon a new instance/run starts")
+        {
+            var (p, kept) = New();
+            p.Take(new GroupChanged(t, new[] { Me, Ally }));
+            p.Take(new DamageDealt(t.AddSeconds(1), 0, 5000, 7_000, Reason: 4));              // a stranger's hit nearby (the decoder: outside the group)
+            Check(p.AlwaysLive == null, "Always on: a stranger's hit nearby never starts the meter");
+            p.Take(new DamageDealt(t.AddSeconds(2), 1, 5000, 10_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(3), 2, 5000, 5_000, "Aerin"));
+            var a = p.AlwaysLive;
+            Check(a is { Kind: "Open world", HasDamage: true } && a.Members.Sum(f => f.Damage) == 15_000 && !a.Waiting,
+                $"...your first hit in the open world starts it, your group's hits count: {a?.Kind}, {a?.Members.Sum(f => f.Damage)}");
+            p.Take(new DamageDealt(t.AddSeconds(60), 0, 5001, 7_000, Reason: 4));             // only strangers fight on
+            p.Tick(t.AddSeconds(3 + 119));
+            Check(p.AlwaysLive != null, "...119 s after your group's last hit it carries on");
+            p.Tick(t.AddSeconds(3 + 120));
+            var held = p.AlwaysEnded;
+            Check(p.AlwaysLive == null && held is { Live: false } && held.End == t.AddSeconds(3) && held.Members.Sum(f => f.Damage) == 15_000,
+                $"...2 minutes without your group fighting (strangers' hits don't count) and it ends at your last hit, held with its figures: {held?.End:HH:mm:ss}, {held?.Members.Sum(f => f.Damage)}");
+            p.Take(new DamageDealt(t.AddSeconds(200), 1, 5002, 4_000, "Swoly", true));
+            Check(p.AlwaysLive is { } a2 && a2.Members.Sum(f => f.Damage) == 4_000 && a2.Start == t.AddSeconds(200), "...and the next hit starts it from 0");
+            Check(kept.Count == 0, $"...never kept in Bosses only ({kept.Count} kept)");
+            // being hit is fighting too
+            p.Take(new HitTaken(t.AddSeconds(290), 7000, 1, 3_000, 0, 7000));
+            p.Tick(t.AddSeconds(200 + 150));
+            Check(p.AlwaysLive != null, "...a hit taken by you keeps it going (150 s after your last hit, 60 s after the hit taken)");
+            p.Tick(t.AddSeconds(290 + 120));
+            Check(p.AlwaysLive == null, "...and 2 minutes after the hit taken it ends");
+
+            // a field or world boss out here: from 0 under its name; the same boss said again carries on
+            p.Take(new DamageDealt(t.AddSeconds(500), 1, 5003, 9_000, "Swoly", true));
+            p.Take(new BossEngaged(t.AddSeconds(510), "Kashapa", 4400));
+            Check(p.AlwaysLive is { Boss: "Kashapa" } wb && !wb.HasDamage, $"...a boss pulled in the open world starts it from 0 under its name: {p.AlwaysLive?.Boss}, {p.AlwaysLive?.Members.Sum(f => f.Damage)}");
+            p.Take(new DamageDealt(t.AddSeconds(511), 1, 4400, 20_000, "Swoly", true));
+            p.Take(new BossEngaged(t.AddSeconds(530), "Kashapa", 4400));
+            Check(p.AlwaysLive is { Boss: "Kashapa" } wb2 && wb2.Members.Sum(f => f.Damage) == 20_000, "...the same boss said again carries on");
+
+            // into a dungeon: a new run, from 0; a reconnect or an unnamed loading screen into the same copy is not
+            p.Take(new InstanceEntered(t.AddSeconds(600), ContentKind.Expedition, "Shattered Arkanis", 77));
+            Check(p.AlwaysLive == null && p.AlwaysEnded is { Boss: "Kashapa" }, "...entering a dungeon starts it from 0 (the open world's held until the first hit there)");
+            p.Take(new DamageDealt(t.AddSeconds(620), 1, 6000, 8_000, "Swoly", true));
+            Check(p.AlwaysLive is { Kind: "Expedition", Instance: "Shattered Arkanis" } d1 && d1.Members.Sum(f => f.Damage) == 8_000, $"...the first hit inside starts the dungeon's: {p.AlwaysLive?.Kind}, {p.AlwaysLive?.Members.Sum(f => f.Damage)}");
+            p.Take(new InstanceEntered(t.AddSeconds(630), ContentKind.Expedition, "Shattered Arkanis", 78));   // a reconnect: the decoder numbers every entry
+            p.Take(new InstanceEntered(t.AddSeconds(635), ContentKind.Other, "", 79));                         // a loading screen the messages can't name
+            p.Take(new DamageDealt(t.AddSeconds(640), 1, 6000, 2_000, "Swoly", true));
+            Check(p.AlwaysLive is { } d2 && d2.Members.Sum(f => f.Damage) == 10_000, $"...a reconnect and an unnamed loading screen into the same copy carry it on: {p.AlwaysLive?.Members.Sum(f => f.Damage)}");
+            p.Tick(t.AddSeconds(640 + 300));
+            Check(p.AlwaysLive != null, "...inside a dungeon 5 minutes of quiet don't start it again (the bosses and the door do)");
+
+            // a boss pulled: the pull is the meter, from 0; its end is held; the next trash hit starts from 0
+            p.Take(new BossEngaged(t.AddSeconds(1000), "Talisra of the Void", 902));
+            Check(p.AlwaysLive is { Boss: "Talisra of the Void", Mode: "boss" } b0 && b0.Members.Sum(f => f.Damage) == 0, $"...a boss pulled in the dungeon starts it from 0, the pull itself: {p.AlwaysLive?.Boss}, {p.AlwaysLive?.Mode}");
+            p.Take(new DamageDealt(t.AddSeconds(1001), 1, 902, 50_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(1002), 2, 6001, 1_000, "Aerin"));            // an add
+            p.Take(new DamageDealt(t.AddSeconds(1030), 2, 902, 30_000, "Aerin"));
+            Check(p.AlwaysLive is { } b1 && b1.Members.Sum(f => f.BossDamage) == 80_000, $"...the pull's damage only: {p.AlwaysLive?.Members.Sum(f => f.BossDamage)}");
+            p.Take(new BossEnded(t.AddSeconds(1040), 902, BossOutcome.Kill));
+            Check(p.AlwaysLive == null && p.AlwaysEnded is { Outcome: "kill", Boss: "Talisra of the Void" } && kept.Count == 1 && kept[0].Boss == "Talisra of the Void",
+                $"...the kill is held on the meter and kept as a boss pull as ever (bests and Compare): {p.AlwaysEnded?.Outcome}, {kept.Count} kept");
+            p.Take(new DamageDealt(t.AddSeconds(1060), 1, 6002, 3_000, "Swoly", true));
+            Check(p.AlwaysLive is { Mode: "fight" } tr && tr.Members.Sum(f => f.Damage) == 3_000 && tr.Start == t.AddSeconds(1060), "...the next trash hit after the boss starts it from 0");
+
+            // out of the dungeon: from 0 again
+            p.Take(new InstanceLeft(t.AddSeconds(1100)));
+            Check(p.AlwaysLive == null, "...leaving the dungeon starts it from 0");
+            p.Take(new InstanceEntered(t.AddSeconds(1110), ContentKind.Other, "Verteron", 80));
+            p.Take(new DamageDealt(t.AddSeconds(1120), 1, 5004, 1_000, "Swoly", true));
+            Check(p.AlwaysLive is { Kind: "Open world" } ow && ow.Members.Sum(f => f.Damage) == 1_000, $"...and the open world's first hit starts its own: {p.AlwaysLive?.Kind}");
+            // the same dungeon run again: leaving it started the meter again, so entering it is a new run too
+            p.Take(new InstanceEntered(t.AddSeconds(1200), ContentKind.Expedition, "Shattered Arkanis", 81));
+            p.Take(new DamageDealt(t.AddSeconds(1210), 1, 6003, 5_000, "Swoly", true));
+            Check(p.AlwaysLive is { Kind: "Expedition" } r2 && r2.Members.Sum(f => f.Damage) == 5_000, "...the same dungeon run again is a new run");
+        }
+
+        // Always on from the screen's place (a build or a moment without the game's messages): only going into a dungeon
+        // starts it again; a minimap misread mid-dungeon (a name a letter off) never does
+        {
+            var (p, _) = New();
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.ScreenPlace("Expedition", "Fire Temple");
+            p.Take(new DamageDealt(t.AddSeconds(1), 1, 6000, 1_000, "Swoly", true));
+            p.ScreenPlace("Expedition", "Fire Tempe");
+            p.Take(new DamageDealt(t.AddSeconds(2), 1, 6000, 1_000, "Swoly", true));
+            Check(p.AlwaysLive is { } s1 && s1.Members.Sum(f => f.Damage) == 2_000, $"Always on: a misread of the dungeon's name on the minimap never starts the meter again ({p.AlwaysLive?.Members.Sum(f => f.Damage)})");
+            p.ScreenPlace(null, null);
+            p.Take(new DamageDealt(t.AddSeconds(3), 1, 5000, 1_000, "Swoly", true));
+            p.ScreenPlace("Sanctuary", "Chalice of Muspel");
+            Check(p.AlwaysLive == null, "...going into a dungeon by the screen's place does");
+        }
+
+        // a misread hit (2026-11-15: Divine Punishment read 261M once in the open world): left out, the record partial
+        {
+            var (p, _) = New();
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.Take(new DamageDealt(t.AddSeconds(1), 1, 5000, 4_000, "Swoly", true, 17050000, 1));
+            p.Take(new DamageDealt(t.AddSeconds(2), 1, 5000, 261_040_996, "Swoly", true, 17050000, 1));
+            p.Take(new DamageDealt(t.AddSeconds(3), 1, 5000, 60_000_000, "Swoly", true, 17050000, 10));   // ten hits of 6M: real, a DoT's sum
+            Check(p.AlwaysLive is { } m && m.You?.Damage == 60_004_000 && m.Partial && m.PartialWhy.Contains("a misread hit left out"),
+                $"a single hit of 261M is a misread: left out, the figure partial; ten hits summing 60M count ({p.AlwaysLive?.You?.Damage:N0}, {string.Join("; ", p.AlwaysLive?.PartialWhy ?? new())})");
+        }
+
+        // the Always on pick: off for everyone until picked, and kept
+        {
+            Check(!new ParserPrefs().AlwaysOn && ParserPrefs.FromText("{\"AlwaysOn\":true}").AlwaysOn, "Always on: off by default (Only boss fights), a pick kept in parser.json");
         }
 
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");

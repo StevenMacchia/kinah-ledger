@@ -38,6 +38,8 @@ public static partial class WpfApp
                     // crit is off as shipped; KL_CRIT=result3 or mark08 renders it on (after the window, which sets it from its prefs)
                     Encounter.CritKey = Encounter.CritKeyOf(Environment.GetEnvironmentVariable("KL_CRIT"));
                     Encounter.BackKey = Encounter.BackKeyOf(Environment.GetEnvironmentVariable("KL_BACK"));
+                    // the meter's pick on the page: KL_PARSER_ALWAYS=1 renders it on Always on (a demo saves nothing)
+                    if (Environment.GetEnvironmentVariable("KL_PARSER_ALWAYS") == "1") w.SetParserAlwaysOnForTest(true);
                 }
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
@@ -81,6 +83,7 @@ public static partial class WpfApp
             ("ui-parser-overlay-killed.png", kill, kill.End!.Value),
             ("ui-parser-overlay-wiped.png", wipe, wipe.End!.Value),
             ("ui-parser-overlay-ready.png", Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), now),
+            ("ui-parser-overlay-ready-anywhere.png", Encounter.ReadyAnywhere("Verteron", now), now),
         };
         foreach (var (file, e, at) in shots)
         {
@@ -219,6 +222,24 @@ public static partial class WpfApp
         w.ShowParserDemo("empty"); DoEvents();
         var empty = w.ParserPageForTest();
         check(!empty.Live && empty.Rows == 0, "Parser: no fights yet says what lands there");
+        // the meter's pick on the page's head (Steven, 2026-11-15): two buttons, Only boss fights on as shipped, a click switches it
+        w.ShowParserDemo("live"); DoEvents();
+        static IEnumerable<System.Windows.Controls.Button> Buttons(DependencyObject d)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+            {
+                var c = VisualTreeHelper.GetChild(d, i);
+                if (c is System.Windows.Controls.Button b) yield return b;
+                foreach (var x in Buttons(c)) yield return x;
+            }
+        }
+        System.Windows.Controls.Button? Meter(string label) => Buttons(w.ParserPage).FirstOrDefault(b => System.Windows.Automation.AutomationProperties.GetName(b) == "Parser meter: " + label);
+        var onlyBoss = Meter("Only boss fights"); var alwaysBtn = Meter("Always on");
+        check(onlyBoss != null && alwaysBtn != null && !w.ParserAlwaysOnForTest, "Parser: the page's head has the meter's pick, Only boss fights and Always on, Only boss fights as shipped");
+        alwaysBtn?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+        check(w.ParserAlwaysOnForTest && Meter("Always on")?.Style == w.TryFindResource("SegOn") as Style, "...a click on Always on picks it, lit at once");
+        Meter("Only boss fights")?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+        check(!w.ParserAlwaysOnForTest, "...and Only boss fights puts it back");
         var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000 };
         var (_, sample) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
         o.Draw(sample!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); o.Show(); DoEvents();
@@ -386,6 +407,12 @@ public static partial class WpfApp
             var pick = HudLooks.FightLooks.First(k => k != onKey);
             opt.PickHudLookForTest(pick); DoEvents();
             check(opt.ParserLooksForTest.On == pick, $"...a look picked shows in the row at once ({pick})");
+            check(opt.ParserLookStageForTest == pick, $"...and the big preview draws it ({opt.ParserLookStageForTest ?? "nothing"})");
+            var hoverKey = HudLooks.FightLooks.First(k => k != pick);
+            opt.HoverParserLookForTest(hoverKey); DoEvents();
+            check(opt.ParserLookStageForTest == hoverKey, $"...a look under the mouse fills the big preview ({opt.ParserLookStageForTest ?? "nothing"}, wanted {hoverKey})");
+            opt.HoverParserLookForTest(null); DoEvents();
+            check(opt.ParserLookStageForTest == pick, $"...and the mouse leaving puts the picked one back ({opt.ParserLookStageForTest ?? "nothing"})");
             var ws = opt.ParserWidthForTest;
             double wBefore = HudStackLook.FightWidth;
             if (ws != null) { ws.Value = 500; DoEvents(); }
