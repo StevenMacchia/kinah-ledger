@@ -360,7 +360,7 @@ public partial class MainWindow
         if (warm) HeadRateLbl.Text += " · warming up";
         string flip = RunShown ? "" : $"\nEvery zone since your last break ({TrackerSession.BreakMinutes:0} minutes with nothing farmed)."
             + (hereHr.Length > 0 && _here is { } hh ? $" {hereHr[3..]}: the hour in {hh.Place} alone, over its {TodayLoot.Dur(hh.Hours * 3600)}." : "");
-        HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted."
+        HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It shows after {RateWarmup.TotalSeconds:0} seconds of farming and {RateWarmupCounts} things counted."
             : ap ? (abyss > 0 ? $"{Amounts.Full(abyss / h)} Abyss Points an hour: {abyss:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it." : "No Abyss Points picked up yet.")
             : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
         FillHeroTicket(ap, total, h, priced, loot, _rateWarming && total > 0);

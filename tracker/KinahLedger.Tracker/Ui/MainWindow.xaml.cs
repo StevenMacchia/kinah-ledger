@@ -1030,17 +1030,23 @@ public partial class MainWindow : Window
 
     /// <summary>The count on screen is too young for an hour's rate to mean much (FillNumbers); BestRuns.MinMinutes is separate.</summary>
     bool _rateWarming;
-    static readonly TimeSpan RateWarmup = TimeSpan.FromMinutes(2);
-    const int RateWarmupCounts = 3;
+    // Steven, 2026-11-15: "why is warming up taking so long it took 18 items": 2 minutes of farming came to 18 pickups at a
+    // gathering node every 10 s. Now 30 s and 6 things counted, and never past 2 minutes once 3 are
+    static readonly TimeSpan RateWarmup = TimeSpan.FromSeconds(30), RateWarmupMost = TimeSpan.FromMinutes(2);
+    const int RateWarmupCounts = 6, RateWarmupFewest = 3;
+
+    /// <summary>The hour's figure is still warming up: under 30 s of farming or 6 things counted, and under 2 minutes or 3.</summary>
+    internal static bool RateWarm(TimeSpan farming, int counted) =>
+        farming < RateWarmup || counted < RateWarmupFewest || (farming < RateWarmupMost && counted < RateWarmupCounts);
     /// <summary>The panel's rate while it warms up.</summary>
     const string WarmingUp = "warming up";
 
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
         double h = Math.Max(elapsed.TotalHours, 1.0 / 3600);
-        // the first minute's hour swings wildly (one pickup 20 s in reads as millions an hour): until 2 minutes and 3
-        // counts, whichever comes later, the window dims its figure and the panel says it is warming up
-        _rateWarming = elapsed < RateWarmup || e.Events < RateWarmupCounts;
+        // the first moments' hour swings wildly (one pickup 20 s in reads as millions an hour): until 30 s and 6 counts (or 2
+        // minutes and 3), the window dims its figure and the panel says it is warming up
+        _rateWarming = RateWarm(elapsed, e.Events);
         var t = e.Totals(); long kinah = t.Kinah;   // farming Kinah only; bound Kinah is reward money
         // in the Abyss every Kinah drop is bound (Steven, 2026-11-13: "kinah and abyss points are not being properly tracked"):
         // its Kinah figures count the bound Kinah too; out of it bound Kinah stays reward money, left out
