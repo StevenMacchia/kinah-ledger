@@ -13,8 +13,14 @@ namespace KinahLedger.Ui;
 /// colour; your row in the gold frame. Kept between draws, so a change moves rather than redraws: the DPS rolls, the bar slides,
 /// a member who passes another glides to the new place and their chip flips. Compact shows five rows and keeps you in sight
 /// (pinned, with your true rank, when you're below them); expanded shows everyone and adds the damage, and crit and the DPS over
-/// time once the record carries them. A death puts a coral tick on the row; a kill sweeps a mint light across; a kill where you
-/// beat your best on the boss puts "PB +x%" on your row with a gold burst.
+/// time once the record carries them. A death puts a coral tick on the row; a kill where you beat your best on the boss puts
+/// "PB +x%" on your row with a gold burst.
+/// The meter's motion (Steven, 2026-11-15: "the absolute next level"), every course short and off when the tracker sits still
+/// (Motion.Still: renders and tests show the settled rows): the DPS's digits roll on their own (Ui/Motion.Meter.cs Odometer)
+/// in a column that never moves; a bar that moves leaves its ghost; a big hit pops "+858K" off its row (gold for a crit);
+/// the one who passes another lifts as it slides past and its chip glows; the fight's end sweeps a light across, its TOP DPS
+/// plate slides in with a glint and a personal best flares your figure gold; your row's frame glows warmer as your pace
+/// nears your best here, gold once you beat it.
 /// </summary>
 public sealed class ParserRows : Grid
 {
@@ -36,9 +42,20 @@ public sealed class ParserRows : Grid
     readonly TextBlock _gapText = new() { FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = HudKit.Faint, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 0, 6, 0) };
     readonly Border _sweep = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(6) };
     readonly Dictionary<long, RowEl> _rows = new();
+    /// <summary>The big hits' pop-ups over the rows (never taking a click); at most <see cref="PopsPerRow"/> a row, <see cref="PopsInAll"/> in all.</summary>
+    readonly Canvas _pops = new() { IsHitTestVisible = false };
+    public const int PopsPerRow = 2, PopsInAll = 4;
+    public const double PopMs = 800;
+    long _popSeq;
+    int _popsOn, _popGen;
     string _fightId = "";
-    bool _wasLive, _expanded;
+    bool _wasLive, _expanded, _sawLive;
     string _pbShown = "";
+    /// <summary>The fight whose plates slid in already (rows built again for it, expanded or a row back in sight, show them still).</summary>
+    string _platesSlidFor = "";
+    /// <summary>Your best on this fight's boss (asked once a fight: the heat's measure).</summary>
+    string _bestId = "\0";
+    PullRef? _best;
 
     public ParserRows(Kind kind = Kind.Panel)
     {
@@ -50,6 +67,7 @@ public sealed class ParserRows : Grid
         _gap.Child = line;
         Children.Add(_host);
         Children.Add(_sweep);
+        Children.Add(_pops);
         _host.Children.Add(_gap);
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(this, HudKit.Text);
@@ -70,6 +88,28 @@ public sealed class ParserRows : Grid
         public required StackPanel NameLine, Plates; public required Border NameHost;
         public string PlatesShown = "";
         public int Rank = -1, Deaths; public double Y = double.NaN; public bool You; public string Cls = "";
+        /// <summary>The DPS as it rolls (Motion on), over the figure itself (the truth, laid out, read by the tests).</summary>
+        public required Odometer Odo;
+        public double LastDps = double.NaN;
+        /// <summary>The row's moves: its glide and lift (one transform), the ghost of its bar, its heat edge.</summary>
+        public required TranslateTransform Lift; public required ScaleTransform Rise;
+        public required Border Ghost, Heat;
+        public double GhostBase = double.NaN;
+        /// <summary>
+        /// The row's foot: a 2 px place along its bottom edge, empty and collapsed (a later change puts the heal line here, under
+        /// a healer's bar, without moving the row's columns).
+        /// </summary>
+        public required Border Under;
+        /// <summary>
+        /// The effects a course changes, kept with the row so a course replaced part-way (a move again, a flip back) starts
+        /// from the row's own look, never from where the last one left it: the lift's shadow, the chip's own glow (your gold one;
+        /// none for the others) and the glow a gain puts on it, and your frame's glow as built.
+        /// </summary>
+        public DropShadowEffect? LiftShadow, ChipOwn, ChipGlow, FrameGlow;
+        public double ChipBlur0, ChipOpacity0, FrameBlur0, FrameOpacity0;
+        public int Pops;
+        /// <summary>The row's two pop-up places left of the DPS (the second a line above the first): which are taken.</summary>
+        public readonly bool[] PopSlot = new bool[ParserRows.PopsPerRow];
     }
 
     /// <summary>The fight now: each member's row updated in place, moved to their rank.</summary>
@@ -80,9 +120,12 @@ public sealed class ParserRows : Grid
         {
             foreach (var r in _rows.Values) _host.Children.Remove(r.Root);
             _rows.Clear();
-            if (e.Id != _fightId) { _pbShown = ""; _wasLive = e.Live; }
+            _pops.Children.Clear(); _popsOn = 0; _popGen++;   // the rows go too, and their pop-up places with them
+            // a fight drawn first here: its big hits so far are history, never popped
+            if (e.Id != _fightId) { _pbShown = ""; _wasLive = e.Live; _sawLive = e.Live; _popSeq = e.BigHits?.LastOrDefault()?.Seq ?? 0; }
             _fightId = e.Id; _expanded = expanded;
         }
+        if (e.Live) _sawLive = true;
         bool dmg = e.HasDamage;
         var all = (dmg ? e.Shown() : e.Ranked()).Where(f => !f.Other).ToList();
         int max = expanded ? ExpandedRows : CompactRows;
@@ -96,6 +139,7 @@ public sealed class ParserRows : Grid
         double top = Math.Max(1, all.Select(e.Measure).DefaultIfEmpty(1).Max());   // the figure (boss damage or all targets), else Combat Power
         long topDps = e.TopDps(now)?.Id ?? long.MinValue, topHeals = e.TopHealer(now)?.Id ?? long.MinValue;
         foreach (var gone in _rows.Keys.Where(id => !visible.Any(f => f.Id == id)).ToList()) { _host.Children.Remove(_rows[gone].Root); _rows.Remove(gone); }
+        bool platesSlid = false;
         for (int i = 0; i < visible.Count; i++)
         {
             var f = visible[i];
@@ -108,9 +152,9 @@ public sealed class ParserRows : Grid
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
             {
-                // under 3 s a DPS is no figure yet: "–" (no 1 s floor)
-                if (e.DpsOf(f, now) is { } dps) Motion.Number(row.Dps, $"parser|ov|{e.Id}|{f.Id}|{(int)_kind}", dps, x => Amounts.Short(x), tintRise: -1);
-                else row.Dps.Text = "–";
+                // the DPS's digits roll on their own (an odometer), in the same right-aligned column
+                if (e.DpsOf(f, now) is { } dps) SetDps(row, Amounts.Short(dps), dps);
+                else SetDps(row, "–", double.NaN);
                 row.Share.Text = Encounter.Pct(e.Share(f));
                 row.Damage.Text = Amounts.Short(e.Figure(f));
                 if (view?.Members.FirstOrDefault(m => m.F.Id == f.Id) is { } mv)
@@ -120,20 +164,25 @@ public sealed class ParserRows : Grid
                     if (spark && mv.PerSecond is { Count: > 1 } ps) { row.Spark.Children.Clear(); row.Spark.Children.Add(PK.Spark(PK.Smooth(ps.Select(x => (double)x).ToList()), 60, 18, f.You ? PK.Gold : ClassArt.ColorOf(f.Class), 0, f.You ? 1.6 : 1.2, glow: f.You)); }
                 }
             }
-            else { row.Dps.Text = f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : ""; row.Share.Text = f.CombatPower > 0 ? "CP" : ""; }
+            else { SetDps(row, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "", f.CombatPower); row.Share.Text = f.CombatPower > 0 ? "CP" : ""; }
             // the bar slides to its new length: the member's share of the group's damage, so 33% fills a third (Steven,
             // 2026-11-15: "the bars shouldn't be full really and should be percentage based"; the top member's was full)
             double share = dmg ? e.Share(f) : 0;
             Motion.Slide(row.BarFill, $"parser|ovbar|{e.Id}|{f.Id}|{(int)_kind}", share, v => SetBar(row, v));
-            // the rank: a changed one flips the chip; the row glides to its new place
+            // a move of the bar of a couple of points leaves its ghost: what it lost holds and shrinks away, what it gained flashes
+            if (double.IsNaN(row.GhostBase) || fresh) row.GhostBase = share;
+            else if (Math.Abs(share - row.GhostBase) >= GhostStep) { GhostTrail(row, row.GhostBase, share); row.GhostBase = share; }
+            // the rank: a changed one flips the chip (and glows, for the one who passed); the row glides to its new place
+            int rankWas = row.Rank;
             if (row.Rank != rank)
             {
-                int was = row.Rank;
                 row.Rank = rank;
-                if (was > 0 && !fresh) Flip(row, was, rank); else row.ChipText.Text = rank.ToString(CultureInfo.InvariantCulture);
+                if (rankWas > 0 && !fresh) Flip(row, rankWas, rank); else row.ChipText.Text = rank.ToString(CultureInfo.InvariantCulture);
             }
             if (double.IsNaN(row.Y) || fresh) { row.Y = y; row.Root.Margin = new Thickness(0, y, 0, 0); }
-            else if (Math.Abs(row.Y - y) > 0.5) Glide(row, y);
+            else if (Math.Abs(row.Y - y) > 0.5) Glide(row, y, passed: rankWas > 0 && rank < rankWas);
+            // your heat: your pace against your best on this boss, warmer as it nears it, gold once you beat it
+            if (f.You) SetHeat(row, Heat(e, f, now));
             // a death: the coral tick lands on the row
             if (f.Deaths > row.Deaths)
             {
@@ -150,24 +199,73 @@ public sealed class ParserRows : Grid
             {
                 row.PlatesShown = plates;
                 row.Plates.Children.Clear();
-                if (plates.Contains('d')) row.Plates.Children.Add(ParserFoot.Plate(heals: false));
-                if (plates.Contains('h')) row.Plates.Children.Add(ParserFoot.Plate(heals: true));
+                // the fight seen ending here: the plate slides in with a glint (drawn first already over, it just sits there)
+                bool slide = _sawLive && _platesSlidFor != e.Id;
+                if (plates.Contains('d')) { var p = ParserFoot.Plate(heals: false); row.Plates.Children.Add(p); if (slide) SlideIn(p); }
+                if (plates.Contains('h')) { var p = ParserFoot.Plate(heals: true); row.Plates.Children.Add(p); if (slide) SlideIn(p); }
+                if (plates.Length > 0) platesSlid = true;
                 row.Plates.Visibility = plates.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
                 FitName(row);
             }
         }
+        if (platesSlid) _platesSlidFor = e.Id;
+        // the big hits that came since the last draw pop off their members' rows
+        if (e.BigHits is { Count: > 0 } hits && hits[^1].Seq > _popSeq)
+        {
+            foreach (var h in hits)
+                if (h.Seq > _popSeq && e.Live && Math.Abs((now - h.At).TotalSeconds) <= PopFreshSeconds && _rows.TryGetValue(h.Member, out var pr) && pr.Root.Visibility == Visibility.Visible)
+                    Pop(pr, h);
+            _popSeq = hits[^1].Seq;
+        }
         _gap.Visibility = pin ? Visibility.Visible : Visibility.Collapsed;
         if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = $"{all.Count - visible.Count} more"; _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
         _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0);
-        // the moments: the kill's sweep; a personal best on this boss
-        if (_wasLive && !e.Live && e.Outcome is "kill" or "cleared") Sweep();
-        if (!e.Live && e.Outcome == "kill" && you != null && _pbShown != e.Id && BestOf?.Invoke(e) is { } best && best.Dps > 0)
+        // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
+        if (_wasLive && !e.Live && dmg) Sweep(e.Tone);
+        if (!e.Live && e.Outcome == "kill" && you != null && _pbShown != e.Id && Best(e) is { } best && best.Dps > 0)
         {
             double d = e.Dps(you, e.End ?? now) / best.Dps - 1;
             if (d > 0 && _rows.TryGetValue(you.Id, out var yr)) { _pbShown = e.Id; ShowPb(yr, d); }
         }
         _wasLive = e.Live;
     }
+
+    /// <summary>The DPS shown: the figure itself (laid out, read by the tests and a screen reader) and, with motion on, the odometer over it.</summary>
+    static void SetDps(RowEl row, string text, double value)
+    {
+        row.Dps.Text = text;
+        bool odo = Motion.On;
+        row.Odo.Visibility = odo ? Visibility.Visible : Visibility.Collapsed;
+        row.Dps.Opacity = odo ? 0 : 1;
+        // the halo on whichever is drawn (the figure under the odometer is clear: no effect to draw for it)
+        if (odo && row.Dps.Effect != null) row.Dps.ClearValue(EffectProperty);
+        else if (!odo && row.Dps.Effect == null) row.Dps.Effect = TextHalo();
+        if (odo) row.Odo.Show(text, up: !(value < row.LastDps));
+        else row.Odo.Show(text, up: true);
+        row.LastDps = value;
+    }
+
+    /// <summary>Your best on this fight's boss, asked once a fight (the records kept don't change while it runs).</summary>
+    PullRef? Best(Encounter e)
+    {
+        if (_bestId == e.Id) return _best;
+        _bestId = e.Id;
+        try { _best = BestOf?.Invoke(e); } catch (Exception) { _best = null; }
+        return _best;
+    }
+
+    /// <summary>Your pace against your best here: from 0.8 of it the edge warms, 1 and over is gold; null without a best or a figure.</summary>
+    double? Heat(Encounter e, Fighter you, DateTime now)
+    {
+        if (!e.Live || e.Waiting || !e.HasDamage || e.Duration(now).TotalSeconds < HeatAfterSeconds) return null;
+        if (Best(e) is not { Dps: > 0 } best || e.DpsOf(you, now) is not { } dps) return null;
+        return dps / best.Dps;
+    }
+    public const double HeatFrom = 0.8, HeatAfterSeconds = 8;
+    /// <summary>A share move this big (of the group's damage) leaves the bar's ghost.</summary>
+    public const double GhostStep = 0.02;
+    /// <summary>A big hit pops only while it is this fresh (a meter shown again later shows none of the ones it missed).</summary>
+    public const double PopFreshSeconds = 2.5;
 
     /// <summary>A soft dark halo for a row's text: it reads over the brightest class bar or your gold wash.</summary>
     static DropShadowEffect TextHalo() => new() { Color = Colors.Black, BlurRadius = 4, ShadowDepth = 0, Opacity = 0.85 };
@@ -227,7 +325,10 @@ public sealed class ParserRows : Grid
         // back attacks beside crit, in a quieter tone so the two rates read apart
         var backT = Fig(11, HudKit.B(0x9FA6B8), FontWeights.Medium); backT.ToolTip = "Hits from behind";
         var sparkG = new Grid { Width = 60, Height = 18, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        cols.Children.Add(PK.Col(dps, 3)); cols.Children.Add(PK.Col(share, 4));
+        // the odometer over the figure, right-aligned in the same column: the column never moves, rolling or not
+        var odo = new Odometer(15, FontWeights.Bold, (HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White) { Effect = TextHalo(), Visibility = Visibility.Collapsed };
+        var dpsHost = new Grid { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { dps, odo } };
+        cols.Children.Add(PK.Col(dpsHost, 3)); cols.Children.Add(PK.Col(share, 4));
         int k = 5;
         if (expanded) { cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (back) cols.Children.Add(PK.Col(backT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
         // the bar: a quiet track the row's width, the fill in the class's colour, angled at its end, fading to the right
@@ -239,13 +340,26 @@ public sealed class ParserRows : Grid
         fade.Freeze();
         var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = fade, Width = 0, RenderTransformOrigin = new Point(0, 1), RenderTransform = new SkewTransform(-16, 0) };
         var edge = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Left, Background = PK.C(c), CornerRadius = new CornerRadius(3, 0, 0, 3), Visibility = f.You ? Visibility.Collapsed : Visibility.Visible };
+        // the bar's ghost (the trail of a move), angled as the fill, over it; never in the layout
+        var ghost = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), IsHitTestVisible = false, Visibility = Visibility.Collapsed,
+            RenderTransformOrigin = new Point(0, 1), RenderTransform = new SkewTransform(-16, 0) };
+        // your heat: a warm wash across the row, from the left, and a warm line along its foot (only your row has one)
+        var heat = new Border { IsHitTestVisible = false, Visibility = Visibility.Collapsed, BorderThickness = new Thickness(0, 0, 0, 1.5), CornerRadius = new CornerRadius(3),
+            Background = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0), GradientStops = { new GradientStop(Colors.Transparent, 0), new GradientStop(Colors.Transparent, 1) } }, BorderBrush = new SolidColorBrush(Colors.Transparent) };
+        // the row's foot, kept for the heal line (a later change): empty and collapsed, along the bottom edge, over the bar
+        var under = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         var inner = new Grid { Height = _rowH - 2, ClipToBounds = true };
-        inner.Children.Add(track); inner.Children.Add(fill); inner.Children.Add(edge); inner.Children.Add(cols);
+        inner.Children.Add(track); inner.Children.Add(fill); inner.Children.Add(ghost); inner.Children.Add(edge); inner.Children.Add(heat); inner.Children.Add(under); inner.Children.Add(cols);
         Border frame = f.You ? PK.YouFrame(inner, 4, new Thickness(0)) : new Border { Child = inner };
-        var root = new Grid { VerticalAlignment = VerticalAlignment.Top, Height = _rowH - 2, RenderTransform = new TranslateTransform() };
+        // its moves: the glide and the lift (a rise from the right edge, so the figures' column stays where it is)
+        var lift = new TranslateTransform(); var rise = new ScaleTransform(1, 1);
+        var root = new Grid { VerticalAlignment = VerticalAlignment.Top, Height = _rowH - 2, RenderTransformOrigin = new Point(1, 0.5), RenderTransform = new TransformGroup { Children = { rise, lift } } };
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
-        var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost };
+        var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost,
+            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under };
+        r.ChipOwn = chip.Effect as DropShadowEffect; r.ChipBlur0 = r.ChipOwn?.BlurRadius ?? 0; r.ChipOpacity0 = r.ChipOwn?.Opacity ?? 0;
+        r.FrameGlow = frame.Effect as DropShadowEffect; r.FrameBlur0 = r.FrameGlow?.BlurRadius ?? 0; r.FrameOpacity0 = r.FrameGlow?.Opacity ?? 0;
         nameHost.SizeChanged += (_, _) => FitName(r);
         track.SizeChanged += (_, _) => { if (track.Tag is double v) SetBar(r, v); else SetBar(r, fill.Width > 0 ? fill.Width / Math.Max(1, track.ActualWidth) : 0); };
         return r;
@@ -286,30 +400,234 @@ public sealed class ParserRows : Grid
 
     // ---- the motion (Ui/Motion.cs courses: held at KL_MOTION_AT in a render, nothing while the tracker sits still)
 
-    /// <summary>The row glides from where it is to its new place (a member passed another).</summary>
-    void Glide(RowEl r, double to)
+    /// <summary>A row's glide to its new place takes this long; the one who passed lifts this much (px, and its rise from the right edge).</summary>
+    public const double GlideMs = 380, LiftPx = 3, LiftRise = 0.018;
+
+    /// <summary>
+    /// The row glides from where it is to its new place. The one who passed another (<paramref name="passed"/>) slides past
+    /// over it, lifted a little with a shadow under it; the one passed sinks under, dimmed for a moment.
+    /// </summary>
+    void Glide(RowEl r, double to, bool passed = false)
     {
-        double from = r.Y + ((TranslateTransform)r.Root.RenderTransform).Y;
+        double from = r.Y + r.Lift.Y;
         r.Y = to;
         r.Root.Margin = new Thickness(0, to, 0, 0);
-        var tt = (TranslateTransform)r.Root.RenderTransform;
+        var tt = r.Lift;
+        // a glide under way is replaced: whatever it left (its lift, its shadow, its dimming) goes first
+        r.Rise.ScaleX = r.Rise.ScaleY = 1; r.Root.Opacity = 1;
+        if (r.Root.Effect != null) r.Root.ClearValue(EffectProperty);
         if (!Motion.On) { tt.Y = 0; return; }
         double offset = from - to;
         tt.Y = offset;
         bool down = to > from;
         if (down) Panel.SetZIndex(r.Root, 0); else Panel.SetZIndex(r.Root, r.You ? 3 : 2);
-        Motion.Play(r.Root, 380, p => { tt.Y = offset * (1 - Motion.Out(p)); if (down) r.Root.Opacity = 1 - 0.65 * Math.Sin(Math.PI * Math.Clamp(p, 0, 1)); },
-            () => { tt.Y = 0; r.Root.Opacity = 1; Panel.SetZIndex(r.Root, r.You ? 2 : 0); });
+        bool lift = passed && !down;
+        // the rise grows from the DPS's right edge, so the figure stays exactly where it is while the row lifts
+        if (lift && r.Root.ActualWidth > 0) r.Root.RenderTransformOrigin = new Point(Math.Clamp(DpsRightIn(r) / r.Root.ActualWidth, 0, 1), 0.5);
+        var shadow = lift ? r.LiftShadow ??= new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 0, Opacity = 0, Direction = 270 } : null;
+        if (shadow != null) { shadow.BlurRadius = shadow.ShadowDepth = shadow.Opacity = 0; r.Root.Effect = shadow; }
+        Motion.Play(r.Root, GlideMs, p =>
+        {
+            tt.Y = offset * (1 - Motion.Out(p));
+            if (down) r.Root.Opacity = 1 - 0.65 * Math.Sin(Math.PI * Math.Clamp(p, 0, 1));
+            if (shadow != null)
+            {
+                double k = Math.Sin(Math.PI * Math.Clamp(p, 0, 1));
+                tt.Y -= LiftPx * k;
+                r.Rise.ScaleX = r.Rise.ScaleY = 1 + LiftRise * k;
+                shadow.BlurRadius = 12 * k; shadow.ShadowDepth = 3 * k; shadow.Opacity = 0.6 * k;
+            }
+        },
+            () => { tt.Y = 0; r.Root.Opacity = 1; r.Rise.ScaleX = r.Rise.ScaleY = 1; if (shadow != null && r.Root.Effect == shadow) r.Root.ClearValue(EffectProperty); Panel.SetZIndex(r.Root, r.You ? 2 : 0); });
     }
 
-    /// <summary>The rank chip turns over like a card: the old number folds away, the new one unfolds.</summary>
+    /// <summary>Where the DPS's column ends across the row (its right edge, the figure's).</summary>
+    static double DpsRightIn(RowEl r)
+    {
+        var defs = r.Cols.ColumnDefinitions;
+        double left = DpsLeft(r, r.Track.ActualWidth);
+        return left + (defs.Count > 3 && defs[3].ActualWidth > 0 ? defs[3].ActualWidth : 60) + (r.You ? 1 : 0);
+    }
+
+    /// <summary>The rank chip's turn, and the glow of the one who passed (after the turn, fading).</summary>
+    public const double FlipMs = 420;
+
+    /// <summary>The rank chip turns over like a card: the old number folds away, the new one unfolds; a rank gained glows briefly in the class's colour.</summary>
     void Flip(RowEl r, int was, int now)
     {
         var sc = (ScaleTransform)((TransformGroup)r.Chip.RenderTransform).Children[1];
         if (!Motion.On) { r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); sc.ScaleY = 1; return; }
-        Motion.Play(r.Chip, 320, p => { sc.ScaleY = Math.Max(0.04, Math.Abs(Math.Cos(Math.PI * p))); r.ChipText.Text = (p < 0.5 ? was : now).ToString(CultureInfo.InvariantCulture); },
-            () => { sc.ScaleY = 1; r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); });
+        bool gained = now < was;
+        // the chip's own look back first (a glow a flip under way left), then the gain's glow from there
+        var own = r.ChipOwn;
+        double ownBlur = r.ChipBlur0, ownOpacity = r.ChipOpacity0;
+        void Rest() { if (own != null) { own.BlurRadius = ownBlur; own.Opacity = ownOpacity; } else if (r.Chip.Effect != null) r.Chip.ClearValue(EffectProperty); }
+        Rest();
+        var glow = gained ? own ?? (r.ChipGlow ??= new DropShadowEffect { Color = r.You ? PK.Gold : ClassArt.ColorOf(r.Cls), ShadowDepth = 0, BlurRadius = 0, Opacity = 0 }) : null;
+        if (glow != null && own == null) { glow.BlurRadius = glow.Opacity = 0; r.Chip.Effect = glow; }
+        Motion.Play(r.Chip, FlipMs, p =>
+        {
+            double q = Math.Min(1, p / 0.76);
+            sc.ScaleY = Math.Max(0.04, Math.Abs(Math.Cos(Math.PI * q))); r.ChipText.Text = (q < 0.5 ? was : now).ToString(CultureInfo.InvariantCulture);
+            if (glow != null) { double k = p < 0.45 ? 0 : Math.Sin(Math.PI * (p - 0.45) / 0.55); glow.BlurRadius = ownBlur + 14 * k; glow.Opacity = ownOpacity + (0.95 - ownOpacity) * k; }
+        },
+            () =>
+            {
+                sc.ScaleY = 1; r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture);
+                Rest();
+            });
     }
+
+    /// <summary>The bar's ghost: the length it lost holds, then shrinks onto the fill and fades; a length gained flashes light and fades.</summary>
+    public const double GhostMs = 400;
+
+    void GhostTrail(RowEl r, double from, double to)
+    {
+        double w = r.Track.ActualWidth;
+        if (!Motion.On || w <= 0) return;
+        var g = r.Ghost;
+        bool lost = to < from;
+        var c = ClassArt.ColorOf(r.Cls);
+        var brush = new SolidColorBrush(lost ? Color.FromArgb(0x80, (byte)Math.Min(255, c.R + 60), (byte)Math.Min(255, c.G + 60), (byte)Math.Min(255, c.B + 60)) : Color.FromArgb(0x48, 0xFF, 0xFF, 0xFF));
+        g.Background = brush;
+        g.Visibility = Visibility.Visible;
+        double lo = Math.Min(from, to), hi = Math.Max(from, to);
+        byte a0 = brush.Color.A;
+        Motion.Play(g, GhostMs, p =>
+        {
+            double q = lost ? (p < 0.25 ? 0 : Motion.Out((p - 0.25) / 0.75)) : Motion.Out(p);
+            double right = lost ? hi - (hi - lo) * q : hi;
+            g.Margin = new Thickness(w * lo, 0, 0, 0);
+            g.Width = Math.Max(0, w * (right - lo));
+            brush.Color = Color.FromArgb((byte)(a0 * (1 - (lost ? 0.6 * q : q))), brush.Color.R, brush.Color.G, brush.Color.B);
+        }, () => g.Visibility = Visibility.Collapsed);
+    }
+
+    /// <summary>
+    /// Your row's heat: none below <see cref="HeatFrom"/> of your best here; from there your row's gold frame glows warmer
+    /// (amber, stronger as you near your best) with a faint warm wash across the row, and bright gold once you beat it. The
+    /// state of your pace, drawn as it is (it moves with your DPS, so it needs no course of its own).
+    /// </summary>
+    static void SetHeat(RowEl r, double? pace)
+    {
+        var glow = r.FrameGlow;
+        if (pace is not { } x || x < HeatFrom)
+        {
+            if (r.Heat.Tag == null) return;
+            r.Heat.Visibility = Visibility.Collapsed; r.Heat.Tag = null;
+            // the frame's own glow back (as built; the PB moment's own course puts it back itself)
+            if (glow != null && !Motion.Playing(r.Pb)) { glow.Color = PK.Gold; glow.BlurRadius = r.FrameBlur0; glow.Opacity = r.FrameOpacity0; }
+            return;
+        }
+        bool beat = x >= 1;
+        double k = beat ? 1 : (x - HeatFrom) / (1 - HeatFrom);
+        var warm = Color.FromRgb(0xFF, 0x7A, 0x3C);
+        var c = beat ? Color.FromRgb(0xFF, 0xD0, 0x5A) : Mix(PK.Gold, warm, 0.35 + 0.65 * k);
+        if (glow != null) { glow.Color = c; glow.BlurRadius = beat ? 26 : 16 + 8 * k; glow.Opacity = beat ? 0.95 : 0.5 + 0.3 * k; }
+        var bg = (LinearGradientBrush)r.Heat.Background;
+        bg.GradientStops[0].Color = Color.FromArgb((byte)(beat ? 0x40 : 0x14 + 0x20 * k), c.R, c.G, c.B);
+        bg.GradientStops[1].Color = Color.FromArgb(0, c.R, c.G, c.B);
+        ((SolidColorBrush)r.Heat.BorderBrush).Color = Color.FromArgb((byte)(beat ? 0xFF : 0x80 + 0x60 * k), c.R, c.G, c.B);
+        r.Heat.Tag = beat ? "heat-beat" : "heat-warm";
+        r.Heat.Visibility = Visibility.Visible;
+    }
+
+    static Color Mix(Color a, Color b, double t) => Color.FromArgb(255, (byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+
+    /// <summary>The end of a boss fight: its plate slides in from the right and a glint runs over it.</summary>
+    public const double PlateMs = 380;
+
+    static void SlideIn(Border plate)
+    {
+        if (!Motion.On || plate.Child is not UIElement word) return;
+        var glint = new Border { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var band = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0.4) };
+        GradientStop a = new(Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0), m = new(Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0), b = new(Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0);
+        band.GradientStops.Add(a); band.GradientStops.Add(m); band.GradientStops.Add(b);
+        glint.Background = band;
+        plate.Child = null;
+        plate.Child = new Grid { Children = { word, glint } };
+        plate.ClipToBounds = true;
+        var tt = new TranslateTransform();
+        plate.RenderTransform = tt;
+        Motion.Play(plate, PlateMs, p =>
+        {
+            double q = Motion.Out(Math.Min(1, p / 0.6));
+            tt.X = 16 * (1 - q); plate.Opacity = Math.Min(1, p / 0.3);
+            double g = Math.Clamp((p - 0.4) / 0.6, 0, 1), at = -0.3 + 1.6 * g;
+            a.Offset = at - 0.25; m.Offset = at; b.Offset = at + 0.25;
+            m.Color = Color.FromArgb((byte)(0xD0 * Math.Sin(Math.PI * g)), 0xFF, 0xFF, 0xFF);
+        }, () => { tt.X = 0; plate.Opacity = 1; m.Color = Color.FromArgb(0, 0xFF, 0xFF, 0xFF); });
+    }
+
+    /// <summary>
+    /// A big hit: "+858K" floats up off the member's row and fades, gold when the record says it was a crit. Never over the
+    /// figures' columns, and at most <see cref="PopsPerRow"/> on a row and <see cref="PopsInAll"/> in all.
+    /// </summary>
+    void Pop(RowEl r, BigHit h)
+    {
+        if (!Motion.On || r.Pops >= PopsPerRow || _popsOn >= PopsInAll) return;
+        double tw = r.Track.ActualWidth;
+        if (tw <= 0) return;
+        int slot = Array.IndexOf(r.PopSlot, false);
+        if (slot < 0) return;
+        bool crit = h.Crit == true;
+        var t = new TextBlock { Text = "+" + Amounts.Short(h.Amount), FontSize = 12.5, FontWeight = FontWeights.Bold, Tag = crit ? "pop-crit" : "pop",
+            Foreground = crit ? HudKit.B(0xFFD36B) : HudKit.Ink, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 1),
+            Effect = crit ? new DropShadowEffect { Color = Color.FromRgb(0x6B, 0x3A, 0x00), BlurRadius = 6, ShadowDepth = 0, Opacity = 1 } : TextHalo() };
+        System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double pw = t.DesiredSize.Width;
+        // in the row's open bar, right-aligned just left of the DPS's column (never on the figures, never on the chip and
+        // emblem); a second one at once sits a line above the first, a little further left, so the two never read as one
+        double minX = r.Cols.Margin.Left + 52, right = DpsLeft(r, tw) - 8 - (slot == 1 ? 10 : 0);
+        double x = Math.Max(minX, right - pw);
+        Canvas.SetLeft(t, x); Canvas.SetTop(t, r.Y + 5 - (slot == 1 ? 12 : 0));
+        var st = new ScaleTransform(1, 1); var tt = new TranslateTransform();
+        t.RenderTransform = new TransformGroup { Children = { st, tt } };
+        _pops.Children.Add(t);
+        r.Pops++; _popsOn++; r.PopSlot[slot] = true;
+        int gen = _popGen;
+        Motion.Play(t, PopMs, p =>
+        {
+            tt.Y = -14 * Motion.Out(p);
+            t.Opacity = p < 0.12 ? p / 0.12 : p > 0.55 ? 1 - (p - 0.55) / 0.45 : 1;
+            double sc = p < 0.25 ? 0.7 + 0.45 * Motion.Out(p / 0.25) : 1.15 - 0.15 * Motion.Out((p - 0.25) / 0.75);
+            st.ScaleX = st.ScaleY = sc;
+        }, () =>
+        {
+            _pops.Children.Remove(t);
+            r.Pops = Math.Max(0, r.Pops - 1); r.PopSlot[slot] = false;
+            if (gen == _popGen) _popsOn = Math.Max(0, _popsOn - 1);   // a pop-up of a fight drawn before counts for nothing now
+        });
+    }
+
+    /// <summary>Where the DPS's column starts across the row (the figures after it too, expanded or not).</summary>
+    static double DpsLeft(RowEl r, double trackWidth)
+    {
+        var defs = r.Cols.ColumnDefinitions;
+        if (defs.Count < 4 || defs[2].ActualWidth <= 0) return trackWidth - r.Cols.Margin.Right - 46 - 60;
+        return r.Cols.Margin.Left + defs[0].ActualWidth + defs[1].ActualWidth + defs[2].ActualWidth;
+    }
+
+    /// <summary>For the tests: the pop-ups on the rows now (their words), and whether any part of a row is moving.</summary>
+    internal List<string> PopsForTest() => _pops.Children.OfType<TextBlock>().Select(t => $"{t.Tag}:{t.Text}").ToList();
+    internal string? HeatForTest() => _rows.Values.FirstOrDefault(r => r.You)?.Heat is { Visibility: Visibility.Visible } h ? h.Tag as string : null;
+    internal bool AnyMotionForTest() => _pops.Children.Count > 0 || _sweep.Visibility == Visibility.Visible
+        || _rows.Values.Any(r => r.Ghost.Visibility == Visibility.Visible || r.Odo.Visibility == Visibility.Visible || r.Odo.Rolling || Math.Abs(r.Lift.Y) > 0.01 || r.Rise.ScaleX != 1 || r.Root.Effect != null
+            || r.Plates.Children.OfType<UIElement>().Any(p => p.Opacity < 1 || p.RenderTransform is TranslateTransform { X: not 0 }) || r.Root.Opacity < 1);
+    /// <summary>For the tests: each row's chip glow (blur/opacity, "none"), by name order; and how many rows carry an effect of their own.</summary>
+    internal List<string> ChipLooksForTest() => _rows.Values.OrderBy(r => r.Name.Text).Select(r => r.Chip.Effect is DropShadowEffect d ? $"{r.Name.Text}:{d.BlurRadius:0.#}/{d.Opacity:0.##}" : $"{r.Name.Text}:none").ToList();
+    internal int RowEffectsForTest() => _rows.Values.Count(r => r.Root.Effect != null);
+    internal bool LiftedForTest() => _rows.Values.Any(r => r.Rise.ScaleX > 1.001 && r.Root.Effect is DropShadowEffect);
+    internal bool GhostForTest() => _rows.Values.Any(r => r.Ghost.Visibility == Visibility.Visible && r.Ghost.Width > 0.5);
+    internal string? SweepForTest() => _sweep.Visibility == Visibility.Visible ? _sweep.Tag as string : null;
+    internal bool FlareForTest() => _rows.Values.FirstOrDefault(r => r.You) is { } y && y.Odo.InkNow != ((HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White);
+    /// <summary>For the tests: the name on the row whose top is at <paramref name="y"/>, and where its DPS's column starts.</summary>
+    internal string RowNameAt(double y) => _rows.Values.FirstOrDefault(r => Math.Abs(r.Y - y) < 1)?.Name.Text ?? "";
+    internal double DpsLeftAt(double y) => _rows.Values.FirstOrDefault(r => Math.Abs(r.Y - y) < 1) is { } r ? DpsLeft(r, r.Track.ActualWidth) : 0;
+    /// <summary>For the tests: the DPS figure each shown row says, by name, and the odometer's (it must say the same once settled).</summary>
+    internal Dictionary<string, (string Figure, string Odometer)> DpsForTest() => _rows.Values.Where(r => r.Root.Visibility == Visibility.Visible).ToDictionary(r => r.Name.Text, r => (r.Dps.Text, r.Odo.Text));
 
     /// <summary>A death: the coral tick lands (large, settling in) and the row washes coral once.</summary>
     void Land(RowEl r)
@@ -325,20 +643,29 @@ public sealed class ParserRows : Grid
         }, () => { st.ScaleX = st.ScaleY = 1; g.Children.Remove(wash); });
     }
 
-    /// <summary>The kill: a mint light sweeps across the rows.</summary>
-    void Sweep()
+    /// <summary>The fight's end: a light sweeps across the rows.</summary>
+    public const double SweepMs = 400;
+
+    /// <summary>
+    /// The fight's end (a kill, a wipe, the open world's fight held after 5 quiet seconds): a light sweeps across the rows, mint
+    /// for a kill or a clear, a soft coral for a wipe or a death, white for a fight that just ended.
+    /// </summary>
+    void Sweep(string tone)
     {
         if (!Motion.On) return;
         _sweep.Visibility = Visibility.Visible;
+        var c = tone == "good" ? PK.Mint : tone == "bad" ? PK.Coral : Colors.White;
+        byte peak = tone == "good" ? (byte)0x78 : tone == "bad" ? (byte)0x50 : (byte)0x46;
         var band = new LinearGradientBrush { StartPoint = new Point(0, 0.3), EndPoint = new Point(1, 0.7) };
-        var a = new GradientStop(Color.FromArgb(0, PK.Mint.R, PK.Mint.G, PK.Mint.B), 0); var m = new GradientStop(PK.Mint, 0); var b = new GradientStop(Color.FromArgb(0, PK.Mint.R, PK.Mint.G, PK.Mint.B), 0);
+        var a = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0); var m = new GradientStop(c, 0); var b = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0);
         band.GradientStops.Add(a); band.GradientStops.Add(m); band.GradientStops.Add(b);
         _sweep.Background = band;
-        Motion.Play(_sweep, 900, p =>
+        _sweep.Tag = "sweep-" + tone;
+        Motion.Play(_sweep, SweepMs, p =>
         {
             double at = -0.2 + 1.4 * Motion.Out(p), k = Math.Sin(Math.PI * p);
-            a.Offset = at - 0.22; m.Offset = at; b.Offset = at + 0.22;
-            m.Color = Color.FromArgb((byte)(0x78 * k), PK.Mint.R, PK.Mint.G, PK.Mint.B);
+            a.Offset = at - 0.13; m.Offset = at; b.Offset = at + 0.13;
+            m.Color = Color.FromArgb((byte)(peak * k), c.R, c.G, c.B);
         }, () => _sweep.Visibility = Visibility.Collapsed);
     }
 
@@ -349,13 +676,15 @@ public sealed class ParserRows : Grid
         r.Pb.Visibility = Visibility.Visible;
         var st = new ScaleTransform(1, 1); r.Pb.RenderTransform = st;
         if (!Motion.On) return;
+        // the figure flares gold with it
+        r.Odo.Flare(PK.Gold);
         var glow = r.Frame.Effect as DropShadowEffect;
         Motion.Play(r.Pb, 900, p =>
         {
             double q = Math.Min(1, p / 0.55);
             double s = 0.4 + 1.1 * Motion.Out(q) - 0.15 * Math.Sin(Math.PI * q); st.ScaleX = st.ScaleY = s; r.Pb.Opacity = Math.Clamp(p / 0.25, 0, 1);
-            if (glow != null) { double k = Math.Sin(Math.PI * p); glow.BlurRadius = 16 + 20 * k; glow.Opacity = 0.42 + 0.5 * k; }
-        }, () => { st.ScaleX = st.ScaleY = 1; r.Pb.Opacity = 1; if (glow != null) { glow.BlurRadius = 16; glow.Opacity = 0.42; } });
+            if (glow != null) { double k = Math.Sin(Math.PI * p); glow.BlurRadius = r.FrameBlur0 + 20 * k; glow.Opacity = r.FrameOpacity0 + 0.5 * k; }
+        }, () => { st.ScaleX = st.ScaleY = 1; r.Pb.Opacity = 1; if (glow != null) { glow.BlurRadius = r.FrameBlur0; glow.Opacity = r.FrameOpacity0; } });
     }
 
     /// <summary>The death recap a hover on the tick shows (when the record carries the last hits).</summary>

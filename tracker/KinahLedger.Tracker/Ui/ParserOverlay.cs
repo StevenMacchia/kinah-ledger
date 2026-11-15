@@ -407,6 +407,7 @@ public sealed class ParserPanel : Border
 {
     readonly StackPanel _body = new();
     readonly ParserRows _prows = new();
+    readonly string _hpPlace = Motion.HpPlace();
     string _sig = "";
     /// <summary>The mode the record is counted in, and whether each member's Combat Power and item level show.</summary>
     public ParserMode Mode { get; set; }
@@ -450,7 +451,7 @@ public sealed class ParserPanel : Border
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}:{Encounter.BossOnly}";
+        var sig = $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}";
         Width = HudStackLook.FightWidth + 10;
         sig += $":{Width}";
         if (sig == _sig) return;
@@ -546,6 +547,8 @@ public sealed class ParserPanel : Border
             var fill = new Border { Background = left < 0.34 ? Coral : HudKit.Gold, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left };
             track.SizeChanged += (_, _) => fill.Width = Math.Max(left > 0 ? 3 : 0, track.ActualWidth * left);
             track.Children.Add(fill);
+            // a big drop leaves a red chunk that shrinks onto the fill
+            Motion.HpGhost(track, _hpPlace, e.Id, left, now, 3);
             hp.Children.Add(track);
             // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
             var pct = HpText(e, 11.5, left < 0.34 ? Coral : HudKit.Ink, HudKit.Muted); pct.Margin = new Thickness(8, 0, 0, 0);

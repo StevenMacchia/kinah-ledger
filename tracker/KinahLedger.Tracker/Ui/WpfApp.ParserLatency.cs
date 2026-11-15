@@ -34,7 +34,21 @@ public static partial class WpfApp
         hud.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour" });
         hud.Show();
         w.AttachHudForTest(hud);
-        MainWindow.ParserLatencyStats.Clear(); MainWindow.FarmLatencyStats.Clear(); MainWindow.FarmTextChanges = 0;
+        MainWindow.ParserLatencyStats.Clear(); MainWindow.FarmLatencyStats.Clear(); MainWindow.FarmTextChanges = 0; MainWindow.MeterDrawStats.Clear();
+        // the frames drawn while the meter moves: the gap from one to the next (a frame over ~17 ms late is a dropped one)
+        var frameGaps = new ParserLatency();
+        TimeSpan lastFrame = TimeSpan.Zero;
+        int frames = 0;
+        EventHandler onFrame = (_, ev) =>
+        {
+            var at = ((System.Windows.Media.RenderingEventArgs)ev).RenderingTime;
+            if (at == lastFrame) return;
+            double gap = (at - lastFrame).TotalMilliseconds;
+            if (lastFrame != TimeSpan.Zero && gap < 250) frameGaps.Add(gap);
+            lastFrame = at; frames++;
+        };
+        System.Windows.Media.CompositionTarget.Rendering += onFrame;
+        var frameClock = Stopwatch.StartNew();
         int farmSeconds = 0;
         int bossEvents = 0, killEvents = 0, gaps = 0;
         double fedSeconds = 0;
@@ -57,7 +71,14 @@ public static partial class WpfApp
                     {
                         while (sw2.Elapsed.TotalMilliseconds < k * 100.0) Thread.Sleep(1);
                         var now = DateTime.UtcNow;
-                        for (int m = 1; m <= 8; m++) { long a2 = rnd.Next(9_000, 15_000); hp -= a2; bossEvents++; parser.Take(new DamageDealt(now, m, 99, a2)); }
+                        for (int m = 1; m <= 8; m++)
+                        {
+                            long a2 = rnd.Next(9_000, 15_000);
+                            // now and then a big hit (about one a second across the group), and its hit in the stream, as the decoder sends it
+                            if (rnd.Next(80) == 0) a2 *= 5;
+                            hp -= a2; bossEvents++; parser.Take(new DamageDealt(now, m, 99, a2));
+                            parser.Take(new HitDealt(now, m, m, 99, a2, 1000 + m, k, 0, false, false, rnd.Next(4) == 0 ? 3 : 1, 0, 0, 0));
+                        }
                         bossEvents++; parser.Take(new BossHealth(now, 99, Math.Max(1, hp), 400_000_000));
                         fedSeconds = sw2.Elapsed.TotalSeconds;
                     }
@@ -115,10 +136,14 @@ public static partial class WpfApp
         tick.Start();
         System.Windows.Threading.Dispatcher.PushFrame(frame);
         DoEvents();
+        System.Windows.Media.CompositionTarget.Rendering -= onFrame;
         var (p50, p95, max, n) = MainWindow.ParserLatencyStats.Stats();
         Console.WriteLine($"events: {bossEvents:N0} boss events, {killEvents:N0} kill events, {gaps} gaps, over {fedSeconds:0} s at the recordings' pace; {BossParser.Name(parser.Mode)} kept {kept.Count} records");
         Console.WriteLine($"capture to screen (tab and overlay, {n:N0} redraws): median {p50:0} ms, 95th percentile {p95:0} ms, worst {max:0} ms (target under 100 ms)");
         Console.WriteLine($"the Parser said {MainWindow.ParserChangesSeen:N0} changes; the window drew {MainWindow.ParserDraws:N0} frames for them ({MainWindow.ParserDrawsShown:N0} on screen)");
+        var (d50, d95, dmax, dn) = MainWindow.MeterDrawStats.Stats();
+        var (g50, g95, gmax, gn) = frameGaps.Stats();
+        Console.WriteLine($"meter draws ({dn:N0}, the window's own time): median {d50:0.0} ms, 95th percentile {d95:0.0} ms, worst {dmax:0.0} ms; frames: {frames / Math.Max(1, frameClock.Elapsed.TotalSeconds):0} a second, gap median {g50:0.0} ms, 95th percentile {g95:0.0} ms, worst {gmax:0} ms");
         var (f50, f95, fmax, fn) = MainWindow.FarmLatencyStats.Stats();
         Console.WriteLine($"the Kinah line's farming DPS: {MainWindow.FarmTextChanges:N0} changes over {farmSeconds} s of farming ({(farmSeconds > 0 ? MainWindow.FarmTextChanges / (double)farmSeconds : 0):0.0} a second); game event to the changed figure on screen ({fn:N0}): median {f50:0} ms, 95th percentile {f95:0} ms, worst {fmax:0} ms");
         hud.Close();
