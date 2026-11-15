@@ -839,9 +839,52 @@ public static partial class WpfApp
         string pvpTip = w.HeroStatTipForTest("PvP");
         Check(abyssLine[4] == "9 PvP" && abyssLine[5] == "109 mobs" && pvpTip.Contains("9 players and 109 monsters") && pvpTip.Contains("You died 2 times, 1 of them to players"),
             $"...kills told apart: {abyssLine.ElementAtOrDefault(4)} · {abyssLine.ElementAtOrDefault(5)}, on hover \"{pvpTip}\"");
+        // the Kinah overlay follows it (Steven, 2026-11-15: "when in the abyss use that to track your Abyss pts per hour and show
+        // relevant stats like in the app itself"): its hour is the hero's Abyss Points hour, the session line the points, then
+        // the kills (players apart), deaths and Kinah as the hero's line says them; in every look, with no Kinah hour or ring
+        // the feed beside the newest Farming line (the Badge's): the demo's newest line overall may be another tab's, with its own hour
+        w.HudFeedForTest();
+        var abyssHud = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
+        foreach (var (k, v) in w.HudFarmFeedForTest()) abyssHud[k] = v;
+        string apKinah = abyssLine[2][..^" Kinah".Length];
+        Check(abyssHud.GetValueOrDefault("abyss") == "1" && abyssHud.GetValueOrDefault("rate") == apHour && abyssHud.GetValueOrDefault("total") == Amounts.Short(24_740)
+            && abyssHud.GetValueOrDefault("abPvp") == "9" && abyssHud.GetValueOrDefault("abKills") == "118" && abyssHud.GetValueOrDefault("abDeaths") == "2" && abyssHud.GetValueOrDefault("abKinah") == apKinah
+            && abyssHud.GetValueOrDefault("chase") == "" && abyssHud.GetValueOrDefault("best") == "" && abyssHud.GetValueOrDefault("feedRate") == apHour && abyssHud.GetValueOrDefault("feedUnit") == "AP an hour",
+            "the Kinah overlay in the Abyss: " + string.Join(", ", new[] { "abyss", "rate", "total", "abPvp", "abKills", "abDeaths", "abKinah", "chase", "best", "feedRate", "feedUnit" }.Select(k => $"{k}={abyssHud.GetValueOrDefault(k)}")));
+        var kinahHourInAbyss = abyssHero.Ticket.Split(' ')[0];   // the Kinah and loot hour, on the ticket: never the overlay's figure there
+        foreach (var look in HudLooks.All.Select(l => l.Key))
+        {
+            var ha = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+            ha.Update(abyssHud); ha.Show(); DoEvents();
+            var shown = VisibleTexts(ha);
+            string all = string.Join(" | ", shown);
+            // one line of words however a look splits its figures and words into blocks ("9" "PvP", or "9 PvP  ·  2 deaths")
+            string words = System.Text.RegularExpressions.Regex.Replace(string.Join(" ", shown), @"[\s·|]+", " ");
+            // Pop's pill has room for the hour and the points; the others say the kills, deaths and Kinah too
+            bool stats = look == HudLooks.Ticker || words.Contains("9 PvP") && words.Contains("2 deaths") && words.Contains(apKinah + " Kinah");
+            // Badge's one line is the newest pickup and the hour (no session total there out of the Abyss either)
+            Check(all.Contains(apHour) && words.Contains("AP") && (look == HudLooks.Strip || all.Contains(Amounts.Short(24_740))) && !all.Contains(kinahHourInAbyss) && !all.Contains("of best", StringComparison.OrdinalIgnoreCase) && !all.Contains("DPS") && stats,
+                $"...{HudLooks.All.First(l => l.Key == look).Name} leads with {apHour} AP an hour, {Amounts.Short(24_740)} AP, the kills, deaths and Kinah{(look == HudLooks.Ticker ? " (the pill: the hour and the points)" : look == HudLooks.Strip ? " (the feed's line: no total)" : "")}: {all}");
+            ha.Close();
+        }
         w.ShowDemo(); DoEvents();
         var worldHero = w.HeroForTest();
         Check(!worldHero.Abyss && worldHero.Ticket == "" && w.RankTicketForTest() == "" && worldHero.Label.Contains("Kinah and loot"), $"...out of the Abyss: the Kinah hour {worldHero.Hero}, no ticket");
+        // leaving the Abyss puts the Kinah view back on the overlay: the Kinah hour, gold, "session", the ring of your best
+        w.HudFeedForTest();
+        var worldHud = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
+        foreach (var (k, v) in w.HudFarmFeedForTest()) worldHud[k] = v;
+        Check(worldHud.GetValueOrDefault("abyss") == "" && worldHud.GetValueOrDefault("rate") == worldHero.Hero && worldHud.GetValueOrDefault("abKinah") == "" && worldHud.GetValueOrDefault("feedUnit") != "AP an hour",
+            $"...and the overlay's values are the Kinah view's again (rate {worldHud.GetValueOrDefault("rate")}, the hero {worldHero.Hero})");
+        foreach (var look in HudLooks.All.Select(l => l.Key))
+        {
+            var hk = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+            hk.Update(abyssHud); DoEvents(); hk.Update(worldHud); hk.Show(); DoEvents();
+            string all = string.Join(" | ", VisibleTexts(hk));
+            Check(all.Contains(worldHero.Hero) && !all.Contains("AP") && !all.Contains("PvP") && !all.Contains("Abyss Points"),
+                $"...{HudLooks.All.First(l => l.Key == look).Name} back on the Kinah hour {worldHero.Hero} after the Abyss: {all}");
+            hk.Close();
+        }
 
         // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
         w.ShowDemo(); DoEvents();
@@ -2561,6 +2604,15 @@ public static partial class WpfApp
             DoEvents();
             if (Motion.FrozenAt != null) { h.MotionFrameForRender(v); DoEvents(); }
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
+        // in the Abyss with every figure picked (Steven, 2026-11-15): the hour and the total in Abyss Points, the rest as they are
+        {
+            var h = new HudWindow(HudFields.All.Select(f => f.Key)) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            h.Update(w.HudAbyssSample(values));
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, "ui-hud-abyss-all.png"), 0);
             h.Close();
         }
         return problems;

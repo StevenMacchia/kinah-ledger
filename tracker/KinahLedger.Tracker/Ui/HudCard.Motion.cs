@@ -29,6 +29,8 @@ public sealed partial class HudCard
     bool _wasBeat, _ringDrawn;
     /// <summary>The figures' runs as last built, which a roll under way writes into (the figures are rebuilt as the clock moves).</summary>
     Run? _rateRun, _totalRun;
+    /// <summary>The hour's colour: gold for Kinah, ink for Abyss Points (HudKit.Abyss); a roll's green settles back to it.</summary>
+    Brush _rateTone = Gold;
     readonly Dictionary<string, double> _shown = new();
     /// <summary>The hot streak bar under the figures, this far below them (into the card's padding).</summary>
     readonly StreakBar _streak = new();
@@ -58,7 +60,7 @@ public sealed partial class HudCard
         _shown[part] = v;
         if (!roll || !had || !(Moves || force) || from <= 0 || Amounts.Short(from) == text) return;
         // rolled through its values again, not flipped (Steven, 2026-11-12, of 0.10.57: "blinks/flashes instead of rolling")
-        var gold = Rgb(GoldC); var good = Rgb(MintC);
+        var gold = (_rateTone as SolidColorBrush)?.Color ?? Rgb(GoldC); var good = Rgb(MintC);
         double ms = tint ? Motion.RollMs * 2 : Motion.RollMs;
         Motion.Play(host, ms, p =>
         {
@@ -68,7 +70,7 @@ public sealed partial class HudCard
             if (run() is not { } r) return;
             r.Text = p >= 1 ? text : Amounts.Short(shown);
             if (tint) r.Foreground = new SolidColorBrush(Motion.Blend(good, gold, Math.Clamp((p - 0.25) / 0.75, 0, 1)));
-        }, () => { _shown[part] = v; if (run() is { } r) { r.Text = text; if (tint) r.Foreground = Gold; } });
+        }, () => { _shown[part] = v; if (run() is { } r) { r.Text = text; if (tint) r.Foreground = _rateTone; } });
     }
 
     /// <summary>The card's edge lights softly gold on a pickup and fades back to its frame line (600 ms); not while a rare drop's frame holds it.</summary>

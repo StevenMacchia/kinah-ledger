@@ -998,6 +998,11 @@ public partial class MainWindow
     /// The panel's feed cell (direction C): the newest thing counted on any tab with its worth, and that tab's rate beside it
     /// (Farming the hour's worth, Crafting the profit today, Events the hour across runs); a run just closed flagged instead.
     /// </summary>
+    /// <summary>For options-test: the feed's and the looks' values as the overlay's tick fills them (UpdateHud runs only with an overlay).</summary>
+    internal void HudFeedForTest() => HudFeed();
+    /// <summary>For options-test: the feed's values for the newest Farming line (the demo's newest line may be another tab's).</summary>
+    internal Dictionary<string, string> HudFarmFeedForTest() => HudFeedValues(FeedFor(FeedTab.Farming).FirstOrDefault(), "");
+
     void HudFeed()
     {
         var newest = new[] { FeedTab.Farming, FeedTab.Crafting, FeedTab.Events }.Select(t => FeedFor(t).FirstOrDefault()).Where(l => l != null).OrderByDescending(l => l!.At).FirstOrDefault();
@@ -1015,7 +1020,8 @@ public partial class MainWindow
         var d = new Dictionary<string, string> { ["flag"] = flag, ["feedText"] = "", ["feedValue"] = "", ["feedTone"] = "", ["feedRate"] = "", ["feedUnit"] = "" };
         // the farming hour beside the line: "warming up" alone while the count is young (FillNumbers), else "1.27M an hour"
         var hour = _hudValues.GetValueOrDefault("rate", "");
-        var hourUnit = hour == WarmingUp ? "" : "an hour";
+        // in the Abyss the hour is the Abyss Points' (HudAbyssValues)
+        var hourUnit = hour == WarmingUp ? "" : _hudValues.GetValueOrDefault("abyss", "") == "1" ? "AP an hour" : "an hour";
         if (l == null) { d["feedRate"] = hour; d["feedUnit"] = hourUnit; return d; }
         var (bold, plain, small) = FeedWords(l);
         d["feedText"] = l.Kind == "craft" ? $"{bold}{plain} {small}" : l.Kind == "kinah" ? bold : $"{bold}{(l.Amount > 1 ? plain : "")}";

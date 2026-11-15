@@ -28,7 +28,7 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!, _parserExpandedChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!;
 
     void LoadParser()
     {
@@ -42,7 +42,6 @@ public partial class OptionsWindow
         _parserSeparateChk.IsChecked = p.InKinah;
         _parserLookPick = ParserPrefs.LookOf(p.Look);
         _parserActiveChk.IsChecked = p.DpsActive;
-        _parserFarmChk.IsChecked = p.FarmDps;
         _parserExpandedChk.IsChecked = p.Expanded;
         if (_parserWidth != null) _parserWidth.Value = HudStackLook.FightWidth = p.Width;
         DrawParserLooks();
@@ -69,7 +68,6 @@ public partial class OptionsWindow
         p.InKinah = _parserSeparateChk.IsChecked == true;
         p.Look = _parserLookPick;
         p.DpsActive = _parserActiveChk.IsChecked == true;
-        p.FarmDps = _parserFarmChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
         if (_parserWidth != null) p.Width = Math.Round(_parserWidth.Value);
         p.Save();
@@ -104,7 +102,6 @@ public partial class OptionsWindow
         _parserKillsChk = Row("Kills near you", "Enemies that died near you during boss pulls and runs. Every fight always shows your kills.", "Parser kills near you");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
-        _parserFarmChk = Row("Open-world DPS on the Kinah line", "While you fight in the open world or the Abyss, your DPS shows small on the Kinah overlay's line. Those fights are counted while they last and never kept.", "Parser open-world DPS");
         _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
         _parserSeparateChk.Click += (_, _) => DrawParserLooks();
         // the overlay's look, first in the group (Steven, 2026-11-14: "idk how to change the style"): the four looks that draw
@@ -290,5 +287,9 @@ public partial class OptionsWindow
         _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
 
     /// <summary>For the options test: the Parser group's switches.</summary>
-    internal (CheckBox Details, CheckBox Kills, CheckBox Deaths, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active, CheckBox Farm) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserFarmChk);
+    internal (CheckBox Details, CheckBox Kills, CheckBox Deaths, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk);
+
+    /// <summary>For the options test: every switch's title in the Parser group.</summary>
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk }
+        .Select(c => AutomationProperties.GetName(c)).ToList();
 }

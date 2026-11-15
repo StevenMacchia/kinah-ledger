@@ -39,6 +39,34 @@ public partial class MainWindow
         _hudValues["streak"] = HudStreakNow();   // the looks' hot streak bar (Ui/HudStreak.cs)
     }
 
+    /// <summary>The Abyss's own values: "abyss" ("1" there), then PvP kills ("" until players and monsters are told apart), all kills, deaths ("" for none), Kinah and the points' icon.</summary>
+    internal static readonly string[] AbyssKeys = { "abyss", "abPvp", "abKills", "abDeaths", "abKinah", "abIcon" };
+    /// <summary>The game's art for Abyss Points (data/extra-items.json).</summary>
+    const string AbyssIcon = ItemDictionary.IconBase + "Icon_abysspoint.png";
+
+    /// <summary>
+    /// The overlay in the Abyss (Steven, 2026-11-15: "when in the abyss use that to track your Abyss pts per hour and show
+    /// relevant stats like in the app itself for the abyss"), from the figures the Farming page shows there (FillRate,
+    /// FillChips): "rate" is the Abyss Points hour the hero says (warming up with it), "total" the points picked up, then
+    /// the kills (players apart once the game told them apart), deaths and Kinah, which counts the bound Kinah there. The
+    /// ring and the best here are a Kinah hour's, so they go. Out of the Abyss, or gathering there, the values stay the Kinah view's.
+    /// </summary>
+    void HudAbyssValues(SessionEngine e, double h, long kinah, int kills, bool on)
+    {
+        foreach (var k in AbyssKeys) _hudValues[k] = "";
+        if (!on) return;
+        long ap = e.AbyssPoints;
+        _hudValues["abyss"] = "1";
+        _hudValues["rate"] = ap <= 0 ? "" : _rateWarming ? WarmingUp : Fk(ap / h);
+        _hudValues["total"] = ap > 0 ? Fk(ap) : "";
+        _hudValues["chase"] = _hudValues["toBest"] = _hudValues["best"] = "";
+        _hudValues["abPvp"] = e.PlayerKills + e.MonsterKills > 0 ? e.PlayerKills.ToString("N0") : "";
+        _hudValues["abKills"] = kills > 0 ? kills.ToString("N0") : "";
+        _hudValues["abDeaths"] = e.Deaths > 0 ? e.Deaths.ToString("N0") : "";
+        _hudValues["abKinah"] = kinah > 0 ? Fk(kinah) : "";
+        _hudValues["abIcon"] = AbyssIcon;
+    }
+
     /// <summary>
     /// The hot streak (2026-11-12, Steven: a bar that "fills as pickups come quickly and drains when you slow down"): each
     /// pickup of the last <see cref="StreakWindow"/> s counts whole for its first <see cref="StreakHold"/> s, then less and
@@ -194,7 +222,34 @@ public partial class MainWindow
             foreach (var (state, v) in new[] { ("normal", normal), ("notice", notice), ("rare", rare), ("idle", idle) })
                 list.Add(($"ui-hud-{look}-{state}.png", look, v));
         list.AddRange(HudRareStates());   // the watched drop with its price (Ui/MainWindow.RareWatch.cs)
+        // in the Abyss (Steven, 2026-11-15) every look leads with the Abyss Points hour, from the Abyss demo's figures; then the
+        // moment before the first points (Kinah picked up, no points yet); and the farming look of the two the list above leaves
+        // out, so every look has its pair
+        var abyss = HudAbyssSample(normal);
+        var abyssWaiting = new Dictionary<string, string>(abyss) { ["rate"] = "", ["total"] = "", ["feedRate"] = "", ["abPvp"] = "", ["abKills"] = "2", ["abDeaths"] = "", ["abKinah"] = Fk(4_420), ["time"] = "RUN 0:48" };
+        foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float, HudLooks.Auto, HudLooks.Strip })
+            list.Add(($"ui-hud-{look}-abyss.png", look, abyss));
+        foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker, HudLooks.Capsule, HudLooks.Strip })
+            list.Add(($"ui-hud-{look}-abyss-waiting.png", look, abyssWaiting));
+        list.Add(("ui-hud-auto-normal.png", HudLooks.Auto, normal));
+        list.Add(("ui-hud-strip-normal.png", HudLooks.Strip, normal));
         return list;
+    }
+
+    /// <summary>
+    /// The sample figures in the Abyss, as HudAbyssValues gives them for the Abyss demo (ShowDemo("Abyss")): 24,740 Abyss Points
+    /// and 266,500 Kinah (bound, all the Abyss pays) from 118 kills, 9 of them players, and 2 deaths in 42 min 17 s.
+    /// </summary>
+    internal Dictionary<string, string> HudAbyssSample(Dictionary<string, string> normal)
+    {
+        const long ap = 24_740, kinah = 266_500;
+        const double h = (42 * 60 + 17) / 3600.0;
+        return new Dictionary<string, string>(normal)
+        {
+            ["abyss"] = "1", ["rate"] = Fk(ap / h), ["total"] = Fk(ap), ["chase"] = "", ["toBest"] = "", ["best"] = "", ["zone"] = KinahLedger.Ocr.ZoneLocator.Abyss,
+            ["feedRate"] = Fk(ap / h), ["feedUnit"] = "AP an hour", ["kinah"] = Fk(kinah / h),
+            ["abPvp"] = "9", ["abKills"] = "118", ["abDeaths"] = "2", ["abKinah"] = Fk(kinah), ["abIcon"] = AbyssIcon,
+        };
     }
 
     /// <summary>Where the player last dropped the panel in its look: the Ticker's spot is its own (HudPrefs.TickerX/Y).</summary>

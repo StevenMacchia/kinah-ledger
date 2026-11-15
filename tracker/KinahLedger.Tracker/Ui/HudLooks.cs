@@ -157,6 +157,49 @@ static class HudKit
         return (share, words, words.StartsWith("New", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// In the Abyss (the window's "abyss" value, MainWindow.HudAbyssValues): "rate" is the Abyss Points hour and "total" the
+    /// points so far, drawn in ink with "AP" beside them, where the Kinah hour is gold. Leaving the Abyss puts Kinah back.
+    /// </summary>
+    public static bool Abyss(IReadOnlyDictionary<string, string> v) => v.TryGetValue("abyss", out var s) && s == "1";
+
+    /// <summary>The line where the hour waits for its first figure, in the Abyss and out of it.</summary>
+    public static string Waiting(bool abyss) => abyss ? "Waiting for Abyss Points" : "Waiting for the first count";
+
+    /// <summary>
+    /// The Abyss's figures after the points, most telling first, only those the count has: the kills (players, once the game
+    /// told players and monsters apart; else every kill), deaths when there were any, and Kinah (bound Kinah in it there).
+    /// </summary>
+    public static List<(string Figure, string Word, Brush Tone)> AbyssStats(IReadOnlyDictionary<string, string> v)
+    {
+        string V(string k) => v.TryGetValue(k, out var s) ? s : "";
+        var list = new List<(string, string, Brush)>();
+        if (V("abPvp").Length > 0) list.Add((V("abPvp"), "PvP", Ink));
+        else if (V("abKills").Length > 0) list.Add((V("abKills"), V("abKills") == "1" ? "kill" : "kills", Ink));
+        if (V("abDeaths").Length > 0) list.Add((V("abDeaths"), V("abDeaths") == "1" ? "death" : "deaths", Rec));
+        if (V("abKinah").Length > 0) list.Add((V("abKinah"), "Kinah", Gold));
+        return list;
+    }
+
+    /// <summary>The stats as one sign, for a look's redraw check.</summary>
+    public static string AbyssSig(IReadOnlyDictionary<string, string> v) => Abyss(v) ? "abyss:" + string.Join(",", AbyssStats(v).Select(s => s.Figure + s.Word)) : "";
+
+    /// <summary>The game's Abyss Points art (the "abIcon" value), where the ring of your best sits out of the Abyss; empty until it loads.</summary>
+    public static FrameworkElement AbyssMark(string icon, double size)
+    {
+        var slot = IconCache.Get(icon);
+        var pic = new Image { Source = slot.Image, Width = size, Height = size, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
+        RenderOptions.SetBitmapScalingMode(pic, BitmapScalingMode.HighQuality);
+        if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
+        {
+            System.ComponentModel.PropertyChangedEventHandler? on = null;
+            on = (_, _) => { if (slot.Image == null) return; pic.Source = slot.Image; slot.PropertyChanged -= on; };
+            slot.PropertyChanged += on;
+        }
+        System.Windows.Automation.AutomationProperties.SetName(pic, "Abyss Points");
+        return pic;
+    }
+
     /// <summary>The run dot: red with a soft glow during a run, grey otherwise.</summary>
     public static Ellipse Dot(double size) => new()
     {

@@ -307,7 +307,7 @@ public sealed class Encounter : IJsonOnDeserialized
     }
 
     /// <summary>
-    /// Your DPS while farming (the Kinah line's small figure): your damage over your fighting time (Fighter.FightingSeconds),
+    /// Your DPS while farming (the Parser page's figure): your damage over your fighting time (Fighter.FightingSeconds),
     /// so the walk between monsters doesn't pull it down; 0 before a hit of yours.
     /// </summary>
     public double FarmDps() => You is { Damage: > 0 } me ? me.Damage / Math.Max(FarmMinSeconds, me.FightingSeconds) : 0;
@@ -536,7 +536,7 @@ public sealed class Fighter
 
     /// <summary>
     /// Seconds spent fighting: stretches of hits with gaps of at most <see cref="StretchGapSeconds"/>, each at least 1 s, the
-    /// one under way included. The Kinah line's farming DPS is over this, so walking between monsters doesn't lower it.
+    /// one under way included. The farming DPS is over this, so walking between monsters doesn't lower it.
     /// </summary>
     public double FightingSeconds => StretchesSeconds + (StretchStart is { } s && LastHit is { } l ? Math.Max(1, (l - s).TotalSeconds) : 0);
 

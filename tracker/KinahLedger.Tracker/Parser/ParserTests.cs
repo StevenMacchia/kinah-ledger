@@ -67,7 +67,7 @@ public static class ParserTests
             if ((at - sampled).TotalSeconds < 1) return;
             sampled = at;
             var f = p.Farm;
-            if (f != null && p.FarmDpsNow(at) is { } now0 && now0 > 0) shown.Add(now0);   // what the Kinah line reads now (the live readout)
+            if (f != null && p.FarmDpsNow(at) is { } now0 && now0 > 0) shown.Add(now0);   // what the Parser page's readout says now (the live readout)
             if (farmNow != null && (f == null || f.Start != farmNow.Start))
             {
                 farms.Add((farmNow.Start, farmNow.LastAt, farmNow.You?.Damage ?? 0, farmNow.You?.FightingSeconds ?? 0, shown));
@@ -734,7 +734,7 @@ public static class ParserTests
             Check(kept.Count == 1, "a stray hit with no kill, death or pull isn't kept");
         }
 
-        // farming in the open world in Bosses only and Full run: a live fight for the Kinah line's small DPS, never a record
+        // farming in the open world in Bosses only and Full run: a live fight for the Parser page's DPS, never a record
         {
             var (p, kept) = New();
             p.Place("Western Cantas Valley", abyss: false);
@@ -742,12 +742,12 @@ public static class ParserTests
             for (int i = 0; i <= 10; i++) p.Take(new DamageDealt(t.AddSeconds(i), 1, 5000 + i, 12_000, SourceIsYou: true));
             var farm = p.Farm;
             Check(p.Live == null && farm is { OpenWorld: true, Kind: "Open world" } && farm.You is { Damage: 132_000 } && Math.Abs(farm.Dps(farm.You!, t.AddSeconds(10)) - 13_200) < 0.01,
-                $"farming in the open world in Bosses only: no pull, but a live fight with your DPS for the Kinah line ({(farm?.You != null ? farm.Dps(farm.You, t.AddSeconds(10)) : 0):0})");
-            // a 14 s walk to the next monster, then 5 s on it: the Kinah line's DPS is over the fighting, not the walk
+                $"farming in the open world in Bosses only: no pull, but a live fight with your DPS for the Parser page ({(farm?.You != null ? farm.Dps(farm.You, t.AddSeconds(10)) : 0):0})");
+            // a 14 s walk to the next monster, then 5 s on it: the farming DPS is over the fighting, not the walk
             for (int i = 24; i <= 29; i++) p.Take(new DamageDealt(t.AddSeconds(i), 1, 5100, 12_000, SourceIsYou: true));
             var walked = p.Farm!;
             Check(walked.You!.FightingSeconds == 15 && Math.Abs(walked.FarmDps() - 17 * 12_000 / 15.0) < 0.01 && walked.Dps(walked.You, t.AddSeconds(29)) < walked.FarmDps(),
-                $"...its DPS on the Kinah line is over your fighting time ({walked.You.FightingSeconds:0} s of 29: stretches of hits with gaps up to {Fighter.StretchGapSeconds:0} s), so walking between monsters doesn't pull it down ({walked.FarmDps():0})");
+                $"...its DPS is over your fighting time ({walked.You.FightingSeconds:0} s of 29: stretches of hits with gaps up to {Fighter.StretchGapSeconds:0} s), so walking between monsters doesn't pull it down ({walked.FarmDps():0})");
             p.Tick(t.AddSeconds(29 + BossParser.PauseSeconds));
             Check(p.Farm == null && kept.Count == 0 && p.LiveAll.Count == 0, "...gone after its pause, nothing kept");
             p.Take(new DamageDealt(t.AddSeconds(100), 1, 6000, 5_000, SourceIsYou: true));

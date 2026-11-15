@@ -35,8 +35,7 @@ public sealed partial class HudTicker : IHudLook
 
     readonly Border _pill;
     readonly Ellipse _dot;
-    readonly TextBlock _run, _time, _rate, _unit, _total, _idle, _farm, _farmUnit;
-    readonly FrameworkElement _sep3;
+    readonly TextBlock _run, _time, _rate, _unit, _total, _idle;
     readonly FrameworkElement _sep1, _sep2;
     readonly StackPanel _stack = new() { Width = 270, HorizontalAlignment = HorizontalAlignment.Left };
     readonly Dictionary<string, Toast> _toasts = new();
@@ -71,15 +70,12 @@ public sealed partial class HudTicker : IHudLook
         _total = T("", 13, Ink, mono: true);
         _sep1 = Rule(14, 9); _sep2 = Rule(14, 9);
         _idle = T("Waiting for the first count", 12, Faint); _idle.Visibility = Visibility.Collapsed;
-        // your DPS while farming in the open world: small, after the session, never more (HudWindow.SetFarmDps)
-        _sep3 = Rule(14, 9); _farm = T("", 12, Ink, weight: FontWeights.SemiBold); _farm.MinWidth = 34; _farm.TextAlignment = TextAlignment.Right; System.Windows.Documents.Typography.SetNumeralAlignment(_farm, FontNumeralAlignment.Tabular); _farmUnit = T("DPS", 11, Muted, weight: FontWeights.SemiBold); _farmUnit.Margin = new Thickness(4, 0, 0, 0);
-        _sep3.Visibility = _farm.Visibility = _farmUnit.Visibility = Visibility.Collapsed;
         _pill = new Border
         {
             Height = 28, Padding = new Thickness(10, 0, 12, 0), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), BorderBrush = FrameLine,
             HorizontalAlignment = HorizontalAlignment.Left,
             // the hot streak bar along the pill's bottom, over its content: it takes no room (Ui/HudStreak.cs)
-            Child = new Grid { Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { _dot, _run, _time, _sep1, _rate, _unit, _sep2, _total, _idle, _sep3, _farm, _farmUnit } }, Streak(new Thickness(0, 0, 0, 2)) } },
+            Child = new Grid { Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { _dot, _run, _time, _sep1, _rate, _unit, _sep2, _total, _idle } }, Streak(new Thickness(0, 0, 0, 2)) } },
         };
         BuildCraft();   // the crafting pill (Ui/HudCraftLooks.cs)
         Paint();
@@ -116,10 +112,12 @@ public sealed partial class HudTicker : IHudLook
         // nothing counted yet (no run, no pickup, a total of 0): "Waiting for the first count" rather than "0:00 | 0" (2026-10-26)
         bool counted = run || Picks(values).Count > 0 || V("total") is not ("" or "0");
         bool picked = _picks.Next(values, out _) != null;   // only a pickup just made rolls the pill (Ui/HudFreshPicks.cs)
-        if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}|{V("farmDps")}"))
+        // in the Abyss (Steven, 2026-11-15) the pill's hour is in Abyss Points, in ink with "AP/h", and its session the points so far
+        bool abyss = Abyss(values);
+        if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}|{abyss}"))
         {
-            _farm.Text = V("farmDps");
-            _sep3.Visibility = _farm.Visibility = _farmUnit.Visibility = V("farmDps").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _rate.Foreground = abyss ? Ink : Gold; _unit.Text = abyss ? "AP/h" : "/h";
+            _idle.Text = Waiting(abyss);
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;
@@ -132,6 +130,8 @@ public sealed partial class HudTicker : IHudLook
             _idle.Visibility = counted ? Visibility.Collapsed : Visibility.Visible;
             _time.Visibility = _sep1.Visibility = counted ? Visibility.Visible : Visibility.Collapsed;
             if (!counted) _rate.Visibility = _unit.Visibility = _sep2.Visibility = _total.Visibility = Visibility.Collapsed;
+            // Kinah picked up in the Abyss before any points: the clock, then that the hour waits for them
+            else if (abyss && V("rate").Length == 0) { _rate.Visibility = _unit.Visibility = _sep2.Visibility = _total.Visibility = Visibility.Collapsed; _idle.Visibility = Visibility.Visible; }
         }
         _streak.Show(values, counted, Moves);   // the hot streak bar fills and drains (Ui/HudStreak.cs)
         bool crafting = CraftPill(values);   // while the crafting window is open: the crafts instead of the pickups
