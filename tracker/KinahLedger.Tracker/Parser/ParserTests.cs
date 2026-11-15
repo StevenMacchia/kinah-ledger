@@ -76,9 +76,16 @@ public static class ParserTests
             }
             farmNow = f;
         }
+        // one decoder for the whole recording, reset at each new connection, as the tracker does (PacketReader): its count
+        // of instances entered carries on, and the Parser hears of each new connection as a gap
+        using var dec = NativeDecoder.TryOpen()!;
+        bool events = Environment.GetEnvironmentVariable("KL_REPLAY_EVENTS") == "1";
+        bool firstConn = true;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
-            using var dec = NativeDecoder.TryOpen()!;
+            dec.Reset();
+            if (!firstConn) p.Take(new FeedGap(conn.First().At));
+            firstConn = false;
             var st = new TcpStream
             {
                 OnData = (d, at) =>
@@ -88,7 +95,12 @@ public static class ParserTests
                     while (dec.Next() is not null) { }
                     while (dec.NextItem() is not null) { }
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
-                    while (dec.NextBossEvent() is { } b) p.Take(b);
+                    while (dec.NextBossEvent() is { } b)
+                    {
+                        if (events && b is InstanceEntered or InstanceLeft or GroupChanged or BossEngaged or BossEnded)
+                            Console.WriteLine($"event {b.At.ToLocalTime():HH:mm:ss} {(b is GroupChanged g ? "group " + string.Join(", ", g.Members.Select(m => $"{m.Name}#{m.Id}{(m.You ? " (you)" : "")}")) : b.ToString())}");
+                        p.Take(b);
+                    }
                     while (dec.NextHit() is { } h) p.Take(h);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
@@ -498,6 +510,151 @@ public static class ParserTests
             u.ScreenPlace("Expedition", "Shattered Arkanis");
             u.Take(new BossEngaged(t.AddSeconds(10), "", 961));
             Check(u.Live is { Boss: "Talisra of the Void", Kind: "Expedition" }, "...then the screen's place makes it one of the three, and its bosses count");
+        }
+
+        // back into an instance of the same name: a reconnect into the same copy or running it again (2026-11-14: three
+        // Vakron Sky Island runs in a row, each with another group, read as one 35-minute run with three rows for you).
+        // Never by the decoder's number for the entry: the tracker's numbers every entry, a replay's restarts at 1
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Run, t);
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 1));
+            p.Take(new GroupChanged(t.AddSeconds(1), new[] { Me, Ally }));
+            p.Take(new BossEngaged(t.AddSeconds(60), "Talisra of the Void", 960));
+            p.Take(new DamageDealt(t.AddSeconds(70), 1, 960, 40_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(71), 2, 960, 10_000, "Aerin"));
+            p.Take(new BossEnded(t.AddSeconds(120), 960, BossOutcome.Kill));
+            // left after one boss; the next run of it: another group, you under a new id, the entry numbered 1 again
+            var meB = Me with { Id = 41 };
+            var kora = new GroupMember(42, "Kora", "Sorcerer", 300_000, 5_600, false);
+            p.Take(new FeedGap(t.AddSeconds(300)));
+            p.Take(new InstanceEntered(t.AddSeconds(310), ContentKind.Expedition, "Shattered Arkanis", 1));
+            p.Take(new GroupChanged(t.AddSeconds(311), new[] { kora }));
+            var first = kept.SingleOrDefault();
+            Check(first is { ModeKind: ParserMode.Run, Outcome: "left", Partial: false } && first.End == t.AddSeconds(120) && first.Splits.Count == 1,
+                $"same instance again, another group: a new run; the run before ends where it stood, no reconnect or gap of the new run's on it: {first?.Outcome}, ended {(first?.End - t)?.TotalSeconds} s, partial ({string.Join("; ", first?.PartialWhy ?? new())})");
+            p.Take(new GroupChanged(t.AddSeconds(312), new[] { meB, kora }));
+            p.Take(new BossEngaged(t.AddSeconds(360), "Talisra of the Void", 970));
+            p.Take(new DamageDealt(t.AddSeconds(370), 41, 970, 30_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(371), 42, 970, 20_000, "Kora"));
+            p.Take(new BossEnded(t.AddSeconds(400), 970, BossOutcome.Kill));
+            p.Take(new InstanceLeft(t.AddSeconds(450)));
+            var second = kept.Count == 2 ? kept[1] : null;
+            Check(second is { Partial: false } && second.Start == t.AddSeconds(310) && second.Splits.Count == 1 && second.Roster.Count == 2
+                && second.Roster.Single(f => f.You).Damage == 30_000 && second.Roster.Any(f => f.Name == "Kora") && !second.Roster.Any(f => f.Name == "Aerin"),
+                $"...from its entry, with its own group and one row for you: {string.Join(", ", second?.Roster.Select(f => $"{f.Name} {f.Damage}") ?? Array.Empty<string>())}");
+        }
+        // a reconnect: the same group back (anyone of it), everyone under new ids: one run, one row per player, nothing lost
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Run, t);
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 5));
+            p.Take(new GroupChanged(t.AddSeconds(1), new[] { Me, Ally }));
+            p.Take(new BossEngaged(t.AddSeconds(60), "Talisra of the Void", 960));
+            p.Take(new DamageDealt(t.AddSeconds(70), 1, 960, 40_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(71), 2, 960, 10_000, "Aerin"));
+            p.Take(new BossEnded(t.AddSeconds(120), 960, BossOutcome.Kill));
+            p.Take(new FeedGap(t.AddSeconds(200)));
+            p.Take(new InstanceEntered(t.AddSeconds(230), ContentKind.Expedition, "Shattered Arkanis", 6));
+            p.Take(new GroupChanged(t.AddSeconds(231), new[] { Ally with { Id = 52 } }));
+            p.Take(new GroupChanged(t.AddSeconds(232), new[] { Me with { Id = 51 }, Ally with { Id = 52 } }));
+            p.Take(new BossEngaged(t.AddSeconds(300), "Siliator of Deceit", 961));
+            p.Take(new DamageDealt(t.AddSeconds(310), 51, 961, 20_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(311), 52, 961, 5_000, "Aerin"));
+            p.Take(new BossEnded(t.AddSeconds(360), 961, BossOutcome.Kill));
+            p.Take(new InstanceLeft(t.AddSeconds(400)));
+            var run = kept.SingleOrDefault();
+            Check(run != null && run.Splits.Count == 2 && run.Roster.Count == 2 && run.Roster.Single(f => f.You).Damage == 60_000 && run.Roster.Single(f => f.Name == "Aerin").Damage == 15_000
+                && run.PartialWhy.Contains("the game reconnected during it") && run.Start == t,
+                $"a reconnect, the same group under new ids: one run, one row each, every hit kept: {kept.Count} runs, {string.Join(", ", run?.Roster.Select(f => $"{f.Name} {f.Damage}") ?? Array.Empty<string>())}");
+            // you alone under a new id, before any group list: still your row
+            var (q, qk) = New();
+            q.SetMode(ParserMode.Run, t);
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 5));
+            q.Take(new BossEngaged(t.AddSeconds(10), "Talisra of the Void", 960));
+            q.Take(new DamageDealt(t.AddSeconds(11), 1, 960, 1_000, "Swoly", true));
+            q.Take(new DamageDealt(t.AddSeconds(12), 77, 960, 2_000, "Swoly", true));
+            Check(q.Live is { } ql && ql.Roster.Count(f => f.You) == 1 && ql.Roster.Single(f => f.You).Damage == 3_000, $"...you under a new id are one row: {q.Live?.Roster.Count} rows");
+        }
+        // after the last boss died, the same instance again is a new run at once, whatever the group; the cleared run unmarked
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Run, t);
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 7));
+            p.Take(new GroupChanged(t.AddSeconds(1), new[] { Me, Ally }));
+            p.Take(new BossEngaged(t.AddSeconds(60), "Ruthilis of Pain", 963));
+            p.Take(new DamageDealt(t.AddSeconds(70), 1, 963, 40_000, "Swoly", true));
+            p.Take(new BossEnded(t.AddSeconds(120), 963, BossOutcome.Kill));
+            p.Take(new FeedGap(t.AddSeconds(200)));
+            Check(kept.SingleOrDefault() is { Outcome: "cleared", Partial: false } c1 && c1.End == t.AddSeconds(120),
+                $"a gap after the last boss's kill ends the run there, cleared, nothing missed: {kept.FirstOrDefault()?.Outcome}, partial ({string.Join("; ", kept.FirstOrDefault()?.PartialWhy ?? new())})");
+            p.Take(new InstanceEntered(t.AddSeconds(210), ContentKind.Expedition, "Shattered Arkanis", 7));
+            p.Take(new GroupChanged(t.AddSeconds(211), new[] { Me, Ally }));   // the same group runs it again
+            p.Take(new BossEngaged(t.AddSeconds(260), "Talisra of the Void", 964));
+            p.Take(new BossEnded(t.AddSeconds(300), 964, BossOutcome.Kill));
+            p.Take(new InstanceLeft(t.AddSeconds(320)));
+            Check(kept.Count == 2 && kept[1].Start == t.AddSeconds(210) && kept[1].Splits.Count == 1 && !kept[1].Partial,
+                $"...and running it again is a new run from its entry, the same group too: {kept.Count} runs");
+            // no gap between: the entry itself ends it
+            var (q, qk) = New();
+            q.SetMode(ParserMode.Run, t);
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 7));
+            q.Take(new BossEngaged(t.AddSeconds(60), "Ruthilis of Pain", 963));
+            q.Take(new BossEnded(t.AddSeconds(120), 963, BossOutcome.Kill));
+            q.Take(new InstanceEntered(t.AddSeconds(300), ContentKind.Expedition, "Shattered Arkanis", 8));
+            Check(qk.SingleOrDefault() is { Outcome: "cleared", Partial: false } && q.Live is { ModeKind: ParserMode.Run } nl && nl.Start == t.AddSeconds(300),
+                "...with no gap before, the entry itself ends it and starts the next");
+            // quiet for half an hour after the last boss: over, not partial
+            var (r, rk) = New();
+            r.SetMode(ParserMode.Run, t);
+            r.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 7));
+            r.Take(new BossEngaged(t.AddSeconds(60), "Ruthilis of Pain", 963));
+            r.Take(new BossEnded(t.AddSeconds(120), 963, BossOutcome.Kill));
+            r.Tick(t.AddHours(1));
+            Check(rk.SingleOrDefault() is { Outcome: "cleared", Partial: false }, $"...and quiet after the last boss is the run over, never partial ({string.Join("; ", rk.FirstOrDefault()?.PartialWhy ?? new())})");
+        }
+        // on your own: a boss already down here pulled again is a new run; another boss, the same copy
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Run, t);
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 9));
+            p.Take(new GroupChanged(t.AddSeconds(1), new[] { Me }));
+            p.Take(new BossEngaged(t.AddSeconds(60), "Talisra of the Void", 960));
+            p.Take(new DamageDealt(t.AddSeconds(70), 1, 960, 40_000, "Swoly", true));
+            p.Take(new BossEnded(t.AddSeconds(120), 960, BossOutcome.Kill));
+            p.Take(new InstanceEntered(t.AddSeconds(300), ContentKind.Expedition, "Shattered Arkanis", 10));
+            p.Take(new GroupChanged(t.AddSeconds(301), new[] { Me with { Id = 61 } }));
+            Check(kept.Count == 0, "on your own, back in the same instance: nothing decided by the group");
+            p.Take(new BossEngaged(t.AddSeconds(360), "Talisra of the Void", 970));
+            Check(kept.SingleOrDefault() is { Outcome: "left", Partial: false } s1 && s1.End == t.AddSeconds(120) && p.Live is { ModeKind: ParserMode.Run } s2 && s2.Start == t.AddSeconds(300),
+                $"...a boss already down pulled again: a new run from the entry, the one before ended where it stood: {kept.Count} runs");
+            var (q, qk) = New();
+            q.SetMode(ParserMode.Run, t);
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 9));
+            q.Take(new GroupChanged(t.AddSeconds(1), new[] { Me }));
+            q.Take(new BossEngaged(t.AddSeconds(60), "Talisra of the Void", 960));
+            q.Take(new BossEnded(t.AddSeconds(120), 960, BossOutcome.Kill));
+            q.Take(new InstanceEntered(t.AddSeconds(300), ContentKind.Expedition, "Shattered Arkanis", 10));
+            q.Take(new BossEngaged(t.AddSeconds(360), "Siliator of Deceit", 961));
+            q.Take(new BossEnded(t.AddSeconds(400), 961, BossOutcome.Kill));
+            q.Take(new InstanceLeft(t.AddSeconds(420)));
+            Check(qk.SingleOrDefault() is { } one && one.Splits.Count == 2 && one.Start == t, $"...the next boss pulled: the same run, reconnected ({qk.Count} runs)");
+        }
+        // Always on: running the same instance again starts the meter from 0; a reconnect carries it on
+        {
+            var (p, _) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 11));
+            p.Take(new GroupChanged(t.AddSeconds(1), new[] { Me, Ally }));
+            p.Take(new DamageDealt(t.AddSeconds(10), 1, 6000, 1_000, "Swoly", true));
+            p.Take(new InstanceEntered(t.AddSeconds(100), ContentKind.Expedition, "Shattered Arkanis", 12));
+            p.Take(new GroupChanged(t.AddSeconds(101), new[] { Ally with { Id = 52 } }));
+            p.Take(new DamageDealt(t.AddSeconds(110), 51, 6000, 1_000, "Swoly", true));
+            Check(p.AlwaysLive is { } a1 && a1.Roster.Sum(f => f.Damage) == 2_000, $"Always on: a reconnect into the same copy carries the meter on ({p.AlwaysLive?.Roster.Sum(f => f.Damage)})");
+            p.Take(new InstanceEntered(t.AddSeconds(200), ContentKind.Expedition, "Shattered Arkanis", 13));
+            p.Take(new GroupChanged(t.AddSeconds(201), new[] { new GroupMember(42, "Kora", "Sorcerer", 300_000, 5_600, false) }));
+            Check(p.AlwaysLive == null, "...running it again with another group starts it from 0");
+            p.Take(new DamageDealt(t.AddSeconds(210), 81, 6000, 500, "Swoly", true));
+            Check(p.AlwaysLive is { } a2 && a2.Roster.Sum(f => f.Damage) == 500 && a2.Start == t.AddSeconds(210), "...from the first hit there");
         }
 
         // Full run: one record from entering to leaving, trash included, each boss a split, cleared by the final boss
