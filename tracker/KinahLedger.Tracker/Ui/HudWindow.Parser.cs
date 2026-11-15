@@ -14,6 +14,17 @@ namespace KinahLedger.Ui;
 /// </summary>
 public sealed partial class HudWindow
 {
+    /// <summary>A click (no drag) on the fight's meter: the window switches it compact or expanded.</summary>
+    public event Action? FightClicked;
+
+    /// <summary>Whether a press was on the fight: the Parser's section, or the look's own fight.</summary>
+    bool InFight(DependencyObject src)
+    {
+        for (var d = src; d != null; d = d is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D ? System.Windows.Media.VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+            if (d == _parserSlot || d is ParserRows || (_look is HudStackLook sl && d == sl.FightFrame)) return true;
+        return false;
+    }
+
     /// <summary>The section's place above the overlay's own content (its 6 px gap included, so the anchor counts it).</summary>
     readonly Border _parserSlot = new() { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(0, 0, 0, 6) };
     ParserPanel? _parserPanel;
@@ -51,6 +62,7 @@ public sealed partial class HudWindow
     /// <summary>The section away, the window down by its height: the Kinah line stays where it was.</summary>
     void Fold()
     {
+        EndMorph();
         _parserSlot.Visibility = Visibility.Collapsed;
         ComposeStack();
         double before = _timerTaken + _parserTaken;
@@ -85,9 +97,15 @@ public sealed partial class HudWindow
     {
         if (on == KinahHidden) return;
         KinahHidden = on;
+        bool swaps = (_look == null || _look is IHudFightAbove || _look is not HudStackLook) && OwnContent != null;
+        // Parser v2: the pill's picture, for the meter to grow out of (Ui/HudWindow.Morph.cs)
+        var pill = on && swaps && _parserSlot.Visibility == Visibility.Visible ? SnapOwn() : null;
+        var pillSize = OwnContent is FrameworkElement of ? new Size(of.ActualWidth, of.ActualHeight) : Size.Empty;
         if (_look is HudStackLook sl) sl.HideKinah(on);
-        if ((_look == null || _look is IHudFightAbove || _look is not HudStackLook) && OwnContent != null)
-            OwnContent.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        if (swaps)
+            OwnContent!.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        if (pill != null) MorphIn(pill, pillSize);
+        else if (!on && swaps) MorphOut();
     }
 
     /// <summary>The record to show above the Kinah line, or null to fold the section away.</summary>
@@ -107,7 +125,7 @@ public sealed partial class HudWindow
             _parserSlot.BeginAnimation(OpacityProperty, fade);
             return;
         }
-        if (above != null) { if (_parserSlot.Child != above) _parserSlot.Child = above; ShowSlot(); return; }
+        if (above != null) { if (SlotContent != above) SetSlot(above); ShowSlot(); return; }
         if (_parserPanel == null)
         {
             // the Kinah overlay's own frame: its corner, its padding, its background at its opacity
@@ -116,7 +134,7 @@ public sealed partial class HudWindow
             if (_parserOpacity >= 0) _parserPanel.SetOpacity(_parserOpacity);
         }
         UIElement slotChild = HudGlass.OldLooks ? (_parserRing ??= HudGlass.Ring(_parserPanel)) : _parserPanel;
-        if (_parserSlot.Child != slotChild) _parserSlot.Child = slotChild;
+        if (SlotContent != slotChild) SetSlot(slotChild);
         _parserPanel.Mode = mode; _parserPanel.ShowDetails = details;
         _parserPanel.Draw(e, now);
         ShowSlot();
