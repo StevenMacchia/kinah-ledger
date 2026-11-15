@@ -567,6 +567,7 @@ public static class PacketTests
             var got = new List<(string What, string Got, string Want)>
             {
                 ("two items in one update", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 2, 100, false, 1, 2), R(1, Fine, 1, 10, false, 1, 2)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); s.CommitForTest(C(2, Fine, 1)); }), "Ore 2, Fine 1"),
+                ("one item's two rises in one update", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 2, 100, false, 1, 2), R(1, Ore, 1, 101, false, 1, 2)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); s.CommitForTest(C(2, Ore, 1)); }), "Ore 3, Fine 0"),
                 ("one item in two updates, 1.8 s apart", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 2, 100, false, 1, 1)); At(1.05); At(2.8); rd.ItemsForTest(R(2.8, Ore, 1, 101, false, 2, 1)); At(2.85); At(3); s.CommitForTest(C(3, Ore, 2)); At(3.5); s.CommitForTest(C(3.5, Ore, 1)); }), "Ore 3, Fine 0"),
                 ("first sight, lines x2 and x1", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 1)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); At(2.4); s.CommitForTest(C(2.4, Ore, 1)); }), "Ore 3, Fine 0"),
                 ("first sight, two lines x1", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 1)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 1)); At(2.4); s.CommitForTest(C(2.4, Ore, 1)); }), "Ore 2, Fine 0"),
