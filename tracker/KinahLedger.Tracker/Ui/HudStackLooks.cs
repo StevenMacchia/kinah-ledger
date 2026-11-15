@@ -182,27 +182,6 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     protected static string Clock(TimeSpan t) => BossParser.Clock(t);
 
-    /// <summary>A member: the class's emblem, the name (gold for you), the DPS and the share; a meter in the class's colour under it.</summary>
-    protected static FrameworkElement MemberLine(Encounter e, Fighter f, DateTime now, double top, double size, double bar)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) }); g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
-        var mark = MainWindow.ClassMark(f.Class, 17, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(mark);
-        var nm = MemberName(f, size); Grid.SetColumn(nm, 1); g.Children.Add(nm);
-        if (e.HasDamage)
-        {
-            var d = Num(Amounts.Short(e.Dps(f, now)), size + 1.5, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 2); g.Children.Add(d);
-            var s = Num(Encounter.Pct(e.Share(f)), size - 0.5, Muted, FontWeights.SemiBold); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 3); g.Children.Add(s);
-        }
-        sp.Children.Add(g);
-        var c = ClassArt.ColorOf(f.Class);
-        double measure = e.HasDamage ? f.Damage : f.CombatPower;
-        sp.Children.Add(Bar(measure / Math.Max(1, top), Frozen(c), bar, new Thickness(22, 2, 0, 0)));
-        return sp;
-    }
-
     protected static double Top(Encounter e) => e.TopMeasure();
 
     /// <summary>A member's name in their class's colour (the bar's, the emblem ring's), you marked by the gold YOU chip.</summary>
@@ -354,7 +333,7 @@ sealed class HudCapsule : HudStackLook
         }
         else _meterBody.Children.Add(new Border { Height = 6 });
         // the rows (Parser v2, Ui/ParserRows.cs): kept between draws, so a change moves
-        _meterBody.Children.Add(_prows);
+        ParserRows.Detach(_prows); _meterBody.Children.Add(_prows);
         _prows.Show(e, now);
         if (!e.Live && e.Outcome.Length > 0)
             _meterBody.Children.Add(Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold));
@@ -534,7 +513,7 @@ sealed class HudMeter : HudStackLook
         PlaceHp();
         // the rows (Parser v2, Ui/ParserRows.cs): kept between draws, so a change moves
         _prows.Margin = new Thickness(4, 4, 4, 2);
-        _rows.Children.Add(_prows);
+        ParserRows.Detach(_prows); _rows.Children.Add(_prows);
         _prows.Show(e, now);
         if (e.HasDamage)
         {
@@ -563,31 +542,6 @@ sealed class HudMeter : HudStackLook
         if (below) _hpBelow.Visibility = Visibility.Visible;
     }
 
-    static FrameworkElement Row(Encounter e, Fighter f, DateTime now, double top, int rank)
-    {
-        var host = new Grid { Height = 28, Margin = new Thickness(0, 0, 0, 1) };
-        var c = ClassArt.ColorOf(f.Class);
-        var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x60, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x22, c.R, c.G, c.B), 1)); fill.Freeze();
-        double measure = e.HasDamage ? f.Damage : f.CombatPower;
-        // a quiet track the row's width, so the rows read as one table; the fill fading from the class's solid edge
-        host.Children.Add(new Border { Background = Frozen(Color.FromArgb(0x0E, c.R, c.G, c.B)) });
-        host.Children.Add(new Border { Background = fill, Width = W * Math.Clamp(measure / top, 0, 1), HorizontalAlignment = HorizontalAlignment.Left });
-        host.Children.Add(new Border { Width = 3, Background = Frozen(c), HorizontalAlignment = HorizontalAlignment.Left });
-        var g = new Grid { Margin = new Thickness(8, 0, 10, 0) };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
-        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
-        g.Children.Add(Num(rank > 0 ? rank.ToString(CultureInfo.InvariantCulture) : "", 11.5, Faint, FontWeights.Bold));
-        var mark = MainWindow.ClassMark(f.Class, 18, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(mark, 1); g.Children.Add(mark);
-        var nm = MemberName(f, 13.5); Grid.SetColumn(nm, 2); g.Children.Add(nm);
-        if (e.HasDamage)
-        {
-            var d = Num(Amounts.Short(e.Dps(f, now)), 15, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 3); g.Children.Add(d);
-            var s = Num(Encounter.Pct(e.Share(f)), 12, Muted, FontWeights.SemiBold); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 4); g.Children.Add(s);
-        }
-        host.Children.Add(g);
-        return host;
-    }
 }
 
 // ================================================================ Float
@@ -694,7 +648,7 @@ sealed class HudFloat : HudStackLook
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         if (e.Waiting) rows.Children.Add(Tx(ReadyLine, 12.5, Muted, FontWeights.SemiBold));
-        else { rows.Children.Add(_prows); _prows.Show(e, now); }
+        else { ParserRows.Detach(_prows); rows.Children.Add(_prows); _prows.Show(e, now); }
         _fight.Children.Add(rows);
         _fight.Visibility = Visibility.Visible;
     }

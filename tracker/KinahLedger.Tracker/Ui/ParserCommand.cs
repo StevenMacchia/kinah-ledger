@@ -15,7 +15,7 @@ namespace KinahLedger.Ui;
 /// <summary>What the Parser page's views need from the window: its choices, and what a click does.</summary>
 sealed class CommandCtx
 {
-    public string Tab = "Damage";
+    public string Tab = "Group";
     public string Sort = "Damage";
     public bool Details, Kills;
     public Action<string> SetTab = _ => { };
@@ -40,7 +40,8 @@ static class ParserCommand
     static TextBlock Num(string s, double size, Brush b, FontWeight? w = null) { var t = T(s, size, b, w ?? FontWeights.SemiBold, tab: true); t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
     static TextBlock Head(string text, bool sorted = false, bool right = true)
     {
-        var t = T(sorted ? text + " ▾" : text, 11, sorted ? GoldInk : Faint, FontWeights.SemiBold);
+        var t = T(text, 11, sorted ? GoldInk : Faint, FontWeights.SemiBold, trim: false);
+        if (sorted) t.Inlines.Add(new System.Windows.Documents.Run(" ▾") { FontSize = 9 });
         if (right) t.HorizontalAlignment = HorizontalAlignment.Right;
         return t;
     }
@@ -53,7 +54,7 @@ static class ParserCommand
     /// <summary>The tabs the record has something for: Damage always; Compare with a kept pull of this boss; Timeline and Taken once the record carries them.</summary>
     public static List<string> Tabs(FightView v)
     {
-        var t = new List<string> { "Damage" };
+        var t = new List<string> { "Group" };
         if (v.HasCompare) t.Add("Compare");
         if (v.HasTimeline) t.Add("Timeline");
         if (v.HasTaken) t.Add("Taken");
@@ -176,6 +177,8 @@ static class ParserCommand
         int n = v.Members.Count(m => !v.HasDamage || m.Damage > 0);
         if (n > 0) Add(n.ToString(CultureInfo.InvariantCulture), n == 1 ? "member" : "in the group");
         if (v.Deaths > 0) Add(v.Deaths.ToString(CultureInfo.InvariantCulture), v.Deaths == 1 ? "death" : "deaths", C(Coral));
+        int near = e.Kills.Count(k => !k.Boss && !k.Yours);
+        if (ctx.Kills && near > 0 && e.ModeKind != ParserMode.Fights) Add(near.ToString(CultureInfo.InvariantCulture), "kills near you");
         if (e.ModeKind == ParserMode.Fights && e.YourKills > 0) Add(e.YourKills.ToString(CultureInfo.InvariantCulture), e.PlayerKills > 0 ? $"kills, {e.PlayerKills} player{(e.PlayerKills == 1 ? "" : "s")}" : e.YourKills == 1 ? "kill" : "kills", C(Mint));
         if (!v.HasDamage && ctx.Details && e.Members.Any(f => f.CombatPower > 0)) Add(((int)Math.Round(e.Members.Where(f => f.CombatPower > 0).Average(f => f.CombatPower))).ToString("N0", CultureInfo.InvariantCulture), "average CP");
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
@@ -297,7 +300,7 @@ static class ParserCommand
                 var bits = new List<string>();
                 if (m.F.Class.Length > 0) bits.Add(ClassArt.Title(m.F.Class));
                 if (m.F.CombatPower > 0) bits.Add($"{m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)} CP");
-                if (m.F.ItemLevel > 0 && !(crit || max || spark)) bits.Add($"{m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)} iLvl");
+                if (m.F.ItemLevel > 0 && !(crit || max || spark)) bits.Add($"{m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)} item level");
                 if (bits.Count > 0) nameBox.Children.Add(T(string.Join(" · ", bits), 11, Muted));
             }
             if (dmg)

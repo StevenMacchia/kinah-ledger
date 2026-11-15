@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     /// <summary>The fight's tab (Damage, Compare, Timeline, Taken), the member opened (their id) and how their abilities are sorted.</summary>
-    string _parserTab = "Damage";
+    string _parserTab = "Group";
     long? _parserInspect;
     string _parserSort = "Damage";
 
@@ -64,7 +64,7 @@ public partial class MainWindow
         var v = ParserViewOf(e, end, past);
         var ctx = ParserCtx();
         var tabs = ParserCommand.Tabs(v);
-        if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Damage";
+        if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Group";
         var page = new StackPanel();
         if (_parserFromRuns)
         {
@@ -120,7 +120,7 @@ public partial class MainWindow
         };
         page.Children.Add(Margin(body, 0, 12, 0, 0));
         // a kept fight: your kills and the kills near you, under the group
-        if (!live && ctx.Tab == "Damage")
+        if (!live && ctx.Tab == "Group")
         {
             void KillChips(string head, IEnumerable<KillNear> kills)
             {

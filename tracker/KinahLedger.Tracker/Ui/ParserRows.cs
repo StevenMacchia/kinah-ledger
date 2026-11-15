@@ -53,6 +53,9 @@ public sealed class ParserRows : Grid
         System.Windows.Documents.TextElement.SetFontFamily(this, HudKit.Text);
     }
 
+    /// <summary>Takes the rows off the panel they were on (a look that builds its panel again each draw).</summary>
+    public static void Detach(ParserRows r) { if (r.Parent is Panel p) p.Children.Remove(r); else if (r.Parent is Decorator d) d.Child = null; }
+
     /// <summary>The rows the look shows now (for its height and the tests).</summary>
     public int Shown => _rows.Values.Count(r => r.Root.Visibility == Visibility.Visible);
     public bool Pinned => _gap.Visibility == Visibility.Visible;

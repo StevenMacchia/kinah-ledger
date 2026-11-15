@@ -664,18 +664,6 @@ public partial class MainWindow
         return t;
     }
 
-    /// <summary>The Other row's mark: a quiet tile with a dot pattern, not a class.</summary>
-    internal static FrameworkElement OtherMark(double size)
-    {
-        var c = Color.FromRgb(0x86, 0x8D, 0xA1);
-        return new Border
-        {
-            Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Background = Frozen(Color.FromArgb(0x18, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x50, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = "···", FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -size * 0.12, 0, 0) },
-        };
-    }
-
     /// <summary>A class's mark: the game's emblem on a ring in the class's colour (Ui/ClassArt.cs).</summary>
     internal static FrameworkElement ClassMark(string cls, double size, string name = "") => ClassArt.Icon(cls, size, name);
 
@@ -1022,7 +1010,7 @@ public partial class MainWindow
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
         // Parser v2's views: the tab, the member opened, and for the renders of what the record will carry (the timeline, damage
         // taken, crits), a sample of those figures (ParserViewSample: render states only, the app never sets it)
-        _parserTab = state switch { "compare" => "Compare", "timeline" => "Timeline", "taken" => "Taken", _ => "Damage" };
+        _parserTab = state switch { "compare" => "Compare", "timeline" => "Timeline", "taken" => "Taken", _ => "Group" };
         _parserSort = "Damage";
         var shownNow = _parserOpen != null ? all.FirstOrDefault(e => e.Id == _parserOpen) : now;
         _parserInspect = state is "inspect" or "inspect-full" ? shownNow?.Ranked().FirstOrDefault(f => f.You && f.Abilities.Count > 0)?.Id : null;
@@ -1055,7 +1043,7 @@ public partial class MainWindow
         void Walk(DependencyObject d)
         {
             if (d is Border b && b.Tag is "parser-row") rows++;
-            if (d is TextBlock t && t.Text == "In progress") live = true;
+            if (d is FrameworkElement h && Equals(h.Tag, "parser-hero") && _parserOpen == null && ParserLive is { Live: true }) live = true;
             foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
         }
         int roster = (ParserLive ?? (_parserOpen != null ? ParserPast().FirstOrDefault(e => e.Id == _parserOpen) : null))?.Members.Count() ?? 0;

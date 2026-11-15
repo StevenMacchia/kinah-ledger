@@ -439,7 +439,7 @@ public sealed class ParserPanel : Border
         if (e.Roster.Count > 0)
         {
             _prows.Margin = new Thickness(-6, 8, -6, 0);
-            _body.Children.Add(_prows);
+            ParserRows.Detach(_prows); _body.Children.Add(_prows);
             _prows.Show(e, now);
         }
         // the foot: the group's DPS while it runs; the result once it's over

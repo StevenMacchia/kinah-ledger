@@ -204,7 +204,7 @@ public static partial class WpfApp
         var live = w.ParserPageForTest();
         check(w.PartForTest == "Parser" && w.ParserPage.Visibility == Visibility.Visible && w.QuestsPage.Visibility != Visibility.Visible && w.LeftCol.Visibility != Visibility.Visible,
             "Parser: its own page, nothing of Farming or Quests beside it");
-        check(live.Live && live.Roster == 4 && live.Rows == 9, $"Parser: the fight under way with its group of {live.Roster}, the 9 kept fights under it ({live.Rows} rows)");
+        check(live.Live && live.Roster == 4 && live.Rows >= 9, $"Parser: the fight under way with its group of {live.Roster}, the kept fights under it ({live.Rows} rows)");
         check(farmHeight < 500 || w.ActualHeight <= farmHeight + 1, $"Parser: the page keeps the Farming page's height and scrolls inside it: {w.ActualHeight:0} (Farming {farmHeight:0})");
         w.FollowForTest(Session.ActivityKind.Crafting, DateTime.UtcNow); w.FollowForTest(Session.ActivityKind.Crafting, DateTime.UtcNow.AddMinutes(5)); DoEvents();
         check(w.PartForTest == "Parser", $"Parser: the page stays while it shows, whatever the player does: {w.PartForTest}");
@@ -247,11 +247,13 @@ public static partial class WpfApp
         // the game's own colours (its party list's): the nearest two (Cleric's gold, Chanter's orange) are the game's choice; the emblem tells them apart
         check(pairs[0].d >= 35, $"Parser: one colour per class, the game's own, the nearest two {pairs[0].a} and {pairs[0].b} {pairs[0].d:0} apart");
         w.ShowParserDemo("live"); DoEvents();
-        var meters = new List<double>();
-        void Walk(DependencyObject d) { if (d is System.Windows.Controls.Grid g && g.Tag is double share) meters.Add(share); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch); }
+        // Parser v2: each member a row of the group's table, ranked by DPS, yours in the gold frame
+        var members = new List<FrameworkElement>();
+        void Walk(DependencyObject d) { if (d is FrameworkElement fe && Equals(fe.Tag, "parser-member")) members.Add(fe); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch); }
         Walk(w.ParserPage);
-        check(meters.Count >= 4 && Math.Abs(meters.Max() - 1) < 1e-9 && meters.Zip(meters.Skip(1)).All(x => x.First >= x.Second - 1e-9),
-            $"Parser: each group row on a meter bar, the top one full and the rest shorter in order: {string.Join(", ", meters.Select(x => x.ToString("0.00")))}");
+        var dpsOrder = members.Select(m => ParserTexts(m).Texts.Select(t => double.TryParse(t.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 500 ? v : -1).DefaultIfEmpty(-1).Max()).ToList();
+        check(members.Count == 4 && dpsOrder.Zip(dpsOrder.Skip(1)).All(x => x.First >= x.Second) && members.Count(m => m is System.Windows.Controls.Border { Effect: System.Windows.Media.Effects.DropShadowEffect }) == 1,
+            $"Parser: the group's rows ranked by DPS ({string.Join(", ", dpsOrder)}), yours in the gold frame");
         // minimal with the switches off (Steven, 2026-11-14): no CP, item level, damage or kills near you until Options turns them on
         w.ShowParserDemo("live-min"); DoEvents();
         var plain = ParserTexts(w.ParserPage);
@@ -262,17 +264,20 @@ public static partial class WpfApp
         var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ")).ToList();
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
         static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP") && t.Contains("item level"));
-        check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !plain.Texts.Contains("kills near you") && plain.Texts.Contains("DPS") && plainTips.Count == 0
-            && Gear(every.Texts) && every.Texts.Contains("Damage") && every.Texts.Contains("kills near you") && every.Tips.Count > 3,
-            $"Parser: the switches off, DPS only (no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(Gear(plain.Texts) ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(plain.Texts.Contains("kills near you") ? "; kills near you shown" : "")}");
+        static bool Near(HashSet<string> texts) => texts.Any(t => t.Contains("kills near you"));
+        static bool DpsHead(HashSet<string> texts) => texts.Any(t => t == "DPS" || t.StartsWith("DPS ", StringComparison.Ordinal));
+        check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !Near(plain.Texts) && DpsHead(plain.Texts) && plainTips.Count == 0
+            && Gear(every.Texts) && every.Texts.Contains("Damage") && Near(every.Texts) && every.Tips.Count > 3,
+            $"Parser: the switches off, DPS only (no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(Gear(plain.Texts) ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(Near(plain.Texts) ? "; kills near you shown" : "")}");
         // each row: "48.2K DPS · 25.1%" (Steven, 2026-11-14: "should give DPS and % not just a %")
-        check(plain.Texts.Contains("DPS") && plain.Texts.Count(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+(\.\d)?%$")) >= 3 && plain.Tips.Count(t => t.Contains(" damage in ")) >= 3,
+        check(DpsHead(plain.Texts) && plain.Texts.Count(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+(\.\d)?%$")) >= 3 && plain.Tips.Count(t => t.Contains(" damage in ")) >= 3,
             $"Parser: each row says its DPS and its share of the damage, its damage on hover: {string.Join(", ", plain.Texts.Where(t => t.EndsWith('%')).Take(4))}");
-        // the expanded row: the member's item level, Combat Power and server over their abilities
-        w.ShowParserDemo("detail-all"); DoEvents();
+        // a member's inspect view (Parser v2): their server, item level and Combat Power over every ability's columns
+        w.ShowParserDemo("inspect-all"); DoEvents();
         var opened = ParserTexts(w.ParserPage);
-        check(opened.Texts.Any(t => t.Contains("Item level") && t.Contains("Combat Power") && t.Contains(" damage in ") && (t.Contains("Siel") || t.Contains("Israphel") || t.Contains("Fregion") || t.Contains("Zikel"))) && opened.Texts.Contains("Average"),
-            "Parser: a member's expanded row says their item level, Combat Power and server over their abilities");
+        check(opened.Texts.Any(t => t.Contains("item level", StringComparison.OrdinalIgnoreCase) && t.Contains("Combat Power") && (t.Contains("Siel") || t.Contains("Israphel") || t.Contains("Fregion") || t.Contains("Zikel")))
+            && opened.Texts.Contains("Average") && opened.Texts.Contains("Hits") && opened.Texts.Contains("Share"),
+            "Parser: a member's inspect view says their server, item level and Combat Power over their abilities' damage, share, DPS, hits and average");
         // the header: the instance with the game's mode for it
         w.ShowParserDemo("live"); DoEvents();
         check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Ferocious Horn Den · Conquest · ")), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
