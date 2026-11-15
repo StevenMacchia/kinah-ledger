@@ -64,6 +64,9 @@ public sealed class ParserRows : Grid
     {
         public required Grid Root, Cols; public required Border Chip, BarFill, Track, Edge, Tick, Pb; public required TextBlock ChipText, Name, Dps, Share, Damage, Crit, Back; public required Grid Spark;
         public required Border Frame;
+        /// <summary>The name's line (tick, name, YOU, PB, the plates) and the plates' place at its end (TOP DPS, TOP HEALS).</summary>
+        public required StackPanel NameLine, Plates; public required Border NameHost;
+        public string PlatesShown = "";
         public int Rank = -1, Deaths; public double Y = double.NaN; public bool You; public string Cls = "";
     }
 
@@ -89,6 +92,7 @@ public sealed class ParserRows : Grid
         var view = expanded ? FightView.Of(e, now, null) : null;
         bool crit = view?.HasCrit == true, back = view?.HasBack == true, spark = view?.HasTimeline == true;
         double top = Math.Max(1, all.Select(e.Measure).DefaultIfEmpty(1).Max());   // the figure (boss damage or all targets), else Combat Power
+        long topDps = e.TopDps(now)?.Id ?? long.MinValue, topHeals = e.TopHealer(now)?.Id ?? long.MinValue;
         foreach (var gone in _rows.Keys.Where(id => !visible.Any(f => f.Id == id)).ToList()) { _host.Children.Remove(_rows[gone].Root); _rows.Remove(gone); }
         for (int i = 0; i < visible.Count; i++)
         {
@@ -136,6 +140,17 @@ public sealed class ParserRows : Grid
                 ((TextBlock)row.Tick.Child).Text = f.Deaths > 1 ? $"✕{f.Deaths}" : "✕";
                 if (view?.Members.FirstOrDefault(m => m.F.Id == f.Id) is { DeathLog.Count: > 0 } dm) row.Tick.ToolTip = Recap(dm);
                 if (landed) Land(row);
+            }
+            // the end of a boss fight: TOP DPS (gold) and TOP HEALS (green) on their rows, in the name's room
+            string plates = (f.Id == topDps ? "d" : "") + (f.Id == topHeals ? "h" : "");
+            if (plates != row.PlatesShown)
+            {
+                row.PlatesShown = plates;
+                row.Plates.Children.Clear();
+                if (plates.Contains('d')) row.Plates.Children.Add(ParserFoot.Plate(heals: false));
+                if (plates.Contains('h')) row.Plates.Children.Add(ParserFoot.Plate(heals: true));
+                row.Plates.Visibility = plates.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+                FitName(row);
             }
         }
         _gap.Visibility = pin ? Visibility.Visible : Visibility.Collapsed;
@@ -185,14 +200,18 @@ public sealed class ParserRows : Grid
         nm.Children.Add(tick);
         var name = new TextBlock { Text = f.Name.Length > 0 ? f.Name : "Unnamed", FontSize = 13, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.You ? HudKit.Ink : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         nm.Children.Add(name);
-        if (f.You) nm.Children.Add(HudGlass.YouChip());
+        if (f.You) { var yc = HudGlass.YouChip(); yc.Tag = "you"; nm.Children.Add(yc); }
         var pb = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(6, 0, 0, 0), Background = HudKit.Gold, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
             RenderTransformOrigin = new Point(0, 0.5), Effect = new DropShadowEffect { Color = PK.Gold, BlurRadius = 12, ShadowDepth = 0, Opacity = 0.9 },
             Child = new TextBlock { FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x1D1300) } };
         nm.Children.Add(pb);
-        cols.Children.Add(PK.Col(nm, 2));
+        var plates = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        nm.Children.Add(plates);
+        // the name gives way to the chips and plates after it (it trims), so the row never widens and the figures never move
+        var nameHost = new Border { Child = nm, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
+        cols.Children.Add(PK.Col(nameHost, 2));
         TextBlock Fig(double size, Brush b, FontWeight w) { var t = new TextBlock { FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
-        var dps = Fig(15, HudKit.Ink, FontWeights.Bold);
+        var dps = Fig(15, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps";
         var share = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
         var damage = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold);
         var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); critT.ToolTip = "Crit rate";
@@ -216,10 +235,44 @@ public sealed class ParserRows : Grid
         var root = new Grid { VerticalAlignment = VerticalAlignment.Top, Height = _rowH - 2, RenderTransform = new TranslateTransform() };
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
-        var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class };
+        var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost };
+        nameHost.SizeChanged += (_, _) => FitName(r);
         track.SizeChanged += (_, _) => { if (track.Tag is double v) SetBar(r, v); else SetBar(r, fill.Width > 0 ? fill.Width / Math.Max(1, track.ActualWidth) : 0); };
         return r;
     }
+
+    /// <summary>The name's room: the column less what follows it on the line (the tick, YOU, PB, the plates); the name trims to it.</summary>
+    static void FitName(RowEl r)
+    {
+        double w = r.NameHost.ActualWidth;
+        if (w <= 0) return;
+        var you = r.NameLine.Children.OfType<Border>().FirstOrDefault(b => b.Tag as string == "you");
+        if (you != null) you.Visibility = Visibility.Visible;
+        double Others()
+        {
+            double o = r.NameLine.Margin.Left + r.NameLine.Margin.Right;
+            foreach (UIElement c in r.NameLine.Children)
+            {
+                if (ReferenceEquals(c, r.Name) || c.Visibility == Visibility.Collapsed) continue;
+                c.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                o += c.DesiredSize.Width;
+            }
+            return o;
+        }
+        double others = Others();
+        // a plate and YOU both: the name first; the YOU chip gives way (the gold frame and chip still say it's you)
+        if (you != null && r.Plates.Visibility == Visibility.Visible)
+        {
+            r.Name.MaxWidth = double.PositiveInfinity;
+            r.Name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (r.Name.DesiredSize.Width > w - others) { you.Visibility = Visibility.Collapsed; others = Others(); }
+        }
+        r.Name.MaxWidth = Math.Max(24, w - others);
+    }
+
+    /// <summary>For the tests: the plates on each shown member's row ("top-dps", "top-heals"), by name.</summary>
+    internal Dictionary<string, string> PlatesForTest() => _rows.Values.Where(r => r.Root.Visibility == Visibility.Visible)
+        .ToDictionary(r => r.Name.Text, r => string.Join(",", r.Plates.Children.OfType<FrameworkElement>().Select(p => p.Tag as string ?? "")));
 
     // ---- the motion (Ui/Motion.cs courses: held at KL_MOTION_AT in a render, nothing while the tracker sits still)
 

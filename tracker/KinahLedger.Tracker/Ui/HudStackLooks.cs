@@ -336,8 +336,12 @@ sealed class HudCapsule : HudStackLook
         // the rows (Parser v2, Ui/ParserRows.cs): kept between draws, so a change moves
         ParserRows.Detach(_prows); _meterBody.Children.Add(_prows);
         _prows.Show(e, now);
-        if (!e.Live && e.Outcome.Length > 0)
-            _meterBody.Children.Add(Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold));
+        var outcome = !e.Live && e.Outcome.Length > 0
+            ? Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold)
+            : null;
+        // the foot: the fight's total and the group's DPS (the outcome before them once it's over); held, the average, badged
+        if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12, outcome); foot.Margin = new Thickness(0, 5, 0, 1); _meterBody.Children.Add(foot); }
+        else if (outcome != null) _meterBody.Children.Add(outcome);
         _meter.Visibility = Visibility.Visible;
     }
 }
@@ -518,10 +522,8 @@ sealed class HudMeter : HudStackLook
         _prows.Show(e, now);
         if (e.HasDamage)
         {
-            var gl = new Grid { Margin = new Thickness(10, 5, 10, 5) };
-            gl.ColumnDefinitions.Add(new ColumnDefinition()); gl.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            gl.Children.Add(Tx("Group", 12, Muted, FontWeights.SemiBold));
-            var gv = Num(e.GroupDpsText(now) + " DPS", 13.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
+            // the fight's total and the group's DPS; held, the fight's average with its badge (the outcome is in the header)
+            var gl = ParserFoot.Line(e, now, 12); gl.Margin = new Thickness(10, 5, 10, 6);
             _rows.Children.Add(gl);
         }
         _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
@@ -649,7 +651,12 @@ sealed class HudFloat : HudStackLook
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         if (e.Waiting) rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));
-        else { ParserRows.Detach(_prows); rows.Children.Add(_prows); _prows.Show(e, now); }
+        else
+        {
+            ParserRows.Detach(_prows); rows.Children.Add(_prows); _prows.Show(e, now);
+            // the foot straight over the game too: the total and the group's DPS (held: the average, badged)
+            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(4, 4, 4, 0); rows.Children.Add(foot); }
+        }
         _fight.Children.Add(rows);
         _fight.Visibility = Visibility.Visible;
     }

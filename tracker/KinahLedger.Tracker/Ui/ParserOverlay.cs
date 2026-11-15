@@ -560,22 +560,15 @@ public sealed class ParserPanel : Border
             ParserRows.Detach(_prows); _body.Children.Add(_prows);
             _prows.Show(e, now);
         }
-        // the foot: the group's DPS while it runs; the result once it's over
+        // the foot: the fight's total and the group's DPS; the result before them once it's over
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var sep = new Border { Height = 1, Background = _glass ? HudGlass.Rule : HudKit.Sep, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, 0, 0) };
         Grid.SetColumnSpan(sep, 2); foot.Children.Add(sep);
-        if (e.Live)
-        {
-            int near = e.Kills.Count(k => !k.Boss && !k.Yours);
-            var l = T(e.HasDamage ? (e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit) ? "Group DPS (boss pulls)" : "Group DPS") : e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 12, FontWeights.SemiBold, HudKit.Muted);
-            foot.Children.Add(l);
-            var v = T(e.HasDamage ? e.GroupDpsText(now) : e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 14, FontWeights.Bold, HudKit.Ink);
-            Typography.SetNumeralAlignment(v, FontNumeralAlignment.Tabular);
-            Grid.SetColumn(v, 1); foot.Children.Add(v);
-        }
-        else
+        // the outcome once it's over ("Killed in 2:31"), said before the figures
+        TextBlock? outcome = null;
+        if (!e.Live)
         {
             var took = BossParser.Clock(e.Duration(now));
             var (text, brush) = e.Outcome switch
@@ -588,9 +581,22 @@ public sealed class ParserPanel : Border
                 "ended" => ($"Ended after {took}", HudKit.Muted),
                 _ => ($"Left after {took}", HudKit.Muted),
             };
-            foot.Children.Add(T(text, 12, FontWeights.Bold, brush));
-            var s = T("kept on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint);
-            Grid.SetColumn(s, 1); foot.Children.Add(s);
+            outcome = T(text, 12, FontWeights.Bold, brush);
+        }
+        if (e.HasDamage)
+        {
+            // the fight's total and the group's DPS (Steven, 2026-11-15); held, the group figure is the fight's average, badged
+            var line = ParserFoot.Line(e, now, 12, outcome);
+            Grid.SetColumnSpan(line, 2); foot.Children.Add(line);
+        }
+        else if (outcome != null) foot.Children.Add(outcome);
+        else
+        {
+            int near = e.Kills.Count(k => !k.Boss && !k.Yours);
+            foot.Children.Add(T(e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 12, FontWeights.SemiBold, HudKit.Muted));
+            var v = T(e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 14, FontWeights.Bold, HudKit.Ink);
+            Typography.SetNumeralAlignment(v, FontNumeralAlignment.Tabular);
+            Grid.SetColumn(v, 1); foot.Children.Add(v);
         }
         _body.Children.Add(foot);
         BorderBrush = e.Live ? (_glass ? HudGlass.Edge : HudKit.FrameLine) : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : _glass ? HudGlass.Edge : HudKit.FrameLine;
