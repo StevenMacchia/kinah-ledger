@@ -3,8 +3,8 @@
 Releases are signed with [Microsoft Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (formerly
 Trusted Signing), under the identity of the project's maintainer, validated by Microsoft.
 
-**Status:** being set up (docs/signing-setup.md). Until it is, releases are unsigned and Windows SmartScreen shows a
-"Windows protected your PC" notice the first time the tracker or its installer runs (More info › Run anyway).
+**Status:** in use. The release build signs every release it publishes (each one from 0.10.72 on was checked; setup in
+docs/signing-setup.md). Right-click a downloaded `KinahLedger.exe` › Properties › Digital Signatures to see it.
 
 ## What is signed
 
