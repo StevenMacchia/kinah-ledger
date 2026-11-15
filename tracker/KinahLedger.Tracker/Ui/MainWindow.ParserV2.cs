@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     /// <summary>The fight's tab (Damage, Compare, Timeline, Taken), the member opened (their id) and how their abilities are sorted.</summary>
-    string _parserTab = "Damage";
+    string _parserTab = "Group";
     long? _parserInspect;
     string _parserSort = "Damage";
 
@@ -42,7 +42,8 @@ public partial class MainWindow
 
     CommandCtx ParserCtx() => new()
     {
-        Tab = _parserTab, Sort = _parserSort, Details = PDetails, Kills = PKills,
+        Tab = _parserTab, Sort = _parserSort, Details = PDetails, Kills = PKills, Deaths = PDeaths,
+        Basis = e => ParserBasisSwitches(e), Coverage = e => CoverageLine(e),
         SetTab = t => { _parserTab = t; RedrawParserPage(); },
         OpenFight = id => OpenFight(id),
         Inspect = id => { _parserInspect = id; RedrawParserPage(); LowerScroll.ScrollToTop(); },
@@ -64,7 +65,7 @@ public partial class MainWindow
         var v = ParserViewOf(e, end, past);
         var ctx = ParserCtx();
         var tabs = ParserCommand.Tabs(v);
-        if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Damage";
+        if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Group";
         var page = new StackPanel();
         if (_parserFromRuns)
         {
@@ -120,7 +121,7 @@ public partial class MainWindow
         };
         page.Children.Add(Margin(body, 0, 12, 0, 0));
         // a kept fight: your kills and the kills near you, under the group
-        if (!live && ctx.Tab == "Damage")
+        if (!live && ctx.Tab == "Group")
         {
             void KillChips(string head, IEnumerable<KillNear> kills)
             {
@@ -165,8 +166,13 @@ public partial class MainWindow
             foreach (var f in c.Roster)
             {
                 double k = (f.You ? youK : 0.97 + 0.02 * (i++ % 3)) * secs / liveSecs;
-                f.Damage = (long)(f.Damage * k);
-                foreach (var a in f.Abilities) { a.Damage = (long)(a.Damage * k * (f.You ? 1 + ((a.Skill / 10000) % 7 - 3) * 0.02 : 1)); a.Hits = Math.Max(1, (int)(a.Hits * secs / liveSecs)); }
+                f.Damage = (long)(f.Damage * k); f.BossDamage = (long)(f.BossDamage * k);
+                foreach (var a in f.Abilities)
+                {
+                    double ka = k * (f.You ? 1 + ((Math.Abs(a.Skill) / 10000) % 7 - 3) * 0.02 : 1);
+                    a.Damage = (long)(a.Damage * ka); a.BossDamage = (long)(a.BossDamage * ka);
+                    a.Hits = Math.Max(1, (int)(a.Hits * secs / liveSecs)); a.BossHits = Math.Max(a.BossDamage > 0 ? 1 : 0, (int)(a.BossHits * secs / liveSecs));
+                }
                 f.ActiveSeconds = secs * 0.93;
             }
             return c;

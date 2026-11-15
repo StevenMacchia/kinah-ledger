@@ -1089,7 +1089,7 @@ public partial class MainWindow
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
         // Parser v2's views: the tab, the member opened, and for the renders of what the record will carry (the timeline, damage
         // taken, crits), a sample of those figures (ParserViewSample: render states only, the app never sets it)
-        _parserTab = state switch { "compare" => "Compare", "timeline" => "Timeline", "taken" => "Taken", _ => "Damage" };
+        _parserTab = state switch { "compare" => "Compare", "timeline" => "Timeline", "taken" => "Taken", _ => "Group" };
         _parserSort = "Damage";
         var shownNow = _parserOpen != null ? all.FirstOrDefault(e => e.Id == _parserOpen) : now;
         _parserInspect = state is "inspect" or "inspect-full" ? shownNow?.Ranked().FirstOrDefault(f => f.You && f.Abilities.Count > 0)?.Id : null;
@@ -1122,7 +1122,7 @@ public partial class MainWindow
         void Walk(DependencyObject d)
         {
             if (d is Border b && b.Tag is "parser-row") rows++;
-            if (d is TextBlock t && t.Text == "In progress") live = true;
+            if (d is FrameworkElement h && Equals(h.Tag, "parser-hero") && _parserOpen == null && ParserLive is { Live: true }) live = true;
             foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
         }
         int roster = (ParserLive ?? (_parserOpen != null ? ParserPast().FirstOrDefault(e => e.Id == _parserOpen) : null))?.Members.Count() ?? 0;

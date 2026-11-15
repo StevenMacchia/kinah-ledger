@@ -19,6 +19,8 @@ public sealed class FightView
     public MemberView? You => Members.FirstOrDefault(m => m.F.You);
     public bool HasDamage => E.HasDamage;
     public double GroupDps => E.GroupDps(Now);
+    /// <summary>"12,327", or "–" for a fight under three seconds (no DPS is said then).</summary>
+    public string GroupDpsText => E.GroupDpsOf(Now) is { } d ? Math.Round(d).ToString("N0", System.Globalization.CultureInfo.InvariantCulture) : "–";
     public double Seconds => E.DpsSeconds(Now);
 
     // what the record carries: each view shows its part only when there's something to show
@@ -34,14 +36,17 @@ public sealed class FightView
     public static FightView Of(Encounter e, DateTime now, IEnumerable<Encounter>? past)
     {
         var v = new FightView { E = e, Now = now };
-        var shown = e.HasDamage ? e.Ranked().Where(f => !f.Other).ToList() : e.Ranked().Where(f => !f.Other).ToList();
         int rank = 0;
-        foreach (var f in shown)
+        foreach (var f in e.Ranked().Where(f => !f.Other))
         {
-            var m = new MemberView { F = f, Rank = ++rank, Dps = e.HasDamage ? e.Dps(f, now) : 0, Share = e.Share(f), Damage = f.Damage, Deaths = f.Deaths };
+            // the figures the record's view counts (Encounter.Figure: the boss's damage, or every target's when picked)
+            var m = new MemberView { F = f, Rank = ++rank, DpsOf = e.HasDamage ? e.DpsOf(f, now) : null, Share = e.Share(f), Damage = e.Figure(f), Deaths = f.Deaths,
+                ToBoss = f.BossDamage, ToAdds = Math.Max(0, f.Damage - f.BossDamage), Present = e.PresentSeconds(f, now), Idle = e.IdleShare(f, now) };
+            m.Dps = m.DpsOf ?? 0;
             // the ids of one ability as one row (a spirit's attack at each rank), each named for the member's class
-            foreach (var a in Abilities.Merged(f.Abilities).OrderByDescending(a => a.Damage))
-                m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = a.Damage, Hits = a.Hits, Share = a.Damage / (double)Math.Max(1, f.Damage), Dps = a.Damage / Math.Max(1, e.DpsSeconds(f, now)) });
+            long fig = Math.Max(1, m.Damage);
+            foreach (var a in e.AbilityRows(f).OrderByDescending(e.Figure))
+                m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)fig, Dps = e.Figure(a) / Math.Max(1, e.DpsSeconds(f, now)) });
             Depth(m, f);
             v.Members.Add(m);
         }
@@ -65,7 +70,7 @@ public sealed class FightView
             && (e.BossId > 0 && p.BossId > 0 ? p.BossId == e.BossId : string.Equals(p.Boss, e.Boss, StringComparison.OrdinalIgnoreCase))
             && p.Start < e.Start && p.You is { Damage: > 0 };
         var list = past.Where(Same).ToList();
-        PullRef Ref(Encounter p) { var end = p.End ?? p.LastAt; var you = p.You!; return new PullRef { E = p, Dps = p.Dps(you, end), Seconds = p.Duration(end).TotalSeconds, When = p.Start, Abilities = Abilities.Merged(you.Abilities).ToDictionary(a => a.Skill, a => a.Damage / Math.Max(1, p.DpsSeconds(you, end))) }; }
+        PullRef Ref(Encounter p) { var end = p.End ?? p.LastAt; var you = p.You!; return new PullRef { E = p, Dps = p.Dps(you, end), Seconds = p.Duration(end).TotalSeconds, When = p.Start, Abilities = p.AbilityRows(you).GroupBy(a => a.Skill).ToDictionary(g => g.Key, g => g.Sum(p.Figure) / Math.Max(1, p.DpsSeconds(you, end))) }; }
         var best = list.Where(p => p.Outcome == "kill").Select(Ref).OrderByDescending(r => r.Dps).FirstOrDefault();
         var last = list.OrderByDescending(p => p.Start).Select(Ref).FirstOrDefault();
         return (best, last);
@@ -76,6 +81,11 @@ public sealed class MemberView
 {
     public Fighter F = null!;
     public int Rank; public double Dps, Share; public long Damage; public int Deaths;
+    /// <summary>The DPS, or null for a fight under three seconds (shown "–").</summary>
+    public double? DpsOf;
+    public string DpsText => DpsOf is { } d ? Math.Round(d).ToString("N0", System.Globalization.CultureInfo.InvariantCulture) : "–";
+    /// <summary>Damage to the boss and to adds; the time in the group; the share of it spent not dealing damage.</summary>
+    public long ToBoss, ToAdds; public double Present; public double? Idle;
     public List<AbilityView> Abilities = new();
     public bool You => F.You;
     /// <summary>Crit rate over every hit; the biggest hit. Null until the record carries crits and max hits.</summary>
@@ -92,7 +102,9 @@ public sealed class MemberView
 public sealed class AbilityView
 {
     public int Skill; public string Name = ""; public long Damage; public int Hits; public double Share, Dps;
-    public double Average => Hits > 0 ? Damage / (double)Hits : 0;
+    /// <summary>The average over counted hits (null when none were counted: shown "–").</summary>
+    public double? Avg;
+    public double Average => Avg ?? 0;
     /// <summary>Store v2 figures: null until the record carries them.</summary>
     public int? Casts; public double? Crit; public long? Max, Min; public Dictionary<string, int>? Kinds;
 }

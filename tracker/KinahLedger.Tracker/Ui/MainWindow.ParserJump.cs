@@ -139,7 +139,7 @@ public partial class MainWindow
             body = new Rect(0, LowerScroll.TransformToAncestor(root).Transform(new Point(0, 0)).Y, root.ActualWidth, root.ActualHeight);
         }
         _parserFromRuns = true;
-        _parserInspect = null; _parserTab = "Damage";
+        _parserInspect = null; _parserTab = "Group";
         _parserOpen = fightId;
         ShowPart("Parser", byHand: true);
         RedrawParserPage();

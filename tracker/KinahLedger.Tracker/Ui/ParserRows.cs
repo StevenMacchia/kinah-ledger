@@ -53,6 +53,9 @@ public sealed class ParserRows : Grid
         System.Windows.Documents.TextElement.SetFontFamily(this, HudKit.Text);
     }
 
+    /// <summary>Takes the rows off the panel they were on (a look that builds its panel again each draw).</summary>
+    public static void Detach(ParserRows r) { if (r.Parent is Panel p) p.Children.Remove(r); else if (r.Parent is Decorator d) d.Child = null; }
+
     /// <summary>The rows the look shows now (for its height and the tests).</summary>
     public int Shown => _rows.Values.Count(r => r.Root.Visibility == Visibility.Visible);
     public bool Pinned => _gap.Visibility == Visibility.Visible;
@@ -85,7 +88,7 @@ public sealed class ParserRows : Grid
         // the view of what the record carries: crit and the timeline columns only when it does
         var view = expanded ? FightView.Of(e, now, null) : null;
         bool crit = view?.HasCrit == true, spark = view?.HasTimeline == true;
-        double top = Math.Max(1, all.Select(f => dmg ? (double)f.Damage : f.CombatPower).DefaultIfEmpty(1).Max());
+        double top = e.TopMeasure();
         foreach (var gone in _rows.Keys.Where(id => !visible.Any(f => f.Id == id)).ToList()) { _host.Children.Remove(_rows[gone].Root); _rows.Remove(gone); }
         for (int i = 0; i < visible.Count; i++)
         {
@@ -99,10 +102,10 @@ public sealed class ParserRows : Grid
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
             {
-                double dps = e.Dps(f, now);
-                Motion.Number(row.Dps, $"parser|ov|{e.Id}|{f.Id}|{(int)_kind}", dps, x => Amounts.Short(x), tintRise: -1);
+                if (e.DpsOf(f, now) is { } dps) Motion.Number(row.Dps, $"parser|ov|{e.Id}|{f.Id}|{(int)_kind}", dps, x => Amounts.Short(x), tintRise: -1);
+                else row.Dps.Text = "–";
                 row.Share.Text = Encounter.Pct(e.Share(f));
-                row.Damage.Text = Amounts.Short(f.Damage);
+                row.Damage.Text = Amounts.Short(e.Figure(f));
                 if (view?.Members.FirstOrDefault(m => m.F.Id == f.Id) is { } mv)
                 {
                     row.Crit.Text = mv.Crit is { } c ? $"{c * 100:0}%" : "–";
@@ -111,7 +114,7 @@ public sealed class ParserRows : Grid
             }
             else { row.Dps.Text = f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : ""; row.Share.Text = f.CombatPower > 0 ? "CP" : ""; }
             // the bar slides to its new length
-            double share = (dmg ? f.Damage : 0) / top;
+            double share = (dmg ? e.Measure(f) : 0) / top;
             Motion.Slide(row.BarFill, $"parser|ovbar|{e.Id}|{f.Id}|{(int)_kind}", share, v => SetBar(row, v));
             // the rank: a changed one flips the chip; the row glides to its new place
             if (row.Rank != rank)
@@ -140,7 +143,7 @@ public sealed class ParserRows : Grid
         if (_wasLive && !e.Live && e.Outcome is "kill" or "cleared") Sweep();
         if (!e.Live && e.Outcome == "kill" && you != null && _pbShown != e.Id && BestOf?.Invoke(e) is { } best && best.Dps > 0)
         {
-            double d = e.Dps(you, e.End ?? now) / best.Dps - 1;
+            double d = (e.DpsOf(you, e.End ?? now) ?? 0) / best.Dps - 1;
             if (d > 0 && _rows.TryGetValue(you.Id, out var yr)) { _pbShown = e.Id; ShowPb(yr, d); }
         }
         _wasLive = e.Live;
