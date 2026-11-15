@@ -49,6 +49,15 @@ public sealed class ParserPrefs
     public bool InKinah { get; set; }
     /// <summary>The Parser in its own overlay window (draggable, its own place, click-through): not <see cref="InKinah"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore] public bool Separate { get => !InKinah; set => InKinah = !value; }
+    /// <summary>
+    /// The look of the Parser's own window (Steven, 2026-11-15: "what happened to the settings for the parser views in the
+    /// options?"): "standard" (its own glass panel, the default) or one of the looks drawn for fights ("auto", "capsule",
+    /// "meter", "float"), fight only, apart from the Kinah overlay's look. Settings › In game › Parser › Overlay look.
+    /// </summary>
+    public string Look { get; set; } = StandardLook;
+    public const string StandardLook = "standard";
+    /// <summary>A look key the Parser's own window can draw: a fight look's, else the standard panel.</summary>
+    public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" ? key : StandardLook;
     /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
     public bool DpsActive { get; set; }
     /// <summary>Your DPS small on the Kinah overlay's line while fighting in the open world or the Abyss (on by default: Steven asked for it).</summary>
