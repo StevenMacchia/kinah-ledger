@@ -345,6 +345,37 @@ public sealed class Encounter : IJsonOnDeserialized
     public double GroupDps(DateTime now) => GroupDpsOf(now) ?? 0;
     public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Short(d) : "–";
 
+    // ---- the meter's foot and its marks (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a green badge
+    // next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]") ----
+
+    /// <summary>
+    /// The meter holds a finished fight (an open-world fight held after 5 s without fighting, a pull's kill or wipe): its
+    /// figures are the whole fight's average, not live, and the foot's group DPS carries the "Avg. DPS" badge.
+    /// </summary>
+    [JsonIgnore] public bool HeldAverage => !Live && HasDamage && !Waiting;
+
+    /// <summary>"Total 10.5M · Group DPS 126.8K" (live) or "Total 10.5M · Group 126.8K · Avg. DPS" (held): the foot's words, as every look draws them.</summary>
+    public string FootText(DateTime now) => !HasDamage ? "" : HeldAverage
+        ? $"Total {Ui.Amounts.Short(Credited)} · Group {GroupDpsText(End ?? now)} · {AvgBadge}"
+        : $"Total {Ui.Amounts.Short(Credited)} · Group DPS {GroupDpsText(now)}";
+
+    /// <summary>The held figure's badge.</summary>
+    public const string AvgBadge = "Avg. DPS";
+
+    /// <summary>
+    /// The end of a boss fight in a dungeon (a pull's kill or wipe, a run cleared, in an Expedition, Transcendence or Sanctuary),
+    /// with two or more members who dealt damage: the meter puts TOP DPS (and TOP HEALS when heals are known) on their rows.
+    /// </summary>
+    [JsonIgnore] public bool TopsShown => !Live && HasDamage && !Waiting && Outcome is "kill" or "wipe" or "cleared"
+        && (Boss.Length > 0 || ModeKind == ParserMode.Run) && KindOf(Kind) is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary
+        && Members.Count(f => Figure(f) > 0) >= 2;
+
+    /// <summary>The member with the fight's highest DPS (the one TOP DPS marks), or null when <see cref="TopsShown"/> is off.</summary>
+    public Fighter? TopDps(DateTime now) => !TopsShown ? null : Members.Where(f => Figure(f) > 0).OrderByDescending(f => Dps(f, End ?? now)).ThenByDescending(Figure).FirstOrDefault();
+
+    /// <summary>The fight's top healer (TOP HEALS), or null: only when heal figures are known for this fight.</summary>
+    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.Healing > 0).OrderByDescending(f => f.Healing).FirstOrDefault();
+
     /// <summary>What a member's meter bar measures: their figure when damage is known, else Combat Power.</summary>
     public double Measure(Fighter f) => HasDamage ? Figure(f) : f.CombatPower;
 
@@ -440,6 +471,8 @@ public sealed class Fighter
     /// <summary>Damage to every target, and to the boss alone (Encounter.TargetsSplit; a run's bosses, a wave's everything).</summary>
     public long Damage { get; set; }
     public long BossDamage { get; set; }
+    /// <summary>Healing done in the fight, when the record carries it (0 = not known: nothing is shown).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long Healing { get; set; }
     public int Deaths { get; set; }
     /// <summary>Damage by ability (the game's skill id; 0: damage over time no skill named), with its hits: a member's breakdown.</summary>
     public List<AbilityShare> Abilities { get; set; } = new();

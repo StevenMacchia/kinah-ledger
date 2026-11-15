@@ -1,0 +1,80 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using KinahLedger.Parser;
+
+namespace KinahLedger.Ui;
+
+/// <summary>
+/// The meter's foot in every look (Steven, 2026-11-15: "have the bottom be total AND group dps avg"): the fight's total on
+/// the left, the group's DPS on the right; once the fight is held (Always on, 5 s without fighting; a pull's kill or wipe)
+/// the group figure is the whole fight's average and carries the green "Avg. DPS" badge. The plates the rows wear at the
+/// end of a boss fight (TOP DPS gold, TOP HEALS green) are drawn here too, so every look has the same ones.
+/// </summary>
+static class ParserFoot
+{
+    /// <summary>
+    /// "Total 10.5M        Group DPS 126.8K", or held "Total 10.5M        Group 126.8K [AVG. DPS]". <paramref name="lead"/>:
+    /// the outcome said before the total ("Killed in 2:31"), when the look has no other place for it.
+    /// </summary>
+    public static Grid Line(Encounter e, DateTime now, double size = 12, TextBlock? lead = null)
+    {
+        var g = new Grid { Tag = "parser-foot" };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var left = new TextBlock { FontSize = size, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        Typography.SetNumeralAlignment(left, FontNumeralAlignment.Tabular);
+        if (lead != null)
+        {
+            left.Inlines.Add(new Run(lead.Text) { Foreground = lead.Foreground, FontWeight = FontWeights.Bold });
+            left.Inlines.Add(new Run("   ") { FontSize = size - 1 });
+        }
+        left.Inlines.Add(new Run("Total ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
+        left.Inlines.Add(new Run(Amounts.Short(e.Credited)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
+        g.Children.Add(left);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        bool held = e.HeldAverage;
+        var gt = new TextBlock { FontSize = size, VerticalAlignment = VerticalAlignment.Center };
+        Typography.SetNumeralAlignment(gt, FontNumeralAlignment.Tabular);
+        // a run's DPS counts its boss pulls only: said while it runs, as the panel always has
+        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
+        gt.Inlines.Add(new Run(held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
+        gt.Inlines.Add(new Run(e.GroupDpsText(held ? e.End ?? now : now)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
+        right.Children.Add(gt);
+        if (held) right.Children.Add(AvgBadge());
+        Grid.SetColumn(right, 1); g.Children.Add(right);
+        System.Windows.Automation.AutomationProperties.SetName(g, e.FootText(now));
+        return g;
+    }
+
+    /// <summary>The held figure's mark: a small green outline pill, "AVG. DPS", quieter than the TOP HEALS plate.</summary>
+    public static Border AvgBadge() => new()
+    {
+        Tag = "avg-badge", Background = HudKit.B(HudKit.MintC, 0.14), BorderBrush = HudKit.B(HudKit.MintC, 0.6), BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+        ToolTip = "The whole fight's average: the fight is over",
+        Child = new TextBlock { Text = Encounter.AvgBadge.ToUpperInvariant(), FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = HudKit.Mint, Margin = new Thickness(0, 0, 0, 0.5) },
+    };
+
+    /// <summary>
+    /// A row's plate at the end of a boss fight: gold "TOP DPS" or green "TOP HEALS". Small (13 px), a metal gradient with a
+    /// light top edge and a soft glow, dark letters; it sits in the name's room, so the row never widens.
+    /// </summary>
+    public static Border Plate(bool heals)
+    {
+        Color hi = heals ? HudKit.Rgb(0x8BF0BC) : HudKit.Rgb(0xFFE29A), mid = heals ? HudKit.Rgb(0x3DD68C) : HudKit.Rgb(0xF5B942), lo = heals ? HudKit.Rgb(0x1E9E62) : HudKit.Rgb(0xC98A1C);
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        fill.GradientStops.Add(new GradientStop(hi, 0)); fill.GradientStops.Add(new GradientStop(mid, 0.45)); fill.GradientStops.Add(new GradientStop(lo, 1));
+        fill.Freeze();
+        return new Border
+        {
+            Tag = heals ? "top-heals" : "top-dps", Height = 13, CornerRadius = new CornerRadius(2.5), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 0, 0, 0),
+            Background = fill, BorderBrush = HudKit.B(heals ? 0xC4FFE0u : 0xFFF1C6u, 0.7), BorderThickness = new Thickness(0, 0.8, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Effect = new DropShadowEffect { Color = mid, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.55 },
+            ToolTip = heals ? "The fight's top healer" : "The fight's top DPS",
+            Child = new TextBlock { Text = heals ? "TOP HEALS" : "TOP DPS", FontSize = 8, FontWeight = FontWeights.Black, Foreground = HudKit.B(heals ? 0x062A17u : 0x2A1A00u), VerticalAlignment = VerticalAlignment.Center },
+        };
+    }
+}

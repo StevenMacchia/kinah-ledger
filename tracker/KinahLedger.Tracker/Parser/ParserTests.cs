@@ -1511,6 +1511,12 @@ public static class ParserTests
             var held = p.AlwaysEnded;
             Check(BossParser.AlwaysIdleSeconds <= 6 && p.AlwaysLive == null && held is { Live: false } && held.End == t.AddSeconds(3) && held.Members.Sum(f => f.Damage) == 15_000,
                 $"...{BossParser.AlwaysIdleSeconds:0} s without your group fighting (strangers' hits don't count) and it ends at your last hit, held with its figures: {held?.End:HH:mm:ss}, {held?.Members.Sum(f => f.Damage)}");
+            // the meter's foot (Steven, 2026-11-15: "have the bottom be total AND group dps avg"): the total and the group's DPS;
+            // held, the whole fight's average with its "Avg. DPS" badge; no TOP plates out in the world
+            string S(double v) => Ui.Amounts.Short(v);
+            Check(a != null && !a.HeldAverage && a.FootText(t.AddSeconds(3)) == $"Total {S(15_000)} · Group DPS {S(15_000)}"
+                && held != null && held.HeldAverage && held.FootText(t.AddSeconds(30)) == $"Total {S(15_000)} · Group {S(15_000)} · Avg. DPS" && !held.TopsShown && held.TopDps(t) == null,
+                $"...the foot says the total and the group's DPS, live \"{a?.FootText(t.AddSeconds(3))}\"; held, the fight's average badged \"{held?.FootText(t.AddSeconds(30))}\"; no TOP DPS in the open world");
             p.Take(new DamageDealt(t.AddSeconds(200), 1, 5002, 4_000, "Swoly", true));
             Check(p.AlwaysLive is { } a2 && a2.Members.Sum(f => f.Damage) == 4_000 && a2.Start == t.AddSeconds(200), "...and the next hit starts it from 0");
             Check(kept.Count == 0, $"...never kept in Bosses only ({kept.Count} kept)");
@@ -1551,8 +1557,15 @@ public static class ParserTests
             p.Take(new BossEnded(t.AddSeconds(1040), 902, BossOutcome.Kill));
             Check(p.AlwaysLive == null && p.AlwaysEnded is { Outcome: "kill", Boss: "Talisra of the Void" } && kept.Count == 1 && kept[0].Boss == "Talisra of the Void",
                 $"...the kill is held on the meter and kept as a boss pull as ever (bests and Compare): {p.AlwaysEnded?.Outcome}, {kept.Count} kept");
+            {
+                // the end of a boss fight in an Expedition: TOP DPS on the highest DPS's row; no TOP HEALS while heals aren't known
+                var k = p.AlwaysEnded!;
+                Check(k.TopsShown && k.HeldAverage && k.TopDps(t.AddSeconds(2000))?.Name == "Swoly" && k.TopHealer(t.AddSeconds(2000)) == null && k.FootText(t.AddSeconds(2000)).EndsWith("· Avg. DPS", StringComparison.Ordinal)
+                    && p.AlwaysLive == null,
+                    $"...a boss kill in an Expedition puts TOP DPS on the top row ({k.TopDps(t.AddSeconds(2000))?.Name}), no TOP HEALS without heal figures, the foot badged ({k.FootText(t.AddSeconds(2000))})");
+            }
             p.Take(new DamageDealt(t.AddSeconds(1060), 1, 6002, 3_000, "Swoly", true));
-            Check(p.AlwaysLive is { Mode: "fight" } tr && tr.Members.Sum(f => f.Damage) == 3_000 && tr.Start == t.AddSeconds(1060), "...the next trash hit after the boss starts it from 0");
+            Check(p.AlwaysLive is { Mode: "fight" } tr && tr.Members.Sum(f => f.Damage) == 3_000 && tr.Start == t.AddSeconds(1060) && !tr.TopsShown && !tr.HeldAverage, "...the next trash hit after the boss starts it from 0 (live: no badge, no plates)");
 
             // out of the dungeon: from 0 again
             p.Take(new InstanceLeft(t.AddSeconds(1100)));

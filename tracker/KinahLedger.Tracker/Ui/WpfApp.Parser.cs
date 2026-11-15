@@ -59,6 +59,20 @@ public static partial class WpfApp
     /// <summary>The game-like grey under the overlays' renders; KL_SHOT_CLEAR=1 leaves them clear, to lay over real game pictures.</summary>
     static Color? ShotGround => Environment.GetEnvironmentVariable("KL_SHOT_CLEAR") == "1" ? null : Color.FromRgb(0x4A, 0x52, 0x5C);
 
+    /// <summary>
+    /// An open-world fight held by Always on (5 s without fighting): the pull's members and damage as a fight in Verteron that
+    /// ended at its last hit, so the meter shows the whole fight's average with the "Avg. DPS" badge.
+    /// </summary>
+    internal static Encounter HeldSample(Encounter live, DateTime now)
+    {
+        var h = BossParser.Copy(live);
+        h.Id = "held-sample"; h.Mode = "fight"; h.Kind = "Open world"; h.Instance = "Verteron"; h.Boss = ""; h.BossId = 0; h.GameMode = "";
+        h.BossHp = h.BossMaxHp = 0; h.TargetsSplit = false; h.Always = true;
+        foreach (var f in h.Roster) f.BossDamage = f.Damage;
+        h.End = now.AddSeconds(-5); h.Outcome = "ended";
+        return h;
+    }
+
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
@@ -72,6 +86,7 @@ public static partial class WpfApp
         var pvp = pastFight.LastOrDefault(e => e.PlayerKills > 0) ?? pastFight.Last();
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a moment the tracker missed");
+        var held = HeldSample(live!, now);
         var shots = new List<(string File, Encounter E, DateTime At)>
         {
             ("ui-parser-overlay-live.png", live!, now),
@@ -84,6 +99,7 @@ public static partial class WpfApp
             ("ui-parser-overlay-wiped.png", wipe, wipe.End!.Value),
             ("ui-parser-overlay-ready.png", Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), now),
             ("ui-parser-overlay-ready-anywhere.png", Encounter.ReadyAnywhere("Verteron", now), now),
+            ("ui-parser-overlay-held.png", held, held.End!.Value),
         };
         foreach (var (file, e, at) in shots)
         {
@@ -98,7 +114,7 @@ public static partial class WpfApp
         // the Parser's own window in each fight look (Settings › In game › Parser › Overlay look), a pull under way and the
         // open world's Always on card: the fight alone
         foreach (var lk in HudLooks.FightLooks)
-            foreach (var (tag, e, at) in new[] { ("live", live!, now), ("anywhere", Encounter.ReadyAnywhere("Verteron", now), now) })
+            foreach (var (tag, e, at) in new[] { ("live", live!, now), ("held", held, held.End!.Value), ("killed", kill, kill.End!.Value), ("anywhere", Encounter.ReadyAnywhere("Verteron", now), now) })
             {
                 var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = e.ModeKind, Look = lk };
                 o.Draw(e, at);
@@ -499,6 +515,40 @@ public static partial class WpfApp
                 check(!t1.SequenceEqual(t2) && Top1(t2) < Top1(t1),
                     $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(t1):N0} to {Top1(t2):N0} half a second on)");
             }
+            // the foot, the held badge and the top plates (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a
+            // green badge next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]"), in every look: a pull under way, an
+            // open-world fight held by Always on, a boss killed in an Expedition
+            {
+                bool st1 = Motion.Still; Motion.Still = true;
+                var (pastF, _) = ParserDemo.Sample(nowL);
+                var killF = pastF.Last(x => x.Outcome == "kill");
+                var heldF = HeldSample(pullL!, nowL);
+                var wrong = new List<string>();
+                foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+                    foreach (var (tag, e, at) in new[] { ("live", pullL!, nowL), ("held", heldF, heldF.End!.Value), ("killed", killF, killF.End!.Value) })
+                    {
+                        var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000, Look = lk, Mode = e.ModeKind };
+                        po.Draw(e, at); po.Show(); DoEvents();
+                        var root = (DependencyObject)po.Content;
+                        var feet = TaggedShown(root, "parser-foot");
+                        var footName = feet.Count == 1 ? System.Windows.Automation.AutomationProperties.GetName(feet[0]) : "";
+                        int badges = TaggedShown(root, "avg-badge").Count;
+                        var tops = TaggedShown(root, "top-dps").Select(PlateName).ToList();
+                        int heals = TaggedShown(root, "top-heals").Count;
+                        bool shouldHold = tag != "live", shouldTop = tag == "killed";
+                        string want = e.FootText(at), topWant = e.TopDps(at)?.Name ?? "";
+                        // the plate sits in the name's room: every row's DPS still ends at the same place (your gold frame's 1 px line apart)
+                        var dpsRights = DpsRights(root);
+                        bool aligned = dpsRights.Count >= 2 && dpsRights.Max() - dpsRights.Min() <= 1.5;
+                        if (feet.Count != 1 || footName != want || !want.StartsWith("Total ", StringComparison.Ordinal) || badges != (shouldHold ? 1 : 0)
+                            || (shouldTop ? tops.Count != 1 || tops[0] != topWant || topWant.Length == 0 : tops.Count != 0) || heals != 0 || !aligned)
+                            wrong.Add($"{lk} {tag}: foot {feet.Count} \"{footName}\" (want \"{want}\"), badge {badges}, top DPS [{string.Join(",", tops)}] (want {(shouldTop ? topWant : "none")}), top heals {heals}, DPS column {(aligned ? "aligned" : string.Join("/", dpsRights.Select(x => x.ToString("0.#"))))}");
+                        po.Close();
+                    }
+                Motion.Still = st1;
+                check(wrong.Count == 0 && killF.TopsShown && !heldF.TopsShown && heldF.HeldAverage && !pullL!.HeldAverage,
+                    $"the meter's foot says the total and the group's DPS in every look, \"Avg. DPS\" only on a held fight, TOP DPS only on a boss kill's top row, the DPS column unmoved{(wrong.Count > 0 ? ": " + string.Join("; ", wrong) : "")}");
+            }
             check(moved.Count == 0, $"the Parser's own window grows up: the meter's bottom edge stays where it is as it grows into a pull and back, in each look{(moved.Count > 0 ? ": " + string.Join("; ", moved) : "")}");
             check(ParserPrefs.FromText("{\"Left\":10,\"Top\":20}").Bottom == null, "...a file from before has no bottom edge kept (its top places it once)");
         }
@@ -644,6 +694,32 @@ public static partial class WpfApp
     }
 
     /// <summary>True when a text containing <paramref name="part"/> is laid out and visible in the overlay (not collapsed or under a collapsed parent).</summary>
+    /// <summary>The shown elements under <paramref name="root"/> with this tag (the meter's foot, its badges and plates).</summary>
+    static List<FrameworkElement> TaggedShown(DependencyObject root, string tag)
+    {
+        var found = new List<FrameworkElement>();
+        var seen = new HashSet<DependencyObject>();
+        void Walk(DependencyObject d)
+        {
+            if (!seen.Add(d)) return;
+            if (d is UIElement u && !u.IsVisible) return;
+            if (d is FrameworkElement fe && fe.Tag as string == tag && fe.ActualWidth > 0) found.Add(fe);
+            foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
+            if (d is Visual) for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(root);
+        return found;
+    }
+
+    /// <summary>The member's name on the row a plate sits on (the plate's line holds the name).</summary>
+    static string PlateName(FrameworkElement plate) =>
+        VisualTreeHelper.GetParent(plate) is System.Windows.Controls.StackPanel plates && VisualTreeHelper.GetParent(plates) is System.Windows.Controls.StackPanel line ? line.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault()?.Text ?? "" : "";
+
+    /// <summary>Where each shown row's DPS figure ends, across the meter (the column a plate must never push).</summary>
+    static List<double> DpsRights(DependencyObject root) => root is Visual v
+        ? TaggedShown(root, "row-dps").Select(t => t.TranslatePoint(new Point(t.ActualWidth, 0), (UIElement)v).X).ToList()
+        : new List<double>();
+
     static bool ParserVisibleText(Window w, string part)
     {
         bool found = false;
