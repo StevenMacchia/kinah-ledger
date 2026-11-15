@@ -197,12 +197,13 @@ static partial class HudRare
         }
 
         /// <summary>The hour's rate in the head while the drop shows ("1.27M /h"), as the Ticker's pill says it.</summary>
-        public void Rate(string rate)
+        /// <param name="abyss">In the Abyss the hour is Abyss Points (HudKit.Abyss): in ink, "AP/h".</param>
+        public void Rate(string rate, bool abyss = false)
         {
             _rate.Inlines.Clear();
             if (rate.Length == 0) return;
-            _rate.Inlines.Add(R(rate, 13, Gold, mono: true));
-            _rate.Inlines.Add(R(" /h", 12, Faint));
+            _rate.Inlines.Add(R(rate, 13, abyss ? Ink : Gold, mono: true));
+            _rate.Inlines.Add(R(abyss ? " AP/h" : " /h", 12, Faint));
         }
     }
 

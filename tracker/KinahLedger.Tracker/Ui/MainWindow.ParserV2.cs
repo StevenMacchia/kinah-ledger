@@ -89,7 +89,7 @@ public partial class MainWindow
         }
         if (live && e.OpenWorld && e.You is { Damage: > 0 })
         {
-            // farming: your live DPS, rolling as the Kinah line's (refreshed ten times a second by FarmTick)
+            // farming: your live DPS, rolling (refreshed ten times a second by FarmTick)
             var stat = PStat("Your DPS now", FarmDpsText(now) is { Length: > 0 } t0 ? t0 : FarmFigure(e.FarmDps()), "Ink", $"last {BossParser.RollSeconds:0} s");
             _parserFarmNow = ((StackPanel)stat.Child).Children.OfType<TextBlock>().ElementAt(1);
             System.Windows.Documents.Typography.SetNumeralAlignment(_parserFarmNow, FontNumeralAlignment.Tabular);

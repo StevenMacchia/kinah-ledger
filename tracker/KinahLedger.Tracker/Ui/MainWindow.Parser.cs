@@ -56,7 +56,7 @@ public partial class MainWindow
         ParserPrefs.Saved += () => Dispatcher.BeginInvoke(() =>
         {
             var fresh = ParserPrefs.Load();
-            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps;
+            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
             _parserPrefs.Width = fresh.Width; _parserPrefs.Expanded = fresh.Expanded; ApplyMeterExpanded();
             ParserOverlayTick();
@@ -214,10 +214,7 @@ public partial class MainWindow
     /// <summary>A change, from any thread: one redraw is queued, now or when the last one is <see cref="ParserFrameMs"/> old.</summary>
     /// <summary>For parser-latency: changes the Parser said, frames drawn for them, of which on screen.</summary>
     internal static int ParserChangesSeen, ParserDraws, ParserDrawsShown;
-    /// <summary>For parser-latency: the Kinah line's farming figure, each time its text changed, and the time from the game event to that frame.</summary>
-    internal static int FarmTextChanges;
-    internal static ParserLatency FarmLatencyStats { get; } = new();
-    /// <summary>For parser-latency: the replay's own Kinah overlay (hidden, off-screen), so the line's figure is drawn as live.</summary>
+    /// <summary>For parser-latency: the replay's own Kinah overlay (hidden, off-screen), so the meter in it is drawn as live.</summary>
     internal void AttachHudForTest(HudWindow h) => _hud = h;
     void OnParserChanged(DateTime? at)
     {
@@ -244,15 +241,13 @@ public partial class MainWindow
         Interlocked.Increment(ref ParserDraws);
         lock (_parserDrawGate) { oldest = _parserOldest; _parserOldest = null; _parserDrawQueued = false; }
         _parserLastDraw = System.Diagnostics.Stopwatch.GetTimestamp();
-        string farmWas = _hud?.FarmDpsShown ?? "";
         try
         {
             if (_part == "Parser") FillParserPage();
             ParserOverlayTick();
         }
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
-        FarmDrawn(farmWas, oldest);
-        bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true } || _hud is { IsVisible: true, FarmDpsShown.Length: > 0 };
+        bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true };
         if (oldest is not { } o || !shown) return;
         Interlocked.Increment(ref ParserDrawsShown);
         EventHandler? h = null;
@@ -262,18 +257,6 @@ public partial class MainWindow
             double ms = Math.Max(0, (DateTime.UtcNow - o).TotalMilliseconds);
             ParserLatencyStats.Add(ms); ParserLatencyMinute.Add(ms);
         };
-        System.Windows.Media.CompositionTarget.Rendering += h;
-    }
-
-    /// <summary>The Kinah line's farming figure after a draw: counted when its text changed, timed from the event that brought it (if any) to the frame.</summary>
-    void FarmDrawn(string was, DateTime? from)
-    {
-        var now = _hud?.FarmDpsShown ?? "";
-        if (now == was) return;
-        Interlocked.Increment(ref FarmTextChanges);
-        if (from is not { } o) return;
-        EventHandler? h = null;
-        h = (_, _) => { System.Windows.Media.CompositionTarget.Rendering -= h; FarmLatencyStats.Add(Math.Max(0, (DateTime.UtcNow - o).TotalMilliseconds)); };
         System.Windows.Media.CompositionTarget.Rendering += h;
     }
 
@@ -337,12 +320,10 @@ public partial class MainWindow
         // the last fight's result until the next one starts afresh, the dungeon's ready card before the first
         if (show == null && DungeonMeter(now) is { } held) show = held;
         // Steven, 2026-11-14: big "only inside of expeditions and other runs": an open-world fight never opens the section or
-        // the separate overlay; it is one small figure on the Kinah line instead (your DPS, Options › In game › Parser)
+        // the separate overlay (the Parser page shows your DPS in it; the Kinah line's small figure went on 2026-11-15)
         if (show is { OpenWorld: true }) show = null;
         // Steven, 2026-11-15: "Always on": the meter is always up, anywhere, and starts from 0 by the parser's rules
         if (_parserPrefs.AlwaysOn) show = AlwaysMeter(now);
-        // the small DPS on the Kinah line is the meter's figure: not twice
-        _hud?.SetFarmDps(_parserPrefs.AlwaysOn ? "" : FarmDpsText(now));
         // the meter's clock redraws this one between hits (MeterClockTick)
         _meterShown = _parserPrefs.Overlay ? show : null;
         _meterInKinah = !ParserOverlaySeparate;
@@ -496,10 +477,10 @@ public partial class MainWindow
     /// <summary>In a Transcendence, an Expedition or a Sanctuary now (the meter replaces the Kinah line there).</summary>
     bool InDungeon => ParserWhere.Kind is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
 
-    /// <summary>Your live DPS in the open-world fight under way ("13.2K"), or "" (none, no hit of yours yet, or turned off in Options).</summary>
+    /// <summary>Your live DPS in the open-world fight under way ("13.2K"), or "" (none, or no hit of yours yet): the Parser page's readout.</summary>
     string FarmDpsText(DateTime now)
     {
-        if (!_parserPrefs.FarmDps || ParserFights?.FarmDpsNow(now) is not { } dps || dps <= 0) return "";
+        if (ParserFights?.FarmDpsNow(now) is not { } dps || dps <= 0) return "";
         return FarmFigure(dps);
     }
 
@@ -511,13 +492,13 @@ public partial class MainWindow
         : v < 999_950 ? (v / 1_000).ToString("0.0", CultureInfo.InvariantCulture) + "K" : (v / 1_000_000).ToString("0.00", CultureInfo.InvariantCulture) + "M";
 
     System.Windows.Threading.DispatcherTimer? _farmTicker;
-    /// <summary>The tab's own live readout of your farming DPS (the open-world fight's card), refreshed with the Kinah line's.</summary>
+    /// <summary>The tab's own live readout of your farming DPS (the open-world fight's card).</summary>
     TextBlock? _parserFarmNow;
 
     /// <summary>
-    /// The live readout's clock (Steven, 2026-11-14: "rolling all the time"): ten times a second while you farm, the Kinah
-    /// line's figure (and the tab's) is worked out again, so it slides between hits and eases off when you stop; each hit
-    /// also redraws it at once (the Parser's change, ParserDrawNow). Idle otherwise: one cheap check a tick.
+    /// The live readout's clock (Steven, 2026-11-14: "rolling all the time"): ten times a second while you farm, the Parser
+    /// page's figure is worked out again, so it slides between hits and eases off when you stop; each hit also redraws it at
+    /// once (the Parser's change, ParserDrawNow). Idle otherwise: one cheap check a tick.
     /// </summary>
     void StartFarmTicker()
     {
@@ -531,15 +512,8 @@ public partial class MainWindow
     {
         try
         {
-            bool live = ParserFights?.FarmLive == true;
-            if (!live && (_hud?.FarmDpsShown ?? "").Length == 0 && _parserFarmNow == null) return;
+            if (_parserFarmNow == null) return;
             var text = FarmDpsText(DateTime.UtcNow);
-            if (_hud != null)
-            {
-                var was = _hud.FarmDpsShown;
-                _hud.SetFarmDps(text);
-                if (_hud.FarmDpsShown != was) Interlocked.Increment(ref FarmTextChanges);
-            }
             if (_parserFarmNow != null)
             {
                 if (!_parserFarmNow.IsLoaded && _parserFarmNow.Parent == null) _parserFarmNow = null;
@@ -600,7 +574,7 @@ public partial class MainWindow
         var meters = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (always, label, tip) in new[]
         {
-            (false, "Only boss fights", "The meter shows in boss fights and in Transcendence, Expeditions and Sanctuaries; outside them your DPS is one small figure on the Kinah line."),
+            (false, "Only boss fights", "The meter shows in boss fights and in Transcendence, Expeditions and Sanctuaries; outside them this page shows your DPS while you fight."),
             (true, "Always on", $"The meter is always up, the open world and the Abyss too. It starts from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after {BossParser.AlwaysIdleSeconds:0} seconds without fighting."),
         })
         {

@@ -233,41 +233,16 @@ public sealed partial class HudWindow : Window
     public static (double Radius, Thickness Padding) FrameShape(IReadOnlyList<string> fields) =>
         fields.Count == 1 && fields[0] == "feed" ? (10, new Thickness(10, 6, 12, 6)) : (12, new Thickness(14, 9, 18, 9));
 
-    IReadOnlyDictionary<string, string>? _lastValues;
-    string _farmDps = "";
-    StackPanel? _farmCell;
-    TextBlock? _farmValue;
+    /// <summary>The strip's Abyss figures at the end of its line (HudKit.AbyssStats): the kills, deaths and Kinah, after a rule.</summary>
+    StackPanel? _abyssCell;
+    TextBlock? _abyssText;
 
-    /// <summary>
-    /// Your DPS in the open-world fight under way ("1.2K"), or "" for none (Steven, 2026-11-14: "show on the overlay for the
-    /// kinah tracker in a small number somewhere when they're farming enemies but never large"): one small figure on the
-    /// Kinah line, in its secondary type; the overlay never grows for it. Its words are always "DPS".
-    /// </summary>
-    public void SetFarmDps(string dps)
+    StackPanel AbyssCell()
     {
-        dps ??= "";
-        if (dps == _farmDps) return;
-        // the strip, already showing one: just the figure (ten times a second, so not the whole line again)
-        if (_look == null && _farmCell is { Visibility: Visibility.Visible } && _farmDps.Length > 0 && dps.Length > 0) { _farmDps = dps; _farmValue!.Text = dps; return; }
-        _farmDps = dps;
-        if (_lastValues != null) Update(_lastValues);
-    }
-
-    /// <summary>The strip's small DPS: a rule, the figure, "DPS", at the end of its line (shown only with the "farmDps" value).</summary>
-    StackPanel FarmCell()
-    {
-        // tabular digits and a floor on the width: the figure rolls ten times a second without the line twitching
-        _farmValue = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MinWidth = 34, TextAlignment = TextAlignment.Right };
-        System.Windows.Documents.Typography.SetNumeralAlignment(_farmValue, FontNumeralAlignment.Tabular);
-        var unit = new TextBlock { Text = "DPS", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        _abyssText = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center };
         var rule = new Border { Width = 1, Height = 14, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
-        var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Children = { rule, _farmValue, unit } };
-        System.Windows.Automation.AutomationProperties.SetName(cell, "Your DPS");
-        return cell;
+        return new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Children = { rule, _abyssText } };
     }
-
-    /// <summary>For tests and renders: the small DPS the line shows now ("" when none).</summary>
-    internal string FarmDpsShown => _look == null ? (_farmCell?.Visibility == Visibility.Visible ? _farmValue!.Text : "") : _farmDps;
 
     /// <summary>The player dropped the panel somewhere (unlocked): the window remembers Left and Top.</summary>
     public event Action? Dragged;
@@ -454,8 +429,8 @@ public sealed partial class HudWindow : Window
             _row.Children.Add(cell);
             _cells[key] = number;
         }
-        _farmCell = FarmCell();
-        _row.Children.Add(_farmCell);
+        _abyssCell = AbyssCell();
+        _row.Children.Add(_abyssCell);
     }
 
     /// <summary>The rate while it warms up: there, but plainly not the figure yet.</summary>
@@ -508,9 +483,6 @@ public sealed partial class HudWindow : Window
 
     public void Update(IReadOnlyDictionary<string, string> values)
     {
-        _lastValues = values;
-        // your DPS while farming in the open world (SetFarmDps): the "farmDps" value, small on the line, in every look
-        if (_farmDps.Length > 0) values = new Dictionary<string, string>(values) { ["farmDps"] = _farmDps };
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
@@ -536,9 +508,11 @@ public sealed partial class HudWindow : Window
         _noteSign.Source = !flash ? (V("noticeClock").Length > 0 ? HudClockNotice.Clock : HudKit.NoticeSign) : stopped ? HudKit.StopSign : HudKit.StartSign;
         if (_timeDot != null) _timeDot.Fill = V("run") == "1" ? RunRed : Muted;
         bool warm = V("warm") == "1";
+        // in the Abyss (Steven, 2026-11-15) the hour and the total are Abyss Points (MainWindow.HudAbyssValues): in ink with "AP"
+        bool abyss = HudKit.Abyss(values);
         // the ring of your best here and the chase's words (the "chase" and "toBest" values, Ui/MainWindow.Live.cs FillRate)
         var (share, words, beat) = HudKit.Chase(values);
-        if (warm) { share = -1; words = ""; }   // no measured hour yet, so nothing to hold against the best (2026-11-07 review)
+        if (warm || abyss) { share = -1; words = ""; }   // no measured hour yet, so nothing to hold against the best (2026-11-07 review); a Kinah best beside the points means nothing
         var ringSig = $"{Math.Round(share, 2)}|{words}";
         if (ringSig != _ringSig)
         {
@@ -560,6 +534,7 @@ public sealed partial class HudWindow : Window
             // Kinah in gold, a loot value's plus in mint, a loss in coral: the window's feed and the ticker's roles (colour pass, 2026-11-13)
             _feedValue.Foreground = V("feedTone") switch { "gold" => Gold, "coral" => Coral, _ => Mint };
             _feedRate!.Text = V("feedRate"); _feedUnit!.Text = V("feedRate").Length > 0 ? V("feedUnit") : "";
+            _feedRate.Foreground = abyss && V("feedUnit").StartsWith("AP", StringComparison.Ordinal) ? Ink : Gold;
             _feedSep!.Visibility = V("feedRate").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _feedRate.Opacity = warm ? WarmOpacity : 1;
         }
@@ -570,17 +545,28 @@ public sealed partial class HudWindow : Window
         }
         // warming up ("warm"): the hour's figure reads "warming up", dimmed and without its "/ hr"
         if (_cells.TryGetValue("rate", out var rate)) rate.Opacity = warm ? WarmOpacity : 1;
-        if (_labels.TryGetValue("rate", out var rateLabel)) rateLabel.Visibility = warm ? Visibility.Collapsed : Visibility.Visible;
-        if (_farmCell != null)
+        if (_labels.TryGetValue("rate", out var rateLabel)) { rateLabel.Visibility = warm ? Visibility.Collapsed : Visibility.Visible; rateLabel.Text = abyss ? "AP / hr" : HudFields.All.First(f => f.Key == "rate").Label; }
+        if (_labels.TryGetValue("total", out var totalLabel)) totalLabel.Text = abyss ? "AP" : HudFields.All.First(f => f.Key == "total").Label;
+        if (_cells.TryGetValue("rate", out var rc)) rc.Foreground = abyss ? Ink : Gold;
+        if (_cells.TryGetValue("total", out var tc)) tc.Foreground = abyss ? Ink : Gold;
+        // the kills, deaths and Kinah after the line in the Abyss
+        if (_abyssCell != null)
         {
-            _farmValue!.Text = V("farmDps");
-            _farmCell.Visibility = V("farmDps").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            var stats = abyss ? HudKit.AbyssStats(values) : new();
+            _abyssText!.Inlines.Clear();
+            foreach (var (fig, word, tone) in stats)
+            {
+                if (_abyssText.Inlines.Count > 0) _abyssText.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = HudKit.Faint });
+                _abyssText.Inlines.Add(new System.Windows.Documents.Run(fig) { Foreground = tone, FontWeight = FontWeights.Bold });
+                _abyssText.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+            }
+            _abyssCell.Visibility = stats.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         bool first = true;
         foreach (FrameworkElement c in _row.Children)
         {
             if (c.Visibility != Visibility.Visible) continue;
-            if (c == _farmCell) { c.Margin = new Thickness(10, 0, 0, 0); continue; }   // small, close after the line
+            if (c == _abyssCell) { c.Margin = new Thickness(10, 0, 0, 0); continue; }   // close after the line
             c.Margin = new Thickness(first ? 0 : 20, 0, 0, 0); first = false;
         }
         BadgeMoved(values, picked);

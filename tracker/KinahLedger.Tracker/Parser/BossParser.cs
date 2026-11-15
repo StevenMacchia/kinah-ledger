@@ -285,7 +285,7 @@ public sealed class BossParser
     /// <summary>Copies of every record under way (the pull, the run, the fight), for encounter-live.json.</summary>
     public List<Encounter> LiveAll { get { lock (_gate) return new[] { _cur, _run, _fight }.Where(e => e != null && !e.OpenWorld).Select(e => Copy(e!)).ToList(); } }
 
-    /// <summary>The open-world fight under way, in any mode (null when none, or inside an instance): the Kinah line's small DPS. Never kept.</summary>
+    /// <summary>The open-world fight under way, in any mode (null when none, or inside an instance): the Parser page's live DPS. Never kept.</summary>
     public Encounter? Farm
     {
         get
