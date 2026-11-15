@@ -44,14 +44,17 @@ sealed class TimersOverlay : Window
     /// <summary>The grabbable left edge with click-through on, in WPF units at 1x.</summary>
     const double GripWidth = 16;
 
-    /// <summary>For the options self-test: strips made while it is set are fully transparent, so a test never flashes one on the player's screen.</summary>
+    /// <summary>
+    /// For the options self-test: strips made while it is set are fully transparent and parked far off every screen (their
+    /// first spot off-screen too, never clamped onto one), so a test never shows one or catches a click on the player's screen.
+    /// </summary>
     internal static bool InvisibleForTest;
 
     public TimersOverlay(TimerPrefs prefs)
     {
         _prefs = prefs;
         if (InvisibleForTest) Opacity = 0;
-        Title = InvisibleForTest ? "Kinah Ledger timers (invisible test strip)" : "Kinah Ledger timers";
+        Title = InvisibleForTest ? "Kinah Ledger timers (parked test strip)" : "Kinah Ledger timers";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -172,6 +175,7 @@ sealed class TimersOverlay : Window
         UpdateLayout();
         double w = ActualWidth, h = ActualHeight;
         if (KinahBox?.Invoke() is { } k) { Left = k.Left; Top = k.Top - h - 6; }
+        else if (InvisibleForTest) { Left = -12000; Top = -12000; }   // a test's strip with no Kinah overlay: off every screen
         else { Left = SystemParameters.WorkArea.Left + (SystemParameters.WorkArea.Width - w) / 2; Top = SystemParameters.WorkArea.Top + 12; }
         KeepOnScreen();
         _placed = true;
@@ -191,6 +195,7 @@ sealed class TimersOverlay : Window
     /// </summary>
     public void KeepOnScreen()
     {
+        if (InvisibleForTest) return;   // a test's strip stays parked off the screens
         double scale = 1;
         try { scale = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch (Exception) { }
         double w = ActualWidth > 0 ? ActualWidth : 180, h = ActualHeight > 0 ? ActualHeight : 30;
