@@ -633,7 +633,16 @@ public static partial class WpfApp
         Check(w.TablesCard.Visibility != Visibility.Visible && w.SummaryCard.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
             "Compact: the hero and the chips, the bag behind its chip, no tables, Where next folded");
         w.ToggleChipForTest("bag"); DoEvents();
-        Check(w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.LootForTest().Slots >= 8, "...the loot chip opens the bag with its slots (two rows of four tiles)");
+        Check(w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.LootForTest().Slots >= 8, "...the loot chip opens the bag with its slots (rows of four compact tiles)");
+        // compact (Steven, 2026-11-15: "the icons are way too big ... so much wasted room"): a tile is a slim row, the icon at
+        // its left, well under the old tile's 100 px
+        {
+            var tiles = new List<System.Windows.Controls.Border>();
+            void FindTiles(DependencyObject d) { if (d is System.Windows.Controls.Border b && b.Width == 149) tiles.Add(b); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) FindTiles(ch); }
+            FindTiles(w.SummaryCard);
+            double tallest = tiles.Count > 0 ? tiles.Max(t => t.ActualHeight) : 0;
+            Check(tiles.Count >= 8 && tallest > 30 && tallest <= 56, $"...each a compact tile, {tallest:0} px tall at most ({tiles.Count} tiles)");
+        }
         // UX pass (2026-11-13): the open bag card takes the strip's place, not a second copy of the same slots under it
         Check(!w.BagStripForTest().Strip, "...and stands in for the bag strip while it is open");
         w.ToggleChipForTest("bag"); DoEvents();
@@ -806,6 +815,11 @@ public static partial class WpfApp
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
             $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");
         Check(w.HudValues.GetValueOrDefault("warm", "") == "" && w.HeadRate.Opacity == 1, "a 42-minute count shows its rate, not warming up");
+        // warming up is short (Steven, 2026-11-15: "why is warming up taking so long it took 18 items"): 30 s and 6 counted,
+        // or 2 minutes and 3; 2 minutes of gathering at a node every 10 s (18 pickups) used to be the wait
+        Check(MainWindow.RateWarm(TimeSpan.FromSeconds(20), 10) && MainWindow.RateWarm(TimeSpan.FromSeconds(45), 5) && !MainWindow.RateWarm(TimeSpan.FromSeconds(31), 6)
+            && !MainWindow.RateWarm(TimeSpan.FromSeconds(60), 18) && !MainWindow.RateWarm(TimeSpan.FromMinutes(2), 3) && MainWindow.RateWarm(TimeSpan.FromMinutes(5), 2),
+            "warming up: under 30 s or under 6 counted (2 minutes with 3 is enough); 18 pickups in a minute show the rate");
 
         // the Abyss (Steven, 2026-11-13: "in abyss zones the primary should be abyss points per hour and a secondary ticket
         // for kinah"): the sample's 118 kills paid 24,740 Abyss Points in 42 min 17 s, so the hero is their hour and Kinah and

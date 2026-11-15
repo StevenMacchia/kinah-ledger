@@ -65,7 +65,7 @@ public partial class MainWindow
     }
 
     /// <summary>Full view: whether Just dropped and Where to farm sit in the second column; null until the view's first balance.</summary>
-    (bool Feed, bool Where)? _fullSides;
+    (bool Feed, bool Where, bool Odds)? _fullSides;
 
     /// <summary>For options-test: the Full view's two columns' heights as laid out, and where Just dropped and Where to farm went.</summary>
     internal (double Left, double Right, bool FeedRight, bool WhereRight) FullBalanceForTest()
@@ -86,21 +86,24 @@ public partial class MainWindow
         if (!(_part == "Farming" && !_welcome && FullShown)) return;
         var size = new Size(662, double.PositiveInfinity);
         double H(UIElement e) { if (e.Visibility != Visibility.Visible) return 0; e.Measure(size); return e.DesiredSize.Height; }
-        double left = LeftCol.Children.OfType<UIElement>().Where(c => c != FeedCard && c != WhereSection).Sum(H);
-        double right = QuestRight.Margin.Top + QuestRight.Children.OfType<UIElement>().Where(c => c != FeedCard && c != WhereSection).Sum(H);
-        double feed = H(FeedCard), where = H(WhereSection);
-        (bool Feed, bool Where) best = (false, false);
+        var movable = new UIElement[] { FeedCard, WhereSection, QuestOdds };
+        double left = LeftCol.Children.OfType<UIElement>().Where(c => !movable.Contains(c)).Sum(H);
+        double right = QuestRight.Margin.Top + QuestRight.Children.OfType<UIElement>().Where(c => !movable.Contains(c)).Sum(H);
+        double feed = H(FeedCard), where = H(WhereSection), odds = H(QuestOdds);
+        // Drop odds moves too since the bag's tiles went compact (2026-11-15): the second column came out ~170 px shorter
+        (bool Feed, bool Where, bool Odds) best = (false, false, true);
         double bestGap = double.PositiveInfinity, nowGap = double.PositiveInfinity;
         foreach (var f in new[] { false, true })
             foreach (var w in new[] { false, true })
-            {
-                double gap = Math.Abs(left + (f ? 0 : feed) + (w ? 0 : where) - (right + (f ? feed : 0) + (w ? where : 0)));
-                if (gap < bestGap - 0.5) { bestGap = gap; best = (f, w); }
-                if (_fullSides == (f, w)) nowGap = gap;
-            }
+                foreach (var o in new[] { true, false })
+                {
+                    double gap = Math.Abs(left + (f ? 0 : feed) + (w ? 0 : where) + (o ? 0 : odds) - (right + (f ? feed : 0) + (w ? where : 0) + (o ? odds : 0)));
+                    if (gap < bestGap - 0.5) { bestGap = gap; best = (f, w, o); }
+                    if (_fullSides == (f, w, o)) nowGap = gap;
+                }
         if (_fullSides is { } now && nowGap - bestGap < 48) best = now;
         _fullSides = best;
-        // the left column: Next up, then Just dropped and Where to farm (those that stay), then the footer;
+        // the left column: Next up, then Just dropped, Where to farm and Drop odds (those that stay), then the footer;
         // the right column: the bag, Who pays, Drop odds, then Just dropped and Where to farm (those that go), the gathering cards last
         static void Place(FrameworkElement el, Panel to, UIElement after)
         {
@@ -108,8 +111,11 @@ public partial class MainWindow
             (el.Parent as Panel)?.Children.Remove(el);
             to.Children.Insert(to.Children.IndexOf(after) + 1, el);
         }
-        Place(FeedCard, best.Feed ? QuestRight : LeftCol, best.Feed ? QuestOdds : GoalsCard);
-        Place(WhereSection, best.Where ? QuestRight : LeftCol, best.Where == best.Feed ? FeedCard : best.Where ? QuestOdds : GoalsCard);
+        UIElement leftAt = GoalsCard, rightAt = QuestWho;
+        if (best.Odds) { Place(QuestOdds, QuestRight, rightAt); rightAt = QuestOdds; }
+        if (best.Feed) { Place(FeedCard, QuestRight, rightAt); rightAt = FeedCard; } else { Place(FeedCard, LeftCol, leftAt); leftAt = FeedCard; }
+        if (best.Where) { Place(WhereSection, QuestRight, rightAt); rightAt = WhereSection; } else { Place(WhereSection, LeftCol, leftAt); leftAt = WhereSection; }
+        if (!best.Odds) Place(QuestOdds, LeftCol, leftAt);
     }
 
     /// <summary>The Full view's second column: Who pays, Drop odds and the gathering chips (the bag and the zone board are moved in by ApplyView).</summary>

@@ -270,17 +270,27 @@ public partial class MainWindow
     /// <param name="roll">The item's key and count: the big count rolls up from the one last shown under it (Motion.Number).</param>
     static Border QTile(FrameworkElement icon, string big, string name, string value, string valueTone = "Gold", double width = 149, (string Key, long Count)? roll = null)
     {
-        var sp = new StackPanel();
-        icon.HorizontalAlignment = HorizontalAlignment.Left;
-        sp.Children.Add(icon);
-        var b = QT(big, 16, FontWeights.Bold, "Ink", trim: true); b.Margin = new Thickness(0, 5, 0, 0); b.LineHeight = 18; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        // compact (Steven, 2026-11-15: "when you expand the bag the icons are way too big lol there's so much wasted room"):
+        // the icon at the left, the name over the count and its worth beside it; about half the old tile's height, so the
+        // open bag shows its rows without the empty space under each icon. The whole name is on the tile's hover card.
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        icon.HorizontalAlignment = HorizontalAlignment.Left; icon.VerticalAlignment = VerticalAlignment.Center;
+        g.Children.Add(icon);
+        var sp = new StackPanel { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(sp, 1);
+        var n = QT(name, 12, FontWeights.Medium, "Muted", trim: true);
+        n.ToolTip = name;
+        sp.Children.Add(n);
+        var line = new StackPanel { Orientation = Orientation.Horizontal };
+        var b = QT(big, 14, FontWeights.Bold, "Ink", trim: true);
         if (roll is { } r) Motion.Number(b, r.Key, r.Count, v => Math.Round(v).ToString("N0"), -1);
-        sp.Children.Add(b);
-        // the name wraps to a second line rather than trimming (colour pass review, 2026-11-13: "Fairy's Dream Wing F...");
-        // a tile in a row of the bag stretches to the row's tallest, so a two-line name never leaves the row ragged
-        sp.Children.Add(QWrapName(name, 12, "Muted"));
-        if (value.Length > 0) { var v = QT(value, 12, FontWeights.SemiBold, valueTone, trim: true); sp.Children.Add(v); }
-        var tile = new Border { Width = width, VerticalAlignment = VerticalAlignment.Stretch, Padding = new Thickness(10, 9, 10, 9), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
+        line.Children.Add(b);
+        if (value.Length > 0) { var v = QT(value, 11.5, FontWeights.SemiBold, valueTone, trim: true); v.Margin = new Thickness(6, 1, 0, 0); v.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(v); }
+        sp.Children.Add(line);
+        g.Children.Add(sp);
+        var tile = new Border { Width = width, VerticalAlignment = VerticalAlignment.Stretch, Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(10), Child = g, Cursor = Cursors.Hand };
         tile.SetResourceReference(Border.BackgroundProperty, "Card2");
         tile.MouseEnter += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         tile.MouseLeave += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "Card2");

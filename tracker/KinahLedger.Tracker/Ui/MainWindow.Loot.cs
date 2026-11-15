@@ -229,7 +229,7 @@ public partial class MainWindow
         var sp = new StackPanel { Margin = new Thickness(0, LootHost.Children.Count > 0 && title.Length > 0 ? 6 : 0, 0, 0) };
         if (title.Length > 0) { var t = QT(title, 12, FontWeights.SemiBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
         bool all = _todayAll.Contains(key);
-        int max = perRow * (FullShown ? 3 : TodayRows);
+        int max = perRow * (FullShown ? 5 : TodayRows);   // Full view: five rows of the compact tiles fill its column as three old ones did
         var wrap = new WrapPanel();
         foreach (var s in all ? slots : slots.Take(max)) { s.Margin = new Thickness(0, 0, 8, 8); wrap.Children.Add(s); }
         sp.Children.Add(wrap);
@@ -248,7 +248,7 @@ public partial class MainWindow
     {
         var name = r.Report.Length > 0 ? r.Report : r.Name;
         // the Quest tile (2026-11-07): the game's icon, the count, the name, the worth or why there is none
-        var tile = QTile(QItemIcon(name, _items.IdOf(name), 34, round: false, grade: r.Grade), Qty(r.Drops).ToString("N0"), name,
+        var tile = QTile(QItemIcon(name, _items.IdOf(name), 28, round: false, grade: r.Grade), Qty(r.Drops).ToString("N0"), name,
             r.Worth > 0 ? r.Value : r.Sub.Contains("bound", StringComparison.OrdinalIgnoreCase) ? "bound" : "no price yet", r.Worth > 0 ? "Gold" : "Faint",
             roll: ("loot-count|" + LootHereName + "|" + name, Qty(r.Drops)));
         if (r.Reported) tile.Opacity = 0.55;
@@ -286,7 +286,7 @@ public partial class MainWindow
     /// <summary>The Soul Crystals of the count on screen as one slot, each kind on its card.</summary>
     FrameworkElement SoulSlot(List<DropRow> pets, long crystals, string where)
     {
-        var tile = QTile(QIconBox("Gem", "Lime", 34), crystals.ToString("N0"), "Soul Crystals", "pet food", "Faint");
+        var tile = QTile(QIconBox("Gem", "Lime", 28),crystals.ToString("N0"), "Soul Crystals", "pet food", "Faint");
         CardTip(tile, () =>
         {
             var (card, body) = CkShell(300);
