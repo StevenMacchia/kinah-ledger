@@ -100,9 +100,9 @@ internal sealed class BossMapper
                 return new GroupChanged(r.At, _group.Values.ToList());
             case 7: return _group.Remove(r.Entity) ? new GroupChanged(r.At, _group.Values.ToList()) : null;
             case 11: return r.Boss.Length > 0 ? new InstanceMode(r.At, r.Boss) : null;   // the mode rides in the boss field
-            // a damage row: ItemLevel carries the hits (0 = not counted), Content the reason a share has no source (source 0: HP
-            // lost with no hit to name one; 0 until the decoder says)
-            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), Reason: r.Entity == 0 ? r.Content : 0);
+            // a damage row: ItemLevel carries the hits (0 = not counted), Outcome, on a share with no source (source 0), the
+            // reason it has none (0: not said)
+            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), Reason: r.Entity == 0 ? r.Outcome : 0);
             case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
             case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1);
             default: return null;   // a boss seen (its HP comes with the pull), or a kind this build doesn't know

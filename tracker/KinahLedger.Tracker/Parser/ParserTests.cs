@@ -958,7 +958,7 @@ public static class ParserTests
 
         // 2. damage over time by skill (a negative id, Parser/Abilities.cs) is a row of its own beside the skill's, one row however
         // many of its effects ticked, and keeps its boss damage and hits through the inspect view's rows; a share with no source
-        // gives its reason in the decoder's damage row (Content), shown on the coverage line's hover
+        // gives its reason in the decoder's damage row (Outcome), shown on the coverage line's hover
         {
             var (p, _) = New();
             p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 860));
@@ -972,9 +972,9 @@ public static class ParserTests
             Check(rows.Count == 2 && rows.Select(a => Abilities.Name(a.Skill, "Templar")).SequenceEqual(new[] { "Punishing Strike", "Punishing Strike (over time)" })
                 && rows[1] is { BossDamage: 7_000, BossHits: 4, Damage: 9_000, Hits: 5 } && l.Figure(rows[1]) == 7_000,
                 $"2. damage over time is its skill's own row ({string.Join(", ", rows.Select(a => $"{Abilities.Name(a.Skill)} {l.Figure(a)}"))}), boss damage apart");
-            var none = new BossMapper().Map(new BossRow(t, 8, 2, "", 1, "", 861, 0, 0, "", "", false, 0, 0, 900, 0, 0));
-            Check(none is DamageDealt { SourceId: 0, Reason: 2 } && Encounter.WhyWords(2) == "a moment the tracker missed",
-                "...the decoder's damage row with no source gives its reason in Content (shown on the coverage line's hover)");
+            var none = new BossMapper().Map(new BossRow(t, 8, 0, "", 1, "", 861, 3, 0, "", "", false, 0, 0, 900, 0, 0));
+            Check(none is DamageDealt { SourceId: 0, Reason: 3 } && Encounter.WhyWords(3) == "a moment the tracker missed" && Encounter.WhyWords(99) == "another reason",
+                "...the decoder's damage row with no source gives its reason in Outcome (shown on the coverage line's hover)");
         }
 
         // 7. serious defaults (the honest pass): deaths, list filters and explanations on hover on; kills near you off; boss

@@ -65,13 +65,17 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The uncredited damage by the reason given for it (DamageDealt.Reason; 0 = none given).</summary>
     public Dictionary<int, long> UncreditedWhy { get; set; } = new();
 
-    /// <summary>A reason for uncredited damage in the hover's words (1 damage over time no hit named, 2 a moment missed, 3 someone outside the group).</summary>
+    /// <summary>A reason for uncredited damage in the coverage hover's words (DamageDealt.Reason, 1 to 7).</summary>
     public static string WhyWords(int reason) => reason switch
     {
-        1 => "damage over time no hit named",
-        2 => "a moment the tracker missed",
-        3 => "damage from someone outside the group",
-        _ => $"reason {reason}",
+        1 => "HP lost with no hit to name",
+        2 => "hits too late to match the HP lost",
+        3 => "a moment the tracker missed",
+        4 => "someone outside the group",
+        5 => "a monster or a trap",
+        6 => "something placed by a player outside the group",
+        7 => "someone the tracker never saw arrive",
+        _ => "another reason",
     };
     /// <summary>
     /// Each member's damage to the boss is kept apart from their damage to everything (Fighter.BossDamage): records kept
