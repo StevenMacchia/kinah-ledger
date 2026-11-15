@@ -95,6 +95,18 @@ public static partial class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, file), ParserOverlay.Width0, ShotGround);
             o.Close();
         }
+        // the Parser's own window in each fight look (Settings › In game › Parser › Overlay look), a pull under way and the
+        // open world's Always on card: the fight alone
+        foreach (var lk in HudLooks.FightLooks)
+            foreach (var (tag, e, at) in new[] { ("live", live!, now), ("anywhere", Encounter.ReadyAnywhere("Verteron", now), now) })
+            {
+                var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = e.ModeKind, Look = lk };
+                o.Draw(e, at);
+                o.Show();
+                DoEvents();
+                Save((FrameworkElement)o.Content, Path.Combine(dir, $"ui-parser-overlay-look-{lk}-{tag}.png"), 0, ShotGround);
+                o.Close();
+            }
         // expanded by default (Steven, 2026-11-14): the Kinah overlay alone, then with the Parser's section above the Kinah
         // line (a pull under way, a run, the result held after a kill), the Strip and the Card looks
         // and farming in the open world (Steven, 2026-11-14: "in a small number somewhere ... never large"): your DPS, small on
@@ -425,10 +437,39 @@ public static partial class WpfApp
         check(new[] { sws.Details, sws.Deaths, sws.Filters, sws.Hovers }.All(c => c?.IsChecked == true) && new[] { sws.Kills, sws.Separate, sws.Active }.All(c => c.IsChecked == false),
             "Options › In game › Parser: Group details, Deaths, List filters and Explanations on hover on by default (the honest pass); DPS over active time, Kills near you, Parser inside the Kinah overlay off");
         // two windows by default (Steven, 2026-11-15: "have them just be 2 separate windows pls i miss the old one"): a new
-        // player, and a file from before with the old "Separate": false, both get the Parser's own window; the look row is away
+        // player, and a file from before with the old "Separate": false, both get the Parser's own window
         check(ParserPrefs.FromText("{}").Separate && ParserPrefs.FromText("{\"Separate\":false,\"DetailsSettled\":true,\"HonestSettled\":true}").Separate
-            && !ParserPrefs.FromText("{\"InKinah\":true}").Separate && opt.ParserLookRowShownForTest == false,
-            "Options › In game › Parser: the Parser in its own window by default, a file from before too (its old Separate: false is no choice), Inside the Kinah overlay kept when picked; no look row then");
+            && !ParserPrefs.FromText("{\"InKinah\":true}").Separate,
+            "Options › In game › Parser: the Parser in its own window by default, a file from before too (its old Separate: false is no choice), Inside the Kinah overlay kept when picked");
+        // its own window's look (Steven, 2026-11-15: "what happened to the settings for the parser views in the options?"):
+        // Standard and the four fight looks, apart from the Kinah overlay's; a pick outlines it and fills the big preview
+        {
+            var (keys0, on0) = opt.ParserLooksForTest;
+            string kinahLook = w.HudLook;
+            bool rowShown = opt.ParserLookRowShownForTest == true;
+            opt.PickParserLookForTest("capsule"); DoEvents();
+            var (_, on1) = opt.ParserLooksForTest;
+            string stage1 = opt.ParserLookStageForTest ?? "";
+            opt.PickParserLookForTest(ParserPrefs.StandardLook); DoEvents();
+            check(rowShown && keys0.SequenceEqual(new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
+                && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.StandardLook,
+                $"Options › In game › Parser: its own window's look row ({string.Join(", ", keys0)}), Standard by default ({on0}); a pick outlines it and draws it big ({on1}, {stage1}), the Kinah overlay's look left alone");
+            // each look in the window itself: the fight drawn, no Kinah figure, the window as wide as the meter or so
+            bool st0 = Motion.Still; Motion.Still = true;
+            var nowL = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+            var (_, pullL) = ParserDemo.Sample(nowL);
+            var bad = new List<string>();
+            foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+            {
+                var po = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Look = lk };
+                po.Draw(pullL!, nowL); po.Show(); DoEvents();
+                bool boss = ParserVisibleText(po, "Ferocious Horn Nuakum"), kinah = ParserVisibleText(po, "/h") || ParserVisibleText(po, "an hour");
+                if (!boss || kinah || po.ActualWidth < 200) bad.Add($"{lk} (boss {boss}, Kinah {kinah}, {po.ActualWidth:0} wide)");
+                po.Close();
+            }
+            Motion.Still = st0;
+            check(bad.Count == 0, $"the Parser's own window in each look draws the fight alone{(bad.Count > 0 ? ": " + string.Join("; ", bad) : "")}");
+        }
         // the Parser's look row (Parser inside the Kinah overlay on): the four looks drawn for fights, the one in use outlined, a click picks it for the panel too
         sws.Separate.IsChecked = true; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
         check(opt.ParserLookRowShownForTest == true, "...with Parser inside the Kinah overlay on, the look row shows");

@@ -56,7 +56,7 @@ public partial class MainWindow
         ParserPrefs.Saved += () => Dispatcher.BeginInvoke(() =>
         {
             var fresh = ParserPrefs.Load();
-            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps;
+            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
             _parserPrefs.Width = fresh.Width; _parserPrefs.Expanded = fresh.Expanded; ApplyMeterExpanded();
             ParserOverlayTick();
@@ -373,6 +373,7 @@ public partial class MainWindow
             _parserOverlay.SetOpacity(_hudPreview?.HudOpacity ?? _prefs.HudOpacity);
             var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(_prefs.HudFields));
             _parserOverlay.SetFrame(radius, pad);
+            _parserOverlay.Look = _parserPrefs.Look;
             _parserOverlay.Mode = ParserModeNow;
             _parserOverlay.ShowDetails = PDetails;
             _parserOverlay.Draw(show!, now);
@@ -381,6 +382,7 @@ public partial class MainWindow
             _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect);
             return;
         }
+        _parserOverlay.Look = _parserPrefs.Look;   // Settings › In game › Parser › Overlay look, at once
         _parserOverlay.Mode = ParserModeNow;
         _parserOverlay.ShowDetails = PDetails;
         _parserOverlay.Draw(show!, now);
@@ -447,6 +449,7 @@ public partial class MainWindow
     {
         HudStackLook.FightWidth = w;
         _hud?.ApplyFightWidth();
+        _parserOverlay?.ApplyFightWidth();
         if (_parserOverlay != null) ParserOverlayTick();
     }
 
@@ -575,14 +578,15 @@ public partial class MainWindow
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         // the overlay's look, one click from here (Steven, 2026-11-14: "idk how to change the style"): its name, a click opens
-        // Settings › In game at the Parser's look row. Separated, the Parser's own overlay has one look, so no link
+        // Settings › In game at the Parser's look row: its own window's look (Standard, Auto, Capsule, Meter, Float), or
+        // inside the Kinah overlay that overlay's look
         // (the look's link sits under it, beside what the mode counts: the head's row holds the two picks and the switch)
         TextBlock? lookLink = null;
-        if (!_parserPrefs.Separate)
         {
-            var look = HudLooks.All.First(l => l.Key == HudLook);
+            string lookName = _parserPrefs.Separate ? ParserLookName(_parserPrefs.Look) : HudLooks.All.First(l => l.Key == HudLook).Name;
+            var look = new { Name = lookName };
             lookLink = QLinkify(PT($"Overlay look: {look.Name}  ›", 12, FontWeights.SemiBold, "Link"));
-            lookLink.ToolTip = Tip("How the Parser draws over the game (the Kinah overlay's look): pick another in Settings › In game.");
+            lookLink.ToolTip = Tip(_parserPrefs.Separate ? "How the Parser's own window looks over the game: pick another in Settings › In game › Parser." : "How the Parser draws over the game (the Kinah overlay's look): pick another in Settings › In game.");
             lookLink.Margin = new Thickness(16, 7, 0, 0);
             lookLink.VerticalAlignment = VerticalAlignment.Top;
             AutomationProperties.SetName(lookLink, $"Overlay look: {look.Name}. Change it");
@@ -1211,6 +1215,13 @@ public partial class MainWindow
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;
     internal void SetParserOverlayForTest(bool on) => SetParserOverlay(on);
     internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; DrawOverlayPills(); RedrawParserPage(); }
+
+    /// <summary>A Parser window look's name: "Standard" for its own panel, else the fight look's (Auto, Capsule, Meter, Float).</summary>
+    internal static string ParserLookName(string? key)
+    {
+        var k = ParserPrefs.LookOf(key);
+        return k == ParserPrefs.StandardLook ? "Standard" : HudLooks.All.First(l => l.Key == k).Name;
+    }
 
     /// <summary>The Parser's own window is wanted (the game in front aside): set by the overlay's tick when it has its own window.</summary>
     bool _parserOwnWanted;

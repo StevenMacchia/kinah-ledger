@@ -79,7 +79,9 @@ public sealed class ParserOverlay : Window
             Child = new TextBlock { Text = "• • •", FontSize = 8, Foreground = HudKit.Muted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) },
         };
         System.Windows.Automation.AutomationProperties.SetName(_grab, "Drag to move the overlay");
-        Content = new StackPanel { Children = { new Grid { Children = { HudGlass.On ? HudGlass.Ring(_panel) : _panel, _grab } }, _hint } };   // the glass's dark outer hairline round it
+        _panelFace = HudGlass.On ? HudGlass.Ring(_panel) : _panel;   // the glass's dark outer hairline round it
+        _face.Child = _panelFace;
+        Content = new StackPanel { Children = { new Grid { Children = { _face, _grab } }, _hint } };
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
         IsVisibleChanged += (_, _) => { if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
@@ -199,7 +201,76 @@ public sealed class ParserOverlay : Window
     }
 
     /// <summary>How solid the background is, as the Kinah overlay's (Options › In game): the same setting for both.</summary>
-    public void SetOpacity(double opacity) => _panel.SetOpacity(opacity);
+    public void SetOpacity(double opacity) { _opacity = opacity; _panel.SetOpacity(opacity); _lookFace?.SetOpacity(opacity); }
+    double _opacity = -1;
+
+    // ---- its look (Settings › In game › Parser › Overlay look) ----
+
+    readonly Border _face = new();
+    readonly FrameworkElement _panelFace;
+    HudStackLook? _lookFace;
+    string _lookKey = ParserPrefs.StandardLook;
+
+    /// <summary>
+    /// The window's look: "standard" (its own glass panel) or a look drawn for fights (Auto, Capsule, Meter, Float), drawn
+    /// as it is in a dungeon, the fight alone (its Kinah figures away): the Kinah overlay keeps its own look.
+    /// </summary>
+    public string Look
+    {
+        get => _lookKey;
+        set
+        {
+            var k = ParserPrefs.LookOf(value);
+            if (k == _lookKey) return;
+            _lookKey = k;
+            _lookFace = MakeLook(k, _still);
+            if (_lookFace != null && _opacity >= 0) _lookFace.SetOpacity(_opacity);
+            _face.Child = _lookFace == null ? _panelFace : _lookFace is IHudFightAbove ? null : _lookFace.Root;
+        }
+    }
+
+    /// <summary>A fight look for the Parser's own window, its Kinah part put away; null for the standard panel.</summary>
+    static HudStackLook? MakeLook(string key, bool still)
+    {
+        HudStackLook? l = key switch
+        {
+            HudLooks.Auto => new HudAuto { Still = still }, HudLooks.Capsule => new HudCapsule { Still = still },
+            HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still }, _ => null,
+        };
+        if (l == null) return null;
+        l.Update(new Dictionary<string, string>());
+        l.HideKinah(true);
+        return l;
+    }
+
+    /// <summary>Settings › In game › Parser › Width moved: a fight look drawn again at the new width.</summary>
+    public void ApplyFightWidth() => _lookFace?.ApplyWidth();
+
+    /// <summary>
+    /// A look's face in a fight as the Parser's own window draws it (Settings' look row): the standard panel, or a fight
+    /// look with its Kinah part away. Nothing animates; in the window's face and figures.
+    /// </summary>
+    public static FrameworkElement PreviewFace(string look, Encounter e, DateTime now, ParserMode mode, bool details)
+    {
+        FrameworkElement face;
+        if (MakeLook(ParserPrefs.LookOf(look), still: true) is { } l)
+        {
+            if (l is IHudFightAbove fa) face = fa.FightAbove(e, now) ?? new Border();
+            else { l.ShowFight(e, now); face = l.Root; }
+        }
+        else
+        {
+            var p = new ParserPanel(glass: HudGlass.On) { Mode = mode, ShowDetails = details };
+            p.Draw(e, now);
+            face = HudGlass.On ? HudGlass.Ring(p) : p;
+        }
+        var host = new Border { Child = face };
+        TextElement.SetFontFamily(host, HudKit.Text);
+        TextElement.SetFontWeight(host, FontWeights.Medium);
+        TextOptions.SetTextFormattingMode(host, TextFormattingMode.Display);
+        Typography.SetNumeralAlignment(host, FontNumeralAlignment.Tabular);
+        return host;
+    }
     /// <summary>The Kinah overlay's frame (its corner and padding for the figures picked), so the two look alike.</summary>
     public void SetFrame(double radius, Thickness padding) => _panel.SetFrame(radius, padding);
 
@@ -275,6 +346,13 @@ public sealed class ParserOverlay : Window
     /// <summary>The record (the panel draws it: Ui/ParserPanel below, shared with the Kinah overlay's parser section).</summary>
     public void Draw(Encounter e, DateTime now)
     {
+        if (_lookFace is IHudFightAbove fa)
+        {
+            var el = fa.FightAbove(e, now);
+            if (!ReferenceEquals(_face.Child, el)) _face.Child = el;
+            return;
+        }
+        if (_lookFace != null) { _lookFace.ShowFight(e, now); return; }
         _panel.Mode = Mode; _panel.ShowDetails = ShowDetails;
         _panel.Draw(e, now);
     }
