@@ -43,6 +43,7 @@ const UA = 'kinah-ledger skill-fill (https://github.com/StevenMacchia/kinah-ledg
 const ACOMP = { repo: 'Swellshinider/AcompanION', commit: 'beb75aef160d74f37300701603490e9c2f41df13', file: 'public/gamedata.json', license: 'MIT' };
 const PING = { repo: 'gunba/pingmaker', commit: '09687ad3ddc19f5189562eb8e17375f7c45e02c9', file: 'skills.json', license: 'MIT' };
 const WAFFLE = { repo: 'Waffle-ens/waffle_meter', commit: '2bef5591d27f06f9731a862f6bfab3cf94b8f3d9', dir: 'dotnet/Assets/SkillIcons', license: 'MIT' };
+const WAFFLE_KO = { repo: 'Waffle-ens/waffle_meter', commit: '33375dc9eb3c701e10ddb4545adf7ac29c4c1aae', file: 'dotnet/Assets/json/skills.json', license: 'MIT' };
 const CHECK = { repo: 'taengu/A2Tools-DPS-Meter', commit: '537452fbac9fc1db1e46e0b06d42015594fa9f25', file: 'src/data/i18n/skills/en.json', license: 'GPL-3.0' };
 const NC_ICON = 'https://assets.playnccdn.com/static-aion2-gamedata/resources/';
 const MB_ICON = 'https://metabot.gg/web/aion2/skills/';
@@ -201,6 +202,29 @@ const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-'
     say(`added ${n} spirit attacks at other ranks, named for their spirit (each confirmed by the check table)`);
   }
 
+  // the same skill under another id: Waffle's MIT table names every id in Korean. An id whose Korean name is the one an
+  // already-named id has (Fire Spirit: Summon Meteor at each spirit form; a Brawler's Focused Block) takes that id's English
+  // name, when every named id with that Korean name has the one English name and the check table agrees.
+  {
+    const ko = {};
+    for (const r of await table(WAFFLE_KO)) if (r?.code != null && r.name) ko[String(r.code)] = r.name;
+    const english = {};   // Korean name -> { English names, the first id }
+    for (const [k, v] of Object.entries(skills)) if (ko[k]) { const e = (english[ko[k]] ??= { names: new Set(), id: k }); e.names.add(v.name); }
+    let n = 0; const off = [];
+    for (const k of Object.keys(check).filter(k => !skills[k] && showable(Number(k)) && !junk(check[k]) && ko[k])) {
+      const e = english[ko[k]];
+      if (!e || e.names.size !== 1) continue;
+      const name = [...e.names][0];
+      if (check[k] !== name) { off.push(`${k} "${name}" (as ${e.id}), the client table "${check[k]}"`); continue; }
+      const id = Number(k);
+      const cls = id >= 10_000_000 ? CLASS_BY_FAMILY[Math.floor(id / 1_000_000)] ?? '' : /^\w+ Spirit: /.test(name) ? 'spiritmaster' : '';
+      skills[k] = { name, cls, src: 'bridge', as: e.id };
+      if (skills[e.id].icon || skills[e.id].src === 'metabot') skills[k].icon = '=' + e.id;
+      n++;
+    }
+    say(`added ${n} by the same skill's Korean name${off.length ? `; ${off.length} left out, the client table disagreeing: ${off.join('; ')}` : ''}`);
+  }
+
   // the names only the GPL client table has: left out
   const checkOnly = Object.entries(check).filter(([k, n]) => !skills[k] && showable(Number(k)) && !junk(n)).map(([k]) => k);
   say(`names only the client table has (left out, "<Class> skill" in the tracker): ${checkOnly.length}`);
@@ -293,6 +317,7 @@ const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-'
       item: 'https://metabot.gg/en/aion-2/items/<item> (a Theostone\'s name and icon, --verify-items)',
       ncitem: 'NCSoft\'s AION 2 item dictionary (data/tw-items.json, tools/crawl-tw.js): a Theostone item\'s name; its skill id by the item-to-skill rule in tools/skill-fill.js, which fits every MIT-paired Theostone',
       family: 'a spirit\'s basic attack at another rank: the name every MIT-named id of that spirit (the id\'s tens digit) shares; "of" is one of them',
+      bridge: `the same skill under another id: its Korean name in https://github.com/${WAFFLE_KO.repo}/blob/${WAFFLE_KO.commit}/${WAFFLE_KO.file} (${WAFFLE_KO.license}) is the one "as" has, so it takes "as"'s English name`,
       icon: `"nc:<file>": ${NC_ICON}<file>.png; "item:<file>": ${MB_ITEM_ICON}<file>; "waffle": https://github.com/${WAFFLE.repo}/blob/${WAFFLE.commit}/${WAFFLE.dir}/<id>.png (${WAFFLE.license}); none on a MetaBot skill: ${MB_ICON}<id>.webp`,
     };
     const sorted = {};

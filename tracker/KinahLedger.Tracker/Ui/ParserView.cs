@@ -91,7 +91,7 @@ public sealed class FightView
                 At = d.At, BossHpLeft = d.BossHpLeft, Killer = Source(d.Killer, d.KillerSkill),
                 Last = d.Last.Select(h => (h.At, Source(h.Source, h.Skill), h.Amount, h.HpAfter, false)).ToList(),
             }).ToList();
-        if (f.Buffs is { Count: > 0 } buffs) m.Buffs = buffs.Select(b => (Abilities.Name(b.Skill, f.Class), b.Seconds, b.Share)).ToList();
+        if (f.Buffs is { Count: > 0 } buffs) m.Buffs = buffs.Select(b => (Abilities.Name(b.Id > 0 ? Abilities.SkillOfEffect(b.Id) : b.Skill, f.Class), b.Seconds, b.Share)).ToList();   // by the effect's id, so records kept before SkillOfEffect name right too
     }
 
     /// <summary>Who dealt a hit taken, in words: the attacker's name when known (the boss), else its skill's when the skill list names it, else "".</summary>
