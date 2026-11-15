@@ -438,6 +438,28 @@ public static partial class WpfApp
             HudStackLook.FightWidth = w0;
             Motion.Still = still0;
         }
+        // in a Transcendence, an Expedition or a Sanctuary the meter replaces the Kinah line (Steven, 0.10.95): no look shows
+        // the hour's figure there, compact or expanded (Parser v2), whatever the fight
+        {
+            bool still = Motion.Still; Motion.Still = true;
+            bool exp = ParserRows.ExpandedPref;
+            var (_, pull) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
+            var shown = new List<string>();
+            foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+                foreach (var expanded in new[] { false, true })
+                {
+                    ParserRows.ExpandedPref = expanded;
+                    var hd = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+                    hd.Update(new Dictionary<string, string> { ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04" });
+                    hd.ShowParser(pull, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc), ParserMode.Bosses, false);
+                    hd.SetKinahHidden(true);
+                    hd.Show(); DoEvents();
+                    if (VisibleTexts((DependencyObject)hd.Content).Any(t => t.Contains("1.27M") || t.Contains("894K"))) shown.Add($"{look}{(expanded ? " expanded" : "")}");
+                    hd.Close();
+                }
+            ParserRows.ExpandedPref = exp; Motion.Still = still;
+            check(shown.Count == 0, $"in a dungeon no look shows the Kinah line, compact or expanded{(shown.Count > 0 ? ": shown in " + string.Join(", ", shown) : "")}");
+        }
         // expanded by default: the Parser's section opens above the Kinah line and the Kinah line stays where it is
         {
             bool still = Motion.Still; Motion.Still = true;
@@ -494,6 +516,20 @@ public static partial class WpfApp
 
     /// <summary>A text block's words, its runs too (Text alone misses runs added in code).</summary>
     static string BlockText(System.Windows.Controls.TextBlock t) => t.Inlines.Count > 0 ? new System.Windows.Documents.TextRange(t.ContentStart, t.ContentEnd).Text : t.Text;
+
+    /// <summary>The texts drawn on screen under <paramref name="root"/>: only those visible (a collapsed part's are left out).</summary>
+    static List<string> VisibleTexts(DependencyObject root)
+    {
+        var list = new List<string>();
+        void Walk(DependencyObject d)
+        {
+            if (d is UIElement u && !u.IsVisible) return;
+            if (d is System.Windows.Controls.TextBlock t && t.Text.Length > 0) list.Add(t.Text);
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(root);
+        return list;
+    }
 
     /// <summary>Every text and hover on the Parser page, for the checks above.</summary>
     static (HashSet<string> Texts, List<string> Tips) ParserTexts(DependencyObject root)

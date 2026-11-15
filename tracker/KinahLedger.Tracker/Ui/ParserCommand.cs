@@ -172,15 +172,14 @@ static class ParserCommand
         void Add(string fig, string word, Brush? tone = null)
         {
             var t = T("", 12.5, Muted, trim: false); Typography(t);
-            if (n0++ > 0) t.Inlines.Add(R("·  ", 12.5, Faint));
-            t.Inlines.Add(R(fig, 12.5, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + word + "  ", 12.5, Muted));
+            t.Inlines.Add(R(fig, 12.5, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + word, 12.5, Muted));
+            t.Margin = new Thickness(0, 0, 16, 0);
+            n0++;
             wp.Children.Add(t);
         }
         if (v.HasDamage) Add(Amounts.Short(v.Members.Sum(m => m.Damage)), "damage");
         // a boss under way: its HP left of its whole (the ring holds the share)
         if (e.Live && e.ModeKind == ParserMode.Bosses && e.BossHpLeft != null && e.BossMaxHp > 0) Add(Amounts.Short(Math.Max(0, e.BossHp)), $"of {Amounts.Short(e.BossMaxHp)} HP left");
-        int n = v.Members.Count(m => !v.HasDamage || m.Damage > 0);
-        if (n > 0) Add(n.ToString(CultureInfo.InvariantCulture), n == 1 ? "member" : "in the group");
         if (v.Deaths > 0) Add(v.Deaths.ToString(CultureInfo.InvariantCulture), v.Deaths == 1 ? "death" : "deaths", C(Coral));
         int near = e.Kills.Count(k => !k.Boss && !k.Yours);
         if (ctx.Kills && near > 0 && e.ModeKind != ParserMode.Fights) Add(near.ToString(CultureInfo.InvariantCulture), "kills near you");

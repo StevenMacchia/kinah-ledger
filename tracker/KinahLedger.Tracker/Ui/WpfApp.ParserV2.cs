@@ -99,7 +99,9 @@ public static partial class WpfApp
         void Hud(string look, Encounter e, DateTime at, string file)
         {
             var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
-            h.Update(kinah); h.ShowParser(e, at, ParserMode.Bosses, details: false); h.Show(); DoEvents();
+            h.Update(kinah); h.ShowParser(e, at, ParserMode.Bosses, details: false);
+            h.SetKinahHidden(true);   // a boss pull in a dungeon: the meter in the Kinah line's place (0.10.95)
+            h.Show(); DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
             h.Close();
         }
