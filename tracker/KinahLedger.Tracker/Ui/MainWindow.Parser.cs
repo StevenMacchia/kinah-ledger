@@ -343,6 +343,10 @@ public partial class MainWindow
         if (_parserPrefs.AlwaysOn) show = AlwaysMeter(now);
         // the small DPS on the Kinah line is the meter's figure: not twice
         _hud?.SetFarmDps(_parserPrefs.AlwaysOn ? "" : FarmDpsText(now));
+        // the meter's clock redraws this one between hits (MeterClockTick)
+        _meterShown = _parserPrefs.Overlay ? show : null;
+        _meterInKinah = !ParserOverlaySeparate;
+        StartMeterClock();
         if (!ParserOverlaySeparate)
         {
             // expanded by default: the section above the Kinah line; its own window stays away
@@ -389,6 +393,42 @@ public partial class MainWindow
         _parserOverlay.ShowWanted(true);
     }
 
+
+    // ---- the meter's clock (Steven, 2026-11-15: "it should be refreshing the numbers every like 0.01 seconds and moving it
+    // depending on if youre attacking or not") ----
+    // A hit redraws the meter at once (OnParserChanged). Between hits the DPS falls as time passes, so the meter is drawn
+    // again 20 times a second from the copy last fetched: no new copy of the record, only the clock moves. Only while a live
+    // record is on a visible meter.
+
+    /// <summary>How often the live meter is drawn between hits.</summary>
+    const int MeterClockMs = 50;
+    System.Windows.Threading.DispatcherTimer? _meterClock;
+    Encounter? _meterShown;
+    bool _meterInKinah;
+    /// <summary>For the options test: the meter's clock ticks and the live meters it drew.</summary>
+    internal static int MeterClockDraws;
+
+    void StartMeterClock()
+    {
+        if (_meterClock != null || _demo) return;
+        _meterClock = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(MeterClockMs) };
+        _meterClock.Tick += (_, _) => MeterClockTick(DateTime.UtcNow);
+        _meterClock.Start();
+    }
+
+    internal void MeterClockTick(DateTime now)
+    {
+        if (_demo || _meterShown is not { Live: true, End: null } e) return;
+        try
+        {
+            if (_meterInKinah) { if (_hud is { IsVisible: true } h) { h.ShowParser(e, now, ParserModeNow, PDetails); MeterClockDraws++; } }
+            else if (_parserOverlay is { IsVisible: true } o) { o.Draw(e, now); MeterClockDraws++; }
+        }
+        catch (Exception ex) { CrashLog.Write("parser meter clock", ex); _meterShown = null; }
+    }
+
+    /// <summary>For the options test: the meter's clock on a given record, as if the overlay showed it.</summary>
+    internal void SetMeterShownForTest(Encounter? e, bool inKinah) { _meterShown = e; _meterInKinah = inKinah; }
 
     /// <summary>
     /// The meter to hold while in a dungeon with no fight under way: the last fight that ended in this dungeon, else its ready
@@ -561,7 +601,7 @@ public partial class MainWindow
         foreach (var (always, label, tip) in new[]
         {
             (false, "Only boss fights", "The meter shows in boss fights and in Transcendence, Expeditions and Sanctuaries; outside them your DPS is one small figure on the Kinah line."),
-            (true, "Always on", $"The meter is always up, the open world and the Abyss too. It starts from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after {BossParser.AlwaysIdleSeconds / 60:0} minutes without fighting."),
+            (true, "Always on", $"The meter is always up, the open world and the Abyss too. It starts from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after {BossParser.AlwaysIdleSeconds:0} seconds without fighting."),
         })
         {
             var b = new Button { Content = label, Height = 26, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(meters.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = Tip(tip) };
@@ -604,7 +644,7 @@ public partial class MainWindow
         // Always on: what is kept, then the meter's rule (Bosses only's own sentence says the open world never counts: it is still never kept)
         var kept = !_parserPrefs.AlwaysOn ? BossParser.Counts(ParserModeNow)
             : ParserModeNow == ParserMode.Bosses ? "Keeps each boss pull in Transcendence, Expeditions and Sanctuaries." : BossParser.Counts(ParserModeNow);
-        var counts = PT(kept + (_parserPrefs.AlwaysOn ? $" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {BossParser.AlwaysIdleSeconds / 60:0} minutes without fighting." : ""), 12, FontWeights.Medium, "Muted");
+        var counts = PT(kept + (_parserPrefs.AlwaysOn ? $" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {BossParser.AlwaysIdleSeconds:0} seconds without fighting." : ""), 12, FontWeights.Medium, "Muted");
         counts.TextWrapping = TextWrapping.Wrap; counts.Margin = new Thickness(2, 7, 0, 0);
         var under = new Grid();
         under.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

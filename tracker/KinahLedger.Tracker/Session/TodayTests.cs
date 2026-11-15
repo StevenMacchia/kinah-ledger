@@ -38,6 +38,28 @@ public static class TodayTests
             long zoneA = s.ZoneView.Totals().Kinah;
             Check("zone A: the zone view counted the Kinah", zoneA.ToString(), "819");
             Check("zone A: all zones and today counted the same", $"{all.Totals().Kinah == zoneA} {day.Totals().Kinah == zoneA}", "True True");
+            // a run started holds the all-zones count (Steven, 2026-11-15: "switching to a run should stop the tracker's kinah per
+            // hour in a zone"): the run's Kinah and time are the run's; the count goes on when the run stops, today counts all
+            {
+                var s2 = new TrackerSession(null, settings, items, "Test");
+                var all2 = new SessionEngine(items); var day2 = new SessionEngine(items);
+                s2.AllView = all2; s2.DayView = day2;
+                var r0 = DateTime.UtcNow;
+                s2.ApplyZone("Western Cantas Valley", r0);
+                s2.Count(new KinahChanged(r0.AddSeconds(1), 500, false));
+                var run = new SessionEngine(items);
+                s2.Secondary = run;
+                s2.Count(new KinahChanged(r0.AddSeconds(2), 900, false));
+                string during = $"{all2.Totals().Kinah} {run.Totals().Kinah} {all2.Paused} {day2.Totals().Kinah}";
+                var fresh = new SessionEngine(items);
+                s2.AllView = fresh;   // Start run's fresh all-zones count, set while the run is under way: held from the start
+                bool freshHeld = fresh.Paused;
+                s2.AllView = all2;
+                s2.Secondary = null;
+                s2.Count(new KinahChanged(r0.AddSeconds(3), 700, false));
+                Check("a run under way holds the all-zones count: before / run / held / today, then the fresh one held, then after",
+                    $"{during} {freshHeld} {all2.Totals().Kinah} {all2.Paused} {day2.Totals().Kinah}", "500 900 True 1400 True 1200 False 2100");
+            }
             var t1 = t0.AddSeconds(30);
             // 0.10.70 (Steven, 2026-11-13: "dont restart the area every time u go somewhere else"): a new zone is a move only
             // once it has been read for a minute (or behind a loading screen); until then the zone view goes on

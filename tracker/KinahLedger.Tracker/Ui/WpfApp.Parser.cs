@@ -486,6 +486,19 @@ public static partial class WpfApp
                 po.Close();
             }
             Motion.Still = st0;
+            // the meter moves between hits (Steven, 2026-11-15: "refreshing the numbers every like 0.01 seconds and moving it
+            // depending on if youre attacking or not"): the same live record drawn half a second later reads a lower DPS
+            {
+                var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000 };
+                po.Draw(pullL!, nowL); po.Show(); DoEvents();
+                var t1 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
+                po.Draw(pullL!, nowL.AddSeconds(0.5)); DoEvents();
+                var t2 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
+                po.Close();
+                double Top1(List<string> ts) => ts.Select(x => double.TryParse(x.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : -1).Where(v => v >= 1000).DefaultIfEmpty(-1).Max();
+                check(!t1.SequenceEqual(t2) && Top1(t2) < Top1(t1),
+                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(t1):N0} to {Top1(t2):N0} half a second on)");
+            }
             check(moved.Count == 0, $"the Parser's own window grows up: the meter's bottom edge stays where it is as it grows into a pull and back, in each look{(moved.Count > 0 ? ": " + string.Join("; ", moved) : "")}");
             check(ParserPrefs.FromText("{\"Left\":10,\"Top\":20}").Bottom == null, "...a file from before has no bottom edge kept (its top places it once)");
         }

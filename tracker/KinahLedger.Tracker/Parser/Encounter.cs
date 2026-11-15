@@ -38,30 +38,6 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The last damage dealt in it, and the boss's last HP fall: a wipe or leaving ends there, never later (null before any).</summary>
     public DateTime? LastDamageAt { get; set; }
     public DateTime? LastHpFallAt { get; set; }
-
-    /// <summary>
-    /// Combat time (Steven, 2026-11-15: "make sure that the DPS meter is actually telling you your combat dps"): a fight's DPS
-    /// outside boss pulls and runs is over the time the group was fighting, not the walk between packs. Each gap between the
-    /// group's hits counts up to <see cref="CombatGapSeconds"/>, and so does the time since the last hit; so the figure eases
-    /// for a few seconds after the last hit, then holds while nobody fights, and never jumps when fighting starts again.
-    /// </summary>
-    public const double CombatGapSeconds = 5;
-    /// <summary>The combat seconds up to <see cref="LastCombatHit"/>; the group's last hit (null before any).</summary>
-    public double CombatSeconds { get; set; }
-    public DateTime? LastCombatHit { get; set; }
-
-    /// <summary>A hit by the group at <paramref name="at"/>: the time since the last one, up to <see cref="CombatGapSeconds"/>, is combat.</summary>
-    public void CombatHit(DateTime at)
-    {
-        if (LastCombatHit is not { } l) { LastCombatHit = at; return; }
-        if (at <= l) return;
-        CombatSeconds += Math.Min((at - l).TotalSeconds, CombatGapSeconds);
-        LastCombatHit = at;
-    }
-
-    /// <summary>The combat seconds now: those up to the last hit, and the time since it (to the end, if ended) up to <see cref="CombatGapSeconds"/>.</summary>
-    public double CombatSecondsAt(DateTime now) =>
-        LastCombatHit is { } l ? CombatSeconds + Math.Clamp(((End ?? now) - l).TotalSeconds, 0, CombatGapSeconds) : 0;
     /// <summary>A pull: "kill", "wipe", "left". A run: "cleared" (its final boss died), "left". A fight: "died", "kill" (you killed), "ended". "" while under way.</summary>
     public string Outcome { get; set; } = "";
     /// <summary>
@@ -272,10 +248,10 @@ public sealed class Encounter : IJsonOnDeserialized
     /// The seconds DPS is over: a run's boss pulls when its figures are the bosses' damage (and an older run's, which counted
     /// that way), else the whole record.
     /// </summary>
-    public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds)
-        // a fight (Every fight, the open world, the Always on meter): its combat time; a record from before kept none
-        : ModeKind == ParserMode.Fights && LastCombatHit != null ? CombatSecondsAt(now)
-        : Duration(now).TotalSeconds;
+    // Damage per second is over the real time since the start (Steven, 2026-11-15, on 0.10.106's combat time, which held the
+    // figure while he walked away: "i left and didnt kill anything for a while and it ... didnt drop the dps ... at all"):
+    // fighting raises it, every second without a hit lowers it, and the meter shows that as it happens
+    public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
 
     /// <summary>Under this many seconds a DPS isn't a figure yet and shows "–" (no 1 s floor making a short fight look big).</summary>
     public const double MinDpsSeconds = 3;

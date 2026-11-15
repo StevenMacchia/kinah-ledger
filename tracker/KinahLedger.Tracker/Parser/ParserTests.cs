@@ -1487,22 +1487,24 @@ public static class ParserTests
             var a = p.AlwaysLive;
             Check(a is { Kind: "Open world", HasDamage: true } && a.Members.Sum(f => f.Damage) == 15_000 && !a.Waiting,
                 $"...your first hit in the open world starts it, your group's hits count: {a?.Kind}, {a?.Members.Sum(f => f.Damage)}");
-            p.Take(new DamageDealt(t.AddSeconds(60), 0, 5001, 7_000, Reason: 4));             // only strangers fight on
-            p.Tick(t.AddSeconds(3 + 119));
-            Check(p.AlwaysLive != null, "...119 s after your group's last hit it carries on");
-            p.Tick(t.AddSeconds(3 + 120));
+            // a few seconds without fighting ends it (Steven, 2026-11-15: "it can stop when you stop DPSing for a few seconds while
+            // in the open world and refresh"; it was 2 minutes)
+            p.Take(new DamageDealt(t.AddSeconds(5), 0, 5001, 7_000, Reason: 4));              // only strangers fight on
+            p.Tick(t.AddSeconds(3 + BossParser.AlwaysIdleSeconds - 1));
+            Check(p.AlwaysLive != null, $"...{BossParser.AlwaysIdleSeconds - 1:0} s after your group's last hit it carries on");
+            p.Tick(t.AddSeconds(3 + BossParser.AlwaysIdleSeconds));
             var held = p.AlwaysEnded;
-            Check(p.AlwaysLive == null && held is { Live: false } && held.End == t.AddSeconds(3) && held.Members.Sum(f => f.Damage) == 15_000,
-                $"...2 minutes without your group fighting (strangers' hits don't count) and it ends at your last hit, held with its figures: {held?.End:HH:mm:ss}, {held?.Members.Sum(f => f.Damage)}");
+            Check(BossParser.AlwaysIdleSeconds <= 6 && p.AlwaysLive == null && held is { Live: false } && held.End == t.AddSeconds(3) && held.Members.Sum(f => f.Damage) == 15_000,
+                $"...{BossParser.AlwaysIdleSeconds:0} s without your group fighting (strangers' hits don't count) and it ends at your last hit, held with its figures: {held?.End:HH:mm:ss}, {held?.Members.Sum(f => f.Damage)}");
             p.Take(new DamageDealt(t.AddSeconds(200), 1, 5002, 4_000, "Swoly", true));
             Check(p.AlwaysLive is { } a2 && a2.Members.Sum(f => f.Damage) == 4_000 && a2.Start == t.AddSeconds(200), "...and the next hit starts it from 0");
             Check(kept.Count == 0, $"...never kept in Bosses only ({kept.Count} kept)");
             // being hit is fighting too
-            p.Take(new HitTaken(t.AddSeconds(290), 7000, 1, 3_000, 0, 7000));
-            p.Tick(t.AddSeconds(200 + 150));
-            Check(p.AlwaysLive != null, "...a hit taken by you keeps it going (150 s after your last hit, 60 s after the hit taken)");
-            p.Tick(t.AddSeconds(290 + 120));
-            Check(p.AlwaysLive == null, "...and 2 minutes after the hit taken it ends");
+            p.Take(new HitTaken(t.AddSeconds(203), 7000, 1, 3_000, 0, 7000));
+            p.Tick(t.AddSeconds(200 + BossParser.AlwaysIdleSeconds + 1));
+            Check(p.AlwaysLive != null, "...a hit taken by you keeps it going (past the idle time after your last hit, inside it after the hit taken)");
+            p.Tick(t.AddSeconds(203 + BossParser.AlwaysIdleSeconds));
+            Check(p.AlwaysLive == null, "...and it ends that long after the hit taken");
 
             // a field or world boss out here: from 0 under its name; the same boss said again carries on
             p.Take(new DamageDealt(t.AddSeconds(500), 1, 5003, 9_000, "Swoly", true));
@@ -1581,8 +1583,9 @@ public static class ParserTests
             Check(!new ParserPrefs().AlwaysOn && ParserPrefs.FromText("{\"AlwaysOn\":true}").AlwaysOn, "Always on: off by default (Only boss fights), a pick kept in parser.json");
         }
 
-        // combat DPS (Steven, 2026-11-15: "make sure that the DPS meter is actually telling you your combat dps. seems like its
-        // too high or stuck"): a fight's DPS is over its combat time, each gap between hits and the time since the last up to 5 s
+        // DPS over the real time since the start (Steven, 2026-11-15: "i left and didnt kill anything for a while and it ... didnt
+        // drop the dps ... at all" and "moving it depending on if youre attacking or not"): fighting raises it, a second
+        // without a hit lowers it
         {
             var (p, _) = New();
             p.Take(new GroupChanged(t, new[] { Me }));
@@ -1591,24 +1594,16 @@ public static class ParserTests
             p.Take(new DamageDealt(t.AddSeconds(4), 1, 5000, 10_000, "Swoly", true));
             var a = p.AlwaysLive!;
             double At(Encounter e, double s) => e.Dps(e.You!, t.AddSeconds(s));
-            Check(Math.Abs(At(a, 4) - 7_500) < 1, $"combat DPS: 30K in 4 s of fighting reads 7,500 ({At(a, 4):N0})");
-            Check(Math.Abs(At(a, 9) - 30_000 / 9.0) < 1 && Math.Abs(At(a, 60) - At(a, 9)) < 0.01 && Math.Abs(At(a, 110) - At(a, 9)) < 0.01,
-                $"...it eases for 5 s after the last hit, then holds while you walk to the next pack ({At(a, 9):N0}, {At(a, 60):N0} at a minute, {At(a, 110):N0} later), not sliding toward 0");
-            p.Take(new DamageDealt(t.AddSeconds(100), 1, 5001, 10_000, "Swoly", true));
+            Check(Math.Abs(At(a, 4) - 7_500) < 1, $"DPS: 30K in 4 s reads 7,500 ({At(a, 4):N0})");
+            Check(At(a, 4.1) < At(a, 4) && At(a, 10) < At(a, 5) && Math.Abs(At(a, 60) - 500) < 1 && At(a, 110) < At(a, 60),
+                $"...and it falls every moment without a hit ({At(a, 4.1):N0} a tenth of a second on, {At(a, 10):N0} at 10 s, {At(a, 60):N0} at a minute, {At(a, 110):N0} later): it never holds while you walk away");
+            p.Take(new DamageDealt(t.AddSeconds(100), 1, 5001, 40_000, "Swoly", true));
             var b = p.AlwaysLive!;
-            Check(Math.Abs(At(b, 100) - 40_000 / 9.0) < 1, $"...the next pack's first hit adds its damage and no walk time: 40K over 9 s ({At(b, 100):N0}), no jump down");
-            p.Take(new DamageDealt(t.AddSeconds(102), 1, 5001, 10_000, "Swoly", true));
-            var c = p.AlwaysLive!;
-            Check(Math.Abs(At(c, 102) - 50_000 / 11.0) < 1 && Math.Abs(c.GroupDps(t.AddSeconds(102)) - 50_000 / 11.0) < 1,
-                $"...and fighting on counts again: 50K over 11 s ({At(c, 102):N0}), the group's figure the same");
-            // the walk used to count: 50K over the 102 s since the first hit read 490 a second
-            Check(c.Duration(t.AddSeconds(102)).TotalSeconds > 100 && At(c, 102) > 9 * 50_000 / c.Duration(t.AddSeconds(102)).TotalSeconds,
-                "...where the old figure over the whole 102 s read nine times lower");
-            // a record kept before combat time: over its length as before
-            var old = System.Text.Json.JsonSerializer.Deserialize<Encounter>(System.Text.Json.JsonSerializer.Serialize(c).Replace("\"LastCombatHit\":\"", "\"LastCombatHitWas\":\""));
-            Check(old != null && old.LastCombatHit == null && Math.Abs(old.DpsSeconds(t.AddSeconds(102)) - old.Duration(t.AddSeconds(102)).TotalSeconds) < 0.01,
-                "...a fight kept before it has no combat time and reads over its length");
-            // a boss pull: over the pull's time as ever (a boss fight is all combat)
+            Check(At(b, 100) > At(a, 99.9), $"...a hit raises it at once ({At(a, 99.9):N0} to {At(b, 100):N0})");
+            p.Tick(t.AddSeconds(100 + BossParser.AlwaysIdleSeconds));
+            Check(p.AlwaysLive == null && p.AlwaysEnded is { } fin && Math.Abs(fin.Dps(fin.You!, t.AddSeconds(500)) - 70_000 / 100.0) < 1,
+                "...a few seconds without a hit end it: the fight's result is held at its last hit (70K over its 100 s), the next hit starts from 0");
+            // a boss pull: over the pull's own time
             var (q, _) = New();
             q.Take(new GroupChanged(t, new[] { Me }));
             q.Take(new InstanceEntered(t, ContentKind.Expedition, "Fire Temple", 1));
@@ -1617,7 +1612,7 @@ public static class ParserTests
             q.Take(new DamageDealt(t.AddSeconds(20), 1, 90, 60_000, "Swoly", true));
             var pull = q.AlwaysLive!;
             Check(pull.Mode == "boss" && Math.Abs(pull.DpsSeconds(t.AddSeconds(31)) - pull.Duration(t.AddSeconds(31)).TotalSeconds) < 0.01,
-                $"...a boss pull stays over the pull's own time ({pull.DpsSeconds(t.AddSeconds(31)):0} s)");
+                $"...a boss pull is over the pull's own time ({pull.DpsSeconds(t.AddSeconds(31)):0} s)");
         }
         // the Kinah line's farming figure: never over less than 3 s (a mob killed in a second read 209.7K a second)
         {
