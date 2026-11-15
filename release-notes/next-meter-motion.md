@@ -1,0 +1,12 @@
+Kinah Ledger tracker: the DPS meter moves like a pro meter.
+
+- **Rolling figures.** Each digit of a DPS figure turns on its own, like an odometer, and the column never moves.
+- **Bars that leave a trail.** When a bar shrinks, the length it lost holds a moment and shrinks away; a gain flashes light. A big drop in the boss's HP leaves a red chunk that slides onto the bar.
+- **Big hits pop.** A hit of three times a member's usual hit floats up off their row ("+858K"), gold for a crit when crits are on. At most two on a row and four in all.
+- **Overtakes.** The member who passes another lifts as their row slides past, and their rank chip glows.
+- **The fight's end.** A light sweeps across the rows, the green AVG. DPS badge stamps in, and the gold TOP DPS plate slides in with a glint. A personal best flares your figure gold.
+- **Your pace.** As you near your best on a boss, your row's frame glows warmer, and gold once you're beating it.
+
+Every move is short and stays clear of the figures. With Windows animations off, the meter shows the settled figures only.
+
+Installed copies update by themselves in the background.

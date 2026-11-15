@@ -195,6 +195,8 @@ public partial class MainWindow
     DateTime _parserStatsAt = DateTime.UtcNow;
     /// <summary>Capture to screen, in ms, of the Parser's redraws.</summary>
     internal static ParserLatency ParserLatencyStats { get; } = new();
+    /// <summary>For parser-latency: the window's own time on each meter draw (a hit's redraw, the clock's), in ms.</summary>
+    internal static ParserLatency MeterDrawStats { get; } = new();
     /// <summary>The same since the last line in reads.log (the line a minute starts it again; the one above keeps everything).</summary>
     static readonly ParserLatency ParserLatencyMinute = new();
     /// <summary>A replay's Parser (parser-latency), in place of the session's; the overlay shows whatever is in front.</summary>
@@ -241,12 +243,14 @@ public partial class MainWindow
         Interlocked.Increment(ref ParserDraws);
         lock (_parserDrawGate) { oldest = _parserOldest; _parserOldest = null; _parserDrawQueued = false; }
         _parserLastDraw = System.Diagnostics.Stopwatch.GetTimestamp();
+        long drawStart = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
             if (_part == "Parser") FillParserPage();
             ParserOverlayTick();
         }
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
+        MeterDrawStats.Add(System.Diagnostics.Stopwatch.GetElapsedTime(drawStart).TotalMilliseconds);
         bool shown = (_part == "Parser" && IsVisible) || _parserOverlay is { IsVisible: true } || _hud is { IsVisible: true, ParserShown: true };
         if (oldest is not { } o || !shown) return;
         Interlocked.Increment(ref ParserDrawsShown);
@@ -400,12 +404,14 @@ public partial class MainWindow
     internal void MeterClockTick(DateTime now)
     {
         if (_demo || _meterShown is not { Live: true, End: null } e) return;
+        long drawStart = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
             if (_meterInKinah) { if (_hud is { IsVisible: true } h) { h.ShowParser(e, now, ParserModeNow, PDetails); MeterClockDraws++; } }
             else if (_parserOverlay is { IsVisible: true } o) { o.Draw(e, now); MeterClockDraws++; }
         }
         catch (Exception ex) { CrashLog.Write("parser meter clock", ex); _meterShown = null; }
+        MeterDrawStats.Add(System.Diagnostics.Stopwatch.GetElapsedTime(drawStart).TotalMilliseconds);
     }
 
     /// <summary>For the options test: the meter's clock on a given record, as if the overlay showed it.</summary>

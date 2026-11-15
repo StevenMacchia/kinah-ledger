@@ -71,6 +71,8 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     public virtual void ApplyWidth() { }
     protected Encounter? _lastFight;
     protected DateTime _lastNow;
+    /// <summary>This look's own place for the boss HP's red chunk (Motion.HpGhost).</summary>
+    protected readonly string _hpPlace = Motion.HpPlace();
     public void SetAccuracy(string? text, bool toCheck) { _acc = text ?? ""; _accCheck = toCheck; }
 
     /// <summary>A meter's figure (DPS, a share, a clock): tabular digits, so a figure that changes as hits land never shifts its column.</summary>
@@ -229,7 +231,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
     // the time to a tenth of a second: a live DPS moves as the meter's clock runs, not once a second (Steven, 2026-11-15)
-    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}";
+    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}";
 
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
@@ -359,6 +361,7 @@ sealed class HudCapsule : HudStackLook
             var hpRow = new Grid { Margin = new Thickness(0, 4, 0, 6) };
             hpRow.ColumnDefinitions.Add(new ColumnDefinition()); hpRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var hb = Bar(hp, hp < .34 ? B(RecC) : Gold, 3, new Thickness(0)); hb.VerticalAlignment = VerticalAlignment.Center; hpRow.Children.Add(hb);
+            Motion.HpGhost(hb, _hpPlace, e.Id, hp, now);
             if (Hp(e, 11) is { } hpText) { hpText.Margin = new Thickness(8, 0, 0, 0); Grid.SetColumn(hpText, 1); hpRow.Children.Add(hpText); }
             _meterBody.Children.Add(hpRow);
         }
@@ -548,6 +551,8 @@ sealed class HudMeter : HudStackLook
         _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold : Ink;
         double hp = e.BossHpLeft is { } h && e.Live ? h : 0;
         _hpFill.Width = _hpLine.Width = W * hp;
+        // a big drop: a red chunk in the header from the old HP to the new, shrinking onto the fill
+        if (hp > 0) Motion.HpGhost(_head, _hpPlace, e.Id, hp, now, 0, 0.42);
         // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
         _hpNow = hp > 0 ? ($"{Math.Round(hp * 100):0}%", ParserPanel.HpLeft(e), true) : (!e.Live && e.Outcome == "kill" ? "Killed" : !e.Live && e.Outcome == "wipe" ? "Wiped" : "", "", false);
         _hpPct.Tag = !e.Live && e.Outcome == "kill";
@@ -687,7 +692,7 @@ sealed class HudFloat : HudStackLook
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
             head.Children.Add(Tx(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed", 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);
-        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); }
+        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); }
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         if (e.Waiting) rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));

@@ -298,7 +298,15 @@ public sealed class BossParser
         }
     }
 
-    public static Encounter Copy(Encounter e) => JsonSerializer.Deserialize<Encounter>(JsonSerializer.Serialize(e))!;
+    /// <summary>A copy of a record (the live copy the window draws), its big hits with it (they are never written).</summary>
+    public static Encounter Copy(Encounter e)
+    {
+        var c = JsonSerializer.Deserialize<Encounter>(JsonSerializer.Serialize(e))!;
+        if (e.BigHits is { Count: > 0 } b) c.BigHits = b.ToList();
+        // the big hit's measure too (a record restored from a copy keeps its members' averages); the round trip keeps the order
+        for (int i = 0; i < c.Roster.Count && i < e.Roster.Count; i++) { c.Roster[i].StreamHitCount = e.Roster[i].StreamHitCount; c.Roster[i].StreamHitSum = e.Roster[i].StreamHitSum; }
+        return c;
+    }
 
     static bool Kept(ContentKind k) => k is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
 
@@ -532,12 +540,14 @@ public sealed class BossParser
                 // a cast counts once, with its first hit that lands here (a cast whose hits all went elsewhere, or missed, isn't
                 // this fight's): so an ability's casts are never more than its hits
                 bool firstOfCast = !hd.NoRow && !hd.Tick && hd.Skill > 0 && _castsLanded.Add((hd.Actor, hd.Cast, hd.Skill));
+                long seq = 0;
                 foreach (var e in Records())
                     if (Member(e, hd.Source) is { } m)
                     {
                         var a = m.Ability(hd.Skill);
                         StreamHit(a, hd);
                         if (firstOfCast) a.Casts = (a.Casts ?? 0) + 1;
+                        BigHitOf(e, m, hd, ref seq);
                     }
                 break;
             }
@@ -967,6 +977,27 @@ public sealed class BossParser
     const double RecapLateSeconds = 1.5;
 
     static Fighter? Member(Encounter e, long id) => id == 0 ? null : e.Roster.FirstOrDefault(f => f.Id == id && !f.Other);
+
+    long _bigHitSeq;
+
+    /// <summary>
+    /// A hit against the member's average hit so far in this record: <see cref="Encounter.BigHitTimes"/> or more (once the
+    /// average is a measure) is a big hit, kept on the record for the meter's pop-up, a crit only when the record carries
+    /// crit data. Ticks and parts with no hit under them are not hits. One hit is one Seq in every record.
+    /// </summary>
+    void BigHitOf(Encounter e, Fighter m, HitDealt hd, ref long seq)
+    {
+        if (hd.NoRow || hd.Tick || hd.Amount <= 0) return;
+        int n = m.StreamHitCount;
+        bool big = n >= Encounter.BigHitAfter && hd.Amount >= Encounter.BigHitTimes * (m.StreamHitSum / (double)n);
+        m.StreamHitCount = n + 1; m.StreamHitSum += hd.Amount;
+        if (!big) return;
+        if (seq == 0) seq = ++_bigHitSeq;
+        bool? crit = Encounter.CritKey switch { "result:3" => hd.Result == 3, "mark:3" => (hd.Marks & (1 << 3)) != 0, _ => null };
+        var list = e.BigHits ??= new();
+        list.Add(new BigHit(seq, m.Id, hd.Amount, crit, hd.At));
+        if (list.Count > Encounter.BigHitsKept) list.RemoveAt(0);
+    }
 
     /// <summary>One hit of the stream onto its ability: counted, its size into the biggest and smallest, its kind into the raw counters.</summary>
     static void StreamHit(AbilityShare a, HitDealt h)

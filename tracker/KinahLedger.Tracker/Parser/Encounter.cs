@@ -427,6 +427,17 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The Always on meter's own tally (never a record of the mode): its sub line says "Always on", not the mode's name.</summary>
     [JsonIgnore] public bool Always { get; set; }
 
+    /// <summary>
+    /// The record's last big hits (a member's hit of <see cref="BigHitTimes"/> their average hit or more, from the hit stream),
+    /// newest last, at most <see cref="BigHitsKept"/>: the meter's pop-ups. Never kept in the fight store; the live copy carries
+    /// them (BossParser.Copy). Null until the stream gives one.
+    /// </summary>
+    [JsonIgnore] public List<BigHit>? BigHits { get; set; }
+    public const int BigHitsKept = 8;
+    public const double BigHitTimes = 3;
+    /// <summary>A member's hits counted before their average is a measure for a big hit.</summary>
+    public const int BigHitAfter = 8;
+
     /// <summary>What a ready card says under its name: a dungeon waits for its first pull, the meter anywhere else for a hit.</summary>
     [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? "Waiting for the first hit" : "Waiting for the first pull";
 
@@ -465,9 +476,19 @@ public sealed class Encounter : IJsonOnDeserialized
     [JsonIgnore] public string Tone => Outcome switch { "kill" or "cleared" => "good", "wipe" or "died" => "bad", "" => "live", _ => "quiet" };
 }
 
+/// <summary>
+/// A member's big hit (the meter's pop-up): its order in the stream (Seq, the same for one hit in every record), whose it
+/// counts for, how much, and whether it was a crit (null: the record carries no crit data, so it is never called one).
+/// </summary>
+public sealed record BigHit(long Seq, long Member, long Amount, bool? Crit, DateTime At);
+
 /// <summary>One member of the group in a fight.</summary>
 public sealed class Fighter
 {
+    /// <summary>The member's hits from the stream so far, and their damage: the big hit's measure (never kept or copied).</summary>
+    [JsonIgnore] internal int StreamHitCount;
+    [JsonIgnore] internal long StreamHitSum;
+
     public long Id { get; set; }
     public string Name { get; set; } = "";
     /// <summary>The class as the game names it ("Gladiator"), "" when unknown.</summary>

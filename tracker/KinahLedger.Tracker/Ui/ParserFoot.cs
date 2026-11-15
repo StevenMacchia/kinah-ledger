@@ -43,10 +43,47 @@ static class ParserFoot
         gt.Inlines.Add(new Run(held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
         gt.Inlines.Add(new Run(e.GroupDpsText(held ? e.End ?? now : now)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
         right.Children.Add(gt);
-        if (held) right.Children.Add(AvgBadge());
+        if (e.Live && !e.Waiting) SawLive(e.Id);
+        if (held)
+        {
+            var badge = AvgBadge();
+            right.Children.Add(badge);
+            // a fight seen ending: the badge stamps in (a foot drawn again picks the stamp up where it was)
+            string key = "avg|" + e.Id;
+            if (Seen.Contains(e.Id)) Motion.Mark(key);
+            Stamp(badge, key);
+        }
         Grid.SetColumn(right, 1); g.Children.Add(right);
         System.Windows.Automation.AutomationProperties.SetName(g, e.FootText(now));
         return g;
+    }
+
+    // the fights a foot drew live (the last few): only the end of one of them stamps the badge in
+    static readonly HashSet<string> Seen = new();
+    static readonly Queue<string> SeenOrder = new();
+    static void SawLive(string id)
+    {
+        if (!Seen.Add(id)) return;
+        SeenOrder.Enqueue(id);
+        while (SeenOrder.Count > 32) Seen.Remove(SeenOrder.Dequeue());
+    }
+
+    /// <summary>The badge's stamp: down from a third larger onto its place, a touch past and back, fading in.</summary>
+    public const double StampMs = 320;
+
+    static void Stamp(Border badge, string key)
+    {
+        var st = new ScaleTransform(1, 1);
+        // grown from near its left edge: at its largest it spills 3 px left (inside its 6 px gap, never on the group's figure)
+        // and the rest right, into the panel's edge
+        badge.RenderTransformOrigin = new Point(0.2, 0.5);
+        badge.RenderTransform = st;
+        Motion.Resume(badge, key, StampMs, p =>
+        {
+            double s = 1.35 - 0.35 * Motion.Back(Math.Min(1, p / 0.8), 1.4);
+            st.ScaleX = st.ScaleY = s;
+            badge.Opacity = Math.Clamp(p / 0.35, 0, 1);
+        }, () => { st.ScaleX = st.ScaleY = 1; badge.Opacity = 1; });
     }
 
     /// <summary>The held figure's mark: a small green outline pill, "AVG. DPS", quieter than the TOP HEALS plate.</summary>

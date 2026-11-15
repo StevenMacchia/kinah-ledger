@@ -126,6 +126,9 @@ public static partial class WpfApp
         void Check(bool ok, string what) { Console.WriteLine((ok ? "ok    " : "FAIL  ") + what); if (!ok) fails++; }
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         static void Flip(System.Windows.Controls.CheckBox c) { c.IsChecked = c.IsChecked != true; Click(c); }
+        // KL_OPTIONS_ONLY=meter: the meter's motion checks alone (a quick run while working on them; the whole test runs them too)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "meter") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterMotionChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter motion): all passed" : $"options test (meter motion): {fails} failed"); return fails == 0 ? 0 : 1; }
+
 
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
@@ -1284,6 +1287,7 @@ public static partial class WpfApp
 
         // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
         ParserChecks(w, Check);
+        MeterMotionChecks(Check);
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs
 
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
