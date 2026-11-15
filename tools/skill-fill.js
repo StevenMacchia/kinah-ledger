@@ -1,35 +1,34 @@
 // The skill-fill step (2026-11-14): names every ability the Parser can show, so its inspect view never says a number.
 // data/skills.json held only the 279 class skills on MetaBot's skill pages; the chain skills (Templar's Punishing Strike,
-// Chanter's Bursting Blow), the Spiritmaster's spirits' own attacks, and the Theostones' strikes were missing, and the
-// Parser printed their ids. This adds them from the game client's own English skill table, checks that table against
-// every name MetaBot has, and reports what Steven's saved fights still leave unnamed. The loop is in tools/skill-fill.md.
+// Chanter's Bursting Blow), the Spiritmaster's spirits' own attacks and the Theostones' strikes were missing, and the
+// Parser printed their ids. This adds the ones public MIT-licensed tables name, checks each name against the game
+// client's own English table, and reports what Steven's saved fights still leave unnamed. The loop is in tools/skill-fill.md.
 //
-//   node tools/skill-fill.js                          add what is missing to data/skills.json, then the coverage report
+//   node tools/skill-fill.js                          rebuild the non-MetaBot entries of data/skills.json, then the report
 //   node tools/skill-fill.js --dry-run                the report only, write nothing
 //   node tools/skill-fill.js --icons <dir>            also fetch each listed ability's icon into <dir> (<id>.webp / <id>.png),
-//                                                     for python -I tools/skill-icons.py <dir>
-//   node tools/skill-fill.js --cache <dir>            keep the two source tables in <dir> (and read them from there next time)
-//   node tools/skill-fill.js --metabot <file>         the site's data/metabot-classes.json: each MetaBot entry's page as its src
-//   node tools/skill-fill.js --verify-items           check each Theostone's name against its MetaBot item page (one request each)
+//                                                     for python tools/skill-icons.py <dir>
+//   node tools/skill-fill.js --cache <dir>            keep the source tables in <dir> (and read them from there next time)
+//   node tools/skill-fill.js --metabot <file>         the site's data/metabot-classes.json: each MetaBot entry's page
+//   node tools/skill-fill.js --verify-items           check each Theostone against its MetaBot item page (name and icon)
 //   node tools/skill-fill.js --records <dir>          where the saved fights are (default %LOCALAPPDATA%\KinahLedger)
 //   node tools/skill-fill.js --fights <file> ...      count these records instead (JSON lines, as the tracker keeps them;
 //                                                     KinahLedger.exe parser-replay <recording> --save <file> writes them)
 //   node tools/skill-fill.js --out report.md          also write the report to a file
 //
-// Sources, each entry's "src" in skills.json (the "sources" table at its top says where each one is):
-//   metabot  MetaBot.GG's skill pages (https://metabot.gg/en/aion-2/skills/<page>), read from the global client: the
-//            279 class skills. Kept as they are; never overwritten.
-//   client   The global client's English skill table as A2Tools (taengu/A2Tools-DPS-Meter, GPL-3.0) ships it,
-//            src/data/i18n/skills/en.json at a pinned commit. It agrees with MetaBot on all 279 names they share, which is
-//            the check that it is the global client's text and not a translation. Every new name comes from it.
-//   Theostone names are also MetaBot item names ("Theostone: Zikel's Vestige"); --verify-items checks them one by one.
-//   Icons ("icon" in an entry: the file's name, or "=<id>" for another entry's): MetaBot's copy for a MetaBot skill
-//   (https://metabot.gg/web/aion2/skills/<id>.webp); for the rest the game's own icon file on NCSoft's game-data CDN
-//   (https://assets.playnccdn.com/static-aion2-gamedata/resources/<icon>.png), named the way A2Tools names it: a class
-//   skill by the first four digits of its id (src/data/skill_icons.json, from the game data), a Theostone by its id
-//   (Icon_Item_Usable_Godstone_WP_r_ and the id's 6th-7th digits in hex: Traufnir's Courage 3000117 is _011, as on its
-//   MetaBot item page). A spirit's attacks and commands ("Fire Spirit: Flame Explosion") take their spirit's summon icon
-//   (Summon: Fire Spirit). Anything else has none, and the tracker draws the class's emblem.
+// What ships ("src" of each entry; the "sources" table at the top of skills.json says where each one is):
+//   metabot     MetaBot.GG's skill pages (https://metabot.gg/en/aion-2/skills/<page>): the 279 class skills. Never touched.
+//   acompanion  Swellshinider/AcompanION public/gamedata.json (MIT): names by id, with the game's icon file name.
+//   pingmaker   gunba/pingmaker skills.json (MIT): ids by name.
+//   Both pinned to a commit. Where they differ, the one the check table confirms ships; with no check entry, they must agree.
+// The check (never shipped): the global client's English skill table as A2Tools carries it (taengu/A2Tools-DPS-Meter,
+// GPL-3.0). It agrees with MetaBot on all 279 shared names, so a shipped name must match it too; one that doesn't is
+// left out and reported. Names only A2Tools has are left out as well (they read "<Class> skill" in the tracker) and
+// the report lists the ones Steven's fights use, with their share of the damage, until a non-GPL source names them.
+// Icons: MetaBot's copy for a MetaBot skill; the icon AcompanION names, from NCSoft's game-data CDN
+// (https://assets.playnccdn.com/static-aion2-gamedata/resources/<icon>.png); else Waffle-ens/waffle_meter's per-id copy
+// (MIT, dotnet/Assets/SkillIcons/<id>.png); a Theostone's from its MetaBot item page (--verify-items). Else none: the
+// tracker draws the class's emblem.
 //
 // Which ids the Parser can show (it files a class skill's hits under the skill without its rank, the last four digits;
 // a spirit's own attack, a Theostone's strike and the like under their own id), so which ids are listed:
@@ -37,15 +36,17 @@
 //   - each class's own block xx00xxxx (the Spiritmaster's spirit commands: 16001101 "Fire Spirit: Flame Explosion"),
 //     except xx000000, the class's "Weapon Equip", which never deals damage;
 //   - the spirits' basic attacks (1000xx) and the Theostones (30xxxxx).
-// Left out: monsters' skills, test and internal entries ("(DNT)", "Test_"), food and potions.
-// Never a guess: an id neither table names stays unnamed, and the report lists it with its damage and who used it.
+// Never a guess: an id no shipped source names stays unnamed, and the report lists it.
 const fs = require('fs'), path = require('path'), os = require('os');
 const root = path.join(__dirname, '..');
 const UA = 'kinah-ledger skill-fill (https://github.com/StevenMacchia/kinah-ledger)';
-const CLIENT = { repo: 'taengu/A2Tools-DPS-Meter', commit: '537452fbac9fc1db1e46e0b06d42015594fa9f25', file: 'src/data/i18n/skills/en.json', license: 'GPL-3.0' };
-const ICONS = { repo: CLIENT.repo, commit: CLIENT.commit, file: 'src/data/skill_icons.json', license: CLIENT.license };
+const ACOMP = { repo: 'Swellshinider/AcompanION', commit: 'beb75aef160d74f37300701603490e9c2f41df13', file: 'public/gamedata.json', license: 'MIT' };
+const PING = { repo: 'gunba/pingmaker', commit: '09687ad3ddc19f5189562eb8e17375f7c45e02c9', file: 'skills.json', license: 'MIT' };
+const WAFFLE = { repo: 'Waffle-ens/waffle_meter', commit: '2bef5591d27f06f9731a862f6bfab3cf94b8f3d9', dir: 'dotnet/Assets/SkillIcons', license: 'MIT' };
+const CHECK = { repo: 'taengu/A2Tools-DPS-Meter', commit: '537452fbac9fc1db1e46e0b06d42015594fa9f25', file: 'src/data/i18n/skills/en.json', license: 'GPL-3.0' };
 const NC_ICON = 'https://assets.playnccdn.com/static-aion2-gamedata/resources/';
 const MB_ICON = 'https://metabot.gg/web/aion2/skills/';
+const MB_ITEM_ICON = 'https://metabot.gg/web/aion2/items/';
 const CLASS_BY_FAMILY = { 11: 'gladiator', 12: 'templar', 13: 'assassin', 14: 'ranger', 15: 'sorcerer', 16: 'spiritmaster', 17: 'cleric', 18: 'chanter', 19: 'brawler' };
 
 const args = process.argv.slice(2);
@@ -60,6 +61,7 @@ const outPath = opt('--out', null);
 const fightFiles = args.flatMap((a, i) => a === '--fights' && args[i + 1] ? [args[i + 1]] : []);
 const skillsPath = path.join(root, 'data', 'skills.json');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const raw = (src, file) => `https://raw.githubusercontent.com/${src.repo}/${src.commit}/${file}`;
 
 async function get(url, binary = false) {
   for (let i = 0; ; i++) {
@@ -75,7 +77,7 @@ async function get(url, binary = false) {
 async function table(src) {
   const name = src.repo.replace('/', '_') + '_' + src.commit.slice(0, 7) + '_' + path.basename(src.file);
   if (cacheDir && fs.existsSync(path.join(cacheDir, name))) return JSON.parse(fs.readFileSync(path.join(cacheDir, name), 'utf8'));
-  const text = await get(`https://raw.githubusercontent.com/${src.repo}/${src.commit}/${src.file}`);
+  const text = await get(raw(src, src.file));
   if (!text) throw new Error('no ' + src.file + ' at ' + src.repo + '@' + src.commit);
   if (cacheDir) { fs.mkdirSync(cacheDir, { recursive: true }); fs.writeFileSync(path.join(cacheDir, name), text); }
   return JSON.parse(text);
@@ -98,85 +100,95 @@ function showable(id) {
   return (id >= 100_000 && id < 101_000) || (id >= 3_000_000 && id < 3_100_000);
 }
 const junk = n => !n || /\(DNT\)|^Test|_|\bTEST\b/i.test(n);
+const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 (async () => {
   const doc = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
-  const skills = doc.skills;
   const report = [];
   const say = s => { report.push(s); console.log(s); };
 
-  const client = await table(CLIENT);
-  const iconByPrefix = await table(ICONS);
-
-  // the check that the client table is the global client's English text: it must agree with every MetaBot name
-  const metabotIds = Object.keys(skills).filter(k => (skills[k].src ?? 'metabot') === 'metabot');
-  const disagree = metabotIds.filter(k => client[k] !== skills[k].name);
-  say(`client table: ${Object.keys(client).length} entries; agrees with MetaBot on ${metabotIds.length - disagree.length} of ${metabotIds.length}`);
-  for (const k of disagree) say(`  disagrees: ${k} MetaBot "${skills[k].name}", client "${client[k] ?? '(none)'}" (MetaBot kept)`);
-  if (disagree.length > metabotIds.length / 20) { console.error('the client table disagrees with MetaBot on more than 5%: not the global client\'s names, stopping'); process.exit(1); }
-
-  // MetaBot entries: their src and page
-  const pages = {};
+  // start from the MetaBot entries; every other entry is rebuilt from the sources on each run
+  const skills = {};
+  for (const [k, v] of Object.entries(doc.skills)) if ((v.src ?? 'metabot') === 'metabot') skills[k] = { ...v, src: 'metabot' };
+  const metabotIds = Object.keys(skills);
   if (metabotFile) {
     const mb = JSON.parse(fs.readFileSync(metabotFile, 'utf8'));
-    for (const s of Object.values(mb.skills)) { const m = /skills\/(\d+)\.webp/.exec(s.icon || ''); if (m) pages[m[1]] = s.url; }
-  }
-  for (const k of metabotIds) {
-    skills[k].src = 'metabot';
-    if (pages[k]) skills[k].page = pages[k].replace(/^.*\/skills\//, '');
+    for (const s of Object.values(mb.skills)) { const m = /skills\/(\d+)\.webp/.exec(s.icon || ''); if (m && skills[m[1]]) skills[m[1]].page = s.url.replace(/^.*\/skills\//, ''); }
   }
 
-  // new entries
-  let added = 0;
-  const summon = {};   // "Fire Spirit" -> the id of "Summon: Fire Spirit"
-  for (const [k, name] of Object.entries(client)) {
-    const m = /^Summon: (\w+ Spirit)$/.exec(name);
-    if (m && k.startsWith('16') && Number(k) % 10_000 === 0 && !summon[m[1]]) summon[m[1]] = k;
+  const check = await table(CHECK);
+  const acomp = {};
+  for (const [k, v] of Object.entries((await table(ACOMP)).skills ?? {})) acomp[k] = { name: typeof v.name === 'object' ? v.name.en : v.name, icon: v.icon };
+  const ping = {};
+  for (const [name, ids] of Object.entries(await table(PING))) for (const id of ids) if (!(id in ping)) ping[id] = name;
+
+  // each source's agreement with MetaBot, and the check table's
+  const agree = t => metabotIds.filter(k => t(k) != null).map(k => t(k) === skills[k].name);
+  for (const [label, t] of [['client table (check)', k => check[k]], ['AcompanION', k => acomp[k]?.name], ['pingmaker', k => ping[k]]]) {
+    const a = agree(t); say(`${label}: agrees with MetaBot on ${a.filter(Boolean).length} of the ${a.length} MetaBot skills it names`);
   }
-  for (const [k, name] of Object.entries(client)) {
+  const checkAgree = agree(k => check[k]);
+  if (checkAgree.filter(x => !x).length > metabotIds.length / 20) { console.error('the check table disagrees with MetaBot on more than 5%: stopping'); process.exit(1); }
+
+  // new entries: a name an MIT source gives, the sources agreeing with each other and with the check table
+  const conflicts = [], unchecked = [];
+  let added = 0;
+  const ids = new Set([...Object.keys(acomp), ...Object.keys(ping)].filter(k => !skills[k] && showable(Number(k))));
+  for (const k of [...ids].sort((a, b) => a - b)) {
+    const a = acomp[k]?.name, p = ping[k];
+    // the name a source gives that the check table confirms; with no check entry, the sources must agree
+    const name = check[k] ? [a, p].find(n => n === check[k]) : a && p && a !== p ? undefined : a ?? p;
+    if (junk(name ?? a ?? p)) continue;
+    if (!name) { conflicts.push(`${k}: ${[a && `AcompanION "${a}"`, p && `pingmaker "${p}"`].filter(Boolean).join(', ')}${check[k] ? `, the client table "${check[k]}"` : ''}`); continue; }
+    if (!check[k]) unchecked.push(`${k} ${name}`);
     const id = Number(k);
-    if (skills[k] || !showable(id) || junk(name)) continue;
     const spirit = /^(\w+ Spirit): /.exec(name)?.[1];
     const cls = id >= 10_000_000 ? CLASS_BY_FAMILY[Math.floor(id / 1_000_000)] ?? '' : spirit ? 'spiritmaster' : '';
-    skills[k] = { name, cls, src: 'client' };
-    let icon = null;
-    if (id >= 3_000_000 && id < 3_100_000) icon = 'Icon_Item_Usable_Godstone_WP_r_' + Number((k + '0').slice(5, 7)).toString(16).padStart(3, '0');
-    else if (spirit && summon[spirit] && (id < 1_000_000 || Math.floor(id / 10_000) % 100 === 0)) icon = '=' + summon[spirit];
-    else if (id >= 11_000_000 && id % 10_000 === 0) icon = iconByPrefix[k.slice(0, 4)] ?? null;
-    if (icon) skills[k].icon = icon;
+    skills[k] = { name, cls, src: [a === name && 'acompanion', p === name && 'pingmaker'].filter(Boolean).join(',') };
+    if (a === name && acomp[k]?.icon) skills[k].icon = 'nc:' + acomp[k].icon;
     added++;
   }
-  say(`added ${added} abilities; skills.json lists ${Object.keys(skills).length}`);
+  say(`added ${added} abilities from the MIT tables; skills.json lists ${Object.keys(skills).length}`);
+  say(`left out, the sources disagreeing (${conflicts.length}): ${conflicts.join('; ') || '-'}`);
+  if (unchecked.length) say(`shipped though the client table lacks them (${unchecked.length}): ${unchecked.join('; ')}`);
 
-  // the Theostones against their MetaBot item pages
+  // the names only the GPL client table has: left out
+  const checkOnly = Object.entries(check).filter(([k, n]) => !skills[k] && showable(Number(k)) && !junk(n)).map(([k]) => k);
+  say(`names only the client table has (left out, "<Class> skill" in the tracker): ${checkOnly.length}`);
+
+  // the Theostones against their MetaBot item pages: the name, and the icon
   if (verifyItems) {
     let ok = 0; const off = [];
     for (const k of Object.keys(skills).filter(k => /^Theostone: /.test(skills[k].name))) {
-      const slug = skills[k].name.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      const html = await get('https://metabot.gg/en/aion-2/items/' + slug) ?? await get('https://metabot.gg/en/aion-2/items/' + slug + '-bound');
+      const slug = slugOf(skills[k].name);
+      let html = await get('https://metabot.gg/en/aion-2/items/' + slug), page = slug;
+      if (!html) { html = await get('https://metabot.gg/en/aion-2/items/' + slug + '-bound'); page = slug + '-bound'; }
       const t = html && /<title>([^<]*)/.exec(html)?.[1].replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
-      if (t && t.startsWith(skills[k].name)) { ok++; skills[k].item = slug; } else off.push(`${k} ${skills[k].name}`);
+      if (t && t.startsWith(skills[k].name)) {
+        ok++; skills[k].item = page;
+        const og = /og:image" content="https:\/\/metabot\.gg\/web\/aion2\/items\/([a-z0-9_]+\.webp)"/.exec(html);
+        if (og && !skills[k].icon) skills[k].icon = 'item:' + og[1];
+      } else off.push(`${k} ${skills[k].name}`);
       await sleep(1200);
     }
-    say(`Theostones on MetaBot's item pages: ${ok} found, ${off.length} not: ${off.join('; ') || '-'}`);
+    say(`Theostones on MetaBot's item pages: ${ok} found, ${off.length} not${off.length ? ': ' + off.join('; ') : ''}`);
   }
 
   // the icons
   if (iconDir) {
     fs.mkdirSync(iconDir, { recursive: true });
-    let got = 0, none = [];
+    for (const f of fs.readdirSync(iconDir)) if (!skills[f.replace(/\.\w+$/, '')]) fs.unlinkSync(path.join(iconDir, f));   // ids no longer listed
+    let got = 0; const none = [];
     for (const [k, s] of Object.entries(skills)) {
-      if (fs.existsSync(path.join(iconDir, k + '.webp')) || fs.existsSync(path.join(iconDir, k + '.png'))) continue;
-      if (s.icon?.startsWith('=')) continue;   // copied from its spirit's summon below
-      const url = s.src === 'metabot' ? MB_ICON + k + '.webp' : s.icon ? NC_ICON + s.icon + '.png' : null;
-      const buf = url && await get(url, true);
-      if (buf) { fs.writeFileSync(path.join(iconDir, k + (s.src === 'metabot' ? '.webp' : '.png')), buf); got++; } else none.push(k);
-      await sleep(150);
-    }
-    for (const [k, s] of Object.entries(skills)) {
-      if (!s.icon?.startsWith('=')) continue;
-      const from = s.icon.slice(1), ext = ['webp', 'png'].find(e => fs.existsSync(path.join(iconDir, from + '.' + e)));
-      if (ext) fs.copyFileSync(path.join(iconDir, from + '.' + ext), path.join(iconDir, k + '.' + ext)); else none.push(k);
+      if (['webp', 'png'].some(e => fs.existsSync(path.join(iconDir, k + '.' + e)))) continue;
+      const tries = s.src === 'metabot' ? [[MB_ICON + k + '.webp', 'webp']]
+        : s.icon?.startsWith('nc:') ? [[NC_ICON + s.icon.slice(3) + '.png', 'png']]
+        : s.icon?.startsWith('item:') ? [[MB_ITEM_ICON + s.icon.slice(5), 'webp']]
+        : [[raw(WAFFLE, `${WAFFLE.dir}/${k}.png`), 'png']];
+      let buf = null, ext = null;
+      for (const [u, e] of tries) { buf = await get(u, true); if (buf) { ext = e; if (!s.icon && s.src !== 'metabot') s.icon = 'waffle'; break; } }
+      if (buf) { fs.writeFileSync(path.join(iconDir, k + '.' + ext), buf); got++; } else none.push(k);
+      await sleep(120);
     }
     say(`icons: ${got} fetched into ${iconDir}; ${none.length} with none (the class's emblem stands in)`);
   }
@@ -206,28 +218,28 @@ const junk = n => !n || /\(DNT\)|^Test|_|\bTEST\b/i.test(n);
     const named = [...dmg].filter(([id]) => id !== 0 && resolve(skills, id) != null).reduce((s, [, d]) => s + d.dmg, 0);
     const over = dmg.get(0)?.dmg ?? 0;
     const pc = x => (100 * x / total).toFixed(2) + '%';
-    say(`\nsaved fights: ${fights} in ${files.length} files, ${dmg.size} abilities, ${total.toLocaleString('en-US')} damage`);
+    say(`\nfights: ${fights} in ${files.length} files, ${dmg.size} abilities, ${total.toLocaleString('en-US')} damage`);
     say(`named: ${pc(named)}; damage over time (one row, not an ability): ${pc(over)}; unnamed: ${pc(total - named - over)}`);
     const left = [...dmg].filter(([id]) => id !== 0 && resolve(skills, id) == null).sort((a, b) => b[1].dmg - a[1].dmg);
     if (left.length) {
-      say('\n| id | share | hits | fights | used by | client table says |\n|---|---|---|---|---|---|');
-      for (const [id, d] of left) say(`| ${id} | ${pc(d.dmg)} | ${d.hits} | ${d.fights} | ${[...d.cls].join(', ')} | ${client[id] ?? '(none)'} |`);
+      say('\n| id | share | hits | fights | used by | client table (not shipped) |\n|---|---|---|---|---|---|');
+      for (const [id, d] of left) say(`| ${id} | ${pc(d.dmg)} | ${d.hits} | ${d.fights} | ${[...d.cls].join(', ')} | ${check[id] ?? '(none)'} |`);
     }
   }
   const loggedLeft = [...logged].filter(id => resolve(skills, id) == null);
   if (loggedLeft.length) say(`\nlogged unnamed by the tracker, still unnamed: ${loggedLeft.join(', ')}`);
 
   if (!dry) {
-    doc.source = 'MetaBot.GG skill pages and the global client\'s English skill table (tools/skill-fill.js)';
+    doc.source = 'MetaBot.GG skill pages and public MIT-licensed skill tables, each name checked against the game client\'s (tools/skill-fill.js)';
     doc.sources = {
       metabot: 'https://metabot.gg/en/aion-2/skills/<page> (via kinahledger.com data/metabot-classes.json, fetched 2026-10-28)',
-      client: `https://github.com/${CLIENT.repo}/blob/${CLIENT.commit}/${CLIENT.file} (${CLIENT.license}; agrees with MetaBot on all ${metabotIds.length - disagree.length} shared names)`,
-      icon: `${NC_ICON}<icon>.png (named as https://github.com/${ICONS.repo}/blob/${ICONS.commit}/${ICONS.file} and its Theostone rule have it); "=<id>": that entry's icon`,
-      item: 'https://metabot.gg/en/aion-2/items/<item> (the Theostones\' names, --verify-items)',
+      acompanion: `https://github.com/${ACOMP.repo}/blob/${ACOMP.commit}/${ACOMP.file} (${ACOMP.license})`,
+      pingmaker: `https://github.com/${PING.repo}/blob/${PING.commit}/${PING.file} (${PING.license})`,
+      item: 'https://metabot.gg/en/aion-2/items/<item> (a Theostone\'s name and icon, --verify-items)',
+      icon: `"nc:<file>": ${NC_ICON}<file>.png; "item:<file>": ${MB_ITEM_ICON}<file>; "waffle": https://github.com/${WAFFLE.repo}/blob/${WAFFLE.commit}/${WAFFLE.dir}/<id>.png (${WAFFLE.license}); none on a MetaBot skill: ${MB_ICON}<id>.webp`,
     };
     const sorted = {};
     for (const k of Object.keys(skills).sort((a, b) => a - b)) sorted[k] = skills[k];
-    doc.skills = sorted;
     // one skill per line keeps the diff readable
     const body = Object.entries(sorted).map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(',\n');
     const head = Object.entries(doc).filter(([k]) => k !== 'skills').map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v, null, 1).replace(/\n\s*/g, ' ')}`).join(',\n');

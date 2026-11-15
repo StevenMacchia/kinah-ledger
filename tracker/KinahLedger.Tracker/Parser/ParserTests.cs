@@ -518,17 +518,17 @@ public static class ParserTests
                 new AbilityShare { Skill = 16001101, Damage = 900, Hits = 1 }, new AbilityShare { Skill = 16001104, Damage = 100, Hits = 1 }, new AbilityShare { Skill = 0, Damage = 50, Hits = 4 } });
             Check(merged.Count == 3 && merged[0] is { Damage: 1_200, Hits: 5 } && Abilities.Name(merged[0].Skill) == "Fire Spirit: Basic Attack" && merged[0].Skill == Abilities.Canon(100018) && merged[1] is { Skill: 16001101, Damage: 1_000, Hits: 2 } && merged[2].Skill == 0,
                 $"one row per ability: Fire Spirit: Basic Attack's two ids as one ({string.Join(", ", merged.Select(a => $"{Abilities.Name(a.Skill)} {a.Damage}"))})");
-            // an id the list doesn't name: never a number; its class from the id's family or the member, else "Other damage"; noted once
+            // an id the list doesn't name: never a number; its class from the id's family or the member, else "Unknown skill"; noted once
             var notes = new List<string>();
             using (CrashLog.CaptureNotes(notes))
             {
                 var fallbacks = new[] { Abilities.Name(16000000), Abilities.Name(16000000, "Spiritmaster"), Abilities.Name(12999999), Abilities.Name(2_999_999, "Chanter"), Abilities.Name(2_999_998), Abilities.Name(2_999_997, "Elementalist") };
-                Check(fallbacks.SequenceEqual(new[] { "Spiritmaster skill", "Spiritmaster skill", "Templar skill", "Chanter skill", "Other damage", "Spiritmaster skill" }) && fallbacks.All(n => !n.Any(char.IsDigit))
+                Check(fallbacks.SequenceEqual(new[] { "Spiritmaster skill", "Spiritmaster skill", "Templar skill", "Chanter skill", "Unknown skill", "Spiritmaster skill" }) && fallbacks.All(n => !n.Any(char.IsDigit))
                     && notes.Count(n => n.StartsWith("ability unnamed: 16000000 (Spiritmaster)")) == 1 && notes.Count(n => n.StartsWith("ability unnamed: 2999998 (no class)")) == 1 && notes.Count == 5,
                     $"an unnamed ability: {string.Join(" / ", fallbacks)}, each id noted once ({notes.Count} notes)");
             }
             // each ability the skill list names that has art carries its icon in the exe; an unnamed one and damage over time have none (the class's emblem / a glyph stands in)
-            Check(Ui.SkillArt.Count >= 500 && Ui.SkillArt.Image(12240000) != null && Ui.SkillArt.Image(16050000) != null && Ui.SkillArt.Image(3000117) != null && Ui.SkillArt.Image(16000000) == null && Ui.SkillArt.Image(0) == null,
+            Check(Ui.SkillArt.Count >= 350 && Ui.SkillArt.Image(12240000) != null && Ui.SkillArt.Image(16050000) != null && Ui.SkillArt.Image(3000117) != null && Ui.SkillArt.Image(16000000) == null && Ui.SkillArt.Image(0) == null,
                 $"ability icons: {Ui.SkillArt.Count} of the {Abilities.Count} listed skills carry their icon; an unlisted one and damage over time have none");
             Check(l.Shown().Count() == 1 && l.Shown().Single().Id == 1 && l.Roster.Count == 2,
                 "a member with no damage yet has no row (Felicity), though the record keeps them for its detail");

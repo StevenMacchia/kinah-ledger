@@ -10,7 +10,7 @@ namespace KinahLedger.Parser;
 /// with the summon's own skill.
 /// Steven, 2026-11-14: "wtf is 'Ability 16050000'… you need to get them fucking right": the view never shows a number. An
 /// id the list doesn't name is "&lt;Class&gt; skill" when the class is known (from the id's family or the member), else
-/// "Other damage", and it is noted once in reads.log ("ability unnamed: …") so the next fill finds it.
+/// "Unknown skill", and it is noted once in reads.log ("ability unnamed: …") so the next fill finds it.
 /// </summary>
 public static class Abilities
 {
@@ -83,7 +83,7 @@ public static class Abilities
 
     /// <summary>
     /// "Judgment"; "Damage over time and more" for 0; for an id the list doesn't name, "Spiritmaster skill" (the class from the
-    /// id's family, else <paramref name="casterClass"/>, the member's) or "Other damage", noted once in reads.log.
+    /// id's family, else <paramref name="casterClass"/>, the member's) or "Unknown skill", noted once in reads.log.
     /// </summary>
     public static string Name(int skill, string? casterClass = null)
     {
@@ -94,7 +94,7 @@ public static class Abilities
         bool note;
         lock (Gate) note = Noted.Add(skill);
         if (note) CrashLog.Note($"ability unnamed: {skill} ({(cls.Length > 0 ? cls : "no class")}); tools/skill-fill.js lists it");
-        return cls.Length > 0 ? cls + " skill" : "Other damage";
+        return cls.Length > 0 ? cls + " skill" : "Unknown skill";
     }
 
     /// <summary>The ability's class ("templar"), from the list or the id's family; "" when neither says.</summary>

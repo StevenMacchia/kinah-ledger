@@ -23,7 +23,7 @@ public static class ParserDemo
     {
         // a chain skill (Smashing Blow, Punishing Strike, Burst), a rank under its skill (12060003) and a Theostone's strike as well
         ["Gladiator"] = new[] { 11010000, 11020000, 11050000, 11100000, 11420000, 3000117 }, ["Cleric"] = new[] { 17040000, 17060000, 17010000, 17050000 },
-        ["Templar"] = new[] { 12090000, 12040000, 12100000, 12010000, 12060000, 12060003 }, ["Sorcerer"] = new[] { 15040000, 15060000, 15010000, 15090000, 15030000, 3000121 },
+        ["Templar"] = new[] { 12090000, 12040000, 12100000, 12010000, 12060000, 12060003 }, ["Sorcerer"] = new[] { 15040000, 15060000, 15010000, 15090000, 15030000, 3000019 },
     };
 
     static double Weight(string cls) => cls == "Cleric" ? 0.45 : cls == "Templar" ? 0.7 : 1;
