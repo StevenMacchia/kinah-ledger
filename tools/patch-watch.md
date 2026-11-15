@@ -38,5 +38,9 @@ unknown zone or name.
    on a branch, and open a PR titled "Data: <patch date> patch names". The PR body is the watcher's table with each row's
    verdict written beside it.
 5. Items or chat wording changed: a tracker release is needed too (`Ocr/ChatParser.cs`, `data/extra-items.json` are built in).
+6. A patch that adds or renames skills (new class skills, chain skills, Theostones, a new class): run the skill fill
+   (`tools/skill-fill.md`). It also runs every week regardless: its report lists any ability the Parser could not name in
+   the player's saved fights or that the tracker noted as "ability unnamed" in reads.log. `data/skills.json` is built in,
+   so new names need a release.
 
 The state file is committed so the next run, on any checkout, starts after the last note that was judged.
