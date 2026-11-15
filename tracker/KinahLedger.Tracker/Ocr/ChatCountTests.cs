@@ -514,6 +514,43 @@ static class ChatCountTests
             Check("...under lines the read shows three times each: the kills decide", gg.Judge("Spiritstone", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), new ItemRepeatGuard.Place(6, 10, "Points.", "Obtained 1 Enhanced Krall Combatant Soul"), new(1, DateTime.MinValue, fight2), false).V.ToString(), "Count");
         }
 
+        // two harvest procs on one gather (Steven, 2026-11-15: "sometimes if plentiful and bountiful harvest proc at same
+        // time it only logs 1 of the resources"): one Success race, then two result lines in the game's formats, in one read
+        // or the second a read later, with or without their loot list rows, shown again and again as the chat stays up.
+        // Both lines count at their own amounts, the same item or another (no such gather is in Steven's logs: built from
+        // the formats)
+        {
+            var d0 = t0.AddMinutes(90);
+            string Two(string[] adds, bool split, bool rows)
+            {
+                var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+                var calm = new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks" };
+                s.ProcessChat(calm, d0);
+                s.GatherOutcome(d0.AddSeconds(7), true, false);
+                var all = new List<string>(calm); all.AddRange(adds);
+                s.ProcessChat(split ? new List<string>(calm) { adds[0] } : all, d0.AddSeconds(7.8));
+                // the loot list's rows for the two lines ("Orichalcum Ore x2", "Fine Orichalcum Ore x1")
+                if (rows) s.ProcessList(adds.Select((a, i) => new LootLine(1197 - 30 * i, System.Text.RegularExpressions.Regex.Replace(a, @"^Acquired (.+?)( x\d+)?\.$|^(.+?) acquired\.$",
+                    m => m.Groups[1].Success ? m.Groups[1].Value + (m.Groups[2].Success ? m.Groups[2].Value : " x1") : m.Groups[3].Value + " x1"), 0.62, 0xF0F0F0F0F0F0F0F0UL, 0.14, 0.12, 1920)).ToList(), d0.AddSeconds(8.1));
+                for (double x = 8.4; x <= 20; x += 0.6) s.ProcessChat(new List<string>(all), d0.AddSeconds(x));
+                s.FlushVotes(d0.AddSeconds(25));
+                return string.Join(", ", s.Engine.Items.Where(kv => kv.Value > 0).Select(kv => $"{items.NameOf(kv.Key)} {kv.Value}").OrderBy(x => x));
+            }
+            foreach (var (adds, want) in new[]
+            {
+                (new[] { "Acquired Orichalcum Ore x2.", "Fine Orichalcum Ore acquired." }, "Fine Orichalcum Ore 1, Orichalcum Ore 2"),
+                (new[] { "Acquired Orichalcum Ore x2.", "Orichalcum Ore acquired." }, "Orichalcum Ore 3"),
+                (new[] { "Acquired Orichalcum Ore x2.", "Acquired Orichalcum Ore x2." }, "Orichalcum Ore 4"),
+                (new[] { "Orichalcum Ore acquired.", "Orichalcum Ore acquired." }, "Orichalcum Ore 2"),
+                (new[] { "Acquired Fine Orichalcum Ore x2.", "Orichalcum Ore acquired." }, "Fine Orichalcum Ore 2, Orichalcum Ore 1"),
+                (new[] { "Acquired Orichalcum Ore x2.", "Ruby Gemstone acquired." }, "Orichalcum Ore 2, Ruby Gemstone 1"),
+            })
+            {
+                var runs = new[] { (false, false), (false, true), (true, false), (true, true) }.Select(v => Two(adds, v.Item1, v.Item2)).ToList();
+                Check($"two procs: {adds[0]} + {adds[1]}", runs.All(r => r == want) ? runs[0] : string.Join(" | ", runs), want);
+            }
+        }
+
         // 2026-11-06, the data-fill loop (tools/data-fill.js): an item it drafts into data/extra-items.json from its MetaBot page
         // is one a chat line resolves to by name, bound or not. Content Usage Ticket Selection Chest (Bound) is the fill's own
         // draft of that entry (its proof run reproduced the committed entry field for field): a Special Reward Chest, not

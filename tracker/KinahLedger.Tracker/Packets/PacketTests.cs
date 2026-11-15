@@ -534,6 +534,67 @@ public static class PacketTests
             finally { PacketClock.Fixed = null; }
         }
 
+        // two harvest procs on one gather (Steven, 2026-11-15: "sometimes if plentiful and bountiful harvest proc at same time
+        // it only logs 1 of the resources"). No such gather is in his logs (Nov 14 10:34 to Nov 15 14:23), so these are built
+        // from the formats the game uses: "Acquired Orichalcum Ore
+        // x2." and "Orichalcum Ore acquired.", the rows of one update, a gather's report. Each shape counts every resource at
+        // its own amount. A stack seen for the first time is counted from the gather's report, and its chat lines add up (two
+        // lines for one gather: x2 and x1 are three). The item's next rise ends that, so the next gather's line never tops up
+        // the first one. A chat read shown over and over counts its two lines once each.
+        {
+            const long Ore = 610620013, Fine = 610620014;
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var t0 = DateTime.UtcNow.AddMinutes(-2);
+            string Two(Action<PacketReader, TrackerSession, Action<double>, Func<double, long, long, long, bool, int, int, ItemChange>> body)
+            {
+                var clock = t0; PacketClock.Fixed = () => clock;
+                try
+                {
+                    var reader = new PacketReader(); reader.ReadingForTest(); reader.GathersForTest();
+                    var s = new TrackerSession(null, settings, items, "Test") { Packets = reader, Vote = false };
+                    s.Engine.SetZone("Ellun River Midstream");
+                    void At(double sec) { clock = t0.AddSeconds(sec); reader.ReadingForTest(); s.DrainPacketsForTest(); }
+                    ItemChange R(double at, long id, long d, long total, bool first, int batch, int rows) => new(t0.AddSeconds(at), id, ItemOp.Changed, 1, d, total, first, batch, rows, false);
+                    body(reader, s, At, R);
+                    for (double x = 20; x <= 60; x += 1) { At(x); reader.AgreeItemsForTest(clock); s.DrainPacketsForTest(); }
+                    int M(long id) => s.Engine.Items.GetValueOrDefault(id) + s.Engine.ItemsBound.GetValueOrDefault(id);
+                    return $"Ore {M(Ore)}, Fine {M(Fine)}{(reader.ItemsBroken != null ? ", items broken" : "")}";
+                }
+                finally { PacketClock.Fixed = null; }
+            }
+            ItemAcquired C(double at, long id, int n) => new(t0.AddSeconds(at), id, n, false) { Via = "chat" };
+            GatherResult G(double at, int attempt = 1, long item = Ore) => new(t0.AddSeconds(at), 7, 1, GatherEnd.Worked, item, 1, attempt);
+            var got = new List<(string What, string Got, string Want)>
+            {
+                ("two items in one update", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 2, 100, false, 1, 2), R(1, Fine, 1, 10, false, 1, 2)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); s.CommitForTest(C(2, Fine, 1)); }), "Ore 2, Fine 1"),
+                ("one item's two rises in one update", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 2, 100, false, 1, 2), R(1, Ore, 1, 101, false, 1, 2)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); s.CommitForTest(C(2, Ore, 1)); }), "Ore 3, Fine 0"),
+                ("one item in two updates, 1.8 s apart", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 2, 100, false, 1, 1)); At(1.05); At(2.8); rd.ItemsForTest(R(2.8, Ore, 1, 101, false, 2, 1)); At(2.85); At(3); s.CommitForTest(C(3, Ore, 2)); At(3.5); s.CommitForTest(C(3.5, Ore, 1)); }), "Ore 3, Fine 0"),
+                ("first sight, lines x2 and x1", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 1)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); At(2.4); s.CommitForTest(C(2.4, Ore, 1)); }), "Ore 3, Fine 0"),
+                ("first sight, two lines x1", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 1)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 1)); At(2.4); s.CommitForTest(C(2.4, Ore, 1)); }), "Ore 2, Fine 0"),
+                ("first sight of both items, x2 and Fine x1", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 2), R(1, Fine, 0, 10, true, 1, 2)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 2)); s.CommitForTest(C(2, Fine, 1)); }), "Ore 2, Fine 1"),
+                ("first sight x1, the next gather's x2 5 s on", Two((rd, s, At, R) => { At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 1)); At(1.05); At(2); s.CommitForTest(C(2, Ore, 1)); At(6); rd.GathersForTest(G(6, 2)); rd.ItemsForTest(R(6, Ore, 2, 102, false, 2, 1)); At(6.05); At(7); s.CommitForTest(C(7, Ore, 2)); }), "Ore 3, Fine 0"),
+                // Steven's live log, 2026-11-15 12:13:20.2: an upgrade roll's Fine Orichalcum Ore, its stack first seen (counted
+                // as the report's one), "Acquired Fine Orichalcum Ore x2." at 21.5 (one more); the next gather's report and its
+                // +2 at 23.9, and that gather's own x2 line read at 24.2, before the session drained the rise: 4, not 6
+                ("12:13:20 a first sight's x2, then the next gather's x2 read ahead of its rise", Two((rd, s, At, R) =>
+                {
+                    At(0.2); rd.GathersForTest(new GatherResult(t0.AddSeconds(0.2), 9, 1, GatherEnd.Upgrade, Fine, 1, 0)); rd.ItemsForTest(R(0.2, Fine, 0, 18, true, 1, 1)); At(0.4);
+                    At(1.5); s.CommitForTest(C(1.5, Fine, 2));
+                    rd.GathersForTest(new GatherResult(t0.AddSeconds(3.9), 9, 1, GatherEnd.Upgrade, Fine, 1, 0)); rd.ItemsForTest(R(3.9, Fine, 2, 20, false, 2, 1));
+                    s.CommitForTest(C(4.2, Fine, 2)); At(4.2);
+                }), "Ore 0, Fine 4"),
+                ("first sight, its two lines read over and over", Two((rd, s, At, R) =>
+                {
+                    var calm = new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks" };
+                    At(0.5); s.ProcessChat(calm, t0.AddSeconds(0.5));
+                    At(1); rd.GathersForTest(G(1)); rd.ItemsForTest(R(1, Ore, 0, 100, true, 1, 1)); At(1.05);
+                    for (double x = 1.8; x <= 12; x += 0.6) { At(x); s.ProcessChat(new List<string>(calm) { "Acquired Orichalcum Ore x2.", "Orichalcum Ore acquired." }, t0.AddSeconds(x)); }
+                    s.FlushVotes(t0.AddSeconds(14));
+                }), "Ore 3, Fine 0"),
+            };
+            foreach (var (what, g, want) in got) Check(g == want, $"two harvest procs on one gather, {what}: {g} (expected {want})");
+        }
+
         // Steven's gathering of 2026-11-14 13:00-13:15 (kinah-bench/packets/rec-20261114-13 and -13-2, the tracker's own
         // recording, with reads.log's lines of those minutes): through this build's decoder and a whole session, stepped on
         // the recording's clock. The Poko's Skin Bundle (Bound) of 13:09:57 counts (0.10.92 dropped it: a stack seen for the
