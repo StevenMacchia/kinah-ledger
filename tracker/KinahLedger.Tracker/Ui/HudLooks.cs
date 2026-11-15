@@ -32,6 +32,9 @@ public static class HudLooks
         new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
     };
 
+    /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
+    public static readonly string[] FightLooks = { Auto, Capsule, Meter, Float };
+
     /// <summary>A saved look, or the Strip for anything unknown (an older or edited hud.json).</summary>
     public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Strip;
 

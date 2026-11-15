@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st != "overlay" && !ParserStates.Contains(st.EndsWith("-all") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st != "overlay" && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -109,6 +109,7 @@ public static partial class WpfApp
             h.Update(kinah);
             h.SetFarmDps(farm);
             h.ShowParser(e, at, e?.ModeKind ?? ParserMode.Bosses, details: false);
+            h.SetKinahHidden(e != null);   // a boss fight is a dungeon's: the meter replaces the Kinah line
             h.Show();
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
@@ -135,11 +136,22 @@ public static partial class WpfApp
                 h.Update(kinah);
                 h.SetFarmDps(withParser ? "" : "13.2K");
                 if (withTimers) h.ShowTimers(due, now);
-                if (withParser) h.ShowParser(live, now, live!.ModeKind, details: false);
+                if (withParser) { h.ShowParser(live, now, live!.ModeKind, details: false); h.SetKinahHidden(true); }
                 h.Show();
                 DoEvents();
                 Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
                 h.Close();
+            }
+            // wider (Steven, 2026-11-14: "maybe an option to make it wider?"): Auto's boss fight at the widest
+            {
+                double w0 = HudStackLook.FightWidth; HudStackLook.FightWidth = HudStackLook.FightWidthMax;
+                var h = new HudWindow(null, HudLooks.Auto, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                h.Update(kinah); h.ShowTimers(due, now);
+                h.ShowParser(live, now, live!.ModeKind, details: false); h.SetKinahHidden(true);
+                h.Show(); DoEvents();
+                Save((FrameworkElement)h.Content, Path.Combine(dir, "ui-hud-auto-boss-wide.png"), 0, ShotGround);
+                h.Close();
+                HudStackLook.FightWidth = w0;
             }
             // in a dungeon the overlay stays the Parser (Steven, 2026-11-14): its ready card before the first pull, and the last
             // fight's result held until the next one starts
@@ -149,7 +161,9 @@ public static partial class WpfApp
                 {
                     var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
                     h.Update(kinah);
+                    h.ShowTimers(due, at);   // a timer due during the run stays in sight inside the meter
                     h.ShowParser(e, at, ParserMode.Bosses, details: false);
+                    h.SetKinahHidden(true);
                     h.Show();
                     DoEvents();
                     Save((FrameworkElement)h.Content, Path.Combine(dir, $"ui-hud-{look}-{tag}.png"), 0, ShotGround);
@@ -237,17 +251,19 @@ public static partial class WpfApp
         Walk(w.ParserPage);
         check(meters.Count >= 4 && Math.Abs(meters.Max() - 1) < 1e-9 && meters.Zip(meters.Skip(1)).All(x => x.First >= x.Second - 1e-9),
             $"Parser: each group row on a meter bar, the top one full and the rest shorter in order: {string.Join(", ", meters.Select(x => x.ToString("0.00")))}");
-        // minimal by default (Steven, 2026-11-14): no CP, item level, damage or kills near you until Options turns them on
-        w.ShowParserDemo("live"); DoEvents();
+        // minimal with the switches off (Steven, 2026-11-14): no CP, item level, damage or kills near you until Options turns them on
+        w.ShowParserDemo("live-min"); DoEvents();
         var plain = ParserTexts(w.ParserPage);
         w.ShowParserDemo("live-all"); DoEvents();
         var every = ParserTexts(w.ParserPage);
         // a class emblem's hover names its class: that stays (the emblem is the class, colour-blind or not)
         // and a row's figure says the damage behind it ("1.2M damage in 2:42"): a figure, not an explanation
         var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ")).ToList();
-        check(!plain.Texts.Contains("CP") && !plain.Texts.Contains("Damage") && !plain.Texts.Contains("Kills near you") && plain.Texts.Contains("DPS") && plainTips.Count == 0
-            && every.Texts.Contains("CP") && every.Texts.Contains("Item lvl") && every.Texts.Contains("Damage") && every.Texts.Contains("Kills near you") && every.Tips.Count > 3,
-            $"Parser: minimal by default (DPS, no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(plain.Texts.Contains("CP") ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(plain.Texts.Contains("Kills near you") ? "; kills near you shown" : "")}");
+        // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
+        static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP") && t.Contains("item level"));
+        check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !plain.Texts.Contains("kills near you") && plain.Texts.Contains("DPS") && plainTips.Count == 0
+            && Gear(every.Texts) && every.Texts.Contains("Damage") && every.Texts.Contains("kills near you") && every.Tips.Count > 3,
+            $"Parser: the switches off, DPS only (no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(Gear(plain.Texts) ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(plain.Texts.Contains("kills near you") ? "; kills near you shown" : "")}");
         // each row: "48.2K DPS · 25.1%" (Steven, 2026-11-14: "should give DPS and % not just a %")
         check(plain.Texts.Contains("DPS") && plain.Texts.Count(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+(\.\d)?%$")) >= 3 && plain.Tips.Count(t => t.Contains(" damage in ")) >= 3,
             $"Parser: each row says its DPS and its share of the damage, its damage on hover: {string.Join(", ", plain.Texts.Where(t => t.EndsWith('%')).Take(4))}");
@@ -258,7 +274,11 @@ public static partial class WpfApp
             "Parser: a member's expanded row says their item level, Combat Power and server over their abilities");
         // the header: the instance with the game's mode for it
         w.ShowParserDemo("live"); DoEvents();
-        check(ParserTexts(w.ParserPage).Texts.Contains("Ferocious Horn Den · Conquest"), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
+        check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Ferocious Horn Den · Conquest · ")), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
+        // the boss's HP left beside its share, on the page (Steven, 2026-11-14)
+        check(ParserTexts(w.ParserPage).Texts.Any(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+% · [\d.,]+[KM]? left of [\d.,]+[KM]? HP$")), $"Parser: the boss's HP says its share and the HP left (47% · 1.82M left of 3.85M HP) [{string.Join(" | ", ParserTexts(w.ParserPage).Texts.Where(t => t.Contains('%')))}]");
+        // the overlay's look, one click from the page (Steven, 2026-11-14: "idk how to change the style")
+        check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")), "Parser: the page names the overlay's look, a link to change it");
         // separated (Steven, 2026-11-14: overlays move by a plain drag, no Move button or placement mode; the Kinah overlay's look exactly)
         {
             w.SetParserSeparateForTest(true); DoEvents();
@@ -318,7 +338,20 @@ public static partial class WpfApp
         var opt = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
-        check(sws.Details != null && new[] { sws.Details, sws.Kills, sws.Filters, sws.Hovers, sws.Separate, sws.Active }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details, DPS over active time, Kills and deaths, List filters, Explanations on hover, Separate parser overlay, all off by default");
+        check(sws.Details?.IsChecked == true && new[] { sws.Kills, sws.Filters, sws.Hovers, sws.Separate, sws.Active }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details on by default (Steven, 2026-11-14); DPS over active time, Kills and deaths, List filters, Explanations on hover, Separate parser overlay off");
+        // the Parser's look row: the four looks drawn for fights, the one in use outlined, a click picks it for the panel too
+        {
+            var (keys, onKey) = opt.ParserLooksForTest;
+            check(keys.SequenceEqual(HudLooks.FightLooks) && (onKey == null || HudLooks.FightLooks.Contains(onKey)), $"Options › In game › Parser: the overlay's look row offers {string.Join(", ", keys)}, the one in use outlined ({onKey ?? "none: an older look"})");
+            var pick = HudLooks.FightLooks.First(k => k != onKey);
+            opt.PickHudLookForTest(pick); DoEvents();
+            check(opt.ParserLooksForTest.On == pick, $"...a look picked shows in the row at once ({pick})");
+            var ws = opt.ParserWidthForTest;
+            double wBefore = HudStackLook.FightWidth;
+            if (ws != null) { ws.Value = 500; DoEvents(); }
+            check(ws != null && ws.Minimum == 300 && ws.Maximum == 640 && HudStackLook.FightWidth == 500, $"Options › In game › Parser: a Width slider, 300 to 640, that widens the meter as it moves ({HudStackLook.FightWidth:0})");
+            if (ws != null) { ws.Value = wBefore; DoEvents(); }
+        }
         check(sws.Farm?.IsChecked == true, "Options › In game › Parser: Open-world DPS on the Kinah line, on by default (Steven asked for it)");
         // farming: your DPS small on the Kinah line in each look; the overlay never grows for it
         foreach (var look in new[] { HudLooks.Strip, HudLooks.Card, HudLooks.Ticker })
@@ -337,6 +370,66 @@ public static partial class WpfApp
                 $"farming ({look}): your DPS small on the Kinah line, gone with the fight, the overlay no taller ({h0:0} / {h1:0})");
             hf.Close(); Motion.Still = still0;
         }
+        // in a dungeon the meter replaces the Kinah line (Steven, 2026-11-14), a timer due stays in sight, and leaving brings it back
+        {
+            bool still0 = Motion.Still; Motion.Still = true;
+            var now0 = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+            var (_, pull0) = ParserDemo.Sample(now0);
+            var due0 = new List<Session.TimerBoard.Item> { new("boss:Soul Ruler Kashapa", "Verteron", "Soul Ruler Kashapa", "", Session.TimerBoard.Kind.Waiting, now0.AddSeconds(279), "4m 39s", "") { Short = "Kashapa" } };
+            var kin = new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04" };
+            foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float, HudLooks.Strip })
+            {
+                var hd = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+                hd.Update(kin); hd.ShowTimers(due0, now0); hd.ShowParser(pull0, now0, ParserMode.Bosses, false);
+                hd.Show(); DoEvents();
+                // the Strip draws its own line from these figures (not the rate); its whole Kinah line is the part to watch
+                bool KinahShown() => look == HudLooks.Strip ? hd.OwnContent?.IsVisible == true : ParserVisibleText(hd, "1.27M");
+                bool kinahBefore = KinahShown();
+                hd.SetKinahHidden(true); DoEvents();
+                bool gone = !KinahShown();
+                bool meter = ParserVisibleText(hd, "Ferocious Horn Nuakum");
+                bool timer = ParserVisibleText(hd, "Kashapa");
+                hd.SetKinahHidden(false); DoEvents();
+                bool back = KinahShown();
+                check(kinahBefore && gone && meter && timer && back, $"in a dungeon ({look}): the meter replaces the Kinah line ({(gone ? "hidden" : "still shown")}), the timer due stays in sight ({timer}), the Kinah line back after ({back}){(kinahBefore ? "" : ", the Kinah line not shown before")}{(meter ? "" : ", the meter not shown")}");
+                hd.Close();
+            }
+            Motion.Still = still0;
+        }
+        // wider (Steven, 2026-11-14): the meter's width in every look, 300 to 640; the rows stretch, the figures stay at the right
+        {
+            bool still0 = Motion.Still; Motion.Still = true;
+            double w0 = HudStackLook.FightWidth;
+            var now0 = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+            var (_, pull0) = ParserDemo.Sample(now0);
+            foreach (var look in HudLooks.FightLooks)
+            {
+                HudStackLook.FightWidth = HudStackLook.FightWidthDefault;
+                var hd = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+                hd.ShowParser(pull0, now0, ParserMode.Bosses, false); hd.SetKinahHidden(true);
+                hd.Show(); DoEvents();
+                (double W, double Gap) Measure()
+                {
+                    var f = hd.FightFrameForTest;
+                    if (f == null || f.ActualWidth < 1) return (0, -1);
+                    // the top member's share, the right-most figure of its row
+                    var share = FindTexts(f).FirstOrDefault(t => BlockText(t) == "31.5%");
+                    if (share == null) return (f.ActualWidth, -1);
+                    var r = share.TransformToAncestor(f).Transform(new Point(share.ActualWidth, 0)).X;
+                    return (f.ActualWidth, f.ActualWidth - r);
+                }
+                var (w1, gap1) = Measure();
+                HudStackLook.FightWidth = HudStackLook.FightWidthMax; hd.ApplyFightWidth(); DoEvents();
+                var (w2, gap2) = Measure();
+                bool wider = w2 - w1 >= 250, right = gap1 >= 0 && gap2 >= 0 && Math.Abs(gap2 - gap1) <= 2;
+                check(wider && right, $"wider ({look}): the meter {w1:0} wide at 100%, {w2:0} at the widest; the figures at its right edge ({gap1:0} and {gap2:0} from it)");
+                hd.Close();
+            }
+            check(Math.Abs(HudStackLook.FightWidth - 640) < 0.5 && (HudStackLook.FightWidth = 9999) == 9999 && HudStackLook.FightWidth == HudStackLook.FightWidthMax && (HudStackLook.FightWidth = 10) == 10 && HudStackLook.FightWidth == HudStackLook.FightWidthMin,
+                "wider: the width stays within 300 to 640");
+            HudStackLook.FightWidth = w0;
+            Motion.Still = still0;
+        }
         // expanded by default: the Parser's section opens above the Kinah line and the Kinah line stays where it is
         {
             bool still = Motion.Still; Motion.Still = true;
@@ -352,9 +445,47 @@ public static partial class WpfApp
                 $"the Kinah overlay grows upward for a fight and folds back: its bottom stays put ({bottom:0} / {bottom2:0} / {bottom3:0}), the section {parserH:0} high");
             hud.Close(); Motion.Still = still;
         }
-        opt.Close();
+        opt.Discard();   // the look picked above is an unsaved edit: dropped, never a save question
         w.ShowPartForTest("Farming"); w.ShowDemo(); DoEvents();
     }
+
+    /// <summary>True when a text containing <paramref name="part"/> is laid out and visible in the overlay (not collapsed or under a collapsed parent).</summary>
+    static bool ParserVisibleText(Window w, string part)
+    {
+        bool found = false;
+        var seen = new HashSet<DependencyObject>();
+        void Walk(DependencyObject d)
+        {
+            if (found || !seen.Add(d)) return;
+            if (d is UIElement u && !u.IsVisible) return;
+            if (d is System.Windows.Controls.TextBlock t && BlockText(t).Contains(part) && t.ActualWidth > 0) { found = true; return; }
+            foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
+            // some looks draw parts outside the logical tree (the glass ring, the strip's cells)
+            if (d is Visual or System.Windows.Media.Media3D.Visual3D)
+                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(w);
+        return found;
+    }
+
+    /// <summary>Every text block under <paramref name="root"/>, the visual tree's too.</summary>
+    static List<System.Windows.Controls.TextBlock> FindTexts(DependencyObject root)
+    {
+        var all = new List<System.Windows.Controls.TextBlock>();
+        var seen = new HashSet<DependencyObject>();
+        void Walk(DependencyObject d)
+        {
+            if (!seen.Add(d)) return;
+            if (d is System.Windows.Controls.TextBlock t) all.Add(t);
+            foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
+            if (d is Visual) for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(root);
+        return all;
+    }
+
+    /// <summary>A text block's words, its runs too (Text alone misses runs added in code).</summary>
+    static string BlockText(System.Windows.Controls.TextBlock t) => t.Inlines.Count > 0 ? new System.Windows.Documents.TextRange(t.ContentStart, t.ContentEnd).Text : t.Text;
 
     /// <summary>Every text and hover on the Parser page, for the checks above.</summary>
     static (HashSet<string> Texts, List<string> Tips) ParserTexts(DependencyObject root)
@@ -362,7 +493,7 @@ public static partial class WpfApp
         var texts = new HashSet<string>(); var tips = new List<string>();
         void Walk(DependencyObject d)
         {
-            if (d is System.Windows.Controls.TextBlock t && t.Text.Length > 0) texts.Add(t.Text);
+            if (d is System.Windows.Controls.TextBlock t && BlockText(t) is { Length: > 0 } tt) texts.Add(tt);
             if (d is System.Windows.Controls.ContentControl cc && cc.Content is string cs) texts.Add(cs);
             if (d is FrameworkElement fe && fe.ToolTip is string tip) tips.Add(tip);
             foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);

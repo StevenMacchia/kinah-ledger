@@ -71,6 +71,25 @@ public sealed partial class HudWindow
         if (Math.Abs(_parserSlot.ActualHeight - _parserTaken) > 0.5) { _parserTaken = _parserSlot.ActualHeight; Restack(before); }
     }
 
+    /// <summary>True while the meter replaces the Kinah line (a dungeon run, Ui/MainWindow.Parser.cs).</summary>
+    public bool KinahHidden { get; private set; }
+
+    /// <summary>
+    /// In a Transcendence, an Expedition or a Sanctuary the meter replaces the Kinah line for the whole run (Steven,
+    /// 2026-11-14: "the parser should REPLACE the kinah tracker and that should be hidden during expeditions"): the looks that
+    /// draw the fight above it (Auto, and Badge, Buddy and Pop with the Parser's section) put their Kinah part away; the
+    /// Capsule, the Meter and the Float hide their Kinah figures. A timer due stays in sight (the timer line, or inside the
+    /// meter). The Kinah line's spot is the anchor the meter sits on, so it comes back where it was.
+    /// </summary>
+    public void SetKinahHidden(bool on)
+    {
+        if (on == KinahHidden) return;
+        KinahHidden = on;
+        if (_look is HudStackLook sl) sl.HideKinah(on);
+        if ((_look == null || _look is IHudFightAbove || _look is not HudStackLook) && OwnContent != null)
+            OwnContent.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     /// <summary>The record to show above the Kinah line, or null to fold the section away.</summary>
     public void ShowParser(Encounter? e, DateTime now, ParserMode mode, bool details)
     {

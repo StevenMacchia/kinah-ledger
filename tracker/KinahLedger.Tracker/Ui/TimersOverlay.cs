@@ -51,7 +51,7 @@ sealed class TimersOverlay : Window
     {
         _prefs = prefs;
         if (InvisibleForTest) Opacity = 0;
-        Title = "Kinah Ledger timers";
+        Title = InvisibleForTest ? "Kinah Ledger timers (invisible test strip)" : "Kinah Ledger timers";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;

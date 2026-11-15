@@ -77,6 +77,9 @@ sealed class BossWindow : Window
         _prefs.Save();
     }
 
+    /// <summary>For the self-tests: the window opens far off the screens (its spot beside a parked main window would be clamped onto the player's screen).</summary>
+    internal static bool OffscreenForTest;
+
     /// <summary>Shows <paramref name="card"/>: in place when open (the scroll kept), else where it was last put or beside the main window, on a screen.</summary>
     /// <param name="offscreen">For a render (ui-shot): shown far off the screens.</param>
     public void ShowCard(Border card, bool offscreen = false)
@@ -85,7 +88,7 @@ sealed class BossWindow : Window
         _scroll.Content = card;
         if (IsVisible) { _scroll.UpdateLayout(); _scroll.ScrollToVerticalOffset(y); return; }
         WindowStartupLocation = WindowStartupLocation.Manual;
-        if (offscreen) { Left = -12000; Top = -12000; ShowActivated = false; Show(); return; }
+        if (offscreen || OffscreenForTest) { Left = -12000; Top = -12000; ShowActivated = false; Show(); return; }
         double w = Width, h = Height, left, top;
         if (_prefs.WinX is { } x && _prefs.WinY is { } yy) { left = x; top = yy; }
         else

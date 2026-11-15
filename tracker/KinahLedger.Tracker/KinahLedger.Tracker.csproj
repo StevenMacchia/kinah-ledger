@@ -75,7 +75,9 @@
     <Resource Include="Fonts\Inter-Bold.ttf" />
     <!-- the game's own UI art for concepts (Kinah, a fight, a recipe, a run, a quest...), as the site's /img/ui icons, in
          place of drawn line icons (Steven: real AION 2 art only); 80 px PNGs from the site's webp -->
-    <Resource Include="Art\*.png" />
+    <Resource Include="Art\*.png" Exclude="Art\skill-icons.png" />
+    <!-- the abilities' icons, one palette sheet (tools/skill-icons.py), read as a stream so the self-tests can load it too (Ui/SkillArt.cs) -->
+    <EmbeddedResource Include="Art\skill-icons.png" LogicalName="skill-icons.png" />
 
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->
@@ -90,6 +92,8 @@
     <EmbeddedResource Include="..\..\data\bosses.txt" LogicalName="bosses.txt" />
     <!-- each ability's name by the game's skill id (MetaBot's skill pages): the Parser's damage by ability (Parser/Abilities.cs) -->
     <EmbeddedResource Include="..\..\data\skills.json" LogicalName="skills.json" />
+    <!-- the cells of Art/skill-icons.png, the abilities' icons in the Parser's inspect view (tools/skill-icons.py) -->
+    <EmbeddedResource Include="..\..\data\skill-icons.txt" LogicalName="skill-icons.txt" />
     <!-- the Abyss's areas and the part of Reshanta each is in: where the Abyss's rules apply -->
     <EmbeddedResource Include="..\..\data\abyss.txt" LogicalName="abyss.txt" />
     <!-- enemy names as the target bar prints them: the whitelist for Kinah by enemy -->

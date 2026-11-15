@@ -46,6 +46,31 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     protected string _acc = "";
     protected bool _accCheck;
+
+    /// <summary>
+    /// In a dungeon the meter replaces the Kinah line (Steven, 2026-11-14: "the parser should REPLACE the kinah tracker and that
+    /// should be hidden during expeditions"): the look hides its Kinah figures, and a timer due moves into the meter so no
+    /// alert is lost. Off again when the player leaves the instance.
+    /// </summary>
+    public virtual void HideKinah(bool on) => KinahHidden = on;
+    protected bool KinahHidden;
+
+    /// <summary>
+    /// The meter's width at 100% (Steven, 2026-11-14: "maybe an option to make it wider?"): one figure for every look and
+    /// the separate overlay, set by dragging the meter's left or right edge or by Settings › In game › Parser › Width.
+    /// The rows and names stretch with it; the figures stay right-aligned.
+    /// </summary>
+    public static double FightWidth { get => _fightWidth; set => _fightWidth = Math.Round(Math.Clamp(double.IsFinite(value) ? value : FightWidthDefault, FightWidthMin, FightWidthMax)); }
+    static double _fightWidth = FightWidthDefault;
+    public const double FightWidthDefault = 330, FightWidthMin = 300, FightWidthMax = 640;
+
+    /// <summary>The fight's frame whose left and right edges widen it, or null while no fight shows.</summary>
+    public virtual FrameworkElement? FightFrame => null;
+
+    /// <summary>The fight drawn again at <see cref="FightWidth"/>.</summary>
+    public virtual void ApplyWidth() { }
+    protected Encounter? _lastFight;
+    protected DateTime _lastNow;
     public void SetAccuracy(string? text, bool toCheck) { _acc = text ?? ""; _accCheck = toCheck; }
 
     /// <summary>A meter's figure (DPS, a share, a clock): tabular digits, so a figure that changes as hits land never shifts its column.</summary>
@@ -165,7 +190,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) }); g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
         var mark = MainWindow.ClassMark(f.Class, 17, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(mark);
-        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", size, f.You ? Gold : Ink, FontWeights.SemiBold); nm.TextTrimming = TextTrimming.CharacterEllipsis; Grid.SetColumn(nm, 1); g.Children.Add(nm);
+        var nm = MemberName(f, size); Grid.SetColumn(nm, 1); g.Children.Add(nm);
         if (e.HasDamage)
         {
             var d = Num(Amounts.Short(e.Dps(f, now)), size + 1.5, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 2); g.Children.Add(d);
@@ -179,6 +204,23 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     }
 
     protected static double Top(Encounter e) => e.TopMeasure();
+
+    /// <summary>A member's name in their class's colour (the bar's, the emblem ring's), you marked by the gold YOU chip.</summary>
+    protected static FrameworkElement MemberName(Fighter f, double size)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", size, f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : Muted, FontWeights.SemiBold);
+        sp.Children.Add(nm);
+        if (f.You) sp.Children.Add(HudGlass.YouChip());
+        return sp;
+    }
+
+    /// <summary>"47% · 1.82M left" after a boss's name, or null when its HP isn't known or the fight is over.</summary>
+    protected static TextBlock? Hp(Encounter e, double size)
+    {
+        if (!e.Live || e.BossHpLeft is not { } hp) return null;
+        return ParserPanel.HpText(e, size, hp < .34 ? B(RecC) : Ink, Muted);
+    }
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
     protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}";
@@ -216,8 +258,8 @@ sealed class HudCapsule : HudStackLook
         _chip.Child = _chipText;
         var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { _row, _chip } };
         (_pill, _pillFrame) = Glass(row, new Thickness(6, 5, 12, 5), 19);
-        (_meter, _meterFrame) = Glass(_meterBody, new Thickness(12, 8, 12, 6), 12);
-        _meter.Margin = new Thickness(10, 4, 0, 0); _meter.Width = 300; _meter.HorizontalAlignment = HorizontalAlignment.Left; _meter.Visibility = Visibility.Collapsed;
+        (_meter, _meterFrame) = Glass(new StackPanel { Children = { _meterBody, _meterTimer } }, new Thickness(12, 8, 12, 6), 12);
+        _meter.Margin = new Thickness(10, 4, 0, 0); _meter.Width = FightWidth - 30; _meter.HorizontalAlignment = HorizontalAlignment.Left; _meter.Visibility = Visibility.Collapsed;
         _root.Children.Add(_pill); _root.Children.Add(_note); _root.Children.Add(_meter);
     }
 
@@ -249,32 +291,67 @@ sealed class HudCapsule : HudStackLook
             _row.Children.Add(figs);
         }
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
-        _note.Visibility = f.Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The next timer due inside the meter, while the pill is away in a dungeon.</summary>
+    readonly TextBlock _meterTimer = new() { FontSize = 11.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
+    (IReadOnlyList<TimerBoard.Item> Items, DateTime Now)? _timersNow;
+
+    public override void HideKinah(bool on)
+    {
+        base.HideKinah(on);
+        _pill.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        if (on) _note.Visibility = Visibility.Collapsed; else _figSig = "";
+        _meter.Margin = new Thickness(on ? 0 : 10, on ? 0 : 4, 0, 0);
+        if (_timersNow is { } t) ShowTimers(t.Items, t.Now);
     }
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        if (TimerChip(items, now) is not { } c) { _chip.Visibility = Visibility.Collapsed; return; }
+        _timersNow = (items, now);
+        var tc = TimerChip(items, now);
+        _meterTimer.Visibility = KinahHidden && tc != null ? Visibility.Visible : Visibility.Collapsed;
+        if (tc is { } mt) { _meterTimer.Text = mt.Text; _meterTimer.Foreground = mt.Tone; }
+        if (tc is not { } c) { _chip.Visibility = Visibility.Collapsed; return; }
         bool gold = ReferenceEquals(c.Tone, Gold);
         _chipText.Text = c.Text; _chipText.Foreground = c.Tone;
         _chip.Background = B(gold ? GoldC : 0xFFFFFF, gold ? .14 : .06); _chip.BorderBrush = B(gold ? GoldC : 0xFFFFFF, gold ? .45 : .14);
         _chip.Visibility = Visibility.Visible;
     }
 
+    public override FrameworkElement? FightFrame => _meter.Visibility == Visibility.Visible ? _meter : null;
+
+    public override void ApplyWidth()
+    {
+        _meter.Width = FightWidth - 30;
+        _fightSig = ""; ShowFight(_lastFight, _lastNow);
+    }
+
     public override void ShowFight(Encounter? e, DateTime now)
     {
+        _lastFight = e; _lastNow = now;
         var sig = FightSig(e, now);
         if (sig == _fightSig) return;
         _fightSig = sig;
         _meterBody.Children.Clear();
         if (e == null) { _meter.Visibility = Visibility.Collapsed; return; }
         var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(Tx(e.Title, 13.5, Ink, FontWeights.Bold));
-        var clk = e.Waiting ? Tx("Ready", 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 1); head.Children.Add(clk);
+        var clk = e.Waiting ? Tx("Ready", 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _meterBody.Children.Add(head);
         if (e.Waiting) { var w = Tx(ReadyLine, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w); _meter.Visibility = Visibility.Visible; return; }
-        _meterBody.Children.Add(e.BossHpLeft is { } hp && e.Live ? Bar(hp, hp < .34 ? B(RecC) : Gold, 3, new Thickness(0, 5, 0, 7)) : new Border { Height = 6 });
+        if (e.BossHpLeft is { } hp && e.Live)
+        {
+            // the HP as a hairline with "47% · 1.82M left" at its end
+            var hpRow = new Grid { Margin = new Thickness(0, 4, 0, 6) };
+            hpRow.ColumnDefinitions.Add(new ColumnDefinition()); hpRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var hb = Bar(hp, hp < .34 ? B(RecC) : Gold, 3, new Thickness(0)); hb.VerticalAlignment = VerticalAlignment.Center; hpRow.Children.Add(hb);
+            if (Hp(e, 11) is { } hpText) { hpText.Margin = new Thickness(8, 0, 0, 0); Grid.SetColumn(hpText, 1); hpRow.Children.Add(hpText); }
+            _meterBody.Children.Add(hpRow);
+        }
+        else _meterBody.Children.Add(new Border { Height = 6 });
         double top = Top(e);
         foreach (var f in e.Shown().Take(6)) _meterBody.Children.Add(MemberLine(e, f, now, top, 13, 2));
         if (!e.Live && e.Outcome.Length > 0)
@@ -293,12 +370,19 @@ sealed class HudCapsule : HudStackLook
 /// </summary>
 sealed class HudMeter : HudStackLook
 {
-    const double W = 330;
+    static double W => FightWidth;
     readonly Border _ring, _frame;
+    readonly StackPanel _body = new();
     readonly Grid _head = new() { Height = 32 };
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 }, _hpLine = new() { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
     readonly TextBlock _title = new() { FontSize = 13.5, FontWeight = FontWeights.Bold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     readonly TextBlock _hpPct = new() { FontSize = 12.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
+    /// <summary>
+    /// The HP words' line under the header, used while a timer's tab takes the header's room (the boss's name would be cut
+    /// to a word): "47% · 1.82M left" there instead of beside the name.
+    /// </summary>
+    readonly TextBlock _hpBelow = new() { FontSize = 11.5, FontWeight = FontWeights.Bold, Margin = new Thickness(10, 5, 10, 0), Visibility = Visibility.Collapsed };
+    (string Pct, string Left, bool Words)? _hpNow;
     readonly TextBlock _clock = new() { FontSize = 15, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _tab = new() { CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly TextBlock _tabText = new() { FontSize = 10.5, FontWeight = FontWeights.Bold };
@@ -316,24 +400,28 @@ sealed class HudMeter : HudStackLook
 
     HudMeter(byte _)
     {
-        var body = new StackPanel { Width = W };
+        var body = _body; body.Width = W;
         _head.Children.Add(new Border { Background = B(0xFFFFFF, .05) });
         var hb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         hb.GradientStops.Add(new GradientStop(Color.FromArgb(0x10, 0xF2, 0x6D, 0x6D), 0)); hb.GradientStops.Add(new GradientStop(Color.FromArgb(0x55, 0xF2, 0x6D, 0x6D), 1)); hb.Freeze();
         _hpFill.Background = hb; _hpLine.Background = B(RecC);
         _head.Children.Add(_hpFill); _head.Children.Add(_hpLine);
         var hg = new Grid { Margin = new Thickness(10, 0, 10, 0) };
-        hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new StackPanel { Orientation = Orientation.Horizontal, Children = { _title, _hpPct } };
-        _title.MaxWidth = 190;
+        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = new Grid();
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        title.Children.Add(_title);
+        Grid.SetColumn(_hpPct, 1); title.Children.Add(_hpPct);
         System.Windows.Documents.Typography.SetNumeralAlignment(_clock, FontNumeralAlignment.Tabular); System.Windows.Documents.Typography.SetNumeralAlignment(_hpPct, FontNumeralAlignment.Tabular);
         hg.Children.Add(title);
         _tab.Child = _tabText;
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Children = { _tab, _clock } };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), Children = { _tab, _clock } };
         Grid.SetColumn(right, 1); hg.Children.Add(right);
         _head.Children.Add(hg);
         body.Children.Add(_head);
         body.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
+        System.Windows.Documents.Typography.SetNumeralAlignment(_hpBelow, FontNumeralAlignment.Tabular);
+        body.Children.Add(_hpBelow);
         body.Children.Add(_rows);
         body.Children.Add(_foot);
         body.Children.Add(_note);
@@ -355,7 +443,15 @@ sealed class HudMeter : HudStackLook
         if (!_fight) { _title.Text = f.Zone.Length > 0 ? f.Zone : "Kinah Ledger"; _clock.Text = f.Clock; _clock.Foreground = Muted; }
         DrawFoot(f);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
-        _note.Visibility = f.Note.Length > 0 && _withFoot ? Visibility.Visible : Visibility.Collapsed;
+        _note.Visibility = f.Note.Length > 0 && _withFoot && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public override void HideKinah(bool on)
+    {
+        base.HideKinah(on);
+        if (!_withFoot) return;
+        _foot.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        if (on) _note.Visibility = Visibility.Collapsed; else _figSig = "";
     }
 
     void DrawFoot(Figures f)
@@ -380,15 +476,25 @@ sealed class HudMeter : HudStackLook
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        if (TimerChip(items, now) is not { } c) { _tab.Visibility = Visibility.Collapsed; return; }
+        if (TimerChip(items, now) is not { } c) { _tab.Visibility = Visibility.Collapsed; PlaceHp(); return; }
         bool gold = ReferenceEquals(c.Tone, Gold);
         _tabText.Text = c.Text; _tabText.Foreground = c.Tone;
         _tab.Background = B(gold ? GoldC : 0xFFFFFF, gold ? .16 : .07);
         _tab.Visibility = Visibility.Visible;
+        PlaceHp();
+    }
+
+    public override FrameworkElement? FightFrame => _fight ? _ring : null;
+
+    public override void ApplyWidth()
+    {
+        _body.Width = W;
+        _fightSig = ""; ShowFight(_lastFight, _lastNow);
     }
 
     public override void ShowFight(Encounter? e, DateTime now)
     {
+        _lastFight = e; _lastNow = now;
         var sig = FightSig(e, now);
         if (sig == _fightSig) return;
         _fightSig = sig;
@@ -398,7 +504,7 @@ sealed class HudMeter : HudStackLook
         if (e == null)
         {
             _rows.Visibility = Visibility.Collapsed;
-            _hpFill.Width = _hpLine.Width = 0; _hpPct.Text = "";
+            _hpFill.Width = _hpLine.Width = 0; _hpNow = null; PlaceHp();
             if (_figs is { } f0) { _title.Text = f0.Zone.Length > 0 ? f0.Zone : "Kinah Ledger"; _clock.Text = f0.Clock; _clock.Foreground = Muted; if (was) DrawFoot(f0); }
             _figSig = "";
             return;
@@ -408,7 +514,7 @@ sealed class HudMeter : HudStackLook
         {
             // a dungeon before its first pull: its name, Ready, and where the members will be
             _clock.Text = "Ready"; _clock.Foreground = Muted;
-            _hpFill.Width = _hpLine.Width = 0; _hpPct.Text = "";
+            _hpFill.Width = _hpLine.Width = 0; _hpNow = null; PlaceHp();
             var w = Tx(ReadyLine, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(10, 7, 10, 8);
             _rows.Children.Add(w);
             _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
@@ -419,8 +525,10 @@ sealed class HudMeter : HudStackLook
         _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold : Ink;
         double hp = e.BossHpLeft is { } h && e.Live ? h : 0;
         _hpFill.Width = _hpLine.Width = W * hp;
-        _hpPct.Text = hp > 0 ? $"{hp * 100:0}%" : !e.Live && e.Outcome == "kill" ? "Killed" : !e.Live && e.Outcome == "wipe" ? "Wiped" : "";
-        _hpPct.Foreground = !e.Live && e.Outcome == "kill" ? Mint : B(RecC);
+        // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
+        _hpNow = hp > 0 ? ($"{Math.Round(hp * 100):0}%", ParserPanel.HpLeft(e), true) : (!e.Live && e.Outcome == "kill" ? "Killed" : !e.Live && e.Outcome == "wipe" ? "Wiped" : "", "", false);
+        _hpPct.Tag = !e.Live && e.Outcome == "kill";
+        PlaceHp();
         double top = Top(e);
         int rank = 1;
         foreach (var f in e.Shown().Take(6)) _rows.Children.Add(Row(e, f, now, top, rank++));
@@ -437,21 +545,37 @@ sealed class HudMeter : HudStackLook
         if (_figs is { } f1 && !was) { DrawFoot(f1); _figSig = ""; }
     }
 
+    /// <summary>The HP words beside the boss's name, or on their own line under the header while a timer's tab is there.</summary>
+    void PlaceHp()
+    {
+        _hpPct.Inlines.Clear(); _hpBelow.Inlines.Clear();
+        _hpBelow.Visibility = Visibility.Collapsed;
+        if (_hpNow is not { } h || h.Pct.Length == 0) return;
+        if (!h.Words) { _hpPct.Inlines.Add(new System.Windows.Documents.Run(h.Pct) { Foreground = _hpPct.Tag is true ? Mint : B(RecC) }); return; }
+        bool below = _tab.Visibility == Visibility.Visible;
+        var host = below ? _hpBelow : _hpPct;
+        host.Inlines.Add(new System.Windows.Documents.Run(h.Pct) { Foreground = B(RecC) });
+        host.Inlines.Add(new System.Windows.Documents.Run($" · {h.Left}") { Foreground = Muted, FontWeight = FontWeights.SemiBold });
+        if (below) _hpBelow.Visibility = Visibility.Visible;
+    }
+
     static FrameworkElement Row(Encounter e, Fighter f, DateTime now, double top, int rank)
     {
         var host = new Grid { Height = 28, Margin = new Thickness(0, 0, 0, 1) };
         var c = ClassArt.ColorOf(f.Class);
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x70, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x30, c.R, c.G, c.B), 1)); fill.Freeze();
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x60, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x22, c.R, c.G, c.B), 1)); fill.Freeze();
         double measure = e.HasDamage ? f.Damage : f.CombatPower;
+        // a quiet track the row's width, so the rows read as one table; the fill fading from the class's solid edge
+        host.Children.Add(new Border { Background = Frozen(Color.FromArgb(0x0E, c.R, c.G, c.B)) });
         host.Children.Add(new Border { Background = fill, Width = W * Math.Clamp(measure / top, 0, 1), HorizontalAlignment = HorizontalAlignment.Left });
-        host.Children.Add(new Border { Width = 2, Background = Frozen(c), HorizontalAlignment = HorizontalAlignment.Left });
+        host.Children.Add(new Border { Width = 3, Background = Frozen(c), HorizontalAlignment = HorizontalAlignment.Left });
         var g = new Grid { Margin = new Thickness(8, 0, 10, 0) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
         g.Children.Add(Num(rank > 0 ? rank.ToString(CultureInfo.InvariantCulture) : "", 11.5, Faint, FontWeights.Bold));
         var mark = MainWindow.ClassMark(f.Class, 18, f.Name); mark.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(mark, 1); g.Children.Add(mark);
-        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, f.You ? Gold : Ink, FontWeights.SemiBold); nm.TextTrimming = TextTrimming.CharacterEllipsis; Grid.SetColumn(nm, 2); g.Children.Add(nm);
+        var nm = MemberName(f, 13.5); Grid.SetColumn(nm, 2); g.Children.Add(nm);
         if (e.HasDamage)
         {
             var d = Num(Amounts.Short(e.Dps(f, now)), 15, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 3); g.Children.Add(d);
@@ -514,7 +638,16 @@ sealed class HudFloat : HudStackLook
             _line.Children.Add(figs);
         }
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
-        _note.Visibility = f.Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public override void HideKinah(bool on)
+    {
+        base.HideKinah(on);
+        _line.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        if (on) _note.Visibility = Visibility.Collapsed; else _figSig = "";
+        // the meter's rows end the overlay: no gap left under them for the line
+        _fight.Margin = new Thickness(0, 0, 0, on ? -8 : 0);
     }
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
@@ -532,8 +665,14 @@ sealed class HudFloat : HudStackLook
         _timers.Visibility = _timers.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    StackPanel? _rowsNow;
+    public override FrameworkElement? FightFrame => _fight.Visibility == Visibility.Visible ? _rowsNow : null;
+
+    public override void ApplyWidth() { _fightSig = ""; ShowFight(_lastFight, _lastNow); }
+
     public override void ShowFight(Encounter? e, DateTime now)
     {
+        _lastFight = e; _lastNow = now;
         var sig = FightSig(e, now);
         if (sig == _fightSig) return;
         _fightSig = sig;
@@ -541,13 +680,14 @@ sealed class HudFloat : HudStackLook
         if (e == null) { _fight.Visibility = Visibility.Collapsed; return; }
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(Tx(e.Title, 14, Ink, FontWeights.Bold));
+        if (Hp(e, 12) is { } hpText) { hpText.Margin = new Thickness(8, 1, 0, 0); head.Children.Add(hpText); }
         head.Children.Add(e.Waiting ? Tx("  Ready", 12.5, Muted, FontWeights.SemiBold) : Num("  " + Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold));
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
             head.Children.Add(Tx(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed", 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);
-        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = 250; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); }
+        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); }
         else _fight.Children.Add(new Border { Height = 6 });
-        var rows = new StackPanel { Width = 280, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
+        var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         double top = Top(e);
         if (e.Waiting) rows.Children.Add(Tx(ReadyLine, 12.5, Muted, FontWeights.SemiBold));
         foreach (var f in e.Shown().Take(5)) rows.Children.Add(MemberLine(e, f, now, top, 13, 1.5));
@@ -575,11 +715,24 @@ sealed class HudAuto : HudStackLook, IHudFightAbove
     public override double Corner => _pill.Corner;
     public override void SetOpacity(double opacity) { _pill.SetOpacity(opacity); _meter.SetOpacity(opacity); }
     public override void Update(IReadOnlyDictionary<string, string> values) { _pill.Update(values); _meter.Update(values); }
+    (IReadOnlyList<TimerBoard.Item> Items, DateTime Now)? _timersNow;
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        _pill.ShowTimers(items, now);
-        _meter.ShowTimers(System.Array.Empty<TimerBoard.Item>(), now);   // the pill's chip says it once
+        _timersNow = (items, now);
+        // the pill's chip says it once; in a dungeon the pill is away, and the meter's header tab says it
+        _pill.ShowTimers(KinahHidden ? System.Array.Empty<TimerBoard.Item>() : items, now);
+        _meter.ShowTimers(KinahHidden ? items : System.Array.Empty<TimerBoard.Item>(), now);
     }
+
+    public override void HideKinah(bool on)
+    {
+        base.HideKinah(on);
+        _meter.Root.Margin = new Thickness(0, 0, 0, on ? 0 : 4);
+        if (_timersNow is { } t) ShowTimers(t.Items, t.Now);
+    }
+    public override FrameworkElement? FightFrame => _meter.FightFrame;
+    public override void ApplyWidth() => _meter.ApplyWidth();
+
     /// <summary>A fight comes through FightAbove; the pill never draws one of its own.</summary>
     public override void ShowFight(Encounter? e, DateTime now) => FightAbove(e, now);
 
