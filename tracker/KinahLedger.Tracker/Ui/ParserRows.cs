@@ -62,7 +62,7 @@ public sealed class ParserRows : Grid
 
     sealed class RowEl
     {
-        public required Grid Root, Cols; public required Border Chip, BarFill, Track, Edge, Tick, Pb; public required TextBlock ChipText, Name, Dps, Share, Damage, Crit; public required Grid Spark;
+        public required Grid Root, Cols; public required Border Chip, BarFill, Track, Edge, Tick, Pb; public required TextBlock ChipText, Name, Dps, Share, Damage, Crit, Back; public required Grid Spark;
         public required Border Frame;
         public int Rank = -1, Deaths; public double Y = double.NaN; public bool You; public string Cls = "";
     }
@@ -87,7 +87,7 @@ public sealed class ParserRows : Grid
         if (pin) visible = all.Take(max - 1).Append(you!).ToList();
         // the view of what the record carries: crit and the timeline columns only when it does
         var view = expanded ? FightView.Of(e, now, null) : null;
-        bool crit = view?.HasCrit == true, spark = view?.HasTimeline == true;
+        bool crit = view?.HasCrit == true, back = view?.HasBack == true, spark = view?.HasTimeline == true;
         double top = Math.Max(1, all.Select(e.Measure).DefaultIfEmpty(1).Max());   // the figure (boss damage or all targets), else Combat Power
         foreach (var gone in _rows.Keys.Where(id => !visible.Any(f => f.Id == id)).ToList()) { _host.Children.Remove(_rows[gone].Root); _rows.Remove(gone); }
         for (int i = 0; i < visible.Count; i++)
@@ -97,7 +97,7 @@ public sealed class ParserRows : Grid
             bool pinnedRow = pin && f.You;
             double y = i * _rowH + (pinnedRow ? _gap.Height : 0);
             bool fresh = !_rows.TryGetValue(f.Id, out var r);
-            if (fresh) { r = Build(f, expanded, crit, spark); _rows[f.Id] = r; _host.Children.Add(r.Root); }
+            if (fresh) { r = Build(f, expanded, crit, back, spark); _rows[f.Id] = r; _host.Children.Add(r.Root); }
             var row = r!;
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
@@ -110,6 +110,7 @@ public sealed class ParserRows : Grid
                 if (view?.Members.FirstOrDefault(m => m.F.Id == f.Id) is { } mv)
                 {
                     row.Crit.Text = mv.Crit is { } c ? $"{c * 100:0}%" : "–";
+                    row.Back.Text = mv.Back is { } bk ? $"{bk * 100:0}%" : "–";
                     if (spark && mv.PerSecond is { Count: > 1 } ps) { row.Spark.Children.Clear(); row.Spark.Children.Add(PK.Spark(PK.Smooth(ps.Select(x => (double)x).ToList()), 60, 18, f.You ? PK.Gold : ClassArt.ColorOf(f.Class), 0, f.You ? 1.6 : 1.2, glow: f.You)); }
                 }
             }
@@ -157,12 +158,12 @@ public sealed class ParserRows : Grid
         r.BarFill.Width = v <= 0.001 ? 0 : Math.Max(6, w * Math.Clamp(v, 0, 1));
     }
 
-    RowEl Build(Fighter f, bool expanded, bool crit, bool spark)
+    RowEl Build(Fighter f, bool expanded, bool crit, bool back, bool spark)
     {
         var c = ClassArt.ColorOf(f.Class);
         bool bare = _kind == Kind.Bare;
         var widths = new List<double> { 28, 24, -1, 60, 46 };
-        if (expanded) { widths.Add(56); if (crit) widths.Add(44); if (spark) widths.Add(66); }
+        if (expanded) { widths.Add(56); if (crit) widths.Add(44); if (back) widths.Add(44); if (spark) widths.Add(66); }
         var cols = PK.Cols(widths.ToArray());
         cols.Height = _rowH - 2;
         cols.Margin = new Thickness(5, 0, 6, 0);
@@ -194,11 +195,13 @@ public sealed class ParserRows : Grid
         var dps = Fig(15, HudKit.Ink, FontWeights.Bold);
         var share = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
         var damage = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold);
-        var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold);
+        var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); critT.ToolTip = "Crit rate";
+        // back attacks beside crit, in a quieter tone so the two rates read apart
+        var backT = Fig(11, HudKit.B(0x9FA6B8), FontWeights.Medium); backT.ToolTip = "Hits from behind";
         var sparkG = new Grid { Width = 60, Height = 18, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         cols.Children.Add(PK.Col(dps, 3)); cols.Children.Add(PK.Col(share, 4));
         int k = 5;
-        if (expanded) { cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
+        if (expanded) { cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (back) cols.Children.Add(PK.Col(backT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
         // the bar: a quiet track the row's width, the fill in the class's colour, angled at its end, fading to the right
         var track = new Border { CornerRadius = new CornerRadius(3), Background = PK.C(c, bare ? 0 : 0.07) };
         var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
@@ -213,7 +216,7 @@ public sealed class ParserRows : Grid
         var root = new Grid { VerticalAlignment = VerticalAlignment.Top, Height = _rowH - 2, RenderTransform = new TranslateTransform() };
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
-        var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class };
+        var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class };
         track.SizeChanged += (_, _) => { if (track.Tag is double v) SetBar(r, v); else SetBar(r, fill.Width > 0 ? fill.Width / Math.Max(1, track.ActualWidth) : 0); };
         return r;
     }

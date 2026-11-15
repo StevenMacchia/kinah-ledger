@@ -25,6 +25,7 @@ public sealed class FightView
 
     // what the record carries: each view shows its part only when there's something to show
     public bool HasCrit => Members.Any(m => m.Crit != null);
+    public bool HasBack => Members.Any(m => m.Back != null);
     public bool HasMax => Members.Any(m => m.MaxHit != null);
     public bool HasCasts => Members.Any(m => m.Abilities.Any(a => a.Casts != null));
     public bool HasTimeline => Members.Any(m => m.PerSecond is { Count: > 1 });
@@ -49,7 +50,8 @@ public sealed class FightView
             foreach (var a in e.AbilityRows(f))
                 m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)Math.Max(1, e.Figure(f)),
                     DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null, Casts = a.Casts, Max = a.Max, Min = a.Min,
-                    Crit = Encounter.CritKey is { } ck && a.StreamHits is > 0 and var sh && a.Kinds != null ? Encounter.KindTotals(a, ck).Hits / (double)sh : null });
+                    Crit = Encounter.CritKey is { } ck && a.StreamHits is > 0 and var sh && a.Kinds != null ? Encounter.KindTotals(a, ck).Hits / (double)sh : null,
+                    Back = Encounter.BackKey is { } bk && a.StreamHits is > 0 and var sb && a.Kinds != null ? Encounter.KindTotals(a, bk).Hits / (double)sb : null });
             Depth(m, f, e);
             v.Members.Add(m);
         }
@@ -73,6 +75,9 @@ public sealed class FightView
             if (dealt > 0 && f.Abilities.Any(a => a.KindDamage != null)) m.CritShare = crits.Sum(c => c.Damage) / (double)dealt;
             if (f.Abilities.Any(a => a.KindMax != null)) m.MaxCrit = crits.Max(c => c.Max);
         }
+        // back attacks: only when Encounter.BackKey names the kind (ParserPrefs.BackSource, none by default); over the hits seen
+        if (Encounter.BackKey is { } bkey && f.Abilities.Sum(a => a.StreamHits ?? 0) is > 0 and var seenB && f.Abilities.Any(a => a.Kinds != null))
+            m.Back = f.Abilities.Sum(a => Encounter.KindTotals(a, bkey).Hits) / (double)seenB;
         // damage per second as the figures count it (the boss's, or all targets')
         m.PerSecond = e.BossView ? f.BossPerSecond : f.PerSecond;
         if (f.Taken is { Count: > 0 } taken)
@@ -118,6 +123,8 @@ public sealed class MemberView
     public double? Crit; public long? MaxHit;
     /// <summary>The crits' share of the damage of the hits seen, and the biggest crit: null unless a crit kind is picked (ParserPrefs.CritSource) and the record carries it.</summary>
     public double? CritShare; public long? MaxCrit;
+    /// <summary>The share of the hits seen that came from behind: null unless a back-attack kind is picked (ParserPrefs.BackSource) and the record carries it.</summary>
+    public double? Back;
     /// <summary>Damage in each second from the pull (store v2); null until then.</summary>
     public List<long>? PerSecond;
     /// <summary>Damage taken, all of it and by source (store v2); null until then.</summary>
@@ -137,7 +144,7 @@ public sealed class AbilityView
     public double Dps => DpsOrNull ?? 0;
     public double Average => Avg ?? 0;
     /// <summary>Store v2 figures: null until the record carries them.</summary>
-    public int? Casts; public double? Crit; public long? Max, Min; public Dictionary<string, int>? Kinds;
+    public int? Casts; public double? Crit, Back; public long? Max, Min; public Dictionary<string, int>? Kinds;
 }
 
 public sealed class DeathView { public double At; public double? BossHpLeft; public string Killer = ""; public List<(double At, string Source, long Amount, double? HpAfter, bool Crit)> Last = new(); }

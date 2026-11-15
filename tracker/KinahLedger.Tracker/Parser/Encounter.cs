@@ -223,6 +223,11 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The kind key for a CritSource value ("result3", "mark08"); null for "none" or anything else.</summary>
     public static string? CritKeyOf(string? source) => source switch { "result3" => "result:3", "mark08" => "mark:3", _ => null };
 
+    /// <summary>The hit kind shown as a back attack (ParserPrefs.BackSource, set by the window): null, the default, shows none; "side:1" the hits from behind.</summary>
+    public static string? BackKey { get; set; }
+    /// <summary>The kind key for a BackSource value ("side1"); null for "none" or anything else.</summary>
+    public static string? BackKeyOf(string? source) => source == "side1" ? "side:1" : null;
+
     /// <summary>A kind's hits, damage and biggest hit in an ability (all 0 when the ability carries no kinds).</summary>
     public static (int Hits, long Damage, long Max) KindTotals(AbilityShare a, string key) =>
         (a.Kinds?.GetValueOrDefault(key) ?? 0, a.KindDamage?.GetValueOrDefault(key) ?? 0, a.KindMax?.GetValueOrDefault(key) ?? 0);

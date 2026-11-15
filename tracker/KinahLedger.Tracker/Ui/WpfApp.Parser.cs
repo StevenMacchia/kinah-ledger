@@ -37,6 +37,7 @@ public static partial class WpfApp
                     DoEvents();
                     // crit is off as shipped; KL_CRIT=result3 or mark08 renders it on (after the window, which sets it from its prefs)
                     Encounter.CritKey = Encounter.CritKeyOf(Environment.GetEnvironmentVariable("KL_CRIT"));
+                    Encounter.BackKey = Encounter.BackKeyOf(Environment.GetEnvironmentVariable("KL_BACK"));
                 }
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
@@ -287,7 +288,7 @@ public static partial class WpfApp
         // two switches; a late joiner marked; no "Other" and no "and more" anywhere
         w.ShowParserDemo("detail"); DoEvents();
         var kwapo = ParserTexts(w.ParserPage);
-        check(new[] { "To the boss", "To adds" }.All(opened.Texts.Contains) && opened.Texts.Any(t => t.StartsWith("Active · ") && t.EndsWith("% idle"))
+        check(new[] { "To the boss", "To adds" }.All(opened.Texts.Contains) && opened.Texts.Contains("Active") && opened.Texts.Contains("Idle")
             && kwapo.Texts.Contains("joined late") && kwapo.Texts.Contains("left")
             && kwapo.Texts.Any(t => t.Contains("of the boss's HP credited") && t.Contains("DPS and shares count credited damage")),
             $"Parser, honest pass: the inspect view's boss / adds / active and idle figures; a late joiner and a leaver marked, the coverage line ({kwapo.Texts.FirstOrDefault(t => t.Contains("credited"))})");

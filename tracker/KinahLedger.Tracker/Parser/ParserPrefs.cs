@@ -64,10 +64,17 @@ public sealed class ParserPrefs
     /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, four rows. A click on the meter switches it.</summary>
     public bool Expanded { get; set; }
     /// <summary>
-    /// Which hit kind the Parser shows as crit: "none" (the default: no crit shown), "result3" or "mark08", the two
-    /// candidates the hits carry. No switch in Settings: set by a release once the game's own figures confirm one.
+    /// Which hit kind the Parser shows as crit ("none", "result3" or "mark08", the two candidates the hits carry), and as a
+    /// back attack ("none" or "side1"). No switch in Settings. Null, as every player has it, means the release's default
+    /// (<see cref="CritDefault"/>, <see cref="BackDefault"/>): null is never written, so a release that changes a default
+    /// reaches every player, saved settings or not. A value in the file is a choice and stays.
     /// </summary>
-    public string CritSource { get; set; } = "none";
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] public string? CritSource { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] public string? BackSource { get; set; }
+    /// <summary>The defaults a release ships: the morning's flip is one of these lines.</summary>
+    public const string CritDefault = "none", BackDefault = "none";
+    [System.Text.Json.Serialization.JsonIgnore] public string CritNow => CritSource ?? CritDefault;
+    [System.Text.Json.Serialization.JsonIgnore] public string BackNow => BackSource ?? BackDefault;
 
     /// <summary>Options saved the Parser's switches: the window reads them again.</summary>
     public static event Action? Saved;
