@@ -193,12 +193,12 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         var nm = MemberName(f, size); Grid.SetColumn(nm, 1); g.Children.Add(nm);
         if (e.HasDamage)
         {
-            var d = Num(Amounts.Short(e.Dps(f, now)), size + 1.5, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 2); g.Children.Add(d);
+            var d = Num(e.DpsText(f, now), size + 1.5, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 2); g.Children.Add(d);
             var s = Num(Encounter.Pct(e.Share(f)), size - 0.5, Muted, FontWeights.SemiBold); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 3); g.Children.Add(s);
         }
         sp.Children.Add(g);
         var c = ClassArt.ColorOf(f.Class);
-        double measure = e.HasDamage ? f.Damage : f.CombatPower;
+        double measure = e.Measure(f);
         sp.Children.Add(Bar(measure / Math.Max(1, top), Frozen(c), bar, new Thickness(22, 2, 0, 0)));
         return sp;
     }
@@ -223,7 +223,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     }
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
-    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}";
+    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{Encounter.ActiveBasis}:{Encounter.BossOnly}";
 
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
@@ -537,7 +537,7 @@ sealed class HudMeter : HudStackLook
             var gl = new Grid { Margin = new Thickness(10, 5, 10, 5) };
             gl.ColumnDefinitions.Add(new ColumnDefinition()); gl.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             gl.Children.Add(Tx("Group", 12, Muted, FontWeights.SemiBold));
-            var gv = Num(Amounts.Short(e.GroupDps(now)) + " DPS", 13.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
+            var gv = Num(e.GroupDpsText(now) + " DPS", 13.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
             _rows.Children.Add(gl);
         }
         _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
@@ -565,7 +565,7 @@ sealed class HudMeter : HudStackLook
         var c = ClassArt.ColorOf(f.Class);
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x60, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x22, c.R, c.G, c.B), 1)); fill.Freeze();
-        double measure = e.HasDamage ? f.Damage : f.CombatPower;
+        double measure = e.Measure(f);
         // a quiet track the row's width, so the rows read as one table; the fill fading from the class's solid edge
         host.Children.Add(new Border { Background = Frozen(Color.FromArgb(0x0E, c.R, c.G, c.B)) });
         host.Children.Add(new Border { Background = fill, Width = W * Math.Clamp(measure / top, 0, 1), HorizontalAlignment = HorizontalAlignment.Left });
@@ -578,7 +578,7 @@ sealed class HudMeter : HudStackLook
         var nm = MemberName(f, 13.5); Grid.SetColumn(nm, 2); g.Children.Add(nm);
         if (e.HasDamage)
         {
-            var d = Num(Amounts.Short(e.Dps(f, now)), 15, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 3); g.Children.Add(d);
+            var d = Num(e.DpsText(f, now), 15, Ink, FontWeights.Bold); d.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(d, 3); g.Children.Add(d);
             var s = Num(Encounter.Pct(e.Share(f)), 12, Muted, FontWeights.SemiBold); s.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(s, 4); g.Children.Add(s);
         }
         host.Children.Add(g);

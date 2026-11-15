@@ -45,6 +45,8 @@ public partial class MainWindow
     /// <summary>Options › In game › Parser's switches (minimal by default): group details, kills and deaths, list filters, explanations on hover.</summary>
     bool PDetails => _parserPrefs.Details;
     bool PKills => _parserPrefs.KillsNear;
+    /// <summary>The group's deaths on boss pulls and runs (on by default since the honest pass).</summary>
+    bool PDeaths => _parserPrefs.Deaths;
     bool PFilters => _parserPrefs.Filters;
     /// <summary>An explanation on hover, only when Options › In game › Parser › Explanations on hover is on.</summary>
     string? Tip(string text) => _parserPrefs.Hovers ? text : null;
@@ -54,8 +56,8 @@ public partial class MainWindow
         ParserPrefs.Saved += () => Dispatcher.BeginInvoke(() =>
         {
             var fresh = ParserPrefs.Load();
-            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps;
-            Encounter.ActiveBasis = fresh.DpsActive;
+            _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps; _parserPrefs.Targets = fresh.Targets;
+            Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all";
             _parserPrefs.Width = HudStackLook.FightWidth = fresh.Width; _hud?.ApplyFightWidth();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
@@ -65,7 +67,7 @@ public partial class MainWindow
         _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
         HudStackLook.FightWidth = _parserPrefs.Width;
         if (watch) StartFarmTicker();
-        Encounter.ActiveBasis = _parserPrefs.DpsActive;
+        Encounter.ActiveBasis = _parserPrefs.DpsActive; Encounter.BossOnly = _parserPrefs.Targets != "all";
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
         ParserTab.Click += (_, _) => ShowPart("Parser");
         // five pills and the Timers countdown in the header's tab column: a little less room each, so Parser isn't cut off
@@ -151,6 +153,19 @@ public partial class MainWindow
         try { ParserFights?.SetMode(mode, DateTime.UtcNow); } catch (Exception ex) { CrashLog.Write("parser mode", ex); }
         if (_demo && _parserDemoState.Length > 0) { ShowParserDemo(mode switch { ParserMode.Run => "run", ParserMode.Fights => "fight", _ => "live" }); return; }
         Say($"Parser: {BossParser.Name(mode)}. {BossParser.Counts(mode)}", "Faint");
+        ParserOverlayTick();
+        RedrawParserPage();
+    }
+
+    /// <summary>
+    /// The group card's two switches, one click from the page (the honest pass): DPS over the fight or over each member's
+    /// active time, and member figures as boss damage or all targets. Kept in parser.json; the overlay follows.
+    /// </summary>
+    void SetParserBasis(bool? active = null, bool? bossOnly = null)
+    {
+        if (active is { } a) { _parserPrefs.DpsActive = a; Encounter.ActiveBasis = a; }
+        if (bossOnly is { } b) { _parserPrefs.Targets = b ? "boss" : "all"; Encounter.BossOnly = b; }
+        if (!_demo) _parserPrefs.Save();
         ParserOverlayTick();
         RedrawParserPage();
     }
@@ -452,7 +467,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{live?.Uncredited}|{string.Join(",", _parserAbilitiesOpen)}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear(); _parserFarmNow = null;
@@ -754,9 +769,12 @@ public partial class MainWindow
         }
         if (e.HasDamage)
         {
-            double gd = e.GroupDps(now);
-            Stat(Amounts.Short(gd), e.ModeKind == ParserMode.Run ? "group DPS on boss pulls" : "group DPS",
-                tip: e.ModeKind == ParserMode.Run ? Tip("Over the run's boss pulls: the damage counted is the bosses'.") : null, roll: live ? ($"parser|gdps|{e.Id}", gd) : null);
+            double? gd = e.GroupDpsOf(now);
+            bool onPulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
+            Stat(e.GroupDpsText(now), onPulls ? "group DPS on boss pulls" : "group DPS",
+                tip: Tip((onPulls ? "Over the run's boss pulls: the damage counted is the bosses'. " : e.BossView ? "Damage to the boss only. " : "")
+                    + $"The group's credited damage over the time; under {Encounter.MinDpsSeconds:0} seconds it shows –."),
+                roll: live && gd is { } g0 ? ($"parser|gdps|{e.Id}", g0) : null);
             if (PDetails && e.BossDamage > 0 && e.BossMaxHp <= 0) Stat(Amounts.Short(e.BossDamage), "boss damage");
             if (PDetails && e.BossMaxHp > 0 && !live) Stat(Amounts.Short(e.BossMaxHp), e.Outcome == "kill" || e.BossHpLeft is not { } l ? "boss HP" : $"boss HP, {Math.Round(l * 100):0}% left");
         }
@@ -766,7 +784,7 @@ public partial class MainWindow
         bool fight = e.ModeKind == ParserMode.Fights;
         if (PKills && adds > 0) Stat(adds.ToString("N0", CultureInfo.InvariantCulture), "kills near you");
         int deaths = Math.Max(e.Roster.Sum(f => f.Deaths), e.YourDeaths);
-        if ((PKills || fight) && deaths > 0) Stat(deaths.ToString("N0", CultureInfo.InvariantCulture), deaths == 1 ? "death" : "deaths", "Coral");
+        if ((PDeaths || fight) && deaths > 0) Stat(deaths.ToString("N0", CultureInfo.InvariantCulture), deaths == 1 ? "death" : "deaths", "Coral");
         if (PDetails && !e.HasDamage && e.Members.Any(f => f.CombatPower > 0)) Stat(AvgCp(e), "average CP");
         if (e.Partial)
         {
@@ -794,11 +812,79 @@ public partial class MainWindow
         card.Margin = new Thickness(0, 8, 0, 0);
         var body = new StackPanel();
         int n = (detail ? e.Ranked() : e.Shown()).Count();
-        var right = e.HasDamage ? (Encounter.ActiveBasis ? "DPS over each one's active time" : "DPS over the fight") : "";
-        body.Children.Add(QHead("Shield", n > 0 ? $"Group  ·  {n}" : "Group", right));
+        var head = QHead("Shield", n > 0 ? $"Group  ·  {n}" : "Group");
+        // what the figures are, one click from here (the honest pass): boss damage or all targets, over the fight or active time
+        if (e.HasDamage)
+        {
+            var sw = ParserBasisSwitches(e);
+            var old = head.Children.OfType<FrameworkElement>().FirstOrDefault(c => c.Tag as string == "right");
+            if (old != null) head.Children.Remove(old);
+            sw.HorizontalAlignment = HorizontalAlignment.Right; sw.Margin = new Thickness(10, -3, 0, -3);
+            Grid.SetColumn(sw, 2); head.Children.Add(sw);
+        }
+        body.Children.Add(head);
         body.Children.Add(Margin(RosterTable(e, now, detail), 0, 8, 0, 0));
+        if (CoverageLine(e) is { } cov) body.Children.Add(Margin(cov, 8, 9, 8, 0));
         card.Child = body;
         return (card, body);
+    }
+
+    /// <summary>
+    /// The group card's switches: Boss / All targets (only when the record has damage to adds to tell apart), then Fight /
+    /// Active (DPS over the fight's length or over each member's active time). Small segments, the page's own.
+    /// </summary>
+    FrameworkElement ParserBasisSwitches(Encounter e)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        FrameworkElement Seg(string name, params (string Label, bool On, Action Pick, string Tip)[] opts)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            var seg = new Border { Padding = new Thickness(2), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Child = sp, VerticalAlignment = VerticalAlignment.Center };
+            seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+            AutomationProperties.SetName(seg, name);
+            foreach (var (label, on, pick, tip) in opts)
+            {
+                var b = new Button { Content = label, Height = 22, FontSize = 11.5, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(sp.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = Tip(tip) };
+                b.SetResourceReference(StyleProperty, on ? "SegOn" : "SegOff");
+                AutomationProperties.SetName(b, $"{name}: {label}");
+                b.Click += (_, _) => { if (!on) pick(); };
+                sp.Children.Add(b);
+            }
+            return seg;
+        }
+        if (e.HasAdds)
+            row.Children.Add(Seg("Damage counted",
+                ("Boss", Encounter.BossOnly, () => SetParserBasis(bossOnly: true), "Each member's damage to the boss only: DPS, shares and the bars."),
+                ("All targets", !Encounter.BossOnly, () => SetParserBasis(bossOnly: false), "Each member's damage to everything, adds included.")));
+        if (row.Children.Count > 0) row.Children.Add(new Border { Width = 6 });
+        row.Children.Add(Seg("DPS over",
+            ("Fight", !Encounter.ActiveBasis, () => SetParserBasis(active: false), "Each member's DPS over the whole fight's length."),
+            ("Active", Encounter.ActiveBasis, () => SetParserBasis(active: true), $"Each member's DPS over the time they were dealing damage: their first hit to their last, pauses over {Fighter.PauseSeconds:0} seconds left out.")));
+        return row;
+    }
+
+    /// <summary>
+    /// The group card's coverage line (the honest pass: no "Other" row, no damage left out unsaid): how much of the HP the
+    /// boss lost is credited to a member, and that DPS and shares count that; the uncredited share, and why when known, on
+    /// hover (a figure, so it shows whatever the hover switch says).
+    /// </summary>
+    FrameworkElement? CoverageLine(Encounter e)
+    {
+        if (e.Coverage is not { } cov) return null;
+        bool run = e.ModeKind == ParserMode.Run;
+        string whose = run ? "the bosses' HP" : "the boss's HP";
+        string pct = cov >= 1 ? "100%" : Encounter.Pct(cov) == "100%" ? ">99.9%" : Encounter.Pct(cov);
+        var t = PT($"{pct} of {whose} credited  ·  DPS and shares count credited damage", 11.5, FontWeights.Medium, cov < 0.95 ? "Warn" : "Faint", trim: true);
+        var tip = new List<string>();
+        if (e.UncreditedBoss > 0)
+            tip.Add($"{Amounts.Short(e.UncreditedBoss)} of the {Amounts.Short(e.BossDamage)} HP {(run ? "the bosses" : "the boss")} lost ({Encounter.Pct(1 - cov)}) came with no hit naming who dealt it, so it is in no member's figures.");
+        else tip.Add($"Every point of HP {(run ? "the bosses" : "the boss")} lost is in a member's figures.");
+        if (e.Uncredited > e.UncreditedBoss) tip.Add($"Another {Amounts.Short(e.Uncredited - e.UncreditedBoss)} to other targets had no hit to name its source either.");
+        var why = e.UncreditedWhy.Where(kv => kv.Key != 0 && kv.Value > 0).OrderByDescending(kv => kv.Value).Select(kv => $"{Encounter.WhyWords(kv.Key)} ({Amounts.Short(kv.Value)})").ToList();
+        if (why.Count > 0) tip.Add("Why: " + string.Join("; ", why) + ".");
+        t.ToolTip = string.Join(" ", tip);
+        AutomationProperties.SetName(t, $"{pct} of {whose} credited");
+        return t;
     }
 
     /// <summary>
@@ -820,7 +906,7 @@ public partial class MainWindow
         }
         bool dark = Skins.IsDark(Skins.Current);
         bool dmg = e.HasDamage;
-        bool deaths = detail && PKills && e.Roster.Any(f => f.Deaths > 0);
+        bool deaths = detail && PDeaths && e.Roster.Any(f => f.Deaths > 0);
         // before the group list comes (damage only), the rows are who hit the boss: no class, CP or item level to show
         bool gear = PDetails && e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0 || f.Class.Length > 0);
         // Steven, 2026-11-14: "should give DPS and % not just a %": each row's DPS and share; its damage on hover, and as a
@@ -849,8 +935,7 @@ public partial class MainWindow
                 if (cols[i].Head.Length > 0) Cell(head, i, Right(PT(cols[i].Head, 11, FontWeights.SemiBold, "Faint")));
             host.Children.Add(head);
         }
-        // what the bars measure: damage when the game gives it, else Combat Power (the group's strength before a hit lands)
-        double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
+        // what the bars measure: the figure (boss damage or all targets) when known, else Combat Power (the group's strength before a hit lands)
         double top = e.TopMeasure();
         bool first = true;
         // Steven, 2026-11-14: "don't count [a member] until they have at least 1 [damage]": the live card shows those who
@@ -861,22 +946,22 @@ public partial class MainWindow
             string abilityKey = $"{e.Id}:{f.Id}";
             bool canOpen = dmg && f.Abilities.Count > 0;
             bool open = canOpen && _parserAbilitiesOpen.Contains(abilityKey);
-            bool sub = gear && !f.Other && !open;
+            bool sub = gear && !open;
             var row = Row();
             row.Margin = new Thickness(8, 0, 8, 0);
             row.MinHeight = sub ? 44 : 38;
-            Cell(row, 0, f.Other ? OtherMark(26) : ClassArt.Icon(f.Class, 26, f.Name));
+            Cell(row, 0, ClassArt.Icon(f.Class, 26, f.Name));
             var nameBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
-            var nm = PT(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, f.Other ? FontWeights.Medium : FontWeights.SemiBold, "Muted", trim: true);
+            var nm = PT(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, FontWeights.SemiBold, "Muted", trim: true);
             // the name in the member's class colour (the bar's, the ring's), readable on this skin
-            if (!f.Other && f.Name.Length > 0) nm.Foreground = ClassArt.NameBrush(f.Class, dark);
-            if (f.Other) nm.ToolTip = Tip("HP the boss lost with no hit to name its source, such as damage over time. Shown so the rows add up to the HP it lost.");
-            else if (f.Name.Length == 0) nm.ToolTip = Tip("Someone not named yet: a pet, or a player not seen up close.");
+            if (f.Name.Length > 0) nm.Foreground = ClassArt.NameBrush(f.Class, dark);
+            else nm.ToolTip = Tip("Someone not named yet: a pet, or a player not seen up close.");
             nameLine.Children.Add(nm);
             if (f.You) { var you = PChip("you", "GoldInk", "Gold"); you.Margin = new Thickness(7, 0, 0, 0); you.Padding = new Thickness(6, 0, 6, 1); nameLine.Children.Add(you); }
-            if (f.Late) nameLine.Children.Add(Margin(PT("joined late", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
-            if (f.Gone) nameLine.Children.Add(Margin(PT("left", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
+            // joined late or left, whether or not damage was dealt by then; when, on hover
+            if (f.Late) nameLine.Children.Add(Margin(Tipped(PT("joined late", 11, FontWeights.Medium, "Faint"), f.JoinedAt is { } ja ? $"Joined {BossParser.Clock(ja - e.Start)} in" : null), 6, 1, 0, 0));
+            if (f.Gone) nameLine.Children.Add(Margin(Tipped(PT("left", 11, FontWeights.Medium, "Faint"), f.LeftAt is { } la ? $"Left {BossParser.Clock(la - e.Start)} in" : null), 6, 1, 0, 0));
             nameBox.Children.Add(nameLine);
             // Group details: "Sorcerer · 4,730 CP · 5,620 item level" under the name (the inspect view says it when open)
             if (sub)
@@ -888,24 +973,24 @@ public partial class MainWindow
                 nameBox.Children.Add(Margin(PT(string.Join("  ·  ", bits), 11.5, FontWeights.Medium, "Muted", trim: true), 0, 1, 0, 0));
             }
             Cell(row, 1, nameBox);
-            if (dmgCol) Cell(row, 2, Right(Tab(PT(Amounts.Short(f.Damage), 13, FontWeights.Medium, "Text2"))));
+            if (dmgCol) Cell(row, 2, Right(Tab(PT(Amounts.Short(e.Figure(f)), 13, FontWeights.Medium, "Text2"))));
             if (dmg)
             {
-                double dps = e.Dps(f, now);
-                var d = Right(Tab(PT(Amounts.Short(dps), 15, FontWeights.Bold, "Ink")));
-                if (!detail) Motion.Number(d, $"parser|dps|{e.Id}|{f.Id}", dps, x => Amounts.Short(x), tintRise: -1);
+                double? dps = e.DpsOf(f, now);
+                var d = Right(Tab(PT(e.DpsText(f, now), 15, FontWeights.Bold, "Ink")));
+                if (!detail && dps is { } dv) Motion.Number(d, $"parser|dps|{e.Id}|{f.Id}", dv, x => Amounts.Short(x), tintRise: -1);
                 // the figure behind it, always (a figure, not an explanation)
-                d.ToolTip = $"{Amounts.Short(f.Damage)} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(f, now)))}{(Encounter.ActiveBasis && !f.Other ? " active" : "")}";
-                AutomationProperties.SetName(d, $"{Amounts.Short(dps)} DPS, {Encounter.Pct(e.Share(f))} of the damage");
+                d.ToolTip = $"{Amounts.Short(e.Figure(f))} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(f, now)))}{(Encounter.ActiveBasis ? " active" : "")}{(e.BossView ? ", to the boss" : "")}{(dps == null ? $": under {Encounter.MinDpsSeconds:0} seconds, no DPS yet" : "")}";
+                AutomationProperties.SetName(d, $"{e.DpsText(f, now)} DPS, {Encounter.Pct(e.Share(f))} of the damage");
                 Cell(row, 3, d);
                 Cell(row, 4, Right(Tab(PT(Encounter.Pct(e.Share(f)), 13, FontWeights.SemiBold, "Text2"))));
             }
             if (deaths) Cell(row, 5, Right(Tab(PT(f.Deaths > 0 ? f.Deaths.ToString(CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, f.Deaths > 0 ? "Coral" : "Faint"))));
             // the bar behind the member, ending before the figures; with no damage, no bar (Combat Powers are near alike: bars by
             // them said nothing), the track and the class's edge only
-            var meter = ClassArt.MeterRow(row, f.Class, dmg ? Measure(f) / top : 0, other: f.Other, radius: 9, slideKey: detail ? null : $"parser|bar|{e.Id}|{f.Id}",
+            var meter = ClassArt.MeterRow(row, f.Class, dmg ? e.Measure(f) / top : 0, radius: 9, slideKey: detail ? null : $"parser|bar|{e.Id}|{f.Id}",
                 reserveRight: figuresWidth + 8, light: !dark);
-            if (dmg && f.Damage <= 0 && !f.Other) { meter.Opacity = 0.55; nameLine.Children.Add(Margin(PT("no damage", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0)); }
+            if (dmg && f.Damage <= 0) { meter.Opacity = 0.55; nameLine.Children.Add(Margin(PT("no damage", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0)); }
             // a member's inspect view: a click on the row opens it under the row, a chevron says so
             if (canOpen)
             {
@@ -931,7 +1016,7 @@ public partial class MainWindow
             else
             {
                 // opened: the row and its inspect view in one frame in the member's class colour
-                var c = f.Other ? Color.FromRgb(0x86, 0x8D, 0xA1) : ClassArt.ColorOf(f.Class);
+                var c = ClassArt.ColorOf(f.Class);
                 var inspect = Inspect(f, e, now);
                 var frame = new Border
                 {
@@ -971,8 +1056,29 @@ public partial class MainWindow
         if (f.Server.Length > 0) who.Add(f.Server);
         if (f.ItemLevel > 0) who.Add($"Item level {f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)}");
         if (f.CombatPower > 0) who.Add($"Combat Power {f.CombatPower.ToString("N0", CultureInfo.InvariantCulture)}");
-        who.Add($"{Amounts.Short(f.Damage)} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(f, now)))}{(Encounter.ActiveBasis ? " active" : "")}");
-        host.Children.Add(Margin(PT(string.Join("  ·  ", who), 12, FontWeights.Medium, "Muted", trim: true), 40, 0, 0, 8));
+        host.Children.Add(Margin(PT(string.Join("  ·  ", who), 12, FontWeights.Medium, "Muted", trim: true), 40, 0, 0, 3));
+        // the figures behind the row (the honest pass): damage to the boss with the adds beside it, the time it's over, then
+        // the member's active time and idle share of their time in the group, and when they joined or left
+        var figs = new WrapPanel { Margin = new Thickness(40, 0, 0, 8) };
+        void Fig(string value, string word, string? tip = null)
+        {
+            if (figs.Children.Count > 0) figs.Children.Add(Margin(PT("·", 12, FontWeights.SemiBold, "Faint"), 7, 0, 7, 0));
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, ToolTip = tip, Background = Brushes.Transparent };
+            sp.Children.Add(Tab(PT(value, 12.5, FontWeights.Bold, "Ink")));
+            sp.Children.Add(Margin(PT(word, 12, FontWeights.Medium, "Muted"), 4, 0, 0, 0));
+            figs.Children.Add(sp);
+        }
+        if (e.TargetsSplit && e.ModeKind != ParserMode.Fights && !e.Wave)
+        {
+            Fig(Amounts.Short(f.BossDamage), "to the boss");
+            Fig(Amounts.Short(Math.Max(0, f.Damage - f.BossDamage)), "to adds", Tip("Damage to anything but the boss while it was fought. The group card's Boss / All targets switch picks which the figures count."));
+        }
+        else Fig(Amounts.Short(f.Damage), "damage");
+        Fig(BossParser.Clock(TimeSpan.FromSeconds(f.ActiveSeconds)), "active", Tip($"Their first hit to their last, pauses over {Fighter.PauseSeconds:0} seconds left out."));
+        if (e.IdleShare(f, now) is { } idle) Fig($"{Math.Round(idle * 100):0}%", "idle", Tip($"The part of their {BossParser.Clock(TimeSpan.FromSeconds(e.PresentSeconds(f, now)))} in the group with no damage dealt."));
+        if (f.Late && f.JoinedAt is { } ja) Fig(BossParser.Clock(ja - e.Start), "joined");
+        if (f.Gone && f.LeftAt is { } la) Fig(BossParser.Clock(la - e.Start), "left");
+        host.Children.Add(figs);
         Grid Row()
         {
             var g = new Grid();
@@ -992,11 +1098,12 @@ public partial class MainWindow
         Cell(head, 4, Right(PT("Average", 11, FontWeights.SemiBold, "Faint")));
         Cell(head, 5, Right(PT("Share", 11, FontWeights.SemiBold, "Faint")));
         host.Children.Add(head);
-        var list = f.Abilities.OrderByDescending(a => a.Damage).ToList();
+        // the abilities as the figures count them (boss damage or all targets)
+        var list = f.Abilities.Where(a => e.Figure(a) > 0).OrderByDescending(e.Figure).ToList();
         string allKey = $"{e.Id}:{f.Id}:all";
         bool all = _parserAbilitiesOpen.Contains(allKey);
-        long total = Math.Max(1, f.Damage);
-        double top = Math.Max(1, list.Max(a => a.Damage));
+        long total = Math.Max(1, e.Figure(f));
+        double top = Math.Max(1, list.Select(e.Figure).DefaultIfEmpty(1).Max());
         int i = 0;
         foreach (var a in all ? list : list.Take(8))
         {
@@ -1005,9 +1112,9 @@ public partial class MainWindow
             rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
             Cell(g, 0, SkillArt.Icon(a.Skill, f.Class, 24));
             var nameCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-            nameCol.Children.Add(PT(Abilities.Name(a.Skill), 12.5, FontWeights.SemiBold, a.Skill == 0 ? "Muted" : "Ink", trim: true));
+            nameCol.Children.Add(PT(a.Name, 12.5, FontWeights.SemiBold, a.Skill == 0 ? "Muted" : "Ink", trim: true));
             // the ability's bar: its part of the top ability's damage, the class's colour deeper the bigger the part
-            double part = a.Damage / top;
+            double part = e.Figure(a) / top;
             var track = new Grid { Height = 4, Margin = new Thickness(0, 4, 0, 0) };
             track.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Frozen(Color.FromArgb(0x1C, c.R, c.G, c.B)) });
             var fill = new Border { CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left, Background = Frozen(Color.FromArgb((byte)Math.Round(255 * (0.4 + 0.6 * part)), c.R, c.G, c.B)) };
@@ -1015,10 +1122,12 @@ public partial class MainWindow
             track.SizeChanged += (_, _) => fill.Width = Math.Max(part > 0 ? 4 : 0, track.ActualWidth * part);
             nameCol.Children.Add(track);
             Cell(g, 1, nameCol);
-            Cell(g, 2, Right(Tab(PT(Amounts.Short(a.Damage), 12.5, FontWeights.SemiBold, "Ink"))));
-            Cell(g, 3, Right(Tab(PT(a.Hits.ToString("N0", CultureInfo.InvariantCulture), 12.5, FontWeights.Medium, "Text2"))));
-            Cell(g, 4, Right(Tab(PT(Amounts.Short(a.Average), 12.5, FontWeights.Medium, "Text2"))));
-            Cell(g, 5, Right(Tab(PT($"{a.Damage * 100.0 / total:0}%", 12.5, FontWeights.SemiBold, "Text2"))));
+            Cell(g, 2, Right(Tab(PT(Amounts.Short(e.Figure(a)), 12.5, FontWeights.SemiBold, "Ink"))));
+            // a count that didn't come shows "–", never a made-up 1; the average is over the counted hits only
+            int hits = e.Hits(a);
+            Cell(g, 3, Right(Tab(PT(hits > 0 ? hits.ToString("N0", CultureInfo.InvariantCulture) : "–", 12.5, FontWeights.Medium, hits > 0 ? "Text2" : "Faint"))));
+            Cell(g, 4, Right(Tab(PT(e.Average(a) is { } avg ? Amounts.Short(avg) : "–", 12.5, FontWeights.Medium, hits > 0 ? "Text2" : "Faint"))));
+            Cell(g, 5, Right(Tab(PT($"{e.Figure(a) * 100.0 / total:0}%", 12.5, FontWeights.SemiBold, "Text2"))));
             host.Children.Add(rule);
         }
         if (list.Count > 8)
@@ -1050,17 +1159,8 @@ public partial class MainWindow
         return t;
     }
 
-    /// <summary>The Other row's mark: a quiet tile with a dot pattern, not a class.</summary>
-    internal static FrameworkElement OtherMark(double size)
-    {
-        var c = Color.FromRgb(0x86, 0x8D, 0xA1);
-        return new Border
-        {
-            Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Background = Frozen(Color.FromArgb(0x18, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x50, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = "···", FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -size * 0.12, 0, 0) },
-        };
-    }
+    /// <summary>A figure on hover (a time, an amount: never an explanation, so whatever the hover switch says).</summary>
+    static T Tipped<T>(T el, string? tip) where T : FrameworkElement { if (tip != null) { el.ToolTip = tip; } return el; }
 
     FrameworkElement ShareBar(double share, bool you)
     {
@@ -1297,7 +1397,7 @@ public partial class MainWindow
         var dur = Right(PT(BossParser.Clock(e.Duration(e.End ?? now)), 13, FontWeights.SemiBold, "Ink"));
         Grid.SetColumn(dur, 3); g.Children.Add(dur);
         var fig = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        if (e.HasDamage) { fig.Children.Add(Right(PT(Amounts.Short(e.GroupDps(e.End ?? now)), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT("group DPS", 10.5, FontWeights.Medium, "Faint"))); }
+        if (e.HasDamage) { fig.Children.Add(Right(PT(e.GroupDpsText(e.End ?? now), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT("group DPS", 10.5, FontWeights.Medium, "Faint"))); }
         else if (e.ModeKind != ParserMode.Bosses) { fig.Children.Add(Right(PT(e.YourKills.ToString("N0", CultureInfo.InvariantCulture), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT(e.PlayerKills > 0 ? $"kills · {e.PlayerKills} PvP" : "your kills", 10.5, FontWeights.Medium, "Faint"))); }
         else if (PDetails) { fig.Children.Add(Right(PT(AvgCp(e), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT("average CP", 10.5, FontWeights.Medium, "Faint"))); }
         Grid.SetColumn(fig, 4); g.Children.Add(fig);
@@ -1450,8 +1550,11 @@ public partial class MainWindow
         // "-min": every option off
         bool everyOption = state.EndsWith("-all"), none = state.EndsWith("-min");
         if (everyOption || none) state = state[..^4];
-        _parserPrefs.KillsNear = _parserPrefs.Filters = _parserPrefs.Hovers = everyOption;
+        // the defaults since the honest pass: deaths, filters and hovers on; kills near you off
+        _parserPrefs.KillsNear = everyOption;
+        _parserPrefs.Deaths = _parserPrefs.Filters = _parserPrefs.Hovers = !none;
         _parserPrefs.Details = !none;
+        _parserPrefs.DpsActive = Encounter.ActiveBasis = false; _parserPrefs.Targets = "boss"; Encounter.BossOnly = true;
         _parserDemoState = state;
         _parserDemoNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var mode = state.StartsWith("run") ? ParserMode.Run : state.StartsWith("fight") ? ParserMode.Fights : ParserMode.Bosses;
@@ -1517,6 +1620,7 @@ public partial class MainWindow
 
     internal void OpenFightForTest(string? id) => OpenFight(id);
     internal List<Encounter> ParserPastForTest => ParserPast();
+    internal string? ParserOpenForTest => _parserOpen;
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;
     internal void SetParserOverlayForTest(bool on) => SetParserOverlay(on);
     internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; DrawOverlayPills(); RedrawParserPage(); }

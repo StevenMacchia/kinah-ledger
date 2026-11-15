@@ -34,8 +34,13 @@ public sealed record GroupMember(long Id, string Name, string Class, int CombatP
 /// <summary>The whole group as it is now, the player included (alone: just the player).</summary>
 public sealed record GroupChanged(DateTime At, IReadOnlyList<GroupMember> Members) : BossEvent(At);
 
-/// <summary>Damage one unit dealt another (SourceId matches a GroupMember's Id; 0 = HP lost with no hit to name a source). SourceName and SourceIsYou when known.</summary>
-public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long Amount, string SourceName = "", bool SourceIsYou = false, int Skill = 0, int Hits = 0) : BossEvent(At);
+/// <summary>
+/// Damage one unit dealt another (SourceId matches a GroupMember's Id; 0 = HP lost with no hit to name a source). SourceName
+/// and SourceIsYou when known. Skill is the ability (0 = none named); Hits the hits in it (0 = not counted). OverTime: the
+/// damage is the ticks of Skill's effect (a damage over time), not its hits. Reason: for SourceId 0, why no one is credited
+/// (0 = not said; see Encounter.UncreditedWhy).
+/// </summary>
+public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long Amount, string SourceName = "", bool SourceIsYou = false, int Skill = 0, int Hits = 0, bool OverTime = false, int Reason = 0) : BossEvent(At);
 
 /// <summary>A boss's HP now and its max, after a change while it is fought (the Parser's HP bar); 0 = not known.</summary>
 public sealed record BossHealth(DateTime At, long BossId, long Hp, long Max) : BossEvent(At);

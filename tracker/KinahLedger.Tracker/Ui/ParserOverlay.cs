@@ -327,7 +327,7 @@ public sealed class ParserPanel : Border
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}";
+        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}:{Encounter.BossOnly}";
         Width = HudStackLook.FightWidth + 10;
         sig += $":{Width}";
         if (sig == _sig) return;
@@ -452,7 +452,7 @@ public sealed class ParserPanel : Border
             hdr.Margin = new Thickness(4, 0, 4, 1);
             rows.Children.Add(hdr);
             // each row on a meter bar in its class's colour (damage, else Combat Power), the class's emblem at its left
-            double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
+            double Measure(Fighter f) => e.Measure(f);
             double top = e.TopMeasure();
             foreach (var f in e.Shown().Take(8))
             {
@@ -471,7 +471,7 @@ public sealed class ParserPanel : Border
                     C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
                     C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
                 }
-                if (dmg) { C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold, 15); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold, 12.5); }
+                if (dmg) { C(4, e.DpsText(f, now), HudKit.Ink, FontWeights.Bold, 15); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold, 12.5); }
                 var meter = _glass ? ClassArt.ThinMeterRow(g, f.Class, Measure(f) / top, other: false) : ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: false, radius: 5);
                 meter.Margin = new Thickness(0, _glass ? 2 : 3, 0, 0);
                 rows.Children.Add(meter);
@@ -488,9 +488,9 @@ public sealed class ParserPanel : Border
         if (e.Live)
         {
             int near = e.Kills.Count(k => !k.Boss && !k.Yours);
-            var l = T(e.HasDamage ? (e.ModeKind == ParserMode.Run ? "Group DPS (boss pulls)" : "Group DPS") : e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 12, FontWeights.SemiBold, HudKit.Muted);
+            var l = T(e.HasDamage ? (e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit) ? "Group DPS (boss pulls)" : "Group DPS") : e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 12, FontWeights.SemiBold, HudKit.Muted);
             foot.Children.Add(l);
-            var v = T(e.HasDamage ? Amounts.Short(e.GroupDps(now)) : e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 14, FontWeights.Bold, HudKit.Ink);
+            var v = T(e.HasDamage ? e.GroupDpsText(now) : e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 14, FontWeights.Bold, HudKit.Ink);
             Typography.SetNumeralAlignment(v, FontNumeralAlignment.Tabular);
             Grid.SetColumn(v, 1); foot.Children.Add(v);
         }

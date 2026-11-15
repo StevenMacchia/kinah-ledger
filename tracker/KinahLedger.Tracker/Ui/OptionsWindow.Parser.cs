@@ -22,7 +22,7 @@ public partial class OptionsWindow
     TextBlock? _parserLookHint;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!;
 
     void LoadParser()
     {
@@ -30,6 +30,7 @@ public partial class OptionsWindow
         var p = ParserPrefs.Load();
         _parserDetailsChk.IsChecked = p.Details;
         _parserKillsChk.IsChecked = p.KillsNear;
+        _parserDeathsChk.IsChecked = p.Deaths;
         _parserFiltersChk.IsChecked = p.Filters;
         _parserHoversChk.IsChecked = p.Hovers;
         _parserSeparateChk.IsChecked = p.Separate;
@@ -53,6 +54,8 @@ public partial class OptionsWindow
         var p = ParserPrefs.Load();
         p.Details = _parserDetailsChk.IsChecked == true;
         p.KillsNear = _parserKillsChk.IsChecked == true;
+        p.Deaths = _parserDeathsChk.IsChecked == true;
+        p.HonestSettled = true;
         p.Filters = _parserFiltersChk.IsChecked == true;
         p.Hovers = _parserHoversChk.IsChecked == true;
         p.Separate = _parserSeparateChk.IsChecked == true;
@@ -85,8 +88,9 @@ public partial class OptionsWindow
             return cb;
         }
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
-        _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out.", "Parser DPS over active time");
-        _parserKillsChk = Row("Kills and deaths", "Kills near you and the group's deaths on boss pulls and runs. Every fight always shows your kills and deaths.", "Parser kills and deaths");
+        _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.", "Parser DPS over active time");
+        _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls and runs: how many in the figures line, each member's in the record's group. Every fight always shows your deaths.", "Parser deaths");
+        _parserKillsChk = Row("Kills near you", "Enemies that died near you during boss pulls and runs. Every fight always shows your kills.", "Parser kills near you");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
         _parserFarmChk = Row("Open-world DPS on the Kinah line", "While you fight in the open world or the Abyss, your DPS shows small on the Kinah overlay's line. Those fights are counted while they last and never kept.", "Parser open-world DPS");
@@ -225,5 +229,5 @@ public partial class OptionsWindow
         _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
 
     /// <summary>For the options test: the Parser group's switches.</summary>
-    internal (CheckBox Details, CheckBox Kills, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active, CheckBox Farm) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserFarmChk);
+    internal (CheckBox Details, CheckBox Kills, CheckBox Deaths, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active, CheckBox Farm) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserFarmChk);
 }

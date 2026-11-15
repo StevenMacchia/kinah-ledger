@@ -74,6 +74,24 @@ public sealed class BossParser
     public const double RunMinSeconds = 30;
     /// <summary>A live record with nothing heard for this long and then the instance again: the connection dropped in between.</summary>
     const double QuietSeconds = 30;
+    /// <summary>
+    /// A boss pull with damage and then none, and no HP fall, for this long has wiped (or the group walked off) though no end
+    /// came: it ends then, at its last damage, not after <see cref="StaleMinutes"/>. Hitting the same boss again opens a new pull.
+    /// </summary>
+    public const double WipeQuietSeconds = 60;
+    /// <summary>A pull starts at its first damage when that comes more than this before or after the pull itself.</summary>
+    public const double StartSlackSeconds = 1;
+    /// <summary>Damage to a boss this long before its pull counts for the pull (the first damage can come just ahead of it).</summary>
+    const double PreSeconds = 10;
+    /// <summary>A member who joins this long after the pull (a group list known before) is marked late, damage or not.</summary>
+    public const double LateSeconds = 10;
+    /// <summary>The boss's HP back to full with no damage for this long is a reset (a heal back to full mid-fight comes under fire).</summary>
+    const double ResetQuietSeconds = 5;
+
+    /// <summary>Damage to a boss in the last <see cref="PreSeconds"/> while no pull was under way (its pull may follow).</summary>
+    readonly Queue<DamageDealt> _preHits = new();
+    /// <summary>The last pull ended by its quiet or its reset, with no end said: hitting that boss again opens a new pull.</summary>
+    (string Boss, long BossId, long InstanceId)? _inferred;
 
     public BossParser(BossBook? book = null) => _book = book ?? BossBook.Shared;
 
@@ -300,8 +318,9 @@ public sealed class BossParser
                 if (_cur != null)
                 {
                     if (SameCopy(_cur)) Rejoined(_cur, ie);
-                    else ClosePull(_cur, BossOutcome.Left, _cur.LastAt, done, "left for another place");
+                    else ClosePull(_cur, BossOutcome.Left, _cur.LastAt, done, "left for another place", yours: true);
                 }
+                _preHits.Clear(); _inferred = null;
                 if (_run != null)
                 {
                     if (SameCopy(_run)) Rejoined(_run, ie);
@@ -318,7 +337,8 @@ public sealed class BossParser
                 break;
             }
             case InstanceLeft il:
-                if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance");
+                if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance", yours: true);
+                _preHits.Clear(); _inferred = null;
                 if (_run != null) CloseRun(RunEnd(_run), il.At, done, "left the instance");
                 _kind = ContentKind.Other; _instance = ""; _instanceId = 0; _gameMode = "";
                 break;
@@ -355,28 +375,50 @@ public sealed class BossParser
             }
             case GroupChanged gc:
                 _group = gc.Members.Where(m => m.Name.Trim().Length > 0 || m.You).ToList();
-                foreach (var e in Records()) { MergeGroup(e, _group, late: (gc.At - e.Start).TotalSeconds > 30); ApplyClasses(e); }
+                foreach (var e in Records()) { MergeGroup(e, _group, gc.At); ApplyClasses(e); }
                 break;
             case DamageDealt dd:
+            {
                 if (dd.Amount <= 0) break;
+                // the boss of a pull that ended with no end said (a wipe found by its quiet or its reset) hit again: a new pull
+                if (_cur == null && _inferred is { } inf && dd.TargetId != 0 && dd.TargetId == inf.BossId && Kept(_kind) && _instanceId == inf.InstanceId)
+                {
+                    _inferred = null;
+                    Log($"{inf.Boss} hit again after its pull ended: a new pull");
+                    Engage(new BossEngaged(dd.At, inf.Boss, inf.BossId), done);
+                }
                 if (_mode == ParserMode.Fights && _fight == null) OpenFight(dd.At);
                 FarmAt(dd.At);
-                foreach (var e in Records())
+                // damage to a boss just ahead of its pull: kept for it (Engage takes it)
+                if (_cur == null && Kept(_kind) && dd.TargetId != 0)
                 {
-                    e.LastAt = Max(e.LastAt, dd.At);
-                    e.HasDamage = true;
-                    if (dd.TargetId != 0 && _cur != null && dd.TargetId == _cur.BossId) e.BossDamage += dd.Amount;
-                    var src = SourceOf(e, dd);
-                    src.Damage += dd.Amount;
-                    src.AddAbility(dd.Skill, dd.Amount, dd.Hits);
-                    if (!src.Other) src.Hit(dd.At);
+                    _preHits.Enqueue(dd);
+                    while (_preHits.Count > 0 && (dd.At - _preHits.Peek().At).TotalSeconds > PreSeconds) _preHits.Dequeue();
                 }
+                // a pull starts at its first damage when that comes well after the pull itself
+                if (_cur is { HasDamage: false } c0 && (dd.At - c0.Start).TotalSeconds > StartSlackSeconds)
+                {
+                    Log($"{c0.Boss}: the first damage {(dd.At - c0.Start).TotalSeconds:0.0} s after the pull, which starts there");
+                    c0.Start = dd.At;
+                }
+                bool toBoss = _cur != null && (_cur.Wave || (dd.TargetId != 0 && dd.TargetId == _cur.BossId));
+                foreach (var e in Records()) Credit(e, dd, toBoss);
                 // your hit while farming: the live readout's (FarmDpsNow)
                 if (FarmRecord is { } fr && (dd.SourceIsYou || fr.Roster.Any(x => x.You && x.Id == dd.SourceId && dd.SourceId != 0))) FarmHit(fr, dd.At, dd.Amount);
                 break;
+            }
             case BossHealth bh:
                 if (_cur == null || (bh.BossId != 0 && _cur.BossId != 0 && bh.BossId != _cur.BossId)) break;
                 _cur.LastAt = Max(_cur.LastAt, bh.At);
+                // back to full after falling, with no damage for a while: the boss reset, the group wiped though no end came
+                if (bh.Max > 0 && bh.Hp >= bh.Max && _cur.LastHpFallAt != null && _cur.BossHp < bh.Max
+                    && (bh.At - (_cur.LastDamageAt ?? _cur.LastHpFallAt.Value)).TotalSeconds >= ResetQuietSeconds)
+                {
+                    _inferred = (_cur.Boss, _cur.BossId, _instanceId);
+                    ClosePull(_cur, BossOutcome.Wipe, bh.At, done, "the boss reset to full HP");
+                    break;
+                }
+                if (_cur.BossMaxHp > 0 ? bh.Hp < _cur.BossHp : bh.Max > 0 && bh.Hp < bh.Max) _cur.LastHpFallAt = bh.At;
                 _cur.BossHp = Math.Max(0, bh.Hp);
                 if (bh.Max > 0) _cur.BossMaxHp = bh.Max;
                 if (_fight != null) { _fight.LastAt = Max(_fight.LastAt, bh.At); _fight.BossHp = _cur.BossHp; _fight.BossMaxHp = _cur.BossMaxHp; }
@@ -558,10 +600,27 @@ public sealed class BossParser
         {
             Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
             Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true, Wave = listed?.Wave == true,
-            Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion,
+            Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
         };
-        MergeGroup(_cur, _group, late: false);
+        MergeGroup(_cur, _group, null);
         ApplyClasses(_cur);
+        _inferred = null;
+        // damage to this boss just ahead of its pull is the pull's; the pull starts at it when it came well before
+        if (be.BossId != 0)
+        {
+            var pre = _preHits.Where(h => h.TargetId == be.BossId && h.At >= be.At.AddSeconds(-PreSeconds) && h.At <= be.At).ToList();
+            if (pre.Count > 0)
+            {
+                var first = pre.Min(h => h.At);
+                if ((be.At - first).TotalSeconds > StartSlackSeconds) { _cur.Start = first; Log($"{_cur.Boss}: the first damage {(be.At - first).TotalSeconds:0.0} s ahead of the pull, which starts there"); }
+                foreach (var h in pre)
+                {
+                    Credit(_cur, h, toBoss: true);
+                    foreach (var r in new[] { _run, _fight }) if (r != null) Promote(r, h);
+                }
+            }
+        }
+        _preHits.Clear();
         if (_mode == ParserMode.Run && _run == null) OpenRun(be.At, midway: true);
         if (_mode == ParserMode.Fights)
         {
@@ -578,10 +637,10 @@ public sealed class BossParser
         _run = new Encounter
         {
             Mode = "run", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
-            Start = at, LastAt = at, App = Upload.RunPayload.AppVersion,
+            Start = at, LastAt = at, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
         };
         if (midway) MarkPartial(_run, "counted from partway through the run");
-        MergeGroup(_run, _group, late: false);
+        MergeGroup(_run, _group, null);
         Log($"run: {_instance} ({_run.Kind}){(midway ? ", from partway through" : "")}");
     }
 
@@ -595,27 +654,59 @@ public sealed class BossParser
         {
             Mode = "fight", Kind = inside ? Encounter.KindName(_kind) : _abyss ? "Abyss" : "Open world",
             Instance = inside ? _instance : _zone, InstanceId = inside ? _instanceId : 0, GameMode = inside ? _gameMode : "",
-            Start = at, LastAt = at, App = Upload.RunPayload.AppVersion,
+            Start = at, LastAt = at, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
         };
-        MergeGroup(f, _group, late: false);
+        MergeGroup(f, _group, null);
         return f;
+    }
+
+    /// <summary>Names a fighter's class from the party list on the screen, when there is one (set per parser: <see cref="ScreenParty"/>).</summary>
+    [ThreadStatic] static Action<Fighter>? ClassOf;
+
+    /// <summary>
+    /// One hit onto a record: its damage (to the boss or not) and its time; the member it names gets it with its ability. A
+    /// hit with no source (id 0) is the record's uncredited damage, in no member and no row (Steven, 2026-11-14: "no 'Other'").
+    /// </summary>
+    static void Credit(Encounter e, DamageDealt dd, bool toBoss)
+    {
+        e.LastAt = Max(e.LastAt, dd.At);
+        e.HasDamage = true;
+        e.LastDamageAt = e.LastDamageAt is { } ld ? Max(ld, dd.At) : dd.At;
+        if (toBoss) e.BossDamage += dd.Amount;
+        if (dd.SourceId == 0)
+        {
+            e.Uncredited += dd.Amount;
+            if (toBoss) e.UncreditedBoss += dd.Amount;
+            e.UncreditedWhy[dd.Reason] = e.UncreditedWhy.GetValueOrDefault(dd.Reason) + dd.Amount;
+            return;
+        }
+        var src = SourceOf(e, dd);
+        src.Damage += dd.Amount;
+        if (toBoss) src.BossDamage += dd.Amount;
+        src.AddAbility(dd.Skill, dd.Amount, dd.Hits, dd.OverTime, toBoss);
+        src.Hit(dd.At);
+    }
+
+    /// <summary>A hit a record already has, found to be on the boss after all (it came just ahead of the pull): counted as boss damage too.</summary>
+    static void Promote(Encounter e, DamageDealt dd)
+    {
+        e.BossDamage += dd.Amount;
+        if (dd.SourceId == 0) { e.UncreditedBoss += dd.Amount; return; }
+        if (e.Roster.FirstOrDefault(f => f.Id == dd.SourceId && !f.Other) is not { } m) return;
+        m.BossDamage += dd.Amount;
+        if (m.Abilities.FirstOrDefault(a => a.Skill == dd.Skill && a.OverTime == dd.OverTime) is { } a)
+        {
+            a.BossDamage += dd.Amount;
+            if (dd.Hits > 0) a.BossHits += dd.Hits; else a.BossUncounted += dd.Amount;
+        }
     }
 
     /// <summary>
     /// The row a hit goes to: the member by id; else a row made from the hit (its name when the decoder knows it, you
-    /// marked), so the damage rows are the group until a group list comes. Id 0 is the Other row.
+    /// marked), so the damage rows are the group until a group list comes.
     /// </summary>
-    /// <summary>Names a fighter's class from the party list on the screen, when there is one (set per parser: <see cref="ScreenParty"/>).</summary>
-    [ThreadStatic] static Action<Fighter>? ClassOf;
-
     static Fighter SourceOf(Encounter e, DamageDealt dd)
     {
-        if (dd.SourceId == 0)
-        {
-            var other = e.Roster.FirstOrDefault(f => f.Other);
-            if (other == null) e.Roster.Add(other = new Fighter { Name = "Other", Other = true });
-            return other;
-        }
         var f = e.Roster.FirstOrDefault(r => r.Id == dd.SourceId && !r.Other);
         bool fresh = f == null;
         if (f == null) e.Roster.Add(f = new Fighter { Id = dd.SourceId, FromDamage = true });
@@ -625,14 +716,27 @@ public sealed class BossParser
         return f;
     }
 
-    /// <summary>The group onto a record's roster: new members (Late after its start), known ones updated, missing ones Gone.</summary>
-    static void MergeGroup(Encounter e, List<GroupMember> group, bool late)
+    /// <summary>
+    /// The group onto a record's roster (<paramref name="at"/>: when the list came; null as the record opens): known members
+    /// updated; a new one marked late when the list comes over <see cref="LateSeconds"/> after the start and a group list was
+    /// known before (the first list after damage rows only names who was there all along), damage or not; missing ones gone.
+    /// </summary>
+    static void MergeGroup(Encounter e, List<GroupMember> group, DateTime? at)
     {
+        bool after = at is { } a0 && (a0 - e.Start).TotalSeconds > LateSeconds;
+        bool hadList = e.Roster.Any(r => !r.Other && !r.FromDamage);
         foreach (var m in group)
         {
             var f = e.Roster.FirstOrDefault(r => (m.Id != 0 && r.Id == m.Id) || (m.Id == 0 && r.Name.Equals(m.Name.Trim(), StringComparison.OrdinalIgnoreCase)));
-            if (f == null) { f = Fighter.From(m); f.Late = late && !e.HasDamage; e.Roster.Add(f); continue; }
-            f.Gone = false; f.FromDamage = false;
+            if (f == null)
+            {
+                f = Fighter.From(m);
+                if (after && hadList) { f.Late = true; f.JoinedAt = at; }
+                e.Roster.Add(f);
+                continue;
+            }
+            if (f.Gone) { f.Gone = false; f.LeftAt = null; }
+            f.FromDamage = false;
             if (m.Name.Trim().Length > 0) f.Name = m.Name.Trim();
             if (m.Class.Trim().Length > 0) f.SetClass(m.Class);
             if (m.CombatPower > 0) f.CombatPower = m.CombatPower;
@@ -640,9 +744,10 @@ public sealed class BossParser
             if (m.Server?.Trim() is { Length: > 0 } server) f.Server = server;
             f.You |= m.You;
         }
-        if (late)
+        if (at != null)
             foreach (var f in e.Roster)
-                if (!f.Other && !f.FromDamage && !f.You && !group.Any(m => (m.Id != 0 && m.Id == f.Id) || (m.Id == 0 && m.Name.Trim().Equals(f.Name, StringComparison.OrdinalIgnoreCase)))) f.Gone = true;
+                if (!f.Other && !f.FromDamage && !f.You && !f.Gone && !group.Any(m => (m.Id != 0 && m.Id == f.Id) || (m.Id == 0 && m.Name.Trim().Equals(f.Name, StringComparison.OrdinalIgnoreCase))))
+                { f.Gone = true; f.LeftAt = at; }
     }
 
     static void MarkPartial(Encounter e, string why)
@@ -653,11 +758,26 @@ public sealed class BossParser
 
     // ---- ends ----
 
-    void ClosePull(Encounter e, BossOutcome outcome, DateTime at, List<Encounter> done, string? why)
+    /// <summary>
+    /// When a pull that ends at <paramref name="at"/> really ended: a kill at the death; a wipe at its last damage or HP fall,
+    /// no later; leaving (<paramref name="yours"/>: you left) at your last damage, else the group's; any other end with damage
+    /// at the last damage. A pull with no damage known ends at <paramref name="at"/>.
+    /// </summary>
+    static DateTime EndOf(Encounter e, BossOutcome outcome, DateTime at, bool yours)
+    {
+        if (outcome == BossOutcome.Kill || !e.HasDamage) return at;
+        DateTime? last = e.LastDamageAt is { } d ? (e.LastHpFallAt is { } h ? Max(d, h) : d) : e.LastHpFallAt;
+        if (yours && outcome == BossOutcome.Left && e.You?.LastHit is { } mine) last = mine;
+        return last is { } l && l < at ? l : at;
+    }
+
+    void ClosePull(Encounter e, BossOutcome outcome, DateTime at, List<Encounter> done, string? why, bool yours = false)
     {
         if (!ReferenceEquals(e, _cur)) return;
         _cur = null;
-        e.End = Max(at, e.Start);
+        var end = EndOf(e, outcome, at, yours);
+        if (end < at) Log($"{e.Boss}: ends at {(yours && outcome == BossOutcome.Left && e.You?.LastHit != null ? "your" : "the")} last damage, {(at - end).TotalSeconds:0.0} s before its end was known");
+        e.End = Max(end, e.Start);
         e.LastAt = Max(e.LastAt, e.End.Value);
         e.Outcome = Encounter.OutcomeName(outcome);
         if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
@@ -719,6 +839,14 @@ public sealed class BossParser
         lock (_gate)
         {
             int was = done.Count;
+            // damage, then none and no HP fall for a minute, and no end said: the group wiped (or walked off); it ends at its last damage
+            if (_cur is { HasDamage: true } q && (q.LastDamageAt ?? q.LastAt) is { } lastHit
+                && (now - (q.LastHpFallAt is { } fall && fall > lastHit ? fall : lastHit)).TotalSeconds >= WipeQuietSeconds)
+            {
+                _inferred = (q.Boss, q.BossId, _instanceId);
+                ClosePull(q, BossOutcome.Wipe, now, done, $"no damage for {WipeQuietSeconds:0} s and no end said");
+                _version++;
+            }
             if (_cur is { } c && (now - c.LastAt).TotalMinutes >= StaleMinutes)
             {
                 MarkPartial(c, $"nothing heard of it for {StaleMinutes:0} minutes");

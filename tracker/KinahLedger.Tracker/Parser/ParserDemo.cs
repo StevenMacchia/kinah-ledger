@@ -25,6 +25,9 @@ public static class ParserDemo
         ["Templar"] = new[] { 12090000, 12040000, 12100000, 12010000 }, ["Sorcerer"] = new[] { 15040000, 15060000, 15010000, 15090000 },
     };
 
+    /// <summary>A member who joins a pull late and leaves before its end (the detail render's).</summary>
+    static readonly GroupMember Joiner = new(5, "Lyrandel", "Ranger", 4_702, 5_600, false, "Ariel");
+
     static double Weight(string cls) => cls == "Cleric" ? 0.45 : cls == "Templar" ? 0.7 : 1;
 
     /// <summary>The kept records (oldest first) and, when <paramref name="live"/>, the record under way, as of <paramref name="now"/>.</summary>
@@ -44,9 +47,11 @@ public static class ParserDemo
             t = t.AddSeconds(30);
         }
 
-        // one pull: hits every 3 s from each member (and now and then Other), the boss's HP after each, then its end
-        void Pull(string boss, long id, int secs, BossOutcome? outcome, bool gap = false, int adds = 0, bool deaths = false)
+        // one pull: hits every 3 s from each member (and now and then a fall no hit names: uncredited), the boss's HP after
+        // each, damage to its adds when it has some, a member who joins late and leaves (late), then its end
+        void Pull(string boss, long id, int secs, BossOutcome? outcome, bool gap = false, int adds = 0, bool deaths = false, bool late = false)
         {
+            int addsAt = adds;
             var ticks = new List<(int S, long Src, long Amount)>();
             for (int s = 3; s < secs || (outcome == null && s <= secs); s += 3)
             {
@@ -71,6 +76,13 @@ public static class ParserDemo
                 }
                 if (src == 1)
                 {
+                    // the adds: some of the group's damage goes to them, never to the boss's HP
+                    if (damage && addsAt > 0 && s % 6 == 0)
+                        foreach (var m in Group.Where(g => g.Class != "Cleric"))
+                            p.Take(new DamageDealt(at, m.Id, 7000 + s / 30, (long)(rnd.Next(2_000, 4_500) * Weight(m.Class)), group ? "" : m.Name, m.You, Skills[m.Class][0], 1));
+                    if (late && s == 33) p.Take(new GroupChanged(at, Group.Append(Joiner).ToArray()));
+                    if (late && s >= 36 && s <= secs - 33 && damage) p.Take(new DamageDealt(at, Joiner.Id, id, rnd.Next(9_000, 13_000), group ? "" : Joiner.Name, false, 14010000, 2));
+                    if (late && s == (secs - 24) / 3 * 3) p.Take(new GroupChanged(at, Group));
                     if (adds > 0 && s % 30 == 0) { p.Take(new UnitDied(at, 5000 + s, "Void Fragment", false)); p.Kill(at, player: false, death: false, ""); adds--; }
                     if (gap && s == 60) p.Take(new FeedGap(at));
                     if (deaths && s == 81) { p.Take(new UnitDied(at, 3, "Thornecrest", false)); }
@@ -119,7 +131,7 @@ public static class ParserDemo
         p.Take(new InstanceMode(t.AddSeconds(4), "Conquest"));
         if (group) p.Take(new GroupChanged(t, Group));
         Trash(3);
-        Pull("Watchdog Kwapo", 301, 118, BossOutcome.Kill, adds: 2, deaths: true);
+        Pull("Watchdog Kwapo", 301, 118, BossOutcome.Kill, adds: 2, deaths: true, late: true);
         Pull("Totem room", 304, 64, BossOutcome.Kill, adds: 4);
         Trash(2);
         Pull("Necromancer Duanka", 302, 142, BossOutcome.Kill);
