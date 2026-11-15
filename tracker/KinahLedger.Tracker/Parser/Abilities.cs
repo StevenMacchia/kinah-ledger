@@ -78,10 +78,23 @@ public static class Abilities
     }
 
     /// <summary>
-    /// Damage over time comes as a negative skill: minus its effect's id, the skill's id x 100 plus the effect's number
-    /// (-1206000003 is Punishing Strike's, 12060000). The skill's id; a skill as it is.
+    /// Damage over time comes as a negative skill: minus its effect's id (<see cref="SkillOfEffect"/>; -1206000003 is
+    /// Punishing Strike's, 12060000). The skill's id; a skill as it is.
     /// </summary>
-    public static int BaseOf(int skill) => skill < 0 ? (int)(-(long)skill / 100) : skill;
+    public static int BaseOf(int skill) => skill < 0 ? SkillOfEffect((int)Math.Min(-(long)skill, int.MaxValue)) : skill;
+
+    /// <summary>
+    /// The skill an effect (a tick of damage over time, a buff) belongs to. The effect's id is the skill's id x 100 plus the
+    /// effect's number (1206000003 from 12060000), or, for a class skill, the skill's id without its last digit x 100 plus
+    /// the number: Steven's Templar, 2026-11-15, 122400001 from Judgment (12240000) and 120700201 from Doom Shield's
+    /// specialization 12070020 (its name then by <see cref="Resolve"/>). So a quotient of seven digits starting 1 is a class
+    /// skill short of its last digit.
+    /// </summary>
+    public static int SkillOfEffect(int effect)
+    {
+        int b = effect / 100;
+        return b is >= 1_000_000 and < 2_000_000 ? b * 10 : b;
+    }
 
     /// <summary>A class by its skills' family, the id's first two digits (11 Gladiator ... 18 Chanter, 19 Brawler); "" for anything else (damage over time: its skill's).</summary>
     public static string ClassOfFamily(int skill) => skill < 0 ? ClassOfFamily(BaseOf(skill)) : skill is >= 10_000_000 and < 20_000_000 ? (skill / 1_000_000) switch

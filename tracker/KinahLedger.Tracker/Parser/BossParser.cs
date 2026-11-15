@@ -1003,7 +1003,7 @@ public sealed class BossParser
         if (overlap <= 0) return;
         var list = m.Buffs ??= new();
         var b = list.FirstOrDefault(x => x.Id == effect);
-        if (b == null) list.Add(b = new BuffUptime { Id = effect, Skill = effect / 100 });
+        if (b == null) list.Add(b = new BuffUptime { Id = effect, Skill = Abilities.SkillOfEffect(effect) });
         b.Seconds = Math.Round(b.Seconds + overlap, 2);
         double present = e.PresentSeconds(m, to);
         b.Share = present > 0 ? Math.Clamp(b.Seconds / present, 0, 1) : 0;

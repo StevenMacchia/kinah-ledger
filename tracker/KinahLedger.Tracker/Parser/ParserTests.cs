@@ -856,6 +856,10 @@ public static class ParserTests
             Check(Abilities.Name(3000121) == "Theostone: Boreas's Encouragement" && Abilities.Name(100012) == "Fire Spirit: Basic Attack" && Abilities.ClassOf(100012) == "spiritmaster"
                 && Ui.SkillArt.Image(3000121) != null && Ui.SkillArt.Image(100012) != null && Abilities.Canon(100012) == Abilities.Canon(100014),
                 "a Theostone from the item dictionary and a spirit's attack at another rank: named, with icons, one row with its spirit's other ranks");
+            // the same skill under another id (its Korean name is a named id's): spirit commands at each form, a Brawler's Focused Block; one the sources disagree on stays its class's
+            Check(Abilities.Name(16001604) == "Fire Spirit: Summon Meteor" && Abilities.Name(16001617) == "Ancient Spirit: Magnetic Storm" && Abilities.Name(19350000) == "Focused Block"
+                && Abilities.Name(16001612, "Spiritmaster") == "Spiritmaster skill" && Abilities.Canon(16001604) == Abilities.Canon(16001301) && Ui.SkillArt.Image(16001604) == Ui.SkillArt.Image(16001301),
+                "the same skill under another id: Fire Spirit: Summon Meteor at another form (one row with it, its icon), Ancient Spirit: Magnetic Storm, a Brawler's Focused Block; a disputed one stays Spiritmaster skill");
             // a class skill's rank or variant (the last four digits) is its base's: name and icon
             Check(Abilities.Resolve(12060003) == 12060000 && Abilities.Name(12060003) == "Punishing Strike" && Abilities.Name(16100005) == "Summon: Fire Spirit"
                 && Abilities.Resolve(16001102) == 16001102 && Abilities.Resolve(100051) == 100051 && Abilities.Resolve(99_999_999) == null && Ui.SkillArt.Image(12060003) == Ui.SkillArt.Image(12060000) && Ui.SkillArt.Image(12060003) != null,
@@ -879,6 +883,11 @@ public static class ParserTests
                 && Abilities.Canon(-1206000003) == -1206000000 && Abilities.Canon(-1206000301) == -1206000000 && Abilities.ClassOf(-1206000003) == "templar"
                 && Ui.SkillArt.Image(-1206000003) != null && Ui.SkillArt.Image(-1206000003) == Ui.SkillArt.Image(12060000) && Abilities.Name(0) == "Damage over time",
                 "damage over time: -1206000003 and a rank's -1206000301 are Punishing Strike (over time) with its icon; old records' 0 keeps its row");
+            // the other form Steven's Templar showed (2026-11-15): a class skill's id short of its last digit, x 100 + n
+            Check(Abilities.SkillOfEffect(122400001) == 12240000 && Abilities.Name(-122400001) == "Judgment (over time)" && Abilities.SkillOfEffect(120700201) == 12070020
+                && Abilities.Name(Abilities.SkillOfEffect(120700201)) == "Doom Shield" && Abilities.SkillOfEffect(1206000003) == 12060000 && Abilities.SkillOfEffect(1702000101) == 17020001
+                && Abilities.SkillOfEffect(300011701) == 3000117 && Abilities.Canon(-122400001) == Abilities.Canon(-1224000003) && Ui.SkillArt.Image(-122400001) == Ui.SkillArt.Image(12240000),
+                "an effect's skill: 122400001 is Judgment's and 120700201 Doom Shield's (an id short of its last digit), 1206000003 Punishing Strike's, a Theostone's as it is; one row either way");
             var dots = Abilities.Merged(new[] { new AbilityShare { Skill = -1206000003, Damage = 300, Hits = 3 }, new AbilityShare { Skill = -1206000301, Damage = 200, Hits = 2 },
                 new AbilityShare { Skill = 12060000, Damage = 1_000, Hits = 4 } });
             Check(dots.Count == 2 && dots[0].Skill == 12060000 && dots[1] is { Skill: -1206000000, Damage: 500, Hits: 5 } && Abilities.Name(dots[1].Skill) == "Punishing Strike (over time)",
