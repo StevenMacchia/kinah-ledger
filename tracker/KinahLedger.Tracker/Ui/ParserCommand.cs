@@ -118,8 +118,8 @@ static class ParserCommand
         }
         if (Ring(v, live) is { } ring) g.Children.Add(Col(ring, 2));
         body.Children.Add(g);
-        // the boss's HP in words and on the glowing bar, while the fight lasts
-        if (live && e.BossHpLeft is { } hp && e.ModeKind != ParserMode.Run)
+        // the boss's HP, said once: the ring holds it (its share and the HP left); a fight with no ring (a run's, a fight's) keeps the bar
+        if (live && e.BossHpLeft is { } hp && e.ModeKind != ParserMode.Run && Ring(v, live) == null)
         {
             var hw = T("", 12.5, Muted, trim: false); Typography(hw);
             hw.Inlines.Add(R($"{Math.Round(hp * 100):0}%", 13, hp < 0.34 ? C(Coral) : Ink, FontWeights.Bold));
@@ -167,13 +167,18 @@ static class ParserCommand
     static FrameworkElement Figures(FightView v, CommandCtx ctx)
     {
         var e = v.E;
-        var t = T("", 12.5, Muted, trim: false); Typography(t);
+        var wp = new WrapPanel { Margin = new Thickness(0, 1, 0, 0) };
+        int n0 = 0;
         void Add(string fig, string word, Brush? tone = null)
         {
-            if (t.Inlines.Count > 0) t.Inlines.Add(R("  ·  ", 12.5, Faint));
-            t.Inlines.Add(R(fig, 12.5, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + word, 12.5, Muted));
+            var t = T("", 12.5, Muted, trim: false); Typography(t);
+            if (n0++ > 0) t.Inlines.Add(R("·  ", 12.5, Faint));
+            t.Inlines.Add(R(fig, 12.5, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + word + "  ", 12.5, Muted));
+            wp.Children.Add(t);
         }
         if (v.HasDamage) Add(Amounts.Short(v.Members.Sum(m => m.Damage)), "damage");
+        // a boss under way: its HP left of its whole (the ring holds the share)
+        if (e.Live && e.ModeKind == ParserMode.Bosses && e.BossHpLeft != null && e.BossMaxHp > 0) Add(Amounts.Short(Math.Max(0, e.BossHp)), $"of {Amounts.Short(e.BossMaxHp)} HP left");
         int n = v.Members.Count(m => !v.HasDamage || m.Damage > 0);
         if (n > 0) Add(n.ToString(CultureInfo.InvariantCulture), n == 1 ? "member" : "in the group");
         if (v.Deaths > 0) Add(v.Deaths.ToString(CultureInfo.InvariantCulture), v.Deaths == 1 ? "death" : "deaths", C(Coral));
@@ -181,15 +186,13 @@ static class ParserCommand
         if (ctx.Kills && near > 0 && e.ModeKind != ParserMode.Fights) Add(near.ToString(CultureInfo.InvariantCulture), "kills near you");
         if (e.ModeKind == ParserMode.Fights && e.YourKills > 0) Add(e.YourKills.ToString(CultureInfo.InvariantCulture), e.PlayerKills > 0 ? $"kills, {e.PlayerKills} player{(e.PlayerKills == 1 ? "" : "s")}" : e.YourKills == 1 ? "kill" : "kills", C(Mint));
         if (!v.HasDamage && ctx.Details && e.Members.Any(f => f.CombatPower > 0)) Add(((int)Math.Round(e.Members.Where(f => f.CombatPower > 0).Average(f => f.CombatPower))).ToString("N0", CultureInfo.InvariantCulture), "average CP");
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
-        row.Children.Add(t);
         if (e.Partial)
         {
             var p = Tag("Partial", Color.FromRgb(0xF7, 0xA0, 0x72));
             p.ToolTip = ctx.Tip($"Some of it wasn't seen: {string.Join("; ", e.PartialWhy)}. Its damage and kills may be short.");
-            row.Children.Add(M(p, t.Inlines.Count > 0 ? 10 : 0, 0, 0, 0));
+            wp.Children.Add(M(p, n0 > 0 ? 4 : 0, 0, 0, 0));
         }
-        return row;
+        return wp;
     }
 
     /// <summary>The ring: the boss's HP left while a boss fight lasts; a kill's time in mint, a wipe's HP left in coral; none for a run or a fight.</summary>
@@ -197,7 +200,7 @@ static class ParserCommand
     {
         var e = v.E;
         if (e.ModeKind != ParserMode.Bosses) return null;
-        if (live && e.BossHpLeft is { } hp) return HpRing(108, 10, hp, hp < 0.34 ? Coral : Gold, $"{Math.Round(hp * 100):0}%", "HP left");
+        if (live && e.BossHpLeft is { } hp) { var r = HpRing(108, 10, hp, hp < 0.34 ? Coral : Gold, $"{Math.Round(hp * 100):0}%", "HP left"); AutomationProperties.SetName(r, $"Boss HP {Math.Round(hp * 100):0}%, {Amounts.Short(Math.Max(0, e.BossHp))} left of {Amounts.Short(e.BossMaxHp)}"); return r; }
         if (!live && e.Outcome == "kill") return HpRing(108, 10, 1, Mint, BossParser.Clock(e.Duration(v.Now)), "killed");
         if (!live && e.Outcome == "wipe" && e.BossHpLeft is { } w) return HpRing(108, 10, w, Coral, $"{Math.Round(w * 100):0}%", "HP left");
         return null;
@@ -430,7 +433,27 @@ static class ParserCommand
         head.Children.Add(hs);
         page.Children.Add(Glass(head, new Thickness(16, 14, 16, 14), 14, glow: c));
         page.Children.Add(M(Abilities(v, m, ctx), 0, 12, 0, 0));
+        if (m.Buffs is { Count: > 0 } buffs) page.Children.Add(M(Buffs(m, buffs), 0, 12, 0, 0));
         return page;
+    }
+
+    /// <summary>Each buff's uptime over the fight (once the record carries it): its name, a bar of its share of the fight, the time.</summary>
+    static Border Buffs(MemberView m, List<(string Name, double Seconds, double Share)> buffs)
+    {
+        var body = new StackPanel();
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 8) };
+        head.Children.Add(T("Buff uptime", 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T("time up over the fight", 12, Muted), 8, 0, 0, 0));
+        body.Children.Add(head);
+        foreach (var (name, secs, share) in buffs.OrderByDescending(b => b.Share).Take(10))
+        {
+            var r = Cols(190, -1, 56, 52); r.MinHeight = 28;
+            r.Children.Add(T(name, 12.5, Ink, FontWeights.SemiBold));
+            r.Children.Add(Col(M(Bar(share, share >= 0.8 ? Mint : share >= 0.5 ? Gold : Coral, 6, Track, glow: false), 0, 0, 12, 0), 1));
+            r.Children.Add(Col(Num(Pct(share, 0), 12.5, Ink, FontWeights.Bold), 2));
+            r.Children.Add(Col(Num(BossParser.Clock(TimeSpan.FromSeconds(secs)), 12, Text2), 3));
+            body.Children.Add(r);
+        }
+        return Glass(body, new Thickness(14, 12, 14, 10), 14);
     }
 
     /// <summary>Every ability: its icon and name, damage, share, DPS, hits, average; casts, crit, max and min once the record carries them. A click on a column's name sorts by it.</summary>

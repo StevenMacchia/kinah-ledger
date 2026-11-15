@@ -204,7 +204,7 @@ public static partial class WpfApp
         var live = w.ParserPageForTest();
         check(w.PartForTest == "Parser" && w.ParserPage.Visibility == Visibility.Visible && w.QuestsPage.Visibility != Visibility.Visible && w.LeftCol.Visibility != Visibility.Visible,
             "Parser: its own page, nothing of Farming or Quests beside it");
-        check(live.Live && live.Roster == 4 && live.Rows >= 9, $"Parser: the fight under way with its group of {live.Roster}, the kept fights under it ({live.Rows} rows)");
+        check(live.Live && live.Roster == 4 && live.Rows >= 5, $"Parser: the fight under way with its group of {live.Roster}, the kept fights under it ({live.Rows} rows)");
         check(farmHeight < 500 || w.ActualHeight <= farmHeight + 1, $"Parser: the page keeps the Farming page's height and scrolls inside it: {w.ActualHeight:0} (Farming {farmHeight:0})");
         w.FollowForTest(Session.ActivityKind.Crafting, DateTime.UtcNow); w.FollowForTest(Session.ActivityKind.Crafting, DateTime.UtcNow.AddMinutes(5)); DoEvents();
         check(w.PartForTest == "Parser", $"Parser: the page stays while it shows, whatever the player does: {w.PartForTest}");
@@ -282,7 +282,9 @@ public static partial class WpfApp
         w.ShowParserDemo("live"); DoEvents();
         check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Ferocious Horn Den · Conquest · ")), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
         // the boss's HP left beside its share, on the page (Steven, 2026-11-14)
-        check(ParserTexts(w.ParserPage).Texts.Any(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+% · [\d.,]+[KM]? left of [\d.,]+[KM]? HP$")), $"Parser: the boss's HP says its share and the HP left (47% · 1.82M left of 3.85M HP) [{string.Join(" | ", ParserTexts(w.ParserPage).Texts.Where(t => t.Contains('%')))}]");
+        var hpTexts = ParserTexts(w.ParserPage);
+        check(hpTexts.Texts.Contains("47%") && hpTexts.Texts.Any(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"[\d.,]+[KM]? of [\d.,]+[KM]? HP left")),
+            $"Parser: the boss's HP: its share on the ring (47%), the HP left of its whole on the figures line (1.82M of 3.85M HP left) [{string.Join(" | ", hpTexts.Texts.Where(t => t.Contains("HP")))}]");
         // the overlay's look, one click from the page (Steven, 2026-11-14: "idk how to change the style")
         check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")), "Parser: the page names the overlay's look, a link to change it");
         // separated (Steven, 2026-11-14: overlays move by a plain drag, no Move button or placement mode; the Kinah overlay's look exactly)

@@ -85,7 +85,7 @@ static class PK
         line.GradientStops.Add(new GradientStop(dark ? Color.FromArgb(0x16, 255, 255, 255) : KC("Line"), 0.35));
         line.GradientStops.Add(new GradientStop(dark ? Color.FromArgb(0x0E, 255, 255, 255) : KC("Line"), 1));
         var outer = new Border { CornerRadius = new CornerRadius(radius), BorderThickness = new Thickness(1), BorderBrush = edge ?? line, Background = fill,
-            Effect = new DropShadowEffect { Color = Black, BlurRadius = 24, ShadowDepth = 5, Direction = 270, Opacity = dark ? 0.5 : 0.12 } };
+            Effect = new DropShadowEffect { Color = Black, BlurRadius = 18, ShadowDepth = 3, Direction = 270, Opacity = dark ? 0.32 : 0.08 } };
         var g = new Grid();
         if (glow is { } gc)
         {
@@ -94,7 +94,6 @@ static class PK
             rg.GradientStops.Add(new GradientStop(Color.FromArgb(0, gc.R, gc.G, gc.B), 1));
             g.Children.Add(new Border { CornerRadius = new CornerRadius(radius - 1), Background = rg });
         }
-        if (dark) g.Children.Add(new Border { CornerRadius = new CornerRadius(radius - 1), Background = Noise });
         // the lit top edge
         var hl = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         hl.GradientStops.Add(new GradientStop(Color.FromArgb(0, 255, 255, 255), 0));
@@ -104,7 +103,7 @@ static class PK
         // the inner shadow at the foot
         var sh = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         sh.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), 0.7));
-        sh.GradientStops.Add(new GradientStop(Color.FromArgb(dark ? (byte)0x40 : (byte)0x06, 0, 0, 0), 1));
+        sh.GradientStops.Add(new GradientStop(Color.FromArgb(dark ? (byte)0x24 : (byte)0x04, 0, 0, 0), 1));
         g.Children.Add(new Border { CornerRadius = new CornerRadius(radius - 1), Background = sh, IsHitTestVisible = false });
         g.Children.Add(new Border { Padding = pad, Child = content });
         outer.Child = g;
@@ -138,8 +137,8 @@ static class PK
         var b = new Border
         {
             Width = size * (skew ? 1.25 : 1), Height = size, CornerRadius = new CornerRadius(skew ? 3 : size * 0.3), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Background = C(c, you ? 0.95 : 0.2), BorderBrush = C(c, you ? 1 : 0.75), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = shown.ToString(), FontSize = size * 0.58, FontWeight = FontWeights.Bold, Foreground = you ? C(Color.FromRgb(0x1D, 0x13, 0x00)) : C(ClassArt.NameColor(cls)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Background = C(c, you ? 0.95 : Dark ? 0.2 : 0.3), BorderBrush = C(c, you ? 1 : 0.75), BorderThickness = new Thickness(1),
+            Child = new TextBlock { Text = shown.ToString(), FontSize = size * 0.58, FontWeight = FontWeights.Bold, Foreground = you ? C(Color.FromRgb(0x1D, 0x13, 0x00)) : C(ClassArt.NameColor(cls, Dark)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         var tg = new TransformGroup();
         if (skew) tg.Children.Add(new SkewTransform(-14, 0));

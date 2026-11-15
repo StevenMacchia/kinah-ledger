@@ -206,6 +206,8 @@ public partial class MainWindow
             m.Taken = taken;
             var parts = new[] { 0.36, 0.27, 0.19, 0.12, 0.06 };
             m.TakenBy = parts.Select((p, j) => (hits[j], 0, (long)(taken * p), 3 + (int)(N(j, m.F.Id, 5) * 9))).ToList();
+            // buffs: placeholder names (a render's sample only)
+            m.Buffs = new[] { "Group buff A", "Group buff B", "Self buff", "Short burst buff" }.Select((b, j) => { double sh = Math.Clamp(0.95 - j * 0.22 + (N(j, m.F.Id, 7) - 0.5) * 0.1, 0.05, 1); return (b, sh * secs, sh); }).ToList();
         }
         if (v.Members.FirstOrDefault(m => ClassArt.Key(m.F.Class) == "templar") is { } tank)
         {

@@ -27,7 +27,7 @@ public partial class MainWindow
     /// </summary>
     internal FrameworkElement? RunBossFights(InstanceRun? run, bool open)
     {
-        if (run == null || ParserPacketsOff) return null;
+        if (run == null || ParserReadingOff) return null;
         var from = run.Start.AddMinutes(-1);
         var to = open ? DateTime.UtcNow.AddMinutes(1) : (run.Left ?? run.LastLoot ?? run.Start.AddSeconds(Math.Max(600, run.Seconds))).AddMinutes(1);
         if (_demo) { from = DateTime.MinValue; to = DateTime.MaxValue; }
@@ -78,7 +78,7 @@ public partial class MainWindow
     }
 
     /// <summary>Whether the Parser can't see fights (its setting off): then a run lists no boss fights.</summary>
-    bool ParserPacketsOff => !_demo && _watcher.Packets is { } pr && !pr.On;
+    bool ParserReadingOff => !_demo && _watcher.Packets is { } pr && !pr.On;
 
     /// <summary>The flight's picture layer over the window: the Runs page's body leaving, the row's box growing into the hero.</summary>
     sealed class JumpGhost : Adorner
@@ -91,7 +91,7 @@ public partial class MainWindow
             if (From != null)
             {
                 dc.PushClip(new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(Body), new RectangleGeometry(R0)));
-                dc.PushOpacity(1 - Motion.Out(Math.Clamp(T / 0.5, 0, 1)));
+                dc.PushOpacity(1 - Motion.Out(Math.Clamp(T / 0.3, 0, 1)));
                 dc.DrawImage(From, new Rect(-28 * e, 0, From.Width, From.Height));
                 dc.Pop(); dc.Pop();
             }
@@ -159,7 +159,7 @@ public partial class MainWindow
         Motion.Play(ParserPage, 460, p =>
         {
             ghost.T = p; ghost.InvalidateVisual();
-            double e = Motion.Out(Math.Clamp((p - 0.3) / 0.7, 0, 1));
+            double e = Motion.Out(Math.Clamp((p - 0.35) / 0.65, 0, 1));
             ParserPage.Opacity = e; slide.X = 28 * (1 - Motion.Out(p));
         }, () => { layer.Remove(ghost); ParserPage.Opacity = 1; slide.X = 0; hero.Opacity = 1; });
     }
