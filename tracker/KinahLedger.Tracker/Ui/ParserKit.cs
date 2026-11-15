@@ -118,7 +118,7 @@ static class PK
         edge.GradientStops.Add(new GradientStop(Color.FromArgb(0x70, Gold.R, Gold.G, Gold.B), 0.6));
         edge.GradientStops.Add(new GradientStop(Color.FromArgb(0x50, Gold.R, Gold.G, Gold.B), 1));
         var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        wash.GradientStops.Add(new GradientStop(Color.FromArgb(0x30, Gold.R, Gold.G, Gold.B), 0));
+        wash.GradientStops.Add(new GradientStop(Color.FromArgb(0x1A, Gold.R, Gold.G, Gold.B), 0));   // light: the name reads over it
         wash.GradientStops.Add(new GradientStop(Color.FromArgb(0x08, Gold.R, Gold.G, Gold.B), 1));
         return new Border { CornerRadius = new CornerRadius(radius), BorderThickness = new Thickness(1), BorderBrush = edge, Background = wash, Padding = pad, Child = content,
             Effect = glow > 0 ? new DropShadowEffect { Color = Gold, BlurRadius = 16, ShadowDepth = 0, Opacity = 0.42 * glow } : null };

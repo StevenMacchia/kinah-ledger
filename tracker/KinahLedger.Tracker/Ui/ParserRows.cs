@@ -169,6 +169,9 @@ public sealed class ParserRows : Grid
         _wasLive = e.Live;
     }
 
+    /// <summary>A soft dark halo for a row's text: it reads over the brightest class bar or your gold wash.</summary>
+    static DropShadowEffect TextHalo() => new() { Color = Colors.Black, BlurRadius = 4, ShadowDepth = 0, Opacity = 0.85 };
+
     void SetBar(RowEl r, double v)
     {
         double w = r.Track.ActualWidth;
@@ -202,6 +205,9 @@ public sealed class ParserRows : Grid
             Child = new TextBlock { Text = "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
         nm.Children.Add(tick);
         var name = new TextBlock { Text = f.Name.Length > 0 ? f.Name : "Unnamed", FontSize = 13, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.You ? HudKit.Ink : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        // a soft dark halo under the name and the DPS: they read over any bar (Steven, 2026-11-15: "the highlight over the name
+        // of yourself makes it so hard to read")
+        name.Effect = TextHalo();
         nm.Children.Add(name);
         if (f.You) { var yc = HudGlass.YouChip(); yc.Tag = "you"; nm.Children.Add(yc); }
         var pb = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(6, 0, 0, 0), Background = HudKit.Gold, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
@@ -214,7 +220,7 @@ public sealed class ParserRows : Grid
         var nameHost = new Border { Child = nm, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
         cols.Children.Add(PK.Col(nameHost, 2));
         TextBlock Fig(double size, Brush b, FontWeight w) { var t = new TextBlock { FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
-        var dps = Fig(15, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps";
+        var dps = Fig(15, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps"; dps.Effect = TextHalo();
         var share = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
         var damage = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold);
         var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); critT.ToolTip = "Crit rate";
@@ -227,8 +233,9 @@ public sealed class ParserRows : Grid
         // the bar: a quiet track the row's width, the fill in the class's colour, angled at its end, fading to the right
         var track = new Border { CornerRadius = new CornerRadius(3), Background = PK.C(c, bare ? 0 : 0.07) };
         var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x60 : (byte)0x8C, c.R, c.G, c.B), 0));
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x18 : (byte)0x30, c.R, c.G, c.B), 1));
+        // your row's bar quieter: under the gold frame's wash a full-strength bar made the name hard to read
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x60 : f.You ? (byte)0x58 : (byte)0x8C, c.R, c.G, c.B), 0));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x18 : f.You ? (byte)0x20 : (byte)0x30, c.R, c.G, c.B), 1));
         fade.Freeze();
         var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = fade, Width = 0, RenderTransformOrigin = new Point(0, 1), RenderTransform = new SkewTransform(-16, 0) };
         var edge = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Left, Background = PK.C(c), CornerRadius = new CornerRadius(3, 0, 0, 3), Visibility = f.You ? Visibility.Collapsed : Visibility.Visible };
