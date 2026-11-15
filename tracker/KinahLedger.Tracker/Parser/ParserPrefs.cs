@@ -40,8 +40,15 @@ public sealed class ParserPrefs
     /// so that player's Details moves to on once; from then on their switch is kept, on or off.
     /// </summary>
     public bool DetailsSettled { get; set; }
-    /// <summary>The Parser in its own overlay window (draggable, its own place, click-through) instead of the Kinah overlay's section above the Kinah line (Steven, 2026-11-14: "expand by default but give option in settings to separate"). Off by default.</summary>
-    public bool Separate { get; set; }
+    /// <summary>
+    /// The Parser inside the Kinah overlay (its section above the Kinah line, the meter in place of it in a dungeon) instead
+    /// of its own window. Off by default since 0.10.100 (Steven, 2026-11-15: "have them just be 2 separate windows pls i miss
+    /// the old one"): the Kinah overlay stays the Kinah overlay, the Parser has its own. A new name, so the old "Separate":
+    /// false every file has from before (the old default) is not read as a choice: everyone gets the two windows once.
+    /// </summary>
+    public bool InKinah { get; set; }
+    /// <summary>The Parser in its own overlay window (draggable, its own place, click-through): not <see cref="InKinah"/>.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public bool Separate { get => !InKinah; set => InKinah = !value; }
     /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
     public bool DpsActive { get; set; }
     /// <summary>Your DPS small on the Kinah overlay's line while fighting in the open world or the Abyss (on by default: Steven asked for it).</summary>

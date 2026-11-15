@@ -353,11 +353,13 @@ public partial class MainWindow
             _hud.SetKinahHidden(_parserPrefs.Overlay && show != null && InDungeon);
             return;
         }
-        // separated: the player chose two overlays, so the Kinah overlay stays as it is
+        // two windows (the default since 0.10.100, Steven, 2026-11-15: "have them just be 2 separate windows pls i miss the old
+        // one"): the Kinah overlay stays as it is, the Parser in its own window, in the open world as in a dungeon
         _hud?.SetKinahHidden(false);
         _hud?.ShowParser(null, now, ParserModeNow, PDetails);
+        _parserOwnWanted = _parserPrefs.Overlay && show != null;
         bool inFront = ParserOverlayForceForTest || (_watcher.GameRect != null && (Native.ForegroundPid() == (uint)Environment.ProcessId || GameInFront()));
-        bool want = _parserPrefs.Overlay && show != null && inFront;
+        bool want = _parserOwnWanted && inFront;
         if (!want) { _parserOverlay?.ShowWanted(false); return; }
         if (_parserOverlay == null)
         {
@@ -1176,6 +1178,7 @@ public partial class MainWindow
     {
         _demo = false;
         ParserSourceForTest = parser; ParserOverlayForceForTest = true;
+        _parserPrefs.InKinah = true;   // the meter in the off-screen Kinah overlay, as it has been timed: its own window would show on the screen
         StartFarmTicker();
         _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = ""; _parserPrefs.Overlay = true;
         ShowPart("Parser", byHand: false);
@@ -1208,4 +1211,34 @@ public partial class MainWindow
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;
     internal void SetParserOverlayForTest(bool on) => SetParserOverlay(on);
     internal void SetParserSeparateForTest(bool on) { _parserPrefs.Separate = on; DrawOverlayPills(); RedrawParserPage(); }
+
+    /// <summary>The Parser's own window is wanted (the game in front aside): set by the overlay's tick when it has its own window.</summary>
+    bool _parserOwnWanted;
+
+    /// <summary>
+    /// For the options test: one overlay tick on <paramref name="parser"/> with the meter Always on, the Parser in its own
+    /// window or inside the Kinah overlay, against an off-screen Kinah overlay; nothing shown on any screen (the game is not
+    /// in front, so the Parser's own window is only wanted). What the Kinah overlay did, and whether the own window was wanted.
+    /// </summary>
+    internal (bool KinahHidden, bool ParserInKinah, bool OwnWanted) TwoWindowsForTest(HudWindow hud, BossParser parser, bool inKinah)
+    {
+        var (hud0, demo0, src0, force0, prefs0) = (_hud, _demo, ParserSourceForTest, ParserOverlayForceForTest, (_parserPrefs.AlwaysOn, _parserPrefs.Overlay, _parserPrefs.InKinah));
+        try
+        {
+            _hud = hud; _demo = false; ParserSourceForTest = parser; ParserOverlayForceForTest = false;
+            _parserPrefs.AlwaysOn = true; _parserPrefs.Overlay = true; _parserPrefs.InKinah = inKinah;
+            _parserOwnWanted = false;
+            var hudPreview0 = _hudPreview; bool hudOn0 = _prefs.Hud;
+            _hudPreview = null; _prefs.Hud = true;   // the Kinah overlay wanted, as the player has it (a test never saves _prefs)
+            try { ParserOverlayTick(); } finally { _hudPreview = hudPreview0; _prefs.Hud = hudOn0; }
+            return (hud.KinahHidden, hud.ParserShown, _parserOwnWanted);
+        }
+        finally
+        {
+            hud.SetKinahHidden(false); hud.ShowParser(null, DateTime.UtcNow, ParserModeNow, PDetails);
+            (_hud, _demo, ParserSourceForTest, ParserOverlayForceForTest) = (hud0, demo0, src0, force0);
+            (_parserPrefs.AlwaysOn, _parserPrefs.Overlay, _parserPrefs.InKinah) = prefs0;
+            _parserOverlay?.ShowWanted(false);
+        }
+    }
 }

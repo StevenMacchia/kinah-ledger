@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using KinahLedger.Parser;
@@ -337,14 +337,38 @@ public static partial class WpfApp
         var hpTexts = ParserTexts(w.ParserPage);
         check(hpTexts.Texts.Contains("47%") && hpTexts.Texts.Any(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"[\d.,]+[KM]? of [\d.,]+[KM]? HP left")),
             $"Parser: the boss's HP: its share on the ring (47%), the HP left of its whole on the figures line (1.82M of 3.85M HP left) [{string.Join(" | ", hpTexts.Texts.Where(t => t.Contains("HP")))}]");
-        // the overlay's look, one click from the page (Steven, 2026-11-14: "idk how to change the style")
-        check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")), "Parser: the page names the overlay's look, a link to change it");
+        // two windows (Steven, 2026-11-15: "when im in the open world killing things with the parser on - it turns in to the
+        // parser and not the kinah ledger ... have them just be 2 separate windows"): Always on, fighting in the open world,
+        // the Kinah overlay stays the Kinah line and the Parser wants its own window; inside the Kinah overlay (the switch) as before
+        {
+            bool still0 = Motion.Still; Motion.Still = true;
+            var t0 = DateTime.UtcNow;
+            var ow = new BossParser();
+            ow.Take(new Packets.GroupChanged(t0, new[] { new Packets.GroupMember(1, "Swoly", "Cleric", 4_500, 5_600, true) }));
+            ow.Take(new Packets.DamageDealt(t0, 1, 5000, 12_000, "Swoly", true));
+            foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Strip })
+            {
+                var hk = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+                hk.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04" });
+                hk.Show(); DoEvents();
+                bool Kinah() => look == HudLooks.Strip ? hk.OwnContent?.IsVisible == true : ParserVisibleText(hk, "1.27M");
+                var two = w.TwoWindowsForTest(hk, ow, inKinah: false); DoEvents();
+                bool kinahTwo = Kinah(), fightInKinah = ParserVisibleText(hk, "Swoly");
+                var one = w.TwoWindowsForTest(hk, ow, inKinah: true); DoEvents();
+                check(!two.KinahHidden && !two.ParserInKinah && two.OwnWanted && kinahTwo && !fightInKinah && !one.OwnWanted,
+                    $"two windows ({look}), Always on in the open world: the Kinah overlay stays the Kinah line ({(kinahTwo ? "shown" : "gone")}{(fightInKinah ? ", the fight drawn in it" : "")}), the Parser in its own window ({two.OwnWanted}); inside the Kinah overlay, no own window ({!one.OwnWanted})");
+                hk.Close();
+            }
+            Motion.Still = still0;
+        }
+        // the overlay's look, one click from the page (Steven, 2026-11-14: "idk how to change the style"): with the Parser inside the Kinah overlay
+        w.SetParserSeparateForTest(false); DoEvents();
+        check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")), "Parser: inside the Kinah overlay, the page names the overlay's look, a link to change it");
         // separated (Steven, 2026-11-14: overlays move by a plain drag, no Move button or placement mode; the Kinah overlay's look exactly)
         {
             w.SetParserSeparateForTest(true); DoEvents();
             check(w.OverlaysForTest().Any(o => o.Name == "Parser"), "Parser: separated, it is in the header's Overlays menu (registered with the Kinah and Timers overlays)");
             check(FindButton(w.ParserPage, "Move overlay") == null, "Parser: separated, no Move button or placement mode: the overlay moves by a plain drag");
-            w.SetParserSeparateForTest(false); DoEvents();
             // the same frame as the Kinah overlay's: surface, line, radius, padding, face
             var hud = new HudWindow(null, HudLooks.Strip, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
             hud.Show(); DoEvents();
@@ -399,8 +423,15 @@ public static partial class WpfApp
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
         check(new[] { sws.Details, sws.Deaths, sws.Filters, sws.Hovers }.All(c => c?.IsChecked == true) && new[] { sws.Kills, sws.Separate, sws.Active }.All(c => c.IsChecked == false),
-            "Options › In game › Parser: Group details, Deaths, List filters and Explanations on hover on by default (the honest pass); DPS over active time, Kills near you, Separate parser overlay off");
-        // the Parser's look row: the four looks drawn for fights, the one in use outlined, a click picks it for the panel too
+            "Options › In game › Parser: Group details, Deaths, List filters and Explanations on hover on by default (the honest pass); DPS over active time, Kills near you, Parser inside the Kinah overlay off");
+        // two windows by default (Steven, 2026-11-15: "have them just be 2 separate windows pls i miss the old one"): a new
+        // player, and a file from before with the old "Separate": false, both get the Parser's own window; the look row is away
+        check(ParserPrefs.FromText("{}").Separate && ParserPrefs.FromText("{\"Separate\":false,\"DetailsSettled\":true,\"HonestSettled\":true}").Separate
+            && !ParserPrefs.FromText("{\"InKinah\":true}").Separate && opt.ParserLookRowShownForTest == false,
+            "Options › In game › Parser: the Parser in its own window by default, a file from before too (its old Separate: false is no choice), Inside the Kinah overlay kept when picked; no look row then");
+        // the Parser's look row (Parser inside the Kinah overlay on): the four looks drawn for fights, the one in use outlined, a click picks it for the panel too
+        sws.Separate.IsChecked = true; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+        check(opt.ParserLookRowShownForTest == true, "...with Parser inside the Kinah overlay on, the look row shows");
         {
             var (keys, onKey) = opt.ParserLooksForTest;
             check(keys.SequenceEqual(HudLooks.FightLooks) && (onKey == null || HudLooks.FightLooks.Contains(onKey)), $"Options › In game › Parser: the overlay's look row offers {string.Join(", ", keys)}, the one in use outlined ({onKey ?? "none: an older look"})");
@@ -418,6 +449,7 @@ public static partial class WpfApp
             if (ws != null) { ws.Value = 500; DoEvents(); }
             check(ws != null && ws.Minimum == 300 && ws.Maximum == 640 && HudStackLook.FightWidth == 500, $"Options › In game › Parser: a Width slider, 300 to 640, that widens the meter as it moves ({HudStackLook.FightWidth:0})");
             if (ws != null) { ws.Value = wBefore; DoEvents(); }
+            sws.Separate.IsChecked = false; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
         }
         check(sws.Farm?.IsChecked == true, "Options › In game › Parser: Open-world DPS on the Kinah line, on by default (Steven asked for it)");
         // farming: your DPS small on the Kinah line in each look; the overlay never grows for it

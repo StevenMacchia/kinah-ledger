@@ -856,16 +856,18 @@ public static partial class WpfApp
                 Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20) && System.Windows.Automation.AutomationProperties.GetName(shown[0]) == "Overlays" && w.SiteText.IsVisible,
                     $"the header's round buttons on {page}: Overlays and Settings, each with a tooltip; the site is a footer link ({seen[^1]})");
             }
-            // the Overlays button's menu: by default just Kinah (the timers are a line on top of it); with Settings › Timers ›
-            // Separate timer overlay on, a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            // the Overlays button's menu: by default Kinah and the Parser, two windows since 0.10.100 (the timers are a line on
+            // top of the Kinah overlay); with Settings › Timers › Separate timer overlay on, Timers too, Kinah first; a switch
+            // flips its overlay and the dot follows
+            w.SetParserSeparateForTest(true);
             string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
-            bool defaultOne = defaultMenu == "Kinah" && w.OverlayEntries().Count == 1;
-            Check(defaultOne && !w.TimersSeparate, $"the header's Overlays menu by default: just Kinah ({defaultMenu}), the timers being a line on top of it");
+            bool defaultTwo = defaultMenu == "Kinah,Parser" && w.OverlayEntries().Count == 2;
+            Check(defaultTwo && !w.TimersSeparate, $"the header's Overlays menu by default: Kinah and the Parser ({defaultMenu}), the timers being a line on top of the Kinah overlay");
             w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
             var entries = w.OverlayEntries();
-            Check(string.Join(",", ovs.Select(p => p.Name)) == "Kinah,Timers" && entries.Count == 2 && entries.All(e => e.On != null && e.Sub.Length > 0),
-                $"the header's Overlays menu: a switch each for Kinah, then Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
+            Check(ovs.Count == 3 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Kinah", "Parser", "Timers" }) && entries.Count == 3 && entries.All(e => e.On != null && e.Sub.Length > 0),
+                $"the header's Overlays menu: a switch each for Kinah first, the Parser and Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
             bool kinahWas = ovs[0].On;
             entries[0].Do!(); DoEvents();
             bool flipped = w.OverlaysForTest()[0].On != kinahWas;
