@@ -17,7 +17,7 @@ public partial class OptionsWindow
 {
     TextBlock? _parserLabel;
     /// <summary>The Parser's look row (the four looks that draw a fight, each in a boss fight), and its tiles' host.</summary>
-    FrameworkElement? _parserLookRow;
+    FrameworkElement? _parserLookRow, _parserLookDivider;
     UniformGrid? _parserLookHost;
     TextBlock? _parserLookHint;
     /// <summary>The big preview under the look buttons (Steven, 2026-11-15: "can't really see the previews... they're so small"):
@@ -37,7 +37,7 @@ public partial class OptionsWindow
         _parserDeathsChk.IsChecked = p.Deaths;
         _parserFiltersChk.IsChecked = p.Filters;
         _parserHoversChk.IsChecked = p.Hovers;
-        _parserSeparateChk.IsChecked = p.Separate;
+        _parserSeparateChk.IsChecked = p.InKinah;
         _parserActiveChk.IsChecked = p.DpsActive;
         _parserFarmChk.IsChecked = p.FarmDps;
         _parserExpandedChk.IsChecked = p.Expanded;
@@ -63,7 +63,7 @@ public partial class OptionsWindow
         p.HonestSettled = true;
         p.Filters = _parserFiltersChk.IsChecked == true;
         p.Hovers = _parserHoversChk.IsChecked == true;
-        p.Separate = _parserSeparateChk.IsChecked == true;
+        p.InKinah = _parserSeparateChk.IsChecked == true;
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.FarmDps = _parserFarmChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
@@ -101,13 +101,13 @@ public partial class OptionsWindow
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
         _parserFarmChk = Row("Open-world DPS on the Kinah line", "While you fight in the open world or the Abyss, your DPS shows small on the Kinah overlay's line. Those fights are counted while they last and never kept.", "Parser open-world DPS");
-        _parserSeparateChk = Row("Separate parser overlay", "The Parser in its own overlay you can drag anywhere. Off, it opens above the Kinah overlay when a fight starts and folds away after.", "Separate parser overlay");
+        _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
         _parserSeparateChk.Click += (_, _) => DrawParserLooks();
         // the overlay's look, first in the group (Steven, 2026-11-14: "idk how to change the style"): the four looks that draw
         // a fight, each drawn in a boss fight; a click picks it, the same choice as The panel › Panel look
         stack.Children.Insert(0, Styled(new Border(), "Divider"));
         stack.Children.Insert(0, BuildParserWidthRow());
-        stack.Children.Insert(0, Styled(new Border(), "Divider"));
+        stack.Children.Insert(0, _parserLookDivider = Styled(new Border(), "Divider"));
         stack.Children.Insert(0, BuildParserLookRow());
         var group = Styled(new Border { Child = stack }, "Group");
         // before Rare drops, which stays the page's last group
@@ -177,15 +177,20 @@ public partial class OptionsWindow
 
     /// <summary>For the options test: the Width slider.</summary>
     internal Slider? ParserWidthForTest => _parserWidth;
+    internal bool? ParserLookRowShownForTest => _parserLookRow?.Visibility == Visibility.Visible;
 
-    /// <summary>The look tiles, the one in use outlined; dimmed while the Parser has its own overlay (the looks are the Kinah overlay's).</summary>
+    /// <summary>The look tiles, the one in use outlined; away while the Parser has its own overlay (the looks are the Kinah overlay's).</summary>
     void DrawParserLooks()
     {
         if (_parserLookHost == null || _parserLookHint == null) return;
         _parserLookHost.Children.Clear();
         if (_parserLookStage != null) _parserLookStage.Tag = null;
         var current = HudLooks.Parse(_edit.HudLook);
-        bool separate = _parserSeparateChk?.IsChecked == true;
+        // the switch is "Parser inside the Kinah overlay": off (the default), the Parser has its own window and its own
+        // look, so the Kinah overlay's looks are no pick of the Parser's and the row is away
+        bool separate = _parserSeparateChk?.IsChecked != true;
+        if (_parserLookRow != null) _parserLookRow.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
+        if (_parserLookDivider != null) _parserLookDivider.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
         var inUse = HudLooks.All.First(l => l.Key == current);
         _parserLookHint.Text = separate
             ? "The looks are the Kinah overlay's. With a separate parser overlay, the Parser keeps its own."
