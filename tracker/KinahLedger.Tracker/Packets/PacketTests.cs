@@ -588,6 +588,10 @@ public static class PacketTests
                     && Of("Enhance Stone") == w.Stone && Of("Centuryroot Token") == w.Root && Of("Abyss Points") == w.Ap && gear == w.Gear,
                     $"the {w.Hour} {w.Event}, replayed: {(run == null ? "no run" : $"{(run.FromGame ? "from the game" : "not from the game")}, {(run.PartlyRead ? "partly read" : "complete")}, {(run.ToLookAt ? "to check" : "nothing to check")}")}; "
                     + $"{gear} gear, Enhance Stone x{Of("Enhance Stone"):N0}, Centuryroot Token x{Of("Centuryroot Token")}, Abyss Points x{Of("Abyss Points"):N0}, {run?.Kinah:N0} Kinah, {run?.GameUnknown.Count} not known");
+                // the reward's chat lines, however late they came, are the run's to the agreement check: no misses, items stay the game's
+                var vs = res.Verdicts ?? new();
+                Check(res.ItemsBroken == null,
+                    $"...its agreement check: {(res.ItemsBroken == null ? "items stay the game's" : "BROKEN (" + res.ItemsBroken + ")")}; {vs.Count} line(s): {string.Join(", ", vs.GroupBy(v => v).Select(g => $"{g.Key} {g.Count()}"))}");
             }
         }
 
@@ -625,7 +629,7 @@ public static class PacketTests
                 };
                 s.Instances.RewardTable(at, slots, 12, Enumerable.Range(0, 12).Select(i => $"c3.{i} · not read").ToList(), false, 11, null, partly: true, pictureSlots: 40);
             }
-            (TrackerSession S, PacketReader R) Run(bool cardsFirst, IEnumerable<(string Name, long Id, long N)>? rs = null, bool firstSeen = false, long kinah = 0, bool farmAfter = false)
+            (TrackerSession S, PacketReader R) Run(bool cardsFirst, IEnumerable<(string Name, long Id, long N)>? rs = null, bool firstSeen = false, long kinah = 0, bool farmAfter = false, Action<TrackerSession, PacketReader>? chat = null)
             {
                 var r = new PacketReader(); r.ReadingForTest();
                 var s = new TrackerSession(null, settings, items, "Test") { Packets = r };
@@ -639,6 +643,7 @@ public static class PacketTests
                 if (kinah > 0) r.AmountForTest(CurrencyKind.Kinah, 6_063_883 + kinah, L("11:04:59.04"));
                 r.ItemsForTest(Rows(L("11:04:59.04"), rs ?? reward, firstSeen));
                 s.DrainPacketsForTest();
+                chat?.Invoke(s, r);
                 if (!cardsFirst) Cards(s, "11:05:12.1");
                 s.Instances.GameSaid(Area("11:05:39.7", AreaEvent.Kind.Closed, AreaEvent.Stage.UnderWay), "Shugo Festival");
                 if (farmAfter)
@@ -673,6 +678,37 @@ public static class PacketTests
             var (s7, _) = Run(cardsFirst: false, farmAfter: true);
             var r7 = s7.Instances.Snapshot().LastOrDefault();
             Check(r7 is { FromGame: true } && N(r7, "Abyss Points") == 2000 && N(r7, "Odyle") == 7, $"...after leaving it, a kill's Abyss Points and a gathered Odyle aren't its: Abyss Points x{N(r7, "Abyss Points"):N0}, Odyle x{N(r7, "Odyle")}");
+            // the reward's chat lines, read late (2026-11-15: the reward screen held the chat unread from 11:04:59 to 11:05:11,
+            // and the 16 lines then scrolled by): live, the agreement check called seven of them misses at 11:05:29.8 ("the
+            // screen read Riverside Gloves x1 at 11:05:11.4 that the game's messages didn't show") and items went back to the
+            // screen. The run took those rises as its rewards: each covers its own line, however late, and nothing is a miss.
+            // These are the lines it read then (Fine Odyle's x3 read as x35)
+            var lateLines = new (string Name, int N, bool Bound)[]
+            {
+                ("Riverside Gloves", 1, false), ("Forgotten Cloak", 1, false), ("Fine Odyle", 35, false), ("Expert's Refining Stone", 1, false),
+                ("Refining Stone", 5, false), ("Odyle", 7, false), ("Soul Codex (Bound)", 3, true),
+            };
+            var (s8, r8) = Run(cardsFirst: false, chat: (s, r) =>
+            {
+                foreach (var (name, n, bound) in lateLines) s.CommitForTest(new ItemAcquired(L("11:05:11.4"), items.IdOf(name), n, bound) { Via = "chat" });
+                s.DrainPacketsForTest(); r.AgreeItemsForTest(DateTime.UtcNow); s.DrainPacketsForTest();
+            });
+            var r8r = s8.Instances.Snapshot().LastOrDefault();
+            int E8(string name) => s8.Engine.Items.GetValueOrDefault(items.IdOf(name)) + s8.Engine.ItemsBound.GetValueOrDefault(items.IdOf(name));
+            int E1(string name) => s1.Engine.Items.GetValueOrDefault(items.IdOf(name)) + s1.Engine.ItemsBound.GetValueOrDefault(items.IdOf(name));
+            bool sameCounts = lateLines.All(l => E8(l.Name) == E1(l.Name)) && s8.Engine.Items.Values.Sum() == s1.Engine.Items.Values.Sum();
+            var v8 = r8.Verdicts.ToList();
+            Check(r8.ItemsBroken == null && v8.Count == 7 && v8.All(v => v == "covered: the run's reward") && r8r is { FromGame: true, PartlyRead: false, ToLookAt: false }
+                && N(r8r, "Odyle") == 7 && N(r8r, "Fine Odyle") == 3 && sameCounts,
+                $"...its lines read 12.4 s late, as at 11:05:11.4: {(r8.ItemsBroken == null ? "items still the game's" : "BROKEN: " + r8.ItemsBroken)}; {v8.Count(v => v == "covered: the run's reward")} of {v8.Count} lines the run's reward ({string.Join(", ", v8.Distinct())}); "
+                + $"{Say(r8r)}; farming's counts {(sameCounts ? "as without the lines" : "CHANGED by the lines")} (Odyle {E8("Odyle")}, Fine Odyle {E8("Fine Odyle")}, {s8.Engine.Items.Values.Sum()} items in all)");
+            // a real disagreement still trips the check: out of the run, an Odyle line past what the reward gave (its line in
+            // two minutes before) and two Fresh Raw Meat lines, none of which the game's updates showed: three misses
+            foreach (var (hms, name, n) in new[] { ("11:07:30", "Odyle", 7), ("11:07:40", "Fresh Raw Meat", 1), ("11:07:50", "Fresh Raw Meat", 1) })
+                s8.CommitForTest(new ItemAcquired(L(hms), items.IdOf(name), n, false) { Via = "chat" });
+            s8.DrainPacketsForTest(); r8.AgreeItemsForTest(DateTime.UtcNow); s8.DrainPacketsForTest();
+            Check(r8.ItemsBroken != null && r8.Verdicts.Count == 10 && r8.Verdicts.Skip(7).All(v => v == "not shown"),
+                $"...and three lines the game's updates never showed, the reward's line long in: {string.Join(", ", r8.Verdicts.Skip(7))}; {(r8.ItemsBroken != null ? "items back to the screen" : "NOT tripped")}");
             // an event's Kinah, by the game's count: the run's, not set aside
             var (s3, _) = Run(cardsFirst: false, kinah: 12_000);
             var r3 = s3.Instances.Snapshot().LastOrDefault();
@@ -863,7 +899,7 @@ public static class PacketTests
 
     /// <summary>A pickup the game reported in a replay: its item, when, whether a gather gave it, and how long after its message it counted (null: never).</summary>
     internal sealed record Reported(DateTime At, long Id, bool Gathered, double? Delay);
-    internal sealed record SessionReplayResult(List<Reported> Reported, List<(ItemAcquired Ev, DateTime CountedAt)> Counted, List<InstanceRun>? Runs = null);
+    internal sealed record SessionReplayResult(List<Reported> Reported, List<(ItemAcquired Ev, DateTime CountedAt)> Counted, List<InstanceRun>? Runs = null, string? ItemsBroken = null, List<string>? Verdicts = null);
 
     /// <summary>
     /// Recordings (folders with capture.pcapng, info.json and the reads.log lines of their minutes as chat.log) through this
@@ -909,6 +945,9 @@ public static class PacketTests
                 using var j = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "info.json")));
                 var start = j.RootElement.GetProperty("startUtc").GetDateTime().ToUniversalTime();
                 int off = j.RootElement.GetProperty("utcOffsetMinutes").GetInt32();
+                // a recording copied while its hour was written ends before its chat.log does: a line past the capture's last
+                // frame has no update to agree with (rec-20261115-11 ends 11:21:24 local, rec-20261114-12 12:13:52), so it stays out
+                var lastFrame = j.RootElement.TryGetProperty("lastFrameUtc", out var lf) ? lf.GetDateTime().ToUniversalTime() : DateTime.MaxValue;
                 var day = start.AddMinutes(off).Date;
                 var line = new System.Text.RegularExpressions.Regex(@"^﻿?(\d\d):(\d\d):(\d\d\.\d)\s+ok\s+(.*)$");
                 var acq = new System.Text.RegularExpressions.Regex(@"^(?:Acquired (?<n1>.+?) x(?<c>\d+)|(?<n2>.+?) acquired)\W*$");
@@ -925,6 +964,7 @@ public static class PacketTests
                     var at = DateTime.SpecifyKind(day.AddHours(int.Parse(m.Groups[1].Value)).AddMinutes(int.Parse(m.Groups[2].Value))
                         .AddSeconds(double.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture)).AddMinutes(-off), DateTimeKind.Utc);
                     int n = a.Groups["c"].Success ? int.Parse(a.Groups["c"].Value) : 1;
+                    if (at > lastFrame) continue;
                     evs.Add((at, 3, new ItemAcquired(at, id, n, items.NameOf(id).EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase)) { Via = "chat" }));
                 }
             }
@@ -979,7 +1019,7 @@ public static class PacketTests
                 }
             }
             s.Instances.Close();
-            return new SessionReplayResult(reported, counted, s.Instances.Snapshot());
+            return new SessionReplayResult(reported, counted, s.Instances.Snapshot(), reader.ItemsBroken, reader.Verdicts.ToList());
         }
         finally { PacketClock.Fixed = null; }
     }

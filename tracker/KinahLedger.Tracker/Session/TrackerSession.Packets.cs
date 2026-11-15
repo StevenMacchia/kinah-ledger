@@ -280,7 +280,10 @@ public sealed partial class TrackerSession
             string name = _items.NameOf(id);
             rises.Add((id, unknown ? 0 : n, name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase), _items.Get(id) != null, unknown, name));
         }
-        Instances.GameLoot(b.At, rises);
+        // the run's: their chat lines, however late (the reward screen over the chat, a long list scrolling by), are those
+        // rewards to the agreement check, not pickups it missed (2026-11-15 11:05:29: seven of them handed items back to the screen)
+        if (Instances.GameLoot(b.At, rises))
+            foreach (var r in rises) if (r.Listed && !r.FirstSeen) p.RunTook(r.Id, r.Name, r.Count, b.At);
     }
 
     /// <summary>One inventory update, once the lines around it are in: a craft's while crafting, else each item that went up a pickup if the gate lets it.</summary>
