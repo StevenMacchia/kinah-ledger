@@ -68,13 +68,10 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>A reason for uncredited damage in the coverage hover's words (DamageDealt.Reason, 1 to 7).</summary>
     public static string WhyWords(int reason) => reason switch
     {
-        1 => "HP lost with no hit to name",
-        2 => "hits too late to match the HP lost",
-        3 => "a moment the tracker missed",
+        1 or 2 or 3 => "a moment the tracker missed",
         4 => "someone outside the group",
-        5 => "a monster or a trap",
-        6 => "something placed by a player outside the group",
-        7 => "someone the tracker never saw arrive",
+        5 => "the boss's surroundings (not a player)",
+        6 or 7 => "an attacker the tracker couldn't place",
         _ => "another reason",
     };
     /// <summary>

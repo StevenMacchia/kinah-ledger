@@ -1018,7 +1018,7 @@ public static class ParserTests
                 && rows[1] is { BossDamage: 7_000, BossHits: 4, Damage: 9_000, Hits: 5 } && l.Figure(rows[1]) == 7_000,
                 $"2. damage over time is its skill's own row ({string.Join(", ", rows.Select(a => $"{Abilities.Name(a.Skill)} {l.Figure(a)}"))}), boss damage apart");
             var none = new BossMapper().Map(new BossRow(t, 8, 0, "", 1, "", 861, 3, 0, "", "", false, 0, 0, 900, 0, 0));
-            Check(none is DamageDealt { SourceId: 0, Reason: 3 } && Encounter.WhyWords(3) == "a moment the tracker missed" && Encounter.WhyWords(99) == "another reason",
+            Check(none is DamageDealt { SourceId: 0, Reason: 3 } && Encounter.WhyWords(3) == "a moment the tracker missed" && Encounter.WhyWords(1) == Encounter.WhyWords(2) && Encounter.WhyWords(7) == "an attacker the tracker couldn't place" && Encounter.WhyWords(99) == "another reason",
                 "...the decoder's damage row with no source gives its reason in Outcome (shown on the coverage line's hover)");
         }
 

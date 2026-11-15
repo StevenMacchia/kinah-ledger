@@ -880,7 +880,8 @@ public partial class MainWindow
             tip.Add($"{Amounts.Short(e.UncreditedBoss)} of the {Amounts.Short(e.BossDamage)} HP {(run ? "the bosses" : "the boss")} lost ({Encounter.Pct(1 - cov)}) came with no hit naming who dealt it, so it is in no member's figures.");
         else tip.Add($"Every point of HP {(run ? "the bosses" : "the boss")} lost is in a member's figures.");
         if (e.Uncredited > e.UncreditedBoss) tip.Add($"Another {Amounts.Short(e.Uncredited - e.UncreditedBoss)} to other targets had no hit to name its source either.");
-        var why = e.UncreditedWhy.Where(kv => kv.Key != 0 && kv.Value > 0).OrderByDescending(kv => kv.Value).Select(kv => $"{Encounter.WhyWords(kv.Key)} ({Amounts.Short(kv.Value)})").ToList();
+        var why = e.UncreditedWhy.Where(kv => kv.Key != 0 && kv.Value > 0).GroupBy(kv => Encounter.WhyWords(kv.Key))
+            .Select(g => (Words: g.Key, Amount: g.Sum(kv => kv.Value))).OrderByDescending(x => x.Amount).Select(x => $"{x.Words} ({Amounts.Short(x.Amount)})").ToList();
         if (why.Count > 0) tip.Add("Why: " + string.Join("; ", why) + ".");
         t.ToolTip = string.Join(" ", tip);
         AutomationProperties.SetName(t, $"{pct} of {whose} credited");
