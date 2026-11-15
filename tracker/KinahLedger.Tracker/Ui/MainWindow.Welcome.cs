@@ -23,10 +23,11 @@ public partial class MainWindow
         _wRegion = RegionKey; _wServer = Server; _wFaction = Server?.Faction ?? "Elyos";
         BuildRegionChips(); BuildFactionChips(); BuildServerChips();
         BuildSkinChips(SkinChips);
-        WelcomeGo.Click += (_, _) => FinishWelcome();
+        WelcomeGo.Click += (_, _) => WelcomeServerDone();
+        WelcomeLookGo.Click += (_, _) => FinishWelcome();
         WelcomeSentLink.Click += (_, _) => WhatsSent();
         WelcomePrivacyLink.Click += (_, _) => Open(PrivacyUrl);
-        WelcomeNext.Text = WelcomeNextLine(HotkeyText);
+        WelcomeNext.Text = WelcomeNextLine(HotkeyText.Replace("+", "\u2060+\u2060"));   // the key kept on one line (word joiners)
         SetWelcome(!_prefs.Welcomed || !HasServer);
     }
 
@@ -35,6 +36,7 @@ public partial class MainWindow
     {
         _welcome = on;
         WelcomeCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        WelcomeLookCard.Visibility = Visibility.Collapsed;   // the look step comes after Continue
         if (on) WelcomeShareChk.IsChecked = _prefs.Share;
         // the page tabs and the site button wait too (0.10.11): nothing to switch to before a server is chosen
         foreach (var fe in new FrameworkElement[] { StatusRow, OptionsBtn, WhoRow, PartTabs, OverlaysBtn })
@@ -48,10 +50,22 @@ public partial class MainWindow
     internal static string WelcomeNextLine(string hotkey) =>
         "Then: open Aion 2, keep the chat on screen, and press Start run" + (hotkey.Length > 0 ? $" (or {hotkey} in the game)." : ".");
 
-    void FinishWelcome()
+    /// <summary>The server step's Continue: on to the look step, once a server is picked.</summary>
+    void WelcomeServerDone()
     {
         if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Warn"); return; }
+        _wLook = HudLook;   // Buddy on a new install (HudLooks.Default)
+        WelcomeCard.Visibility = Visibility.Collapsed;
+        WelcomeLookCard.Visibility = Visibility.Visible;
+        BuildWelcomeLooks();
+        WelcomeLookGo.Focus();
+    }
+
+    void FinishWelcome()
+    {
+        if (_wServer == null) { SetWelcome(true); return; }
         ApplyServer(_wRegion, _wServer.Label);
+        ApplyHudLook(_wLook);   // a pick by hand, Buddy kept included: written with the prefs below
         bool share = WelcomeShareChk.IsChecked == true;
         if (int.TryParse(new string(WelcomeGear.Text.Where(char.IsDigit).ToArray()), out var gear) && gear > 0) SetGearScore(gear);
         if (share != _prefs.Share) { _prefs.Share = share; MarketSwitch(share); ApplyCounting(); }
@@ -62,6 +76,96 @@ public partial class MainWindow
         OpenCalibration(this).Closed += (_, _) => PlacementGuideOwed();
         Say($"Server set to {_wServer.Label} · {_wServer.Region.Name}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", "Good");
     }
+
+    /* ---------------- the look step ---------------- */
+
+    string _wLook = HudLooks.Default;
+
+    /// <summary>The look step's buttons, in their order: Buddy, the default, first; then the fight looks; then the other two older ones.</summary>
+    internal static readonly string[] WelcomeLooks = { HudLooks.Card, HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float, HudLooks.Strip, HudLooks.Ticker };
+
+    /// <summary>A dark game scene under the looks, whatever the window's skin (as Options' look picker).</summary>
+    static readonly Brush WelcomeScene = Freeze(new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90));
+    static Brush Freeze(Brush b) { b.Freeze(); return b; }
+
+    /// <summary>A button per look, the picked one outlined; hovering one draws it on the stage, leaving draws the picked one again.</summary>
+    void BuildWelcomeLooks()
+    {
+        WelcomeLookHost.Children.Clear();
+        foreach (var key in WelcomeLooks)
+        {
+            var l = HudLooks.All.First(x => x.Key == key);
+            bool on = key == _wLook;
+            var name = new TextBlock { Text = l.Name, FontSize = 13.5, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
+            name.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
+            var b = new Border
+            {
+                CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(14, 8, 14, 8), MinWidth = 72, Cursor = System.Windows.Input.Cursors.Hand,
+                BorderThickness = new Thickness(on ? 2 : 1), Child = name, ToolTip = l.Hint, Focusable = true, Tag = key,
+            };
+            b.SetResourceReference(Border.BackgroundProperty, on ? "AccentDim" : "Card2");
+            b.SetResourceReference(Border.BorderBrushProperty, on ? "Accent" : "Line");
+            if (TryFindResource("FocusRing") is Style ring) b.FocusVisualStyle = ring;
+            System.Windows.Automation.AutomationProperties.SetName(b, l.Name + " overlay look" + (on ? ", picked" : ""));
+            b.MouseLeftButtonUp += (_, _) => PickWelcomeLook(key);
+            b.KeyDown += (_, e) => { if (e.Key is System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space) { PickWelcomeLook(key); e.Handled = true; } };
+            b.MouseEnter += (_, _) => ShowWelcomeLook(key);
+            b.GotKeyboardFocus += (_, _) => ShowWelcomeLook(key);
+            b.MouseLeave += (_, _) => ShowWelcomeLook(_wLook);
+            WelcomeLookHost.Children.Add(b);
+        }
+        WelcomeLookStage.Tag = null;
+        ShowWelcomeLook(_wLook);
+    }
+
+    /// <summary>The stage draws a look at most this much larger than in the game at 100%.</summary>
+    internal const double WelcomeLookMaxScale = 1.5;
+
+    void PickWelcomeLook(string key)
+    {
+        _wLook = HudLooks.Parse(key);
+        BuildWelcomeLooks();
+    }
+
+    /// <summary>The stage: one look over the dark scene with the sample figures Options draws, as large as the stage holds.</summary>
+    void ShowWelcomeLook(string key)
+    {
+        if (WelcomeLookStage.Tag as string == key) return;
+        var l = HudLooks.All.First(x => x.Key == key);
+        FrameworkElement face;
+        try { face = HudWindow.Preview(key, HudFields.Parse(_prefs.HudFields), HudSample()); }
+        catch (Exception ex) { CrashLog.Write("welcome look preview", ex); return; }
+        // as large as the stage holds, up to 1.5 times (the panel's own Size goes to 2): the small pills would be lost at 1x
+        // in the stage that Pop, the tallest, needs (Steven, 2026-11-15: the Parser's look thumbnails were too small)
+        face.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var room = new Size((WelcomeLookStage.ActualWidth > 0 ? WelcomeLookStage.ActualWidth : 617) - 34, WelcomeLookStage.Height - 34);
+        double scale = Math.Min(WelcomeLookMaxScale, Math.Min(room.Width / Math.Max(1, face.DesiredSize.Width), room.Height / Math.Max(1, face.DesiredSize.Height)));
+        face.LayoutTransform = new ScaleTransform(scale, scale);
+        face.HorizontalAlignment = HorizontalAlignment.Center;
+        face.VerticalAlignment = VerticalAlignment.Center;
+        WelcomeLookStage.Background = WelcomeScene;
+        WelcomeLookStage.Tag = key;
+        WelcomeLookStage.Child = face;
+        WelcomeLookName.Inlines.Clear();
+        var n = new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.Bold };
+        n.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Ink");
+        WelcomeLookName.Inlines.Add(n);
+        WelcomeLookName.Inlines.Add(new System.Windows.Documents.Run("  ·  " + l.Hint));
+    }
+
+    /// <summary>For the self-test and the render: the look step (Ui/WpfApp.cs).</summary>
+    internal void WelcomeServerDoneForTest() => WelcomeServerDone();
+    internal void FinishWelcomeForTest() => FinishWelcome();
+    internal void PickWelcomeLookForTest(string key) => PickWelcomeLook(key);
+    internal void HoverWelcomeLookForTest(string? key)
+    {
+        var b = WelcomeLookHost.Children.OfType<Border>().FirstOrDefault(x => (string)x.Tag == (key ?? _wLook));
+        b?.RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = key == null ? UIElement.MouseLeaveEvent : UIElement.MouseEnterEvent });
+    }
+    internal (bool StepShown, string Picked, string? Staged, List<string> Buttons, string? Outlined) WelcomeLookForTest => (
+        WelcomeLookCard.Visibility == Visibility.Visible && WelcomeCard.Visibility != Visibility.Visible, _wLook, WelcomeLookStage.Tag as string,
+        WelcomeLookHost.Children.OfType<Border>().Select(b => (string)b.Tag).ToList(),
+        WelcomeLookHost.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
 
     /* ---------------- chips ---------------- */
 

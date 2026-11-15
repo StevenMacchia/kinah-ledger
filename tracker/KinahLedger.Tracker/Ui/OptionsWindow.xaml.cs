@@ -213,7 +213,7 @@ public partial class OptionsWindow : Window
             if (on) { var r = new System.Windows.Documents.Run("  ·  in use") { FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Link"); name.Inlines.Add(r); }
             var card = new Border
             {
-                Width = key == HudLooks.Auto ? 388 : 190, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,   // Auto, the default, across the row: the other six two by two
+                Width = key == HudLooks.Auto ? 388 : 190, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,   // Auto, the widest, across the row: the other six two by two
                 BorderThickness = new Thickness(on ? 2 : 1),
                 Child = new StackPanel { Margin = new Thickness(10, 8, 10, 9), Children = { name, stage } },
             };

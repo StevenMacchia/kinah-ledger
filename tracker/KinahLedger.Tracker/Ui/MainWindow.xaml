@@ -380,7 +380,7 @@
             <TextBlock Grid.Column="1" Style="{StaticResource BodyStyle}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
                        Text="Optional. The gear score on your character window. Your runs are compared with players in the same band of 200 (1450 sits in 1400–1599). Change it in Options."/>
           </Grid>
-          <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,12,0,8"/>
+          <TextBlock Style="{StaticResource LabelStyle}" Text="THEME" Margin="0,12,0,8"/>
           <WrapPanel x:Name="SkinChips"/>
           <!-- sharing, chosen here before anything is read or sent (the same switch as Options › Sharing) -->
           <Grid Margin="0,16,0,0">
@@ -396,9 +396,25 @@
             <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or sent until you continue. The chat and the zone are found on their own."/>
             <Button x:Name="WelcomeGo" Style="{StaticResource PrimaryButton}" Content="Continue" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
-          <!-- what to do once Continue is pressed (2026-11-08 audit: nothing said it); the key is filled in by InitWelcome -->
-          <TextBlock x:Name="WelcomeNext" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Ink}"
-                     Text="Then: open Aion 2, keep the chat on screen, and press Start run."/>
+        </StackPanel>
+      </Border>
+
+      <!-- first run, step two (0.10.103, Steven 2026-11-15: "in the onboarding let people choose"): the Kinah overlay's look,
+           Buddy picked. One big live drawing of the look under the mouse or picked, at its real size over a dark game scene,
+           and a button per look under it (Ui/MainWindow.Welcome.cs, BuildWelcomeLooks) -->
+      <Border x:Name="WelcomeLookCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock Text="Pick your overlay" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Medium"/>
+          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="What sits over the game while you farm. Change it any time in Options."/>
+          <Border x:Name="WelcomeLookStage" CornerRadius="12" Height="230" Margin="0,16,0,0" Padding="16" BorderThickness="1" BorderBrush="#232736" ClipToBounds="True"/>
+          <TextBlock x:Name="WelcomeLookName" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="2,8,0,0" TextWrapping="Wrap"/>
+          <WrapPanel x:Name="WelcomeLookHost" Margin="0,12,0,0"/>
+          <Grid Margin="0,14,0,0">
+            <!-- what to do once Done is pressed (2026-11-08 audit: nothing said it); the key is filled in by InitWelcome -->
+            <TextBlock x:Name="WelcomeNext" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,0,180,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource Ink}"
+                       Text="Then: open Aion 2, keep the chat on screen, and press Start run."/>
+            <Button x:Name="WelcomeLookGo" Style="{StaticResource PrimaryButton}" Content="Done" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+          </Grid>
         </StackPanel>
       </Border>
 

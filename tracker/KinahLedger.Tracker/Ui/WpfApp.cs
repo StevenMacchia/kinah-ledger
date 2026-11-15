@@ -206,10 +206,56 @@ public static partial class WpfApp
         DoEvents();
         Check(w.HudLocked == !lockedBefore, "panel lock saved");
 
+        // Buddy the default (0.10.103, Steven 2026-11-15: "make buddy the default view"): a new install, and once a player who
+        // never picked a look (the old defaults, the Strip and Auto); a look picked by hand stays
+        {
+            string Moved(string json) { var p = HudPrefs.FromText(json, out bool m); return p == null ? "null" : $"{p.Look}{(m ? " moved" : "")}{(p.LookSettled && p.BuddySettled ? "" : " unsettled")}"; }
+            var said = new[]
+            {
+                ("an old file on the Strip, never moved", Moved("{\"Look\":\"strip\"}"), "card moved"),
+                ("Auto, the old default", Moved("{\"Look\":\"auto\",\"LookSettled\":true}"), "card moved"),
+                ("the Meter, picked", Moved("{\"Look\":\"meter\",\"LookSettled\":true}"), "meter moved"),
+                ("the Strip, picked after 0.10.91", Moved("{\"Look\":\"strip\",\"LookSettled\":true}"), "strip moved"),
+                ("Auto picked after the move", Moved("{\"Look\":\"auto\",\"LookSettled\":true,\"BuddySettled\":true,\"LookPicked\":true}"), "auto"),
+                ("Auto marked picked before any move", Moved("{\"Look\":\"auto\",\"LookSettled\":true,\"LookPicked\":true}"), "auto moved"),
+                ("Buddy, settled", Moved("{\"Look\":\"card\",\"LookSettled\":true,\"BuddySettled\":true}"), "card"),
+            };
+            var off = said.Where(x => x.Item2 != x.Item3).Select(x => $"{x.Item1}: {x.Item2}, expected {x.Item3}").ToList();
+            Check(off.Count == 0 && HudPrefs.Defaults().Look == HudLooks.Card && new HudPrefs().Look == HudLooks.Card && HudLooks.Parse("nonsense") == HudLooks.Card,
+                "Buddy for a new install and for anything unknown; Auto and the never-moved Strip move to Buddy once, a picked look stays" + (off.Count > 0 ? ": " + string.Join("; ", off) : ""));
+        }
+        // the first run's look step (0.10.103): after the server, one big live drawing of the look under the mouse or picked,
+        // Buddy picked and first, a click picks another
+        {
+            var (cardLayer, tipHost) = (InCard.Layer, HoverTip.Host);   // a new window takes the click cards' and the hover tips' layer: put back after
+            var ww = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            ww.Show();
+            bool still = Motion.Still; var skinWas = Skins.Current;   // the welcome render sets both for the whole app: put back after
+            ww.ShowWelcomeDemo();
+            DoEvents();
+            var server = ww.WelcomeLookForTest;
+            ww.WelcomeServerDoneForTest();
+            DoEvents();
+            var st = ww.WelcomeLookForTest;
+            Check(!server.StepShown && st.StepShown && st.Picked == HudLooks.Card && st.Staged == HudLooks.Card && st.Outlined == HudLooks.Card
+                && st.Buttons.Count == HudLooks.All.Length && st.Buttons[0] == HudLooks.Card && st.Buttons.Distinct().Count() == HudLooks.All.Length,
+                $"first run: Continue opens the look step with Buddy picked, first and drawn (shown {st.StepShown}, picked {st.Picked}, drawn {st.Staged}, {st.Buttons.Count} looks, first {st.Buttons.FirstOrDefault()})");
+            ww.HoverWelcomeLookForTest(HudLooks.Meter); DoEvents();
+            var hov = ww.WelcomeLookForTest.Staged;
+            ww.HoverWelcomeLookForTest(null); DoEvents();
+            var back = ww.WelcomeLookForTest.Staged;
+            Check(hov == HudLooks.Meter && back == HudLooks.Card && ww.WelcomeLookForTest.Picked == HudLooks.Card, $"hovering a look draws it, leaving draws the picked one again ({hov}, then {back})");
+            ww.PickWelcomeLookForTest(HudLooks.Ticker); DoEvents();
+            st = ww.WelcomeLookForTest;
+            Check(st.Picked == HudLooks.Ticker && st.Outlined == HudLooks.Ticker && st.Staged == HudLooks.Ticker, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
+            ww.Close();
+            Motion.Still = still; Skins.Apply(skinWas); InCard.Layer = cardLayer; HoverTip.Host = tipHost; DoEvents();
+        }
+
         // the panel's look (2026-10-25): the Strip until another is picked; the three drawn in Options; the Strip's figures grey out for the others
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Check(w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled, "panel look: Auto by default (the pill, the group's meter above it in a fight); the Strip's figure chips greyed for it");
+        Check(w.HudLook == HudLooks.Card && HudLooks.Default == HudLooks.Card && !o.HudFieldHost.IsEnabled, "panel look: Buddy by default (0.10.103, Steven 2026-11-15); the Strip's figure chips greyed for it");
         Check(o.HudLookHost.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7 && HudLooks.All[0].Key == HudLooks.Auto && HudLooks.All[4].Key == HudLooks.Strip && o.HudLookPreview.Children.Count == 1,
             $"every look a live thumbnail in Options, the new ones first (Auto, Capsule, Meter, Float, then Badge, Buddy, Pop), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
         // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
@@ -244,10 +290,10 @@ public static partial class WpfApp
             Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
         o.PickHudLookForTest(HudLooks.Ticker);
-        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Auto && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
+        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);
         DoEvents();
-        Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
+        Check(w.HudLook == HudLooks.Ticker && w.HudPrefsForTest.LookPicked, "panel look saved, as a pick by hand: " + w.HudLook);
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
         o.PickHudLookForTest(HudLooks.Strip);
@@ -2362,6 +2408,17 @@ public static partial class WpfApp
         }
         var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Abyss" => "ui-main-abyss", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", "Quests" => "ui-main-quests", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // the first run's look step (0.10.103): Buddy picked (ui-welcome-look.png), and Auto under the mouse (ui-welcome-look-hover.png)
+        if (welcome)
+        {
+            var tail = (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png";
+            w.WelcomeServerDoneForTest(); IconCache.Drain(TimeSpan.FromSeconds(8)); DoEvents();
+            Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look" + tail), (compact ? 640 : 800) - 16);
+            w.HoverWelcomeLookForTest(HudLooks.Auto); DoEvents();
+            // KL_WELCOME_LOOKS=1: each look on the stage too, under the mouse (ui-welcome-look-<key>.png)
+            if (Environment.GetEnvironmentVariable("KL_WELCOME_LOOKS") == "1") foreach (var k in MainWindow.WelcomeLooks) { w.HoverWelcomeLookForTest(k); DoEvents(); Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-" + k + ".png"), 784); }
+            Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-hover" + tail), (compact ? 640 : 800) - 16);
+        }
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
         if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
