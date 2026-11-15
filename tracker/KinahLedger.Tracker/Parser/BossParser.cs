@@ -586,6 +586,34 @@ public sealed class BossParser
         Log($"always on: the meter starts again ({why})");
     }
 
+    /// <summary>
+    /// A fight of one hit folded into the held fight before it: its damage, abilities, kills and deaths added, and its time,
+    /// at least <see cref="Encounter.MinDpsSeconds"/>, added to the fight's length (the quiet between them never counts: no
+    /// penalty for stopping). The fold is the meter's only (Always on is never kept).
+    /// </summary>
+    static void Fold(Encounter into, Encounter one)
+    {
+        double add = Math.Max(Encounter.MinDpsSeconds, ((one.End ?? one.LastAt) - one.Start).TotalSeconds);
+        into.End = into.End!.Value.AddSeconds(add);
+        into.LastAt = Max(into.LastAt, into.End.Value);
+        into.HasDamage |= one.HasDamage;
+        into.BossDamage += one.BossDamage; into.Uncredited += one.Uncredited; into.UncreditedBoss += one.UncreditedBoss;
+        into.YourKills += one.YourKills; into.PlayerKills += one.PlayerKills; into.YourDeaths += one.YourDeaths;
+        if (one.Outcome == "kill" || one.YourKills > 0) into.Outcome = into.YourDeaths > 0 ? "died" : "kill";
+        foreach (var f in one.Roster)
+        {
+            var g = into.Roster.FirstOrDefault(x => x.Other == f.Other && ((f.Id != 0 && x.Id == f.Id) || (f.Name.Length > 0 && x.Name.Equals(f.Name, StringComparison.OrdinalIgnoreCase)) || (f.You && x.You)));
+            if (g == null) { f.PerSecond = null; f.BossPerSecond = null; into.Roster.Add(f); continue; }
+            g.Damage += f.Damage; g.BossDamage += f.BossDamage; g.Deaths += f.Deaths;
+            foreach (var a in f.Abilities)
+            {
+                var ga = g.Ability(a.Skill);
+                ga.Damage += a.Damage; ga.Hits += a.Hits; ga.Uncounted += a.Uncounted;
+                ga.BossDamage += a.BossDamage; ga.BossHits += a.BossHits; ga.BossUncounted += a.BossUncounted;
+            }
+        }
+    }
+
     /// <summary>Your fighting, for the Always on tally: it opens at your or your group's first hit (never during a boss pull, which is the meter then).</summary>
     void AlwaysFight(DateTime at, bool open)
     {
@@ -1234,7 +1262,18 @@ public sealed class BossParser
                 // before pausing - if nothing else is hit go back to the dps before it started dropping"): the live figure falls
                 // through the quiet seconds, then the fight's own DPS as it stood at that hit
                 var ourLastHit = al.Members.Select(f => f.LastHit).Where(h => h != null).Max() ?? _alwaysActiveAt;
-                EndAlways(ourLastHit, $"{AlwaysIdleSeconds:0} seconds without fighting");
+                var ourFirstHit = al.Members.Select(f => f.FirstHit).Where(h => h != null).Min() ?? ourLastHit;
+                // a fight of one hit (a mob killed at once) joins the fight before it out here (Steven, 2026-11-15: "yes, merge
+                // them"): held alone it read the hit over a second, the opening spike, never the pace
+                if ((ourLastHit - ourFirstHit).TotalSeconds < Encounter.MinDpsSeconds && _alwaysEnded is { Mode: "fight", End: { } } prev
+                    && !Kept(Encounter.KindOf(prev.Kind)) && prev.Kind == al.Kind)
+                {
+                    _always = null;
+                    al.End = Max(Min(ourLastHit, al.LastAt), al.Start);
+                    Fold(prev, al);
+                    Log($"always on: a fight of one hit joined the one before it ({AlwaysIdleSeconds:0} seconds without fighting)");
+                }
+                else EndAlways(ourLastHit, $"{AlwaysIdleSeconds:0} seconds without fighting");
                 _version++;
             }
             // the open-world fight of Bosses only and Full run: gone after its pause, nothing kept

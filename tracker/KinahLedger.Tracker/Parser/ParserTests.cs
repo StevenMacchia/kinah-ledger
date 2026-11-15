@@ -1619,6 +1619,28 @@ public static class ParserTests
             Check(p.AlwaysLive == null && p.AlwaysEnded is { } fin && Math.Abs(fin.Dps(fin.You!, t.AddSeconds(500)) - 70_000 / 100.0) < 1
                 && fin.Dps(fin.You!, t.AddSeconds(500)) > At(b, 100 + BossParser.AlwaysIdleSeconds - 0.1),
                 $"...a few seconds without a hit end it: the live figure falls through them ({At(b, 100 + BossParser.AlwaysIdleSeconds - 0.1):N0}), then goes back to the fight's DPS at its last hit, held (70K over its 100 s), the next hit starting from 0");
+            // a fight of one hit joins the fight before it (Steven, 2026-11-15: "yes, merge them"): held alone it read the hit
+            // over a second (119.7K for one 119.7K hit), the spike of a fight's start
+            {
+                var (pj, _) = New();
+                pj.Take(new GroupChanged(t, new[] { Me }));
+                pj.Take(new DamageDealt(t, 1, 5000, 50_000, "Swoly", true));
+                pj.Take(new DamageDealt(t.AddSeconds(10), 1, 5000, 50_000, "Swoly", true));
+                pj.Tick(t.AddSeconds(10 + BossParser.AlwaysIdleSeconds));
+                double before = pj.AlwaysEnded!.Dps(pj.AlwaysEnded.You!, t.AddSeconds(20));
+                pj.Take(new DamageDealt(t.AddSeconds(30), 1, 5001, 20_000, "Swoly", true));
+                pj.Tick(t.AddSeconds(30 + BossParser.AlwaysIdleSeconds));
+                var joined = pj.AlwaysEnded!;
+                double after = joined.Dps(joined.You!, t.AddSeconds(60));
+                Check(Math.Abs(before - 10_000) < 1 && Math.Abs(after - 120_000 / 11.0) < 1 && joined.You!.Damage == 120_000 && pj.AlwaysLive == null,
+                    $"...a fight of one hit joins the fight before it: {before:N0} then {after:N0} (120K over 10 + 1 s, the quiet between them not counted), never the hit's 20,000 over a second");
+                // a fight of several hits stays its own
+                pj.Take(new DamageDealt(t.AddSeconds(60), 1, 5002, 30_000, "Swoly", true));
+                pj.Take(new DamageDealt(t.AddSeconds(63), 1, 5002, 30_000, "Swoly", true));
+                pj.Tick(t.AddSeconds(63 + BossParser.AlwaysIdleSeconds));
+                Check(pj.AlwaysEnded is { } own && own.You!.Damage == 60_000 && Math.Abs(own.Dps(own.You!, t.AddSeconds(90)) - 20_000) < 1,
+                    $"...a fight of several hits stays its own ({pj.AlwaysEnded?.You?.Damage:N0} over 3 s)");
+            }
             // a hit taken keeps it going, but the held figure is still at the last hit dealt
             {
                 var (ph, _) = New();
