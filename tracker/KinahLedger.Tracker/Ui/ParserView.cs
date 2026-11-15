@@ -49,7 +49,7 @@ public sealed class FightView
             // the ids of one ability as one row (a spirit's attack at each rank), each named for the member's class
             foreach (var a in e.AbilityRows(f))
                 m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)Math.Max(1, e.Figure(f)),
-                    DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null, Casts = a.Casts, Max = a.Max, Min = a.Min,
+                    DpsOrNull = e.Figure(a) / Math.Max(secs, Encounter.MinDpsSeconds), Casts = a.Casts, Max = a.Max, Min = a.Min,
                     Crit = Encounter.CritKey is { } ck && a.StreamHits is > 0 and var sh && a.Kinds != null ? Encounter.KindTotals(a, ck).Hits / (double)sh : null,
                     Back = Encounter.BackKey is { } bk && a.StreamHits is > 0 and var sb && a.Kinds != null ? Encounter.KindTotals(a, bk).Hits / (double)sb : null });
             Depth(m, f, e);

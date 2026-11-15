@@ -1230,7 +1230,11 @@ public sealed class BossParser
             // Always on, outside the three: a few seconds with nobody of yours fighting, and the next hit starts the meter from 0
             if (_always is { } al && !Kept(_kind) && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
             {
-                EndAlways(_alwaysActiveAt, $"{AlwaysIdleSeconds:0} seconds without fighting");
+                // held at the group's last hit dealt (Steven, 2026-11-15: "the dps meter can continue to drop for a few seconds
+                // before pausing - if nothing else is hit go back to the dps before it started dropping"): the live figure falls
+                // through the quiet seconds, then the fight's own DPS as it stood at that hit
+                var ourLastHit = al.Members.Select(f => f.LastHit).Where(h => h != null).Max() ?? _alwaysActiveAt;
+                EndAlways(ourLastHit, $"{AlwaysIdleSeconds:0} seconds without fighting");
                 _version++;
             }
             // the open-world fight of Bosses only and Full run: gone after its pause, nothing kept

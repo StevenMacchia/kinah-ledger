@@ -253,8 +253,12 @@ public sealed class Encounter : IJsonOnDeserialized
     // fighting raises it, every second without a hit lowers it, and the meter shows that as it happens
     public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
 
-    /// <summary>Under this many seconds a DPS isn't a figure yet and shows "–" (no 1 s floor making a short fight look big).</summary>
-    public const double MinDpsSeconds = 3;
+    /// <summary>
+    /// A DPS is over at least this long: the meter shows a figure from the first hit, never a hit's damage over a split second
+    /// (Steven, 2026-11-15: "the dps meter takes like 2-3 seconds after first hit to start working ... that's too long"; it
+    /// showed "–" for the first 3 s).
+    /// </summary>
+    public const double MinDpsSeconds = 1;
 
     /// <summary>
     /// DPS over each member's active time (Settings › In game › Parser › DPS over active time, parser.json DpsActive):
@@ -268,13 +272,12 @@ public sealed class Encounter : IJsonOnDeserialized
 
     /// <summary>
     /// A member's damage per second (their <see cref="Figure(Fighter)"/> over the fight, a run's over its boss pulls, or over
-    /// their active time); null when damage isn't known or the time is under <see cref="MinDpsSeconds"/>.
+    /// their active time, never under <see cref="MinDpsSeconds"/>); null when damage isn't known.
     /// </summary>
     public double? DpsOf(Fighter f, DateTime now)
     {
         if (!HasDamage) return null;
-        double s = DpsSeconds(f, now);
-        return s >= MinDpsSeconds ? Figure(f) / s : null;
+        return Figure(f) / Math.Max(DpsSeconds(f, now), MinDpsSeconds);
     }
 
     /// <summary><see cref="DpsOf"/>, 0 when it isn't a figure.</summary>
@@ -307,7 +310,9 @@ public sealed class Encounter : IJsonOnDeserialized
     /// Your DPS while farming (the Kinah line's small figure): your damage over your fighting time (Fighter.FightingSeconds),
     /// so the walk between monsters doesn't pull it down; 0 before a hit of yours.
     /// </summary>
-    public double FarmDps() => You is { Damage: > 0 } me ? me.Damage / Math.Max(MinDpsSeconds, me.FightingSeconds) : 0;   // never over less than 3 s: a mob killed in a second isn't 200K a second
+    public double FarmDps() => You is { Damage: > 0 } me ? me.Damage / Math.Max(FarmMinSeconds, me.FightingSeconds) : 0;
+    /// <summary>The Kinah line's farming figure is never over less than this: a mob killed in a second isn't 200K a second there.</summary>
+    public const double FarmMinSeconds = 3;   // never over less than 3 s: a mob killed in a second isn't 200K a second
 
     /// <summary>
     /// A member's share of the group's damage, 0 to 1 (0 when damage isn't known). Over the members only (Steven, 2026-11-14:
@@ -336,7 +341,7 @@ public sealed class Encounter : IJsonOnDeserialized
     [JsonIgnore] public string Place { get { var i = BossBook.Strip(Instance); return GameMode.Length == 0 ? i : i.Length == 0 ? GameMode : $"{i} · {GameMode}"; } }
 
     /// <summary>The group's damage per second: the credited damage (the rows' sum, as the figures count it) over the fight; null under <see cref="MinDpsSeconds"/>.</summary>
-    public double? GroupDpsOf(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= MinDpsSeconds ? Credited / s : null; }
+    public double? GroupDpsOf(DateTime now) => HasDamage ? Credited / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
     public double GroupDps(DateTime now) => GroupDpsOf(now) ?? 0;
     public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Short(d) : "–";
 
