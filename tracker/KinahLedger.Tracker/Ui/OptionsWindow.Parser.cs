@@ -17,7 +17,9 @@ public partial class OptionsWindow
 {
     TextBlock? _parserLabel;
     /// <summary>The Parser's look row (the four looks that draw a fight, each in a boss fight), and its tiles' host.</summary>
-    FrameworkElement? _parserLookRow, _parserLookDivider;
+    FrameworkElement? _parserLookRow, _parserLookDivider, _parserAllLooks;
+    /// <summary>The look picked for the Parser's own window (saved with the Parser's switches).</summary>
+    string _parserLookPick = ParserPrefs.StandardLook;
     UniformGrid? _parserLookHost;
     TextBlock? _parserLookHint;
     /// <summary>The big preview under the look buttons (Steven, 2026-11-15: "can't really see the previews... they're so small"):
@@ -38,6 +40,7 @@ public partial class OptionsWindow
         _parserFiltersChk.IsChecked = p.Filters;
         _parserHoversChk.IsChecked = p.Hovers;
         _parserSeparateChk.IsChecked = p.InKinah;
+        _parserLookPick = ParserPrefs.LookOf(p.Look);
         _parserActiveChk.IsChecked = p.DpsActive;
         _parserFarmChk.IsChecked = p.FarmDps;
         _parserExpandedChk.IsChecked = p.Expanded;
@@ -64,6 +67,7 @@ public partial class OptionsWindow
         p.Filters = _parserFiltersChk.IsChecked == true;
         p.Hovers = _parserHoversChk.IsChecked == true;
         p.InKinah = _parserSeparateChk.IsChecked == true;
+        p.Look = _parserLookPick;
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.FarmDps = _parserFarmChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
@@ -131,6 +135,7 @@ public partial class OptionsWindow
         all.MouseLeftButtonUp += (_, _) => HudLookHost.BringIntoView();
         AutomationProperties.SetName(all, "All panel looks");
         Grid.SetColumn(all, 1); top.Children.Add(all);
+        _parserAllLooks = all;
         box.Children.Add(top);
         _parserLookHint = Styled(new TextBlock(), "RowHint");
         box.Children.Add(_parserLookHint);
@@ -178,48 +183,61 @@ public partial class OptionsWindow
     /// <summary>For the options test: the Width slider.</summary>
     internal Slider? ParserWidthForTest => _parserWidth;
     internal bool? ParserLookRowShownForTest => _parserLookRow?.Visibility == Visibility.Visible;
+    /// <summary>For the options test: a click on a look button (the Parser's own window's look, or inside the Kinah overlay the Kinah overlay's).</summary>
+    internal void PickParserLookForTest(string key)
+    {
+        var card = _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => (string)b.Tag == key);
+        card?.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+    }
 
-    /// <summary>The look tiles, the one in use outlined; away while the Parser has its own overlay (the looks are the Kinah overlay's).</summary>
+    /// <summary>
+    /// The look buttons, the one in use outlined, the big stage drawing the one hovered or picked. With the Parser in its
+    /// own window (the default) they are that window's looks, apart from the Kinah overlay's: Standard (its own panel) and
+    /// the four drawn for fights, fight alone. Inside the Kinah overlay they are the Kinah overlay's four fight looks.
+    /// </summary>
     void DrawParserLooks()
     {
         if (_parserLookHost == null || _parserLookHint == null) return;
         _parserLookHost.Children.Clear();
         if (_parserLookStage != null) _parserLookStage.Tag = null;
-        var current = HudLooks.Parse(_edit.HudLook);
-        // the switch is "Parser inside the Kinah overlay": off (the default), the Parser has its own window and its own
-        // look, so the Kinah overlay's looks are no pick of the Parser's and the row is away
         bool separate = _parserSeparateChk?.IsChecked != true;
-        if (_parserLookRow != null) _parserLookRow.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
-        if (_parserLookDivider != null) _parserLookDivider.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
-        var inUse = HudLooks.All.First(l => l.Key == current);
+        if (_parserLookRow != null) _parserLookRow.Visibility = Visibility.Visible;
+        if (_parserLookDivider != null) _parserLookDivider.Visibility = Visibility.Visible;
+        if (_parserAllLooks != null) _parserAllLooks.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
+        var current = separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook);
+        var keys = separate ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).ToArray() : HudLooks.FightLooks.ToArray();
+        if (_parserLookHost is UniformGrid ug) ug.Columns = keys.Length;
+        string inUseName = separate ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
         _parserLookHint.Text = separate
-            ? "The looks are the Kinah overlay's. With a separate parser overlay, the Parser keeps its own."
+            ? "How the Parser's own window looks over the game. The Kinah overlay keeps its own look."
             : HudLooks.FightLooks.Contains(current) ? "How a boss fight shows over the game, in a dungeon in place of the Kinah line. Picking one here picks the Kinah overlay's look too."
-            : $"In use: {inUse.Name}, the Parser above it. Pick one drawn for fights, or see all looks.";
+            : $"In use: {inUseName}, the Parser above it. Pick one drawn for fights, or see all looks.";
         var sample = _host.HudSample();
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (_, fight) = ParserDemo.Sample(now, live: true);
         var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);
         scene.Freeze();
-        _parserLookShown = HudLooks.FightLooks.Contains(current) && !separate ? current : HudLooks.FightLooks[0];
-        foreach (var key in HudLooks.FightLooks)
+        _parserLookShown = keys.Contains(current) ? current : keys[0];
+        foreach (var key in keys)
         {
-            var l = HudLooks.All.First(x => x.Key == key);
-            bool on = key == current && !separate;
+            string lookName = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
+            string hint = key == ParserPrefs.StandardLook ? "The Parser's own panel: the boss, the clock, the group on class-coloured bars." : HudLooks.All.First(x => x.Key == key).Hint;
+            bool on = key == current;
             // a button per look, the big stage below draws it: four thumbnails side by side came out ~110 px tall, unreadable
-            var name = new TextBlock { Text = l.Name, FontSize = 13, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
+            var name = new TextBlock { Text = lookName, FontSize = 13, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
             name.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
             var card = new Border
             {
                 CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 7, 8, 7), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
-                Child = name, ToolTip = l.Hint, Focusable = true, Tag = key, Opacity = separate ? 0.45 : 1,
+                Child = name, ToolTip = hint, Focusable = true, Tag = key,
             };
             card.SetResourceReference(Border.BackgroundProperty, "Card2");
             card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
             card.FocusVisualStyle = (Style)FindResource("FocusRing");
-            AutomationProperties.SetName(card, l.Name + " overlay look" + (on ? ", in use" : ""));
-            card.MouseLeftButtonUp += (_, _) => PickHudLook(key);
-            card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { PickHudLook(key); e.Handled = true; } };
+            AutomationProperties.SetName(card, lookName + " overlay look" + (on ? ", in use" : ""));
+            void Pick() { if (separate) { _parserLookPick = key; DrawParserLooks(); } else PickHudLook(key); }
+            card.MouseLeftButtonUp += (_, _) => Pick();
+            card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Pick(); e.Handled = true; } };
             card.MouseEnter += (_, _) => ShowParserLook(key, sample, fight!, now, scene);
             card.GotKeyboardFocus += (_, _) => ShowParserLook(key, sample, fight!, now, scene);
             card.MouseLeave += (_, _) => ShowParserLook(_parserLookShown, sample, fight!, now, scene);
@@ -234,7 +252,8 @@ public partial class OptionsWindow
         if (_parserLookStage == null || key == null) return;
         if (_parserLookStage.Tag as string == key) return;
         FrameworkElement face;
-        try { face = HudWindow.PreviewFight(key, sample, fight, now); }
+        bool separate = _parserSeparateChk?.IsChecked != true;
+        try { face = separate ? ParserOverlay.PreviewFace(key, fight, now, fight.ModeKind, false) : HudWindow.PreviewFight(key, sample, fight, now); }
         catch (Exception ex) { CrashLog.Write("parser look preview", ex); return; }
         face.HorizontalAlignment = HorizontalAlignment.Center;
         face.VerticalAlignment = VerticalAlignment.Center;
