@@ -114,7 +114,8 @@ public static class ParserTests
             {
                 var end = a.End ?? a.LastAt;
                 Console.WriteLine($"always on {a.Start.ToLocalTime():HH:mm:ss}-{end.ToLocalTime():HH:mm:ss} ({BossParser.Clock(a.Duration(end))}) · {(a.Mode == "boss" ? "boss pull " + a.Boss : a.Boss.Length > 0 ? "fight, " + a.Boss : "fight")} · {(a.Kind.Length > 0 ? a.Kind : "?")} {a.Instance}"
-                    + $" · group {Ui.Amounts.Short(a.Members.Sum(f => f.Damage))}, you {Ui.Amounts.Short(a.You?.Damage ?? 0)}{(a.Outcome.Length > 0 ? " · " + a.Outcome : "")}");
+                    + $" · group {Ui.Amounts.Short(a.Members.Sum(f => f.Damage))}, you {Ui.Amounts.Short(a.You?.Damage ?? 0)}{(a.Outcome.Length > 0 ? " · " + a.Outcome : "")}"
+                    + $" · your DPS {(a.You is { } y ? a.DpsText(y, end) : "–")} over {a.DpsSeconds(end):0} s");
             }
         foreach (var f in farms)
         {
@@ -1578,6 +1579,53 @@ public static class ParserTests
         // the Always on pick: off for everyone until picked, and kept
         {
             Check(!new ParserPrefs().AlwaysOn && ParserPrefs.FromText("{\"AlwaysOn\":true}").AlwaysOn, "Always on: off by default (Only boss fights), a pick kept in parser.json");
+        }
+
+        // combat DPS (Steven, 2026-11-15: "make sure that the DPS meter is actually telling you your combat dps. seems like its
+        // too high or stuck"): a fight's DPS is over its combat time, each gap between hits and the time since the last up to 5 s
+        {
+            var (p, _) = New();
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.Take(new DamageDealt(t, 1, 5000, 10_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(2), 1, 5000, 10_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(4), 1, 5000, 10_000, "Swoly", true));
+            var a = p.AlwaysLive!;
+            double At(Encounter e, double s) => e.Dps(e.You!, t.AddSeconds(s));
+            Check(Math.Abs(At(a, 4) - 7_500) < 1, $"combat DPS: 30K in 4 s of fighting reads 7,500 ({At(a, 4):N0})");
+            Check(Math.Abs(At(a, 9) - 30_000 / 9.0) < 1 && Math.Abs(At(a, 60) - At(a, 9)) < 0.01 && Math.Abs(At(a, 110) - At(a, 9)) < 0.01,
+                $"...it eases for 5 s after the last hit, then holds while you walk to the next pack ({At(a, 9):N0}, {At(a, 60):N0} at a minute, {At(a, 110):N0} later), not sliding toward 0");
+            p.Take(new DamageDealt(t.AddSeconds(100), 1, 5001, 10_000, "Swoly", true));
+            var b = p.AlwaysLive!;
+            Check(Math.Abs(At(b, 100) - 40_000 / 9.0) < 1, $"...the next pack's first hit adds its damage and no walk time: 40K over 9 s ({At(b, 100):N0}), no jump down");
+            p.Take(new DamageDealt(t.AddSeconds(102), 1, 5001, 10_000, "Swoly", true));
+            var c = p.AlwaysLive!;
+            Check(Math.Abs(At(c, 102) - 50_000 / 11.0) < 1 && Math.Abs(c.GroupDps(t.AddSeconds(102)) - 50_000 / 11.0) < 1,
+                $"...and fighting on counts again: 50K over 11 s ({At(c, 102):N0}), the group's figure the same");
+            // the walk used to count: 50K over the 102 s since the first hit read 490 a second
+            Check(c.Duration(t.AddSeconds(102)).TotalSeconds > 100 && At(c, 102) > 9 * 50_000 / c.Duration(t.AddSeconds(102)).TotalSeconds,
+                "...where the old figure over the whole 102 s read nine times lower");
+            // a record kept before combat time: over its length as before
+            var old = System.Text.Json.JsonSerializer.Deserialize<Encounter>(System.Text.Json.JsonSerializer.Serialize(c).Replace("\"LastCombatHit\":\"", "\"LastCombatHitWas\":\""));
+            Check(old != null && old.LastCombatHit == null && Math.Abs(old.DpsSeconds(t.AddSeconds(102)) - old.Duration(t.AddSeconds(102)).TotalSeconds) < 0.01,
+                "...a fight kept before it has no combat time and reads over its length");
+            // a boss pull: over the pull's time as ever (a boss fight is all combat)
+            var (q, _) = New();
+            q.Take(new GroupChanged(t, new[] { Me }));
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Fire Temple", 1));
+            q.Take(new BossEngaged(t.AddSeconds(1), "Flame Lord Kromede", 90));
+            q.Take(new DamageDealt(t.AddSeconds(2), 1, 90, 60_000, "Swoly", true));
+            q.Take(new DamageDealt(t.AddSeconds(20), 1, 90, 60_000, "Swoly", true));
+            var pull = q.AlwaysLive!;
+            Check(pull.Mode == "boss" && Math.Abs(pull.DpsSeconds(t.AddSeconds(31)) - pull.Duration(t.AddSeconds(31)).TotalSeconds) < 0.01,
+                $"...a boss pull stays over the pull's own time ({pull.DpsSeconds(t.AddSeconds(31)):0} s)");
+        }
+        // the Kinah line's farming figure: never over less than 3 s (a mob killed in a second read 209.7K a second)
+        {
+            var e = new Encounter { Mode = "fight", Start = t, LastAt = t, HasDamage = true };
+            var me = new Fighter { Id = 1, You = true, Damage = 209_700 };
+            me.Hit(t); me.Hit(t.AddSeconds(0.9));
+            e.Roster.Add(me);
+            Check(Math.Abs(e.FarmDps() - 69_900) < 1, $"farming DPS: a 209.7K mob killed in a second reads {e.FarmDps():N0}, over 3 s, not 209.7K");
         }
 
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");

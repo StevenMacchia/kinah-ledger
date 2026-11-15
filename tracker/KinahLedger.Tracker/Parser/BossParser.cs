@@ -890,6 +890,7 @@ public sealed class BossParser
             e.UncreditedWhy[dd.Reason] = e.UncreditedWhy.GetValueOrDefault(dd.Reason) + dd.Amount;
             return;
         }
+        e.CombatHit(dd.At);   // the group fighting (Encounter.CombatSecondsAt: a fight's DPS is over its combat time)
         var src = SourceOf(e, dd);
         src.Damage += dd.Amount;
         if (toBoss) src.BossDamage += dd.Amount;
