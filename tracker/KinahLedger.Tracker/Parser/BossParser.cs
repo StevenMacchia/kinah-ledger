@@ -756,9 +756,18 @@ public sealed class BossParser
     {
         if (h.NoRow) return;   // a part with no hit under it: its damage is counted already, it is no hit
         a.StreamHits = (a.StreamHits ?? 0) + 1;
+        long amt = Math.Max(0, h.Amount);
+        a.StreamDamage = (a.StreamDamage ?? 0) + amt;
         if (h.Amount > 0) { a.Max = Math.Max(a.Max ?? 0, h.Amount); a.Min = a.Min is { } mn ? Math.Min(mn, h.Amount) : h.Amount; }
         var k = a.Kinds ??= new();
-        void Count(string key) => k[key] = k.GetValueOrDefault(key) + 1;
+        var kd = a.KindDamage ??= new();
+        var km = a.KindMax ??= new();
+        void Count(string key)
+        {
+            k[key] = k.GetValueOrDefault(key) + 1;
+            kd[key] = kd.GetValueOrDefault(key) + amt;
+            km[key] = Math.Max(km.GetValueOrDefault(key), amt);
+        }
         Count("result:" + h.Result);
         for (int b = 0; b < 16; b++) if ((h.Marks & (1 << b)) != 0) Count("mark:" + b);
         if (h.Multi > 0) Count("multi");

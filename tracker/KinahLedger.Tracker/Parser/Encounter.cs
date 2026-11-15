@@ -200,8 +200,32 @@ public sealed class Encounter : IJsonOnDeserialized
             // store v2 (null when no id of the ability carries it)
             Casts = g.Any(a => a.Casts != null) ? g.Sum(a => a.Casts ?? 0) : null, StreamHits = g.Any(a => a.StreamHits != null) ? g.Sum(a => a.StreamHits ?? 0) : null,
             Max = g.Max(a => a.Max), Min = g.Min(a => a.Min),
+            StreamDamage = g.Any(a => a.StreamDamage != null) ? g.Sum(a => a.StreamDamage ?? 0) : null,
+            Kinds = Merge(g.Select(a => a.Kinds), (x, y) => x + y), KindDamage = Merge(g.Select(a => a.KindDamage), (x, y) => x + y), KindMax = Merge(g.Select(a => a.KindMax), Math.Max),
         })
         .Where(a => Figure(a) > 0).OrderByDescending(Figure).ToList();
+
+    static Dictionary<string, T>? Merge<T>(IEnumerable<Dictionary<string, T>?> parts, Func<T, T, T> add) where T : struct
+    {
+        Dictionary<string, T>? all = null;
+        foreach (var d in parts)
+            if (d != null)
+                foreach (var (k, v) in d) { all ??= new(); all[k] = all.TryGetValue(k, out var had) ? add(had, v) : v; }
+        return all;
+    }
+
+    /// <summary>
+    /// The hit kind shown as crit (ParserPrefs.CritSource, set by the window): null, the default, shows none; "result:3" or
+    /// "mark:3" picks one of the two candidates the hits carry, once the game's own figures have settled which is crit.
+    /// </summary>
+    public static string? CritKey { get; set; }
+
+    /// <summary>The kind key for a CritSource value ("result3", "mark08"); null for "none" or anything else.</summary>
+    public static string? CritKeyOf(string? source) => source switch { "result3" => "result:3", "mark08" => "mark:3", _ => null };
+
+    /// <summary>A kind's hits, damage and biggest hit in an ability (all 0 when the ability carries no kinds).</summary>
+    public static (int Hits, long Damage, long Max) KindTotals(AbilityShare a, string key) =>
+        (a.Kinds?.GetValueOrDefault(key) ?? 0, a.KindDamage?.GetValueOrDefault(key) ?? 0, a.KindMax?.GetValueOrDefault(key) ?? 0);
 
     /// <summary>Damage to adds (anything but the boss) can be told apart: the Boss / All targets switch has something to switch.</summary>
     [JsonIgnore] public bool HasAdds => TargetsSplit && ModeKind != ParserMode.Fights && !Wave && Members.Any(f => f.Damage > f.BossDamage);
@@ -519,6 +543,10 @@ public sealed class AbilityShare
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? Min { get; set; }
     /// <summary>The hits' kinds as they came, counted by an internal key, unnamed until mapped (never shown before then).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? Kinds { get; set; }
+    /// <summary>The damage of the hits seen one by one, and by kind with each kind's biggest hit (store v2, since the crit candidates): crit share and max crit.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? StreamDamage { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindDamage { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindMax { get; set; }
 }
 
 /// <summary>Damage a member took from one attacker's skill: Source is the boss's name when the boss dealt it, else "".</summary>

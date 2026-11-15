@@ -38,7 +38,7 @@ public static class ParserTests
     /// fast as it goes, each piece stamped with its own capture time: every record kept, with each member's share of the
     /// damage (as the tab shows it) and their top abilities. Needs a decoder of interface version 4 or later beside the exe.
     /// </summary>
-    public static int ParserReplay(string pcapng, string mode, int port = 13328, string? save = null)
+    public static int ParserReplay(string pcapng, string mode, int port = 13328, string? save = null, bool crit = false)
     {
         if (NativeDecoder.Version < 4) { Console.WriteLine($"this build's decoder reads no fights for the Parser (interface version {NativeDecoder.Version})"); return 1; }
         var kept = new List<Encounter>();
@@ -98,6 +98,7 @@ public static class ParserTests
             var end = e.End ?? e.LastAt;
             Console.WriteLine($"{e.Title} · {e.Instance} · {e.Kind} · {e.OutcomeLabel} in {BossParser.Clock(e.Duration(end))}{(e.BossMaxHp > 0 ? $" · {Ui.Amounts.Short(e.BossMaxHp)} HP" : "")}{(e.Wave ? " · wave" : "")}{(e.Partial ? " · partial: " + string.Join("; ", e.PartialWhy) : "")}");
             if (e.Coverage is { } cov) Console.WriteLine($"   {Encounter.Pct(cov)} of the boss's HP credited ({Ui.Amounts.Short(e.UncreditedBoss)} not)");
+            if (crit) PrintCrit(e);
             var ms = e.Members.ToList();
             if (ms.Any(f => f.PerSecond != null || f.Taken != null))
                 Console.WriteLine($"   depth: {ms.Sum(f => f.Abilities.Sum(a => a.Casts ?? 0)):N0} casts, {ms.Sum(f => f.Abilities.Sum(a => a.StreamHits ?? 0)):N0} hits seen, {Ui.Amounts.Short(ms.Sum(f => f.Taken?.Sum(x => x.Damage) ?? 0))} taken, "
@@ -113,6 +114,51 @@ public static class ParserTests
         // (the open-world fights too: a recording that starts inside an instance has no boss records, but its damage by ability is there)
         if (save != null) File.AppendAllLines(save, kept.Concat(farmRecords).Select(e => System.Text.Json.JsonSerializer.Serialize(e)));
         return 0;
+    }
+
+    /// <summary>The two crit candidates the hits carry: the result byte's 3 (crit-like, x1.5 to x2.1 a caster) and mark 0x08 (a fixed x2 proc).</summary>
+    public static readonly (string Key, string Label)[] CritCandidates = { ("result:3", "result 3"), ("mark:3", "mark 0x08") };
+
+    /// <summary>
+    /// parser-replay --crit: a record's hits by member and skill, laid out like the game's Combat Analysis (detailed): each
+    /// skill's damage, share, hits, then for each crit candidate its hits, rate and its hits' average against the others'
+    /// (the multiplier), and the biggest hit. All targets, the hits seen one by one (a share with no hit under it left out).
+    /// </summary>
+    static void PrintCrit(Encounter e)
+    {
+        bool bossOnly = Encounter.BossOnly;
+        Encounter.BossOnly = false;
+        try
+        {
+            string Rate(int n, int of) => of > 0 ? $"{n * 100.0 / of,5:0.0}%" : "    -";
+            string Mult((int Hits, long Damage, long Max) k, int hits, long dmg)
+            {
+                int rest = hits - k.Hits; long restDmg = dmg - k.Damage;
+                return k.Hits > 0 && rest > 0 && restDmg > 0 ? $"x{k.Damage / (double)k.Hits / (restDmg / (double)rest),4:0.00}" : "    -";
+            }
+            string Head() => $"      {"Skill",-34} {"Damage",9} {"Share",6} {"Hits",5}" + string.Concat(CritCandidates.Select(c => $" | {c.Label,-9} {"rate",6} {"mult",5}")) + $" | {"Max",8}";
+            foreach (var f in e.Ranked().Where(f => f.Abilities.Any(a => a.StreamHits > 0)))
+            {
+                var rows = e.AbilityRows(f).Where(a => a.StreamHits > 0).ToList();
+                int hits = rows.Sum(a => a.StreamHits ?? 0); long dmg = rows.Sum(a => a.StreamDamage ?? 0);
+                var line = $"   {f.Name} ({(f.Class.Length > 0 ? f.Class : "-")}): {Ui.Amounts.Short(f.Damage)} damage, {hits:N0} hits seen";
+                foreach (var (key, label) in CritCandidates)
+                {
+                    var k = rows.Select(a => Encounter.KindTotals(a, key)).Aggregate((Hits: 0, Damage: 0L, Max: 0L), (s, x) => (s.Hits + x.Hits, s.Damage + x.Damage, Math.Max(s.Max, x.Max)));
+                    line += $"; {label}: {k.Hits:N0} ({Rate(k.Hits, hits).Trim()}), {Mult(k, hits, dmg).Trim()}, {(dmg > 0 ? k.Damage * 100.0 / dmg : 0):0.0}% of the damage, max {Ui.Amounts.Short(k.Max)}";
+                }
+                Console.WriteLine(line);
+                Console.WriteLine(Head());
+                foreach (var a in rows)
+                {
+                    int h = a.StreamHits ?? 0; long d = a.StreamDamage ?? 0;
+                    var r = $"      {Abilities.Name(a.Skill, f.Class),-34} {Ui.Amounts.Short(a.Damage),9} {(f.Damage > 0 ? a.Damage * 100.0 / f.Damage : 0),5:0.0}% {h,5}";
+                    foreach (var (key, _) in CritCandidates) { var k = Encounter.KindTotals(a, key); r += $" | {k.Hits,-9} {Rate(k.Hits, h),6} {Mult(k, h, d),5}"; }
+                    Console.WriteLine(r + $" | {Ui.Amounts.Short(a.Max ?? 0),8}");
+                }
+            }
+        }
+        finally { Encounter.BossOnly = bossOnly; }
     }
 
     /// <summary>party-scan: the party list read from each picture in a folder (5120 × 2160 reward pictures and the like); classes counted.</summary>
@@ -1128,6 +1174,70 @@ public static class ParserTests
                     $"...every death with its killer, killing skill and last hits ({deaths.Count} deaths, {deaths.Count(d => d.Killer.Length > 0)} by the boss by name), one record each");
                 Check(members.Any(f => f.Taken is { Count: > 0 }) && members.Any(f => f.Buffs is { Count: > 0 }) && with.All(e => e.BossHpPerSecond is { Count: > 0 }),
                     $"...damage taken, uptimes and the boss's HP timeline filled ({members.Sum(f => f.Taken?.Sum(x => x.Damage) ?? 0):N0} taken, {members.Sum(f => f.Buffs?.Count ?? 0)} uptimes)");
+            }
+        }
+
+        // crit, ready to switch on: each hit kind's hits, damage and biggest hit kept per ability (store v2); nothing shown as
+        // crit until ParserPrefs.CritSource picks a kind; then the inspect view and the overlay get crit rate, crit share, max crit
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 890));
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.Take(new BossEngaged(t.AddSeconds(1), "Talisra of the Void", 891));
+            // four hits of Judgment: two normal (1,000), one result-3 (1,700), one result-3 with the x2 mark (3,400); one rank's id apart
+            p.Take(new HitDealt(t.AddSeconds(2), 1, 1, 891, 1_000, 12240000, 1, 1, false, false, 2, 0, 0, 0));
+            p.Take(new HitDealt(t.AddSeconds(3), 1, 1, 891, 1_000, 12240000, 2, 1, false, false, 2, 0, 0, 0));
+            p.Take(new HitDealt(t.AddSeconds(4), 1, 1, 891, 1_700, 12240000, 3, 1, false, false, 3, 0, 0, 0));
+            p.Take(new HitDealt(t.AddSeconds(5), 1, 1, 891, 3_400, 12240003, 4, 1, false, false, 3, 0x08, 0, 0));
+            p.Take(new DamageDealt(t.AddSeconds(5), 1, 891, 7_100, Skill: 12240000, Hits: 4));
+            p.Take(new BossEnded(t.AddSeconds(9), 891, BossOutcome.Kill));
+            var e = kept.Single(); var me = e.Members.Single();
+            var row = e.AbilityRows(me).Single();
+            Check(row is { StreamHits: 4, StreamDamage: 7_100 } && Encounter.KindTotals(row, "result:3") == (2, 5_100, 3_400) && Encounter.KindTotals(row, "mark:3") == (1, 3_400, 3_400),
+                "crit candidates: each kind's hits, damage and biggest hit kept per ability, a rank's id merged into its skill's row");
+            string? key0 = Encounter.CritKey;
+            Encounter.CritKey = Encounter.CritKeyOf(new ParserPrefs().CritSource);
+            var none = Ui.FightView.Of(e, e.End!.Value, null).Members.Single();
+            Encounter.CritKey = Encounter.CritKeyOf("result3");
+            var r3 = Ui.FightView.Of(e, e.End.Value, null);
+            Encounter.CritKey = Encounter.CritKeyOf("mark08");
+            var m8 = Ui.FightView.Of(e, e.End.Value, null).Members.Single();
+            Encounter.CritKey = key0;
+            Check(new ParserPrefs().CritSource == "none" && none is { Crit: null, CritShare: null, MaxCrit: null } && !Ui.FightView.Of(e, e.End.Value, null).HasCrit,
+                "...nothing shown as crit by default (CritSource none)");
+            var r3m = r3.Members.Single();
+            Check(r3.HasCrit && r3m is { Crit: 0.5, MaxCrit: 3_400 } && Math.Abs(r3m.CritShare!.Value - 5_100 / 7_100.0) < 1e-9 && r3m.Abilities.Single().Crit == 0.5
+                && m8 is { Crit: 0.25, MaxCrit: 3_400 } && Math.Abs(m8.CritShare!.Value - 3_400 / 7_100.0) < 1e-9,
+                $"...CritSource result3: crit {Encounter.Pct(r3m.Crit ?? 0)}, {Encounter.Pct(r3m.CritShare ?? 0)} of the damage, max crit {r3m.MaxCrit:N0}; mark08: {Encounter.Pct(m8.Crit ?? 0)}");
+            Check(Encounter.CritKeyOf("result3") == "result:3" && Encounter.CritKeyOf("mark08") == "mark:3" && Encounter.CritKeyOf("none") == null && Encounter.CritKeyOf("junk") == null,
+                "...the switch's values: none, result3, mark08 (anything else is none)");
+        }
+
+        // both crit candidates on Steven's recordings (20261114-14, ABI 10 decoder): kept for every member and skill, within what
+        // the hits can hold, at the rates and multipliers the statistics found (result 3: a caster's x1.5 to x2.1 at 10 to 60%;
+        // mark 0x08: about x2 at a few to 25%). Only where the decoder and the recording are on this PC
+        {
+            var rec = Recordings().FirstOrDefault(r => r.EndsWith("20261114-14.pcapng"));
+            if (NativeDecoder.Version < 10 || rec == null) Console.WriteLine($"skip  crit candidates on Steven's recordings: decoder interface {NativeDecoder.Version}, {(rec == null ? "no" : "the")} recording here");
+            else
+            {
+                var pulls = Replay(rec, hits: true);
+                var members = pulls.SelectMany(e => e.Members.Select(f => (e, f))).Where(x => x.f.Abilities.Sum(a => a.StreamHits ?? 0) >= 50).ToList();
+                bool within = members.All(x => x.f.Abilities.All(a => CritCandidates.All(c =>
+                    Encounter.KindTotals(a, c.Key) is var k && k.Hits <= (a.StreamHits ?? 0) && k.Damage <= (a.StreamDamage ?? 0) && k.Max <= (a.Max ?? 0))));
+                (double Rate, double Mult) Of(Fighter f, string key)
+                {
+                    int hits = f.Abilities.Sum(a => a.StreamHits ?? 0); long dmg = f.Abilities.Sum(a => a.StreamDamage ?? 0);
+                    var k = f.Abilities.Select(a => Encounter.KindTotals(a, key)).Aggregate((H: 0, D: 0L), (s, x) => (s.H + x.Hits, s.D + x.Damage));
+                    double mult = k.H > 0 && hits > k.H ? k.D / (double)k.H / ((dmg - k.D) / (double)(hits - k.H)) : 0;
+                    return (k.H / (double)Math.Max(1, hits), mult);
+                }
+                double Median(IEnumerable<double> xs) { var l = xs.OrderBy(x => x).ToList(); return l.Count == 0 ? 0 : l[l.Count / 2]; }
+                var r3 = members.Select(x => Of(x.f, "result:3")).ToList(); var m8 = members.Select(x => Of(x.f, "mark:3")).ToList();
+                Check(members.Count >= 10 && within && r3.All(x => x.Rate is > 0.05 and < 0.9) && Median(r3.Select(x => x.Mult)) is > 1.3 and < 2.3,
+                    $"crit candidates, Steven's 14:00 recording: result 3 kept for {members.Count} member pulls, every count within its hits; rate {Encounter.Pct(r3.Min(x => x.Rate))} to {Encounter.Pct(r3.Max(x => x.Rate))}, median x{Median(r3.Select(x => x.Mult)):0.00}");
+                Check(m8.All(x => x.Rate is > 0 and < 0.3) && Median(m8.Select(x => x.Mult)) is > 1.5 and < 2.5,
+                    $"...mark 0x08: rate {Encounter.Pct(m8.Min(x => x.Rate))} to {Encounter.Pct(m8.Max(x => x.Rate))}, median x{Median(m8.Select(x => x.Mult)):0.00}");
             }
         }
 

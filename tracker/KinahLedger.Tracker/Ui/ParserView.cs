@@ -48,7 +48,8 @@ public sealed class FightView
             // the ids of one ability as one row (a spirit's attack at each rank), each named for the member's class
             foreach (var a in e.AbilityRows(f))
                 m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)Math.Max(1, e.Figure(f)),
-                    DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null, Casts = a.Casts, Max = a.Max, Min = a.Min });
+                    DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null, Casts = a.Casts, Max = a.Max, Min = a.Min,
+                    Crit = Encounter.CritKey is { } ck && a.StreamHits is > 0 and var sh && a.Kinds != null ? Encounter.KindTotals(a, ck).Hits / (double)sh : null });
             Depth(m, f, e);
             v.Members.Add(m);
         }
@@ -62,8 +63,16 @@ public sealed class FightView
     /// </summary>
     static void Depth(MemberView m, Fighter f, Encounter e)
     {
-        // crit stays null: the hits' kinds are kept raw (AbilityShare.Kinds) and named only once mapped against the game's own figures
         m.MaxHit = f.Abilities.Max(a => a.Max);
+        // crit: only the kind Encounter.CritKey names (ParserPrefs.CritSource, none by default); over the hits seen one by one
+        if (Encounter.CritKey is { } key && f.Abilities.Sum(a => a.StreamHits ?? 0) is > 0 and var seen && f.Abilities.Any(a => a.Kinds != null))
+        {
+            var crits = f.Abilities.Select(a => Encounter.KindTotals(a, key)).ToList();
+            m.Crit = crits.Sum(c => c.Hits) / (double)seen;
+            long dealt = f.Abilities.Sum(a => a.StreamDamage ?? 0);
+            if (dealt > 0 && f.Abilities.Any(a => a.KindDamage != null)) m.CritShare = crits.Sum(c => c.Damage) / (double)dealt;
+            if (f.Abilities.Any(a => a.KindMax != null)) m.MaxCrit = crits.Max(c => c.Max);
+        }
         // damage per second as the figures count it (the boss's, or all targets')
         m.PerSecond = e.BossView ? f.BossPerSecond : f.PerSecond;
         if (f.Taken is { Count: > 0 } taken)
@@ -107,6 +116,8 @@ public sealed class MemberView
     public bool You => F.You;
     /// <summary>Crit rate over every hit; the biggest hit. Null until the record carries crits and max hits.</summary>
     public double? Crit; public long? MaxHit;
+    /// <summary>The crits' share of the damage of the hits seen, and the biggest crit: null unless a crit kind is picked (ParserPrefs.CritSource) and the record carries it.</summary>
+    public double? CritShare; public long? MaxCrit;
     /// <summary>Damage in each second from the pull (store v2); null until then.</summary>
     public List<long>? PerSecond;
     /// <summary>Damage taken, all of it and by source (store v2); null until then.</summary>

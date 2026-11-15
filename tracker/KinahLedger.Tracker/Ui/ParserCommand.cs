@@ -423,14 +423,18 @@ static class ParserCommand
         int hits = m.Abilities.Sum(a => a.Hits);
         if (hits > 0) tiles.Add(("Hits", hits.ToString("N0", CultureInfo.InvariantCulture), Ink));
         if (hits > 0) tiles.Add(("Average hit", Amounts.Short(m.Abilities.Sum(a => a.Average * a.Hits) / hits), Ink));
+        // crit: its rate, with the crits' share of the damage in the label; the biggest crit in place of the biggest hit when known
         if (m.Crit is { } cr) tiles.Add(("Crit", Pct(cr), Ink));
-        if (m.MaxHit is { } mx) tiles.Add(("Max hit", Amounts.Short(mx), Ink));
+        if (m.CritShare is { } cs) tiles.Add(("Crit damage", Pct(cs, 0), Ink));
+        if (m.MaxCrit is { } mc && mc > 0) tiles.Add(("Max crit", Amounts.Short(mc), Ink));
+        else if (m.MaxHit is { } mx) tiles.Add(("Max hit", Amounts.Short(mx), Ink));
         if (m.Abilities.Any(a => a.Casts != null)) tiles.Add(("Casts", m.Abilities.Sum(a => a.Casts ?? 0).ToString("N0", CultureInfo.InvariantCulture), Ink));
         // active time and the idle share of their time in the group (a late joiner's from joining, a leaver's to leaving)
         if (m.F.FirstHit != null) tiles.Add((e.IdleShare(m.F, v.Now) is { } idle ? $"Active · {Math.Round(idle * 100):0}% idle" : "Active", BossParser.Clock(TimeSpan.FromSeconds(m.ActiveSeconds)), Ink));
         if (ctx.Deaths) tiles.Add(("Deaths", m.Deaths.ToString(CultureInfo.InvariantCulture), m.Deaths > 0 ? C(Coral) : Ink));
-        var tg = new System.Windows.Controls.Primitives.UniformGrid { Columns = Math.Min(6, tiles.Count), Margin = new Thickness(-4, 14, -4, 0) };
-        foreach (var (l, val, tone) in tiles.Take(6))
+        // every tile the record has, in one row up to six, else two even rows (none dropped: active time and deaths stay)
+        var tg = new System.Windows.Controls.Primitives.UniformGrid { Columns = tiles.Count <= 6 ? tiles.Count : (tiles.Count + 1) / 2, Margin = new Thickness(-4, 14, -4, 0) };
+        foreach (var (l, val, tone) in tiles)
             tg.Children.Add(new Border { CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 6, 10, 7), Margin = new Thickness(4, 0, 4, 0), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1),
                 Child = Stat(l, T(val, 17, tone, FontWeights.Bold, tab: true), "", Muted, Faint) });
         hs.Children.Add(tg);
