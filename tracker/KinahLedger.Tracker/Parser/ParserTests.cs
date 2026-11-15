@@ -79,6 +79,7 @@ public static class ParserTests
                     while (dec.NextItem() is not null) { }
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
                     while (dec.NextBossEvent() is { } b) p.Take(b);
+                    while (dec.NextHit() is { } h) p.Take(h);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
             };
@@ -97,6 +98,10 @@ public static class ParserTests
             var end = e.End ?? e.LastAt;
             Console.WriteLine($"{e.Title} · {e.Instance} · {e.Kind} · {e.OutcomeLabel} in {BossParser.Clock(e.Duration(end))}{(e.BossMaxHp > 0 ? $" · {Ui.Amounts.Short(e.BossMaxHp)} HP" : "")}{(e.Wave ? " · wave" : "")}{(e.Partial ? " · partial: " + string.Join("; ", e.PartialWhy) : "")}");
             if (e.Coverage is { } cov) Console.WriteLine($"   {Encounter.Pct(cov)} of the boss's HP credited ({Ui.Amounts.Short(e.UncreditedBoss)} not)");
+            var ms = e.Members.ToList();
+            if (ms.Any(f => f.PerSecond != null || f.Taken != null))
+                Console.WriteLine($"   depth: {ms.Sum(f => f.Abilities.Sum(a => a.Casts ?? 0)):N0} casts, {ms.Sum(f => f.Abilities.Sum(a => a.StreamHits ?? 0)):N0} hits seen, {Ui.Amounts.Short(ms.Sum(f => f.Taken?.Sum(x => x.Damage) ?? 0))} taken, "
+                    + $"{ms.Sum(f => f.DeathLog?.Count ?? 0)} deaths logged, {ms.Sum(f => f.Buffs?.Count ?? 0)} uptimes, {e.BossHpPerSecond?.Count ?? 0} s of boss HP");
             foreach (var x in e.Splits) Console.WriteLine($"   split {x.Boss}{(x.Wave ? " (wave)" : "")}: {x.Outcome} in {BossParser.Clock(TimeSpan.FromSeconds(x.Seconds))}");
             long total = Math.Max(1, e.Roster.Sum(f => f.Damage));
             foreach (var f in e.Ranked())
@@ -137,6 +142,46 @@ public static class ParserTests
         Console.WriteLine($"{frames} pictures, {withParty} with a party list, {members} members: {string.Join(", ", counts.Select(kv => $"{kv.Key} {kv.Value}"))}, unnamed {unnamed}");
         return 0;
     }
+
+    /// <summary>
+    /// A recording replayed through this build's decoder into a Bosses-only Parser, as parser-replay does (each piece at its
+    /// own capture time, the tick at each): the pulls kept. <paramref name="hits"/> false leaves the hit stream undrained,
+    /// as a decoder before interface version 10 would.
+    /// </summary>
+    static List<Encounter> Replay(string pcapng, bool hits, int port = 13328)
+    {
+        var kept = new List<Encounter>();
+        var p = new BossParser { Ended = kept.Add };
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var (at, frame, link) in Pcapng.Read(pcapng))
+            if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == port) segs.Add((at, s));
+        DateTime last = DateTime.MinValue;
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var st = new TcpStream
+            {
+                OnData = (d, at) =>
+                {
+                    last = at;
+                    dec.Feed(d, at);
+                    while (dec.Next() is not null) { }
+                    while (dec.NextItem() is not null) { }
+                    while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
+                    while (dec.NextBossEvent() is { } b) p.Take(b);
+                    while (dec.NextHit() is { } h) { if (hits) p.Take(h); }
+                },
+                OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
+            };
+            foreach (var (at, s) in conn) { st.Add(s.Seq, s.Payload, at, s.Syn); p.Tick(at); }
+        }
+        p.Tick(DateTime.MaxValue.AddDays(-1));
+        return kept;
+    }
+
+    /// <summary>Steven's recordings for the store v2 cases (his tracker's own, 2026-11-14 14:00 to 17:00), when they are on this PC.</summary>
+    static List<string> Recordings() => new[] { "20261114-14", "20261114-15", "20261114-16" }
+        .Select(n => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "packets", n + ".pcapng")).Where(File.Exists).ToList();
 
     /// <summary>Steven's saved fights (tracker/tests/parser/NAME.jsonl, his encounters.jsonl as kept), read as the tracker reads them.</summary>
     static List<Encounter> Saved(string name)
@@ -1005,6 +1050,81 @@ public static class ParserTests
             Check(fresh is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, Targets: "boss", DpsActive: false } && steven is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, HonestSettled: true }
                 && chose is { Deaths: true, Filters: false, Hovers: true, KillsNear: true } && later is { Deaths: false, Filters: false, Hovers: false },
                 "7. serious defaults: Deaths, List filters and Explanations on hover on for a new player and once for Steven's parser.json as it was; a player who had chosen keeps their choice; an off after the move stays off");
+        }
+
+        // store v2 on made-up hit rows: per-second damage, the boss's HP timeline, casts, biggest and smallest hits, raw hit
+        // kinds, damage taken, a death with its killer and last hits (the killing blow arriving just after the death), uptime
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 870));
+            p.Take(new GroupChanged(t, new[] { Me, Ally }));
+            p.Take(new BossEngaged(t.AddSeconds(1), "Talisra of the Void", 871));
+            p.Take(new BossHealth(t.AddSeconds(1), 871, 100_000, 100_000));
+            p.Take(new CastMade(t.AddSeconds(1.5), 1, 1, 12240000, 7));
+            p.Take(new HitDealt(t.AddSeconds(1.6), 1, 1, 871, 3_000, 12240000, 7, 1, false, false, 3, 0x08, 0, 0));
+            p.Take(new HitDealt(t.AddSeconds(1.6), 1, 1, 871, 1_000, 12240000, 7, 2, false, false, 2, 0, 1, 0));
+            p.Take(new DamageDealt(t.AddSeconds(1.6), 1, 871, 4_000, Skill: 12240000, Hits: 2));
+            p.Take(new BossHealth(t.AddSeconds(1.6), 871, 96_000, 100_000));
+            p.Take(new HitDealt(t.AddSeconds(3.2), 1, 1, 871, 500, 12240000, 0, 0, true, false, 0, 0, 0, 0));
+            p.Take(new DamageDealt(t.AddSeconds(3.2), 1, 871, 500, Skill: 12240000, Hits: 0));
+            p.Take(new BossHealth(t.AddSeconds(3.2), 871, 95_500, 100_000));
+            p.Take(new EffectChanged(t.AddSeconds(2), 2, 4, 1702000101, true, 10_000));
+            p.Take(new HitTaken(t.AddSeconds(4), 871, 2, 8_000, 9000100, 2300908));
+            p.Take(new HitTaken(t.AddSeconds(5), 871, 2, 9_000, 9000200, 2300908));
+            p.Take(new UnitDied(t.AddSeconds(6), 2, "Aerin", false, 871, 9000300));
+            p.Take(new HitTaken(t.AddSeconds(6.4), 871, 2, 12_000, 9000300, 2300908));   // the killing blow, just after the death
+            p.Take(new EffectChanged(t.AddSeconds(6), 2, 4, 1702000101, false, 4_000));
+            p.Take(new DamageDealt(t.AddSeconds(8), 1, 871, 5_000, Skill: 12240000, Hits: 1));
+            p.Take(new BossHealth(t.AddSeconds(8), 871, 0, 100_000));
+            p.Take(new UnitDied(t.AddSeconds(8), 871, "Talisra of the Void", true));
+            var e = kept.Single(); var me = e.Members.Single(f => f.Id == 1); var aerin = e.Members.Single(f => f.Id == 2);
+            var j = me.Abilities.Single(a => a.Skill == 12240000);
+            Check(me.PerSecond!.Sum() == me.Damage && me.BossPerSecond!.Sum() == me.BossDamage && me.PerSecond.Count == e.SecondOf(e.End!.Value) + 1 && me.PerSecond[0] == 4_000 && me.PerSecond[2] == 500,
+                $"store v2: each member's damage by second from the pull's start adds up to their damage ({string.Join(" ", me.PerSecond)})");
+            Check(e.BossHpPerSecond is { } hp && hp.Count == e.SecondOf(e.End.Value) + 1 && hp[0] == 0.96 && hp[^1] == 0,
+                $"...the boss's HP at each second, to the kill ({string.Join(" ", e.BossHpPerSecond ?? new())})");
+            Check(j is { Casts: 1, StreamHits: 2, Max: 3_000, Min: 1_000, Hits: 3 } && j.Kinds!["result:3"] == 1 && j.Kinds["mark:3"] == 1 && j.Kinds["multi"] == 1,
+                "...an ability's casts, its hits seen one by one with the biggest and smallest (a part with no hit under it counts as none), its raw kinds counted");
+            var death = aerin.DeathLog!.Single();
+            Check(death is { At: 5.0, KillerId: 871, KillerSkill: 9000300, Killer: "Talisra of the Void", BossHpLeft: 0.955 } && death.Last.Select(h => h.Amount).SequenceEqual(new long[] { 8_000, 9_000, 12_000 })
+                && aerin.Taken!.Sum(x => x.Damage) == 29_000 && aerin.Taken.All(x => x.Source == "Talisra of the Void"),
+                $"...a death: when, the boss's HP then, the killer and its skill, the last hits taken with the killing blow that came just after ({death.Last.Count}); damage taken by skill and source");
+            Check(aerin.Buffs!.Single() is { Id: 1702000101, Skill: 17020001, Seconds: 4 } b && Math.Abs(b.Share - 4 / e.Duration(e.End.Value).TotalSeconds) < 1e-9,
+                $"...an effect's uptime: {aerin.Buffs.Single().Seconds} s, {Encounter.Pct(aerin.Buffs.Single().Share)} of the pull");
+            var back = System.Text.Json.JsonSerializer.Deserialize<Encounter>(System.Text.Json.JsonSerializer.Serialize(e))!;
+            var old = Saved("krao-cave").First();
+            Check(back.Members.Single(f => f.Id == 2).DeathLog!.Single().Last.Count == 3 && back.BossHpPerSecond!.Count == e.BossHpPerSecond!.Count
+                && old.BossHpPerSecond == null && old.Members.All(f => f.PerSecond == null && f.Taken == null && f.DeathLog == null && f.Abilities.All(a => a.Casts == null && a.Max == null)),
+                "...kept and read back whole; a record kept before reads with every new field empty");
+        }
+
+        // store v2 on Steven's recordings (20261114-14 to -16), replayed through this build's decoder: totals as without the hit
+        // stream, buckets adding up, casts at or below hits, deaths with a killer. Only where the decoder (interface version 10)
+        // and the recordings are on this PC
+        {
+            var recs = Recordings();
+            if (NativeDecoder.Version < 10 || recs.Count == 0)
+                Console.WriteLine($"skip  store v2 on Steven's recordings: decoder interface {NativeDecoder.Version}, {recs.Count} recordings here");
+            else
+            {
+                var with = recs.SelectMany(r => Replay(r, hits: true)).ToList();
+                var without = recs.SelectMany(r => Replay(r, hits: false)).ToList();
+                string Totals(List<Encounter> l) => string.Join("|", l.Select(e => $"{e.Boss}:{e.Outcome}:{e.Credited}:{e.Uncredited}:{string.Join(",", e.Members.OrderBy(f => f.Id).Select(f => $"{f.Id}={f.Damage}/{f.BossDamage}"))}"));
+                Check(with.Count > 0 && Totals(with) == Totals(without),
+                    $"store v2, Steven's recordings: {with.Count} pulls, every total the same with the hit stream as without ({Ui.Amounts.Short(with.Sum(e => e.Credited))} credited)");
+                var members = with.SelectMany(e => e.Members.Where(f => f.Damage > 0)).ToList();
+                Check(members.All(f => f.PerSecond != null && f.PerSecond.Sum() == f.Damage && (f.BossPerSecond?.Sum() ?? 0) == f.BossDamage),
+                    $"...each member's per-second damage adds up to their damage ({members.Count} members)");
+                var abilities = members.SelectMany(f => f.Abilities).Where(a => a.Damage > 0 && a.Skill > 0).ToList();
+                int withCasts = abilities.Count(a => a.Casts > 0), over = abilities.Count(a => a.Casts > (a.StreamHits ?? 0));
+                Check(withCasts > 0 && over == 0 && abilities.Where(a => a.StreamHits > 0).All(a => a.Max >= a.Min && a.Min > 0),
+                    $"...casts at or below hits for every ability ({withCasts} with casts, {abilities.Sum(a => a.Casts ?? 0):N0} casts, {abilities.Sum(a => a.StreamHits ?? 0):N0} hits; {over} over), each with its biggest and smallest hit");
+                var deaths = members.SelectMany(f => f.DeathLog ?? new()).ToList();
+                Check(deaths.All(d => d.KillerId != 0 && d.KillerSkill != 0 && d.Last.Count > 0) && members.Sum(f => f.DeathLog?.Count ?? 0) == members.Sum(f => f.Deaths),
+                    $"...every death with its killer, killing skill and last hits ({deaths.Count} deaths, {deaths.Count(d => d.Killer.Length > 0)} by the boss by name), one record each");
+                Check(members.Any(f => f.Taken is { Count: > 0 }) && members.Any(f => f.Buffs is { Count: > 0 }) && with.All(e => e.BossHpPerSecond is { Count: > 0 }),
+                    $"...damage taken, uptimes and the boss's HP timeline filled ({members.Sum(f => f.Taken?.Sum(x => x.Damage) ?? 0):N0} taken, {members.Sum(f => f.Buffs?.Count ?? 0)} uptimes)");
+            }
         }
 
         // Group details on by default (Steven, 2026-11-14): a fresh install has it on; a parser.json from before moves to on

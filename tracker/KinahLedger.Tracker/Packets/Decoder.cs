@@ -82,6 +82,8 @@ internal sealed class BossMapper
 {
     readonly Dictionary<long, GroupMember> _group = new();
     long _instance;
+    /// <summary>A death row carries its killer and killing skill (interface version 10); before, those fields meant nothing.</summary>
+    public bool Killers { get; init; }
 
     public void Reset() => _group.Clear();
 
@@ -104,7 +106,7 @@ internal sealed class BossMapper
             // reason it has none (0: not said)
             case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), Reason: r.Entity == 0 ? r.Outcome : 0);
             case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
-            case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1);
+            case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1, Killers ? r.CombatPower : 0, Killers ? r.Skill : 0);   // version 10: killer and skill
             default: return null;   // a boss seen (its HP comes with the pull), or a kind this build doesn't know
         }
     }
@@ -140,6 +142,8 @@ public interface IGameDecoder : IDisposable
     bool ReadsBosses => false;
     /// <summary>The next boss parser event, or null (always null for a decoder that reads no boss fights).</summary>
     BossEvent? NextBossEvent() => null;
+    /// <summary>The next row of the hit stream (klnet.dll's interface version 10) as a Parser event, or null (always null for a decoder without it).</summary>
+    BossEvent? NextHit() => null;
     /// <summary>True when this decoder reads the inventory's snapshot too (klnet.dll's interface version 8).</summary>
     bool ReadsBag => false;
     /// <summary>The next record of an inventory snapshot, or null (always null for a decoder that reads none).</summary>
@@ -177,6 +181,12 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
     [StructLayout(LayoutKind.Sequential)] struct KlBagRow { public long AtUtcTicks; public int Kind; public int Count; public uint ItemId; public int Container; public int Slot; public int Gear; public int Currency; public int Reserved; public long StackId; public long Amount; }
     [StructLayout(LayoutKind.Sequential)] struct KlGather { public long AtUtcTicks; public uint NodeId; public uint TemplateId; public uint ItemId; public int Result; public int Count; public int Attempt; public int Flags; public float X, Y, Z; }
+    /// <summary>A hit row (interface version 10): 88 bytes.</summary>
+    [StructLayout(LayoutKind.Sequential)] struct KlHit
+    {
+        public long AtUtcTicks; public int Kind, Encounter; public long Source, Actor, Target, Amount, Raw;
+        public uint SkillId; public int Skill; public ushort RowFlags, Marks; public byte Result, Cast, Multi, Why; public int N, Flags; public long Extra;
+    }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -194,6 +204,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_area_event")] static extern int NextAreaN(nint h, KlAreaEvent* ev);
     [DllImport("klnet", EntryPoint = "kl_next_bag")] static extern int NextBagN(nint h, KlBagRow* row);
     [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
+    [DllImport("klnet", EntryPoint = "kl_next_hit")] static extern int NextHitN(nint h, KlHit* x);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
@@ -244,7 +255,38 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         if (NextItemN(_h, &c) != 1 || c.Op is < 0 or > 2) return null;
         return new ItemChange(new DateTime(c.AtUtcTicks, DateTimeKind.Utc), c.ItemId, (ItemOp)c.Op, c.StackId, c.Delta, c.Total, c.First != 0, c.Batch, c.BatchRows, c.BatchFell != 0);
     }
-    readonly BossMapper _bosses = new();
+    readonly BossMapper _bosses = new() { Killers = Version >= 10 };
+    /// <summary>The hit row's size (88 bytes: a check for the tests).</summary>
+    internal static int HitRecordSize => sizeof(KlHit);
+    // a dll that says 10 or more but was built without the hit stream: asked once, then the Parser goes on without its depth
+    static bool _noHits;
+    public bool ReadsHits => Version >= 10 && !_noHits;
+    /// <summary>The next row of the hit stream as the Parser's event (hits, hits taken, casts, effects), or null.</summary>
+    public BossEvent? NextHit()
+    {
+        if (_h == 0 || !ReadsHits) return null;
+        KlHit x;
+        while (true)
+        {
+            int got;
+            try { got = NextHitN(_h, &x); }
+            catch (EntryPointNotFoundException) { _noHits = true; return null; }
+            if (got != 1) return null;
+            if (MapHit(x) is { } e) return e;
+        }
+    }
+    static BossEvent? MapHit(in KlHit x)
+    {
+        var at = new DateTime(x.AtUtcTicks, DateTimeKind.Utc);
+        return x.Kind switch
+        {
+            1 => new HitDealt(at, x.Source, x.Actor, x.Target, x.Amount, x.Skill, x.Cast, x.N, (x.Flags & 2) != 0, (x.Flags & 4) != 0, x.Result, x.Marks, x.Multi, x.Why),
+            2 => new HitTaken(at, x.Source, x.Target, x.Amount, x.Skill, x.Extra),
+            3 => new CastMade(at, x.Source, x.Actor, x.Skill, x.Cast),
+            4 or 5 => new EffectChanged(at, x.Target, x.N, x.Skill, x.Kind == 4, x.Extra),
+            _ => null,   // a kind this build doesn't know
+        };
+    }
     // a dll of version 4 or later without kl_next_fight (one built from a branch that took a later number first): no boss
     // fights, found once, and packet reading goes on
     static bool _noBossExport;

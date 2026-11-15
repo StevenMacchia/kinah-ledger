@@ -89,6 +89,33 @@ public sealed class Encounter : IJsonOnDeserialized
     [JsonIgnore] public double? BossHpLeft => BossMaxHp > 0 ? Math.Clamp(BossHp / (double)BossMaxHp, 0, 1) : null;
     /// <summary>The tracker version that kept it.</summary>
     public string App { get; set; } = "";
+    /// <summary>
+    /// The boss's HP left (0 to 1) at the end of each second from <see cref="Start"/> (store v2, a pull's timeline); null
+    /// for a record kept before, or with no HP known.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<double>? BossHpPerSecond { get; set; }
+
+    /// <summary>The second of the record an instant falls in (0 at <see cref="Start"/>; before it, 0).</summary>
+    public int SecondOf(DateTime at) => (int)Math.Max(0, Math.Floor((at - Start).TotalSeconds));
+
+    /// <summary>
+    /// The record's start moves (a pull starts at its first damage): the per-second lists move with it, so second 0 is
+    /// still the start (seconds before a new later start dropped; an earlier start adds seconds in front).
+    /// </summary>
+    public void MoveStart(DateTime to)
+    {
+        int shift = (int)Math.Floor((to - Start).TotalSeconds);
+        Start = to;
+        if (shift == 0) return;
+        static void Move<T>(List<T>? l, int k, T fill)
+        {
+            if (l == null) return;
+            if (k > 0) l.RemoveRange(0, Math.Min(k, l.Count));
+            else l.InsertRange(0, Enumerable.Repeat(fill, -k));
+        }
+        Move(BossHpPerSecond, shift, 1.0);
+        foreach (var f in Roster) { Move(f.PerSecond, shift, 0L); Move(f.BossPerSecond, shift, 0L); }
+    }
     /// <summary>Gaps in the game's traffic during it.</summary>
     public int Gaps { get; set; }
     /// <summary>A run's boss pulls, in order (a live run's copy ends with the pull under way).</summary>
@@ -367,6 +394,34 @@ public sealed class Fighter
     /// <summary>Damage by ability (the game's skill id; 0: damage over time no skill named), with its hits: a member's breakdown.</summary>
     public List<AbilityShare> Abilities { get; set; } = new();
 
+    // ---- store v2 (the hit stream): each null in a record kept before, or until its data comes ----
+    /// <summary>Damage to every target, and to the boss, in each second from Encounter.Start (index = second).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? PerSecond { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? BossPerSecond { get; set; }
+    /// <summary>Damage the member took, by skill and attacker.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<TakenShare>? Taken { get; set; }
+    /// <summary>Each death: when, the boss's HP then, the killer and the killing skill, the last hits taken.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<DeathRecord>? DeathLog { get; set; }
+    /// <summary>Effects on the member: how long each was on during the record.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<BuffUptime>? Buffs { get; set; }
+
+    /// <summary>Adds damage at its second to a per-second list (made on first use); the list.</summary>
+    internal static List<long> AddAt(List<long>? list, int second, long amount)
+    {
+        list ??= new();
+        while (list.Count <= second) list.Add(0);
+        list[second] += amount;
+        return list;
+    }
+
+    /// <summary>The member's row for a skill, made (with no damage yet) when the hit stream names it first.</summary>
+    internal AbilityShare Ability(int skill)
+    {
+        var a = Abilities.FirstOrDefault(x => x.Skill == skill);
+        if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill });
+        return a;
+    }
+
     /// <summary>A pause in a member's damage longer than this (seconds) is left out of their active time.</summary>
     public const double PauseSeconds = 20;
     /// <summary>The member's first and last hit in this record; null before any.</summary>
@@ -454,6 +509,56 @@ public sealed class AbilityShare
     /// <summary>The average a counted hit (damage that came with no count left out); null with no hit counted, shown "–".</summary>
     [JsonIgnore] public double? Average => Hits > 0 ? Math.Max(0, Damage - Uncounted) / (double)Hits : null;
     [JsonIgnore] public double? BossAverage => BossHits > 0 ? Math.Max(0, BossDamage - BossUncounted) / (double)BossHits : null;
+
+    // ---- store v2 (the hit stream): null in a record kept before, or until its data comes ----
+    /// <summary>Casts of the skill.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? Casts { get; set; }
+    /// <summary>Hits seen one by one (the denominator for Max, Min and Kinds), and the biggest and smallest of them.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? StreamHits { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? Max { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? Min { get; set; }
+    /// <summary>The hits' kinds as they came, counted by an internal key, unnamed until mapped (never shown before then).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? Kinds { get; set; }
+}
+
+/// <summary>Damage a member took from one attacker's skill: Source is the boss's name when the boss dealt it, else "".</summary>
+public sealed class TakenShare
+{
+    public int Skill { get; set; }
+    public string Source { get; set; } = "";
+    public long SourceId { get; set; }
+    public long Damage { get; set; }
+    public int Hits { get; set; }
+}
+
+/// <summary>One death of a member's: seconds from the record's start, the boss's HP left then (0 to 1), the killer and killing skill, the last hits taken (up to 5, the killing blow last).</summary>
+public sealed class DeathRecord
+{
+    public double At { get; set; }
+    public double? BossHpLeft { get; set; }
+    public int KillerSkill { get; set; }
+    public string Killer { get; set; } = "";
+    public long KillerId { get; set; }
+    public List<TakenHit> Last { get; set; } = new();
+}
+
+/// <summary>A hit taken, in a death's recap: seconds from the record's start, the skill, the attacker, the damage; HP after it when known.</summary>
+public sealed class TakenHit
+{
+    public double At { get; set; }
+    public int Skill { get; set; }
+    public string Source { get; set; } = "";
+    public long Amount { get; set; }
+    public double? HpAfter { get; set; }
+}
+
+/// <summary>An effect on a member: its id (the skill's id x 100 + n), the skill to name it by (Abilities.Name), seconds on during the record and its share (0 to 1) of the member's time in the group.</summary>
+public sealed class BuffUptime
+{
+    public int Id { get; set; }
+    public int Skill { get; set; }
+    public double Seconds { get; set; }
+    public double Share { get; set; }
 }
 
 /// <summary>An enemy that died near the player during a record, or one the player killed (Yours; a player when Player).</summary>

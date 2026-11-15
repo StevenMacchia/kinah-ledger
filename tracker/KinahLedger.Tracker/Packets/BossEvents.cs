@@ -45,8 +45,26 @@ public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long
 /// <summary>A boss's HP now and its max, after a change while it is fought (the Parser's HP bar); 0 = not known.</summary>
 public sealed record BossHealth(DateTime At, long BossId, long Hp, long Max) : BossEvent(At);
 
-/// <summary>A unit near the player died: an enemy (Boss when the game marks it so) or a group member.</summary>
-public sealed record UnitDied(DateTime At, long Id, string Name, bool Boss) : BossEvent(At);
+/// <summary>A unit near the player died: an enemy (Boss when the game marks it so) or a group member; who killed it and with what, when known (0 = not).</summary>
+public sealed record UnitDied(DateTime At, long Id, string Name, bool Boss, long KillerId = 0, int KillerSkill = 0) : BossEvent(At);
+
+/// <summary>
+/// One hit of a member's (Source: who it counts for, a summon's owner; Actor: who dealt it), its part of the boss's HP fall
+/// (Amount), by Skill (as DamageDealt's). NoRow: a part with no single hit under it (count its damage, not a hit). Tick: a
+/// damage over time's tick. Cast and N tie hits to their cast. Result, Marks and Multi are the hit's kind as it came,
+/// unnamed until they are mapped. Why: for Source 0, the reason no one is credited (as DamageDealt.Reason).
+/// </summary>
+public sealed record HitDealt(DateTime At, long Source, long Actor, long Target, long Amount, int Skill, int Cast, int N, bool NoRow, bool Tick,
+    int Result, int Marks, int Multi, int Why) : BossEvent(At);
+
+/// <summary>A hit a member took: from Attacker (Npc: its kind, 0 = not known), Amount, by Skill.</summary>
+public sealed record HitTaken(DateTime At, long Attacker, long Target, long Amount, int Skill, long Npc) : BossEvent(At);
+
+/// <summary>A cast of Skill by Actor, counted for Source (a summon's owner).</summary>
+public sealed record CastMade(DateTime At, long Source, long Actor, int Skill, int Cast) : BossEvent(At);
+
+/// <summary>An effect put on (On) or taken off a member, in one of their slots: its id (the skill's id x 100 + n), and its length in ms (on: as given, -1 none; off: how long it was on).</summary>
+public sealed record EffectChanged(DateTime At, long Target, int Slot, int Effect, bool On, long Ms) : BossEvent(At);
 
 /// <summary>The reader lost some of the game's traffic here: what follows doesn't fully continue what came before.</summary>
 public sealed record FeedGap(DateTime At) : BossEvent(At);
