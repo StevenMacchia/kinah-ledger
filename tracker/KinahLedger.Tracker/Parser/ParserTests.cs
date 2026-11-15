@@ -1204,13 +1204,19 @@ public static class ParserTests
                 Check(Math.Abs(fightDps - a6.BossDamage / t6.Duration(end6).TotalSeconds) < 0.01 && Math.Abs(activeDps - a6.BossDamage / active) < 0.01,
                     $"...both DPS modes: {S(fightDps)} over the fight, {S(activeDps)} over their active time");
 
-                // 6. short fights: no 1 s floor; under 3 s a DPS is "–"
+                // 6. short fights: a figure from the first hit (Steven, 2026-11-15: "the dps meter takes like 2-3 seconds after
+                // first hit to start working ... too long"), never a hit over a split second: under 1 s it is over 1 s
                 var (p7, _) = New();
                 var at7 = harcon.Start.AddSeconds(2.5);
                 foreach (var ev in EventsOf(harcon, 10, end: false).Where(ev => ev.At <= at7)) p7.Take(ev);
                 var l7 = p7.LiveAt(at7)!;
-                Check(l7.HasDamage && l7.Credited > 0 && l7.GroupDpsText(at7) == "–" && l7.GroupDpsOf(at7) == null && l7.Members.Where(f => f.Damage > 0).All(f => l7.DpsText(f, at7) == "–"),
-                    $"6. Harcon's first 2.5 s ({S(l7.Credited)} dealt): group and member DPS show –, not a figure made from a second's floor");
+                Check(l7.HasDamage && l7.Credited > 0 && l7.GroupDpsOf(at7) is { } g7 && Math.Abs(g7 - l7.Credited / (at7 - l7.Start).TotalSeconds) < 0.01
+                    && l7.Members.Where(f => f.Damage > 0).All(f => l7.DpsText(f, at7) != "–"),
+                    $"6. Harcon's first 2.5 s ({S(l7.Credited)} dealt): group and member DPS show a figure already ({l7.GroupDpsText(at7)}), the damage over the 2.5 s");
+                var early = l7.Start.AddSeconds(0.3);
+                double ge = l7.GroupDps(early);
+                Check(Math.Abs(ge - l7.Credited / Encounter.MinDpsSeconds) < 0.01,
+                    $"...0.3 s in, the damage so far over 1 s ({Ui.Amounts.Short(ge)}), not over 0.3 s");
                 var (p8, _) = New();
                 var at8 = harcon.Start.AddSeconds(4);
                 foreach (var ev in EventsOf(harcon, 11, end: false).Where(ev => ev.At <= at8)) p8.Take(ev);
@@ -1219,8 +1225,8 @@ public static class ParserTests
                 Encounter.ActiveBasis = true;
                 string onceText = l8.DpsText(once, at8);
                 Encounter.ActiveBasis = false;
-                Check(Math.Abs(l8.GroupDps(at8) - l8.Credited / (at8 - l8.Start).TotalSeconds) < 0.01 && onceText == "–",
-                    $"...at 4 s the group DPS is the damage over the 4 s exactly ({l8.GroupDpsText(at8)}); over active time, {once.Name}'s {once.ActiveSeconds:0.0} s shows –, not their damage over 1 s");
+                Check(Math.Abs(l8.GroupDps(at8) - l8.Credited / (at8 - l8.Start).TotalSeconds) < 0.01 && onceText == Ui.Amounts.Short(l8.Figure(once) / Encounter.MinDpsSeconds),
+                    $"...at 4 s the group DPS is the damage over the 4 s exactly ({l8.GroupDpsText(at8)}); over active time, {once.Name}'s {once.ActiveSeconds:0.0} s reads their damage over 1 s ({onceText}), never over a split second");
 
                 // 8. hit counts: a share with no count adds no hit; the average is over the counted hits; no count at all is "–"
                 var pigTop = piggie.Abilities.Where(a => a.Skill != 0).OrderByDescending(a => a.Damage).First();
@@ -1610,8 +1616,20 @@ public static class ParserTests
             var b = p.AlwaysLive!;
             Check(At(b, 100) > At(a, 99.9), $"...a hit raises it at once ({At(a, 99.9):N0} to {At(b, 100):N0})");
             p.Tick(t.AddSeconds(100 + BossParser.AlwaysIdleSeconds));
-            Check(p.AlwaysLive == null && p.AlwaysEnded is { } fin && Math.Abs(fin.Dps(fin.You!, t.AddSeconds(500)) - 70_000 / 100.0) < 1,
-                "...a few seconds without a hit end it: the fight's result is held at its last hit (70K over its 100 s), the next hit starts from 0");
+            Check(p.AlwaysLive == null && p.AlwaysEnded is { } fin && Math.Abs(fin.Dps(fin.You!, t.AddSeconds(500)) - 70_000 / 100.0) < 1
+                && fin.Dps(fin.You!, t.AddSeconds(500)) > At(b, 100 + BossParser.AlwaysIdleSeconds - 0.1),
+                $"...a few seconds without a hit end it: the live figure falls through them ({At(b, 100 + BossParser.AlwaysIdleSeconds - 0.1):N0}), then goes back to the fight's DPS at its last hit, held (70K over its 100 s), the next hit starting from 0");
+            // a hit taken keeps it going, but the held figure is still at the last hit dealt
+            {
+                var (ph, _) = New();
+                ph.Take(new GroupChanged(t, new[] { Me }));
+                ph.Take(new DamageDealt(t, 1, 5000, 10_000, "Swoly", true));
+                ph.Take(new DamageDealt(t.AddSeconds(4), 1, 5000, 10_000, "Swoly", true));
+                ph.Take(new HitTaken(t.AddSeconds(7), 5000, 1, 2_000, 0, 5000));
+                ph.Tick(t.AddSeconds(7 + BossParser.AlwaysIdleSeconds));
+                Check(ph.AlwaysEnded is { } hh && hh.End == t.AddSeconds(4) && Math.Abs(hh.Dps(hh.You!, t.AddSeconds(60)) - 5_000) < 1,
+                    $"...a hit taken after your last one keeps the meter up, but the held DPS is at your last hit dealt ({ph.AlwaysEnded?.End:HH:mm:ss}, 20K over 4 s)");
+            }
             // a boss pull: over the pull's own time
             var (q, _) = New();
             q.Take(new GroupChanged(t, new[] { Me }));
