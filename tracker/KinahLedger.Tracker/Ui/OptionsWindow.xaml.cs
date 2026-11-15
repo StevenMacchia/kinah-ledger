@@ -440,12 +440,17 @@ public partial class OptionsWindow : Window
         Close();
     }
 
+    /// <summary>
+    /// Parked off every screen (the self-tests and renders): nothing of its own opens on a screen. Its save question and its
+    /// pop-up lists stay shut (Windows keeps a pop-up on a screen, so one under a parked window lands in a screen's corner).
+    /// </summary>
+    internal bool Parked => Left < -5000 || Top < -5000;
+
     void OnClosingOptions(object? sender, CancelEventArgs e)
     {
         EndCapture();
-        // a window parked off every screen (the self-tests and renders) never asks: its question would open on the player's screen
-        bool parked = Left < -5000 || Top < -5000;
-        if (!_closeConfirmed && !parked && (_edit != _saved || _resetSpot))
+        // a parked window never asks: its question would open on the player's screen
+        if (!_closeConfirmed && !Parked && (_edit != _saved || _resetSpot))
         {
             var r = MessageBox.Show(this, "Save your changes to Kinah Ledger's options?", "Kinah Ledger", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }

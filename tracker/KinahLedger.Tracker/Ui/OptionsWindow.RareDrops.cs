@@ -256,7 +256,8 @@ public partial class OptionsWindow
         var have = MainWindow.WatchNames(_edit.RareWatch);
         foreach (var i in _host.ItemsLike(text, 12).Where(i => !have.Contains(i.Name, StringComparer.OrdinalIgnoreCase)).Take(8))
             _watchSuggest.Children.Add(SuggestRow(i.Name, i.Grade, _host.WatchItem(i.Name).Icon));
-        _watchPop.IsOpen = _watchSuggest.Children.Count > 0 && IsVisible;
+        // the list itself is filled either way (the self-test reads it); parked, it never opens on a screen
+        _watchPop.IsOpen = _watchSuggest.Children.Count > 0 && IsVisible && !Parked;
     }
 
     Button SuggestRow(string name, string grade, string icon)
