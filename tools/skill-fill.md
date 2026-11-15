@@ -16,8 +16,16 @@ it once in reads.log as `ability unnamed: <id> (<class>)`.
   table as A2Tools carries it (taengu/A2Tools-DPS-Meter, GPL-3.0; it agrees with MetaBot on 279 of 279). That table is a
   check only: nothing from it ships. A name it contradicts is left out; where the two MIT tables differ, the one it
   confirms ships.
-- Names only the A2Tools table has (228 on 2026-11-14) are left out until a non-GPL source names them; they read
+- Names only the A2Tools table has (181 on 2026-11-15: 64 Brawler skills, 52 spirit commands, 39 Theostones not in the
+  item dictionary, 26 basic attacks and spirit effects) are left out until a non-GPL source names them; they read
   "<Class> skill". The report lists the ones the saved fights use, with their share.
+- `ncitem`: a Theostone from NCSoft's own item dictionary (`data/tw-items.json`, `tools/crawl-tw.js`), the item's name; its
+  skill id by the rule the MIT-paired Theostones show: item `5138G00NN` (G 5 Rare, 4 Legend, 3 Unique) grants skill
+  `30` + R + Q + `NN+6`, Q the grade (0, 1, 2) and R 1 for NN up to 10, else 0 (Zikel's Vestige, item 513850011, is
+  3000017). The tool adds none if the rule misses one paired Theostone, and each id must be one the check table confirms.
+- `family`: a spirit's basic attack at another rank (`1000xy`, the tens digit the spirit), named for its spirit when
+  every MIT-named id of that spirit has the one name and the check table agrees; `of` is one of them. No such rule for
+  the spirit commands: from the 14xx block on, Earth and Wind swap places, so a positional copy would mislabel them.
 - Theostones carry `item`, their MetaBot item page, when `--verify-items` found one (18 of 18 on 2026-11-14).
 - Icons (`icon`): `nc:<file>` is the game's own file on NCSoft's game-data CDN
   (`https://assets.playnccdn.com/static-aion2-gamedata/resources/<file>.png`) as AcompanION names it; `item:<file>` a

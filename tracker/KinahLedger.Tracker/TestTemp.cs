@@ -8,7 +8,9 @@ namespace KinahLedger;
 /// </summary>
 public static class TestTemp
 {
-    static readonly string[] Modes = { "parse-test", "market-test", "accuracy-test", "replay-bank" };
+    // options-test, ui-shot, packet-test and parser-test too (2026-11-15): two worktrees' options-tests at once wrote one
+    // parser.json under %TEMP%\KinahLedger-test-logs, and one run's "-all" switches failed the other's defaults check
+    static readonly string[] Modes = { "parse-test", "market-test", "accuracy-test", "replay-bank", "options-test", "ui-shot", "packet-test", "parser-test" };
 
     /// <summary>This run's folder, or null outside a test mode (then <see cref="Path"/> is under %TEMP% as before).</summary>
     public static string? Base { get; private set; }

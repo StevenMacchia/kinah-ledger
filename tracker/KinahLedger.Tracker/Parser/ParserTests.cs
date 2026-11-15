@@ -584,6 +584,10 @@ public static class ParserTests
                 && Abilities.Name(18400000) == "Piercing Strike" && Abilities.Name(100051) == "Ancient Spirit: Basic Attack" && Abilities.Name(16001101) == "Fire Spirit: Flame Explosion"
                 && Abilities.Name(3000117) == "Theostone: Traufnir's Courage" && Abilities.ClassOf(12060000) == "templar" && Abilities.ClassOf(100051) == "spiritmaster",
                 "abilities his saved fights showed as numbers: Ashy Call, Punishing Strike, Bursting Blow, Piercing Strike, a spirit's attack, a spirit command, a Theostone");
+            // a Theostone from the game's item dictionary (Boreas's Encouragement, 3000121, in his fights) and a spirit's attack at another rank, with their icons
+            Check(Abilities.Name(3000121) == "Theostone: Boreas's Encouragement" && Abilities.Name(100012) == "Fire Spirit: Basic Attack" && Abilities.ClassOf(100012) == "spiritmaster"
+                && Ui.SkillArt.Image(3000121) != null && Ui.SkillArt.Image(100012) != null && Abilities.Canon(100012) == Abilities.Canon(100014),
+                "a Theostone from the item dictionary and a spirit's attack at another rank: named, with icons, one row with its spirit's other ranks");
             // a class skill's rank or variant (the last four digits) is its base's: name and icon
             Check(Abilities.Resolve(12060003) == 12060000 && Abilities.Name(12060003) == "Punishing Strike" && Abilities.Name(16100005) == "Summon: Fire Spirit"
                 && Abilities.Resolve(16001102) == 16001102 && Abilities.Resolve(100051) == 100051 && Abilities.Resolve(99_999_999) == null && Ui.SkillArt.Image(12060003) == Ui.SkillArt.Image(12060000) && Ui.SkillArt.Image(12060003) != null,

@@ -212,7 +212,15 @@ public sealed partial class HudWindow : Window
             Content = new StackPanel { Children = { face, hintRow } };
         }
         // a drag the player made is the one place remembered (Dragged); placing it by code is not
-        MouseLeftButtonDown += (_, _) => { try { DragMove(); Dragged?.Invoke(); } catch (InvalidOperationException) { } };
+        MouseLeftButtonDown += (_, ev) =>
+        {
+            double l0 = Left, t0 = Top;
+            var src = ev.OriginalSource as DependencyObject;
+            try { DragMove(); } catch (InvalidOperationException) { return; }
+            // a press that didn't move the overlay is a click: on the fight's meter it switches compact and expanded (Parser v2)
+            if (Math.Abs(Left - l0) < 0.5 && Math.Abs(Top - t0) < 0.5 && src != null && InFight(src)) FightClicked?.Invoke();
+            Dragged?.Invoke();
+        };
         MouseEnter += (_, _) => ShowDragHint(); MouseLeave += (_, _) => ShowDragHint();
         SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _unlock.Length == 0);
         SizeChanged += (_, _) => PlacePending();
