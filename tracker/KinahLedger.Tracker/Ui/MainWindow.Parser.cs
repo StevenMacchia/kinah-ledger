@@ -125,9 +125,9 @@ public partial class MainWindow
     internal bool ParserOverlayClickThrough { get => _parserPrefs.ClickThrough; set { if (value != _parserPrefs.ClickThrough) SetParserClickThrough(value); } }
     internal void ResetParserOverlayPosition()
     {
-        _parserPrefs.Left = null; _parserPrefs.Top = null;
+        _parserPrefs.Left = null; _parserPrefs.Top = null; _parserPrefs.Bottom = null;
         if (!_demo) _parserPrefs.Save();
-        _parserOverlay?.Place(null, null, _watcher.GameRect);
+        _parserOverlay?.Place(null, null, null, _watcher.GameRect);
     }
 
     void SetParserClickThrough(bool on)
@@ -364,7 +364,7 @@ public partial class MainWindow
         if (_parserOverlay == null)
         {
             _parserOverlay = new ParserOverlay { HotkeyText = _parserPrefs.Hotkey };   // "Off" (the default) says no shortcut
-            _parserOverlay.Dropped += (x, y) => { _parserPrefs.Left = x; _parserPrefs.Top = y; _parserPrefs.Save(); };
+            _parserOverlay.Dropped += (x, y, b) => { _parserPrefs.Left = x; _parserPrefs.Top = y; _parserPrefs.Bottom = b; _parserPrefs.Save(); };
             _parserOverlay.ModePicked += SetParserMode;
             _parserOverlay.HideAsked += () => SetParserOverlay(false);
             _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
@@ -379,7 +379,7 @@ public partial class MainWindow
             _parserOverlay.Draw(show!, now);
             _parserOverlay.ShowWanted(true);
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
-            _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect);
+            _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _parserPrefs.Bottom, _watcher.GameRect);
             return;
         }
         _parserOverlay.Look = _parserPrefs.Look;   // Settings › In game › Parser › Overlay look, at once

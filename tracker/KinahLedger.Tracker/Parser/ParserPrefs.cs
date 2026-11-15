@@ -15,6 +15,8 @@ public sealed class ParserPrefs
     /// <summary>Where the overlay was dropped, in screen pixels; null until it is dragged once.</summary>
     public int? Left { get; set; }
     public int? Top { get; set; }
+    /// <summary>The meter's bottom edge where it was dropped (pixels): the window is placed by it and grows up from it. Null in a file from before (Top places it then).</summary>
+    public int? Bottom { get; set; }
     /// <summary>The overlay's shortcut ("Off", the default, for none; e.g. "Ctrl+Shift+P").</summary>
     public string Hotkey { get; set; } = DefaultHotkey;
     /// <summary>What the Parser keeps: "boss" (Bosses only, the default), "run" (Full run), "fight" (Every fight).</summary>

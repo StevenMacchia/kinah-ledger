@@ -467,8 +467,27 @@ public static partial class WpfApp
                 if (!boss || kinah || po.ActualWidth < 200) bad.Add($"{lk} (boss {boss}, Kinah {kinah}, {po.ActualWidth:0} wide)");
                 po.Close();
             }
-            Motion.Still = st0;
             check(bad.Count == 0, $"the Parser's own window in each look draws the fight alone{(bad.Count > 0 ? ": " + string.Join("; ", bad) : "")}");
+            // the meter's bottom edge stays put (Steven, 2026-11-15: "the bottom of the DPS meter is always the source of truth -
+            // when the window needs to get bigger, it grows UP not down"): the ready card, a pull, the card again, in each look
+            var moved = new List<string>();
+            foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+            {
+                var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000, Look = lk };
+                po.Draw(Encounter.ReadyAnywhere("Verteron", nowL), nowL); po.Show(); DoEvents();
+                po.AnchorBottomForTest();
+                var e0 = po.EdgesForTest;
+                po.Draw(pullL!, nowL); DoEvents();
+                var e1 = po.EdgesForTest;
+                po.Draw(Encounter.ReadyAnywhere("Verteron", nowL), nowL); DoEvents();
+                var e2 = po.EdgesForTest;
+                if (!(e1.FaceBottom == e0.FaceBottom && e2.FaceBottom == e0.FaceBottom && e1.Top < e0.Top - 40 && e2.Top == e0.Top))
+                    moved.Add($"{lk}: bottom {e0.FaceBottom}/{e1.FaceBottom}/{e2.FaceBottom}, top {e0.Top}/{e1.Top}/{e2.Top}");
+                po.Close();
+            }
+            Motion.Still = st0;
+            check(moved.Count == 0, $"the Parser's own window grows up: the meter's bottom edge stays where it is as it grows into a pull and back, in each look{(moved.Count > 0 ? ": " + string.Join("; ", moved) : "")}");
+            check(ParserPrefs.FromText("{\"Left\":10,\"Top\":20}").Bottom == null, "...a file from before has no bottom edge kept (its top places it once)");
         }
         // the Parser's look row (Parser inside the Kinah overlay on): the four looks drawn for fights, the one in use outlined, a click picks it for the panel too
         sws.Separate.IsChecked = true; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();

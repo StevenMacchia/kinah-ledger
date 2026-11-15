@@ -22,7 +22,7 @@ public sealed class ParserOverlay : Window
     public static ParserOverlay? Current { get; private set; }
 
     /// <summary>The player dropped it somewhere (pixels, the window's top-left).</summary>
-    public event Action<int, int>? Dropped;
+    public event Action<int, int, int>? Dropped;   // left, top, and the meter's bottom edge (what it keeps)
     /// <summary>The overlay's own menu (a right-click): a mode picked, hide it, clicks through.</summary>
     public event Action<ParserMode>? ModePicked;
     public event Action? HideAsked;
@@ -81,7 +81,8 @@ public sealed class ParserOverlay : Window
         System.Windows.Automation.AutomationProperties.SetName(_grab, "Drag to move the overlay");
         _panelFace = HudGlass.On ? HudGlass.Ring(_panel) : _panel;   // the glass's dark outer hairline round it
         _face.Child = _panelFace;
-        Content = new StackPanel { Children = { new Grid { Children = { _face, _grab } }, _hint } };
+        _faceGrid = new Grid { Children = { _face, _grab } };
+        Content = new StackPanel { Children = { _faceGrid, _hint } };
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
         IsVisibleChanged += (_, _) => { if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
@@ -93,15 +94,41 @@ public sealed class ParserOverlay : Window
             // a press that didn't move it is a click: it switches the meter compact or expanded (Parser v2)
             if (Math.Abs(Left - l0) < 0.5 && Math.Abs(Top - t0) < 0.5 && !_grabbing) Clicked?.Invoke();
             var h = new WindowInteropHelper(this).Handle;
-            if (h != IntPtr.Zero && GetWindowRect(h, out var r)) Dropped?.Invoke(r.Left, r.Top);
+            if (h != IntPtr.Zero && GetWindowRect(h, out var r)) { _anchorBottom = r.Top + FaceHeightPx(); Dropped?.Invoke(r.Left, r.Top, _anchorBottom.Value); }
             if (_clickThrough) WatchGrab();
         };
         MouseEnter += (_, _) => ShowHint(); MouseLeave += (_, _) => ShowHint();
         // its small menu: what the Parser keeps, hide, clicks through (never while clicks go through: the game has them)
         MouseRightButtonUp += (_, ev) => { if (_clickThrough || _still) return; ev.Handled = true; OpenMenu(); };
         SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _clickThrough);
-        SizeChanged += (_, _) => PlacePending();
+        SizeChanged += (_, _) => { PlacePending(); KeepBottom(); };
     }
+
+    // ---- the meter's bottom edge stays put (Steven, 2026-11-15: "make sure that the bottom of the DPS meter is always the
+    // source of truth - when the window needs to get bigger, it grows UP not down") ----
+
+    readonly Grid _faceGrid;
+    /// <summary>The meter's bottom edge on screen, in pixels: where it was placed or dropped. The drag hint under it doesn't count.</summary>
+    int? _anchorBottom;
+
+    /// <summary>The meter's own height on screen, in pixels (the hint under it left out).</summary>
+    int FaceHeightPx() => (int)Math.Round(_faceGrid.ActualHeight * VisualTreeHelper.GetDpi(this).DpiScaleY);
+
+    /// <summary>The meter grew or shrank: the window moves so its bottom edge stays where it was, and it grows up.</summary>
+    void KeepBottom()
+    {
+        if (_placeAt != null || _placeIn != null || _anchorBottom is not int b) return;
+        var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero || !IsVisible || !GetWindowRect(h, out var r)) return;
+        int faceH = FaceHeightPx();
+        if (faceH <= 0) return;
+        int want = b - faceH;
+        if (r.Top != want) Native.MoveTo(h, r.Left, want);
+    }
+
+    /// <summary>For the options test: the meter's bottom edge pinned where it is now; and that edge and the window's top, in pixels.</summary>
+    internal void AnchorBottomForTest() { var h = new WindowInteropHelper(this).Handle; if (h != IntPtr.Zero && GetWindowRect(h, out var r)) _anchorBottom = r.Top + FaceHeightPx(); }
+    internal (int Top, int FaceBottom) EdgesForTest { get { var h = new WindowInteropHelper(this).Handle; return h != IntPtr.Zero && GetWindowRect(h, out var r) ? (r.Top, r.Top + FaceHeightPx()) : (0, 0); } }
 
     /// <summary>The overlay's shortcut, said in the drag hint ("Ctrl+Shift+P").</summary>
     /// <summary>
@@ -280,15 +307,20 @@ public sealed class ParserOverlay : Window
 
     // ---- where it goes ----
 
-    (int X, int Y)? _placeAt;
+    (int X, int Y, int? Bottom)? _placeAt;
     System.Drawing.Rectangle? _placeIn;
 
-    /// <summary>Puts it where it was dropped last, or by default near the top left, right of the party list: clear of the party list, the minimap (top-right), the chat (bottom-left) and the skill bar (bottom).</summary>
-    public void Place(int? left, int? top, System.Drawing.Rectangle? game)
+    /// <summary>
+    /// Puts it where it was dropped last (its bottom edge where the meter's was, when known: it grows up from there), or by
+    /// default near the top left, right of the party list: clear of the party list, the minimap (top-right), the chat
+    /// (bottom-left) and the skill bar (bottom).
+    /// </summary>
+    public void Place(int? left, int? top, int? bottom, System.Drawing.Rectangle? game)
     {
         // a place on a screen that is still there (a monitor unplugged since: the default place)
-        _placeAt = left is int l && top is int t && System.Windows.Forms.Screen.AllScreens.Any(s => s.WorkingArea.Contains(l + 20, t + 20)) ? (l, t) : null;
+        _placeAt = left is int l && (bottom ?? top) is int y0 && System.Windows.Forms.Screen.AllScreens.Any(s => s.WorkingArea.Contains(l + 20, bottom != null ? y0 - 20 : y0 + 20)) ? (l, top ?? y0, bottom) : null;
         _placeIn = game;
+        _anchorBottom = null;
         PlacePending();
     }
 
@@ -296,12 +328,19 @@ public sealed class ParserOverlay : Window
     {
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero || ActualWidth < 1) return;
-        if (_placeAt is { } p) { Native.MoveTo(h, p.X, p.Y); _placeAt = null; _placeIn = null; return; }
+        if (_placeAt is { } p)
+        {
+            int y = p.Bottom is int b ? b - FaceHeightPx() : p.Y;
+            Native.MoveTo(h, p.X, y);
+            _anchorBottom = y + FaceHeightPx();
+            _placeAt = null; _placeIn = null; return;
+        }
         if (_placeIn is not { } a) return;
         _placeIn = null;
-        var dpi = VisualTreeHelper.GetDpi(this);
         // right of the party list and its effects (the left edge to about a third of the height across), under the currencies
-        Native.MoveTo(h, a.Left + (int)Math.Round(a.Height * 0.36), a.Top + (int)Math.Round(a.Height * 0.16));
+        int top = a.Top + (int)Math.Round(a.Height * 0.16);
+        Native.MoveTo(h, a.Left + (int)Math.Round(a.Height * 0.36), top);
+        _anchorBottom = top + FaceHeightPx();
     }
 
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
@@ -337,7 +376,7 @@ public sealed class ParserOverlay : Window
     {
         Wanted = on;
         if (_readHidden) return;
-        if (on && !IsVisible) Show();
+        if (on && !IsVisible) { Show(); KeepBottom(); }   // a meter that changed size while hidden still sits on its bottom edge
         else if (!on && IsVisible) Hide();
     }
 
