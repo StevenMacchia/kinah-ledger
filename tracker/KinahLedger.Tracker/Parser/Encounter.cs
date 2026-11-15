@@ -158,6 +158,20 @@ public sealed class Encounter : IJsonOnDeserialized
     public int Hits(AbilityShare a) => BossView ? a.BossHits : a.Hits;
     public double? Average(AbilityShare a) => BossView ? a.BossAverage : a.Average;
 
+    /// <summary>
+    /// A member's abilities as the inspect view lists them: the ids of one ability as one row (Abilities.Canon: a spirit's
+    /// attack at each rank, a skill's damage over time by any of its effects), every figure summed, biggest first as the
+    /// figures count them; abilities with nothing in this view left out.
+    /// </summary>
+    public List<AbilityShare> AbilityRows(Fighter f) => f.Abilities
+        .GroupBy(a => Abilities.Canon(a.Skill))
+        .Select(g => new AbilityShare
+        {
+            Skill = g.Key, Damage = g.Sum(a => a.Damage), Hits = g.Sum(a => a.Hits), Uncounted = g.Sum(a => a.Uncounted),
+            BossDamage = g.Sum(a => a.BossDamage), BossHits = g.Sum(a => a.BossHits), BossUncounted = g.Sum(a => a.BossUncounted),
+        })
+        .Where(a => Figure(a) > 0).OrderByDescending(Figure).ToList();
+
     /// <summary>Damage to adds (anything but the boss) can be told apart: the Boss / All targets switch has something to switch.</summary>
     [JsonIgnore] public bool HasAdds => TargetsSplit && ModeKind != ParserMode.Fights && !Wave && Members.Any(f => f.Damage > f.BossDamage);
 
@@ -385,13 +399,13 @@ public sealed class Fighter
     public double FightingSeconds => StretchesSeconds + (StretchStart is { } s && LastHit is { } l ? Math.Max(1, (l - s).TotalSeconds) : 0);
 
     /// <summary>
-    /// A share of damage by one ability (its effect's ticks apart when <paramref name="overTime"/>): its damage, and its hits
-    /// when they were counted. A share with no count adds no made-up hit, and its damage is left out of the average a hit.
+    /// A share of damage by one ability (a damage over time is its own, negative skill): its damage, and its hits when they
+    /// were counted. A share with no count adds no made-up hit, and its damage is left out of the average a hit.
     /// </summary>
-    public void AddAbility(int skill, long amount, int hits, bool overTime = false, bool boss = false)
+    public void AddAbility(int skill, long amount, int hits, bool boss = false)
     {
-        var a = Abilities.FirstOrDefault(x => x.Skill == skill && x.OverTime == overTime);
-        if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill, OverTime = overTime });
+        var a = Abilities.FirstOrDefault(x => x.Skill == skill);
+        if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill });
         a.Damage += amount;
         if (hits > 0) a.Hits += hits; else a.Uncounted += amount;
         if (!boss) return;
@@ -420,14 +434,12 @@ public sealed class Fighter
 }
 
 /// <summary>
-/// One ability's share of a member's damage: the skill (0 for damage over time no skill named), its effect's ticks apart
-/// (OverTime), its damage and counted hits, to every target and to the boss alone.
+/// One ability's share of a member's damage: the skill (Parser/Abilities.cs names it: 0 damage over time no skill named,
+/// negative a skill's damage over time), its damage and counted hits, to every target and to the boss alone.
 /// </summary>
 public sealed class AbilityShare
 {
     public int Skill { get; set; }
-    /// <summary>The ticks of the skill's effect (a damage over time), shown "Erosion (over time)".</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool OverTime { get; set; }
     public long Damage { get; set; }
     /// <summary>Hits counted (0: none came with a count); Uncounted is the damage that came with no count.</summary>
     public int Hits { get; set; }
@@ -438,8 +450,6 @@ public sealed class AbilityShare
     /// <summary>The average a counted hit (damage that came with no count left out); null with no hit counted, shown "–".</summary>
     [JsonIgnore] public double? Average => Hits > 0 ? Math.Max(0, Damage - Uncounted) / (double)Hits : null;
     [JsonIgnore] public double? BossAverage => BossHits > 0 ? Math.Max(0, BossDamage - BossUncounted) / (double)BossHits : null;
-    /// <summary>"Judgment"; "Erosion (over time)" for an effect's ticks; "Damage over time" for damage no skill named (never "and more").</summary>
-    [JsonIgnore] public string Name => Skill == 0 ? "Damage over time" : OverTime ? Abilities.Name(Skill) + " (over time)" : Abilities.Name(Skill);
 }
 
 /// <summary>An enemy that died near the player during a record, or one the player killed (Yours; a player when Player).</summary>

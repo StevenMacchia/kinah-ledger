@@ -7,7 +7,6 @@ Kinah Ledger tracker: the Parser counts honestly and says what it counts.
 - **Late joiners and leavers marked.** Someone who joins mid-fight is tagged "joined late", and someone who leaves is tagged "left", even after the damage has started. Hover the tag to see when it happened.
 - **No inflated DPS in short fights.** Under 3 seconds DPS shows "–" rather than a big number from a single hit.
 - **Honest hit counts.** When a hit count is missing, Hits and Average show "–" instead of a made-up 1, and the average a hit only uses hits that were counted.
-- **Damage over time, named plainly.** The leftover row in a member's abilities is now called "Damage over time" (no more "and more"). Once a skill's ticks can be told apart, they get a row of their own, like "Hellfire (over time)".
 - **Deaths on by default.** The group's deaths, the list filters and the explanations on hover are now on for everyone. If you had turned any Parser extras on yourself, your choices stay. "Kills and deaths" in Settings › In game › Parser is now two switches: Deaths, and Kills near you.
 
 Installed copies update by themselves in the background.

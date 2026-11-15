@@ -1,1121 +1,464 @@
 {
-"source": "MetaBot.GG AION 2 skill pages (via kinahledger.com data/metabot-classes.json, fetched 2026-10-28)",
+"source": "MetaBot.GG skill pages and public MIT-licensed skill tables, each name checked against the game client's (tools/skill-fill.js)",
+"sources": { "metabot": "https://metabot.gg/en/aion-2/skills/<page> (via kinahledger.com data/metabot-classes.json, fetched 2026-10-28)", "acompanion": "https://github.com/Swellshinider/AcompanION/blob/beb75aef160d74f37300701603490e9c2f41df13/public/gamedata.json (MIT)", "pingmaker": "https://github.com/gunba/pingmaker/blob/09687ad3ddc19f5189562eb8e17375f7c45e02c9/skills.json (MIT)", "item": "https://metabot.gg/en/aion-2/items/<item> (a Theostone's name and icon, --verify-items)", "icon": "\"nc:<file>\": https://assets.playnccdn.com/static-aion2-gamedata/resources/<file>.png; \"item:<file>\": https://metabot.gg/web/aion2/items/<file>; \"waffle\": https://github.com/Waffle-ens/waffle_meter/blob/2bef5591d27f06f9731a862f6bfab3cf94b8f3d9/dotnet/Assets/SkillIcons/<id>.png (MIT); none on a MetaBot skill: https://metabot.gg/web/aion2/skills/<id>.webp" },
 "skills": {
-"11010000": {
-"name": "Rending Blow",
-"cls": "gladiator"
-},
-"11020000": {
-"name": "Keen Strike",
-"cls": "gladiator"
-},
-"11050000": {
-"name": "Crushing Wave",
-"cls": "gladiator"
-},
-"11080000": {
-"name": "Blade Toss",
-"cls": "gladiator"
-},
-"11100000": {
-"name": "Ruinous Blow",
-"cls": "gladiator"
-},
-"11110000": {
-"name": "Focused Block",
-"cls": "gladiator"
-},
-"11130000": {
-"name": "Armor of Balance",
-"cls": "gladiator"
-},
-"11170000": {
-"name": "Overhead Slam",
-"cls": "gladiator"
-},
-"11190000": {
-"name": "Leaping Slam",
-"cls": "gladiator"
-},
-"11200000": {
-"name": "Ankle Slice",
-"cls": "gladiator"
-},
-"11240000": {
-"name": "Wrath Wave",
-"cls": "gladiator"
-},
-"11250000": {
-"name": "Zikel's Blessing",
-"cls": "gladiator"
-},
-"11260000": {
-"name": "Defiance",
-"cls": "gladiator"
-},
-"11280000": {
-"name": "Sword Aura Rampage",
-"cls": "gladiator"
-},
-"11290000": {
-"name": "Mocking Blade",
-"cls": "gladiator"
-},
-"11300000": {
-"name": "Aerial Snare",
-"cls": "gladiator"
-},
-"11340000": {
-"name": "Lifestealing Blade",
-"cls": "gladiator"
-},
-"11360000": {
-"name": "Rush Strike",
-"cls": "gladiator"
-},
-"11380000": {
-"name": "Tenaciousness",
-"cls": "gladiator"
-},
-"11390000": {
-"name": "Rage Burst",
-"cls": "gladiator"
-},
-"11400000": {
-"name": "Lunge Stance",
-"cls": "gladiator"
-},
-"11410000": {
-"name": "Wave Armor",
-"cls": "gladiator"
-},
-"11430000": {
-"name": "Forced Restraint",
-"cls": "gladiator"
-},
-"11450000": {
-"name": "Fracturing Rush",
-"cls": "gladiator"
-},
-"11700000": {
-"name": "Assault Strike",
-"cls": "gladiator"
-},
-"11710000": {
-"name": "Survival Stance",
-"cls": "gladiator"
-},
-"11720000": {
-"name": "Protection Armor",
-"cls": "gladiator"
-},
-"11730000": {
-"name": "Blood Absorption",
-"cls": "gladiator"
-},
-"11740000": {
-"name": "Identify Weakness",
-"cls": "gladiator"
-},
-"11750000": {
-"name": "Attack Preparation",
-"cls": "gladiator"
-},
-"11760000": {
-"name": "Impact Hit",
-"cls": "gladiator"
-},
-"11770000": {
-"name": "Destructive Impulse",
-"cls": "gladiator"
-},
-"11780000": {
-"name": "Experienced Counterstrike",
-"cls": "gladiator"
-},
-"11790000": {
-"name": "Survival Willpower",
-"cls": "gladiator"
-},
-"11800000": {
-"name": "Murderous Burst",
-"cls": "gladiator"
-},
-"12010000": {
-"name": "Vicious Strike",
-"cls": "templar"
-},
-"12040000": {
-"name": "Pummel",
-"cls": "templar"
-},
-"12070000": {
-"name": "Doom Shield",
-"cls": "templar"
-},
-"12090000": {
-"name": "Punishment",
-"cls": "templar"
-},
-"12100000": {
-"name": "Shield Smite",
-"cls": "templar"
-},
-"12110000": {
-"name": "Shield of Protection",
-"cls": "templar"
-},
-"12120000": {
-"name": "Taunt",
-"cls": "templar"
-},
-"12130000": {
-"name": "Poach",
-"cls": "templar"
-},
-"12190000": {
-"name": "Second Skin",
-"cls": "templar"
-},
-"12200000": {
-"name": "Armor of Balance",
-"cls": "templar"
-},
-"12220000": {
-"name": "Grapple",
-"cls": "templar"
-},
-"12230000": {
-"name": "Noble Armor",
-"cls": "templar"
-},
-"12240000": {
-"name": "Judgment",
-"cls": "templar"
-},
-"12250000": {
-"name": "Comrade in Arms",
-"cls": "templar"
-},
-"12260000": {
-"name": "Defiance",
-"cls": "templar"
-},
-"12270000": {
-"name": "Debilitating Smash",
-"cls": "templar"
-},
-"12300000": {
-"name": "Annihilate",
-"cls": "templar"
-},
-"12310000": {
-"name": "Empyrean Lord's Punishment",
-"cls": "templar"
-},
-"12320000": {
-"name": "Nezekan's Shield",
-"cls": "templar"
-},
-"12340000": {
-"name": "Flash Rampage",
-"cls": "templar"
-},
-"12350000": {
-"name": "Warding Strike",
-"cls": "templar"
-},
-"12410000": {
-"name": "Executing Blade",
-"cls": "templar"
-},
-"12430000": {
-"name": "Shield Rush",
-"cls": "templar"
-},
-"12450000": {
-"name": "Battlefield Banner",
-"cls": "templar"
-},
-"12700000": {
-"name": "Assault Fury",
-"cls": "templar"
-},
-"12710000": {
-"name": "Enhance Health",
-"cls": "templar"
-},
-"12720000": {
-"name": "Warding Shield",
-"cls": "templar"
-},
-"12730000": {
-"name": "Punishing Benediction",
-"cls": "templar"
-},
-"12740000": {
-"name": "Ironclad Defense",
-"cls": "templar"
-},
-"12750000": {
-"name": "Guarding Seal",
-"cls": "templar"
-},
-"12760000": {
-"name": "Impact Hit",
-"cls": "templar"
-},
-"12770000": {
-"name": "Insulting Roar",
-"cls": "templar"
-},
-"12780000": {
-"name": "Fury",
-"cls": "templar"
-},
-"12790000": {
-"name": "Survival Willpower",
-"cls": "templar"
-},
-"12800000": {
-"name": "Block Pain",
-"cls": "templar"
-},
-"13010000": {
-"name": "Quick Slice",
-"cls": "assassin"
-},
-"13020000": {
-"name": "Throw Shadowblade",
-"cls": "assassin"
-},
-"13050000": {
-"name": "Flash Slice",
-"cls": "assassin"
-},
-"13060000": {
-"name": "Ambush",
-"cls": "assassin"
-},
-"13070000": {
-"name": "Shadowstrike",
-"cls": "assassin"
-},
-"13080000": {
-"name": "Evasion Stance",
-"cls": "assassin"
-},
-"13100000": {
-"name": "Savage Roar",
-"cls": "assassin"
-},
-"13130000": {
-"name": "Insignia Explosion",
-"cls": "assassin"
-},
-"13140000": {
-"name": "Shadowstep",
-"cls": "assassin"
-},
-"13180000": {
-"name": "Shadow Walk",
-"cls": "assassin"
-},
-"13210000": {
-"name": "Whirlwind Slice",
-"cls": "assassin"
-},
-"13220000": {
-"name": "Shadow Fall",
-"cls": "assassin"
-},
-"13230000": {
-"name": "Aerial Bind",
-"cls": "assassin"
-},
-"13250000": {
-"name": "Smoke Bomb",
-"cls": "assassin"
-},
-"13260000": {
-"name": "Defiance",
-"cls": "assassin"
-},
-"13270000": {
-"name": "Savage Fang",
-"cls": "assassin"
-},
-"13280000": {
-"name": "Spiral Slice",
-"cls": "assassin"
-},
-"13300000": {
-"name": "Triniel's Dagger",
-"cls": "assassin"
-},
-"13310000": {
-"name": "Illusive Clone",
-"cls": "assassin"
-},
-"13340000": {
-"name": "Storm Rampage",
-"cls": "assassin"
-},
-"13350000": {
-"name": "Heart Gore",
-"cls": "assassin"
-},
-"13360000": {
-"name": "Infiltrate",
-"cls": "assassin"
-},
-"13370000": {
-"name": "Evasion Contract",
-"cls": "assassin"
-},
-"13390000": {
-"name": "Swift Contract",
-"cls": "assassin"
-},
-"13700000": {
-"name": "Assault Ambush",
-"cls": "assassin"
-},
-"13710000": {
-"name": "Heightened Sixth Sense",
-"cls": "assassin"
-},
-"13720000": {
-"name": "Exploit Weakness",
-"cls": "assassin"
-},
-"13730000": {
-"name": "Apply Poison",
-"cls": "assassin"
-},
-"13740000": {
-"name": "Rear Smite",
-"cls": "assassin"
-},
-"13750000": {
-"name": "Assault Stance",
-"cls": "assassin"
-},
-"13760000": {
-"name": "Impact Hit",
-"cls": "assassin"
-},
-"13770000": {
-"name": "Ambush Stance",
-"cls": "assassin"
-},
-"13780000": {
-"name": "Defense Break",
-"cls": "assassin"
-},
-"13790000": {
-"name": "Revitalization Contract",
-"cls": "assassin"
-},
-"13800000": {
-"name": "Determination",
-"cls": "assassin"
-},
-"14010000": {
-"name": "Deadshot",
-"cls": "ranger"
-},
-"14020000": {
-"name": "Snipe",
-"cls": "ranger"
-},
-"14050000": {
-"name": "Drill Dart",
-"cls": "ranger"
-},
-"14060000": {
-"name": "Griffon Arrow",
-"cls": "ranger"
-},
-"14070000": {
-"name": "Suppressing Arrow",
-"cls": "ranger"
-},
-"14080000": {
-"name": "Burst Arrow",
-"cls": "ranger"
-},
-"14090000": {
-"name": "Marking Shot",
-"cls": "ranger"
-},
-"14110000": {
-"name": "Gale Arrow",
-"cls": "ranger"
-},
-"14120000": {
-"name": "Ambush Kick",
-"cls": "ranger"
-},
-"14130000": {
-"name": "Snare Shot",
-"cls": "ranger"
-},
-"14150000": {
-"name": "Illusory Arrow",
-"cls": "ranger"
-},
-"14160000": {
-"name": "Sealing Arrow",
-"cls": "ranger"
-},
-"14170000": {
-"name": "Explosion Trap",
-"cls": "ranger"
-},
-"14180000": {
-"name": "Ensnaring Trap",
-"cls": "ranger"
-},
-"14190000": {
-"name": "Stealth",
-"cls": "ranger"
-},
-"14220000": {
-"name": "Bow of Blessing",
-"cls": "ranger"
-},
-"14260000": {
-"name": "Defiance",
-"cls": "ranger"
-},
-"14270000": {
-"name": "Arrow Storm",
-"cls": "ranger"
-},
-"14310000": {
-"name": "Vaizel's Authority",
-"cls": "ranger"
-},
-"14330000": {
-"name": "Arrow Scattershot",
-"cls": "ranger"
-},
-"14340000": {
-"name": "Tempest Shot",
-"cls": "ranger"
-},
-"14350000": {
-"name": "Mother Nature's Breath",
-"cls": "ranger"
-},
-"14360000": {
-"name": "Explosive Arrow",
-"cls": "ranger"
-},
-"14380000": {
-"name": "Supporting Fire",
-"cls": "ranger"
-},
-"14700000": {
-"name": "Assault Smite",
-"cls": "ranger"
-},
-"14710000": {
-"name": "Vigilant Eye",
-"cls": "ranger"
-},
-"14720000": {
-"name": "Concentrated Fire",
-"cls": "ranger"
-},
-"14730000": {
-"name": "Wind Vigor",
-"cls": "ranger"
-},
-"14740000": {
-"name": "Focused Eye",
-"cls": "ranger"
-},
-"14750000": {
-"name": "Hunter's Resolve",
-"cls": "ranger"
-},
-"14760000": {
-"name": "Unyielding Resolve",
-"cls": "ranger"
-},
-"14770000": {
-"name": "Rooting Eye",
-"cls": "ranger"
-},
-"14780000": {
-"name": "Melee Fire",
-"cls": "ranger"
-},
-"14790000": {
-"name": "Revitalization Contract",
-"cls": "ranger"
-},
-"14800000": {
-"name": "Hunter's Soul",
-"cls": "ranger"
-},
-"15010000": {
-"name": "Flame Scattershot",
-"cls": "sorcerer"
-},
-"15040000": {
-"name": "Firestorm",
-"cls": "sorcerer"
-},
-"15050000": {
-"name": "Blaze",
-"cls": "sorcerer"
-},
-"15060000": {
-"name": "Hellfire",
-"cls": "sorcerer"
-},
-"15090000": {
-"name": "Ice Chain",
-"cls": "sorcerer"
-},
-"15110000": {
-"name": "Winter's Shackles",
-"cls": "sorcerer"
-},
-"15120000": {
-"name": "Glacial Smite",
-"cls": "sorcerer"
-},
-"15130000": {
-"name": "Soul Freeze",
-"cls": "sorcerer"
-},
-"15140000": {
-"name": "Curse: Tree",
-"cls": "sorcerer"
-},
-"15150000": {
-"name": "Frost",
-"cls": "sorcerer"
-},
-"15160000": {
-"name": "Steel Barrier",
-"cls": "sorcerer"
-},
-"15200000": {
-"name": "Cold Storm",
-"cls": "sorcerer"
-},
-"15210000": {
-"name": "Flame Arrow",
-"cls": "sorcerer"
-},
-"15220000": {
-"name": "Frost Burst",
-"cls": "sorcerer"
-},
-"15230000": {
-"name": "Arctic Armor",
-"cls": "sorcerer"
-},
-"15240000": {
-"name": "Defiance",
-"cls": "sorcerer"
-},
-"15280000": {
-"name": "Bittercold Wind",
-"cls": "sorcerer"
-},
-"15300000": {
-"name": "Lumiel's Space",
-"cls": "sorcerer"
-},
-"15310000": {
-"name": "Wish of Concentration",
-"cls": "sorcerer"
-},
-"15320000": {
-"name": "Delayed Explosion",
-"cls": "sorcerer"
-},
-"15360000": {
-"name": "Divine Burst",
-"cls": "sorcerer"
-},
-"15390000": {
-"name": "Fire Wall",
-"cls": "sorcerer"
-},
-"15400000": {
-"name": "Element Enhancement",
-"cls": "sorcerer"
-},
-"15410000": {
-"name": "Hibernation",
-"cls": "sorcerer"
-},
-"15700000": {
-"name": "Assault Bombardment",
-"cls": "sorcerer"
-},
-"15710000": {
-"name": "Fire Mark",
-"cls": "sorcerer"
-},
-"15720000": {
-"name": "Robe of Earth",
-"cls": "sorcerer"
-},
-"15730000": {
-"name": "Cold Snap",
-"cls": "sorcerer"
-},
-"15740000": {
-"name": "Robe of Flame",
-"cls": "sorcerer"
-},
-"15750000": {
-"name": "Robe of Cold",
-"cls": "sorcerer"
-},
-"15760000": {
-"name": "Absorb Essence",
-"cls": "sorcerer"
-},
-"15770000": {
-"name": "Grace of Resistance",
-"cls": "sorcerer"
-},
-"15780000": {
-"name": "Grace of Enhancement",
-"cls": "sorcerer"
-},
-"15790000": {
-"name": "Revitalization Contract",
-"cls": "sorcerer"
-},
-"15800000": {
-"name": "Vitality Evaporation",
-"cls": "sorcerer"
-},
-"16010000": {
-"name": "Cold Shock",
-"cls": "spiritmaster"
-},
-"16040000": {
-"name": "Combustion",
-"cls": "spiritmaster"
-},
-"16060000": {
-"name": "Siphon",
-"cls": "spiritmaster"
-},
-"16070000": {
-"name": "Soul's Cry",
-"cls": "spiritmaster"
-},
-"16080000": {
-"name": "Cry of Terror",
-"cls": "spiritmaster"
-},
-"16100000": {
-"name": "Summon: Fire Spirit",
-"cls": "spiritmaster"
-},
-"16110000": {
-"name": "Summon: Water Spirit",
-"cls": "spiritmaster"
-},
-"16120000": {
-"name": "Summon: Wind Spirit",
-"cls": "spiritmaster"
-},
-"16130000": {
-"name": "Summon: Earth Spirit",
-"cls": "spiritmaster"
-},
-"16140000": {
-"name": "Jointstrike: Curse",
-"cls": "spiritmaster"
-},
-"16150000": {
-"name": "Jointstrike: Corrode",
-"cls": "spiritmaster"
-},
-"16170000": {
-"name": "Command: Proxy",
-"cls": "spiritmaster"
-},
-"16190000": {
-"name": "Enhance: Spirit's Benediction",
-"cls": "spiritmaster"
-},
-"16200000": {
-"name": "Defiance",
-"cls": "spiritmaster"
-},
-"16220000": {
-"name": "Cursed Cloud",
-"cls": "spiritmaster"
-},
-"16230000": {
-"name": "Seize Magic",
-"cls": "spiritmaster"
-},
-"16240000": {
-"name": "Jointstrike: Destructive Attack",
-"cls": "spiritmaster"
-},
-"16250000": {
-"name": "Summon: Ancient Spirit",
-"cls": "spiritmaster"
-},
-"16260000": {
-"name": "Magic Block",
-"cls": "spiritmaster"
-},
-"16300000": {
-"name": "Elemental Fusion",
-"cls": "spiritmaster"
-},
-"16330000": {
-"name": "Dimensional Control",
-"cls": "spiritmaster"
-},
-"16340000": {
-"name": "Rapid Scattershot",
-"cls": "spiritmaster"
-},
-"16360000": {
-"name": "Kaisinel's Power",
-"cls": "spiritmaster"
-},
-"16370000": {
-"name": "Flame Blessing",
-"cls": "spiritmaster"
-},
-"16700000": {
-"name": "Assault Terror",
-"cls": "spiritmaster"
-},
-"16710000": {
-"name": "Spirit Strike",
-"cls": "spiritmaster"
-},
-"16720000": {
-"name": "Spirit Protection",
-"cls": "spiritmaster"
-},
-"16730000": {
-"name": "Spirit's Descent",
-"cls": "spiritmaster"
-},
-"16740000": {
-"name": "Corrode",
-"cls": "spiritmaster"
-},
-"16750000": {
-"name": "Spirit Revitalization",
-"cls": "spiritmaster"
-},
-"16760000": {
-"name": "Mental Focus",
-"cls": "spiritmaster"
-},
-"16770000": {
-"name": "Spirit Communion",
-"cls": "spiritmaster"
-},
-"16780000": {
-"name": "Element Unification",
-"cls": "spiritmaster"
-},
-"16790000": {
-"name": "Revitalization Contract",
-"cls": "spiritmaster"
-},
-"16800000": {
-"name": "Consecutive Countercurrent",
-"cls": "spiritmaster"
-},
-"17010000": {
-"name": "Earth's Retribution",
-"cls": "cleric"
-},
-"17040000": {
-"name": "Judgment Thunder",
-"cls": "cleric"
-},
-"17060000": {
-"name": "Bolt",
-"cls": "cleric"
-},
-"17070000": {
-"name": "Chain of Torment",
-"cls": "cleric"
-},
-"17080000": {
-"name": "Debilitating Mark",
-"cls": "cleric"
-},
-"17090000": {
-"name": "Light of Regeneration",
-"cls": "cleric"
-},
-"17100000": {
-"name": "Healing Light",
-"cls": "cleric"
-},
-"17120000": {
-"name": "Radiant Recovery",
-"cls": "cleric"
-},
-"17150000": {
-"name": "Divine Aura",
-"cls": "cleric"
-},
-"17160000": {
-"name": "Benevolence",
-"cls": "cleric"
-},
-"17190000": {
-"name": "Root",
-"cls": "cleric"
-},
-"17240000": {
-"name": "Defiance",
-"cls": "cleric"
-},
-"17270000": {
-"name": "Salvation",
-"cls": "cleric"
-},
-"17280000": {
-"name": "Power Burst",
-"cls": "cleric"
-},
-"17290000": {
-"name": "Absolution",
-"cls": "cleric"
-},
-"17300000": {
-"name": "Voice of Doom",
-"cls": "cleric"
-},
-"17350000": {
-"name": "Condemnation",
-"cls": "cleric"
-},
-"17370000": {
-"name": "Lightning Strike Scattershot",
-"cls": "cleric"
-},
-"17390000": {
-"name": "Summon Resurrection",
-"cls": "cleric"
-},
-"17400000": {
-"name": "Earth Punishment",
-"cls": "cleric"
-},
-"17410000": {
-"name": "Light of Protection",
-"cls": "cleric"
-},
-"17420000": {
-"name": "Yustiel's Power",
-"cls": "cleric"
-},
-"17430000": {
-"name": "Prayer of Amplification",
-"cls": "cleric"
-},
-"17440000": {
-"name": "Noble Aura",
-"cls": "cleric"
-},
-"17700000": {
-"name": "Assault Mark",
-"cls": "cleric"
-},
-"17710000": {
-"name": "Warm Benediction",
-"cls": "cleric"
-},
-"17720000": {
-"name": "Empyrean Lords' Benediction",
-"cls": "cleric"
-},
-"17730000": {
-"name": "Empyrean Lord's Grace",
-"cls": "cleric"
-},
-"17740000": {
-"name": "Healing Enhancement",
-"cls": "cleric"
-},
-"17750000": {
-"name": "Immortal Veil",
-"cls": "cleric"
-},
-"17760000": {
-"name": "Heal Block",
-"cls": "cleric"
-},
-"17770000": {
-"name": "Prayer of Concentration",
-"cls": "cleric"
-},
-"17780000": {
-"name": "Earth's Grace",
-"cls": "cleric"
-},
-"17790000": {
-"name": "Survival Willpower",
-"cls": "cleric"
-},
-"17800000": {
-"name": "Radiant Benediction",
-"cls": "cleric"
-},
-"18010000": {
-"name": "Onslaught",
-"cls": "chanter"
-},
-"18040000": {
-"name": "Incandescent Blow",
-"cls": "chanter"
-},
-"18060000": {
-"name": "Impactful Crush",
-"cls": "chanter"
-},
-"18080000": {
-"name": "Wave Blow",
-"cls": "chanter"
-},
-"18090000": {
-"name": "Rushing Smash",
-"cls": "chanter"
-},
-"18100000": {
-"name": "Dark Crush",
-"cls": "chanter"
-},
-"18120000": {
-"name": "Recuperation",
-"cls": "chanter"
-},
-"18130000": {
-"name": "Fracturing Blow",
-"cls": "chanter"
-},
-"18140000": {
-"name": "Focused Defense",
-"cls": "chanter"
-},
-"18150000": {
-"name": "Heat Wave Blow",
-"cls": "chanter"
-},
-"18160000": {
-"name": "Sprint Mantra",
-"cls": "chanter"
-},
-"18170000": {
-"name": "Healing Touch",
-"cls": "chanter"
-},
-"18190000": {
-"name": "Undefeated Mantra",
-"cls": "chanter"
-},
-"18200000": {
-"name": "Defiance",
-"cls": "chanter"
-},
-"18210000": {
-"name": "Tremor Crush",
-"cls": "chanter"
-},
-"18220000": {
-"name": "Obliterate",
-"cls": "chanter"
-},
-"18230000": {
-"name": "Ensnaring Mark",
-"cls": "chanter"
-},
-"18240000": {
-"name": "Impeding Authority",
-"cls": "chanter"
-},
-"18250000": {
-"name": "Power of the Storm",
-"cls": "chanter"
-},
-"18290000": {
-"name": "Spinning Strike",
-"cls": "chanter"
-},
-"18300000": {
-"name": "Gust Rampage",
-"cls": "chanter"
-},
-"18330000": {
-"name": "Marchutan's Wrath",
-"cls": "chanter"
-},
-"18420000": {
-"name": "Guardian Blessing",
-"cls": "chanter"
-},
-"18440000": {
-"name": "Barrier Spell",
-"cls": "chanter"
-},
-"18700000": {
-"name": "Assault Shock",
-"cls": "chanter"
-},
-"18710000": {
-"name": "Blessing of Life",
-"cls": "chanter"
-},
-"18720000": {
-"name": "Crossguard",
-"cls": "chanter"
-},
-"18730000": {
-"name": "Protection Circle",
-"cls": "chanter"
-},
-"18740000": {
-"name": "Inspiring Spell",
-"cls": "chanter"
-},
-"18750000": {
-"name": "Attack Preparation",
-"cls": "chanter"
-},
-"18760000": {
-"name": "Impact Hit",
-"cls": "chanter"
-},
-"18770000": {
-"name": "Raging Spell",
-"cls": "chanter"
-},
-"18780000": {
-"name": "Earth's Promise",
-"cls": "chanter"
-},
-"18800000": {
-"name": "Wind's Promise",
-"cls": "chanter"
-}
+"100011": {"name":"Fire Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_010"},
+"100014": {"name":"Fire Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_010"},
+"100015": {"name":"Fire Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_010"},
+"100018": {"name":"Fire Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_010"},
+"100021": {"name":"Water Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_011"},
+"100023": {"name":"Water Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_011"},
+"100024": {"name":"Water Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_011"},
+"100025": {"name":"Water Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_011"},
+"100027": {"name":"Water Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_011"},
+"100028": {"name":"Water Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_011"},
+"100031": {"name":"Wind Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_012"},
+"100032": {"name":"Wind Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_012"},
+"100033": {"name":"Wind Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_012"},
+"100034": {"name":"Wind Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_012"},
+"100041": {"name":"Earth Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_013"},
+"100044": {"name":"Earth Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_013"},
+"100045": {"name":"Earth Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_013"},
+"100048": {"name":"Earth Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_013"},
+"100051": {"name":"Ancient Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_025"},
+"100055": {"name":"Ancient Spirit: Basic Attack","cls":"spiritmaster","src":"acompanion","icon":"nc:ICON_EL_SKILL_025"},
+"100901": {"name":"Magic Backflow","cls":"","src":"pingmaker"},
+"100902": {"name":"Magic Backflow","cls":"","src":"pingmaker"},
+"100903": {"name":"Magic Backflow","cls":"","src":"pingmaker"},
+"3000017": {"name":"Theostone: Zikel's Vestige","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_011","item":"theostone-zikels-vestige"},
+"3000018": {"name":"Theostone: Tassin's Command","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_012","item":"theostone-tassins-command"},
+"3000019": {"name":"Theostone: Ulgorn's Will","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_013","item":"theostone-ulgorns-will"},
+"3000020": {"name":"Theostone: Aultross's Promise","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_014","item":"theostone-aultrosss-promise"},
+"3000021": {"name":"Theostone: Bargott's Ember","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_015","item":"theostone-bargotts-ember"},
+"3000022": {"name":"Theostone: Aulvicar's Sorcery","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_016","item":"theostone-aulvicars-sorcery"},
+"3000023": {"name":"Theostone: Gartua's Strength","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_017","item":"theostone-gartuas-strength"},
+"3000024": {"name":"Theostone: Rathman's Greed","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_018","item":"theostone-rathmans-greed"},
+"3000117": {"name":"Theostone: Traufnir's Courage","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_011","item":"theostone-traufnirs-courage"},
+"3000118": {"name":"Theostone: Sif's Knowledge","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_012","item":"theostone-sifs-knowledge"},
+"3000119": {"name":"Theostone: Freyr's Wisdom","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_013","item":"theostone-freyrs-wisdom"},
+"3000120": {"name":"Theostone: Sigyn's Brilliance","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_014","item":"theostone-sigyns-brilliance"},
+"3000122": {"name":"Theostone: Charna's Acumen","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_016","item":"theostone-charnas-acumen"},
+"3000123": {"name":"Theostone: Thrasymedes's Wisdom","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_017","item":"theostone-thrasymedess-wisdom"},
+"3001015": {"name":"Theostone: Santras's Secret","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_009","item":"theostone-santrass-secret"},
+"3001016": {"name":"Theostone: Feruk's Instinct","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_010","item":"theostone-feruks-instinct"},
+"3001115": {"name":"Theostone: Orissan's Blood","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_009","item":"theostone-orissans-blood"},
+"3001116": {"name":"Theostone: Mahisha's Wrath","cls":"","src":"acompanion","icon":"nc:Icon_Item_Usable_Godstone_WP_r_010","item":"theostone-mahishas-wrath"},
+"11000100": {"name":"Dodge","cls":"gladiator","src":"pingmaker"},
+"11000101": {"name":"Dodge","cls":"gladiator","src":"pingmaker"},
+"11010000": {"name":"Rending Blow","cls":"gladiator","src":"metabot","page":"rending-blow"},
+"11020000": {"name":"Keen Strike","cls":"gladiator","src":"metabot","page":"keen-strike"},
+"11030000": {"name":"Rupture Strike","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_003"},
+"11040000": {"name":"Wrathful Strike","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_004"},
+"11050000": {"name":"Crushing Wave","cls":"gladiator","src":"metabot","page":"crushing-wave"},
+"11060000": {"name":"Frenzied Wave","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_006"},
+"11080000": {"name":"Blade Toss","cls":"gladiator","src":"metabot","page":"blade-toss"},
+"11090000": {"name":"Blade Dance","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_009"},
+"11100000": {"name":"Ruinous Blow","cls":"gladiator","src":"metabot","page":"ruinous-blow"},
+"11110000": {"name":"Focused Block","cls":"gladiator","src":"metabot","page":"focused-block"},
+"11120000": {"name":"Blood Absorption","cls":"gladiator","src":"pingmaker","icon":"waffle"},
+"11130000": {"name":"Armor of Balance","cls":"gladiator","src":"metabot","page":"armor-of-balance"},
+"11140000": {"name":"Intimidating Roar","cls":"gladiator","src":"pingmaker"},
+"11170000": {"name":"Overhead Slam","cls":"gladiator","src":"metabot","page":"overhead-slam"},
+"11180000": {"name":"Reckless Strike","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_018"},
+"11190000": {"name":"Leaping Slam","cls":"gladiator","src":"metabot","page":"leaping-slam"},
+"11200000": {"name":"Ankle Slice","cls":"gladiator","src":"metabot","page":"ankle-slice"},
+"11210000": {"name":"Ankle Smash","cls":"gladiator","src":"pingmaker","icon":"waffle"},
+"11230000": {"name":"Rush","cls":"gladiator","src":"pingmaker"},
+"11240000": {"name":"Wrath Wave","cls":"gladiator","src":"metabot","page":"wrath-wave"},
+"11250000": {"name":"Zikel's Blessing","cls":"gladiator","src":"metabot","page":"zikels-blessing"},
+"11260000": {"name":"Defiance","cls":"gladiator","src":"metabot","page":"defiance"},
+"11270000": {"name":"Survival Stance","cls":"gladiator","src":"pingmaker","icon":"waffle"},
+"11280000": {"name":"Sword Aura Rampage","cls":"gladiator","src":"metabot","page":"sword-aura-rampage"},
+"11290000": {"name":"Mocking Blade","cls":"gladiator","src":"metabot","page":"mocking-blade"},
+"11300000": {"name":"Aerial Snare","cls":"gladiator","src":"metabot","page":"aerial-snare"},
+"11310000": {"name":"Doom Advent","cls":"gladiator","src":"pingmaker"},
+"11320000": {"name":"Wrath Burst","cls":"gladiator","src":"acompanion,pingmaker","icon":"waffle"},
+"11330000": {"name":"Madness Blow","cls":"gladiator","src":"pingmaker"},
+"11340000": {"name":"Lifestealing Blade","cls":"gladiator","src":"metabot","page":"lifestealing-blade"},
+"11350000": {"name":"Wrathful Strike","cls":"gladiator","src":"pingmaker","icon":"waffle"},
+"11360000": {"name":"Rush Strike","cls":"gladiator","src":"metabot","page":"rush-strike"},
+"11370000": {"name":"Forced Fall","cls":"gladiator","src":"pingmaker","icon":"waffle"},
+"11380000": {"name":"Tenaciousness","cls":"gladiator","src":"metabot","page":"tenaciousness"},
+"11390000": {"name":"Rage Burst","cls":"gladiator","src":"metabot","page":"rage-burst"},
+"11400000": {"name":"Lunge Stance","cls":"gladiator","src":"metabot","page":"lunge-stance"},
+"11410000": {"name":"Wave Armor","cls":"gladiator","src":"metabot","page":"wave-armor"},
+"11420000": {"name":"Smashing Blow","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_042"},
+"11430000": {"name":"Forced Restraint","cls":"gladiator","src":"metabot","page":"forced-restraint"},
+"11440000": {"name":"Upward Strike","cls":"gladiator","src":"acompanion,pingmaker","icon":"nc:ICON_GL_SKILL_044"},
+"11450000": {"name":"Fracturing Rush","cls":"gladiator","src":"metabot","page":"fracturing-rush"},
+"11460000": {"name":"Destructive Rush","cls":"gladiator","src":"pingmaker"},
+"11470000": {"name":"Unsheathing Rush","cls":"gladiator","src":"pingmaker"},
+"11700000": {"name":"Assault Strike","cls":"gladiator","src":"metabot","page":"assault-strike"},
+"11710000": {"name":"Survival Stance","cls":"gladiator","src":"metabot","page":"survival-stance"},
+"11720000": {"name":"Protection Armor","cls":"gladiator","src":"metabot","page":"protection-armor"},
+"11730000": {"name":"Blood Absorption","cls":"gladiator","src":"metabot","page":"blood-absorption"},
+"11740000": {"name":"Identify Weakness","cls":"gladiator","src":"metabot","page":"identify-weakness"},
+"11750000": {"name":"Attack Preparation","cls":"gladiator","src":"metabot","page":"attack-preparation"},
+"11760000": {"name":"Impact Hit","cls":"gladiator","src":"metabot","page":"impact-hit"},
+"11770000": {"name":"Destructive Impulse","cls":"gladiator","src":"metabot","page":"destructive-impulse"},
+"11780000": {"name":"Experienced Counterstrike","cls":"gladiator","src":"metabot","page":"experienced-counterstrike"},
+"11790000": {"name":"Survival Willpower","cls":"gladiator","src":"metabot","page":"survival-willpower"},
+"11800000": {"name":"Murderous Burst","cls":"gladiator","src":"metabot","page":"murderous-burst"},
+"12000100": {"name":"Dodge","cls":"templar","src":"pingmaker"},
+"12000101": {"name":"Dodge","cls":"templar","src":"pingmaker"},
+"12010000": {"name":"Vicious Strike","cls":"templar","src":"metabot","page":"vicious-strike"},
+"12020000": {"name":"Decisive Strike","cls":"templar","src":"acompanion,pingmaker","icon":"nc:ICON_TE_SKILL_002"},
+"12030000": {"name":"Desperate Strike","cls":"templar","src":"acompanion,pingmaker","icon":"nc:ICON_TE_SKILL_003"},
+"12040000": {"name":"Pummel","cls":"templar","src":"metabot","page":"pummel"},
+"12060000": {"name":"Punishing Strike","cls":"templar","src":"acompanion,pingmaker","icon":"nc:ICON_TE_SKILL_014"},
+"12070000": {"name":"Doom Shield","cls":"templar","src":"metabot","page":"doom-shield"},
+"12080000": {"name":"Provoke <DNT>","cls":"templar","src":"pingmaker"},
+"12090000": {"name":"Punishment","cls":"templar","src":"metabot","page":"punishment"},
+"12100000": {"name":"Shield Smite","cls":"templar","src":"metabot","page":"shield-smite"},
+"12110000": {"name":"Shield of Protection","cls":"templar","src":"metabot","page":"shield-of-protection"},
+"12120000": {"name":"Taunt","cls":"templar","src":"metabot","page":"taunt"},
+"12130000": {"name":"Poach","cls":"templar","src":"metabot","page":"poach"},
+"12180000": {"name":"Punishing Benediction (Not Used)","cls":"templar","src":"pingmaker"},
+"12190000": {"name":"Second Skin","cls":"templar","src":"metabot","page":"second-skin"},
+"12200000": {"name":"Armor of Balance","cls":"templar","src":"metabot","page":"armor-of-balance-templar"},
+"12210000": {"name":"Fury","cls":"templar","src":"pingmaker"},
+"12220000": {"name":"Grapple","cls":"templar","src":"metabot","page":"grapple"},
+"12230000": {"name":"Noble Armor","cls":"templar","src":"metabot","page":"noble-armor"},
+"12240000": {"name":"Judgment","cls":"templar","src":"metabot","page":"judgment"},
+"12250000": {"name":"Comrade in Arms","cls":"templar","src":"metabot","page":"comrade-in-arms"},
+"12260000": {"name":"Defiance","cls":"templar","src":"metabot","page":"defiance-templar"},
+"12270000": {"name":"Debilitating Smash","cls":"templar","src":"metabot","page":"debilitating-smash"},
+"12290000": {"name":"Bone-chilling Roar","cls":"templar","src":"pingmaker"},
+"12300000": {"name":"Annihilate","cls":"templar","src":"metabot","page":"annihilate"},
+"12310000": {"name":"Empyrean Lord's Punishment","cls":"templar","src":"metabot","page":"empyrean-lords-punishment"},
+"12320000": {"name":"Nezekan's Shield","cls":"templar","src":"metabot","page":"nezekans-shield"},
+"12330000": {"name":"Capture","cls":"templar","src":"pingmaker","icon":"waffle"},
+"12340000": {"name":"Flash Rampage","cls":"templar","src":"metabot","page":"flash-rampage"},
+"12350000": {"name":"Warding Strike","cls":"templar","src":"metabot","page":"warding-strike"},
+"12410000": {"name":"Executing Blade","cls":"templar","src":"metabot","page":"executing-blade"},
+"12420000": {"name":"Blade Storm","cls":"templar","src":"pingmaker"},
+"12430000": {"name":"Shield Rush","cls":"templar","src":"metabot","page":"shield-rush"},
+"12440000": {"name":"Threatening Blow","cls":"templar","src":"acompanion,pingmaker","icon":"nc:ICON_TE_SKILL_044"},
+"12450000": {"name":"Battlefield Banner","cls":"templar","src":"metabot","page":"battlefield-banner"},
+"12700000": {"name":"Assault Fury","cls":"templar","src":"metabot","page":"assault-fury"},
+"12710000": {"name":"Enhance Health","cls":"templar","src":"metabot","page":"enhance-health"},
+"12720000": {"name":"Warding Shield","cls":"templar","src":"metabot","page":"warding-shield"},
+"12730000": {"name":"Punishing Benediction","cls":"templar","src":"metabot","page":"punishing-benediction"},
+"12740000": {"name":"Ironclad Defense","cls":"templar","src":"metabot","page":"ironclad-defense"},
+"12750000": {"name":"Guarding Seal","cls":"templar","src":"metabot","page":"guarding-seal"},
+"12760000": {"name":"Impact Hit","cls":"templar","src":"metabot","page":"impact-hit-templar"},
+"12770000": {"name":"Insulting Roar","cls":"templar","src":"metabot","page":"insulting-roar"},
+"12780000": {"name":"Fury","cls":"templar","src":"metabot","page":"fury"},
+"12790000": {"name":"Survival Willpower","cls":"templar","src":"metabot","page":"survival-willpower-templar"},
+"12800000": {"name":"Block Pain","cls":"templar","src":"metabot","page":"block-pain"},
+"13000100": {"name":"Dodge","cls":"assassin","src":"pingmaker"},
+"13000101": {"name":"Dodge","cls":"assassin","src":"pingmaker"},
+"13010000": {"name":"Quick Slice","cls":"assassin","src":"metabot","page":"quick-slice"},
+"13020000": {"name":"Throw Shadowblade","cls":"assassin","src":"metabot","page":"throw-shadowblade"},
+"13030000": {"name":"Breaking Slice","cls":"assassin","src":"acompanion,pingmaker","icon":"nc:ICON_AS_SKILL_003"},
+"13040000": {"name":"Swift Slice","cls":"assassin","src":"acompanion,pingmaker","icon":"nc:ICON_AS_SKILL_004"},
+"13050000": {"name":"Flash Slice","cls":"assassin","src":"metabot","page":"flash-slice"},
+"13060000": {"name":"Ambush","cls":"assassin","src":"metabot","page":"ambush"},
+"13070000": {"name":"Shadowstrike","cls":"assassin","src":"metabot","page":"shadowstrike"},
+"13080000": {"name":"Evasion Stance","cls":"assassin","src":"metabot","page":"evasion-stance"},
+"13090000": {"name":"Shadowblade Pursuit","cls":"assassin","src":"acompanion,pingmaker","icon":"nc:ICON_AS_SKILL_017"},
+"13100000": {"name":"Savage Roar","cls":"assassin","src":"metabot","page":"savage-roar"},
+"13110000": {"name":"Savage Back Kick","cls":"assassin","src":"acompanion,pingmaker","icon":"nc:ICON_AS_SKILL_010"},
+"13120000": {"name":"Savage Smash","cls":"assassin","src":"acompanion,pingmaker","icon":"nc:ICON_AS_SKILL_011"},
+"13130000": {"name":"Insignia Explosion","cls":"assassin","src":"metabot","page":"insignia-explosion"},
+"13140000": {"name":"Shadowstep","cls":"assassin","src":"metabot","page":"shadowstep"},
+"13150000": {"name":"Frenzied Accord","cls":"assassin","src":"pingmaker"},
+"13160000": {"name":"Apply Poison","cls":"assassin","src":"pingmaker","icon":"waffle"},
+"13170000": {"name":"Surging Bloodlust","cls":"assassin","src":"pingmaker"},
+"13180000": {"name":"Shadow Walk","cls":"assassin","src":"metabot","page":"shadow-walk"},
+"13210000": {"name":"Whirlwind Slice","cls":"assassin","src":"metabot","page":"whirlwind-slice"},
+"13220000": {"name":"Shadow Fall","cls":"assassin","src":"metabot","page":"shadow-fall"},
+"13230000": {"name":"Aerial Bind","cls":"assassin","src":"metabot","page":"aerial-bind"},
+"13240000": {"name":"Aerial Slaughter","cls":"assassin","src":"pingmaker"},
+"13250000": {"name":"Smoke Bomb","cls":"assassin","src":"metabot","page":"smoke-bomb"},
+"13260000": {"name":"Defiance","cls":"assassin","src":"metabot","page":"defiance-assassin"},
+"13270000": {"name":"Savage Fang","cls":"assassin","src":"metabot","page":"savage-fang"},
+"13280000": {"name":"Spiral Slice","cls":"assassin","src":"metabot","page":"spiral-slice"},
+"13290000": {"name":"Prepare to Assassinate","cls":"assassin","src":"pingmaker"},
+"13300000": {"name":"Triniel's Dagger","cls":"assassin","src":"metabot","page":"triniels-dagger"},
+"13310000": {"name":"Illusive Clone","cls":"assassin","src":"metabot","page":"illusive-clone"},
+"13330000": {"name":"Storm Slice","cls":"assassin","src":"pingmaker","icon":"waffle"},
+"13340000": {"name":"Storm Rampage","cls":"assassin","src":"metabot","page":"storm-rampage"},
+"13350000": {"name":"Heart Gore","cls":"assassin","src":"metabot","page":"heart-gore"},
+"13360000": {"name":"Infiltrate","cls":"assassin","src":"metabot","page":"infiltrate"},
+"13370000": {"name":"Evasion Contract","cls":"assassin","src":"metabot","page":"evasion-contract"},
+"13380000": {"name":"Dark Strike","cls":"assassin","src":"pingmaker"},
+"13390000": {"name":"Swift Contract","cls":"assassin","src":"metabot","page":"swift-contract"},
+"13700000": {"name":"Assault Ambush","cls":"assassin","src":"metabot","page":"assault-ambush"},
+"13710000": {"name":"Heightened Sixth Sense","cls":"assassin","src":"metabot","page":"heightened-sixth-sense"},
+"13720000": {"name":"Exploit Weakness","cls":"assassin","src":"metabot","page":"exploit-weakness"},
+"13730000": {"name":"Apply Poison","cls":"assassin","src":"metabot","page":"apply-poison"},
+"13740000": {"name":"Rear Smite","cls":"assassin","src":"metabot","page":"rear-smite"},
+"13750000": {"name":"Assault Stance","cls":"assassin","src":"metabot","page":"assault-stance"},
+"13760000": {"name":"Impact Hit","cls":"assassin","src":"metabot","page":"impact-hit-assassin"},
+"13770000": {"name":"Ambush Stance","cls":"assassin","src":"metabot","page":"ambush-stance"},
+"13780000": {"name":"Defense Break","cls":"assassin","src":"metabot","page":"defense-break"},
+"13790000": {"name":"Revitalization Contract","cls":"assassin","src":"metabot","page":"revitalization-contract"},
+"13800000": {"name":"Determination","cls":"assassin","src":"metabot","page":"determination"},
+"14000100": {"name":"Dodge","cls":"ranger","src":"pingmaker"},
+"14000101": {"name":"Dodge","cls":"ranger","src":"pingmaker"},
+"14010000": {"name":"Deadshot","cls":"ranger","src":"metabot","page":"deadshot"},
+"14020000": {"name":"Snipe","cls":"ranger","src":"metabot","page":"snipe"},
+"14030000": {"name":"Rapid Fire","cls":"ranger","src":"acompanion,pingmaker","icon":"nc:ICON_RA_SKILL_003"},
+"14040000": {"name":"Spiral Arrow","cls":"ranger","src":"acompanion,pingmaker","icon":"nc:ICON_RA_SKILL_004"},
+"14050000": {"name":"Drill Dart","cls":"ranger","src":"metabot","page":"drill-dart"},
+"14060000": {"name":"Griffon Arrow","cls":"ranger","src":"metabot","page":"griffon-arrow"},
+"14070000": {"name":"Suppressing Arrow","cls":"ranger","src":"metabot","page":"suppressing-arrow"},
+"14080000": {"name":"Burst Arrow","cls":"ranger","src":"metabot","page":"burst-arrow"},
+"14090000": {"name":"Marking Shot","cls":"ranger","src":"metabot","page":"marking-shot"},
+"14100000": {"name":"Tempest Arrow","cls":"ranger","src":"acompanion,pingmaker","icon":"nc:ICON_RA_SKILL_010"},
+"14110000": {"name":"Gale Arrow","cls":"ranger","src":"metabot","page":"gale-arrow"},
+"14120000": {"name":"Ambush Kick","cls":"ranger","src":"metabot","page":"ambush-kick"},
+"14130000": {"name":"Snare Shot","cls":"ranger","src":"metabot","page":"snare-shot"},
+"14140000": {"name":"Shackling Arrow","cls":"ranger","src":"acompanion,pingmaker","icon":"nc:ICON_RA_SKILL_014"},
+"14150000": {"name":"Illusory Arrow","cls":"ranger","src":"metabot","page":"illusory-arrow"},
+"14160000": {"name":"Sealing Arrow","cls":"ranger","src":"metabot","page":"sealing-arrow"},
+"14170000": {"name":"Explosion Trap","cls":"ranger","src":"metabot","page":"explosion-trap"},
+"14180000": {"name":"Ensnaring Trap","cls":"ranger","src":"metabot","page":"ensnaring-trap"},
+"14190000": {"name":"Stealth","cls":"ranger","src":"metabot","page":"stealth"},
+"14210000": {"name":"Eye of Rapid Burst","cls":"ranger","src":"pingmaker"},
+"14220000": {"name":"Bow of Blessing","cls":"ranger","src":"metabot","page":"bow-of-blessing"},
+"14230000": {"name":"Explosive Arrow","cls":"ranger","src":"pingmaker","icon":"waffle"},
+"14240000": {"name":"Afterimage","cls":"ranger","src":"pingmaker"},
+"14260000": {"name":"Defiance","cls":"ranger","src":"metabot","page":"defiance-ranger"},
+"14270000": {"name":"Arrow Storm","cls":"ranger","src":"metabot","page":"arrow-storm"},
+"14290000": {"name":"Arrow of Space-time","cls":"ranger","src":"pingmaker"},
+"14300000": {"name":"Dust Arrow","cls":"ranger","src":"pingmaker"},
+"14310000": {"name":"Vaizel's Authority","cls":"ranger","src":"metabot","page":"vaizels-authority"},
+"14320000": {"name":"Impact Kick","cls":"ranger","src":"pingmaker"},
+"14330000": {"name":"Arrow Scattershot","cls":"ranger","src":"metabot","page":"arrow-scattershot"},
+"14340000": {"name":"Tempest Shot","cls":"ranger","src":"metabot","page":"tempest-shot"},
+"14350000": {"name":"Mother Nature's Breath","cls":"ranger","src":"metabot","page":"mother-natures-breath"},
+"14360000": {"name":"Explosive Arrow","cls":"ranger","src":"metabot","page":"explosive-arrow"},
+"14370000": {"name":"Lightning Arrow","cls":"ranger","src":"pingmaker","icon":"waffle"},
+"14380000": {"name":"Supporting Fire","cls":"ranger","src":"metabot","page":"supporting-fire"},
+"14700000": {"name":"Assault Smite","cls":"ranger","src":"metabot","page":"assault-smite"},
+"14710000": {"name":"Vigilant Eye","cls":"ranger","src":"metabot","page":"vigilant-eye"},
+"14720000": {"name":"Concentrated Fire","cls":"ranger","src":"metabot","page":"concentrated-fire"},
+"14730000": {"name":"Wind Vigor","cls":"ranger","src":"metabot","page":"wind-vigor"},
+"14740000": {"name":"Focused Eye","cls":"ranger","src":"metabot","page":"focused-eye"},
+"14750000": {"name":"Hunter's Resolve","cls":"ranger","src":"metabot","page":"hunters-resolve"},
+"14760000": {"name":"Unyielding Resolve","cls":"ranger","src":"metabot","page":"unyielding-resolve"},
+"14770000": {"name":"Rooting Eye","cls":"ranger","src":"metabot","page":"rooting-eye"},
+"14780000": {"name":"Melee Fire","cls":"ranger","src":"metabot","page":"melee-fire"},
+"14790000": {"name":"Revitalization Contract","cls":"ranger","src":"metabot","page":"revitalization-contract-ranger"},
+"14800000": {"name":"Hunter's Soul","cls":"ranger","src":"metabot","page":"hunters-soul"},
+"15000100": {"name":"Dodge","cls":"sorcerer","src":"pingmaker"},
+"15000101": {"name":"Dodge","cls":"sorcerer","src":"pingmaker"},
+"15010000": {"name":"Flame Scattershot","cls":"sorcerer","src":"metabot","page":"flame-scattershot"},
+"15020000": {"name":"Firebomb","cls":"sorcerer","src":"pingmaker"},
+"15030000": {"name":"Burst","cls":"sorcerer","src":"acompanion,pingmaker","icon":"nc:ICON_SO_SKILL_003"},
+"15040000": {"name":"Firestorm","cls":"sorcerer","src":"metabot","page":"firestorm"},
+"15050000": {"name":"Blaze","cls":"sorcerer","src":"metabot","page":"blaze"},
+"15060000": {"name":"Hellfire","cls":"sorcerer","src":"metabot","page":"hellfire"},
+"15080000": {"name":"Cold Snap","cls":"sorcerer","src":"pingmaker","icon":"waffle"},
+"15090000": {"name":"Ice Chain","cls":"sorcerer","src":"metabot","page":"ice-chain"},
+"15100000": {"name":"Cold Wave","cls":"sorcerer","src":"acompanion,pingmaker","icon":"nc:ICON_SO_SKILL_010"},
+"15110000": {"name":"Winter's Shackles","cls":"sorcerer","src":"metabot","page":"winters-shackles"},
+"15120000": {"name":"Glacial Smite","cls":"sorcerer","src":"metabot","page":"glacial-smite"},
+"15130000": {"name":"Soul Freeze","cls":"sorcerer","src":"metabot","page":"soul-freeze"},
+"15140000": {"name":"Curse: Tree","cls":"sorcerer","src":"metabot","page":"curse-tree"},
+"15150000": {"name":"Frost","cls":"sorcerer","src":"metabot","page":"frost"},
+"15160000": {"name":"Steel Barrier","cls":"sorcerer","src":"metabot","page":"steel-barrier"},
+"15180000": {"name":"Vaizel's Wisdom","cls":"sorcerer","src":"pingmaker"},
+"15200000": {"name":"Cold Storm","cls":"sorcerer","src":"metabot","page":"cold-storm"},
+"15210000": {"name":"Flame Arrow","cls":"sorcerer","src":"metabot","page":"flame-arrow"},
+"15220000": {"name":"Frost Burst","cls":"sorcerer","src":"metabot","page":"frost-burst"},
+"15230000": {"name":"Arctic Armor","cls":"sorcerer","src":"metabot","page":"arctic-armor"},
+"15240000": {"name":"Defiance","cls":"sorcerer","src":"metabot","page":"defiance-sorcerer"},
+"15250000": {"name":"Pyroclasm","cls":"sorcerer","src":"acompanion,pingmaker","icon":"nc:ICON_SO_SKILL_023"},
+"15270000": {"name":"Summon Flame","cls":"sorcerer","src":"pingmaker"},
+"15280000": {"name":"Bittercold Wind","cls":"sorcerer","src":"metabot","page":"bittercold-wind"},
+"15290000": {"name":"Illusion","cls":"sorcerer","src":"pingmaker"},
+"15300000": {"name":"Lumiel's Space","cls":"sorcerer","src":"metabot","page":"lumiels-space"},
+"15310000": {"name":"Wish of Concentration","cls":"sorcerer","src":"metabot","page":"wish-of-concentration"},
+"15320000": {"name":"Delayed Explosion","cls":"sorcerer","src":"metabot","page":"delayed-explosion"},
+"15330000": {"name":"Winter's Illusion","cls":"sorcerer","src":"acompanion,pingmaker","icon":"nc:ICON_SO_SKILL_033"},
+"15340000": {"name":"Curse: Old Tree","cls":"sorcerer","src":"pingmaker","icon":"waffle"},
+"15350000": {"name":"Magic Energy Blast","cls":"sorcerer","src":"pingmaker"},
+"15360000": {"name":"Divine Burst","cls":"sorcerer","src":"metabot","page":"divine-burst"},
+"15380000": {"name":"Lumiel's Authority","cls":"sorcerer","src":"pingmaker"},
+"15390000": {"name":"Fire Wall","cls":"sorcerer","src":"metabot","page":"fire-wall"},
+"15400000": {"name":"Element Enhancement","cls":"sorcerer","src":"metabot","page":"element-enhancement"},
+"15410000": {"name":"Hibernation","cls":"sorcerer","src":"metabot","page":"hibernation"},
+"15700000": {"name":"Assault Bombardment","cls":"sorcerer","src":"metabot","page":"assault-bombardment"},
+"15710000": {"name":"Fire Mark","cls":"sorcerer","src":"metabot","page":"fire-mark"},
+"15720000": {"name":"Robe of Earth","cls":"sorcerer","src":"metabot","page":"robe-of-earth"},
+"15730000": {"name":"Cold Snap","cls":"sorcerer","src":"metabot","page":"cold-snap"},
+"15740000": {"name":"Robe of Flame","cls":"sorcerer","src":"metabot","page":"robe-of-flame"},
+"15750000": {"name":"Robe of Cold","cls":"sorcerer","src":"metabot","page":"robe-of-cold"},
+"15760000": {"name":"Absorb Essence","cls":"sorcerer","src":"metabot","page":"absorb-essence"},
+"15770000": {"name":"Grace of Resistance","cls":"sorcerer","src":"metabot","page":"grace-of-resistance"},
+"15780000": {"name":"Grace of Enhancement","cls":"sorcerer","src":"metabot","page":"grace-of-enhancement"},
+"15790000": {"name":"Revitalization Contract","cls":"sorcerer","src":"metabot","page":"revitalization-contract-sorcerer"},
+"15800000": {"name":"Vitality Evaporation","cls":"sorcerer","src":"metabot","page":"vitality-evaporation"},
+"16000100": {"name":"Dodge","cls":"spiritmaster","src":"pingmaker"},
+"16000101": {"name":"Dodge","cls":"spiritmaster","src":"pingmaker"},
+"16001101": {"name":"Fire Spirit: Flame Explosion","cls":"spiritmaster","src":"pingmaker"},
+"16001102": {"name":"Fire Spirit: Flame Explosion","cls":"spiritmaster","src":"pingmaker"},
+"16001103": {"name":"Fire Spirit: Flame Explosion","cls":"spiritmaster","src":"pingmaker"},
+"16001104": {"name":"Fire Spirit: Flame Explosion","cls":"spiritmaster","src":"pingmaker"},
+"16001105": {"name":"Water Spirit: Water Bomb","cls":"spiritmaster","src":"pingmaker"},
+"16001106": {"name":"Water Spirit: Water Bomb","cls":"spiritmaster","src":"pingmaker"},
+"16001107": {"name":"Water Spirit: Water Bomb","cls":"spiritmaster","src":"pingmaker"},
+"16001108": {"name":"Water Spirit: Water Bomb","cls":"spiritmaster","src":"pingmaker"},
+"16001109": {"name":"Wind Spirit: Malicious Whirlwind","cls":"spiritmaster","src":"pingmaker"},
+"16001110": {"name":"Wind Spirit: Malicious Whirlwind","cls":"spiritmaster","src":"pingmaker"},
+"16001111": {"name":"Wind Spirit: Malicious Whirlwind","cls":"spiritmaster","src":"pingmaker"},
+"16001112": {"name":"Wind Spirit: Malicious Whirlwind","cls":"spiritmaster","src":"pingmaker"},
+"16001113": {"name":"Earth Spirit: Headbutt","cls":"spiritmaster","src":"pingmaker"},
+"16001114": {"name":"Earth Spirit: Headbutt","cls":"spiritmaster","src":"pingmaker"},
+"16001115": {"name":"Earth Spirit: Headbutt","cls":"spiritmaster","src":"pingmaker"},
+"16001116": {"name":"Earth Spirit: Headbutt","cls":"spiritmaster","src":"pingmaker"},
+"16001117": {"name":"Ancient Spirit: Destruction","cls":"spiritmaster","src":"pingmaker"},
+"16001301": {"name":"Fire Spirit: Summon Meteor","cls":"spiritmaster","src":"pingmaker"},
+"16001302": {"name":"Fire Spirit: Summon Meteor","cls":"spiritmaster","src":"pingmaker"},
+"16001303": {"name":"Fire Spirit: Summon Meteor","cls":"spiritmaster","src":"pingmaker"},
+"16001304": {"name":"Fire Spirit: Summon Meteor","cls":"spiritmaster","src":"pingmaker"},
+"16001305": {"name":"Water Spirit: Glacier Harpoon","cls":"spiritmaster","src":"pingmaker"},
+"16001306": {"name":"Water Spirit: Glacier Harpoon","cls":"spiritmaster","src":"pingmaker"},
+"16001307": {"name":"Water Spirit: Glacier Harpoon","cls":"spiritmaster","src":"pingmaker"},
+"16001308": {"name":"Water Spirit: Glacier Harpoon","cls":"spiritmaster","src":"pingmaker"},
+"16001309": {"name":"Wind Spirit: Storm","cls":"spiritmaster","src":"pingmaker"},
+"16001310": {"name":"Wind Spirit: Storm","cls":"spiritmaster","src":"pingmaker"},
+"16001311": {"name":"Wind Spirit: Storm","cls":"spiritmaster","src":"pingmaker"},
+"16001312": {"name":"Wind Spirit: Storm","cls":"spiritmaster","src":"pingmaker"},
+"16001313": {"name":"Earth Spirit: Colossal Stalk","cls":"spiritmaster","src":"pingmaker"},
+"16001314": {"name":"Earth Spirit: Colossal Stalk","cls":"spiritmaster","src":"pingmaker"},
+"16001315": {"name":"Earth Spirit: Colossal Stalk","cls":"spiritmaster","src":"pingmaker"},
+"16001316": {"name":"Earth Spirit: Colossal Stalk","cls":"spiritmaster","src":"pingmaker"},
+"16001317": {"name":"Ancient Spirit: Magnetic Storm","cls":"spiritmaster","src":"pingmaker"},
+"16010000": {"name":"Cold Shock","cls":"spiritmaster","src":"metabot","page":"cold-shock"},
+"16020000": {"name":"Vacuum Explosion","cls":"spiritmaster","src":"acompanion,pingmaker","icon":"nc:ICON_EL_SKILL_002"},
+"16030000": {"name":"Earth Tremor","cls":"spiritmaster","src":"acompanion,pingmaker","icon":"nc:ICON_EL_SKILL_003"},
+"16040000": {"name":"Combustion","cls":"spiritmaster","src":"metabot","page":"combustion"},
+"16050000": {"name":"Ashy Call","cls":"spiritmaster","src":"acompanion,pingmaker","icon":"nc:ICON_EL_SKILL_005"},
+"16060000": {"name":"Siphon","cls":"spiritmaster","src":"metabot","page":"siphon"},
+"16070000": {"name":"Soul's Cry","cls":"spiritmaster","src":"metabot","page":"souls-cry"},
+"16080000": {"name":"Cry of Terror","cls":"spiritmaster","src":"metabot","page":"cry-of-terror"},
+"16090000": {"name":"Magic Backflow","cls":"spiritmaster","src":"pingmaker"},
+"16100000": {"name":"Summon: Fire Spirit","cls":"spiritmaster","src":"metabot","page":"summon-fire-spirit"},
+"16110000": {"name":"Summon: Water Spirit","cls":"spiritmaster","src":"metabot","page":"summon-water-spirit"},
+"16120000": {"name":"Summon: Wind Spirit","cls":"spiritmaster","src":"metabot","page":"summon-wind-spirit"},
+"16130000": {"name":"Summon: Earth Spirit","cls":"spiritmaster","src":"metabot","page":"summon-earth-spirit"},
+"16140000": {"name":"Jointstrike: Curse","cls":"spiritmaster","src":"metabot","page":"jointstrike-curse"},
+"16150000": {"name":"Jointstrike: Corrode","cls":"spiritmaster","src":"metabot","page":"jointstrike-corrode"},
+"16160000": {"name":"Spirit Protection","cls":"spiritmaster","src":"pingmaker"},
+"16170000": {"name":"Command: Proxy","cls":"spiritmaster","src":"metabot","page":"command-proxy"},
+"16180000": {"name":"Spirit Momentum","cls":"spiritmaster","src":"pingmaker"},
+"16190000": {"name":"Enhance: Spirit's Benediction","cls":"spiritmaster","src":"metabot","page":"enhance-spirits-benediction"},
+"16200000": {"name":"Defiance","cls":"spiritmaster","src":"metabot","page":"defiance-spiritmaster"},
+"16210000": {"name":"Curse of Despair","cls":"spiritmaster","src":"pingmaker","icon":"waffle"},
+"16220000": {"name":"Cursed Cloud","cls":"spiritmaster","src":"metabot","page":"cursed-cloud"},
+"16230000": {"name":"Seize Magic","cls":"spiritmaster","src":"metabot","page":"seize-magic"},
+"16240000": {"name":"Jointstrike: Destructive Attack","cls":"spiritmaster","src":"metabot","page":"jointstrike-destructive-attack"},
+"16250000": {"name":"Summon: Ancient Spirit","cls":"spiritmaster","src":"metabot","page":"summon-ancient-spirit"},
+"16260000": {"name":"Magic Block","cls":"spiritmaster","src":"metabot","page":"magic-block"},
+"16270000": {"name":"Elemental Replenishment","cls":"spiritmaster","src":"pingmaker"},
+"16280000": {"name":"Continuous Impact","cls":"spiritmaster","src":"pingmaker"},
+"16290000": {"name":"Dismiss: Fire Spirit","cls":"spiritmaster","src":"pingmaker"},
+"16300000": {"name":"Elemental Fusion","cls":"spiritmaster","src":"metabot","page":"elemental-fusion"},
+"16310000": {"name":"Extract Vitality","cls":"spiritmaster","src":"pingmaker"},
+"16330000": {"name":"Dimensional Control","cls":"spiritmaster","src":"metabot","page":"dimensional-control"},
+"16340000": {"name":"Rapid Scattershot","cls":"spiritmaster","src":"metabot","page":"rapid-scattershot"},
+"16350000": {"name":"Soul Decimation","cls":"spiritmaster","src":"pingmaker"},
+"16360000": {"name":"Kaisinel's Power","cls":"spiritmaster","src":"metabot","page":"kaisinels-power"},
+"16370000": {"name":"Flame Blessing","cls":"spiritmaster","src":"metabot","page":"flame-blessing"},
+"16700000": {"name":"Assault Terror","cls":"spiritmaster","src":"metabot","page":"assault-terror"},
+"16710000": {"name":"Spirit Strike","cls":"spiritmaster","src":"metabot","page":"spirit-strike"},
+"16720000": {"name":"Spirit Protection","cls":"spiritmaster","src":"metabot","page":"spirit-protection"},
+"16730000": {"name":"Spirit's Descent","cls":"spiritmaster","src":"metabot","page":"spirits-descent"},
+"16740000": {"name":"Corrode","cls":"spiritmaster","src":"metabot","page":"corrode"},
+"16750000": {"name":"Spirit Revitalization","cls":"spiritmaster","src":"metabot","page":"spirit-revitalization"},
+"16760000": {"name":"Mental Focus","cls":"spiritmaster","src":"metabot","page":"mental-focus"},
+"16770000": {"name":"Spirit Communion","cls":"spiritmaster","src":"metabot","page":"spirit-communion"},
+"16780000": {"name":"Element Unification","cls":"spiritmaster","src":"metabot","page":"element-unification"},
+"16790000": {"name":"Revitalization Contract","cls":"spiritmaster","src":"metabot","page":"revitalization-contract-spiritmaster"},
+"16800000": {"name":"Consecutive Countercurrent","cls":"spiritmaster","src":"metabot","page":"consecutive-countercurrent"},
+"17000100": {"name":"Dodge","cls":"cleric","src":"pingmaker"},
+"17000101": {"name":"Dodge","cls":"cleric","src":"pingmaker"},
+"17010000": {"name":"Earth's Retribution","cls":"cleric","src":"metabot","page":"earths-retribution"},
+"17020000": {"name":"Thunder and Lightning","cls":"cleric","src":"acompanion,pingmaker","icon":"nc:ICON_CL_SKILL_002"},
+"17030000": {"name":"Discharge","cls":"cleric","src":"acompanion,pingmaker","icon":"nc:ICON_CL_SKILL_003"},
+"17040000": {"name":"Judgment Thunder","cls":"cleric","src":"metabot","page":"judgment-thunder"},
+"17050000": {"name":"Divine Punishment","cls":"cleric","src":"acompanion,pingmaker","icon":"nc:ICON_CL_SKILL_005"},
+"17060000": {"name":"Bolt","cls":"cleric","src":"metabot","page":"bolt"},
+"17070000": {"name":"Chain of Torment","cls":"cleric","src":"metabot","page":"chain-of-torment"},
+"17080000": {"name":"Debilitating Mark","cls":"cleric","src":"metabot","page":"debilitating-mark"},
+"17090000": {"name":"Light of Regeneration","cls":"cleric","src":"metabot","page":"light-of-regeneration"},
+"17100000": {"name":"Healing Light","cls":"cleric","src":"metabot","page":"healing-light"},
+"17120000": {"name":"Radiant Recovery","cls":"cleric","src":"metabot","page":"radiant-recovery"},
+"17150000": {"name":"Divine Aura","cls":"cleric","src":"metabot","page":"divine-aura"},
+"17160000": {"name":"Benevolence","cls":"cleric","src":"metabot","page":"benevolence"},
+"17190000": {"name":"Root","cls":"cleric","src":"metabot","page":"root"},
+"17240000": {"name":"Defiance","cls":"cleric","src":"metabot","page":"defiance-cleric"},
+"17270000": {"name":"Salvation","cls":"cleric","src":"metabot","page":"salvation"},
+"17280000": {"name":"Power Burst","cls":"cleric","src":"metabot","page":"power-burst"},
+"17290000": {"name":"Absolution","cls":"cleric","src":"metabot","page":"absolution"},
+"17300000": {"name":"Voice of Doom","cls":"cleric","src":"metabot","page":"voice-of-doom"},
+"17320000": {"name":"Blessing of Regeneration","cls":"cleric","src":"pingmaker","icon":"waffle"},
+"17350000": {"name":"Condemnation","cls":"cleric","src":"metabot","page":"condemnation"},
+"17370000": {"name":"Lightning Strike Scattershot","cls":"cleric","src":"metabot","page":"lightning-strike-scattershot"},
+"17390000": {"name":"Summon Resurrection","cls":"cleric","src":"metabot","page":"summon-resurrection"},
+"17400000": {"name":"Earth Punishment","cls":"cleric","src":"metabot","page":"earth-punishment"},
+"17410000": {"name":"Light of Protection","cls":"cleric","src":"metabot","page":"light-of-protection"},
+"17420000": {"name":"Yustiel's Power","cls":"cleric","src":"metabot","page":"yustiels-power"},
+"17430000": {"name":"Prayer of Amplification","cls":"cleric","src":"metabot","page":"prayer-of-amplification"},
+"17440000": {"name":"Noble Aura","cls":"cleric","src":"metabot","page":"noble-aura"},
+"17700000": {"name":"Assault Mark","cls":"cleric","src":"metabot","page":"assault-mark"},
+"17710000": {"name":"Warm Benediction","cls":"cleric","src":"metabot","page":"warm-benediction"},
+"17720000": {"name":"Empyrean Lords' Benediction","cls":"cleric","src":"metabot","page":"empyrean-lords-benediction"},
+"17730000": {"name":"Empyrean Lord's Grace","cls":"cleric","src":"metabot","page":"empyrean-lords-grace"},
+"17740000": {"name":"Healing Enhancement","cls":"cleric","src":"metabot","page":"healing-enhancement"},
+"17750000": {"name":"Immortal Veil","cls":"cleric","src":"metabot","page":"immortal-veil"},
+"17760000": {"name":"Heal Block","cls":"cleric","src":"metabot","page":"heal-block"},
+"17770000": {"name":"Prayer of Concentration","cls":"cleric","src":"metabot","page":"prayer-of-concentration"},
+"17780000": {"name":"Earth's Grace","cls":"cleric","src":"metabot","page":"earths-grace"},
+"17790000": {"name":"Survival Willpower","cls":"cleric","src":"metabot","page":"survival-willpower-cleric"},
+"17800000": {"name":"Radiant Benediction","cls":"cleric","src":"metabot","page":"radiant-benediction"},
+"18000100": {"name":"Dodge","cls":"chanter","src":"pingmaker"},
+"18010000": {"name":"Onslaught","cls":"chanter","src":"metabot","page":"onslaught"},
+"18020000": {"name":"Resonance Crush","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_002"},
+"18030000": {"name":"Bolt Crush","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_003"},
+"18040000": {"name":"Incandescent Blow","cls":"chanter","src":"metabot","page":"incandescent-blow"},
+"18050000": {"name":"Bursting Blow","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_005"},
+"18060000": {"name":"Impactful Crush","cls":"chanter","src":"metabot","page":"impactful-crush"},
+"18070000": {"name":"Crushing Blow","cls":"chanter","src":"pingmaker","icon":"waffle"},
+"18080000": {"name":"Wave Blow","cls":"chanter","src":"metabot","page":"wave-blow"},
+"18090000": {"name":"Rushing Smash","cls":"chanter","src":"metabot","page":"rushing-smash"},
+"18100000": {"name":"Dark Crush","cls":"chanter","src":"metabot","page":"dark-crush"},
+"18120000": {"name":"Recuperation","cls":"chanter","src":"metabot","page":"recuperation"},
+"18130000": {"name":"Fracturing Blow","cls":"chanter","src":"metabot","page":"fracturing-blow"},
+"18140000": {"name":"Focused Defense","cls":"chanter","src":"metabot","page":"focused-defense"},
+"18150000": {"name":"Heat Wave Blow","cls":"chanter","src":"metabot","page":"heat-wave-blow"},
+"18160000": {"name":"Sprint Mantra","cls":"chanter","src":"metabot","page":"sprint-mantra"},
+"18170000": {"name":"Healing Touch","cls":"chanter","src":"metabot","page":"healing-touch"},
+"18190000": {"name":"Undefeated Mantra","cls":"chanter","src":"metabot","page":"undefeated-mantra"},
+"18200000": {"name":"Defiance","cls":"chanter","src":"metabot","page":"defiance-chanter"},
+"18210000": {"name":"Tremor Crush","cls":"chanter","src":"metabot","page":"tremor-crush"},
+"18220000": {"name":"Obliterate","cls":"chanter","src":"metabot","page":"obliterate"},
+"18230000": {"name":"Ensnaring Mark","cls":"chanter","src":"metabot","page":"ensnaring-mark"},
+"18240000": {"name":"Impeding Authority","cls":"chanter","src":"metabot","page":"impeding-authority"},
+"18250000": {"name":"Power of the Storm","cls":"chanter","src":"metabot","page":"power-of-the-storm"},
+"18290000": {"name":"Spinning Strike","cls":"chanter","src":"metabot","page":"spinning-strike"},
+"18300000": {"name":"Gust Rampage","cls":"chanter","src":"metabot","page":"gust-rampage"},
+"18330000": {"name":"Marchutan's Wrath","cls":"chanter","src":"metabot","page":"marchutans-wrath"},
+"18370000": {"name":"Storm Chain","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_037"},
+"18390000": {"name":"Surging Strike","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_039"},
+"18400000": {"name":"Piercing Strike","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_040"},
+"18410000": {"name":"Crushing Strike","cls":"chanter","src":"acompanion,pingmaker","icon":"nc:ICON_CH_SKILL_041"},
+"18420000": {"name":"Guardian Blessing","cls":"chanter","src":"metabot","page":"guardian-blessing"},
+"18440000": {"name":"Barrier Spell","cls":"chanter","src":"metabot","page":"barrier-spell"},
+"18700000": {"name":"Assault Shock","cls":"chanter","src":"metabot","page":"assault-shock"},
+"18710000": {"name":"Blessing of Life","cls":"chanter","src":"metabot","page":"blessing-of-life"},
+"18720000": {"name":"Crossguard","cls":"chanter","src":"metabot","page":"crossguard"},
+"18730000": {"name":"Protection Circle","cls":"chanter","src":"metabot","page":"protection-circle"},
+"18740000": {"name":"Inspiring Spell","cls":"chanter","src":"metabot","page":"inspiring-spell"},
+"18750000": {"name":"Attack Preparation","cls":"chanter","src":"metabot","page":"attack-preparation-chanter"},
+"18760000": {"name":"Impact Hit","cls":"chanter","src":"metabot","page":"impact-hit-chanter"},
+"18770000": {"name":"Raging Spell","cls":"chanter","src":"metabot","page":"raging-spell"},
+"18780000": {"name":"Earth's Promise","cls":"chanter","src":"metabot","page":"earths-promise"},
+"18790000": {"name":"Survival Willpower","cls":"chanter","src":"pingmaker","icon":"waffle"},
+"18800000": {"name":"Wind's Promise","cls":"chanter","src":"metabot","page":"winds-promise"}
 }
 }

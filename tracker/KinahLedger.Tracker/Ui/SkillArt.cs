@@ -10,8 +10,8 @@ namespace KinahLedger.Ui;
 /// Each ability's own icon in the Parser's inspect view (Steven, 2026-11-14: the parser should look like the rest of the
 /// app; ability icons beside their names): the game's skill art, MetaBot's copies, for the skills the Parser knows
 /// (data/skills.json), packed by tools/skill-icons.py into one small palette sheet (Art/skill-icons.png, an embedded stream) with its cell list
-/// (data/skill-icons.txt). An ability with no icon (one MetaBot doesn't list, or damage over time) gets a quiet glyph in the
-/// member's class colour: never a broken picture.
+/// (data/skill-icons.txt; a cell's ids share its picture). An ability with no icon gets the class's emblem, damage over time a
+/// quiet glyph in the member's class colour: never a broken picture.
 /// </summary>
 static class SkillArt
 {
@@ -24,7 +24,9 @@ static class SkillArt
         lock (Gate)
         {
             _icons ??= Load();
-            return _icons.TryGetValue(skill, out var i) ? i : null;
+            if (_icons.TryGetValue(skill, out var i)) return i;
+            // a class skill's rank or variant: its base's icon (KinahLedger.Parser.Abilities.Resolve)
+            return KinahLedger.Parser.Abilities.Resolve(skill) is { } id && _icons.TryGetValue(id, out var b) ? b : null;
         }
     }
 
@@ -47,12 +49,14 @@ static class SkillArt
             if (lines.Count < 2 || !int.TryParse(lines[0], out var cell) || !int.TryParse(lines[1], out var cols) || cell <= 0 || cols <= 0) return map;
             for (int n = 0; n + 2 < lines.Count; n++)
             {
-                if (!int.TryParse(lines[n + 2], out var id)) continue;
+                // a cell's ids: one, or several that share the picture ("100014 100018")
+                var ids = lines[n + 2].Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(x => int.TryParse(x, out var v) ? v : 0).Where(v => v != 0).ToList();
+                if (ids.Count == 0) continue;
                 var rect = new Int32Rect((n % cols) * cell, (n / cols) * cell, cell, cell);
                 if (rect.X + cell > sheet.PixelWidth || rect.Y + cell > sheet.PixelHeight) break;
                 var crop = new CroppedBitmap(sheet, rect);
                 crop.Freeze();
-                map[id] = crop;
+                foreach (var id in ids) map[id] = crop;
             }
         }
         catch (Exception ex) { CrashLog.Write("ability icons", ex); }
@@ -61,12 +65,15 @@ static class SkillArt
 
     /// <summary>
     /// The ability's icon, <paramref name="size"/> square, on a rounded tile with a hairline ring in the member's class
-    /// colour; with no icon, the tile in the class's tint with a small diamond in its colour.
+    /// colour; an ability the list doesn't name, the class's emblem (from the id's family, else the member's); damage over
+    /// time and an ability with neither, the tile in the class's tint with a small diamond in its colour.
     /// </summary>
     public static FrameworkElement Icon(int skill, string? cls, double size)
     {
         var c = ClassArt.ColorOf(cls);
         var img = skill != 0 ? Image(skill) : null;
+        if (img == null && skill != 0 && KinahLedger.Parser.Abilities.Resolve(skill) == null)
+            img = ClassArt.Image(KinahLedger.Parser.Abilities.ClassOfFamily(skill) is { Length: > 0 } fam ? fam : cls);
         var radius = Math.Round(size * 0.24);
         var tile = new Border
         {

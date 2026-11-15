@@ -683,7 +683,7 @@ public sealed class BossParser
         var src = SourceOf(e, dd);
         src.Damage += dd.Amount;
         if (toBoss) src.BossDamage += dd.Amount;
-        src.AddAbility(dd.Skill, dd.Amount, dd.Hits, dd.OverTime, toBoss);
+        src.AddAbility(dd.Skill, dd.Amount, dd.Hits, toBoss);
         src.Hit(dd.At);
     }
 
@@ -694,7 +694,7 @@ public sealed class BossParser
         if (dd.SourceId == 0) { e.UncreditedBoss += dd.Amount; return; }
         if (e.Roster.FirstOrDefault(f => f.Id == dd.SourceId && !f.Other) is not { } m) return;
         m.BossDamage += dd.Amount;
-        if (m.Abilities.FirstOrDefault(a => a.Skill == dd.Skill && a.OverTime == dd.OverTime) is { } a)
+        if (m.Abilities.FirstOrDefault(a => a.Skill == dd.Skill) is { } a)
         {
             a.BossDamage += dd.Amount;
             if (dd.Hits > 0) a.BossHits += dd.Hits; else a.BossUncounted += dd.Amount;
