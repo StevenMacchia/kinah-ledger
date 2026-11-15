@@ -57,7 +57,7 @@ public partial class MainWindow
         {
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.DpsActive = fresh.DpsActive; _parserPrefs.FarmDps = fresh.FarmDps;
-            Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritSource);
+            Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
             _parserPrefs.Width = fresh.Width; _parserPrefs.Expanded = fresh.Expanded; ApplyMeterExpanded();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
@@ -69,7 +69,7 @@ public partial class MainWindow
         // a new best on a boss (the overlay's PB moment) is measured against your kills of it kept on this PC
         ParserRows.BestOf = e => FightView.Records(e, ParserPast()).Best;
         if (watch) StartFarmTicker();
-        Encounter.ActiveBasis = _parserPrefs.DpsActive; Encounter.BossOnly = _parserPrefs.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(_parserPrefs.CritSource);   // crit: none until a release picks the kind
+        Encounter.ActiveBasis = _parserPrefs.DpsActive; Encounter.BossOnly = _parserPrefs.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(_parserPrefs.CritNow); Encounter.BackKey = Encounter.BackKeyOf(_parserPrefs.BackNow);   // crit and back attacks: none until a release picks the kind
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
         ParserTab.Click += (_, _) => { _parserFromRuns = false; ShowPart("Parser"); };
         // five pills and the Timers countdown in the header's tab column: a little less room each, so Parser isn't cut off
@@ -1061,7 +1061,8 @@ public partial class MainWindow
         _parserPrefs.Details = !none;
         _parserPrefs.DpsActive = Encounter.ActiveBasis = false; _parserPrefs.Targets = "boss"; Encounter.BossOnly = true;
         // crit is off as shipped; a render can show it on with KL_CRIT=result3 or mark08 (a render's switch only, never the app's)
-        Encounter.CritKey = Encounter.CritKeyOf(Environment.GetEnvironmentVariable("KL_CRIT") ?? _parserPrefs.CritSource);
+        Encounter.CritKey = Encounter.CritKeyOf(Environment.GetEnvironmentVariable("KL_CRIT") ?? _parserPrefs.CritNow);
+        Encounter.BackKey = Encounter.BackKeyOf(Environment.GetEnvironmentVariable("KL_BACK") ?? _parserPrefs.BackNow);
         _parserDemoState = state;
         _parserDemoNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var mode = state.StartsWith("run") ? ParserMode.Run : state.StartsWith("fight") ? ParserMode.Fights : ParserMode.Bosses;

@@ -769,7 +769,9 @@ public sealed class BossParser
             km[key] = Math.Max(km.GetValueOrDefault(key), amt);
         }
         Count("result:" + h.Result);
-        for (int b = 0; b < 16; b++) if ((h.Marks & (1 << b)) != 0) Count("mark:" + b);
+        for (int b = 0; b < 12; b++) if ((h.Marks & (1 << b)) != 0) Count("mark:" + b);
+        // the side the hit came from, when the row says one (bit 14), kept whole from bits 12-13: 2 in front, 1 behind
+        if ((h.Marks & 0x4000) != 0) Count("side:" + ((h.Marks >> 12) & 3));
         if (h.Multi > 0) Count("multi");
         if (h.Tick) Count("tick");
     }

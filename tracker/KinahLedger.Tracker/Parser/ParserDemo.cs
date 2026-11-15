@@ -76,7 +76,8 @@ public static class ParserDemo
                     {
                         int cast = (s / 3) % 250, roll = (int)((amount * 31 + s * 7 + src * 13) % 100);   // from the hit itself: the sample's other figures stay as they were
                         p.Take(new CastMade(at, src, src, skill, cast));
-                        p.Take(new HitDealt(at, src, src, id, amount, skill, cast, 1, false, false, roll < 40 ? 3 : 2, roll % 12 == 0 ? 0x08 : 0, 0, 0));
+                        int side = who?.Class is "Templar" or "Gladiator" ? (roll % 5 == 0 ? 1 : 2) : (roll % 2 == 0 ? 1 : 2);   // tanks mostly in front
+                        p.Take(new HitDealt(at, src, src, id, amount, skill, cast, 1, false, false, roll < 40 ? 3 : 2, (roll % 12 == 0 ? 0x08 : 0) | 0x4000 | (side << 12), 0, 0));
                     }
                     p.Take(new DamageDealt(at, src, id, amount, group ? "" : who?.Name ?? "", who?.You == true, skill, 1 + (int)(amount % 3)));
                     hp -= amount;

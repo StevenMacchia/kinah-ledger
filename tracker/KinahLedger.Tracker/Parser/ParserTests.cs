@@ -136,7 +136,7 @@ public static class ParserTests
                 int rest = hits - k.Hits; long restDmg = dmg - k.Damage;
                 return k.Hits > 0 && rest > 0 && restDmg > 0 ? $"x{k.Damage / (double)k.Hits / (restDmg / (double)rest),4:0.00}" : "    -";
             }
-            string Head() => $"      {"Skill",-34} {"Damage",9} {"Share",6} {"Hits",5}" + string.Concat(CritCandidates.Select(c => $" | {c.Label,-9} {"rate",6} {"mult",5}")) + $" | {"Max",8}";
+            string Head() => $"      {"Skill",-34} {"Damage",9} {"Share",6} {"Hits",5}" + string.Concat(CritCandidates.Select(c => $" | {c.Label,-9} {"rate",6} {"mult",5}")) + $" | {"back %",6} | {"Max",8}";
             foreach (var f in e.Ranked().Where(f => f.Abilities.Any(a => a.StreamHits > 0)))
             {
                 var rows = e.AbilityRows(f).Where(a => a.StreamHits > 0).ToList();
@@ -147,6 +147,8 @@ public static class ParserTests
                     var k = rows.Select(a => Encounter.KindTotals(a, key)).Aggregate((Hits: 0, Damage: 0L, Max: 0L), (s, x) => (s.Hits + x.Hits, s.Damage + x.Damage, Math.Max(s.Max, x.Max)));
                     line += $"; {label}: {k.Hits:N0} ({Rate(k.Hits, hits).Trim()}), {Mult(k, hits, dmg).Trim()}, {(dmg > 0 ? k.Damage * 100.0 / dmg : 0):0.0}% of the damage, max {Ui.Amounts.Short(k.Max)}";
                 }
+                int back = rows.Sum(a => Encounter.KindTotals(a, "side:1").Hits), sided = rows.Sum(a => (a.Kinds?.GetValueOrDefault("side:1") ?? 0) + (a.Kinds?.GetValueOrDefault("side:2") ?? 0));
+                line += $"; back {back:N0} ({Rate(back, hits).Trim()} of hits, {(sided > 0 ? Rate(back, sided).Trim() : "-")} of those with a side)";
                 Console.WriteLine(line);
                 Console.WriteLine(Head());
                 foreach (var a in rows)
@@ -154,7 +156,7 @@ public static class ParserTests
                     int h = a.StreamHits ?? 0; long d = a.StreamDamage ?? 0;
                     var r = $"      {Abilities.Name(a.Skill, f.Class),-34} {Ui.Amounts.Short(a.Damage),9} {(f.Damage > 0 ? a.Damage * 100.0 / f.Damage : 0),5:0.0}% {h,5}";
                     foreach (var (key, _) in CritCandidates) { var k = Encounter.KindTotals(a, key); r += $" | {k.Hits,-9} {Rate(k.Hits, h),6} {Mult(k, h, d),5}"; }
-                    Console.WriteLine(r + $" | {Ui.Amounts.Short(a.Max ?? 0),8}");
+                    Console.WriteLine(r + $" | {Rate(Encounter.KindTotals(a, "side:1").Hits, h),6} | {Ui.Amounts.Short(a.Max ?? 0),8}");
                 }
             }
         }
@@ -1196,14 +1198,14 @@ public static class ParserTests
             Check(row is { StreamHits: 4, StreamDamage: 7_100 } && Encounter.KindTotals(row, "result:3") == (2, 5_100, 3_400) && Encounter.KindTotals(row, "mark:3") == (1, 3_400, 3_400),
                 "crit candidates: each kind's hits, damage and biggest hit kept per ability, a rank's id merged into its skill's row");
             string? key0 = Encounter.CritKey;
-            Encounter.CritKey = Encounter.CritKeyOf(new ParserPrefs().CritSource);
+            Encounter.CritKey = Encounter.CritKeyOf(new ParserPrefs().CritNow);
             var none = Ui.FightView.Of(e, e.End!.Value, null).Members.Single();
             Encounter.CritKey = Encounter.CritKeyOf("result3");
             var r3 = Ui.FightView.Of(e, e.End.Value, null);
             Encounter.CritKey = Encounter.CritKeyOf("mark08");
             var m8 = Ui.FightView.Of(e, e.End.Value, null).Members.Single();
             Encounter.CritKey = key0;
-            Check(new ParserPrefs().CritSource == "none" && none is { Crit: null, CritShare: null, MaxCrit: null } && !Ui.FightView.Of(e, e.End.Value, null).HasCrit,
+            Check(new ParserPrefs().CritNow == "none" && none is { Crit: null, CritShare: null, MaxCrit: null } && !Ui.FightView.Of(e, e.End.Value, null).HasCrit,
                 "...nothing shown as crit by default (CritSource none)");
             var r3m = r3.Members.Single();
             Check(r3.HasCrit && r3m is { Crit: 0.5, MaxCrit: 3_400 } && Math.Abs(r3m.CritShare!.Value - 5_100 / 7_100.0) < 1e-9 && r3m.Abilities.Single().Crit == 0.5
@@ -1211,6 +1213,43 @@ public static class ParserTests
                 $"...CritSource result3: crit {Encounter.Pct(r3m.Crit ?? 0)}, {Encounter.Pct(r3m.CritShare ?? 0)} of the damage, max crit {r3m.MaxCrit:N0}; mark08: {Encounter.Pct(m8.Crit ?? 0)}");
             Check(Encounter.CritKeyOf("result3") == "result:3" && Encounter.CritKeyOf("mark08") == "mark:3" && Encounter.CritKeyOf("none") == null && Encounter.CritKeyOf("junk") == null,
                 "...the switch's values: none, result3, mark08 (anything else is none)");
+        }
+
+        // the release's defaults reach everyone: a crit or back-attack choice is written only when one is made, so a release that
+        // changes the default (the morning's flip) reaches players whose settings were saved before; a choice in the file stays
+        {
+            var saved = System.Text.Json.JsonSerializer.Serialize(new ParserPrefs { Details = false });
+            var back0 = ParserPrefs.FromText(saved);
+            var chose = ParserPrefs.FromText("{\"DetailsSettled\":true,\"HonestSettled\":true,\"CritSource\":\"mark08\",\"BackSource\":\"none\"}");
+            Check(!saved.Contains("CritSource") && !saved.Contains("BackSource") && back0.CritSource == null && back0.CritNow == ParserPrefs.CritDefault && back0.BackNow == ParserPrefs.BackDefault
+                && chose is { CritNow: "mark08", BackNow: "none" },
+                $"crit and back attacks: the default never written (saved settings follow a release's new default: crit {ParserPrefs.CritDefault}, back {ParserPrefs.BackDefault}); a choice in the file kept");
+        }
+
+        // back attacks: the side each hit came from kept whole per ability ("side:1" behind, "side:2" front); shown only when
+        // ParserPrefs.BackSource picks it, as a share of the hits seen
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 892));
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.Take(new BossEngaged(t.AddSeconds(1), "Talisra of the Void", 893));
+            p.Take(new HitDealt(t.AddSeconds(2), 1, 1, 893, 1_000, 12240000, 1, 1, false, false, 2, 0x4000 | 1 << 12, 0, 0));           // behind
+            p.Take(new HitDealt(t.AddSeconds(3), 1, 1, 893, 1_000, 12240000, 2, 1, false, false, 3, 0x4000 | 1 << 12 | 0x08, 0, 0));  // behind, a crit and the x2 mark
+            p.Take(new HitDealt(t.AddSeconds(4), 1, 1, 893, 1_000, 12240000, 3, 1, false, false, 2, 0x4000 | 2 << 12, 0, 0));           // front
+            p.Take(new HitDealt(t.AddSeconds(5), 1, 1, 893, 1_000, 12240000, 4, 1, false, false, 2, 0, 0, 0));                     // no side said (bit 14 clear)
+            p.Take(new DamageDealt(t.AddSeconds(5), 1, 893, 4_000, Skill: 12240000, Hits: 4));
+            p.Take(new BossEnded(t.AddSeconds(9), 893, BossOutcome.Kill));
+            var e = kept.Single(); var a = e.Members.Single().Abilities.Single();
+            string? bk0 = Encounter.BackKey;
+            Encounter.BackKey = Encounter.BackKeyOf(new ParserPrefs().BackNow);
+            var off = Ui.FightView.Of(e, e.End!.Value, null);
+            Encounter.BackKey = Encounter.BackKeyOf("side1");
+            var on = Ui.FightView.Of(e, e.End.Value, null);
+            Encounter.BackKey = bk0;
+            Check(a.Kinds!["side:1"] == 2 && a.Kinds["side:2"] == 1 && !a.Kinds.ContainsKey("side:0") && a.Kinds["mark:3"] == 1 && !a.Kinds.Keys.Any(k => k is "mark:12" or "mark:13" or "mark:14"),
+                "back attacks: each hit's side kept when the row says one (2 behind, 1 front; 1 with none not counted), apart from the other marks");
+            Check(!off.HasBack && off.Members.Single().Back == null && on.HasBack && on.Members.Single().Back == 0.5 && on.Members.Single().Abilities.Single().Back == 0.5 && Encounter.BackKeyOf("junk") == null,
+                $"...nothing shown by default; BackSource side1: {Encounter.Pct(on.Members.Single().Back ?? 0)} of the hits from behind, per member and per ability");
         }
 
         // both crit candidates on Steven's recordings (20261114-14, ABI 10 decoder): kept for every member and skill, within what
@@ -1238,6 +1277,16 @@ public static class ParserTests
                     $"crit candidates, Steven's 14:00 recording: result 3 kept for {members.Count} member pulls, every count within its hits; rate {Encounter.Pct(r3.Min(x => x.Rate))} to {Encounter.Pct(r3.Max(x => x.Rate))}, median x{Median(r3.Select(x => x.Mult)):0.00}");
                 Check(m8.All(x => x.Rate is > 0 and < 0.3) && Median(m8.Select(x => x.Mult)) is > 1.5 and < 2.5,
                     $"...mark 0x08: rate {Encounter.Pct(m8.Min(x => x.Rate))} to {Encounter.Pct(m8.Max(x => x.Rate))}, median x{Median(m8.Select(x => x.Mult)):0.00}");
+                // the side, where this decoder says it (its version from 2026-11-14 23:32 on): the tanks mostly in front, the casters more behind
+                var sides = members.Select(x => (x.f, B: x.f.Abilities.Sum(a => a.Kinds?.GetValueOrDefault("side:1") ?? 0), F: x.f.Abilities.Sum(a => a.Kinds?.GetValueOrDefault("side:2") ?? 0))).ToList();
+                if (sides.Sum(s => s.B + s.F) == 0) Console.WriteLine("skip  back attacks on Steven's recording: this decoder says no side");
+                else
+                {
+                    double Behind(string cls) => sides.Where(s => s.f.Class.Equals(cls, StringComparison.OrdinalIgnoreCase)).Sum(s => (double)s.B) / Math.Max(1, sides.Where(s => s.f.Class.Equals(cls, StringComparison.OrdinalIgnoreCase)).Sum(s => s.B + s.F));
+                    var behind = sides.Where(s => s.B + s.F > 0).Select(s => s.B / (double)(s.B + s.F)).ToList();
+                    Check(behind.Count >= 10 && Behind("templar") < Behind("sorcerer") && Behind("templar") < Behind("cleric"),
+                        $"back attacks, Steven's 14:00 recording: kept for {sides.Count(s => s.B + s.F > 0)} member pulls, {Encounter.Pct(behind.Min())} to {Encounter.Pct(behind.Max())} of sided hits from behind; the tank in front more than the casters (Templar {Encounter.Pct(Behind("templar"))}, Sorcerer {Encounter.Pct(Behind("sorcerer"))}, Cleric {Encounter.Pct(Behind("cleric"))})");
+                }
             }
         }
 

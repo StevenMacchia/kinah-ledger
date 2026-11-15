@@ -426,11 +426,13 @@ static class ParserCommand
         // crit: its rate, with the crits' share of the damage in the label; the biggest crit in place of the biggest hit when known
         if (m.Crit is { } cr) tiles.Add(("Crit", Pct(cr), Ink));
         if (m.CritShare is { } cs) tiles.Add(("Crit damage", Pct(cs, 0), Ink));
+        if (m.Back is { } ba) tiles.Add(("Back attacks", Pct(ba), Ink));
         if (m.MaxCrit is { } mc && mc > 0) tiles.Add(("Max crit", Amounts.Short(mc), Ink));
         else if (m.MaxHit is { } mx) tiles.Add(("Max hit", Amounts.Short(mx), Ink));
         if (m.Abilities.Any(a => a.Casts != null)) tiles.Add(("Casts", m.Abilities.Sum(a => a.Casts ?? 0).ToString("N0", CultureInfo.InvariantCulture), Ink));
         // active time and the idle share of their time in the group (a late joiner's from joining, a leaver's to leaving)
-        if (m.F.FirstHit != null) tiles.Add((e.IdleShare(m.F, v.Now) is { } idle ? $"Active · {Math.Round(idle * 100):0}% idle" : "Active", BossParser.Clock(TimeSpan.FromSeconds(m.ActiveSeconds)), Ink));
+        if (m.F.FirstHit != null) tiles.Add(("Active", BossParser.Clock(TimeSpan.FromSeconds(m.ActiveSeconds)), Ink));
+        if (m.F.FirstHit != null && e.IdleShare(m.F, v.Now) is { } idle) tiles.Add(("Idle", $"{Math.Round(idle * 100):0}%", Ink));
         if (ctx.Deaths) tiles.Add(("Deaths", m.Deaths.ToString(CultureInfo.InvariantCulture), m.Deaths > 0 ? C(Coral) : Ink));
         // every tile the record has, in one row up to six, else two even rows (none dropped: active time and deaths stay)
         var tg = new System.Windows.Controls.Primitives.UniformGrid { Columns = tiles.Count <= 6 ? tiles.Count : (tiles.Count + 1) / 2, Margin = new Thickness(-4, 14, -4, 0) };
@@ -487,6 +489,7 @@ static class ParserCommand
         if (casts) cols.Add(("Casts", 46, a => a.Casts ?? 0, a => a.Casts?.ToString(CultureInfo.InvariantCulture) ?? "–"));
         cols.Add(("Hits", 44, a => a.Hits, a => a.Hits > 0 ? a.Hits.ToString("N0", CultureInfo.InvariantCulture) : "–"));   // a count that didn't come: "–", never a made-up 1
         if (crit) cols.Add(("Crit", 48, a => a.Crit ?? 0, a => a.Crit is { } x ? Pct(x) : "–"));
+        if (m.Abilities.Any(a => a.Back != null)) cols.Add(("Back", 48, a => a.Back ?? 0, a => a.Back is { } x ? Pct(x) : "–"));
         if (max) cols.Add(("Max", 56, a => a.Max ?? 0, a => a.Max is { } x ? Amounts.Short(x) : "–"));
         if (min) cols.Add(("Min", 52, a => a.Min ?? 0, a => a.Min is { } x ? Amounts.Short(x) : "–"));
         cols.Add(("Average", 60, a => a.Average, a => a.Avg is { } x ? Amounts.Short(x) : "–"));
