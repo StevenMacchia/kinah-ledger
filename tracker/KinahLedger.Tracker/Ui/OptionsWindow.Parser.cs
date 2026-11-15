@@ -22,7 +22,7 @@ public partial class OptionsWindow
     TextBlock? _parserLookHint;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserFarmChk = null!, _parserExpandedChk = null!;
 
     void LoadParser()
     {
@@ -36,6 +36,7 @@ public partial class OptionsWindow
         _parserSeparateChk.IsChecked = p.Separate;
         _parserActiveChk.IsChecked = p.DpsActive;
         _parserFarmChk.IsChecked = p.FarmDps;
+        _parserExpandedChk.IsChecked = p.Expanded;
         if (_parserWidth != null) _parserWidth.Value = HudStackLook.FightWidth = p.Width;
         DrawParserLooks();
     }
@@ -61,6 +62,7 @@ public partial class OptionsWindow
         p.Separate = _parserSeparateChk.IsChecked == true;
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.FarmDps = _parserFarmChk.IsChecked == true;
+        p.Expanded = _parserExpandedChk.IsChecked == true;
         if (_parserWidth != null) p.Width = Math.Round(_parserWidth.Value);
         p.Save();
         ParserPrefs.RaiseSaved();
@@ -87,6 +89,7 @@ public partial class OptionsWindow
             stack.Children.Add(g);
             return cb;
         }
+        _parserExpandedChk = Row("Expanded meter", "The overlay's meter shows everyone with their damage. Off, the top four, and you always. A click on the meter switches it too.", "Parser expanded meter");
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
         _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.", "Parser DPS over active time");
         _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls and runs: how many in the figures line, each member's in the record's group. Every fight always shows your deaths.", "Parser deaths");

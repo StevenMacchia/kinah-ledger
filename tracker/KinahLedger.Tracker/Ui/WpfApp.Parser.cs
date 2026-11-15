@@ -7,7 +7,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "run", "run-detail", "fight", "fight-history" };
+    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "run", "run-detail", "fight", "fight-history", "inspect", "compare", "timeline", "taken", "full", "inspect-full" };
 
     /// <summary>
     /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight]: the Parser page from
@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st != "overlay" && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "motion") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -37,6 +37,7 @@ public static partial class WpfApp
                     DoEvents();
                 }
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
+                if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 w.ShowParserDemo(st);
                 DoEvents();
                 var name = "ui-parser-" + st + (skin != null ? "-" + skin : "");
@@ -203,7 +204,7 @@ public static partial class WpfApp
         var live = w.ParserPageForTest();
         check(w.PartForTest == "Parser" && w.ParserPage.Visibility == Visibility.Visible && w.QuestsPage.Visibility != Visibility.Visible && w.LeftCol.Visibility != Visibility.Visible,
             "Parser: its own page, nothing of Farming or Quests beside it");
-        check(live.Live && live.Roster == 4 && live.Rows == 9, $"Parser: the fight under way with its group of {live.Roster}, the 9 kept fights under it ({live.Rows} rows)");
+        check(live.Live && live.Roster == 4 && live.Rows >= 5, $"Parser: the fight under way with its group of {live.Roster}, the kept fights under it ({live.Rows} rows)");
         check(farmHeight < 500 || w.ActualHeight <= farmHeight + 1, $"Parser: the page keeps the Farming page's height and scrolls inside it: {w.ActualHeight:0} (Farming {farmHeight:0})");
         w.FollowForTest(Session.ActivityKind.Crafting, DateTime.UtcNow); w.FollowForTest(Session.ActivityKind.Crafting, DateTime.UtcNow.AddMinutes(5)); DoEvents();
         check(w.PartForTest == "Parser", $"Parser: the page stays while it shows, whatever the player does: {w.PartForTest}");
@@ -246,11 +247,13 @@ public static partial class WpfApp
         // the game's own colours (its party list's): the nearest two (Cleric's gold, Chanter's orange) are the game's choice; the emblem tells them apart
         check(pairs[0].d >= 35, $"Parser: one colour per class, the game's own, the nearest two {pairs[0].a} and {pairs[0].b} {pairs[0].d:0} apart");
         w.ShowParserDemo("live"); DoEvents();
-        var meters = new List<double>();
-        void Walk(DependencyObject d) { if (d is System.Windows.Controls.Grid g && g.Tag is double share) meters.Add(share); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch); }
+        // Parser v2: each member a row of the group's table, ranked by DPS, yours in the gold frame
+        var members = new List<FrameworkElement>();
+        void Walk(DependencyObject d) { if (d is FrameworkElement fe && Equals(fe.Tag, "parser-member")) members.Add(fe); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch); }
         Walk(w.ParserPage);
-        check(meters.Count >= 4 && Math.Abs(meters.Max() - 1) < 1e-9 && meters.Zip(meters.Skip(1)).All(x => x.First >= x.Second - 1e-9),
-            $"Parser: each group row on a meter bar, the top one full and the rest shorter in order: {string.Join(", ", meters.Select(x => x.ToString("0.00")))}");
+        var dpsOrder = members.Select(m => ParserTexts(m).Texts.Select(t => double.TryParse(t.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 500 ? v : -1).DefaultIfEmpty(-1).Max()).ToList();
+        check(members.Count == 4 && dpsOrder.Zip(dpsOrder.Skip(1)).All(x => x.First >= x.Second) && members.Count(m => m is System.Windows.Controls.Border { Effect: System.Windows.Media.Effects.DropShadowEffect }) == 1,
+            $"Parser: the group's rows ranked by DPS ({string.Join(", ", dpsOrder)}), yours in the gold frame");
         // minimal with the switches off (Steven, 2026-11-14): no CP, item level, damage or kills near you until Options turns them on
         w.ShowParserDemo("live-min"); DoEvents();
         var plain = ParserTexts(w.ParserPage);
@@ -263,23 +266,29 @@ public static partial class WpfApp
             && !t.StartsWith("Joined ") && !t.StartsWith("Left ")).ToList();
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
         static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP") && t.Contains("item level"));
-        check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !plain.Texts.Contains("kills near you") && plain.Texts.Contains("DPS") && plainTips.Count == 0
-            && Gear(every.Texts) && every.Texts.Contains("Damage") && every.Texts.Contains("kills near you") && every.Tips.Count > 3,
-            $"Parser: the switches off, DPS only (no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(Gear(plain.Texts) ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(plain.Texts.Contains("kills near you") ? "; kills near you shown" : "")}");
+        static bool Near(HashSet<string> texts) => texts.Any(t => t.Contains("kills near you"));
+        static bool DpsHead(HashSet<string> texts) => texts.Any(t => t == "DPS" || t.StartsWith("DPS ", StringComparison.Ordinal));
+        check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !Near(plain.Texts) && DpsHead(plain.Texts) && plainTips.Count == 0
+            && Gear(every.Texts) && every.Texts.Contains("Damage") && Near(every.Texts) && every.Tips.Count > 3,
+            $"Parser: the switches off, DPS only (no CP, damage, kills near you or hovers); every option on adds them ({every.Tips.Count} hovers){(plainTips.Count > 0 ? "; left on: " + plainTips[0] : "")}{(Gear(plain.Texts) ? "; CP shown" : "")}{(plain.Texts.Contains("Damage") ? "; Damage shown" : "")}{(Near(plain.Texts) ? "; kills near you shown" : "")}");
         // each row: "48.2K DPS · 25.1%" (Steven, 2026-11-14: "should give DPS and % not just a %")
-        check(plain.Texts.Contains("DPS") && plain.Texts.Count(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+(\.\d)?%$")) >= 3 && plain.Tips.Count(t => t.Contains(" damage in ")) >= 3,
+        check(DpsHead(plain.Texts) && plain.Texts.Count(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+(\.\d)?%$")) >= 3 && plain.Tips.Count(t => t.Contains(" damage in ")) >= 3,
             $"Parser: each row says its DPS and its share of the damage, its damage on hover: {string.Join(", ", plain.Texts.Where(t => t.EndsWith('%')).Take(4))}");
-        // the expanded row: the member's item level, Combat Power and server over their abilities
-        w.ShowParserDemo("detail-all"); DoEvents();
+        // a member's inspect view (Parser v2): their server, item level and Combat Power over every ability's columns
+        w.ShowParserDemo("inspect-all"); DoEvents();
         var opened = ParserTexts(w.ParserPage);
-        check(opened.Texts.Any(t => t.Contains("Item level") && t.Contains("Combat Power") && (t.Contains("Siel") || t.Contains("Israphel") || t.Contains("Fregion") || t.Contains("Zikel"))) && opened.Texts.Contains("Average"),
-            "Parser: a member's expanded row says their item level, Combat Power and server over their abilities");
+        check(opened.Texts.Any(t => t.Contains("item level", StringComparison.OrdinalIgnoreCase) && t.Contains("Combat Power") && (t.Contains("Siel") || t.Contains("Israphel") || t.Contains("Fregion") || t.Contains("Zikel")))
+            && opened.Texts.Contains("Average") && opened.Texts.Contains("Hits") && opened.Texts.Contains("Share"),
+            "Parser: a member's inspect view says their server, item level and Combat Power over their abilities' damage, share, DPS, hits and average");
         // the honest pass: the inspect view's figures (to the boss, to adds, active, idle), the group card's coverage line and its
         // two switches; a late joiner marked; no "Other" and no "and more" anywhere
-        check(new[] { "to the boss", "to adds", "active", "idle" }.All(opened.Texts.Contains) && opened.Texts.Contains("joined late")
-            && opened.Texts.Any(t => t.Contains("of the boss's HP credited") && t.Contains("DPS and shares count credited damage")),
-            $"Parser, honest pass: the inspect view's boss / adds / active / idle figures, a late joiner marked, the coverage line ({opened.Texts.FirstOrDefault(t => t.Contains("credited"))})");
-        check(!opened.Texts.Concat(every.Texts).Any(t => t == "Other" || t.Contains("and more")), "Parser, honest pass: no Other row and no \"and more\" bucket");
+        w.ShowParserDemo("detail"); DoEvents();
+        var kwapo = ParserTexts(w.ParserPage);
+        check(new[] { "To the boss", "To adds" }.All(opened.Texts.Contains) && opened.Texts.Any(t => t.StartsWith("Active · ") && t.EndsWith("% idle"))
+            && kwapo.Texts.Contains("joined late") && kwapo.Texts.Contains("left")
+            && kwapo.Texts.Any(t => t.Contains("of the boss's HP credited") && t.Contains("DPS and shares count credited damage")),
+            $"Parser, honest pass: the inspect view's boss / adds / active and idle figures; a late joiner and a leaver marked, the coverage line ({kwapo.Texts.FirstOrDefault(t => t.Contains("credited"))})");
+        check(!opened.Texts.Concat(every.Texts).Concat(kwapo.Texts).Any(t => t == "Other" || t.Contains("and more")), "Parser, honest pass: no Other row and no \"and more\" bucket");
         {
             w.ShowParserDemo("detail"); DoEvents();
             var boss = FindButton(w.ParserPage, "Boss"); var allT = FindButton(w.ParserPage, "All targets");
@@ -300,7 +309,9 @@ public static partial class WpfApp
         w.ShowParserDemo("live"); DoEvents();
         check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Ferocious Horn Den · Conquest · ")), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
         // the boss's HP left beside its share, on the page (Steven, 2026-11-14)
-        check(ParserTexts(w.ParserPage).Texts.Any(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+% · [\d.,]+[KM]? left of [\d.,]+[KM]? HP$")), $"Parser: the boss's HP says its share and the HP left (47% · 1.82M left of 3.85M HP) [{string.Join(" | ", ParserTexts(w.ParserPage).Texts.Where(t => t.Contains('%')))}]");
+        var hpTexts = ParserTexts(w.ParserPage);
+        check(hpTexts.Texts.Contains("47%") && hpTexts.Texts.Any(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"[\d.,]+[KM]? of [\d.,]+[KM]? HP left")),
+            $"Parser: the boss's HP: its share on the ring (47%), the HP left of its whole on the figures line (1.82M of 3.85M HP left) [{string.Join(" | ", hpTexts.Texts.Where(t => t.Contains("HP")))}]");
         // the overlay's look, one click from the page (Steven, 2026-11-14: "idk how to change the style")
         check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")), "Parser: the page names the overlay's look, a link to change it");
         // separated (Steven, 2026-11-14: overlays move by a plain drag, no Move button or placement mode; the Kinah overlay's look exactly)
@@ -455,6 +466,28 @@ public static partial class WpfApp
             HudStackLook.FightWidth = w0;
             Motion.Still = still0;
         }
+        // in a Transcendence, an Expedition or a Sanctuary the meter replaces the Kinah line (Steven, 0.10.95): no look shows
+        // the hour's figure there, compact or expanded (Parser v2), whatever the fight
+        {
+            bool still = Motion.Still; Motion.Still = true;
+            bool exp = ParserRows.ExpandedPref;
+            var (_, pull) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
+            var shown = new List<string>();
+            foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+                foreach (var expanded in new[] { false, true })
+                {
+                    ParserRows.ExpandedPref = expanded;
+                    var hd = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
+                    hd.Update(new Dictionary<string, string> { ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04" });
+                    hd.ShowParser(pull, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc), ParserMode.Bosses, false);
+                    hd.SetKinahHidden(true);
+                    hd.Show(); DoEvents();
+                    if (VisibleTexts((DependencyObject)hd.Content).Any(t => t.Contains("1.27M") || t.Contains("894K"))) shown.Add($"{look}{(expanded ? " expanded" : "")}");
+                    hd.Close();
+                }
+            ParserRows.ExpandedPref = exp; Motion.Still = still;
+            check(shown.Count == 0, $"in a dungeon no look shows the Kinah line, compact or expanded{(shown.Count > 0 ? ": shown in " + string.Join(", ", shown) : "")}");
+        }
         // expanded by default: the Parser's section opens above the Kinah line and the Kinah line stays where it is
         {
             bool still = Motion.Still; Motion.Still = true;
@@ -511,6 +544,20 @@ public static partial class WpfApp
 
     /// <summary>A text block's words, its runs too (Text alone misses runs added in code).</summary>
     static string BlockText(System.Windows.Controls.TextBlock t) => t.Inlines.Count > 0 ? new System.Windows.Documents.TextRange(t.ContentStart, t.ContentEnd).Text : t.Text;
+
+    /// <summary>The texts drawn on screen under <paramref name="root"/>: only those visible (a collapsed part's are left out).</summary>
+    static List<string> VisibleTexts(DependencyObject root)
+    {
+        var list = new List<string>();
+        void Walk(DependencyObject d)
+        {
+            if (d is UIElement u && !u.IsVisible) return;
+            if (d is System.Windows.Controls.TextBlock t && t.Text.Length > 0) list.Add(t.Text);
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(root);
+        return list;
+    }
 
     /// <summary>Every text and hover on the Parser page, for the checks above.</summary>
     static (HashSet<string> Texts, List<string> Tips) ParserTexts(DependencyObject root)

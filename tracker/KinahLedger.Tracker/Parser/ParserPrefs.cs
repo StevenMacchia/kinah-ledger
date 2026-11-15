@@ -61,6 +61,8 @@ public sealed class ParserPrefs
     public bool HonestSettled { get; set; }
     /// <summary>Member figures: "boss" (damage to the boss only, the default) or "all" (every target, adds too). The group card's switch.</summary>
     public string Targets { get; set; } = "boss";
+    /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, four rows. A click on the meter switches it.</summary>
+    public bool Expanded { get; set; }
 
     /// <summary>Options saved the Parser's switches: the window reads them again.</summary>
     public static event Action? Saved;
