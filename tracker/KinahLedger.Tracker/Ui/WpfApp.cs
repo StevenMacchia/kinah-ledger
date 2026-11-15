@@ -1005,11 +1005,12 @@ public static partial class WpfApp
             {
                 var pp = Session.TimerPrefs.Defaults(); pp.Separate = true;
                 tw.TimerPrefsForTest = pp;
-                var strip = new TimersOverlay(pp) { KinahBox = () => new Rect(400, 500, 320, 40) };
+                // the Kinah overlay's box off every screen, as the test windows are: the strip is placed off-screen above it
+                var strip = new TimersOverlay(pp) { KinahBox = () => new Rect(-11600, -11500, 320, 40) };
                 var tnow = DateTime.UtcNow;
                 strip.Show(new[] { new Session.TimerBoard.Item("event:Shugo Festival", "Events", "Shugo Festival", "", Session.TimerBoard.Kind.Waiting, tnow.AddSeconds(292), "", "") { Short = "Shugo" } }, tnow);
                 DoEvents();
-                bool above = Math.Abs(strip.Left - 400) < 1 && Math.Abs(strip.Top + strip.ActualHeight + 6 - 500) < 1;
+                bool above = Math.Abs(strip.Left + 11600) < 1 && Math.Abs(strip.Top + strip.ActualHeight + 6 + 11500) < 1;
                 var kinah = new HudWindow(still: true) { Left = -12000, Top = -12000 };
                 kinah.Show(); DoEvents();
                 var kf = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)kinah.OwnContent!).Children[0];
@@ -1022,7 +1023,7 @@ public static partial class WpfApp
                 tw.ResetTimersOverlayPosition();
                 bool reset = pp.X == null && pp.Y == null;
                 strip.ResetSpot();
-                bool backAbove = Math.Abs(strip.Left - 400) < 1;
+                bool backAbove = Math.Abs(strip.Left + 11600) < 1;
                 strip.Close();
                 var to2 = new OptionsWindow(tw, OptionsWindow.Page.Timers) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
                 to2.Show(); DoEvents();
