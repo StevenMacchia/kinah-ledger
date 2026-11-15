@@ -11,7 +11,7 @@ namespace KinahLedger.Ui;
 /// The fight's rows over the game, in every overlay look (Parser v2, the Arena rows Steven picked, 2026-11-15): an angled rank
 /// chip in the member's class colour, the class's emblem, the name, the DPS large and the share, on a thick bar in the class's
 /// colour; your row in the gold frame. Kept between draws, so a change moves rather than redraws: the DPS rolls, the bar slides,
-/// a member who passes another glides to the new place and their chip flips. Compact shows four rows and keeps you in sight
+/// a member who passes another glides to the new place and their chip flips. Compact shows five rows and keeps you in sight
 /// (pinned, with your true rank, when you're below them); expanded shows everyone and adds the damage, and crit and the DPS over
 /// time once the record carries them. A death puts a coral tick on the row; a kill sweeps a mint light across; a kill where you
 /// beat your best on the boss puts "PB +x%" on your row with a gold burst.
@@ -21,12 +21,14 @@ public sealed class ParserRows : Grid
     /// <summary>Panel: on a look's panel. Bare: straight over the game (the Float look), the bars lighter.</summary>
     public enum Kind { Panel, Bare }
 
-    /// <summary>Compact (four rows) or expanded (everyone, more columns): one choice for every look, kept in parser.json.</summary>
+    /// <summary>Compact (five rows) or expanded (everyone, more columns): one choice for every look, kept in parser.json.</summary>
     public static bool ExpandedPref { get; set; }
     /// <summary>Your best kill of a boss before this pull (the window gives it from the records kept): the PB moment's measure.</summary>
     public static Func<Encounter, PullRef?>? BestOf { get; set; }
 
-    public const int CompactRows = 4, ExpandedRows = 8;
+    // compact shows a whole party of five (Steven, 2026-11-15: "how come only 4 party members appeared in my last ... dungeon
+    // and not 5"), expanded a whole raid of ten
+    public const int CompactRows = 5, ExpandedRows = 10;
     readonly Kind _kind;
     readonly double _rowH;
     readonly Grid _host = new() { VerticalAlignment = VerticalAlignment.Top };
@@ -119,8 +121,9 @@ public sealed class ParserRows : Grid
                 }
             }
             else { row.Dps.Text = f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : ""; row.Share.Text = f.CombatPower > 0 ? "CP" : ""; }
-            // the bar slides to its new length
-            double share = (dmg ? e.Figure(f) : 0) / top;
+            // the bar slides to its new length: the member's share of the group's damage, so 33% fills a third (Steven,
+            // 2026-11-15: "the bars shouldn't be full really and should be percentage based"; the top member's was full)
+            double share = dmg ? e.Share(f) : 0;
             Motion.Slide(row.BarFill, $"parser|ovbar|{e.Id}|{f.Id}|{(int)_kind}", share, v => SetBar(row, v));
             // the rank: a changed one flips the chip; the row glides to its new place
             if (row.Rank != rank)
