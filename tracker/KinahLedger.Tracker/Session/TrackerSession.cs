@@ -5261,7 +5261,8 @@ public sealed partial class TrackerSession
     /// </summary>
     internal static bool TakeReread(InstanceRun r, InstanceRun read)
     {
-        if (!read.FromPicture) return false;
+        // its rewards are the game's own item data (2026-11-15): no read of a picture replaces them
+        if (!read.FromPicture || r.FromGame) return false;
         bool otherCards = r.CardsReceived.Length > 0 && read.CardsReceived.Length > 0 && r.CardsReceived != read.CardsReceived;
         bool better = otherCards || r.KinahUnknown || !r.FromPicture || read.PictureSlots > r.PictureSlots || (read.PictureSlots == r.PictureSlots && read.SlotsUnread < r.SlotsUnread);
         if (otherCards) CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: the live read had cards {r.CardsReceived} received, the read of its kept pictures cards {read.CardsReceived}: the pictures' read is taken (the whole screen, to its end)");
