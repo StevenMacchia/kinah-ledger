@@ -592,13 +592,53 @@ public sealed class PacketReader : IDisposable, IBossFeed
         lock (_gate) { _itemExcluded.Add((id, at, why)); _itemExcluded.RemoveAll(x => (at - x.At).TotalSeconds > ExcludedSeconds * 2); }
     }
 
+    /// <summary>
+    /// How long a rise an event run took as its reward covers its item's chat line. The reward screen holds the chat unread
+    /// while it is up (as long as the player keeps it open), and a long reward list then scrolls by for 10 to 15 s: on
+    /// 2026-11-15 the 16 items of Defend Shugo Merchants came in one update at 11:04:59.0 and their lines were read at
+    /// 11:05:11.4, past <see cref="ItemBefore"/>. Seven of them were called misses and items went back to the screen.
+    /// </summary>
+    public const double RunRewardSeconds = ExcludedSeconds;
+    sealed class RunRise { public long Id; public string Name = ""; public DateTime At; public long Left; public DateTime TakenAt = DateTime.MinValue; }
+    readonly List<RunRise> _runRises = new();
+
+    /// <summary>
+    /// A rise an event run took as its reward from the game's item data (TrackerSession.GameRewards): it covers its item's
+    /// chat lines up to <paramref name="count"/>, however late they show (<see cref="RunRewardSeconds"/>). Such a line is no
+    /// pickup and no miss: the rise was counted. A line of another item, or past what the reward gave, is judged as any.
+    /// A line names its item, and gear of one name has several ids (the chat's "Ethereal Helm" is not the id the game gave,
+    /// 2026-11-15 07:05): a line of the rise's name is its item.
+    /// </summary>
+    public void RunTook(long id, string name, long count, DateTime at)
+    {
+        if (count <= 0) return;
+        lock (_gate)
+        {
+            _runRises.Add(new RunRise { Id = id, Name = name, At = at, Left = count });
+            _runRises.RemoveAll(r => (at - r.At).TotalSeconds > RunRewardSeconds * 2);
+        }
+    }
+
+    /// <summary>A run's reward rise of the item that covers a line read at <paramref name="lineAt"/> (null when none), its count taken down by the line's.</summary>
+    RunRise? TakeRunRise(long id, int count, DateTime lineAt, DateTime? riseAt = null)
+    {
+        string name = ItemName(id);
+        var r = _runRises.FirstOrDefault(x => Same(x, id, name) && x.Left > 0 && (riseAt is { } ra ? Math.Abs((x.At - ra).TotalSeconds) <= ItemAfter
+            : (lineAt - x.At).TotalSeconds is >= -ItemAfter and <= RunRewardSeconds));
+        if (r == null) return null;
+        r.Left -= Math.Max(1, Math.Min(count, r.Left)); r.TakenAt = lineAt;
+        return r;
+    }
+    static bool Same(RunRise r, long id, string name) => r.Id == id || (r.Name.Length > 0 && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>For packet-test: what the agreement check decided for each screen pickup it judged, oldest first ("covered", "covered: ...", "first sight", "not shown").</summary>
     public List<string> Verdicts { get; } = new();
 
     /// <summary>
     /// The agreement check for items and crafts (under _gate). A screen pickup 15 s old or more is covered by a rise of that
     /// item the traffic showed around it (left out: the traffic counted it); during a craft it is the craft's item (left
-    /// out); a first sight of that item's stack around it is the pickup the traffic couldn't count, and the screen counts
+    /// out); a rise an event run took as its reward covers its line however late (<see cref="RunTook"/>); a first sight of
+    /// that item's stack around it is the pickup the traffic couldn't count, and the screen counts
     /// it after all; another item's rise around it covers it too (a line that misread the name); nothing at all is a miss,
     /// and the screen counts it after all too. Three misses in five minutes and
     /// items go back to the screen. A crafting race the traffic showed nothing of within 12 s is a miss for crafts.
@@ -615,7 +655,27 @@ public sealed class PacketReader : IDisposable, IBossFeed
             // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
             // screen's to count, no miss); another item's rise (the line misread its name)
             var own = _itemSeen.Where(p => Near(p) && p.Id == s.Id && !p.First && p.Delta > 0 && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ToList();
-            if (own.Count > 0) { _risesTaken.Add((own[0].Id, own[0].At)); Verdicts.Add("covered"); continue; }
+            if (own.Count > 0)
+            {
+                _risesTaken.Add((own[0].Id, own[0].At)); Verdicts.Add("covered");
+                TakeRunRise(s.Id, s.Count, s.At, own[0].At);   // a run's reward read in time: that reward's line is in
+                continue;
+            }
+            // an event run's reward from the game's update, its line read late (the reward screen over the chat, a long list
+            // scrolling by): that line, counted with the rise, never a pickup or a miss. Its count used up, the same line read
+            // again within a minute is that line still
+            if (TakeRunRise(s.Id, s.Count, s.At) is { } rr)
+            {
+                Verdicts.Add("covered: the run's reward");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)}: the run's reward from the game's update at {Local(rr.At)}, {(s.At - rr.At).TotalSeconds:F1} s before: not counted again");
+                continue;
+            }
+            if (_runRises.Any(x => Same(x, s.Id, ItemName(s.Id)) && x.Left <= 0 && (s.At - x.TakenAt).TotalSeconds is >= 0 and <= RereadSeconds))
+            {
+                Verdicts.Add("covered: the run's reward read again");
+                Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)} again: the run's reward, its line already in; not counted");
+                continue;
+            }
             // a rise the tracker didn't count (bought, a reward, in a base) before the line: the line is that item's, read
             // now, never a pickup, however late the chat showed it
             if (_itemExcluded.LastOrDefault(x => x.Id == s.Id && (s.At - x.At).TotalSeconds is >= -ItemAfter and <= ExcludedSeconds) is { Why: not null } ex)

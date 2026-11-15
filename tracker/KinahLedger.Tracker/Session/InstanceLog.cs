@@ -851,16 +851,17 @@ public sealed class InstanceLog
     /// One inventory update inside an event run, by the game's own item data (TrackerSession.Packets.cs): each item that
     /// went up, with its count (0 and <c>FirstSeen</c> for a stack whose earlier amount isn't known; <c>Listed</c> false for
     /// an id the item list lacks). Three or more items at once are the event's rewards coming in. Once the run's reward
-    /// picture is filed, an update after it is taken at once, so the order of the two doesn't matter.
+    /// picture is filed, an update after it is taken at once, so the order of the two doesn't matter. True when the run took
+    /// the update.
     /// </summary>
-    public void GameLoot(DateTime at, IReadOnlyList<(long Id, long Count, bool Bound, bool Listed, bool FirstSeen, string Name)> rises)
+    public bool GameLoot(DateTime at, IReadOnlyList<(long Id, long Count, bool Bound, bool Listed, bool FirstSeen, string Name)> rises)
     {
         lock (_lock)
         {
-            if (!GameRunLocked(at) || rises.Count == 0) return;
+            if (!GameRunLocked(at) || rises.Count == 0) return false;
             var c = _cur!;
             // once the run was left, only its rewards' own update is its (an open-world kill's drops are farming's)
-            if (_leftAt != null && (rises.Count < 3 || c.GameRewardAt != null)) return;
+            if (_leftAt != null && (rises.Count < 3 || c.GameRewardAt != null)) return false;
             foreach (var (id, n, bound, listed, first, name) in rises)
             {
                 if (first) { c.GameGaps++; c.GameUnknown.Add($"{name}: its stack first seen, its count not known"); continue; }
@@ -876,6 +877,7 @@ public sealed class InstanceLog
                 CrashLog.Note($"{c.Label}: its rewards came in the game's own item data ({at.ToLocalTime():HH:mm:ss.f}): {rises.Count} item(s) at once");
             }
             if (c.Tables > 0) UseGameLocked(c, "a game update after its reward picture");
+            return true;
         }
     }
 
