@@ -13,7 +13,7 @@ public sealed class HudPrefs
     /// <summary>The panel's size, 0.7 to 2 (70 to 200%).</summary>
     public double Scale { get; set; } = 1;
     /// <summary>The panel's look (HudLooks' keys). Buddy ("card") for everyone until they pick another.</summary>
-    public string Look { get; set; } = HudLooks.Default;   // Buddy since 0.10.102 (Steven, 2026-11-15); Auto from 0.10.91, the Strip before
+    public string Look { get; set; } = HudLooks.Default;   // Buddy since 0.10.103 (Steven, 2026-11-15); Auto from 0.10.91, the Strip before
     /// <summary>
     /// Where the player left the Ticker, kept apart from the strip's and the Card's spot (UserPrefs.HudX/HudY): its toasts
     /// hang down, so its place is left of the target bar, not over it. Null until it is dragged.
@@ -38,11 +38,11 @@ public sealed class HudPrefs
     public bool Placed { get; set; }
     /// <summary>The one-time move from the old default look to Auto (0.10.91) is done; see Load.</summary>
     public bool LookSettled { get; set; }
-    /// <summary>The one-time move from Auto to Buddy (0.10.102) is done; see Load.</summary>
+    /// <summary>The one-time move from Auto to Buddy (0.10.103) is done; see Load.</summary>
     public bool BuddySettled { get; set; }
     /// <summary>
     /// The player picked the look by hand (Options' Save with a new look, or the first-run look step), so a later change
-    /// of the default leaves it alone. False in every hud.json before 0.10.102.
+    /// of the default leaves it alone. False in every hud.json before 0.10.103.
     /// </summary>
     public bool LookPicked { get; set; }
 
@@ -92,7 +92,7 @@ public sealed class HudPrefs
             saved.LookSettled = true;
             moved = true;
         }
-        // 0.10.102 (Steven, 2026-11-15: "make buddy the default view"): a player on Auto, the default before, moves to Buddy
+        // 0.10.103 (Steven, 2026-11-15: "make buddy the default view"): a player on Auto, the default before, moves to Buddy
         // once. hud.json never said whether Auto was picked or defaulted, so Auto counts as the default; any other look stays,
         // and from now on LookPicked says it was picked
         if (!saved.BuddySettled)

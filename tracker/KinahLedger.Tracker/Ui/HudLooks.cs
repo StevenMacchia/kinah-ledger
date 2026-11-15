@@ -9,13 +9,13 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// How the panel over the game looks (Options › In game › Panel look, 2026-10-25): the Strip it has always been, the Card
 /// (a game tooltip: run, rate, session and the last three pickups) or the Ticker (a small pill and pickups as toasts, the
-/// way the game shows loot). The Card, named Buddy, is the default since 0.10.102 (Default).
+/// way the game shows loot). The Card, named Buddy, is the default since 0.10.103 (Default).
 /// </summary>
 public static class HudLooks
 {
     public const string Strip = "strip", Card = "card", Ticker = "ticker", Capsule = "capsule", Meter = "meter", Float = "float", Auto = "auto";
 
-    /// <summary>A new install's look, and one never picked by hand (HudPrefs.Load): Buddy since 0.10.102 (Steven, 2026-11-15).</summary>
+    /// <summary>A new install's look, and one never picked by hand (HudPrefs.Load): Buddy since 0.10.103 (Steven, 2026-11-15).</summary>
     public const string Default = Card;
 
     /// <param name="Key">Kept in hud.json (HudPrefs.Look).</param>

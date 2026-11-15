@@ -399,7 +399,7 @@
         </StackPanel>
       </Border>
 
-      <!-- first run, step two (0.10.102, Steven 2026-11-15: "in the onboarding let people choose"): the Kinah overlay's look,
+      <!-- first run, step two (0.10.103, Steven 2026-11-15: "in the onboarding let people choose"): the Kinah overlay's look,
            Buddy picked. One big live drawing of the look under the mouse or picked, at its real size over a dark game scene,
            and a button per look under it (Ui/MainWindow.Welcome.cs, BuildWelcomeLooks) -->
       <Border x:Name="WelcomeLookCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
