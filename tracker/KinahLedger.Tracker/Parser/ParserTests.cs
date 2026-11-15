@@ -977,6 +977,23 @@ public static class ParserTests
                 "...the decoder's damage row with no source gives its reason in Outcome (shown on the coverage line's hover)");
         }
 
+        // your own death comes twice (the group's death row and the kill tally): one death, whichever comes first
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 880));
+            p.Take(new GroupChanged(t, new[] { Me, Ally }));
+            p.Take(new BossEngaged(t.AddSeconds(1), "Talisra of the Void", 881));
+            p.Take(new UnitDied(t.AddSeconds(10), 1, "Swoly", false));
+            p.Kill(t.AddSeconds(10.4), player: false, death: true, "");
+            p.Kill(t.AddSeconds(30), player: false, death: true, "");
+            p.Take(new UnitDied(t.AddSeconds(30.6), 1, "Swoly", false));
+            p.Take(new UnitDied(t.AddSeconds(40), 2, "Aerin", false));
+            p.Take(new BossEnded(t.AddSeconds(50), 881, BossOutcome.Wipe));
+            var e = kept.Single();
+            Check(e.Members.Single(f => f.You).Deaths == 2 && e.Members.Single(f => f.Id == 2).Deaths == 1,
+                $"deaths: your two deaths, each said twice, count 2 ({e.Members.Single(f => f.You).Deaths}); a member's one counts 1");
+        }
+
         // 7. serious defaults (the honest pass): deaths, list filters and explanations on hover on; kills near you off; boss
         // figures over the fight. A parser.json from before (Steven's as it was) moves to them once; one whose player turned an
         // extra on keeps their choices; after the move, an off stays off

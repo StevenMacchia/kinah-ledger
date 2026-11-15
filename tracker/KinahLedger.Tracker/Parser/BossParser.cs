@@ -356,13 +356,15 @@ public sealed class BossParser
                 break;
             case UnitDied ud:
             {
+                // your death comes twice (this row and the kill tally's): counted once
+                bool youCounted = ud.Id != 0 && Records().Any(r => r.You?.Id == ud.Id) && SameDeathOfYours(ud.At);
                 bool bossDied = _cur != null && ((ud.Id != 0 && ud.Id == _cur.BossId) || (ud.Boss && ud.Name.Trim().Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase) && (ud.Id == 0 || _cur.BossId == 0)));
                 foreach (var e in Records())
                 {
                     if (ReferenceEquals(e, _cur) && bossDied) continue;
                     e.LastAt = Max(e.LastAt, ud.At);
                     if (bossDied) e.Kills.Add(new KillNear { At = ud.At, Name = _cur!.Boss, Boss = true });
-                    else if (e.Roster.FirstOrDefault(f => ud.Id != 0 && f.Id == ud.Id && !f.Other) is { } member) member.Deaths++;
+                    else if (e.Roster.FirstOrDefault(f => ud.Id != 0 && f.Id == ud.Id && !f.Other) is { } member) { if (!member.You || !youCounted) member.Deaths++; }
                     else if (ud.Name.Trim().Length > 0) e.Kills.Add(new KillNear { At = ud.At, Name = ud.Name.Trim(), Boss = ud.Boss });
                 }
                 if (bossDied)
@@ -473,10 +475,20 @@ public sealed class BossParser
                 if (player && name.Trim().Length > 0) e.Opponent = name.Trim();
                 if (!death) e.Kills.Add(new KillNear { At = at, Name = name.Trim().Length > 0 ? name.Trim() : player ? "Player" : "Monster", Player = player, Yours = true });
             }
-            if (death && _cur?.You is { } me) me.Deaths++;
+            // your death comes twice (the kill tally's and the group's death row): counted once
+            if (death && _cur?.You is { } me && !SameDeathOfYours(at)) me.Deaths++;
             _version++;
         }
         Finish(done, at);
+    }
+
+    /// <summary>When your last death was counted: the same death said again (the other source, within a few seconds) isn't counted twice.</summary>
+    DateTime _youDiedAt = DateTime.MinValue;
+    bool SameDeathOfYours(DateTime at)
+    {
+        bool same = Math.Abs((at - _youDiedAt).TotalSeconds) < 3;
+        if (!same) _youDiedAt = at;
+        return same;
     }
 
     // ---- the party list's classes (Ocr/PartyFrame.cs, Steven 2026-11-14: "it's literally an icon in the top left") ----
