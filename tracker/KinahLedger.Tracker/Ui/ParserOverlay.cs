@@ -26,6 +26,8 @@ public sealed class ParserOverlay : Window
     /// <summary>The overlay's own menu (a right-click): a mode picked, hide it, clicks through.</summary>
     public event Action<ParserMode>? ModePicked;
     public event Action? HideAsked;
+    /// <summary>A click (no drag) on the overlay: the window switches the meter compact or expanded.</summary>
+    public event Action? Clicked;
     public event Action? ClickThroughAsked;
     /// <summary>Each member's Combat Power and item level beside their DPS (Options › In game › Parser › Group details).</summary>
     public bool ShowDetails { get; set; }
@@ -84,7 +86,10 @@ public sealed class ParserOverlay : Window
         MouseLeftButtonDown += (_, _) =>
         {
             if ((_clickThrough && !_grabbing) || _still) return;
+            double l0 = Left, t0 = Top;
             try { DragMove(); } catch (InvalidOperationException) { return; }
+            // a press that didn't move it is a click: it switches the meter compact or expanded (Parser v2)
+            if (Math.Abs(Left - l0) < 0.5 && Math.Abs(Top - t0) < 0.5 && !_grabbing) Clicked?.Invoke();
             var h = new WindowInteropHelper(this).Handle;
             if (h != IntPtr.Zero && GetWindowRect(h, out var r)) Dropped?.Invoke(r.Left, r.Top);
             if (_clickThrough) WatchGrab();
@@ -284,6 +289,7 @@ public sealed class ParserOverlay : Window
 public sealed class ParserPanel : Border
 {
     readonly StackPanel _body = new();
+    readonly ParserRows _prows = new();
     string _sig = "";
     /// <summary>The mode the record is counted in, and whether each member's Combat Power and item level show.</summary>
     public ParserMode Mode { get; set; }
@@ -327,7 +333,7 @@ public sealed class ParserPanel : Border
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}";
+        var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}";
         Width = HudStackLook.FightWidth + 10;
         sig += $":{Width}";
         if (sig == _sig) return;
@@ -429,55 +435,12 @@ public sealed class ParserPanel : Border
             _body.Children.Add(hp);
         }
 
-        // the group
+        // the group (Parser v2, Ui/ParserRows.cs): the rows are kept between draws, so a change moves
         if (e.Roster.Count > 0)
         {
-            bool dmg = e.HasDamage;
-            bool gear = ShowDetails && e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0);
-            var rows = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-            Grid Row()
-            {
-                var g = new Grid();
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(25) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 50 : 60) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(!gear ? 0 : dmg ? 44 : 52) });
-                if (dmg) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) }); }
-                return g;
-            }
-            var hdr = Row();
-            void H(int col, string text) { var t = T(text, 10, FontWeights.SemiBold, HudKit.Faint); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); hdr.Children.Add(t); }
-            if (gear) { H(2, "CP"); H(3, "iLvl"); }
-            if (dmg) { H(4, "DPS"); H(5, "%"); }
-            hdr.Margin = new Thickness(4, 0, 4, 1);
-            rows.Children.Add(hdr);
-            // each row on a meter bar in its class's colour (damage, else Combat Power), the class's emblem at its left
-            double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
-            double top = e.TopMeasure();
-            foreach (var f in e.Shown().Take(8))
-            {
-                var g = Row(); g.Margin = new Thickness(4, 0, 4, 0); g.MinHeight = _glass ? 26 : 28;
-                var mark = MainWindow.ClassMark(f.Class, _glass ? 18 : 20, f.Name);
-                g.Children.Add(mark);
-                var nm = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-                // the name in the member's class colour (the bar's, the ring's), you marked by the gold chip
-                var n = T(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, FontWeights.SemiBold, f.Name.Length == 0 ? HudKit.Muted : ClassArt.NameBrush(f.Class)); n.TextTrimming = TextTrimming.CharacterEllipsis;
-                nm.Children.Add(n);
-                if (f.You) nm.Children.Add(HudGlass.YouChip());
-                Grid.SetColumn(nm, 1); g.Children.Add(nm);
-                void C(int col, string text, Brush b, FontWeight w, double size = 12) { var t = Num(text, size, w, b); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); g.Children.Add(t); }
-                if (gear)
-                {
-                    C(2, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", Text2, FontWeights.SemiBold);
-                    C(3, f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", HudKit.Muted, FontWeights.Medium);
-                }
-                if (dmg) { C(4, Amounts.Short(e.Dps(f, now)), HudKit.Ink, FontWeights.Bold, 15); C(5, Encounter.Pct(e.Share(f)), Text2, FontWeights.SemiBold, 12.5); }
-                var meter = _glass ? ClassArt.ThinMeterRow(g, f.Class, Measure(f) / top, other: false) : ClassArt.MeterRow(g, f.Class, Measure(f) / top, other: false, radius: 5);
-                meter.Margin = new Thickness(0, _glass ? 2 : 3, 0, 0);
-                rows.Children.Add(meter);
-            }
-            if (e.Shown().Count() > 8) rows.Children.Add(T($"+{e.Shown().Count() - 8} more on the Parser page", 10.5, FontWeights.Medium, HudKit.Faint));
-            _body.Children.Add(rows);
+            _prows.Margin = new Thickness(-6, 8, -6, 0);
+            ParserRows.Detach(_prows); _body.Children.Add(_prows);
+            _prows.Show(e, now);
         }
         // the foot: the group's DPS while it runs; the result once it's over
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };

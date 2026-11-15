@@ -156,6 +156,51 @@ const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-'
   say(`left out, the sources disagreeing (${conflicts.length}): ${conflicts.join('; ') || '-'}`);
   if (unchecked.length) say(`shipped though the client table lacks them (${unchecked.length}): ${unchecked.join('; ')}`);
 
+  // NCSoft's own item dictionary (data/tw-items.json, tools/crawl-tw.js): each Theostone item's name, its skill's id by the
+  // rule the MIT-paired Theostones show. Item 5138G00NN (G: 5 Rare, 4 Legend, 3 Unique) grants skill 30 R Q NN+6, where Q is
+  // the grade (0 Rare, 1 Legend, 2 Unique) and R is 1 for NN up to 10, else 0: Zikel's Vestige, item 513850011, is skill
+  // 3000017. The rule must fit every Theostone already paired; then each id it gives must be one the check table confirms.
+  const twPath = path.join(root, 'data', 'tw-items.json');
+  if (fs.existsSync(twPath)) {
+    const items = (JSON.parse(fs.readFileSync(twPath, 'utf8')).items ?? []).filter(i => i.categoryName === 'Theostone' && /^5138[345]00\d\d$/.test(String(i.id)));
+    const skillOf = id => { const g = Math.floor(id / 10_000) % 10, nn = id % 100; return 3_000_000 + (nn <= 10 ? 1000 : 0) + { 5: 0, 4: 100, 3: 200 }[g] + nn + 6; };
+    const paired = items.filter(i => Object.values(skills).some(v => v.name === i.name));
+    const misfit = paired.filter(i => skills[skillOf(i.id)]?.name !== i.name);
+    say(`Theostone items: ${items.length} in the item dictionary; the item-to-skill rule fits ${paired.length - misfit.length} of the ${paired.length} already paired`);
+    if (misfit.length) say(`  the rule does not fit: ${misfit.map(i => `${i.id} ${i.name}`).join('; ')}; no Theostone added from the dictionary`);
+    else {
+      let n = 0; const off = [];
+      for (const i of items) {
+        const k = String(skillOf(i.id));
+        if (skills[k]) continue;
+        if (check[k] !== i.name) { off.push(`${i.id} ${i.name} -> ${k} (${check[k] ?? 'none'})`); continue; }
+        skills[k] = { name: i.name, cls: '', src: 'ncitem', itemId: i.id };
+        const icon = /resources\/([A-Za-z0-9_]+)\.png$/.exec(i.icon ?? '')?.[1];
+        if (icon) skills[k].icon = 'nc:' + icon;
+        n++;
+      }
+      say(`added ${n} Theostones from the item dictionary${off.length ? `; not confirmed by the check table: ${off.join('; ')}` : ''}`);
+    }
+  }
+
+  // a spirit's basic attack at another rank: 1000xy, the tens digit the spirit (1 Fire, 2 Water, 3 Wind, 4 Earth, 5 Ancient).
+  // Named for its spirit when every id of that spirit the MIT tables name has the one name, and the check table agrees.
+  {
+    const named = {};
+    for (const [k, v] of Object.entries(skills)) if (/^1000[1-5]\d$/.test(k)) (named[k[4]] ??= new Set()).add(v.name);
+    let n = 0;
+    for (const k of Object.keys(check).filter(k => /^1000[1-5]\d$/.test(k) && !skills[k])) {
+      const names = named[k[4]];
+      if (!names || names.size !== 1) continue;
+      const name = [...names][0];
+      if (check[k] !== name) continue;
+      const sib = Object.keys(skills).find(s => /^1000[1-5]\d$/.test(s) && s[4] === k[4] && skills[s].src !== 'family' && skills[s].name === name);
+      skills[k] = { name, cls: 'spiritmaster', src: 'family', of: sib, icon: '=' + sib };
+      n++;
+    }
+    say(`added ${n} spirit attacks at other ranks, named for their spirit (each confirmed by the check table)`);
+  }
+
   // the names only the GPL client table has: left out
   const checkOnly = Object.entries(check).filter(([k, n]) => !skills[k] && showable(Number(k)) && !junk(n)).map(([k]) => k);
   say(`names only the client table has (left out, "<Class> skill" in the tracker): ${checkOnly.length}`);
@@ -185,6 +230,7 @@ const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-'
     let got = 0; const none = [];
     for (const [k, s] of Object.entries(skills)) {
       if (['webp', 'png'].some(e => fs.existsSync(path.join(iconDir, k + '.' + e)))) continue;
+      if (s.icon?.startsWith('=')) continue;   // another entry's icon: copied below
       const tries = s.src === 'metabot' ? [[MB_ICON + k + '.webp', 'webp']]
         : s.icon?.startsWith('nc:') ? [[NC_ICON + s.icon.slice(3) + '.png', 'png']]
         : s.icon?.startsWith('item:') ? [[MB_ITEM_ICON + s.icon.slice(5), 'webp']]
@@ -193,6 +239,11 @@ const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-'
       for (const [u, e] of tries) { buf = await get(u, true); if (buf) { ext = e; if (!s.icon && s.src !== 'metabot') s.icon = 'waffle'; break; } }
       if (buf) { fs.writeFileSync(path.join(iconDir, k + '.' + ext), buf); got++; } else none.push(k);
       await sleep(120);
+    }
+    for (const [k, s] of Object.entries(skills)) {
+      if (!s.icon?.startsWith('=')) continue;
+      const from = s.icon.slice(1), ext = ['webp', 'png'].find(e => fs.existsSync(path.join(iconDir, from + '.' + e)));
+      if (ext) fs.copyFileSync(path.join(iconDir, from + '.' + ext), path.join(iconDir, k + '.' + ext)); else none.push(k);
     }
     say(`icons: ${got} fetched into ${iconDir}; ${none.length} with none (the class's emblem stands in)`);
   }
@@ -240,6 +291,8 @@ const slugOf = n => n.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-'
       acompanion: `https://github.com/${ACOMP.repo}/blob/${ACOMP.commit}/${ACOMP.file} (${ACOMP.license})`,
       pingmaker: `https://github.com/${PING.repo}/blob/${PING.commit}/${PING.file} (${PING.license})`,
       item: 'https://metabot.gg/en/aion-2/items/<item> (a Theostone\'s name and icon, --verify-items)',
+      ncitem: 'NCSoft\'s AION 2 item dictionary (data/tw-items.json, tools/crawl-tw.js): a Theostone item\'s name; its skill id by the item-to-skill rule in tools/skill-fill.js, which fits every MIT-paired Theostone',
+      family: 'a spirit\'s basic attack at another rank: the name every MIT-named id of that spirit (the id\'s tens digit) shares; "of" is one of them',
       icon: `"nc:<file>": ${NC_ICON}<file>.png; "item:<file>": ${MB_ITEM_ICON}<file>; "waffle": https://github.com/${WAFFLE.repo}/blob/${WAFFLE.commit}/${WAFFLE.dir}/<id>.png (${WAFFLE.license}); none on a MetaBot skill: ${MB_ICON}<id>.webp`,
     };
     const sorted = {};

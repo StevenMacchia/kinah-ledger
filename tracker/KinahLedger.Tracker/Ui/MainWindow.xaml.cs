@@ -1639,7 +1639,8 @@ public partial class MainWindow : Window
         _hud.SetScale(_hudPreview?.HudScale ?? _hudPrefs.Scale);
         // where the player left it, kept on a screen that is still there; else the top centre of the game's monitor
         if (!_hudSpotPreview && SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
-        _hud.FightWidthSet += w => { _parserPrefs.Width = w; _parserPrefs.Save(); };   // the meter's edge dragged (Ui/HudWindow.Width.cs)
+        _hud.FightWidthSet += w => { _parserPrefs.Width = w - MeterExtraWidth; _parserPrefs.Save(); };
+        _hud.FightClicked += ToggleMeterExpanded;   // the meter's edge dragged (Ui/HudWindow.Width.cs)
         _hud.Dragged += () => { if (_hud != null) RememberHudSpot(_hud.Left, _hud.AnchorTop); };   // the Kinah line's spot, the timer line and the Parser's section left out   // the Ticker's spot is its own (never in a render)
         // it follows the game from the start: created while the game is behind another window, it waits out of sight
         UpdateHud();
