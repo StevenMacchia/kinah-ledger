@@ -56,8 +56,9 @@ public static partial class WpfApp
                 Change(live!, swapped, now, $"ui-pv2-motion-swap-{n}.png", t);
                 Change(live!, died, now, $"ui-pv2-motion-death-{n}.png", t);
                 Change(live!, killed, now, $"ui-pv2-motion-kill-{n}.png", t);
-                ParserRows.BestOf = _ => new PullRef { Dps = killed.Dps(killed.You!, now) / 1.042 };
-                Change(live!, killed, now, $"ui-pv2-motion-pb-{n}.png", t);
+                var pb = BossParser.Copy(killed); var me = pb.Roster.First(f => f.You); me.Damage = (long)(me.Damage * 4190.0 / Math.Max(1, killed.Dps(killed.You!, now)));
+                ParserRows.BestOf = _ => new PullRef { Dps = 4020 };
+                Change(live!, pb, now, $"ui-pv2-motion-pb-{n}.png", t);
                 ParserRows.BestOf = best0;
                 // entering a dungeon: the Kinah pill unfolds into the meter
                 {

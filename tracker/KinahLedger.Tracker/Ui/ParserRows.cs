@@ -181,8 +181,9 @@ public sealed class ParserRows : Grid
             RenderTransformOrigin = new Point(0.5, 0.5), Effect = new DropShadowEffect { Color = PK.Coral, BlurRadius = 9, ShadowDepth = 0, Opacity = 0.85 },
             Child = new TextBlock { Text = "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
         nm.Children.Add(tick);
-        var name = new TextBlock { Text = f.Name.Length > 0 ? f.Name : "Unnamed", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = f.You ? HudKit.Gold : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var name = new TextBlock { Text = f.Name.Length > 0 ? f.Name : "Unnamed", FontSize = 13, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.You ? HudKit.Ink : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         nm.Children.Add(name);
+        if (f.You) nm.Children.Add(HudGlass.YouChip());
         var pb = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(6, 0, 0, 0), Background = HudKit.Gold, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
             RenderTransformOrigin = new Point(0, 0.5), Effect = new DropShadowEffect { Color = PK.Gold, BlurRadius = 12, ShadowDepth = 0, Opacity = 0.9 },
             Child = new TextBlock { FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x1D1300) } };
@@ -228,7 +229,10 @@ public sealed class ParserRows : Grid
         if (!Motion.On) { tt.Y = 0; return; }
         double offset = from - to;
         tt.Y = offset;
-        Motion.Play(r.Root, 380, p => tt.Y = offset * (1 - Motion.Out(p)), () => tt.Y = 0);
+        bool down = to > from;
+        if (down) Panel.SetZIndex(r.Root, 0); else Panel.SetZIndex(r.Root, r.You ? 3 : 2);
+        Motion.Play(r.Root, 380, p => { tt.Y = offset * (1 - Motion.Out(p)); if (down) r.Root.Opacity = 1 - 0.65 * Math.Sin(Math.PI * Math.Clamp(p, 0, 1)); },
+            () => { tt.Y = 0; r.Root.Opacity = 1; Panel.SetZIndex(r.Root, r.You ? 2 : 0); });
     }
 
     /// <summary>The rank chip turns over like a card: the old number folds away, the new one unfolds.</summary>
@@ -267,7 +271,7 @@ public sealed class ParserRows : Grid
         {
             double at = -0.2 + 1.4 * Motion.Out(p), k = Math.Sin(Math.PI * p);
             a.Offset = at - 0.22; m.Offset = at; b.Offset = at + 0.22;
-            m.Color = Color.FromArgb((byte)(0x50 * k), PK.Mint.R, PK.Mint.G, PK.Mint.B);
+            m.Color = Color.FromArgb((byte)(0x78 * k), PK.Mint.R, PK.Mint.G, PK.Mint.B);
         }, () => _sweep.Visibility = Visibility.Collapsed);
     }
 

@@ -30,6 +30,7 @@ public sealed class FightView
     public bool HasTimeline => Members.Any(m => m.PerSecond is { Count: > 1 });
     public bool HasTaken => Members.Any(m => m.Taken != null);
     public bool HasDeathLog => Members.Any(m => m.DeathLog.Count > 0);
+    public bool HasBuffs => Members.Any(m => m.Buffs is { Count: > 0 });
     public bool HasCompare => You is { Damage: > 0 } && (Best != null || Last != null);
     public int Deaths => Members.Sum(m => m.Deaths);
 
@@ -96,6 +97,8 @@ public sealed class MemberView
     public long? Taken; public List<(string Source, int Skill, long Damage, int Hits)>? TakenBy;
     /// <summary>Each death with its time, the killing blow and the last five hits taken (store v2); empty until then.</summary>
     public List<DeathView> DeathLog = new();
+    /// <summary>Each buff's time up over the fight (store v2); null until then.</summary>
+    public List<(string Name, double Seconds, double Share)>? Buffs;
     public double ActiveSeconds => F.ActiveSeconds;
 }
 

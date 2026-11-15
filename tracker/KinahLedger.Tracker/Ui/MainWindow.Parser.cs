@@ -40,7 +40,7 @@ public partial class MainWindow
     string _parserLastLiveId = "";
     const double OverlayResultSeconds = 15;
     const int ParserHotkeyId = 3;
-    const int ParserRowsAtRest = 10;
+    const int ParserRowsAtRest = 5;   // the kept fights folded at five (Parser v2: one screen, as the main page's lists)
 
     /// <summary>Options › In game › Parser's switches (minimal by default): group details, kills and deaths, list filters, explanations on hover.</summary>
     bool PDetails => _parserPrefs.Details;
