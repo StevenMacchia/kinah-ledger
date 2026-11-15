@@ -321,7 +321,7 @@ sealed class HudCapsule : HudStackLook
         head.Children.Add(Tx(e.Title, 13.5, Ink, FontWeights.Bold));
         var clk = e.Waiting ? Tx("Ready", 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _meterBody.Children.Add(head);
-        if (e.Waiting) { var w = Tx(ReadyLine, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w); _meter.Visibility = Visibility.Visible; return; }
+        if (e.Waiting) { var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w); _meter.Visibility = Visibility.Visible; return; }
         if (e.BossHpLeft is { } hp && e.Live)
         {
             // the HP as a hairline with "47% · 1.82M left" at its end
@@ -497,7 +497,7 @@ sealed class HudMeter : HudStackLook
             // a dungeon before its first pull: its name, Ready, and where the members will be
             _clock.Text = "Ready"; _clock.Foreground = Muted;
             _hpFill.Width = _hpLine.Width = 0; _hpNow = null; PlaceHp();
-            var w = Tx(ReadyLine, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(10, 7, 10, 8);
+            var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(10, 7, 10, 8);
             _rows.Children.Add(w);
             _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
             _rows.Visibility = Visibility.Visible;
@@ -647,7 +647,7 @@ sealed class HudFloat : HudStackLook
         if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); }
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
-        if (e.Waiting) rows.Children.Add(Tx(ReadyLine, 12.5, Muted, FontWeights.SemiBold));
+        if (e.Waiting) rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));
         else { ParserRows.Detach(_prows); rows.Children.Add(_prows); _prows.Show(e, now); }
         _fight.Children.Add(rows);
         _fight.Visibility = Visibility.Visible;

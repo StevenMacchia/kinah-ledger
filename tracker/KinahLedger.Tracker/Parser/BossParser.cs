@@ -115,6 +115,27 @@ public sealed class BossParser
     /// small figure on the Kinah line while farming. Never kept, never written, dropped after its pause.
     /// </summary>
     Encounter? _farm;
+    /// <summary>
+    /// Always on (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss fights'"): the
+    /// meter's own tally, in every mode, never kept, never written. It opens at the first hit of yours or your group's and
+    /// starts again from 0 when a boss is pulled (the pull is the meter then), when you go into or out of a Transcendence,
+    /// an Expedition or a Sanctuary (a reconnect or a loading screen back into the same copy is not a new one), and outside
+    /// those after <see cref="AlwaysIdleSeconds"/> with nobody of yours fighting. Null between those and the next hit, while
+    /// the meter holds what ended last (<see cref="AlwaysEnded"/>).
+    /// </summary>
+    Encounter? _always;
+    /// <summary>When yours last fought in the Always on tally (a hit dealt or taken, a kill, a pull): its idle clock.</summary>
+    DateTime _alwaysActiveAt;
+    /// <summary>What the Always on meter showed that ended last (its tally or a boss pull), settled: held until the next starts.</summary>
+    Encounter? _alwaysEnded;
+    /// <summary>Always on, outside the three: this long with nobody of yours fighting and the next hit starts the meter from 0.</summary>
+    public const double AlwaysIdleSeconds = 120;
+    /// <summary>
+    /// One hit this big is a misread, never damage (2026-11-15: a Cleric's Divine Punishment read 261M once in the open
+    /// world; it hits for thousands, and a whole boss has 5 to 10M HP): left out of every figure, the record marked partial.
+    /// </summary>
+    public const long ImpossibleHit = 50_000_000;
+
     /// <summary>Your hits in the farming fight under way (the last few seconds of them), for the live readout (FarmDpsNow).</summary>
     readonly Queue<(DateTime At, long Amount)> _farmHits = new();
     Encounter? _farmHitsOf;
@@ -231,6 +252,16 @@ public sealed class BossParser
         }
     }
 
+    /// <summary>
+    /// The Always on meter now: the boss pull under way (a pull always starts the meter from 0), else the tally under way,
+    /// else null (then the meter holds <see cref="AlwaysEnded"/>).
+    /// </summary>
+    public Encounter? AlwaysLive { get { lock (_gate) return _cur is { Wave: false } c ? Copy(c) : _always != null ? Tally(Copy(_always)) : null; } }
+    static Encounter Tally(Encounter e) { e.Always = true; return e; }
+
+    /// <summary>What the Always on meter showed that ended last (a tally or a pull, with its end), or null.</summary>
+    public Encounter? AlwaysEnded { get { lock (_gate) return _alwaysEnded == null ? null : _alwaysEnded.Mode == "fight" ? Tally(Copy(_alwaysEnded)) : Copy(_alwaysEnded); } }
+
     /// <summary>Copies of every record under way (the pull, the run, the fight), for encounter-live.json.</summary>
     public List<Encounter> LiveAll { get { lock (_gate) return new[] { _cur, _run, _fight }.Where(e => e != null && !e.OpenWorld).Select(e => Copy(e!)).ToList(); } }
 
@@ -326,6 +357,15 @@ public sealed class BossParser
                     if (SameCopy(_run)) Rejoined(_run, ie);
                     else CloseRun(RunEnd(_run), _run.LastAt, done, "left for another place");
                 }
+                // Always on: into or out of a Transcendence, an Expedition or a Sanctuary starts the meter from 0; back into the same copy does not
+                {
+                    bool was = Kept(_kind), to = Kept(kind);
+                    // by name, never the id (the decoder numbers every entry, a reconnect into the same copy too); running the
+                    // same dungeon again comes after leaving it (InstanceLeft), which started the meter again already. A place
+                    // the game's messages can't name: the screen's place decides (ScreenPlace)
+                    bool sameCopy = unplaced || (was == to && (!to || BossBook.Strip(ie.Name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase)));
+                    if (!sameCopy) EndAlways(ie.At, to ? $"entered {ie.Name.Trim()}" : "left the instance");
+                }
                 if (ie.InstanceId == 0 || ie.InstanceId != _instanceId) { _bossNames.Clear(); _downHere.Clear(); _gameMode = ""; }
                 _instanceId = ie.InstanceId;
                 if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: the screen's place names it"); break; }
@@ -337,6 +377,7 @@ public sealed class BossParser
                 break;
             }
             case InstanceLeft il:
+                if (Kept(_kind)) EndAlways(il.At, "left the instance");
                 if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance", yours: true);
                 _preHits.Clear(); _inferred = null; _recentTaken.Clear(); _pendingDeaths.Clear(); _effectsOn.Clear(); _castsLanded.Clear();
                 if (_run != null) CloseRun(RunEnd(_run), il.At, done, "left the instance");
@@ -382,6 +423,12 @@ public sealed class BossParser
             case DamageDealt dd:
             {
                 if (dd.Amount <= 0) break;
+                if (dd.Amount / Math.Max(1, dd.Hits) >= ImpossibleHit)
+                {
+                    Log($"a hit of {dd.Amount:N0} left out (skill {dd.Skill}): no hit is that big, a misread");
+                    foreach (var e in Records()) MarkPartial(e, "a misread hit left out");
+                    break;
+                }
                 // the boss of a pull that ended with no end said (a wipe found by its quiet or its reset) hit again: a new pull
                 if (_cur == null && _inferred is { } inf && dd.TargetId != 0 && dd.TargetId == inf.BossId && Kept(_kind) && _instanceId == inf.InstanceId)
                 {
@@ -391,6 +438,7 @@ public sealed class BossParser
                 }
                 if (_mode == ParserMode.Fights && _fight == null) OpenFight(dd.At);
                 FarmAt(dd.At);
+                if (Ours(dd.SourceId, dd.SourceIsYou)) AlwaysFight(dd.At, open: true);
                 // damage to a boss just ahead of its pull: kept for it (Engage takes it)
                 if (_cur == null && Kept(_kind) && dd.TargetId != 0)
                 {
@@ -436,7 +484,7 @@ public sealed class BossParser
                 break;
             case HitDealt hd:
             {
-                if (hd.Source == 0) break;
+                if (hd.Source == 0 || hd.Amount >= ImpossibleHit) break;   // a misread hit (DamageDealt says so once): in no figure
                 // a cast counts once, with its first hit that lands here (a cast whose hits all went elsewhere, or missed, isn't
                 // this fight's): so an ability's casts are never more than its hits
                 bool firstOfCast = !hd.NoRow && !hd.Tick && hd.Skill > 0 && _castsLanded.Add((hd.Actor, hd.Cast, hd.Skill));
@@ -454,6 +502,7 @@ public sealed class BossParser
                 _castsLanded.RemoveWhere(c => c.Actor == cm.Actor && c.Cast == cm.Cast);
                 break;
             case HitTaken ht:
+                if (Ours(ht.Target, false)) AlwaysFight(ht.At, open: false);
                 Taken(ht);
                 break;
             case EffectChanged ec:
@@ -471,7 +520,30 @@ public sealed class BossParser
     }
 
     /// <summary>The records under way, the pull first.</summary>
-    IEnumerable<Encounter> Records() { if (_cur != null) yield return _cur; if (_run != null) yield return _run; if (_fight != null) yield return _fight; if (_farm != null) yield return _farm; }
+    IEnumerable<Encounter> Records() { if (_cur != null) yield return _cur; if (_run != null) yield return _run; if (_fight != null) yield return _fight; if (_farm != null) yield return _farm; if (_always != null) yield return _always; }
+
+    /// <summary>A fighter of yours: you, or a member of your group (by the game's id).</summary>
+    bool Ours(long id, bool you) => you || (id != 0 && (_group.Any(g => g.Id == id) || (_always?.Roster.Any(f => f.Id == id && !f.Other) ?? false)));
+
+    /// <summary>The Always on tally ends here (kept nowhere): the meter holds it, settled, until the next hit starts a new one.</summary>
+    void EndAlways(DateTime at, string why)
+    {
+        if (_always is not { } a) return;
+        _always = null;
+        a.End = Max(Min(at, a.LastAt), a.Start);
+        a.LastAt = Max(a.LastAt, a.End.Value);
+        a.Outcome = a.YourDeaths > 0 ? "died" : a.YourKills > 0 || a.Kills.Any(k => k.Boss) ? "kill" : "ended";
+        Settle(a);
+        _alwaysEnded = a;
+        Log($"always on: the meter starts again ({why})");
+    }
+
+    /// <summary>Your fighting, for the Always on tally: it opens at your or your group's first hit (never during a boss pull, which is the meter then).</summary>
+    void AlwaysFight(DateTime at, bool open)
+    {
+        if (_always == null && open && _cur is not { Wave: false }) { _always = NewFight(at); _alwaysActiveAt = at; }
+        if (_always != null) _alwaysActiveAt = Max(_alwaysActiveAt, at);
+    }
 
     /// <summary>A hit, kill or pull outside an instance in Bosses only or Full run: the open-world fight (Farm) opens if none is under way.</summary>
     void FarmAt(DateTime at)
@@ -499,7 +571,8 @@ public sealed class BossParser
             _lastEventAt = Max(_lastEventAt, at);
             if (_mode == ParserMode.Fights && _fight == null) OpenFight(at);
             FarmAt(at);
-            foreach (var e in new[] { _run, _fight, _farm })
+            AlwaysFight(at, open: false);
+            foreach (var e in new[] { _run, _fight, _farm, _always })
             {
                 if (e == null) continue;
                 e.LastAt = Max(e.LastAt, at);
@@ -629,6 +702,15 @@ public sealed class BossParser
             Log($"{name}: not in a Transcendence, Expedition or Sanctuary{(_instance.Length > 0 ? $" ({_instance})" : "")}, no boss pull kept");
             if (_mode == ParserMode.Fights) { if (_fight == null) OpenFight(be.At); _fight!.LastAt = Max(_fight.LastAt, be.At); if (_fight.Boss.Length == 0) _fight.Boss = name; }
             FarmAt(be.At);
+            // Always on: a boss out here (a field or world boss) starts the meter from 0, under its name; the same boss again carries on
+            if (_always == null || !_always.Boss.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                EndAlways(be.At, $"{name} was pulled");
+                _always = NewFight(be.At);
+                _always.Boss = name;
+            }
+            _always.LastAt = Max(_always.LastAt, be.At);
+            _alwaysActiveAt = Max(_alwaysActiveAt, be.At);
             if (_farm != null) { _farm.LastAt = Max(_farm.LastAt, be.At); if (_farm.Boss.Length == 0) _farm.Boss = name; }
             return;
         }
@@ -650,6 +732,8 @@ public sealed class BossParser
         MergeGroup(_cur, _group, null);
         ApplyClasses(_cur);
         _inferred = null;
+        // Always on: the pull is the meter now, from 0 (a wave's damage stays in the tally)
+        if (!_cur.Wave) EndAlways(be.At, $"{_cur.Boss} was pulled");
         // damage to this boss just ahead of its pull is the pull's; the pull starts at it when it came well before
         if (be.BossId != 0)
         {
@@ -959,6 +1043,7 @@ public sealed class BossParser
         e.LastAt = Max(e.LastAt, e.End.Value);
         e.Outcome = Encounter.OutcomeName(outcome);
         Settle(e);
+        if (!e.Wave) _alwaysEnded = Copy(e);
         if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
@@ -1045,6 +1130,12 @@ public sealed class BossParser
                 CloseFight(f.LastAt, done, null);
                 _version++;
             }
+            // Always on, outside the three: two minutes with nobody of yours fighting, and the next hit starts the meter from 0
+            if (_always is { } al && !Kept(_kind) && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
+            {
+                EndAlways(_alwaysActiveAt, $"{AlwaysIdleSeconds / 60:0} minutes without fighting");
+                _version++;
+            }
             // the open-world fight of Bosses only and Full run: gone after its pause, nothing kept
             if (_farm is { } fm && (now - fm.LastAt).TotalSeconds >= PauseSeconds) { _farm = null; _version++; }
         }
@@ -1064,7 +1155,10 @@ public sealed class BossParser
             if (k == ContentKind.Other && instance != null) k = _book.KindOf(instance);
             var name = instance?.Trim() ?? "";
             if (k == _kind && name == _instance) return;
-            _kind = instance == null ? ContentKind.Other : k; _instance = name;
+            var newKind = instance == null ? ContentKind.Other : k;
+            // only into one of the three: a minimap misread mid-dungeon (a name a letter off, a frame with none) never starts the meter again
+            if (!Kept(_kind) && Kept(newKind)) EndAlways(DateTime.UtcNow, $"entered {name}");
+            _kind = newKind; _instance = name;
             if (Kept(_kind)) _farm = null;   // the minimap says an instance: whatever was counted as farming is over
             if (_mode == ParserMode.Run && _run == null && Kept(_kind)) OpenRun(DateTime.UtcNow, midway: false);
             _version++;
@@ -1110,6 +1204,7 @@ public sealed class BossParser
                         break;
                 }
             }
+            _alwaysEnded = null;   // a record of the last session is not what the Always on meter holds
             _version++;
         }
         Finish(done, null);

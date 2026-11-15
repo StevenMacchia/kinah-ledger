@@ -19,6 +19,13 @@ public sealed class ParserPrefs
     public string Hotkey { get; set; } = DefaultHotkey;
     /// <summary>What the Parser keeps: "boss" (Bosses only, the default), "run" (Full run), "fight" (Every fight).</summary>
     public string Mode { get; set; } = "boss";
+    /// <summary>
+    /// The meter over the game (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss
+    /// fights'"): off (Only boss fights, the default) it shows in boss fights and dungeons; on (Always on) it is always up,
+    /// starting from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after two minutes without
+    /// fighting (Parser/BossParser.cs, AlwaysLive). What is kept stays the mode's either way.
+    /// </summary>
+    public bool AlwaysOn { get; set; }
     /// <summary>Which records the list shows ("boss", "run", "fight"); the mode's own when empty.</summary>
     public string ListMode { get; set; } = "";
     /// <summary>

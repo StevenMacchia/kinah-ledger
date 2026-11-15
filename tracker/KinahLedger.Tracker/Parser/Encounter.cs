@@ -357,6 +357,19 @@ public sealed class Encounter : IJsonOnDeserialized
         Start = now, End = now, LastAt = now, Waiting = true,
     };
 
+    /// <summary>The Always on meter before its first hit outside a dungeon: the place's name, no clock, no rows.</summary>
+    public static Encounter ReadyAnywhere(string place, DateTime now) => new()
+    {
+        Id = "ready", Mode = "fight", Kind = "", Instance = place, Boss = place,
+        Start = now, End = now, LastAt = now, Waiting = true, Always = true,
+    };
+
+    /// <summary>The Always on meter's own tally (never a record of the mode): its sub line says "Always on", not the mode's name.</summary>
+    [JsonIgnore] public bool Always { get; set; }
+
+    /// <summary>What a ready card says under its name: a dungeon waits for its first pull, the meter anywhere else for a hit.</summary>
+    [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? "Waiting for the first hit" : "Waiting for the first pull";
+
     /// <summary>
     /// The rows the live card, the overlay and the list show (Steven, 2026-11-14: "don't count [a member] until they have at
     /// least 1 [damage]"): with damage counted, only members who have dealt some; before any damage, everyone. The detail's
