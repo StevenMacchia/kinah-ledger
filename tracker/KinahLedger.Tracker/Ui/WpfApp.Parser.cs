@@ -386,6 +386,12 @@ public static partial class WpfApp
             var pick = HudLooks.FightLooks.First(k => k != onKey);
             opt.PickHudLookForTest(pick); DoEvents();
             check(opt.ParserLooksForTest.On == pick, $"...a look picked shows in the row at once ({pick})");
+            check(opt.ParserLookStageForTest == pick, $"...and the big preview draws it ({opt.ParserLookStageForTest ?? "nothing"})");
+            var hoverKey = HudLooks.FightLooks.First(k => k != pick);
+            opt.HoverParserLookForTest(hoverKey); DoEvents();
+            check(opt.ParserLookStageForTest == hoverKey, $"...a look under the mouse fills the big preview ({opt.ParserLookStageForTest ?? "nothing"}, wanted {hoverKey})");
+            opt.HoverParserLookForTest(null); DoEvents();
+            check(opt.ParserLookStageForTest == pick, $"...and the mouse leaving puts the picked one back ({opt.ParserLookStageForTest ?? "nothing"})");
             var ws = opt.ParserWidthForTest;
             double wBefore = HudStackLook.FightWidth;
             if (ws != null) { ws.Value = 500; DoEvents(); }
