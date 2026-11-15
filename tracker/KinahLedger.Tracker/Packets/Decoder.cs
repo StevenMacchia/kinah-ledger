@@ -284,6 +284,8 @@ public sealed unsafe class NativeDecoder : IGameDecoder
             2 => new HitTaken(at, x.Source, x.Target, x.Amount, x.Skill, x.Extra),
             3 => new CastMade(at, x.Source, x.Actor, x.Skill, x.Cast),
             4 or 5 => new EffectChanged(at, x.Target, x.N, x.Skill, x.Kind == 4, x.Extra),
+            // a heal (a later klnet at the same interface version; an older one sends none): raw as dealt, amount the effective part
+            6 => new HealDone(at, x.Source, x.Target, x.Raw, x.Amount, x.Skill, (x.Flags & 4) != 0, (x.Flags & 8) != 0, (x.Flags & 16) != 0, (x.Flags & 32) != 0),
             _ => null,   // a kind this build doesn't know
         };
     }
