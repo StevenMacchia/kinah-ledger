@@ -76,9 +76,16 @@ public static class ParserTests
             }
             farmNow = f;
         }
+        // one decoder for the whole recording, reset at each new connection, as the tracker does (PacketReader): its count
+        // of instances entered carries on, and the Parser hears of each new connection as a gap
+        using var dec = NativeDecoder.TryOpen()!;
+        bool events = Environment.GetEnvironmentVariable("KL_REPLAY_EVENTS") == "1";
+        bool firstConn = true;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
-            using var dec = NativeDecoder.TryOpen()!;
+            dec.Reset();
+            if (!firstConn) p.Take(new FeedGap(conn.First().At));
+            firstConn = false;
             var st = new TcpStream
             {
                 OnData = (d, at) =>
@@ -88,7 +95,12 @@ public static class ParserTests
                     while (dec.Next() is not null) { }
                     while (dec.NextItem() is not null) { }
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
-                    while (dec.NextBossEvent() is { } b) p.Take(b);
+                    while (dec.NextBossEvent() is { } b)
+                    {
+                        if (events && b is InstanceEntered or InstanceLeft or GroupChanged or BossEngaged or BossEnded)
+                            Console.WriteLine($"event {b.At.ToLocalTime():HH:mm:ss} {(b is GroupChanged g ? "group " + string.Join(", ", g.Members.Select(m => $"{m.Name}#{m.Id}{(m.You ? " (you)" : "")}")) : b.ToString())}");
+                        p.Take(b);
+                    }
                     while (dec.NextHit() is { } h) p.Take(h);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },

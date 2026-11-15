@@ -344,8 +344,21 @@ public sealed class BossParser
                 var kind = ie.Kind != ContentKind.Other ? ie.Kind : _book.KindOf(ie.Name);
                 // an instance the game's messages can't place (no kind, no name): the screen's place names it (ScreenPlace)
                 bool unplaced = kind == ContentKind.Other && ie.Name.Trim().Length == 0;
-                bool SameCopy(Encounter e) => ie.InstanceId != 0 && e.InstanceId != 0 ? ie.InstanceId == e.InstanceId
-                    : unplaced || (BossBook.Strip(ie.Name).Equals(BossBook.Strip(e.Instance), StringComparison.OrdinalIgnoreCase) && Kept(kind));
+                // never by the decoder's number for the entry (the tracker's decoder numbers every entry, a reconnect into the
+                // same copy too; a replay's restarts at each connection): by name. The same name again is a reconnect or a new
+                // run of it: after its last boss died, a new run at once; else what comes next decides (Reentry)
+                bool sameName = !unplaced && Kept(kind) && Kept(_kind) && BossBook.Strip(ie.Name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase);
+                bool again = sameName && (_run is { } r0 && RunEnd(r0) == "cleared" || _book.BossesOf(_instance).Any(b => b.Final && _downHere.Contains(b.Name)));
+                _reentry = null;
+                if (sameName && !again)
+                {
+                    var before = _gapBefore is { } gb && (ie.At - gb.At).TotalSeconds <= ReentryGapSeconds ? gb : Snapshot(ie.At);
+                    _reentry = new Reentry(ie.At, before, _cur?.LastAt,
+                        _group.Where(m => !m.You && m.Name.Trim().Length > 0).Select(m => m.Name.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase));
+                }
+                _gapBefore = null;
+                if (again) Log($"entered {ie.Name.Trim()} again after its last boss died: a new run");
+                bool SameCopy(Encounter e) => !again && (unplaced || (BossBook.Strip(ie.Name).Equals(BossBook.Strip(e.Instance), StringComparison.OrdinalIgnoreCase) && Kept(kind)));
                 if (_cur != null)
                 {
                     if (SameCopy(_cur)) Rejoined(_cur, ie);
@@ -363,10 +376,11 @@ public sealed class BossParser
                     // by name, never the id (the decoder numbers every entry, a reconnect into the same copy too); running the
                     // same dungeon again comes after leaving it (InstanceLeft), which started the meter again already. A place
                     // the game's messages can't name: the screen's place decides (ScreenPlace)
-                    bool sameCopy = unplaced || (was == to && (!to || BossBook.Strip(ie.Name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase)));
+                    bool sameCopy = !again && (unplaced || (was == to && (!to || BossBook.Strip(ie.Name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase))));
                     if (!sameCopy) EndAlways(ie.At, to ? $"entered {ie.Name.Trim()}" : "left the instance");
                 }
-                if (ie.InstanceId == 0 || ie.InstanceId != _instanceId) { _bossNames.Clear(); _downHere.Clear(); _gameMode = ""; }
+                // the bosses down and the names given: this copy's, kept through a reconnect into it
+                if (!sameName || again) { _bossNames.Clear(); _downHere.Clear(); _gameMode = ""; }
                 _instanceId = ie.InstanceId;
                 if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: the screen's place names it"); break; }
                 _kind = kind; _instance = ie.Name.Trim(); _instanceFromGame = Kept(kind);
@@ -377,6 +391,7 @@ public sealed class BossParser
                 break;
             }
             case InstanceLeft il:
+                _reentry = null; _gapBefore = null;
                 if (Kept(_kind)) EndAlways(il.At, "left the instance");
                 if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance", yours: true);
                 _preHits.Clear(); _inferred = null; _recentTaken.Clear(); _pendingDeaths.Clear(); _effectsOn.Clear(); _castsLanded.Clear();
@@ -417,6 +432,13 @@ public sealed class BossParser
                 break;
             }
             case GroupChanged gc:
+                // back into an instance of the same name: the group says which. Anyone of the group before: a reconnect into
+                // the same copy; others only: a new run of it, with another group
+                if (_reentry is { } re && gc.Members.Where(m => !m.You && m.Name.Trim().Length > 0).Select(m => m.Name.Trim()).ToList() is { Count: > 0 } others)
+                {
+                    if (others.Any(re.Others.Contains)) { _reentry = null; Log($"{_instance}: the same group, a reconnect into the same copy"); }
+                    else NewCopy(done, re.Others.Count > 0 ? "another group" : "a group where you were on your own");
+                }
                 _group = gc.Members.Where(m => m.Name.Trim().Length > 0 || m.You).ToList();
                 foreach (var e in Records()) { MergeGroup(e, _group, gc.At); ApplyClasses(e); }
                 break;
@@ -508,7 +530,11 @@ public sealed class BossParser
             case EffectChanged ec:
                 Effect(ec);
                 break;
-            case FeedGap:
+            case FeedGap fg:
+                // a new connection, often a run's end: a run cleared ends here, missing nothing; else how it stood is kept, for
+                // a new run of the same instance coming next (Reentry) to end it there
+                if (_run is { } done0 && _cur == null && RunEnd(done0) == "cleared") CloseRun("cleared", done0.LastAt, done, "a new connection after its last boss");
+                _gapBefore = Snapshot(fg.At);
                 foreach (var e in Records())
                 {
                     e.Gaps++;
