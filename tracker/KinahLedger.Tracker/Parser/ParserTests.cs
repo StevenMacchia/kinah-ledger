@@ -138,8 +138,17 @@ public static class ParserTests
             foreach (var f in e.Ranked())
                 Console.WriteLine($"   {(f.Name.Length > 0 ? f.Name : "Unnamed"),-16} {(f.Class.Length > 0 ? f.Class : "-"),-13} {f.Damage * 100.0 / total,5:0.0}%  {Ui.Amounts.Short(f.Damage),8}  {(e.Shown().Contains(f) ? "" : "(no row: no damage)")}"
                     + (f.Abilities.Count > 0 ? "  top: " + string.Join(", ", f.Abilities.OrderByDescending(a => a.Damage).Take(3).Select(a => $"{Abilities.Name(a.Skill, f.Class)} {Ui.Amounts.Short(a.Damage)} in {(a.Hits > 0 ? a.Hits.ToString() : "–")}")) : ""));
+            // healing (a decoder that reads heals): done, its effective part (≈ an estimate), per second, on others, self and potions
+            if (e.HasHealing)
+            {
+                Console.WriteLine($"   healing: group {e.GroupHealing:N0}{(e.TopHealer(end) is { } th ? $", TOP HEALS {th.Name}" : "")}");
+                foreach (var f in e.Members.Where(f => f.Healing > 0).OrderByDescending(f => f.Healing))
+                    Console.WriteLine($"   heals {(f.Name.Length > 0 ? f.Name : "Unnamed"),-16} {(f.Class.Length > 0 ? f.Class : "-"),-13} {f.Healing,9:N0} done, {(f.HealingIsEstimate ? "≈" : "")}{f.HealingEffective:N0} effective, "
+                        + $"{e.HpsOf(f, end) ?? 0:N0}/s ({(f.HealingIsEstimate ? "≈" : "")}{e.EffectiveHpsOf(f, end) ?? 0:N0}/s effective); others {f.HealingOthers:N0}, self {f.HealingSelf - f.HealingPotions:N0}, potions {f.HealingPotions:N0}"
+                        + (f.Heals is { Count: > 0 } hl ? "; top: " + string.Join(", ", hl.OrderByDescending(a => a.Healing).Take(3).Select(a => $"{Abilities.Name(a.Skill, f.Class)} {Ui.Amounts.Short(a.Healing)} in {a.Hits}")) : ""));
+            }
         }
-        Console.WriteLine($"{kept.Count} records kept ({BossParser.Name(p.Mode)})");
+        Console.WriteLine($"{kept.Count} records kept ({BossParser.Name(p.Mode)}){(p.LateHeals > 0 ? $"; {p.LateHeals:N0} healing came after its pull's end (not in the kept copies above)" : "")}");
         // --save <file>: the records as the tracker keeps them (encounters.jsonl's lines), for tools/skill-fill.js --fights
         // (the open-world fights too: a recording that starts inside an instance has no boss records, but its damage by ability is there)
         if (save != null) File.AppendAllLines(save, kept.Concat(farmRecords).Select(e => System.Text.Json.JsonSerializer.Serialize(e)));
@@ -1340,6 +1349,95 @@ public static class ParserTests
                 "...kept and read back whole; a record kept before reads with every new field empty");
         }
 
+        // heals (the hit stream's heals): healing done and its effective part per member, an estimate said so, self-heals and
+        // potions the healer's own, heals per second over the fight's time, TOP HEALS only for someone who healed another member
+        // (a damage dealer's self-heals never), a heal before the pull or after its end not the pull's, a heal of its last moment
+        // arriving after its kill still in the pull (and the held meter's copy), never in the copy already saved
+        {
+            var (p, kept) = New();
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 880));
+            p.Take(new GroupChanged(t, new[] { Me, Ally }));
+            p.Take(new HealDone(t.AddSeconds(0.5), 2, 1, 4_000, 4_000, 17120000, false, false, false, false));   // before the pull: not its
+            p.Take(new BossEngaged(t.AddSeconds(1), "Watchdog Kwapo", 881));
+            p.Take(new BossHealth(t.AddSeconds(1), 881, 100_000, 100_000));
+            p.Take(new DamageDealt(t.AddSeconds(1), 1, 881, 50_000, "Swoly", true, 11000000, 1));
+            p.Take(new DamageDealt(t.AddSeconds(1), 2, 881, 10_000, "Aerin", false, 17000000, 1));
+            p.Take(new BossHealth(t.AddSeconds(1), 881, 40_000, 100_000));
+            // Aerin (Cleric) heals Swoly: 3,000 done of which 1,200 fit, confirmed; a heal over time's tick, an estimate; herself
+            p.Take(new HealDone(t.AddSeconds(2), 2, 1, 3_000, 1_200, 17120000, false, false, false, false));
+            p.Take(new HealDone(t.AddSeconds(3), 2, 1, 500, 500, -1709025011, true, false, true, false));
+            p.Take(new HealDone(t.AddSeconds(4), 2, 2, 1_000, 0, 17800000, false, true, false, false));
+            // Swoly (Gladiator) heals himself more than Aerin heals: his own skill and a potion
+            p.Take(new HealDone(t.AddSeconds(4), 1, 1, 9_000, 2_000, 11730000, false, true, true, false));
+            p.Take(new HealDone(t.AddSeconds(4.5), 1, 1, 420, 420, -201110111, true, true, false, true));
+            p.Take(new HealDone(t.AddSeconds(5), 0, 1, 777, 777, 0, false, false, false, false));   // no healer named: in no one
+            var live = p.Live!;
+            var sw = live.Members.Single(f => f.Id == 1); var ae = live.Members.Single(f => f.Id == 2);
+            Check(ae is { Healing: 4_500, HealingEffective: 1_700, HealingEstimated: 500, HealingSelf: 1_000, HealingOthers: 3_500, HealingIsEstimate: true }
+                && sw is { Healing: 9_420, HealingEffective: 2_420, HealingSelf: 9_420, HealingPotions: 420, HealingOthers: 0 } && live.GroupHealing == 13_920,
+                $"heals: done, effective (an estimate when unconfirmed), self and potions per member (Aerin {ae.Healing}/{ae.HealingEffective}/{ae.HealingEstimated}, Swoly {sw.Healing}/{sw.HealingSelf}/{sw.HealingPotions})");
+            Check(ae.Heals!.Single(h => h.Skill == -1709025011) is { Healing: 500, Hits: 1 } && ae.Heals!.Single(h => h.Skill == 17120000) is { Healing: 3_000, Effective: 1_200 }
+                && sw.Heals!.Single(h => h.Potion) is { Skill: -201110111, Self: 420 },
+                "...by ability: a heal over time's ticks under its effect, a potion marked");
+            // heals per second over the fight's seconds (as DPS): 4,500 over 9 s
+            Check(Math.Abs((live.HpsOf(ae, t.AddSeconds(10)) ?? 0) - 500) < 0.01 && Math.Abs((live.EffectiveHpsOf(ae, t.AddSeconds(10)) ?? 0) - 1_700 / 9.0) < 0.01
+                && live.HpsOf(new Fighter(), t.AddSeconds(10)) == null,
+                $"...heals per second over the fight's time ({live.HpsOf(ae, t.AddSeconds(10)):0}/s, {live.EffectiveHpsOf(ae, t.AddSeconds(10)):0}/s effective); none for no healing");
+            p.Take(new DamageDealt(t.AddSeconds(10), 1, 881, 40_000, "Swoly", true, 11000000, 1));
+            p.Take(new BossHealth(t.AddSeconds(10), 881, 0, 100_000));
+            p.Take(new UnitDied(t.AddSeconds(10), 881, "Watchdog Kwapo", true));
+            // a heal of the pull's last moment, after the kill (a heal waits for its target's HP); one after the end is not the pull's
+            p.Take(new HealDone(t.AddSeconds(9.8), 2, 1, 2_000, 0, 17120000, false, false, false, false));
+            p.Take(new HealDone(t.AddSeconds(10.5), 2, 1, 6_000, 6_000, 17120000, false, false, false, false));
+            var k = kept.Single();
+            var held = p.AlwaysEnded!;
+            Check(k.Members.Single(f => f.Id == 2).Healing == 4_500 && held.Members.Single(f => f.Id == 2).Healing == 6_500 && p.LateHeals == 2_000,
+                $"...a heal of the pull's last moment after its kill: in the held meter's copy ({held.Members.Single(f => f.Id == 2).Healing:N0}), not in the copy saved ({k.Members.Single(f => f.Id == 2).Healing:N0}); one after the end in neither");
+            Check(k.TopHealer(k.End!.Value)?.Id == 2 && k.TopsShown,
+                $"...TOP HEALS: Aerin, who healed Swoly, not Swoly, whose own heals are more ({k.TopHealer(k.End!.Value)?.Name})");
+            var again = BossParser.Copy(k).Members.Single(f => f.Id == 2);
+            Check(again is { Healing: 4_500, HealingEffective: 1_700, HealingEstimated: 500, HealingSelf: 1_000 } && again.Heals?.Count == 3,
+                "...kept as it was (the saved record's heal fields read back)");
+            // nobody healed another: no TOP HEALS
+            var (q, kq) = New();
+            q.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 890));
+            q.Take(new GroupChanged(t, new[] { Me, Ally }));
+            q.Take(new BossEngaged(t.AddSeconds(1), "Watchdog Kwapo", 891));
+            q.Take(new DamageDealt(t.AddSeconds(1), 1, 891, 60_000, "Swoly", true, 11000000, 1));
+            q.Take(new DamageDealt(t.AddSeconds(1), 2, 891, 40_000, "Aerin", false, 17000000, 1));
+            q.Take(new HealDone(t.AddSeconds(2), 1, 1, 9_000, 2_000, 11730000, false, true, false, false));
+            q.Take(new BossHealth(t.AddSeconds(8), 891, 0, 100_000));
+            q.Take(new UnitDied(t.AddSeconds(8), 891, "Watchdog Kwapo", true));
+            var kq0 = kq.Single();
+            Check(kq0.TopsShown && kq0.TopHealer(kq0.End!.Value) == null && kq0.HasHealing, "...no TOP HEALS when no one healed another member (a Gladiator's self-heals)");
+        }
+        // heals on Steven's recordings (20261114-08 Ferocious Horn Den, 20261114-14 Vakron Sky Island) through a decoder that reads
+        // them: every boss pull's top healer is the group's Cleric; Duanka's LMZ111 heals 62,608 effective (the heal verdict's
+        // figure, kinah-bench); the effective part never more than done; only Clerics and Chanters heal others
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "packets");
+            var recs = new[] { "20261114-08", "20261114-14" }.Select(n => Path.Combine(dir, n + ".pcapng")).Where(File.Exists).ToList();
+            var pulls = NativeDecoder.Version >= 10 && recs.Count == 2 ? recs.SelectMany(r => Replay(r, hits: true)).ToList() : new();
+            if (pulls.Count == 0 || !pulls.Any(e => e.HasHealing))
+                Console.WriteLine($"skip  heals on Steven's recordings: decoder interface {NativeDecoder.Version}{(pulls.Count > 0 ? " without heals" : "")}, {recs.Count} recordings here");
+            else
+            {
+                var tops = pulls.Select(e => $"{e.Boss}: {e.TopHealer(e.End!.Value)?.Name} {e.TopHealer(e.End!.Value)?.Healing:N0} ({e.TopHealer(e.End!.Value)?.HealingEffective:N0})").ToList();
+                Console.WriteLine("      top healers: " + string.Join("; ", tops));
+                bool clerics = pulls.All(e => e.TopHealer(e.End!.Value) is { Class: "Cleric" } th && th.Name is "LMZ111" or "Swoles");
+                var duanka = pulls.Single(e => e.Boss == "Necromancer Duanka").Members.Single(f => f.Name == "LMZ111");
+                var healers = pulls.SelectMany(e => e.Members).Where(f => f.HealingOthers > 0).ToList();
+                Check(pulls.Count == 11 && clerics && duanka.HealingEffective == 62_608 && duanka.HealingIsEstimate,
+                    $"heals, Steven's recordings: {pulls.Count} boss pulls, each one's TOP HEALS the group's Cleric; Duanka's LMZ111 {duanka.Healing:N0} done, ≈{duanka.HealingEffective:N0} effective (the verdict's 62,608)");
+                Check(pulls.SelectMany(e => e.Members).All(f => f.HealingEffective <= f.Healing && f.HealingEstimated <= f.HealingEffective && f.HealingSelf <= f.Healing)
+                    && healers.Where(f => f.HealingOthers * 10 > f.Healing).All(f => f.Class is "Cleric" or "Chanter" or "Spiritmaster" or "Sorcerer"),
+                    $"...effective never more than done; the big healers of others Clerics and Chanters ({string.Join(", ", healers.Where(f => f.HealingOthers * 10 > f.Healing).Select(f => f.Class).Distinct())})");
+                var lmz = pulls.Where(e => e.Instance.Contains("Horn")).Select(e => e.Members.Single(f => f.Name == "LMZ111")).ToList();
+                long g = lmz.Sum(f => f.Healing), ef = lmz.Sum(f => f.HealingEffective);
+                Check(lmz.Count == 3 && ef * 100 > g * 30 && ef * 100 < g * 55,
+                    $"...LMZ111 over Horn Den's three bosses {g:N0} done, ≈{ef:N0} effective ({100 - ef * 100.0 / g:F0}% overheal)");
+            }
+        }
         // store v2 on Steven's recordings (20261114-14 to -16), replayed through this build's decoder: totals as without the hit
         // stream, buckets adding up, casts at or below hits, deaths with a killer. Only where the decoder (interface version 10)
         // and the recordings are on this PC

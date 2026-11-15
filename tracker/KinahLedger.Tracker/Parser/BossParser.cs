@@ -541,6 +541,18 @@ public sealed class BossParser
                     }
                 break;
             }
+            case HealDone hl:
+            {
+                if (hl.Source == 0 || hl.Amount <= 0 || hl.Amount >= ImpossibleHit) break;
+                foreach (var e in Records()) Heal(e, hl);
+                // a heal of a pull's last moment can come after its end (a heal waits for its target's HP): it is still that pull's
+                if (_endedPull is { } ep)
+                {
+                    if ((hl.At - ep.End).TotalSeconds > LateHealSeconds) _endedPull = null;
+                    else if (hl.At <= ep.End) { foreach (var e in ep.Copies) Heal(e, hl); LateHeals += hl.Amount; }
+                }
+                break;
+            }
             case CastMade cm:
                 // a new cast by this actor: its sequence number is free again for counting (it wraps)
                 _castsLanded.RemoveWhere(c => c.Actor == cm.Actor && c.Cast == cm.Cast);
@@ -605,6 +617,14 @@ public sealed class BossParser
             var g = into.Roster.FirstOrDefault(x => x.Other == f.Other && ((f.Id != 0 && x.Id == f.Id) || (f.Name.Length > 0 && x.Name.Equals(f.Name, StringComparison.OrdinalIgnoreCase)) || (f.You && x.You)));
             if (g == null) { f.PerSecond = null; f.BossPerSecond = null; into.Roster.Add(f); continue; }
             g.Damage += f.Damage; g.BossDamage += f.BossDamage; g.Deaths += f.Deaths;
+            g.Healing += f.Healing; g.HealingEffective += f.HealingEffective; g.HealingEstimated += f.HealingEstimated; g.HealingSelf += f.HealingSelf; g.HealingPotions += f.HealingPotions;
+            foreach (var h in f.Heals ?? new())
+            {
+                var gl = g.Heals ??= new();
+                var gh = gl.FirstOrDefault(x => x.Skill == h.Skill);
+                if (gh == null) gl.Add(gh = new HealShare { Skill = h.Skill, Potion = h.Potion });
+                gh.Healing += h.Healing; gh.Effective += h.Effective; gh.Hits += h.Hits; gh.Self += h.Self;
+            }
             foreach (var a in f.Abilities)
             {
                 var ga = g.Ability(a.Skill);
@@ -973,6 +993,32 @@ public sealed class BossParser
         if (h.Tick) Count("tick");
     }
 
+    /// <summary>The pull that just ended (its own record, the Always on meter's held copy): a heal of its last moment can come after its end.</summary>
+    (DateTime End, List<Encounter> Copies)? _endedPull;
+    /// <summary>A heal comes at most this long after it was dealt (it waits for its target's next HP change, a second at most).</summary>
+    const double LateHealSeconds = 2;
+    /// <summary>
+    /// Healing that came after its pull ended, put into the pull's own record and the meter's held copy (Always on); the copy
+    /// already handed to <see cref="Ended"/> (saved, and the overlay's result) is not touched after it went out. Replays print it.
+    /// </summary>
+    public long LateHeals { get; private set; }
+
+    /// <summary>A heal onto a record: the healer's healing, its effective part (and how much of that is an estimate), self and potions, by ability.</summary>
+    static void Heal(Encounter e, HealDone hl)
+    {
+        if (hl.At < e.Start || (e.End is { } end && hl.At > end) || Member(e, hl.Source) is not { } m) return;
+        m.Healing += hl.Amount;
+        long eff = Math.Clamp(hl.Effective, 0, hl.Amount);
+        m.HealingEffective += eff;
+        if (hl.Estimate) m.HealingEstimated += eff;
+        if (hl.Self) { m.HealingSelf += hl.Amount; if (hl.Potion) m.HealingPotions += hl.Amount; }
+        var list = m.Heals ??= new();
+        var a = list.FirstOrDefault(x => x.Skill == hl.Skill);
+        if (a == null) list.Add(a = new HealShare { Skill = hl.Skill, Potion = hl.Potion });
+        a.Healing += hl.Amount; a.Effective += eff; a.Hits++;
+        if (hl.Self) a.Self += hl.Amount;
+    }
+
     /// <summary>Who dealt a hit taken, in words: the boss's name when it was the boss, a member's when a member, else "".</summary>
     string SourceName(Encounter e, long attacker) => attacker == 0 ? "" : _cur != null && attacker == _cur.BossId ? _cur.Boss : Member(e, attacker)?.Name ?? "";
 
@@ -1168,6 +1214,7 @@ public sealed class BossParser
         e.Outcome = Encounter.OutcomeName(outcome);
         Settle(e);
         if (!e.Wave) _alwaysEnded = Copy(e);
+        _endedPull = (e.End.Value, e.Wave || _alwaysEnded == null ? new List<Encounter> { e } : new List<Encounter> { e, _alwaysEnded });
         if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;

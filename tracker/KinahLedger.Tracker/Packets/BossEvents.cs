@@ -57,6 +57,14 @@ public sealed record UnitDied(DateTime At, long Id, string Name, bool Boss, long
 public sealed record HitDealt(DateTime At, long Source, long Actor, long Target, long Amount, int Skill, int Cast, int N, bool NoRow, bool Tick,
     int Result, int Marks, int Multi, int Why) : BossEvent(At);
 
+/// <summary>
+/// A heal by Source (who it counts for: the player or a member; a summon's owner) on Target (a member, or the healer: Self),
+/// Amount as dealt in HP, Effective the part of it that fit under the target's max HP (overheal left out). Estimate: Effective
+/// wasn't confirmed by the target's HP (damage came in between, or no HP change was seen), so it is an estimate. Skill as
+/// HitDealt's (a heal over time's tick is negative, its effect: Tick). Potion: a potion's. Shields are never heals.
+/// </summary>
+public sealed record HealDone(DateTime At, long Source, long Target, long Amount, long Effective, int Skill, bool Tick, bool Self, bool Estimate, bool Potion) : BossEvent(At);
+
 /// <summary>A hit a member took: from Attacker (Npc: its kind, 0 = not known), Amount, by Skill.</summary>
 public sealed record HitTaken(DateTime At, long Attacker, long Target, long Amount, int Skill, long Npc) : BossEvent(At);
 
