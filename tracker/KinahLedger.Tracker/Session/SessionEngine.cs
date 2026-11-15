@@ -522,6 +522,25 @@ public sealed partial class SessionEngine
 
     public void Resume() { lock (_lock) ResumeLocked(); }
 
+    /// <summary>
+    /// Goes on after a hold that wasn't farming (a run took the lines): the grace after the last farming line before the hold
+    /// is kept, and the next line starts the farming clock afresh, so none of the hold's time counts in any rate.
+    /// </summary>
+    public void ResumeFresh()
+    {
+        lock (_lock)
+        {
+            if (_pausedAt is not { } at) return;
+            if (_lastFarmAt is { } last)
+            {
+                double tail = Math.Clamp((at - last).TotalSeconds, 0, GraceSeconds);
+                _active += tail; Z().Active += tail;
+                _lastFarmAt = null;
+            }
+            ResumeLocked();
+        }
+    }
+
     void ResumeLocked()
     {
         if (_pausedAt is not { } at) return;

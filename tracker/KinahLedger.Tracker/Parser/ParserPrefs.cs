@@ -24,7 +24,7 @@ public sealed class ParserPrefs
     /// <summary>
     /// The meter over the game (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss
     /// fights'"): off (Only boss fights, the default) it shows in boss fights and dungeons; on (Always on) it is always up,
-    /// starting from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after two minutes without
+    /// starting from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after a few seconds without
     /// fighting (Parser/BossParser.cs, AlwaysLive). What is kept stays the mode's either way.
     /// </summary>
     public bool AlwaysOn { get; set; }

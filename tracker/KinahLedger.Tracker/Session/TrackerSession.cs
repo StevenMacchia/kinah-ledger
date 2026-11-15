@@ -216,8 +216,12 @@ public sealed partial class TrackerSession
     /// <summary>Runs in expeditions and events, entry to last loot, kept across restarts.</summary>
     public InstanceLog Instances { get; } = new();
     public void ResetCraftView() => CraftView = new SessionEngine(_items);
-    /// <summary>Every zone since the last break (GameWatcher.AllView): fed like the zone view, never reset by a zone change.</summary>
-    public SessionEngine? AllView { get; set; }
+    /// <summary>
+    /// Every zone since the last break (GameWatcher.AllView): fed like the zone view, never reset by a zone change. Held while a
+    /// run is under way (<see cref="Secondary"/>): one set while it is, is held from the start.
+    /// </summary>
+    public SessionEngine? AllView { get => _all; set { _all = value; if (_secondary != null) value?.Pause(); } }
+    SessionEngine? _all;
     /// <summary>A break: this long with nothing farmed, and the next farming line starts the overall count over.</summary>
     public const double BreakMinutes = 15;
     /// <summary>Back from a break (<see cref="BreakMinutes"/>), or into or out of the Abyss: the watcher starts the overall count over.</summary>
@@ -232,13 +236,14 @@ public sealed partial class TrackerSession
     IEnumerable<SessionEngine> Views()
     {
         yield return ZoneView;
-        if (AllView is { } a) yield return a;
+        // the all-zones count is held while a run is under way: the run's loot and time are the run's (Secondary)
+        if (AllView is { } a && _secondary == null) yield return a;
         if (DayView is { } d) yield return d;
         if (HeldZone is { } hz) yield return hz;
         if (HeldAll is { } ha) yield return ha;
         // a move to another place, held until it is steady (SteadyDue)
         if (_moveZone is { } pz) yield return pz;
-        if (_moveAll is { } pa) yield return pa;
+        if (_moveAll is { } pa && _secondary == null) yield return pa;
     }
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
@@ -258,8 +263,23 @@ public sealed partial class TrackerSession
     /// <summary>Why the target bar can't be read right now ("the panel sits over it"); empty while it is read.</summary>
     public string TargetNote { get; private set; } = "";
     public string Kind { get; set; }
-    /// <summary>A second engine fed the same events: the farming run that sits on top of the always-on reader.</summary>
-    public SessionEngine? Secondary { get; set; }
+    /// <summary>
+    /// A second engine fed the same events: the farming run that sits on top of the always-on reader. While one is under way the
+    /// all-zones count is held (Steven, 2026-11-15: "switching to a run should stop the tracker's kinah per hour in a zone"):
+    /// no line of the run goes into it and its clocks stop; it goes on when the run stops, with none of the run's time in it.
+    /// </summary>
+    public SessionEngine? Secondary
+    {
+        get => _secondary;
+        set
+        {
+            bool was = _secondary != null;
+            _secondary = value;
+            if (!was && value != null) { _all?.Pause(); CrashLog.Note("a run started: the all-zones count is held until it stops"); }
+            else if (was && value == null) { _all?.ResumeFresh(); CrashLog.Note("the run stopped: the all-zones count goes on"); }
+        }
+    }
+    SessionEngine? _secondary;
     public Rectangle? Region { get; private set; }
     public bool ManualRegion { get; }
     public string? Zone => Engine.Zone;

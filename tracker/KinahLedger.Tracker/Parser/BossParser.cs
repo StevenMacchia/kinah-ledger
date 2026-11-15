@@ -128,8 +128,12 @@ public sealed class BossParser
     DateTime _alwaysActiveAt;
     /// <summary>What the Always on meter showed that ended last (its tally or a boss pull), settled: held until the next starts.</summary>
     Encounter? _alwaysEnded;
-    /// <summary>Always on, outside the three: this long with nobody of yours fighting and the next hit starts the meter from 0.</summary>
-    public const double AlwaysIdleSeconds = 120;
+    /// <summary>
+    /// Always on, outside the three: this long with nobody of yours fighting and the fight is over, its result held, the next
+    /// hit starting the meter from 0 (Steven, 2026-11-15: "it can stop when you stop DPSing for a few seconds while in the open
+    /// world and refresh"; it was 2 minutes).
+    /// </summary>
+    public const double AlwaysIdleSeconds = 5;
 
     /// <summary>How a run stood at a moment (a gap, an entry), to end it there when what came after was a new run of the instance.</summary>
     sealed record RunState(DateTime At, bool Partial, List<string> PartialWhy, int Gaps, DateTime LastAt);
@@ -890,7 +894,6 @@ public sealed class BossParser
             e.UncreditedWhy[dd.Reason] = e.UncreditedWhy.GetValueOrDefault(dd.Reason) + dd.Amount;
             return;
         }
-        e.CombatHit(dd.At);   // the group fighting (Encounter.CombatSecondsAt: a fight's DPS is over its combat time)
         var src = SourceOf(e, dd);
         src.Damage += dd.Amount;
         if (toBoss) src.BossDamage += dd.Amount;
@@ -1224,10 +1227,10 @@ public sealed class BossParser
                 CloseFight(f.LastAt, done, null);
                 _version++;
             }
-            // Always on, outside the three: two minutes with nobody of yours fighting, and the next hit starts the meter from 0
+            // Always on, outside the three: a few seconds with nobody of yours fighting, and the next hit starts the meter from 0
             if (_always is { } al && !Kept(_kind) && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
             {
-                EndAlways(_alwaysActiveAt, $"{AlwaysIdleSeconds / 60:0} minutes without fighting");
+                EndAlways(_alwaysActiveAt, $"{AlwaysIdleSeconds:0} seconds without fighting");
                 _version++;
             }
             // the open-world fight of Bosses only and Full run: gone after its pause, nothing kept
