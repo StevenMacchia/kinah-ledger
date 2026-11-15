@@ -158,31 +158,40 @@ public sealed partial class HudCard : IHudLook
         var (share, words, beat) = Chase(values);
         bool picked = _picks.Next(values, out _) != null;   // only a pickup just made flips, sweeps and lights (Ui/HudFreshPicks.cs)
         _streak.Show(values, counted, Moves);   // the hot streak bar fills and drains (Ui/HudStreak.cs)
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{V("farmDps")}"))
+        // in the Abyss (Steven, 2026-11-15): the hour in Abyss Points, in ink, the points so far on the session's line, and the
+        // kills, deaths and Kinah on the chase's line; the points' art where the ring of your best (a Kinah hour) sits elsewhere
+        bool abyss = Abyss(values);
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}"))
         {
             // a pickup: the hour and the session flip to their new figures and the edge lights (Ui/HudCard.Motion.cs)
             bool rose = TotalRose(V("total")) && picked;
+            _rateTone = abyss ? Ink : Gold;
             _rate.Inlines.Clear(); _rateRun = _totalRun = null;
-            if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
-            else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, weight: FontWeights.Bold));
-            else { _rateRun = R(V("rate"), 22, Gold, weight: FontWeights.Bold); _rate.Inlines.Add(_rateRun); _rate.Inlines.Add(R(" an hour", 12, Muted, weight: FontWeights.SemiBold)); }
+            if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R(Waiting(abyss), 13, Faint));
+            else if (warm) _rate.Inlines.Add(R(V("rate"), 16, _rateTone, weight: FontWeights.Bold));
+            else { _rateRun = R(V("rate"), 22, _rateTone, weight: FontWeights.Bold); _rate.Inlines.Add(_rateRun); _rate.Inlines.Add(R(abyss ? " AP an hour" : " an hour", 12, Muted, weight: FontWeights.SemiBold)); }
             if (_rateRun != null) Roll(_rate, "rate", () => _rateRun, V("rate"), rose, true);
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
             // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
-            if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
-            // your DPS while farming in the open world: small, on the session's line, never more (HudWindow.SetFarmDps)
-            if (V("farmDps").Length > 0) { if (_total.Inlines.Count > 0) _total.Inlines.Add(R("  ·  ", 11.5, Faint)); var fr = R(V("farmDps"), 12, Ink, weight: FontWeights.SemiBold); System.Windows.Documents.Typography.SetNumeralAlignment(fr, FontNumeralAlignment.Tabular); _total.Inlines.Add(fr); _total.Inlines.Add(R(" DPS", 11, Muted, weight: FontWeights.SemiBold)); }
+            if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(abyss ? " AP session" : " session", 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
             if (rose && Moves) EdgeGlow();
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten
-            bool ring = share >= 0 && counted && !warm;
+            bool ring = share >= 0 && counted && !warm && !abyss;
             // the ring sweeps to its new share and pulses once when you pass your best (Ui/HudCard.Motion.cs)
             if (ring) DrawRing(share, beat, rose); else { _ringHost.Children.Clear(); Motion.ForgetShare(_key + "ring"); _ringDrawn = false; }
-            _ringHost.Visibility = ring ? Visibility.Visible : Visibility.Collapsed;
-            _chase.Text = words.Length > 0 && counted && !warm ? (beat ? "★ " : "⚑ ") + words : "";
-            _chase.Foreground = Gold;   // the chase is gold beaten or not (colour pass, 2026-11-13); the ★ says it is beaten
-            _chase.Visibility = _chase.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (abyss && counted && V("abIcon").Length > 0) _ringHost.Children.Add(AbyssMark(V("abIcon"), 40));
+            _ringHost.Visibility = _ringHost.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _chase.Inlines.Clear();
+            if (abyss && counted)
+                foreach (var (fig, word, figTone) in AbyssStats(values))
+                {
+                    if (_chase.Inlines.Count > 0) _chase.Inlines.Add(R("  ·  ", 11.5, Faint));
+                    _chase.Inlines.Add(R(fig, 12, figTone, weight: FontWeights.SemiBold)); _chase.Inlines.Add(R(" " + word, 11.5, Muted, weight: FontWeights.SemiBold));
+                }
+            else if (words.Length > 0 && counted && !warm) _chase.Inlines.Add(R((beat ? "★ " : "⚑ ") + words, 11.5, Gold, weight: FontWeights.Bold));   // gold beaten or not (colour pass, 2026-11-13); the ★ says it is beaten
+            _chase.Visibility = _chase.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // the notice row: the reader paused (orange, with the sign), else a start or stop's flash, an update waiting, a flagged run
@@ -280,7 +289,7 @@ public sealed partial class HudCard : IHudLook
             _drop.Show(drop, Moves);   // a new drop makes its entrance (Ui/HudRare.Motion.cs)
             if (crafting) _farmBody.Visibility = Visibility.Collapsed;   // Show(null) brings the farming figures back
         }
-        if (drop != null && Changed("dropRate", V("rate"))) _drop.Rate(V("rate"));
+        if (drop != null && Changed("dropRate", V("rate") + abyss)) _drop.Rate(V("rate"), abyss);
     }
 
     /// <summary>

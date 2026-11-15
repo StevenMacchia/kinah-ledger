@@ -98,8 +98,6 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         var t = Tx(big, size, fg, FontWeights.Bold);
         System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
-        // your DPS rolls up to ten times a second (the Parser's rolling DPS): a fixed width, so the words after it never shift
-        if (unit == "DPS") { t.MinWidth = Math.Round(size * 2.9); t.TextAlignment = TextAlignment.Right; }
         sp.Children.Add(t);
         if (unit.Length > 0) { var u = Tx(unit, Math.Round(size * 0.68, 1), Muted, FontWeights.Medium); u.Margin = new Thickness(4, Math.Round(size * 0.18), 0, 0); sp.Children.Add(u); }
         return sp;
@@ -162,7 +160,32 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     // ---- the window's values
 
-    protected sealed record Figures(bool Counted, bool Warm, string Rate, string Total, string Dps, double Share, string ToBest, bool Beat, string Zone, string Clock, string Note, Brush NoteTone);
+    /// <param name="Abyss">In the Abyss (HudKit.Abyss): Rate is the Abyss Points hour and Total the points so far, then Stats (kills, deaths, Kinah) and the points' art (Icon).</param>
+    protected sealed record Figures(bool Counted, bool Warm, string Rate, string Total, double Share, string ToBest, bool Beat, string Zone, string Clock, string Note, Brush NoteTone,
+        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon)
+    {
+        /// <summary>A sign of the figures, for a look's redraw check.</summary>
+        public string Sig => $"{Counted}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{Icon}";
+        /// <summary>The hour's colour: gold for Kinah, ink for Abyss Points.</summary>
+        public Brush Tone => Abyss ? Ink : Gold;
+        /// <summary>The hour's word: "/h", or "AP/h" for Abyss Points; none while it warms up.</summary>
+        public string Unit => Warm ? "" : Abyss ? "AP/h" : "/h";
+        /// <summary>The session's word: "session", or "AP" for the points so far.</summary>
+        public string TotalWord => Abyss ? "AP" : "session";
+    }
+
+    /// <summary>The Abyss's stats as one small line ("9 PvP · 2 deaths · 266.5K Kinah"), figures in their colour, words muted.</summary>
+    protected static TextBlock StatsLine(Figures f, double size)
+    {
+        var t = Tx("", size, Muted, FontWeights.SemiBold);
+        foreach (var (fig, word, tone) in f.Stats)
+        {
+            if (t.Inlines.Count > 0) t.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
+            t.Inlines.Add(new System.Windows.Documents.Run(fig) { Foreground = tone, FontWeight = FontWeights.Bold });
+            t.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+        }
+        return t;
+    }
 
     protected Figures Read(IReadOnlyDictionary<string, string> v)
     {
@@ -170,6 +193,8 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         var (run, clock) = Time(V("time"));
         bool counted = run || V("total") is not ("" or "0") || Picks(v).Count > 0;
         var (share, words, beat) = Chase(v);
+        bool abyss = Abyss(v);
+        if (abyss) { share = -1; words = ""; }   // the ring of your best is a Kinah hour's: not beside the points
         string note; Brush tone;
         if (V("paused").Length > 0) { note = V("paused"); tone = Warn; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
@@ -177,7 +202,8 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
         else if (_acc.Length > 0) { note = _acc; tone = _accCheck ? Warn : Mint; }
         else { note = ""; tone = Muted; }
-        return new Figures(counted, V("warm") == "1", V("rate"), V("total"), V("farmDps"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone);
+        return new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
+            abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "");
     }
 
     // ---- a fight
@@ -219,7 +245,8 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 // ================================================================ Capsule
 
 /// <summary>
-/// Capsule: one pill. The ring of your best, the hour in gold, the session, your DPS while farming; the next watched timer as
+/// Capsule: one pill. The ring of your best, the hour in gold and the session (in the Abyss the points' hour, the points, the
+/// kills, deaths and Kinah); the next watched timer as
 /// a gold chip at the pill's end. A fight drops a slim meter under the pill: the boss, its clock, its HP as a hairline, and
 /// the members with a meter in their class's colour. A notice sits under the pill in its own small line.
 /// </summary>
@@ -254,25 +281,28 @@ sealed class HudCapsule : HudStackLook
 
     void Draw(Figures f)
     {
-        var sig = $"{f.Counted}|{f.Warm}|{f.Rate}|{f.Total}|{f.Dps}|{Math.Round(f.Share, 2)}|{f.Beat}|{f.Note}";
+        var sig = f.Sig;
         if (sig == _figSig) return;
         _figSig = sig;
         _row.Children.Clear();
+        bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
+        if (mark) _row.Children.Add(AbyssMark(f.Icon, 24));
         if (!f.Counted || f.Rate.Length == 0)
         {
-            var w = Tx("Waiting for the first count", 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(8, 4, 0, 4);
+            var w = Tx(Waiting(f.Abyss), 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(8, 4, 0, 4);
             _row.Children.Add(w);
         }
         else
         {
             if (f.Share >= 0 && !f.Warm) _row.Children.Add(BestRing(26, 2.5, f.Share, f.Beat, 9.5));
             var figs = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(f.Share >= 0 && !f.Warm ? 10 : 8, 0, 0, 0) };
-            var rate = Fig(f.Rate, f.Warm ? "" : "/h", Gold, 17); rate.Opacity = f.Warm ? .55 : 1;
+            var rate = Fig(f.Rate, f.Unit, f.Tone, 17); rate.Opacity = f.Warm ? .55 : 1;
             figs.Children.Add(rate);
-            if (f.Total.Length > 0) { figs.Children.Add(Rule()); figs.Children.Add(Fig(f.Total, "session", Ink, 13)); }
-            if (f.Dps.Length > 0) { figs.Children.Add(Rule()); figs.Children.Add(Fig(f.Dps, "DPS", Ink, 13)); }
+            if (f.Total.Length > 0) { figs.Children.Add(Rule()); figs.Children.Add(Fig(f.Total, f.TotalWord, Ink, 13)); }
             _row.Children.Add(figs);
         }
+        // the Abyss's kills, deaths and Kinah after the points, each its own figure on the pill
+        foreach (var (fig, word, tone) in f.Stats) { _row.Children.Add(Rule()); _row.Children.Add(Fig(fig, word, tone, 13)); }
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -354,8 +384,8 @@ sealed class HudCapsule : HudStackLook
 /// <summary>
 /// Meter: a raid meter. The header carries the context: the place and the run's clock while farming, or the boss, its
 /// HP (the header's own fill, red) and its clock in a fight; the next watched timer is a gold tab on its right. A fight's
-/// members are rows in their class's colour from the left, ranked. The Kinah line is the foot: the ring, the hour, the
-/// session and your DPS.
+/// members are rows in their class's colour from the left, ranked. The Kinah line is the foot: the ring, the hour and the
+/// session; in the Abyss the points' hour, the points, and the kills, deaths and Kinah under the hour.
 /// </summary>
 sealed class HudMeter : HudStackLook
 {
@@ -427,7 +457,7 @@ sealed class HudMeter : HudStackLook
     {
         var f = Read(values);
         _figs = f;
-        var sig = $"{f.Counted}|{f.Warm}|{f.Rate}|{f.Total}|{f.Dps}|{Math.Round(f.Share, 2)}|{f.Beat}|{f.Note}|{f.Zone}|{f.Clock}|{f.ToBest}|{_fight}";
+        var sig = $"{f.Sig}|{f.Zone}|{f.Clock}|{f.ToBest}|{_fight}";
         if (sig == _figSig) return;
         _figSig = sig;
         if (!_fight) { _title.Text = f.Zone.Length > 0 ? f.Zone : "Kinah Ledger"; _clock.Text = f.Clock; _clock.Foreground = Muted; }
@@ -450,17 +480,23 @@ sealed class HudMeter : HudStackLook
         _foot.Children.Clear(); _foot.ColumnDefinitions.Clear();
         _foot.Margin = new Thickness(10, _fight ? 6 : 9, 10, _fight ? 7 : 9);
         _foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _foot.ColumnDefinitions.Add(new ColumnDefinition()); _foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (!f.Counted || f.Rate.Length == 0) { _foot.Children.Add(Tx("Waiting for the first count", 12.5, Faint, FontWeights.SemiBold)); return; }
-        bool ring = f.Share >= 0 && !f.Warm;
-        if (ring) _foot.Children.Add(BestRing(_fight ? 22 : 34, _fight ? 2.2 : 3, f.Share, f.Beat, _fight ? 8.5 : 10.5));
-        var mid = new StackPanel { Margin = new Thickness(ring ? 10 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var rate = Fig(f.Rate, f.Warm ? "" : "/h", Gold, _fight ? 14 : 19); rate.Opacity = f.Warm ? .55 : 1;
-        mid.Children.Add(rate);
-        if (!_fight && f.ToBest.Length > 0) { var tb = Tx((f.Beat ? "★ " : "") + f.ToBest, 11, Muted, FontWeights.Medium); tb.Margin = new Thickness(0, 1, 0, 0); mid.Children.Add(tb); }
+        bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
+        if (mark) _foot.Children.Add(AbyssMark(f.Icon, _fight ? 22 : 32));
+        var mid = new StackPanel { Margin = new Thickness(mark ? 10 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(mid, 1); _foot.Children.Add(mid);
+        if (!f.Counted || f.Rate.Length == 0) mid.Children.Add(Tx(Waiting(f.Abyss), 12.5, Faint, FontWeights.SemiBold));
+        else
+        {
+            bool ring = f.Share >= 0 && !f.Warm;
+            if (ring) { _foot.Children.Add(BestRing(_fight ? 22 : 34, _fight ? 2.2 : 3, f.Share, f.Beat, _fight ? 8.5 : 10.5)); mid.Margin = new Thickness(10, 0, 0, 0); }
+            var rate = Fig(f.Rate, f.Unit, f.Tone, _fight ? 14 : 19); rate.Opacity = f.Warm ? .55 : 1;
+            mid.Children.Add(rate);
+            if (!_fight && f.ToBest.Length > 0) { var tb = Tx((f.Beat ? "★ " : "") + f.ToBest, 11, Muted, FontWeights.Medium); tb.Margin = new Thickness(0, 1, 0, 0); mid.Children.Add(tb); }
+        }
+        // the Abyss's kills, deaths and Kinah under the points' hour (not while a fight's rows take the room)
+        if (!_fight && f.Stats.Count > 0) { var st = StatsLine(f, 11); st.Margin = new Thickness(0, 1, 0, 0); mid.Children.Add(st); }
         var side = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        if (f.Total.Length > 0) { var s1 = Fig(f.Total, "session", Ink, 12); s1.HorizontalAlignment = HorizontalAlignment.Right; side.Children.Add(s1); }
-        if (!_fight && f.Dps.Length > 0) { var s2 = Fig(f.Dps, "DPS", Ink, 12); s2.HorizontalAlignment = HorizontalAlignment.Right; s2.Margin = new Thickness(0, 1, 0, 0); side.Children.Add(s2); }
+        if (f.Counted && f.Total.Length > 0) { var s1 = Fig(f.Total, f.TotalWord, Ink, 12); s1.HorizontalAlignment = HorizontalAlignment.Right; side.Children.Add(s1); }
         Grid.SetColumn(side, 2); _foot.Children.Add(side);
     }
 
@@ -556,8 +592,9 @@ sealed class HudMeter : HudStackLook
 
 /// <summary>
 /// Float: no panel. The figures straight over the game with a dark halo round every letter: the timers due on one line, a
-/// fight's boss with its clock, a red hairline of its HP and the members on hairline meters, then the ring, the hour in gold,
-/// the session and your DPS, and the chase under them. The panel's opacity is the halo's.
+/// fight's boss with its clock, a red hairline of its HP and the members on hairline meters, then the ring, the hour in gold
+/// and the session, and the chase under them (in the Abyss the points' hour and the points, then the kills, deaths and
+/// Kinah). The panel's opacity is the halo's.
 /// </summary>
 sealed class HudFloat : HudStackLook
 {
@@ -585,25 +622,28 @@ sealed class HudFloat : HudStackLook
     public override void Update(IReadOnlyDictionary<string, string> values)
     {
         var f = Read(values);
-        var sig = $"{f.Counted}|{f.Warm}|{f.Rate}|{f.Total}|{f.Dps}|{Math.Round(f.Share, 2)}|{f.Beat}|{f.Note}|{f.ToBest}";
+        var sig = $"{f.Sig}|{f.ToBest}";
         if (sig == _figSig) return;
         _figSig = sig;
         _line.Children.Clear();
-        if (!f.Counted || f.Rate.Length == 0) _line.Children.Add(Tx("Waiting for the first count", 13, Muted, FontWeights.SemiBold));
+        bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
+        if (mark) _line.Children.Add(AbyssMark(f.Icon, 28));
+        var figs = new StackPanel { Margin = new Thickness(mark ? 10 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        if (!f.Counted || f.Rate.Length == 0) figs.Children.Add(Tx(Waiting(f.Abyss), 13, Muted, FontWeights.SemiBold));
         else
         {
             bool ring = f.Share >= 0 && !f.Warm;
-            if (ring) _line.Children.Add(BestRing(30, 2.5, f.Share, f.Beat, 10));
-            var figs = new StackPanel { Margin = new Thickness(ring ? 10 : 0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            if (ring) { _line.Children.Add(BestRing(30, 2.5, f.Share, f.Beat, 10)); figs.Margin = new Thickness(10, 0, 0, 0); }
             var top = new StackPanel { Orientation = Orientation.Horizontal };
-            var rate = Fig(f.Rate, f.Warm ? "" : "/h", Gold, 20); rate.Opacity = f.Warm ? .6 : 1;
+            var rate = Fig(f.Rate, f.Unit, f.Tone, 20); rate.Opacity = f.Warm ? .6 : 1;
             top.Children.Add(rate);
-            var rest = (f.Total.Length > 0 ? $"   {f.Total} session" : "") + (f.Dps.Length > 0 ? $"   {f.Dps} DPS" : "");
-            if (rest.Length > 0) { var r = Tx(rest, 12, Ink, FontWeights.SemiBold); r.Margin = new Thickness(0, 4, 0, 0); top.Children.Add(r); }
+            if (f.Total.Length > 0) { var r = Tx($"   {f.Total} {f.TotalWord}", 12, Ink, FontWeights.SemiBold); r.Margin = new Thickness(0, 4, 0, 0); top.Children.Add(r); }
             figs.Children.Add(top);
             if (f.ToBest.Length > 0) figs.Children.Add(Tx((f.Beat ? "★ " : "") + f.ToBest, 11, Muted, FontWeights.Medium));
-            _line.Children.Add(figs);
         }
+        // the Abyss's kills, deaths and Kinah under the points
+        if (f.Stats.Count > 0) figs.Children.Add(StatsLine(f, 11.5));
+        _line.Children.Add(figs);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
     }

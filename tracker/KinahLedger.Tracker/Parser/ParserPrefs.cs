@@ -62,8 +62,6 @@ public sealed class ParserPrefs
     public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" ? key : StandardLook;
     /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
     public bool DpsActive { get; set; }
-    /// <summary>Your DPS small on the Kinah overlay's line while fighting in the open world or the Abyss (on by default: Steven asked for it).</summary>
-    public bool FarmDps { get; set; } = true;
     /// <summary>
     /// The meter's width at 100%, in DIPs (Steven, 2026-11-14: "maybe an option to make it wider?"): 330 by default, 300 to
     /// 640; set by dragging the meter's left or right edge, or Settings › In game › Parser › Width.

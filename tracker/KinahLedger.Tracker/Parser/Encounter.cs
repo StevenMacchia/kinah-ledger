@@ -307,7 +307,7 @@ public sealed class Encounter : IJsonOnDeserialized
     }
 
     /// <summary>
-    /// Your DPS while farming (the Kinah line's small figure): your damage over your fighting time (Fighter.FightingSeconds),
+    /// Your DPS while farming (the Parser page's figure): your damage over your fighting time (Fighter.FightingSeconds),
     /// so the walk between monsters doesn't pull it down; 0 before a hit of yours.
     /// </summary>
     public double FarmDps() => You is { Damage: > 0 } me ? me.Damage / Math.Max(FarmMinSeconds, me.FightingSeconds) : 0;
@@ -373,8 +373,29 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The member with the fight's highest DPS (the one TOP DPS marks), or null when <see cref="TopsShown"/> is off.</summary>
     public Fighter? TopDps(DateTime now) => !TopsShown ? null : Members.Where(f => Figure(f) > 0).OrderByDescending(f => Dps(f, End ?? now)).ThenByDescending(Figure).FirstOrDefault();
 
-    /// <summary>The fight's top healer (TOP HEALS), or null: only when heal figures are known for this fight.</summary>
-    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.Healing > 0).OrderByDescending(f => f.Healing).FirstOrDefault();
+    /// <summary>
+    /// The fight's top healer (TOP HEALS), or null: only when heal figures are known for this fight, and only someone who healed
+    /// another member (a damage dealer's own self-heals and potions never make them the top healer). Ranked by healing done,
+    /// which is exact; the effective part is an estimate (<see cref="Fighter.HealingEstimated"/>).
+    /// </summary>
+    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.HealingOthers > 0).OrderByDescending(f => f.Healing).ThenByDescending(f => f.HealingOthers).FirstOrDefault();
+
+    // ---- healing (klnet's heals on the hit stream) ----
+
+    /// <summary>Some member's healing is known in this record (a decoder that reads heals, and a heal came).</summary>
+    [JsonIgnore] public bool HasHealing => Members.Any(f => f.Healing > 0);
+
+    /// <summary>
+    /// A member's healing per second: their healing done (self-heals and potions in) over the same seconds the group's DPS is
+    /// over (the fight's real time, a run's boss pulls; never under <see cref="MinDpsSeconds"/>); null when they healed nothing.
+    /// </summary>
+    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+
+    /// <summary>The effective part per second (overheal left out): an estimate when <see cref="Fighter.HealingEstimated"/> says so.</summary>
+    public double? EffectiveHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+
+    /// <summary>The group's healing done in the record.</summary>
+    [JsonIgnore] public long GroupHealing => Members.Sum(f => f.Healing);
 
     /// <summary>What a member's meter bar measures: their figure when damage is known, else Combat Power.</summary>
     public double Measure(Fighter f) => HasDamage ? Figure(f) : f.CombatPower;
@@ -492,8 +513,28 @@ public sealed class Fighter
     /// <summary>Damage to every target, and to the boss alone (Encounter.TargetsSplit; a run's bosses, a wave's everything).</summary>
     public long Damage { get; set; }
     public long BossDamage { get; set; }
-    /// <summary>Healing done in the fight, when the record carries it (0 = not known: nothing is shown).</summary>
+    /// <summary>
+    /// Healing done in the fight, in HP as dealt: on others, on themselves and potions (0 = none or not known: nothing is shown).
+    /// Exact: the heals as the game dealt them. Shields are never in it.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long Healing { get; set; }
+    /// <summary>
+    /// The part of <see cref="Healing"/> that fit under the target's max HP (overheal left out). Each heal's part is cut at the
+    /// target's HP as last seen; where the target's HP confirmed it, it is exact, else an estimate (<see cref="HealingEstimated"/>).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long HealingEffective { get; set; }
+    /// <summary>The part of <see cref="HealingEffective"/> no HP change confirmed: above 0, the effective figure is an estimate.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long HealingEstimated { get; set; }
+    /// <summary>Healing the member did on themselves (their own skills and potions), within <see cref="Healing"/>.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long HealingSelf { get; set; }
+    /// <summary>Of that, potions.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long HealingPotions { get; set; }
+    /// <summary>Healing done on other members.</summary>
+    [JsonIgnore] public long HealingOthers => Healing - HealingSelf;
+    /// <summary>The effective healing is an estimate (some of it wasn't confirmed by the target's HP).</summary>
+    [JsonIgnore] public bool HealingIsEstimate => HealingEstimated > 0;
+    /// <summary>Healing by ability (a heal over time's ticks under their negative effect id, as damage over time is): a member's breakdown.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<HealShare>? Heals { get; set; }
     public int Deaths { get; set; }
     /// <summary>Damage by ability (the game's skill id; 0: damage over time no skill named), with its hits: a member's breakdown.</summary>
     public List<AbilityShare> Abilities { get; set; } = new();
@@ -557,7 +598,7 @@ public sealed class Fighter
 
     /// <summary>
     /// Seconds spent fighting: stretches of hits with gaps of at most <see cref="StretchGapSeconds"/>, each at least 1 s, the
-    /// one under way included. The Kinah line's farming DPS is over this, so walking between monsters doesn't lower it.
+    /// one under way included. The farming DPS is over this, so walking between monsters doesn't lower it.
     /// </summary>
     public double FightingSeconds => StretchesSeconds + (StretchStart is { } s && LastHit is { } l ? Math.Max(1, (l - s).TotalSeconds) : 0);
 
@@ -627,6 +668,17 @@ public sealed class AbilityShare
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? StreamDamage { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindDamage { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindMax { get; set; }
+}
+
+/// <summary>Healing by one ability: healing done (HP as dealt), its effective part, the heals (ticks for a heal over time), and how many were on the healer.</summary>
+public sealed class HealShare
+{
+    public int Skill { get; set; }
+    public long Healing { get; set; }
+    public long Effective { get; set; }
+    public int Hits { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long Self { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Potion { get; set; }
 }
 
 /// <summary>Damage a member took from one attacker's skill: Source is the boss's name when the boss dealt it, else "".</summary>

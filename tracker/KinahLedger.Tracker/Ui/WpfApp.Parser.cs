@@ -125,25 +125,20 @@ public static partial class WpfApp
                 o.Close();
             }
         // expanded by default (Steven, 2026-11-14): the Kinah overlay alone, then with the Parser's section above the Kinah
-        // line (a pull under way, a run, the result held after a kill), the Strip and the Card looks
-        // and farming in the open world (Steven, 2026-11-14: "in a small number somewhere ... never large"): your DPS, small on
-        // the Kinah line in each look, the overlay no bigger
-        var kinahShots = new List<(string File, string Look, Encounter? E, DateTime At, string Farm)>
+        // line (a pull under way, a run, the result held after a kill), the Strip and the Card looks. Farming in the open world
+        // shows no DPS on the Kinah line (Steven, 2026-11-15: the Parser has its own meter now)
+        var kinahShots = new List<(string File, string Look, Encounter? E, DateTime At)>
         {
-            ("ui-parser-kinah-overlay.png", HudLooks.Strip, null, now, ""),
-            ("ui-parser-kinah-overlay-live.png", HudLooks.Strip, live, now, ""),
-            ("ui-parser-kinah-overlay-run.png", HudLooks.Strip, liveRun, now, ""),
-            ("ui-parser-kinah-overlay-killed.png", HudLooks.Strip, kill, kill.End!.Value, ""),
-            ("ui-parser-kinah-overlay-card-live.png", HudLooks.Card, live, now, ""),
-            ("ui-parser-kinah-farming.png", HudLooks.Strip, null, now, "13.2K"),
-            ("ui-parser-kinah-farming-card.png", HudLooks.Card, null, now, "13.2K"),
-            ("ui-parser-kinah-farming-ticker.png", HudLooks.Ticker, null, now, "13.2K"),
+            ("ui-parser-kinah-overlay.png", HudLooks.Strip, null, now),
+            ("ui-parser-kinah-overlay-live.png", HudLooks.Strip, live, now),
+            ("ui-parser-kinah-overlay-run.png", HudLooks.Strip, liveRun, now),
+            ("ui-parser-kinah-overlay-killed.png", HudLooks.Strip, kill, kill.End!.Value),
+            ("ui-parser-kinah-overlay-card-live.png", HudLooks.Card, live, now),
         };
-        foreach (var (file, look, e, at, farm) in kinahShots)
+        foreach (var (file, look, e, at) in kinahShots)
         {
             var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Update(kinah);
-            h.SetFarmDps(farm);
             h.ShowParser(e, at, e?.ModeKind ?? ParserMode.Bosses, details: false);
             h.SetKinahHidden(e != null);   // a boss fight is a dungeon's: the meter replaces the Kinah line
             h.Show();
@@ -163,14 +158,13 @@ public static partial class WpfApp
             {
                 ("ui-parser-kinah-timer.png", HudLooks.Strip, false, true), ("ui-parser-kinah-stack.png", HudLooks.Strip, true, true), ("ui-parser-kinah-stack-card.png", HudLooks.Card, true, true),
             };
-            // the design pass's looks (Ui/HudStackLooks.cs): farming (your DPS), a timer due, a boss fight with a timer due
+            // the design pass's looks (Ui/HudStackLooks.cs): farming, a timer due, a boss fight with a timer due
             foreach (var look in new[] { HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
                 stackShots.AddRange(new[] { ($"ui-hud-{look}-farming.png", look, false, false), ($"ui-hud-{look}-timer.png", look, false, true), ($"ui-hud-{look}-boss.png", look, true, true) });
             foreach (var (file, look, withParser, withTimers) in stackShots)
             {
                 var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
                 h.Update(kinah);
-                h.SetFarmDps(withParser ? "" : "13.2K");
                 if (withTimers) h.ShowTimers(due, now);
                 if (withParser) { h.ShowParser(live, now, live!.ModeKind, details: false); h.SetKinahHidden(true); }
                 h.Show();
@@ -575,22 +569,22 @@ public static partial class WpfApp
             if (ws != null) { ws.Value = wBefore; DoEvents(); }
             sws.Separate.IsChecked = false; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
         }
-        check(sws.Farm?.IsChecked == true, "Options › In game › Parser: Open-world DPS on the Kinah line, on by default (Steven asked for it)");
-        // farming: your DPS small on the Kinah line in each look; the overlay never grows for it
-        foreach (var look in new[] { HudLooks.Strip, HudLooks.Card, HudLooks.Ticker })
+        // the Kinah overlay's small DPS went (Steven, 2026-11-15: "get rid of the dps meter on the kinah tracker overlay only since
+        // we have the dps meters now as a separate thing"): no switch for it, and no look draws a DPS on the Kinah line, even
+        // handed an old "farmDps" value; the Parser's own meter is the one place
+        var parserTitles = opt.ParserSwitchTitlesForTest;
+        check(!parserTitles.Any(t => t.Contains("DPS on the Kinah", StringComparison.OrdinalIgnoreCase) || t.Contains("Open-world DPS", StringComparison.OrdinalIgnoreCase)) && parserTitles.Contains("Parser inside the Kinah overlay"),
+            "Options › In game › Parser: no Open-world DPS on the Kinah line switch; Parser inside the Kinah overlay stays (" + string.Join(", ", parserTitles) + ")");
+        check(!typeof(KinahLedger.Parser.ParserPrefs).GetProperties().Any(p => p.Name == "FarmDps"), "the Parser's settings keep no Kinah-line DPS choice");
+        foreach (var look in HudLooks.All.Select(l => l.Key))
         {
             bool still0 = Motion.Still; Motion.Still = true;
             var hf = new HudWindow(null, look, still: true) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = 900, ShowActivated = false };
-            hf.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour", ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04" });
+            hf.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour", ["rate"] = "1.27M", ["total"] = "894K", ["time"] = "12:04", ["run"] = "1", ["farmDps"] = "1.2K" });
             hf.Show(); DoEvents();
-            double h0 = hf.ActualHeight;
-            hf.SetFarmDps("1.2K"); DoEvents();
-            bool shown = ParserTexts((DependencyObject)hf.Content).Texts.Any(x => x.Contains("1.2K"));
-            double h1 = hf.ActualHeight;
-            hf.SetFarmDps(""); DoEvents();
-            bool gone = !ParserTexts((DependencyObject)hf.Content).Texts.Any(x => x.Contains("1.2K"));
-            check(shown && gone && Math.Abs(h1 - h0) < 1.5 && hf.ParserHeight == 0,
-                $"farming ({look}): your DPS small on the Kinah line, gone with the fight, the overlay no taller ({h0:0} / {h1:0})");
+            var texts = VisibleTexts(hf);
+            check(texts.Any(x => x.Contains("1.27M")) && !texts.Any(x => x.Contains("1.2K") || x.Contains("DPS")),
+                $"farming ({look}): the Kinah line shows the hour and no DPS figure ({string.Join(" | ", texts.Take(8))})");
             hf.Close(); Motion.Still = still0;
         }
         // in a dungeon the meter replaces the Kinah line (Steven, 2026-11-14), a timer due stays in sight, and leaving brings it back
@@ -737,6 +731,24 @@ public static partial class WpfApp
         }
         Walk(w);
         return found;
+    }
+
+    /// <summary>The words of every text block the window shows now (shown and laid out), the visual tree's too, in tree order.</summary>
+    internal static List<string> VisibleTexts(Window w)
+    {
+        var list = new List<string>();
+        var seen = new HashSet<DependencyObject>();
+        void Walk(DependencyObject d)
+        {
+            if (!seen.Add(d)) return;
+            if (d is UIElement u && !u.IsVisible) return;
+            if (d is System.Windows.Controls.TextBlock t && t.ActualWidth > 0 && BlockText(t) is { Length: > 0 } s && s.Trim().Length > 0) list.Add(s);
+            foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
+            if (d is Visual or System.Windows.Media.Media3D.Visual3D)
+                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(w);
+        return list;
     }
 
     /// <summary>Every text block under <paramref name="root"/>, the visual tree's too.</summary>

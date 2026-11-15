@@ -29,12 +29,12 @@ public static partial class WpfApp
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         w.ShowParserReplay(parser, BossParser.ModeOf(mode));
-        // the Kinah overlay as live, off every screen: its line's farming figure is drawn and timed (still: no anchoring)
+        // the Kinah overlay as live, off every screen: the meter in it is drawn and timed (still: no anchoring)
         var hud = new HudWindow(null, HudLooks.Strip, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
         hud.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour" });
         hud.Show();
         w.AttachHudForTest(hud);
-        MainWindow.ParserLatencyStats.Clear(); MainWindow.FarmLatencyStats.Clear(); MainWindow.FarmTextChanges = 0; MainWindow.MeterDrawStats.Clear();
+        MainWindow.ParserLatencyStats.Clear(); MainWindow.MeterDrawStats.Clear();
         // the frames drawn while the meter moves: the gap from one to the next (a frame over ~17 ms late is a dropped one)
         var frameGaps = new ParserLatency();
         TimeSpan lastFrame = TimeSpan.Zero;
@@ -49,7 +49,6 @@ public static partial class WpfApp
         };
         System.Windows.Media.CompositionTarget.Rendering += onFrame;
         var frameClock = Stopwatch.StartNew();
-        int farmSeconds = 0;
         int bossEvents = 0, killEvents = 0, gaps = 0;
         double fedSeconds = 0;
         bool done = false;
@@ -132,7 +131,7 @@ public static partial class WpfApp
         // the window's own loop runs meanwhile; the session's pass part (the stale check, a fight's end) each second, as live
         var frame = new System.Windows.Threading.DispatcherFrame();
         var tick = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        tick.Tick += (_, _) => { parser.Tick(DateTime.UtcNow); if (parser.Farm is { HasDamage: true }) farmSeconds++; if (done) { tick.Stop(); frame.Continue = false; } };
+        tick.Tick += (_, _) => { parser.Tick(DateTime.UtcNow); if (done) { tick.Stop(); frame.Continue = false; } };
         tick.Start();
         System.Windows.Threading.Dispatcher.PushFrame(frame);
         DoEvents();
@@ -144,8 +143,6 @@ public static partial class WpfApp
         var (d50, d95, dmax, dn) = MainWindow.MeterDrawStats.Stats();
         var (g50, g95, gmax, gn) = frameGaps.Stats();
         Console.WriteLine($"meter draws ({dn:N0}, the window's own time): median {d50:0.0} ms, 95th percentile {d95:0.0} ms, worst {dmax:0.0} ms; frames: {frames / Math.Max(1, frameClock.Elapsed.TotalSeconds):0} a second, gap median {g50:0.0} ms, 95th percentile {g95:0.0} ms, worst {gmax:0} ms");
-        var (f50, f95, fmax, fn) = MainWindow.FarmLatencyStats.Stats();
-        Console.WriteLine($"the Kinah line's farming DPS: {MainWindow.FarmTextChanges:N0} changes over {farmSeconds} s of farming ({(farmSeconds > 0 ? MainWindow.FarmTextChanges / (double)farmSeconds : 0):0.0} a second); game event to the changed figure on screen ({fn:N0}): median {f50:0} ms, 95th percentile {f95:0} ms, worst {fmax:0} ms");
         hud.Close();
         w.Close();
         return n > 0 && p95 < 100 ? 0 : 1;

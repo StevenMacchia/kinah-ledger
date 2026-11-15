@@ -1148,6 +1148,8 @@ public partial class MainWindow : Window
         _hudValues["kinah"] = _rateWarming ? "" : Fk(kinah / h);
         _hudValues["loot"] = s.Priced > 0 && rateHasKinah && !_rateWarming ? Fk(s.Value / h) : "";
         _hudValues["total"] = Fk(totalNow);
+        // in the Abyss the overlay follows the hero: Abyss Points an hour, the points so far, kills, deaths and Kinah (Ui/MainWindow.HudLooks.cs)
+        HudAbyssValues(e, h, kinah, t.Kills, inAbyss && _mode != Mode.Gather);
         // the Share picture's This session: this count's zone, time and total (Ui/MainWindow.Share.cs)
         SetShareSession(e, elapsed, totalNow);
         ShowTable(e, elapsed, s);
