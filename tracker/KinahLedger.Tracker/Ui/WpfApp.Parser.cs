@@ -35,6 +35,8 @@ public static partial class WpfApp
                     if (skin != null) Skins.Apply(skin);
                     w.ShowDemo("Open world", null);
                     DoEvents();
+                    // crit is off as shipped; KL_CRIT=result3 or mark08 renders it on (after the window, which sets it from its prefs)
+                    Encounter.CritKey = Encounter.CritKeyOf(Environment.GetEnvironmentVariable("KL_CRIT"));
                 }
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }

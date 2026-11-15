@@ -63,6 +63,11 @@ public sealed class ParserPrefs
     public string Targets { get; set; } = "boss";
     /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, four rows. A click on the meter switches it.</summary>
     public bool Expanded { get; set; }
+    /// <summary>
+    /// Which hit kind the Parser shows as crit: "none" (the default: no crit shown), "result3" or "mark08", the two
+    /// candidates the hits carry. No switch in Settings: set by a release once the game's own figures confirm one.
+    /// </summary>
+    public string CritSource { get; set; } = "none";
 
     /// <summary>Options saved the Parser's switches: the window reads them again.</summary>
     public static event Action? Saved;

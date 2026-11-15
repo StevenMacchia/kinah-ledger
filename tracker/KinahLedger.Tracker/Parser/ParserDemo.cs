@@ -71,6 +71,13 @@ public static class ParserDemo
                 {
                     var who = Group.FirstOrDefault(g => g.Id == src);
                     int skill = who != null && Skills.TryGetValue(who.Class, out var sk) ? sk[(int)((s / 3 + src) % sk.Length) % sk.Length] : 0;
+                    // the hit under it (store v2), with the two crit candidates' marks: result 3 about 40% of hits, mark 0x08 about 8%
+                    if (src != 0)
+                    {
+                        int cast = (s / 3) % 250, roll = (int)((amount * 31 + s * 7 + src * 13) % 100);   // from the hit itself: the sample's other figures stay as they were
+                        p.Take(new CastMade(at, src, src, skill, cast));
+                        p.Take(new HitDealt(at, src, src, id, amount, skill, cast, 1, false, false, roll < 40 ? 3 : 2, roll % 12 == 0 ? 0x08 : 0, 0, 0));
+                    }
                     p.Take(new DamageDealt(at, src, id, amount, group ? "" : who?.Name ?? "", who?.You == true, skill, 1 + (int)(amount % 3)));
                     hp -= amount;
                     p.Take(new BossHealth(at, id, Math.Max(0, hp), max));
