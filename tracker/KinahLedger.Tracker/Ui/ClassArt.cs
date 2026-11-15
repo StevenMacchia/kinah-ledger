@@ -83,26 +83,68 @@ public static class ClassArt
     public static string Title(string cls) => Key(cls) is { Length: > 0 } k ? char.ToUpperInvariant(k[0]) + k[1..] : cls.Trim();
 
     /// <summary>
-    /// A row with a meter bar behind it (a classic meter: the bar's length is the row's share of the top row's figure), in
-    /// the class's colour at about a third, with a solid edge at its left; the row's own content drawn on top.
+    /// A member's name in their class's colour, kept readable (the parser polish, 2026-11-14: one colour per member wherever
+    /// they appear): on a dark surface the colour lifted halfway to white, on a light one taken halfway to black.
     /// </summary>
-    public static Grid MeterRow(FrameworkElement content, string? cls, double share, bool other = false, double radius = 6)
+    public static Color NameColor(string? cls, bool dark = true)
+    {
+        if (Key(cls).Length == 0) return dark ? Color.FromRgb(0xED, 0xEF, 0xF5) : Color.FromRgb(0x1A, 0x1D, 0x26);
+        var c = ColorOf(cls);
+        byte Mix(byte v, byte to, double t) => (byte)Math.Round(v + (to - v) * t);
+        return dark ? Color.FromRgb(Mix(c.R, 255, 0.55), Mix(c.G, 255, 0.55), Mix(c.B, 255, 0.55)) : Color.FromRgb(Mix(c.R, 0, 0.5), Mix(c.G, 0, 0.5), Mix(c.B, 0, 0.5));
+    }
+
+    /// <summary>The name's colour as a frozen brush, for the window's skin (dark or light) or the overlays (always dark).</summary>
+    public static SolidColorBrush NameBrush(string? cls, bool dark = true) => Frozen(NameColor(cls, dark));
+
+    /// <summary>
+    /// A row with a meter bar behind it (Steven, 2026-11-14: "thicker bars that act as a background for the character"):
+    /// the bar's length is the row's share of the top row's figure. Since the parser polish it is drawn as the window's
+    /// other bars are (QBar): a quiet track the row's full width so every row reads as one table, the fill in the class's
+    /// colour fading from its solid edge at the left, and a light gloss on its top edge; the row's own content on top.
+    /// <paramref name="reserveRight"/>: the bar stays behind the member, ending before the figure columns at the right (the
+    /// review's first finding: a bar's end cut through the Damage figure), so the figures sit on the plain track.
+    /// <paramref name="light"/>: a light skin, where the track needs more colour to keep the rows' bounds.
+    /// </summary>
+    public static Grid MeterRow(FrameworkElement content, string? cls, double share, bool other = false, double radius = 8, string? slideKey = null, double reserveRight = 0, bool light = false)
     {
         var host = new Grid();
-        var c = other ? System.Windows.Media.Color.FromRgb(0x86, 0x8D, 0xA1) : ColorOf(cls);
+        var c = other ? Color.FromRgb(0x86, 0x8D, 0xA1) : ColorOf(cls);
+        var track = new Border { CornerRadius = new CornerRadius(radius), Background = Frozen(Color.FromArgb(light ? (byte)0x24 : (byte)0x12, c.R, c.G, c.B)), IsHitTestVisible = false };
+        var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(other ? (byte)0x2C : (byte)0x4A, c.R, c.G, c.B), 0));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(other ? (byte)0x14 : (byte)0x1E, c.R, c.G, c.B), 1));
+        fade.Freeze();
         var bar = new Border
         {
-            HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(radius),
-            Background = Frozen(System.Windows.Media.Color.FromArgb(other ? (byte)0x30 : (byte)0x55, c.R, c.G, c.B)),
-            BorderBrush = Frozen(System.Windows.Media.Color.FromArgb(0xE6, c.R, c.G, c.B)), BorderThickness = new Thickness(3, 0, 0, 0),
-            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(radius), Background = fade, IsHitTestVisible = false,
+            // the gloss: a hairline of light along the top, as the window's progress bars have
+            Child = new Border { CornerRadius = new CornerRadius(radius, radius, 0, 0), Height = Math.Max(2, radius), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(1, 1, 1, 0),
+                Background = Gloss },
         };
+        var cap = new Border { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(radius, 0, 0, radius), Background = Frozen(Color.FromArgb(0xF2, c.R, c.G, c.B)), IsHitTestVisible = false };
         var frac = Math.Clamp(double.IsFinite(share) ? share : 0, 0, 1);
-        host.SizeChanged += (_, _) => bar.Width = frac <= 0 ? 0 : Math.Max(6, host.ActualWidth * frac);
+        double shown = frac;
+        void Apply(double v) { shown = v; double room = host.ActualWidth - reserveRight; if (room > 0) bar.Width = v <= 0 ? 0 : Math.Max(8, room * v); }
+        host.SizeChanged += (_, _) => Apply(shown);
+        // the bar slides to its new length as damage lands (Ui/Motion.cs), when the caller names it
+        if (slideKey != null) host.Loaded += (_, _) => Motion.Slide(bar, slideKey, frac, Apply);
+        host.Children.Add(track);
         host.Children.Add(bar);
+        host.Children.Add(cap);
         host.Children.Add(content);
         host.Tag = frac;   // the share, for the tests
         return host;
+    }
+
+    static readonly Brush Gloss = MakeGloss();
+    static Brush MakeGloss()
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF), 0));
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 1));
+        b.Freeze();
+        return b;
     }
 
     /// <summary>

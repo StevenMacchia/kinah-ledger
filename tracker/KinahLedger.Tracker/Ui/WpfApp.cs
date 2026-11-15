@@ -887,6 +887,7 @@ public static partial class WpfApp
         {
             var tw = w;
             TimersOverlay.InvisibleForTest = true;   // the strips these checks open are never seen on the player's screen
+            BossWindow.OffscreenForTest = true;      // nor the Pop out window (beside the parked main window it was clamped onto a screen)
             tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             tw.TimersSampleForShot("live");
             Click(tw.TimersTab); DoEvents();
@@ -2200,6 +2201,16 @@ public static partial class WpfApp
             o.Scroller.ScrollToVerticalOffset(Math.Max(0, o.Scroller.VerticalOffset + at.Y - 70));
             DoEvents();
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-look{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
+        // In game at the Parser's group (the Parser page's "Look" link lands here): its look row, each look in a boss fight
+        {
+            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            DoEvents();
+            o.ShowParserLook();
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-parser{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
         // In game once more, scrolled to the end: the panel's rows below the fold (opacity, size and position)

@@ -218,6 +218,7 @@ public sealed partial class HudWindow : Window
         SizeChanged += (_, _) => PlacePending();
         AddParserSection();   // the Parser's section above the Kinah line (Ui/HudWindow.Parser.cs)
         AddTimerSection();    // the timer line on top of both (Ui/HudWindow.Timers.cs)
+        AddWidthDrag();       // the meter's edges widen it (Ui/HudWindow.Width.cs)
     }
 
     /// <summary>The frame's corner and padding for these figures: the one-line feed (the default) is the tighter one. The Parser's panel takes the same (Ui/ParserOverlay.cs).</summary>
@@ -581,6 +582,18 @@ public sealed partial class HudWindow : Window
     /// The panel in a look, drawn from these values as the layout renders draw it, to show inside another window (Options ›
     /// In game shows the three looks with the game closed). Nothing animates, and the live panel is left alone.
     /// </summary>
+    /// <summary>A look's face in a boss fight, from sample figures (In game › Parser's look row): the pull, the group, the Kinah line.</summary>
+    public static FrameworkElement PreviewFight(string look, IReadOnlyDictionary<string, string> values, KinahLedger.Parser.Encounter fight, DateTime now)
+    {
+        var h = new HudWindow(null, look, still: true);
+        h.Update(values);
+        h.ShowParser(fight, now, fight.ModeKind, false);
+        var face = (FrameworkElement)h.Content;
+        h.Content = null;
+        h.Close();
+        return face;
+    }
+
     public static FrameworkElement Preview(string look, IEnumerable<string>? fields, IReadOnlyDictionary<string, string> values, string? accuracy = null)
     {
         var h = new HudWindow(fields, look, still: true);

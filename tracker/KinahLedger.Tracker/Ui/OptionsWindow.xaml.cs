@@ -261,6 +261,7 @@ public partial class OptionsWindow : Window
         if (_loading || key == _edit.HudLook) return;
         Edit(_edit with { HudLook = key });
         BuildHudLooks(key);
+        DrawParserLooks();   // In game › Parser's look row shows the same choice
     }
 
     void Wire()
@@ -442,7 +443,9 @@ public partial class OptionsWindow : Window
     void OnClosingOptions(object? sender, CancelEventArgs e)
     {
         EndCapture();
-        if (!_closeConfirmed && (_edit != _saved || _resetSpot))
+        // a window parked off every screen (the self-tests and renders) never asks: its question would open on the player's screen
+        bool parked = Left < -5000 || Top < -5000;
+        if (!_closeConfirmed && !parked && (_edit != _saved || _resetSpot))
         {
             var r = MessageBox.Show(this, "Save your changes to Kinah Ledger's options?", "Kinah Ledger", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }
@@ -454,6 +457,7 @@ public partial class OptionsWindow : Window
             }
         }
         if (_edit.Skin != _saved.Skin || Skins.Current != _saved.Skin) _host.ApplySkin(_saved.Skin);   // a theme being tried goes back
+        EndParserWidthPreview();   // and the meter at its saved width (Ui/OptionsWindow.Parser.cs)
         _host.EndHudPreview();   // and the panel as it was saved: switch, figures, lock, opacity, size and spot
         _host.EndWindowScalePreview();   // and the window at its saved size
     }

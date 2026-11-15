@@ -499,6 +499,9 @@ public static class ParserTests
             Check(judgment is { Damage: 655_000, Hits: 24 } && Math.Abs(judgment.Average - 655_000 / 24.0) < 0.01 && me.Abilities.Single(a => a.Skill == 0).Hits == 1
                 && Abilities.Name(12240000) == "Judgment" && Abilities.Name(0).Length > 0 && Abilities.Name(12060000) == "Ability 12060000",
                 $"damage by ability: each skill's total, hits and average a hit, named from the skill list ({Abilities.Count} skills); a skill it doesn't list says its number");
+            // each ability the skill list names has its icon in the exe; one it doesn't list has none (the class's glyph stands in)
+            Check(Ui.SkillArt.Count == Abilities.Count && Ui.SkillArt.Image(12240000) != null && Ui.SkillArt.Image(12060000) == null && Ui.SkillArt.Image(0) == null,
+                $"ability icons: {Ui.SkillArt.Count} of the {Abilities.Count} listed skills carry their icon; an unlisted one and damage over time have none");
             Check(l.Shown().Count() == 1 && l.Shown().Single().Id == 1 && l.Roster.Count == 2,
                 "a member with no damage yet has no row (Felicity), though the record keeps them for its detail");
             p.Take(new BossEnded(t.AddSeconds(50), 700, BossOutcome.Kill));
@@ -674,6 +677,16 @@ public static class ParserTests
             feed.Add(new BossEnded(now, 990, BossOutcome.Kill));
             s.DrainFightsForTest();
             Check(s.Fights.Live == null && TrackerSession.FightStore.All().Any(e => e.BossId == 990), "...and the fight lands in the character's kept fights");
+        }
+
+        // Group details on by default (Steven, 2026-11-14): a fresh install has it on; a parser.json from before moves to on
+        // once; after that move a player's off stays off
+        {
+            var fresh = new ParserPrefs();
+            var old = ParserPrefs.FromText("{\"Overlay\":true,\"Details\":false,\"Mode\":\"boss\"}");
+            var chosenOff = ParserPrefs.FromText("{\"Details\":false,\"DetailsSettled\":true}");
+            Check(fresh.Details && old.Details && old.DetailsSettled && !chosenOff.Details,
+                $"Group details: on for a new player ({fresh.Details}), moved to on once for a player from before ({old.Details}), an off chosen after that kept ({!chosenOff.Details})");
         }
 
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");

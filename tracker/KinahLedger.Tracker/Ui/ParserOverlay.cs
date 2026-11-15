@@ -297,7 +297,7 @@ public sealed class ParserPanel : Border
     public ParserPanel(bool glass = false)
     {
         _glass = glass;
-        Width = ParserOverlay.Width0;
+        Width = HudStackLook.FightWidth + 10;   // the meter's width (Settings › In game › Parser › Width), 340 by default
         // the Kinah overlay's frame exactly (Ui/HudWindow.cs): its surface at the same opacity, its 1 px line, radius 12, its padding
         Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0B, 0x0C, 0x10)); BorderBrush = HudKit.FrameLine; BorderThickness = new Thickness(1);
         var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(null));
@@ -328,6 +328,8 @@ public sealed class ParserPanel : Border
     public void Draw(Encounter e, DateTime now)
     {
         var sig = $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}";
+        Width = HudStackLook.FightWidth + 10;
+        sig += $":{Width}";
         if (sig == _sig) return;
         _sig = sig;
         _body.Children.Clear();
@@ -421,7 +423,8 @@ public sealed class ParserPanel : Border
             track.SizeChanged += (_, _) => fill.Width = Math.Max(left > 0 ? 3 : 0, track.ActualWidth * left);
             track.Children.Add(fill);
             hp.Children.Add(track);
-            var pct = T($"{left:P0}", 11.5, FontWeights.Bold, left < 0.34 ? Coral : HudKit.Ink); pct.Margin = new Thickness(8, 0, 0, 0);
+            // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
+            var pct = HpText(e, 11.5, left < 0.34 ? Coral : HudKit.Ink, HudKit.Muted); pct.Margin = new Thickness(8, 0, 0, 0);
             Grid.SetColumn(pct, 1); hp.Children.Add(pct);
             _body.Children.Add(hp);
         }
@@ -457,11 +460,10 @@ public sealed class ParserPanel : Border
                 var mark = MainWindow.ClassMark(f.Class, _glass ? 18 : 20, f.Name);
                 g.Children.Add(mark);
                 var nm = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-                var n = T(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, FontWeights.SemiBold, f.Name.Length == 0 ? HudKit.Muted : _glass && f.You ? HudKit.Gold : HudKit.Ink); n.TextTrimming = TextTrimming.CharacterEllipsis;
+                // the name in the member's class colour (the bar's, the ring's), you marked by the gold chip
+                var n = T(f.Name.Length > 0 ? f.Name : "Unnamed", 13.5, FontWeights.SemiBold, f.Name.Length == 0 ? HudKit.Muted : ClassArt.NameBrush(f.Class)); n.TextTrimming = TextTrimming.CharacterEllipsis;
                 nm.Children.Add(n);
-                if (f.You && _glass) nm.Children.Add(HudGlass.YouChip());
-                else if (f.You) nm.Children.Add(new Border { Background = HudKit.Gold, CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-                    Child = T("you", 9.5, FontWeights.Bold, HudKit.B(0x1D1300)) });
+                if (f.You) nm.Children.Add(HudGlass.YouChip());
                 Grid.SetColumn(nm, 1); g.Children.Add(nm);
                 void C(int col, string text, Brush b, FontWeight w, double size = 12) { var t = Num(text, size, w, b); t.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(t, col); g.Children.Add(t); }
                 if (gear)
@@ -511,6 +513,21 @@ public sealed class ParserPanel : Border
         }
         _body.Children.Add(foot);
         BorderBrush = e.Live ? (_glass ? HudGlass.Edge : HudKit.FrameLine) : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : _glass ? HudGlass.Edge : HudKit.FrameLine;
+    }
+
+    /// <summary>"1.82M left": the boss's HP left, or "" when the game hasn't given its HP.</summary>
+    public static string HpLeft(Encounter e) => e.BossMaxHp > 0 ? $"{Amounts.Short(Math.Max(0, e.BossHp))} left" : "";
+
+    /// <summary>"47% · 1.82M left": the share in <paramref name="pctInk"/>, bold, and the HP left after it in <paramref name="restInk"/>; tabular digits.</summary>
+    public static TextBlock HpText(Encounter e, double size, Brush pctInk, Brush restInk)
+    {
+        var t = new TextBlock { FontSize = size, VerticalAlignment = VerticalAlignment.Center };
+        Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        if (e.BossHpLeft is not { } left) return t;
+        t.Inlines.Add(new Run($"{Math.Round(left * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = pctInk });
+        t.Inlines.Add(new Run($" · {HpLeft(e)}") { FontWeight = FontWeights.SemiBold, Foreground = restInk });
+        System.Windows.Automation.AutomationProperties.SetName(t, $"Boss HP {Math.Round(left * 100):0}%, {HpLeft(e)}");
+        return t;
     }
 
     static TextBlock Pad(TextBlock t) { t.Margin = new Thickness(0); return t; }
