@@ -48,8 +48,8 @@ public sealed class FightView
             // the ids of one ability as one row (a spirit's attack at each rank), each named for the member's class
             foreach (var a in e.AbilityRows(f))
                 m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)Math.Max(1, e.Figure(f)),
-                    DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null });
-            Depth(m, f);
+                    DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null, Casts = a.Casts, Max = a.Max, Min = a.Min });
+            Depth(m, f, e);
             v.Members.Add(m);
         }
         if (past != null && e.ModeKind == ParserMode.Bosses && e.Boss.Length > 0) (v.Best, v.Last) = Records(e, past);
@@ -60,10 +60,28 @@ public sealed class FightView
     /// The deeper figures, read from the record when it carries them (store v2: crits, max and min hit, casts and hit kinds per
     /// ability; per-second damage; damage taken; the death log). A record without them leaves every one null.
     /// </summary>
-    static void Depth(MemberView m, Fighter f)
+    static void Depth(MemberView m, Fighter f, Encounter e)
     {
-        // the record has no such fields yet: each one lights up here as the store carries it
+        // crit stays null: the hits' kinds are kept raw (AbilityShare.Kinds) and named only once mapped against the game's own figures
+        m.MaxHit = f.Abilities.Max(a => a.Max);
+        // damage per second as the figures count it (the boss's, or all targets')
+        m.PerSecond = e.BossView ? f.BossPerSecond : f.PerSecond;
+        if (f.Taken is { Count: > 0 } taken)
+        {
+            m.Taken = taken.Sum(x => x.Damage);
+            m.TakenBy = taken.OrderByDescending(x => x.Damage).Select(x => (Source(x.Source, x.Skill), x.Skill, x.Damage, x.Hits)).ToList();
+        }
+        if (f.DeathLog is { Count: > 0 } deaths)
+            m.DeathLog = deaths.Select(d => new DeathView
+            {
+                At = d.At, BossHpLeft = d.BossHpLeft, Killer = Source(d.Killer, d.KillerSkill),
+                Last = d.Last.Select(h => (h.At, Source(h.Source, h.Skill), h.Amount, h.HpAfter, false)).ToList(),
+            }).ToList();
+        if (f.Buffs is { Count: > 0 } buffs) m.Buffs = buffs.Select(b => (Abilities.Name(b.Skill, f.Class), b.Seconds, b.Share)).ToList();
     }
+
+    /// <summary>Who dealt a hit taken, in words: the attacker's name when known (the boss), else its skill's when the skill list names it, else "".</summary>
+    static string Source(string name, int skill) => name.Length > 0 ? name : Abilities.Resolve(skill) != null ? Abilities.Name(skill) : "";
 
     /// <summary>Your best kill of this boss and your last pull of it before this record (yours only: other members' figures stay on this PC and in this view).</summary>
     public static (PullRef? Best, PullRef? Last) Records(Encounter e, IEnumerable<Encounter> past)

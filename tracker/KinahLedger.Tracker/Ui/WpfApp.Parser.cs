@@ -265,7 +265,8 @@ public static partial class WpfApp
         var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ") && !t.Contains("HP the boss lost") && !t.Contains("HP the bosses lost")
             && !t.StartsWith("Joined ") && !t.StartsWith("Left ")).ToList();
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
-        static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP") && t.Contains("item level"));
+        // (the item level steps aside when the row carries its DPS over time: store v2's per-second damage)
+        static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP"));
         static bool Near(HashSet<string> texts) => texts.Any(t => t.Contains("kills near you"));
         static bool DpsHead(HashSet<string> texts) => texts.Any(t => t == "DPS" || t.StartsWith("DPS ", StringComparison.Ordinal));
         check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !Near(plain.Texts) && DpsHead(plain.Texts) && plainTips.Count == 0

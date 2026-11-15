@@ -197,6 +197,9 @@ public sealed class Encounter : IJsonOnDeserialized
         {
             Skill = g.Key, Damage = g.Sum(a => a.Damage), Hits = g.Sum(a => a.Hits), Uncounted = g.Sum(a => a.Uncounted),
             BossDamage = g.Sum(a => a.BossDamage), BossHits = g.Sum(a => a.BossHits), BossUncounted = g.Sum(a => a.BossUncounted),
+            // store v2 (null when no id of the ability carries it)
+            Casts = g.Any(a => a.Casts != null) ? g.Sum(a => a.Casts ?? 0) : null, StreamHits = g.Any(a => a.StreamHits != null) ? g.Sum(a => a.StreamHits ?? 0) : null,
+            Max = g.Max(a => a.Max), Min = g.Min(a => a.Min),
         })
         .Where(a => Figure(a) > 0).OrderByDescending(Figure).ToList();
 
