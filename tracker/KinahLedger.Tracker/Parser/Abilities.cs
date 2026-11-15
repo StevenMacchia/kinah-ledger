@@ -91,7 +91,7 @@ public static class Abilities
     } : "";
 
     /// <summary>
-    /// "Judgment"; "Damage over time and more" for 0 (records from before damage over time came by skill); for an id the
+    /// "Judgment"; "Damage over time" for 0 (records from before damage over time came by skill); for an id the
     /// list doesn't name, "Spiritmaster skill" (the class from the id's family, else <paramref name="casterClass"/>, the
     /// member's) or "Unknown skill", noted once in reads.log. Damage over time (a negative skill): its skill's name with
     /// " (over time)", "Punishing Strike (over time)", "Templar skill (over time)", "Unknown skill (over time)".
@@ -99,7 +99,7 @@ public static class Abilities
     public static string Name(int skill, string? casterClass = null)
     {
         if (skill < 0) return (BaseOf(skill) is > 0 and var b ? Name(b, casterClass) : Title(casterClass) is { Length: > 0 } c ? c + " skill" : "Unknown skill") + " (over time)";
-        if (skill == 0) return "Damage over time and more";
+        if (skill == 0) return "Damage over time";
         if (Resolve(skill) is { } id) return Map[id].Name;
         var cls = ClassOfFamily(skill);
         if (cls.Length == 0) cls = Title(casterClass);

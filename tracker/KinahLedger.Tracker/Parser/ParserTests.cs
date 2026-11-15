@@ -530,7 +530,7 @@ public static class ParserTests
             // damage over time by skill: minus the effect's id (the skill's id x 100 + n), named for its skill with " (over time)", one row per skill
             Check(Abilities.Name(-1206000003) == "Punishing Strike (over time)" && Abilities.Name(-1206000301) == "Punishing Strike (over time)" && Abilities.Name(-1605000001, "Spiritmaster") == "Ashy Call (over time)"
                 && Abilities.Canon(-1206000003) == -1206000000 && Abilities.Canon(-1206000301) == -1206000000 && Abilities.ClassOf(-1206000003) == "templar"
-                && Ui.SkillArt.Image(-1206000003) != null && Ui.SkillArt.Image(-1206000003) == Ui.SkillArt.Image(12060000) && Abilities.Name(0) == "Damage over time and more",
+                && Ui.SkillArt.Image(-1206000003) != null && Ui.SkillArt.Image(-1206000003) == Ui.SkillArt.Image(12060000) && Abilities.Name(0) == "Damage over time",
                 "damage over time: -1206000003 and a rank's -1206000301 are Punishing Strike (over time) with its icon; old records' 0 keeps its row");
             var dots = Abilities.Merged(new[] { new AbilityShare { Skill = -1206000003, Damage = 300, Hits = 3 }, new AbilityShare { Skill = -1206000301, Damage = 200, Hits = 2 },
                 new AbilityShare { Skill = 12060000, Damage = 1_000, Hits = 4 } });
