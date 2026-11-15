@@ -42,7 +42,8 @@ public partial class MainWindow
 
     CommandCtx ParserCtx() => new()
     {
-        Tab = _parserTab, Sort = _parserSort, Details = PDetails, Kills = PKills,
+        Tab = _parserTab, Sort = _parserSort, Details = PDetails, Kills = PKills, Deaths = PDeaths,
+        GroupHead = e => e.HasDamage ? ParserBasisSwitches(e) : null, GroupFoot = e => CoverageLine(e),
         SetTab = t => { _parserTab = t; RedrawParserPage(); },
         OpenFight = id => OpenFight(id),
         Inspect = id => { _parserInspect = id; RedrawParserPage(); LowerScroll.ScrollToTop(); },

@@ -19,6 +19,8 @@ public sealed class FightView
     public MemberView? You => Members.FirstOrDefault(m => m.F.You);
     public bool HasDamage => E.HasDamage;
     public double GroupDps => E.GroupDps(Now);
+    /// <summary>The group's DPS, null under Encounter.MinDpsSeconds (shown "–", no 1 s floor).</summary>
+    public double? GroupDpsOrNull => E.GroupDpsOf(Now);
     public double Seconds => E.DpsSeconds(Now);
 
     // what the record carries: each view shows its part only when there's something to show
@@ -39,11 +41,15 @@ public sealed class FightView
         int rank = 0;
         foreach (var f in shown)
         {
-            var m = new MemberView { F = f, Rank = ++rank, Dps = e.HasDamage ? e.Dps(f, now) : 0, Share = e.Share(f), Damage = f.Damage, Deaths = f.Deaths };
+            // the figures as the record counts them (the honest pass): boss damage or all targets (Encounter.Figure), DPS null
+            // under 3 s, hits as counted (none made up) with the average over the counted ones
+            var m = new MemberView { F = f, Rank = ++rank, Dps = e.HasDamage ? e.Dps(f, now) : 0, DpsOrNull = e.DpsOf(f, now), Share = e.Share(f), Damage = e.HasDamage ? e.Figure(f) : f.Damage, Deaths = f.Deaths };
+            double secs = e.DpsSeconds(f, now);
             // the ids of one ability as one row (a spirit's attack at each rank), each named for the member's class
-            foreach (var a in Abilities.Merged(f.Abilities).OrderByDescending(a => a.Damage))
-                m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = a.Damage, Hits = a.Hits, Share = a.Damage / (double)Math.Max(1, f.Damage), Dps = a.Damage / Math.Max(1, e.DpsSeconds(f, now)) });
-            Depth(m, f);
+            foreach (var a in e.AbilityRows(f))
+                m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)Math.Max(1, e.Figure(f)),
+                    DpsOrNull = secs >= Encounter.MinDpsSeconds ? e.Figure(a) / secs : null, Casts = a.Casts, Max = a.Max, Min = a.Min });
+            Depth(m, f, e);
             v.Members.Add(m);
         }
         if (past != null && e.ModeKind == ParserMode.Bosses && e.Boss.Length > 0) (v.Best, v.Last) = Records(e, past);
@@ -54,10 +60,28 @@ public sealed class FightView
     /// The deeper figures, read from the record when it carries them (store v2: crits, max and min hit, casts and hit kinds per
     /// ability; per-second damage; damage taken; the death log). A record without them leaves every one null.
     /// </summary>
-    static void Depth(MemberView m, Fighter f)
+    static void Depth(MemberView m, Fighter f, Encounter e)
     {
-        // the record has no such fields yet: each one lights up here as the store carries it
+        // crit stays null: the hits' kinds are kept raw (AbilityShare.Kinds) and named only once mapped against the game's own figures
+        m.MaxHit = f.Abilities.Max(a => a.Max);
+        // damage per second as the figures count it (the boss's, or all targets')
+        m.PerSecond = e.BossView ? f.BossPerSecond : f.PerSecond;
+        if (f.Taken is { Count: > 0 } taken)
+        {
+            m.Taken = taken.Sum(x => x.Damage);
+            m.TakenBy = taken.OrderByDescending(x => x.Damage).Select(x => (Source(x.Source, x.Skill), x.Skill, x.Damage, x.Hits)).ToList();
+        }
+        if (f.DeathLog is { Count: > 0 } deaths)
+            m.DeathLog = deaths.Select(d => new DeathView
+            {
+                At = d.At, BossHpLeft = d.BossHpLeft, Killer = Source(d.Killer, d.KillerSkill),
+                Last = d.Last.Select(h => (h.At, Source(h.Source, h.Skill), h.Amount, h.HpAfter, false)).ToList(),
+            }).ToList();
+        if (f.Buffs is { Count: > 0 } buffs) m.Buffs = buffs.Select(b => (Abilities.Name(b.Skill, f.Class), b.Seconds, b.Share)).ToList();
     }
+
+    /// <summary>Who dealt a hit taken, in words: the attacker's name when known (the boss), else its skill's when the skill list names it, else "".</summary>
+    static string Source(string name, int skill) => name.Length > 0 ? name : Abilities.Resolve(skill) != null ? Abilities.Name(skill) : "";
 
     /// <summary>Your best kill of this boss and your last pull of it before this record (yours only: other members' figures stay on this PC and in this view).</summary>
     public static (PullRef? Best, PullRef? Last) Records(Encounter e, IEnumerable<Encounter> past)
@@ -77,6 +101,8 @@ public sealed class MemberView
 {
     public Fighter F = null!;
     public int Rank; public double Dps, Share; public long Damage; public int Deaths;
+    /// <summary>The member's DPS, null under Encounter.MinDpsSeconds (shown "–").</summary>
+    public double? DpsOrNull;
     public List<AbilityView> Abilities = new();
     public bool You => F.You;
     /// <summary>Crit rate over every hit; the biggest hit. Null until the record carries crits and max hits.</summary>
@@ -94,8 +120,11 @@ public sealed class MemberView
 
 public sealed class AbilityView
 {
-    public int Skill; public string Name = ""; public long Damage; public int Hits; public double Share, Dps;
-    public double Average => Hits > 0 ? Damage / (double)Hits : 0;
+    public int Skill; public string Name = ""; public long Damage; public int Hits; public double Share;
+    /// <summary>The ability's DPS (null under Encounter.MinDpsSeconds) and its average a counted hit (null with none counted): both shown "–".</summary>
+    public double? DpsOrNull, Avg;
+    public double Dps => DpsOrNull ?? 0;
+    public double Average => Avg ?? 0;
     /// <summary>Store v2 figures: null until the record carries them.</summary>
     public int? Casts; public double? Crit; public long? Max, Min; public Dictionary<string, int>? Kinds;
 }

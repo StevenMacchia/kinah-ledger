@@ -9,7 +9,7 @@ namespace KinahLedger.Parser;
 /// entering to leaving, each boss a <see cref="Split"/>), or a fight anywhere ("fight": the first hit or kill to a pause).
 /// Kept on this PC in the character's encounters.jsonl (Parser/EncounterStore.cs); never uploaded.
 /// </summary>
-public sealed class Encounter
+public sealed class Encounter : IJsonOnDeserialized
 {
     /// <summary>Short and unique: the file's key for this record.</summary>
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
@@ -35,6 +35,9 @@ public sealed class Encounter
     public DateTime? End { get; set; }
     /// <summary>The last thing heard of the fight: an open fight with nothing new for a long while is given up at this time.</summary>
     public DateTime LastAt { get; set; }
+    /// <summary>The last damage dealt in it, and the boss's last HP fall: a wipe or leaving ends there, never later (null before any).</summary>
+    public DateTime? LastDamageAt { get; set; }
+    public DateTime? LastHpFallAt { get; set; }
     /// <summary>A pull: "kill", "wipe", "left". A run: "cleared" (its final boss died), "left". A fight: "died", "kill" (you killed), "ended". "" while under way.</summary>
     public string Outcome { get; set; } = "";
     /// <summary>
@@ -50,8 +53,32 @@ public sealed class Encounter
     public List<KillNear> Kills { get; set; } = new();
     /// <summary>True when the game's messages gave damage for this fight: only then are damage and DPS shown (never made up).</summary>
     public bool HasDamage { get; set; }
-    /// <summary>Damage dealt to the boss itself, by everyone, when known.</summary>
+    /// <summary>Damage dealt to the boss itself (a run's: to its bosses; a wave's: to anything while it is open), by everyone, credited or not, when known: the HP the boss lost.</summary>
     public long BossDamage { get; set; }
+    /// <summary>
+    /// Damage no hit named a source for (HP lost with no hit to credit), to any target and to the boss alone. It is in no
+    /// member and no row (Steven, 2026-11-14: "no 'Other'"); the group card says how much of the boss's HP is credited
+    /// (<see cref="Coverage"/>) instead.
+    /// </summary>
+    public long Uncredited { get; set; }
+    public long UncreditedBoss { get; set; }
+    /// <summary>The uncredited damage by the reason given for it (DamageDealt.Reason; 0 = none given).</summary>
+    public Dictionary<int, long> UncreditedWhy { get; set; } = new();
+
+    /// <summary>A reason for uncredited damage in the coverage hover's words (DamageDealt.Reason, 1 to 7).</summary>
+    public static string WhyWords(int reason) => reason switch
+    {
+        1 or 2 or 3 => "a moment the tracker missed",
+        4 => "someone outside the group",
+        5 => "the boss's surroundings (not a player)",
+        6 or 7 => "an attacker the tracker couldn't place",
+        _ => "another reason",
+    };
+    /// <summary>
+    /// Each member's damage to the boss is kept apart from their damage to everything (Fighter.BossDamage): records kept
+    /// since the parser's honest pass. An older record blended the two and shows all targets.
+    /// </summary>
+    public bool TargetsSplit { get; set; }
     /// <summary>The boss's HP now (at the end, for a kept fight) and its max, when the game gave them; 0 = not known.</summary>
     public long BossHp { get; set; }
     public long BossMaxHp { get; set; }
@@ -59,6 +86,33 @@ public sealed class Encounter
     [JsonIgnore] public double? BossHpLeft => BossMaxHp > 0 ? Math.Clamp(BossHp / (double)BossMaxHp, 0, 1) : null;
     /// <summary>The tracker version that kept it.</summary>
     public string App { get; set; } = "";
+    /// <summary>
+    /// The boss's HP left (0 to 1) at the end of each second from <see cref="Start"/> (store v2, a pull's timeline); null
+    /// for a record kept before, or with no HP known.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<double>? BossHpPerSecond { get; set; }
+
+    /// <summary>The second of the record an instant falls in (0 at <see cref="Start"/>; before it, 0).</summary>
+    public int SecondOf(DateTime at) => (int)Math.Max(0, Math.Floor((at - Start).TotalSeconds));
+
+    /// <summary>
+    /// The record's start moves (a pull starts at its first damage): the per-second lists move with it, so second 0 is
+    /// still the start (seconds before a new later start dropped; an earlier start adds seconds in front).
+    /// </summary>
+    public void MoveStart(DateTime to)
+    {
+        int shift = (int)Math.Floor((to - Start).TotalSeconds);
+        Start = to;
+        if (shift == 0) return;
+        static void Move<T>(List<T>? l, int k, T fill)
+        {
+            if (l == null) return;
+            if (k > 0) l.RemoveRange(0, Math.Min(k, l.Count));
+            else l.InsertRange(0, Enumerable.Repeat(fill, -k));
+        }
+        Move(BossHpPerSecond, shift, 1.0);
+        foreach (var f in Roster) { Move(f.PerSecond, shift, 0L); Move(f.BossPerSecond, shift, 0L); }
+    }
     /// <summary>Gaps in the game's traffic during it.</summary>
     public int Gaps { get; set; }
     /// <summary>A run's boss pulls, in order (a live run's copy ends with the pull under way).</summary>
@@ -99,11 +153,76 @@ public sealed class Encounter
     /// <summary>The player's own row, if the group was known.</summary>
     [JsonIgnore] public Fighter? You => Roster.FirstOrDefault(f => f.You);
 
-    /// <summary>The group's members: every row but Other (HP lost with no hit: damage over time, lost traffic).</summary>
+    /// <summary>The group's members (an older record's Other row is folded into <see cref="Uncredited"/> as it is read).</summary>
     [JsonIgnore] public IEnumerable<Fighter> Members => Roster.Where(f => !f.Other);
 
-    /// <summary>The seconds DPS is over: a run's boss pulls (its damage is the bosses'), else the whole record.</summary>
-    public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
+    /// <summary>
+    /// A record kept before the honest pass had an "Other" row for the damage no hit named: read, it becomes the record's
+    /// uncredited damage (to the boss, as far as the boss's damage goes) and the row is gone.
+    /// </summary>
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        var others = Roster.Where(f => f.Other).ToList();
+        if (others.Count == 0) return;
+        long sum = others.Sum(o => o.Damage);
+        foreach (var o in others) Roster.Remove(o);
+        Uncredited += sum;
+        UncreditedBoss = Math.Min(BossDamage, UncreditedBoss + sum);
+    }
+
+    /// <summary>
+    /// Member figures are boss damage (the group card's Boss / All targets, parser.json Targets): on (the default), a boss
+    /// pull's and a run's figures, DPS and shares count damage to the boss only; off, to every target, adds too. Set by the window.
+    /// </summary>
+    public static bool BossOnly { get; set; } = true;
+
+    /// <summary>This record's figures are boss damage: <see cref="BossOnly"/>, a pull or a run, kept apart (<see cref="TargetsSplit"/>).</summary>
+    [JsonIgnore] public bool BossView => BossOnly && TargetsSplit && ModeKind != ParserMode.Fights && !Wave;
+
+    /// <summary>A member's damage as the figures count it: to the boss in <see cref="BossView"/>, else to every target.</summary>
+    public long Figure(Fighter f) => BossView ? f.BossDamage : f.Damage;
+    public long Figure(AbilityShare a) => BossView ? a.BossDamage : a.Damage;
+    /// <summary>An ability's counted hits and average a hit as the figures count them (null: no hit counted).</summary>
+    public int Hits(AbilityShare a) => BossView ? a.BossHits : a.Hits;
+    public double? Average(AbilityShare a) => BossView ? a.BossAverage : a.Average;
+
+    /// <summary>
+    /// A member's abilities as the inspect view lists them: the ids of one ability as one row (Abilities.Canon: a spirit's
+    /// attack at each rank, a skill's damage over time by any of its effects), every figure summed, biggest first as the
+    /// figures count them; abilities with nothing in this view left out.
+    /// </summary>
+    public List<AbilityShare> AbilityRows(Fighter f) => f.Abilities
+        .GroupBy(a => Abilities.Canon(a.Skill))
+        .Select(g => new AbilityShare
+        {
+            Skill = g.Key, Damage = g.Sum(a => a.Damage), Hits = g.Sum(a => a.Hits), Uncounted = g.Sum(a => a.Uncounted),
+            BossDamage = g.Sum(a => a.BossDamage), BossHits = g.Sum(a => a.BossHits), BossUncounted = g.Sum(a => a.BossUncounted),
+            // store v2 (null when no id of the ability carries it)
+            Casts = g.Any(a => a.Casts != null) ? g.Sum(a => a.Casts ?? 0) : null, StreamHits = g.Any(a => a.StreamHits != null) ? g.Sum(a => a.StreamHits ?? 0) : null,
+            Max = g.Max(a => a.Max), Min = g.Min(a => a.Min),
+        })
+        .Where(a => Figure(a) > 0).OrderByDescending(Figure).ToList();
+
+    /// <summary>Damage to adds (anything but the boss) can be told apart: the Boss / All targets switch has something to switch.</summary>
+    [JsonIgnore] public bool HasAdds => TargetsSplit && ModeKind != ParserMode.Fights && !Wave && Members.Any(f => f.Damage > f.BossDamage);
+
+    /// <summary>The group's credited damage as the figures count it: the sum of the rows, what group DPS and shares are of.</summary>
+    [JsonIgnore] public long Credited => Members.Sum(Figure);
+
+    /// <summary>
+    /// The share of the HP the boss lost that is credited to a member, 0 to 1 (null when the boss's damage isn't known): the
+    /// group card's "99.8% of the boss's HP credited".
+    /// </summary>
+    [JsonIgnore] public double? Coverage => HasDamage && BossDamage > 0 ? Math.Clamp((BossDamage - UncreditedBoss) / (double)BossDamage, 0, 1) : null;
+
+    /// <summary>
+    /// The seconds DPS is over: a run's boss pulls when its figures are the bosses' damage (and an older run's, which counted
+    /// that way), else the whole record.
+    /// </summary>
+    public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
+
+    /// <summary>Under this many seconds a DPS isn't a figure yet and shows "–" (no 1 s floor making a short fight look big).</summary>
+    public const double MinDpsSeconds = 3;
 
     /// <summary>
     /// DPS over each member's active time (Settings › In game › Parser › DPS over active time, parser.json DpsActive):
@@ -113,13 +232,43 @@ public sealed class Encounter
     public static bool ActiveBasis { get; set; }
 
     /// <summary>The seconds a member's DPS is over, by <see cref="ActiveBasis"/>.</summary>
-    public double DpsSeconds(Fighter f, DateTime now) => ActiveBasis && !f.Other && f.Damage > 0 ? Math.Max(1, f.ActiveSeconds) : DpsSeconds(now);
+    public double DpsSeconds(Fighter f, DateTime now) => ActiveBasis && !f.Other && f.Damage > 0 ? f.ActiveSeconds : DpsSeconds(now);
 
-    /// <summary>A member's damage per second (over the fight, a run's over its boss pulls, or over their active time); 0 when damage isn't known.</summary>
-    public double Dps(Fighter f, DateTime now)
+    /// <summary>
+    /// A member's damage per second (their <see cref="Figure(Fighter)"/> over the fight, a run's over its boss pulls, or over
+    /// their active time); null when damage isn't known or the time is under <see cref="MinDpsSeconds"/>.
+    /// </summary>
+    public double? DpsOf(Fighter f, DateTime now)
     {
-        if (!HasDamage || DpsSeconds(now) < 1) return 0;
-        return f.Damage / DpsSeconds(f, now);
+        if (!HasDamage) return null;
+        double s = DpsSeconds(f, now);
+        return s >= MinDpsSeconds ? Figure(f) / s : null;
+    }
+
+    /// <summary><see cref="DpsOf"/>, 0 when it isn't a figure.</summary>
+    public double Dps(Fighter f, DateTime now) => DpsOf(f, now) ?? 0;
+
+    /// <summary>A member's DPS as the rows say it ("3,851", "12.4K"); "–" when it isn't a figure yet.</summary>
+    public string DpsText(Fighter f, DateTime now) => DpsOf(f, now) is { } d ? Ui.Amounts.Short(d) : "–";
+
+    /// <summary>
+    /// The seconds a member was in the group during the record: from the start (or their joining, when they joined late) to
+    /// the end (or their leaving).
+    /// </summary>
+    public double PresentSeconds(Fighter f, DateTime now)
+    {
+        var from = f.Late && f.JoinedAt is { } j && j > Start ? j : Start;
+        var to = End ?? now;
+        if (f.Gone && f.LeftAt is { } l && l < to) to = l;
+        return Math.Max(0, (to - from).TotalSeconds);
+    }
+
+    /// <summary>The part of a member's time in the group in which they dealt no damage, 0 to 1; null before a hit or under <see cref="MinDpsSeconds"/>.</summary>
+    public double? IdleShare(Fighter f, DateTime now)
+    {
+        double present = PresentSeconds(f, now);
+        if (f.FirstHit == null || present < MinDpsSeconds) return null;
+        return Math.Clamp(1 - f.ActiveSeconds / present, 0, 1);
     }
 
     /// <summary>
@@ -132,7 +281,7 @@ public sealed class Encounter
     /// A member's share of the group's damage, 0 to 1 (0 when damage isn't known). Over the members only (Steven, 2026-11-14:
     /// "there should be no 'other' in the parser"): damage no hit named (damage over time) is in no row, so the rows add up to 100%.
     /// </summary>
-    public double Share(Fighter f) { long all = Members.Sum(x => x.Damage); return HasDamage && all > 0 && !f.Other ? f.Damage / (double)all : 0; }
+    public double Share(Fighter f) { long all = Credited; return HasDamage && all > 0 && !f.Other ? Figure(f) / (double)all : 0; }
 
     /// <summary>A share as the rows say it: "25.1%", "100%".</summary>
     public static string Pct(double share) => share >= 0.9995 ? "100%" : (share * 100).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
@@ -154,11 +303,16 @@ public sealed class Encounter
     /// <summary>"Ferocious Horn Den · Conquest": the instance with the game's mode for it, when known.</summary>
     [JsonIgnore] public string Place { get { var i = BossBook.Strip(Instance); return GameMode.Length == 0 ? i : i.Length == 0 ? GameMode : $"{i} · {GameMode}"; } }
 
-    /// <summary>The group's damage per second: the members' (the rows'), never damage no hit named.</summary>
-    public double GroupDps(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= 1 ? Members.Sum(f => f.Damage) / s : 0; }
+    /// <summary>The group's damage per second: the credited damage (the rows' sum, as the figures count it) over the fight; null under <see cref="MinDpsSeconds"/>.</summary>
+    public double? GroupDpsOf(DateTime now) { var s = DpsSeconds(now); return HasDamage && s >= MinDpsSeconds ? Credited / s : null; }
+    public double GroupDps(DateTime now) => GroupDpsOf(now) ?? 0;
+    public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Short(d) : "–";
 
-    /// <summary>The meter's top: the biggest member's damage when known, else Combat Power (at least 1).</summary>
-    public double TopMeasure() => Math.Max(1, Members.Select(f => HasDamage ? (double)f.Damage : f.CombatPower).DefaultIfEmpty(1).Max());
+    /// <summary>What a member's meter bar measures: their figure when damage is known, else Combat Power.</summary>
+    public double Measure(Fighter f) => HasDamage ? Figure(f) : f.CombatPower;
+
+    /// <summary>The meter's top: the biggest member's figure when known, else Combat Power (at least 1).</summary>
+    public double TopMeasure() => Math.Max(1, Members.Select(Measure).DefaultIfEmpty(1).Max());
 
     /// <summary>
     /// Not a record: the card the overlay shows in a dungeon before its first pull (Steven, 2026-11-14: "turn into the parser
@@ -183,7 +337,7 @@ public sealed class Encounter
 
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
-        ? Members.OrderByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+        ? Members.OrderByDescending(Figure).ThenByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
         : Members.OrderByDescending(f => f.You).ThenByDescending(f => f.CombatPower).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
 
     public static string KindName(ContentKind k) => k switch
@@ -223,18 +377,50 @@ public sealed class Fighter
     public bool You { get; set; }
     /// <summary>The member's server ("Israphel"), "" when not known: the expanded row and hover only.</summary>
     public string Server { get; set; } = "";
-    /// <summary>Joined after the pull.</summary>
+    /// <summary>Joined after the pull (whether or not damage had been dealt by then), and when.</summary>
     public bool Late { get; set; }
-    /// <summary>Left the group during the fight.</summary>
+    public DateTime? JoinedAt { get; set; }
+    /// <summary>Left the group during the fight, and when.</summary>
     public bool Gone { get; set; }
-    /// <summary>The "Other" row: HP the boss lost with no hit to name a source (damage over time, lost traffic), so the rows add up to the HP lost.</summary>
-    public bool Other { get; set; }
+    public DateTime? LeftAt { get; set; }
+    /// <summary>An older record's "Other" row (HP lost with no hit to name a source): read only, folded into Encounter.Uncredited.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Other { get; set; }
     /// <summary>Known only from its damage (no group list yet): Combat Power and item level not known.</summary>
     public bool FromDamage { get; set; }
+    /// <summary>Damage to every target, and to the boss alone (Encounter.TargetsSplit; a run's bosses, a wave's everything).</summary>
     public long Damage { get; set; }
+    public long BossDamage { get; set; }
     public int Deaths { get; set; }
-    /// <summary>Damage by ability (the game's skill id; 0: damage over time and the rest), with its hits: a member's breakdown.</summary>
+    /// <summary>Damage by ability (the game's skill id; 0: damage over time no skill named), with its hits: a member's breakdown.</summary>
     public List<AbilityShare> Abilities { get; set; } = new();
+
+    // ---- store v2 (the hit stream): each null in a record kept before, or until its data comes ----
+    /// <summary>Damage to every target, and to the boss, in each second from Encounter.Start (index = second).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? PerSecond { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? BossPerSecond { get; set; }
+    /// <summary>Damage the member took, by skill and attacker.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<TakenShare>? Taken { get; set; }
+    /// <summary>Each death: when, the boss's HP then, the killer and the killing skill, the last hits taken.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<DeathRecord>? DeathLog { get; set; }
+    /// <summary>Effects on the member: how long each was on during the record.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<BuffUptime>? Buffs { get; set; }
+
+    /// <summary>Adds damage at its second to a per-second list (made on first use); the list.</summary>
+    internal static List<long> AddAt(List<long>? list, int second, long amount)
+    {
+        list ??= new();
+        while (list.Count <= second) list.Add(0);
+        list[second] += amount;
+        return list;
+    }
+
+    /// <summary>The member's row for a skill, made (with no damage yet) when the hit stream names it first.</summary>
+    internal AbilityShare Ability(int skill)
+    {
+        var a = Abilities.FirstOrDefault(x => x.Skill == skill);
+        if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill });
+        return a;
+    }
 
     /// <summary>A pause in a member's damage longer than this (seconds) is left out of their active time.</summary>
     public const double PauseSeconds = 20;
@@ -271,12 +457,19 @@ public sealed class Fighter
     /// </summary>
     public double FightingSeconds => StretchesSeconds + (StretchStart is { } s && LastHit is { } l ? Math.Max(1, (l - s).TotalSeconds) : 0);
 
-    public void AddAbility(int skill, long amount, int hits)
+    /// <summary>
+    /// A share of damage by one ability (a damage over time is its own, negative skill): its damage, and its hits when they
+    /// were counted. A share with no count adds no made-up hit, and its damage is left out of the average a hit.
+    /// </summary>
+    public void AddAbility(int skill, long amount, int hits, bool boss = false)
     {
         var a = Abilities.FirstOrDefault(x => x.Skill == skill);
         if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill });
         a.Damage += amount;
-        a.Hits += Math.Max(1, hits);
+        if (hits > 0) a.Hits += hits; else a.Uncounted += amount;
+        if (!boss) return;
+        a.BossDamage += amount;
+        if (hits > 0) a.BossHits += hits; else a.BossUncounted += amount;
     }
 
     /// <summary>The game's number for the class, when it came as one (0 = not); the class itself once it is paired (Parser/ClassNumbers.cs).</summary>
@@ -299,13 +492,73 @@ public sealed class Fighter
     }
 }
 
-/// <summary>One ability's share of a member's damage: the skill (0 for damage over time and the rest), its damage and hits.</summary>
+/// <summary>
+/// One ability's share of a member's damage: the skill (Parser/Abilities.cs names it: 0 damage over time no skill named,
+/// negative a skill's damage over time), its damage and counted hits, to every target and to the boss alone.
+/// </summary>
 public sealed class AbilityShare
 {
     public int Skill { get; set; }
     public long Damage { get; set; }
+    /// <summary>Hits counted (0: none came with a count); Uncounted is the damage that came with no count.</summary>
     public int Hits { get; set; }
-    public double Average => Hits > 0 ? Damage / (double)Hits : 0;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long Uncounted { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long BossDamage { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int BossHits { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long BossUncounted { get; set; }
+    /// <summary>The average a counted hit (damage that came with no count left out); null with no hit counted, shown "–".</summary>
+    [JsonIgnore] public double? Average => Hits > 0 ? Math.Max(0, Damage - Uncounted) / (double)Hits : null;
+    [JsonIgnore] public double? BossAverage => BossHits > 0 ? Math.Max(0, BossDamage - BossUncounted) / (double)BossHits : null;
+
+    // ---- store v2 (the hit stream): null in a record kept before, or until its data comes ----
+    /// <summary>Casts of the skill.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? Casts { get; set; }
+    /// <summary>Hits seen one by one (the denominator for Max, Min and Kinds), and the biggest and smallest of them.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? StreamHits { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? Max { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? Min { get; set; }
+    /// <summary>The hits' kinds as they came, counted by an internal key, unnamed until mapped (never shown before then).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? Kinds { get; set; }
+}
+
+/// <summary>Damage a member took from one attacker's skill: Source is the boss's name when the boss dealt it, else "".</summary>
+public sealed class TakenShare
+{
+    public int Skill { get; set; }
+    public string Source { get; set; } = "";
+    public long SourceId { get; set; }
+    public long Damage { get; set; }
+    public int Hits { get; set; }
+}
+
+/// <summary>One death of a member's: seconds from the record's start, the boss's HP left then (0 to 1), the killer and killing skill, the last hits taken (up to 5, the killing blow last).</summary>
+public sealed class DeathRecord
+{
+    public double At { get; set; }
+    public double? BossHpLeft { get; set; }
+    public int KillerSkill { get; set; }
+    public string Killer { get; set; } = "";
+    public long KillerId { get; set; }
+    public List<TakenHit> Last { get; set; } = new();
+}
+
+/// <summary>A hit taken, in a death's recap: seconds from the record's start, the skill, the attacker, the damage; HP after it when known.</summary>
+public sealed class TakenHit
+{
+    public double At { get; set; }
+    public int Skill { get; set; }
+    public string Source { get; set; } = "";
+    public long Amount { get; set; }
+    public double? HpAfter { get; set; }
+}
+
+/// <summary>An effect on a member: its id (the skill's id x 100 + n), the skill to name it by (Abilities.Name), seconds on during the record and its share (0 to 1) of the member's time in the group.</summary>
+public sealed class BuffUptime
+{
+    public int Id { get; set; }
+    public int Skill { get; set; }
+    public double Seconds { get; set; }
+    public double Share { get; set; }
 }
 
 /// <summary>An enemy that died near the player during a record, or one the player killed (Yours; a player when Player).</summary>

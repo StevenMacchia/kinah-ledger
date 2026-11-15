@@ -44,9 +44,23 @@ public sealed class ParserPrefs
     /// 640; set by dragging the meter's left or right edge, or Settings › In game › Parser › Width.
     /// </summary>
     public double Width { get; set; } = 330;
+    /// <summary>Kills near you on boss pulls and runs (off by default: minimal).</summary>
     public bool KillsNear { get; set; }
-    public bool Filters { get; set; }
-    public bool Hovers { get; set; }
+    /// <summary>
+    /// The group's deaths on boss pulls and runs, the list filters and the explanations on hover: on by default since the
+    /// parser's honest pass (the spec's serious defaults); a player from before moves to them once (<see cref="HonestSettled"/>).
+    /// </summary>
+    public bool Deaths { get; set; } = true;
+    public bool Filters { get; set; } = true;
+    public bool Hovers { get; set; } = true;
+    /// <summary>
+    /// The one-time move to the honest pass's defaults is done. A file from before: deaths come on (they were Kills and
+    /// deaths' half, on for a player who had that on), and filters and hovers come on unless the player had turned any of
+    /// the three extras on, a choice of their own that is kept as it is.
+    /// </summary>
+    public bool HonestSettled { get; set; }
+    /// <summary>Member figures: "boss" (damage to the boss only, the default) or "all" (every target, adds too). The group card's switch.</summary>
+    public string Targets { get; set; } = "boss";
     /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, four rows. A click on the meter switches it.</summary>
     public bool Expanded { get; set; }
 
@@ -68,23 +82,62 @@ public sealed class ParserPrefs
     {
         try
         {
-            if (File.Exists(PathNow) && JsonSerializer.Deserialize<ParserPrefs>(File.ReadAllText(PathNow)) is { } saved)
+            if (File.Exists(PathNow) && Read(File.ReadAllText(PathNow)) is { } saved)
             {
                 // Group details on for everyone (Steven, 2026-11-14): a file from before has it off by the old default, so it
                 // moves to on once, as HudPrefs moved the panel's look; DetailsSettled marks the move done, so a later off stays off
-                if (!saved.DetailsSettled) { saved.Details = true; saved.DetailsSettled = true; saved.Save(); }
+                // the honest pass's move is made on every read until the player saves a Parser setting (the same each time,
+                // from the file as written), so reading never writes: a self-test reading the player's file leaves it alone
+                bool detailsMove = !saved.DetailsSettled;
+                Settle(saved);
+                if (detailsMove) saved.Save();
                 return saved;
             }
         }
         catch (Exception) { /* a broken file: the defaults */ }
-        return new() { DetailsSettled = true };
+        return new() { DetailsSettled = true, HonestSettled = true };
     }
 
-    /// <summary>For parser-test: the one-time move read from a file's text (Load's rule, without the file).</summary>
-    internal static ParserPrefs FromText(string json)
+    /// <summary>The one-time moves of a file from before (Group details on; the honest pass's defaults); true when one was made.</summary>
+    internal static bool Settle(ParserPrefs p)
+    {
+        bool moved = false;
+        if (!p.DetailsSettled) { p.Details = true; p.DetailsSettled = true; moved = true; }
+        if (!p.HonestSettled)
+        {
+            // in a file from before, Deaths, Filters and Hovers read as this build's defaults (on) when missing, so their
+            // values there say nothing: what the player chose is in the old switches (off by default) as written
+            bool chose = p.KillsNear || p.OldFilters == true || p.OldHovers == true;
+            p.Deaths = true;
+            if (!chose) { p.Filters = true; p.Hovers = true; }
+            else { p.Filters = p.OldFilters == true; p.Hovers = p.OldHovers == true; }
+            p.HonestSettled = true; moved = true;
+        }
+        return moved;
+    }
+
+    // what a file from before the honest pass said for Filters and Hovers, as written (null: not in it); the properties
+    // themselves read the new default when a file lacks them, so Read takes these from the file's text
+    [System.Text.Json.Serialization.JsonIgnore] bool? OldFilters { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] bool? OldHovers { get; set; }
+
+    static ParserPrefs Read(string json)
     {
         var p = JsonSerializer.Deserialize<ParserPrefs>(json) ?? new();
-        if (!p.DetailsSettled) { p.Details = true; p.DetailsSettled = true; }
+        if (!p.HonestSettled)
+        {
+            using var doc = JsonDocument.Parse(json);
+            bool? B(string name) => doc.RootElement.TryGetProperty(name, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
+            p.OldFilters = B("Filters"); p.OldHovers = B("Hovers");
+        }
+        return p;
+    }
+
+    /// <summary>For parser-test: the one-time moves read from a file's text (Load's rule, without the file).</summary>
+    internal static ParserPrefs FromText(string json)
+    {
+        var p = Read(json);
+        Settle(p);
         return p;
     }
 

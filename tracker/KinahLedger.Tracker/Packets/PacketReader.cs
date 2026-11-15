@@ -472,6 +472,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
                     TakeFight(f);
                 }
                 while (dec.NextBossEvent() is { } b) TakeBoss(b);
+                while (dec.NextHit() is { } h) TakeBoss(h);   // the hit stream: the Parser's depth (never logged line by line)
             },
             OnGap = () =>
             {

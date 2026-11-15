@@ -202,7 +202,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     }
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
-    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}";
+    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)e.Duration(now).TotalSeconds}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}";
 
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
@@ -520,7 +520,7 @@ sealed class HudMeter : HudStackLook
             var gl = new Grid { Margin = new Thickness(10, 5, 10, 5) };
             gl.ColumnDefinitions.Add(new ColumnDefinition()); gl.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             gl.Children.Add(Tx("Group", 12, Muted, FontWeights.SemiBold));
-            var gv = Num(Amounts.Short(e.GroupDps(now)) + " DPS", 13.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
+            var gv = Num(e.GroupDpsText(now) + " DPS", 13.5, Ink, FontWeights.Bold); Grid.SetColumn(gv, 1); gl.Children.Add(gv);
             _rows.Children.Add(gl);
         }
         _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });

@@ -82,6 +82,7 @@ public static partial class WpfApp
                                 while (dec.NextItem() is not null) { }
                                 while (dec.NextFight() is { } f) { killEvents++; live = true; TrackerSession.RawFight(parser, f); }
                                 while (dec.NextBossEvent() is { } b) { bossEvents++; live = true; parser.Take(b); }
+                                while (dec.NextHit() is { } h) parser.Take(h);
                             },
                             OnGap = () => { gaps++; dec.Gap(); parser.Take(new FeedGap(DateTime.UtcNow)); },
                         };

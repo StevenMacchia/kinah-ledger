@@ -261,9 +261,12 @@ public static partial class WpfApp
         var every = ParserTexts(w.ParserPage);
         // a class emblem's hover names its class: that stays (the emblem is the class, colour-blind or not)
         // and a row's figure says the damage behind it ("1.2M damage in 2:42"): a figure, not an explanation
-        var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ")).ToList();
+        // as are the coverage line's uncredited share and a late joiner's or leaver's time (the honest pass): figures too
+        var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ") && !t.Contains("HP the boss lost") && !t.Contains("HP the bosses lost")
+            && !t.StartsWith("Joined ") && !t.StartsWith("Left ")).ToList();
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
-        static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP") && t.Contains("item level"));
+        // (the item level steps aside when the row carries its DPS over time: store v2's per-second damage)
+        static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP"));
         static bool Near(HashSet<string> texts) => texts.Any(t => t.Contains("kills near you"));
         static bool DpsHead(HashSet<string> texts) => texts.Any(t => t == "DPS" || t.StartsWith("DPS ", StringComparison.Ordinal));
         check(!Gear(plain.Texts) && !plain.Texts.Contains("Damage") && !Near(plain.Texts) && DpsHead(plain.Texts) && plainTips.Count == 0
@@ -278,6 +281,31 @@ public static partial class WpfApp
         check(opened.Texts.Any(t => t.Contains("item level", StringComparison.OrdinalIgnoreCase) && t.Contains("Combat Power") && (t.Contains("Siel") || t.Contains("Israphel") || t.Contains("Fregion") || t.Contains("Zikel")))
             && opened.Texts.Contains("Average") && opened.Texts.Contains("Hits") && opened.Texts.Contains("Share"),
             "Parser: a member's inspect view says their server, item level and Combat Power over their abilities' damage, share, DPS, hits and average");
+        // the honest pass: the inspect view's figures (to the boss, to adds, active, idle), the group card's coverage line and its
+        // two switches; a late joiner marked; no "Other" and no "and more" anywhere
+        w.ShowParserDemo("detail"); DoEvents();
+        var kwapo = ParserTexts(w.ParserPage);
+        check(new[] { "To the boss", "To adds" }.All(opened.Texts.Contains) && opened.Texts.Any(t => t.StartsWith("Active · ") && t.EndsWith("% idle"))
+            && kwapo.Texts.Contains("joined late") && kwapo.Texts.Contains("left")
+            && kwapo.Texts.Any(t => t.Contains("of the boss's HP credited") && t.Contains("DPS and shares count credited damage")),
+            $"Parser, honest pass: the inspect view's boss / adds / active and idle figures; a late joiner and a leaver marked, the coverage line ({kwapo.Texts.FirstOrDefault(t => t.Contains("credited"))})");
+        check(!opened.Texts.Concat(every.Texts).Concat(kwapo.Texts).Any(t => t == "Other" || t.Contains("and more")), "Parser, honest pass: no Other row and no \"and more\" bucket");
+        {
+            w.ShowParserDemo("detail"); DoEvents();
+            var boss = FindButton(w.ParserPage, "Boss"); var allT = FindButton(w.ParserPage, "All targets");
+            var fightB = FindButton(w.ParserPage, "Fight"); var activeB = FindButton(w.ParserPage, "Active");
+            var openedE = w.ParserPastForTest.Single(e => e.Id == w.ParserOpenForTest);
+            var top = openedE.Ranked().First();
+            double bossDps = openedE.Dps(top, openedE.End!.Value);
+            allT?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+            bool allOn = !Encounter.BossOnly && openedE.Dps(top, openedE.End.Value) > bossDps;
+            activeB = FindButton(w.ParserPage, "Active");
+            activeB?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+            bool activeOn = Encounter.ActiveBasis;
+            w.ShowParserDemo("detail"); DoEvents();
+            check(boss != null && allT != null && fightB != null && activeB != null && allOn && activeOn && Encounter.BossOnly && !Encounter.ActiveBasis,
+                "Parser: the group card's Boss / All targets and Fight / Active switches, one click each, change the figures (boss damage over the fight by default)");
+        }
         // the header: the instance with the game's mode for it
         w.ShowParserDemo("live"); DoEvents();
         check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Ferocious Horn Den · Conquest · ")), "Parser: the header says the instance and its mode (Ferocious Horn Den · Conquest)");
@@ -346,7 +374,8 @@ public static partial class WpfApp
         var opt = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
-        check(sws.Details?.IsChecked == true && new[] { sws.Kills, sws.Filters, sws.Hovers, sws.Separate, sws.Active }.All(c => c.IsChecked == false), "Options › In game › Parser: Group details on by default (Steven, 2026-11-14); DPS over active time, Kills and deaths, List filters, Explanations on hover, Separate parser overlay off");
+        check(new[] { sws.Details, sws.Deaths, sws.Filters, sws.Hovers }.All(c => c?.IsChecked == true) && new[] { sws.Kills, sws.Separate, sws.Active }.All(c => c.IsChecked == false),
+            "Options › In game › Parser: Group details, Deaths, List filters and Explanations on hover on by default (the honest pass); DPS over active time, Kills near you, Separate parser overlay off");
         // the Parser's look row: the four looks drawn for fights, the one in use outlined, a click picks it for the panel too
         {
             var (keys, onKey) = opt.ParserLooksForTest;
