@@ -85,7 +85,7 @@ public sealed class ParserOverlay : Window
         Content = new StackPanel { Children = { _faceGrid, _hint } };
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
-        IsVisibleChanged += (_, _) => { if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
+        IsVisibleChanged += (_, _) => { if (!IsVisible) DropEdge(); if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
         AddWidthDrag();
         MouseLeftButtonDown += (_, _) =>
         {
@@ -113,7 +113,24 @@ public sealed class ParserOverlay : Window
     int? _anchorBottom;
 
     /// <summary>The meter's own height on screen, in pixels (the hint under it left out).</summary>
-    int FaceHeightPx() => (int)Math.Round(_faceGrid.ActualHeight * VisualTreeHelper.GetDpi(this).DpiScaleY);
+    int FaceHeightPx() => (int)Math.Round(_faceGrid.ActualHeight * _scale * VisualTreeHelper.GetDpi(this).DpiScaleY);
+
+    /// <summary>
+    /// The overlays' size (Options › In game › Size, the Kinah overlay's): the Parser's own window grows or shrinks with it,
+    /// so at Buddy's width it is as wide as Buddy on screen at any size (Steven, 2026-11-15: "its obviously not the buddy width
+    /// by default its shorter": the Kinah overlay was at 110%, the Parser at 100%).
+    /// </summary>
+    public void SetScale(double scale)
+    {
+        var s = Math.Clamp(double.IsFinite(scale) ? scale : 1, HudPrefs.MinScale, HudPrefs.MaxScale);
+        if (Math.Abs(s - _scale) < 0.001) return;
+        _scale = s;
+        if (Math.Abs(s - 1) < 0.001) ((FrameworkElement)Content).LayoutTransform = Transform.Identity;
+        else { var t = new ScaleTransform(s, s); t.Freeze(); ((FrameworkElement)Content).LayoutTransform = t; }
+    }
+    double _scale = 1;
+    /// <summary>For the options test: the size the window draws at.</summary>
+    internal double ScaleForTest => _scale;
 
     /// <summary>The meter grew or shrank: the window moves so its bottom edge stays where it was, and it grows up.</summary>
     void KeepBottom()
@@ -134,18 +151,21 @@ public sealed class ParserOverlay : Window
     /// <summary>-1 while the left edge is held, 1 the right, 0 none.</summary>
     int _edge;
     double _edgeX0, _edgeW0, _edgeLeft0;
+    /// <summary>While clicks go through: the pointer is over an edge, and the window has taken it (WatchGrab).</summary>
+    bool _overEdge;
     const double EdgeGrip = 8;
 
     /// <summary>
     /// A press on the meter's left or right edge widens or narrows it (ahead of the window's own drag, which moves it), the
     /// same as the Kinah overlay's meter; dragging the left edge keeps the right edge where it was. Not while clicks go
-    /// through (the game has the pointer then; Settings › In game › Parser › Width still sets it).
+    /// through, except over an edge: there the window takes the pointer (as over the grab handle), so its edges widen it even
+    /// while clicks go through to the game everywhere else (Steven, 2026-11-15: "i cant drag its edges", click-through on).
     /// </summary>
     void AddWidthDrag()
     {
         PreviewMouseLeftButtonDown += (_, e) =>
         {
-            if (_still || _clickThrough) return;
+            if (_still || (_clickThrough && !_overEdge)) return;
             int edge = EdgeAt(e.GetPosition(this));
             if (edge == 0) return;
             _edge = edge; _edgeX0 = ScreenX(e); _edgeW0 = HudStackLook.FightWidth; _edgeLeft0 = Left;
@@ -161,11 +181,11 @@ public sealed class ParserOverlay : Window
                 return;
             }
             e.Handled = true;
-            double w = Math.Clamp(Math.Round(_edgeW0 + _edge * (ScreenX(e) - _edgeX0)), HudStackLook.FightWidthMin, HudStackLook.FightWidthMax);
+            double w = Math.Clamp(Math.Round(_edgeW0 + _edge * (ScreenX(e) - _edgeX0) / _scale), HudStackLook.FightWidthMin, HudStackLook.FightWidthMax);
             if (w == HudStackLook.FightWidth) return;
             HudStackLook.FightWidth = w;
             ApplyFightWidth();
-            if (_edge < 0) Left = _edgeLeft0 - (w - _edgeW0);   // the right edge stays put
+            if (_edge < 0) Left = _edgeLeft0 - (w - _edgeW0) * _scale;   // the right edge stays put
         };
         PreviewMouseLeftButtonUp += (_, e) =>
         {
@@ -257,12 +277,24 @@ public sealed class ParserOverlay : Window
 
     void ShowHint()
     {
-        _hint.Text = _clickThrough ? "drag the handle to move" : HotkeyText.Length > 0 ? $"drag to move  ·  right-click for the mode  ·  {HotkeyText} hides it" : "drag to move  ·  right-click for the mode";
+        // the edges widen it (either mode): said in the hint, the one place it can be found
+        _hint.Text = _clickThrough ? "drag the handle to move  ·  an edge to resize" : HotkeyText.Length > 0 ? $"drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {HotkeyText} hides it" : "drag to move  ·  an edge to resize  ·  right-click for the mode";
         _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Clicks go through to the game now: the rows' hover cards stay away then (only an edge or the handle takes the pointer).</summary>
+    internal bool ClickThroughNow => _clickThrough;
+
+    /// <summary>An edge drag or an edge under the pointer let go of (click-through switched, the handle hidden): nothing left holding the pointer.</summary>
+    void DropEdge()
+    {
+        _overEdge = false;
+        if (_edge != 0) { EndEdge(); if (IsMouseCaptured) ReleaseMouseCapture(); }
     }
 
     public void SetClickThrough(bool on)
     {
+        DropEdge();
         _clickThrough = on;
         _grabbing = false;
         var h = new WindowInteropHelper(this).Handle;
@@ -285,16 +317,22 @@ public sealed class ParserOverlay : Window
         if (!_clickThrough || !IsVisible || _still) { HideGrab(); return; }
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero || !GetCursorPos(out var c) || !GetWindowRect(h, out var r)) return;
+        if (_edge != 0) return;   // an edge held: the window keeps the pointer until it is let go
         bool over = c.X >= r.Left && c.X < r.Right && c.Y >= r.Top && c.Y < r.Bottom;
         bool onGrab = false;
+        _overEdge = false;
         if (over)
         {
             if (_grab.Visibility != Visibility.Visible) { _grab.Visibility = Visibility.Visible; UpdateLayout(); }
             var dpi = VisualTreeHelper.GetDpi(this);
             var tl = _grab.TranslatePoint(new Point(0, 0), this);
             int gx = r.Left + (int)Math.Round(tl.X * dpi.DpiScaleX), gy = r.Top + (int)Math.Round(tl.Y * dpi.DpiScaleY);
-            int gw = (int)Math.Round(_grab.ActualWidth * dpi.DpiScaleX), gh = (int)Math.Round(_grab.ActualHeight * dpi.DpiScaleY);
+            int gw = (int)Math.Round(_grab.ActualWidth * _scale * dpi.DpiScaleX), gh = (int)Math.Round(_grab.ActualHeight * _scale * dpi.DpiScaleY);
             onGrab = c.X >= gx - 4 && c.X < gx + gw + 4 && c.Y >= gy - 2 && c.Y < gy + gh + 4;
+            // an edge of the meter takes the pointer too (a drag there widens it)
+            _overEdge = !onGrab && EdgeAt(new Point((c.X - r.Left) / dpi.DpiScaleX, (c.Y - r.Top) / dpi.DpiScaleY)) != 0;
+            Cursor = _overEdge ? System.Windows.Input.Cursors.SizeWE : null;
+            onGrab |= _overEdge;
         }
         else HideGrab();
         if (onGrab != _grabbing)
@@ -307,6 +345,7 @@ public sealed class ParserOverlay : Window
 
     void HideGrab()
     {
+        if (_edge == 0) _overEdge = false;
         _grab.Visibility = Visibility.Collapsed;
         if (_grabbing) { _grabbing = false; var h = new WindowInteropHelper(this).Handle; if (h != IntPtr.Zero) Native.SetClickThrough(h, _clickThrough); }
         ShowHint();

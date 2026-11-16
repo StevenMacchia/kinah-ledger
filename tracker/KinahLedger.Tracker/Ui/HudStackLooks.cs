@@ -216,7 +216,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     protected static FrameworkElement MemberName(Fighter f, double size)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", size, f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : Muted, FontWeights.SemiBold);
+        var nm = Tx(ParserRows.NameOf(f), size, f.Name.Length > 0 || f.You ? ClassArt.NameBrush(f.Class) : Muted, FontWeights.SemiBold);
         sp.Children.Add(nm);
         if (f.You) sp.Children.Add(HudGlass.YouChip());
         return sp;

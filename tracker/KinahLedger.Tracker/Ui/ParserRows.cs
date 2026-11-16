@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using KinahLedger.Parser;
 
@@ -123,6 +124,13 @@ public sealed class ParserRows : Grid
     /// <summary>The fight now: each member's row updated in place, moved to their rank.</summary>
     public void Show(Encounter e, DateTime now)
     {
+        _shownE = e; _shownAt = now;
+        // an open hover card follows the fight, once a second (drawn again settled: its entrance played when it opened)
+        if (_openCard is { IsOpen: true } oc && (now - _cardAt).TotalSeconds >= 1 && e.Roster.FirstOrDefault(x => x.Id == _openCardId && !x.Other) is { } om)
+        {
+            _cardAt = now;
+            if (HoverCard(e, om, now) is { } fresh) oc.Content = fresh;
+        }
         bool expanded = ExpandedPref;
         if (e.Id != _fightId || expanded != _expanded)
         {
@@ -216,8 +224,9 @@ public sealed class ParserRows : Grid
                 row.Plates.Visibility = plates.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
                 FitName(row);
             }
-            // the heal line: only for a member who healed someone else (a damage dealer's self-heals and potions never)
-            SetHeal(row, e, f, now, dmg && f.HealingOthers > 0);
+            // the heal line: for anyone who healed, their own heals from skills too; potions never (they are in no heal figure)
+            // (Steven, 2026-11-15: "self heals should count, potions should not")
+            SetHeal(row, e, f, now, dmg && f.Healing > 0);
         }
         if (platesSlid) _platesSlidFor = e.Id;
         // the big hits that came since the last draw pop off their members' rows
@@ -278,6 +287,140 @@ public sealed class ParserRows : Grid
 
     /// <summary>A soft dark halo for a row's text: it reads over the brightest class bar or your gold wash.</summary>
     static DropShadowEffect TextHalo() => new() { Color = Colors.Black, BlurRadius = 4, ShadowDepth = 0, Opacity = 0.85 };
+
+    /// <summary>
+    /// Your character's name as the tracker knows it (Characters, set by the window); null in renders and tests.
+    /// </summary>
+    public static Func<string>? YourName;
+
+    /// <summary>
+    /// A member's name as the meter says it: the game's name; for your row with none (alone in the open world no group list
+    /// comes and the hits don't carry it), your character's name, else "You"; anyone else with none, "Unnamed" (Steven,
+    /// 2026-11-15: "why is my character called unnamed now in the dps parser"). Read at draw time, never written into the record.
+    /// </summary>
+    public static string NameOf(Fighter f)
+    {
+        if (f.Name.Length > 0) return f.Name;
+        if (!f.You) return "Unnamed";
+        string n = "";
+        try { n = YourName?.Invoke()?.Trim() ?? ""; } catch (Exception) { }
+        return n.Length > 0 ? n : "You";
+    }
+
+    /// <summary>The fight last drawn, and when: what a row's hover card reads.</summary>
+    Encounter? _shownE;
+    DateTime _shownAt;
+    /// <summary>The hover card open now, whose it is, and when it was last drawn (it follows the fight once a second).</summary>
+    ToolTip? _openCard;
+    long _openCardId;
+    DateTime _cardAt;
+    /// <summary>The abilities a hover card lists at most (the rest summed in one line).</summary>
+    public const int CardAbilities = 6;
+    const string CardBarTag = "card-bar";
+
+    /// <summary>
+    /// The card's entrance: it slides in from the meter's side and fades up (160 ms), and its ability bars grow from nothing one
+    /// after another (40 ms apart, 260 ms each, easing out). Never in a render or a test (Motion.Still): the card is drawn settled.
+    /// </summary>
+    static void CardIn(FrameworkElement card)
+    {
+        if (Motion.Still) return;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var slide = new TranslateTransform(-8, 0);
+        card.RenderTransform = slide;
+        card.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
+        slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-8, 0, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
+        int i = 0;
+        foreach (var bar in Descendants(card).OfType<Border>().Where(b => CardBarTag.Equals(b.Tag)))
+        {
+            double to = bar.Width;
+            bar.BeginAnimation(WidthProperty, new DoubleAnimation(3, to, TimeSpan.FromMilliseconds(260)) { BeginTime = TimeSpan.FromMilliseconds(60 + 40 * i++), EasingFunction = ease, FillBehavior = FillBehavior.HoldEnd });
+        }
+    }
+
+    /// <summary>The card's elements by its logical tree (it opens before it is laid out, so the visual tree is empty then).</summary>
+    static IEnumerable<DependencyObject> Descendants(DependencyObject d)
+    {
+        foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) { yield return ch; foreach (var x in Descendants(ch)) yield return x; }
+    }
+
+    /// <summary>For the options test: the card's ability bars and their widths (what the entrance grows them to).</summary>
+    internal static List<double> CardBarsForTest(FrameworkElement card) => Descendants(card).OfType<Border>().Where(b => CardBarTag.Equals(b.Tag)).Select(b => b.Width).ToList();
+
+    /// <summary>
+    /// A member's hover card: their DPS, share and damage, then their top abilities by damage, each with its share as a bar in the
+    /// class's colour, its damage and hits; their heals when they healed; the biggest hit when the record carries it. Only what
+    /// the record has (nothing made up); null when there's nothing to show (no damage yet).
+    /// </summary>
+    internal static FrameworkElement? HoverCard(Encounter e, Fighter f, DateTime now)
+    {
+        if (!e.HasDamage || e.Figure(f) <= 0) return null;
+        var v = FightView.Of(e, now, null);
+        if (v.Members.FirstOrDefault(m => m.F.Id == f.Id) is not { } m) return null;
+        var c = ClassArt.ColorOf(f.Class);
+        TextBlock T(string s, double size, Brush b, FontWeight w, HorizontalAlignment h = HorizontalAlignment.Left)
+        { var t = new TextBlock { Text = s, FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = h, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
+        var stack = new StackPanel { Width = 250 };
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
+        var cls = T(f.Class, 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); DockPanel.SetDock(cls, Dock.Right); head.Children.Add(cls);
+        head.Children.Add(T(NameOf(f), 13, f.You ? PK.C(PK.Gold) : ClassArt.NameBrush(f.Class), FontWeights.Bold));
+        stack.Children.Add(head);
+        var sums = new List<string>();
+        if (m.DpsOrNull is { } dps) sums.Add($"{Amounts.Short(dps)} DPS");
+        sums.Add(Encounter.Pct(m.Share));
+        sums.Add($"{Amounts.Short(m.Damage)} damage");
+        stack.Children.Add(T(string.Join("  ·  ", sums), 11, HudKit.Ink, FontWeights.SemiBold));
+        // the abilities with damage on the figures' basis (boss only or all targets): one with none there is not listed
+        var dealt = m.Abilities.Where(x => x.Damage > 0).OrderByDescending(x => x.Damage).ToList();
+        if (dealt.Count > 0)
+        {
+            stack.Children.Add(new Border { Height = 1, Background = HudKit.FrameLine, Margin = new Thickness(0, 6, 0, 5) });
+            var shownAbilities = dealt.Take(CardAbilities).ToList();
+            double topShare = Math.Max(1e-9, shownAbilities[0].Share);
+            foreach (var a in shownAbilities)
+            {
+                var row = new Grid { Height = 19, Margin = new Thickness(0, 0, 0, 2) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+                // the ability against the top one as a bar behind the name, in the class's colour, fading right like the meter's
+                var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+                fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x7A, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x26, c.R, c.G, c.B), 1)); fill.Freeze();
+                var bar = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(2), Background = fill, BorderBrush = PK.C(c, 0.9), BorderThickness = new Thickness(2, 0, 0, 0),
+                    Width = Math.Max(3, 156 * Math.Clamp(a.Share / topShare, 0, 1)), Tag = CardBarTag };
+                var nameCell = new Grid { ClipToBounds = true, Children = { bar, new Border { Padding = new Thickness(5, 0, 4, 0), Child = T(a.Name, 11, HudKit.Ink, FontWeights.Medium) } } };
+                row.Children.Add(nameCell);
+                var pct = T(Encounter.Pct(a.Share), 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); Grid.SetColumn(pct, 1); row.Children.Add(pct);
+                var dmg = T(Amounts.Short(a.Damage), 11, HudKit.Ink, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(dmg, 2); row.Children.Add(dmg);
+                if (a.Hits > 0) row.ToolTip = $"{a.Hits:N0} hits{(a.Avg is { } avg ? $", {Amounts.Short(avg)} a hit" : "")}{(!e.BossView && a.Max is { } mx ? $", biggest {Amounts.Short(mx)}" : "")}";
+                stack.Children.Add(row);
+            }
+            int more = dealt.Count - CardAbilities;
+            if (more > 0)
+            {
+                long rest = dealt.Skip(CardAbilities).Sum(x => x.Damage);
+                stack.Children.Add(T($"{more} more  ·  {Amounts.Short(rest)}", 10.5, HudKit.Muted, FontWeights.Medium));
+            }
+        }
+        var foot = new List<string>();
+        var dealtHits = m.Abilities.Where(x => x.Damage > 0).ToList();
+        int hits = dealtHits.Sum(a => a.Hits);
+        if (hits > 0) foot.Add($"{hits:N0} hits");
+        // the biggest hit is over every target: said only when the figures are too (boss only, it could be an add's)
+        if (!e.BossView && m.MaxHit is { } big && big > 0) foot.Add($"biggest {Amounts.Short(big)}");
+        if (f.Healing > 0) foot.Add($"healed {Amounts.Short(f.Healing)}{(e.HpsOf(f, now) is { } hps ? $" ({Amounts.Short(hps)}/s)" : "")}");
+        if (f.Deaths > 0) foot.Add(f.Deaths == 1 ? "1 death" : $"{f.Deaths} deaths");
+        if (foot.Count > 0) stack.Children.Add(T(string.Join("  ·  ", foot), 10.5, HudKit.Muted, FontWeights.Medium));
+        if (stack.Children[^1] is FrameworkElement last) last.Margin = new Thickness(0, 4, 0, 0);
+        var card = new Border
+        {
+            Child = stack, Padding = new Thickness(11, 8, 11, 9), CornerRadius = new CornerRadius(8), Background = HudKit.B(HudKit.Panel2C, 0.97), BorderBrush = PK.C(c, 0.55), BorderThickness = new Thickness(1),
+            Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 14, ShadowDepth = 2, Opacity = 0.55 },
+        };
+        System.Windows.Documents.TextElement.SetFontFamily(card, HudKit.Text);
+        TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
+        return card;
+    }
 
     void SetBar(RowEl r, double v)
     {
@@ -373,7 +516,7 @@ public sealed class ParserRows : Grid
             RenderTransformOrigin = new Point(0.5, 0.5), Effect = new DropShadowEffect { Color = PK.Coral, BlurRadius = 9, ShadowDepth = 0, Opacity = 0.85 },
             Child = new TextBlock { Text = "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
         nm.Children.Add(tick);
-        var name = new TextBlock { Text = f.Name.Length > 0 ? f.Name : "Unnamed", FontSize = 13, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.You ? HudKit.Ink : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var name = new TextBlock { Text = NameOf(f), FontSize = 13, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.You ? HudKit.Ink : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         // a soft dark halo under the name and the DPS: they read over any bar (Steven, 2026-11-15: "the highlight over the name
         // of yourself makes it so hard to read")
         name.Effect = TextHalo();
@@ -439,6 +582,25 @@ public sealed class ParserRows : Grid
             Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, Heal = heal };
         r.ChipOwn = chip.Effect as DropShadowEffect; r.ChipBlur0 = r.ChipOwn?.BlurRadius ?? 0; r.ChipOpacity0 = r.ChipOwn?.Opacity ?? 0;
         r.FrameGlow = frame.Effect as DropShadowEffect; r.FrameBlur0 = r.FrameGlow?.BlurRadius ?? 0; r.FrameOpacity0 = r.FrameGlow?.Opacity ?? 0;
+        // the member's abilities on hover (2026-11-15 night, the meters players pick: a breakdown on the meter itself, not only
+        // on the Parser page): built when it opens, from the fight as it stands, so it costs nothing while the meter runs
+        var card = new ToolTip { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HasDropShadow = false, Placement = System.Windows.Controls.Primitives.PlacementMode.Right, HorizontalOffset = 6 };
+        root.ToolTip = card;
+        ToolTipService.SetInitialShowDelay(root, 350);
+        ToolTipService.SetShowDuration(root, 60_000);
+        long fid = f.Id;
+        root.ToolTipOpening += (_, ev) =>
+        {
+            // never while clicks go through to the game (the pointer is the game's; an edge taken for a resize is no hover)
+            if (Window.GetWindow(this) is ParserOverlay { ClickThroughNow: true }) { ev.Handled = true; return; }
+            var fight = _shownE;
+            var fm = fight?.Roster.FirstOrDefault(x => x.Id == fid && !x.Other);
+            if (fight == null || fm == null || HoverCard(fight, fm, _shownAt) is not { } content) { ev.Handled = true; return; }
+            card.Content = content;
+            _openCard = card; _openCardId = fid; _cardAt = _shownAt;
+            CardIn(content);
+        };
+        card.Closed += (_, _) => { if (_openCard == card) _openCard = null; };
         nameHost.SizeChanged += (_, _) => { FitName(r); FitHeal(r); };
         track.SizeChanged += (_, _) =>
         {

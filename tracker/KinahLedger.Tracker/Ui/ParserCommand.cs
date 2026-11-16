@@ -296,7 +296,7 @@ static class ParserCommand
             g.Children.Add(Col(ClassArt.Icon(m.F.Class, 30, m.F.Name), 1));
             var nameBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             var nl = new StackPanel { Orientation = Orientation.Horizontal };
-            var nm = T(m.F.Name.Length > 0 ? m.F.Name : "Unnamed", 13.5, m.F.Name.Length > 0 ? ClassArt.NameBrush(m.F.Class, Dark) : Muted, FontWeights.SemiBold);
+            var nm = T(ParserRows.NameOf(m.F), 13.5, m.F.Name.Length > 0 || m.F.You ? ClassArt.NameBrush(m.F.Class, Dark) : Muted, FontWeights.SemiBold);
             nl.Children.Add(nm);
             if (m.You) nl.Children.Add(YouTag());
             if (m.Deaths > 0 && ctx.Deaths) { var dt = Tag(m.Deaths == 1 ? "✕ died" : $"✕ {m.Deaths} deaths", Coral); if (m.DeathLog.Count > 0) dt.ToolTip = DeathTip(m); nl.Children.Add(dt); }

@@ -66,6 +66,9 @@ public partial class MainWindow
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
             RedrawParserPage();
         });
+        // your row named as your character when nothing else names you (alone in the open world): the character in the world,
+        // read when a row is drawn (never written into the record, so a switch to an alt never leaves the old name behind)
+        if (watch) ParserRows.YourName = () => Session.Characters.Current?.Name ?? "";
         _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
         ApplyMeterExpanded();
         // a new best on a boss (the overlay's PB moment) is measured against your kills of it kept on this PC
@@ -370,6 +373,7 @@ public partial class MainWindow
             _parserOverlay.FightWidthSet += w => { _parserPrefs.Width = w - MeterExtraWidth; _parserPrefs.WidthPicked = true; if (!_demo) _parserPrefs.Save(); _hud?.ApplyFightWidth(); };
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
             _parserOverlay.SetOpacity(_hudPreview?.HudOpacity ?? _prefs.HudOpacity);
+            _parserOverlay.SetScale(_hudPreview?.HudScale ?? _hudPrefs.Scale);   // the Kinah overlay's size: Buddy's width on screen
             var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(_prefs.HudFields));
             _parserOverlay.SetFrame(radius, pad);
             _parserOverlay.Look = _parserPrefs.Look;

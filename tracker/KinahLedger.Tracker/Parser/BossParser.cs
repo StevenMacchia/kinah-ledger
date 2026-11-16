@@ -1045,11 +1045,17 @@ public sealed class BossParser
     static void Heal(Encounter e, HealDone hl)
     {
         if (hl.At < e.Start || (e.End is { } end && hl.At > end) || Member(e, hl.Source) is not { } m) return;
-        m.Healing += hl.Amount;
         long eff = Math.Clamp(hl.Effective, 0, hl.Amount);
-        m.HealingEffective += eff;
-        if (hl.Estimate) m.HealingEstimated += eff;
-        if (hl.Self) { m.HealingSelf += hl.Amount; if (hl.Potion) m.HealingPotions += hl.Amount; }
+        // a potion is in no heal figure (Steven, 2026-11-15: "self heals should count, potions should not"): kept apart, and
+        // listed by ability as a potion; a heal of your own from a skill counts as any heal
+        if (hl.Potion) m.HealingPotions += hl.Amount;
+        else
+        {
+            m.Healing += hl.Amount;
+            m.HealingEffective += eff;
+            if (hl.Estimate) m.HealingEstimated += eff;
+            if (hl.Self) m.HealingSelf += hl.Amount;
+        }
         var list = m.Heals ??= new();
         var a = list.FirstOrDefault(x => x.Skill == hl.Skill);
         if (a == null) list.Add(a = new HealShare { Skill = hl.Skill, Potion = hl.Potion });
