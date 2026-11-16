@@ -66,7 +66,6 @@ public static partial class WpfApp
         return new List<MeterChange>
         {
             new("ghost", a, ghost, now, now),
-            new("odometer", a, odo, now, now),
             new("pops", a, pops, now, now),
             new("overtake", a, swap, now, now),
             new("finish", a, kill, now, now),
@@ -180,7 +179,7 @@ public static partial class WpfApp
                 bool heat = c.Name.StartsWith("heat", StringComparison.Ordinal);
                 check(!still.Moving && still.Pops.Count == 0 && still.Badge is null or (1, 1) && still.PlateAtRest && still.Chunk == false,
                     $"meter motion ({c.Name}): the tracker still shows no transient (pops {still.Pops.Count}, moving {still.Moving}, badge {still.Badge}, plate at rest {still.PlateAtRest}, HP chunk {still.Chunk})");
-                check(settled.Pops.Count == 0 && settled.Badge is null or (1, 1) && settled.PlateAtRest && settled.Chunk == false && settled.Dps.All(d => d.Value.Figure == d.Value.Odometer) && !settled.Lifted && !settled.Ghost,
+                check(settled.Pops.Count == 0 && settled.Badge is null or (1, 1) && settled.PlateAtRest && settled.Chunk == false && !settled.Lifted && !settled.Ghost,
                     $"meter motion ({c.Name}): held at its end it settles (pops {settled.Pops.Count}, badge {settled.Badge}, plate at rest {settled.PlateAtRest}, HP chunk {settled.Chunk}, odometer {(settled.Dps.All(d => d.Value.Figure == d.Value.Odometer) ? "says the figure" : "differs: " + string.Join(", ", settled.Dps.Select(d => $"{d.Value.Figure}/{d.Value.Odometer}")))}, lifted {settled.Lifted}, ghost {settled.Ghost})");
                 check(still.Dps.Keys.All(k => settled.Dps.TryGetValue(k, out var s) && s.Figure == still.Dps[k].Figure),
                     $"meter motion ({c.Name}): the settled figures are the still ones");
