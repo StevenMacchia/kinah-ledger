@@ -236,8 +236,7 @@ public partial class OptionsWindow
         var sample = _host.HudSample();
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (_, fight) = ParserDemo.Sample(now, live: true);
-        var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);
-        scene.Freeze();
+        var scene = HudKit.GameScene();   // over the game (Steven, 2026-11-16)
         _parserLookShown = keys.Contains(current) ? current : keys[0];
         foreach (var key in keys)
         {

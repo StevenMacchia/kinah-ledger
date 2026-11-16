@@ -73,6 +73,31 @@ public interface IHudLook
 static class HudKit
 {
     /// <summary>
+    /// A scene from the game (the site's farming art, Art/game-scene.jpg) to draw the overlay's previews on (Steven,
+    /// 2026-11-16: "for the previews of the overlay looks - show them over the game - you can't tell"): bright rock, sky and
+    /// foliage, where a look has to read. Filled to its box and centred; the dark gradient before it when it can't be read.
+    /// </summary>
+    public static Brush GameScene()
+    {
+        if (_scene != null) return _scene;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit(); bmp.UriSource = new Uri("pack://application:,,,/Art/game-scene.jpg", UriKind.Absolute); bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; bmp.EndInit(); bmp.Freeze();
+            var b = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Center, AlignmentY = AlignmentY.Center };
+            b.Freeze();
+            return _scene = b;
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("the previews' game scene", ex);
+            var g = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90); g.Freeze();
+            return _scene = g;
+        }
+    }
+    static Brush? _scene;
+
+    /// <summary>
     /// Ticks at a third and two thirds of a boss's HP bar (Steven, 2026-11-16: "little tick markers on every 1/3 health of
     /// every boss"): a dark notch through the bar, laid over it last so the fill never hides it. <paramref name="height"/>
     /// NaN: the bar's height; else that tall, at the bar's foot.
