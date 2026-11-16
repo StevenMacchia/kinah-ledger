@@ -95,7 +95,7 @@ public sealed class ParserPrefs
     public bool Expanded { get; set; }
     /// <summary>
     /// Which hit kind the Parser shows as crit ("none", "result3" or "mark08", the two candidates the hits carry), and as a
-    /// back attack ("none" or "side1"). No switch in Settings. Null, as every player has it, means the release's default
+    /// back attack ("none" or "side1"). Settings' "Crit and back-attack rates" switch picks <see cref="CritPick"/> and <see cref="BackPick"/>. Null, as every player has it, means the release's default
     /// (<see cref="CritDefault"/>, <see cref="BackDefault"/>): null is never written, so a release that changes a default
     /// reaches every player, saved settings or not. A value in the file is a choice and stays.
     /// </summary>
@@ -103,6 +103,8 @@ public sealed class ParserPrefs
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] public string? BackSource { get; set; }
     /// <summary>The defaults a release ships: the morning's flip is one of these lines.</summary>
     public const string CritDefault = "none", BackDefault = "none";
+    /// <summary>The kinds the Settings switch picks: result 3 (x1.76, rises from behind in 7 of 7 classes) and side 1.</summary>
+    public const string CritPick = "result3", BackPick = "side1";
     [System.Text.Json.Serialization.JsonIgnore] public string CritNow => CritSource ?? CritDefault;
     [System.Text.Json.Serialization.JsonIgnore] public string BackNow => BackSource ?? BackDefault;
 

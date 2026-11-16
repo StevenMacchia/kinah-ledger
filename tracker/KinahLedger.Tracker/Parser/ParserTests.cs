@@ -790,6 +790,21 @@ public static class ParserTests
             finally { Ui.ParserRows.YourName = name0; }
         }
 
+        // skill specialties (Steven, 2026-11-16: "show what specialties people have on their skills"): a class skill's id is the
+        // skill's plus the picks x 10 plus a part's number; the picks 1 to 5 rising, at most three; anything else names none
+        {
+            int P(params int[] picks) => picks.Aggregate(0, (m, x) => m | 1 << x);
+            var cases = new (uint Id, int Want)[]
+            {
+                (12040340, P(3, 4)), (12040047, P(4)), (12010130, P(1, 3)), (18013450, P(3, 4, 5)), (12350240, P(2, 4)), (12350246, P(2, 4)),
+                (12040000, 0), (18010100, 0), (18010101, 0), (18017000, 0), (18011117, 0), (18011104, 0), (16000030, 0), (3001015, 0), (12043140, 0),
+                (120700201, P(2)), (122400001, 0),
+            };
+            var wrong = cases.Where(c => Abilities.PicksOf(c.Id) != c.Want).Select(c => $"{c.Id}: {Abilities.PicksText(Abilities.PicksOf(c.Id))} (want {Abilities.PicksText(c.Want)})").ToList();
+            Check(wrong.Count == 0 && Abilities.PicksText(P(3, 4)) == "3·4" && Abilities.PicksText(0) == "",
+                $"specialties from the skill's id: Pummel 12040340 is 3·4, its part 12040047 4, a tick's effect 120700201 2; a basic attack, a summon's row, a spirit command, a Theostone, falling digits: none{(wrong.Count > 0 ? " — " + string.Join("; ", wrong) : "")}");
+        }
+
         // the live farming readout (Steven, 2026-11-14: "the dps figure needs to be rolling all the time"): every hit lifts it,
         // it slides down between hits, and when you stop it eases onto the fight's figure, never down to nothing
         {

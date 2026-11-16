@@ -19,6 +19,9 @@ static class ParserFoot
     /// "Total 10.5M        Group DPS 126.8K", or held "Total 10.5M        Group 126.8K [AVG. DPS]". <paramref name="lead"/>:
     /// the outcome said before the total ("Killed in 2:31"), when the look has no other place for it.
     /// </summary>
+    /// <summary>You are the only one on the meter (no member but you with damage): the group's figure is yours.</summary>
+    public static bool SoloYou(Encounter e) => e.Members.Any(f => f.You) && e.Members.Where(f => !f.Other && f.Damage > 0).All(f => f.You);
+
     public static Grid Line(Encounter e, DateTime now, double size = 12, TextBlock? lead = null)
     {
         var g = new Grid { Tag = "parser-foot" };
@@ -40,7 +43,10 @@ static class ParserFoot
         Typography.SetNumeralAlignment(gt, FontNumeralAlignment.Tabular);
         // a run's DPS counts its boss pulls only: said while it runs, as the panel always has
         bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
-        gt.Inlines.Add(new Run(held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
+        // alone on the meter it is your DPS, said so (Steven, 2026-11-16: "it needs to be my individual one if I'm alone")
+        bool solo = SoloYou(e);
+        string label = solo ? (held ? "You " : pulls ? "Your DPS (boss pulls) " : "Your DPS ") : held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ";
+        gt.Inlines.Add(new Run(label) { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
         gt.Inlines.Add(new Run(e.GroupDpsText(held ? e.End ?? now : now)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
         right.Children.Add(gt);
         if (e.Live && !e.Waiting) SawLive(e.Id);

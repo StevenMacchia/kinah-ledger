@@ -202,6 +202,7 @@ public sealed class Encounter : IJsonOnDeserialized
             Max = g.Max(a => a.Max), Min = g.Min(a => a.Min),
             StreamDamage = g.Any(a => a.StreamDamage != null) ? g.Sum(a => a.StreamDamage ?? 0) : null,
             Kinds = Merge(g.Select(a => a.Kinds), (x, y) => x + y), KindDamage = Merge(g.Select(a => a.KindDamage), (x, y) => x + y), KindMax = Merge(g.Select(a => a.KindMax), Math.Max),
+            Picks = g.Aggregate(0, (p, a) => p | a.Picks),
         })
         .Where(a => Figure(a) > 0).OrderByDescending(Figure).ToList();
 
@@ -668,6 +669,8 @@ public sealed class AbilityShare
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? StreamDamage { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindDamage { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindMax { get; set; }
+    /// <summary>The specialties the skill's hits named (Abilities.PicksOf, bits 1 to 5): a pick that changes none of its hits isn't seen.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Picks { get; set; }
 }
 
 /// <summary>Healing by one ability: healing done (HP as dealt), its effective part, the heals (ticks for a heal over time), and how many were on the healer.</summary>

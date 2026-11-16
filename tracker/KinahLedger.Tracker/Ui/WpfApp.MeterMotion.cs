@@ -240,8 +240,10 @@ public static partial class WpfApp
                     case "pops-healer":
                         bool clearH = mid.Pops.All(p => p.Left >= p.NameEnd - 0.5 && p.Right <= p.DpsLeft + 0.5);
                         bool inRowH = mid.Pops.All(p => p.Top >= p.BandTop - 0.5 && p.Bottom <= p.BandBottom + 0.5);
-                        check(mid.Pops.Count == 1 && clearH && inRowH,
-                            $"meter motion (pops-healer): a healer's big hit pops in its row clear of the name and the heal figures under it, and of the DPS ({string.Join(", ", mid.Pops.Select(p => $"{p.Row}:{p.Word}@{p.Left:0}-{p.Right:0}/{p.NameEnd:0}-{p.DpsLeft:0}"))})");
+                        // the heal chip is on the name's line (0.10.122): a pop needs the room between it and the DPS, so on a narrow
+                        // meter there may be none; one that shows is clear of both
+                        check(mid.Pops.Count <= 1 && clearH && inRowH,
+                            $"meter motion (pops-healer): a healer's big hit, when it pops, pops in its row clear of the name and its heal chip, and of the DPS ({string.Join(", ", mid.Pops.Select(p => $"{p.Row}:{p.Word}@{p.Left:0}-{p.Right:0}/{p.NameEnd:0}-{p.DpsLeft:0}"))})");
                         break;
                     case "overtake": check(mid.Lifted, "meter motion (overtake): part-way the one who passed is lifted, with its shadow"); break;
                     case "finish": check(mid.Sweep == "sweep-good" && mid.Badge is { } b && b.Opacity > 0 && Math.Abs(b.Scale - 1) > 0.01 && !mid.PlateAtRest, $"meter motion (finish): part-way the light sweeps, the AVG. DPS badge stamps, the TOP DPS plate slides in (sweep {mid.Sweep}, badge {mid.Badge}, plate at rest {mid.PlateAtRest})"); break;
