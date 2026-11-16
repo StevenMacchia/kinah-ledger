@@ -132,7 +132,7 @@ public static partial class WpfApp
                         var (root, win) = HealWindow(e, at, place);
                         var figures = TaggedShown(root, "heal-figures").OfType<TextBlock>().ToList();
                         var lines = TaggedShown(root, "heal-line");
-                        var healers = e.Members.Where(f => f.HealingOthers > 0).Select(f => f.Name).OrderBy(x => x).ToList();
+                        var healers = e.Members.Where(f => f.Healing > 0).Select(f => f.Name).OrderBy(x => x).ToList();   // self-heals count (0.10.120)
                         var shown = figures.Select(HealRowName).OrderBy(x => x).ToList();
                         string tag = $"{name} {place}{(expanded ? " expanded" : "")}";
                         if (!shown.SequenceEqual(healers) || lines.Count != healers.Count) wrong.Add($"{tag}: heal figures on [{string.Join(",", shown)}], {lines.Count} lines (want [{string.Join(",", healers)}])");
@@ -182,8 +182,8 @@ public static partial class WpfApp
                 // the old, narrower default (330): the name's room is short there
                 HudStackLook.FightWidth = KinahLedger.Parser.ParserPrefs.OldDefaultWidth + 70;
                 var (root, win) = HealWindow(big, at, "standard");
-                var fig = TaggedShown(root, "heal-figures").OfType<TextBlock>().FirstOrDefault();
-                var f = big.Members.First(m => m.HealingOthers > 0);
+                var f = big.Members.First(m => m.HealingOthers > 0);   // the raid's healer (a self-healer has a line too since 0.10.120)
+                var fig = TaggedShown(root, "heal-figures").OfType<TextBlock>().FirstOrDefault(x => HealRowName(x) == f.Name);
                 fig?.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                 string short2 = $"{Amounts.Short(f.Healing)} · {Amounts.Short(big.HpsOf(f, at) ?? 0)}/s";
                 check(fig != null && fig.Text == short2 && fig.DesiredSize.Width <= fig.ActualWidth + 0.5,
@@ -203,7 +203,8 @@ public static partial class WpfApp
                     ParserRows.ExpandedPref = false;
                     var (r1, w1) = HealWindow(live!, now, place); double h1 = ((FrameworkElement)r1).ActualHeight; int heals1 = TaggedShown(r1, "heal-figures").Count; w1.Close();
                     var (r2, w2) = HealWindow(bare, now, place); double h2 = ((FrameworkElement)r2).ActualHeight; int heals2 = TaggedShown(r2, "heal-figures").Count; w2.Close();
-                    if (Math.Abs(h1 - h2) > 0.5 || heals1 != 1 || heals2 != 0) taller.Add($"{place} {h1:0.#}/{h2:0.#} ({heals1}/{heals2} heal lines)");
+                    // heals1: the Cleric's line, and a self-healer's since 0.10.120
+                    if (Math.Abs(h1 - h2) > 0.5 || heals1 < 1 || heals2 != 0) taller.Add($"{place} {h1:0.#}/{h2:0.#} ({heals1}/{heals2} heal lines)");
                 }
                 check(taller.Count == 0, $"...the meter is no taller with the heal line, in every place{(taller.Count > 0 ? ": " + string.Join("; ", taller) : "")}");
             }

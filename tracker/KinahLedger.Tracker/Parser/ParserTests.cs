@@ -144,7 +144,7 @@ public static class ParserTests
                 Console.WriteLine($"   healing: group {e.GroupHealing:N0}{(e.TopHealer(end) is { } th ? $", TOP HEALS {th.Name}" : "")}");
                 foreach (var f in e.Members.Where(f => f.Healing > 0).OrderByDescending(f => f.Healing))
                     Console.WriteLine($"   heals {(f.Name.Length > 0 ? f.Name : "Unnamed"),-16} {(f.Class.Length > 0 ? f.Class : "-"),-13} {f.Healing,9:N0} done, {(f.HealingIsEstimate ? "≈" : "")}{f.HealingEffective:N0} effective, "
-                        + $"{e.HpsOf(f, end) ?? 0:N0}/s ({(f.HealingIsEstimate ? "≈" : "")}{e.EffectiveHpsOf(f, end) ?? 0:N0}/s effective); others {f.HealingOthers:N0}, self {f.HealingSelf - f.HealingPotions:N0}, potions {f.HealingPotions:N0}"
+                        + $"{e.HpsOf(f, end) ?? 0:N0}/s ({(f.HealingIsEstimate ? "≈" : "")}{e.EffectiveHpsOf(f, end) ?? 0:N0}/s effective); others {f.HealingOthers:N0}, self {f.HealingSelf:N0}, potions {f.HealingPotions:N0} (in no figure)"
                         + (f.Heals is { Count: > 0 } hl ? "; top: " + string.Join(", ", hl.OrderByDescending(a => a.Healing).Take(3).Select(a => $"{Abilities.Name(a.Skill, f.Class)} {Ui.Amounts.Short(a.Healing)} in {a.Hits}")) : ""));
             }
         }
@@ -766,6 +766,30 @@ public static class ParserTests
             Check(p.Farm == null, "...trash inside an instance is never farming");
         }
 
+        // alone in the open world (Steven, 2026-11-15: "why is my character called unnamed now in the dps parser"): no group
+        // list comes and the hits don't name you, so the meter names your row by your character (read when drawn, never written
+        // into the record: a switch to an alt leaves no old name behind); a group list's name wins; anyone else unnamed says so
+        {
+            var name0 = Ui.ParserRows.YourName;
+            try
+            {
+                Ui.ParserRows.YourName = () => "SwolyDaBooly";
+                var (p, _) = New();
+                p.Place("Western Cantas Valley", abyss: false);
+                for (int i = 0; i <= 4; i++) p.Take(new DamageDealt(t.AddSeconds(i), 7, 5000 + i, 12_000, SourceIsYou: true));
+                var solo = p.Farm;
+                Check(solo?.You is { Name: "" } you0 && Ui.ParserRows.NameOf(you0) == "SwolyDaBooly" && solo.Roster.Count(f => !f.Other) == 1,
+                    $"alone in the open world, the meter names your row by your character ({(solo?.You is { } y ? Ui.ParserRows.NameOf(y) : "no row")}), the record left unnamed");
+                p.Take(new GroupChanged(t.AddSeconds(5), new[] { new GroupMember(7, "Swoly", "Gladiator", 0, 0, true) }));
+                p.Take(new DamageDealt(t.AddSeconds(6), 7, 5009, 12_000, SourceIsYou: true));
+                Check(p.Farm?.You is { Name: "Swoly" } you1 && Ui.ParserRows.NameOf(you1) == "Swoly", $"...and a group list naming you wins ({p.Farm?.You?.Name})");
+                Ui.ParserRows.YourName = null;
+                Check(Ui.ParserRows.NameOf(new Fighter { You = true }) == "You" && Ui.ParserRows.NameOf(new Fighter()) == "Unnamed",
+                    "...with no character known your row says You; anyone else with no name, Unnamed");
+            }
+            finally { Ui.ParserRows.YourName = name0; }
+        }
+
         // the live farming readout (Steven, 2026-11-14: "the dps figure needs to be rolling all the time"): every hit lifts it,
         // it slides down between hits, and when you stop it eases onto the fight's figure, never down to nothing
         {
@@ -1382,8 +1406,8 @@ public static class ParserTests
             var live = p.Live!;
             var sw = live.Members.Single(f => f.Id == 1); var ae = live.Members.Single(f => f.Id == 2);
             Check(ae is { Healing: 4_500, HealingEffective: 1_700, HealingEstimated: 500, HealingSelf: 1_000, HealingOthers: 3_500, HealingIsEstimate: true }
-                && sw is { Healing: 9_420, HealingEffective: 2_420, HealingSelf: 9_420, HealingPotions: 420, HealingOthers: 0 } && live.GroupHealing == 13_920,
-                $"heals: done, effective (an estimate when unconfirmed), self and potions per member (Aerin {ae.Healing}/{ae.HealingEffective}/{ae.HealingEstimated}, Swoly {sw.Healing}/{sw.HealingSelf}/{sw.HealingPotions})");
+                && sw is { Healing: 9_000, HealingEffective: 2_000, HealingSelf: 9_000, HealingPotions: 420, HealingOthers: 0 } && live.GroupHealing == 13_500,
+                $"heals: done, effective (an estimate when unconfirmed), self-heals counted, a potion kept apart and in no figure, per member (Aerin {ae.Healing}/{ae.HealingEffective}/{ae.HealingEstimated}, Swoly {sw.Healing}/{sw.HealingSelf}/{sw.HealingPotions})");
             Check(ae.Heals!.Single(h => h.Skill == -1709025011) is { Healing: 500, Hits: 1 } && ae.Heals!.Single(h => h.Skill == 17120000) is { Healing: 3_000, Effective: 1_200 }
                 && sw.Heals!.Single(h => h.Potion) is { Skill: -201110111, Self: 420 },
                 "...by ability: a heal over time's ticks under its effect, a potion marked");
@@ -1438,8 +1462,9 @@ public static class ParserTests
                 bool clerics = pulls.All(e => e.TopHealer(e.End!.Value) is { Class: "Cleric" } th && th.Name is "LMZ111" or "Swoles");
                 var duanka = pulls.Single(e => e.Boss == "Necromancer Duanka").Members.Single(f => f.Name == "LMZ111");
                 var healers = pulls.SelectMany(e => e.Members).Where(f => f.HealingOthers > 0).ToList();
-                Check(pulls.Count == 11 && clerics && duanka.HealingEffective == 62_608 && duanka.HealingIsEstimate,
-                    $"heals, Steven's recordings: {pulls.Count} boss pulls, each one's TOP HEALS the group's Cleric; Duanka's LMZ111 {duanka.Healing:N0} done, ≈{duanka.HealingEffective:N0} effective (the verdict's 62,608)");
+                // the verdict's 62,608 had a potion of hers in it (2,190 effective); potions are in no heal figure since 0.10.120
+                Check(pulls.Count == 11 && clerics && duanka.HealingEffective == 60_418 && duanka.HealingPotions > 0 && duanka.HealingIsEstimate,
+                    $"heals, Steven's recordings: {pulls.Count} boss pulls, each one's TOP HEALS the group's Cleric; Duanka's LMZ111 {duanka.Healing:N0} done, ≈{duanka.HealingEffective:N0} effective (the verdict's 62,608 less her potion), potions {duanka.HealingPotions:N0} apart");
                 Check(pulls.SelectMany(e => e.Members).All(f => f.HealingEffective <= f.Healing && f.HealingEstimated <= f.HealingEffective && f.HealingSelf <= f.Healing)
                     && healers.Where(f => f.HealingOthers * 10 > f.Healing).All(f => f.Class is "Cleric" or "Chanter" or "Spiritmaster" or "Sorcerer"),
                     $"...effective never more than done; the big healers of others Clerics and Chanters ({string.Join(", ", healers.Where(f => f.HealingOthers * 10 > f.Healing).Select(f => f.Class).Distinct())})");

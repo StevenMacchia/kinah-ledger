@@ -89,6 +89,9 @@ public static partial class WpfApp
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a moment the tracker missed");
         var held = HeldSample(live!, now);
+        // a row's hover card (the top member's, and yours), each as it opens beside the meter
+        foreach (var (file, who) in new[] { ("ui-parser-card-top.png", live!.Ranked().First(f => !f.Other)), ("ui-parser-card-you.png", live!.Roster.FirstOrDefault(f => f.You) ?? live!.Ranked().First(f => !f.Other)) })
+            if (ParserRows.HoverCard(live!, who, now) is { } card) { card.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = card }, Path.Combine(dir, file), 320, ShotGround); }
         var shots = new List<(string File, Encounter E, DateTime At)>
         {
             ("ui-parser-overlay-live.png", live!, now),
@@ -278,7 +281,28 @@ public static partial class WpfApp
                 "...its left and right edges take a drag to widen it, the middle moves it");
             HudStackLook.FightWidth = 500; o.ApplyFightWidth(); DoEvents();
             check(Math.Abs(o.FaceWidthForTest - f1 - 150) <= 2, $"...and wider, it draws wider ({o.FaceWidthForTest:0} at 500)");
+            // the overlays' size (Options › In game › Size) on it too: at 110% it is Buddy's 110% width on screen, its edges still found
+            HudStackLook.FightWidth = HudStackLook.FightWidthDefault; o.ApplyFightWidth(); o.SetScale(1.1); DoEvents();
+            double onScreen = o.ActualWidth;
+            check(Math.Abs(onScreen - 360 * 1.1) <= 3 && o.EdgeAt(new Point(onScreen - 2, o.ActualHeight / 2)) == 1 && o.EdgeAt(new Point(2, o.ActualHeight / 2)) == -1,
+                $"...at the overlays' 110% size it is as wide as Buddy at 110% ({onScreen:0}, Buddy {360 * 1.1:0}), its edges where they show");
+            o.SetScale(1); DoEvents();
             HudStackLook.FightWidth = w0;
+        }
+        // a row's hover card: the member's figures and top abilities by damage (at most six), only from what the record has
+        {
+            var at = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+            var top = sample!.Ranked().First(f => !f.Other && sample.Figure(f) > 0);
+            var card = ParserRows.HoverCard(sample, top, at);
+            var texts = card == null ? new List<string>() : FindTexts(card).Select(BlockText).ToList();
+            int abilityRows = FindTexts(card ?? new System.Windows.Controls.Border()).Count(t => t.Text.EndsWith("%") && t.FontSize < 11) ;
+            var biggest = FightView.Of(sample, at, null).Members.First(m => m.F.Id == top.Id).Abilities.OrderByDescending(a => a.Damage).FirstOrDefault()?.Name;
+            check(card != null && texts.Contains(top.Name) && texts.Any(t => t.Contains("DPS")) && abilityRows is >= 1 and <= ParserRows.CardAbilities && biggest != null && texts.Contains(biggest) && !texts.Any(t => t == "Other"),
+                $"Parser: a row's hover card names {top.Name}, their DPS and {abilityRows} abilities, the biggest first ({string.Join(" | ", texts.Take(8))})");
+            check(ParserRows.HoverCard(sample, new KinahLedger.Parser.Fighter { Id = 999 }, at) == null, "...and none for a member with no damage");
+            var bars = card == null ? new List<double>() : ParserRows.CardBarsForTest(card);
+            check(bars.Count == abilityRows && bars.Count > 0 && Math.Abs(bars[0] - 156) < 0.5 && bars.Zip(bars.Skip(1)).All(p => p.First >= p.Second),
+                $"...its ability bars against the top one, the top one full and the rest shorter in order ({string.Join(", ", bars.Select(b => b.ToString("0")))})");
         }
         o.Close();
         // the modes: Full run's run under way with its splits, Every fight's fights, the list by mode, the overlay's menu
@@ -424,7 +448,7 @@ public static partial class WpfApp
             check(before > after && after > 0, $"...and its fill follows the opacity setting ({before} to {after})");
             // click-through (off by default): a grab handle on the top edge shows with the pointer over it, and moves it
             po.SetClickThrough(true); po.ShowGrabForTest(); DoEvents();
-            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move"), "Parser: with click-through on, a grab handle on its top edge moves the overlay");
+            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move  ·  an edge to resize"), "Parser: with click-through on, a grab handle on its top edge moves the overlay (and the hint says an edge resizes it)");
             // the shortcut "Off" (the default): the hint and the menu name none; a real one is named
             var off = new ParserOverlay(still: true) { HotkeyText = "Off" }.HintForTest;
             var on = new ParserOverlay(still: true) { HotkeyText = "Ctrl+Shift+P" }.HintForTest;

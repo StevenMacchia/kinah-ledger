@@ -247,6 +247,7 @@ public partial class MainWindow
         _hud?.SetOpacity(opacity);
         _parserOverlay?.SetOpacity(opacity);   // the separate Parser overlay: the same surface
         _hud?.SetScale(scale);
+        _parserOverlay?.SetScale(scale);   // and the same size: Buddy's width on screen at any Size (Steven, 2026-11-15)
     }
 
     /// <summary>
