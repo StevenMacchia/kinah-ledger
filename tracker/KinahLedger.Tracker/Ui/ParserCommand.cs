@@ -519,6 +519,13 @@ static class ParserCommand
             var nb = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
             var an = T(a.Name, 13, a.Skill == 0 ? Muted : Ink, FontWeights.SemiBold);
             if (a.Kinds is { Count: > 0 } kinds) an.ToolTip = string.Join(" · ", kinds.Select(k => $"{k.Value} {k.Key}"));
+            // the specialties its hits named, after the name: "Pummel  Specialty 3·4"
+            if (a.Picks != 0)
+            {
+                an.Text = "";
+                an.Inlines.Add(new System.Windows.Documents.Run(a.Name));
+                an.Inlines.Add(new System.Windows.Documents.Run("   " + (KinahLedger.Parser.Abilities.PicksText(a.Picks).Length > 1 ? "Specialties " : "Specialty ") + KinahLedger.Parser.Abilities.PicksText(a.Picks)) { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = GoldInk });
+            }
             nb.Children.Add(an);
             var bar = Bar(a.Damage / top, c, 3, Track, glow: false); bar.Margin = new Thickness(0, 4, 0, 0);
             nb.Children.Add(bar);

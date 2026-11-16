@@ -280,7 +280,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         var at = new DateTime(x.AtUtcTicks, DateTimeKind.Utc);
         return x.Kind switch
         {
-            1 => new HitDealt(at, x.Source, x.Actor, x.Target, x.Amount, x.Skill, x.Cast, x.N, (x.Flags & 2) != 0, (x.Flags & 4) != 0, x.Result, x.Marks, x.Multi, x.Why),
+            1 => new HitDealt(at, x.Source, x.Actor, x.Target, x.Amount, x.Skill, x.Cast, x.N, (x.Flags & 2) != 0, (x.Flags & 4) != 0, x.Result, x.Marks, x.Multi, x.Why, x.SkillId),
             2 => new HitTaken(at, x.Source, x.Target, x.Amount, x.Skill, x.Extra),
             3 => new CastMade(at, x.Source, x.Actor, x.Skill, x.Cast),
             4 or 5 => new EffectChanged(at, x.Target, x.N, x.Skill, x.Kind == 4, x.Extra),

@@ -104,6 +104,8 @@ public static partial class WpfApp
                     a.StreamHits = seen; a.StreamDamage = a.Damage;
                     a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
                     a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
+                    // and the specialties its hits named (a class skill's id: the picks x 10)
+                    if (a.Skill is >= 11_000_000 and < 20_000_000) a.Picks = KinahLedger.Parser.Abilities.PicksOf((uint)a.Skill + (uint)((h % 4) switch { 0 => 340, 1 => 120, 2 => 450, _ => 0 }));
                 }
             string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
             Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
@@ -319,6 +321,17 @@ public static partial class WpfApp
             check(card != null && texts.Contains(top.Name) && texts.Any(t => t.Contains("DPS")) && abilityRows is >= 1 and <= ParserRows.CardAbilities && biggest != null && texts.Contains(biggest) && !texts.Any(t => t == "Other"),
                 $"Parser: a row's hover card names {top.Name}, their DPS and {abilityRows} abilities, the biggest first ({string.Join(" | ", texts.Take(8))})");
             check(ParserRows.HoverCard(sample, new KinahLedger.Parser.Fighter { Id = 999 }, at) == null, "...and none for a member with no damage");
+            // alone on the meter the foot says your DPS (Steven, 2026-11-16: "it needs to be my individual one if I'm alone")
+            {
+                var solo = BossParser.Copy(sample);
+                var me = solo.Roster.FirstOrDefault(f => f.You) ?? solo.Roster.First();
+                me.You = true;
+                foreach (var f in solo.Roster.Where(f => f.Id != me.Id)) { f.Damage = 0; f.BossDamage = 0; f.Abilities.Clear(); }
+                string FootOf(Encounter x) => string.Join(" ", FindTexts(ParserFoot.Line(x, at)).Select(BlockText));
+                string group = FootOf(sample), alone = FootOf(solo);
+                check(alone.Contains("Your DPS") && !alone.Contains("Group") && group.Contains("Group DPS") && ParserFoot.SoloYou(solo) && !ParserFoot.SoloYou(sample),
+                    $"Parser: alone on the meter the foot says your DPS, with a group the group's (\"{alone}\" | \"{group}\")");
+            }
             var bars = card == null ? new List<double>() : ParserRows.CardBarsForTest(card);
             check(bars.Count == abilityRows && bars.Count > 0 && Math.Abs(bars[0] - 156) < 0.5 && bars.Zip(bars.Skip(1)).All(p => p.First >= p.Second),
                 $"...its ability bars against the top one, the top one full and the rest shorter in order ({string.Join(", ", bars.Select(b => b.ToString("0")))})");
@@ -329,7 +342,7 @@ public static partial class WpfApp
                 var who = copy.Roster.First(f => f.Id == top.Id);
                 foreach (var a in who.Abilities)
                 {
-                    a.StreamHits = Math.Max(10, a.Hits); a.StreamDamage = a.Damage;
+                    a.StreamHits = 20 * (1 + a.Hits / 20); a.StreamDamage = a.Damage;   // a multiple of 20: 2 in 5 and 1 in 4 exact
                     a.Kinds = new() { ["result:3"] = a.StreamHits.Value * 2 / 5, ["side:1"] = a.StreamHits.Value / 4 };
                     a.KindDamage = new() { ["result:3"] = a.Damage / 2 }; a.KindMax = new() { ["result:3"] = Math.Max(1, a.Damage / 10) };
                 }

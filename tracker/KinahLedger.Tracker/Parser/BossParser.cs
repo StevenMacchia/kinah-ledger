@@ -1010,6 +1010,7 @@ public sealed class BossParser
     static void StreamHit(AbilityShare a, HitDealt h)
     {
         if (h.NoRow) return;   // a part with no hit under it: its damage is counted already, it is no hit
+        a.Picks |= Abilities.PicksOf(h.Ranked);
         a.StreamHits = (a.StreamHits ?? 0) + 1;
         long amt = Math.Max(0, h.Amount);
         a.StreamDamage = (a.StreamDamage ?? 0) + amt;
