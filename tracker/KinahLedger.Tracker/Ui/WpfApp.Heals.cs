@@ -236,7 +236,7 @@ public static partial class WpfApp
     /// fits the name's room, else without the part that landed, else the healing done alone.
     /// </summary>
     static string HealWant(TextBlock fig, Encounter e, Fighter f, DateTime at) =>
-        e.HpsOf(f, at) is { } hps ? $"{Amounts.Short(hps)}/s" : Amounts.Short(f.Healing);
+        e.HpsOf(f, at) is { } hps ? $"{ParserRows.Compact(hps)}/s" : ParserRows.Compact(f.Healing);
 
     /// <summary>A fight drawn in one place, off-screen and still, for the checks: the meter's root and its window (closed by the caller).</summary>
     static (DependencyObject Root, Window Win) HealWindow(Encounter e, DateTime at, string place)
