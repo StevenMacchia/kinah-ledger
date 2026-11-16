@@ -513,7 +513,31 @@ public static partial class WpfApp
             check(before > after && after > 0, $"...and its fill follows the opacity setting ({before} to {after})");
             // click-through (off by default): a grab handle on the top edge shows with the pointer over it, and moves it
             po.SetClickThrough(true); po.ShowGrabForTest(); DoEvents();
-            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move  ·  an edge to resize"), "Parser: with click-through on, a grab handle on its top edge moves the overlay (and the hint says an edge resizes it)");
+            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize"), "Parser: with click-through on, a grab handle on its top edge moves the overlay (and the hint says an edge resizes it)");
+            // the skills card with clicks going through (Steven, 2026-11-16: he couldn't find it): the pointer resting on a name opens
+            // that member's card, a pass over the meter opens nothing, moving off closes it; the window never takes the pointer
+            {
+                ParserRows.PeekNoPopupForTest = true;
+                try
+                {
+                    ParserRows? Find(DependencyObject d) { for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) { var ch = VisualTreeHelper.GetChild(d, i); if (ch is ParserRows pr && pr.IsVisible) return pr; if (Find(ch) is { } x) return x; } return null; }
+                    var rows = Find(po);
+                    var mem = pull1!.Members.First(m => !m.Other && !m.You);
+                    var mid = rows?.RowMiddleForTest(mem.Id);
+                    Point? at = mid is { } m0 ? rows!.TranslatePoint(m0, po) : null;
+                    po.PeekForTest(at); DoEvents();
+                    bool passOpens = rows?.PeekingForTest != 0;
+                    System.Threading.Thread.Sleep(ParserRows.PeekMs + 80);
+                    po.PeekForTest(at); DoEvents();
+                    long peekOpen = rows?.PeekingForTest ?? 0;
+                    bool filled = rows?.PeekCardForTest is FrameworkElement;
+                    po.PeekForTest(null); DoEvents();
+                    long peekAfter = rows?.PeekingForTest ?? -1;
+                    check(at != null && !passOpens && peekOpen == mem.Id && filled && peekAfter == 0,
+                        $"Parser: with click-through on, resting the pointer on {mem.Name}'s row opens their skills card ({peekOpen}, want {mem.Id}), a pass opens nothing ({!passOpens}), moving off closes it ({peekAfter})");
+                }
+                finally { ParserRows.PeekNoPopupForTest = false; }
+            }
             // the shortcut "Off" (the default): the hint and the menu name none; a real one is named
             var off = new ParserOverlay(still: true) { HotkeyText = "Off" }.HintForTest;
             var on = new ParserOverlay(still: true) { HotkeyText = "Ctrl+Shift+P" }.HintForTest;

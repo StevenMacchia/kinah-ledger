@@ -83,6 +83,9 @@ public sealed class ParserOverlay : Window
         _face.Child = _panelFace;
         _faceGrid = new Grid { Children = { _face, _grab } };
         Content = new StackPanel { Children = { _faceGrid, _hint } };
+        // the hint wraps under the meter, never wider than it (the window sizes to its content)
+        _hint.TextWrapping = TextWrapping.Wrap;
+        _hint.SetBinding(MaxWidthProperty, new System.Windows.Data.Binding(nameof(ActualWidth)) { Source = _faceGrid });
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
         IsVisibleChanged += (_, _) => { if (!IsVisible) DropEdge(); if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
@@ -278,7 +281,8 @@ public sealed class ParserOverlay : Window
     void ShowHint()
     {
         // the edges widen it (either mode): said in the hint, the one place it can be found
-        _hint.Text = _clickThrough ? L.T("drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the mode");
+        // ...and resting on a name opens its skills (with clicks going through too: ParserRows.Peek), said first: the one most looked for
+        _hint.Text = _clickThrough ? L.T("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the mode");
         _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -333,6 +337,8 @@ public sealed class ParserOverlay : Window
             _overEdge = !onGrab && EdgeAt(new Point((c.X - r.Left) / dpi.DpiScaleX, (c.Y - r.Top) / dpi.DpiScaleY)) != 0;
             Cursor = _overEdge ? System.Windows.Input.Cursors.SizeWE : null;
             onGrab |= _overEdge;
+            // the rows' cards with clicks going through: resting the pointer on a name opens its skills (ParserRows.Peek)
+            Peek(onGrab ? null : new Point((c.X - r.Left) / dpi.DpiScaleX, (c.Y - r.Top) / dpi.DpiScaleY));
         }
         else HideGrab();
         if (onGrab != _grabbing)
@@ -343,8 +349,28 @@ public sealed class ParserOverlay : Window
         ShowHint();
     }
 
+    /// <summary>The pointer's place in the window (null: off the rows) to every meter in it.</summary>
+    void Peek(Point? at)
+    {
+        foreach (var rows in RowsIn(this)) rows.Peek(at is { } p && rows.IsVisible ? TranslatePoint(p, rows) : null);
+    }
+
+    static IEnumerable<ParserRows> RowsIn(DependencyObject d)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+        {
+            var ch = VisualTreeHelper.GetChild(d, i);
+            if (ch is ParserRows pr) { yield return pr; continue; }
+            foreach (var x in RowsIn(ch)) yield return x;
+        }
+    }
+
+    /// <summary>For the tests: the pointer watch's step with the pointer at a place in the window (null: away).</summary>
+    internal void PeekForTest(Point? at) => Peek(at);
+
     void HideGrab()
     {
+        Peek(null);
         if (_edge == 0) _overEdge = false;
         _grab.Visibility = Visibility.Collapsed;
         if (_grabbing) { _grabbing = false; var h = new WindowInteropHelper(this).Handle; if (h != IntPtr.Zero) Native.SetClickThrough(h, _clickThrough); }
