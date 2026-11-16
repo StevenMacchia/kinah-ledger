@@ -45,7 +45,7 @@ public sealed class ParserOverlay : Window
     readonly Border _grab;
     readonly System.Windows.Threading.DispatcherTimer _grabWatch;
     bool _grabbing;
-    public const double Width0 = 340;
+    public const double Width0 = ParserPrefs.DefaultWidth + 10;   // Buddy's width (HudCard, 360)
 
     /// <param name="still">A drawing (layout renders): not the overlay the readers step around.</param>
     public ParserOverlay(bool still = false)
@@ -86,6 +86,7 @@ public sealed class ParserOverlay : Window
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
         IsVisibleChanged += (_, _) => { if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
+        AddWidthDrag();
         MouseLeftButtonDown += (_, _) =>
         {
             if ((_clickThrough && !_grabbing) || _still) return;
@@ -125,6 +126,90 @@ public sealed class ParserOverlay : Window
         int want = b - faceH;
         if (r.Top != want) Native.MoveTo(h, r.Left, want);
     }
+
+    // ---- its width, dragged from its own edges (Steven, 2026-11-15: "let the user drag size/width from the overlay itself") ----
+
+    /// <summary>The player let go of an edge: the meter's new width at 100% (MainWindow keeps it in parser.json).</summary>
+    public event Action<double>? FightWidthSet;
+    /// <summary>-1 while the left edge is held, 1 the right, 0 none.</summary>
+    int _edge;
+    double _edgeX0, _edgeW0, _edgeLeft0;
+    const double EdgeGrip = 8;
+
+    /// <summary>
+    /// A press on the meter's left or right edge widens or narrows it (ahead of the window's own drag, which moves it), the
+    /// same as the Kinah overlay's meter; dragging the left edge keeps the right edge where it was. Not while clicks go
+    /// through (the game has the pointer then; Settings › In game › Parser › Width still sets it).
+    /// </summary>
+    void AddWidthDrag()
+    {
+        PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (_still || _clickThrough) return;
+            int edge = EdgeAt(e.GetPosition(this));
+            if (edge == 0) return;
+            _edge = edge; _edgeX0 = ScreenX(e); _edgeW0 = HudStackLook.FightWidth; _edgeLeft0 = Left;
+            CaptureMouse();
+            e.Handled = true;
+        };
+        PreviewMouseMove += (_, e) =>
+        {
+            if (_still) return;
+            if (_edge == 0)
+            {
+                if (!_clickThrough) Cursor = EdgeAt(e.GetPosition(this)) != 0 ? System.Windows.Input.Cursors.SizeWE : System.Windows.Input.Cursors.SizeAll;
+                return;
+            }
+            e.Handled = true;
+            double w = Math.Clamp(Math.Round(_edgeW0 + _edge * (ScreenX(e) - _edgeX0)), HudStackLook.FightWidthMin, HudStackLook.FightWidthMax);
+            if (w == HudStackLook.FightWidth) return;
+            HudStackLook.FightWidth = w;
+            ApplyFightWidth();
+            if (_edge < 0) Left = _edgeLeft0 - (w - _edgeW0);   // the right edge stays put
+        };
+        PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (_edge == 0) return;
+            e.Handled = true;
+            EndEdge();
+            ReleaseMouseCapture();
+        };
+        LostMouseCapture += (_, _) => EndEdge();
+    }
+
+    void EndEdge()
+    {
+        if (_edge == 0) return;
+        bool moved = _edge < 0 && Math.Abs(Left - _edgeLeft0) > 0.5;
+        _edge = 0;
+        Cursor = _clickThrough ? null : System.Windows.Input.Cursors.SizeAll;
+        if (HudStackLook.FightWidth != _edgeW0) FightWidthSet?.Invoke(HudStackLook.FightWidth);
+        // the left edge moved the window: its new spot is kept as a drop's (the bottom edge where it was)
+        var h = new WindowInteropHelper(this).Handle;
+        if (moved && h != IntPtr.Zero && GetWindowRect(h, out var r)) { _anchorBottom = r.Top + FaceHeightPx(); Dropped?.Invoke(r.Left, r.Top, _anchorBottom.Value); }
+    }
+
+    double ScreenX(System.Windows.Input.MouseEventArgs e) => PointToScreen(e.GetPosition(this)).X / VisualTreeHelper.GetDpi(this).DpiScaleX;
+
+    /// <summary>-1 over the meter's left edge, 1 over its right, 0 elsewhere (the hint under it left out).</summary>
+    internal int EdgeAt(Point p)
+    {
+        if (_faceGrid.ActualWidth < 1) return 0;
+        try
+        {
+            var t = _faceGrid.TransformToAncestor(this);
+            var tl = t.Transform(new Point(0, 0));
+            var br = t.Transform(new Point(_faceGrid.ActualWidth, _faceGrid.ActualHeight));
+            if (p.Y < tl.Y || p.Y > br.Y) return 0;
+            if (p.X >= tl.X && p.X <= tl.X + EdgeGrip) return -1;
+            if (p.X <= br.X && p.X >= br.X - EdgeGrip) return 1;
+        }
+        catch (InvalidOperationException) { }
+        return 0;
+    }
+
+    /// <summary>For the options test: the meter's frame width, in DIPs.</summary>
+    internal double FaceWidthForTest => _faceGrid.ActualWidth;
 
     /// <summary>For the options test: the meter's bottom edge pinned where it is now; and that edge and the window's top, in pixels.</summary>
     internal void AnchorBottomForTest() { var h = new WindowInteropHelper(this).Handle; if (h != IntPtr.Zero && GetWindowRect(h, out var r)) _anchorBottom = r.Top + FaceHeightPx(); }
@@ -271,7 +356,7 @@ public sealed class ParserOverlay : Window
     }
 
     /// <summary>Settings › In game › Parser › Width moved: a fight look drawn again at the new width.</summary>
-    public void ApplyFightWidth() => _lookFace?.ApplyWidth();
+    public void ApplyFightWidth() { _lookFace?.ApplyWidth(); _panel.Width = HudStackLook.FightWidth + 10; }
 
     /// <summary>
     /// A look's face in a fight as the Parser's own window draws it (Settings' look row): the standard panel, or a fight
@@ -421,7 +506,7 @@ public sealed class ParserPanel : Border
     public ParserPanel(bool glass = false)
     {
         _glass = glass;
-        Width = HudStackLook.FightWidth + 10;   // the meter's width (Settings › In game › Parser › Width), 340 by default
+        Width = HudStackLook.FightWidth + 10;   // the meter's width (Settings › In game › Parser › Width, or an edge dragged), 360 by default: Buddy's
         // the Kinah overlay's frame exactly (Ui/HudWindow.cs): its surface at the same opacity, its 1 px line, radius 12, its padding
         Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0B, 0x0C, 0x10)); BorderBrush = HudKit.FrameLine; BorderThickness = new Thickness(1);
         var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(null));

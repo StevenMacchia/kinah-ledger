@@ -43,16 +43,22 @@ public partial class OptionsWindow
         _parserLookPick = ParserPrefs.LookOf(p.Look);
         _parserActiveChk.IsChecked = p.DpsActive;
         _parserExpandedChk.IsChecked = p.Expanded;
-        if (_parserWidth != null) _parserWidth.Value = HudStackLook.FightWidth = p.Width;
+        // the slider shows the saved width; opening Settings never moves the meter (it reset the meter to the base width,
+        // dropping the expanded meter's extra: Steven, 2026-11-15, "should never revert unless you change it")
+        _parserWidthLoading = true;
+        if (_parserWidth != null) _parserWidth.Value = p.Width;
+        _parserWidthLoading = false;
+        _parserWidthLoaded = p.Width;
         DrawParserLooks();
     }
+    bool _parserWidthLoading;
+    double _parserWidthLoaded = double.NaN;
 
-    /// <summary>Options closed without saving: the meter back to its saved width.</summary>
+    /// <summary>Options closed without saving: the meter back to its saved width, only if the slider moved it.</summary>
     void EndParserWidthPreview()
     {
-        if (_parserWidth == null) return;
-        var w = ParserPrefs.Load().Width;
-        if (w != HudStackLook.FightWidth) _host.PreviewFightWidth(w);
+        if (_parserWidth == null || double.IsNaN(_parserWidthLoaded) || Math.Round(_parserWidth.Value) == Math.Round(_parserWidthLoaded)) return;
+        _host.PreviewFightWidth(ParserPrefs.Load().Width);
     }
 
     void SaveParser()
@@ -69,7 +75,8 @@ public partial class OptionsWindow
         p.Look = _parserLookPick;
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
-        if (_parserWidth != null) p.Width = Math.Round(_parserWidth.Value);
+        // the slider's width only when it was moved here: a width dragged on the overlay since stays
+        if (_parserWidth != null && Math.Round(_parserWidth.Value) != Math.Round(_parserWidthLoaded)) { p.Width = Math.Round(_parserWidth.Value); p.WidthPicked = true; }
         p.Save();
         ParserPrefs.RaiseSaved();
     }
@@ -167,7 +174,7 @@ public partial class OptionsWindow
         _parserWidth.ValueChanged += (_, e) =>
         {
             Label();
-            if (Math.Round(e.NewValue) != HudStackLook.FightWidth) _host.PreviewFightWidth(e.NewValue);
+            if (!_parserWidthLoading) _host.PreviewFightWidth(Math.Round(e.NewValue));
         };
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _parserWidth, _parserWidthLbl } };
         Grid.SetColumn(right, 1); g.Children.Add(right);

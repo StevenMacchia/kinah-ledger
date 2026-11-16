@@ -60,7 +60,7 @@ public partial class MainWindow
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
-            _parserPrefs.Width = fresh.Width; _parserPrefs.Expanded = fresh.Expanded; ApplyMeterExpanded();
+            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; ApplyMeterExpanded();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
@@ -366,6 +366,8 @@ public partial class MainWindow
             _parserOverlay.HideAsked += () => SetParserOverlay(false);
             _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
             _parserOverlay.Clicked += ToggleMeterExpanded;
+            // an edge dragged on the Parser's own window: its width kept from then on (Steven, 2026-11-15: "let the user drag size/width from the overlay itself")
+            _parserOverlay.FightWidthSet += w => { _parserPrefs.Width = w - MeterExtraWidth; _parserPrefs.WidthPicked = true; if (!_demo) _parserPrefs.Save(); _hud?.ApplyFightWidth(); };
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
             _parserOverlay.SetOpacity(_hudPreview?.HudOpacity ?? _prefs.HudOpacity);
             var (radius, pad) = HudWindow.FrameShape(HudFields.Parse(_prefs.HudFields));
@@ -482,7 +484,7 @@ public partial class MainWindow
     /// <summary>Settings › In game › Parser › Width moved: the meter at that width now (Save keeps it).</summary>
     public void PreviewFightWidth(double w)
     {
-        HudStackLook.FightWidth = w;
+        HudStackLook.FightWidth = w + MeterExtraWidth;   // the slider's is the compact width: the expanded meter keeps its extra
         _hud?.ApplyFightWidth();
         _parserOverlay?.ApplyFightWidth();
         if (_parserOverlay != null) ParserOverlayTick();

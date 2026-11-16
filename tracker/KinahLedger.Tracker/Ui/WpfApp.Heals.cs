@@ -169,9 +169,18 @@ public static partial class WpfApp
             // a raid healer's figures (millions) on the expanded meter, where the name's room is short: the part that landed gives way,
             // no figure is trimmed
             {
-                // the default width (an earlier check may have left the meter wider), expanded as the renders draw it
+                // at Buddy's width (the default since 0.10.119) the whole line fits, the part that landed too, nothing trimmed
                 ParserRows.ExpandedPref = true; HudStackLook.FightWidth = HudStackLook.FightWidthDefault + 70; ParserRows.BestOf = _ => null;
                 var (name, big, at, _) = HealLooks(now).First(x => x.Name == "big");
+                {
+                    var (root0, win0) = HealWindow(big, at, "standard");
+                    var fig0 = TaggedShown(root0, "heal-figures").OfType<TextBlock>().FirstOrDefault();
+                    fig0?.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    check(fig0 != null && fig0.DesiredSize.Width <= fig0.ActualWidth + 0.5, $"...a raid healer's figures on the expanded meter at the default width trim no figure (\"{fig0?.Text}\")");
+                    win0.Close();
+                }
+                // the old, narrower default (330): the name's room is short there
+                HudStackLook.FightWidth = KinahLedger.Parser.ParserPrefs.OldDefaultWidth + 70;
                 var (root, win) = HealWindow(big, at, "standard");
                 var fig = TaggedShown(root, "heal-figures").OfType<TextBlock>().FirstOrDefault();
                 var f = big.Members.First(m => m.HealingOthers > 0);

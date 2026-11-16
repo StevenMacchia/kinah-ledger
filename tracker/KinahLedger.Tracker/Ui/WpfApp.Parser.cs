@@ -268,6 +268,18 @@ public static partial class WpfApp
         var (_, sample) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
         o.Draw(sample!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); o.Show(); DoEvents();
         check(o.ActualWidth >= ParserOverlay.Width0 - 1 && !o.ShowActivated && o.Topmost && !o.ShowInTaskbar, "Parser: the overlay is drawn, on top, out of the taskbar, never activated");
+        // its width (Steven, 2026-11-15): Buddy's by default, and dragged from its own left or right edge
+        {
+            double w0 = HudStackLook.FightWidth;
+            HudStackLook.FightWidth = HudStackLook.FightWidthDefault; o.ApplyFightWidth(); DoEvents();
+            double f1 = o.FaceWidthForTest, h = o.ActualHeight / 2;
+            check(Math.Abs(f1 - 360) <= 2 && HudStackLook.FightWidthDefault == KinahLedger.Parser.ParserPrefs.DefaultWidth, $"Parser: the overlay is Buddy's width by default ({f1:0}, Buddy 360)");
+            check(o.EdgeAt(new Point(2, h)) == -1 && o.EdgeAt(new Point(f1 - 2, h)) == 1 && o.EdgeAt(new Point(f1 / 2, h)) == 0,
+                "...its left and right edges take a drag to widen it, the middle moves it");
+            HudStackLook.FightWidth = 500; o.ApplyFightWidth(); DoEvents();
+            check(Math.Abs(o.FaceWidthForTest - f1 - 150) <= 2, $"...and wider, it draws wider ({o.FaceWidthForTest:0} at 500)");
+            HudStackLook.FightWidth = w0;
+        }
         o.Close();
         // the modes: Full run's run under way with its splits, Every fight's fights, the list by mode, the overlay's menu
         w.ShowParserDemo("run"); DoEvents();
@@ -571,6 +583,7 @@ public static partial class WpfApp
             if (ws != null) { ws.Value = 500; DoEvents(); }
             check(ws != null && ws.Minimum == 300 && ws.Maximum == 640 && HudStackLook.FightWidth == 500, $"Options › In game › Parser: a Width slider, 300 to 640, that widens the meter as it moves ({HudStackLook.FightWidth:0})");
             if (ws != null) { ws.Value = wBefore; DoEvents(); }
+            check(HudStackLook.FightWidth == wBefore, $"...and moved back puts the meter back ({HudStackLook.FightWidth:0}, was {wBefore:0})");
             sws.Separate.IsChecked = false; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
         }
         // the Kinah overlay's small DPS went (Steven, 2026-11-15: "get rid of the dps meter on the kinah tracker overlay only since
