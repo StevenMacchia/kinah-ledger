@@ -53,6 +53,13 @@ public sealed class BossParser
     public Encounter? LastEnded { get { lock (_gate) return _lastEnded; } }
     Encounter? _lastEnded;
 
+    /// <summary>
+    /// The pull that just ended (<paramref name="id"/>) as it is now: its own record, a copy, with any heal of its last moment
+    /// that came after its end (<see cref="LastEnded"/> is the copy saved, kept as it went out). Null once another pull ended,
+    /// or for any other record. The meter that holds the result re-reads it when <see cref="LateHeals"/> moves.
+    /// </summary>
+    public Encounter? EndedNow(string id) { lock (_gate) return _endedPull is { } ep && ep.Copies.Count > 0 && ep.Copies[0].Id == id ? Copy(ep.Copies[0]) : null; }
+
     void Finish(List<Encounter> done, DateTime? at)
     {
         if (done.Count > 0) lock (_gate) _lastEnded = done[^1];

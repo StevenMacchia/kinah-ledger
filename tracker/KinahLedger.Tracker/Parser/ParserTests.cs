@@ -1393,6 +1393,9 @@ public static class ParserTests
             var held = p.AlwaysEnded!;
             Check(k.Members.Single(f => f.Id == 2).Healing == 4_500 && held.Members.Single(f => f.Id == 2).Healing == 6_500 && p.LateHeals == 2_000,
                 $"...a heal of the pull's last moment after its kill: in the held meter's copy ({held.Members.Single(f => f.Id == 2).Healing:N0}), not in the copy saved ({k.Members.Single(f => f.Id == 2).Healing:N0}); one after the end in neither");
+            // the meter's held result re-reads the pull (EndedNow): its own record with the late heal; another id, nothing
+            Check(p.EndedNow(k.Id)?.Members.Single(f => f.Id == 2).Healing == 6_500 && p.EndedNow("not-this-pull") == null && p.LastEnded?.Members.Single(f => f.Id == 2).Healing == 4_500,
+                $"...the pull just ended, read again, has the late heal ({p.EndedNow(k.Id)?.Members.Single(f => f.Id == 2).Healing:N0}); the copy saved still not ({p.LastEnded?.Members.Single(f => f.Id == 2).Healing:N0})");
             Check(k.TopHealer(k.End!.Value)?.Id == 2 && k.TopsShown,
                 $"...TOP HEALS: Aerin, who healed Swoly, not Swoly, whose own heals are more ({k.TopHealer(k.End!.Value)?.Name})");
             var again = BossParser.Copy(k).Members.Single(f => f.Id == 2);
