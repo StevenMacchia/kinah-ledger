@@ -305,7 +305,12 @@ public sealed partial class ParserRows : Grid
     public const double PopFreshSeconds = 2.5;
 
     /// <summary>A soft dark halo for a row's text: it reads over the brightest class bar or your gold wash.</summary>
-    static DropShadowEffect TextHalo() => new() { Color = Colors.Black, BlurRadius = 4, ShadowDepth = 0, Opacity = 0.85 };
+    // a tight dark edge since 0.10.131 (Steven, 2026-11-16: "idk if the numbers need small outline ... its hard to read"):
+    // a small blur at full strength reads as an outline round each letter, not a soft glow
+    static DropShadowEffect TextHalo() => new() { Color = Colors.Black, BlurRadius = 2.5, ShadowDepth = 0, Opacity = 1 };
+
+    /// <summary>A second tight edge, on a figure's host: with the figure's own, a solid outline round the digits.</summary>
+    static DropShadowEffect Outline() => new() { Color = Colors.Black, BlurRadius = 2, ShadowDepth = 0, Opacity = 1 };
 
     /// <summary>
     /// Your character's name as the tracker knows it (Characters, set by the window); null in renders and tests.
@@ -661,7 +666,8 @@ public sealed partial class ParserRows : Grid
             RenderTransformOrigin = new Point(0.5, 0.5), Effect = new DropShadowEffect { Color = PK.Coral, BlurRadius = 9, ShadowDepth = 0, Opacity = 0.85 },
             Child = new TextBlock { Text = "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
         nm.Children.Add(tick);
-        var name = new TextBlock { Text = NameOf(f), FontSize = 13, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.You ? HudKit.Ink : f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        // the name in white (0.10.131, "a little hard to read"): the class tint melted into the class's own bar; the icon and the bar say the class
+        var name = new TextBlock { Text = NameOf(f), FontSize = 13.5, FontWeight = f.You ? FontWeights.Bold : FontWeights.SemiBold, Foreground = f.Name.Length > 0 ? HudKit.Ink : HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         // a soft dark halo under the name and the DPS: they read over any bar (Steven, 2026-11-15: "the highlight over the name
         // of yourself makes it so hard to read")
         name.Effect = TextHalo();
@@ -691,17 +697,18 @@ public sealed partial class ParserRows : Grid
         var nameHost = new Border { Child = nm, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
         cols.Children.Add(PK.Col(nameHost, 2));
         TextBlock Fig(double size, Brush b, FontWeight w) { var t = new TextBlock { FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
-        var dps = Fig(15, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps"; dps.Effect = TextHalo();
-        var share = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
+        var dps = Fig(16, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps"; dps.Effect = TextHalo();
+        var share = Fig(12, HudKit.B(0xDDE0E8), FontWeights.SemiBold); share.Effect = TextHalo(); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
         var damage = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold);
         var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); critT.ToolTip = L.T("Crit rate");
         // back attacks beside crit, in a quieter tone so the two rates read apart
         var backT = Fig(11, HudKit.B(0x9FA6B8), FontWeights.Medium); backT.ToolTip = L.T("Hits from behind");
         var sparkG = new Grid { Width = 60, Height = 18, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         // the odometer over the figure, right-aligned in the same column: the column never moves, rolling or not
-        var odo = new Odometer(15, FontWeights.Bold, (HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White) { Effect = TextHalo(), Visibility = Visibility.Collapsed };
-        var dpsHost = new Grid { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { dps, odo } };
-        cols.Children.Add(PK.Col(dpsHost, 3)); cols.Children.Add(PK.Col(share, 4));
+        var odo = new Odometer(16, FontWeights.Bold, (HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White) { Effect = TextHalo(), Visibility = Visibility.Collapsed };
+        var dpsHost = new Grid { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { dps, odo }, Effect = Outline() };
+        var shareHost = new Grid { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { share }, Effect = Outline() };
+        cols.Children.Add(PK.Col(dpsHost, 3)); cols.Children.Add(PK.Col(shareHost, 4));
         int k = 5;
         if (expanded) { cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (back) cols.Children.Add(PK.Col(backT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
         // the bar: a quiet track the row's width, the fill in the class's colour, angled at its end, fading to the right
@@ -709,8 +716,10 @@ public sealed partial class ParserRows : Grid
         var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         // your row's bar quieter: under the gold frame's wash a full-strength bar made the name hard to read
         // 2026-11-16: "really hard to see the damage bars cause transparent": more solid, the fade gentler (names keep their halo)
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x90 : f.You ? (byte)0x88 : (byte)0xC0, c.R, c.G, c.B), 0));
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x48 : f.You ? (byte)0x50 : (byte)0x78, c.R, c.G, c.B), 1));
+        // 0.10.131: a shade deeper than the class colour (15% toward the panel), so the white name and figures stand on it and the bar still shows
+        var deep = Color.FromRgb((byte)(c.R * 0.85 + 0x10 * 0.15), (byte)(c.G * 0.85 + 0x12 * 0.15), (byte)(c.B * 0.85 + 0x18 * 0.15));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0xA0 : f.You ? (byte)0x98 : (byte)0xD8, deep.R, deep.G, deep.B), 0));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x50 : f.You ? (byte)0x58 : (byte)0x80, deep.R, deep.G, deep.B), 1));
         fade.Freeze();
         var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = fade, Width = 0, RenderTransformOrigin = new Point(0, 1), RenderTransform = new SkewTransform(-16, 0) };
         var edge = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Left, Background = PK.C(c), CornerRadius = new CornerRadius(3, 0, 0, 3), Visibility = f.You ? Visibility.Collapsed : Visibility.Visible };
