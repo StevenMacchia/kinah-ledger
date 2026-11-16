@@ -172,12 +172,13 @@ public static class PacketTests
                 K(10, FightFlags.NoKiller | FightFlags.VictimPlayer, "Zev"),                     // a player died, no rise: not mine
                 K(15, FightFlags.Mine | FightFlags.VictimMonster), K(15.2, FightFlags.NoKiller), R(15.2, 12),   // one rise, taken by my own kill
                 K(20, FightFlags.Mine | FightFlags.VictimPlayer, "Pecked"), R(20, 46),
-                K(25, FightFlags.VictimMe, killer: "Nana"), K(30, FightFlags.VictimMe | FightFlags.NoKiller) })
+                K(25, FightFlags.VictimMe, killer: "Nana"), K(30, FightFlags.VictimMe | FightFlags.NoKiller),
+                K(35, FightFlags.NoKiller | FightFlags.VictimPlayer, "MayB"), R(35.2, 13) })   // a player near you died, your points rose (a kill of yours): not your PvP
                 ft.Add(e);
             var early = ft.Take(t0.AddSeconds(2));
             var all = early.Concat(ft.Take(t0.AddSeconds(60))).ToList();
             string Say(FightTally.Outcome o) => o.Death ? $"death{(o.Name.Length > 0 ? ":" + o.Name : "")}" : $"{(o.Player ? "player" : "monster")}{(o.Credited ? "*" : "")}{(o.Name.Length > 0 ? ":" + o.Name : "")}";
-            Check(early.Count == 0 && string.Join(" ", all.Select(Say)) == "monster monster* monster player:Pecked death:Nana death" && ft.RankPoints == 84,
+            Check(early.Count == 0 && string.Join(" ", all.Select(Say)) == "monster monster* monster player:Pecked death:Nana death" && ft.RankPoints == 97,
                 $"fights: held until the points after them are in, then {string.Join(" ", all.Select(Say))}; Rank Points +{ft.RankPoints}");
             // through the session: the counts, the kills the larger of the chat's and the game's, the kill marked for the pickup gate
             var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);

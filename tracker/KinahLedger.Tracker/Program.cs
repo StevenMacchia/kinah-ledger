@@ -1790,7 +1790,12 @@ options: --process aion[,other]");
         var wk = SharePicture.Compose(week with { Days = wdays, Kinah = 1_000_000 }, false, null, fk);
         Check("week: the panel", $"{wk.RowsHead} | {wk.RowsSide} | " + string.Join(" / ", wk.Rows.Select(r => $"{r.Name} {r.Fig} {r.Bar:0.00}{(r.Best ? " best" : "")}{(r.Dim ? " dim" : "")}")), "BY DAY | 6 of 7 days farmed | Sun 25 100K 0.14 / Mon 26 200K 0.29 / Tue 27 300K 0.43 / Wed 28 – 0.00 dim / Thu 29 500K 0.71 / Fri 30 600K 0.86 / Today 700K 1.00 best");
         Check("week: its best day and zone at the foot", wk.BestLine, "Best day: Thu 29, 1.2M · most made in Northern Tolbas Forest");
-        var all2 = string.Join("\n", new[] { tp, wk }.Select(SharePicture.Text));
+        // 9. the Abyss (Steven, 2026-11-16): the points an hour and the points lead, Rank Points and PvP under them, the
+        // Abyss's drops (the facts carry only those), no Kinah-and-loot split, no zones line
+        var ab = SharePicture.Compose(session with { Seconds = 3600, Title = "Lower Abyss", Abyss = new ShareAbyss(18_420, 4_210, 380, 3, 96, 2), Kinah = 120_000 }, false, null, fk);
+        Check("the Abyss: its figures and words", $"{ab.Kicker} | {ab.Rate} {ab.RateLabel} | {ab.Made} {ab.MadeLabel} | {string.Join(", ", ab.Stats.Select(x => $"{x.Fig} {x.Label}"))} | {ab.RowsHead} | split {(ab.Split == null ? "none" : "shown")} | zones [{ab.Zones}]",
+            "THIS SESSION · ABYSS | 18,420 Abyss Points an hour | 18,420 Abyss Points in 1h | 18,420 AP an hour, 4,210 Rank Points, 3 PvP kills | ABYSS DROPS | split none | zones []");
+        var all2 = string.Join("\n", new[] { tp, wk, ab }.Select(SharePicture.Text));
         Check("still no accuracy figures", all2.Contains('%') || all2.Contains("accura", StringComparison.OrdinalIgnoreCase) ? "found" : "none", "none");
         return ok;
     }
