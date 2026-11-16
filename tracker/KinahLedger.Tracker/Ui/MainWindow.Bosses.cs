@@ -146,8 +146,10 @@ public partial class MainWindow
     {
         bool soon = !r.OnNow && r.Left <= BossSoon;
         string sub = r.Event.Every + (r.Event.Where.Length > 0 ? " · " + r.Event.Where : "");
-        string big = r.OnNow ? "On now" : r.When;
-        string small = r.OnNow ? r.When : r.StartPc.ToLocalTime().Date != DateTime.Now.Date ? $"{r.StartPc.ToLocalTime():ddd HH:mm}" : $"at {r.StartPc.ToLocalTime():HH:mm}";
+        // an event joined in its first minutes: the time left to enter, counting down (Steven, 2026-11-16)
+        bool entry = r.OnNow && r.Event.EntryMinutes > 0;
+        string big = entry ? r.When : r.OnNow ? "On now" : r.When;
+        string small = entry ? "left to enter" : r.OnNow ? r.When : r.StartPc.ToLocalTime().Date != DateTime.Now.Date ? $"{r.StartPc.ToLocalTime():ddd HH:mm}" : $"at {r.StartPc.ToLocalTime():HH:mm}";
         return TimerRow(r.Event.Name, sub, big, small, r.OnNow ? CkGood : soon ? CkGold : CkFaint, r.OnNow ? CkGood : soon ? CkGold : CkInk, r.OnNow || soon);
     }
 

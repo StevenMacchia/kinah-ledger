@@ -236,9 +236,10 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
         var i = items.FirstOrDefault();
-        if (i?.AtPc is not { } at) return null;
-        var left = at - now;
-        return ($"{i.Short} {TimerBoard.Clock(left)}", left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes) ? Gold : Ink);
+        if (i?.AtPc == null) return null;
+        // as the badges say it (Ui/TimerBadge.cs): an event's entry open in green, "Shugo ENTER 2:41"
+        var tone = TimerBadge.Of(i, now).Tone;
+        return (TimerBadge.Text(i, now), tone == TimerBadge.Tone.On ? Mint : tone == TimerBadge.Tone.Soon ? Gold : Ink);
     }
 }
 
@@ -327,9 +328,9 @@ sealed class HudCapsule : HudStackLook
         _meterTimer.Visibility = KinahHidden && tc != null ? Visibility.Visible : Visibility.Collapsed;
         if (tc is { } mt) { _meterTimer.Text = mt.Text; _meterTimer.Foreground = mt.Tone; }
         if (tc is not { } c) { _chip.Visibility = Visibility.Collapsed; return; }
-        bool gold = ReferenceEquals(c.Tone, Gold);
+        bool gold = ReferenceEquals(c.Tone, Gold), on = ReferenceEquals(c.Tone, Mint);
         _chipText.Text = c.Text; _chipText.Foreground = c.Tone;
-        _chip.Background = B(gold ? GoldC : 0xFFFFFF, gold ? .14 : .06); _chip.BorderBrush = B(gold ? GoldC : 0xFFFFFF, gold ? .45 : .14);
+        _chip.Background = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .14 : .06); _chip.BorderBrush = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .45 : .14);
         _chip.Visibility = Visibility.Visible;
     }
 
@@ -506,9 +507,9 @@ sealed class HudMeter : HudStackLook
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
         if (TimerChip(items, now) is not { } c) { _tab.Visibility = Visibility.Collapsed; PlaceHp(); return; }
-        bool gold = ReferenceEquals(c.Tone, Gold);
+        bool gold = ReferenceEquals(c.Tone, Gold), on = ReferenceEquals(c.Tone, Mint);
         _tabText.Text = c.Text; _tabText.Foreground = c.Tone;
-        _tab.Background = B(gold ? GoldC : 0xFFFFFF, gold ? .16 : .07);
+        _tab.Background = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .16 : .07);
         _tab.Visibility = Visibility.Visible;
         PlaceHp();
     }
@@ -663,16 +664,8 @@ sealed class HudFloat : HudStackLook
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        _timers.Children.Clear();
-        foreach (var i in items.Take(HudWindow.TimerLineMax))
-        {
-            if (i.AtPc is not { } at) continue;
-            var left = at - now;
-            bool soon = left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes);
-            if (_timers.Children.Count > 0) _timers.Children.Add(Tx("   ", 11, Faint));
-            _timers.Children.Add(Tx(i.Short + " ", 11.5, soon ? Gold : Muted, FontWeights.SemiBold));
-            _timers.Children.Add(Tx(TimerBoard.Clock(left), 11.5, soon ? Gold : Ink, FontWeights.Bold));
-        }
+        // badges (Steven, 2026-11-16: not "black boxes w/ yellow text")
+        TimerBadge.Fill(_timers, items.Where(i => i.AtPc != null), now, 11, HudWindow.TimerLineMax);
         _timers.Visibility = _timers.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 

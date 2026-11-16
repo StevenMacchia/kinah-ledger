@@ -176,6 +176,8 @@ public static partial class WpfApp
         {
             var due = new List<Session.TimerBoard.Item>
             {
+                // the Shugo Festival's entry open (a green badge counting the minutes to enter down), then two timers due
+                new("event:Shugo Festival", "Events", "Shugo Festival", "", Session.TimerBoard.Kind.On, now.AddSeconds(161), "2m 41s", "left to enter") { Short = "Shugo" },
                 new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" },
                 new("boss:Soul Ruler Kashapa", "Verteron", "Soul Ruler Kashapa", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(719), "11m 59s", "") { Short = "Kashapa" },
             };

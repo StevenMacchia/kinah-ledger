@@ -22,6 +22,9 @@ public sealed partial class HudWindow
     /// <summary>The line's place above everything else in the overlay (its 4 px gap included, so the anchor counts it).</summary>
     readonly Border _timerSlot = new() { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(0, 0, 0, 4) };
     readonly TextBlock _timerText = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+    /// <summary>The timers as badges (Ui/TimerBadge.cs; Steven, 2026-11-16: not "black boxes w/ yellow text").</summary>
+    readonly StackPanel _timerBadges = new() { Orientation = Orientation.Horizontal };
+    string _timerLine = "";
 
     static readonly Brush TimerInk = Frozen(Color.FromRgb(0xE4, 0xE7, 0xEE)), TimerGold = Frozen(Color.FromRgb(0xF5, 0xB9, 0x42)), TimerDot = Frozen(Color.FromRgb(0x86, 0x8D, 0xA1));
 
@@ -31,20 +34,10 @@ public sealed partial class HudWindow
     /// <summary>Called at the end of the constructor, after the Parser's section: the line goes above it, at the top of the same stack.</summary>
     void AddTimerSection()
     {
-        var lineFrame = new Border
-        {
-            Child = _timerText, Padding = new Thickness(8, 2, 8, 3), CornerRadius = new CornerRadius(8),
-            Background = Frozen(Color.FromArgb(0xE6, 0x0B, 0x0C, 0x10)), BorderBrush = FrameBrush, BorderThickness = new Thickness(1),
-        };
-        if (HudGlass.OldLooks)
-        {
-            // the glass, the panel's own padding, a step bigger type; on the strip it is the stack's top part
-            var (_, pad) = FrameShape(_fields);
-            HudGlass.Apply(lineFrame, 0.94, new CornerRadius(_look == null ? HudGlass.Radius : 9));
-            lineFrame.Padding = _look == null ? new Thickness(pad.Left, 4, pad.Right, 4) : new Thickness(9, 3, 9, 3);
-            _timerText.FontSize = 11.5;
-        }
-        _timerSlot.Child = HudGlass.OldLooks ? _timerRing = HudGlass.Ring(lineFrame, lineFrame.CornerRadius) : lineFrame;
+        // each badge is its own plate: no box behind the line
+        // (a few px under the badges: the panel below draws its edge up into the slot)
+        var lineFrame = new Border { Child = _timerBadges, Padding = new Thickness(0, 0, 0, 6), Background = Brushes.Transparent };
+        _timerSlot.Child = lineFrame;
         if (HudGlass.OldLooks && _look == null) { _timerSlot.Padding = new Thickness(0); _timerSlot.HorizontalAlignment = HorizontalAlignment.Stretch; }
         // flush with the Card's or the Ticker's edge, not its shadow: as close to the overlay as on the strip (Steven, 2026-11-14:
         // "i like the closest one to the tracker"). The line's own box reaches down over the look's empty inset, so the slot's
@@ -99,7 +92,7 @@ public sealed partial class HudWindow
     public bool TimersShown => _timerSlot.Visibility == Visibility.Visible;
 
     /// <summary>The line's text, for the options self-test.</summary>
-    internal string TimerLineForTest => new TextRange(_timerText.ContentStart, _timerText.ContentEnd).Text;
+    internal string TimerLineForTest => _timerLine;
 
     /// <summary>The height the window has moved up by for the line (what folding gives back).</summary>
     double _timerTaken;
@@ -128,15 +121,8 @@ public sealed partial class HudWindow
     {
         if (_look is IHudStackLook own) { own.ShowTimers(items, now); return; }   // the Capsule, the Meter and the Float draw their own
         if (items.Count == 0) { if (TimersShown) FoldTimers(); return; }
-        _timerText.Inlines.Clear();
-        foreach (var (i, n) in items.Take(TimerLineMax).Select((i, n) => (i, n)))
-        {
-            if (n > 0) _timerText.Inlines.Add(new Run(" · ") { Foreground = TimerDot });
-            var left = i.AtPc is { } at ? at - now : TimeSpan.Zero;
-            var tone = left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes) ? TimerGold : TimerInk;
-            _timerText.Inlines.Add(new Run($"{i.Short} {TimerBoard.Clock(left)}") { Foreground = tone });
-        }
-        System.Windows.Documents.Typography.SetNumeralAlignment(_timerText, FontNumeralAlignment.Tabular);
+        TimerBadge.Fill(_timerBadges, items, now, HudGlass.OldLooks ? 11.5 : 11, TimerLineMax);
+        _timerLine = string.Join(" · ", items.Take(TimerLineMax).Select(i => TimerBadge.Text(i, now)));
         // the line grows and shrinks with the overlay's size (Options › In game)
         _timerSlot.LayoutTransform = _content.LayoutTransform;
         FitTimerLine();

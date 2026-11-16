@@ -210,20 +210,9 @@ sealed class TimersOverlay : Window
     public void Show(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
         if (items.Count == 0) { if (IsVisible) Hide(); return; }
-        _line.Children.Clear();
-        bool anyGold = false;
-        for (int n = 0; n < items.Count; n++)
-        {
-            var i = items[n];
-            if (n > 0) _line.Children.Add(new Border { Width = 1, Height = 16, Background = Rule, Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
-            var left = i.AtPc is { } at ? at - now : TimeSpan.Zero;
-            bool gold = left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes);
-            anyGold |= gold;
-            _line.Children.Add(new TextBlock { Text = i.Short, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center });
-            var c = new TextBlock { Text = TimerBoard.Clock(left), FontSize = 13, FontWeight = FontWeights.Bold, Foreground = gold ? Gold : Muted, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            System.Windows.Documents.Typography.SetNumeralAlignment(c, FontNumeralAlignment.Tabular);
-            _line.Children.Add(c);
-        }
+        // badges (Steven, 2026-11-16: not "black boxes w/ yellow text")
+        TimerBadge.Fill(_line, items, now, 12);
+        bool anyGold = items.Any(i => TimerBadge.Of(i, now).Tone != TimerBadge.Tone.Quiet);
         _dot.Fill = anyGold ? Gold : Muted;
         if (!IsVisible) Show();   // never activated (ShowActivated off, and the window's style)
         if (!_placed) PlaceFirst();
