@@ -1,7 +1,7 @@
 <Window x:Class="KinahLedger.Ui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinah Ledger" SizeToContent="WidthAndHeight" ResizeMode="CanMinimize"
+        Title="Kinah Ledger" SizeToContent="WidthAndHeight" ResizeMode="CanResize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
         FontFamily="{DynamicResource BodyFont}" FontSize="13" FontWeight="Normal" Typography.NumeralAlignment="Tabular"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"

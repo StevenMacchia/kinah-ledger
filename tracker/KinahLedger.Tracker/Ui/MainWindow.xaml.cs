@@ -1898,6 +1898,7 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
+        NoMaximize(h);   // resizable by its edges (Ui/MainWindow.Fit.cs), never maximized
         RefitIfNeeded();   // Full view against the screen the window opened on, now that it has one
         // the shortcuts (only the tracker itself registers them: Platform/Hotkey.cs Register); one that's off is a quiet line
         // beside it in Options › Shortcuts, never a notice (Steven, 2026-11-14: test runs and a second copy popped them up)
@@ -1910,7 +1911,8 @@ public partial class MainWindow : Window
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
         else if (msg == Native.WM_HOTKEY && wParam.ToInt32() == Hotkey.MarkWrongId) { MarkLastLineWrong(); handled = true; }   // Ui/MainWindow.MarkWrong.cs
-        else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) Dispatcher.BeginInvoke(RefitIfNeeded);   // dropped on another screen: Full view fitted to it
+        else if (msg == WM_SIZING) { OnSizing(wParam, lParam); handled = true; return new IntPtr(1); }   // an edge dragged: the window's size (Ui/MainWindow.Fit.cs)
+        else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) { EndSizing(); Dispatcher.BeginInvoke(RefitIfNeeded); }   // dropped on another screen: Full view fitted to it
         return IntPtr.Zero;
     }
 

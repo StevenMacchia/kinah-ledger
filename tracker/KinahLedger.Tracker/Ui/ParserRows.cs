@@ -93,6 +93,8 @@ public sealed partial class ParserRows : Grid
     sealed class RowEl
     {
         public required Grid Root, Cols; public required Border Chip, BarFill, Track, Edge, Tick, Pb; public required TextBlock ChipText, Name, Dps, Share, Damage, Crit, Back; public required Grid Spark;
+        /// <summary>The member's Combat Power after the name, short ("150.8K"; Steven, 2026-11-16), the first thing to give way in a tight row.</summary>
+        public required TextBlock Cp;
         public required Border Frame;
         /// <summary>The name's line (tick, name, YOU, PB, the plates) and the plates' place at its end (TOP DPS, TOP HEALS).</summary>
         public required StackPanel NameLine, Plates; public required Border NameHost;
@@ -150,7 +152,7 @@ public sealed partial class ParserRows : Grid
         }
         if (e.Live) _sawLive = true;
         bool dmg = e.HasDamage;
-        var all = (dmg ? e.Shown() : e.Ranked()).Where(f => !f.Other).ToList();
+        var all = e.Shown(now).Where(f => !f.Other).ToList();
         int max = expanded ? ExpandedRows : CompactRows;
         var visible = all.Take(max).ToList();
         var you = all.FirstOrDefault(f => f.You);
@@ -188,6 +190,9 @@ public sealed partial class ParserRows : Grid
                 }
             }
             else { SetDps(row, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "", f.CombatPower); row.Share.Text = f.CombatPower > 0 ? L.T("CP") : ""; }
+            // Combat Power beside the name once there is damage (before it, the figure's column says it whole)
+            string cpText = dmg && f.CombatPower > 0 ? Amounts.Meter(f.CombatPower) : "";
+            if (row.Cp.Text != cpText) { row.Cp.Text = cpText; row.Cp.ToolTip = f.CombatPower > 0 ? L.F("Combat Power {0:N0}", f.CombatPower) : null; FitName(row); }
             // the bar slides to its new length: the member's share of the group's damage, so 33% fills a third (Steven,
             // 2026-11-15: "the bars shouldn't be full really and should be percentage based"; the top member's was full)
             double share = dmg ? e.Share(f) : 0;
@@ -672,6 +677,11 @@ public sealed partial class ParserRows : Grid
         // of yourself makes it so hard to read")
         name.Effect = TextHalo();
         nm.Children.Add(name);
+        // Combat Power after the name ("150.8K", muted): from the party list, there from the start
+        var cp = new TextBlock { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = HudKit.B(0xB1B7C8), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 1, 0, 0),
+            Tag = "cp", Effect = TextHalo(), Visibility = Visibility.Collapsed };
+        System.Windows.Documents.Typography.SetNumeralAlignment(cp, FontNumeralAlignment.Tabular);
+        nm.Children.Add(cp);
         if (f.You) { var yc = HudGlass.YouChip(); if (yc.Child is TextBlock yt) yt.Text = L.T(yt.Text); yc.Tag = "you"; nm.Children.Add(yc); }
         // the heal chip after the name (a healer's row only; Steven, 2026-11-16: the tiny green figures under the name and the
         // line along the row's foot "look awful"): a green cross and the healing a second, on the name's line, so the row keeps
@@ -747,7 +757,7 @@ public sealed partial class ParserRows : Grid
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
         var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost,
-            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, UnderTrack = underTrack, Heal = heal, HealPill = healPill, HealCross = cross };
+            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, UnderTrack = underTrack, Cp = cp, Heal = heal, HealPill = healPill, HealCross = cross };
         r.ChipOwn = chip.Effect as DropShadowEffect; r.ChipBlur0 = r.ChipOwn?.BlurRadius ?? 0; r.ChipOpacity0 = r.ChipOwn?.Opacity ?? 0;
         r.FrameGlow = frame.Effect as DropShadowEffect; r.FrameBlur0 = r.FrameGlow?.BlurRadius ?? 0; r.FrameOpacity0 = r.FrameGlow?.Opacity ?? 0;
         // the member's abilities on hover (2026-11-15 night, the meters players pick: a breakdown on the meter itself, not only
@@ -780,6 +790,8 @@ public sealed partial class ParserRows : Grid
         if (w <= 0) return;
         var you = r.NameLine.Children.OfType<Border>().FirstOrDefault(b => b.Tag as string == "you");
         if (you != null) you.Visibility = Visibility.Visible;
+        r.Cp.Visibility = r.Cp.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (r.Heal.Text.Length > 0) r.HealPill.Visibility = Visibility.Visible;
         double Others()
         {
             double o = r.NameLine.Margin.Left + r.NameLine.Margin.Right;
@@ -792,6 +804,8 @@ public sealed partial class ParserRows : Grid
             return o;
         }
         double others = Others();
+        // short of room, Combat Power gives way first (its tooltip and the card still say it)
+        if (r.Cp.Visibility == Visibility.Visible && w - others < NameMin) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
         // a plate and YOU both: the name first; the YOU chip gives way (the gold frame and chip still say it's you)
         if (you != null && r.Plates.Visibility == Visibility.Visible)
         {
