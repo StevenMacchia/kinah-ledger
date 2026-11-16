@@ -160,7 +160,7 @@ public sealed class ParserRows : Grid
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
             {
-                // the DPS's digits roll on their own (an odometer), in the same right-aligned column
+                // the DPS, plain, in its right-aligned column
                 if (e.DpsOf(f, now) is { } dps) SetDps(row, Amounts.Short(dps), dps);
                 else SetDps(row, "–", double.NaN);
                 row.Share.Text = Encounter.Pct(e.Share(f));
@@ -241,18 +241,16 @@ public sealed class ParserRows : Grid
         _wasLive = e.Live;
     }
 
-    /// <summary>The DPS shown: the figure itself (laid out, read by the tests and a screen reader) and, with motion on, the odometer over it.</summary>
+    /// <summary>
+    /// The DPS shown: the figure itself, plain, drawn again as the meter's clock runs (Steven, 2026-11-15, of the rolling
+    /// digits of 0.10.116: "the odometer is terrible get rid of it"). The odometer stays collapsed.
+    /// </summary>
     static void SetDps(RowEl row, string text, double value)
     {
         row.Dps.Text = text;
-        bool odo = Motion.On;
-        row.Odo.Visibility = odo ? Visibility.Visible : Visibility.Collapsed;
-        row.Dps.Opacity = odo ? 0 : 1;
-        // the halo on whichever is drawn (the figure under the odometer is clear: no effect to draw for it)
-        if (odo && row.Dps.Effect != null) row.Dps.ClearValue(EffectProperty);
-        else if (!odo && row.Dps.Effect == null) row.Dps.Effect = TextHalo();
-        if (odo) row.Odo.Show(text, up: !(value < row.LastDps));
-        else row.Odo.Show(text, up: true);
+        row.Odo.Visibility = Visibility.Collapsed;
+        row.Dps.Opacity = 1;
+        if (row.Dps.Effect == null) row.Dps.Effect = TextHalo();
         row.LastDps = value;
     }
 
