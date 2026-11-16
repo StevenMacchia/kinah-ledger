@@ -116,8 +116,9 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
      other windows, and the look.
    - **Server**: region and server; everything shared is filed under it.
    - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
-     site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the
-     install ID, and the data folder.
+     site (the link code is a short form of the random install ID; without it runs stay anonymous), **Show my boss
+     bests on my kinahledger.com profile** (off by default; only your own DPS, see "What a shared run contains"),
+     replacing the install ID, and the data folder.
    - **Game reading**: **Detect now**, **Choose the chat**, **Test read**, the Market area, and a live preview of what
      is read. These act right away.
    - **In game**: the start/stop shortcut (Ctrl+Shift+K by default, or off; a letter or number needs Shift with Ctrl or
@@ -269,6 +270,15 @@ tracker (`c1`, `c2`...) and the name it has in the window, so your signed-in pro
 (never a public profile or a leaderboard). Since 0.10.79, in the Abyss: Abyss Points, Rank Points earned and
 lost, players and monsters defeated and deaths, overall and per area, for your profile's Abyss section (a run
 outside the Abyss sends none of them). Never the account, level, chat text or screenshots. Sharing is on by default and off with one setting; the live readout works either way.
+
+The Parser's boss fights are kept on this PC and never uploaded, unless you turn on **Show my boss bests on my
+kinahledger.com profile** (Options › Sharing, off by default). Then, for the character playing, each boss's best kill
+of yours goes with the next upload: the boss, instance, game mode and kind, your DPS over the kill (boss damage alone
+when the record kept it apart), the fight's length and date, your class and combat power when known, how many were in
+the group, how many kills of it you have, and your latest pull of it (DPS, length, date, kill/wipe/left). Only your own
+numbers: other players' names, classes and DPS never leave this PC. The site keeps them only for a tracker linked to
+your profile and shows them only on your own signed-in profile, never publicly and never ranked. Turning the switch off
+tells the site to forget them with the next upload.
 
 The totals post to `https://kinahledger.com/v1/runs` (`upload.endpoint` in `settings.json`, set by default;
 blank it and nothing is sent) in small batches: every 15 minutes while the game is being read, once more when

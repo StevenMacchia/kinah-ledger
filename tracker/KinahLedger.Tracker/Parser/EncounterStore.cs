@@ -4,7 +4,9 @@ namespace KinahLedger.Parser;
 
 /// <summary>
 /// The boss fights kept on this PC, per character: encounters.jsonl (one finished fight per line, newest last) and
-/// encounter-live.json (the fight under way, so a restart in the middle of one carries it on). Never uploaded.
+/// encounter-live.json (the fight under way, so a restart in the middle of one carries it on). Never uploaded, unless the
+/// player turns on Show my boss bests on my kinahledger.com profile (off by default): then only their own best kill per boss
+/// and their last pull of it go to their profile (Upload/BossBests.cs); other players' numbers never leave this PC.
 /// </summary>
 public sealed class EncounterStore
 {

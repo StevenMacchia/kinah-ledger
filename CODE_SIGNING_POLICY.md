@@ -54,6 +54,10 @@ and never sends input to the game. It sends data to these places, and nowhere el
   - With each run, which of your characters played it (since 0.10.55): its number in the tracker and the name it has
     in the window, so the profile it is linked to can show each character apart. Only that profile's own signed-in
     page shows the names; they are deleted with the profile.
+  - Only while "Show my boss bests on my kinahledger.com profile" is on (Options › Sharing; off by default): with a
+    run, your own best kill on each boss the Parser kept and your latest pull of it (boss, place, your DPS, fight
+    length, date, your class and combat power, group size). Never another player's name, class or numbers. Only your
+    own signed-in profile shows them; turning the switch off, unlinking the tracker or deleting the profile deletes them.
   - Never your account, level, chat text or screenshots of the chat or the whole screen.
   - If you paste the profile link code into a profile on the site, runs from that PC show there; profiles are
     private unless you make them public.

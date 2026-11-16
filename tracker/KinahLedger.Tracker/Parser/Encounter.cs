@@ -7,7 +7,8 @@ namespace KinahLedger.Parser;
 /// One record of the Parser (Parser/BossParser.cs decides), by its <see cref="Mode"/>: a boss pull ("boss": the pull to
 /// the boss's death, a wipe or leaving, in a Transcendence, an Expedition or a Sanctuary), an instance run ("run":
 /// entering to leaving, each boss a <see cref="Split"/>), or a fight anywhere ("fight": the first hit or kill to a pause).
-/// Kept on this PC in the character's encounters.jsonl (Parser/EncounterStore.cs); never uploaded.
+/// Kept on this PC in the character's encounters.jsonl (Parser/EncounterStore.cs); never uploaded, unless the player turns on
+/// Show my boss bests on my kinahledger.com profile: then only their own best kill per boss goes (Upload/BossBests.cs), never other players' numbers.
 /// </summary>
 public sealed class Encounter : IJsonOnDeserialized
 {
