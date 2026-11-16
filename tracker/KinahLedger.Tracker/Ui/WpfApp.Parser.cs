@@ -813,8 +813,13 @@ public static partial class WpfApp
     }
 
     /// <summary>The member's name on the row a plate sits on (the plate's line holds the name).</summary>
-    static string PlateName(FrameworkElement plate) =>
-        VisualTreeHelper.GetParent(plate) is System.Windows.Controls.StackPanel plates && VisualTreeHelper.GetParent(plates) is System.Windows.Controls.StackPanel line ? line.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault()?.Text ?? "" : "";
+    static string PlateName(FrameworkElement plate)
+    {
+        // up to the name's line: a plate sits in the plates beside the name, the TOP HEALS tab in the heal chip after it
+        for (DependencyObject? d = VisualTreeHelper.GetParent(plate); d != null; d = VisualTreeHelper.GetParent(d))
+            if (d is System.Windows.Controls.StackPanel line && line.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault(t => t.Tag as string != "heal-figures") is { } name) return name.Text;
+        return "";
+    }
 
     /// <summary>Where each shown row's DPS figure ends, across the meter (the column a plate must never push).</summary>
     static List<double> DpsRights(DependencyObject root) => root is Visual v
