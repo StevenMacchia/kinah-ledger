@@ -62,7 +62,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     /// </summary>
     public static double FightWidth { get => _fightWidth; set => _fightWidth = Math.Round(Math.Clamp(double.IsFinite(value) ? value : FightWidthDefault, FightWidthMin, FightWidthMax)); }
     static double _fightWidth = FightWidthDefault;
-    public const double FightWidthDefault = 330, FightWidthMin = 300, FightWidthMax = 640;
+    public const double FightWidthDefault = KinahLedger.Parser.ParserPrefs.DefaultWidth, FightWidthMin = 300, FightWidthMax = 640;
 
     /// <summary>The fight's frame whose left and right edges widen it, or null while no fight shows.</summary>
     public virtual FrameworkElement? FightFrame => null;

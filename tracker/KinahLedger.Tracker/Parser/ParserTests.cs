@@ -1301,6 +1301,14 @@ public static class ParserTests
             Check(fresh is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, Targets: "boss", DpsActive: false } && steven is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, HonestSettled: true }
                 && chose is { Deaths: true, Filters: false, Hovers: true, KillsNear: true } && later is { Deaths: false, Filters: false, Hovers: false },
                 "7. serious defaults: Deaths, List filters and Explanations on hover on for a new player and once for Steven's parser.json as it was; a player who had chosen keeps their choice; an off after the move stays off");
+            // the meter's width (Steven, 2026-11-15: "default width of the parser should be the same as the buddy / tracker and
+            // should never revert unless you change it"): Buddy's 360 (350 + the panel's 10) for a new player and for a file with
+            // the old default never picked; a width the player picked or set stays, read after read
+            var picked330 = ParserPrefs.FromText("{\"DetailsSettled\":true,\"HonestSettled\":true,\"Width\":330,\"WidthPicked\":true}");
+            var wide = ParserPrefs.FromText("{\"DetailsSettled\":true,\"HonestSettled\":true,\"Width\":420}");
+            var again = ParserPrefs.FromText(System.Text.Json.JsonSerializer.Serialize(picked330));
+            Check(fresh.Width == 350 && steven.Width == 350 && !steven.WidthPicked && picked330.Width == 330 && wide.Width == 420 && again is { Width: 330, WidthPicked: true },
+                $"7. the meter's width: {fresh.Width:0} new, {steven.Width:0} for Steven's file (330, the old default), a picked 330 kept ({picked330.Width:0}, {again.Width:0} read again), a set 420 kept ({wide.Width:0})");
         }
 
         // store v2 on made-up hit rows: per-second damage, the boss's HP timeline, casts, biggest and smallest hits, raw hit

@@ -63,10 +63,17 @@ public sealed class ParserPrefs
     /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
     public bool DpsActive { get; set; }
     /// <summary>
-    /// The meter's width at 100%, in DIPs (Steven, 2026-11-14: "maybe an option to make it wider?"): 330 by default, 300 to
-    /// 640; set by dragging the meter's left or right edge, or Settings › In game › Parser › Width.
+    /// The meter's width at 100%, in DIPs (Steven, 2026-11-14: "maybe an option to make it wider?"): 350 by default, 300 to
+    /// 640; set by dragging the meter's left or right edge (on either overlay), or Settings › In game › Parser › Width.
     /// </summary>
-    public double Width { get; set; } = 330;
+    public double Width { get; set; } = DefaultWidth;
+    /// <summary>
+    /// The default: the meter as wide as the Kinah overlay's Buddy panel (360, the Parser's panel adds 10) (Steven, 2026-11-15:
+    /// "default width of the parser should be the same as the buddy / tracker and should never revert unless you change it").
+    /// </summary>
+    public const double DefaultWidth = 350, OldDefaultWidth = 330;
+    /// <summary>The player set the width (an edge dragged, the Settings slider saved): kept as it is from then on; see Settle.</summary>
+    public bool WidthPicked { get; set; }
     /// <summary>Kills near you on boss pulls and runs (off by default: minimal).</summary>
     public bool KillsNear { get; set; }
     /// <summary>
@@ -138,6 +145,8 @@ public sealed class ParserPrefs
     {
         bool moved = false;
         if (!p.DetailsSettled) { p.Details = true; p.DetailsSettled = true; moved = true; }
+        // the old default width, never picked: Buddy's width (a width the player set stays)
+        if (!p.WidthPicked && Math.Abs(p.Width - OldDefaultWidth) < 0.5) p.Width = DefaultWidth;
         if (!p.HonestSettled)
         {
             // in a file from before, Deaths, Filters and Hovers read as this build's defaults (on) when missing, so their
