@@ -36,6 +36,8 @@ public partial class MainWindow
     ParserOverlay? _parserOverlay;
     /// <summary>The last fight ended, and when: the overlay shows its result for a few seconds after the kill.</summary>
     Encounter? _parserJustEnded;
+    /// <summary>The parser's late healing when the held result was last read (Parser/BossParser.cs LateHeals).</summary>
+    long _parserLateHeals;
     DateTime _parserEndedAt = DateTime.MinValue;
     string _parserLastLiveId = "";
     const double OverlayResultSeconds = 15;
@@ -318,6 +320,12 @@ public partial class MainWindow
             _parserLastLiveId = "";
         }
         if (live != null) { _parserLastLiveId = live.Id; _parserJustEnded = null; }
+        // a heal of the pull's last moment can come after its kill: the held result takes it (the pull's own record, re-read)
+        if (live == null && _parserJustEnded != null && ParserFights is { } pf && pf.LateHeals != _parserLateHeals)
+        {
+            _parserLateHeals = pf.LateHeals;
+            if (pf.EndedNow(_parserJustEnded.Id) is { } fresh) _parserJustEnded = fresh;
+        }
         var show = live ?? ((now - _parserEndedAt).TotalSeconds <= OverlayResultSeconds ? _parserJustEnded : null);
         // Steven, 2026-11-14: "turn into the parser when you're in a dungeon - it should not disappear after a fight and persist
         // throughout the dungeon - it should reset each fight": in a Transcendence, an Expedition or a Sanctuary the meter stays,
@@ -1208,6 +1216,44 @@ public partial class MainWindow
         ShowPart("Parser", byHand: false);
         WatchParser();
         RedrawParserPage();
+    }
+
+    /// <summary>
+    /// For the options test: the meter's held result on <paramref name="parser"/> (Bosses, inside an off-screen Kinah overlay,
+    /// nothing on any screen): one tick while the pull is under way, <paramref name="end"/> ends it, a tick, then
+    /// <paramref name="late"/> brings a heal of its last moment and a tick again. What the held result said for
+    /// <paramref name="member"/>'s healing after the end and after the late heal, and whether it is still that pull.
+    /// </summary>
+    internal (long AtEnd, long AfterLate, bool SamePull) HeldHealForTest(HudWindow hud, BossParser parser, long member, Action end, Action late)
+    {
+        var (hud0, demo0, src0, force0, prefs0) = (_hud, _demo, ParserSourceForTest, ParserOverlayForceForTest, (_parserPrefs.AlwaysOn, _parserPrefs.Overlay, _parserPrefs.InKinah, _parserPrefs.Separate));
+        try
+        {
+            _hud = hud; _demo = false; ParserSourceForTest = parser; ParserOverlayForceForTest = false;
+            _parserPrefs.AlwaysOn = false; _parserPrefs.Overlay = true; _parserPrefs.InKinah = true; _parserPrefs.Separate = false;
+            _parserLastLiveId = ""; _parserJustEnded = null; _parserLateHeals = parser.LateHeals;
+            var hudPreview0 = _hudPreview; bool hudOn0 = _prefs.Hud;
+            _hudPreview = null; _prefs.Hud = true;
+            try
+            {
+                ParserOverlayTick();
+                string id = _parserLastLiveId;
+                end(); ParserOverlayTick();
+                long atEnd = _parserJustEnded?.Members.FirstOrDefault(f => f.Id == member)?.Healing ?? -1;
+                late(); ParserOverlayTick();
+                long after = _parserJustEnded?.Members.FirstOrDefault(f => f.Id == member)?.Healing ?? -1;
+                return (atEnd, after, id.Length > 0 && _parserJustEnded?.Id == id);
+            }
+            finally { _hudPreview = hudPreview0; _prefs.Hud = hudOn0; }
+        }
+        finally
+        {
+            hud.SetKinahHidden(false); hud.ShowParser(null, DateTime.UtcNow, ParserModeNow, PDetails);
+            (_hud, _demo, ParserSourceForTest, ParserOverlayForceForTest) = (hud0, demo0, src0, force0);
+            (_parserPrefs.AlwaysOn, _parserPrefs.Overlay, _parserPrefs.InKinah, _parserPrefs.Separate) = prefs0;
+            _parserLastLiveId = ""; _parserJustEnded = null;
+            _parserOverlay?.ShowWanted(false);
+        }
     }
 
     internal void SetParserModeForTest(ParserMode m) => SetParserMode(m);

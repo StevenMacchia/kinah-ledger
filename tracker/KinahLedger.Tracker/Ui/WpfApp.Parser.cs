@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "motion" or "meter") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "motion" or "meter" or "heals") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -44,6 +44,7 @@ public static partial class WpfApp
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "meter") { ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
+                if (st == "heals") { ShotHeals(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 w.ShowParserDemo(st);
                 DoEvents();
                 var name = "ui-parser-" + st + (skin != null ? "-" + skin : "");
@@ -515,6 +516,7 @@ public static partial class WpfApp
             // open-world fight held by Always on, a boss killed in an Expedition
             {
                 bool st1 = Motion.Still; Motion.Still = true;
+                static bool shouldTopOf(string tag) => tag == "killed";
                 var (pastF, _) = ParserDemo.Sample(nowL);
                 var killF = pastF.Last(x => x.Outcome == "kill");
                 var heldF = HeldSample(pullL!, nowL);
@@ -529,20 +531,22 @@ public static partial class WpfApp
                         var footName = feet.Count == 1 ? System.Windows.Automation.AutomationProperties.GetName(feet[0]) : "";
                         int badges = TaggedShown(root, "avg-badge").Count;
                         var tops = TaggedShown(root, "top-dps").Select(PlateName).ToList();
-                        int heals = TaggedShown(root, "top-heals").Count;
+                        var heals = TaggedShown(root, "top-heals").Select(PlateName).ToList();
+                        string healWant = shouldTopOf(tag) ? e.TopHealer(at)?.Name ?? "" : "";
                         bool shouldHold = tag != "live", shouldTop = tag == "killed";
                         string want = e.FootText(at), topWant = e.TopDps(at)?.Name ?? "";
                         // the plate sits in the name's room: every row's DPS still ends at the same place (your gold frame's 1 px line apart)
                         var dpsRights = DpsRights(root);
                         bool aligned = dpsRights.Count >= 2 && dpsRights.Max() - dpsRights.Min() <= 1.5;
                         if (feet.Count != 1 || footName != want || !want.StartsWith("Total ", StringComparison.Ordinal) || badges != (shouldHold ? 1 : 0)
-                            || (shouldTop ? tops.Count != 1 || tops[0] != topWant || topWant.Length == 0 : tops.Count != 0) || heals != 0 || !aligned)
-                            wrong.Add($"{lk} {tag}: foot {feet.Count} \"{footName}\" (want \"{want}\"), badge {badges}, top DPS [{string.Join(",", tops)}] (want {(shouldTop ? topWant : "none")}), top heals {heals}, DPS column {(aligned ? "aligned" : string.Join("/", dpsRights.Select(x => x.ToString("0.#"))))}");
+                            || (shouldTop ? tops.Count != 1 || tops[0] != topWant || topWant.Length == 0 : tops.Count != 0)
+                            || (shouldTop ? heals.Count != 1 || heals[0] != healWant || healWant.Length == 0 : heals.Count != 0) || !aligned)
+                            wrong.Add($"{lk} {tag}: foot {feet.Count} \"{footName}\" (want \"{want}\"), badge {badges}, top DPS [{string.Join(",", tops)}] (want {(shouldTop ? topWant : "none")}), top heals [{string.Join(",", heals)}] (want {(shouldTop ? healWant : "none")}), DPS column {(aligned ? "aligned" : string.Join("/", dpsRights.Select(x => x.ToString("0.#"))))}");
                         po.Close();
                     }
                 Motion.Still = st1;
                 check(wrong.Count == 0 && killF.TopsShown && !heldF.TopsShown && heldF.HeldAverage && !pullL!.HeldAverage,
-                    $"the meter's foot says the total and the group's DPS in every look, \"Avg. DPS\" only on a held fight, TOP DPS only on a boss kill's top row, the DPS column unmoved{(wrong.Count > 0 ? ": " + string.Join("; ", wrong) : "")}");
+                    $"the meter's foot says the total and the group's DPS in every look, \"Avg. DPS\" only on a held fight, TOP DPS only on a boss kill's top row and TOP HEALS on its top healer's, the DPS column unmoved{(wrong.Count > 0 ? ": " + string.Join("; ", wrong) : "")}");
             }
             check(moved.Count == 0, $"the Parser's own window grows up: the meter's bottom edge stays where it is as it grows into a pull and back, in each look{(moved.Count > 0 ? ": " + string.Join("; ", moved) : "")}");
             check(ParserPrefs.FromText("{\"Left\":10,\"Top\":20}").Bottom == null, "...a file from before has no bottom edge kept (its top places it once)");

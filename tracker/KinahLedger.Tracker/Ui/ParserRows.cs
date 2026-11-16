@@ -21,6 +21,10 @@ namespace KinahLedger.Ui;
 /// the one who passes another lifts as it slides past and its chip glows; the fight's end sweeps a light across, its TOP DPS
 /// plate slides in with a glint and a personal best flares your figure gold; your row's frame glows warmer as your pace
 /// nears your best here, gold once you beat it.
+/// The heal line (Steven, 2026-11-15: "a very tiny green line with a tiny number under classes that have heals"): a member who
+/// healed another (a Cleric, a Chanter; everyone's own self-heals never count for it) gets a thin green line along the row's
+/// foot, its length their share of the group's healing, and under the name what they healed, per second over the DPS's
+/// seconds, and the part that landed (≈ when the target's HP didn't confirm it). The row keeps its height and its columns.
 /// </summary>
 public sealed class ParserRows : Grid
 {
@@ -98,10 +102,13 @@ public sealed class ParserRows : Grid
         public required Border Ghost, Heat;
         public double GhostBase = double.NaN;
         /// <summary>
-        /// The row's foot: a 2 px place along its bottom edge, empty and collapsed (a later change puts the heal line here, under
-        /// a healer's bar, without moving the row's columns).
+        /// The row's foot: the heal line, 2 px along its bottom edge, its length the member's share of the group's healing
+        /// (collapsed for a member who healed no one else); and the heal figures under the name, the name's line lifted for them.
         /// </summary>
         public required Border Under;
+        public required TextBlock Heal;
+        public string HealFull = "", HealShort = "", HealDone = "";
+        public double HealShare = double.NaN, HealShown = double.NaN;
         /// <summary>
         /// The effects a course changes, kept with the row so a course replaced part-way (a move again, a flip back) starts
         /// from the row's own look, never from where the last one left it: the lift's shadow, the chip's own glow (your gold one;
@@ -209,6 +216,8 @@ public sealed class ParserRows : Grid
                 row.Plates.Visibility = plates.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
                 FitName(row);
             }
+            // the heal line: only for a member who healed someone else (a damage dealer's self-heals and potions never)
+            SetHeal(row, e, f, now, dmg && f.HealingOthers > 0);
         }
         if (platesSlid) _platesSlidFor = e.Id;
         // the big hits that came since the last draw pop off their members' rows
@@ -279,6 +288,65 @@ public sealed class ParserRows : Grid
         r.BarFill.Width = v <= 0.001 ? 0 : Math.Max(6, w * Math.Clamp(v, 0, 1));
     }
 
+    /// <summary>The name's line rises this much on a healer's row, so the heal figures fit under it (the row keeps its height).</summary>
+    public const double HealLift = 10;
+
+    /// <summary>
+    /// The heal line on a healer's row: the green line slides to their share of the group's healing (everyone's, self-heals in,
+    /// so a Cleric's line reads against the group's whole); under the name "649K · 2.9K/s · ≈265K eff": the healing done
+    /// (exact), per second over the DPS's seconds, and the part that fit under the targets' HP (≈ unless the HP confirmed all
+    /// of it), that last part only when it fits.
+    /// </summary>
+    void SetHeal(RowEl r, Encounter e, Fighter f, DateTime now, bool healer)
+    {
+        if (!healer)
+        {
+            if (r.Heal.Visibility == Visibility.Collapsed) return;
+            r.Under.Visibility = Visibility.Collapsed; r.Heal.Visibility = Visibility.Collapsed; r.HealShare = r.HealShown = double.NaN;
+            r.NameHost.Margin = new Thickness(0);
+            return;
+        }
+        r.Under.Visibility = Visibility.Visible;
+        r.Heal.Visibility = Visibility.Visible;
+        double lift = r.You ? HealLift - 2 : HealLift;   // your row's inside is 2 px shorter (the gold frame): the name keeps its height
+        if (r.NameHost.Margin.Bottom != lift) r.NameHost.Margin = new Thickness(0, 0, 0, lift);
+        double share = e.GroupHealing > 0 ? Math.Clamp((double)f.Healing / e.GroupHealing, 0, 1) : 0;
+        r.HealShare = share;
+        Motion.Slide(r.Under, $"parser|ovheal|{e.Id}|{f.Id}|{(int)_kind}", share, v => { r.HealShown = v; SetHealBar(r, v); });
+        string done = Amounts.Short(f.Healing), ps = e.HpsOf(f, now) is { } hps ? $" · {Amounts.Short(hps)}/s" : "";
+        string landed = $" · {(f.HealingIsEstimate ? "≈" : "")}{Amounts.Short(f.HealingEffective)} eff";
+        r.HealDone = done;
+        r.HealShort = done + ps;
+        r.HealFull = r.HealShort + landed;
+        r.Heal.ToolTip = $"Healed {f.Healing:N0}{(f.HealingSelf > 0 ? $" ({f.HealingOthers:N0} on others)" : "")}, {(e.HpsOf(f, now) ?? 0):N0} a second; "
+            + $"{(f.HealingIsEstimate ? "about " : "")}{f.HealingEffective:N0} landed, the rest overheal{(f.HealingIsEstimate ? " (an estimate: the HP didn't confirm all of it)" : "")}";
+        FitHeal(r);
+    }
+
+    void SetHealBar(RowEl r, double v)
+    {
+        double w = r.Track.ActualWidth;
+        if (w <= 0) return;   // laid out later: the track's resize draws it (from the share shown)
+        r.Under.Width = v <= 0.001 ? 0 : Math.Max(4, w * Math.Clamp(v, 0, 1));
+    }
+
+    /// <summary>The heal figures in the name's room: the part that landed only when the whole line fits.</summary>
+    static void FitHeal(RowEl r)
+    {
+        if (r.Heal.Visibility != Visibility.Visible) return;
+        double w = r.NameHost.ActualWidth;
+        r.Heal.Text = r.HealFull;
+        if (w <= 0) return;
+        // the whole line; else without the part that landed; else the healing done alone (a figure is never cut)
+        foreach (var text in new[] { r.HealFull, r.HealShort, r.HealDone })
+        {
+            r.Heal.Text = text;
+            r.Heal.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (r.Heal.DesiredSize.Width <= w) break;
+        }
+        r.Heal.MaxWidth = w;
+    }
+
     RowEl Build(Fighter f, bool expanded, bool crit, bool back, bool spark)
     {
         var c = ClassArt.ColorOf(f.Class);
@@ -286,7 +354,10 @@ public sealed class ParserRows : Grid
         var widths = new List<double> { 28, 24, -1, 60, 46 };
         if (expanded) { widths.Add(56); if (crit) widths.Add(44); if (back) widths.Add(44); if (spark) widths.Add(66); }
         var cols = PK.Cols(widths.ToArray());
-        cols.Height = _rowH - 2;
+        // your row sits in the gold frame (a 1 px edge all round): its inside is that much shorter, so nothing at its foot (the heal
+        // line, the heat's line) is cut off and its text is centred as on the other rows
+        double innerH = _rowH - 2 - (f.You ? 2 : 0);
+        cols.Height = innerH;
         cols.Margin = new Thickness(5, 0, 6, 0);
         // the angled rank chip in the class's colour (gold for you)
         var chipText = new TextBlock { FontSize = 11, FontWeight = FontWeights.Bold, Foreground = f.You ? HudKit.B(0x1D1300) : PK.C(ClassArt.NameColor(f.Class)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -318,7 +389,11 @@ public sealed class ParserRows : Grid
         nm.Children.Add(plates);
         // the name gives way to the chips and plates after it (it trims), so the row never widens and the figures never move
         var nameHost = new Border { Child = nm, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
-        cols.Children.Add(PK.Col(nameHost, 2));
+        // the heal figures under the name (a healer's row only): tiny, green, at the row's foot just over the heal line
+        var heal = new TextBlock { FontSize = 8, FontWeight = FontWeights.SemiBold, Foreground = HudKit.B(0x6FE8A8), Tag = "heal-figures", VerticalAlignment = VerticalAlignment.Bottom,
+            HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 1.5), TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed, Effect = TextHalo() };
+        System.Windows.Documents.Typography.SetNumeralAlignment(heal, FontNumeralAlignment.Tabular);
+        cols.Children.Add(PK.Col(new Grid { Children = { nameHost, heal } }, 2));
         TextBlock Fig(double size, Brush b, FontWeight w) { var t = new TextBlock { FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
         var dps = Fig(15, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps"; dps.Effect = TextHalo();
         var share = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
@@ -348,9 +423,13 @@ public sealed class ParserRows : Grid
         // your heat: a warm wash across the row, from the left, and a warm line along its foot (only your row has one)
         var heat = new Border { IsHitTestVisible = false, Visibility = Visibility.Collapsed, BorderThickness = new Thickness(0, 0, 0, 1.5), CornerRadius = new CornerRadius(3),
             Background = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0), GradientStops = { new GradientStop(Colors.Transparent, 0), new GradientStop(Colors.Transparent, 1) } }, BorderBrush = new SolidColorBrush(Colors.Transparent) };
-        // the row's foot, kept for the heal line (a later change): empty and collapsed, along the bottom edge, over the bar
-        var under = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
-        var inner = new Grid { Height = _rowH - 2, ClipToBounds = true };
+        // the heal line along the row's foot, over the bar: green, brighter at its head, with a soft glow (a healer's row only)
+        var healFade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        healFade.GradientStops.Add(new GradientStop(Color.FromArgb(0xB0, 0x2F, 0xC4, 0x7A), 0)); healFade.GradientStops.Add(new GradientStop(Color.FromRgb(0x7D, 0xF5, 0xB5), 1));
+        healFade.Freeze();
+        var under = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
+            Tag = "heal-line", Width = 0, CornerRadius = new CornerRadius(1), Background = healFade, Effect = new DropShadowEffect { Color = PK.Mint, BlurRadius = 5, ShadowDepth = 0, Opacity = 0.7 } };
+        var inner = new Grid { Height = innerH, ClipToBounds = true };
         inner.Children.Add(track); inner.Children.Add(fill); inner.Children.Add(ghost); inner.Children.Add(edge); inner.Children.Add(heat); inner.Children.Add(under); inner.Children.Add(cols);
         Border frame = f.You ? PK.YouFrame(inner, 4, new Thickness(0)) : new Border { Child = inner };
         // its moves: the glide and the lift (a rise from the right edge, so the figures' column stays where it is)
@@ -359,11 +438,15 @@ public sealed class ParserRows : Grid
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
         var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost,
-            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under };
+            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, Heal = heal };
         r.ChipOwn = chip.Effect as DropShadowEffect; r.ChipBlur0 = r.ChipOwn?.BlurRadius ?? 0; r.ChipOpacity0 = r.ChipOwn?.Opacity ?? 0;
         r.FrameGlow = frame.Effect as DropShadowEffect; r.FrameBlur0 = r.FrameGlow?.BlurRadius ?? 0; r.FrameOpacity0 = r.FrameGlow?.Opacity ?? 0;
-        nameHost.SizeChanged += (_, _) => FitName(r);
-        track.SizeChanged += (_, _) => { if (track.Tag is double v) SetBar(r, v); else SetBar(r, fill.Width > 0 ? fill.Width / Math.Max(1, track.ActualWidth) : 0); };
+        nameHost.SizeChanged += (_, _) => { FitName(r); FitHeal(r); };
+        track.SizeChanged += (_, _) =>
+        {
+            if (track.Tag is double v) SetBar(r, v); else SetBar(r, fill.Width > 0 ? fill.Width / Math.Max(1, track.ActualWidth) : 0);
+            if (!double.IsNaN(r.HealShare)) SetHealBar(r, double.IsNaN(r.HealShown) ? r.HealShare : r.HealShown);
+        };
         return r;
     }
 
@@ -638,7 +721,8 @@ public sealed class ParserRows : Grid
     {
         var defs = r.Cols.ColumnDefinitions;
         double start = r.Cols.Margin.Left + (defs.Count > 1 ? defs[0].ActualWidth + defs[1].ActualWidth : 52);
-        return start + r.NameLine.DesiredSize.Width;
+        // the heal figures under the name too: a pop-up never covers them
+        return start + Math.Max(r.NameLine.DesiredSize.Width, r.Heal.Visibility == Visibility.Visible ? r.Heal.DesiredSize.Width : 0);
     }
 
     /// <summary>Where the DPS's column starts across the row (the figures after it too, expanded or not).</summary>

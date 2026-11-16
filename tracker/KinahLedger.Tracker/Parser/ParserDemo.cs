@@ -82,6 +82,14 @@ public static class ParserDemo
                     p.Take(new DamageDealt(at, src, id, amount, group ? "" : who?.Name ?? "", who?.You == true, skill, 1 + (int)(amount % 3)));
                     hp -= amount;
                     p.Take(new BossHealth(at, id, Math.Max(0, hp), max));
+                    // the heals (from the hit itself, so the sample's other figures stay as they were): the Cleric heals the
+                    // others in turn, part of it overheal, now and then unconfirmed; the Templar heals only himself (no heal line)
+                    if (src == 2)
+                    {
+                        long h = 5_000 + (s * 37 + amount) % 4_000, target = new long[] { 1, 3, 4, 2 }[(s / 3) % 4];
+                        p.Take(new HealDone(at, 2, target, h, h * (35 + s % 30) / 100, 17120000, false, target == 2, s % 4 == 0, false));
+                    }
+                    if (src == 3 && s % 15 == 0) p.Take(new HealDone(at, 3, 3, 3_000, 1_200, 12330000, false, true, false, false));
                 }
                 if (src == 1)
                 {

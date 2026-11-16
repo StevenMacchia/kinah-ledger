@@ -51,6 +51,15 @@ public static partial class WpfApp
         // the open world's fight held after 5 quiet seconds
         var heldLive = HeldSample(a, now); heldLive.End = null; heldLive.Outcome = "";
         var held = HeldSample(a, now);
+        // the heal line: the Templar heals himself a big burst, so the Cleric's share of the group's healing falls and their line
+        // slides shorter (the Cleric's figures stay; the Templar still gets no line: he healed no one else)
+        var heal = BossParser.Copy(a);
+        var tank = heal.Roster.First(f => f.Class == "Templar");
+        long burst = heal.GroupHealing; tank.Healing += burst; tank.HealingSelf += burst; tank.HealingEffective += burst / 3;
+        // a big hit of the Cleric's: its pop-up beside the heal figures, never over them
+        var popsHealer = BossParser.Copy(a);
+        foreach (var f in popsHealer.Roster) Add(f, 1);
+        popsHealer.BigHits = new List<BigHit> { new(1, popsHealer.Roster.First(f => f.HealingOthers > 0).Id, 96_000, null, now) };
         double yourDps = a.DpsOf(you, now) ?? 1;
         // damage added to a member: to every target and to the boss alike (the meter counts the boss's when the record splits them)
         static void Add(Fighter f, long d) { f.Damage += d; f.BossDamage += d; }
@@ -63,6 +72,8 @@ public static partial class WpfApp
             new("finish", a, kill, now, now),
             new("finish-pb", a, pb, now, now, _ => new PullRef { Dps = 4020 }),
             new("finish-held", heldLive, held, now.AddSeconds(-5), held.End!.Value),
+            new("heal", a, heal, now, now),
+            new("pops-healer", a, popsHealer, now, now),
             new("heat-near", a, a, now, now, _ => new PullRef { Dps = yourDps / 0.9 }),
             new("heat-beat", a, a, now, now, _ => new PullRef { Dps = yourDps / 1.06 }),
         };
@@ -189,6 +200,12 @@ public static partial class WpfApp
                         bool gold = mid.Pops.Any(p => p.Word == "pop-crit:+299K") && !mid.Pops.Any(p => p.Word.Contains("+858K")) && mid.Pops.All(p => p.Word.StartsWith("pop-crit:") == (p.Word.EndsWith("+858K") || p.Word.EndsWith("+299K")));
                         check(mid.Pops.Count > 0 && mid.Pops.Count <= ParserRows.PopsInAll && perRow <= ParserRows.PopsPerRow && apart && clear && inRow && gold,
                             $"meter motion (pops): four at most, two a row (a third takes the oldest's place), apart, in their own row, clear of the name and the DPS, gold only for a crit (count {mid.Pops.Count}, per row {perRow}, apart {apart}, clear {clear}, in row {inRow}, gold {gold}: {string.Join(", ", mid.Pops.Select(p => $"{p.Row}:{p.Word}@{p.Left:0}-{p.Right:0}/{p.NameEnd:0}-{p.DpsLeft:0}"))})");
+                        break;
+                    case "pops-healer":
+                        bool clearH = mid.Pops.All(p => p.Left >= p.NameEnd - 0.5 && p.Right <= p.DpsLeft + 0.5);
+                        bool inRowH = mid.Pops.All(p => p.Top >= p.BandTop - 0.5 && p.Bottom <= p.BandBottom + 0.5);
+                        check(mid.Pops.Count == 1 && clearH && inRowH,
+                            $"meter motion (pops-healer): a healer's big hit pops in its row clear of the name and the heal figures under it, and of the DPS ({string.Join(", ", mid.Pops.Select(p => $"{p.Row}:{p.Word}@{p.Left:0}-{p.Right:0}/{p.NameEnd:0}-{p.DpsLeft:0}"))})");
                         break;
                     case "overtake": check(mid.Lifted, "meter motion (overtake): part-way the one who passed is lifted, with its shadow"); break;
                     case "finish": check(mid.Sweep == "sweep-good" && mid.Badge is { } b && b.Opacity > 0 && Math.Abs(b.Scale - 1) > 0.01 && !mid.PlateAtRest, $"meter motion (finish): part-way the light sweeps, the AVG. DPS badge stamps, the TOP DPS plate slides in (sweep {mid.Sweep}, badge {mid.Badge}, plate at rest {mid.PlateAtRest})"); break;
