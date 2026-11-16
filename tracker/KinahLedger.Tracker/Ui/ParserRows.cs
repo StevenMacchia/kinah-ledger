@@ -109,7 +109,7 @@ public sealed partial class ParserRows : Grid
         /// The row's foot: the heal line, 2 px along its bottom edge, its length the member's share of the group's healing
         /// (collapsed for a member who healed no one else); and the heal figures under the name, the name's line lifted for them.
         /// </summary>
-        public required Border Under;
+        public required Border Under, UnderTrack;
         public required TextBlock Heal;
         /// <summary>The heal chip after the name (a healer's row): a green cross and their healing a second.</summary>
         public required Border HealPill;
@@ -578,7 +578,7 @@ public sealed partial class ParserRows : Grid
         {
             if (r.HealPill.Visibility == Visibility.Collapsed) return;
             r.HealPill.Visibility = Visibility.Collapsed; r.Heal.Text = ""; r.HealShare = r.HealShown = double.NaN;   // Text "" keeps FitName from bringing it back
-            r.Under.Visibility = Visibility.Collapsed;
+            r.Under.Visibility = r.UnderTrack.Visibility = Visibility.Collapsed;
             FitName(r);
             return;
         }
@@ -593,9 +593,12 @@ public sealed partial class ParserRows : Grid
         if (was != text.Length) FitName(r);
         // the heal bar along the row's foot (Steven, 2026-11-16: "the healing bar underneath ... should be toggleable and slightly
         // bigger"): 4 px, sliding to the member's share of the group's healing (self-heals in), a Settings switch
-        if (!HealBarsPref) { r.Under.Visibility = Visibility.Collapsed; r.HealShare = r.HealShown = double.NaN; return; }
-        r.Under.Visibility = Visibility.Visible;
-        double share = e.GroupHealing > 0 ? Math.Clamp((double)f.Healing / e.GroupHealing, 0, 1) : 0;
+        if (!HealBarsPref) { r.Under.Visibility = r.UnderTrack.Visibility = Visibility.Collapsed; r.HealShare = r.HealShown = double.NaN; return; }
+        r.Under.Visibility = r.UnderTrack.Visibility = Visibility.Visible;
+        // its length against the top healer's (as the DPS bars are against the top DPS): the top healer's runs the row's width,
+        // a small healer's still reads (Steven, 2026-11-16: "i cant see the fucking bars at all" with group shares of a few %)
+        long most = e.Members.Select(m => m.Healing).DefaultIfEmpty(0).Max();
+        double share = most > 0 ? Math.Clamp((double)f.Healing / most, 0, 1) : 0;
         r.HealShare = share;
         Motion.Slide(r.Under, $"parser|ovheal|{e.Id}|{f.Id}|{(int)_kind}", share, v => { r.HealShown = v; SetHealBar(r, v); });
     }
@@ -608,14 +611,16 @@ public sealed partial class ParserRows : Grid
         r.Under.Width = v <= 0.001 ? 0 : Math.Max(4, w * Math.Clamp(v, 0, 1));
     }
 
-    /// <summary>The heal chip's tab: HEAL, or TOP HEALS on a boss kill's top healer (tagged as the plate it stands for).</summary>
+    /// <summary>The heal chip's cross: plain green, or on a green square for a boss kill's top healer (tagged as the TOP HEALS plate it stands for).</summary>
     static void SetTopHeals(RowEl r, bool top)
     {
         if (r.HealCross is not Border { Child: TextBlock t } tab) return;
         string tag = top ? "top-heals" : "heal-label";
         if (tab.Tag as string == tag) return;
-        t.Text = L.T(top ? "TOP HEALS" : "HEAL"); tab.Tag = tag;
-        tab.Background = top ? ParserFoot.Plate(heals: true).Background : HudKit.B(0x3DD68C);
+        tab.Tag = tag;
+        tab.Background = top ? ParserFoot.Plate(heals: true).Background : null;
+        t.Foreground = top ? HudKit.B(0x062A17) : HudKit.B(0x3DD68C);
+        tab.ToolTip = top ? L.T("TOP HEALS") : null;
         FitName(r);
     }
 
@@ -661,12 +666,13 @@ public sealed partial class ParserRows : Grid
         // its look and its height; the rest (done, landed, on others) in the chip's tooltip and the member's pop-up
         // 2026-11-16 later: "TOO small and you cant tell wtf is going on": the chip says what it is (a solid HEAL tab) and its figure
         // reads at the name's size, short (7.8K/s), as tall as the rank chip
-        var heal = new TextBlock { FontSize = 12, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x9CFACB), Tag = "heal-figures", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 6, 0), Effect = TextHalo() };
+        // 2026-11-16 later still: the HEAL tab and its box took "WAY too much space": a green cross and the figure, nothing round
+        // them (about half the width); the top healer's cross on a solid green square (the TOP HEALS plate it stands for)
+        var heal = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x9CFACB), Tag = "heal-figures", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0), Effect = TextHalo() };
         System.Windows.Documents.Typography.SetNumeralAlignment(heal, FontNumeralAlignment.Tabular);
-        var cross = new Border { Tag = "heal-label", CornerRadius = new CornerRadius(3, 0, 0, 3), Padding = new Thickness(5, 0, 5, 0), Background = HudKit.B(0x3DD68C), VerticalAlignment = VerticalAlignment.Stretch,
-            Child = new TextBlock { Text = L.T("HEAL"), FontSize = 9.5, FontWeight = FontWeights.Black, Foreground = HudKit.B(0x062A17), VerticalAlignment = VerticalAlignment.Center } };
-        var healPill = new Border { Tag = "heal-pill", Height = 18, CornerRadius = new CornerRadius(3), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
-            Background = new SolidColorBrush(Color.FromArgb(0x40, 0x2F, 0xC4, 0x7A)), BorderBrush = HudKit.B(0x3DD68C), BorderThickness = new Thickness(1),
+        var cross = new Border { Tag = "heal-label", Width = 13, Height = 13, CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = "\u271A", FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x3DD68C), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = TextHalo() } };
+        var healPill = new Border { Tag = "heal-pill", Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { cross, heal } } };
         nm.Children.Add(healPill);
         var pb = new Border { CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(6, 0, 0, 0), Background = HudKit.Gold, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
@@ -713,8 +719,11 @@ public sealed partial class ParserRows : Grid
         healFade.Freeze();
         var under = new Border { Height = HealBarPx, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
             Tag = "heal-line", Width = 0, CornerRadius = new CornerRadius(2), Background = healFade, Effect = new DropShadowEffect { Color = PK.Mint, BlurRadius = 5, ShadowDepth = 0, Opacity = 0.7 } };
+        // its track: the row's width in a dark green, so the bar reads as a bar even when short
+        var underTrack = new Border { Height = HealBarPx, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, Visibility = Visibility.Collapsed, Tag = "heal-track",
+            CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(Color.FromArgb(0x38, 0x2F, 0xC4, 0x7A)) };
         var inner = new Grid { Height = innerH, ClipToBounds = true };
-        inner.Children.Add(track); inner.Children.Add(fill); inner.Children.Add(ghost); inner.Children.Add(edge); inner.Children.Add(heat); inner.Children.Add(under); inner.Children.Add(cols);
+        inner.Children.Add(track); inner.Children.Add(fill); inner.Children.Add(ghost); inner.Children.Add(edge); inner.Children.Add(heat); inner.Children.Add(underTrack); inner.Children.Add(under); inner.Children.Add(cols);
         Border frame = f.You ? PK.YouFrame(inner, 4, new Thickness(0)) : new Border { Child = inner };
         // its moves: the glide and the lift (a rise from the right edge, so the figures' column stays where it is)
         var lift = new TranslateTransform(); var rise = new ScaleTransform(1, 1);
@@ -722,7 +731,7 @@ public sealed partial class ParserRows : Grid
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
         var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost,
-            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, Heal = heal, HealPill = healPill, HealCross = cross };
+            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, UnderTrack = underTrack, Heal = heal, HealPill = healPill, HealCross = cross };
         r.ChipOwn = chip.Effect as DropShadowEffect; r.ChipBlur0 = r.ChipOwn?.BlurRadius ?? 0; r.ChipOpacity0 = r.ChipOwn?.Opacity ?? 0;
         r.FrameGlow = frame.Effect as DropShadowEffect; r.FrameBlur0 = r.FrameGlow?.BlurRadius ?? 0; r.FrameOpacity0 = r.FrameGlow?.Opacity ?? 0;
         // the member's abilities on hover (2026-11-15 night, the meters players pick: a breakdown on the meter itself, not only
@@ -779,15 +788,11 @@ public sealed partial class ParserRows : Grid
         if (r.Heal.Text.Length > 0)
         {
             r.HealPill.Visibility = Visibility.Visible;
-            var tab = (r.HealCross as Border)?.Child as TextBlock;
-            // a new word in the tab: the chip measured afresh (a parent's Measure keeps its last size until the layout pass reaches it)
-            void Tab(string t) { if (tab == null) return; if (tab.Text != t) tab.Text = t; r.HealCross.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure(); }
-            Tab(L.T(r.HealCross.Tag as string == "top-heals" ? "TOP HEALS" : "HEAL"));
+            // the figure's length may have changed: the chip measured afresh (a parent's Measure keeps its last size until the layout pass reaches it)
+            r.Heal.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure();
             others = Others();
             if (w - others < NameMin && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
-            // short of room the tab keeps its colour and a +, the figure whole beside it
-            if (w - others < NameMin && tab != null) { Tab("+"); others = Others(); }
-            // the + chip keeps the name to its first letters (the class icon and colour still say who): the healing beats the name
+            // the chip keeps the name to its first letters (the class icon and colour still say who): the healing beats the name
             if (w - others < NameTight) { r.HealPill.Visibility = Visibility.Collapsed; others = Others(); }
         }
         r.Name.MaxWidth = Math.Max(24, w - others);
@@ -808,8 +813,8 @@ public sealed partial class ParserRows : Grid
         _ => "",
     };
 
-    /// <summary>The heal bar's height (it was 2 px to 0.10.121: "TOO small").</summary>
-    public const double HealBarPx = 4;
+    /// <summary>The heal bar's height (2 px to 0.10.121: "TOO small"; 4 px to 0.10.126: "cant see the bars at all").</summary>
+    public const double HealBarPx = 5;
 
     /// <summary>The least a name keeps beside the + heal chip in a tight meter (two letters and the ellipsis).</summary>
     const double NameTight = 26;
