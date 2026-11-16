@@ -85,6 +85,12 @@ public static partial class WpfApp
 
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
+        // the card a specialties chip opens (0.10.133): Judgment with 4 and 5 picked
+        {
+            var card = ParserCommand.SpecCard("Judgment", Specialties.Of(12240000), new[] { 4, 5 });
+            var host = new System.Windows.Controls.Border { Padding = new Thickness(12), Child = card };
+            Save(host, Path.Combine(dir, "ui-parser-spec-card.png"), 0, ShotGround);
+        }
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (past, live) = ParserDemo.Sample(now, live: true, damage: true);
         var (pastNd, liveNd) = ParserDemo.Sample(now, live: true, damage: false);

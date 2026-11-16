@@ -231,5 +231,11 @@
  "counted from partway through the run": "런 도중부터 집계",
  "the tracker restarted during it": "도중에 트래커가 다시 시작됨",
  "the tracker closed during it": "도중에 트래커가 종료됨",
- "the game reconnected during it": "도중에 게임이 재접속함"
+ "the game reconnected during it": "도중에 게임이 재접속함",
+ "SPEC": "특화",
+ "Specialization {0}": "특화 {0}",
+ "skill level {0}": "스킬 레벨 {0}",
+ "Specialties picked are lit": "선택한 특화가 밝게 표시돼요",
+ "No details for this skill's specializations yet": "이 스킬의 특화 정보가 아직 없어요",
+ "Specialties {0}": "특화 {0}"
 }

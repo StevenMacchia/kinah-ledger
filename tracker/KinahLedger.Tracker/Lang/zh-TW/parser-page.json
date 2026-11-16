@@ -231,5 +231,11 @@
  "counted from partway through the run": "從這一輪途中開始計算",
  "the tracker restarted during it": "途中追蹤器重新啟動",
  "the tracker closed during it": "途中追蹤器關閉",
- "the game reconnected during it": "途中遊戲重新連線"
+ "the game reconnected during it": "途中遊戲重新連線",
+ "SPEC": "特化",
+ "Specialization {0}": "特化 {0}",
+ "skill level {0}": "技能等級 {0}",
+ "Specialties picked are lit": "已選的特化會亮起",
+ "No details for this skill's specializations yet": "這個技能的特化資料還沒有",
+ "Specialties {0}": "特化 {0}"
 }

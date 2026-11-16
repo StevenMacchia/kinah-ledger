@@ -1,0 +1,1815 @@
+{
+ "source": "https://metabot.gg/en/aion-2/skills/<page>, section \"specializations\" (tools/specialty-fill.js)",
+ "fetched": "2026-11-16",
+ "skills": {
+  "11010000": {
+   "page": "rending-blow",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11010010.webp" },
+    { "n": 2, "text": "+200 Block while using skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11010020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11010030.webp" },
+    { "n": 4, "text": "Deals up to 12% more damage when less targets are hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11010040.webp" },
+    { "n": 5, "text": "Restores 50 MP on landing a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11010050.webp" }
+   ] },
+  "11020000": {
+   "page": "keen-strike",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11020010.webp" },
+    { "n": 2, "text": "Absorbs 100, 100% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11020020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11020030.webp" },
+    { "n": 4, "text": "-1s [Ruinous Blow] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11020040.webp" },
+    { "n": 5, "text": "Adds [Reckless Strike] Chain Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11020050.webp" }
+   ] },
+  "11050000": {
+   "page": "crushing-wave",
+   "specs": [
+    { "n": 1, "text": "Absorbs 200, 200% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11050010.webp" },
+    { "n": 2, "text": "Restores 50 MP on landing a Critical Hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11050020.webp" },
+    { "n": 3, "text": "Up to +20% damage when more targets hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11050030.webp" },
+    { "n": 4, "text": "Resets cooldown on landing a Critical Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11050040.webp" },
+    { "n": 5, "text": "50% chance to pull", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11050050.webp" }
+   ] },
+  "11080000": {
+   "page": "blade-toss",
+   "specs": [
+    { "n": 1, "text": "+20% [Blade Toss] Incoming Heal reduction", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11080010.webp" },
+    { "n": 2, "text": "[Blade Toss] inflicts Slow for 5s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11080020.webp" },
+    { "n": 3, "text": "[Blade Toss] breaks Protective Shields", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11080030.webp" },
+    { "n": 4, "text": "[Blade Dance] has 30% chance to inflict Knockdown for 3s", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11080040.webp" },
+    { "n": 5, "text": "Max 2 Chain Attacks" }
+   ] },
+  "11100000": {
+   "page": "ruinous-blow",
+   "specs": [
+    { "n": 1, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11100010.webp" },
+    { "n": 2, "text": "+12.5m Range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11100020.webp" },
+    { "n": 3, "text": "+30% Skill Critical Hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11100030.webp" },
+    { "n": 4, "text": "Extra damage on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11100040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11100050.webp" }
+   ] },
+  "11110000": {
+   "page": "focused-block",
+   "specs": [
+    { "n": 1, "text": "+1 consecutive use", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11110010.webp" },
+    { "n": 2, "text": "Changes to mobile skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11110020.webp" },
+    { "n": 3, "text": "+20% Move Speed for 3s on Parry", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11110030.webp" },
+    { "n": 4, "text": "Restores 10% HP once on Parry", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11110040.webp" },
+    { "n": 5, "text": "+1s Block duration" }
+   ] },
+  "11130000": {
+   "page": "armor-of-balance",
+   "specs": [
+    { "n": 1, "text": "+20% Ailment-type and Mental-type Resist", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11130010.webp" },
+    { "n": 2, "text": "x1.5 [Blood Absorption] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11130020.webp" },
+    { "n": 3, "text": "x1.5 [Protection Armor] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11130030.webp" },
+    { "n": 4, "text": "+50% additional Impact-type Resist", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11130040.webp" },
+    { "n": 5, "text": "+30% Status Effect Resist" }
+   ] },
+  "11170000": {
+   "page": "overhead-slam",
+   "specs": [
+    { "n": 1, "text": "Absorbs 70, 70% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11170010.webp" },
+    { "n": 2, "text": "Changes to AoE Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11170020.webp" },
+    { "n": 3, "text": "Adds [Upward Strike] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11170030.webp" },
+    { "n": 4, "text": "Critical Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11170040.webp" },
+    { "n": 5, "text": "Remove cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11170050.webp" }
+   ] },
+  "11190000": {
+   "page": "leaping-slam",
+   "specs": [
+    { "n": 1, "text": "Prepare for Battle effect on the caster for 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11190010.webp" },
+    { "n": 2, "text": "50% chance to trigger [Ankle Slice] on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11190020.webp" },
+    { "n": 3, "text": "Resets cooldown on defeating an enemy", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11190030.webp" },
+    { "n": 4, "text": "+20% PvE Damage Tolerance and +10 PvP Damage Tolerance for 3s", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11190040.webp" },
+    { "n": 5, "text": "Changes to AoE skill and pulls in enemies", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11190050.webp" }
+   ] },
+  "11200000": {
+   "page": "ankle-slice",
+   "specs": [
+    { "n": 1, "text": "30% chance to inflict Knockdown for 3s on landing [Ankle Slice]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11200010.webp" },
+    { "n": 2, "text": "Adds [Ankle Smash] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11200020.webp" },
+    { "n": 3, "text": "+16m [Ankle Slice] range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11200030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11200040.webp" },
+    { "n": 5, "text": "25% chance to reset [Ankle Slice] cooldown on Block", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11200050.webp" }
+   ] },
+  "11240000": {
+   "page": "wrath-wave",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11240010.webp" },
+    { "n": 2, "text": "Reduces Attack by 20% for 5s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11240020.webp" },
+    { "n": 3, "text": "Deals damage 1 additional time", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11240030.webp" },
+    { "n": 4, "text": "+25% Knockdown Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11240040.webp" },
+    { "n": 5, "text": "Changes to ranged skill" }
+   ] },
+  "11250000": {
+   "page": "zikels-blessing",
+   "specs": [
+    { "n": 1, "text": "+50% Stagger Gauge Damage", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11250010.webp" },
+    { "n": 2, "text": "+10% PvE Damage Boost and +5% PvP Damage Boost", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11250020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit chance", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11250030.webp" },
+    { "n": 4, "text": "+20% Status Effect Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11250040.webp" },
+    { "n": 5, "text": "+5s duration" }
+   ] },
+  "11260000": {
+   "page": "defiance",
+   "specs": [
+    { "n": 1, "text": "Adds [Wrath Burst] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11260010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11260020.webp" },
+    { "n": 3, "text": "Restores 20% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11260030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11260040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11260050.webp" }
+   ] },
+  "11280000": {
+   "page": "sword-aura-rampage",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11280010.webp" },
+    { "n": 2, "text": "Restores 120 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11280020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11280030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11280040.webp" },
+    { "n": 5, "text": "-1s all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11280050.webp" }
+   ] },
+  "11290000": {
+   "page": "mocking-blade",
+   "specs": [
+    { "n": 1, "text": "Absorbs 400, 400% HP, absorbs 1500, 1500% HP of target with Incapacitated Immunity", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11290010.webp" },
+    { "n": 2, "text": "Changes to AoE damage on down strike", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11290020.webp" },
+    { "n": 3, "text": "Adds 2 additional strikes", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11290030.webp" },
+    { "n": 4, "text": "+1s Knockdown duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11290040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11290050.webp" }
+   ] },
+  "11300000": {
+   "page": "aerial-snare",
+   "specs": [
+    { "n": 1, "text": "Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11300010.webp" },
+    { "n": 2, "text": "+25% [Aerial Snare] Airborne Chance", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11300020.webp" },
+    { "n": 3, "text": "+100% damage to targets with Incapacitated Immunity", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11300030.webp" },
+    { "n": 4, "text": "Adds [Forced Fall] Chain Skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11300040.webp" },
+    { "n": 5, "text": "-50% [Aerial Snare] cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11300050.webp" }
+   ] },
+  "11340000": {
+   "page": "lifestealing-blade",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11340010.webp" },
+    { "n": 2, "text": "Predation effect on party members for 20s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11340020.webp" },
+    { "n": 3, "text": "-30s cooldown", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11340030.webp" },
+    { "n": 4, "text": "+5% HP absorbed", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11340040.webp" },
+    { "n": 5, "text": "Predation extra damage lands as a Critical Hit" }
+   ] },
+  "11360000": {
+   "page": "rush-strike",
+   "specs": [
+    { "n": 1, "text": "Restores 300 Stamina on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11360010.webp" },
+    { "n": 2, "text": "+10m range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11360020.webp" },
+    { "n": 3, "text": "Changes to Charge Skill and deals AoE damage", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/11360030.webp" },
+    { "n": 4, "text": "-10s cooldown", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/11360040.webp" },
+    { "n": 5, "text": "+25% Knockdown Chance", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/11360050.webp" }
+   ] },
+  "11380000": {
+   "page": "tenaciousness",
+   "specs": [
+    { "n": 1, "text": "+100% Incoming Heal", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11380010.webp" },
+    { "n": 2, "text": "Restores 20% Max HP when the effect ends", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11380020.webp" },
+    { "n": 3, "text": "+20% Attack", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11380030.webp" },
+    { "n": 4, "text": "Trigger [Tenaciousness] when afflicted with Impact-type status", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11380040.webp" },
+    { "n": 5, "text": "+1s duration" }
+   ] },
+  "11390000": {
+   "page": "rage-burst",
+   "specs": [
+    { "n": 1, "text": "-15s [Rage Burst] cooldown", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11390010.webp" },
+    { "n": 2, "text": "+10% Attack reduction", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11390020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11390030.webp" },
+    { "n": 4, "text": "+10% PvE Damage Boost increase and +5% PvP Damage Boost increase", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11390040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "11400000": {
+   "page": "lunge-stance",
+   "specs": [
+    { "n": 1, "text": "+5% Double Chance for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11400010.webp" },
+    { "n": 2, "text": "Increases Move Speed by 20% for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11400020.webp" },
+    { "n": 3, "text": "x1.5 [Identify Weakness] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11400030.webp" },
+    { "n": 4, "text": "50% chance to reduce all skill cooldowns by 1s on Critical Hit for the duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11400040.webp" },
+    { "n": 5, "text": "50% chance to deal extra damage on Critical Hit for the duration" }
+   ] },
+  "11410000": {
+   "page": "wave-armor",
+   "specs": [
+    { "n": 1, "text": "Absorbs 200, 200% HP", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11410010.webp" },
+    { "n": 2, "text": "x1.5 [Experienced Counterstrike] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11410020.webp" },
+    { "n": 3, "text": "x1.5 [Murderous Burst] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11410030.webp" },
+    { "n": 4, "text": "Reflects 10% of damage taken", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11410040.webp" },
+    { "n": 5, "text": "Activates 2 times" }
+   ] },
+  "11430000": {
+   "page": "forced-restraint",
+   "specs": [
+    { "n": 1, "text": "50% chance to inflict Root for 5s", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11430010.webp" },
+    { "n": 2, "text": "-1,000 Stamina", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11430020.webp" },
+    { "n": 3, "text": "+2s Seal duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11430030.webp" },
+    { "n": 4, "text": "+25% Seal chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11430040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "11450000": {
+   "page": "fracturing-rush",
+   "specs": [
+    { "n": 1, "text": "+2 max targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11450010.webp" },
+    { "n": 2, "text": "Adds [Destructive Rush] Chain Skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11450020.webp" },
+    { "n": 3, "text": "+20% Root Chance", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11450030.webp" },
+    { "n": 4, "text": "50% chance to inflict Airborne for 3s", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11450040.webp" },
+    { "n": 5, "text": "50% chance to inflict Airborne for 3s" }
+   ] },
+  "11700000": {
+   "page": "assault-strike",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/11700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/11700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/11700030.webp" },
+    { "n": 4, "text": "+20% Knockdown Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/11700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] },
+  "12010000": {
+   "page": "vicious-strike",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12010010.webp" },
+    { "n": 2, "text": "Absorbs 100, 100% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12010020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12010030.webp" },
+    { "n": 4, "text": "-2s [Warding Strike] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12010040.webp" },
+    { "n": 5, "text": "Adds [Threatening Blow] Chain Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12010050.webp" }
+   ] },
+  "12040000": {
+   "page": "pummel",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12040010.webp" },
+    { "n": 2, "text": "[Punishing Strike] absorbs 300, 300% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12040020.webp" },
+    { "n": 3, "text": "Deals up to 12% more damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12040030.webp" },
+    { "n": 4, "text": "-1s [Punishment] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12040040.webp" },
+    { "n": 5, "text": "[Punishing Strike] grants extra damage on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12040050.webp" }
+   ] },
+  "12070000": {
+   "page": "doom-shield",
+   "specs": [
+    { "n": 1, "text": "Resets [Annihilate] cooldown on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12070010.webp" },
+    { "n": 2, "text": "+200 Block for 5s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12070020.webp" },
+    { "n": 3, "text": "Resets cooldown on defeating an enemy", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12070030.webp" },
+    { "n": 4, "text": "+25% Knockdown Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12070040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "12090000": {
+   "page": "punishment",
+   "specs": [
+    { "n": 1, "text": "Absorbs 1000, 1000% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12090010.webp" },
+    { "n": 2, "text": "Inflicts Damage over Time to target on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12090020.webp" },
+    { "n": 3, "text": "+30% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12090030.webp" },
+    { "n": 4, "text": "Changes to mobile skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12090040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12090050.webp" }
+   ] },
+  "12100000": {
+   "page": "shield-smite",
+   "specs": [
+    { "n": 1, "text": "+1s Stun duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12100010.webp" },
+    { "n": 2, "text": "Removes MP Cost and restores 200 MP on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12100020.webp" },
+    { "n": 3, "text": "50% chance to trigger [Debilitating Smash] on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12100030.webp" },
+    { "n": 4, "text": "-2s cooldown", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12100040.webp" },
+    { "n": 5, "text": "AoE Stun", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12100050.webp" }
+   ] },
+  "12110000": {
+   "page": "shield-of-protection",
+   "specs": [
+    { "n": 1, "text": "+1 consecutive use", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12110010.webp" },
+    { "n": 2, "text": "Changes to mobile skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12110020.webp" },
+    { "n": 3, "text": "+20% Move Speed for 3s on Block", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12110030.webp" },
+    { "n": 4, "text": "Restores 10% HP once on Block", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12110040.webp" },
+    { "n": 5, "text": "+1 consecutive use" }
+   ] },
+  "12120000": {
+   "page": "taunt",
+   "specs": [
+    { "n": 1, "text": "Adds 10% PvE Damage Tolerance reduction and 5% PvP Damage Tolerance reduction effect to Shrink", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12120010.webp" },
+    { "n": 2, "text": "+10% Shrink Attack reduction", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12120020.webp" },
+    { "n": 3, "text": "-5s cooldown", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12120030.webp" },
+    { "n": 4, "text": "+2s Taunt duration, +5s Shrink duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12120040.webp" },
+    { "n": 5, "text": "Adds 5% Critical Damage Tolerance reduction effect to Shrink" }
+   ] },
+  "12130000": {
+   "page": "poach",
+   "specs": [
+    { "n": 1, "text": "Moves to the target if target has Incapacitated Immunity", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12130010.webp" },
+    { "n": 2, "text": "-20% Status Effect Resist for 5s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12130020.webp" },
+    { "n": 3, "text": "Resets cooldown on defeating an enemy", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12130030.webp" },
+    { "n": 4, "text": "10% Max HP Protective Shield", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12130040.webp" },
+    { "n": 5, "text": "50% chance to Stun for 3s", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12130050.webp" }
+   ] },
+  "12190000": {
+   "page": "second-skin",
+   "specs": [
+    { "n": 1, "text": "+10% all Element Tolerance for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12190010.webp" },
+    { "n": 2, "text": "+20% Block for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12190020.webp" },
+    { "n": 3, "text": "x1.5 [Ironclad Defense] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12190030.webp" },
+    { "n": 4, "text": "+20% PvE Damage Tolerance increase and +10% PvP Damage Tolerance increase", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12190040.webp" },
+    { "n": 5, "text": "-30s cooldown" }
+   ] },
+  "12200000": {
+   "page": "armor-of-balance-templar",
+   "specs": [
+    { "n": 1, "text": "+20% Ailment-type, Mental-type Resist for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12200010.webp" },
+    { "n": 2, "text": "+20% Move Speed for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12200020.webp" },
+    { "n": 3, "text": "x1.5 [Warding Shield] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12200030.webp" },
+    { "n": 4, "text": "+50% additional Impact-type Resist", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12200040.webp" },
+    { "n": 5, "text": "+30% Status Effect Resist for the duration" }
+   ] },
+  "12220000": {
+   "page": "grapple",
+   "specs": [
+    { "n": 1, "text": "50% chance to inflict Stun for 3s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12220010.webp" },
+    { "n": 2, "text": "20% of Max HP as Protective Shield for 10s on use", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12220020.webp" },
+    { "n": 3, "text": "-30s cooldown", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12220030.webp" },
+    { "n": 4, "text": "Up to +20% PvE Damage Tolerance and +10% PvP Damage Tolerance when more targets hit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12220040.webp" },
+    { "n": 5, "text": "+2 Hit Target Count" }
+   ] },
+  "12230000": {
+   "page": "noble-armor",
+   "specs": [
+    { "n": 1, "text": "+5% Defense for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12230010.webp" },
+    { "n": 2, "text": "x1.5 [Insulting Roar] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12230020.webp" },
+    { "n": 3, "text": "x1.5 [Fury] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12230030.webp" },
+    { "n": 4, "text": "+10% Incoming Heal for the duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12230040.webp" },
+    { "n": 5, "text": "+10% PvE Damage Tolerance and +5% PvP Damage Tolerance for the duration" }
+   ] },
+  "12240000": {
+   "page": "judgment",
+   "specs": [
+    { "n": 1, "text": "Absorbs 100, 100% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12240010.webp" },
+    { "n": 2, "text": "Deals extra damage on attacking a target afflicted with Impact-type status", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12240020.webp" },
+    { "n": 3, "text": "Extra damage on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12240030.webp" },
+    { "n": 4, "text": "Critical Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12240040.webp" },
+    { "n": 5, "text": "Remove cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12240050.webp" }
+   ] },
+  "12250000": {
+   "page": "comrade-in-arms",
+   "specs": [
+    { "n": 1, "text": "Restores 25% of Max HP once if hit during Comrade in Arms while HP is 25% or less", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12250010.webp" },
+    { "n": 2, "text": "x1.5 [Guarding Seal] Protective Shield effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12250020.webp" },
+    { "n": 3, "text": "x1.5 [Block Pain] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12250030.webp" },
+    { "n": 4, "text": "Restores 50% of caster's Max HP when the effect ends", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12250040.webp" },
+    { "n": 5, "text": "+20% Status Effect Resist for the duration" }
+   ] },
+  "12260000": {
+   "page": "defiance-templar",
+   "specs": [
+    { "n": 1, "text": "Adds [Capture] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12260010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12260020.webp" },
+    { "n": 3, "text": "Restores 20% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12260030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12260040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12260050.webp" }
+   ] },
+  "12270000": {
+   "page": "debilitating-smash",
+   "specs": [
+    { "n": 1, "text": "30% chance to inflict Stun for 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12270010.webp" },
+    { "n": 2, "text": "+3s Debilitate duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12270020.webp" },
+    { "n": 3, "text": "-60% Incoming Heal during Debilitate", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12270030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12270040.webp" },
+    { "n": 5, "text": "25% chance to reset cooldown on Block", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12270050.webp" }
+   ] },
+  "12300000": {
+   "page": "annihilate",
+   "specs": [
+    { "n": 1, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12300010.webp" },
+    { "n": 2, "text": "+20% Knockdown Chance", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12300020.webp" },
+    { "n": 3, "text": "+100% damage to targets with Incapacitated Immunity", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12300030.webp" },
+    { "n": 4, "text": "-10s cooldown", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12300040.webp" },
+    { "n": 5, "text": "Changes to AoE Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12300050.webp" }
+   ] },
+  "12310000": {
+   "page": "empyrean-lords-punishment",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when less targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12310010.webp" },
+    { "n": 2, "text": "+50 Stagger Gauge Damage", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12310020.webp" },
+    { "n": 3, "text": "+10% PvE Damage Boost and +5% PvP Damage Boost for 10s on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12310030.webp" },
+    { "n": 4, "text": "+25% Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12310040.webp" },
+    { "n": 5, "text": "+200% damage to targets with Incapacitated Immunity" }
+   ] },
+  "12320000": {
+   "page": "nezekans-shield",
+   "specs": [
+    { "n": 1, "text": "+20% all Element Tolerance for Protective Shield duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12320010.webp" },
+    { "n": 2, "text": "+2s Protective Shield duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12320020.webp" },
+    { "n": 3, "text": "+20% PvE Damage Tolerance and +10% PvP Damage Tolerance for Protective Shield duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12320030.webp" },
+    { "n": 4, "text": "Restores 20% of Max HP when Protective Shield is removed", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12320040.webp" },
+    { "n": 5, "text": "+10% Protective Shield" }
+   ] },
+  "12340000": {
+   "page": "flash-rampage",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12340010.webp" },
+    { "n": 2, "text": "Restores 120 MP on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12340020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12340030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12340040.webp" },
+    { "n": 5, "text": "-1s to all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12340050.webp" }
+   ] },
+  "12350000": {
+   "page": "warding-strike",
+   "specs": [
+    { "n": 1, "text": "-5s cooldown", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12350010.webp" },
+    { "n": 2, "text": "+100 Block during Warding", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12350020.webp" },
+    { "n": 3, "text": "Heal over Time during Warding", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12350030.webp" },
+    { "n": 4, "text": "Adds PvE Damage Tolerance and PvP Damage Tolerance increase effect when more targets hit to Warding", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12350040.webp" },
+    { "n": 5, "text": "+10% PvE Damage Tolerance and +5% PvP Damage Tolerance to party members on skill use", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12350050.webp" },
+    { "n": 6, "text": "A1A2" },
+    { "n": 7, "text": "A1A3" },
+    { "n": 8, "text": "A1A4" },
+    { "n": 9, "text": "A1A5" },
+    { "n": 10, "text": "A2A3" },
+    { "n": 11, "text": "A2A4" },
+    { "n": 12, "text": "A2A5" },
+    { "n": 13, "text": "A3A4" },
+    { "n": 14, "text": "A3A5" },
+    { "n": 15, "text": "A4A5" }
+   ] },
+  "12410000": {
+   "page": "executing-blade",
+   "specs": [
+    { "n": 1, "text": "-15s cooldown", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12410010.webp" },
+    { "n": 2, "text": "Inflict Exposed for 5s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12410020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12410030.webp" },
+    { "n": 4, "text": "+30% damage on attacking a target inflicted with Impact-type status", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12410040.webp" },
+    { "n": 5, "text": "+3% all skill cooldowns of the target on hit" }
+   ] },
+  "12430000": {
+   "page": "shield-rush",
+   "specs": [
+    { "n": 1, "text": "Restores 300 Stamina on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12430010.webp" },
+    { "n": 2, "text": "+10m range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12430020.webp" },
+    { "n": 3, "text": "Changes to Charge Skill and deals AoE damage", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/12430030.webp" },
+    { "n": 4, "text": "-10s cooldown", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/12430040.webp" },
+    { "n": 5, "text": "+25% Stun Chance", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/12430050.webp" }
+   ] },
+  "12450000": {
+   "page": "battlefield-banner",
+   "specs": [
+    { "n": 1, "text": "+10% Multi-Hit Chance for duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12450010.webp" },
+    { "n": 2, "text": "+10% Weapon Damage Boost for duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12450020.webp" },
+    { "n": 3, "text": "+20% Attack increase proportional to Defense", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12450030.webp" },
+    { "n": 4, "text": "-30s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12450040.webp" },
+    { "n": 5, "text": "+15% Combat Speed for the duration" }
+   ] },
+  "12700000": {
+   "page": "assault-fury",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/12700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/12700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/12700030.webp" },
+    { "n": 4, "text": "+20% Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/12700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] },
+  "13010000": {
+   "page": "quick-slice",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13010010.webp" },
+    { "n": 2, "text": "Absorbs 70, 70% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13010020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13010030.webp" },
+    { "n": 4, "text": "-1s [Insignia Explosion] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13010040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13010050.webp" }
+   ] },
+  "13020000": {
+   "page": "throw-shadowblade",
+   "specs": [
+    { "n": 1, "text": "Adds [Shadowblade Pursuit] Chain Skill", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13020010.webp" },
+    { "n": 2, "text": "Resets cooldown on defeating an enemy", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13020020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13020030.webp" },
+    { "n": 4, "text": "Changes to AoE Skill", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13020040.webp" },
+    { "n": 5, "text": "+30% Skill Speed" }
+   ] },
+  "13050000": {
+   "page": "flash-slice",
+   "specs": [
+    { "n": 1, "text": "+2s Blind duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13050010.webp" },
+    { "n": 2, "text": "+6m Range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13050020.webp" },
+    { "n": 3, "text": "Up to +20% damage when more targets hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13050030.webp" },
+    { "n": 4, "text": "+1 consecutive use", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13050040.webp" },
+    { "n": 5, "text": "50% chance to rotate and inflict Stun for 3s on hitting a target afflicted with Blind", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13050050.webp" }
+   ] },
+  "13060000": {
+   "page": "ambush",
+   "specs": [
+    { "n": 1, "text": "Engraves 2 Insignias for 10s on landing as a Back attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13060010.webp" },
+    { "n": 2, "text": "Absorbs 300, 300% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13060020.webp" },
+    { "n": 3, "text": "Breaks Protective Shields on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13060030.webp" },
+    { "n": 4, "text": "50% chance to trigger [Whirlwind Slice] on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13060040.webp" },
+    { "n": 5, "text": "+2 consecutive uses", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13060050.webp" }
+   ] },
+  "13070000": {
+   "page": "shadowstrike",
+   "specs": [
+    { "n": 1, "text": "+1s Stun duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13070010.webp" },
+    { "n": 2, "text": "+20% caster Critical Damage Boost for 10s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13070020.webp" },
+    { "n": 3, "text": "50% chance to inflict Seal for 5s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13070030.webp" },
+    { "n": 4, "text": "50% chance to inflict Root for 5s on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13070040.webp" },
+    { "n": 5, "text": "Changes to AoE Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13070050.webp" }
+   ] },
+  "13080000": {
+   "page": "evasion-stance",
+   "specs": [
+    { "n": 1, "text": "+1 consecutive use", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13080010.webp" },
+    { "n": 2, "text": "Changes to mobile skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13080020.webp" },
+    { "n": 3, "text": "+20% Move Speed for 3s on Evasion", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13080030.webp" },
+    { "n": 4, "text": "Restore 10% HP once after successfully evading", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13080040.webp" },
+    { "n": 5, "text": "+1s duration" }
+   ] },
+  "13100000": {
+   "page": "savage-roar",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13100010.webp" },
+    { "n": 2, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13100020.webp" },
+    { "n": 3, "text": "Deals up to 12% more damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13100030.webp" },
+    { "n": 4, "text": "-1s [Shadowstrike] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13100040.webp" },
+    { "n": 5, "text": "Pulls nearby targets on using [Savage Smash]", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13100050.webp" }
+   ] },
+  "13130000": {
+   "page": "insignia-explosion",
+   "specs": [
+    { "n": 1, "text": "Adds rotate effect", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13130010.webp" },
+    { "n": 2, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13130020.webp" },
+    { "n": 3, "text": "Keep 2 stacks of Insignias after [Insignia Explosion]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13130030.webp" },
+    { "n": 4, "text": "+1s Stun duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13130040.webp" },
+    { "n": 5, "text": "-3s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13130050.webp" }
+   ] },
+  "13140000": {
+   "page": "shadowstep",
+   "specs": [
+    { "n": 1, "text": "40% chance to rotate and inflict Stun for 3s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13140010.webp" },
+    { "n": 2, "text": "Engraves 5 Insignias for 10s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13140020.webp" },
+    { "n": 3, "text": "+200 Evasion for 10s on use", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13140030.webp" },
+    { "n": 4, "text": "-15s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13140040.webp" },
+    { "n": 5, "text": "+2s Stealth duration" }
+   ] },
+  "13180000": {
+   "page": "shadow-walk",
+   "specs": [
+    { "n": 1, "text": "Critical Hit on attack during Stealth", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13180010.webp" },
+    { "n": 2, "text": "+20% Move Speed for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13180020.webp" },
+    { "n": 3, "text": "Available in combat", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13180030.webp" },
+    { "n": 4, "text": "Resets cooldown on player kill assists", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13180040.webp" },
+    { "n": 5, "text": "Stun for 3s on Back Attack while in Stealth" }
+   ] },
+  "13210000": {
+   "page": "whirlwind-slice",
+   "specs": [
+    { "n": 1, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13210010.webp" },
+    { "n": 2, "text": "Changes to AoE damage", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13210020.webp" },
+    { "n": 3, "text": "+16m range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13210030.webp" },
+    { "n": 4, "text": "+20% Stun Chance", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13210040.webp" },
+    { "n": 5, "text": "25% chance to reset [Whirlwind Slice] cooldown on Evasion", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13210050.webp" }
+   ] },
+  "13220000": {
+   "page": "shadow-fall",
+   "specs": [
+    { "n": 1, "text": "Absorbs 1000, 1000% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13220010.webp" },
+    { "n": 2, "text": "Engraves 3 Insignias for 10s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13220020.webp" },
+    { "n": 3, "text": "-5s cooldown", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13220030.webp" },
+    { "n": 4, "text": "+1s Knockdown duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13220040.webp" },
+    { "n": 5, "text": "Can be used on targets afflicted with Blind", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13220050.webp" }
+   ] },
+  "13230000": {
+   "page": "aerial-bind",
+   "specs": [
+    { "n": 1, "text": "+16m [Aerial Bind] range", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13230010.webp" },
+    { "n": 2, "text": "Adds [Aerial Slaughter] Chain Skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13230020.webp" },
+    { "n": 3, "text": "x1.5 [Ambush Stance] effect for 10s on first strike of [Aerial Bind]", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13230030.webp" },
+    { "n": 4, "text": "-30s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13230040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "13250000": {
+   "page": "smoke-bomb",
+   "specs": [
+    { "n": 1, "text": "+10m range", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13250010.webp" },
+    { "n": 2, "text": "Changes to AoE Skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13250020.webp" },
+    { "n": 3, "text": "Inflicts Slow for 5s on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13250030.webp" },
+    { "n": 4, "text": "+1 consecutive use", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13250040.webp" },
+    { "n": 5, "text": "Inflict Exposed for 5s on hit" }
+   ] },
+  "13260000": {
+   "page": "defiance-assassin",
+   "specs": [
+    { "n": 1, "text": "Adds [Storm Slice] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13260010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13260020.webp" },
+    { "n": 3, "text": "Restores 20% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13260030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13260040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13260050.webp" }
+   ] },
+  "13270000": {
+   "page": "savage-fang",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13270010.webp" },
+    { "n": 2, "text": "+50 Stagger Gauge Damage", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13270020.webp" },
+    { "n": 3, "text": "+10% PvE Damage Boost and +5% PvP Damage Boost for 10s on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13270030.webp" },
+    { "n": 4, "text": "Critical Hit on hit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13270040.webp" },
+    { "n": 5, "text": "+200% damage to targets with Incapacitated Immunity" }
+   ] },
+  "13280000": {
+   "page": "spiral-slice",
+   "specs": [
+    { "n": 1, "text": "Removes up to 2 buffs", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13280010.webp" },
+    { "n": 2, "text": "Rotates and inflicts Stun for 3s when removing 2 or more buffs", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13280020.webp" },
+    { "n": 3, "text": "Removes up to 3 buffs", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13280030.webp" },
+    { "n": 4, "text": "-30s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13280040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "13300000": {
+   "page": "triniels-dagger",
+   "specs": [
+    { "n": 1, "text": "Changes to mobile skill", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13300010.webp" },
+    { "n": 2, "text": "-10% all skill cooldowns on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13300020.webp" },
+    { "n": 3, "text": "Resets cooldown on defeating an enemy with [Triniel's Dagger]", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13300030.webp" },
+    { "n": 4, "text": "+3% all skill cooldowns", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13300040.webp" },
+    { "n": 5, "text": "+10% Back Attack Damage Boost for 5s on hit" }
+   ] },
+  "13310000": {
+   "page": "illusive-clone",
+   "specs": [
+    { "n": 1, "text": "+10% Status Effect Chance for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13310010.webp" },
+    { "n": 2, "text": "+20% Critical Damage Boost for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13310020.webp" },
+    { "n": 3, "text": "x1.5 [Exploit Weakness] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13310030.webp" },
+    { "n": 4, "text": "50% chance to deal extra damage on Critical Hit for the duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13310040.webp" },
+    { "n": 5, "text": "-1s [Illusive Clone] cooldown on Back Critical for the duration" }
+   ] },
+  "13340000": {
+   "page": "storm-rampage",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13340010.webp" },
+    { "n": 2, "text": "Restores 120 MP on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13340020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13340030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13340040.webp" },
+    { "n": 5, "text": "-1s all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13340050.webp" }
+   ] },
+  "13350000": {
+   "page": "heart-gore",
+   "specs": [
+    { "n": 1, "text": "Absorbs 70, 70% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13350010.webp" },
+    { "n": 2, "text": "Engraves 1 Insignia for 10s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13350020.webp" },
+    { "n": 3, "text": "Up to +20% Critical Hit when less targets hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13350030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13350040.webp" },
+    { "n": 5, "text": "Resets [Heart Gore] cooldown on landing a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13350050.webp" }
+   ] },
+  "13360000": {
+   "page": "infiltrate",
+   "specs": [
+    { "n": 1, "text": "Restores 300 Stamina on landing [Infiltrate]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13360010.webp" },
+    { "n": 2, "text": "+10m [Infiltrate] range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13360020.webp" },
+    { "n": 3, "text": "Breaks Protective Shields on landing [Infiltrate]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/13360030.webp" },
+    { "n": 4, "text": "Adds [Dark Strike] Chain Skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/13360040.webp" },
+    { "n": 5, "text": "+20% [Infiltrate] Blind Chance", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/13360050.webp" }
+   ] },
+  "13370000": {
+   "page": "evasion-contract",
+   "specs": [
+    { "n": 1, "text": "25% chance of Projectile Immunity for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13370010.webp" },
+    { "n": 2, "text": "+30% Move Speed for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13370020.webp" },
+    { "n": 3, "text": "50% chance to reduce all skill cooldowns by 1s on Evasion for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13370030.webp" },
+    { "n": 4, "text": "+100 Evasion increase", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13370040.webp" },
+    { "n": 5, "text": "Removes and grants immunity to Damage over Time effects" }
+   ] },
+  "13390000": {
+   "page": "swift-contract",
+   "specs": [
+    { "n": 1, "text": "-20% MP Cost for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13390010.webp" },
+    { "n": 2, "text": "x1.5 [Rear Smite] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13390020.webp" },
+    { "n": 3, "text": "x1.5 [Assault Stance] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13390030.webp" },
+    { "n": 4, "text": "+10% additional Combat Speed", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13390040.webp" },
+    { "n": 5, "text": "+10% Attack for the duration" }
+   ] },
+  "13700000": {
+   "page": "assault-ambush",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/13700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/13700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/13700030.webp" },
+    { "n": 4, "text": "+20% Blind Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/13700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] },
+  "14010000": {
+   "page": "deadshot",
+   "specs": [
+    { "n": 1, "text": "Removes MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14010010.webp" },
+    { "n": 2, "text": "+30% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14010020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14010030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14010040.webp" },
+    { "n": 5, "text": "[Deadshot] grants extra damage on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14010050.webp" }
+   ] },
+  "14020000": {
+   "page": "snipe",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14020010.webp" },
+    { "n": 2, "text": "Absorbs 70, 70% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14020020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14020030.webp" },
+    { "n": 4, "text": "-1s [Deadshot] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14020040.webp" },
+    { "n": 5, "text": "Adds [Tempest Arrow] Chain Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14020050.webp" }
+   ] },
+  "14050000": {
+   "page": "drill-dart",
+   "specs": [
+    { "n": 1, "text": "Absorbs 300, 300% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14050010.webp" },
+    { "n": 2, "text": "+2s Bleed duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14050020.webp" },
+    { "n": 3, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14050030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14050040.webp" },
+    { "n": 5, "text": "Activates [Drill Dart] 1 extra time", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14050050.webp" }
+   ] },
+  "14060000": {
+   "page": "griffon-arrow",
+   "specs": [
+    { "n": 1, "text": "Changes to mobile skill", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14060010.webp" },
+    { "n": 2, "text": "+5s Damage over Time duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14060020.webp" },
+    { "n": 3, "text": "Enhanced Crimson Flames - Extra damage when hit while afflicted with Crimson Flames", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14060030.webp" },
+    { "n": 4, "text": "-50% Damage over Time intervals", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14060040.webp" },
+    { "n": 5, "text": "+20% extra damage to targets afflicted with Crimson Flames" }
+   ] },
+  "14070000": {
+   "page": "suppressing-arrow",
+   "specs": [
+    { "n": 1, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14070010.webp" },
+    { "n": 2, "text": "+1s Stun duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14070020.webp" },
+    { "n": 3, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14070030.webp" },
+    { "n": 4, "text": "+20% Stun Chance", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14070040.webp" },
+    { "n": 5, "text": "25% chance to reset cooldown on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14070050.webp" }
+   ] },
+  "14080000": {
+   "page": "burst-arrow",
+   "specs": [
+    { "n": 1, "text": "Absorbs 1000, 1000% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14080010.webp" },
+    { "n": 2, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14080020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14080030.webp" },
+    { "n": 4, "text": "Up to +20% damage when less targets hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14080040.webp" },
+    { "n": 5, "text": "25% chance to reset cooldown on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14080050.webp" }
+   ] },
+  "14090000": {
+   "page": "marking-shot",
+   "specs": [
+    { "n": 1, "text": "+5% Perfect Chance for the duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14090010.webp" },
+    { "n": 2, "text": "30% chance to inflict Knock Back on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14090020.webp" },
+    { "n": 3, "text": "+5s duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14090030.webp" },
+    { "n": 4, "text": "+1 consecutive use", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14090040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14090050.webp" }
+   ] },
+  "14110000": {
+   "page": "gale-arrow",
+   "specs": [
+    { "n": 1, "text": "+5s duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14110010.webp" },
+    { "n": 2, "text": "50% chance to inflict Knock Back on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14110020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14110030.webp" },
+    { "n": 4, "text": "Increases Combat Speed, PvE Damage Boost, and PvP Damage Boost when less targets hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14110040.webp" },
+    { "n": 5, "text": "-10s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14110050.webp" }
+   ] },
+  "14120000": {
+   "page": "ambush-kick",
+   "specs": [
+    { "n": 1, "text": "+5m Range", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14120010.webp" },
+    { "n": 2, "text": "10% Max HP Protective Shield for 5s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14120020.webp" },
+    { "n": 3, "text": "50% chance to inflict Stun for 3s on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14120030.webp" },
+    { "n": 4, "text": "+50% Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14120040.webp" },
+    { "n": 5, "text": "Increases Protective Shield generated to 20% of Max HP" }
+   ] },
+  "14130000": {
+   "page": "snare-shot",
+   "specs": [
+    { "n": 1, "text": "+20% Move Speed reduction", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14130010.webp" },
+    { "n": 2, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14130020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14130030.webp" },
+    { "n": 4, "text": "Adds [Shackling Arrow] Chain Skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14130040.webp" },
+    { "n": 5, "text": "+2s Slow and Root duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14130050.webp" }
+   ] },
+  "14150000": {
+   "page": "illusory-arrow",
+   "specs": [
+    { "n": 1, "text": "+1s Blind duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14150010.webp" },
+    { "n": 2, "text": "Changes to AoE Skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14150020.webp" },
+    { "n": 3, "text": "Inflicts Slow for 5s on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14150030.webp" },
+    { "n": 4, "text": "+1 consecutive use", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14150040.webp" },
+    { "n": 5, "text": "Inflict Exposed for 5s on hit" }
+   ] },
+  "14160000": {
+   "page": "sealing-arrow",
+   "specs": [
+    { "n": 1, "text": "50% chance to inflict Root for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14160010.webp" },
+    { "n": 2, "text": "-1,000 enemy Max Stamina for 5s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14160020.webp" },
+    { "n": 3, "text": "+2s Seal duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14160030.webp" },
+    { "n": 4, "text": "+25% Seal chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14160040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "14170000": {
+   "page": "explosion-trap",
+   "specs": [
+    { "n": 1, "text": "Pulls enemies on explosion", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14170010.webp" },
+    { "n": 2, "text": "+1s Stun duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14170020.webp" },
+    { "n": 3, "text": "Extra damage after 3s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14170030.webp" },
+    { "n": 4, "text": "+20% Stun Chance", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14170040.webp" },
+    { "n": 5, "text": "+1 consecutive use", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14170050.webp" }
+   ] },
+  "14180000": {
+   "page": "ensnaring-trap",
+   "specs": [
+    { "n": 1, "text": "Adds [Guerilla Strike] Chain Skill", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14180010.webp" },
+    { "n": 2, "text": "Removes up to 2 buffs", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14180020.webp" },
+    { "n": 3, "text": "+1s Airborne duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14180030.webp" },
+    { "n": 4, "text": "-30s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14180040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "14190000": {
+   "page": "stealth",
+   "specs": [
+    { "n": 1, "text": "Critical Hit on attack during Stealth", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14190010.webp" },
+    { "n": 2, "text": "+20% Move Speed for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14190020.webp" },
+    { "n": 3, "text": "Available in combat", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14190030.webp" },
+    { "n": 4, "text": "+10s Stealth duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14190040.webp" },
+    { "n": 5, "text": "Grants [On the Hunt] which increases Critical Hit by 1,000 for 5s when attacking during Stealth" }
+   ] },
+  "14220000": {
+   "page": "bow-of-blessing",
+   "specs": [
+    { "n": 1, "text": "+50% Multi-Hit Chance for duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14220010.webp" },
+    { "n": 2, "text": "Increases Attack proportional to Critical Hit for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14220020.webp" },
+    { "n": 3, "text": "+20% Critical Damage Boost for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14220030.webp" },
+    { "n": 4, "text": "+7% Double Chance for the duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14220040.webp" },
+    { "n": 5, "text": "+5s duration" }
+   ] },
+  "14260000": {
+   "page": "defiance-ranger",
+   "specs": [
+    { "n": 1, "text": "Adds [Lightning Arrow] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14260010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14260020.webp" },
+    { "n": 3, "text": "Restores 20% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14260030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14260040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14260050.webp" }
+   ] },
+  "14270000": {
+   "page": "arrow-storm",
+   "specs": [
+    { "n": 1, "text": "Up to +20% max damage when more targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14270010.webp" },
+    { "n": 2, "text": "Inflicts Slow for 10s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14270020.webp" },
+    { "n": 3, "text": "+1s Stun duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14270030.webp" },
+    { "n": 4, "text": "+25% Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14270040.webp" },
+    { "n": 5, "text": "Up to -30s cooldown for [Arrow Storm] based on the number of targets hit" }
+   ] },
+  "14310000": {
+   "page": "vaizels-authority",
+   "specs": [
+    { "n": 1, "text": "+10% Perfect Chance for the duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14310010.webp" },
+    { "n": 2, "text": "x1.5 [Focused Eye] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14310020.webp" },
+    { "n": 3, "text": "x1.5 [Hunter's Soul] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14310030.webp" },
+    { "n": 4, "text": "50% chance to reduce all skill cooldowns by 1s on Critical Hit for the duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14310040.webp" },
+    { "n": 5, "text": "+10% Weapon Damage Boost for duration" }
+   ] },
+  "14330000": {
+   "page": "arrow-scattershot",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14330010.webp" },
+    { "n": 2, "text": "Restores 120 MP on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14330020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14330030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14330040.webp" },
+    { "n": 5, "text": "-1s all cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14330050.webp" }
+   ] },
+  "14340000": {
+   "page": "tempest-shot",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14340010.webp" },
+    { "n": 2, "text": "+10% skill Critical Hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14340020.webp" },
+    { "n": 3, "text": "Deals up to 12% more damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/14340030.webp" },
+    { "n": 4, "text": "5% chance to inflict Knock Back on Critical Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/14340040.webp" },
+    { "n": 5, "text": "+20% Skill Speed", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/14340050.webp" }
+   ] },
+  "14350000": {
+   "page": "mother-natures-breath",
+   "specs": [
+    { "n": 1, "text": "Removes and grants immunity to Damage over Time effects", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14350010.webp" },
+    { "n": 2, "text": "x1.5 [Vigilant Eye] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14350020.webp" },
+    { "n": 3, "text": "x1.5 [Unyielding Resolve] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14350030.webp" },
+    { "n": 4, "text": "+20% PvE Damage Tolerance increase and +10% PvP Damage Tolerance increase", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14350040.webp" },
+    { "n": 5, "text": "+25% activation chance for Mother Nature's Embrace" }
+   ] },
+  "14360000": {
+   "page": "explosive-arrow",
+   "specs": [
+    { "n": 1, "text": "-15s cooldown", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14360010.webp" },
+    { "n": 2, "text": "+10% additional damage to targets afflicted with Slow or Root", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14360020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14360030.webp" },
+    { "n": 4, "text": "+20% additional damage to targets afflicted with Slow or Root", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14360040.webp" },
+    { "n": 5, "text": "-50% cooldown for [Explosive Arrow] when hitting targets afflicted with Slow or Root" }
+   ] },
+  "14380000": {
+   "page": "supporting-fire",
+   "specs": [
+    { "n": 1, "text": "+25% activation chance", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14380010.webp" },
+    { "n": 2, "text": "+15s duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14380020.webp" },
+    { "n": 3, "text": "-30s cooldown", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14380030.webp" },
+    { "n": 4, "text": "Critical Hit on hit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14380040.webp" },
+    { "n": 5, "text": "10% chance to shoot extra projectile" }
+   ] },
+  "14700000": {
+   "page": "assault-smite",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/14700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/14700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/14700030.webp" },
+    { "n": 4, "text": "+20% Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/14700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] },
+  "15010000": {
+   "page": "flame-scattershot",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15010010.webp" },
+    { "n": 2, "text": "Restores 120 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15010020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15010030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15010040.webp" },
+    { "n": 5, "text": "-1s all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15010050.webp" }
+   ] },
+  "15040000": {
+   "page": "firestorm",
+   "specs": [
+    { "n": 1, "text": "-50% MP Cost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15040010.webp" },
+    { "n": 2, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15040020.webp" },
+    { "n": 3, "text": "-60% Incoming Heal for 5s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15040030.webp" },
+    { "n": 4, "text": "-2s [Hellfire] cooldown per fireball", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15040040.webp" },
+    { "n": 5, "text": "+15% damage per fireball, up to +75%", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15040050.webp" }
+   ] },
+  "15050000": {
+   "page": "blaze",
+   "specs": [
+    { "n": 1, "text": "Absorbs 300, 300% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15050010.webp" },
+    { "n": 2, "text": "+50% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15050020.webp" },
+    { "n": 3, "text": "Delayed Damage after 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15050030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15050040.webp" },
+    { "n": 5, "text": "-3s [Wish of Concentration] cooldown on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15050050.webp" }
+   ] },
+  "15060000": {
+   "page": "hellfire",
+   "specs": [
+    { "n": 1, "text": "+30% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15060010.webp" },
+    { "n": 2, "text": "Fire Damage over Time for 10s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15060020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15060030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15060040.webp" },
+    { "n": 5, "text": "-15s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15060050.webp" }
+   ] },
+  "15090000": {
+   "page": "ice-chain",
+   "specs": [
+    { "n": 1, "text": "-20% MP Cost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15090010.webp" },
+    { "n": 2, "text": "+20% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15090020.webp" },
+    { "n": 3, "text": "Up to +12% damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15090030.webp" },
+    { "n": 4, "text": "-1s [Winter's Shackles] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15090040.webp" },
+    { "n": 5, "text": "5% chance to inflict Frost for 2s on landing [Cold Wave]", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15090050.webp" }
+   ] },
+  "15110000": {
+   "page": "winters-shackles",
+   "specs": [
+    { "n": 1, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15110010.webp" },
+    { "n": 2, "text": "30% chance to inflict Frost for 3s on landing [Winter's Shackles]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15110020.webp" },
+    { "n": 3, "text": "+20% PvE Damage Boost and +10% PvP Damage Boost for 5s on landing [Winter's Shackles]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15110030.webp" },
+    { "n": 4, "text": "Adds [Winter's Illusion] Chain Skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15110040.webp" },
+    { "n": 5, "text": "-15s [Winter's Shackles] cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15110050.webp" }
+   ] },
+  "15120000": {
+   "page": "glacial-smite",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets are hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15120010.webp" },
+    { "n": 2, "text": "-30s cooldown", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15120020.webp" },
+    { "n": 3, "text": "50% chance to inflict Frost for 3s", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15120030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15120040.webp" },
+    { "n": 5, "text": "+25% Frost Chance" }
+   ] },
+  "15130000": {
+   "page": "soul-freeze",
+   "specs": [
+    { "n": 1, "text": "50% chance to inflict Root for 5s", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15130010.webp" },
+    { "n": 2, "text": "-1,000 Stamina", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15130020.webp" },
+    { "n": 3, "text": "+2s Seal duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15130030.webp" },
+    { "n": 4, "text": "+25% Seal chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15130040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "15140000": {
+   "page": "curse-tree",
+   "specs": [
+    { "n": 1, "text": "Increases number of hits required to remove Polymorph", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15140010.webp" },
+    { "n": 2, "text": "-200 Block, Evasion for 10s when Polymorph ends", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15140020.webp" },
+    { "n": 3, "text": "-20% Impact-type Resist for 10s when Polymorph ends", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15140030.webp" },
+    { "n": 4, "text": "Inflicts debuff even if Polymorph is removed through attacks", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15140040.webp" },
+    { "n": 5, "text": "+50% Polymorph Chance" }
+   ] },
+  "15150000": {
+   "page": "frost",
+   "specs": [
+    { "n": 1, "text": "Restores 200 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15150010.webp" },
+    { "n": 2, "text": "-5s cooldown", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15150020.webp" },
+    { "n": 3, "text": "Reset [Frost Burst] cooldown on landing Frost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15150030.webp" },
+    { "n": 4, "text": "+25% PC target Frost Chance", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15150040.webp" },
+    { "n": 5, "text": "+1s Frost duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15150050.webp" }
+   ] },
+  "15160000": {
+   "page": "steel-barrier",
+   "specs": [
+    { "n": 1, "text": "+10% Move Speed", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15160010.webp" },
+    { "n": 2, "text": "HP Regen at fixed intervals", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15160020.webp" },
+    { "n": 3, "text": "+10% PvE Damage Tolerance increase and +5% PvP Damage Tolerance increase", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15160030.webp" },
+    { "n": 4, "text": "-15s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15160040.webp" },
+    { "n": 5, "text": "No Back damage occurs" }
+   ] },
+  "15200000": {
+   "page": "cold-storm",
+   "specs": [
+    { "n": 1, "text": "Enhanced Frostbite - Grants extra damage when landing an attack", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15200010.webp" },
+    { "n": 2, "text": "30% chance to inflict Root for 2s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15200020.webp" },
+    { "n": 3, "text": "+3s [Cold Storm] summoning duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15200030.webp" },
+    { "n": 4, "text": "+10s Frostbite duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15200040.webp" },
+    { "n": 5, "text": "Has a 5% chance to inflict Frost for 3s on attacking target with Frostbite" }
+   ] },
+  "15210000": {
+   "page": "flame-arrow",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15210010.webp" },
+    { "n": 2, "text": "Absorbs 100, 100% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15210020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15210030.webp" },
+    { "n": 4, "text": "+5% Fire Damage Boost for 10s on activating [Pyroclasm]", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15210040.webp" },
+    { "n": 5, "text": "Reset [Blaze] cooldown on landing [Pyroclasm]", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15210050.webp" }
+   ] },
+  "15220000": {
+   "page": "frost-burst",
+   "specs": [
+    { "n": 1, "text": "Absorbs 700, 700% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15220010.webp" },
+    { "n": 2, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15220020.webp" },
+    { "n": 3, "text": "75% chance to Knock Back 2m", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15220030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as a Critical Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15220040.webp" },
+    { "n": 5, "text": "50% chance to reset cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15220050.webp" }
+   ] },
+  "15230000": {
+   "page": "arctic-armor",
+   "specs": [
+    { "n": 1, "text": "+20% Impact-type Resist", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15230010.webp" },
+    { "n": 2, "text": "x1.5 [Absorb Essence] effect", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15230020.webp" },
+    { "n": 3, "text": "x1.5 [Robe of Cold] effect", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15230030.webp" },
+    { "n": 4, "text": "+20% PvE Damage Tolerance increase and +10% PvP Damage Tolerance increase", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15230040.webp" },
+    { "n": 5, "text": "Changes Magic Displacement effect to -40% HP and -8% MP" }
+   ] },
+  "15240000": {
+   "page": "defiance-sorcerer",
+   "specs": [
+    { "n": 1, "text": "Adds [Curse: Old Tree] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15240010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15240020.webp" },
+    { "n": 3, "text": "Restores 20% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15240030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15240040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15240050.webp" }
+   ] },
+  "15280000": {
+   "page": "bittercold-wind",
+   "specs": [
+    { "n": 1, "text": "+1s [Bittercold Wind] summon duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15280010.webp" },
+    { "n": 2, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15280020.webp" },
+    { "n": 3, "text": "Pull effect", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15280030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as a Critical Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15280040.webp" },
+    { "n": 5, "text": "-1s [Frost] cooldown on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15280050.webp" }
+   ] },
+  "15300000": {
+   "page": "lumiels-space",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets are hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15300010.webp" },
+    { "n": 2, "text": "Adds [The Depths] Chain Skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15300020.webp" },
+    { "n": 3, "text": "+1s [The Depths] Knockdown duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15300030.webp" },
+    { "n": 4, "text": "-30s [Lumiel's Space] cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15300040.webp" },
+    { "n": 5, "text": "x2 Airborne Chance on Slow or Root targets" }
+   ] },
+  "15310000": {
+   "page": "wish-of-concentration",
+   "specs": [
+    { "n": 1, "text": "Reduces MP Cost by 10%", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15310010.webp" },
+    { "n": 2, "text": "+10% additional Attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15310020.webp" },
+    { "n": 3, "text": "+500 Max MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/15310030.webp" },
+    { "n": 4, "text": "+10% Combat Speed", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/15310040.webp" },
+    { "n": 5, "text": "-10s all skill cooldowns", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/15310050.webp" }
+   ] },
+  "15320000": {
+   "page": "delayed-explosion",
+   "specs": [
+    { "n": 1, "text": "Restores 200 MP", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15320010.webp" },
+    { "n": 2, "text": "-10s [Delayed Explosion] cooldown", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15320020.webp" },
+    { "n": 3, "text": "Changes to AoE Skill", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15320030.webp" },
+    { "n": 4, "text": "+10% additional Damage Taken", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15320040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as a Critical Hit" }
+   ] },
+  "15360000": {
+   "page": "divine-burst",
+   "specs": [
+    { "n": 1, "text": "+20% Skill Speed", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15360010.webp" },
+    { "n": 2, "text": "Absorbs 1000, 1000% HP", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15360020.webp" },
+    { "n": 3, "text": "75% chance to inflict Knock Back", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15360030.webp" },
+    { "n": 4, "text": "Inflict Stun for 3s after Knock Back", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15360040.webp" },
+    { "n": 5, "text": "+100% damage to targets with Incapacitated Immunity" }
+   ] },
+  "15390000": {
+   "page": "fire-wall",
+   "specs": [
+    { "n": 1, "text": "Enhanced Embers - Grants extra damage when landing an attack", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15390010.webp" },
+    { "n": 2, "text": "+2m wall width", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15390020.webp" },
+    { "n": 3, "text": "+2s [Fire Wall] summoning duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15390030.webp" },
+    { "n": 4, "text": "+10s Embers duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15390040.webp" },
+    { "n": 5, "text": "+10% extra damage on attacking targets inflicted with Embers" }
+   ] },
+  "15400000": {
+   "page": "element-enhancement",
+   "specs": [
+    { "n": 1, "text": "+200 Accuracy", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15400010.webp" },
+    { "n": 2, "text": "x1.5 [Robe of Flame] effect", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15400020.webp" },
+    { "n": 3, "text": "x1.5 [Grace of Enhancement] effect", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15400030.webp" },
+    { "n": 4, "text": "+10% additional Fire and Water Attack", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15400040.webp" },
+    { "n": 5, "text": "+7% Double Chance" }
+   ] },
+  "15410000": {
+   "page": "hibernation",
+   "specs": [
+    { "n": 1, "text": "+100% Incoming Heal", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15410010.webp" },
+    { "n": 2, "text": "Restores 5% Max HP every 1s for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15410020.webp" },
+    { "n": 3, "text": "+2s duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15410030.webp" },
+    { "n": 4, "text": "Triggers when afflicted with Impact-type status", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15410040.webp" },
+    { "n": 5, "text": "Has a 75% chance to inflict Frost on up to 4 enemies within 4m of the caster for 3s when using [Remove Hibernation]" }
+   ] },
+  "15700000": {
+   "page": "assault-bombardment",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/15700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/15700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/15700030.webp" },
+    { "n": 4, "text": "+20% Frost Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/15700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] },
+  "16010000": {
+   "page": "cold-shock",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16010010.webp" },
+    { "n": 2, "text": "Absorbs 100, 100% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16010020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16010030.webp" },
+    { "n": 4, "text": "+2% Attack on landing [Earth Tremor] (Up to 5 stacks)", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16010040.webp" },
+    { "n": 5, "text": "10% chance to remove 1 buff on landing [Earth Tremor]", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16010050.webp" }
+   ] },
+  "16040000": {
+   "page": "combustion",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16040010.webp" },
+    { "n": 2, "text": "Deals up to 12% more damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16040020.webp" },
+    { "n": 3, "text": "+100 Skill Accuracy", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16040030.webp" },
+    { "n": 4, "text": "+20% Skill Speed", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16040040.webp" },
+    { "n": 5, "text": "Adds [Ashy Call] Chain Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16040050.webp" }
+   ] },
+  "16060000": {
+   "page": "siphon",
+   "specs": [
+    { "n": 1, "text": "+20% Skill Speed", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16060010.webp" },
+    { "n": 2, "text": "+5% HP absorbed", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16060020.webp" },
+    { "n": 3, "text": "30% of Max HP as Protective Shield for 30s on use", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16060030.webp" },
+    { "n": 4, "text": "Stun for 3s on hit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16060040.webp" },
+    { "n": 5, "text": "+30% Protective Shield effect increase" }
+   ] },
+  "16070000": {
+   "page": "souls-cry",
+   "specs": [
+    { "n": 1, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16070010.webp" },
+    { "n": 2, "text": "Inflicts Root for 5s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16070020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16070030.webp" },
+    { "n": 4, "text": "-10s cooldown", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16070040.webp" },
+    { "n": 5, "text": "+2s Fear duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16070050.webp" }
+   ] },
+  "16080000": {
+   "page": "cry-of-terror",
+   "specs": [
+    { "n": 1, "text": "Root for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16080010.webp" },
+    { "n": 2, "text": "Up to +20% damage when more targets hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16080020.webp" },
+    { "n": 3, "text": "+2s Fear duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16080030.webp" },
+    { "n": 4, "text": "+20% Fear Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16080040.webp" },
+    { "n": 5, "text": "-30s cooldown" }
+   ] },
+  "16100000": {
+   "page": "summon-fire-spirit",
+   "specs": [
+    { "n": 1, "text": "-50% MP Cost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16100010.webp" },
+    { "n": 2, "text": "+20% Fire Spirit Critical Hit damage", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16100020.webp" },
+    { "n": 3, "text": "10% chance to activate skill when Fire Spirit lands attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16100030.webp" },
+    { "n": 4, "text": "5% chance to inflict Knockdown for 3s on landing Fire Spirit attack", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16100040.webp" },
+    { "n": 5, "text": "+20% Fire Spirit Stats", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16100050.webp" }
+   ] },
+  "16110000": {
+   "page": "summon-water-spirit",
+   "specs": [
+    { "n": 1, "text": "-50% MP Cost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16110010.webp" },
+    { "n": 2, "text": "+10% Water Spirit Attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16110020.webp" },
+    { "n": 3, "text": "10% chance to activate skill when Water Spirit lands attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16110030.webp" },
+    { "n": 4, "text": "5% chance to inflict Root for 2s on landing Water Spirit attack", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16110040.webp" },
+    { "n": 5, "text": "+20% Water Spirit Stats", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16110050.webp" }
+   ] },
+  "16120000": {
+   "page": "summon-wind-spirit",
+   "specs": [
+    { "n": 1, "text": "-50% MP Cost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16120010.webp" },
+    { "n": 2, "text": "+20% Wind Spirit Critical Hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16120020.webp" },
+    { "n": 3, "text": "10% chance to activate skill when Wind Spirit lands attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16120030.webp" },
+    { "n": 4, "text": "5% chance to reduce enemy Attack Speed by 30% for 10s on landing Wind Spirit attack", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16120040.webp" },
+    { "n": 5, "text": "+20% Wind Spirit Stats", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16120050.webp" }
+   ] },
+  "16130000": {
+   "page": "summon-earth-spirit",
+   "specs": [
+    { "n": 1, "text": "-50% MP Cost", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16130010.webp" },
+    { "n": 2, "text": "+20% PvE Damage Tolerance and +10 PvP Damage Tolerance to Earth Spirit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16130020.webp" },
+    { "n": 3, "text": "10% chance to activate skill when Earth Spirit lands attack", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16130030.webp" },
+    { "n": 4, "text": "5% chance to restore 5% of Spirit HP when landing Earth Spirit attack", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16130040.webp" },
+    { "n": 5, "text": "+20% Earth Spirit Stats", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16130050.webp" }
+   ] },
+  "16140000": {
+   "page": "jointstrike-curse",
+   "specs": [
+    { "n": 1, "text": "+2s Curse duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16140010.webp" },
+    { "n": 2, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16140020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16140030.webp" },
+    { "n": 4, "text": "-2s cooldown", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16140040.webp" },
+    { "n": 5, "text": "[Jointstrike: Curse] ignores Block and Evasion and lands as a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16140050.webp" }
+   ] },
+  "16150000": {
+   "page": "jointstrike-corrode",
+   "specs": [
+    { "n": 1, "text": "+15% extra damage taken from Spirit during Corrode", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16150010.webp" },
+    { "n": 2, "text": "-20% Combat Speed on hit for 10s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16150020.webp" },
+    { "n": 3, "text": "-70% Incoming Heal during Corrode", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16150030.webp" },
+    { "n": 4, "text": "+10s Corrode effect duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16150040.webp" },
+    { "n": 5, "text": "+30% extra damage taken from Spiritmaster during Corrode" }
+   ] },
+  "16170000": {
+   "page": "command-proxy",
+   "specs": [
+    { "n": 1, "text": "+2s Command: Proxy duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16170010.webp" },
+    { "n": 2, "text": "+10% PVP Damage Tolerance increase and +5% PvP Damage Tolerance increase to Spirit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16170020.webp" },
+    { "n": 3, "text": "x1.5 [Spirit Protection] effect during Command: Proxy", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16170030.webp" },
+    { "n": 4, "text": "Restores 3% of Spirit's HP every 1s for Command: Proxy duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16170040.webp" },
+    { "n": 5, "text": "Grants Immortality to Spirit when its HP is 50% or less for Command: Proxy duration" }
+   ] },
+  "16190000": {
+   "page": "enhance-spirits-benediction",
+   "specs": [
+    { "n": 1, "text": "Restores 10% of Max HP on cast", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16190010.webp" },
+    { "n": 2, "text": "x1.5 [Spirit Strike] Damage Boost effect", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16190020.webp" },
+    { "n": 3, "text": "x1.5 activation chance and amount healed from [Spirit Communion]", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16190030.webp" },
+    { "n": 4, "text": "+25% PvE Damage Boost and Damage Tolerance, +12.5% PvP Damage Boost and Damage Tolerance for caster and Spirit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16190040.webp" },
+    { "n": 5, "text": "+3s [Enhance: Spirit's Benediction] duration" }
+   ] },
+  "16200000": {
+   "page": "defiance-spiritmaster",
+   "specs": [
+    { "n": 1, "text": "Adds [Curse of Despair] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16200010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16200020.webp" },
+    { "n": 3, "text": "Restores 20% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16200030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16200040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16200050.webp" }
+   ] },
+  "16220000": {
+   "page": "cursed-cloud",
+   "specs": [
+    { "n": 1, "text": "-1,000 enemy Max Stamina during Damage over Time", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16220010.webp" },
+    { "n": 2, "text": "-20% Max HP of PC targets during Damage over Time", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16220020.webp" },
+    { "n": 3, "text": "+10s Damage over Time duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16220030.webp" },
+    { "n": 4, "text": "-30% Status Effect Resist during Damage over Time", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16220040.webp" },
+    { "n": 5, "text": "-50% Damage over Time intervals" }
+   ] },
+  "16230000": {
+   "page": "seize-magic",
+   "specs": [
+    { "n": 1, "text": "Removes up to 3 buffs", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16230010.webp" },
+    { "n": 2, "text": "Inflicts Seal for 5s when removing 3 or more buffs", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16230020.webp" },
+    { "n": 3, "text": "Removes up to 5 buffs", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16230030.webp" },
+    { "n": 4, "text": "-30s cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16230040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "16240000": {
+   "page": "jointstrike-destructive-attack",
+   "specs": [
+    { "n": 1, "text": "Changes to Charge Skill, dealing up to 200% more [Jointstrike: Destructive Attack] damage", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16240010.webp" },
+    { "n": 2, "text": "+30% Skill Speed", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16240020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16240030.webp" },
+    { "n": 4, "text": "Reset [Jointstrike: Curse] and [Jointstrike: Corrode] cooldown on landing [Jointstrike: Destructive Attack] first hit", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16240040.webp" },
+    { "n": 5, "text": "+200% damage to targets with Incapacitated Immunity" }
+   ] },
+  "16250000": {
+   "page": "summon-ancient-spirit",
+   "specs": [
+    { "n": 1, "text": "+10% Ancient Spirit Attack", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16250010.webp" },
+    { "n": 2, "text": "x1.5 [Spirit's Descent] activation chance and damage for 30s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16250020.webp" },
+    { "n": 3, "text": "Ancient Spirit uses skill after 5 basic attacks", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16250030.webp" },
+    { "n": 4, "text": "+20% Ancient Spirit Stats", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16250040.webp" },
+    { "n": 5, "text": "Uses skill after Ancient Spirit uses Normal Attack 3 times" }
+   ] },
+  "16260000": {
+   "page": "magic-block",
+   "specs": [
+    { "n": 1, "text": "50% chance to inflict Root for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16260010.webp" },
+    { "n": 2, "text": "-1,000 enemy Max Stamina for 5s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16260020.webp" },
+    { "n": 3, "text": "+2s Seal duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16260030.webp" },
+    { "n": 4, "text": "+25% Seal chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16260040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "16300000": {
+   "page": "elemental-fusion",
+   "specs": [
+    { "n": 1, "text": "Changes to AoE Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16300010.webp" },
+    { "n": 2, "text": "Extra damage after 3s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16300020.webp" },
+    { "n": 3, "text": "+10% all Element Boost on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16300030.webp" },
+    { "n": 4, "text": "Changes to Charge Skill, dealing up to 200% more damage", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16300040.webp" },
+    { "n": 5, "text": "25% chance to regain Four Elements", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16300050.webp" }
+   ] },
+  "16330000": {
+   "page": "dimensional-control",
+   "specs": [
+    { "n": 1, "text": "+20% Slow effect", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16330010.webp" },
+    { "n": 2, "text": "Extra damage after 3s on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16330020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit chance on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16330030.webp" },
+    { "n": 4, "text": "Pull in nearby targets", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16330040.webp" },
+    { "n": 5, "text": "30% chance to inflict Root for 3s on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16330050.webp" }
+   ] },
+  "16340000": {
+   "page": "rapid-scattershot",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16340010.webp" },
+    { "n": 2, "text": "Restores 120 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16340020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/16340030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/16340040.webp" },
+    { "n": 5, "text": "-1s all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/16340050.webp" }
+   ] },
+  "16360000": {
+   "page": "kaisinels-power",
+   "specs": [
+    { "n": 1, "text": "+150 Block and Evasion", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16360010.webp" },
+    { "n": 2, "text": "+15% Status Effect Resist", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16360020.webp" },
+    { "n": 3, "text": "+150 Accuracy", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16360030.webp" },
+    { "n": 4, "text": "+15% Status Effect Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16360040.webp" },
+    { "n": 5, "text": "+30% duration" }
+   ] },
+  "16370000": {
+   "page": "flame-blessing",
+   "specs": [
+    { "n": 1, "text": "+100 Accuracy", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16370010.webp" },
+    { "n": 2, "text": "+100 Critical Hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16370020.webp" },
+    { "n": 3, "text": "+10% Critical Damage Boost", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16370030.webp" },
+    { "n": 4, "text": "-50% extra damage cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16370040.webp" },
+    { "n": 5, "text": "+100% damage to targets with Incapacitated Immunity" }
+   ] },
+  "16700000": {
+   "page": "assault-terror",
+   "specs": [
+    { "n": 1, "text": "+20% caster's Attack for 5s", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/16700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/16700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/16700030.webp" },
+    { "n": 4, "text": "+20% Fear Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/16700040.webp" },
+    { "n": 5, "text": "-50% cooldown" }
+   ] },
+  "17010000": {
+   "page": "earths-retribution",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17010010.webp" },
+    { "n": 2, "text": "+20% [Discharge] Chain Skill trigger chance", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17010020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17010030.webp" },
+    { "n": 4, "text": "-7s [Bolt] cooldown on landing [Discharge]", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17010040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17010050.webp" }
+   ] },
+  "17040000": {
+   "page": "judgment-thunder",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17040010.webp" },
+    { "n": 2, "text": "Deals up to 12% more damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17040020.webp" },
+    { "n": 3, "text": "-10% enemy Combat Speed for 5s on landing [Divine Punishment]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17040030.webp" },
+    { "n": 4, "text": "10% chance to inflict Root for 2s on landing [Divine Punishment]", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17040040.webp" },
+    { "n": 5, "text": "Activates [Divine Punishment] 1 extra time", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17040050.webp" }
+   ] },
+  "17060000": {
+   "page": "bolt",
+   "specs": [
+    { "n": 1, "text": "30% chance to inflict Stun for 3s when fully charged", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17060010.webp" },
+    { "n": 2, "text": "+300 Skill Accuracy", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17060020.webp" },
+    { "n": 3, "text": "+30% Skill Speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17060030.webp" },
+    { "n": 4, "text": "Up to +20% damage when less targets hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17060040.webp" },
+    { "n": 5, "text": "Critical Hit on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17060050.webp" }
+   ] },
+  "17070000": {
+   "page": "chain-of-torment",
+   "specs": [
+    { "n": 1, "text": "Slows target for 5s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17070010.webp" },
+    { "n": 2, "text": "+3s Damage over Time", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17070020.webp" },
+    { "n": 3, "text": "Has a 20% chance to inflict Knockdown on the target for 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17070030.webp" },
+    { "n": 4, "text": "+10% PvE Damage Tolerance reduction and +5% PvP Damage Tolerance reduction", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17070040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and reduces Damage over Time interval by 50%", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17070050.webp" }
+   ] },
+  "17080000": {
+   "page": "debilitating-mark",
+   "specs": [
+    { "n": 1, "text": "Removes MP Consumed and restores 150 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17080010.webp" },
+    { "n": 2, "text": "-15% target Defense for duration of Damage over Time", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17080020.webp" },
+    { "n": 3, "text": "Has a 20% chance to inflict Stun on the target for 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17080030.webp" },
+    { "n": 4, "text": "+10% PvE Damage Boost reduction and +5% PvP Damage Boost reduction", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17080040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and reduces Damage over Time interval by 50%", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17080050.webp" }
+   ] },
+  "17090000": {
+   "page": "light-of-regeneration",
+   "specs": [
+    { "n": 1, "text": "+5% Defense while healing", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17090010.webp" },
+    { "n": 2, "text": "+20% amount healed when HP is 50% or less", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17090020.webp" },
+    { "n": 3, "text": "+5% Incoming Heal during healing", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17090030.webp" },
+    { "n": 4, "text": "+5% Move Speed during healing", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17090040.webp" },
+    { "n": 5, "text": "+5% PvE Damage Tolerance and +2.5% PvP Damage Tolerance during healing", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17090050.webp" }
+   ] },
+  "17100000": {
+   "page": "healing-light",
+   "specs": [
+    { "n": 1, "text": "+2 consecutive uses", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17100010.webp" },
+    { "n": 2, "text": "+20% amount healed when HP is 50% or less", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17100020.webp" },
+    { "n": 3, "text": "50% chance to remove 1 debuff", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17100030.webp" },
+    { "n": 4, "text": "+2% HP restored", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17100040.webp" },
+    { "n": 5, "text": "-2s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17100050.webp" }
+   ] },
+  "17120000": {
+   "page": "radiant-recovery",
+   "specs": [
+    { "n": 1, "text": "Removes up to 2 debuffs", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17120010.webp" },
+    { "n": 2, "text": "+1 consecutive use", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17120020.webp" },
+    { "n": 3, "text": "-3s cooldown", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17120030.webp" },
+    { "n": 4, "text": "+10% Incoming Heal for 10s", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17120040.webp" },
+    { "n": 5, "text": "+5% HP restored", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17120050.webp" }
+   ] },
+  "17150000": {
+   "page": "divine-aura",
+   "specs": [
+    { "n": 1, "text": "-40% Move Speed for 3s to up to 4 enemies within 4m of the Aura", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17150010.webp" },
+    { "n": 2, "text": "Changes to AoE Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17150020.webp" },
+    { "n": 3, "text": "+50% [Divine Aura] attacking speed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17150030.webp" },
+    { "n": 4, "text": "+3s [Divine Aura] duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17150040.webp" },
+    { "n": 5, "text": "-10s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17150050.webp" }
+   ] },
+  "17160000": {
+   "page": "benevolence",
+   "specs": [
+    { "n": 1, "text": "+10s duration", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17160010.webp" },
+    { "n": 2, "text": "Restores 200 Stamina every 5s for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17160020.webp" },
+    { "n": 3, "text": "Restores 2% HP every 5s for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17160030.webp" },
+    { "n": 4, "text": "Cleansing effect every 5s for the duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17160040.webp" },
+    { "n": 5, "text": "-1s Stamina, HP restoration, and Cleansing effect interval" }
+   ] },
+  "17190000": {
+   "page": "root",
+   "specs": [
+    { "n": 1, "text": "Changes to mobile skill", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17190010.webp" },
+    { "n": 2, "text": "+2s Root duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17190020.webp" },
+    { "n": 3, "text": "+25% Root chance", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17190030.webp" },
+    { "n": 4, "text": "x2 Damage over Time on Root targets", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17190040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "17240000": {
+   "page": "defiance-cleric",
+   "specs": [
+    { "n": 1, "text": "Adds [Blessing of Regeneration] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17240010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17240020.webp" },
+    { "n": 3, "text": "Restores 10% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17240030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17240040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17240050.webp" }
+   ] },
+  "17270000": {
+   "page": "salvation",
+   "specs": [
+    { "n": 1, "text": "+100% Incoming Heal", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17270010.webp" },
+    { "n": 2, "text": "Restores 20% of Max HP at the end of [Salvation]", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17270020.webp" },
+    { "n": 3, "text": "Grants base effect of [Salvation] to the party member with the lowest HP", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17270030.webp" },
+    { "n": 4, "text": "Triggers [Salvation] when afflicted with Impact-type status", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17270040.webp" },
+    { "n": 5, "text": "Grants base effect of [Salvation] to all party members" }
+   ] },
+  "17280000": {
+   "page": "power-burst",
+   "specs": [
+    { "n": 1, "text": "+20% Skill Speed", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17280010.webp" },
+    { "n": 2, "text": "Critical Hit on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17280020.webp" },
+    { "n": 3, "text": "75% chance to inflict Knock Back", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17280030.webp" },
+    { "n": 4, "text": "75% chance to inflict Stun for 3s", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17280040.webp" },
+    { "n": 5, "text": "+200% damage to targets with Incapacitated Immunity" }
+   ] },
+  "17290000": {
+   "page": "absolution",
+   "specs": [
+    { "n": 1, "text": "-30s cooldown", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17290010.webp" },
+    { "n": 2, "text": "Removes all debuffs", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17290020.webp" },
+    { "n": 3, "text": "+5% HP restored", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17290030.webp" },
+    { "n": 4, "text": "Restores 1.5% HP every 2s for 10s", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17290040.webp" },
+    { "n": 5, "text": "Immediately restores 5% HP and +1.5% additional Heal over Time" }
+   ] },
+  "17300000": {
+   "page": "voice-of-doom",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17300010.webp" },
+    { "n": 2, "text": "Removes Protective Shields on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17300020.webp" },
+    { "n": 3, "text": "-200 Critical Hit Resist for duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17300030.webp" },
+    { "n": 4, "text": "-50% Damage over Time intervals", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17300040.webp" },
+    { "n": 5, "text": "-20% target's Status Effect Resist for the duration" }
+   ] },
+  "17350000": {
+   "page": "condemnation",
+   "specs": [
+    { "n": 1, "text": "Restores 100 MP on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17350010.webp" },
+    { "n": 2, "text": "Up to +12% damage when less targets hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17350020.webp" },
+    { "n": 3, "text": "20% chance to inflict Root for 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17350030.webp" },
+    { "n": 4, "text": "Resets cooldown on landing a Critical Hit with [Condemnation]", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17350040.webp" },
+    { "n": 5, "text": "Multi-Hit on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17350050.webp" }
+   ] },
+  "17370000": {
+   "page": "lightning-strike-scattershot",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17370010.webp" },
+    { "n": 2, "text": "Restores 120 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17370020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/17370030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/17370040.webp" },
+    { "n": 5, "text": "-1s all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/17370050.webp" }
+   ] },
+  "17390000": {
+   "page": "summon-resurrection",
+   "specs": [
+    { "n": 1, "text": "-1s casting time", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17390010.webp" },
+    { "n": 2, "text": "Invincible for 3s after resurrection", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17390020.webp" },
+    { "n": 3, "text": "Restores 20% of Max HP", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17390030.webp" },
+    { "n": 4, "text": "Invincible for 5s after resurrection", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17390040.webp" },
+    { "n": 5, "text": "Grants Resurrection in place effect to the caster for 60s" }
+   ] },
+  "17400000": {
+   "page": "earth-punishment",
+   "specs": [
+    { "n": 1, "text": "[Condemnation] lands as a Critical Hit on targets afflicted with [Earth Punishment]", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17400010.webp" },
+    { "n": 2, "text": "+10% Double Chance to caster and +5% to party members from [Earth's Blessing]", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17400020.webp" },
+    { "n": 3, "text": "+10% Attack and Defense to caster and +5% to party members from [Earth's Blessing]", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17400030.webp" },
+    { "n": 4, "text": "+10s [Earth Punishment] and [Earth's Blessing] duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17400040.webp" },
+    { "n": 5, "text": "[Earth's Blessing] grants extra damage on landing attack" }
+   ] },
+  "17410000": {
+   "page": "light-of-protection",
+   "specs": [
+    { "n": 1, "text": "+10% Incoming Heal", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17410010.webp" },
+    { "n": 2, "text": "+100 Accuracy", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17410020.webp" },
+    { "n": 3, "text": "+10% Max HP", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17410030.webp" },
+    { "n": 4, "text": "+10% Perfect Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17410040.webp" },
+    { "n": 5, "text": "+5% Double Chance" }
+   ] },
+  "17420000": {
+   "page": "yustiels-power",
+   "specs": [
+    { "n": 1, "text": "10% Max HP Protective Shield", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17420010.webp" },
+    { "n": 2, "text": "+100 Block, Evasion", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17420020.webp" },
+    { "n": 3, "text": "+20% Status Effect Resist", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17420030.webp" },
+    { "n": 4, "text": "+10% PvE Damage Tolerance increase and +5% PvP Damage Tolerance increase", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17420040.webp" },
+    { "n": 5, "text": "+20% Max HP Protective Shield" }
+   ] },
+  "17430000": {
+   "page": "prayer-of-amplification",
+   "specs": [
+    { "n": 1, "text": "+20% PvE Damage Boost and +10% PvP Damage Boost", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17430010.webp" },
+    { "n": 2, "text": "x1.5 [Empyrean Lord's Grace] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17430020.webp" },
+    { "n": 3, "text": "x1.5 [Earth's Grace] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17430030.webp" },
+    { "n": 4, "text": "+15% additional Attack", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17430040.webp" },
+    { "n": 5, "text": "+10% all Element Damage Boost" }
+   ] },
+  "17440000": {
+   "page": "noble-aura",
+   "specs": [
+    { "n": 1, "text": "+200 Aura Critical Hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17440010.webp" },
+    { "n": 2, "text": "+20% damage to targets afflicted with Debilitating Mark", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17440020.webp" },
+    { "n": 3, "text": "+30% damage to targets with Incapacitated Immunity", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17440030.webp" },
+    { "n": 4, "text": "-1s Aura attack cooldown", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17440040.webp" },
+    { "n": 5, "text": "+30% additional damage to targets with Incapacitated Immunity" }
+   ] },
+  "17700000": {
+   "page": "assault-mark",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/17700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/17700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/17700030.webp" },
+    { "n": 4, "text": "+20% Root Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/17700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] },
+  "18010000": {
+   "page": "onslaught",
+   "specs": [
+    { "n": 1, "text": "+20% MP restored", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18010010.webp" },
+    { "n": 2, "text": "Absorbs 70, 70% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18010020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18010030.webp" },
+    { "n": 4, "text": "-1s [Spinning Strike] cooldown on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18010040.webp" },
+    { "n": 5, "text": "Adds [Storm Chain] Chain Skill", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18010050.webp" }
+   ] },
+  "18040000": {
+   "page": "incandescent-blow",
+   "specs": [
+    { "n": 1, "text": "-20% MP consumed", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18040010.webp" },
+    { "n": 2, "text": "+200 Block while using skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18040020.webp" },
+    { "n": 3, "text": "Deals up to 12% more damage when less targets are hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18040030.webp" },
+    { "n": 4, "text": "-200 enemy Accuracy for 3s on landing Bursting Blow", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18040040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18040050.webp" }
+   ] },
+  "18060000": {
+   "page": "impactful-crush",
+   "specs": [
+    { "n": 1, "text": "Changes to AoE damage", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18060010.webp" },
+    { "n": 2, "text": "+1s [Impactful Crush] Stun duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18060020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18060030.webp" },
+    { "n": 4, "text": "+30% Skill Speed", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18060040.webp" },
+    { "n": 5, "text": "+20% [Impactful Crush] Stun Chance", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18060050.webp" }
+   ] },
+  "18080000": {
+   "page": "wave-blow",
+   "specs": [
+    { "n": 1, "text": "Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18080010.webp" },
+    { "n": 2, "text": "+6m Range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18080020.webp" },
+    { "n": 3, "text": "+1s Knockdown duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18080030.webp" },
+    { "n": 4, "text": "-15% target's PvE Damage Boost and -7.5% PvP Damage Boost for 10s", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18080040.webp" },
+    { "n": 5, "text": "-5s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18080050.webp" }
+   ] },
+  "18090000": {
+   "page": "rushing-smash",
+   "specs": [
+    { "n": 1, "text": "-20% target's Impact-type Resist for 5s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18090010.webp" },
+    { "n": 2, "text": "Changes to Charge Skill, dealing up to 200% more damage", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18090020.webp" },
+    { "n": 3, "text": "50% chance to trigger [Heat Wave Blow] on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18090030.webp" },
+    { "n": 4, "text": "Resets cooldown on defeating an enemy", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18090040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18090050.webp" }
+   ] },
+  "18100000": {
+   "page": "dark-crush",
+   "specs": [
+    { "n": 1, "text": "Absorbs 70, 70% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18100010.webp" },
+    { "n": 2, "text": "Deals extra damage on attacking a target afflicted with Impact-type status", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18100020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18100030.webp" },
+    { "n": 4, "text": "Adds [Piercing Strike] Chain Skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18100040.webp" },
+    { "n": 5, "text": "Removes [Dark Crush] cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18100050.webp" }
+   ] },
+  "18120000": {
+   "page": "recuperation",
+   "specs": [
+    { "n": 1, "text": "+1 consecutive use and Heal over Time can stack up to 2 times", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18120010.webp" },
+    { "n": 2, "text": "Removes up to 2, 2 debuffs", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18120020.webp" },
+    { "n": 3, "text": "+4s healing duration", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18120030.webp" },
+    { "n": 4, "text": "+5% HP restored", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18120040.webp" },
+    { "n": 5, "text": "-3s cooldown", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18120050.webp" }
+   ] },
+  "18130000": {
+   "page": "fracturing-blow",
+   "specs": [
+    { "n": 1, "text": "-15s cooldown", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18130010.webp" },
+    { "n": 2, "text": "Inflict Exposed for 5s on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18130020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18130030.webp" },
+    { "n": 4, "text": "+30% additional Impact-type Status target damage", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18130040.webp" },
+    { "n": 5, "text": "+3% target skill cooldown" }
+   ] },
+  "18140000": {
+   "page": "focused-defense",
+   "specs": [
+    { "n": 1, "text": "+1 consecutive use", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18140010.webp" },
+    { "n": 2, "text": "Changes to mobile skill", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18140020.webp" },
+    { "n": 3, "text": "+20% Move Speed for 3s on Block", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18140030.webp" },
+    { "n": 4, "text": "Restores 5% HP once on Parry", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18140040.webp" },
+    { "n": 5, "text": "+1s Parry duration" }
+   ] },
+  "18150000": {
+   "page": "heat-wave-blow",
+   "specs": [
+    { "n": 1, "text": "40% chance to inflict Stun for 3s", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18150010.webp" },
+    { "n": 2, "text": "+20% Seal Chance", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18150020.webp" },
+    { "n": 3, "text": "Up to +20% damage when more targets hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18150030.webp" },
+    { "n": 4, "text": "Ignores Block and Evasion and lands as Multi-Hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18150040.webp" },
+    { "n": 5, "text": "25% chance to reset [Heat Wave Blow] cooldown on Block", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18150050.webp" }
+   ] },
+  "18160000": {
+   "page": "sprint-mantra",
+   "specs": [
+    { "n": 1, "text": "+10% Incoming Heal", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18160010.webp" },
+    { "n": 2, "text": "+30% Natural Stamina Regen", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18160020.webp" },
+    { "n": 3, "text": "+50% amount restored when HP is 50% or less", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18160030.webp" },
+    { "n": 4, "text": "+10% Restoration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18160040.webp" },
+    { "n": 5, "text": "+5% Endurance" }
+   ] },
+  "18170000": {
+   "page": "healing-touch",
+   "specs": [
+    { "n": 1, "text": "+20% amount healed when HP is 50% or less", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18170010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18170020.webp" },
+    { "n": 3, "text": "Removes 5, 5 debuff(s)", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18170030.webp" },
+    { "n": 4, "text": "+5% HP restored", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18170040.webp" },
+    { "n": 5, "text": "-5s cooldown" }
+   ] },
+  "18190000": {
+   "page": "undefeated-mantra",
+   "specs": [
+    { "n": 1, "text": "+100 Critical Hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18190010.webp" },
+    { "n": 2, "text": "+100 Accuracy", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18190020.webp" },
+    { "n": 3, "text": "+5% Critical Damage Boost", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18190030.webp" },
+    { "n": 4, "text": "+5% Double Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18190040.webp" },
+    { "n": 5, "text": "+10% Perfect Chance" }
+   ] },
+  "18200000": {
+   "page": "defiance-chanter",
+   "specs": [
+    { "n": 1, "text": "Adds [Crushing Strike] Chain Skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18200010.webp" },
+    { "n": 2, "text": "Restores 1,000 Stamina on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18200020.webp" },
+    { "n": 3, "text": "Restores 10% HP on using [Defiance]", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18200030.webp" },
+    { "n": 4, "text": "+2s Tenacity duration", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18200040.webp" },
+    { "n": 5, "text": "+50% PvE Damage Tolerance and +25% PvP Damage Tolerance for Tenacity duration", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18200050.webp" }
+   ] },
+  "18210000": {
+   "page": "tremor-crush",
+   "specs": [
+    { "n": 1, "text": "Restores 300 Stamina on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18210010.webp" },
+    { "n": 2, "text": "+10m [Tremor Crush] range", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18210020.webp" },
+    { "n": 3, "text": "+50% Multi-Hit on hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18210030.webp" },
+    { "n": 4, "text": "Adds [Surging Strike] Chain Skill", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18210040.webp" },
+    { "n": 5, "text": "+25% [Tremor Crush] Stun Chance", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18210050.webp" }
+   ] },
+  "18220000": {
+   "page": "obliterate",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when more targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18220010.webp" },
+    { "n": 2, "text": "+20% Skill Speed", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18220020.webp" },
+    { "n": 3, "text": "Critical Hit on hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18220030.webp" },
+    { "n": 4, "text": "+25% Knockdown Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18220040.webp" },
+    { "n": 5, "text": "+200% damage to targets with Incapacitated Immunity" }
+   ] },
+  "18230000": {
+   "page": "ensnaring-mark",
+   "specs": [
+    { "n": 1, "text": "50% chance to inflict Root", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18230010.webp" },
+    { "n": 2, "text": "50% chance to inflict -1,000 enemy Max Stamina", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18230020.webp" },
+    { "n": 3, "text": "+3s Seal, Root, Max Stamina reduction effect", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18230030.webp" },
+    { "n": 4, "text": "+25% Seal, Root, Max Stamina reduction chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18230040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "18240000": {
+   "page": "impeding-authority",
+   "specs": [
+    { "n": 1, "text": "+15% Defense", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18240010.webp" },
+    { "n": 2, "text": "+10% Incoming Heal", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18240020.webp" },
+    { "n": 3, "text": "+10% PvE Damage Tolerance, +5% PvP Damage Tolerance", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18240030.webp" },
+    { "n": 4, "text": "Restores 7% of Max HP when Protective Shield ends or is broken", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18240040.webp" },
+    { "n": 5, "text": "+10% additional PvE Damage Tolerance, +5% additional PvP Damage Tolerance" }
+   ] },
+  "18250000": {
+   "page": "power-of-the-storm",
+   "specs": [
+    { "n": 1, "text": "-30s cooldown", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18250010.webp" },
+    { "n": 2, "text": "+200 Accuracy", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18250020.webp" },
+    { "n": 3, "text": "+200 Critical Hit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18250030.webp" },
+    { "n": 4, "text": "+20% Caster Attack and +10% party member Attack", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18250040.webp" },
+    { "n": 5, "text": "+5% Weapon Damage Boost" }
+   ] },
+  "18290000": {
+   "page": "spinning-strike",
+   "specs": [
+    { "n": 1, "text": "-5s cooldown", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18290010.webp" },
+    { "n": 2, "text": "+10% Heal Boost (up to 20%)", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18290020.webp" },
+    { "n": 3, "text": "Up to +20% damage when less targets hit", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18290030.webp" },
+    { "n": 4, "text": "40% chance to inflict Seal for 3s", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18290040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion and lands as a Critical Hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18290050.webp" }
+   ] },
+  "18300000": {
+   "page": "gust-rampage",
+   "specs": [
+    { "n": 1, "text": "Absorbs 500, 500% HP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18300010.webp" },
+    { "n": 2, "text": "Restores 120 MP", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18300020.webp" },
+    { "n": 3, "text": "Changes to mobile skill", "level": 8, "icon": "https://metabot.gg/web/aion2/stigma/18300030.webp" },
+    { "n": 4, "text": "Multi-Hit on hit", "level": 12, "icon": "https://metabot.gg/web/aion2/stigma/18300040.webp" },
+    { "n": 5, "text": "-1s all skill cooldowns on hit", "level": 16, "icon": "https://metabot.gg/web/aion2/stigma/18300050.webp" }
+   ] },
+  "18330000": {
+   "page": "marchutans-wrath",
+   "specs": [
+    { "n": 1, "text": "Up to +20% damage when less targets hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18330010.webp" },
+    { "n": 2, "text": "50% chance to inflict Stun for 3s", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18330020.webp" },
+    { "n": 3, "text": "-70% Incoming Heal and Potion Recovery", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18330030.webp" },
+    { "n": 4, "text": "+25% additional Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18330040.webp" },
+    { "n": 5, "text": "Ignores Block and Evasion" }
+   ] },
+  "18420000": {
+   "page": "guardian-blessing",
+   "specs": [
+    { "n": 1, "text": "+10% Status Effect Resist", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18420010.webp" },
+    { "n": 2, "text": "x1.5 [Crossguard] effect for the duration", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18420020.webp" },
+    { "n": 3, "text": "x1.5 [Wind's Promise] effect for the duration", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18420030.webp" },
+    { "n": 4, "text": "+10% Incoming Heal", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18420040.webp" },
+    { "n": 5, "text": "+10% PvE Damage Tolerance, +5% PvP Damage Tolerance" }
+   ] },
+  "18440000": {
+   "page": "barrier-spell",
+   "specs": [
+    { "n": 1, "text": "Restores 10% HP when effect expires naturally", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18440010.webp" },
+    { "n": 2, "text": "+10% PvE Damage Tolerance and +5% PvP Damage Tolerance for 10s when effect expires naturally", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18440020.webp" },
+    { "n": 3, "text": "+10% HP limit", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18440030.webp" },
+    { "n": 4, "text": "+1s effect duration", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18440040.webp" },
+    { "n": 5, "text": "Removes all debuffs when effect expires naturally" }
+   ] },
+  "18700000": {
+   "page": "assault-shock",
+   "specs": [
+    { "n": 1, "text": "+20% Attack for 5s on hit", "level": 5, "icon": "https://metabot.gg/web/aion2/stigma/18700010.webp" },
+    { "n": 2, "text": "500 MP damage on hit", "level": 10, "icon": "https://metabot.gg/web/aion2/stigma/18700020.webp" },
+    { "n": 3, "text": "+10m range", "level": 15, "icon": "https://metabot.gg/web/aion2/stigma/18700030.webp" },
+    { "n": 4, "text": "+20% Stun Chance", "level": 20, "icon": "https://metabot.gg/web/aion2/stigma/18700040.webp" },
+    { "n": 5, "text": "-1min cooldown" }
+   ] } }
+}

@@ -221,8 +221,7 @@ public partial class OptionsWindow : Window
         HudLookHost.Children.Clear();
         var sample = _host.HudSample();
         var fields = HudFields.Parse(_edit.HudFields);
-        var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);   // a dark game scene, whatever the window's skin
-        scene.Freeze();
+        var scene = HudKit.GameScene();   // a scene from the game, whatever the window's skin (Steven, 2026-11-16: "show them over the game")
         foreach (var l in HudLooks.All)
         {
             var key = l.Key;

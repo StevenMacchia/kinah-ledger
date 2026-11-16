@@ -529,15 +529,23 @@ static class ParserCommand
             r.Children.Add(SkillArt.Icon(a.Skill, m.F.Class, 28));
             var nb = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
             var an = T(a.Name, 13, a.Skill == 0 ? Muted : Ink, FontWeights.SemiBold);
+            an.TextTrimming = TextTrimming.CharacterEllipsis;
             if (a.Kinds is { Count: > 0 } kinds) an.ToolTip = string.Join(" · ", kinds.Select(k => $"{k.Value} {k.Key}"));
-            // the specialties its hits named, after the name: "Pummel  Specialty 3·4"
+            // the specialties its hits named, after the name, as a chip that opens what each does (Steven, 2026-11-16: "make
+            // these clickable in the app so u can see which specialties are grabbed"): "Pummel  [SPEC 3·4 ▾]"
             if (a.Picks != 0)
             {
-                an.Text = "";
-                an.Inlines.Add(new System.Windows.Documents.Run(a.Name));
-                an.Inlines.Add(new System.Windows.Documents.Run("   " + L.T(KinahLedger.Parser.Abilities.PicksText(a.Picks).Length > 1 ? "Specialties " : "Specialty ") + KinahLedger.Parser.Abilities.PicksText(a.Picks)) { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = GoldInk });
+                var line = new Grid();
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                line.Children.Add(an);
+                var chip = SpecChip(a.Skill, a.Name, a.Picks);
+                Grid.SetColumn(chip, 1); line.Children.Add(chip);
+                // the name takes what the chip leaves (Auto then *: the chip is never the one cut)
+                line.ColumnDefinitions[0].Width = GridLength.Auto; an.MaxWidth = 150;
+                nb.Children.Add(line);
             }
-            nb.Children.Add(an);
+            else nb.Children.Add(an);
             var bar = Bar(a.Damage / top, c, 3, Track, glow: false); bar.Margin = new Thickness(0, 4, 0, 0);
             nb.Children.Add(bar);
             r.Children.Add(Col(nb, 1));
@@ -547,6 +555,76 @@ static class ParserCommand
             if (i < list.Count - 1) body.Children.Add(M(new Border { Height = 1, Background = Hair }, 8, 0, 8, 0));
         }
         return Glass(body, new Thickness(6, 12, 6, 10), 14);
+    }
+
+    /// <summary>
+    /// The specialties chip after an ability's name: "SPEC 4·5 ▾" in gold. A click opens a card of the skill's five
+    /// specializations, the ones its hits named lit (their effect and the skill level each needs) and the others dim; its
+    /// tooltip says the picked ones' effects too. Without data for the skill, the chip still says the numbers.
+    /// </summary>
+    static Border SpecChip(int skill, string name, int picks)
+    {
+        var all = Specialties.Of(skill);
+        var picked = Enumerable.Range(1, 5).Where(p => (picks & (1 << p)) != 0).ToList();
+        var label = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = GoldInk, VerticalAlignment = VerticalAlignment.Center,
+            Text = L.T("SPEC") + " " + KinahLedger.Parser.Abilities.PicksText(picks) + (all.Count > 0 ? "  ▾" : "") };
+        var chip = new Border
+        {
+            Tag = "spec-chip", CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 1, 6, 2), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Background = C(Color.FromRgb(0xF5, 0xB9, 0x42), 0.12), BorderBrush = C(Color.FromRgb(0xF5, 0xB9, 0x42), 0.5), BorderThickness = new Thickness(1), Child = label,
+            Cursor = all.Count > 0 ? Cursors.Hand : null,
+        };
+        AutomationProperties.SetName(chip, L.F("Specialties {0}", KinahLedger.Parser.Abilities.PicksText(picks)));
+        if (all.Count == 0) { chip.ToolTip = L.T("No details for this skill's specializations yet"); return chip; }
+        chip.ToolTip = string.Join("\n", all.Where(s => picked.Contains(s.N)).Select(s => $"{L.F("Specialization {0}", s.N)}: {s.Text}"));
+        chip.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            var pop = new System.Windows.Controls.Primitives.Popup
+            {
+                PlacementTarget = chip, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, VerticalOffset = 4, StaysOpen = false,
+                AllowsTransparency = true, PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade, Child = SpecCard(name, all, picked),
+            };
+            pop.IsOpen = true;
+        };
+        return chip;
+    }
+
+    /// <summary>The card a specialties chip opens: the skill's name, then its five specializations, the picked ones lit.</summary>
+    internal static Border SpecCard(string name, IReadOnlyList<Specialty> all, IReadOnlyList<int> picked)
+    {
+        var sp = new StackPanel { Width = 300 };
+        sp.Children.Add(T(name, 13.5, Ink, FontWeights.Bold));
+        sp.Children.Add(M(T(L.T("Specialties picked are lit"), 11, Faint, FontWeights.Medium), 0, 1, 0, 6));
+        foreach (var s in all)
+        {
+            bool on = picked.Contains(s.N);
+            var row = new Grid { Margin = new Thickness(0, 4, 0, 0), Opacity = on ? 1 : 0.45 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            var num = new Border
+            {
+                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0),
+                Background = on ? GoldInk : C(Color.FromRgb(0xFF, 0xFF, 0xFF), 0.08),
+                Child = new TextBlock { Text = s.N.ToString(CultureInfo.InvariantCulture), FontSize = 11, FontWeight = FontWeights.Bold, Foreground = on ? new SolidColorBrush(Color.FromRgb(0x1D, 0x13, 0x00)) : Muted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
+            row.Children.Add(num);
+            var words = new StackPanel();
+            var head = T(L.F("Specialization {0}", s.N) + (s.Level > 0 ? "  ·  " + L.F("skill level {0}", s.Level) : ""), 10.5, on ? GoldInk : Faint, FontWeights.SemiBold);
+            words.Children.Add(head);
+            var text = T(s.Text, 12.5, on ? Ink : Muted, on ? FontWeights.SemiBold : FontWeights.Normal);
+            text.TextWrapping = TextWrapping.Wrap;
+            words.Children.Add(text);
+            Grid.SetColumn(words, 1); row.Children.Add(words);
+            sp.Children.Add(row);
+        }
+        var card = new Border
+        {
+            Tag = "spec-card", CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 12, 14, 12), BorderThickness = new Thickness(1), Child = sp,
+            Background = new SolidColorBrush(Color.FromRgb(0x17, 0x1A, 0x22)), BorderBrush = C(Color.FromRgb(0xF5, 0xB9, 0x42), 0.35),
+            Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 18, ShadowDepth = 4, Opacity = 0.55 },
+        };
+        return card;
     }
 
     // ================================================================ compare

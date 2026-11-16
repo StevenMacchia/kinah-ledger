@@ -1554,6 +1554,16 @@ public static class ParserTests
             var ok0 = ok2.Single();
             Check(ok0.TopHealer(ok0.End!.Value)?.Id == 3, $"...TOP HEALS by the healing that landed: Mira's 3,000 over Aerin's 1,000 of 10,000 ({ok0.TopHealer(ok0.End!.Value)?.Name})");
         }
+        // the specializations' effects (data/specialties.json, tools/specialty-fill.js): the skills that have them, Judgment's
+        // five in order with their levels, a pick's own id and a rank's id finding the skill's, a passive none
+        {
+            var j = Specialties.Of(12240000);
+            var byRank = Specialties.Of(12240450);   // Judgment with picks 4 and 5
+            Check(Specialties.Count >= 190 && j.Count == 5 && j.Select(s => s.N).SequenceEqual(new[] { 1, 2, 3, 4, 5 }) && j[3] is { Text: "Critical Hit on hit", Level: 12 }
+                && byRank.Count == 5 && Specialties.Of(0).Count == 0 && Specialties.Of(12350000).All(s => s.N <= 5),
+                $"specializations: {Specialties.Count} skills; Judgment {j.Count} ({string.Join(" / ", j.Select(s => $"{s.N} {s.Text} L{s.Level}"))}); by a rank's id {byRank.Count}; a combination row never one");
+        }
+
         // heals on Steven's recordings (20261114-08 Ferocious Horn Den, 20261114-14 Vakron Sky Island) through a decoder that reads
         // them: every boss pull's top healer is the group's Cleric; Duanka's LMZ111 heals 62,608 effective (the heal verdict's
         // figure, kinah-bench); the effective part never more than done; only Clerics and Chanters heal others
