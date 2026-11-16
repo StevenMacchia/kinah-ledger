@@ -193,6 +193,7 @@ static class HudKit
         var list = new List<(string, string, Brush)>();
         if (V("abPvp").Length > 0) list.Add((V("abPvp"), "PvP", Ink));
         else if (V("abKills").Length > 0) list.Add((V("abKills"), V("abKills") == "1" ? "kill" : "kills", Ink));
+        if (V("abRank").Length > 0) list.Add((V("abRank"), "RP", Ink));
         if (V("abDeaths").Length > 0) list.Add((V("abDeaths"), V("abDeaths") == "1" ? "death" : "deaths", Rec));
         if (V("abKinah").Length > 0) list.Add((V("abKinah"), "Kinah", Gold));
         return list;

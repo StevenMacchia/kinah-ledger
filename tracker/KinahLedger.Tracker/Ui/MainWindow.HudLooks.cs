@@ -40,7 +40,7 @@ public partial class MainWindow
     }
 
     /// <summary>The Abyss's own values: "abyss" ("1" there), then PvP kills ("" until players and monsters are told apart), all kills, deaths ("" for none), Kinah and the points' icon.</summary>
-    internal static readonly string[] AbyssKeys = { "abyss", "abPvp", "abKills", "abDeaths", "abKinah", "abIcon" };
+    internal static readonly string[] AbyssKeys = { "abyss", "abPvp", "abKills", "abRank", "abDeaths", "abKinah", "abIcon" };
     /// <summary>The game's art for Abyss Points (data/extra-items.json).</summary>
     const string AbyssIcon = ItemDictionary.IconBase + "Icon_abysspoint.png";
 
@@ -62,6 +62,8 @@ public partial class MainWindow
         _hudValues["chase"] = _hudValues["toBest"] = _hudValues["best"] = "";
         _hudValues["abPvp"] = e.PlayerKills + e.MonsterKills > 0 ? e.PlayerKills.ToString("N0") : "";
         _hudValues["abKills"] = kills > 0 ? kills.ToString("N0") : "";
+        // the Rank Points earned here (Steven, 2026-11-16: "buddy should show rank points as well in abyss")
+        _hudValues["abRank"] = e.RankPoints > 0 ? Fk(e.RankPoints) : "";
         _hudValues["abDeaths"] = e.Deaths > 0 ? e.Deaths.ToString("N0") : "";
         _hudValues["abKinah"] = kinah > 0 ? Fk(kinah) : "";
         _hudValues["abIcon"] = AbyssIcon;
@@ -248,7 +250,7 @@ public partial class MainWindow
         {
             ["abyss"] = "1", ["rate"] = Fk(ap / h), ["total"] = Fk(ap), ["chase"] = "", ["toBest"] = "", ["best"] = "", ["zone"] = KinahLedger.Ocr.ZoneLocator.Abyss,
             ["feedRate"] = Fk(ap / h), ["feedUnit"] = "AP an hour", ["kinah"] = Fk(kinah / h),
-            ["abPvp"] = "9", ["abKills"] = "118", ["abDeaths"] = "2", ["abKinah"] = Fk(kinah), ["abIcon"] = AbyssIcon,
+            ["abPvp"] = "9", ["abKills"] = "118", ["abRank"] = "4.2K", ["abDeaths"] = "2", ["abKinah"] = Fk(kinah), ["abIcon"] = AbyssIcon,
         };
     }
 
