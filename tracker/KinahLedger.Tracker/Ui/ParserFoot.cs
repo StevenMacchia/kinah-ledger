@@ -34,7 +34,7 @@ static class ParserFoot
             left.Inlines.Add(new Run(lead.Text) { Foreground = lead.Foreground, FontWeight = FontWeights.Bold });
             left.Inlines.Add(new Run("   ") { FontSize = size - 1 });
         }
-        left.Inlines.Add(new Run("Total ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
+        left.Inlines.Add(new Run(L.T("Total ")) { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
         left.Inlines.Add(new Run(Amounts.Short(e.Credited)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
@@ -45,7 +45,7 @@ static class ParserFoot
         bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
         // alone on the meter it is your DPS, said so (Steven, 2026-11-16: "it needs to be my individual one if I'm alone")
         bool solo = SoloYou(e);
-        string label = solo ? (held ? "You " : pulls ? "Your DPS (boss pulls) " : "Your DPS ") : held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ";
+        string label = L.T(solo ? (held ? "You " : pulls ? "Your DPS (boss pulls) " : "Your DPS ") : held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ");
         gt.Inlines.Add(new Run(label) { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
         gt.Inlines.Add(new Run(e.GroupDpsText(held ? e.End ?? now : now)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
         right.Children.Add(gt);
@@ -97,8 +97,8 @@ static class ParserFoot
     {
         Tag = "avg-badge", Background = HudKit.B(HudKit.MintC, 0.14), BorderBrush = HudKit.B(HudKit.MintC, 0.6), BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-        ToolTip = "The whole fight's average: the fight is over",
-        Child = new TextBlock { Text = Encounter.AvgBadge.ToUpperInvariant(), FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = HudKit.Mint, Margin = new Thickness(0, 0, 0, 0.5) },
+        ToolTip = L.T("The whole fight's average: the fight is over"),
+        Child = new TextBlock { Text = L.T(Encounter.AvgBadge).ToUpperInvariant(), FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = HudKit.Mint, Margin = new Thickness(0, 0, 0, 0.5) },
     };
 
     /// <summary>
@@ -116,8 +116,8 @@ static class ParserFoot
             Tag = heals ? "top-heals" : "top-dps", Height = 13, CornerRadius = new CornerRadius(2.5), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 0, 0, 0),
             Background = fill, BorderBrush = HudKit.B(heals ? 0xC4FFE0u : 0xFFF1C6u, 0.7), BorderThickness = new Thickness(0, 0.8, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             Effect = new DropShadowEffect { Color = mid, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.55 },
-            ToolTip = heals ? "The fight's top healer" : "The fight's top DPS",
-            Child = new TextBlock { Text = heals ? "TOP HEALS" : "TOP DPS", FontSize = 8, FontWeight = FontWeights.Black, Foreground = HudKit.B(heals ? 0x062A17u : 0x2A1A00u), VerticalAlignment = VerticalAlignment.Center },
+            ToolTip = L.T(heals ? "The fight's top healer" : "The fight's top DPS"),
+            Child = new TextBlock { Text = L.T(heals ? "TOP HEALS" : "TOP DPS"), FontSize = 8, FontWeight = FontWeights.Black, Foreground = HudKit.B(heals ? 0x062A17u : 0x2A1A00u), VerticalAlignment = VerticalAlignment.Center },
         };
     }
 }

@@ -862,6 +862,26 @@ public static class ParserTests
             try { Directory.Delete(dir, true); } catch (IOException) { }
         }
 
+        // the app's languages (Ui/Lang.cs): the tables built in, every key in both, each translation with the key's {0} places
+        {
+            var tables = KinahLedger.Ui.L.Tables().ToList();
+            var keys = tables.Select(t => t.Table.Keys.ToHashSet()).ToList();
+            var onlyOne = tables.Count == 2 ? keys[0].Except(keys[1]).Concat(keys[1].Except(keys[0])).ToList() : new List<string>();
+            static string Places(string x) => string.Join(",", System.Text.RegularExpressions.Regex.Matches(x, @"\{(\d+)(?:[,:][^}]*)?\}").Select(m => m.Groups[1].Value).Distinct().OrderBy(v => v));
+            var badPlaces = tables.SelectMany(t => t.Table.Where(kv => Places(kv.Key) != Places(kv.Value)).Select(kv => $"{t.Code}: \"{kv.Key}\" → \"{kv.Value}\"")).ToList();
+            static bool Script(string code, string v) => v.Any(ch => code == "ko" ? ch is >= '가' and <= '힣' : ch is >= '一' and <= '鿿');
+            var untranslated = tables.SelectMany(t => t.Table.Where(kv => kv.Key.Count(char.IsLetter) > 3 && !Script(t.Code, kv.Value)).Select(kv => $"{t.Code}: \"{kv.Key}\"")).ToList();
+            Check(tables.Count == 2 && tables.All(t => t.Table.Count > 0) && onlyOne.Count == 0,
+                $"the Korean and Traditional Chinese tables are built in with the same keys ({string.Join(", ", tables.Select(t => $"{t.Code} {t.Table.Count}"))}){(onlyOne.Count > 0 ? ": in one only: " + string.Join("; ", onlyOne.Take(6)) : "")}");
+            Check(badPlaces.Count == 0, $"...each translation keeps its key's {{0}} places{(badPlaces.Count > 0 ? ": " + string.Join("; ", badPlaces.Take(6)) : "")}");
+            Check(untranslated.Count == 0, $"...and is written in its own script{(untranslated.Count > 0 ? ": " + string.Join("; ", untranslated.Take(6)) : "")}");
+            string R(string c) => KinahLedger.Ui.L.Resolve("auto", new System.Globalization.CultureInfo(c));
+            Check(R("ko-KR") == "ko" && R("zh-TW") == "zh-TW" && R("zh-Hant-HK") == "zh-TW" && R("zh-CN") == "en" && R("en-US") == "en" && R("de-DE") == "en" && KinahLedger.Ui.L.Resolve("ko") == "ko",
+                $"...Windows' language picks one: ko-KR {R("ko-KR")}, zh-TW {R("zh-TW")}, zh-Hant-HK {R("zh-Hant-HK")}, zh-CN {R("zh-CN")}, en-US {R("en-US")}");
+            Check(KinahLedger.Ui.L.Code == "en" && KinahLedger.Ui.L.T("Your DPS ") == "Your DPS " && KinahLedger.Ui.L.F("Killed in {0}", "2:19") == "Killed in 2:19",
+                $"...and a test run is in English, word for word ({KinahLedger.Ui.L.Code})");
+        }
+
         // your records per fight (Parser/FightRecords.cs): the boss in one instance and one mode, never the same boss elsewhere
         {
             Encounter Kill(DateTime at, string mode, long dmg, long heal, long big) => new()

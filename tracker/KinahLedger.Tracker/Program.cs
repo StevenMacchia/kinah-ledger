@@ -32,6 +32,10 @@ internal static class Program
         Ocr.ScreenReader.UseWindowCapture = settings.Ocr.WindowCapture;
         // a kinahledger:// link from the site opens (or brings up) the window
         if (args.Length > 0 && Platform.Installer.IsLink(args[0])) args = Array.Empty<string>();
+        // the app's language (Ui/Lang.cs): the player's pick for the window; English for a command (tests and renders), unless
+        // KL_LANG names one (a render in Korean)
+        bool window = args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg;
+        Ui.L.Init(window ? null : Environment.GetEnvironmentVariable("KL_LANG") ?? "en");
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
             // double-clicked, started with Windows (in the tray), or restarted by an update: open the window.

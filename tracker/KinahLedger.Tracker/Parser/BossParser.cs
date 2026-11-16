@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using KinahLedger.Packets;
 
 namespace KinahLedger.Parser;
@@ -1263,7 +1263,7 @@ public sealed class BossParser
         if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
-        Log($"{e.Boss}: {e.OutcomeLabel.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
+        Log($"{e.Boss}: {e.OutcomeWord.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
         // the run and the fight around it heard of it too; a kill is the fight's (its own pause decides its end)
         if (_fight != null && _fight.Boss.Length > 0) _fight.BossResult = e.Outcome;
         foreach (var r in new[] { _run, _fight })
@@ -1291,7 +1291,7 @@ public sealed class BossParser
         r.Boss = "";
         var secs = r.Duration(r.End.Value).TotalSeconds;
         bool worth = r.Splits.Count > 0 || secs >= RunMinSeconds;
-        Log($"run: {r.Instance} {r.OutcomeLabel.ToLowerInvariant()} after {Clock(r.Duration(r.End.Value))}, {r.Splits.Count} bosses{(why != null ? $" ({why})" : "")}{(worth ? "" : ", too short to keep")}");
+        Log($"run: {r.Instance} {r.OutcomeWord.ToLowerInvariant()} after {Clock(r.Duration(r.End.Value))}, {r.Splits.Count} bosses{(why != null ? $" ({why})" : "")}{(worth ? "" : ", too short to keep")}");
         if (worth) done.Add(Copy(r));
     }
 
@@ -1307,7 +1307,7 @@ public sealed class BossParser
         // open world and the Abyss: shown while it lasted, never kept, and the log says no more than that it ended
         if (f.OpenWorld) { Log("fight: an open-world fight ended (shown live only, not kept)"); return; }
         bool worth = f.YourKills > 0 || f.YourDeaths > 0 || f.Boss.Length > 0 || (f.HasDamage && f.Duration(f.End.Value).TotalSeconds >= MinSeconds);
-        Log($"fight: {f.Title} in {f.Instance} {f.OutcomeLabel.ToLowerInvariant()} after {Clock(f.Duration(f.End.Value))}{(why != null ? $" ({why})" : "")}{(worth ? "" : ", nothing to keep")}");
+        Log($"fight: {f.TitleWord} in {f.Instance} {f.OutcomeWord.ToLowerInvariant()} after {Clock(f.Duration(f.End.Value))}{(why != null ? $" ({why})" : "")}{(worth ? "" : ", nothing to keep")}");
         if (worth) done.Add(Copy(f));
     }
 
@@ -1422,7 +1422,7 @@ public sealed class BossParser
                 {
                     MarkPartial(s, "the tracker restarted during it");
                     if (m != ParserMode.Fights) { _kind = Encounter.KindOf(s.Kind); _instance = s.Instance; _instanceId = s.InstanceId; }
-                    Log($"{s.Title}: carries on after the tracker restarted");
+                    Log($"{s.TitleWord}: carries on after the tracker restarted");
                     continue;
                 }
                 MarkPartial(s, "the tracker closed during it");
