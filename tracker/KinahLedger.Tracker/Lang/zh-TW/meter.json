@@ -114,5 +114,7 @@
   "  Wiped": "  團滅",
   "  Cleared": "  通關",
   "  Killed": "  擊殺",
-  "rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize": "滑鼠停在名字上看技能  ·  拖曳把手移動  ·  拖曳邊緣調整大小"
+  "rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize": "滑鼠停在名字上看技能  ·  拖曳把手移動  ·  拖曳邊緣調整大小",
+  "{0:N0} a second landed": "每秒有效治療 {0:N0}",
+  " ({0}% overheal)": "（溢補 {0}%）"
 }

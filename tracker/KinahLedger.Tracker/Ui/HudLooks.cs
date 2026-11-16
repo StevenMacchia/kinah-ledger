@@ -72,6 +72,23 @@ public interface IHudLook
 /// </summary>
 static class HudKit
 {
+    /// <summary>
+    /// Ticks at a third and two thirds of a boss's HP bar (Steven, 2026-11-16: "little tick markers on every 1/3 health of
+    /// every boss"): a dark notch through the bar, laid over it last so the fill never hides it. <paramref name="height"/>
+    /// NaN: the bar's height; else that tall, at the bar's foot.
+    /// </summary>
+    public static Grid HpTicks(double height = double.NaN)
+    {
+        var g = new Grid { IsHitTestVisible = false, Tag = "hp-ticks", Height = height, VerticalAlignment = double.IsNaN(height) ? VerticalAlignment.Stretch : VerticalAlignment.Bottom };
+        for (int i = 0; i < 3; i++) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < 2; i++)
+        {
+            var t = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, -1, 0), Background = new SolidColorBrush(Color.FromArgb(0xE0, 0x08, 0x0A, 0x10)) };
+            Grid.SetColumn(t, i); g.Children.Add(t);
+        }
+        return g;
+    }
+
     public static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     public static Color Rgb(uint rgb, double alpha = 1) => Color.FromArgb((byte)Math.Round(255 * Math.Clamp(alpha, 0, 1)), (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
     public static SolidColorBrush B(uint rgb, double alpha = 1) => Frozen(Rgb(rgb, alpha));

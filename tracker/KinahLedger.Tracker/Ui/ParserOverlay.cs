@@ -699,6 +699,7 @@ public sealed class ParserPanel : Border
             track.Children.Add(fill);
             // a big drop leaves a red chunk that shrinks onto the fill
             Motion.HpGhost(track, _hpPlace, e.Id, left, now, 3);
+            track.Children.Add(HudKit.HpTicks());
             hp.Children.Add(track);
             // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
             var pct = HpText(e, 11.5, left < 0.34 ? Coral : HudKit.Ink, HudKit.Muted); pct.Margin = new Thickness(8, 0, 0, 0);

@@ -144,11 +144,11 @@ public static class ParserTests
                 Console.WriteLine($"   healing: group {e.GroupHealing:N0}{(e.TopHealer(end) is { } th ? $", TOP HEALS {th.Name}" : "")}");
                 foreach (var f in e.Members.Where(f => f.Healing > 0).OrderByDescending(f => f.Healing))
                     Console.WriteLine($"   heals {(f.Name.Length > 0 ? f.Name : "Unnamed"),-16} {(f.Class.Length > 0 ? f.Class : "-"),-13} {f.Healing,9:N0} done, {(f.HealingIsEstimate ? "≈" : "")}{f.HealingEffective:N0} effective, "
-                        + $"{e.HpsOf(f, end) ?? 0:N0}/s ({(f.HealingIsEstimate ? "≈" : "")}{e.EffectiveHpsOf(f, end) ?? 0:N0}/s effective); others {f.HealingOthers:N0}, self {f.HealingSelf:N0}, potions {f.HealingPotions:N0} (in no figure)"
+                        + $"{e.DoneHpsOf(f, end) ?? 0:N0}/s ({(f.HealingIsEstimate ? "≈" : "")}{e.HpsOf(f, end) ?? 0:N0}/s effective); others {f.HealingOthers:N0}, self {f.HealingSelf:N0}, potions {f.HealingPotions:N0} (in no figure)"
                         + (f.Heals is { Count: > 0 } hl ? "; top: " + string.Join(", ", hl.OrderByDescending(a => a.Healing).Take(3).Select(a => $"{Abilities.Name(a.Skill, f.Class)} {Ui.Amounts.Short(a.Healing)} in {a.Hits}")) : ""));
             }
         }
-        Console.WriteLine($"{kept.Count} records kept ({BossParser.Name(p.Mode)}){(p.LateHeals > 0 ? $"; {p.LateHeals:N0} healing came after its pull's end (not in the kept copies above)" : "")}");
+        Console.WriteLine($"{kept.Count} records kept ({BossParser.Name(p.Mode)}){(p.LateHeals > 0 ? $"; {p.LateHeals:N0} healing came after its pull's end (not in the kept copies above)" : "")}{(BossParser.Recredited > 0 ? $"; {BossParser.Recredited:N0} healing moved to its skill's caster (counted once a record)" : "")}");
         // --save <file>: the records as the tracker keeps them (encounters.jsonl's lines), for tools/skill-fill.js --fights
         // (the open-world fights too: a recording that starts inside an instance has no boss records, but its damage by ability is there)
         if (save != null) File.AppendAllLines(save, kept.Concat(farmRecords).Select(e => System.Text.Json.JsonSerializer.Serialize(e)));
@@ -888,7 +888,7 @@ public static class ParserTests
             {
                 Mode = "boss", Kind = "Expedition", Instance = "Ferocious Horn Den", GameMode = mode, Boss = "Necromancer Duanka", BossId = 4401,
                 Start = at, End = at.AddSeconds(90), LastAt = at.AddSeconds(90), Outcome = "kill", HasDamage = true,
-                Roster = { new Fighter { Id = 1, You = true, Name = "Swoly", Damage = dmg, BossDamage = dmg, Healing = heal, Abilities = { new AbilityShare { Skill = 11010000, Damage = dmg, Hits = 10, Max = big } } } },
+                Roster = { new Fighter { Id = 1, You = true, Name = "Swoly", Damage = dmg, BossDamage = dmg, Healing = heal, HealingEffective = heal, Abilities = { new AbilityShare { Skill = 11010000, Damage = dmg, Hits = 10, Max = big } } } },
             };
             var c1 = Kill(t, "Conquest", 90_000, 9_000, 4_000);
             var x1 = Kill(t.AddMinutes(5), "Expedition", 180_000, 0, 9_000);
@@ -1485,9 +1485,9 @@ public static class ParserTests
                 && sw.Heals!.Single(h => h.Potion) is { Skill: -201110111, Self: 420 },
                 "...by ability: a heal over time's ticks under its effect, a potion marked");
             // heals per second over the fight's seconds (as DPS): 4,500 over 9 s
-            Check(Math.Abs((live.HpsOf(ae, t.AddSeconds(10)) ?? 0) - 500) < 0.01 && Math.Abs((live.EffectiveHpsOf(ae, t.AddSeconds(10)) ?? 0) - 1_700 / 9.0) < 0.01
+            Check(Math.Abs((live.DoneHpsOf(ae, t.AddSeconds(10)) ?? 0) - 500) < 0.01 && Math.Abs((live.HpsOf(ae, t.AddSeconds(10)) ?? 0) - 1_700 / 9.0) < 0.01
                 && live.HpsOf(new Fighter(), t.AddSeconds(10)) == null,
-                $"...heals per second over the fight's time ({live.HpsOf(ae, t.AddSeconds(10)):0}/s, {live.EffectiveHpsOf(ae, t.AddSeconds(10)):0}/s effective); none for no healing");
+                $"...heals per second over the fight's time, the part that landed ({live.HpsOf(ae, t.AddSeconds(10)):0}/s; {live.DoneHpsOf(ae, t.AddSeconds(10)):0}/s with overheal); none for no healing");
             p.Take(new DamageDealt(t.AddSeconds(10), 1, 881, 40_000, "Swoly", true, 11000000, 1));
             p.Take(new BossHealth(t.AddSeconds(10), 881, 0, 100_000));
             p.Take(new UnitDied(t.AddSeconds(10), 881, "Watchdog Kwapo", true));
@@ -1518,6 +1518,41 @@ public static class ParserTests
             q.Take(new UnitDied(t.AddSeconds(8), 891, "Watchdog Kwapo", true));
             var kq0 = kq.Single();
             Check(kq0.TopsShown && kq0.TopHealer(kq0.End!.Value) == null && kq0.HasHealing, "...no TOP HEALS when no one healed another member (a Gladiator's self-heals)");
+            // a Chanter's skill's heal named for the member it healed (Sprint Mantra on a Gladiator, a "self-heal"): the group's
+            // Chanter's, on others; on the Chanter, a self-heal; with two Chanters, or none, where it came
+            var (mq, mk) = New();
+            var chanter = new GroupMember(3, "Mira", "Chanter", 300_000, 5_600, false);
+            mq.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 900));
+            mq.Take(new GroupChanged(t, new[] { Me, Ally, chanter }));
+            mq.Take(new BossEngaged(t.AddSeconds(1), "Watchdog Kwapo", 901));
+            mq.Take(new DamageDealt(t.AddSeconds(1), 1, 901, 60_000, "Swoly", true, 11000000, 1));
+            mq.Take(new HealDone(t.AddSeconds(2), 1, 1, 800, 600, 18120000, true, true, false, false));   // named Swoly's, a Chanter skill
+            mq.Take(new HealDone(t.AddSeconds(2), 3, 3, 500, 500, 18120000, true, true, false, false));   // on the Chanter herself
+            mq.Take(new HealDone(t.AddSeconds(3), 1, 1, 300, 300, 11730000, false, true, false, false));  // Swoly's own skill: his
+            var ml = mq.Live!;
+            var mira = ml.Members.Single(f => f.Id == 3); var swm = ml.Members.Single(f => f.Id == 1);
+            Check(mira is { Healing: 1_300, HealingEffective: 1_100, HealingSelf: 500, HealingOthers: 800 } && swm is { Healing: 300, HealingSelf: 300 },
+                $"...a Chanter's skill's heal named for the member it healed is the Chanter's, on others (Mira {mira.Healing}/{mira.HealingOthers} on others, Swoly {swm.Healing})");
+            var (mq2, _) = New();
+            mq2.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 910));
+            mq2.Take(new GroupChanged(t, new[] { Me, chanter, new GroupMember(4, "Lio", "Chanter", 300_000, 5_600, false) }));
+            mq2.Take(new BossEngaged(t.AddSeconds(1), "Watchdog Kwapo", 911));
+            mq2.Take(new HealDone(t.AddSeconds(2), 1, 1, 800, 600, 18120000, true, true, false, false));
+            Check(mq2.Live!.Members.Single(f => f.Id == 1).Healing == 800 && mq2.Live!.Members.Where(f => f.Id is 3 or 4).All(f => f.Healing == 0),
+                "...with two Chanters in the group it stays where it came (no guessing which)");
+            // the meter's top healer is by the healing that landed: a big overhealer is not it
+            var (oq, ok2) = New();
+            oq.Take(new InstanceEntered(t, ContentKind.Expedition, "Ferocious Horn Den", 920));
+            oq.Take(new GroupChanged(t, new[] { Me, Ally, chanter }));
+            oq.Take(new BossEngaged(t.AddSeconds(1), "Watchdog Kwapo", 921));
+            oq.Take(new DamageDealt(t.AddSeconds(1), 1, 921, 60_000, "Swoly", true, 11000000, 1));
+            oq.Take(new DamageDealt(t.AddSeconds(1), 2, 921, 20_000, "Aerin", false, 17000000, 1));
+            oq.Take(new HealDone(t.AddSeconds(2), 2, 1, 10_000, 1_000, 17120000, false, false, false, false));   // Aerin: mostly overheal
+            oq.Take(new HealDone(t.AddSeconds(2), 3, 1, 4_000, 3_000, 18120000, false, false, false, false));   // Mira: less, more landed
+            oq.Take(new BossHealth(t.AddSeconds(8), 921, 0, 100_000));
+            oq.Take(new UnitDied(t.AddSeconds(8), 921, "Watchdog Kwapo", true));
+            var ok0 = ok2.Single();
+            Check(ok0.TopHealer(ok0.End!.Value)?.Id == 3, $"...TOP HEALS by the healing that landed: Mira's 3,000 over Aerin's 1,000 of 10,000 ({ok0.TopHealer(ok0.End!.Value)?.Name})");
         }
         // heals on Steven's recordings (20261114-08 Ferocious Horn Den, 20261114-14 Vakron Sky Island) through a decoder that reads
         // them: every boss pull's top healer is the group's Cleric; Duanka's LMZ111 heals 62,608 effective (the heal verdict's
@@ -1721,8 +1756,8 @@ public static class ParserTests
             // the meter's foot (Steven, 2026-11-15: "have the bottom be total AND group dps avg"): the total and the group's DPS;
             // held, the whole fight's average with its "Avg. DPS" badge; no TOP plates out in the world
             string S(double v) => Ui.Amounts.Short(v);
-            Check(a != null && !a.HeldAverage && a.FootText(t.AddSeconds(3)) == $"Total {S(15_000)} · Group DPS {S(15_000)}"
-                && held != null && held.HeldAverage && held.FootText(t.AddSeconds(30)) == $"Total {S(15_000)} · Group {S(15_000)} · Avg. DPS" && !held.TopsShown && held.TopDps(t) == null,
+            Check(a != null && !a.HeldAverage && a.FootText(t.AddSeconds(3)) == "Total 15K · Group DPS 15K"
+                && held != null && held.HeldAverage && held.FootText(t.AddSeconds(30)) == "Total 15K · Group 15K · Avg. DPS" && !held.TopsShown && held.TopDps(t) == null,
                 $"...the foot says the total and the group's DPS, live \"{a?.FootText(t.AddSeconds(3))}\"; held, the fight's average badged \"{held?.FootText(t.AddSeconds(30))}\"; no TOP DPS in the open world");
             p.Take(new DamageDealt(t.AddSeconds(200), 1, 5002, 4_000, "Swoly", true));
             Check(p.AlwaysLive is { } a2 && a2.Members.Sum(f => f.Damage) == 4_000 && a2.Start == t.AddSeconds(200), "...and the next hit starts it from 0");

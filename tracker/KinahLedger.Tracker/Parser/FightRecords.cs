@@ -45,7 +45,8 @@ public sealed class FightRecord
 
 public sealed class FightRecords
 {
-    public const string FileName = "records.json";
+    /// <summary>records2.json since 0.10.128 (healing a second is the part that landed): built afresh from the fights, the old file left.</summary>
+    public const string FileName = "records2.json";
     /// <summary>A fight's Seen list keeps this many ids (enough to never count a fight saved twice).</summary>
     const int SeenKept = 64;
 

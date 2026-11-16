@@ -156,7 +156,8 @@ public static partial class WpfApp
                             seen++;
                             var f = e.Members.First(m => m.Name == HealRowName(fig));
                             string want = HealWant(fig, e, f, at);
-                            if (fig.Text != want) wrong.Add($"{tag} {f.Name}: \"{fig.Text}\" (want \"{want}\")");
+                            // short of room the total gives way ("2.4K/s" alone)
+                            if (fig.Text != want && !(want.Contains(" · ") && fig.Text == want[..want.IndexOf(" · ")])) wrong.Add($"{tag} {f.Name}: \"{fig.Text}\" (want \"{want}\")");
                             // the chip on the name's line, whole (the name trims for it), clear of the DPS's column, inside its row
                             var pill = (Border)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(fig));
                             var host = (FrameworkElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(pill));
@@ -183,8 +184,8 @@ public static partial class WpfApp
                 var hostW = pill == null ? 0 : ((FrameworkElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(pill))).ActualWidth;
                 double pillEnd = pill == null ? 9999 : pill.TranslatePoint(new Point(pill.ActualWidth, 0), (UIElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(pill))).X;
                 string want = fig == null ? "" : HealWant(fig, big, f, at);
-                check(fig != null && fig.Text == want && pillEnd <= hostW + 0.5,
-                    $"...a raid healer's chip on the expanded meter at the default width shows whole, the name trims for it (\"{fig?.Text}\", want \"{want}\", ends {pillEnd:0.#} of {hostW:0.#})");
+                check(fig != null && (fig.Text == want || want.StartsWith(fig.Text + " · ")) && pillEnd <= hostW + 0.5,
+                    $"...a raid healer's chip on the expanded meter at the default width shows whole (its total gives way when the name would go), the name trims for it (\"{fig?.Text}\", want \"{want}\", ends {pillEnd:0.#} of {hostW:0.#})");
                 win.Close();
                 HudStackLook.FightWidth = width0;
             }
@@ -255,7 +256,7 @@ public static partial class WpfApp
     }
 
     static string HealWant(TextBlock fig, Encounter e, Fighter f, DateTime at) =>
-        e.HpsOf(f, at) is { } hps ? $"{ParserRows.Compact(hps)}/s" : ParserRows.Compact(f.Healing);
+        e.HpsOf(f, at) is { } hps ? $"{ParserRows.Compact(hps)}/s" : ParserRows.Compact(f.HealingEffective);
 
     /// <summary>A fight drawn in one place, off-screen and still, for the checks: the meter's root and its window (closed by the caller).</summary>
     static (DependencyObject Root, Window Win) HealWindow(Encounter e, DateTime at, string place)

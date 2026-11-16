@@ -1046,6 +1046,10 @@ public sealed class BossParser
     static void Heal(Encounter e, HealDone hl)
     {
         if (hl.At < e.Start || (e.End is { } end && hl.At > end) || Member(e, hl.Source) is not { } m) return;
+        // a heal of another class's skill is that class's member's (Steven, 2026-11-16: a Chanter's Sprint Mantra came named
+        // for each member it healed, as their own self-heal): the group's one member of the skill's class, the heal on others
+        // unless it landed on them; two of that class, or none, and it stays where it came
+        if (!hl.Potion && CasterOf(e, m, hl.Skill) is { } caster) { m = caster; hl = hl with { Source = caster.Id, Self = hl.Target == caster.Id }; Recredited += hl.Amount; }
         long eff = Math.Clamp(hl.Effective, 0, hl.Amount);
         // a potion is in no heal figure (Steven, 2026-11-15: "self heals should count, potions should not"): kept apart, and
         // listed by ability as a potion; a heal of your own from a skill counts as any heal
@@ -1063,6 +1067,23 @@ public sealed class BossParser
         a.Healing += hl.Amount; a.Effective += eff; a.Hits++;
         if (hl.Self) a.Self += hl.Amount;
     }
+
+    /// <summary>
+    /// The member a heal's skill belongs to when it isn't the named healer's class: the group's only member of the skill's class
+    /// (from the skill list, else the id's family); null when the skill is the healer's own class, has no class, or the group
+    /// has no one, or two, of it.
+    /// </summary>
+    internal static Fighter? CasterOf(Encounter e, Fighter named, int skill)
+    {
+        int s = skill >= 100_000_000 ? Abilities.SkillOfEffect(skill) : skill;
+        string cls = Abilities.ClassOf(s);
+        if (cls.Length == 0 || named.Class.Length == 0 || string.Equals(cls, named.Class, StringComparison.OrdinalIgnoreCase)) return null;
+        var of = e.Roster.Where(f => !f.Other && string.Equals(f.Class, cls, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
+        return of.Count == 1 ? of[0] : null;
+    }
+
+    /// <summary>Healing moved to its skill's caster by <see cref="CasterOf"/> (replays print it).</summary>
+    [ThreadStatic] public static long Recredited;
 
     /// <summary>Who dealt a hit taken, in words: the boss's name when it was the boss, a member's when a member, else "".</summary>
     string SourceName(Encounter e, long attacker) => attacker == 0 ? "" : _cur != null && attacker == _cur.BossId ? _cur.Boss : Member(e, attacker)?.Name ?? "";

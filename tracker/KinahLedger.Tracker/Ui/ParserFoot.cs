@@ -35,7 +35,7 @@ static class ParserFoot
             left.Inlines.Add(new Run("   ") { FontSize = size - 1 });
         }
         left.Inlines.Add(new Run(L.T("Total ")) { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
-        left.Inlines.Add(new Run(Amounts.Short(e.Credited)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
+        left.Inlines.Add(new Run(Amounts.Meter(e.Credited)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         bool held = e.HeldAverage;
