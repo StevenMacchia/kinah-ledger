@@ -488,6 +488,7 @@
               <StackPanel Margin="18,13,18,15">
                 <TextBlock Style="{StaticResource RowTitle}" Text="Panel look"/>
                 <TextBlock Style="{StaticResource RowHint}" Text="Pick one from its live thumbnail; the one in use is drawn at its real size under them, with sample figures."/>
+                <WrapPanel x:Name="HudThemeHost" Margin="0,10,0,0"/>
                 <WrapPanel x:Name="HudLookHost" Margin="0,10,0,0"/>
                 <StackPanel x:Name="HudLookPreview" Margin="0,6,0,0"/>
               </StackPanel>

@@ -226,7 +226,8 @@ public partial class OptionsWindow
         if (_parserLookDivider != null) _parserLookDivider.Visibility = Visibility.Visible;
         if (_parserAllLooks != null) _parserAllLooks.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
         var current = separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook);
-        var keys = separate ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).ToArray() : HudLooks.FightLooks.ToArray();
+        var themeLooks = HudThemes.FightLooks(_hudTheme ?? HudThemes.Of(_edit.HudLook));   // the theme picked's (Ui/OptionsWindow.Themes.cs)
+        var keys = separate ? new[] { ParserPrefs.StandardLook }.Concat(themeLooks).ToArray() : themeLooks.ToArray();
         if (_parserLookHost is UniformGrid ug) ug.Columns = keys.Length;
         string inUseName = separate ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
         _parserLookHint.Text = separate

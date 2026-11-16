@@ -412,7 +412,7 @@ public sealed class ParserOverlay : Window
         HudStackLook? l = key switch
         {
             HudLooks.Auto => new HudAuto { Still = still }, HudLooks.Capsule => new HudCapsule { Still = still },
-            HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still }, _ => null,
+            HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still }, _ => HudThemes.Make(key, still),
         };
         if (l == null) return null;
         l.Update(new Dictionary<string, string>());

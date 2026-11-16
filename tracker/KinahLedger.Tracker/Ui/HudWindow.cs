@@ -142,7 +142,7 @@ public sealed partial class HudWindow : Window
         {
             HudLooks.Card => new HudCard { Still = still }, HudLooks.Ticker => new HudTicker { Still = still },
             HudLooks.Auto => new HudAuto { Still = still }, HudLooks.Capsule => new HudCapsule { Still = still }, HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still },
-            _ => null,
+            _ => HudThemes.Make(Look, still),   // a theme's look (Ui/Themes/), or the strip
         };
         if (!still)
         {
@@ -478,6 +478,7 @@ public sealed partial class HudWindow : Window
     {
         if (_look is HudTicker t) t.MotionFrame(values);
         else if (_look is HudCard c) c.MotionFrame(values);
+        else if (_look is IHudMotionFrame m) m.MotionFrame(values);   // a theme's look: its pickup's effect held
         else if (_look == null) BadgeFrame(values);
     }
 
