@@ -1587,8 +1587,8 @@ public static class ParserTests
         // and the recordings are on this PC
         {
             var recs = Recordings();
-            if (NativeDecoder.Version < 10 || recs.Count == 0)
-                Console.WriteLine($"skip  store v2 on Steven's recordings: decoder interface {NativeDecoder.Version}, {recs.Count} recordings here");
+            if (NativeDecoder.Version < 10 || recs.Count < 3)
+                Console.WriteLine($"skip  store v2 on Steven's recordings: decoder interface {NativeDecoder.Version}, {recs.Count} of its 3 recordings here (the tracker prunes old ones)");
             else
             {
                 var with = recs.SelectMany(r => Replay(r, hits: true)).ToList();

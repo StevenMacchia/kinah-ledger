@@ -32,7 +32,8 @@ public static class TimerBoard
         var list = new List<Item>();
         foreach (var r in events.Rows(now, region))
             list.Add(new Item(EventKey(r.Event.Name), "Events", r.Event.Name, r.Event.Every, r.OnNow ? Kind.On : Kind.Waiting,
-                r.OnNow ? null : r.StartPc, r.OnNow ? "On now" : r.When, r.OnNow ? r.When : $"at {r.StartPc.ToLocalTime():HH:mm}", r.OnNow ? r.StartPc : null));
+                r.OnNow ? (r.Event.EntryMinutes > 0 ? r.StartPc.AddMinutes(r.Event.EntryMinutes) : null) : r.StartPc, r.OnNow && r.Event.EntryMinutes == 0 ? "On now" : r.When,
+                r.OnNow ? (r.Event.EntryMinutes > 0 ? "left to enter" : r.When) : $"at {r.StartPc.ToLocalTime():HH:mm}", r.OnNow ? r.StartPc : null));
         foreach (var r in bosses.Rows(now))
         {
             if (r.Boss.State == BossTimers.Kind.NoTimer) continue;

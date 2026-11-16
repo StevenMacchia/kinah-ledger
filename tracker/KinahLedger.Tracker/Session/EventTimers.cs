@@ -70,8 +70,10 @@ public sealed class EventTimers
     /// A recurring event in the region's wall-clock time: every <paramref name="EveryMinutes"/> from <paramref name="AtMinutes"/>
     /// past midnight, or once a day at <paramref name="AtMinutes"/> on <paramref name="Weekdays"/> (0 Sunday). OnMinutes: how
     /// long it counts as on after its start. AtIn: a region whose first start of the day differs (none since the Rift's 02:00 holds everywhere).
+    /// EntryMinutes: an event joined only in its first minutes (Steven, 2026-11-16: the Shugo Festival and the Dimensional
+    /// Invasion give 3 minutes "to enter"): its timer counts those down after the start ("2m 41s" left to enter), then the next start.
     /// </summary>
-    public sealed record Recurring(string Name, string Every, int EveryMinutes, int AtMinutes, int[]? Weekdays, int OnMinutes, string Where, IReadOnlyDictionary<string, int>? AtIn = null)
+    public sealed record Recurring(string Name, string Every, int EveryMinutes, int AtMinutes, int[]? Weekdays, int OnMinutes, string Where, IReadOnlyDictionary<string, int>? AtIn = null, int EntryMinutes = 0)
     {
         public int AtFor(string region) => AtIn != null && AtIn.TryGetValue(region, out var at) ? at : AtMinutes;
     }
@@ -86,8 +88,8 @@ public sealed class EventTimers
     /// </summary>
     public static readonly Recurring[] Schedule =
     {
-        new("Shugo Festival", "Every hour", 60, 0, null, 6, "Verteron and Altgard"),
-        new("Dimensional Invasion", "Every hour at half past", 60, 30, null, 13, "Verteron and Altgard"),
+        new("Shugo Festival", "Every hour", 60, 0, null, 6, "Verteron and Altgard", EntryMinutes: 3),
+        new("Dimensional Invasion", "Every hour at half past", 60, 30, null, 13, "Verteron and Altgard", EntryMinutes: 3),
         new("Spacetime Rift", "Every 3 hours", 180, 120, null, 10, "One of ten zones"),
         new("Artifact Siege", "Thu and Sat", 1440, 21 * 60, new[] { 4, 6 }, 20, "Chaotic Lower Reshanta"),   // twice a week since the Nov 4 patch
     };
@@ -200,7 +202,16 @@ public sealed class EventTimers
     {
         var (last, next) = Around(r, serverUtc, clock);
         var since = serverUtc - last;
-        if (since >= TimeSpan.Zero && since.TotalMinutes < r.OnMinutes)
+        // joined only in its first minutes: on while the entry is open, its countdown the time left to enter; then the next start
+        if (r.EntryMinutes > 0)
+        {
+            if (since >= TimeSpan.Zero && since.TotalMinutes < r.EntryMinutes)
+            {
+                var close = TimeSpan.FromMinutes(r.EntryMinutes) - since;
+                return new Row(r, true, last + offset, close, since, BossTimers.Countdown(close));
+            }
+        }
+        else if (since >= TimeSpan.Zero && since.TotalMinutes < r.OnMinutes)
             return new Row(r, true, last + offset, TimeSpan.Zero, since, $"started {BossTimers.Span(since)} ago");
         var left = next - serverUtc;
         // a day or more off (the Artifact Siege): days and hours, the seconds ticking there would only be noise

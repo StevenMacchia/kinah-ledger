@@ -1173,9 +1173,13 @@ public static class PacketTests
         var spring = EventTimers.Around(rift, new DateTime(2027, 3, 14, 5, 0, 0, DateTimeKind.Utc), naE).Next;
         Check(summer == U(10, 8, 0) && thu == U(10, 16, 1) && fallLast == U(11, 1, 3) && fallNext == U(11, 1, 7) && spring == new DateTime(2027, 3, 14, 7, 0, 0, DateTimeKind.Utc),
             $"...daylight saving: the Rift at {summer:HH:mm}Z on 2026-10-07 (20:00 EDT), the siege Thu 21:00 EDT = {thu:ddd HH:mm}Z; on 2026-11-01 {fallLast:HH:mm}Z then {fallNext:HH:mm}Z (23:00 EDT, 02:00 EST); on 2027-03-14 02:00 doesn't exist: {spring:HH:mm}Z (03:00 EDT)");
+        // the Shugo Festival's 3 minutes to enter (Steven, 2026-11-16): a minute past, 2 left; at 3 past, the next one
+        var at1 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 1), lag, naE);
         var at3 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 3), lag, naE);
-        var at6 = EventTimers.RowOf(EventTimers.Schedule[0], U(11, 14, 2, 6), lag, naE);
-        Check(at3 is { OnNow: true, When: "started 3 min ago" } && at6 is { OnNow: false, When: "54m 00s" }, $"...the Shugo Festival 3 min past the hour: {Say(at3)}; at 6 past: {Say(at6)}");
+        var dim = EventTimers.RowOf(EventTimers.Schedule[1], U(11, 14, 2, 32), lag, naE);
+        Check(at1 is { OnNow: true, When: "2m 00s" } && at1.Left == TimeSpan.FromMinutes(2) && at3 is { OnNow: false, When: "57m 00s" }
+            && dim is { OnNow: true, When: "1m 00s" },
+            $"...the Shugo Festival and the Dimensional Invasion count down their 3 minutes to enter, then the next start: {Say(at1)}; at 3 past: {Say(at3)}; Dimensional 2 past: {Say(dim)}");
         var siegeOn = EventTimers.RowOf(siege, U(11, 15, 2, 5), lag, naE);
         var siegeNext = EventTimers.RowOf(siege, U(11, 15, 2, 25), lag, naE);
         Check(siegeOn.OnNow && !siegeNext.OnNow && siegeNext.StartPc == U(11, 20, 2) + lag && siegeNext.When == "4d 23h 35m",
