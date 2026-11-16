@@ -1,4 +1,4 @@
-using KinahLedger.Data;
+﻿using KinahLedger.Data;
 using KinahLedger.Packets;
 using KinahLedger.Session;
 
@@ -860,6 +860,44 @@ public static class ParserTests
             Check(again.Count == 1 && again[0].Boss == "Kaldrix" && lines.Length == 1 && !lines[0].Contains("Open world"),
                 $"...and the open-world fights an older version kept are removed from the file, the rest left as they were ({again.Count} read, {lines.Length} lines)");
             try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+
+        // your records per fight (Parser/FightRecords.cs): the boss in one instance and one mode, never the same boss elsewhere
+        {
+            Encounter Kill(DateTime at, string mode, long dmg, long heal, long big) => new()
+            {
+                Mode = "boss", Kind = "Expedition", Instance = "Ferocious Horn Den", GameMode = mode, Boss = "Necromancer Duanka", BossId = 4401,
+                Start = at, End = at.AddSeconds(90), LastAt = at.AddSeconds(90), Outcome = "kill", HasDamage = true,
+                Roster = { new Fighter { Id = 1, You = true, Name = "Swoly", Damage = dmg, BossDamage = dmg, Healing = heal, Abilities = { new AbilityShare { Skill = 11010000, Damage = dmg, Hits = 10, Max = big } } } },
+            };
+            var c1 = Kill(t, "Conquest", 90_000, 9_000, 4_000);
+            var x1 = Kill(t.AddMinutes(5), "Expedition", 180_000, 0, 9_000);
+            var c2 = Kill(t.AddMinutes(10), "Conquest", 135_000, 4_500, 3_000);
+            var wipe = Kill(t.AddMinutes(15), "Conquest", 900_000, 0, 50_000); wipe.Outcome = "wipe";
+            var map = FightRecords.From(new[] { c1, x1, c2, wipe });
+            var rc = map[FightRecords.KeyOf(c1)];
+            Check(map.Count == 2 && FightRecords.KeyOf(c1) != FightRecords.KeyOf(x1),
+                $"records are kept per fight: the same boss in Conquest and in Expedition are two records ({map.Count})");
+            Check(rc.Kills == 2 && Math.Abs(rc.BestDps - 1500) < 1 && rc.BestDpsFight == c2.Id && Math.Abs(rc.DpsBefore(c2.Id) - 1000) < 1 && Math.Abs(rc.DpsBefore("later") - 1500) < 1,
+                $"...a fight's best DPS, and the best before the fight that set it (what its record moment measures against): {rc.Kills} kills, best {rc.BestDps:0}, before {rc.DpsBefore(c2.Id):0}");
+            Check(Math.Abs(rc.BestHps - 100) < 1 && rc.BestHpsFight == c1.Id && rc.HpsBefore(c1.Id) == 0 && Math.Abs(rc.FastestSeconds - 90) < 0.5 && rc.BiggestHit == 4_000,
+                $"...the best healing a second, the fastest kill and the biggest hit, on kills only (a wipe's 50,000 hit isn't one): {rc.BestHps:0}/s, {rc.FastestSeconds:0} s, {rc.BiggestHit}");
+            Check(KinahLedger.Ui.ParserRows.PbText(0.042, null) == "PB +4.2%" && KinahLedger.Ui.ParserRows.PbText(null, 0.09).StartsWith("HEAL PB +") && KinahLedger.Ui.ParserRows.PbText(0.042, 0.09).Contains(" · HEAL "),
+                $"...the record moment says which: \"{KinahLedger.Ui.ParserRows.PbText(0.042, null)}\", \"{KinahLedger.Ui.ParserRows.PbText(null, 0.09)}\", \"{KinahLedger.Ui.ParserRows.PbText(0.042, 0.09)}\"");
+            // kept per character in records.json: each kill kept adds to it once, and a folder without one builds it from every fight
+            var dir = Path.Combine(Path.GetTempPath(), "kl-records-" + Guid.NewGuid().ToString("N")[..8]);
+            try
+            {
+                var store = new EncounterStore(() => dir);
+                store.Add(c1); store.Add(x1); store.Add(c2); store.Add(c2);
+                var kept = store.Records.Of(c2);
+                bool file = File.Exists(Path.Combine(dir, FightRecords.FileName));
+                File.Delete(Path.Combine(dir, FightRecords.FileName));
+                var rebuilt = new EncounterStore(() => dir).Records.Of(c1);
+                Check(file && kept is { Kills: 2 } && Math.Abs(kept.BestDps - 1500) < 1 && rebuilt is { Kills: 2 } && Math.Abs(rebuilt.DpsBefore(c2.Id) - 1000) < 1,
+                    $"...records.json kept beside the fights, a fight saved twice counted once, rebuilt from the fights when it's gone ({kept?.Kills}/{rebuilt?.Kills} kills)");
+            }
+            finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
         }
 
         // changing the mode ends the old mode's record where it is and starts the new one there

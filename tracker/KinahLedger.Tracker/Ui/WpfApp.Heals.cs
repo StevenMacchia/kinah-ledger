@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -130,7 +130,10 @@ public static partial class WpfApp
             foreach (var (name, e, at, best) in HealLooks(now))
                 foreach (var expanded in new[] { false, true })
                     foreach (var place in HealPlaces)
+                    foreach (var bars in new[] { true, false })
                     {
+                        if (!bars && (expanded || place != HealPlaces[0])) continue;   // the switch off: once is enough
+                        ParserRows.HealBarsPref = bars;
                         ParserRows.BestOf = best ?? (_ => null);
                         ParserRows.ExpandedPref = expanded; HudStackLook.FightWidth = expanded ? width0 + 70 : width0;
                         var (root, win) = HealWindow(e, at, place);
@@ -138,12 +141,15 @@ public static partial class WpfApp
                         var lines = TaggedShown(root, "heal-line");
                         var healers = e.Members.Where(f => f.Healing > 0).Select(f => f.Name).OrderBy(x => x).ToList();   // self-heals count (0.10.120)
                         var shown = figures.Select(HealRowName).OrderBy(x => x).ToList();
-                        string tag = $"{name} {place}{(expanded ? " expanded" : "")}";
+                        string tag = $"{name} {place}{(expanded ? " expanded" : "")}{(bars ? "" : " bars off")}";
                         // every healer's chip; one with no room beside the name (a narrow look's expanded meter, a row with a TOP plate)
                         // gives way, never cut
                         bool narrow = expanded && place is "capsule" or "float";
                         var missing = healers.Except(shown).Where(n => !narrow && !RowHasPlate(root, n)).ToList();
-                        if (!shown.All(healers.Contains) || missing.Count > 0 || lines.Count != 0) wrong.Add($"{tag}: heal chips on [{string.Join(",", shown)}], {lines.Count} foot lines (want [{string.Join(",", healers)}], none)");
+                        // the heal bar (Settings › Parser › Heal bars, on by default): one under every healer's row shown, 4 px, none with it off
+                        int barsWant = bars ? healers.Count(n => NameShown(root, n)) : 0;
+                        bool barsOk = lines.Count == barsWant && lines.All(l => Math.Abs(l.ActualHeight - ParserRows.HealBarPx) < 0.5 && l.ActualWidth >= 4);
+                        if (!shown.All(healers.Contains) || missing.Count > 0 || !barsOk) wrong.Add($"{tag}: heal chips on [{string.Join(",", shown)}], {lines.Count} heal bars {string.Join("/", lines.Select(l => $"{l.ActualWidth:0}x{l.ActualHeight:0}"))} (want [{string.Join(",", healers)}], {barsWant} bars)");
                         var dpsLeft = TaggedShown(root, "row-dps").Select(t => t.TranslatePoint(new Point(0, 0), (UIElement)root).X).DefaultIfEmpty(9999).Min();
                         foreach (var fig in figures)
                         {
@@ -162,7 +168,7 @@ public static partial class WpfApp
                         }
                         win.Close();
                     }
-            check(wrong.Count == 0 && seen > 0, $"the heal chip in every place, live, held and killed, compact and expanded: on every healer (self-heals count), their healing a second, whole on the name's line, clear of the DPS, no line along the foot ({seen} drawn){(wrong.Count > 0 ? ": " + string.Join("; ", wrong.Take(8)) : "")}");
+            check(wrong.Count == 0 && seen > 0, $"the heal chip in every place, live, held and killed, compact and expanded: on every healer (self-heals count), their healing a second, whole on the name's line, clear of the DPS, a 4 px heal bar along each healer's row, none with Settings' switch off ({seen} drawn){(wrong.Count > 0 ? ": " + string.Join("; ", wrong.Take(8)) : "")}");
 
             // a raid healer's chip (thousands a second) on the expanded meter at the default width (Buddy's), where the name's room
             // is shorter: the chip shows whole and the name trims for it
@@ -228,13 +234,26 @@ public static partial class WpfApp
                     $"...the held result takes a heal of the pull's last moment that came after its kill ({atEnd:N0} at the kill, {afterLate:N0} after; the copy saved {savedHeal:N0}{(same ? "" : "; not the same pull")})");
             }
         }
-        finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; ParserRows.BestOf = best0; HudStackLook.FightWidth = width0; }
+        finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; ParserRows.BestOf = best0; HudStackLook.FightWidth = width0; ParserRows.HealBarsPref = true; }
     }
 
     /// <summary>
     /// The heal figures a row should say: the whole line (done · per second · the part that landed, ≈ unless confirmed) when it
     /// fits the name's room, else without the part that landed, else the healing done alone.
     /// </summary>
+    /// <summary>A member's row is on the meter (its name drawn).</summary>
+    static bool NameShown(DependencyObject root, string name)
+    {
+        bool Walk(DependencyObject d)
+        {
+            if (d is UIElement u && !u.IsVisible) return false;
+            if (d is TextBlock t && t.Text == name) return true;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) if (Walk(VisualTreeHelper.GetChild(d, i))) return true;
+            return false;
+        }
+        return Walk(root);
+    }
+
     static string HealWant(TextBlock fig, Encounter e, Fighter f, DateTime at) =>
         e.HpsOf(f, at) is { } hps ? $"{ParserRows.Compact(hps)}/s" : ParserRows.Compact(f.Healing);
 
