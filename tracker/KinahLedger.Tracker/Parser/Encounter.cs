@@ -288,7 +288,7 @@ public sealed class Encounter : IJsonOnDeserialized
     public double Dps(Fighter f, DateTime now) => DpsOf(f, now) ?? 0;
 
     /// <summary>A member's DPS as the rows say it ("3,851", "12.4K"); "–" when it isn't a figure yet.</summary>
-    public string DpsText(Fighter f, DateTime now) => DpsOf(f, now) is { } d ? Ui.Amounts.Short(d) : "–";
+    public string DpsText(Fighter f, DateTime now) => DpsOf(f, now) is { } d ? Ui.Amounts.Meter(d) : "–";
 
     /// <summary>
     /// The seconds a member was in the group during the record: from the start (or their joining, when they joined late) to
@@ -347,7 +347,7 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The group's damage per second: the credited damage (the rows' sum, as the figures count it) over the fight; null under <see cref="MinDpsSeconds"/>.</summary>
     public double? GroupDpsOf(DateTime now) => HasDamage ? Credited / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
     public double GroupDps(DateTime now) => GroupDpsOf(now) ?? 0;
-    public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Short(d) : "–";
+    public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Meter(d) : "–";
 
     // ---- the meter's foot and its marks (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a green badge
     // next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]") ----
@@ -360,8 +360,8 @@ public sealed class Encounter : IJsonOnDeserialized
 
     /// <summary>"Total 10.5M · Group DPS 126.8K" (live) or "Total 10.5M · Group 126.8K · Avg. DPS" (held): the foot's words, as every look draws them.</summary>
     public string FootText(DateTime now) => !HasDamage ? "" : HeldAverage
-        ? Ui.L.F("Total {0} · Group {1} · {2}", Ui.Amounts.Short(Credited), GroupDpsText(End ?? now), Ui.L.T(AvgBadge))
-        : Ui.L.F("Total {0} · Group DPS {1}", Ui.Amounts.Short(Credited), GroupDpsText(now));
+        ? Ui.L.F("Total {0} · Group {1} · {2}", Ui.Amounts.Meter(Credited), GroupDpsText(End ?? now), Ui.L.T(AvgBadge))
+        : Ui.L.F("Total {0} · Group DPS {1}", Ui.Amounts.Meter(Credited), GroupDpsText(now));
 
     /// <summary>The held figure's badge.</summary>
     public const string AvgBadge = "Avg. DPS";
@@ -382,7 +382,7 @@ public sealed class Encounter : IJsonOnDeserialized
     /// another member (a damage dealer's own self-heals and potions never make them the top healer). Ranked by healing done,
     /// which is exact; the effective part is an estimate (<see cref="Fighter.HealingEstimated"/>).
     /// </summary>
-    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.HealingOthers > 0).OrderByDescending(f => f.Healing).ThenByDescending(f => f.HealingOthers).FirstOrDefault();
+    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.HealingOthers > 0).OrderByDescending(f => f.HealingEffective).ThenByDescending(f => f.HealingOthers).FirstOrDefault();
 
     // ---- healing (klnet's heals on the hit stream) ----
 
@@ -390,13 +390,14 @@ public sealed class Encounter : IJsonOnDeserialized
     [JsonIgnore] public bool HasHealing => Members.Any(f => f.Healing > 0);
 
     /// <summary>
-    /// A member's healing per second: their healing done (self-heals and potions in) over the same seconds the group's DPS is
-    /// over (the fight's real time, a run's boss pulls; never under <see cref="MinDpsSeconds"/>); null when they healed nothing.
+    /// A member's healing per second, the part that landed (overheal left out; Steven, 2026-11-16: a Cleric's figure was 50 to
+    /// 85% overheal): over the same seconds the group's DPS is over (the fight's real time, a run's boss pulls; never under
+    /// <see cref="MinDpsSeconds"/>); an estimate when <see cref="Fighter.HealingEstimated"/> says so; null when they healed nothing.
     /// </summary>
-    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
 
-    /// <summary>The effective part per second (overheal left out): an estimate when <see cref="Fighter.HealingEstimated"/> says so.</summary>
-    public double? EffectiveHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+    /// <summary>All their healing a second, overheal in (the tooltip's and the replay's).</summary>
+    public double? DoneHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
 
     /// <summary>The group's healing done in the record.</summary>
     [JsonIgnore] public long GroupHealing => Members.Sum(f => f.Healing);

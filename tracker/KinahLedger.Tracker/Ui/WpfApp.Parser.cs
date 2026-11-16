@@ -631,10 +631,18 @@ public static partial class WpfApp
                 var t1 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
                 po.Draw(pullL!, nowL.AddSeconds(0.5)); DoEvents();
                 var t2 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
+                // the figures are short since 0.10.128 ("4.3K"): a few seconds on for the fall to show in them
+                po.Draw(pullL!, nowL.AddSeconds(4)); DoEvents();
+                var t3 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
                 po.Close();
-                double Top1(List<string> ts) => ts.Select(x => double.TryParse(x.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : -1).Where(v => v >= 1000).DefaultIfEmpty(-1).Max();
-                check(!t1.SequenceEqual(t2) && Top1(t2) < Top1(t1),
-                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(t1):N0} to {Top1(t2):N0} half a second on)");
+                static double Num(string x)
+                {
+                    x = x.Replace(",", "").Trim(); double m = x.EndsWith("K") ? 1e3 : x.EndsWith("M") ? 1e6 : 1;
+                    return double.TryParse(m > 1 ? x[..^1] : x, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v * m : -1;
+                }
+                double Top1(List<string> ts) => ts.Select(Num).Where(v => v >= 1000).DefaultIfEmpty(-1).Max();
+                check(!t1.SequenceEqual(t2) && Top1(t3) < Top1(t1),
+                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(t1):N0} to {Top1(t3):N0} four seconds on)");
             }
             // the foot, the held badge and the top plates (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a
             // green badge next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]"), in every look: a pull under way, an

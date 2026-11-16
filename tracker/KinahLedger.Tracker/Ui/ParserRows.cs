@@ -176,7 +176,7 @@ public sealed partial class ParserRows : Grid
             if (dmg)
             {
                 // the DPS, plain, in its right-aligned column
-                if (e.DpsOf(f, now) is { } dps) SetDps(row, Amounts.Short(dps), dps);
+                if (e.DpsOf(f, now) is { } dps) SetDps(row, Amounts.Meter(dps), dps);
                 else SetDps(row, "–", double.NaN);
                 row.Share.Text = Encounter.Pct(e.Share(f));
                 row.Damage.Text = Amounts.Short(e.Figure(f));
@@ -543,7 +543,7 @@ public sealed partial class ParserRows : Grid
         if (hits > 0) foot.Add(L.F("{0:N0} hits", hits));
         // the biggest hit is over every target: said only when the figures are too (boss only, it could be an add's)
         if (!e.BossView && m.MaxHit is { } big && big > 0) foot.Add(L.F("biggest {0}", Amounts.Short(big)));
-        if (f.Healing > 0) foot.Add(L.F("healed {0}", Amounts.Short(f.Healing)) + (e.HpsOf(f, now) is { } hps ? L.F(" ({0}/s)", Amounts.Short(hps)) : ""));
+        if (f.Healing > 0) foot.Add(L.F("healed {0}", Amounts.Meter(f.HealingEffective)) + (e.HpsOf(f, now) is { } hps ? L.F(" ({0}/s)", Amounts.Meter(hps)) : ""));
         if (f.Deaths > 0) foot.Add(L.F(f.Deaths == 1 ? "{0} death" : "{0} deaths", f.Deaths));
         if (foot.Count > 0) stack.Children.Add(T(string.Join("  ·  ", foot), 10.5, HudKit.Muted, FontWeights.Medium));
         if (stack.Children[^1] is FrameworkElement last) last.Margin = new Thickness(0, 4, 0, 0);
@@ -582,23 +582,29 @@ public sealed partial class ParserRows : Grid
             FitName(r);
             return;
         }
-        int was = r.Heal.Text.Length;   // a chip new or of another length: the name's line fits again
+        string wasFull = r.HealFull; bool wasShort = r.Heal.Text.Length > 0 && r.Heal.Text == r.HealShort && r.HealShort != r.HealFull;
         double? hps = e.HpsOf(f, now);
-        string text = hps is { } x ? L.F("{0}/s", Compact(x)) : Compact(f.Healing);
+        // the part that landed (overheal out), as the DPS is the damage that landed; the whole in the tooltip
+        // the total is the hover's (the member's card: "healed 132K (2.4K/s)"); beside the figure it was "too crowded" (Steven, 2026-11-16)
+        string text = hps is { } x ? L.F("{0}/s", Compact(x)) : Compact(f.HealingEffective);
         r.HealDone = Amounts.Short(f.Healing);
-        r.HealShort = r.HealFull = text;
-        r.Heal.Text = text;
-        r.HealPill.ToolTip = L.F("Healed {0:N0}", f.Healing) + (f.HealingOthers > 0 && f.HealingSelf > 0 ? L.F(" ({0:N0} on others)", f.HealingOthers) : f.HealingOthers <= 0 ? L.T(" (on themselves)") : "") + L.F(", {0:N0} a second; ", hps ?? 0)
-            + (f.HealingIsEstimate ? L.T("about ") : "") + L.F("{0:N0} landed, the rest overheal", f.HealingEffective) + (f.HealingIsEstimate ? L.T(" (an estimate: the HP didn't confirm all of it)") : "");
-        if (was != text.Length) FitName(r);
+        r.HealFull = text;
+        r.HealShort = hps is { } y ? L.F("{0}/s", Compact(y)) : text;
+        r.Heal.Text = wasShort ? r.HealShort : text;
+        r.HealPill.ToolTip = (f.HealingIsEstimate ? L.T("about ") : "") + L.F("{0:N0} a second landed", hps ?? 0) + "\n"
+            + L.F("Healed {0:N0}", f.Healing) + (f.HealingOthers > 0 && f.HealingSelf > 0 ? L.F(" ({0:N0} on others)", f.HealingOthers) : f.HealingOthers <= 0 ? L.T(" (on themselves)") : "") + "; "
+            + (f.HealingIsEstimate ? L.T("about ") : "") + L.F("{0:N0} landed, the rest overheal", f.HealingEffective)
+            + (f.Healing > 0 ? L.F(" ({0}% overheal)", Math.Round(100.0 * (f.Healing - f.HealingEffective) / f.Healing)) : "")
+            + (f.HealingIsEstimate ? L.T(" (an estimate: the HP didn't confirm all of it)") : "");
+        if (wasFull.Length != text.Length || wasShort) FitName(r);   // a chip new or of another length: the name's line fits again
         // the heal bar along the row's foot (Steven, 2026-11-16: "the healing bar underneath ... should be toggleable and slightly
         // bigger"): 4 px, sliding to the member's share of the group's healing (self-heals in), a Settings switch
         if (!HealBarsPref) { r.Under.Visibility = r.UnderTrack.Visibility = Visibility.Collapsed; r.HealShare = r.HealShown = double.NaN; return; }
         r.Under.Visibility = r.UnderTrack.Visibility = Visibility.Visible;
-        // its length against the top healer's (as the DPS bars are against the top DPS): the top healer's runs the row's width,
-        // a small healer's still reads (Steven, 2026-11-16: "i cant see the fucking bars at all" with group shares of a few %)
-        long most = e.Members.Select(m => m.Healing).DefaultIfEmpty(0).Max();
-        double share = most > 0 ? Math.Clamp((double)f.Healing / most, 0, 1) : 0;
+        // its length the member's share of the fight's healing that landed (Steven, 2026-11-16: "the bars should be % of total
+        // heals in fight"), over a track the row's width so a short one still reads as a bar
+        long all = e.Members.Sum(m => m.HealingEffective);
+        double share = all > 0 ? Math.Clamp((double)f.HealingEffective / all, 0, 1) : 0;
         r.HealShare = share;
         Motion.Slide(r.Under, $"parser|ovheal|{e.Id}|{f.Id}|{(int)_kind}", share, v => { r.HealShown = v; SetHealBar(r, v); });
     }
@@ -699,11 +705,12 @@ public sealed partial class ParserRows : Grid
         int k = 5;
         if (expanded) { cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (back) cols.Children.Add(PK.Col(backT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
         // the bar: a quiet track the row's width, the fill in the class's colour, angled at its end, fading to the right
-        var track = new Border { CornerRadius = new CornerRadius(3), Background = PK.C(c, bare ? 0 : 0.07) };
+        var track = new Border { CornerRadius = new CornerRadius(3), Background = PK.C(c, bare ? 0 : 0.10) };
         var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         // your row's bar quieter: under the gold frame's wash a full-strength bar made the name hard to read
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x60 : f.You ? (byte)0x58 : (byte)0x8C, c.R, c.G, c.B), 0));
-        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x18 : f.You ? (byte)0x20 : (byte)0x30, c.R, c.G, c.B), 1));
+        // 2026-11-16: "really hard to see the damage bars cause transparent": more solid, the fade gentler (names keep their halo)
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x90 : f.You ? (byte)0x88 : (byte)0xC0, c.R, c.G, c.B), 0));
+        fade.GradientStops.Add(new GradientStop(Color.FromArgb(bare ? (byte)0x48 : f.You ? (byte)0x50 : (byte)0x78, c.R, c.G, c.B), 1));
         fade.Freeze();
         var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = fade, Width = 0, RenderTransformOrigin = new Point(0, 1), RenderTransform = new SkewTransform(-16, 0) };
         var edge = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Left, Background = PK.C(c), CornerRadius = new CornerRadius(3, 0, 0, 3), Visibility = f.You ? Visibility.Collapsed : Visibility.Visible };
@@ -788,10 +795,18 @@ public sealed partial class ParserRows : Grid
         if (r.Heal.Text.Length > 0)
         {
             r.HealPill.Visibility = Visibility.Visible;
+            if (r.HealFull.Length > 0 && r.Heal.Text != r.HealFull) r.Heal.Text = r.HealFull;
             // the figure's length may have changed: the chip measured afresh (a parent's Measure keeps its last size until the layout pass reaches it)
             r.Heal.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure();
             others = Others();
             if (w - others < NameMin && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
+            // then the total: the figure a second alone
+            if (w - others < NameMin && r.HealShort.Length > 0 && r.HealShort != r.Heal.Text)
+            {
+                r.Heal.Text = r.HealShort;
+                r.Heal.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure();
+                others = Others();
+            }
             // the chip keeps the name to its first letters (the class icon and colour still say who): the healing beats the name
             if (w - others < NameTight) { r.HealPill.Visibility = Visibility.Collapsed; others = Others(); }
         }
@@ -799,7 +814,7 @@ public sealed partial class ParserRows : Grid
     }
 
     /// <summary>The heal chip's figure, short: 940, 7.8K, 91.8K, 1.24M (the tooltip has it whole).</summary>
-    internal static string Compact(double v) => v < 1000 ? Math.Round(v).ToString("N0") : v < 999_950 ? $"{v / 1e3:0.#}K" : $"{v / 1e6:0.##}M";
+    internal static string Compact(double v) => Amounts.Meter(v);
 
     /// <summary>The least room a name keeps beside its heal chip (a few letters and the ellipsis).</summary>
     const double NameMin = 40;

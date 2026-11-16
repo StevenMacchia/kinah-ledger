@@ -133,6 +133,7 @@ static class ParserCommand
             AutomationProperties.SetName(hw, $"Boss HP {Math.Round(hp * 100):0}%, {Amounts.Short(Math.Max(0, e.BossHp))} left of {Amounts.Short(e.BossMaxHp)}");
             body.Children.Add(M(hw, 0, 12, 0, 6));
             var bar = HpBar(hp, 9, Track, true);
+            bar.Children.Add(HudKit.HpTicks());
             body.Children.Add(bar);
         }
         foreach (var x in extras) body.Children.Add(x);

@@ -846,6 +846,7 @@ public partial class MainWindow
     FrameworkElement BossHpBar(Encounter e, double left)
     {
         var bar = QBar(left, left < 0.34 ? "Coral" : "Gold", 8, key: $"parser|hp|{e.Id}");
+        bar.Children.Add(HudKit.HpTicks());   // a third and two thirds
         AutomationProperties.SetName(bar, $"Boss HP {Math.Round(left * 100):0}%");
         return bar;
     }

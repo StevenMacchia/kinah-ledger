@@ -362,6 +362,7 @@ sealed class HudCapsule : HudStackLook
             hpRow.ColumnDefinitions.Add(new ColumnDefinition()); hpRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var hb = Bar(hp, hp < .34 ? B(RecC) : Gold, 3, new Thickness(0)); hb.VerticalAlignment = VerticalAlignment.Center; hpRow.Children.Add(hb);
             Motion.HpGhost(hb, _hpPlace, e.Id, hp, now);
+            hb.Children.Add(HudKit.HpTicks());
             if (Hp(e, 11) is { } hpText) { hpText.Margin = new Thickness(8, 0, 0, 0); Grid.SetColumn(hpText, 1); hpRow.Children.Add(hpText); }
             _meterBody.Children.Add(hpRow);
         }
@@ -394,6 +395,8 @@ sealed class HudMeter : HudStackLook
     readonly Border _ring, _frame;
     readonly StackPanel _body = new();
     readonly Grid _head = new() { Height = 32 };
+    /// <summary>The boss HP's thirds, on the header's HP line (a notch a little taller than the line).</summary>
+    readonly Grid _hpTicks = HudKit.HpTicks(6);
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 }, _hpLine = new() { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
     readonly TextBlock _title = new() { FontSize = 13.5, FontWeight = FontWeights.Bold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     readonly TextBlock _hpPct = new() { FontSize = 12.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
@@ -425,7 +428,7 @@ sealed class HudMeter : HudStackLook
         var hb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         hb.GradientStops.Add(new GradientStop(Color.FromArgb(0x10, 0xF2, 0x6D, 0x6D), 0)); hb.GradientStops.Add(new GradientStop(Color.FromArgb(0x55, 0xF2, 0x6D, 0x6D), 1)); hb.Freeze();
         _hpFill.Background = hb; _hpLine.Background = B(RecC);
-        _head.Children.Add(_hpFill); _head.Children.Add(_hpLine);
+        _head.Children.Add(_hpFill); _head.Children.Add(_hpLine); _head.Children.Add(_hpTicks);
         var hg = new Grid { Margin = new Thickness(10, 0, 10, 0) };
         hg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = new Grid();
@@ -551,6 +554,7 @@ sealed class HudMeter : HudStackLook
         _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold : Ink;
         double hp = e.BossHpLeft is { } h && e.Live ? h : 0;
         _hpFill.Width = _hpLine.Width = W * hp;
+        _hpTicks.Visibility = hp > 0 ? Visibility.Visible : Visibility.Collapsed;
         // a big drop: a red chunk in the header from the old HP to the new, shrinking onto the fill
         if (hp > 0) Motion.HpGhost(_head, _hpPlace, e.Id, hp, now, 0, 0.42);
         // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
@@ -692,7 +696,7 @@ sealed class HudFloat : HudStackLook
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
             head.Children.Add(Tx(L.T(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed"), 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);
-        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); }
+        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); bar.Children.Add(HudKit.HpTicks()); }
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         if (e.Waiting) rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));
