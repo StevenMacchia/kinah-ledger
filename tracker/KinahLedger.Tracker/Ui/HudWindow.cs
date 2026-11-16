@@ -586,7 +586,15 @@ public sealed partial class HudWindow : Window
         var face = (FrameworkElement)h.Content;
         h.Content = null;
         h.Close();
-        return face;
+        return Cropped(face, h._look);
+    }
+
+    /// <summary>A theme's look without the clear room it keeps round itself for its effects (a thumbnail shows the look, not the room).</summary>
+    internal static FrameworkElement Cropped(FrameworkElement face, IHudLook? look)
+    {
+        if (look is not HudThemeLook || look.Inset is var i && i.Left + i.Top + i.Right + i.Bottom <= 0) return face;
+        face.Margin = new Thickness(-i.Left, -i.Top, -i.Right, -i.Bottom);
+        return new Border { Child = face, ClipToBounds = true };
     }
 
     public static FrameworkElement Preview(string look, IEnumerable<string>? fields, IReadOnlyDictionary<string, string> values, string? accuracy = null)
@@ -597,6 +605,6 @@ public sealed partial class HudWindow : Window
         var face = (FrameworkElement)h.Content;
         h.Content = null;
         h.Close();
-        return face;
+        return Cropped(face, h._look);
     }
 }

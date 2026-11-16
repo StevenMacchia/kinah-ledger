@@ -116,7 +116,7 @@ public static partial class WpfApp
         var moments = new List<(string Tag, Dictionary<string, string> V, List<TimerBoard.Item>? T, Encounter? E, DateTime At, bool Dungeon)>
         {
             ("pickup", kinah, null, null, now, false), ("rare-drop", rare, null, null, now, false), ("best-passed", best, null, null, now, false),
-            ("entry-opened", kinah, due, null, now, false), ("fight-started", kinah, null, live, now, true), ("fight-ended", kinah, null, kill, kill.End!.Value, true),
+            ("entry-opened", kinah, due, null, now, false), ("fight-started", kinah, null, live, now, true), ("fight-ended", kinah, null, kill, kill.End!.Value, true), ("fight-wiped", kinah, null, wipe, wipe.End!.Value, true),
         };
         double? frozen0 = Motion.FrozenAt;
         foreach (var look in looks)
@@ -168,7 +168,7 @@ public static partial class WpfApp
             var c = new Dictionary<string, string>(v);
             if (tag != "rare-drop") c["rare"] = "";
             if (tag != "best-passed" && c.GetValueOrDefault("toBest", "").StartsWith("New")) { c["chase"] = "0.907"; c["toBest"] = "130K to your best here"; }
-            if (tag is "rare-drop" or "best-passed" or "entry-opened" or "fight-started" or "fight-ended") foreach (var k in c.Keys.Where(k => k.StartsWith("pick")).ToList()) c[k] = "";
+            if (tag is "rare-drop" or "best-passed" or "entry-opened" or "fight-started" or "fight-ended" or "fight-wiped") foreach (var k in c.Keys.Where(k => k.StartsWith("pick")).ToList()) c[k] = "";
             return c;
         }
     }

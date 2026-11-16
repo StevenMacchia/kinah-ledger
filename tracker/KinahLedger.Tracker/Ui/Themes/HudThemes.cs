@@ -214,11 +214,34 @@ abstract class HudThemeLook : HudStackLook, IHudMotionFrame
     /// <summary>The rows shown for the fight on <paramref name="host"/>, at <paramref name="width"/>.</summary>
     protected void PutRows(Panel host, Encounter e, DateTime now, double width = double.NaN)
     {
+        if (Meter is { } m)
+        {
+            ParserRows.Detach(Rows);
+            if (m.Parent is Panel p0) p0.Children.Remove(m); else if (m.Parent is Decorator d0) d0.Child = null;
+            m.Width = width;
+            m.Moves = Moves;
+            host.Children.Add(m);
+            m.Show(e, now);
+            return;
+        }
         ParserRows.Detach(Rows);
         Rows.Width = width;
         host.Children.Add(Rows);
         Rows.Show(e, now);
     }
+
+    /// <summary>
+    /// The look's own meter rows (Ui/Themes/ThemeRows.cs): every member drawn in the theme's style, the same figures as the
+    /// Parser's rows. Set in the look's constructor with <see cref="UseRows"/>; <see cref="PutRows"/> then shows these.
+    /// </summary>
+    protected ThemeRows? Meter { get; private set; }
+
+    /// <param name="rowHeight">Each row's pitch (height and the space under it).</param>
+    protected void UseRows(double rowHeight, Func<MeterMember, IThemeRow> make, double gapHeight = 12, Func<int, FrameworkElement>? makeGap = null)
+        => Meter = new ThemeRows(rowHeight, make, gapHeight, makeGap);
+
+    /// <summary>The rows shown now (the look's own, or the Parser's).</summary>
+    protected int RowsShown => Meter?.Shown ?? Rows.Shown;
 
     /// <summary>"Killed", "Wiped", "Cleared", "Over" for a fight that ended; empty while it runs.</summary>
     protected static string OutcomeText(Encounter e) => e.Live || e.Outcome.Length == 0 ? ""
