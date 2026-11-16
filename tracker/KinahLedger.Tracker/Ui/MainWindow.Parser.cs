@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -60,7 +60,7 @@ public partial class MainWindow
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
-            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; ApplyMeterExpanded();
+            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; ApplyMeterExpanded();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
@@ -72,7 +72,9 @@ public partial class MainWindow
         _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
         ApplyMeterExpanded();
         // a new best on a boss (the overlay's PB moment) is measured against your kills of it kept on this PC
-        ParserRows.BestOf = e => FightView.Records(e, ParserPast()).Best;
+        // your record on this fight (this boss in this instance and mode), kept in records.json: the overlay's record moments and
+        // its pace measure against it, never against the same boss elsewhere (Steven, 2026-11-16: "ONLY pop up on a per fight basis")
+        ParserRows.BestOf = e => _demo ? FightView.Records(e, ParserPast()).Best : RecordRef(TrackerSession.FightStore.Records.Of(e), e);
         if (watch) StartFarmTicker();
         Encounter.ActiveBasis = _parserPrefs.DpsActive; Encounter.BossOnly = _parserPrefs.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(_parserPrefs.CritNow); Encounter.BackKey = Encounter.BackKeyOf(_parserPrefs.BackNow);   // crit and back attacks: none until a release picks the kind
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
@@ -282,6 +284,14 @@ public partial class MainWindow
     DateTime ParserNow => _demo ? _parserDemoNow : DateTime.UtcNow;
     Encounter? ParserLive => _demo ? _parserDemoLive : _parserPrefs.AlwaysOn ? ParserFights?.AlwaysLive : ParserFights?.Live;
     (ContentKind Kind, string Instance) ParserWhere => _demo ? _parserDemoWhere : ParserFights?.Where ?? (ContentKind.Other, "");
+    /// <summary>A fight's record as the meter measures against it: the best before this fight (DPS and healing a second).</summary>
+    internal static PullRef? RecordRef(FightRecord? r, Encounter e)
+    {
+        if (r == null) return null;
+        double dps = r.DpsBefore(e.Id), hps = r.HpsBefore(e.Id);
+        return dps > 0 || hps > 0 ? new PullRef { E = e, Dps = dps, Hps = hps, When = r.BestDpsFight == e.Id ? DateTime.MinValue : r.BestDpsAt } : null;
+    }
+
     List<Encounter> ParserPast() => _demo ? _parserDemoPast ?? new() : TrackerSession.FightStore.All();
     /// <summary>The session's parser in the mode the page says (a session made before the pick, or after a restart of the reader).</summary>
     void ParserModeSync() { if (!_demo && ParserFights is { } f && f.Mode != ParserModeNow) f.SetMode(ParserModeNow, DateTime.UtcNow); }

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -35,6 +35,7 @@ public partial class MainWindow
     void ApplyMeterExpanded()
     {
         ParserRows.ExpandedPref = _parserPrefs.Expanded;
+        ParserRows.HealBarsPref = _parserPrefs.HealBars;
         HudStackLook.FightWidth = _parserPrefs.Width + MeterExtraWidth;
         _hud?.ApplyFightWidth();
         ParserOverlayTick();

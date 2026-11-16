@@ -28,7 +28,7 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!;
 
     void LoadParser()
     {
@@ -44,6 +44,7 @@ public partial class OptionsWindow
         _parserActiveChk.IsChecked = p.DpsActive;
         _parserExpandedChk.IsChecked = p.Expanded;
         _parserCritChk.IsChecked = p.CritNow != "none" || p.BackNow != "none";
+        _parserHealBarsChk.IsChecked = p.HealBars;
         // the slider shows the saved width; opening Settings never moves the meter (it reset the meter to the base width,
         // dropping the expanded meter's extra: Steven, 2026-11-15, "should never revert unless you change it")
         _parserWidthLoading = true;
@@ -76,6 +77,7 @@ public partial class OptionsWindow
         p.Look = _parserLookPick;
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
+        p.HealBars = _parserHealBarsChk.IsChecked == true;
         // crit and back attacks: the switch picks the kinds the hits carry (crit: result 3, back: side 1); off is the release's default (none)
         CritSwitch(p, _parserCritChk.IsChecked == true);
         // the slider's width only when it was moved here: a width dragged on the overlay since stays
@@ -116,6 +118,7 @@ public partial class OptionsWindow
             return cb;
         }
         _parserExpandedChk = Row("Expanded meter", "The overlay's meter shows everyone with their damage. Off, the top four, and you always. A click on the meter switches it too.", "Parser expanded meter");
+        _parserHealBarsChk = Row("Heal bars", "A green bar along each healer's row on the overlay's meter: their share of the group's healing. The HEAL chip after the name keeps their healing a second either way.", "Parser heal bars");
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
         _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.", "Parser DPS over active time");
         _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls and runs: how many in the figures line, each member's in the record's group. Every fight always shows your deaths.", "Parser deaths");
@@ -312,8 +315,9 @@ public partial class OptionsWindow
 
     /// <summary>For the options test: the crit and back-attack switch.</summary>
     internal CheckBox ParserCritForTest => _parserCritChk;
+    internal CheckBox ParserHealBarsForTest => _parserHealBarsChk;
 
     /// <summary>For the options test: every switch's title in the Parser group.</summary>
-    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk }
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }

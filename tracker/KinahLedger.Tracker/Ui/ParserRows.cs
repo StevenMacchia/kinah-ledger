@@ -34,6 +34,8 @@ public sealed partial class ParserRows : Grid
 
     /// <summary>Compact (five rows) or expanded (everyone, more columns): one choice for every look, kept in parser.json.</summary>
     public static bool ExpandedPref { get; set; }
+    /// <summary>The heal bar along a healer's row (Settings › Parser › Heal bars; on unless turned off).</summary>
+    public static bool HealBarsPref { get; set; } = true;
     /// <summary>Your best kill of a boss before this pull (the window gives it from the records kept): the PB moment's measure.</summary>
     public static Func<Encounter, PullRef?>? BestOf { get; set; }
 
@@ -256,10 +258,13 @@ public sealed partial class ParserRows : Grid
         _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0);
         // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
         if (_wasLive && !e.Live && dmg) Finale(e.Tone);   // the blade, the punch, the shine down the bars (Ui/ParserRows.Cinema.cs)
-        if (!e.Live && e.Outcome == "kill" && you != null && _pbShown != e.Id && Best(e) is { } best && best.Dps > 0)
+        // a record on this fight (this boss, this instance, this mode: FightRecords), DPS or healing, on a kill only
+        if (!e.Live && e.Outcome == "kill" && you != null && _pbShown != e.Id && Best(e) is { } best && (best.Dps > 0 || best.Hps > 0))
         {
-            double d = e.Dps(you, e.End ?? now) / best.Dps - 1;
-            if (d > 0 && _rows.TryGetValue(you.Id, out var yr)) { _pbShown = e.Id; ShowPb(yr, d); }
+            var end = e.End ?? now;
+            double? d = best.Dps > 0 && e.Dps(you, end) / best.Dps - 1 is > 0 and var dd ? dd : null;
+            double? h = best.Hps > 0 && e.HpsOf(you, end) is { } hps && hps / best.Hps - 1 is > 0 and var hh ? hh : null;
+            if ((d != null || h != null) && _rows.TryGetValue(you.Id, out var yr)) { _pbShown = e.Id; ShowPb(yr, d, h); }
         }
         _wasLive = e.Live;
     }
@@ -511,6 +516,7 @@ public sealed partial class ParserRows : Grid
         {
             if (r.HealPill.Visibility == Visibility.Collapsed) return;
             r.HealPill.Visibility = Visibility.Collapsed; r.Heal.Text = ""; r.HealShare = r.HealShown = double.NaN;   // Text "" keeps FitName from bringing it back
+            r.Under.Visibility = Visibility.Collapsed;
             FitName(r);
             return;
         }
@@ -523,6 +529,21 @@ public sealed partial class ParserRows : Grid
         r.HealPill.ToolTip = $"Healed {f.Healing:N0}{(f.HealingOthers > 0 && f.HealingSelf > 0 ? $" ({f.HealingOthers:N0} on others)" : f.HealingOthers <= 0 ? " (on themselves)" : "")}, {(hps ?? 0):N0} a second; "
             + $"{(f.HealingIsEstimate ? "about " : "")}{f.HealingEffective:N0} landed, the rest overheal{(f.HealingIsEstimate ? " (an estimate: the HP didn't confirm all of it)" : "")}";
         if (was != text.Length) FitName(r);
+        // the heal bar along the row's foot (Steven, 2026-11-16: "the healing bar underneath ... should be toggleable and slightly
+        // bigger"): 4 px, sliding to the member's share of the group's healing (self-heals in), a Settings switch
+        if (!HealBarsPref) { r.Under.Visibility = Visibility.Collapsed; r.HealShare = r.HealShown = double.NaN; return; }
+        r.Under.Visibility = Visibility.Visible;
+        double share = e.GroupHealing > 0 ? Math.Clamp((double)f.Healing / e.GroupHealing, 0, 1) : 0;
+        r.HealShare = share;
+        Motion.Slide(r.Under, $"parser|ovheal|{e.Id}|{f.Id}|{(int)_kind}", share, v => { r.HealShown = v; SetHealBar(r, v); });
+    }
+
+    /// <summary>The heal bar's length: its share of the row's track (never a sliver under 4 px once there's any).</summary>
+    static void SetHealBar(RowEl r, double v)
+    {
+        double w = r.Track.ActualWidth;
+        if (w <= 0) return;   // laid out later: the track's resize draws it (from the share shown)
+        r.Under.Width = v <= 0.001 ? 0 : Math.Max(4, w * Math.Clamp(v, 0, 1));
     }
 
     /// <summary>The heal chip's tab: HEAL, or TOP HEALS on a boss kill's top healer (tagged as the plate it stands for).</summary>
@@ -628,8 +649,8 @@ public sealed partial class ParserRows : Grid
         var healFade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         healFade.GradientStops.Add(new GradientStop(Color.FromArgb(0xB0, 0x2F, 0xC4, 0x7A), 0)); healFade.GradientStops.Add(new GradientStop(Color.FromRgb(0x7D, 0xF5, 0xB5), 1));
         healFade.Freeze();
-        var under = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
-            Tag = "heal-line", Width = 0, CornerRadius = new CornerRadius(1), Background = healFade, Effect = new DropShadowEffect { Color = PK.Mint, BlurRadius = 5, ShadowDepth = 0, Opacity = 0.7 } };
+        var under = new Border { Height = HealBarPx, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
+            Tag = "heal-line", Width = 0, CornerRadius = new CornerRadius(2), Background = healFade, Effect = new DropShadowEffect { Color = PK.Mint, BlurRadius = 5, ShadowDepth = 0, Opacity = 0.7 } };
         var inner = new Grid { Height = innerH, ClipToBounds = true };
         inner.Children.Add(track); inner.Children.Add(fill); inner.Children.Add(ghost); inner.Children.Add(edge); inner.Children.Add(heat); inner.Children.Add(under); inner.Children.Add(cols);
         Border frame = f.You ? PK.YouFrame(inner, 4, new Thickness(0)) : new Border { Child = inner };
@@ -665,6 +686,7 @@ public sealed partial class ParserRows : Grid
         track.SizeChanged += (_, _) =>
         {
             if (track.Tag is double v) SetBar(r, v); else SetBar(r, fill.Width > 0 ? fill.Width / Math.Max(1, track.ActualWidth) : 0);
+            if (!double.IsNaN(r.HealShare)) SetHealBar(r, double.IsNaN(r.HealShown) ? r.HealShare : r.HealShown);
         };
         return r;
     }
@@ -719,6 +741,18 @@ public sealed partial class ParserRows : Grid
 
     /// <summary>The least room a name keeps beside its heal chip (a few letters and the ellipsis).</summary>
     const double NameMin = 40;
+
+    /// <summary>The record chip's words: "PB +4.2%" (DPS), "HEAL PB +9%", or both ("PB +4.2% · HEAL +9%").</summary>
+    internal static string PbText(double? dps, double? heal) => (dps, heal) switch
+    {
+        ({ } d, { } h) => $"PB {PK.Signed(d)} · HEAL {PK.Signed(h)}",
+        ({ } d, null) => $"PB {PK.Signed(d)}",
+        (null, { } h) => $"HEAL PB {PK.Signed(h)}",
+        _ => "",
+    };
+
+    /// <summary>The heal bar's height (it was 2 px to 0.10.121: "TOO small").</summary>
+    public const double HealBarPx = 4;
 
     /// <summary>The least a name keeps beside the + heal chip in a tight meter (two letters and the ellipsis).</summary>
     const double NameTight = 26;
@@ -1039,10 +1073,10 @@ public sealed partial class ParserRows : Grid
     }
 
     /// <summary>A new personal best on this boss: "PB +4.2%" pops onto your row with a burst of gold.</summary>
-    void ShowPb(RowEl r, double d)
+    void ShowPb(RowEl r, double? d, double? heal = null)
     {
         var word = r.Pb.Child as TextBlock ?? (r.Pb.Child as Grid)?.Children.OfType<TextBlock>().FirstOrDefault();
-        if (word != null) word.Text = $"PB {PK.Signed(d)}";
+        if (word != null) word.Text = PbText(d, heal);
         r.Pb.Visibility = Visibility.Visible;
         FitName(r);   // the chip takes room on the name's line: the name trims and YOU gives way, so a TOP DPS plate beside it shows whole
         if (!Motion.On) return;
