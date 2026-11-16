@@ -641,7 +641,9 @@ public sealed class ParserPanel : Border
             var w = T(e.ReadyText, 12.5, FontWeights.SemiBold, HudKit.Muted); w.Margin = new Thickness(30, 8, 0, 2);
             _body.Children.Add(w);
             BorderBrush = _glass ? HudGlass.Edge : HudKit.FrameLine;
-            return;
+            // the party as soon as it forms (Steven, 2026-11-16: "when people join the group / pty it should show the people
+            // even if not DPSing"): its rows with each one's Combat Power; on your own, the line alone
+            if (e.Roster.Count(f => !f.Other) < 2) return;
         }
 
         // a run: the pull under way ("Now: the boss" and its clock) and the bosses done so far
@@ -714,6 +716,7 @@ public sealed class ParserPanel : Border
             ParserRows.Detach(_prows); _body.Children.Add(_prows);
             _prows.Show(e, now);
         }
+        if (e.Waiting) return;   // the party before a hit: no foot (nothing dealt, nothing ended)
         // the foot: the fight's total and the group's DPS; the result before them once it's over
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

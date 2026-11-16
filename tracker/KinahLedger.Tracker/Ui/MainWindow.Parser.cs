@@ -457,9 +457,22 @@ public partial class MainWindow
         if (kind is not (ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary)) return null;
         if (_parserJustEnded is { OpenWorld: false } last && BossBook.Strip(last.Instance).Equals(BossBook.Strip(instance), StringComparison.OrdinalIgnoreCase)) return last;
         if (_parserReady == null || !_parserReady.Instance.Equals(instance, StringComparison.Ordinal)) _parserReady = Encounter.Ready(kind, instance, "", now);
-        return _parserReady;
+        return WithParty(_parserReady);
     }
     Encounter? _parserReady;
+
+    /// <summary>A ready card with the party in it as it stands (Combat Power and class from the party list), so the meter shows who is there before a hit.</summary>
+    Encounter WithParty(Encounter ready)
+    {
+        var group = ParserFights?.Group ?? Array.Empty<GroupMember>();
+        var sig = string.Join("|", group.Select(m => $"{m.Id}:{m.Name}:{m.CombatPower}:{m.Class}"));
+        if (ready.Roster.Count == group.Count && _readyPartySig == sig) return ready;
+        _readyPartySig = sig;
+        ready.Roster.Clear();
+        foreach (var m in group) ready.Roster.Add(Fighter.From(m));
+        return ready;
+    }
+    string _readyPartySig = "";
 
     /// <summary>
     /// The Always on meter: the pull or the tally under way, else what ended last while it is from where the player is (a
@@ -477,12 +490,12 @@ public partial class MainWindow
         {
             if (held != null && Kept(held) && BossBook.Strip(held.Instance).Equals(BossBook.Strip(instance), StringComparison.OrdinalIgnoreCase)) return held;
             if (_parserReady == null || _parserReady.ModeKind != ParserMode.Bosses || !_parserReady.Instance.Equals(instance, StringComparison.Ordinal)) _parserReady = Encounter.Ready(kind, instance, "", now);
-            return _parserReady;
+            return WithParty(_parserReady);
         }
         if (held != null && !Kept(held)) return held;
         var place = pf.Zone.Trim().Length > 0 ? pf.Zone.Trim() : "Open world";
         if (_parserReady == null || _parserReady.ModeKind != ParserMode.Fights || _parserReady.Instance != place) _parserReady = Encounter.ReadyAnywhere(place, now);
-        return _parserReady;
+        return WithParty(_parserReady);
     }
 
     /// <summary>Always on or Only boss fights (the Parser page's head): remembered, the meter follows at once.</summary>

@@ -1368,8 +1368,10 @@ public sealed class BossParser
                 CloseFight(f.LastAt, done, null);
                 _version++;
             }
-            // Always on, outside the three: a few seconds with nobody of yours fighting, and the next hit starts the meter from 0
-            if (_always is { } al && !Kept(_kind) && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
+            // Always on: a few seconds with nobody of yours fighting, and the next hit starts the meter from 0; in a dungeon too
+            // since 0.10.132 (Steven, 2026-11-16: "in dungeons it should show the DPS meter but restart on the fight (like open
+            // world)"): each trash pack its own meter, a boss pull still its own
+            if (_always is { } al && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
             {
                 // held at the group's last hit dealt (Steven, 2026-11-15: "the dps meter can continue to drop for a few seconds
                 // before pausing - if nothing else is hit go back to the dps before it started dropping"): the live figure falls
@@ -1379,7 +1381,7 @@ public sealed class BossParser
                 // a fight of one hit (a mob killed at once) joins the fight before it out here (Steven, 2026-11-15: "yes, merge
                 // them"): held alone it read the hit over a second, the opening spike, never the pace
                 if ((ourLastHit - ourFirstHit).TotalSeconds < Encounter.MinDpsSeconds && _alwaysEnded is { Mode: "fight", End: { } } prev
-                    && !Kept(Encounter.KindOf(prev.Kind)) && prev.Kind == al.Kind)
+                    && prev.Kind == al.Kind && prev.Instance == al.Instance)
                 {
                     _always = null;
                     al.End = Max(Min(ourLastHit, al.LastAt), al.Start);

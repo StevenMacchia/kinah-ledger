@@ -813,6 +813,13 @@ public static partial class WpfApp
         var sizing = w.SizeToContent;
         Check(w.OnSizeMove(MainWindow.WM_ENTERSIZEMOVE) && w.SizeToContent == SizeToContent.Manual, "a drag starting pins the size");
         Check(w.OnSizeMove(MainWindow.WM_EXITSIZEMOVE) && w.SizeToContent == sizing && sizing == SizeToContent.WidthAndHeight, "the drop sizes to content again");
+        // resizing by dragging (0.10.132): the right edge pulled 20% wider draws the window about 20% bigger, the rectangle
+        // held to the scaled content; pulled far past the limit it stops at 150%; the size reached is kept on the drop
+        {
+            var (sz0, wider, widthRatio, capped, kept) = w.DragResizeForTest(1.2, 3);
+            Check(Math.Abs(wider / sz0 - 1.2) < 0.03 && Math.Abs(widthRatio - 1.2) < 0.05 && Math.Abs(capped - MainWindow.MaxWindowScale) < 0.001 && Math.Abs(kept - MainWindow.MaxWindowScale) < 0.001,
+                $"the window resizes by dragging an edge: {sz0:0.00} to {wider:0.00} pulled 20% wider (the window {widthRatio:0.00}x), {capped:0.00} at most, {kept:0.00} kept on the drop");
+        }
 
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,

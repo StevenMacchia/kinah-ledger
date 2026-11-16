@@ -121,6 +121,104 @@ public partial class MainWindow
         if (Math.Abs(next - _fitScale) > 0.001) SetDrawScale(next);
     }
 
+    // ---- resizing by dragging (0.10.132, Steven, 2026-11-16: "allow users to resize the main kinah ledger app ... by dragging") ----
+    // An edge or a corner dragged sets the window's size the way Options and Ctrl+= do: the whole window drawn bigger or
+    // smaller (its pages are laid out to fit with no scrolling), live as the edge moves, kept on the drop. The window's
+    // rectangle is held to the scaled content, so it never shows a gap or a cut. No maximize: it has no layout for that.
+
+    internal const int WM_SIZING = 0x0214;
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct WinRect { public int L, T, R, B; }
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+
+    bool _sizing;
+    double _sizeBaseW, _sizeBaseH, _sizeChromeW, _sizeChromeH, _sizingScale;
+
+    /// <summary>The frame keeps its sizing border, without the maximize button (and a double-click on the title bar does nothing).</summary>
+    void NoMaximize(IntPtr hwnd)
+    {
+        const int GWL_STYLE = -16; const long WS_MAXIMIZEBOX = 0x00010000;
+        long style = GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64();
+        if ((style & WS_MAXIMIZEBOX) != 0) SetWindowLongPtr(hwnd, GWL_STYLE, new IntPtr(style & ~WS_MAXIMIZEBOX));
+    }
+
+    /// <summary>
+    /// An edge being dragged (WM_SIZING): the window's size from where the edge is (its width for a side or a corner, its
+    /// height for the top or the bottom), 80% to 150%, drawn at once; the rectangle Windows proposes is set to that size.
+    /// </summary>
+    internal void OnSizing(IntPtr edgeParam, IntPtr rectParam)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double dx = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1, dy = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
+        if (!_sizing)
+        {
+            if (FitHost.ActualWidth <= 0 || FitHost.ActualHeight <= 0) return;
+            _sizing = true;
+            _sizeBaseW = FitHost.ActualWidth; _sizeBaseH = FitHost.ActualHeight;
+            _sizeChromeW = Math.Max(0, ActualWidth - _sizeBaseW * _fitScale); _sizeChromeH = Math.Max(0, ActualHeight - _sizeBaseH * _fitScale);
+            _sizingScale = _fitScale;
+        }
+        var r = System.Runtime.InteropServices.Marshal.PtrToStructure<WinRect>(rectParam);
+        int edge = edgeParam.ToInt32();   // 1 left, 2 right, 3 top, 4 top-left, 5 top-right, 6 bottom, 7 bottom-left, 8 bottom-right
+        bool side = edge is 1 or 2 or 4 or 5 or 7 or 8;
+        double w = (r.R - r.L) / dx, h = (r.B - r.T) / dy;
+        double s = side ? (w - _sizeChromeW) / _sizeBaseW : (h - _sizeChromeH) / _sizeBaseH;
+        s = Math.Round(Math.Clamp(s, MinWindowScale, MaxWindowScale), 3);
+        int nw = (int)Math.Round((_sizeChromeW + _sizeBaseW * s) * dx), nh = (int)Math.Round((_sizeChromeH + _sizeBaseH * s) * dy);
+        if (edge is 1 or 4 or 7) r.L = r.R - nw; else r.R = r.L + nw;
+        if (edge is 3 or 4 or 5) r.T = r.B - nh; else r.B = r.T + nh;
+        System.Runtime.InteropServices.Marshal.StructureToPtr(r, rectParam, false);
+        _sizingScale = s;
+        if (Math.Abs(s - _fitScale) > 0.001) SetDrawScale(s);
+    }
+
+    /// <summary>The drag let go: the size it reached is the window's size from now on (as if chosen in Options), and the status line says it.</summary>
+    void EndSizing()
+    {
+        if (!_sizing) return;
+        _sizing = false;
+        double kept = Math.Round(Math.Clamp(_sizingScale, MinWindowScale, MaxWindowScale), 2);
+        if (_options != null) _options.SetWindowScale(kept);
+        else if (Math.Abs(kept - _prefs.WindowScale) > 0.001) { _prefs.WindowScale = kept; SavePrefs(); }
+        RefitScale();
+        Say(WindowScaleLine(kept), "Faint");
+    }
+
+    /// <summary>
+    /// For options-test: drags the right edge to <paramref name="factor"/> times the window's width, then to
+    /// <paramref name="far"/> times, and drops it; the scale before, after the first pull, the rectangle's width ratio, after
+    /// the far pull, and the size kept. The saved size is put back after.
+    /// </summary>
+    internal (double Before, double Wider, double WidthRatio, double Capped, double Kept) DragResizeForTest(double factor, double far)
+    {
+        double saved = _prefs.WindowScale, before = _fitScale;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        int W0 = (int)Math.Round(ActualWidth * dpi.DpiScaleX), H0 = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+        var p = System.Runtime.InteropServices.Marshal.AllocHGlobal(16);
+        try
+        {
+            OnSizeMove(WM_ENTERSIZEMOVE);
+            System.Runtime.InteropServices.Marshal.StructureToPtr(new WinRect { L = 0, T = 0, R = (int)(W0 * factor), B = H0 }, p, false);
+            OnSizing(new IntPtr(2), p);
+            double wider = _fitScale;
+            var got = System.Runtime.InteropServices.Marshal.PtrToStructure<WinRect>(p);
+            double ratio = (got.R - got.L) / (double)W0;
+            System.Runtime.InteropServices.Marshal.StructureToPtr(new WinRect { L = 0, T = 0, R = (int)(W0 * far), B = H0 }, p, false);
+            OnSizing(new IntPtr(2), p);
+            double capped = _fitScale;
+            OnSizeMove(WM_EXITSIZEMOVE);
+            EndSizing();
+            double kept = _prefs.WindowScale;
+            return (before, wider, ratio, capped, kept);
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(p);
+            _prefs.WindowScale = saved; RefitScale();
+        }
+    }
+
     /// <summary>Options › General › Window size, being tried: the window shows it now; Save keeps it, Cancel puts the saved one back.</summary>
     public void PreviewWindowScale(double scale)
     {

@@ -453,6 +453,17 @@ public sealed class Encounter : IJsonOnDeserialized
     /// </summary>
     public IEnumerable<Fighter> Shown() => HasDamage ? Ranked().Where(f => f.Damage > 0) : Ranked();
 
+    /// <summary>
+    /// The meter's rows at <paramref name="now"/> (Steven, 2026-11-16: "it should show the people even if not DPSing (you can
+    /// hide if not DPSing for like 15 seconds)"): every member with damage, and one without for their first
+    /// <see cref="QuietShownSeconds"/> in the fight (from its start, or from joining it); one who left and dealt none, never.
+    /// </summary>
+    public IEnumerable<Fighter> Shown(DateTime now) => !HasDamage ? Ranked().Where(f => !f.Gone)
+        : Ranked().Where(f => f.Damage > 0 || (!f.Gone && (now - (f.JoinedAt is { } j && j > Start ? j : Start)).TotalSeconds < QuietShownSeconds));
+
+    /// <summary>How long a member who dealt no damage keeps their row in a fight.</summary>
+    public const double QuietShownSeconds = 15;
+
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
         ? Members.OrderByDescending(Figure).ThenByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)

@@ -1786,8 +1786,9 @@ public static class ParserTests
             p.Take(new InstanceEntered(t.AddSeconds(635), ContentKind.Other, "", 79));                         // a loading screen the messages can't name
             p.Take(new DamageDealt(t.AddSeconds(640), 1, 6000, 2_000, "Swoly", true));
             Check(p.AlwaysLive is { } d2 && d2.Members.Sum(f => f.Damage) == 10_000, $"...a reconnect and an unnamed loading screen into the same copy carry it on: {p.AlwaysLive?.Members.Sum(f => f.Damage)}");
-            p.Tick(t.AddSeconds(640 + 300));
-            Check(p.AlwaysLive != null, "...inside a dungeon 5 minutes of quiet don't start it again (the bosses and the door do)");
+            p.Tick(t.AddSeconds(640 + BossParser.AlwaysIdleSeconds + 1));
+            Check(p.AlwaysLive == null && p.AlwaysEnded is { Kind: "Expedition", Instance: "Shattered Arkanis" } q1 && q1.Members.Sum(f => f.Damage) == 10_000,
+                $"...inside a dungeon too a few seconds of quiet end the fight, held, the next hit starting from 0 (0.10.132: each trash pack its own meter): {p.AlwaysEnded?.Kind} {p.AlwaysEnded?.Members.Sum(f => f.Damage)}");
 
             // a boss pulled: the pull is the meter, from 0; its end is held; the next trash hit starts from 0
             p.Take(new BossEngaged(t.AddSeconds(1000), "Talisra of the Void", 902));

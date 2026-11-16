@@ -76,6 +76,13 @@ public static partial class WpfApp
         return h;
     }
 
+    /// <summary>A ready card with a sample's members in it, as they'd be from the party list (no damage yet).</summary>
+    static Encounter ReadyWithParty(Encounter ready, Encounter from)
+    {
+        foreach (var m in from.Members) ready.Roster.Add(new Fighter { Id = m.Id, Name = m.Name, Class = m.Class, CombatPower = m.CombatPower, You = m.You });
+        return ready;
+    }
+
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
@@ -126,6 +133,8 @@ public static partial class WpfApp
             ("ui-parser-overlay-ready.png", Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), now),
             ("ui-parser-overlay-ready-anywhere.png", Encounter.ReadyAnywhere("Verteron", now), now),
             ("ui-parser-overlay-held.png", held, held.End!.Value),
+            // a party formed before the first hit: its rows, each with Combat Power (0.10.132)
+            ("ui-parser-overlay-ready-party.png", ReadyWithParty(Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), live!), now),
         };
         foreach (var (file, e, at) in shots)
         {
@@ -633,9 +642,10 @@ public static partial class WpfApp
                 var t1 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
                 po.Draw(pullL!, nowL.AddSeconds(0.5)); DoEvents();
                 var t2 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
-                // the figures are short since 0.10.128 ("4.3K"): a few seconds on for the fall to show in them
-                po.Draw(pullL!, nowL.AddSeconds(4)); DoEvents();
-                var t3 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
+                // the figures are short since 0.10.128 ("4.3K"): 30 seconds on for the fall to show in them
+                var d1 = TaggedShown((DependencyObject)po.Content, "row-dps").OfType<System.Windows.Controls.TextBlock>().Select(x => x.Text).ToList();
+                po.Draw(pullL!, nowL.AddSeconds(30)); DoEvents();
+                var t3 = TaggedShown((DependencyObject)po.Content, "row-dps").OfType<System.Windows.Controls.TextBlock>().Select(x => x.Text).ToList();
                 po.Close();
                 static double Num(string x)
                 {
@@ -643,8 +653,8 @@ public static partial class WpfApp
                     return double.TryParse(m > 1 ? x[..^1] : x, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v * m : -1;
                 }
                 double Top1(List<string> ts) => ts.Select(Num).Where(v => v >= 1000).DefaultIfEmpty(-1).Max();
-                check(!t1.SequenceEqual(t2) && Top1(t3) < Top1(t1),
-                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(t1):N0} to {Top1(t3):N0} four seconds on)");
+                check(!t1.SequenceEqual(t2) && Top1(t3) < Top1(d1),
+                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(d1):N0} to {Top1(t3):N0} 30 seconds on)");
             }
             // the foot, the held badge and the top plates (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a
             // green badge next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]"), in every look: a pull under way, an
