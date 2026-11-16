@@ -13,6 +13,48 @@ public static partial class WpfApp
     /// only. The moments' effects are drawn as held frames: ui-theme-LOOK-pickup-40.png is the pickup's effect 40% of the
     /// way through, and so on for the rare drop, your best passed, an entry opening, a fight starting and a kill.
     /// </summary>
+    /// <summary>
+    /// options-test: the Theme row over the look thumbnails (Classic shown for a Classic look, each theme's chip showing its
+    /// three looks), the themes' looks known to every place that takes a look key, and none of their words naming where the
+    /// figures come from, in any state.
+    /// </summary>
+    static void ThemeChecks(OptionsWindow o, MainWindow w, Action<bool, string> check)
+    {
+        var themes = HudThemes.All.Select(t => t.Key).ToList();
+        check(o.HudThemeForTest == HudThemes.Of(w.HudLook) && o.HudThemeHost.Children.Count == themes.Count && themes.SequenceEqual(new[] { HudThemes.Classic, HudThemes.Wacky, HudThemes.Tactical, HudThemes.Glitch }),
+            $"Options › In game: a Theme row (Classic, Wacky, Tactical, Glitch) over the thumbnails, the look in use's theme shown ({o.HudThemeForTest}, {o.HudThemeHost.Children.Count} chips)");
+        var said = new List<string>();
+        foreach (var t in themes.Where(t => t != HudThemes.Classic))
+        {
+            o.PickHudThemeForTest(t); DoEvents();
+            var shown = o.HudLookHost.Children.OfType<FrameworkElement>().Select(c => c.Tag as string).ToList();
+            var want = HudThemes.Looks(t).Select(l => l.Key).ToList();
+            said.Add($"{t}: {string.Join(",", shown)}");
+            check(want.Count == 3 && shown.SequenceEqual(want) && o.HudLookPreview.Children.Count == 1 && o.ParserLooksForTest.Keys.Where(k => k != KinahLedger.Parser.ParserPrefs.StandardLook).SequenceEqual(want),
+                $"...{t} shows its three looks as thumbnails and in the Parser's look row, the look in use still drawn big ({string.Join(", ", shown)})");
+        }
+        o.PickHudThemeForTest(HudThemes.Of(w.HudLook)); DoEvents();
+        var keys = HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key).ToList();
+        check(keys.Count == 9 && keys.All(k => HudLooks.Parse(k) == k && KinahLedger.Parser.ParserPrefs.LookOf(k) == k && HudThemes.Make(k, true) != null) && !HudThemes.Themed(HudLooks.Capsule),
+            $"the themes' nine looks are kept in hud.json and parser.json and made by both windows ({string.Join(", ", keys)})");
+        // no theme's look ever says where the figures come from (Steven, 2026-11-14), farming, in the Abyss, in a fight and after it
+        var now = DateTime.UtcNow;
+        var (past, live) = ParserDemo.Sample(now, live: true, damage: true);
+        var kill = past.Last(e => e.Outcome == "kill");
+        var kinah = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
+        var bad = new List<string>();
+        foreach (var k in keys)
+            foreach (var (v, e, at) in new[] { (kinah, (Encounter?)null, now), (w.HudAbyssSample(kinah), null, now), (kinah, live, now), (kinah, kill, kill.End!.Value) })
+            {
+                var h = new HudWindow(null, k, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                h.Update(v); h.ShowParser(e, at, ParserMode.Bosses, details: false); h.SetKinahHidden(e != null);
+                h.Show(); DoEvents();
+                foreach (var x in VisibleTexts(h).Where(x => System.Text.RegularExpressions.Regex.IsMatch(x, "packet|traffic|game's messages|capture", System.Text.RegularExpressions.RegexOptions.IgnoreCase))) bad.Add($"{k}: {x}");
+                h.Close();
+            }
+        check(bad.Count == 0, "the themes' looks never name packets or traffic" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+    }
+
     static void ShotThemes(MainWindow w, string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
