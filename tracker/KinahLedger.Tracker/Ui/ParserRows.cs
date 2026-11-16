@@ -341,6 +341,68 @@ public sealed partial class ParserRows : Grid
     /// The card's entrance: it slides in from the meter's side and fades up (160 ms), and its ability bars grow from nothing one
     /// after another (40 ms apart, 260 ms each, easing out). Never in a render or a test (Motion.Still): the card is drawn settled.
     /// </summary>
+    /// <summary>A member's card filled from the fight as it stands, and kept as the one open (it follows the fight); false with nothing to show.</summary>
+    bool FillCard(ToolTip card, long fid)
+    {
+        var fight = _shownE;
+        var fm = fight?.Roster.FirstOrDefault(x => x.Id == fid && !x.Other);
+        if (fight == null || fm == null || HoverCard(fight, fm, _shownAt) is not { } content) return false;
+        card.Content = content;
+        _openCard = card; _openCardId = fid; _cardAt = _shownAt;
+        CardIn(content);
+        return true;
+    }
+
+    // ---- the peek: the card with clicks going through to the game (Steven, 2026-11-16: "I STILL DK WHERE THE OVERLAY FOR
+    // INDIVIDUAL ABILITIES IS"; with click-through on, the hover never reached the meter, so the card never opened)
+
+    /// <summary>The pointer rests on a row this long before its card opens (a pass over the meter opens nothing).</summary>
+    public const int PeekMs = 450;
+    long _peekId;
+    DateTime _peekSince;
+    bool _peeking;
+
+    /// <summary>
+    /// With clicks going through to the game, the overlay's pointer watch says where the pointer is over the rows (null: off
+    /// them). Resting on a member's row opens their card beside the meter; moving off it closes it. Nothing takes the pointer:
+    /// the card only shows, and every click still goes to the game.
+    /// </summary>
+    internal void Peek(Point? at)
+    {
+        long id = 0;
+        if (at is { } p)
+            foreach (var (fid, r) in _rows)
+            {
+                if (r.Root.Visibility != Visibility.Visible || r.Root.ActualWidth <= 0) continue;
+                var tl = r.Root.TranslatePoint(new Point(0, 0), this);
+                if (p.X >= tl.X && p.X < tl.X + r.Root.ActualWidth && p.Y >= tl.Y && p.Y < tl.Y + r.Root.ActualHeight) { id = fid; break; }
+            }
+        if (id != _peekId)
+        {
+            if (_peeking) { _peeking = false; if (_openCard is { } c) c.IsOpen = false; }
+            _peekId = id; _peekSince = DateTime.UtcNow;
+            return;
+        }
+        if (id == 0 || _peeking || (DateTime.UtcNow - _peekSince).TotalMilliseconds < PeekMs) return;
+        if (_rows.TryGetValue(id, out var row) && row.Root.ToolTip is ToolTip card && FillCard(card, id))
+        {
+            card.PlacementTarget = row.Root;
+            if (!PeekNoPopupForTest) card.IsOpen = true;   // a popup is kept on the screen by Windows: a test never opens one
+            _peeking = true;
+        }
+    }
+
+    /// <summary>For the tests: the member whose card the peek has open (0: none).</summary>
+    internal long PeekingForTest => _peeking && (PeekNoPopupForTest || _openCard is { IsOpen: true }) ? _peekId : 0;
+    /// <summary>Tests: the peek decides and fills the card, but never opens its popup (it would show on the player's screen).</summary>
+    internal static bool PeekNoPopupForTest;
+    /// <summary>For the tests: the card the peek filled (its content), null before.</summary>
+    internal object? PeekCardForTest => _openCard?.Content;
+
+    /// <summary>For the tests: where a member's row sits in the rows (its middle), to rest a pointer on.</summary>
+    internal Point? RowMiddleForTest(long fid) => _rows.TryGetValue(fid, out var r) && r.Root.ActualWidth > 0
+        ? r.Root.TranslatePoint(new Point(r.Root.ActualWidth / 2, r.Root.ActualHeight / 2), this) : null;
+
     static void CardIn(FrameworkElement card)
     {
         if (Motion.Still) return;
@@ -674,12 +736,7 @@ public sealed partial class ParserRows : Grid
         {
             // never while clicks go through to the game (the pointer is the game's; an edge taken for a resize is no hover)
             if (Window.GetWindow(this) is ParserOverlay { ClickThroughNow: true }) { ev.Handled = true; return; }
-            var fight = _shownE;
-            var fm = fight?.Roster.FirstOrDefault(x => x.Id == fid && !x.Other);
-            if (fight == null || fm == null || HoverCard(fight, fm, _shownAt) is not { } content) { ev.Handled = true; return; }
-            card.Content = content;
-            _openCard = card; _openCardId = fid; _cardAt = _shownAt;
-            CardIn(content);
+            if (!FillCard(card, fid)) ev.Handled = true;
         };
         card.Closed += (_, _) => { if (_openCard == card) _openCard = null; };
         nameHost.SizeChanged += (_, _) => { FitName(r); FitHeal(r); };
