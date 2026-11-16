@@ -93,6 +93,24 @@ public static partial class WpfApp
         // a row's hover card (the top member's, and yours), each as it opens beside the meter
         foreach (var (file, who) in new[] { ("ui-parser-card-top.png", live!.Ranked().First(f => !f.Other)), ("ui-parser-card-you.png", live!.Roster.FirstOrDefault(f => f.You) ?? live!.Ranked().First(f => !f.Other)) })
             if (ParserRows.HoverCard(live!, who, now) is { } card) { card.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = card }, Path.Combine(dir, file), 320, ShotGround); }
+        // the same card with Settings' crit and back-attack switch on: each skill's rates from hits kept one by one
+        {
+            var withKinds = BossParser.Copy(live!);
+            foreach (var f in withKinds.Roster)
+                foreach (var a in f.Abilities)
+                {
+                    int seen = Math.Max(12, a.Hits); uint h = (uint)(a.Skill * 2654435761u ^ (uint)f.Id);
+                    double crit = 0.22 + (h % 37) / 100.0, back = (h / 37 % 41) / 100.0;
+                    a.StreamHits = seen; a.StreamDamage = a.Damage;
+                    a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
+                    a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
+                }
+            string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+            Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
+            var youK = withKinds.Roster.FirstOrDefault(f => f.You) ?? withKinds.Ranked().First(f => !f.Other);
+            if (ParserRows.HoverCard(withKinds, youK, now) is { } cc) { cc.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = cc }, Path.Combine(dir, "ui-parser-card-crit.png"), 380, ShotGround); }
+            Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+        }
         var shots = new List<(string File, Encounter E, DateTime At)>
         {
             ("ui-parser-overlay-live.png", live!, now),
@@ -304,6 +322,39 @@ public static partial class WpfApp
             var bars = card == null ? new List<double>() : ParserRows.CardBarsForTest(card);
             check(bars.Count == abilityRows && bars.Count > 0 && Math.Abs(bars[0] - 156) < 0.5 && bars.Zip(bars.Skip(1)).All(p => p.First >= p.Second),
                 $"...its ability bars against the top one, the top one full and the rest shorter in order ({string.Join(", ", bars.Select(b => b.ToString("0")))})");
+            // crit and back attacks (Settings' switch): none on the card until a kind is picked; then each skill's rates as their
+            // own columns, the member's in a gold line, only from the hits the record kept one by one
+            {
+                var copy = BossParser.Copy(sample);
+                var who = copy.Roster.First(f => f.Id == top.Id);
+                foreach (var a in who.Abilities)
+                {
+                    a.StreamHits = Math.Max(10, a.Hits); a.StreamDamage = a.Damage;
+                    a.Kinds = new() { ["result:3"] = a.StreamHits.Value * 2 / 5, ["side:1"] = a.StreamHits.Value / 4 };
+                    a.KindDamage = new() { ["result:3"] = a.Damage / 2 }; a.KindMax = new() { ["result:3"] = Math.Max(1, a.Damage / 10) };
+                }
+                string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+                var off = ParserRows.HoverCard(copy, who, at);
+                Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
+                var onCard = ParserRows.HoverCard(copy, who, at);
+                Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+                var (critOff, backOff) = off == null ? (new List<string>(), new List<string>()) : ParserRows.CardRatesForTest(off);
+                var (critOn, backOn) = onCard == null ? (new List<string>(), new List<string>()) : ParserRows.CardRatesForTest(onCard);
+                var onTexts = onCard == null ? new List<string>() : FindTexts(onCard).Select(BlockText).ToList();
+                int rowsOn = onCard == null ? 0 : ParserRows.CardBarsForTest(onCard).Count;
+                check(critOff.Count == 0 && backOff.Count == 0 && !FindTexts(off ?? new System.Windows.Controls.Border()).Any(t => t.Text.Contains("crit")),
+                    "Parser: a row's hover card shows no crit or back attack until Settings' switch picks them");
+                check(rowsOn > 0 && critOn.Count == rowsOn && backOn.Count == rowsOn && critOn.All(x => x == "40%") && backOn.All(x => x == "25%")
+                    && onTexts.Any(t => t.Contains("40% crit") && t.Contains("50% of the damage from crits") && t.Contains("25% from behind")) && onTexts.Contains("crit") && onTexts.Contains("back"),
+                    $"...switched on: each skill's crit and back-attack rate in its own column, the member's in one line ({string.Join(", ", critOn)} | {string.Join(", ", backOn)} | {onTexts.FirstOrDefault(t => t.Contains("crit"))})");
+                if (onCard != null)
+                {
+                    onCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var probe = new ParserPrefs(); OptionsWindow.CritSwitch(probe, true); var json = System.Text.Json.JsonSerializer.Serialize(probe); OptionsWindow.CritSwitch(probe, false); var json0 = System.Text.Json.JsonSerializer.Serialize(probe);
+                    check(onCard.DesiredSize.Width <= 360 && probe.CritNow == "none" && probe.BackNow == "none" && json.Contains("\"result3\"") && json.Contains("\"side1\"") && !json0.Contains("CritSource"),
+                        $"...the card stays narrower than the meter ({onCard.DesiredSize.Width:0}); the switch writes result3 and side1, off leaves the release's default");
+                }
+            }
         }
         o.Close();
         // the modes: Full run's run under way with its splits, Every fight's fights, the list by mode, the overlay's menu

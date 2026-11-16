@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -353,6 +353,26 @@ public sealed partial class ParserRows : Grid
         foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) { yield return ch; foreach (var x in Descendants(ch)) yield return x; }
     }
 
+    /// <summary>A rate column's width on the hover card (crit, back), and the tags its cells carry for the tests.</summary>
+    const double CardRateCol = 38;
+    static string Pct0(double x) => (Math.Clamp(x, 0, 1) * 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    const string CardCritTag = "card-crit", CardBackTag = "card-back";
+
+    /// <summary>The header row's columns, the same as an ability row's: name, share, damage, then the rates shown.</summary>
+    static void RateColumns(Grid g, bool crit, bool back)
+    {
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+        if (crit) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardRateCol) });
+        if (back) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardRateCol) });
+    }
+
+    /// <summary>For the options test: the card's crit and back cells, top ability first.</summary>
+    internal static (List<string> Crit, List<string> Back) CardRatesForTest(FrameworkElement card) =>
+        (Descendants(card).OfType<TextBlock>().Where(t => CardCritTag.Equals(t.Tag)).Select(t => t.Text).ToList(),
+         Descendants(card).OfType<TextBlock>().Where(t => CardBackTag.Equals(t.Tag)).Select(t => t.Text).ToList());
+
     /// <summary>For the options test: the card's ability bars and their widths (what the entrance grows them to).</summary>
     internal static List<double> CardBarsForTest(FrameworkElement card) => Descendants(card).OfType<Border>().Where(b => CardBarTag.Equals(b.Tag)).Select(b => b.Width).ToList();
 
@@ -369,7 +389,9 @@ public sealed partial class ParserRows : Grid
         var c = ClassArt.ColorOf(f.Class);
         TextBlock T(string s, double size, Brush b, FontWeight w, HorizontalAlignment h = HorizontalAlignment.Left)
         { var t = new TextBlock { Text = s, FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = h, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
-        var stack = new StackPanel { Width = 250 };
+        // crit and back attacks per skill, once Settings' switch picks the kinds and the record carries them
+        bool critCol = m.Abilities.Any(x => x.Damage > 0 && x.Crit != null), backCol = m.Abilities.Any(x => x.Damage > 0 && x.Back != null);
+        var stack = new StackPanel { Width = 250 + (critCol ? CardRateCol : 0) + (backCol ? CardRateCol : 0) };
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
         var cls = T(f.Class, 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); DockPanel.SetDock(cls, Dock.Right); head.Children.Add(cls);
         head.Children.Add(T(NameOf(f), 13, f.You ? PK.C(PK.Gold) : ClassArt.NameBrush(f.Class), FontWeights.Bold));
@@ -379,6 +401,11 @@ public sealed partial class ParserRows : Grid
         sums.Add(Encounter.Pct(m.Share));
         sums.Add($"{Amounts.Short(m.Damage)} damage");
         stack.Children.Add(T(string.Join("  ·  ", sums), 11, HudKit.Ink, FontWeights.SemiBold));
+        var rates = new List<string>();
+        if (m.Crit is { } cr) rates.Add($"{Pct0(cr)} crit");
+        if (m.CritShare is { } cs) rates.Add($"{Pct0(cs)} of the damage from crits");
+        if (m.Back is { } ba) rates.Add($"{Pct0(ba)} from behind");
+        if (rates.Count > 0) stack.Children.Add(T(string.Join("  ·  ", rates), 10.5, PK.C(PK.Gold, 0.92), FontWeights.SemiBold));
         // the abilities with damage on the figures' basis (boss only or all targets): one with none there is not listed
         var dealt = m.Abilities.Where(x => x.Damage > 0).OrderByDescending(x => x.Damage).ToList();
         if (dealt.Count > 0)
@@ -386,12 +413,25 @@ public sealed partial class ParserRows : Grid
             stack.Children.Add(new Border { Height = 1, Background = HudKit.FrameLine, Margin = new Thickness(0, 6, 0, 5) });
             var shownAbilities = dealt.Take(CardAbilities).ToList();
             double topShare = Math.Max(1e-9, shownAbilities[0].Share);
+            if (critCol || backCol)
+            {
+                // the columns' names over them, only when the rates make the row more than share and damage
+                var names = new Grid { Height = 13, Margin = new Thickness(0, 0, 0, 1) };
+                void Name(string s, int col) { var t = T(s, 9, HudKit.Muted, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(t, col); names.Children.Add(t); }
+                RateColumns(names, critCol, backCol);
+                Name("share", 1); Name("damage", 2);
+                if (critCol) Name("crit", 3);
+                if (backCol) Name("back", critCol ? 4 : 3);
+                stack.Children.Add(names);
+            }
             foreach (var a in shownAbilities)
             {
                 var row = new Grid { Height = 19, Margin = new Thickness(0, 0, 0, 2) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+                if (critCol) row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardRateCol) });
+                if (backCol) row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardRateCol) });
                 // the ability against the top one as a bar behind the name, in the class's colour, fading right like the meter's
                 var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
                 fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x7A, c.R, c.G, c.B), 0)); fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x26, c.R, c.G, c.B), 1)); fill.Freeze();
@@ -401,6 +441,8 @@ public sealed partial class ParserRows : Grid
                 row.Children.Add(nameCell);
                 var pct = T(Encounter.Pct(a.Share), 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); Grid.SetColumn(pct, 1); row.Children.Add(pct);
                 var dmg = T(Amounts.Short(a.Damage), 11, HudKit.Ink, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(dmg, 2); row.Children.Add(dmg);
+                if (critCol) { var ct = T(a.Crit is { } ac ? Pct0(ac) : "–", 10.5, a.Crit != null ? PK.C(PK.Gold, 0.92) : HudKit.Muted, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(ct, 3); ct.Tag = CardCritTag; row.Children.Add(ct); }
+                if (backCol) { var bt = T(a.Back is { } ab ? Pct0(ab) : "–", 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); Grid.SetColumn(bt, critCol ? 4 : 3); bt.Tag = CardBackTag; row.Children.Add(bt); }
                 if (a.Hits > 0) row.ToolTip = $"{a.Hits:N0} hits{(a.Avg is { } avg ? $", {Amounts.Short(avg)} a hit" : "")}{(!e.BossView && a.Max is { } mx ? $", biggest {Amounts.Short(mx)}" : "")}";
                 stack.Children.Add(row);
             }

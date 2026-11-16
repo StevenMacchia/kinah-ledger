@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -28,7 +28,7 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!;
 
     void LoadParser()
     {
@@ -43,6 +43,7 @@ public partial class OptionsWindow
         _parserLookPick = ParserPrefs.LookOf(p.Look);
         _parserActiveChk.IsChecked = p.DpsActive;
         _parserExpandedChk.IsChecked = p.Expanded;
+        _parserCritChk.IsChecked = p.CritNow != "none" || p.BackNow != "none";
         // the slider shows the saved width; opening Settings never moves the meter (it reset the meter to the base width,
         // dropping the expanded meter's extra: Steven, 2026-11-15, "should never revert unless you change it")
         _parserWidthLoading = true;
@@ -75,10 +76,22 @@ public partial class OptionsWindow
         p.Look = _parserLookPick;
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
+        // crit and back attacks: the switch picks the kinds the hits carry (crit: result 3, back: side 1); off is the release's default (none)
+        CritSwitch(p, _parserCritChk.IsChecked == true);
         // the slider's width only when it was moved here: a width dragged on the overlay since stays
         if (_parserWidth != null && Math.Round(_parserWidth.Value) != Math.Round(_parserWidthLoaded)) { p.Width = Math.Round(_parserWidth.Value); p.WidthPicked = true; }
         p.Save();
         ParserPrefs.RaiseSaved();
+    }
+
+    /// <summary>
+    /// The crit and back-attack switch into the settings: on picks the kinds (crit result 3, back side 1); off writes null
+    /// while the release's default is none, so a release that turns them on reaches the player, and "none" once it isn't.
+    /// </summary>
+    internal static void CritSwitch(ParserPrefs p, bool on)
+    {
+        p.CritSource = on ? ParserPrefs.CritPick : ParserPrefs.CritDefault == "none" ? null : "none";
+        p.BackSource = on ? ParserPrefs.BackPick : ParserPrefs.BackDefault == "none" ? null : "none";
     }
 
     void BuildParser()
@@ -108,6 +121,7 @@ public partial class OptionsWindow
         _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls and runs: how many in the figures line, each member's in the record's group. Every fight always shows your deaths.", "Parser deaths");
         _parserKillsChk = Row("Kills near you", "Enemies that died near you during boss pulls and runs. Every fight always shows your kills.", "Parser kills near you");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
+        _parserCritChk = Row("Crit and back-attack rates", "Each member's crit rate, their crits' share of the damage and their biggest crit, and how often they hit from behind, with each skill's own rates, on the Parser page and in the overlay's pop-up on a member. New: close but still being checked against the game's Combat Analysis.", "Parser crit and back-attack rates");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
         _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
         _parserSeparateChk.Click += (_, _) => DrawParserLooks();
@@ -296,7 +310,10 @@ public partial class OptionsWindow
     /// <summary>For the options test: the Parser group's switches.</summary>
     internal (CheckBox Details, CheckBox Kills, CheckBox Deaths, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk);
 
+    /// <summary>For the options test: the crit and back-attack switch.</summary>
+    internal CheckBox ParserCritForTest => _parserCritChk;
+
     /// <summary>For the options test: every switch's title in the Parser group.</summary>
-    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk }
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }
