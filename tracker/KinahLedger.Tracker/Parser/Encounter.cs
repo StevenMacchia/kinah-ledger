@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using KinahLedger.Packets;
 
 namespace KinahLedger.Parser;
@@ -68,11 +68,11 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>A reason for uncredited damage in the coverage hover's words (DamageDealt.Reason, 1 to 7).</summary>
     public static string WhyWords(int reason) => reason switch
     {
-        1 or 2 or 3 => "a moment the tracker missed",
-        4 => "someone outside the group",
-        5 => "the boss's surroundings (not a player)",
-        6 or 7 => "an attacker the tracker couldn't place",
-        _ => "another reason",
+        1 or 2 or 3 => Ui.L.T("a moment the tracker missed"),
+        4 => Ui.L.T("someone outside the group"),
+        5 => Ui.L.T("the boss's surroundings (not a player)"),
+        6 or 7 => Ui.L.T("an attacker the tracker couldn't place"),
+        _ => Ui.L.T("another reason"),
     };
     /// <summary>
     /// Each member's damage to the boss is kept apart from their damage to everything (Fighter.BossDamage): records kept
@@ -130,10 +130,13 @@ public sealed class Encounter : IJsonOnDeserialized
     /// What the record is called: a pull its boss, a run its instance, a fight its boss, else the player you fought ("vs
     /// Kaelith"), else "PvP fight" or "Fight".
     /// </summary>
-    [JsonIgnore] public string Title => ModeKind switch
+    /// <summary>The fight's name in English, always (the logs): <see cref="Title"/> is the one shown.</summary>
+    [JsonIgnore] public string TitleWord => TitleIn(english: true);
+    [JsonIgnore] public string Title => TitleIn(english: false);
+    string TitleIn(bool english) => ModeKind switch
     {
-        ParserMode.Run => BossBook.Strip(Instance).Length > 0 ? BossBook.Strip(Instance) : "Run",
-        ParserMode.Fights => Boss.Length > 0 ? Boss : Opponent.Length > 0 ? "vs " + Opponent : PlayerKills > 0 ? "PvP fight" : "Fight",
+        ParserMode.Run => BossBook.Strip(Instance).Length > 0 ? BossBook.Strip(Instance) : english ? "Run" : Ui.L.T("Run"),
+        ParserMode.Fights => Boss.Length > 0 ? Boss : Opponent.Length > 0 ? (english ? "vs " + Opponent : Ui.L.F("vs {0}", Opponent)) : PlayerKills > 0 ? (english ? "PvP fight" : Ui.L.T("PvP fight")) : english ? "Fight" : Ui.L.T("Fight"),
         _ => Boss,
     };
 
@@ -357,8 +360,8 @@ public sealed class Encounter : IJsonOnDeserialized
 
     /// <summary>"Total 10.5M · Group DPS 126.8K" (live) or "Total 10.5M · Group 126.8K · Avg. DPS" (held): the foot's words, as every look draws them.</summary>
     public string FootText(DateTime now) => !HasDamage ? "" : HeldAverage
-        ? $"Total {Ui.Amounts.Short(Credited)} · Group {GroupDpsText(End ?? now)} · {AvgBadge}"
-        : $"Total {Ui.Amounts.Short(Credited)} · Group DPS {GroupDpsText(now)}";
+        ? Ui.L.F("Total {0} · Group {1} · {2}", Ui.Amounts.Short(Credited), GroupDpsText(End ?? now), Ui.L.T(AvgBadge))
+        : Ui.L.F("Total {0} · Group DPS {1}", Ui.Amounts.Short(Credited), GroupDpsText(now));
 
     /// <summary>The held figure's badge.</summary>
     public const string AvgBadge = "Avg. DPS";
@@ -440,7 +443,7 @@ public sealed class Encounter : IJsonOnDeserialized
     public const int BigHitAfter = 8;
 
     /// <summary>What a ready card says under its name: a dungeon waits for its first pull, the meter anywhere else for a hit.</summary>
-    [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? "Waiting for the first hit" : "Waiting for the first pull";
+    [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? Ui.L.T("Waiting for the first hit") : Ui.L.T("Waiting for the first pull");
 
     /// <summary>
     /// The rows the live card, the overlay and the list show (Steven, 2026-11-14: "don't count [a member] until they have at
@@ -467,7 +470,10 @@ public sealed class Encounter : IJsonOnDeserialized
     public static string OutcomeName(BossOutcome o) => o switch { BossOutcome.Kill => "kill", BossOutcome.Wipe => "wipe", _ => "left" };
 
     /// <summary>"Killed", "Wiped", "Left", "In progress": the outcome as the page says it.</summary>
-    [JsonIgnore] public string OutcomeLabel => Outcome switch
+    /// <summary>The outcome as shown, in the player's language (<see cref="OutcomeWord"/> is the English, for the logs).</summary>
+    [JsonIgnore] public string OutcomeLabel => Outcome == "kill" && ModeKind == ParserMode.Fights && Boss.Length == 0 && YourKills > 1 ? Ui.L.F("{0} kills", YourKills) : Ui.L.T(OutcomeWord);
+    /// <summary>The outcome in English, always: the logs and the tools that read them (log-mine) never change language.</summary>
+    [JsonIgnore] public string OutcomeWord => Outcome switch
     {
         "kill" when ModeKind == ParserMode.Fights && Boss.Length == 0 => YourKills == 1 ? "1 kill" : YourKills > 1 ? $"{YourKills} kills" : "Killed",
         "kill" => "Killed", "wipe" => "Wiped", "left" => "Left", "cleared" => "Cleared", "died" => "Died", "ended" => "Ended", _ => "In progress",

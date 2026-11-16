@@ -71,13 +71,13 @@ public partial class MainWindow
         if (_parserFromRuns)
         {
             // opened from a run on the Runs page: back goes there
-            var back = FoldLink("‹  Back to the run", BackToRuns);
+            var back = FoldLink(L.T("‹  Back to the run"), BackToRuns);
             back.Margin = new Thickness(2, 0, 0, 8);
             page.Children.Add(back);
         }
         else if (!live)
         {
-            var back = FoldLink($"‹  All {Noun(e.ModeKind, 2)}", () => OpenFight(null));
+            var back = FoldLink(L.F("‹  All {0}", Noun(e.ModeKind, 2)), () => OpenFight(null));
             back.Margin = new Thickness(2, 0, 0, 8);
             page.Children.Add(back);
         }
@@ -91,23 +91,23 @@ public partial class MainWindow
         if (live && e.OpenWorld && e.You is { Damage: > 0 })
         {
             // farming: your live DPS, rolling (refreshed ten times a second by FarmTick)
-            var stat = PStat("Your DPS now", FarmDpsText(now) is { Length: > 0 } t0 ? t0 : FarmFigure(e.FarmDps()), "Ink", $"last {BossParser.RollSeconds:0} s");
+            var stat = PStat(L.T("Your DPS now"), FarmDpsText(now) is { Length: > 0 } t0 ? t0 : FarmFigure(e.FarmDps()), "Ink", L.F("last {0:0} s", BossParser.RollSeconds));
             _parserFarmNow = ((StackPanel)stat.Child).Children.OfType<TextBlock>().ElementAt(1);
             System.Windows.Documents.Typography.SetNumeralAlignment(_parserFarmNow, FontNumeralAlignment.Tabular);
             _parserFarmNow.MinWidth = 44;
             extras.Add(Margin(stat, 0, 10, 0, 0));
         }
-        if (live && e.OpenWorld) extras.Add(Margin(PT("Shown while it lasts. Open-world and Abyss fights are never kept.", 11.5, FontWeights.Medium, "Faint"), 0, 8, 0, 0));
+        if (live && e.OpenWorld) extras.Add(Margin(PT(L.T("Shown while it lasts. Open-world and Abyss fights are never kept."), 11.5, FontWeights.Medium, "Faint"), 0, 8, 0, 0));
         if (!live)
         {
             // the timings, and why it's partial when it is
             var local = e.Start.ToLocalTime();
-            var startWord = e.ModeKind switch { ParserMode.Run => "Entered", ParserMode.Fights => "Started", _ => "Pulled" };
-            var endWord = e.ModeKind == ParserMode.Run ? "Left" : "Ended";
-            extras.Add(Margin(PT($"{startWord} {local.ToString("ddd MMM d, HH:mm:ss", CultureInfo.InvariantCulture)}  ·  {endWord} {end.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}", 12, FontWeights.Medium, "Muted", trim: true), 0, 10, 0, 0));
+            var startWord = e.ModeKind switch { ParserMode.Run => L.T("Entered"), ParserMode.Fights => L.T("Started"), _ => L.T("Pulled") };
+            var endWord = e.ModeKind == ParserMode.Run ? L.T("Left") : L.T("Ended");
+            extras.Add(Margin(PT(L.F("{0} {1}  ·  {2} {3}", startWord, L.DayTime(local), endWord, end.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)), 12, FontWeights.Medium, "Muted", trim: true), 0, 10, 0, 0));
             if (e.Partial)
             {
-                var why = PT($"Partial: {string.Join("; ", e.PartialWhy)}. Still one {Noun(e.ModeKind)}; its damage and kills may be short.", 12, FontWeights.Medium, "Warn");
+                var why = PT(L.F("Partial: {0}. Still one {1}; its damage and kills may be short.", ParserCommand.WhyText(e), Noun(e.ModeKind)), 12, FontWeights.Medium, "Warn");
                 why.TextWrapping = TextWrapping.Wrap; why.Margin = new Thickness(0, 4, 0, 0);
                 extras.Add(why);
             }
@@ -128,14 +128,14 @@ public partial class MainWindow
             {
                 var groups = kills.GroupBy(k => k.Name, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count()).ToList();
                 if (groups.Count == 0) return;
-                page.Children.Add(Margin(PT(head, 11, FontWeights.SemiBold, "Faint"), 4, 12, 0, 4));
+                page.Children.Add(Margin(PT(L.T(head), 11, FontWeights.SemiBold, "Faint"), 4, 12, 0, 4));
                 var wp = new WrapPanel { Margin = new Thickness(4, 0, 0, 0) };
                 foreach (var g in groups) { var c = PChip(g.Count() > 1 ? $"{g.First().Name} ×{g.Count()}" : g.First().Name, "Text2", "ChipBg"); c.Margin = new Thickness(0, 0, 6, 4); wp.Children.Add(c); }
                 page.Children.Add(wp);
             }
             if (PKills || e.ModeKind == ParserMode.Fights) KillChips("Your kills", e.Kills.Where(k => k.Yours));
             if (PKills) KillChips("Kills near you", e.Kills.Where(k => !k.Boss && !k.Yours));
-            if (!e.HasDamage) page.Children.Add(Margin(PT($"No damage was seen for this {Noun(e.ModeKind)}, so none is shown.", 11.5, FontWeights.Medium, "Faint"), 4, 10, 0, 0));
+            if (!e.HasDamage) page.Children.Add(Margin(PT(L.F("No damage was seen for this {0}, so none is shown.", Noun(e.ModeKind)), 11.5, FontWeights.Medium, "Faint"), 4, 10, 0, 0));
         }
         return page;
     }

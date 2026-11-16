@@ -43,17 +43,18 @@ public partial class MainWindow
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         ApplyView();   // the run card, the summary and the tables follow the first-run screen
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        if (on) WelcomeHint.Text = HasServer ? "" : "Pick your server to continue.";
+        if (on) WelcomeHint.Text = HasServer ? "" : L.T("Pick your server to continue.");
     }
 
     /// <summary>The welcome card's last line: what to do once Continue is pressed, with the in-game key when one is set.</summary>
     internal static string WelcomeNextLine(string hotkey) =>
-        "Then: open Aion 2, keep the chat on screen, and press Start run" + (hotkey.Length > 0 ? $" (or {hotkey} in the game)." : ".");
+        hotkey.Length > 0 ? L.F("Then: open Aion 2, keep the chat on screen, and press Start run (or {0} in the game).", hotkey)
+                          : L.T("Then: open Aion 2, keep the chat on screen, and press Start run.");
 
     /// <summary>The server step's Continue: on to the look step, once a server is picked.</summary>
     void WelcomeServerDone()
     {
-        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Warn"); return; }
+        if (_wServer == null) { WelcomeHint.Text = L.T("Pick your server to continue."); WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Warn"); return; }
         _wLook = HudLook;   // Buddy on a new install (HudLooks.Default)
         WelcomeCard.Visibility = Visibility.Collapsed;
         WelcomeLookCard.Visibility = Visibility.Visible;
@@ -74,7 +75,7 @@ public partial class MainWindow
         SetWelcome(false);
         // first run: check the chat, the loot list and the HP bar read, step by step; then place the panel over the game
         OpenCalibration(this).Closed += (_, _) => PlacementGuideOwed();
-        Say($"Server set to {_wServer.Label} · {_wServer.Region.Name}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", "Good");
+        Say(L.F("Server set to {0} · {1}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", _wServer.Label, _wServer.Region.Name), "Good");
     }
 
     /* ---------------- the look step ---------------- */
@@ -215,7 +216,7 @@ public partial class MainWindow
             ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.Label} · {srv.Region.Name}"; WelcomeHint.Foreground = B("Good"); }));
         }
         WelcomeGo.IsEnabled = _wServer != null;
-        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }
+        if (_wServer == null) { WelcomeHint.Text = L.T("Pick your server to continue."); WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }
     }
 
     /* ---------------- skins ---------------- */

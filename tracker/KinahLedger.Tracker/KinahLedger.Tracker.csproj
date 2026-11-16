@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.10.124</Version>
+    <Version>0.10.125</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -58,6 +58,7 @@
   <ItemGroup>
     <!-- the window and tray take their sizes from this copy of the exe's icon (Ui/Native.cs) -->
     <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+    <EmbeddedResource Include="Lang\**\*.json" LogicalName="lang/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- the tracker's three sounds (tools/make-chime.js): a drop, a price alert's knock, an update ready -->
     <EmbeddedResource Include="chime.wav" LogicalName="chime.wav" />
     <EmbeddedResource Include="alert.wav" LogicalName="alert.wav" />

@@ -250,19 +250,19 @@ public sealed class ParserOverlay : Window
     internal ContextMenu BuildMenu()
     {
         var menu = new ContextMenu { Background = HudKit.B(HudKit.Panel2C), BorderBrush = HudKit.FrameLine, Foreground = HudKit.Ink, FontFamily = HudKit.Text, FontSize = 12.5, Padding = new Thickness(2, 4, 2, 4) };
-        menu.Items.Add(new MenuItem { Header = "What the Parser keeps", IsEnabled = false, Foreground = HudKit.Faint, FontSize = 11.5 });
+        menu.Items.Add(new MenuItem { Header = L.T("What the Parser keeps"), IsEnabled = false, Foreground = HudKit.Faint, FontSize = 11.5 });
         foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
         {
-            var item = new MenuItem { Header = BossParser.Name(md), IsCheckable = true, IsChecked = md == Mode, ToolTip = BossParser.Counts(md), Foreground = HudKit.Ink };
+            var item = new MenuItem { Header = L.T(BossParser.Name(md)), IsCheckable = true, IsChecked = md == Mode, ToolTip = L.T(BossParser.Counts(md)), Foreground = HudKit.Ink };
             var pick = md;
             item.Click += (_, _) => ModePicked?.Invoke(pick);
             menu.Items.Add(item);
         }
         menu.Items.Add(new Separator { Background = HudKit.FrameLine });
-        var hide = new MenuItem { Header = HotkeyText.Length > 0 ? $"Hide the overlay ({HotkeyText})" : "Hide the overlay", Foreground = HudKit.Ink };
+        var hide = new MenuItem { Header = HotkeyText.Length > 0 ? L.F("Hide the overlay ({0})", HotkeyText) : L.T("Hide the overlay"), Foreground = HudKit.Ink };
         hide.Click += (_, _) => HideAsked?.Invoke();
         menu.Items.Add(hide);
-        var through = new MenuItem { Header = "Let clicks through to the game", Foreground = HudKit.Ink, ToolTip = "Drag the handle on its top edge to move it then; turn it off again on the Parser tab" };
+        var through = new MenuItem { Header = L.T("Let clicks through to the game"), Foreground = HudKit.Ink, ToolTip = L.T("Drag the handle on its top edge to move it then; turn it off again on the Parser tab") };
         through.Click += (_, _) => ClickThroughAsked?.Invoke();
         menu.Items.Add(through);
         return menu;
@@ -278,7 +278,7 @@ public sealed class ParserOverlay : Window
     void ShowHint()
     {
         // the edges widen it (either mode): said in the hint, the one place it can be found
-        _hint.Text = _clickThrough ? "drag the handle to move  ·  an edge to resize" : HotkeyText.Length > 0 ? $"drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {HotkeyText} hides it" : "drag to move  ·  an edge to resize  ·  right-click for the mode";
+        _hint.Text = _clickThrough ? L.T("drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the mode");
         _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -590,13 +590,13 @@ public sealed class ParserPanel : Border
         head.Children.Add(art);
         var name = T(e.Title, _glass ? 14 : 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(name, 1); head.Children.Add(name);
-        var clock = e.Waiting ? T("Ready", 13, FontWeights.SemiBold, HudKit.Muted) : Num(BossParser.Clock(e.Duration(now)), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
+        var clock = e.Waiting ? T(L.T("Ready"), 13, FontWeights.SemiBold, HudKit.Muted) : Num(BossParser.Clock(e.Duration(now)), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
         var where = e.Where;
         // the mode, said once at the head of the sub line, so a glance tells a run from a pull
-        var mode = e.Always ? "Always on" : BossParser.Name(e.ModeKind);
+        var mode = e.Always ? L.T("Always on") : L.T(BossParser.Name(e.ModeKind));
         var sub = T(where.Length > 0 ? $"{mode} · {where}" : mode, 11, FontWeights.Medium, HudKit.Faint);
         sub.TextTrimming = TextTrimming.CharacterEllipsis; sub.Margin = new Thickness(30, 1, 0, 0);
         if (e.Partial)
@@ -604,7 +604,7 @@ public sealed class ParserPanel : Border
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = sub.Margin };
             sub.Margin = new Thickness(0);
             row.Children.Add(sub);
-            row.Children.Add(T("  ·  partial", 11, FontWeights.SemiBold, HudKit.Warn));
+            row.Children.Add(T(L.T("  ·  partial"), 11, FontWeights.SemiBold, HudKit.Warn));
             row.ToolTip = string.Join("; ", e.PartialWhy);
             _body.Children.Add(row);
         }
@@ -628,7 +628,7 @@ public sealed class ParserPanel : Border
                 now1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 now1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var nl = new StackPanel { Orientation = Orientation.Horizontal };
-                nl.Children.Add(T("Now", 11, FontWeights.SemiBold, HudKit.Gold));
+                nl.Children.Add(T(L.T("Now"), 11, FontWeights.SemiBold, HudKit.Gold));
                 var nb = T(pull.Boss, 12, FontWeights.Bold, HudKit.Ink); nb.Margin = new Thickness(6, 0, 0, 0); nb.TextTrimming = TextTrimming.CharacterEllipsis; nb.MaxWidth = 220;
                 nl.Children.Add(nb);
                 now1.Children.Add(nl);
@@ -655,8 +655,8 @@ public sealed class ParserPanel : Border
         if (e.ModeKind == ParserMode.Fights && (e.YourKills > 0 || e.YourDeaths > 0))
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-            if (e.YourKills > 0) line.Children.Add(T($"{e.YourKills} kill{(e.YourKills == 1 ? "" : "s")}{(e.PlayerKills > 0 ? $" · {e.PlayerKills} player{(e.PlayerKills == 1 ? "" : "s")}" : "")}", 12, FontWeights.Bold, HudKit.Mint));
-            if (e.YourDeaths > 0) { var d = T($"{(e.YourKills > 0 ? "   " : "")}{e.YourDeaths} death{(e.YourDeaths == 1 ? "" : "s")}", 12, FontWeights.Bold, Coral); line.Children.Add(d); }
+            if (e.YourKills > 0) line.Children.Add(T((e.YourKills == 1 ? L.F("{0} kill", e.YourKills) : L.F("{0} kills", e.YourKills)) + (e.PlayerKills > 0 ? " · " + (e.PlayerKills == 1 ? L.F("{0} player", e.PlayerKills) : L.F("{0} players", e.PlayerKills)) : ""), 12, FontWeights.Bold, HudKit.Mint));
+            if (e.YourDeaths > 0) { var d = T((e.YourKills > 0 ? "   " : "") + (e.YourDeaths == 1 ? L.F("{0} death", e.YourDeaths) : L.F("{0} deaths", e.YourDeaths)), 12, FontWeights.Bold, Coral); line.Children.Add(d); }
             _body.Children.Add(line);
         }
 
@@ -700,13 +700,13 @@ public sealed class ParserPanel : Border
             var took = BossParser.Clock(e.Duration(now));
             var (text, brush) = e.Outcome switch
             {
-                "kill" when e.ModeKind == ParserMode.Fights => ($"{e.OutcomeLabel} in {took}", HudKit.Mint),
-                "kill" => ($"Killed in {took}", HudKit.Mint),
-                "cleared" => ($"Cleared in {took}", HudKit.Mint),
-                "wipe" => ($"Wiped after {took}", Coral),
-                "died" => ($"Died after {took}", Coral),
-                "ended" => ($"Ended after {took}", HudKit.Muted),
-                _ => ($"Left after {took}", HudKit.Muted),
+                "kill" when e.ModeKind == ParserMode.Fights => (L.F("{0} in {1}", e.OutcomeLabel, took), HudKit.Mint),
+                "kill" => (L.F("Killed in {0}", took), HudKit.Mint),
+                "cleared" => (L.F("Cleared in {0}", took), HudKit.Mint),
+                "wipe" => (L.F("Wiped after {0}", took), Coral),
+                "died" => (L.F("Died after {0}", took), Coral),
+                "ended" => (L.F("Ended after {0}", took), HudKit.Muted),
+                _ => (L.F("Left after {0}", took), HudKit.Muted),
             };
             outcome = T(text, 12, FontWeights.Bold, brush);
         }
@@ -720,7 +720,7 @@ public sealed class ParserPanel : Border
         else
         {
             int near = e.Kills.Count(k => !k.Boss && !k.Yours);
-            foot.Children.Add(T(e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting", 12, FontWeights.SemiBold, HudKit.Muted));
+            foot.Children.Add(T(L.T(e.YourKills > 0 ? "Your kills" : near > 0 ? "Kills near you" : "Fighting"), 12, FontWeights.SemiBold, HudKit.Muted));
             var v = T(e.YourKills > 0 ? e.YourKills.ToString(CultureInfo.InvariantCulture) : near > 0 ? near.ToString(CultureInfo.InvariantCulture) : "", 14, FontWeights.Bold, HudKit.Ink);
             Typography.SetNumeralAlignment(v, FontNumeralAlignment.Tabular);
             Grid.SetColumn(v, 1); foot.Children.Add(v);
@@ -730,7 +730,7 @@ public sealed class ParserPanel : Border
     }
 
     /// <summary>"1.82M left": the boss's HP left, or "" when the game hasn't given its HP.</summary>
-    public static string HpLeft(Encounter e) => e.BossMaxHp > 0 ? $"{Amounts.Short(Math.Max(0, e.BossHp))} left" : "";
+    public static string HpLeft(Encounter e) => e.BossMaxHp > 0 ? L.F("{0} left", Amounts.Short(Math.Max(0, e.BossHp))) : "";
 
     /// <summary>"47% · 1.82M left": the share in <paramref name="pctInk"/>, bold, and the HP left after it in <paramref name="restInk"/>; tabular digits.</summary>
     public static TextBlock HpText(Encounter e, double size, Brush pctInk, Brush restInk)

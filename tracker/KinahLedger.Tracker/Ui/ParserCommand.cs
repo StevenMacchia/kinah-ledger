@@ -40,17 +40,17 @@ static class ParserCommand
     const double Wd = 630;
     static Brush Ink => K("Ink"); static Brush Muted => K("Muted"); static Brush Faint => K("Faint"); static Brush Text2 => K("Text2");
     static Brush Hair => K("CardHair"); static Brush Track => K("Bg");
-    static string Rank(int r) => r switch { 1 => "1st", 2 => "2nd", 3 => "3rd", _ => r + "th" };
+    static string Rank(int r) => r switch { 1 => L.T("1st"), 2 => L.T("2nd"), 3 => L.T("3rd"), _ => L.F("{0}th", r) };
     static TextBlock Num(string s, double size, Brush b, FontWeight? w = null) { var t = T(s, size, b, w ?? FontWeights.SemiBold, tab: true); t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
     static TextBlock Head(string text, bool sorted = false, bool right = true)
     {
-        var t = T(text, 11, sorted ? GoldInk : Faint, FontWeights.SemiBold, trim: false);
+        var t = T(L.T(text), 11, sorted ? GoldInk : Faint, FontWeights.SemiBold, trim: false);
         if (sorted) t.Inlines.Add(new System.Windows.Documents.Run(" ▾") { FontSize = 9 });
         if (right) t.HorizontalAlignment = HorizontalAlignment.Right;
         return t;
     }
     static Border YouTag() => new() { CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(6, 0, 0, 0), Background = GoldInk, VerticalAlignment = VerticalAlignment.Center,
-        Child = T("you", 10, C(Color.FromRgb(0x1D, 0x13, 0)), FontWeights.Bold) };
+        Child = T(L.T("you"), 10, C(Color.FromRgb(0x1D, 0x13, 0)), FontWeights.Bold) };
     static Border Tag(string text, Color c) => new() { CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 0, 6, 1), Margin = new Thickness(6, 0, 0, 0), Background = C(c, 0.16), BorderBrush = C(c, 0.6), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center,
         Child = T(text, 10, C(c), FontWeights.Bold) };
     static Border Quiet(string text) => new() { Margin = new Thickness(6, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = T(text, 11, Faint) };
@@ -97,7 +97,7 @@ static class ParserCommand
         var grp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         if (v.HasDamage)
         {
-            grp.Children.Add(T(e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit) ? "Group DPS on boss pulls" : "Group DPS", 12, Muted, FontWeights.SemiBold));
+            grp.Children.Add(T(e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit) ? L.T("Group DPS on boss pulls") : L.T("Group DPS"), 12, Muted, FontWeights.SemiBold));
             string gtext = v.GroupDpsOrNull is { } g0 ? Int(g0) : "–";   // under 3 s no figure yet
             var big = T(gtext, 50, Ink, FontWeights.Bold, tab: true, trim: false); big.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
             if (live && v.GroupDpsOrNull is { } g1) Motion.Number(big, $"parser|gdps|{e.Id}", g1, x => Int(x), tintRise: -1);
@@ -109,16 +109,16 @@ static class ParserCommand
         if (v.HasDamage && v.You is { Damage: > 0 } you)
         {
             var ys = new StackPanel();
-            ys.Children.Add(T($"You  ·  {Rank(you.Rank)} of {v.Members.Count(m => m.Damage > 0)}", 12, GoldInk, FontWeights.Bold));
+            ys.Children.Add(T(L.F("You  ·  {0} of {1}", Rank(you.Rank), v.Members.Count(m => m.Damage > 0)), 12, GoldInk, FontWeights.Bold));
             var yd = T("", 30, GoldInk, FontWeights.Bold, tab: true, trim: false); yd.Inlines.Add(R(you.DpsOrNull is { } yv ? Int(yv) : "–", 30, GoldInk, FontWeights.Bold)); yd.Inlines.Add(R(" DPS", 12, GoldInk, FontWeights.SemiBold));
             ys.Children.Add(yd);
             // against your best kill of this boss and your last pull of it (kept on this PC)
             var cmp = T("", 11.5, Muted);
-            if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; cmp.Inlines.Add(R(Signed(d), 11.5, C(d >= 0 ? Mint : Coral), FontWeights.Bold)); cmp.Inlines.Add(R(" best", 11.5, Muted)); }
-            if (v.Last != null) { double d = you.Dps / v.Last.Dps - 1; if (v.Best != null) cmp.Inlines.Add(R("  ·  ", 11.5, Faint)); cmp.Inlines.Add(R(Signed(d), 11.5, C(d >= 0 ? Mint : Coral), FontWeights.Bold)); cmp.Inlines.Add(R(" last", 11.5, Muted)); }
-            if (v.Best == null && v.Last == null) cmp.Inlines.Add(R($"{Pct(you.Share)} of the group's damage", 11.5, Muted));
+            if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; cmp.Inlines.Add(R(Signed(d), 11.5, C(d >= 0 ? Mint : Coral), FontWeights.Bold)); cmp.Inlines.Add(R(L.T(" best"), 11.5, Muted)); }
+            if (v.Last != null) { double d = you.Dps / v.Last.Dps - 1; if (v.Best != null) cmp.Inlines.Add(R("  ·  ", 11.5, Faint)); cmp.Inlines.Add(R(Signed(d), 11.5, C(d >= 0 ? Mint : Coral), FontWeights.Bold)); cmp.Inlines.Add(R(L.T(" last"), 11.5, Muted)); }
+            if (v.Best == null && v.Last == null) cmp.Inlines.Add(R(L.F("{0} of the group's damage", Pct(you.Share)), 11.5, Muted));
             ys.Children.Add(cmp);
-            if (v.Best != null || v.Last != null) cmp.ToolTip = ctx.Tip($"Against your {(v.Best != null ? $"best kill of {e.Boss} ({Int(v.Best.Dps)} DPS, {v.Best.When.ToLocalTime():MMM d})" : "")}{(v.Best != null && v.Last != null ? " and your " : "")}{(v.Last != null ? $"last pull of it ({Int(v.Last.Dps)} DPS, {v.Last.When.ToLocalTime():MMM d})" : "")}.");
+            if (v.Best != null || v.Last != null) cmp.ToolTip = ctx.Tip(L.F("Against your {0}.", string.Concat(v.Best != null ? L.F("best kill of {0} ({1} DPS, {2:MMM d})", e.Boss, Int(v.Best.Dps), v.Best.When.ToLocalTime()) : "", v.Best != null && v.Last != null ? L.T(" and your ") : "", v.Last != null ? L.F("last pull of it ({0} DPS, {1:MMM d})", Int(v.Last.Dps), v.Last.When.ToLocalTime()) : "")));
             g.Children.Add(Col(M(YouFrame(ys, 12, new Thickness(12, 8, 14, 9)), 8, 0, 12, 0), 1));
         }
         if (Ring(v, live) is { } ring) g.Children.Add(Col(ring, 2));
@@ -128,8 +128,8 @@ static class ParserCommand
         {
             var hw = T("", 12.5, Muted, trim: false); Typography(hw);
             hw.Inlines.Add(R($"{Math.Round(hp * 100):0}%", 13, hp < 0.34 ? C(Coral) : Ink, FontWeights.Bold));
-            hw.Inlines.Add(R($" · {Amounts.Short(Math.Max(0, e.BossHp))} left", 12.5, Text2, FontWeights.SemiBold));
-            hw.Inlines.Add(R($" of {Amounts.Short(e.BossMaxHp)} HP", 12.5, Muted));
+            hw.Inlines.Add(R(L.F(" · {0} left", Amounts.Short(Math.Max(0, e.BossHp))), 12.5, Text2, FontWeights.SemiBold));
+            hw.Inlines.Add(R(L.F(" of {0} HP", Amounts.Short(e.BossMaxHp)), 12.5, Muted));
             AutomationProperties.SetName(hw, $"Boss HP {Math.Round(hp * 100):0}%, {Amounts.Short(Math.Max(0, e.BossHp))} left of {Amounts.Short(e.BossMaxHp)}");
             body.Children.Add(M(hw, 0, 12, 0, 6));
             var bar = HpBar(hp, 9, Track, true);
@@ -144,6 +144,16 @@ static class ParserCommand
         return hero;
     }
 
+    /// <summary>Why a record is partial, in the language in use: each reason the Parser wrote, translated ("3 moments the tracker missed" by its figure).</summary>
+    public static string WhyText(Encounter e) => string.Join("; ", e.PartialWhy.Select(w =>
+    {
+        var gaps = System.Text.RegularExpressions.Regex.Match(w, @"^(\d+) moments the tracker missed$");
+        if (gaps.Success) return L.F("{0} moments the tracker missed", int.Parse(gaps.Groups[1].Value, CultureInfo.InvariantCulture));
+        var stale = System.Text.RegularExpressions.Regex.Match(w, @"^nothing heard of it for (\d+) minutes$");
+        if (stale.Success) return L.F("nothing heard of it for {0:0} minutes", double.Parse(stale.Groups[1].Value, CultureInfo.InvariantCulture));
+        return L.T(w);
+    }));
+
     static void Typography(TextBlock t) => System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
 
     /// <summary>"Ferocious Horn Den · Conquest · Expedition · final boss": the instance and the game's mode for it, the kind, the boss's place in it.</summary>
@@ -156,8 +166,8 @@ static class ParserCommand
         int i = e.Instance.IndexOf(" [", StringComparison.Ordinal);
         var stage = i > 0 ? e.Instance[(i + 2)..].TrimEnd(']') : "";
         if (e.Kind.Length > 0) parts.Add(stage.Length > 0 ? $"{e.Kind} {stage}" : e.Kind);
-        if (e.ModeKind != ParserMode.Run && e.FinalBoss) parts.Add("final boss");
-        if (e.ModeKind == ParserMode.Run) parts.Add($"{e.Splits.Count(x => x.Outcome == "kill")} of {e.Splits.Select(x => x.Boss).Distinct().Count()} bosses down");
+        if (e.ModeKind != ParserMode.Run && e.FinalBoss) parts.Add(L.T("final boss"));
+        if (e.ModeKind == ParserMode.Run) parts.Add(L.F("{0} of {1} bosses down", e.Splits.Count(x => x.Outcome == "kill"), e.Splits.Select(x => x.Boss).Distinct().Count()));
         return string.Join(" · ", parts.Where(p => p.Length > 0));
     }
 
@@ -177,23 +187,23 @@ static class ParserCommand
         void Add(string fig, string word, Brush? tone = null)
         {
             var t = T("", 12.5, Muted, trim: false); Typography(t);
-            t.Inlines.Add(R(fig, 12.5, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + word, 12.5, Muted));
+            t.Inlines.Add(R(fig, 12.5, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + L.T(word), 12.5, Muted));
             t.Margin = new Thickness(0, 0, 16, 0);
             n0++;
             wp.Children.Add(t);
         }
         if (v.HasDamage) Add(Amounts.Short(v.Members.Sum(m => m.Damage)), "damage");
         // a boss under way: its HP left of its whole (the ring holds the share)
-        if (e.Live && e.ModeKind == ParserMode.Bosses && e.BossHpLeft != null && e.BossMaxHp > 0) Add(Amounts.Short(Math.Max(0, e.BossHp)), $"of {Amounts.Short(e.BossMaxHp)} HP left");
+        if (e.Live && e.ModeKind == ParserMode.Bosses && e.BossHpLeft != null && e.BossMaxHp > 0) Add(Amounts.Short(Math.Max(0, e.BossHp)), L.F("of {0} HP left", Amounts.Short(e.BossMaxHp)));
         if (v.Deaths > 0 && (ctx.Deaths || e.ModeKind == ParserMode.Fights)) Add(v.Deaths.ToString(CultureInfo.InvariantCulture), v.Deaths == 1 ? "death" : "deaths", C(Coral));
         int near = e.Kills.Count(k => !k.Boss && !k.Yours);
         if (ctx.Kills && near > 0 && e.ModeKind != ParserMode.Fights) Add(near.ToString(CultureInfo.InvariantCulture), "kills near you");
-        if (e.ModeKind == ParserMode.Fights && e.YourKills > 0) Add(e.YourKills.ToString(CultureInfo.InvariantCulture), e.PlayerKills > 0 ? $"kills, {e.PlayerKills} player{(e.PlayerKills == 1 ? "" : "s")}" : e.YourKills == 1 ? "kill" : "kills", C(Mint));
+        if (e.ModeKind == ParserMode.Fights && e.YourKills > 0) Add(e.YourKills.ToString(CultureInfo.InvariantCulture), e.PlayerKills > 0 ? L.F(e.PlayerKills == 1 ? "kills, {0} player" : "kills, {0} players", e.PlayerKills) : e.YourKills == 1 ? "kill" : "kills", C(Mint));
         if (!v.HasDamage && ctx.Details && e.Members.Any(f => f.CombatPower > 0)) Add(((int)Math.Round(e.Members.Where(f => f.CombatPower > 0).Average(f => f.CombatPower))).ToString("N0", CultureInfo.InvariantCulture), "average CP");
         if (e.Partial)
         {
-            var p = Tag("Partial", Color.FromRgb(0xF7, 0xA0, 0x72));
-            p.ToolTip = ctx.Tip($"Some of it wasn't seen: {string.Join("; ", e.PartialWhy)}. Its damage and kills may be short.");
+            var p = Tag(L.T("Partial"), Color.FromRgb(0xF7, 0xA0, 0x72));
+            p.ToolTip = ctx.Tip(L.F("Some of it wasn't seen: {0}. Its damage and kills may be short.", WhyText(e)));
             wp.Children.Add(M(p, n0 > 0 ? 4 : 0, 0, 0, 0));
         }
         return wp;
@@ -204,9 +214,9 @@ static class ParserCommand
     {
         var e = v.E;
         if (e.ModeKind != ParserMode.Bosses) return null;
-        if (live && e.BossHpLeft is { } hp) { var r = HpRing(108, 10, hp, hp < 0.34 ? Coral : Gold, $"{Math.Round(hp * 100):0}%", "HP left"); AutomationProperties.SetName(r, $"Boss HP {Math.Round(hp * 100):0}%, {Amounts.Short(Math.Max(0, e.BossHp))} left of {Amounts.Short(e.BossMaxHp)}"); return r; }
-        if (!live && e.Outcome == "kill") return HpRing(108, 10, 1, Mint, BossParser.Clock(e.Duration(v.Now)), "killed");
-        if (!live && e.Outcome == "wipe" && e.BossHpLeft is { } w) return HpRing(108, 10, w, Coral, $"{Math.Round(w * 100):0}%", "HP left");
+        if (live && e.BossHpLeft is { } hp) { var r = HpRing(108, 10, hp, hp < 0.34 ? Coral : Gold, $"{Math.Round(hp * 100):0}%", L.T("HP left")); AutomationProperties.SetName(r, $"Boss HP {Math.Round(hp * 100):0}%, {Amounts.Short(Math.Max(0, e.BossHp))} left of {Amounts.Short(e.BossMaxHp)}"); return r; }
+        if (!live && e.Outcome == "kill") return HpRing(108, 10, 1, Mint, BossParser.Clock(e.Duration(v.Now)), L.T("killed"));
+        if (!live && e.Outcome == "wipe" && e.BossHpLeft is { } w) return HpRing(108, 10, w, Coral, $"{Math.Round(w * 100):0}%", L.T("HP left"));
         return null;
     }
 
@@ -240,7 +250,7 @@ static class ParserCommand
             bool lit = t == ctx.Tab;
             var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 4, 12, 5), Margin = new Thickness(0, 0, 4, 0), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, Focusable = true,
                 Background = lit ? K("Card2") : Brushes.Transparent, BorderBrush = lit ? K("LineStrong") : Brushes.Transparent,
-                Child = T(t, 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold) };
+                Child = T(L.T(t), 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold) };
             AutomationProperties.SetName(b, $"Parser view: {t}");
             var pick = t;
             b.MouseLeftButtonUp += (_, _) => ctx.SetTab(pick);
@@ -262,7 +272,7 @@ static class ParserCommand
     {
         var e = v.E;
         var body = new StackPanel();
-        if (v.Members.Count == 0) { body.Children.Add(T("The group wasn't seen.", 12, Faint)); return Glass(body, new Thickness(14, 12, 14, 12), 14); }
+        if (v.Members.Count == 0) { body.Children.Add(T(L.T("The group wasn't seen."), 12, Faint)); return Glass(body, new Thickness(14, 12, 14, 12), 14); }
         bool dmg = v.HasDamage, dmgCol = dmg && (detail || ctx.Details), crit = v.HasCrit, max = v.HasMax, spark = v.HasTimeline;
         var widths = new List<double> { 30, 38, -1 };
         if (dmgCol) widths.Add(70);
@@ -299,18 +309,18 @@ static class ParserCommand
             var nm = T(ParserRows.NameOf(m.F), 13.5, m.F.Name.Length > 0 || m.F.You ? ClassArt.NameBrush(m.F.Class, Dark) : Muted, FontWeights.SemiBold);
             nl.Children.Add(nm);
             if (m.You) nl.Children.Add(YouTag());
-            if (m.Deaths > 0 && ctx.Deaths) { var dt = Tag(m.Deaths == 1 ? "✕ died" : $"✕ {m.Deaths} deaths", Coral); if (m.DeathLog.Count > 0) dt.ToolTip = DeathTip(m); nl.Children.Add(dt); }
+            if (m.Deaths > 0 && ctx.Deaths) { var dt = Tag(m.Deaths == 1 ? L.T("✕ died") : L.F("✕ {0} deaths", m.Deaths), Coral); if (m.DeathLog.Count > 0) dt.ToolTip = DeathTip(m); nl.Children.Add(dt); }
             // joined late or left, whether or not damage was dealt by then; when, on hover
-            if (m.F.Late) { var q = Quiet("joined late"); if (m.F.JoinedAt is { } ja) q.ToolTip = $"Joined {BossParser.Clock(ja - e.Start)} in"; nl.Children.Add(q); }
-            if (m.F.Gone) { var q = Quiet("left"); if (m.F.LeftAt is { } la) q.ToolTip = $"Left {BossParser.Clock(la - e.Start)} in"; nl.Children.Add(q); }
-            if (dmg && m.Damage <= 0) nl.Children.Add(Quiet("no damage"));
+            if (m.F.Late) { var q = Quiet(L.T("joined late")); if (m.F.JoinedAt is { } ja) q.ToolTip = L.F("Joined {0} in", BossParser.Clock(ja - e.Start)); nl.Children.Add(q); }
+            if (m.F.Gone) { var q = Quiet(L.T("left")); if (m.F.LeftAt is { } la) q.ToolTip = L.F("Left {0} in", BossParser.Clock(la - e.Start)); nl.Children.Add(q); }
+            if (dmg && m.Damage <= 0) nl.Children.Add(Quiet(L.T("no damage")));
             nameBox.Children.Add(nl);
             if (ctx.Details)
             {
                 var bits = new List<string>();
                 if (m.F.Class.Length > 0) bits.Add(ClassArt.Title(m.F.Class));
-                if (m.F.CombatPower > 0) bits.Add($"{m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)} CP");
-                if (m.F.ItemLevel > 0 && !(crit || max || spark)) bits.Add($"{m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)} item level");
+                if (m.F.CombatPower > 0) bits.Add(L.F("{0} CP", m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)));
+                if (m.F.ItemLevel > 0 && !(crit || max || spark)) bits.Add(L.F("{0} item level", m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)));
                 if (bits.Count > 0) nameBox.Children.Add(T(string.Join(" · ", bits), 11, Muted));
             }
             if (dmg)
@@ -326,7 +336,7 @@ static class ParserCommand
                 string dtext = m.DpsOrNull is { } dv ? Int(dv) : "–";   // under 3 s no figure yet
                 var d = Num(dtext, 16.5, m.You ? GoldInk : Ink, FontWeights.Bold);
                 if (live && m.DpsOrNull is { } dv2) Motion.Number(d, $"parser|dps|{e.Id}|{m.F.Id}", dv2, x => Int(x), tintRise: -1);
-                d.ToolTip = $"{Amounts.Short(m.Damage)} damage in {BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(m.F, v.Now)))}{(Encounter.ActiveBasis ? " active" : "")}{(e.BossView ? ", to the boss" : "")}";
+                d.ToolTip = L.F("{0} damage in {1}{2}{3}", Amounts.Short(m.Damage), BossParser.Clock(TimeSpan.FromSeconds(e.DpsSeconds(m.F, v.Now))), Encounter.ActiveBasis ? L.T(" active") : "", e.BossView ? L.T(", to the boss") : "");
                 AutomationProperties.SetName(d, $"{dtext} DPS, {Pct(m.Share)} of the damage");
                 g.Children.Add(Col(d, cDps));
                 g.Children.Add(Col(Num(Pct(m.Share), 12.5, Text2), cShare));
@@ -370,9 +380,9 @@ static class ParserCommand
         var sp = new StackPanel { MaxWidth = 300 };
         foreach (var d in m.DeathLog.Take(2))
         {
-            sp.Children.Add(T($"Died at {BossParser.Clock(TimeSpan.FromSeconds(d.At))}{(d.Killer.Length > 0 ? $" · {d.Killer}" : "")}", 12, C(Coral), FontWeights.Bold));
+            sp.Children.Add(T(L.F("Died at {0}{1}", BossParser.Clock(TimeSpan.FromSeconds(d.At)), d.Killer.Length > 0 ? $" · {d.Killer}" : ""), 12, C(Coral), FontWeights.Bold));
             foreach (var h in d.Last)
-                sp.Children.Add(T($"−{d.At - h.At:0.0} s  {h.Source}  {Int(h.Amount)}{(h.HpAfter is { } hp ? $"  ({Math.Round(hp * 100):0}% left)" : "")}", 11.5, Ink));
+                sp.Children.Add(T(L.F("−{0:0.0} s  {1}  {2}{3}", d.At - h.At, h.Source, Int(h.Amount), h.HpAfter is { } hp ? L.F("  ({0:0}% left)", Math.Round(hp * 100)) : ""), 11.5, Ink));
         }
         return sp;
     }
@@ -404,15 +414,15 @@ static class ParserCommand
         var who = new List<string>();
         if (m.F.Class.Length > 0) who.Add(ClassArt.Title(m.F.Class));
         if (m.F.Server.Length > 0) who.Add(m.F.Server);
-        if (m.F.ItemLevel > 0) who.Add($"{m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)} item level");
-        if (m.F.CombatPower > 0) who.Add($"{m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)} Combat Power");
+        if (m.F.ItemLevel > 0) who.Add(L.F("{0} item level", m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)));
+        if (m.F.CombatPower > 0) who.Add(L.F("{0} Combat Power", m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)));
         if (who.Count > 0) mid.Children.Add(T(string.Join(" · ", who), 12.5, Muted));
         g.Children.Add(Col(mid, 1));
         var big = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
         var d = T("", 40, Ink, FontWeights.Bold, tab: true, trim: false); d.Inlines.Add(R(m.DpsOrNull is { } mv ? Int(mv) : "–", 40, m.You ? GoldInk : Ink, FontWeights.Bold)); d.Inlines.Add(R(" DPS", 14, Muted, FontWeights.SemiBold));
         d.HorizontalAlignment = HorizontalAlignment.Right; big.Children.Add(d);
         int shown = v.Members.Count(x => x.Damage > 0);
-        big.Children.Add(Num($"{Rank(m.Rank)} of {shown} · {Pct(m.Share)} of the group", 12.5, Muted, FontWeights.Medium));
+        big.Children.Add(Num(L.F("{0} of {1} · {2} of the group", Rank(m.Rank), shown, Pct(m.Share)), 12.5, Muted, FontWeights.Medium));
         g.Children.Add(Col(big, 2));
         hs.Children.Add(g);
         // the figures a min-maxer reads first: what the record has
@@ -438,14 +448,14 @@ static class ParserCommand
         var tg = new System.Windows.Controls.Primitives.UniformGrid { Columns = tiles.Count <= 6 ? tiles.Count : (tiles.Count + 1) / 2, Margin = new Thickness(-4, 14, -4, 0) };
         foreach (var (l, val, tone) in tiles)
             tg.Children.Add(new Border { CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 6, 10, 7), Margin = new Thickness(4, 0, 4, 0), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1),
-                Child = Stat(l, T(val, 17, tone, FontWeights.Bold, tab: true), "", Muted, Faint) });
+                Child = Stat(L.T(l), T(val, 17, tone, FontWeights.Bold, tab: true), "", Muted, Faint) });
         hs.Children.Add(tg);
         if (m.PerSecond is { Count: > 1 } ps)
         {
             var sl = Cols(-1, 0); sl.Margin = new Thickness(0, 12, 0, 4);
             var series = Smooth(ps.Select(x => (double)x).ToList());
             int peakAt = Array.IndexOf(series, series.Max());
-            sl.Children.Add(T("DPS over the fight", 11.5, Muted, FontWeights.SemiBold)); sl.Children.Add(Col(T($"peak {Int(series.Max())} at {BossParser.Clock(TimeSpan.FromSeconds(peakAt))}", 11.5, Faint), 1));
+            sl.Children.Add(T(L.T("DPS over the fight"), 11.5, Muted, FontWeights.SemiBold)); sl.Children.Add(Col(T(L.F("peak {0} at {1}", Int(series.Max()), BossParser.Clock(TimeSpan.FromSeconds(peakAt))), 11.5, Faint), 1));
             hs.Children.Add(sl);
             hs.Children.Add(Spark(series, Wd - 2, 46, m.You ? Gold : c, 0, 1.8, glow: true));
         }
@@ -461,7 +471,7 @@ static class ParserCommand
     {
         var body = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 8) };
-        head.Children.Add(T("Buff uptime", 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T("time up over the fight", 12, Muted), 8, 0, 0, 0));
+        head.Children.Add(T(L.T("Buff uptime"), 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T(L.T("time up over the fight"), 12, Muted), 8, 0, 0, 0));
         body.Children.Add(head);
         foreach (var (name, secs, share) in buffs.OrderByDescending(b => b.Share).Take(10))
         {
@@ -524,7 +534,7 @@ static class ParserCommand
             {
                 an.Text = "";
                 an.Inlines.Add(new System.Windows.Documents.Run(a.Name));
-                an.Inlines.Add(new System.Windows.Documents.Run("   " + (KinahLedger.Parser.Abilities.PicksText(a.Picks).Length > 1 ? "Specialties " : "Specialty ") + KinahLedger.Parser.Abilities.PicksText(a.Picks)) { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = GoldInk });
+                an.Inlines.Add(new System.Windows.Documents.Run("   " + L.T(KinahLedger.Parser.Abilities.PicksText(a.Picks).Length > 1 ? "Specialties " : "Specialty ") + KinahLedger.Parser.Abilities.PicksText(a.Picks)) { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = GoldInk });
             }
             nb.Children.Add(an);
             var bar = Bar(a.Damage / top, c, 3, Track, glow: false); bar.Margin = new Thickness(0, 4, 0, 0);
@@ -549,18 +559,18 @@ static class ParserCommand
         var you = v.You!;
         var body = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal };
-        head.Children.Add(T("Compare", 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T($"your DPS on {v.E.Boss}", 12, Muted), 8, 0, 0, 0));
+        head.Children.Add(T(L.T("Compare"), 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T(L.F("your DPS on {0}", v.E.Boss), 12, Muted), 8, 0, 0, 0));
         body.Children.Add(M(head, 0, 0, 0, 10));
         var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 1 + (v.Best != null ? 1 : 0) + (v.Last != null ? 1 : 0), Margin = new Thickness(-4, 0, -4, 10) };
         Border Tile(string label, string value, string sub, Brush tone, bool lit)
         {
-            var sp = Stat(label, T(value, 24, tone, FontWeights.Bold, tab: true), sub, Muted, Faint);
+            var sp = Stat(L.T(label), T(value, 24, tone, FontWeights.Bold, tab: true), sub, Muted, Faint);
             return lit ? M(YouFrame(sp, 10, new Thickness(12, 8, 12, 9), 0.6), 4, 0, 4, 0)
                 : M(new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 9), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1), Child = sp }, 4, 0, 4, 0);
         }
-        tiles.Children.Add(Tile("This pull", Int(you.Dps), $"{BossParser.Clock(v.E.Duration(v.Now))} · {Rank(you.Rank)} in the group", GoldInk, true));
-        if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; tiles.Children.Add(Tile("Your best kill", Int(v.Best.Dps), $"{v.Best.When.ToLocalTime():MMM d} · you're {Signed(d)}", Ink, false)); }
-        if (v.Last != null) { double d = you.Dps / v.Last.Dps - 1; tiles.Children.Add(Tile("Last pull", Int(v.Last.Dps), $"{v.Last.When.ToLocalTime():MMM d} · you're {Signed(d)}", Text2, false)); }
+        tiles.Children.Add(Tile("This pull", Int(you.Dps), L.F("{0} · {1} in the group", BossParser.Clock(v.E.Duration(v.Now)), Rank(you.Rank)), GoldInk, true));
+        if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; tiles.Children.Add(Tile("Your best kill", Int(v.Best.Dps), L.F("{0:MMM d} · you're {1}", v.Best.When.ToLocalTime(), Signed(d)), Ink, false)); }
+        if (v.Last != null) { double d = you.Dps / v.Last.Dps - 1; tiles.Children.Add(Tile("Last pull", Int(v.Last.Dps), L.F("{0:MMM d} · you're {1}", v.Last.When.ToLocalTime(), Signed(d)), Text2, false)); }
         body.Children.Add(tiles);
         var basis = v.Best ?? v.Last!;
         string basisName = v.Best != null ? "Best" : "Last";
@@ -578,7 +588,7 @@ static class ParserCommand
             r.Children.Add(Col(Num(x.Now > 0 ? Int(x.Now) : "–", 12.5, Ink, FontWeights.Bold), 2));
             r.Children.Add(Col(Num(x.Then > 0 ? Int(x.Then) : "–", 12.5, Text2), 3));
             if (x.Now > 0 && x.Then > 0) { double d = x.Now / x.Then - 1; r.Children.Add(Col(Num(Signed(d), 12.5, C(d >= 0 ? Mint : Coral), FontWeights.Bold), 4)); }
-            else r.Children.Add(Col(Num(x.Now > 0 ? "new" : "not used", 11.5, Faint), 4));
+            else r.Children.Add(Col(Num(x.Now > 0 ? L.T("new") : L.T("not used"), 11.5, Faint), 4));
             body.Children.Add(r);
         }
         return Glass(body, new Thickness(14, 12, 14, 10), 14);
@@ -591,7 +601,7 @@ static class ParserCommand
         var body = new StackPanel();
         var head = Cols(-1, 0);
         var hl = new StackPanel { Orientation = Orientation.Horizontal };
-        hl.Children.Add(T("Timeline", 13, Ink, FontWeights.SemiBold)); hl.Children.Add(M(T("DPS over the fight", 12, Muted), 8, 0, 0, 0));
+        hl.Children.Add(T(L.T("Timeline"), 13, Ink, FontWeights.SemiBold)); hl.Children.Add(M(T(L.T("DPS over the fight"), 12, Muted), 8, 0, 0, 0));
         head.Children.Add(hl);
         var legend = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var m in v.Members.Where(m => m.PerSecond != null))
@@ -637,22 +647,22 @@ static class ParserCommand
         {
             var d = m.DeathLog[0];
             var rb = new StackPanel();
-            var ht = T("", 13.5, Ink); ht.Inlines.Add(R("✕  ", 12, C(Coral), FontWeights.Bold)); ht.Inlines.Add(R(m.F.Name, 13.5, ClassArt.NameBrush(m.F.Class, Dark), FontWeights.Bold)); ht.Inlines.Add(R($" died at {BossParser.Clock(TimeSpan.FromSeconds(d.At))}", 13.5, Ink, FontWeights.SemiBold));
-            if (d.Killer.Length > 0) ht.Inlines.Add(R($"   killing blow: {d.Killer}", 12, Muted));
+            var ht = T("", 13.5, Ink); ht.Inlines.Add(R("✕  ", 12, C(Coral), FontWeights.Bold)); ht.Inlines.Add(R(m.F.Name, 13.5, ClassArt.NameBrush(m.F.Class, Dark), FontWeights.Bold)); ht.Inlines.Add(R(L.F(" died at {0}", BossParser.Clock(TimeSpan.FromSeconds(d.At))), 13.5, Ink, FontWeights.SemiBold));
+            if (d.Killer.Length > 0) ht.Inlines.Add(R(L.F("   killing blow: {0}", d.Killer), 12, Muted));
             rb.Children.Add(M(ht, 0, 0, 0, 10));
             foreach (var hit in d.Last)
             {
                 bool kb = hit == d.Last[^1];
                 var r = Cols(56, -1, 74, 170); r.MinHeight = 32;
-                r.Children.Add(T(kb ? BossParser.Clock(TimeSpan.FromSeconds(hit.At)) : $"−{d.At - hit.At:0.0} s", 12, kb ? C(Coral) : Faint, FontWeights.SemiBold, tab: true));
-                var src = T("", 13, Ink); src.Inlines.Add(R(hit.Source, 13, Ink, FontWeights.SemiBold)); if (hit.Crit) src.Inlines.Add(R("  crit", 11, GoldInk, FontWeights.Bold));
+                r.Children.Add(T(kb ? BossParser.Clock(TimeSpan.FromSeconds(hit.At)) : L.F("−{0:0.0} s", d.At - hit.At), 12, kb ? C(Coral) : Faint, FontWeights.SemiBold, tab: true));
+                var src = T("", 13, Ink); src.Inlines.Add(R(hit.Source, 13, Ink, FontWeights.SemiBold)); if (hit.Crit) src.Inlines.Add(R(L.T("  crit"), 11, GoldInk, FontWeights.Bold));
                 r.Children.Add(Col(src, 1));
                 r.Children.Add(Col(Num(Int(hit.Amount), 13, kb ? C(Coral) : Ink, FontWeights.Bold), 2));
                 if (hit.HpAfter is { } hp)
                 {
                     var hg = Cols(-1, 48); hg.Margin = new Thickness(14, 0, 0, 0);
                     hg.Children.Add(Bar(hp, hp < 0.25 ? Coral : Mint, 6, Track, glow: false));
-                    hg.Children.Add(Col(Num(hp <= 0 ? "dead" : Pct(hp, 0), 12, hp <= 0 ? C(Coral) : Text2, FontWeights.Bold), 1));
+                    hg.Children.Add(Col(Num(hp <= 0 ? L.T("dead") : Pct(hp, 0), 12, hp <= 0 ? C(Coral) : Text2, FontWeights.Bold), 1));
                     r.Children.Add(Col(hg, 3));
                 }
                 rb.Children.Add(new Border { Child = r, CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 0, 3), Background = kb ? C(Coral, 0.14) : Brushes.Transparent });

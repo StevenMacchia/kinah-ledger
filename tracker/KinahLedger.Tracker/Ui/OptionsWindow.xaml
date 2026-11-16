@@ -1,4 +1,4 @@
-<Window x:Class="KinahLedger.Ui.OptionsWindow"
+﻿<Window x:Class="KinahLedger.Ui.OptionsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Kinah Ledger Options" Width="860" Height="640" MinWidth="760" MinHeight="520" ResizeMode="CanResize"
@@ -170,6 +170,16 @@
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="LOOK"/>
           <Border Style="{StaticResource Group}">
+            <StackPanel>
+            <Grid Style="{StaticResource Row}">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Language"/>
+                <TextBlock x:Name="LanguageHint" Style="{StaticResource RowHint}" Text="The words in the window and the overlays. Skill, boss and item names stay as the game's English data has them. Takes effect the next time Kinah Ledger starts."/>
+              </StackPanel>
+              <ComboBox x:Name="LanguagePick" Grid.Column="1" Width="200" VerticalAlignment="Center" AutomationProperties.Name="Language"/>
+            </Grid>
+            <Border Style="{StaticResource Divider}"/>
             <Grid Style="{StaticResource Row}">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel>
@@ -178,6 +188,7 @@
               </StackPanel>
               <WrapPanel x:Name="SkinHost" Grid.Column="1" VerticalAlignment="Center" Margin="0,8,-8,-8"/>
             </Grid>
+            </StackPanel>
           </Border>
         </StackPanel>
 

@@ -50,15 +50,15 @@ public partial class OptionsWindow
 
     void BuildRareDrops()
     {
-        _rareLabel = Styled(new TextBlock { Text = "RARE DROPS" }, "GroupLabel");
+        _rareLabel = Styled(new TextBlock { Text = L.T("RARE DROPS") }, "GroupLabel");
         var stack = new StackPanel();
 
         // the watch list: tiles, the empty line, and the box to add one
         var watch = new StackPanel { Margin = new Thickness(18, 13, 18, 15) };
-        watch.Children.Add(Styled(new TextBlock { Text = "Watch list" }, "RowTitle"));
-        watch.Children.Add(Styled(new TextBlock { Text = "These always alert, whatever their grade." }, "RowHint"));
+        watch.Children.Add(Styled(new TextBlock { Text = L.T("Watch list") }, "RowTitle"));
+        watch.Children.Add(Styled(new TextBlock { Text = L.T("These always alert, whatever their grade.") }, "RowHint"));
         _watchHost = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
-        _watchEmpty = Styled(new TextBlock { Text = "None yet. Type a name below, or use \"Alert me when it drops\" on any item's card.", Margin = new Thickness(0, 8, 16, 0) }, "RowHint");
+        _watchEmpty = Styled(new TextBlock { Text = L.T("None yet. Type a name below, or use \"Alert me when it drops\" on any item's card."), Margin = new Thickness(0, 8, 16, 0) }, "RowHint");
         watch.Children.Add(_watchHost);
         watch.Children.Add(_watchEmpty);
         watch.Children.Add(AddBox());
@@ -70,8 +70,8 @@ public partial class OptionsWindow
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = Styled(new TextBlock { VerticalAlignment = VerticalAlignment.Center }, "RowTitle");
-        title.Inlines.Add(new Run("Chime"));
-        var sub = new Run("   on a rare drop or a watched item") { FontSize = 12 };
+        title.Inlines.Add(new Run(L.T("Chime")));
+        var sub = new Run(L.T("   on a rare drop or a watched item")) { FontSize = 12 };
         sub.SetResourceReference(TextElement.ForegroundProperty, "Faint");
         title.Inlines.Add(sub);
         row.Children.Add(title);
@@ -89,12 +89,12 @@ public partial class OptionsWindow
         // three sounds now, one each for a drop, a price alert and an update ready (Steven, 2026-11-04): a Play for each
         // on one row under the slider, at its volume
         var plays = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(26, 10, 0, 0) };
-        var playsLbl = new TextBlock { Text = "Play", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        var playsLbl = new TextBlock { Text = L.T("Play"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         playsLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
         plays.Children.Add(playsLbl);
         foreach (var (label, sound, what) in SoundPlays)
         {
-            var b = new Button { Content = label, Height = 28, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 6, 0), ToolTip = $"Hear {what} at this volume", Tag = sound };
+            var b = new Button { Content = L.T(label), Height = 28, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 6, 0), ToolTip = L.F("Hear {0} at this volume", L.T(what)), Tag = sound };
             AutomationProperties.SetName(b, $"Play {what}");
             b.Click += (_, _) => _host.PlaySound(sound, _chimeVol.Value);   // a preview: nothing is kept
             _soundPlays.Add(b);
@@ -154,7 +154,7 @@ public partial class OptionsWindow
         var card = new Border
         {
             Width = 104, Margin = new Thickness(0, 10, 10, 0), Padding = new Thickness(6, 10, 6, 8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
-            Child = new StackPanel { Children = { tile, label } }, ToolTip = common ? name : $"{name} · {grade}",
+            Child = new StackPanel { Children = { tile, label } }, ToolTip = common ? name : $"{name} · {L.T(grade)}",
         };
         card.SetResourceReference(Border.BackgroundProperty, "Card2");
         card.SetResourceReference(Border.BorderBrushProperty, "Line");
@@ -180,7 +180,7 @@ public partial class OptionsWindow
         var x = new Button
         {
             Template = t, Content = mark, Width = 18, Height = 18, Padding = new Thickness(0), Cursor = Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 4, 0), ToolTip = "Stop watching " + name,
+            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 4, 0), ToolTip = L.F("Stop watching {0}", name),
         };
         AutomationProperties.SetName(x, "Stop watching " + name);
         x.Click += (_, _) => RemoveWatched(name);
@@ -219,7 +219,7 @@ public partial class OptionsWindow
 
     FrameworkElement AddBox()
     {
-        _watchBox = new TextBox { Tag = "Add item…", Height = 34, FontSize = 13.5, Padding = new Thickness(32, 0, 90, 0) };
+        _watchBox = new TextBox { Tag = L.T("Add item…"), Height = 34, FontSize = 13.5, Padding = new Thickness(32, 0, 90, 0) };
         AutomationProperties.SetName(_watchBox, "Add an item to the watch list");
         var search = new WPath
         {
@@ -228,7 +228,7 @@ public partial class OptionsWindow
             Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false,
         };
         search.SetResourceReference(Shape.StrokeProperty, "Faint");
-        _watchHint = new TextBlock { Text = "type a name", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), IsHitTestVisible = false };
+        _watchHint = new TextBlock { Text = L.T("type a name"), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), IsHitTestVisible = false };
         _watchHint.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         _watchSuggest = new StackPanel();
         var list = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(4), Child = _watchSuggest, Width = 420 };
@@ -278,7 +278,7 @@ public partial class OptionsWindow
         var n = new Run(name);
         n.SetResourceReference(TextElement.ForegroundProperty, common ? "Ink" : "Grade" + grade);
         text.Inlines.Add(n);
-        if (!common) { var g = new Run("  " + grade) { FontSize = 12 }; g.SetResourceReference(TextElement.ForegroundProperty, "Faint"); text.Inlines.Add(g); }
+        if (!common) { var g = new Run("  " + L.T(grade)) { FontSize = 12 }; g.SetResourceReference(TextElement.ForegroundProperty, "Faint"); text.Inlines.Add(g); }
         var b = new Button
         {
             Template = t, Tag = name, Height = 32, HorizontalContentAlignment = HorizontalAlignment.Left, Cursor = Cursors.Hand,

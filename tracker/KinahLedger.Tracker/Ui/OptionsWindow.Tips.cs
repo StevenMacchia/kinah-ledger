@@ -42,7 +42,7 @@ public partial class OptionsWindow
             var g = new Grid { Margin = new Thickness(18, 10, 18, 10) };
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) }); g.ColumnDefinitions.Add(new ColumnDefinition());
             g.Children.Add(KeyText(WindowKeys[i].Key));
-            var what = Styled(new TextBlock { Text = WindowKeys[i].What, VerticalAlignment = VerticalAlignment.Center }, "RowTitle");
+            var what = Styled(new TextBlock { Text = L.T(WindowKeys[i].What), VerticalAlignment = VerticalAlignment.Center }, "RowTitle");
             Grid.SetColumn(what, 1); g.Children.Add(what);
             TipsWindow.Children.Add(g);
         }
@@ -69,11 +69,11 @@ public partial class OptionsWindow
     {
         if (_tipRows.Count > 0) TipsKnow.Children.Add(Styled(new Border(), "Divider"));
         var t = Styled(new TextBlock { Margin = new Thickness(18, 10, 18, 10), TextWrapping = TextWrapping.Wrap }, "RowTitle");
-        t.Inlines.Add(new Run(text));
+        t.Inlines.Add(new Run(L.T(text)));
         if (link.Length > 0 && go != null)
         {
             t.Inlines.Add(new Run("   "));
-            var h = new Hyperlink(new Run(link));
+            var h = new Hyperlink(new Run(L.T(link)));
             h.SetResourceReference(StyleProperty, "LinkStyle");
             h.Click += (_, _) => go();
             t.Inlines.Add(h);

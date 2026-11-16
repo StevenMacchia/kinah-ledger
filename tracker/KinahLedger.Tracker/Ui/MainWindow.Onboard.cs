@@ -95,13 +95,13 @@ public partial class MainWindow
 
         var head = new Grid { Margin = new Thickness(0, 0, 0, 6) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(PT(all ? "All set." : "Getting set up", all ? "Good" : "Ink", 13.5, FontWeights.Normal));
-        var count = PT($"{steps.Count(s => s.Done)} of {steps.Count}", "Faint", 12);
+        head.Children.Add(PT(all ? L.T("All set.") : L.T("Getting set up"), all ? "Good" : "Ink", 13.5, FontWeights.Normal));
+        var count = PT(L.F("{0} of {1}", steps.Count(s => s.Done), steps.Count), "Faint", 12);
         Grid.SetColumn(count, 1); head.Children.Add(count);
         FeedOnboard.Children.Add(head);
         if (all)
         {
-            FeedOnboard.Children.Add(PT("Pick something up and it shows here, newest first.", "Faint", 12.5));
+            FeedOnboard.Children.Add(PT(L.T("Pick something up and it shows here, newest first."), "Faint", 12.5));
             return;
         }
 
@@ -113,13 +113,13 @@ public partial class MainWindow
             glyph.VerticalAlignment = VerticalAlignment.Top;
             g.Children.Add(glyph);
             var words = new StackPanel();
-            words.Children.Add(PT(s.Title, s.Done ? "Muted" : "Ink", 12.5));
-            if (!s.Done && s.Sub.Length > 0) { var sub = PT(s.Sub, "Faint", 12); sub.TextWrapping = TextWrapping.Wrap; sub.TextTrimming = TextTrimming.None; words.Children.Add(sub); }
+            words.Children.Add(PT(L.T(s.Title), s.Done ? "Muted" : "Ink", 12.5));
+            if (!s.Done && s.Sub.Length > 0) { var sub = PT(L.T(s.Sub), "Faint", 12); sub.TextWrapping = TextWrapping.Wrap; sub.TextTrimming = TextTrimming.None; words.Children.Add(sub); }
             Grid.SetColumn(words, 1); g.Children.Add(words);
             if (!s.Done && s.Link.Length > 0 && s.Go is { } go)
             {
                 var t = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, 0, 0, 0) };
-                var h = new Hyperlink(new Run(s.Link)) { Cursor = Cursors.Hand };
+                var h = new Hyperlink(new Run(L.T(s.Link))) { Cursor = Cursors.Hand };
                 h.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
                 h.Click += (_, _) => go();
                 t.Inlines.Add(h);
@@ -129,7 +129,7 @@ public partial class MainWindow
         }
 
         var skipLine = new TextBlock { FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
-        var skip = new Hyperlink(new Run("Skip this")) { Cursor = Cursors.Hand, TextDecorations = null };
+        var skip = new Hyperlink(new Run(L.T("Skip this"))) { Cursor = Cursors.Hand, TextDecorations = null };
         skip.SetResourceReference(TextElement.ForegroundProperty, "Faint");
         skip.Click += (_, _) => SkipOnboard();
         skipLine.Inlines.Add(skip);

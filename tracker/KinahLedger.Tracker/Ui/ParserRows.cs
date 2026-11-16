@@ -187,7 +187,7 @@ public sealed partial class ParserRows : Grid
                     if (spark && mv.PerSecond is { Count: > 1 } ps) { row.Spark.Children.Clear(); row.Spark.Children.Add(PK.Spark(PK.Smooth(ps.Select(x => (double)x).ToList()), 60, 18, f.You ? PK.Gold : ClassArt.ColorOf(f.Class), 0, f.You ? 1.6 : 1.2, glow: f.You)); }
                 }
             }
-            else { SetDps(row, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "", f.CombatPower); row.Share.Text = f.CombatPower > 0 ? "CP" : ""; }
+            else { SetDps(row, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "", f.CombatPower); row.Share.Text = f.CombatPower > 0 ? L.T("CP") : ""; }
             // the bar slides to its new length: the member's share of the group's damage, so 33% fills a third (Steven,
             // 2026-11-15: "the bars shouldn't be full really and should be percentage based"; the top member's was full)
             double share = dmg ? e.Share(f) : 0;
@@ -254,7 +254,7 @@ public sealed partial class ParserRows : Grid
             _popSeq = hits[^1].Seq;
         }
         _gap.Visibility = pin ? Visibility.Visible : Visibility.Collapsed;
-        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = $"{all.Count - visible.Count} more"; _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
+        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
         _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0);
         // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
         if (_wasLive && !e.Live && dmg) Finale(e.Tone);   // the blade, the punch, the shine down the bars (Ui/ParserRows.Cinema.cs)
@@ -320,10 +320,10 @@ public sealed partial class ParserRows : Grid
     public static string NameOf(Fighter f)
     {
         if (f.Name.Length > 0) return f.Name;
-        if (!f.You) return "Unnamed";
+        if (!f.You) return L.T("Unnamed");
         string n = "";
         try { n = YourName?.Invoke()?.Trim() ?? ""; } catch (Exception) { }
-        return n.Length > 0 ? n : "You";
+        return n.Length > 0 ? n : L.T("You");
     }
 
     /// <summary>The fight last drawn, and when: what a row's hover card reads.</summary>
@@ -411,14 +411,14 @@ public sealed partial class ParserRows : Grid
         head.Children.Add(T(NameOf(f), 13, f.You ? PK.C(PK.Gold) : ClassArt.NameBrush(f.Class), FontWeights.Bold));
         stack.Children.Add(head);
         var sums = new List<string>();
-        if (m.DpsOrNull is { } dps) sums.Add($"{Amounts.Short(dps)} DPS");
+        if (m.DpsOrNull is { } dps) sums.Add(L.F("{0} DPS", Amounts.Short(dps)));
         sums.Add(Encounter.Pct(m.Share));
-        sums.Add($"{Amounts.Short(m.Damage)} damage");
+        sums.Add(L.F("{0} damage", Amounts.Short(m.Damage)));
         stack.Children.Add(T(string.Join("  ·  ", sums), 11, HudKit.Ink, FontWeights.SemiBold));
         var rates = new List<string>();
-        if (m.Crit is { } cr) rates.Add($"{Pct0(cr)} crit");
-        if (m.CritShare is { } cs) rates.Add($"{Pct0(cs)} of the damage from crits");
-        if (m.Back is { } ba) rates.Add($"{Pct0(ba)} from behind");
+        if (m.Crit is { } cr) rates.Add(L.F("{0} crit", Pct0(cr)));
+        if (m.CritShare is { } cs) rates.Add(L.F("{0} of the damage from crits", Pct0(cs)));
+        if (m.Back is { } ba) rates.Add(L.F("{0} from behind", Pct0(ba)));
         if (rates.Count > 0) stack.Children.Add(T(string.Join("  ·  ", rates), 10.5, PK.C(PK.Gold, 0.92), FontWeights.SemiBold));
         // the abilities with damage on the figures' basis (boss only or all targets): one with none there is not listed
         var dealt = m.Abilities.Where(x => x.Damage > 0).OrderByDescending(x => x.Damage).ToList();
@@ -433,9 +433,9 @@ public sealed partial class ParserRows : Grid
                 var names = new Grid { Height = 13, Margin = new Thickness(0, 0, 0, 1) };
                 void Name(string s, int col) { var t = T(s, 9, HudKit.Muted, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(t, col); names.Children.Add(t); }
                 RateColumns(names, critCol, backCol);
-                Name("share", 1); Name("damage", 2);
-                if (critCol) Name("crit", 3);
-                if (backCol) Name("back", critCol ? 4 : 3);
+                Name(L.T("share"), 1); Name(L.T("damage"), 2);
+                if (critCol) Name(L.T("crit"), 3);
+                if (backCol) Name(L.T("back"), critCol ? 4 : 3);
                 stack.Children.Add(names);
             }
             foreach (var a in shownAbilities)
@@ -465,24 +465,24 @@ public sealed partial class ParserRows : Grid
                 var dmg = T(Amounts.Short(a.Damage), 11, HudKit.Ink, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(dmg, 2); row.Children.Add(dmg);
                 if (critCol) { var ct = T(a.Crit is { } ac ? Pct0(ac) : "–", 10.5, a.Crit != null ? PK.C(PK.Gold, 0.92) : HudKit.Muted, FontWeights.SemiBold, HorizontalAlignment.Right); Grid.SetColumn(ct, 3); ct.Tag = CardCritTag; row.Children.Add(ct); }
                 if (backCol) { var bt = T(a.Back is { } ab ? Pct0(ab) : "–", 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); Grid.SetColumn(bt, critCol ? 4 : 3); bt.Tag = CardBackTag; row.Children.Add(bt); }
-                if (a.Hits > 0) row.ToolTip = $"{a.Hits:N0} hits{(a.Avg is { } avg ? $", {Amounts.Short(avg)} a hit" : "")}{(!e.BossView && a.Max is { } mx ? $", biggest {Amounts.Short(mx)}" : "")}";
+                if (a.Hits > 0) row.ToolTip = L.F("{0:N0} hits", a.Hits) + (a.Avg is { } avg ? L.F(", {0} a hit", Amounts.Short(avg)) : "") + (!e.BossView && a.Max is { } mx ? L.F(", biggest {0}", Amounts.Short(mx)) : "");
                 stack.Children.Add(row);
             }
             int more = dealt.Count - CardAbilities;
             if (more > 0)
             {
                 long rest = dealt.Skip(CardAbilities).Sum(x => x.Damage);
-                stack.Children.Add(T($"{more} more  ·  {Amounts.Short(rest)}", 10.5, HudKit.Muted, FontWeights.Medium));
+                stack.Children.Add(T(L.F("{0} more  ·  {1}", more, Amounts.Short(rest)), 10.5, HudKit.Muted, FontWeights.Medium));
             }
         }
         var foot = new List<string>();
         var dealtHits = m.Abilities.Where(x => x.Damage > 0).ToList();
         int hits = dealtHits.Sum(a => a.Hits);
-        if (hits > 0) foot.Add($"{hits:N0} hits");
+        if (hits > 0) foot.Add(L.F("{0:N0} hits", hits));
         // the biggest hit is over every target: said only when the figures are too (boss only, it could be an add's)
-        if (!e.BossView && m.MaxHit is { } big && big > 0) foot.Add($"biggest {Amounts.Short(big)}");
-        if (f.Healing > 0) foot.Add($"healed {Amounts.Short(f.Healing)}{(e.HpsOf(f, now) is { } hps ? $" ({Amounts.Short(hps)}/s)" : "")}");
-        if (f.Deaths > 0) foot.Add(f.Deaths == 1 ? "1 death" : $"{f.Deaths} deaths");
+        if (!e.BossView && m.MaxHit is { } big && big > 0) foot.Add(L.F("biggest {0}", Amounts.Short(big)));
+        if (f.Healing > 0) foot.Add(L.F("healed {0}", Amounts.Short(f.Healing)) + (e.HpsOf(f, now) is { } hps ? L.F(" ({0}/s)", Amounts.Short(hps)) : ""));
+        if (f.Deaths > 0) foot.Add(L.F(f.Deaths == 1 ? "{0} death" : "{0} deaths", f.Deaths));
         if (foot.Count > 0) stack.Children.Add(T(string.Join("  ·  ", foot), 10.5, HudKit.Muted, FontWeights.Medium));
         if (stack.Children[^1] is FrameworkElement last) last.Margin = new Thickness(0, 4, 0, 0);
         var card = new Border
@@ -522,12 +522,12 @@ public sealed partial class ParserRows : Grid
         }
         int was = r.Heal.Text.Length;   // a chip new or of another length: the name's line fits again
         double? hps = e.HpsOf(f, now);
-        string text = hps is { } x ? $"{Compact(x)}/s" : Compact(f.Healing);
+        string text = hps is { } x ? L.F("{0}/s", Compact(x)) : Compact(f.Healing);
         r.HealDone = Amounts.Short(f.Healing);
         r.HealShort = r.HealFull = text;
         r.Heal.Text = text;
-        r.HealPill.ToolTip = $"Healed {f.Healing:N0}{(f.HealingOthers > 0 && f.HealingSelf > 0 ? $" ({f.HealingOthers:N0} on others)" : f.HealingOthers <= 0 ? " (on themselves)" : "")}, {(hps ?? 0):N0} a second; "
-            + $"{(f.HealingIsEstimate ? "about " : "")}{f.HealingEffective:N0} landed, the rest overheal{(f.HealingIsEstimate ? " (an estimate: the HP didn't confirm all of it)" : "")}";
+        r.HealPill.ToolTip = L.F("Healed {0:N0}", f.Healing) + (f.HealingOthers > 0 && f.HealingSelf > 0 ? L.F(" ({0:N0} on others)", f.HealingOthers) : f.HealingOthers <= 0 ? L.T(" (on themselves)") : "") + L.F(", {0:N0} a second; ", hps ?? 0)
+            + (f.HealingIsEstimate ? L.T("about ") : "") + L.F("{0:N0} landed, the rest overheal", f.HealingEffective) + (f.HealingIsEstimate ? L.T(" (an estimate: the HP didn't confirm all of it)") : "");
         if (was != text.Length) FitName(r);
         // the heal bar along the row's foot (Steven, 2026-11-16: "the healing bar underneath ... should be toggleable and slightly
         // bigger"): 4 px, sliding to the member's share of the group's healing (self-heals in), a Settings switch
@@ -552,7 +552,7 @@ public sealed partial class ParserRows : Grid
         if (r.HealCross is not Border { Child: TextBlock t } tab) return;
         string tag = top ? "top-heals" : "heal-label";
         if (tab.Tag as string == tag) return;
-        t.Text = top ? "TOP HEALS" : "HEAL"; tab.Tag = tag;
+        t.Text = L.T(top ? "TOP HEALS" : "HEAL"); tab.Tag = tag;
         tab.Background = top ? ParserFoot.Plate(heals: true).Background : HudKit.B(0x3DD68C);
         FitName(r);
     }
@@ -593,7 +593,7 @@ public sealed partial class ParserRows : Grid
         // of yourself makes it so hard to read")
         name.Effect = TextHalo();
         nm.Children.Add(name);
-        if (f.You) { var yc = HudGlass.YouChip(); yc.Tag = "you"; nm.Children.Add(yc); }
+        if (f.You) { var yc = HudGlass.YouChip(); if (yc.Child is TextBlock yt) yt.Text = L.T(yt.Text); yc.Tag = "you"; nm.Children.Add(yc); }
         // the heal chip after the name (a healer's row only; Steven, 2026-11-16: the tiny green figures under the name and the
         // line along the row's foot "look awful"): a green cross and the healing a second, on the name's line, so the row keeps
         // its look and its height; the rest (done, landed, on others) in the chip's tooltip and the member's pop-up
@@ -602,7 +602,7 @@ public sealed partial class ParserRows : Grid
         var heal = new TextBlock { FontSize = 12, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x9CFACB), Tag = "heal-figures", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 6, 0), Effect = TextHalo() };
         System.Windows.Documents.Typography.SetNumeralAlignment(heal, FontNumeralAlignment.Tabular);
         var cross = new Border { Tag = "heal-label", CornerRadius = new CornerRadius(3, 0, 0, 3), Padding = new Thickness(5, 0, 5, 0), Background = HudKit.B(0x3DD68C), VerticalAlignment = VerticalAlignment.Stretch,
-            Child = new TextBlock { Text = "HEAL", FontSize = 9.5, FontWeight = FontWeights.Black, Foreground = HudKit.B(0x062A17), VerticalAlignment = VerticalAlignment.Center } };
+            Child = new TextBlock { Text = L.T("HEAL"), FontSize = 9.5, FontWeight = FontWeights.Black, Foreground = HudKit.B(0x062A17), VerticalAlignment = VerticalAlignment.Center } };
         var healPill = new Border { Tag = "heal-pill", Height = 18, CornerRadius = new CornerRadius(3), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
             Background = new SolidColorBrush(Color.FromArgb(0x40, 0x2F, 0xC4, 0x7A)), BorderBrush = HudKit.B(0x3DD68C), BorderThickness = new Thickness(1),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { cross, heal } } };
@@ -620,9 +620,9 @@ public sealed partial class ParserRows : Grid
         var dps = Fig(15, HudKit.Ink, FontWeights.Bold); dps.Tag = "row-dps"; dps.Effect = TextHalo();
         var share = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); share.Margin = new Thickness(0, 0, expanded ? 0 : 2, 0);
         var damage = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold);
-        var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); critT.ToolTip = "Crit rate";
+        var critT = Fig(11, HudKit.B(0xC9CDDA), FontWeights.SemiBold); critT.ToolTip = L.T("Crit rate");
         // back attacks beside crit, in a quieter tone so the two rates read apart
-        var backT = Fig(11, HudKit.B(0x9FA6B8), FontWeights.Medium); backT.ToolTip = "Hits from behind";
+        var backT = Fig(11, HudKit.B(0x9FA6B8), FontWeights.Medium); backT.ToolTip = L.T("Hits from behind");
         var sparkG = new Grid { Width = 60, Height = 18, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         // the odometer over the figure, right-aligned in the same column: the column never moves, rolling or not
         var odo = new Odometer(15, FontWeights.Bold, (HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White) { Effect = TextHalo(), Visibility = Visibility.Collapsed };
@@ -725,7 +725,7 @@ public sealed partial class ParserRows : Grid
             var tab = (r.HealCross as Border)?.Child as TextBlock;
             // a new word in the tab: the chip measured afresh (a parent's Measure keeps its last size until the layout pass reaches it)
             void Tab(string t) { if (tab == null) return; if (tab.Text != t) tab.Text = t; r.HealCross.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure(); }
-            Tab(r.HealCross.Tag as string == "top-heals" ? "TOP HEALS" : "HEAL");
+            Tab(L.T(r.HealCross.Tag as string == "top-heals" ? "TOP HEALS" : "HEAL"));
             others = Others();
             if (w - others < NameMin && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
             // short of room the tab keeps its colour and a +, the figure whole beside it
@@ -745,9 +745,9 @@ public sealed partial class ParserRows : Grid
     /// <summary>The record chip's words: "PB +4.2%" (DPS), "HEAL PB +9%", or both ("PB +4.2% · HEAL +9%").</summary>
     internal static string PbText(double? dps, double? heal) => (dps, heal) switch
     {
-        ({ } d, { } h) => $"PB {PK.Signed(d)} · HEAL {PK.Signed(h)}",
-        ({ } d, null) => $"PB {PK.Signed(d)}",
-        (null, { } h) => $"HEAL PB {PK.Signed(h)}",
+        ({ } d, { } h) => L.F("PB {0} · HEAL {1}", PK.Signed(d), PK.Signed(h)),
+        ({ } d, null) => L.F("PB {0}", PK.Signed(d)),
+        (null, { } h) => L.F("HEAL PB {0}", PK.Signed(h)),
         _ => "",
     };
 
@@ -1091,8 +1091,8 @@ public sealed partial class ParserRows : Grid
         var sp = new StackPanel();
         foreach (var d in m.DeathLog.Take(1))
         {
-            sp.Children.Add(new TextBlock { Text = $"{m.F.Name} died at {BossParser.Clock(TimeSpan.FromSeconds(d.At))}", FontWeight = FontWeights.Bold, Foreground = PK.C(PK.Coral) });
-            foreach (var h in d.Last) sp.Children.Add(new TextBlock { Text = $"−{d.At - h.At:0.0} s  {h.Source}  {Amounts.Short(h.Amount)}{(h.HpAfter is { } hp ? $"  {Math.Round(hp * 100):0}%" : "")}" });
+            sp.Children.Add(new TextBlock { Text = L.F("{0} died at {1}", m.F.Name, BossParser.Clock(TimeSpan.FromSeconds(d.At))), FontWeight = FontWeights.Bold, Foreground = PK.C(PK.Coral) });
+            foreach (var h in d.Last) sp.Children.Add(new TextBlock { Text = L.F("−{0:0.0} s  {1}  {2}", d.At - h.At, h.Source, Amounts.Short(h.Amount)) + (h.HpAfter is { } hp ? $"  {Math.Round(hp * 100):0}%" : "") });
         }
         return sp;
     }

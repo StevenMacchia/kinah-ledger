@@ -98,7 +98,7 @@ public partial class OptionsWindow
 
     void BuildParser()
     {
-        _parserLabel = Styled(new TextBlock { Text = "PARSER" }, "GroupLabel");
+        _parserLabel = Styled(new TextBlock { Text = L.T("PARSER") }, "GroupLabel");
         var stack = new StackPanel();
         CheckBox Row(string title, string hint, string name)
         {
@@ -106,8 +106,8 @@ public partial class OptionsWindow
             g.ColumnDefinitions.Add(new ColumnDefinition());
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var sp = new StackPanel();
-            sp.Children.Add(Styled(new TextBlock { Text = title }, "RowTitle"));
-            sp.Children.Add(Styled(new TextBlock { Text = hint }, "RowHint"));
+            sp.Children.Add(Styled(new TextBlock { Text = L.T(title) }, "RowTitle"));
+            sp.Children.Add(Styled(new TextBlock { Text = L.T(hint) }, "RowHint"));
             g.Children.Add(sp);
             var cb = Styled(new CheckBox(), "Switch");
             AutomationProperties.SetName(cb, title);
@@ -147,9 +147,9 @@ public partial class OptionsWindow
         var top = new Grid();
         top.ColumnDefinitions.Add(new ColumnDefinition());
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Styled(new TextBlock { Text = "Overlay look" }, "RowTitle"));
+        top.Children.Add(Styled(new TextBlock { Text = L.T("Overlay look") }, "RowTitle"));
         // the older looks (Badge, Buddy, Pop) and the real-size preview stay with The panel's picker
-        var all = new TextBlock { Text = "All looks  ›", FontSize = 12, FontWeight = FontWeights.SemiBold, Cursor = Cursors.Hand, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
+        var all = new TextBlock { Text = L.T("All looks  ›"), FontSize = 12, FontWeight = FontWeights.SemiBold, Cursor = Cursors.Hand, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
         all.SetResourceReference(TextBlock.ForegroundProperty, "Link");
         all.MouseEnter += (_, _) => all.TextDecorations = TextDecorations.Underline;
         all.MouseLeave += (_, _) => all.TextDecorations = null;
@@ -179,8 +179,8 @@ public partial class OptionsWindow
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var sp = new StackPanel();
-        sp.Children.Add(Styled(new TextBlock { Text = "Width" }, "RowTitle"));
-        sp.Children.Add(Styled(new TextBlock { Text = "How wide the meter is over the game. You can also drag its left or right edge while the overlay can be moved." }, "RowHint"));
+        sp.Children.Add(Styled(new TextBlock { Text = L.T("Width") }, "RowTitle"));
+        sp.Children.Add(Styled(new TextBlock { Text = L.T("How wide the meter is over the game. You can also drag its left or right edge while the overlay can be moved.") }, "RowHint"));
         g.Children.Add(sp);
         _parserWidth = new Slider { Width = 140, Minimum = HudStackLook.FightWidthMin, Maximum = HudStackLook.FightWidthMax, TickFrequency = 10, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center, Value = HudStackLook.FightWidth };
         AutomationProperties.SetName(_parserWidth, "Parser overlay width");
@@ -230,9 +230,9 @@ public partial class OptionsWindow
         if (_parserLookHost is UniformGrid ug) ug.Columns = keys.Length;
         string inUseName = separate ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
         _parserLookHint.Text = separate
-            ? "How the Parser's own window looks over the game. The Kinah overlay keeps its own look."
-            : HudLooks.FightLooks.Contains(current) ? "How a boss fight shows over the game, in a dungeon in place of the Kinah line. Picking one here picks the Kinah overlay's look too."
-            : $"In use: {inUseName}, the Parser above it. Pick one drawn for fights, or see all looks.";
+            ? L.T("How the Parser's own window looks over the game. The Kinah overlay keeps its own look.")
+            : HudLooks.FightLooks.Contains(current) ? L.T("How a boss fight shows over the game, in a dungeon in place of the Kinah line. Picking one here picks the Kinah overlay's look too.")
+            : L.F("In use: {0}, the Parser above it. Pick one drawn for fights, or see all looks.", L.T(inUseName));
         var sample = _host.HudSample();
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (_, fight) = ParserDemo.Sample(now, live: true);
@@ -242,10 +242,10 @@ public partial class OptionsWindow
         foreach (var key in keys)
         {
             string lookName = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
-            string hint = key == ParserPrefs.StandardLook ? "The Parser's own panel: the boss, the clock, the group on class-coloured bars." : HudLooks.All.First(x => x.Key == key).Hint;
+            string hint = L.T(key == ParserPrefs.StandardLook ? "The Parser's own panel: the boss, the clock, the group on class-coloured bars." : HudLooks.All.First(x => x.Key == key).Hint);
             bool on = key == current;
             // a button per look, the big stage below draws it: four thumbnails side by side came out ~110 px tall, unreadable
-            var name = new TextBlock { Text = lookName, FontSize = 13, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
+            var name = new TextBlock { Text = L.T(lookName), FontSize = 13, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
             name.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
             var card = new Border
             {

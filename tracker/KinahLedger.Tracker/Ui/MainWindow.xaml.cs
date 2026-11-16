@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Documents;
@@ -81,6 +81,8 @@ public partial class MainWindow : Window
         _prefs = watch ? UserPrefs.Load() : UserPrefs.Defaults();
         UseWatchList(player: watch);   // watch.txt the same way (Ui/MainWindow.Alerts.cs)
         InitializeComponent();
+        // the first-run cards, the tagline and the update bar's link in the player's language (Ui/Lang.cs); the rest of the window is English for now
+        foreach (System.Windows.DependencyObject d in new System.Windows.DependencyObject[] { WelcomeCard, WelcomeLookCard, Tagline, UpdateNotesText }) L.Apply(d);
         // the layer the click cards are drawn on, over the window's content and never past its edges (InCard, 2026-11-06)
         var layer = new System.Windows.Controls.Canvas { ClipToBounds = true };
         var host = new System.Windows.Controls.Grid();
