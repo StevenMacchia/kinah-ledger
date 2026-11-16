@@ -107,6 +107,43 @@ public static partial class WpfApp
     }
 
     /// <summary>
+    /// ui-shot --parser finale: the meter's big moments as they play in real time (Ui/ParserRows.Cinema.cs), each held every
+    /// 100 ms: the end of a kill, a kill with a personal best, a wipe, and your row catching fire (ui-finale-NAME-PLACE-MMMM.png).
+    /// </summary>
+    static void ShotFinale(string dir, Dictionary<string, string> kinah)
+    {
+        var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+        bool still0 = Motion.Still; var frozen0 = Motion.FrozenAt; var best0 = ParserRows.BestOf;
+        string sub = Path.Combine(dir, "finale");
+        Directory.CreateDirectory(sub);
+        var all = MeterChanges(now);
+        var a = all.First(c => c.Name == "ghost").From;
+        var you = a.Roster.First(f => f.You);
+        double yourDps = a.DpsOf(you, now) ?? 1;
+        // your row catches fire: your pace just under your best, then past it
+        var hot = BossParser.Copy(a); var me = hot.Roster.First(f => f.You); me.Damage += me.Damage / 12; me.BossDamage += me.BossDamage / 12;
+        var wipe = BossParser.Copy(a); wipe.End = now; wipe.Outcome = "wipe";
+        var changes = new List<MeterChange>
+        {
+            all.First(c => c.Name == "finish"), all.First(c => c.Name == "finish-pb"),
+            new("wipe", a, wipe, now, now),
+            new("ignite", a, hot, now, now, _ => new PullRef { Dps = yourDps * 1.02 }),
+        };
+        var places = Environment.GetEnvironmentVariable("KL_FINALE_PLACES") is { Length: > 0 } pl ? pl.Split(',') : new[] { "standard" };
+        try
+        {
+            foreach (var c in changes)
+                foreach (var place in places)
+                    for (int ms = 0; ms <= 2000; ms += 100)
+                    {
+                        Motion.FrozenMs = ms;
+                        Save(MeterFrame(c, place, kinah, 1), Path.Combine(sub, $"ui-finale-{c.Name}-{place}-{ms:0000}.png"), 0, ShotGround);
+                    }
+        }
+        finally { Motion.FrozenMs = null; Motion.FrozenAt = frozen0; Motion.Still = still0; ParserRows.BestOf = best0; }
+    }
+
+    /// <summary>
     /// One change drawn in one place: the first draw lays the meter down (still), the second is the change, held at
     /// <paramref name="t"/> (null: the tracker still, the settled state). The picture of the meter, its window closed.
     /// </summary>
@@ -236,6 +273,66 @@ public static partial class WpfApp
                 bool rest = !rows.LiftedForTest() && rows.RowEffectsForTest() == 0 && chips0.SequenceEqual(chips1);
                 o.Close(); Motion.FrozenAt = null; Motion.Still = true;
                 check(lifted && rest, $"meter motion (overtake): passed back part-way, nothing is left behind (lifted first {lifted}; row effects after {rows.RowEffectsForTest()}; chips {string.Join(",", chips0)} / {string.Join(",", chips1)})");
+            }
+            // the cinema (Ui/ParserRows.Cinema.cs), held in real time: the finale's shine runs down the bars, the PB's sparks
+            // burst on their own beat and are gone by the end, your row burns while you beat your best (embers, a burning chip)
+            // and catches fire with a wave the first draw it does; none of it with the tracker still but the chip and flames
+            {
+                Dictionary<string, int> FxAt(MeterChange c, double? t, double? ms, out string? chip)
+                {
+                    Motion.FrozenAt = null; Motion.FrozenMs = null; Motion.Still = true; Motion.ForgetFigures();
+                    ParserRows.BestOf = c.Best ?? (_ => null);
+                    var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = c.To.ModeKind };
+                    o.Draw(c.From, c.At); o.Show(); DoEvents();
+                    var rows = Find<ParserRows>((DependencyObject)o.Content).First();
+                    Motion.FrozenAt = t; Motion.FrozenMs = ms; Motion.Still = t == null;
+                    o.Draw(c.To, c.ToAt); DoEvents();
+                    var fx = rows.FxForTest(); chip = rows.ChipFireForTest();
+                    o.Close(); Motion.FrozenAt = null; Motion.FrozenMs = null; Motion.Still = true;
+                    return fx;
+                }
+                int N(Dictionary<string, int> d, string k) => d.GetValueOrDefault(k);
+                var finish = changes.First(x => x.Name == "finish");
+                var f300 = FxAt(finish, 1, 300, out _); var fStill = FxAt(finish, null, null, out _);
+                check(N(f300, "finale-shine") > 0 && fStill.Count == 0, $"meter cinema (finish): 300 ms in, the shine runs down the bars ({N(f300, "finale-shine")}); still, nothing ({fStill.Count})");
+                var pbc = changes.First(x => x.Name == "finish-pb");
+                var p1100 = FxAt(pbc, 1, 1100, out _); var p800 = FxAt(pbc, 1, 800, out _); var p2000 = FxAt(pbc, 1, 2000, out _);
+                check(N(p1100, "pb-spark") == 14 && N(p800, "pb-spark") == 0 && N(p2000, "pb-spark") == 0,
+                    $"meter cinema (finish-pb): the PB's sparks burst on its own beat, after the plates ({N(p800, "pb-spark")} at 800 ms, {N(p1100, "pb-spark")} at 1100 ms, {N(p2000, "pb-spark")} at 2000 ms)");
+                // drawn again a moment on (the overlay skips a draw that changes nothing, as the same fight drawn twice would)
+                var beat0 = changes.First(x => x.Name == "heat-beat");
+                var on = BossParser.Copy(beat0.To); foreach (var f in on.Roster) { f.Damage += 1; f.BossDamage += 1; }
+                var beat = beat0 with { To = on };
+                var bHeld = FxAt(beat, 1, null, out var chipHeld); var bStill = FxAt(beat, null, null, out var chipStill);
+                check(N(bHeld, "ember") > 0 && chipHeld == "fire" && N(bStill, "ember") == 0 && chipStill == "fire",
+                    $"meter cinema (heat-beat): beating your best your row burns: embers ({N(bHeld, "ember")}), the chip on fire ({chipHeld}); still, the chip burns with no embers ({N(bStill, "ember")}, {chipStill})");
+                var near = FxAt(changes.First(x => x.Name == "heat-near"), 1, null, out var chipNear);
+                check(N(near, "ember") == 0 && chipNear == null, $"meter cinema (heat-near): near your best, no fire yet ({N(near, "ember")} embers, chip {chipNear ?? "gold"})");
+                var a0 = finish.From; var you0 = a0.Roster.First(f => f.You);
+                var hot = BossParser.Copy(a0); var me0 = hot.Roster.First(f => f.You); me0.Damage += me0.Damage / 12; me0.BossDamage += me0.BossDamage / 12;
+                var ignite = new MeterChange("ignite", a0, hot, now, now, _ => new PullRef { Dps = (a0.DpsOf(you0, now) ?? 1) * 1.02 });
+                // the fire's cost (Steven, 2026-11-15, of the odometer: "so laggy"): 200 draws of the meter a tick apart, your row
+                // on fire against not, with motion on as in play; the fire adds well under a millisecond a draw
+                {
+                    double Ms(Func<Encounter, PullRef?> best)
+                    {
+                        Motion.FrozenAt = null; Motion.FrozenMs = null; Motion.Still = false; Motion.ForgetFigures();
+                        ParserRows.BestOf = best;
+                        var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = a0.ModeKind };
+                        o.Draw(a0, now); o.Show(); DoEvents();
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        for (int k = 1; k <= 200; k++) { o.Draw(a0, now.AddMilliseconds(50 * k)); o.UpdateLayout(); }
+                        sw.Stop();
+                        o.Close(); Motion.Still = true;
+                        return sw.Elapsed.TotalMilliseconds / 200;
+                    }
+                    double y = a0.DpsOf(you0, now) ?? 1;
+                    Ms(_ => null);   // warm up
+                    double cold = Ms(_ => null), fire = Ms(_ => new PullRef { Dps = y / 1.1 });
+                    check(fire - cold < 1.0, $"meter cinema: your row on fire costs {fire - cold:0.00} ms a draw more ({fire:0.00} against {cold:0.00} ms), the meter drawing every 50 ms");
+                }
+                var i200 = FxAt(ignite, 1, 200, out var chipIg);
+                check(N(i200, "ignite") == 1 && N(i200, "ember") > 0 && chipIg == "fire", $"meter cinema (ignite): passing your best your row catches fire: the wave ({N(i200, "ignite")}), embers ({N(i200, "ember")}), the chip ({chipIg})");
             }
             // no heat without a best, or below 80% of it
             {

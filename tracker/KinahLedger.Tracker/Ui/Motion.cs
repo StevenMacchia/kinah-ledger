@@ -29,6 +29,9 @@ public static partial class Motion
     internal static double? FrozenAt { get; set; } =
         double.TryParse(Environment.GetEnvironmentVariable("KL_MOTION_AT"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f) ? Math.Clamp(f, 0, 1) : null;
 
+    /// <summary>With <see cref="FrozenAt"/> set: hold every course at this many ms from its start instead (a render of a moment of a sequence).</summary>
+    internal static double? FrozenMs { get; set; }
+
     public static bool On => FrozenAt != null || (!Still && SystemParameters.ClientAreaAnimation);
 
     /// <summary>A course's eased point: quick to start, settling in (cubic ease-out).</summary>
@@ -52,7 +55,9 @@ public static partial class Motion
     /// </summary>
     internal static void Play(UIElement el, double ms, Action<double> step, Action? done = null)
     {
-        if (FrozenAt is double at) { step(at); if (at >= 1) done?.Invoke(); return; }
+        // a render's frame: every course at the same point of its own length, or (FrozenMs) at the same moment in real time,
+        // so a sequence of courses of different lengths shows as it plays (the meter's finale)
+        if (FrozenAt is double at) { double pp = FrozenMs is double fm ? Math.Clamp(fm / Math.Max(1, ms), 0, 1) : at; step(pp); if (pp >= 1) done?.Invoke(); return; }
         var token = ++_token;
         Runs.AddOrUpdate(el, new Course { Step = step, Token = token });
         var a = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms)) { FillBehavior = FillBehavior.HoldEnd };

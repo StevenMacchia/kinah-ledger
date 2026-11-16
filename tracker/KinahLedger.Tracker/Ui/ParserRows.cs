@@ -27,7 +27,7 @@ namespace KinahLedger.Ui;
 /// foot, its length their share of the group's healing, and under the name what they healed, per second over the DPS's
 /// seconds, and the part that landed (≈ when the target's HP didn't confirm it). The row keeps its height and its columns.
 /// </summary>
-public sealed class ParserRows : Grid
+public sealed partial class ParserRows : Grid
 {
     /// <summary>Panel: on a look's panel. Bare: straight over the game (the Float look), the bars lighter.</summary>
     public enum Kind { Panel, Bare }
@@ -75,6 +75,7 @@ public sealed class ParserRows : Grid
         Children.Add(_host);
         Children.Add(_sweep);
         Children.Add(_pops);
+        Children.Add(_fx);   // the finale's and the fire's particles, over everything, clipped to the rows (Ui/ParserRows.Cinema.cs)
         _host.Children.Add(_gap);
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(this, HudKit.Text);
@@ -137,6 +138,7 @@ public sealed class ParserRows : Grid
             foreach (var r in _rows.Values) _host.Children.Remove(r.Root);
             _rows.Clear();
             _pops.Children.Clear(); _popsOn = 0; _popGen++;   // the rows go too, and their pop-ups with them
+            _fx.Children.Clear(); _embers = 0; _flames.Clear();   // and the embers, sparks and flames
             // a fight drawn first here: its big hits so far are history, never popped
             if (e.Id != _fightId) { _pbShown = ""; _wasLive = e.Live; _sawLive = e.Live; _popSeq = e.BigHits?.LastOrDefault()?.Seq ?? 0; }
             _fightId = e.Id; _expanded = expanded;
@@ -199,7 +201,14 @@ public sealed class ParserRows : Grid
             else if (Math.Abs(row.Y - y) > 0.5) Glide(row, y, passed: rankWas > 0 && rank < rankWas);
             foreach (var lp in row.Live) Canvas.SetTop(lp.Band, row.Y);   // its pop-ups go with a row that moved
             // your heat: your pace against your best on this boss, warmer as it nears it, gold once you beat it
-            if (f.You) SetHeat(row, Heat(e, f, now));
+            if (f.You)
+            {
+                bool wasBeat = Equals(row.Heat.Tag, "heat-beat");
+                SetHeat(row, Heat(e, f, now));
+                bool beat = Equals(row.Heat.Tag, "heat-beat");
+                // on fire while you beat your best here: it ignites the first draw it's true (seen live), then burns (Cinema)
+                Fire(row, beat, ignite: beat && !wasBeat && !fresh && e.Live);
+            }
             // a death: the coral tick lands on the row
             if (f.Deaths > row.Deaths)
             {
@@ -241,7 +250,7 @@ public sealed class ParserRows : Grid
         if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = $"{all.Count - visible.Count} more"; _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
         _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0);
         // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
-        if (_wasLive && !e.Live && dmg) Sweep(e.Tone);
+        if (_wasLive && !e.Live && dmg) Finale(e.Tone);   // the blade, the punch, the shine down the bars (Ui/ParserRows.Cinema.cs)
         if (!e.Live && e.Outcome == "kill" && you != null && _pbShown != e.Id && Best(e) is { } best && best.Dps > 0)
         {
             double d = e.Dps(you, e.End ?? now) / best.Dps - 1;
@@ -793,16 +802,8 @@ public sealed class ParserRows : Grid
         plate.Child = null;
         plate.Child = new Grid { Children = { word, glint } };
         plate.ClipToBounds = true;
-        var tt = new TranslateTransform();
-        plate.RenderTransform = tt;
-        Motion.Play(plate, PlateMs, p =>
-        {
-            double q = Motion.Out(Math.Min(1, p / 0.6));
-            tt.X = 16 * (1 - q); plate.Opacity = Math.Min(1, p / 0.3);
-            double g = Math.Clamp((p - 0.4) / 0.6, 0, 1), at = -0.3 + 1.6 * g;
-            a.Offset = at - 0.25; m.Offset = at; b.Offset = at + 0.25;
-            m.Color = Color.FromArgb((byte)(0xD0 * Math.Sin(Math.PI * g)), 0xFF, 0xFF, 0xFF);
-        }, () => { tt.X = 0; plate.Opacity = 1; m.Color = Color.FromArgb(0, 0xFF, 0xFF, 0xFF); });
+        // on the finale's beat: after the blade, dropped in with a stamp, then the glint (Ui/ParserRows.Cinema.cs)
+        PlateIn(plate, glint, a, m, b);
     }
 
     /// <summary>
@@ -911,7 +912,7 @@ public sealed class ParserRows : Grid
     internal bool LiftedForTest() => _rows.Values.Any(r => r.Rise.ScaleX > 1.001 && r.Root.Effect is DropShadowEffect);
     internal bool GhostForTest() => _rows.Values.Any(r => r.Ghost.Visibility == Visibility.Visible && r.Ghost.Width > 0.5);
     internal string? SweepForTest() => _sweep.Visibility == Visibility.Visible ? _sweep.Tag as string : null;
-    internal bool FlareForTest() => _rows.Values.FirstOrDefault(r => r.You) is { } y && y.Odo.InkNow != ((HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White);
+    internal bool FlareForTest() => _rows.Values.FirstOrDefault(r => r.You) is { } y && y.Dps.Foreground is SolidColorBrush fb && fb.Color != ((HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White);
     /// <summary>For the tests: the name on the row whose top is at <paramref name="y"/>, and where its DPS's column starts.</summary>
     internal string RowNameAt(double y) => _rows.Values.FirstOrDefault(r => Math.Abs(r.Y - y) < 1)?.Name.Text ?? "";
     internal double DpsLeftAt(double y) => _rows.Values.FirstOrDefault(r => Math.Abs(r.Y - y) < 1) is { } r ? DpsLeft(r, r.Track.ActualWidth) : 0;
@@ -944,37 +945,35 @@ public sealed class ParserRows : Grid
         if (!Motion.On) return;
         _sweep.Visibility = Visibility.Visible;
         var c = tone == "good" ? PK.Mint : tone == "bad" ? PK.Coral : Colors.White;
-        byte peak = tone == "good" ? (byte)0x78 : tone == "bad" ? (byte)0x50 : (byte)0x46;
-        var band = new LinearGradientBrush { StartPoint = new Point(0, 0.3), EndPoint = new Point(1, 0.7) };
-        var a = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0); var m = new GradientStop(c, 0); var b = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0);
-        band.GradientStops.Add(a); band.GradientStops.Add(m); band.GradientStops.Add(b);
+        byte peak = tone == "good" ? (byte)0x70 : tone == "bad" ? (byte)0x50 : (byte)0x40;
+        // a blade of light: a long soft trail behind, a bright near-white core, a short soft lead (it reads as moving)
+        var core = Color.FromRgb((byte)((c.R + 0xFF * 2) / 3), (byte)((c.G + 0xFF * 2) / 3), (byte)((c.B + 0xFF * 2) / 3));
+        var band = new LinearGradientBrush { StartPoint = new Point(0, 0.35), EndPoint = new Point(1, 0.65) };
+        var a = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0); var trail = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0);
+        var m = new GradientStop(Color.FromArgb(0, core.R, core.G, core.B), 0); var b = new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0);
+        band.GradientStops.Add(a); band.GradientStops.Add(trail); band.GradientStops.Add(m); band.GradientStops.Add(b);
         _sweep.Background = band;
         _sweep.Tag = "sweep-" + tone;
-        Motion.Play(_sweep, SweepMs, p =>
+        Motion.Play(_sweep, BladeMs, p =>
         {
-            double at = -0.2 + 1.4 * Motion.Out(p), k = Math.Sin(Math.PI * p);
-            a.Offset = at - 0.13; m.Offset = at; b.Offset = at + 0.13;
-            m.Color = Color.FromArgb((byte)(peak * k), c.R, c.G, c.B);
+            double at = -0.15 + 1.35 * Motion.Out(p), k = Math.Sin(Math.PI * Math.Min(1, p * 1.15));
+            a.Offset = at - 0.42; trail.Offset = at - 0.1; m.Offset = at; b.Offset = at + 0.05;
+            trail.Color = Color.FromArgb((byte)(peak * 0.45 * k), c.R, c.G, c.B);
+            m.Color = Color.FromArgb((byte)(Math.Min(255, peak * 1.8) * k), core.R, core.G, core.B);
         }, () => _sweep.Visibility = Visibility.Collapsed);
     }
 
     /// <summary>A new personal best on this boss: "PB +4.2%" pops onto your row with a burst of gold.</summary>
     void ShowPb(RowEl r, double d)
     {
-        ((TextBlock)r.Pb.Child).Text = $"PB {PK.Signed(d)}";
+        var word = r.Pb.Child as TextBlock ?? (r.Pb.Child as Grid)?.Children.OfType<TextBlock>().FirstOrDefault();
+        if (word != null) word.Text = $"PB {PK.Signed(d)}";
         r.Pb.Visibility = Visibility.Visible;
         FitName(r);   // the chip takes room on the name's line: the name trims and YOU gives way, so a TOP DPS plate beside it shows whole
-        var st = new ScaleTransform(1, 1); r.Pb.RenderTransform = st;
         if (!Motion.On) return;
-        // the figure flares gold with it
-        r.Odo.Flare(PK.Gold);
-        var glow = r.Frame.Effect as DropShadowEffect;
-        Motion.Play(r.Pb, 900, p =>
-        {
-            double q = Math.Min(1, p / 0.55);
-            double s = 0.4 + 1.1 * Motion.Out(q) - 0.15 * Math.Sin(Math.PI * q); st.ScaleX = st.ScaleY = s; r.Pb.Opacity = Math.Clamp(p / 0.25, 0, 1);
-            if (glow != null) { double k = Math.Sin(Math.PI * p); glow.BlurRadius = r.FrameBlur0 + 20 * k; glow.Opacity = r.FrameOpacity0 + 0.5 * k; }
-        }, () => { st.ScaleX = st.ScaleY = 1; r.Pb.Opacity = 1; if (glow != null) { glow.BlurRadius = r.FrameBlur0; glow.Opacity = r.FrameOpacity0; } });
+        // last on the finale's beat, never on the plates: the chip drops in with a flash and a burst of gold sparks, your DPS
+        // flares gold, your frame pulses (Ui/ParserRows.Cinema.cs; the odometer's flare went with it in 0.10.118)
+        PbIn(r);
     }
 
     /// <summary>The death recap a hover on the tick shows (when the record carries the last hits).</summary>

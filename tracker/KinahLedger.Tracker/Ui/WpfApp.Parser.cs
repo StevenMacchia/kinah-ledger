@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "motion" or "meter" or "heals") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "motion" or "meter" or "heals" or "finale") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -45,6 +45,7 @@ public static partial class WpfApp
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "meter") { ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "heals") { ShotHeals(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
+                if (st == "finale") { ShotFinale(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 w.ShowParserDemo(st);
                 DoEvents();
                 var name = "ui-parser-" + st + (skin != null ? "-" + skin : "");
