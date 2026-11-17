@@ -307,7 +307,9 @@ public sealed partial class HudWindow : Window
         _unlock = how;
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.SetClickThrough(h, how.Length == 0);
-        _outline.Visibility = how.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        // the dashed outline only round the Classic looks (Steven, 2026-11-17: "dislike the dotted lines around MOST of these but
+        // not the original one"): a theme's look keeps its own edge, its "drag me" pill still says it can be moved
+        _outline.Visibility = how.Length == 0 || HudThemes.Of(Look) != HudThemes.Classic ? Visibility.Collapsed : Visibility.Visible;
         ShowDragHint();
     }
 
