@@ -104,12 +104,12 @@ public partial class MainWindow
         bool chime = _hudPrefs.Chime && ChimesFor(landed);
         if (chime && !_demo && (DateTime.UtcNow - _chimedAt).TotalSeconds >= ChimeGapSeconds) { _chimedAt = DateTime.UtcNow; Chime(); }
         var (price, where) = RarePrice(name, count);
-        var priceText = price.Length > 0 ? ("sells for " + price + " " + where).TrimEnd() : "no price yet";
-        _hud?.Alert((rare ? "Rare drop: " : "Watched drop: ") + what + " · " + priceText, color);
+        var priceText = price.Length > 0 ? (L.T("sells for") + " " + price + " " + where).TrimEnd() : L.T("no price yet");
+        _hud?.Alert(L.F(rare ? "Rare drop: {0} · {1}" : "Watched drop: {0} · {1}", what, priceText), color);
         HoldRareOnHud(name, count, grade, color, at);   // the Card's and the Ticker's rare drop
         HoldRareExtras(id, price, where, watched, chime);
         NoteRare(new RareFind(id, name, count, grade, color, at, price, where, watched, chime));
-        Say((rare ? $"Rare drop ({grade}): " : "Watched drop: ") + what + " · " + priceText, "Good");
+        Say(rare ? L.F("Rare drop ({0}): {1} · {2}", grade, what, priceText) : L.F("Watched drop: {0} · {1}", what, priceText), "Good");
         return true;
     }
 

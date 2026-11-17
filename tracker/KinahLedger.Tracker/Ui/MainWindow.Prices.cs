@@ -31,14 +31,14 @@ public partial class MainWindow
     string PriceHover(string name, PriceBook.Quote q)
     {
         var lines = new List<string> { $"{q.Price:N0} · {PriceBook.Describe(q)}" };
-        var server = Server?.Name ?? "your server";
-        if (q.Mine && PriceBook.BoardOf(name) is { } b) lines.Add($"{server}'s board: {b.Price:N0} · {PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))}");
-        if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } r) lines.Add($"Other {Server?.Faction ?? ""} servers in {Server?.Region.Name ?? "your region"}: {r.Price:N0} · middle of {r.Servers}".Replace("  ", " "));
+        var server = Server?.Name ?? L.T("your server");
+        if (q.Mine && PriceBook.BoardOf(name) is { } b) lines.Add(L.F("{0}'s board: {1:N0} · {2}", server, b.Price, PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))));
+        if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } r) lines.Add(L.F("Other {0} servers in {1}: {2:N0} · middle of {3}", Server?.Faction ?? "", Server?.Region.Name ?? L.T("your region"), r.Price, r.Servers).Replace("  ", " "));
         if (!q.Sure) lines.Add(q.At is DateTime seen && DateTime.UtcNow - seen > PriceBook.BoardMaxAge
-            ? $"Unsure: last seen {PriceBook.Ago(seen, DateTime.UtcNow)}, too old to count, so it's left out of totals and profit."
-            : "Unsure: one reading isn't a price, so it's left out of totals and profit.");
-        else if (PriceBook.IsOld(q) && q.At is DateTime old) lines.Add($"Old: last seen {PriceBook.Ago(old, DateTime.UtcNow)}.");
-        lines.Add("Open the card and click the price to type what you see in the game.");
+            ? L.F("Unsure: last seen {0}, too old to count, so it's left out of totals and profit.", PriceBook.Ago(seen, DateTime.UtcNow))
+            : L.T("Unsure: one reading isn't a price, so it's left out of totals and profit."));
+        else if (PriceBook.IsOld(q) && q.At is DateTime old) lines.Add(L.F("Old: last seen {0}.", PriceBook.Ago(old, DateTime.UtcNow)));
+        lines.Add(L.T("Open the card and click the price to type what you see in the game."));
         return string.Join("\n", lines);
     }
 
@@ -53,9 +53,9 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         if (q?.From == PriceBook.From.Sold && label == "Lowest Market price") label = "Sold average";   // the site's pick was what it sold for, not a listing
-        left.Children.Add(CkText(label, CkInk, 13.5));
+        left.Children.Add(CkText(L.T(label), CkInk, 13.5));
         if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkFaint : CkWarn, 12));
-        if (q == null) left.Children.Add(CkText($"no Market price on {(server.Length > 0 ? server : "your server")} yet", CkFaint, 12));
+        if (q == null) left.Children.Add(CkText(L.F("no Market price on {0} yet", server.Length > 0 ? server : L.T("your server")), CkFaint, 12));
         g.Children.Add(left);
         var right = CkPriceEditor(item, q, changed, qty);
         Grid.SetColumn(right, 1); g.Children.Add(right);
@@ -68,8 +68,8 @@ public partial class MainWindow
     FrameworkElement CkPriceEditor(string item, PriceBook.Quote? q, Action changed, int qty = 1, double size = 13.5)
     {
         var host = new Grid { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        var shown = new StackPanel { Orientation = Orientation.Horizontal, Cursor = Cursors.Hand, Background = Brushes.Transparent, ToolTip = "Click to type what you see in the game" };
-        var figure = q == null ? "set price" : (q.From == PriceBook.From.Region ? "≈" : "") + (q.Price * qty).ToString("N0");
+        var shown = new StackPanel { Orientation = Orientation.Horizontal, Cursor = Cursors.Hand, Background = Brushes.Transparent, ToolTip = L.T("Click to type what you see in the game") };
+        var figure = q == null ? L.T("set price") : (q.From == PriceBook.From.Region ? "≈" : "") + (q.Price * qty).ToString("N0");
         var t = CkText(figure, q == null ? CkWarn : q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : CkGold, size, FontWeights.Normal, mono: true);
         if (q is { Sure: false } || (q != null && PriceBook.IsOld(q))) t.Opacity = 0.6;
         shown.Children.Add(new Border { Child = t, BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Ck(CkGold, 0x55) });
@@ -79,7 +79,7 @@ public partial class MainWindow
             {
                 Margin = new Thickness(6, 0, 0, 0), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center,
                 Background = Ck(q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkMuted : CkWarn, 0x24),
-                Child = CkText(q.Mine ? "YOURS" : !q.Sure ? "UNSURE" : q.From switch { PriceBook.From.Sold => "SOLD", PriceBook.From.Region => "≈ REGION", _ => "BOARD" }, q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkMuted : CkWarn, 12, FontWeights.Normal),
+                Child = CkText(L.T(q.Mine ? "YOURS" : !q.Sure ? "UNSURE" : q.From switch { PriceBook.From.Sold => "SOLD", PriceBook.From.Region => "≈ REGION", _ => "BOARD" }), q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkMuted : CkWarn, 12, FontWeights.Normal),
             });
         host.Children.Add(shown);
 
@@ -88,9 +88,9 @@ public partial class MainWindow
         {
             Width = 104, FontSize = 13, Padding = new Thickness(6, 3, 6, 3), Background = Ck(CkSlot), BorderBrush = Ck(CkGold), BorderThickness = new Thickness(1), Foreground = Ck(CkGold),
             CaretBrush = Ck(CkGold), FontFamily = new FontFamily("Cascadia Mono, Consolas"), TextAlignment = TextAlignment.Right,
-            Text = q?.Price.ToString("N0") ?? "", ToolTip = "One, in Kinah, as the game's Market shows it. Kept on this PC; shared as your read when sharing is on.",
+            Text = q?.Price.ToString("N0") ?? "", ToolTip = L.T("One, in Kinah, as the game's Market shows it. Kept on this PC; shared as your read when sharing is on."),
         };
-        var save = new Button { Content = "Save", Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(10, 0, 10, 0), Height = 26, FontSize = 12 };
+        var save = new Button { Content = L.T("Save"), Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(10, 0, 10, 0), Height = 26, FontSize = 12 };
         save.SetResourceReference(StyleProperty, "PrimaryButton");
         edit.Children.Add(box); edit.Children.Add(save);
         host.Children.Add(edit);
@@ -114,7 +114,7 @@ public partial class MainWindow
     {
         PriceBook.SetTyped(item, price, DateTime.UtcNow);
         _watcher.Market.QueueTyped(item, price);
-        Say($"{item}: {price:N0}, as you typed it. Used from now on{(_settings.Upload.Enabled && HasServer ? " and shared as your read" : "")}.", "Good");
+        Say(_settings.Upload.Enabled && HasServer ? L.F("{0}: {1:N0}, as you typed it. Used from now on and shared as your read.", item, price) : L.F("{0}: {1:N0}, as you typed it. Used from now on.", item, price), "Good");
         Redraw();
         if (_part == "Crafting") FillCraft(CraftShown);
     }

@@ -28,8 +28,9 @@ public partial class MainWindow
         var fired = new List<string>();
         foreach (var (a, price) in PriceAlerts.Check(s.Label, PriceBook.Price, DateTime.UtcNow))
         {
-            var title = $"{a.Item} is {price:N0} on {s.Name}";
-            var text = $"{(a.Above ? "Above" : "Below")} your {a.Price:N0} alert. Lowest ask{(PriceBook.SourceOf(a.Item) == PriceBook.From.Market ? ", read on this PC" : " on the server's board")}.";
+            var title = L.F("{0} is {1:N0} on {2}", a.Item, price, s.Name);
+            var text = (a.Above ? L.F("Above your {0:N0} alert.", a.Price) : L.F("Below your {0:N0} alert.", a.Price)) + " "
+                + L.T(PriceBook.SourceOf(a.Item) == PriceBook.From.Market ? "Lowest ask, read on this PC." : "Lowest ask on the server's board.");
             try { _tray.ShowBalloonTip(8000, title, text, WF.ToolTipIcon.Info); } catch (Exception ex) { CrashLog.Write("price alert", ex); }
             if (fired.Count == 0) AlertSound();
             fired.Add(title);
@@ -38,7 +39,7 @@ public partial class MainWindow
         if (fired.Count == 0) return;
         // Focus Assist and Game Mode hold back the tray notice while a game is in front, so the alert also goes on the
         // panel for 8 s ("Price alert: Raw Leather is 28,000 on Siel") and stays in the window's status line as long
-        var line = fired.Count == 1 ? $"Price alert: {fired[0]}" : $"Price alerts: {string.Join(" · ", fired)}";
+        var line = fired.Count == 1 ? L.F("Price alert: {0}", fired[0]) : L.F("Price alerts: {0}", string.Join(" · ", fired));
         ShowPriceAlert(line);
     }
 
@@ -60,15 +61,15 @@ public partial class MainWindow
             Data = Geometry.Parse("M6,10 A6,6 0 0 1 18,10 V15 L20,18 H4 L6,15 Z M10,20.5 A2,2 0 0 0 14,20.5"), Stroke = Ck(CkFaint), StrokeThickness = 1.5, Width = 14, Height = 14, Stretch = Stretch.Uniform,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
         });
-        var t = CkText(cur != null ? $"Alert when {(cur.Above ? "above" : "below")} {cur.Price:N0}" : "No price alert", cur != null ? CkMuted : CkFaint, 12.5); Grid.SetColumn(t, 1); g.Children.Add(t);
+        var t = CkText(cur != null ? L.F(cur.Above ? "Alert when above {0:N0}" : "Alert when below {0:N0}", cur.Price) : L.T("No price alert"), cur != null ? CkMuted : CkFaint, 12.5); Grid.SetColumn(t, 1); g.Children.Add(t);
         var link = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
-        var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(cur != null ? "change" : "set one")) { Foreground = Ck(CkLink), TextDecorations = null };
+        var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(L.T(cur != null ? "change" : "set one"))) { Foreground = Ck(CkLink), TextDecorations = null };
         h.Click += (_, _) => { _alertEdit.Add(item); redo(); };
         link.Inlines.Add(h); Grid.SetColumn(link, 2); g.Children.Add(link);
         return new Border
         {
             Child = g, Margin = new Thickness(16, 12, 16, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine),
-            ToolTip = cur != null ? $"A notice on the panel and from the tray when {s.Name}'s lowest ask crosses it. Kept on this PC." : null,
+            ToolTip = cur != null ? L.F("A notice on the panel and from the tray when {0}'s lowest ask crosses it. Kept on this PC.", s.Name) : null,
         };
     }
 
@@ -76,13 +77,13 @@ public partial class MainWindow
     FrameworkElement CkAlertSection(string item)
     {
         var sp = new StackPanel();
-        sp.Children.Add(CkSection("PRICE ALERT"));
-        if (Server is not { } s) { sp.Children.Add(CkNote("Pick your server in Options to set alerts on its prices.")); return sp; }
+        sp.Children.Add(CkSection(L.T("PRICE ALERT")));
+        if (Server is not { } s) { sp.Children.Add(CkNote(L.T("Pick your server in Options to set alerts on its prices."))); return sp; }
         var cur = PriceAlerts.Find(s.Label, item);
         bool above = cur?.Above ?? false;
 
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 0, 20, 0) };
-        row.Children.Add(CkText("Tell me when it's", CkMuted, 13));
+        row.Children.Add(CkText(L.T("Tell me when it's"), CkMuted, 13));
         Border Pill(string text, bool on) => new()
         {
             Child = CkText(text, on ? CkGold : CkMuted, 12.5), Padding = new Thickness(10, 3, 10, 4), Cursor = Cursors.Hand,
@@ -93,8 +94,8 @@ public partial class MainWindow
         void Draw()
         {
             pills.Children.Clear();
-            var b = Pill("below", !above); b.MouseLeftButtonUp += (_, _) => { above = false; Draw(); };
-            var a = Pill("above", above); a.MouseLeftButtonUp += (_, _) => { above = true; Draw(); };
+            var b = Pill(L.T("below"), !above); b.MouseLeftButtonUp += (_, _) => { above = false; Draw(); };
+            var a = Pill(L.T("above"), above); a.MouseLeftButtonUp += (_, _) => { above = true; Draw(); };
             pills.Children.Add(b); pills.Children.Add(a);
         }
         Draw();
@@ -104,33 +105,33 @@ public partial class MainWindow
         {
             Width = 96, FontSize = 13, Padding = new Thickness(6, 3, 6, 3), BorderThickness = new Thickness(1), Background = Ck(CkSlot), BorderBrush = Ck(CkFrame),
             Foreground = Ck(CkGold), CaretBrush = Ck(CkGold), FontFamily = new FontFamily("Cascadia Mono, Consolas"), VerticalAlignment = VerticalAlignment.Center,
-            Text = start is long p0 ? p0.ToString("N0") : "", ToolTip = "The price, in Kinah. The alert fires when the lowest ask crosses it.",
+            Text = start is long p0 ? p0.ToString("N0") : "", ToolTip = L.T("The price, in Kinah. The alert fires when the lowest ask crosses it."),
         };
         row.Children.Add(box);
-        var set = new Button { Content = cur != null ? "Update" : "Set alert", Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(12, 0, 12, 0), Height = 28, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
+        var set = new Button { Content = L.T(cur != null ? "Update" : "Set alert"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(12, 0, 12, 0), Height = 28, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
         set.SetResourceReference(StyleProperty, "PrimaryButton");
         row.Children.Add(set);
         sp.Children.Add(row);
 
-        var note = CkNote(cur != null ? $"Set: {cur.Rule}{(cur.Armed ? "" : " · told you, waits for the price to cross back")}." : $"A notice on the panel and from the tray when {s.Name}'s lowest ask crosses it. Kept on this PC.");
+        var note = CkNote(cur != null ? (cur.Armed ? L.F("Set: {0}.", L.F(cur.Above ? "above {0:N0}" : "below {0:N0}", cur.Price)) : L.F("Set: {0} · told you, waits for the price to cross back.", L.F(cur.Above ? "above {0:N0}" : "below {0:N0}", cur.Price))) : L.F("A notice on the panel and from the tray when {0}'s lowest ask crosses it. Kept on this PC.", s.Name));
         note.Margin = new Thickness(20, 6, 20, 0);
         sp.Children.Add(note);
         void Commit()
         {
             long n = long.TryParse(new string(box.Text.Where(char.IsDigit).ToArray()), out var x) ? x : 0;
-            if (n <= 0) { ((TextBlock)note).Text = "Type a price in Kinah first."; return; }
+            if (n <= 0) { ((TextBlock)note).Text = L.T("Type a price in Kinah first."); return; }
             PriceAlerts.Set(s.Label, item, above, n);
-            ((TextBlock)note).Text = $"Set: {(above ? "above" : "below")} {n:N0}. A notice on the panel and from the tray when it crosses; Options › Server has the list.";
-            set.Content = "Update";
-            Say($"Price alert set: {item} {(above ? "above" : "below")} {n:N0} on {s.Name}.", "Good");
+            ((TextBlock)note).Text = L.F(above ? "Set: above {0:N0}. A notice on the panel and from the tray when it crosses; Options › Server has the list." : "Set: below {0:N0}. A notice on the panel and from the tray when it crosses; Options › Server has the list.", n);
+            set.Content = L.T("Update");
+            Say(L.F(above ? "Price alert set: {0} above {1:N0} on {2}." : "Price alert set: {0} below {1:N0} on {2}.", item, n, s.Name), "Good");
         }
         set.Click += (_, _) => Commit();
         box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(); };
         if (cur != null)
         {
             var rm = new TextBlock { Margin = new Thickness(20, 4, 20, 0), FontSize = 12 };
-            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Remove the alert")) { Foreground = Ck(CkLink), TextDecorations = null };
-            h.Click += (_, _) => { PriceAlerts.Remove(s.Label, item); ((TextBlock)note).Text = "Alert removed."; rm.Visibility = Visibility.Collapsed; set.Content = "Set alert"; };
+            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(L.T("Remove the alert"))) { Foreground = Ck(CkLink), TextDecorations = null };
+            h.Click += (_, _) => { PriceAlerts.Remove(s.Label, item); ((TextBlock)note).Text = L.T("Alert removed."); rm.Visibility = Visibility.Collapsed; set.Content = L.T("Set alert"); };
             rm.Inlines.Add(h);
             sp.Children.Add(rm);
         }

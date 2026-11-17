@@ -91,7 +91,7 @@ public sealed class PlacementGuide : Window
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Title = "Place your panel";
+        Title = L.T("Place your panel");
         FontFamily = HudKit.Text;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         TextOptions.SetTextFormattingMode(_veil, TextFormattingMode.Display);
@@ -101,7 +101,7 @@ public sealed class PlacementGuide : Window
         _preview.IsHitTestVisible = false;
         if (Math.Abs(_scale - 1) > 0.001) { var t = new ScaleTransform(_scale, _scale); t.Freeze(); _preview.LayoutTransform = t; }
         _panel = new Grid { Background = Grab, Cursor = Cursors.SizeAll, Children = { _preview } };
-        AutomationPropertiesName(_panel, "Your panel: drag it, then press Enter");
+        AutomationPropertiesName(_panel, L.T("Your panel: drag it, then press Enter"));
         _panel.MouseLeftButtonDown += (_, e) => { _dragFrom = e.GetPosition(_top); _dragStart = _pos; _panel.CaptureMouse(); _chosen = null; Layout(); e.Handled = true; };
         _panel.MouseMove += (_, e) =>
         {
@@ -140,7 +140,7 @@ public sealed class PlacementGuide : Window
         {
             WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, Topmost = true, ShowInTaskbar = false,
             ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.Manual, ShowActivated = false, Owner = owner,
-            Title = "Place your panel", Content = _veil, FontFamily = HudKit.Text,
+            Title = L.T("Place your panel"), Content = _veil, FontFamily = HudKit.Text,
         };
         _veilWindow.SourceInitialized += (_, _) => { var h = new WindowInteropHelper(_veilWindow).Handle; Native.SetClickThrough(h, true); FitToView(_veilWindow); };
         _veilWindow.Loaded += (_, _) => { if (_veilWindow != null) FitToView(_veilWindow); };
@@ -377,7 +377,7 @@ public sealed class PlacementGuide : Window
         var outline = Boxed(null, PartLine, 1.5, Dashes, 8, PartFill, new Thickness(0));
         outline.Width = r.Width; outline.Height = r.Height;
         Put(_veil, outline, r.X, r.Y);
-        var label = PartLabel("Game · " + name);
+        var label = PartLabel(L.F("Game · {0}", L.T(name)));
         label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double lw = label.DesiredSize.Width, lh = label.DesiredSize.Height;
         double lx = labelRight ? r.Right - lw : r.X, ly = r.Y - lh - 6;
@@ -403,7 +403,7 @@ public sealed class PlacementGuide : Window
         var label = new Border
         {
             Background = GhostLabelBg, CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 2, 8, 2),
-            Child = Label(name, 12, Gold, FontWeights.Medium),
+            Child = Label(L.T(name), 12, Gold, FontWeights.Medium),
         };
         Put(_veil, label, r.X + 8, r.Y + 8);
     }
@@ -419,8 +419,8 @@ public sealed class PlacementGuide : Window
         var (side, gap) = gaps.MaxBy(g => g.Gap);
         bool sideways = side is "left" or "right";
         bool justOff = gap <= (sideways ? _view.Width : _view.Height) * 0.08;
-        string how = justOff ? side switch { "left" => "just left of this screen", "right" => "just right of this screen", "above" => "just above this screen", _ => "just below this screen" }
-            : $"{gap:N0} px {side}";
+        string how = justOff ? L.T(side switch { "left" => "just left of this screen", "right" => "just right of this screen", "above" => "just above this screen", _ => "just below this screen" })
+            : L.F("{0:N0} px {1}", gap, L.T(side, "side"));
         string arrow = (left > 0, right > 0, above > 0, below > 0) switch
         {
             (true, _, true, _) => "↖", (true, _, _, true) => "↙", (_, true, true, _) => "↗", (_, true, _, true) => "↘",
@@ -429,7 +429,7 @@ public sealed class PlacementGuide : Window
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         var arrowText = Label(arrow, 15, Gold); arrowText.Margin = new Thickness(side == "right" ? 6 : 0, 0, side == "right" ? 0 : 6, 0);
         if (side != "right") row.Children.Add(arrowText);
-        row.Children.Add(Label("Game · " + name, 12.5, LabelInk, FontWeights.Medium));
+        row.Children.Add(Label(L.F("Game · {0}", L.T(name)), 12.5, LabelInk, FontWeights.Medium));
         var detail = Label(how + ", " + WhereIn(box), 12.5, Faint); detail.Margin = new Thickness(6, 0, 0, 0);
         row.Children.Add(detail);
         if (side == "right") row.Children.Add(arrowText);
@@ -457,8 +457,8 @@ public sealed class PlacementGuide : Window
         double fx = (box.Left + box.Width / 2.0 - _game.Left) / Math.Max(1, _game.Width), fy = (box.Top + box.Height / 2.0 - _game.Top) / Math.Max(1, _game.Height);
         string v = fy < 0.33 ? "top" : fy > 0.67 ? "bottom" : "";
         string hz = fx < 0.25 ? "left" : fx > 0.75 ? "right" : fx is >= 0.45 and <= 0.55 ? "centre" : fx < 0.5 ? "left of centre" : "right of centre";
-        if (v.Length == 0) return hz == "centre" ? "the centre" : hz;
-        return hz switch { "left" or "right" => $"{v}-{hz} corner", "centre" => $"{v} centre", _ => $"{v}, {hz}" };
+        if (v.Length == 0) return L.T(hz == "centre" ? "the centre" : hz, "where");
+        return L.T(hz switch { "left" or "right" => $"{v}-{hz} corner", "centre" => $"{v} centre", _ => $"{v}, {hz}" }, "where");
     }
 
     /// <summary>A key in the help bar and the tag: "Enter", "Esc".</summary>
@@ -473,12 +473,12 @@ public sealed class PlacementGuide : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         void Add(FrameworkElement e, double gap) { e.Margin = new Thickness(gap, 0, 0, 0); row.Children.Add(e); }
-        Add(Label("Place your panel", 13, Ink, FontWeights.Medium), 0);
-        Add(Label("Drag it, or pick a snap spot", 13, Muted), 14);
+        Add(Label(L.T("Place your panel"), 13, Ink, FontWeights.Medium), 0);
+        Add(Label(L.T("Drag it, or pick a snap spot"), 13, Muted), 14);
         Add(Kbd("Enter", Ink, Slot, BadgeLine, FontWeights.Medium), 14);
-        Add(Label("save", 13, Muted), 6);
+        Add(Label(L.T("save", "key"), 13, Muted), 6);
         Add(Kbd("Esc", Ink, Slot, BadgeLine, FontWeights.Medium), 14);
-        Add(Label("put it back", 13, Muted), 6);
+        Add(Label(L.T("put it back"), 13, Muted), 6);
         var bar = new Border { Background = PanelBg, BorderBrush = FrameLine, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 0, 16, 0), Height = 36, Child = row };
         bar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return bar;
@@ -489,7 +489,7 @@ public sealed class PlacementGuide : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new System.Windows.Shapes.Path { Data = DragIcon, Stroke = TagInk, StrokeThickness = 1.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 15, Height = 15, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center });
-        var words = Label("Drag me, then press", 13, TagInk, FontWeights.SemiBold); words.Margin = new Thickness(7, 0, 7, 0);
+        var words = Label(L.T("Drag me, then press"), 13, TagInk, FontWeights.SemiBold); words.Margin = new Thickness(7, 0, 7, 0);
         row.Children.Add(words);
         row.Children.Add(Kbd("Enter", TagInk, KbdOnTag, KbdOnTagLine, FontWeights.SemiBold));
         return new Border
@@ -503,15 +503,15 @@ public sealed class PlacementGuide : Window
     Border MakeChooser()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var k = Label("SNAP TO", 12, Faint, FontWeights.Medium); k.Margin = new Thickness(0, 0, 10, 0);
+        var k = Label(L.T("SNAP TO"), 12, Faint, FontWeights.Medium); k.Margin = new Thickness(0, 0, 10, 0);
         row.Children.Add(k);
         for (int i = 0; i < HudSpots.All.Length; i++)
         {
             var s = HudSpots.All[i];
             if (i > 0) { var dot = Label("·", 13, Faint); dot.Margin = new Thickness(4, 0, 4, 0); row.Children.Add(dot); }
-            var text = Label(s.Name, 13, Muted);
+            var text = Label(L.T(s.Name), 13, Muted);
             var seg = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(11, 5, 11, 5), Background = Brushes.Transparent, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Child = text, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
-            AutomationPropertiesName(seg, "Snap to " + s.Name);
+            AutomationPropertiesName(seg, L.F("Snap to {0}", L.T(s.Name)));
             seg.MouseLeftButtonUp += (_, e) => { Snap(s.Key); e.Handled = true; };
             seg.MouseEnter += (_, _) => { if (_chosen != s.Key) text.Foreground = Ink; };
             seg.MouseLeave += (_, _) => PaintChooser();

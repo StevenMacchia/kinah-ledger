@@ -33,7 +33,7 @@ public sealed class RegionPickerWindow : Window
         var hintBox = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x0C, 0x0D, 0x11)), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 10, 16, 10),
-            Child = new TextBlock { Text = (hint ?? "Drag a box around the chat lines that show loot and Kinah.") + "   Esc to cancel", Foreground = Brushes.White, FontSize = 15, FontFamily = new FontFamily("Segoe UI") }
+            Child = new TextBlock { Text = L.T(hint ?? "Drag a box around the chat lines that show loot and Kinah.") + "   " + L.T("Esc to cancel"), Foreground = Brushes.White, FontSize = 15, FontFamily = new FontFamily("Segoe UI") }
         };
         Canvas.SetLeft(hintBox, 28); Canvas.SetTop(hintBox, 28);
         _canvas.Children.Add(hintBox);
