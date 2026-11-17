@@ -21,9 +21,9 @@ namespace KinahLedger.Ui;
 public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0, string PriceTone = "", string PriceTip = "", bool Mat = false, string Under = "")
 {
     /// <summary>The row's report link: "Report" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
-    public string ReportText => Reported ? "Undo" : "Report";
+    public string ReportText => Reported ? L.T("Undo") : L.T("Report");
     /// <summary>The words before the link: the hint "Looks wrong?", or "Reported ·" on a flagged row.</summary>
-    public string ReportHint => Reported ? "Reported ·" : "Looks wrong?";
+    public string ReportHint => Reported ? L.T("Reported ·") : L.T("Looks wrong?");
     /// <summary>The line under the name, with a ⓘ when hovering the row tells more.</summary>
     public string SubShown => Tip.Length == 0 || Header ? Sub : Sub.Length > 0 ? Sub + "  ⓘ" : "ⓘ";
 }
@@ -65,7 +65,7 @@ public partial class MainWindow : Window
     public System.Windows.Media.Imaging.BitmapSource? PreviewSource { get; private set; }
 
     readonly WF.NotifyIcon _tray = new();
-    readonly WF.ToolStripMenuItem _trayToggle = new("Start run");
+    readonly WF.ToolStripMenuItem _trayToggle = new(L.T("Start run"));
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     int _packetTickQueued;
     bool _framing; int _ticks;
@@ -253,8 +253,8 @@ public partial class MainWindow : Window
         InitWelcome();
         InitWhatsNew(watch);   // after an update, this version's notes once at the top (Ui/MainWindow.WhatsNew.cs)
         InitCounting(watch);   // Help improve counting: the choice applied, the one-time notice
-        if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
-        else Say("Reading the chat whenever the game is open. Start run times a run.", "Faint");
+        if (!HasServer) Say(L.T("Choose your region and server first: prices and drops are kept per server."), "Warn");
+        else Say(L.T("Reading the chat whenever the game is open. Start run times a run."), "Faint");
         // the data folder's clean-up: pictures and miscount reports past their time, on its own thread, then hourly (Housekeeping)
         if (watch) Housekeeping.RunIfDue(DateTime.Now);
         // miscount reports the site couldn't take before (no connection, the route not deployed yet) go now, when the backoff allows
@@ -296,14 +296,14 @@ public partial class MainWindow : Window
         // three stats (the approved mock): the hour's Kinah is in the line under the big figure, so it isn't one of them
         (Tile1Label.Text, Tile2Label.Text, Tile3Label.Text, Tile4Label.Text) = m switch
         {
-            Mode.Gather => ("attempts an hour", "items an hour", "items a try", ""),
-            Mode.Mixed => ("", "Kinah a kill", "kills an hour", "attempts an hour"),
-            _ => ("", "Kinah a kill", "kills an hour", "drops a kill"),
+            Mode.Gather => (L.T("attempts an hour"), L.T("items an hour"), L.T("items a try"), ""),
+            Mode.Mixed => ("", L.T("Kinah a kill"), L.T("kills an hour"), L.T("attempts an hour")),
+            _ => ("", L.T("Kinah a kill"), L.T("kills an hour"), L.T("drops a kill")),
         };
         Tile1.Visibility = m == Mode.Gather ? Visibility.Visible : Visibility.Collapsed;
         Tile4.Visibility = m == Mode.Gather ? Visibility.Collapsed : Visibility.Visible;
         // the fifth tile: what the hour is worth if the tradeable items are sold on the Market (plus the Kinah, in open world)
-        Tile5Label.Text = m == Mode.Gather ? "value/hr" : "total/hr";
+        Tile5Label.Text = m == Mode.Gather ? L.T("value/hr") : L.T("total/hr");
         if (!Farming && _watcher.Chat == null && !_demo) ShowTable(null);
     }
 
@@ -325,7 +325,7 @@ public partial class MainWindow : Window
         // a flagged drop also keeps the last minute of what was read, so the misread can be found and fixed
         string? saved = null;
         if (on && _watcher.Chat is { } c) { try { saved = c.WriteReport(r.Report); } catch (Exception ex) { CrashLog.Write("miscount report", ex); } }
-        Say(on ? $"{r.Report} won't be sent to the site. Thanks for flagging it." + (saved != null ? " The last minute is saved in your reports folder." : "") : $"{r.Report} counts again.", "Faint");
+        Say(on ? L.F("{0} won't be sent to the site. Thanks for flagging it.", r.Report) + (saved != null ? " " + L.T("The last minute is saved in your reports folder.") : "") : L.F("{0} counts again.", r.Report), "Faint");
         if (saved != null) Status.ToolTip = saved;
         if (saved != null) _ = SendReportPictures(saved, "Looks wrong? on " + r.Report);
         Redraw();
@@ -344,7 +344,7 @@ public partial class MainWindow : Window
             CrashLog.Note($"miscount pictures: {(ok ? "sent" : "not sent")} ({note})");
             // a failed send is final, so the folder is marked: the clean-up keeps it for the player to attach by hand
             if (!ok && ReportBuffer.HasSendablePictures(dir)) ReportBuffer.MarkUnsent(dir, note); else ReportBuffer.ClearUnsent(dir);
-            Say(ok ? $"Report saved and its pictures sent ({note}). Thanks: they become tests the tracker must pass." : $"Report saved on this PC; its pictures weren't sent ({note}).", ok ? "Good" : "Faint");
+            Say(ok ? L.F("Report saved and its pictures sent ({0}). Thanks: they become tests the tracker must pass.", note) : L.F("Report saved on this PC; its pictures weren't sent ({0}).", note), ok ? "Good" : "Faint");
         }
         catch (Exception ex) { CrashLog.Write("miscount pictures", ex); }
     }
@@ -359,15 +359,15 @@ public partial class MainWindow : Window
     void ReportMiscount()
     {
         var c = _watcher.Chat;
-        if (c == null) { Say("Nothing to report yet: the last minute is kept once the tracker is reading the game.", "Warn"); return; }
+        if (c == null) { Say(L.T("Nothing to report yet: the last minute is kept once the tracker is reading the game."), "Warn"); return; }
         bool asked = false;
         if (!_prefs.ReportFrames)
         {
             var answer = MessageBox.Show(this,
-                "Sends this report to Kinah Ledger (no chat from other players).\n\n" +
-                "Also keep the last minute of the chat and the loot list as pictures on this PC, for the next reports? " +
+                L.T("Sends this report to Kinah Ledger (no chat from other players).") + "\n\n" +
+                L.T("Also keep the last minute of the chat and the loot list as pictures on this PC, for the next reports? " +
                 "Pictures show exactly what the screen said, which is what finds a misread. They can show other players' names " +
-                "and messages, so they are never sent with a report. Options › Sharing turns them off again.",
+                "and messages, so they are never sent with a report. Options › Sharing turns them off again."),
                 "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer == MessageBoxResult.Yes) { _prefs.ReportFrames = ReportBuffer.KeepFrames = true; SavePrefs(); asked = true; }
         }
@@ -376,10 +376,10 @@ public partial class MainWindow : Window
             var dir = c.WriteReport("");
             Status.ToolTip = dir;
             _ = SendReportPictures(dir, "Report a miscount");
-            Say("Sending the report…" + (asked ? " Pictures are kept on this PC from now on." : ""), "Faint");
+            Say(L.T("Sending the report…") + (asked ? " " + L.T("Pictures are kept on this PC from now on.") : ""), "Faint");
             _ = UploadReport(dir, "Report a miscount", "");
         }
-        catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
+        catch (Exception ex) { CrashLog.Write("miscount report", ex); Say(L.F("Couldn't save the report: {0}", ex.Message), "Bad"); }
     }
 
     /// <summary>
@@ -395,12 +395,12 @@ public partial class MainWindow : Window
             var o = await Task.Run(() => Upload.ReportClient.SendAsync(u, dir, why, flagged, server));
             Say(o switch
             {
-                Upload.ReportClient.Outcome.Sent => "Report sent. Thanks: it helps fix the count.",
-                Upload.ReportClient.Outcome.Queued => "Report saved; it will send when the site answers.",
-                _ => "Report saved on this PC.",
+                Upload.ReportClient.Outcome.Sent => L.T("Report sent. Thanks: it helps fix the count."),
+                Upload.ReportClient.Outcome.Queued => L.T("Report saved; it will send when the site answers."),
+                _ => L.T("Report saved on this PC."),
             }, o == Upload.ReportClient.Outcome.Sent ? "Good" : "Faint");
         }
-        catch (Exception ex) { CrashLog.Write("miscount report upload", ex); Say("Report saved on this PC.", "Faint"); }
+        catch (Exception ex) { CrashLog.Write("miscount report upload", ex); Say(L.T("Report saved on this PC."), "Faint"); }
     }
 
     void Redraw()
@@ -424,10 +424,10 @@ public partial class MainWindow : Window
         foreach (var v in via.Split('·', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             parts.Add(v switch
             {
-                "chat" => "Read in the chat.",
-                "recovered" => "Read again after the line scrolled away or came out blurred.",
-                "guessed" => "Part of the name was hidden, so it was matched to the closest item. Hover the item's row and press Report if it's not right.",
-                "loot list" => "Only the loot list beside your character showed it; the chat didn't.",
+                "chat" => L.T("Read in the chat."),
+                "recovered" => L.T("Read again after the line scrolled away or came out blurred."),
+                "guessed" => L.T("Part of the name was hidden, so it was matched to the closest item. Hover the item's row and press Report if it's not right."),
+                "loot list" => L.T("Only the loot list beside your character showed it; the chat didn't."),
                 _ => char.ToUpperInvariant(v[0]) + v[1..] + ".",
             });
         return string.Join(" ", parts);
@@ -448,14 +448,14 @@ public partial class MainWindow : Window
         return farm ?? (chat != null ? _watcher.AllView : null);
     }
 
-    string ViewTitle() => RunEngine != null ? "this run" : "every zone since your last break";
+    string ViewTitle() => RunEngine != null ? "this run" : "every zone since your last break";   // English keys: shown through L.T
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
     /// <param name="fromWindow">True for the window's Start/Stop button; the shortcut and the tray pass false.</param>
     async Task Toggle(bool fromWindow = false)
     {
-        if (_welcome) { Say("Choose your server first.", "Warn"); return; }
+        if (_welcome) { Say(L.T("Choose your server first."), "Warn"); return; }
         // Start while a stop can still be undone: that stop becomes final (saved and shared), and a new run starts
         if (_stopPending) { await CommitPending(); await StartTracking(); return; }
         if (!Farming) await StartTracking();
@@ -478,7 +478,7 @@ public partial class MainWindow : Window
         Hide();
         try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; _prefs.ManualChat = true; RegionStore.Save(r.Value); _watcher.ManualChat = r; _ = _watcher.ResetChatAsync(); SetPreview(null); } }
         finally { if (was) { Show(); Activate(); } }
-        if (_region != null && _prefs.ManualChat) Report("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start.", "Good");
+        if (_region != null && _prefs.ManualChat) Report(L.T("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start."), "Good");
     }
 
     /// <summary>The step-by-step setup check (first run, and Options › Game reading › Check the setup).</summary>
@@ -494,37 +494,37 @@ public partial class MainWindow : Window
     {
         _region = null; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null; _ = _watcher.ResetChatAsync();
         SetPreview(null);
-        Report("Back to automatic: the chat is found when you start.", "Faint");
+        Report(L.T("Back to automatic: the chat is found when you start."), "Faint");
     }
 
     /// <summary>Finds the game, the chat and the zone right now and shows what it found, without starting a run.</summary>
     public async Task DetectNow()
     {
-        Report("Looking for the game window, the chat and the zone…", "Faint");
+        Report(L.T("Looking for the game window, the chat and the zone…"), "Faint");
         try
         {
             var game = GameWindow.Find(_settings.ProcessHints);
-            if (game == null) { Report("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
+            if (game == null) { Report(L.T("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself."), "Warn"); return; }
             if (_hud != null) { _hud.Hide(); }   // never read our own panel
             if (GameWindow.Covered(ChatLocator.Corner(game.Value), _settings.ProcessHints) is { } cover)
             {
-                Report($"The chat corner of the game is out of view: {cover} is over it. Move it off the bottom-left of the game, then Detect again.", "Warn");
+                Report(L.F("The chat corner of the game is out of view: {0} is over it. Move it off the bottom-left of the game, then Detect again.", cover), "Warn");
                 return;
             }
             var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
             var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
-            ZoneLbl.Text = "Zone: " + (zone ?? "not read yet");
+            ZoneLbl.Text = L.F("Zone: {0}", zone ?? L.T("not read yet"));
             var g = game.Value;
             var marks = region != null ? new[] { (region.Value, TrackerSession.ChatColor), (ZoneLocator.Strip(g), TrackerSession.ZoneColor) } : new[] { (ZoneLocator.Strip(g), TrackerSession.ZoneColor) };
             SetPreview(await Task.Run(() => ScreenReader.Frame(g, 480, marks)));
             if (region == null)
             {
-                Report("Couldn't see the chat (" + note + "). Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.", "Warn");
+                Report(L.F("Couldn't see the chat ({0}). Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.", note), "Warn");
                 return;
             }
             _region = region; _prefs.ManualChat = false; RegionStore.Clear();
             ShowFix(false);
-            Report($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. Press Start whenever you're ready.", "Good");
+            Report(zone != null ? L.F("Found the chat ({0}) and the zone. Press Start whenever you're ready.", note) : L.F("Found the chat ({0}). Press Start whenever you're ready.", note), "Good");
         }
         catch (Exception ex) { Report(ex.Message, "Bad"); }
     }
@@ -532,12 +532,12 @@ public partial class MainWindow : Window
     public async Task TestRead()
     {
         if (_region == null) { await DetectNow(); if (_region == null) return; }
-        Report("Reading…", "Faint");
+        Report(L.T("Reading…"), "Faint");
         try
         {
             if (GameWindow.Covered(_region.Value, _settings.ProcessHints) is { } cover)
             {
-                Report($"The chat is out of view: {cover}{(cover.StartsWith("the game") ? "" : " is over it")}. Only the game is read; bring it into view, then Test read again.", "Warn");
+                Report(cover.StartsWith("the game") ? L.F("The chat is out of view: {0}. Only the game is read; bring it into view, then Test read again.", cover) : L.F("The chat is out of view: {0} is over it. Only the game is read; bring it into view, then Test read again.", cover), "Warn");
                 return;
             }
             var reader = new ScreenReader(_region.Value, _settings.Ocr.Scale);
@@ -548,12 +548,12 @@ public partial class MainWindow : Window
             var engine = new SessionEngine(_items);
             int hits = 0;
             foreach (var l in lines) foreach (var ev in parser.Parse(l, DateTime.UtcNow)) { engine.Apply(ev); hits++; }
-            TableTitle.Text = "TEST READ · WHAT'S ON SCREEN NOW";
+            TableTitle.Text = L.T("TEST READ · WHAT'S ON SCREEN NOW");
             ShowTable(engine, TimeSpan.FromHours(1));
-            Summary.Text = $"{lines.Count} lines read · {hits} loot or kill lines";
-            if (lines.Count == 0) Report("Nothing recognized. Use borderless or windowed mode and make sure the box covers the chat text.", "Warn");
-            else if (hits == 0) Report($"{lines.Count} line(s) read but none look like loot. Loot something first, or try a bigger chat font or a tighter box.", "Warn");
-            else Report($"Reads fine: {hits} loot or kill line(s) out of {lines.Count}. Ready to start.", "Good");
+            Summary.Text = L.F("{0} lines read · {1} loot or kill lines", lines.Count, hits);
+            if (lines.Count == 0) Report(L.T("Nothing recognized. Use borderless or windowed mode and make sure the box covers the chat text."), "Warn");
+            else if (hits == 0) Report(L.F("{0} line(s) read but none look like loot. Loot something first, or try a bigger chat font or a tighter box.", lines.Count), "Warn");
+            else Report(L.F("Reads fine: {0} loot or kill line(s) out of {1}. Ready to start.", hits, lines.Count), "Good");
         }
         catch (Exception ex) { Report(ex.Message, "Bad"); }
     }
@@ -561,9 +561,9 @@ public partial class MainWindow : Window
     async Task StartTracking()
     {
         SavePrefs();
-        if (Server is not { } server) { Say("Choose your region and server first: prices and drops are kept per server.", "Warn"); ServerRowState(); return; }
+        if (Server is not { } server) { Say(L.T("Choose your region and server first: prices and drops are kept per server."), "Warn"); ServerRowState(); return; }
         StartBtn.IsEnabled = false;
-        Say(_watcher.Chat == null ? "Finding the chat and the zone…" : "Starting…", "Faint");
+        Say(_watcher.Chat == null ? L.T("Finding the chat and the zone…") : L.T("Starting…"), "Faint");
         try
         {
             _settings.Upload.Enabled = _prefs.Share;
@@ -575,14 +575,17 @@ public partial class MainWindow : Window
             if (fromZero) _watcher.HoldViews();
             var farm = _watcher.StartFarm(ActivityName());
             _lastRun = null;
-            ZoneLbl.Text = chat.Zone ?? "Zone not read yet";
+            ZoneLbl.Text = chat.Zone ?? L.T("Zone not read yet");
             EnsureHud();
             _tableWhat = ViewTitle();
             Redraw();
             SetTrackingUi(true);
             ShowFix(false);
-            Say($"Run started{(fromZero ? " from zero" : "")} · {chat.Zone ?? "zone not read yet"}. Minimize this window; the panel and {(HotkeyText.Length > 0 ? HotkeyText : "the tray")} keep working.", "Faint");
-            FlashHud(fromZero ? "Run started from zero" : "Run started");   // the shortcut pressed in the game shows it took
+            var zoneNow = chat.Zone ?? L.T("zone not read yet");
+            Say(HotkeyText.Length > 0
+                ? (fromZero ? L.F("Run started from zero · {0}. Minimize this window; the panel and {1} keep working.", zoneNow, HotkeyText) : L.F("Run started · {0}. Minimize this window; the panel and {1} keep working.", zoneNow, HotkeyText))
+                : (fromZero ? L.F("Run started from zero · {0}. Minimize this window; the panel and the tray keep working.", zoneNow) : L.F("Run started · {0}. Minimize this window; the panel and the tray keep working.", zoneNow)), "Faint");
+            FlashHud(fromZero ? L.T("Run started from zero") : L.T("Run started"));   // the shortcut pressed in the game shows it took
             if (fromZero) await OfferFromZero();
         }
         catch (Exception ex)
@@ -607,12 +610,12 @@ public partial class MainWindow : Window
         var e = _watcher.StopFarm(); if (e == null) return;
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
-        StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
+        StartBtn.IsEnabled = false; Say(L.T("Stopping…"), "Faint");
         long worth = BestRuns.Value(e);
         KeepShareRun(e);   // Share's Last run
         // the zone's best as it was before this run is offered to it, for the recap's "Your best here"
         var bestBefore = BestRuns.For(Server?.Label ?? "", e.Zone);
-        FlashHud(worth > 0 ? $"Run stopped · {Fk(worth)} this run" : "Run stopped");
+        FlashHud(worth > 0 ? L.F("Run stopped · {0} this run", Fk(worth)) : L.T("Run stopped"));
         if (fromWindow)
         {
             if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
@@ -622,18 +625,18 @@ public partial class MainWindow : Window
         // the run's result stays on the status line for a few seconds and in the history
         _lastRun = null; _lastRunUntil = DateTime.MinValue;
         var t = e.Totals();
-        string ran = $"{e.Elapsed:hh\\:mm\\:ss}" + (t.Kinah > 0 ? $" · {Fk(t.Kinah)} Kinah" : "") + (t.Kills > 0 ? $" · {t.Kills} kills" : "") + (t.Nodes > 0 ? $" · {t.Nodes} attempts" : "") + (t.Drops > 0 ? $" · {t.Drops} items" : "");
+        string ran = $"{e.Elapsed:hh\\:mm\\:ss}" + (t.Kinah > 0 ? L.F(" · {0} Kinah", Fk(t.Kinah)) : "") + (t.Kills > 0 ? L.F(" · {0} kills", t.Kills) : "") + (t.Nodes > 0 ? L.F(" · {0} attempts", t.Nodes) : "") + (t.Drops > 0 ? L.F(" · {0} items", t.Drops) : "");
         string msg, tone = "Faint"; bool shared = false; bool eligible = e.Elapsed.TotalMinutes >= 5 && e.Events > 0;
-        if (!eligible) msg = $"Run stopped ({ran}). Under 5 minutes or no loot seen, so it isn't shared.";
-        else if (!_prefs.Share) msg = $"Run stopped ({ran}). Sharing is off, so it stays on this PC.";
-        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = $"Run stopped ({ran}). No sharing address in settings.json, so it stays on this PC.";
-        else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = $"Run stopped ({ran}) and shared anonymously."; tone = "Good"; shared = true; }
-        else { msg = $"Run stopped ({ran}). Not shared: " + (Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : "couldn't reach the site") + ". Kept on this PC."; tone = "Warn"; }
+        if (!eligible) msg = L.F("Run stopped ({0}). Under 5 minutes or no loot seen, so it isn't shared.", ran);
+        else if (!_prefs.Share) msg = L.F("Run stopped ({0}). Sharing is off, so it stays on this PC.", ran);
+        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = L.F("Run stopped ({0}). No sharing address in settings.json, so it stays on this PC.", ran);
+        else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = L.F("Run stopped ({0}) and shared anonymously.", ran); tone = "Good"; shared = true; }
+        else { msg = L.F("Run stopped ({0}). Not shared: {1}. Kept on this PC.", ran, Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : L.T("couldn't reach the site")); tone = "Warn"; }
         if (e.Events > 0)
         {
             SessionStore.Append(e, _items, activity, _settings, shared, Server?.Label ?? "");
             try { BestRuns.OfferRun(Server?.Label ?? "", e, _items); } catch (Exception ex) { CrashLog.Write("best runs", ex); }
-            msg += $" Saved to your history ({SessionStore.Count()} runs). Still counting.";
+            msg += " " + L.F("Saved to your history ({0} runs). Still counting.", SessionStore.Count());
         }
         SetTrackingUi(false);
         SayOnLine(msg, tone);   // a result to read, so on the line for 15 s, not a passing toast
@@ -647,11 +650,11 @@ public partial class MainWindow : Window
 
     void SetTrackingUi(bool on)
     {
-        StartBtn.Content = on ? "Stop run" : "Start run";
+        StartBtn.Content = on ? L.T("Stop run") : L.T("Start run");
         StartBtn.SetResourceReference(ForegroundProperty, on ? "Coral" : "Ink");   // coral while a run is on (the quiet pill, 2026-11-07)
         StartBtn.SetResourceReference(BorderBrushProperty, on ? "Coral" : "CardLineHover");
         StartBtn.IsEnabled = on || HasServer;
-        _trayToggle.Text = on ? "Stop run" : "Start run";
+        _trayToggle.Text = on ? L.T("Stop run") : L.T("Start run");
         UpdateStartHint(on);
         UpdateTrayTip();
     }
@@ -666,7 +669,7 @@ public partial class MainWindow : Window
             : chat.Paused.Length > 0 ? "paused"
             : chat.LastError.Length > 0 ? "read problem"
             : "reading";
-        var tip = "Kinah Ledger · " + what + (UpdateReady ? " · update ready" : "");
+        var tip = "Kinah Ledger · " + L.T(what) + (UpdateReady ? " · " + L.T("update ready") : "");
         if (tip != _trayTip) { _trayTip = tip; try { _tray.Text = tip; } catch (Exception) { /* a text over the limit must not stop the tick */ } }
         // the icon says it too, with a dot: red for a read problem, amber for paused, teal for an update ready; none while all is well
         var dot = what == "read problem" ? System.Drawing.Color.FromArgb(0xFF, 0x6B, 0x5E) : what == "paused" ? System.Drawing.Color.FromArgb(0xF3, 0xB4, 0x5E)
@@ -694,8 +697,8 @@ public partial class MainWindow : Window
             if (now - _tickSaidAt >= TimeSpan.FromMinutes(5))
             {
                 _tickSaidAt = now;
-                Say("Something went wrong, see log", "Warn");
-                Status.ToolTip = "The window's refresh hit an error and carries on. Details are in " + CrashLog.CrashPath;
+                Say(L.T("Something went wrong, see log"), "Warn");
+                Status.ToolTip = L.F("The window's refresh hit an error and carries on. Details are in {0}", CrashLog.CrashPath);
             }
         }
     }
@@ -718,26 +721,26 @@ public partial class MainWindow : Window
             if (show != _lastRun) _tableWhat = ViewTitle();
             FillNumbers(show, show.Active);
         }
-        else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; Motion.Blank(HeadRate, "hero", " "); HeadRateUnit.Visibility = Visibility.Collapsed; }
+        else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? L.T("Reading starts once the game is open") : L.T("Looking for the chat"); Motion.Blank(HeadRate, "hero", " "); HeadRateUnit.Visibility = Visibility.Collapsed; }
         FillReading(chat, show);
         UpdateTrayTip();
         // the live dot: the game is being read right now
         LiveMark.Visibility = chat != null && chat.Paused.Length == 0 && chat.LastError.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (farm?.Paused == true && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
+        if (farm?.Paused == true && !TableTitle.Text.EndsWith(L.T(" · paused"))) TableTitle.Text += L.T(" · paused");
         // the zone is the run card's title, as the site's "best place" card names its zone
-        ZoneLbl.Text = chat?.Zone ?? (_watcher.GameRect == null ? "Waiting for the game" : "Zone not read yet");
+        ZoneLbl.Text = chat?.Zone ?? (_watcher.GameRect == null ? L.T("Waiting for the game") : L.T("Zone not read yet"));
         // with no zone on the list, what the minimap corner said, so a zone the list doesn't have yet can be named and added
-        ZoneLbl.ToolTip = chat?.Zone == null && chat?.ZoneNote is { Length: > 0 } zn ? zn + "\n\nA zone has to be on the tracker's zone list to count. Send the name shown here to have it added." : null;
+        ZoneLbl.ToolTip = chat?.Zone == null && chat?.ZoneNote is { Length: > 0 } zn ? zn + "\n\n" + L.T("A zone has to be on the tracker's zone list to count. Send the name shown here to have it added.") : null;
         if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }
-        else if (chat == null) Tell(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
-        else if (chat.LastError.Length > 0) Tell("Read problem: " + chat.LastError, "Bad");
-        else if (chat.Paused.Length > 0) Tell($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
+        else if (chat == null) Tell(_watcher.GameRect == null ? L.T("Waiting for the game. Reading starts on its own once the game is open.") : L.F("Looking for the chat… {0}", _watcher.ChatNote), "Faint");
+        else if (chat.LastError.Length > 0) Tell(L.F("Read problem: {0}", chat.LastError), "Bad");
+        else if (chat.Paused.Length > 0) Tell(L.F("Paused: {0}. Only the game is read, so reading picks up when the chat is in view again · {1}", chat.Paused, MarketShort()), "Warn");
         else
         {
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
             // the footer (the approved mock): "Tracking Western Cantas Valley · last: Spiritstone acquired"; read counts on hover
-            var line = !chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
-                : chat.LastLine.Length > 0 ? "Last: " + chat.LastLine : chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat";
+            var line = !chat.ChatFound ? L.T("Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows.")
+                : chat.LastLine.Length > 0 ? L.F("Last: {0}", chat.LastLine) : chat.Zone is { Length: > 0 } tz ? L.F("Tracking {0}", tz) : L.T("Reading the chat");
             _lastRead = chat.ChatFound ? line : "";
             // the Farming page says nothing here while all is well (2026-10-28, the calm page): the last line read is in ⋯
             // sharing that isn't getting through is the one thing that line does say
@@ -796,16 +799,16 @@ public partial class MainWindow : Window
     string BalanceShort()
     {
         var b = _watcher.Balance.Tracker;
-        return b.Balance is long v ? $"Kinah {v:N0}" : b.KinahLeft != null ? "Kinah counter found" : "Kinah counter: pick up Kina to find it";
+        return b.Balance is long v ? L.F("Kinah {0:N0}", v) : b.KinahLeft != null ? L.T("Kinah counter found") : L.T("Kinah counter: pick up Kina to find it");
     }
 
     /// <summary>The Market in a few words for the status line.</summary>
     string MarketShort()
     {
         var m = _watcher.Market;
-        if (!m.Enabled) return "Market: off with sharing";
-        if (m.Detected) return $"Market: open · {m.AsksSeen:N0} asks";
-        return m.AsksSeen > 0 ? $"Market: {m.AsksSeen:N0} asks · {m.Shared:N0} shared" : "Market: watching";
+        if (!m.Enabled) return L.T("Market: off with sharing");
+        if (m.Detected) return L.F("Market: open · {0:N0} asks", m.AsksSeen);
+        return m.AsksSeen > 0 ? L.F("Market: {0:N0} asks · {1:N0} shared", m.AsksSeen, m.Shared) : L.T("Market: watching");
     }
 
     /// <param name="Value">What the tradeable items would sell for on the Market, after its cut; bound items can't be sold.</param>
@@ -875,9 +878,9 @@ public partial class MainWindow : Window
             {
                 dc += total;
                 // under the name, what kind of item it is, as the site shows it ("Drop" when the item list has no category)
-                var cat = _items.Get(r.Id)?.Category is { Length: > 0 } c ? c : "Drop";
+                var cat = _items.Get(r.Id)?.Category is { Length: > 0 } c ? c : L.T("Drop");
                 // under the name only what it is; where it came from and how it was read are on hover (0.7.6)
-                var sub = r.Count == 0 ? cat + " · bound" : r.Bound > 0 ? $"{cat} · {r.Bound} bound" : cat;
+                var sub = r.Count == 0 ? L.F("{0} · bound", cat) : r.Bound > 0 ? L.F("{0} · {1} bound", cat, r.Bound) : cat;
                 var tips = new List<string>();
                 var odds = Odds(total, kills); var tone = "";
                 if (tabled.Count > 0)
@@ -888,24 +891,24 @@ public partial class MainWindow : Window
                     if (from.Count > 0 && eligible > 0)
                     {
                         odds = Odds(total, eligible);
-                        var names = string.Join(", ", from.Take(3)) + (from.Count > 3 ? " and others" : "");
-                        tips.Add($"Drops from {names}. The odds count only their {eligible:N0} kill{(eligible == 1 ? "" : "s")}." + (listed is double lc ? $" The game lists it at {OneIn(lc)}." : ""));
+                        var names = string.Join(", ", from.Take(3)) + (from.Count > 3 ? L.T(" and others") : "");
+                        tips.Add((eligible == 1 ? L.F("Drops from {0}. The odds count only their {1:N0} kill.", names, eligible) : L.F("Drops from {0}. The odds count only their {1:N0} kills.", names, eligible)) + (listed is double lc ? " " + L.F("The game lists it at {0}.", OneIn(lc)) : ""));
                     }
                     else if (tabled.Count == ms.Count && book.SourcesOf(r.Name).Count > 0)
                     {
                         // every enemy fought has a table, none lists it, and some other enemy's does: a misread, or a drop
                         // credited to the wrong fight. An item on no table at all is one the tables don't cover: no warning
                         odds = "";
-                        tips.Add("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Report to keep it off the site.");
+                        tips.Add(L.T("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Report to keep it off the site."));
                     }
                 }
                 bool flagged = ReportedDrops.Has(r.Name);
                 // copies the chat never confirmed (the loot list beside the character, or a guessed name): counted, and said on hover
-                if (e.Unconfirmed(r.Id) is int unc && unc > 0) tips.Add($"{unc} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.");
-                if (flagged) { sub = "Reported · not sent to the site"; tone = "Warn"; }
+                if (e.Unconfirmed(r.Id) is int unc && unc > 0) tips.Add(L.F("{0} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.", unc));
+                if (flagged) { sub = L.T("Reported · not sent to the site"); tone = "Warn"; }
                 // no line under the name any more (the approved mock): bound copies and a report are said on hover
-                if (r.Bound > 0) tips.Insert(0, r.Count == 0 ? "Bound: can't be sold, so it has no value here." : $"{r.Bound} of these are bound and have no value here.");
-                if (flagged) tips.Insert(0, "Reported: not sent to the site.");
+                if (r.Bound > 0) tips.Insert(0, r.Count == 0 ? L.T("Bound: can't be sold, so it has no value here.") : L.F("{0} of these are bound and have no value here.", r.Bound));
+                if (flagged) tips.Insert(0, L.T("Reported: not sent to the site."));
                 drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Whole(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceCell(r.Name).Text, PriceTone: PriceCell(r.Name).Tone, PriceTip: PriceCell(r.Name).Tip, Value: rowValue, Sub: sub, Tone: tone, Report: r.Name, Reported: flagged,
                     Tip: string.Join("\n\n", tips), Worth: worthN.GetValueOrDefault(r.Name), Mat: IsMaterial(cat)));
             }
@@ -936,9 +939,9 @@ public partial class MainWindow : Window
             {
                 bool rep = ReportedDrops.Has(name);
                 var gtips = new List<string>();
-                if (e.Unconfirmed(_items.IdOf(name)) is int gu && gu > 0) gtips.Add($"{gu} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.");
+                if (e.Unconfirmed(_items.IdOf(name)) is int gu && gu > 0) gtips.Add(L.F("{0} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.", gu));
                 gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "", Whole(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceCell(name).Text, PriceTone: PriceCell(name).Tone, PriceTip: PriceCell(name).Tip, Value: worth.GetValueOrDefault(name, ""),
-                    Sub: rep ? "Reported · not sent to the site" : skill == GatherFamily.Find ? "Rare find · from any node" : "Gathering material", Tone: rep ? "Warn" : "", Report: name, Reported: rep, Tip: string.Join("\n\n", gtips), Worth: worthN.GetValueOrDefault(name)));
+                    Sub: rep ? L.T("Reported · not sent to the site") : skill == GatherFamily.Find ? L.T("Rare find · from any node") : L.T("Gathering material"), Tone: rep ? "Warn" : "", Report: name, Reported: rep, Tip: string.Join("\n\n", gtips), Worth: worthN.GetValueOrDefault(name)));
             }
         }
         // Kinah by enemy, a best guess: most Kinah first. The zone goes under the name when the view spans more than one.
@@ -951,8 +954,8 @@ public partial class MainWindow : Window
             var where = zonesToo && m.Zone is { Length: > 0 } mz ? mz + " · " : "";
             // every enemy opens: its loot table when one is known, and always what it dropped for you
             mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Amounts.Short(m.Kinah),
-                Sub: where + (open ? "hide drops" : "show drops"), Key: key,
-                Tip: "A best guess: the Kinah that landed just after the target bar named this enemy. Click to " + (open ? "hide" : "show") + " its drops."));
+                Sub: where + (open ? L.T("hide drops") : L.T("show drops")), Key: key,
+                Tip: open ? L.T("A best guess: the Kinah that landed just after the target bar named this enemy. Click to hide its drops.") : L.T("A best guess: the Kinah that landed just after the target bar named this enemy. Click to show its drops.")));
             if (!open) continue;
             // what you got against the listed chance, what hasn't dropped yet last; then drops the table doesn't list
             var table = known ? book.TableOf(m.Name).ToList() : new();
@@ -965,19 +968,19 @@ public partial class MainWindow : Window
             foreach (var (en, got) in rows)
             {
                 long iid = en.Id ?? _items.IdOf(en.Item);
-                mobs.Add(new DropRow(en.Item, got > 0 ? got.ToString("N0") : "", got > 0 ? Odds(got, m.Kills) : "not yet", "", Grade: _items.Get(iid)?.Grade ?? "", Icon: Slot(iid), Initial: InitialOf(en.Item),
-                    Sub: en.Chance is double c && c > 0 ? $"listed {OneIn(c)}" : "listed", Child: true));
+                mobs.Add(new DropRow(en.Item, got > 0 ? got.ToString("N0") : "", got > 0 ? Odds(got, m.Kills) : L.T("not yet"), "", Grade: _items.Get(iid)?.Grade ?? "", Icon: Slot(iid), Initial: InitialOf(en.Item),
+                    Sub: en.Chance is double c && c > 0 ? L.F("listed {0}", OneIn(c)) : L.T("listed"), Child: true));
             }
             foreach (var (id, got) in m.Drops.Where(d => !OnTable(d.Key)).OrderByDescending(d => d.Value))
             {
                 var name = _items.NameOf(id);
                 mobs.Add(new DropRow(name, got.ToString("N0"), Odds(got, m.Kills), "", Grade: _items.Get(id)?.Grade ?? "", Icon: Slot(id), Initial: InitialOf(name),
-                    Sub: known ? "not on its listed table" : "dropped for you", Child: true));
+                    Sub: known ? L.T("not on its listed table") : L.T("dropped for you"), Child: true));
             }
             if (m.Crystals > 0)
-                mobs.Add(new DropRow("Soul Crystals", m.Crystals.ToString("N0"), Odds(m.Crystals, m.Kills), "", Initial: "S", Sub: "from this enemy", Child: true));
+                mobs.Add(new DropRow("Soul Crystals", m.Crystals.ToString("N0"), Odds(m.Crystals, m.Kills), "", Initial: "S", Sub: L.T("from this enemy"), Child: true));
             if (!known && m.Drops.Count == 0 && m.Crystals == 0)
-                mobs.Add(new DropRow("No item drops yet", "", "", "", Sub: "only Kinah so far · its loot table isn't in the list yet", Child: true));
+                mobs.Add(new DropRow(L.T("No item drops yet"), "", "", "", Sub: L.T("only Kinah so far · its loot table isn't in the list yet"), Child: true));
         }
         return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills, dropsUnpriced, unsure, dropsUnsure);
     }
@@ -995,7 +998,7 @@ public partial class MainWindow : Window
         int counted = rows.Count(r => !r.Header && !r.Child);
         bool all = _allRows.Contains(section);
         link.Visibility = counted > top ? Visibility.Visible : Visibility.Collapsed;
-        text.Text = all ? "Show fewer" : $"Show all {counted}";
+        text.Text = all ? L.T("Show fewer") : L.F("Show all {0}", counted);
         if (all || counted <= top) return rows;
         var shown = new List<DropRow>(); int n = 0;
         for (int i = 0; i < rows.Count; i++)
@@ -1013,16 +1016,17 @@ public partial class MainWindow : Window
     readonly HashSet<string> _openMobs = new();
 
     /// <summary>A listed chance as the Odds column reads: 0.2 → "1 in 5", or "20%" with the column switched to percentages.</summary>
-    static string OneIn(double chance) => chance >= 1 ? "every kill" : OddsAsPct ? Pct(chance) : $"1 in {Math.Max(1, Math.Round(1 / chance)):N0}";
+    static string OneIn(double chance) => chance >= 1 ? L.T("every kill") : OddsAsPct ? Pct(chance) : L.F("1 in {0:N0}", Math.Max(1, Math.Round(1 / chance)));
 
     /// <summary>True when the Odds column reads as percentages; the header switches it (UserPrefs.OddsAsPercent).</summary>
     static bool OddsAsPct;
 
     void ShowOddsHeader()
     {
-        PctHeader.Text = "Odds";   // the numbers themselves show which way it reads
-        PctHeader.ToolTip = (OddsAsPct ? "Drops per kill as a percentage" : "How many kills one drop takes")
-            + ", counting only kills of enemies that can drop the item. Click to show it as " + (OddsAsPct ? "\"1 in x\"." : "a percentage.");
+        PctHeader.Text = L.T("Odds");   // the numbers themselves show which way it reads
+        PctHeader.ToolTip = OddsAsPct
+            ? L.T("Drops per kill as a percentage, counting only kills of enemies that can drop the item. Click to show it as \"1 in x\".")
+            : L.T("How many kills one drop takes, counting only kills of enemies that can drop the item. Click to show it as a percentage.");
     }
 
     // the drops' Market value and how many items carried a price, from the last FillNumbers, for the panel over the game
@@ -1041,7 +1045,7 @@ public partial class MainWindow : Window
     internal static bool RateWarm(TimeSpan farming, int counted) =>
         farming < RateWarmup || counted < RateWarmupFewest || (farming < RateWarmupMost && counted < RateWarmupCounts);
     /// <summary>The panel's rate while it warms up.</summary>
-    const string WarmingUp = "warming up";
+    static string WarmingUp => L.T("warming up");
 
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
@@ -1060,10 +1064,10 @@ public partial class MainWindow : Window
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         // quest and payment rewards: bound Kinah, a payment line, or one line far above what the mobs pay. Never farming income.
         // said in ⋯ since 2026-10-28, not on the page: the player doesn't need it while counting goes right
-        _leftOut = t.Rewards > 0 ? $"{t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")}" + (e.KinahSkipped > 0 ? $" ({Fk(e.KinahSkipped)} Kinah)" : "") : "";
+        _leftOut = t.Rewards > 0 ? (t.Rewards == 1 ? L.F("{0} reward line", t.Rewards) : L.F("{0} reward lines", t.Rewards)) + (e.KinahSkipped > 0 ? L.F(" ({0} Kinah)", Fk(e.KinahSkipped)) : "") : "";
         string crystals = t.Pets > 0 ? $" · {t.Pets} soul crystal{(t.Pets == 1 ? "" : "s")}" : "";
         // the clock is farming time; a minute or more of readable time with no loot is idle, said in ⋯
-        _idleNote = e.Idle >= TimeSpan.FromMinutes(1) ? $"{TodayLoot.Dur(e.Idle.TotalSeconds)} idle, not counted in any rate" : "";
+        _idleNote = e.Idle >= TimeSpan.FromMinutes(1) ? L.F("{0} idle, not counted in any rate", TodayLoot.Dur(e.Idle.TotalSeconds)) : "";
         switch (_mode)
         {
             case Mode.Gather:
@@ -1098,18 +1102,18 @@ public partial class MainWindow : Window
         _lastValue = s.Value; _lastPriced = s.Priced;
         long worthHr = (long)((s.Value + (_mode == Mode.Gather ? 0 : kinah)) / h);
         ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "";
-        ValueTile.ToolTip = (s.Priced + s.Unsure + s.Unpriced == 0 ? "No tradeable items yet."
-                : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
-                : $"{s.Priced} of {s.Priced + s.Unsure + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
-                  + (s.Unsure > 0 ? $" {s.Unsure} of them {(s.Unsure == 1 ? "has" : "have")} a thin price (~, or ≈ the other servers'), counted." : "")
-                  + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
-            + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
+        ValueTile.ToolTip = (s.Priced + s.Unsure + s.Unpriced == 0 ? L.T("No tradeable items yet.")
+                : s.Priced == 0 ? L.T("No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest.")
+                : L.F("{0} of {1} tradeable items priced, at the lowest Market price, {2}. Bound items can't be sold and aren't counted.", s.Priced, s.Priced + s.Unsure + s.Unpriced, L.T(PriceBook.Fee))
+                  + (s.Unsure > 0 ? " " + (s.Unsure == 1 ? L.F("{0} of them has a thin price (~, or ≈ the other servers'), counted.", s.Unsure) : L.F("{0} of them have a thin price (~, or ≈ the other servers'), counted.", s.Unsure)) : "")
+                  + (s.Unpriced > 0 ? " " + L.T("Open the Market and look at the others to price them too.") : ""))
+            + (_mode == Mode.Gather ? "" : " " + L.T("Kinah per hour is included."));
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
         // "farming 5:19", minutes and seconds, under a Today line whose "0:21" was hours and minutes); what it covers on hover
-        var verb = _mode == Mode.Gather ? "gathering · " : "";
+        var verb = _mode == Mode.Gather ? L.T("gathering · ") : "";
         // in the Abyss the zone beside it already says "Abyss": the head is its time alone
-        TableTitle.Text = (ZoneLocator.KindOf(e.Zone) ?? (inAbyss ? null : "Open world")) is { } kindWord ? $"{kindWord} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}" : $"{verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
-        TableTitle.ToolTip = _tableWhat.Length > 0 ? "Counting " + _tableWhat + "." : null;
+        TableTitle.Text = (ZoneLocator.KindOf(e.Zone) ?? (inAbyss ? null : L.T("Open world"))) is { } kindWord ? $"{kindWord} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}" : $"{verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
+        TableTitle.ToolTip = _tableWhat.Length > 0 ? L.F("Counting {0}.", L.T(_tableWhat)) : null;
         long totalNow = kinah + s.Value;
         // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line
         // in the Abyss's zones the hour is in Abyss Points, Kinah and loot on a ticket under it (FillRate)
@@ -1121,11 +1125,11 @@ public partial class MainWindow : Window
         _hasSummary = e.Events > 0;
         _shareReady = true;   // the sheet says what each of its sides waits for (Share is in the Farming ⋯ menu)
         var sums = new List<string>();
-        if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
-        if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
-        if (s.Unsure > 0) sums.Add($"{s.Unsure} item{(s.Unsure == 1 ? " has" : "s have")} a thin price (~ or ≈), counted.");
-        if (s.Unpriced > 0) sums.Add($"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add{(s.Unpriced == 1 ? "s" : "")} nothing.");
-        sums.Add($"Total, {PriceBook.Fee}: {totalNow:N0}.");
+        if (kinah > 0 || _mode != Mode.Gather) sums.Add(t.Kills == 1 ? L.F("Kinah picked up: {0:N0}, from {1:N0} kill. Quest rewards and bound Kinah are left out.", kinah, t.Kills) : L.F("Kinah picked up: {0:N0}, from {1:N0} kills. Quest rewards and bound Kinah are left out.", kinah, t.Kills));
+        if (s.Priced > 0) { sums.Add(L.F("Loot at the lowest Market price: {0:N0}.", s.Gross)); if (!PriceBook.ShowGross) sums.Add(L.F("Market fee and tax, {0:P0}: −{1:N0}.", 1 - PriceBook.SellerKeeps, s.Gross - s.Value)); }
+        if (s.Unsure > 0) sums.Add(s.Unsure == 1 ? L.F("{0} item has a thin price (~ or ≈), counted.", s.Unsure) : L.F("{0} items have a thin price (~ or ≈), counted.", s.Unsure));
+        if (s.Unpriced > 0) sums.Add(s.Unpriced == 1 ? L.F("{0} item has no price yet and adds nothing.", s.Unpriced) : L.F("{0} items have no price yet and add nothing.", s.Unpriced));
+        sums.Add(L.F("Total, {0}: {1:N0}.", L.T(PriceBook.Fee), totalNow));
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
         _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
@@ -1194,18 +1198,18 @@ public partial class MainWindow : Window
         // one grey line under the hour (the approved mock): "Your best here 1.40M · players at your gear 1.46M"
         if (counts && rate > best.PerHr)
         {
-            BestLine.Text = $"Best here yet · beats {Fk(best.PerHr)}";
+            BestLine.Text = L.F("Best here yet · beats {0}", Fk(best.PerHr));
             BestLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Good");
             _hudValues["best"] = "new best";
         }
         else
         {
-            BestLine.Text = $"Your best here {Fk(best.PerHr)}";
+            BestLine.Text = L.F("Your best here {0}", Fk(best.PerHr));
             BestLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Faint");
             _hudValues["best"] = Fk(best.PerHr);
         }
         JoinCompare();
-        BestLine.ToolTip = $"Your best hour in {zone} on {Server?.Label ?? "this server"}: {best.PerHr:N0} Kinah plus loot after tax, over {best.Minutes} minutes on {best.At}. A stay counts once it has {BestRuns.MinMinutes} minutes here; loot is valued at today's prices.";
+        BestLine.ToolTip = L.F("Your best hour in {0} on {1}: {2:N0} Kinah plus loot after tax, over {3} minutes on {4}. A stay counts once it has {5} minutes here; loot is valued at today's prices.", zone, Server?.Label ?? L.T("this server"), best.PerHr, best.Minutes, best.At, BestRuns.MinMinutes);
     }
 
     /// <summary>The comparison line: a dot between your best and the players' figure when both show, the first word capitalised.</summary>
@@ -1430,13 +1434,13 @@ public partial class MainWindow : Window
             var book = RecipeBook.ForOutput(r.Name);
             // what came out and what it sells for, so a loss reads against the whole yield (Steven, 2026-11-05: 40 ingots from
             // 4 crafts of the ×10 recipe, "shows as if only 4 were made with a loss of 151k")
-            var tip = "Click for the materials, what a craft costs and what it makes."
-                + (fromBound ? "\nMade with your bound " + RecipeBook.BoundMain(r.Name) + ": it costs nothing here, since it can't be sold. What it makes isn't bound and is valued at the Market's price." : "")
-                + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
-                + (r.MadeCount > 0 ? $"\n{r.MadeCount:N0} made" + (madeKnown && made > 0 ? $", selling for {Fk(made)} at the lowest Market ask, {PriceBook.Cut}." : ".") : "")
-                + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
-                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{Session.CraftLedger.ComboRollsLabel(r.Name)}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
-                + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "")
+            var tip = L.T("Click for the materials, what a craft costs and what it makes.")
+                + (fromBound ? "\n" + L.F("Made with your bound {0}: it costs nothing here, since it can't be sold. What it makes isn't bound and is valued at the Market's price.", RecipeBook.BoundMain(r.Name)) : "")
+                + "\n" + L.F("{0:N0} worked, {1:N0} failed.", r.Ok, r.Fail)
+                + (r.MadeCount > 0 ? "\n" + (madeKnown && made > 0 ? L.F("{0:N0} made, selling for {1} at the lowest Market ask, {2}.", r.MadeCount, Fk(made), L.T(PriceBook.Cut)) : L.F("{0:N0} made.", r.MadeCount)) : "")
+                + (book?.SuccessRate is double sr ? "\n" + L.F("Listed success {0:P0}.", sr) : "")
+                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{Session.CraftLedger.ComboRollsLabel(r.Name)}: " + L.F("{0} of {1} won.", r.Upgraded, r.Upgraded + r.NotUpgraded) : "")
+                + (r.MadeUnknown > 0 ? "\n" + (r.MadeUnknown == 1 ? L.F("{0} success whose yield the panel didn't show.", r.MadeUnknown) : L.F("{0} successes whose yield the panel didn't show.", r.MadeUnknown)) : "")
                 + (r.Unseen > 0 ? "\n" + Session.CraftLedger.UnseenNote(r) + "." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip, Under: Session.CraftLedger.MadeLine(r),
@@ -1461,27 +1465,27 @@ public partial class MainWindow : Window
         CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : " ";
         _craftNet = spent > 0 || worth > 0 ? Signed(net) : "";
         // the colour is the Quest hero's (FillCraftQuest): mint for a profit, coral for a loss
-        CraftProfitNote.Text = spent > 0 || worth > 0 ? (missing.Count + noBook > 0 ? "profit this session, at most" : "profit this session") : "profit shows with the first craft";
+        CraftProfitNote.Text = spent > 0 || worth > 0 ? (missing.Count + noBook > 0 ? L.T("profit this session, at most") : L.T("profit this session")) : L.T("profit shows with the first craft");
         CraftWhat.Inlines.Clear();
         void Fig(string text) { var run = new Run(text); run.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); run.SetResourceReference(TextElement.ForegroundProperty, "Ink"); CraftWhat.Inlines.Add(run); }
         if (tries > 0)
         {
-            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" craft{(tries == 1 ? "" : "s")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
+            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run(tries == 1 ? L.T(" craft · ") : L.T(" crafts · "))); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(L.T(" worked")));
             // what came out, when it isn't one item a craft (a ×10 craft is one craft, ten made)
-            if (itemsMade > ok) { CraftWhat.Inlines.Add(new Run(" · ")); Fig(itemsMade.ToString("N0")); CraftWhat.Inlines.Add(new Run(" made")); }
-            if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
-            if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
+            if (itemsMade > ok) { CraftWhat.Inlines.Add(new Run(" · ")); Fig(itemsMade.ToString("N0")); CraftWhat.Inlines.Add(new Run(L.T(" made"))); }
+            if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(L.T(" spent"))); }
+            if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(L.T(" sells for"))); }
         }
         CraftWhat.Visibility = Visibility.Collapsed;   // the chips say it (Quest)
         // This session's line: the recipes, the cut, and the gaps said once
-        var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
-        var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
-        CraftSpentNote.Text = $"{recipes} recipe{(recipes == 1 ? "" : "s")} · {PriceBook.Fee}";
+        var gapNote = missing.Count > 0 ? (missing.Count == 1 ? L.F("{0} material has no price yet", missing.Count) : L.F("{0} materials have no price yet", missing.Count)) : "";
+        var noBookNote = noBook > 0 ? (noBook == 1 ? L.F("{0} recipe not in the recipe book", noBook) : L.F("{0} recipes not in the recipe book", noBook)) : "";
+        CraftSpentNote.Text = (recipes == 1 ? L.F("{0} recipe · {1}", recipes, L.T(PriceBook.Fee)) : L.F("{0} recipes · {1}", recipes, L.T(PriceBook.Fee)));
         CraftSpent.Text = "";   // the hero says the profit (Quest)
         CraftSpent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, net >= 0 ? "Gold" : "Faint");
-        CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
+        CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? L.F("{0} with no Market price for what came out", noPrice) : "" }.Where(x => x.Length > 0));
         CraftMadeNote.Visibility = CraftMadeNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        CraftNote.Text = $"Lowest Market price on {Server?.Name ?? "your server"}";
+        CraftNote.Text = Server?.Name is { } sn ? L.F("Lowest Market price on {0}", sn) : L.T("Lowest Market price on your server");
         FillCraftQuest(tries, ok, itemsMade, spent, worth, net, rows.Count > 0, missing.Count + noBook > 0, rows);   // Ui/MainWindow.QuestCraft.cs
         ApplySections();
     }
@@ -1508,9 +1512,9 @@ public partial class MainWindow : Window
             // what the same crafts would have sold for as the base item, after the Market's cut
             long? extra = sells is long sv && PriceBook.Price(r.Name) is long bp ? sv - (long)Math.Round(bp * (double)rolls * baseYield * PriceBook.SellerKeeps) : null;
             var cell = PriceCell(item);
-            var tip = $"An upgrade of {r.Name}: {n:N0} made by {rolls:N0} won upgrade roll{(rolls == 1 ? "" : "s")}, counted in the recipe's row above."
-                + (sells is long s1 ? $"\nSells for {Fk(s1)} {PriceBook.Cut}." : "\nNo Market price for it yet.")
-                + (extra is long e1 ? $"\n{Signed(e1)} against {rolls * baseYield:N0} {r.Name} at its price." : "");
+            var tip = (rolls == 1 ? L.F("An upgrade of {0}: {1:N0} made by {2:N0} won upgrade roll, counted in the recipe's row above.", r.Name, n, rolls) : L.F("An upgrade of {0}: {1:N0} made by {2:N0} won upgrade rolls, counted in the recipe's row above.", r.Name, n, rolls))
+                + (sells is long s1 ? "\n" + L.F("Sells for {0} {1}.", Fk(s1), L.T(PriceBook.Cut)) : "\n" + L.T("No Market price for it yet."))
+                + (extra is long e1 ? "\n" + L.F("{0} against {1:N0} {2} at its price.", Signed(e1), rolls * baseYield, r.Name) : "");
             rows.Add(new DropRow(item, "—", "—", "", Child: true, Sub: "  ×" + n.ToString("N0"),
                 Initial: InitialOf(item), Icon: Slot(_items.IdOf(item)), Grade: _items.Get(_items.IdOf(item))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
                 Price: sells is long s2 && s2 > 0 ? Fk(s2) : "", PriceTone: cell.Tone, PriceTip: cell.Tip,
@@ -1545,12 +1549,12 @@ public partial class MainWindow : Window
         DropsSection.Visibility = drops.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         // what came in other zones, for the sections empty here: one line instead of a header each (Steven, 0.7.6)
         var elsewhere = new List<string>();
-        if (drops.Count == 0 && allDrops > 0) elsewhere.Add($"{allDrops:N0} drop{(allDrops == 1 ? "" : "s")}");
-        if (gathered.Count == 0 && allGather > 0) elsewhere.Add($"{allGather:N0} gathered");
-        if (mobs.Count == 0 && allMobs > 0) elsewhere.Add($"{allMobs:N0} enem{(allMobs == 1 ? "y" : "ies")}");
-        if (pets.Count == 0 && allPets > 0) elsewhere.Add($"{allPets:N0} Soul Crystal{(allPets == 1 ? "" : "s")}");
+        if (drops.Count == 0 && allDrops > 0) elsewhere.Add(allDrops == 1 ? L.F("{0:N0} drop", allDrops) : L.F("{0:N0} drops", allDrops));
+        if (gathered.Count == 0 && allGather > 0) elsewhere.Add(L.F("{0:N0} gathered", allGather));
+        if (mobs.Count == 0 && allMobs > 0) elsewhere.Add(allMobs == 1 ? L.F("{0:N0} enemy", allMobs) : L.F("{0:N0} enemies", allMobs));
+        if (pets.Count == 0 && allPets > 0) elsewhere.Add(allPets == 1 ? L.F("{0:N0} Soul Crystal", allPets) : L.F("{0:N0} Soul Crystals", allPets));
         bool nothingHere = drops.Count + gathered.Count + mobs.Count + pets.Count == 0;
-        OtherZones.Text = elsewhere.Count == 0 ? "" : (nothingHere ? "Nothing here yet" : "Other zones") + " · " + string.Join(", ", elsewhere) + (nothingHere ? " in other zones" : "");
+        OtherZones.Text = elsewhere.Count == 0 ? "" : nothingHere ? L.F("Nothing here yet · {0} in other zones", string.Join(", ", elsewhere)) : L.F("Other zones · {0}", string.Join(", ", elsewhere));
         OtherZones.Visibility = elsewhere.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         bool none = nothingHere && elsewhere.Count == 0;
         TablesEmpty.Visibility = none && !(_watcher.Chat?.Instances.Snapshot().Count > 0) ? Visibility.Visible : Visibility.Collapsed;
@@ -1562,14 +1566,14 @@ public partial class MainWindow : Window
         SyncRows(Rows, allDropsShown ? plain : plain.Take(TableRows).ToList());
         SyncRows(MatRows, allDropsShown ? mats : mats.Take(TableRows).ToList());
         MatHead.Visibility = mats.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        MatTitle.Text = $"CRAFTING MATERIALS · {mats.Count}";
+        MatTitle.Text = L.F("CRAFTING MATERIALS · {0}", mats.Count);
         DropsMore.Visibility = plain.Count > TableRows || mats.Count > TableRows ? Visibility.Visible : Visibility.Collapsed;
-        DropsMoreRun.Text = allDropsShown ? "Show fewer" : $"Show all {drops.Count}";
+        DropsMoreRun.Text = allDropsShown ? L.T("Show fewer") : L.F("Show all {0}", drops.Count);
         int noPriceRows = pre?.DropsUnpriced ?? drops.Count(r => r.Value.Length == 0 && r.Worth == 0);
         int unsureRows = pre?.DropsUnsure ?? drops.Count(r => r.Value.StartsWith('~') || r.Value.StartsWith('≈'));
-        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (unsureRows > 0 ? $" · {unsureRows} {(unsureRows == 1 ? "has" : "have")} a thin price (~)" : "") + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
+        DropsNote.Text = drops.Count == 0 ? "" : (drops.Count == 1 ? L.F("{0} kind", drops.Count) : L.F("{0} kinds", drops.Count)) + (unsureRows > 0 ? " · " + (unsureRows == 1 ? L.F("{0} has a thin price (~)", unsureRows) : L.F("{0} have a thin price (~)", unsureRows)) : "") + (noPriceRows > 0 ? " · " + (noPriceRows == 1 ? L.F("{0} has no price yet", noPriceRows) : L.F("{0} have no price yet", noPriceRows)) : "");
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        TableEmpty.Text = e == null ? "Drops show here as they're read, with the odds and how many come an hour." : "No drops yet.";
+        TableEmpty.Text = e == null ? L.T("Drops show here as they're read, with the odds and how many come an hour.") : L.T("No drops yet.");
 
         // Also this session: a chip each for Gathered, the gathering skills, Soul Crystals and Kinah by enemy (Ui/MainWindow.Live.cs)
         var target = _watcher.Chat?.TargetNote ?? "";
@@ -1579,12 +1583,12 @@ public partial class MainWindow : Window
         ShowInstances();
 
         var notes = new List<string>();
-        if (drops.Count > 0 && kills == 0) notes.Add("Odds appear once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.");
-        if (_extraOpen == "Gather" && gathered.Count > 0 && nodes == 0) notes.Add("Per-try rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
+        if (drops.Count > 0 && kills == 0) notes.Add(L.T("Odds appear once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob."));
+        if (_extraOpen == "Gather" && gathered.Count > 0 && nodes == 0) notes.Add(L.T("Per-try rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too."));
         bool noPrice = drops.Any(r => !r.Header && r.Value.Length == 0);
-        if (_extraOpen == "Mob" && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
-        if (_watcher.Chat?.Target is { Unlisted: { Length: > 0 } un } tg && (DateTime.UtcNow - tg.UnlistedAt).TotalSeconds < 30 && mobs.Count == 0) notes.Add($"The target bar shows \"{un}\", which isn't on the enemy list yet, so it isn't counted.");
-        if (noPrice && !PriceBook.Any) notes.Add("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.");
+        if (_extraOpen == "Mob" && mobs.Count > 0 && target.Length > 0) notes.Add(L.F("Target bar: {0}.", target));
+        if (_watcher.Chat?.Target is { Unlisted: { Length: > 0 } un } tg && (DateTime.UtcNow - tg.UnlistedAt).TotalSeconds < 30 && mobs.Count == 0) notes.Add(L.F("The target bar shows \"{0}\", which isn't on the enemy list yet, so it isn't counted.", un));
+        if (noPrice && !PriceBook.Any) notes.Add(L.T("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest."));
         TableNote.Text = string.Join(" ", notes);
         TableNote.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -1605,7 +1609,7 @@ public partial class MainWindow : Window
     static string InitialOf(string name) { foreach (var c in name) if (char.IsLetter(c)) return char.ToUpperInvariant(c).ToString(); return "·"; }
 
     /// <summary>A drop's odds as the site's item page says them: "1 in 6 kills" (here "1 in 6", or "17%" with the column switched), or "2.3 a kill" for more than one per kill.</summary>
-    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : OddsAsPct ? Pct(drops / (double)kills) : $"1 in {Math.Round(kills / (double)drops):0}";
+    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "" : drops >= kills ? L.F("{0:0.0} a kill", drops / (double)kills) : OddsAsPct ? Pct(drops / (double)kills) : L.F("1 in {0:0}", Math.Round(kills / (double)drops));
 
     /// <summary>True when Events shows every run kept on this PC, not only this session's.</summary>
     bool _eventsAll;
@@ -1616,7 +1620,7 @@ public partial class MainWindow : Window
     static string Ago(DateTime utc)
     {
         var d = DateTime.UtcNow - utc;
-        return d.TotalMinutes < 1 ? "just now" : d.TotalHours < 1 ? $"{(int)d.TotalMinutes} min ago" : d.TotalDays < 1 ? $"{(int)d.TotalHours} h ago" : $"{(int)d.TotalDays} d ago";
+        return d.TotalMinutes < 1 ? L.T("just now") : d.TotalHours < 1 ? L.F("{0} min ago", (int)d.TotalMinutes) : d.TotalDays < 1 ? L.F("{0} h ago", (int)d.TotalHours) : L.F("{0} d ago", (int)d.TotalDays);
     }
 
     /// <summary>"42:17" under an hour, "1:42:17" past it, as the site's timer shows it.</summary>
@@ -1699,19 +1703,19 @@ public partial class MainWindow : Window
     public const string PrivacyUrl = "https://github.com/StevenMacchia/kinah-ledger/blob/main/CODE_SIGNING_POLICY.md#privacy";
 
     public void WhatsSent(Window? owner = null) => MessageBox.Show(owner ?? this,
-        "These totals go to the public tables:\n\n" +
-        "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
-        "Never your account, level, chat text or screenshots.\n" +
-        "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n" +
-        "With each run, which of your characters played it: its number here and the name it has in the window, so your profile can show each character apart. Only your own signed-in profile shows the names, never a public profile or a leaderboard.\n\n" +
-        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) in small batches: every 15 minutes while the game is being read, once more when you close the tracker, and when you press Stop on a farming run. A 15-minute batch the site can't take is kept on this PC (up to a day's worth) and sent with the next one; the window says when sharing last worked. A stopped run the site can't take stays in your history here and isn't sent later. The Share switch (Options › Sharing) turns all of this off, and anything still waiting is let go.\n\n" +
-        "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
-        "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
-        "Updates: at start and every 10 minutes the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
-        "Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.\n\n" +
-        "Help improve counting (on unless you turn it off in Options › Sharing, and only while sharing is on): when two of the tracker's own checks agree on a pickup (a chat line and the loot list, a Kina line and the Kinah counter, a gather and the gathering bar, an event card's icon and its grade), what it read and what it settled on go to kinahledger.com (https://kinahledger.com/v1/labels) with the app version, the install ID, the window size and the text height, plus small pictures of that item's name words, icon or reward slot (at most 60 an hour, https://kinahledger.com/v1/label-crops). Never the chat box, never a chat line that isn't your own pickup, never anyone's name, never a whole screenshot. The pictures are deleted after 90 days. Turned off, nothing is written or sent for it and what was waiting on this PC is deleted.\n\n" +
-        "Report pictures stay on this PC unless you turn on Send report pictures.",
-        "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
+        L.T("These totals go to the public tables:") + "\n\n" +
+        L.T("•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam") + "\n\n" +
+        L.T("Never your account, level, chat text or screenshots.") + "\n" +
+        L.T("If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.") + "\n" +
+        L.T("With each run, which of your characters played it: its number here and the name it has in the window, so your profile can show each character apart. Only your own signed-in profile shows the names, never a public profile or a leaderboard.") + "\n\n" +
+        L.T("The totals go to kinahledger.com (https://kinahledger.com/v1/runs) in small batches: every 15 minutes while the game is being read, once more when you close the tracker, and when you press Stop on a farming run. A 15-minute batch the site can't take is kept on this PC (up to a day's worth) and sent with the next one; the window says when sharing last worked. A stopped run the site can't take stays in your history here and isn't sent later. The Share switch (Options › Sharing) turns all of this off, and anything still waiting is let go.") + "\n\n" +
+        L.T("Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.") + "\n\n" +
+        L.T("Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.") + "\n\n" +
+        L.T("Updates: at start and every 10 minutes the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.") + "\n\n" +
+        L.T("Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.") + "\n\n" +
+        L.T("Help improve counting (on unless you turn it off in Options › Sharing, and only while sharing is on): when two of the tracker's own checks agree on a pickup (a chat line and the loot list, a Kina line and the Kinah counter, a gather and the gathering bar, an event card's icon and its grade), what it read and what it settled on go to kinahledger.com (https://kinahledger.com/v1/labels) with the app version, the install ID, the window size and the text height, plus small pictures of that item's name words, icon or reward slot (at most 60 an hour, https://kinahledger.com/v1/label-crops). Never the chat box, never a chat line that isn't your own pickup, never anyone's name, never a whole screenshot. The pictures are deleted after 90 days. Turned off, nothing is written or sent for it and what was waiting on this PC is deleted.") + "\n\n" +
+        L.T("Report pictures stay on this PC unless you turn on Send report pictures."),
+        L.T("What's shared"), MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- server (everything shared is per server) ---------------- */
 
@@ -1738,7 +1742,7 @@ public partial class MainWindow : Window
         bool ok = HasServer;
         // on the Welcome card Options is out of reach, so the way to a server is the card's own chips
         // the character counted for, then the server (Ui/MainWindow.Characters.cs)
-        FillServerChip(Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? "No server chosen · pick yours below" : "No server chosen · pick one in Options");
+        FillServerChip(Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? L.T("No server chosen · pick yours below") : L.T("No server chosen · pick one in Options"));
         ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
@@ -1760,11 +1764,11 @@ public partial class MainWindow : Window
         Hide();
         try
         {
-            var r = RegionPickerWindow.Pick("Drag a box around the Market's listings: the rows with item, quantity and unit price.");
+            var r = RegionPickerWindow.Pick(L.T("Drag a box around the Market's listings: the rows with item, quantity and unit price."));
             if (r != null) { _marketRegion = r; _prefs.ManualMarket = true; RegionStore.Save(r.Value, RegionStore.MarketFile); _watcher.Market.UseRegion(r); }
         }
         finally { if (was) { Show(); Activate(); } }
-        if (_prefs.ManualMarket && _marketRegion != null) Report("Market area chosen by hand and in use now. Each row is read as one line and split by its numbers.", "Good");
+        if (_prefs.ManualMarket && _marketRegion != null) Report(L.T("Market area chosen by hand and in use now. Each row is read as one line and split by its numbers."), "Good");
     }
 
     /// <summary>
@@ -1773,11 +1777,11 @@ public partial class MainWindow : Window
     /// </summary>
     public async void ShareMarketNow()
     {
-        if (!_prefs.Share) { Say("Sharing is off. Turn on Share runs and Market prices first.", "Warn"); return; }
-        if (!HasServer) { Say("Choose your server first, so the prices land on the right board.", "Warn"); return; }
+        if (!_prefs.Share) { Say(L.T("Sharing is off. Turn on Share runs and Market prices first."), "Warn"); return; }
+        if (!HasServer) { Say(L.T("Choose your server first, so the prices land on the right board."), "Warn"); return; }
         var game = GameWindow.Find(_settings.ProcessHints);
-        if (game == null) { Say("The game isn't open. Open the Market in the game, then press Share.", "Warn"); return; }
-        Say("Reading the Market on your screen…", "Faint");
+        if (game == null) { Say(L.T("The game isn't open. Open the Market in the game, then press Share."), "Warn"); return; }
+        Say(L.T("Reading the Market on your screen…"), "Faint");
         bool hidden = false;
         try
         {
@@ -1786,10 +1790,10 @@ public partial class MainWindow : Window
             var (asks, items, sent, note) = await _watcher.Market.ShareNowAsync(game.Value, _settings.Ocr.Scale);
             if (hidden) { Show(); Activate(); hidden = false; }
             if (asks == 0) Say(note, "Warn");
-            else if (!sent) Say($"Read {asks} prices for {items} item{(items == 1 ? "" : "s")}, but {note}. They go out with the next batch.", "Warn");
-            else Say($"Shared {asks} prices for {items} item{(items == 1 ? "" : "s")}. They're {Server?.Label}'s current prices on the site now.", "Good");
+            else if (!sent) Say(items == 1 ? L.F("Read {0} prices for {1} item, but {2}. They go out with the next batch.", asks, items, note) : L.F("Read {0} prices for {1} items, but {2}. They go out with the next batch.", asks, items, note), "Warn");
+            else Say(items == 1 ? L.F("Shared {0} prices for {1} item. They're {2}'s current prices on the site now.", asks, items, Server?.Label) : L.F("Shared {0} prices for {1} items. They're {2}'s current prices on the site now.", asks, items, Server?.Label), "Good");
         }
-        catch (Exception ex) { CrashLog.Write("share market", ex); Say("Couldn't read the Market: " + ex.Message, "Bad"); }
+        catch (Exception ex) { CrashLog.Write("share market", ex); Say(L.F("Couldn't read the Market: {0}", ex.Message), "Bad"); }
         finally { if (hidden) { Show(); Activate(); } }
     }
 
@@ -1797,7 +1801,7 @@ public partial class MainWindow : Window
     public void ResetMarket()
     {
         _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null);
-        Report("Back to automatic: the Market window is found by its title and column headers.", "Faint");
+        Report(L.T("Back to automatic: the Market window is found by its title and column headers."), "Faint");
     }
 
     public bool MarketManual => _prefs.ManualMarket && _marketRegion != null;
@@ -1808,9 +1812,9 @@ public partial class MainWindow : Window
     {
         var m = _watcher.Market;
         if (_demoMarket.Length > 0) return _demoMarket;
-        if (!m.Enabled) return "Sharing is off, so the Market isn't read either. Turn sharing back on (Options › Sharing) and it resumes.";
-        if (_watcher.GameRect == null) return "Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs.";
-        return m.Status + (m.Manual && _marketRegion is DRect r ? $" · chosen area {r.Width} x {r.Height} px" : "");
+        if (!m.Enabled) return L.T("Sharing is off, so the Market isn't read either. Turn sharing back on (Options › Sharing) and it resumes.");
+        if (_watcher.GameRect == null) return L.T("Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs.");
+        return m.Status + (m.Manual && _marketRegion is DRect r ? L.F(" · chosen area {0} x {1} px", r.Width, r.Height) : "");
     }
 
     /// <summary>The Market table's outline for the preview, when it is being read.</summary>
@@ -1821,12 +1825,12 @@ public partial class MainWindow : Window
     }
 
     public void WhatsRead(Window? owner = null) => MessageBox.Show(owner ?? this,
-        "Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
-        "•  item name, stack size and unit price of each ask\n•  your server, as chosen above, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
-        "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
-        "Nothing is clicked or typed in the game. It follows the Share switch in Options › Sharing: with sharing off, the Market isn't read at all.\n\n" +
-        "Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC.",
-        "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
+        L.T("Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:") + "\n\n" +
+        L.T("•  item name, stack size and unit price of each ask\n•  your server, as chosen above, so prices land on the right board\n•  app version and the random install ID used only to stop spam") + "\n\n" +
+        L.T("Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.") + "\n" +
+        L.T("Nothing is clicked or typed in the game. It follows the Share switch in Options › Sharing: with sharing off, the Market isn't read at all.") + "\n\n" +
+        L.T("Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC."),
+        L.T("What's read from the Market"), MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- tray, hotkey, window state ---------------- */
 
@@ -1852,38 +1856,38 @@ public partial class MainWindow : Window
         var pal = TrayPalette.Current();
         var menu = new WF.ContextMenuStrip { BackColor = pal.Bg, ForeColor = pal.Ink, ShowImageMargin = false, Font = new System.Drawing.Font("Segoe UI", 9.75f) };
         menu.Renderer = new TrayMenuRenderer(pal); _trayMenu = menu;
-        var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
+        var open = new WF.ToolStripMenuItem(L.T("Open Kinah Ledger")) { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
         // no key beside Options, Clear everything or Copy share picture: theirs work only in the window, so from the tray they
         // did nothing (Steven, 2026-11-04); Start run keeps the in-game one, which works anywhere. They're listed in Options › Shortcuts & tips
-        var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
-        var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
-        var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
-        var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
+        var options = new WF.ToolStripMenuItem(L.T("Options…")); options.Click += (_, _) => OpenOptions();
+        var movePanel = new WF.ToolStripMenuItem(L.T("Move the panel")); movePanel.Click += (_, _) => MoveHudForAWhile();
+        var placePanel = new WF.ToolStripMenuItem(L.T("Place the panel…")); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, L.T("Place the panel"), why, WF.ToolTipIcon.Info); };
+        var updates = new WF.ToolStripMenuItem(L.T("Check for updates")); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
         // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
         var clearAll = new WF.ToolStripMenuItem(ClearAllText);
         clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
-        var copyPic = new WF.ToolStripMenuItem("Copy share picture");
+        var copyPic = new WF.ToolStripMenuItem(L.T("Copy share picture"));
         copyPic.Click += (_, _) =>
         {
             bool away = !IsVisible || WindowState == WindowState.Minimized;
             bool copied = CopySharePictureNow();
-            if (away) _tray.ShowBalloonTip(3000, copied ? "Picture copied" : "Nothing to share yet", copied ? "Paste it in Discord or anywhere with Ctrl+V." : "Kill or gather something and the picture fills in.", WF.ToolTipIcon.Info);
+            if (away) _tray.ShowBalloonTip(3000, copied ? L.T("Picture copied") : L.T("Nothing to share yet"), copied ? L.T("Paste it in Discord or anywhere with Ctrl+V.") : L.T("Kill or gather something and the picture fills in."), WF.ToolTipIcon.Info);
         };
         // the rows say what they would do now: Stop run while a run is on, and off (greyed) when they can't
         menu.Opening += (_, _) =>
         {
-            _trayToggle.Text = RunOn ? "Stop run" : "Start run";
+            _trayToggle.Text = RunOn ? L.T("Stop run") : L.T("Start run");
             _trayToggle.ShortcutKeyDisplayString = HotkeyText;   // the in-game key, when one is set
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
             clearAll.Enabled = !RunOn && !_welcome;
             copyPic.Enabled = _shareReady && !_welcome;
         };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
-        var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
-        var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
+        var support = new WF.ToolStripMenuItem(L.T("Support on Ko-fi")); support.Click += (_, _) => Open(SupportUrl);
+        var quit = new WF.ToolStripMenuItem(L.T("Quit Kinah Ledger")); quit.Click += (_, _) => { _quitting = true; Close(); };
         menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, clearAll, copyPic, new WF.ToolStripSeparator(), movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         // the tray icon (and so its notices) only for the tracker itself, never a test or render command's window
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = Platform.SingleInstance.Held;
@@ -1921,7 +1925,7 @@ public partial class MainWindow : Window
         // a minimize goes to the tray while farming, or always when Options › General says so
         if (WindowState != WindowState.Minimized || !(Farming || _prefs.MinimizeToTray)) return;
         Hide();
-        if (Farming && !_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, "Kinah Ledger is still counting", "It's in the tray by the clock. Double-click the icon to bring the window back.", WF.ToolTipIcon.Info); }
+        if (Farming && !_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, L.T("Kinah Ledger is still counting"), L.T("It's in the tray by the clock. Double-click the icon to bring the window back."), WF.ToolTipIcon.Info); }
     }
 
     void OnClosingWindow(object? sender, CancelEventArgs e)
@@ -1938,7 +1942,7 @@ public partial class MainWindow : Window
         }
         if (Farming && !_quitting)
         {
-            var r = MessageBox.Show(this, "You're still farming. Stop the run and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps it running and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var r = MessageBox.Show(this, L.T("You're still farming. Stop the run and quit?") + "\n\n" + L.T("Yes stops the run and closes Kinah Ledger.") + "\n" + L.T("No keeps it running and leaves this window open."), "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r == MessageBoxResult.No) { e.Cancel = true; return; }
             e.Cancel = true; _quitting = true;
             _ = StopTracking().ContinueWith(_ => Dispatcher.Invoke(Close));
@@ -1973,9 +1977,9 @@ public partial class MainWindow : Window
 
     /// <summary>Where the chat is read from, for Options › Game reading.</summary>
     public string ChatAreaText() =>
-        _prefs.ManualChat && _region is DRect m ? $"Chosen by hand: {m.Width} × {m.Height} px at {m.X}, {m.Y}. Back to automatic undoes it."
-        : _region is DRect r ? $"Found automatically: {r.Width} × {r.Height} px at {r.X}, {r.Y}. The zone is read from the minimap while you play."
-        : "Found automatically when the game is open: the chat above the input box, and the zone from the minimap. If it can't find the chat, choose it yourself.";
+        _prefs.ManualChat && _region is DRect m ? L.F("Chosen by hand: {0} × {1} px at {2}, {3}. Back to automatic undoes it.", m.Width, m.Height, m.X, m.Y)
+        : _region is DRect r ? L.F("Found automatically: {0} × {1} px at {2}, {3}. The zone is read from the minimap while you play.", r.Width, r.Height, r.X, r.Y)
+        : L.T("Found automatically when the game is open: the chat above the input box, and the zone from the minimap. If it can't find the chat, choose it yourself.");
 
     public void ForceClose() { _quitting = true; Close(); }
 
@@ -2019,7 +2023,7 @@ public partial class MainWindow : Window
             // and four days more for the strip's Week side; a state's week is its own runs, so an empty state is empty
             _demoWeekRuns = state?.Runs != null ? _demoInst.Snapshot() : DemoWeekRuns(_demoInst);
             ShowPart("Events", byHand: false); SetTrackingUi(false);
-            Say("Reading the chat", "Faint");
+            Say(L.T("Reading the chat"), "Faint");
             if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1" || (state != null && state.Strip != "closed")) OpenTodaySample();
             return;
         }
@@ -2041,7 +2045,7 @@ public partial class MainWindow : Window
             ShowPart("Crafting", byHand: false);
             FillCraft(new SessionEngine(_items));
             SetTrackingUi(false);
-            Say("Reading the chat", "Faint");
+            Say(L.T("Reading the chat"), "Faint");
             return;
         }
         if (kind == "CraftingUpgrades")
@@ -2070,7 +2074,7 @@ public partial class MainWindow : Window
             ShowPart("Crafting", byHand: false);
             FillCraft(ue);
             SetTrackingUi(false);
-            Say("Last: Expert's Orichalcum Longsword acquired", "Faint");
+            Say(L.F("Last: {0}", "Expert's Orichalcum Longsword acquired"), "Faint");
             return;
         }
         if (kind == "Crafting")
@@ -2090,7 +2094,7 @@ public partial class MainWindow : Window
             ShowPart("Crafting", byHand: false);
             FillCraft(ce);
             SetTrackingUi(false);
-            Say("Last: Diamond Powder acquired", "Faint");
+            Say(L.F("Last: {0}", "Diamond Powder acquired"), "Faint");
             return;
         }
         ShowPart("Farming", byHand: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
@@ -2223,7 +2227,7 @@ public partial class MainWindow : Window
         SetTrackingUi(false);
         LiveMark.Visibility = Visibility.Visible;
         // all is well, so the footer says nothing on Farming (2026-10-28); the last line read is in ⋯
-        _lastRead = _mode == Mode.Gather ? "Last: Sapphire Gemstone acquired" : "Last: Spiritstone acquired";
+        _lastRead = _mode == Mode.Gather ? L.F("Last: {0}", "Sapphire Gemstone acquired") : L.F("Last: {0}", "Spiritstone acquired");
         Tell("", "Faint");
         if (market)
         {

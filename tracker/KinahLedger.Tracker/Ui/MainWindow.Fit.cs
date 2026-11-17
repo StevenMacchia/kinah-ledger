@@ -35,7 +35,7 @@ public partial class MainWindow
     bool FullShown => _prefs.FullView && !_fullTooWide;
 
     /// <summary>The note Compact shows with when Full view doesn't fit.</summary>
-    const string FullTooWideNote = "Full view needs a wider screen than this one, so the window shows Compact. It comes back on a wider screen.";
+    static string FullTooWideNote => L.T("Full view needs a wider screen than this one, so the window shows Compact. It comes back on a wider screen.");
 
     /// <summary>
     /// The work area's width, in this window's units, of the screen the window is on (the taskbar left out). A layout
@@ -250,11 +250,11 @@ public partial class MainWindow
     /// <summary>"Window size 120%", and "110% fits this screen" when the screen caps it.</summary>
     string WindowScaleLine(double wanted)
     {
-        var line = $"Window size {wanted:P0}";
-        if (wanted > _fitScale + 0.005) line += $" · {_fitScale:P0} fits this screen";
-        else if (Math.Abs(wanted - MaxWindowScale) < 0.001) line += " · the biggest";
-        else if (Math.Abs(wanted - MinWindowScale) < 0.001) line += " · the smallest";
-        return line + $" · {WindowBiggerKey} and {WindowSmallerKey}, {WindowResetKey} for 100%";
+        var line = L.F("Window size {0:P0}", wanted);
+        if (wanted > _fitScale + 0.005) line += L.F(" · {0:P0} fits this screen", _fitScale);
+        else if (Math.Abs(wanted - MaxWindowScale) < 0.001) line += L.T(" · the biggest");
+        else if (Math.Abs(wanted - MinWindowScale) < 0.001) line += L.T(" · the smallest");
+        return line + L.F(" · {0} and {1}, {2} for 100%", WindowBiggerKey, WindowSmallerKey, WindowResetKey);
     }
 
     /// <summary>The window moved to another screen, or the screen's scaling changed: fitted again when that changes anything.</summary>

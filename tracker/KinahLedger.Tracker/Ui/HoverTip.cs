@@ -159,7 +159,7 @@ public sealed class LazyTip
     {
         if (_card != null) return _card;
         try { _card = _build(); }
-        catch (Exception ex) { CrashLog.Write("today card", ex); _card = new TextBlock { Text = "Couldn't draw this card." }; }
+        catch (Exception ex) { CrashLog.Write("today card", ex); _card = new TextBlock { Text = L.T("Couldn't draw this card.") }; }
         return _card;
     }
 

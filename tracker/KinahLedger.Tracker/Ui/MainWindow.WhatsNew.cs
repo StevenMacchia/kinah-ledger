@@ -36,12 +36,12 @@ public partial class MainWindow
     /// <summary>Fills the card with the notes and shows it (on Farming, outside the first-run screen).</summary>
     void ShowWhatsNew(IReadOnlyList<WhatsNew.Note> notes)
     {
-        WhatsNewTitle.Text = $"WHAT'S NEW IN {ThisVersion}";
+        WhatsNewTitle.Text = L.F("WHAT'S NEW IN {0}", ThisVersion);
         WhatsNewList.Children.Clear();
         foreach (var n in notes.Take(WhatsNewMax)) WhatsNewList.Children.Add(WhatsNewLine(n));
         if (notes.Count > WhatsNewMax)
         {
-            var more = new TextBlock { Text = $"and {notes.Count - WhatsNewMax} more in the notes", FontSize = 12.5, Margin = new Thickness(14, 6, 0, 0) };
+            var more = new TextBlock { Text = L.F("and {0} more in the notes", notes.Count - WhatsNewMax), FontSize = 12.5, Margin = new Thickness(14, 6, 0, 0) };
             more.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
             WhatsNewList.Children.Add(more);
         }

@@ -105,9 +105,9 @@ public partial class MainWindow
     /* ---------------- the actions ---------------- */
 
     /// <summary>Start over on the Crafting part: the recipes, tries and profit go, with Undo.</summary>
-    Task StartCraftOver() => Offer("crafts", "Crafting started over",
+    Task StartCraftOver() => Offer("crafts", L.T("Crafting started over"),
         apply: () => { _craftCleared = new SessionEngine(_items); FillCraft(CraftShown); },
-        undo: () => { _craftCleared = null; FillCraft(CraftShown); Say("Crafting is back as it was.", "Good"); },
+        undo: () => { _craftCleared = null; FillCraft(CraftShown); Say(L.T("Crafting is back as it was."), "Good"); },
         commit: () => { _watcher.Chat?.ResetCraftView(); _craftCleared = null; FillCraft(CraftShown); return Task.CompletedTask; });
 
     /// <summary>Clear on the Events part: the runs shown go, with Undo; runs not sent to the site yet are still sent, and the one under way stays.</summary>
@@ -117,16 +117,16 @@ public partial class MainWindow
         var open = il.Current is { } cur ? RunKey(cur.Start, cur.Zone) : "";
         var keys = il.Snapshot().Select(r => RunKey(r.Start, r.Zone)).Where(k => k != open).ToList();
         if (keys.Count == 0) return;
-        await Offer("runs", "Expedition and event runs cleared",
+        await Offer("runs", L.T("Expedition and event runs cleared"),
             apply: () => { _hiddenRuns.UnionWith(keys); ShowInstances(); },
             undo: () => { _hiddenRuns.Clear(); ShowInstances(); },
             commit: () => { _hiddenRuns.Clear(); il.ClearShown(); ShowInstances(); return Task.CompletedTask; });
     }
 
     /// <summary>Stop run from the window's button: the window shows the run stopped at once; it ends for real (saved and shared) when the bar goes.</summary>
-    Task StopFromWindow() => Offer("stop", "Run stopped",
-        apply: () => { _stopPending = true; SetTrackingUi(false); Say("Run stopped. It's saved in a few seconds; Undo carries on with the same run.", "Faint"); Tick(); },
-        undo: () => { _stopPending = false; SetTrackingUi(true); FlashHud("Run resumed"); Say("Run resumed: the same run carries on.", "Good"); Tick(); },
+    Task StopFromWindow() => Offer("stop", L.T("Run stopped"),
+        apply: () => { _stopPending = true; SetTrackingUi(false); Say(L.T("Run stopped. It's saved in a few seconds; Undo carries on with the same run."), "Faint"); Tick(); },
+        undo: () => { _stopPending = false; SetTrackingUi(true); FlashHud(L.T("Run resumed")); Say(L.T("Run resumed: the same run carries on."), "Good"); Tick(); },
         commit: async () => { _stopPending = false; await StopTracking(); });
 
     /// <summary>
@@ -146,7 +146,7 @@ public partial class MainWindow
     /// too, so nothing is lost, and nothing of the cancelled run is saved or shared. When the bar goes, what was counted is
     /// shared and the always-on count starts over, as Clear everything does; the run carries on.
     /// </summary>
-    Task OfferFromZero() => Offer("fresh", "Run started from zero",
+    Task OfferFromZero() => Offer("fresh", L.T("Run started from zero"),
         apply: () => { if (_demo) { _demoFromZero = _demoEngine; _demoEngine = new SessionEngine(_items); Redraw(); } },
         undo: () =>
         {
@@ -154,8 +154,8 @@ public partial class MainWindow
             else { _watcher.StopFarm(); _watcher.RestoreHeld(); }
             _lastRun = null;
             SetTrackingUi(false);
-            FlashHud("Run undone");
-            Say("No run started: the counts are back as they were.", "Good");
+            FlashHud(L.T("Run undone"));
+            Say(L.T("No run started: the counts are back as they were."), "Good");
             Redraw(); Tick();
         },
         commit: async () => { _demoFromZero = null; if (!_demo) await _watcher.CommitHeldAsync(); });
@@ -163,7 +163,7 @@ public partial class MainWindow
     /// <summary>For layout renders (KL_SHOT_UNDO=1): the bar as it shows two seconds after Clear everything.</summary>
     void ShowUndoSample()
     {
-        _ = Offer("tables", "Everything cleared", () => { }, () => { }, () => Task.CompletedTask);
+        _ = Offer("tables", L.T("Everything cleared"), () => { }, () => { }, () => Task.CompletedTask);
         UndoTimeScale.ScaleX = 0.75;
     }
 
