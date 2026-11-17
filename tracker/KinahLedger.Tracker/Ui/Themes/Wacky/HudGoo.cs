@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Path = System.Windows.Shapes.Path;
 using KinahLedger.Parser;
 using KinahLedger.Session;
 using static KinahLedger.Ui.HudKit;
@@ -44,7 +45,7 @@ sealed class HudGoo : WackyLook
                 CornerRadius = new CornerRadius(Math.Max(4, r.TopLeft - 4), Math.Max(4, r.TopRight - 4), gloss / 2, gloss / 2), Height = gloss, VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(Math.Max(7, r.TopLeft * .55), 3, Math.Max(9, r.TopRight * .7), 0), Background = Wk.Lin(0, 0, 0, 1, (0xFFFFFF, .62, 0), (0xFFFFFF, .06, 1)),
             });
-            Layer.Children.Add(new Ellipse { Width = 7, Height = 4.5, Fill = Wk.S(0xFFFFFF, .9), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(Math.Max(9, r.TopLeft * .6), 4, 0, 0) });
+            Layer.Children.Add(new Ellipse { Width = 12, Height = 4, Fill = Wk.Lin(0, 0, 1, 0, (0xFFFFFF, .95, 0), (0xFFFFFF, .4, 1)), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(Math.Max(6, r.TopLeft * .38), 4.5, 0, 0), RenderTransform = new RotateTransform(-14) });
             Layer.RenderTransformOrigin = new Point(.5, 1);
             Layer.RenderTransform = Wobble;
             Root.Children.Add(Layer);
@@ -71,6 +72,7 @@ sealed class HudGoo : WackyLook
 
     public HudGoo() : base(new Thickness(12, 56, 36, 30), Wk.Segoe)
     {
+        UseRows(34, _ => new GooRow(), 16, GooGap);
         _beanClock = Figure("", 13, Wk.S(Grape2), Wk.Heavy, FontWeights.Black);
         _beanClock.Margin = new Thickness(5, 0, 0, 0);
         _beanFace.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _beanName, _beanClock } };
@@ -161,14 +163,14 @@ sealed class HudGoo : WackyLook
         // the Abyss's kills, deaths and Kinah: little grape pills in their colours
         foreach (var (fig, word, tone) in f.Stats)
         {
-            Brush c = ReferenceEquals(tone, Rec) ? Wk.S(0xFF5A5A) : ReferenceEquals(tone, Gold) ? ButterB : WhiteB;
+            Brush c = ReferenceEquals(tone, Rec) ? WhiteB : ReferenceEquals(tone, Gold) ? ButterB : WhiteB;
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
             sp.Children.Add(Figure(fig, 12.5, c, Wk.Heavy, FontWeights.Black));
             bool red = ReferenceEquals(tone, Rec);
-            var w = Wk.Words(word, 11, Wk.S(red ? 0xFFB0B0u : 0xE2CCFFu), Wk.Segoe, FontWeights.SemiBold); w.Margin = new Thickness(4, 1, 0, 0);
+            var w = Wk.Words(word, 11, Wk.S(red ? 0xFFFFFFu : 0xE2CCFFu), Wk.Segoe, FontWeights.SemiBold); w.Margin = new Thickness(4, 1, 0, 0);
             sp.Children.Add(w);
             // deaths on a red sweet, so the red reads at a glance
-            _stats.Children.Add(new Border { CornerRadius = new CornerRadius(10), Background = red ? Wk.S(0x7A0F2A, .9) : Wk.S(Grape2, .78), Padding = new Thickness(8, 1, 9, 2), Margin = new Thickness(0, 0, 5, 0), Child = sp });
+            _stats.Children.Add(new Border { CornerRadius = new CornerRadius(10), Background = red ? Wk.Lin(0, 0, 0, 1, (0xFF6A80, 1, 0), (0xE8344E, 1, 1)) : Wk.S(Grape2, .78), Padding = new Thickness(8, 1, 9, 2), Margin = new Thickness(0, 0, 5, 0), Child = sp });
         }
         if (_stats.Children.Count > 0) _stats.Margin = new Thickness(_ring != null ? 54 : 0, 5, 0, 0);
         _stats.Visibility = _stats.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -413,7 +415,7 @@ sealed class HudGoo : WackyLook
         // it rises out of the blob's top edge and floats above it, off the figures
         var at = At(_blob.Root, .72, 0);
         Jiggle(_blob, 1000, .06);
-        Float(b, c, new Point(at.X, at.Y - 2), 18, "rare", 2700, .7, 12, 9);
+        Float(b, c, new Point(at.X, at.Y - 2), 18, "rare", 2700, .66, 12, 9);
     }
 
     protected override void BestPassed(bool held)
@@ -428,7 +430,7 @@ sealed class HudGoo : WackyLook
         var words = Wk.Outlined(L.T("YUM! NEW BEST"), Wk.Heavy, FontWeights.Black, 14, WhiteB, Wk.S(0x8A0F4A), 2.4);
         var b = Bubble(Math.Max(120, words.Width + 26), 44, 0xFF4FA3, words);
         var at = At(_ring ?? _hour, .6, 0);
-        Float(b, 0xFF7AC0, new Point(at.X + 44, at.Y - 6), 16, "best", 2000, .7, 9, 7);
+        Float(b, 0xFF7AC0, new Point(at.X + 44, at.Y - 6), 16, "best", 2000, .66, 9, 7);
     }
 
     protected override void EntryOpened(TimerBoard.Item i, bool held)
@@ -455,32 +457,41 @@ sealed class HudGoo : WackyLook
             _panel.Wobble.ScaleX = 1 + .03 * Wob(Seg(q, .2, 1), 2, 3.5) + .03 * (1 - k);
         }, () => { _panel.Wobble.ScaleX = _panel.Wobble.ScaleY = 1; });
         double w = Math.Max(_panel.Root.ActualWidth, 260);
-        var cv = new Canvas { Width = w, Height = 48 };
-        var drips = new List<(Border Stem, Ellipse Drop, double Len)>();
-        double[] xs = { .14, .36, .6, .83 }, lens = { 20, 32, 15, 26 };
+        var cv = new Canvas { Width = w, Height = 56 };
+        var drips = new List<(Path Drip, Grid Drop, double Len)>();
+        double[] xs = { .2, .52, .8 }, lens = { 22, 34, 16 };
+        var tear = Geometry.Parse("M5,0 C5,0 10,9 10,13 A5,5 0 1 1 0,13 C0,9 5,0 5,0 Z");
         for (int i = 0; i < xs.Length; i++)
         {
-            var stem = new Border { Width = 11, Height = 0, CornerRadius = new CornerRadius(0, 0, 5.5, 5.5), Background = Wk.Lin(0, 0, 1, 0, (0x5A1CB0, 1, 0), (0x9B4DFF, 1, .35), (0x4A128E, 1, 1)) };
-            var drop = new Ellipse { Width = 14, Height = 16, Fill = Wk.Rad(.36, .3, .75, (0xC9A2FF, 1, 0), (0x8E3DFF, 1, .45), (0x4A128E, 1, 1)), Stroke = Wk.S(Night, .8), StrokeThickness = 1, Opacity = 0 };
-            Canvas.SetLeft(stem, w * xs[i] - 5.5); Canvas.SetTop(stem, 0);
-            Canvas.SetLeft(drop, w * xs[i] - 7);
-            cv.Children.Add(stem); cv.Children.Add(drop);
-            drips.Add((stem, drop, lens[i]));
+            // a tapered teardrop pulling out of the panel's lip, a specular dot near its round end
+            var drip = new Path { Data = tear, Stretch = Stretch.Fill, Width = 13, Height = 0, Fill = Wk.Lin(0, 0, 1, 0, (0x4A128E, 1, 0), (0x9B4DFF, 1, .38), (0x3A0E6E, 1, 1)), RenderTransformOrigin = new Point(.5, 0) };
+            var drop = new Grid { Width = 12, Height = 13, Opacity = 0 };
+            drop.Children.Add(new Ellipse { Fill = Wk.Rad(.36, .3, .75, (0xC9A2FF, 1, 0), (0x8E3DFF, 1, .45), (0x4A128E, 1, 1)), Stroke = Wk.S(Night, .8), StrokeThickness = 1 });
+            drop.Children.Add(new Ellipse { Width = 3.5, Height = 3.5, Fill = WhiteB, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 2.5, 0, 0) });
+            Canvas.SetLeft(drip, w * xs[i] - 6.5); Canvas.SetTop(drip, 0);
+            Canvas.SetLeft(drop, w * xs[i] - 6);
+            cv.Children.Add(drip); cv.Children.Add(drop);
+            drips.Add((drip, drop, lens[i]));
         }
         var at = At(_panel.Root, .5, 1);
-        var s = Spawn(cv, new Point(at.X, at.Y - 3 + 24), "fight");
-        Play(s, "fight", 1600, q =>
+        var s = Spawn(cv, new Point(at.X, at.Y - 6 + 28), "fight");
+        Play(s, "fight", 1700, q =>
         {
             for (int i = 0; i < drips.Count; i++)
             {
-                var (stem, drop, len) = drips[i];
-                double lag = i * .06, grow = Out(Seg(q, .1 + lag, .45 + lag)), fall = Seg(q, .45 + lag, .8 + lag), back = Seg(q, .5 + lag, .9 + lag);
-                stem.Height = Math.Max(0, len * grow * (1 - back));
-                Canvas.SetTop(drop, len * grow - 8 + 34 * fall * fall);
-                drop.Opacity = grow > .05 ? 1 - fall : 0;
+                var (drip, drop, len) = drips[i];
+                double lag = i * .07, grow = Out(Seg(q, .06 + lag, .42 + lag)), fall = Seg(q, .42 + lag, .78 + lag), back = Seg(q, .44 + lag, .7 + lag);
+                drip.Height = Math.Max(0, Math.Max(grow > 0 ? 12 * Math.Min(1, grow * 3) : 0, (len + 6) * grow * (1 - .8 * back)));
+                drip.Opacity = 1 - Seg(q, .7 + lag, .82 + lag);
+                Canvas.SetTop(drop, (len + 6) * grow - 12 + 36 * fall * fall);
+                drop.Opacity = fall > 0 ? 1 - Seg(q, .7 + lag, .86 + lag) : 0;
             }
             s.Set(1, 1, 0, 0, 0, 1);
         });
+        // and a lime GO! bubble pops up off its top edge (the family's fight call)
+        var go = Wk.Outlined(L.T("GO!"), Wk.Heavy, FontWeights.Black, 22, Wk.S(Grape2), WhiteB, 2.4);
+        var top = At(_panel.Root, .5, 0);
+        Float(Bubble(84, 46, Lime, go), Lime, new Point(top.X, top.Y - 6), 14, "fight-go", 1500, .62, 9, 7);
     }
 
     protected override void FightEnded(Encounter e, bool held)
@@ -532,5 +543,148 @@ sealed class HudGoo : WackyLook
             bubble.RenderTransform = bsc;
             sp.Set(1, 1, 0, 0, 0, 1);
         });
+    }
+
+    // ---- the meter's rows: jelly beans with candy bars
+
+    /// <summary>"2 more": a small grape pill between the party and you below it.</summary>
+    static FrameworkElement GooGap(int n)
+    {
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 0; i < 3; i++)
+            g.Children.Add(new Ellipse { Width = 4, Height = 4, Fill = Wk.S(0xE2CCFF, .5), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness((i - 1) * 14 + (n > 0 ? 0 : 0), 0, 0, 0), Visibility = n > 0 ? Visibility.Collapsed : Visibility.Visible });
+        if (n > 0)
+            g.Children.Add(new Border { CornerRadius = new CornerRadius(8), Background = Wk.S(Grape2, .95), BorderBrush = Wk.S(0x8E4BFF, .6), BorderThickness = new Thickness(1), Padding = new Thickness(8, 0, 8, 1), HorizontalAlignment = HorizontalAlignment.Center,
+                Child = Wk.Words(L.F("{0} more", n), 10, Wk.S(0xE2CCFF), Wk.Segoe, FontWeights.Bold) });
+        return g;
+    }
+
+    /// <summary>
+    /// A member as a jelly bean: a glossy grape pill (a lighter rim, a specular streak along its top) holding the name on its
+    /// first line and, under it, a recessed groove with the damage share as a candy bar of the class's colour (full colour,
+    /// a gloss line on top, a round bulged cap) that wobbles like jelly when it moves. The rank is a wrapped sweet in the
+    /// class's colour (twists either side). You are a butter-rimmed bean with a soft butter glow, a butter sweet and a YOU
+    /// pill; a healer's heal a lime pill; deaths a cherry sweet; TOP DPS and TOP HEALS candies at a kill. DPS and % tabular.
+    /// </summary>
+    sealed class GooRow : IThemeRow
+    {
+        const double H = 31;
+        readonly Grid _root = new() { Height = H, Background = Brushes.Transparent, Margin = new Thickness(3, 0, 3, 0) };
+        readonly Border _glow = new() { CornerRadius = new CornerRadius(17), Margin = new Thickness(-3), BorderThickness = new Thickness(3) };
+        readonly Border _bean = new() { CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(1.6) };
+        readonly Grid _groove = new() { Height = 7, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(50, 0, 12, 4.5) };
+        readonly Grid _wrap = new() { HorizontalAlignment = HorizontalAlignment.Left, RenderTransformOrigin = new Point(0, .5) };
+        readonly ScaleTransform _wob = new();
+        readonly Border _candy = new() { CornerRadius = new CornerRadius(3.5) };
+        readonly Ellipse _cap = new() { Width = 9, Height = 9, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) };
+        readonly Wk.BarFill _fill;
+        readonly Grid _sweet = new() { Width = 29, Height = 20, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
+        readonly Ellipse _ball = new() { Width = 19, Height = 19, StrokeThickness = 1.2 };
+        readonly Path _twistL = new() { Data = Geometry.Parse("M0,0 L5.5,2.2 L5.5,4.8 L0,7 Z M0,3.5 L5.5,3.5"), Width = 5.5, Height = 8, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Fill, StrokeThickness = .8 };
+        readonly Path _twistR = new() { Data = Geometry.Parse("M5.5,0 L0,2.2 L0,4.8 L5.5,7 Z M5.5,3.5 L0,3.5"), Width = 5.5, Height = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Fill, StrokeThickness = .8 };
+        readonly TextBlock _rankDrop = Wk.Words("", 11, Wk.S(Night, .85), Wk.Heavy, FontWeights.Black), _rank = Wk.Words("", 11, WhiteB, Wk.Heavy, FontWeights.Black);
+        readonly Border _iconHost = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 6, 0) };
+        readonly TextBlock _name = Wk.Words("", 12.5, WhiteB, Wk.Heavy, FontWeights.Black);
+        readonly Border _you;
+        readonly TextBlock _cp = Wk.Words("", 9.5, Wk.S(0xF0E4FF, .8), Wk.Segoe, FontWeights.Bold);
+        readonly Border _healPill;
+        readonly TextBlock _heal = Wk.Words("", 10, Wk.S(Grape2), Wk.Heavy, FontWeights.Black);
+        readonly Border _top = new() { CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 0, 5, 0), BorderThickness = new Thickness(1), BorderBrush = Wk.S(Night, .8) };
+        readonly TextBlock _topText = Wk.Words("", 8.5, Wk.S(Grape2), Wk.Heavy, FontWeights.Black);
+        readonly Border _dead;
+        readonly TextBlock _deadText = Wk.Words("", 9.5, WhiteB, Wk.Heavy, FontWeights.Black);
+        readonly TextBlock _detail = Wk.Words("", 9.5, Wk.S(0xF0E4FF, .85), Wk.Segoe, FontWeights.Bold);
+        readonly TextBlock _figure, _share;
+        string _cls = "\0";
+        double _was = -1;
+
+        public FrameworkElement Root => _root;
+
+        public GooRow()
+        {
+            _root.Children.Add(_glow);
+            _root.Children.Add(new Border { CornerRadius = new CornerRadius(15), Background = Wk.S(Night, .95), RenderTransform = new TranslateTransform(0, 2.2) });
+            _bean.Background = Wk.Lin(0, 0, 0, 1, (0x5B1F8F, 1, 0), (0x46157A, 1, .45), (0x3A1260, 1, 1));
+            _root.Children.Add(_bean);
+            // the bean's specular streak along its top
+            _root.Children.Add(new Border { Height = 3.5, Width = 90, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16, 2.5, 0, 0), CornerRadius = new CornerRadius(1.75), Background = Wk.Lin(0, 0, 1, 0, (0xFFFFFF, .55, 0), (0xFFFFFF, 0, 1)), IsHitTestVisible = false });
+            // the groove and its candy bar
+            _groove.Children.Add(new Border { CornerRadius = new CornerRadius(3.5), Background = Wk.S(0x1C0833), BorderBrush = Wk.Lin(0, 0, 0, 1, (0x0A0214, 1, 0), (0x7A40C0, .6, 1)), BorderThickness = new Thickness(0, 1, 0, .8) });
+            _wrap.RenderTransform = _wob;
+            _candy.Child = new Border { Height = 1.2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 1, 5, 0), CornerRadius = new CornerRadius(.6), Background = Wk.S(0xFFFFFF, .8) };
+            _wrap.Children.Add(_candy); _wrap.Children.Add(_cap);
+            _groove.Children.Add(_wrap);
+            _fill = new Wk.BarFill(_groove, _wrap, 9);
+            _root.Children.Add(_groove);
+            var row = new Grid { Margin = new Thickness(6, 0, 12, 10) };
+            foreach (var w in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(48), new GridLength(42) })
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+            _sweet.Children.Add(_twistL); _sweet.Children.Add(_twistR);
+            _sweet.Children.Add(_ball);
+            _sweet.Children.Add(new Ellipse { Width = 7, Height = 3.5, Fill = Wk.S(0xFFFFFF, .75), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(9, 3, 0, 0), RenderTransform = new RotateTransform(-20) });
+            _rankDrop.HorizontalAlignment = _rank.HorizontalAlignment = HorizontalAlignment.Center;
+            _rankDrop.RenderTransform = new TranslateTransform(0, 1.2);
+            _sweet.Children.Add(_rankDrop); _sweet.Children.Add(_rank);
+            row.Children.Add(_sweet);
+            Grid.SetColumn(_iconHost, 1); row.Children.Add(_iconHost);
+            _name.TextTrimming = TextTrimming.CharacterEllipsis;
+            _you = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xFFF7A8, 1, 0), (0xFFCF3A, 1, 1)), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                Child = Wk.Words(L.T("YOU"), 8.5, Wk.S(Grape2), Wk.Heavy, FontWeights.Black) };
+            _cp.Margin = new Thickness(5, 2, 0, 0);
+            var nameLine = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _name, _you, _cp } };
+            Grid.SetColumn(nameLine, 2); row.Children.Add(nameLine);
+            _healPill = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xDDFF7A, 1, 0), (0x92E21C, 1, 1)), Padding = new Thickness(4, 0, 4, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _heal };
+            Grid.SetColumn(_healPill, 3); row.Children.Add(_healPill);
+            _top.Child = _topText;
+            _dead = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xFF6A80, 1, 0), (0xE8344E, 1, 1)), Padding = new Thickness(4, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _deadText };
+            Grid.SetColumn(_dead, 5); row.Children.Add(_dead);
+            _detail.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_detail, 6); row.Children.Add(_detail);
+            _figure = Figure("", 14, WhiteB, Wk.Heavy, FontWeights.Black); _figure.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(_figure, 7); row.Children.Add(_figure);
+            _share = Figure("", 10.5, Wk.S(0xE2CCFF), Wk.Segoe, FontWeights.Bold); _share.HorizontalAlignment = HorizontalAlignment.Right; _share.Margin = new Thickness(0, 1, 0, 0);
+            Grid.SetColumn(_share, 8); row.Children.Add(_share);
+            _root.Children.Add(row);
+            // TOP DPS / TOP HEALS: a small candy at the groove's right end, off the name's line (the bar rarely reaches it)
+            _top.HorizontalAlignment = HorizontalAlignment.Right; _top.VerticalAlignment = VerticalAlignment.Bottom; _top.Margin = new Thickness(0, 0, 14, 1);
+            _root.Children.Add(_top);
+        }
+
+        public void Set(MeterMember m, MeterContext c, bool fresh)
+        {
+            _bean.BorderBrush = m.You ? Wk.S(0xFFE38A) : Wk.Lin(0, 0, 0, 1, (0xA070E0, .9, 0), (0x6A35B0, .7, 1));
+            _bean.BorderThickness = new Thickness(m.You ? 2 : 1.4);
+            _glow.BorderBrush = m.You ? Wk.S(0xFFE38A, .32) : null;
+            uint cc = Wk.Hex(m.ClassColor), vivid = Wk.Vivid(cc);
+            uint ball = m.You ? 0xFFCF3Au : vivid;
+            _ball.Fill = Wk.Rad(.38, .32, .75, (Wk.Shade(ball, .45), 1, 0), (ball, 1, .55), (Wk.Shade(ball, -.35), 1, 1));
+            _ball.Stroke = Wk.S(Wk.Shade(ball, -.55));
+            _twistL.Fill = _twistR.Fill = Wk.S(Wk.Shade(ball, -.1)); _twistL.Stroke = _twistR.Stroke = Wk.S(Wk.Shade(ball, -.55));
+            _rank.Text = _rankDrop.Text = m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _rank.Foreground = m.You ? Wk.S(Grape2) : WhiteB; _rankDrop.Visibility = m.You ? Visibility.Hidden : Visibility.Visible;
+            if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ClassArt.Icon(m.Class, 17, m.Name); }
+            _name.Text = m.Name;
+            _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
+            _cp.Visibility = Visibility.Collapsed;   // the Combat Power is in the expanded line, not crowding the name
+            _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _healPill.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
+            _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
+            _top.Background = m.TopDps ? Wk.Lin(0, 0, 0, 1, (0xFFF7A8, 1, 0), (0xFFCF3A, 1, 1)) : Wk.Lin(0, 0, 0, 1, (0xC8FFE0, 1, 0), (0x3DD68C, 1, 1));
+            _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") + (m.Cp.Length > 0 ? " · " + m.Cp + " " + L.T("CP") : "") : "";
+            _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _figure.Text = m.Figure; _share.Text = m.ShareText;
+            // the candy bar: the class's colour at full strength, lit on top, deep at the foot, a bulged round cap at its end
+            _candy.Background = Wk.Lin(0, 0, 0, 1, (Wk.Shade(vivid, .35), 1, 0), (vivid, 1, .5), (Wk.Shade(vivid, -.3), 1, 1));
+            _cap.Fill = Wk.Rad(.35, .3, .7, (Wk.Shade(vivid, .55), 1, 0), (vivid, 1, .6), (Wk.Shade(vivid, -.3), 1, 1));
+            _cap.Stroke = Wk.S(Wk.Shade(vivid, -.5)); _cap.StrokeThickness = .8;
+            double share = m.CpOnly ? 0 : m.Share;
+            _groove.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
+            bool moved = _fill.Set(share, c, "bar", fresh);
+            // a bar that moves wobbles like jelly as it settles (the bar, not the figures)
+            if (moved && c.Moves && _was >= 0 && Math.Abs(share - _was) > .01)
+                Motion.Play(_candy, 700, q => { double w = Wob(q, 2.2, 3.4); _wob.ScaleY = 1 + .3 * w; _wob.ScaleX = 1 - .02 * w; }, () => { _wob.ScaleX = _wob.ScaleY = 1; });
+            _was = share;
+        }
     }
 }

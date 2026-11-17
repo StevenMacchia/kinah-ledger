@@ -51,6 +51,7 @@ abstract class WackyLook : HudThemeLook
     {
         public readonly FrameworkElement El;
         readonly ScaleTransform _s = new();
+        readonly SkewTransform _k = new();
         readonly RotateTransform _r = new();
         readonly TranslateTransform _t = new();
         public Sprite(FrameworkElement el)
@@ -58,11 +59,11 @@ abstract class WackyLook : HudThemeLook
             El = el;
             el.IsHitTestVisible = false;
             el.RenderTransformOrigin = new Point(.5, .5);
-            el.RenderTransform = new TransformGroup { Children = { _s, _r, _t } };
+            el.RenderTransform = new TransformGroup { Children = { _s, _k, _r, _t } };
         }
-        public Sprite Set(double sx, double sy, double rot, double dx, double dy, double op)
+        public Sprite Set(double sx, double sy, double rot, double dx, double dy, double op, double skew = 0)
         {
-            _s.ScaleX = sx; _s.ScaleY = sy; _r.Angle = rot; _t.X = dx; _t.Y = dy; El.Opacity = Math.Clamp(op, 0, 1);
+            _s.ScaleX = sx; _s.ScaleY = sy; _k.AngleX = skew; _r.Angle = rot; _t.X = dx; _t.Y = dy; El.Opacity = Math.Clamp(op, 0, 1);
             El.Visibility = op <= 0.001 ? Visibility.Hidden : Visibility.Visible;
             return this;
         }
@@ -175,6 +176,19 @@ static class Wk
 
     public static uint Hex(Color c) => (uint)(c.R << 16 | c.G << 8 | c.B);
 
+    /// <summary>A colour made vivid: its hue kept, its saturation and brightness lifted (a class's soft colour as candy, tape or neon).</summary>
+    public static uint Vivid(uint c, double sat = .78, double val = .97)
+    {
+        double r = (c >> 16 & 0xFF) / 255.0, g = (c >> 8 & 0xFF) / 255.0, b = (c & 0xFF) / 255.0;
+        double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+        double h = d == 0 ? 0 : max == r ? ((g - b) / d % 6) : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h *= 60; if (h < 0) h += 360;
+        double s = Math.Max(max == 0 ? 0 : d / max, d == 0 ? 0 : sat), v = Math.Max(max, val);
+        double cc = v * s, x = cc * (1 - Math.Abs(h / 60 % 2 - 1)), m = v - cc;
+        (double R, double G, double B) = h < 60 ? (cc, x, 0.0) : h < 120 ? (x, cc, 0.0) : h < 180 ? (0.0, cc, x) : h < 240 ? (0.0, x, cc) : h < 300 ? (x, 0.0, cc) : (cc, 0.0, x);
+        return (uint)Math.Round((R + m) * 255) << 16 | (uint)Math.Round((G + m) * 255) << 8 | (uint)Math.Round((B + m) * 255);
+    }
+
     /// <summary>A colour lighter (t &gt; 0, toward white) or darker (t &lt; 0, toward black).</summary>
     public static uint Shade(uint c, double t)
     {
@@ -279,6 +293,37 @@ static class Wk
         el.RenderTransform = new RotateTransform(angle);
         TextOptions.SetTextFormattingMode(el, TextFormattingMode.Ideal);
         return el;
+    }
+
+    /// <summary>
+    /// A meter bar's fill: <paramref name="fill"/>'s width is its share of <paramref name="host"/>'s, kept through a resize;
+    /// with effects on it slides to a new share (Motion.Slide); off, it is set where it ends.
+    /// </summary>
+    public sealed class BarFill
+    {
+        readonly FrameworkElement _host, _fill;
+        readonly double _min;
+        double _v;
+        public BarFill(FrameworkElement host, FrameworkElement fill, double min)
+        {
+            _host = host; _fill = fill; _min = min;
+            host.SizeChanged += (_, _) => Apply(_v);
+        }
+        public void Apply(double v)
+        {
+            _v = Math.Clamp(double.IsFinite(v) ? v : 0, 0, 1);
+            double w = _host.ActualWidth;
+            if (w <= 0) return;
+            _fill.Width = _v <= 0 ? 0 : Math.Max(_min, w * _v);
+        }
+        /// <summary>The bar at <paramref name="share"/>; true when it moved from another share.</summary>
+        public bool Set(double share, MeterContext c, string tag, bool fresh)
+        {
+            bool moved = Math.Abs(share - _v) > .005;
+            if (!c.Moves || fresh) { Apply(share); return false; }
+            Motion.Slide(_fill, c.Key + "|" + tag, share, Apply);
+            return moved;
+        }
     }
 
     /// <summary>A set of small pieces (droplets, confetti, sparks) drawn on one canvas, each moved by the course.</summary>
