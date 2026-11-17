@@ -204,7 +204,13 @@ public static class LangCheck
                 var l = line.Trim();
                 if (l.Length == 0 || l.StartsWith('#')) continue;
                 var f = l.Split('|');
-                foreach (var i in fields) if (i < f.Length) Add(f[i]);
+                foreach (var i in fields)
+                    if (i < f.Length)
+                    {
+                        Add(f[i]);
+                        // an Abyss area as the timers write it: its part after " - " ("Siel's Heart"), Reshanta without "Chaotic"
+                        foreach (var piece in f[i].Split(" - ")) { Add(piece); if (piece.StartsWith("Chaotic ")) Add(piece["Chaotic ".Length..]); }
+                    }
             }
         }
         var keys = new HashSet<string>(StringComparer.Ordinal) { "name", "item", "skill", "output", "set", "cat1Name", "cat2Name", "categoryName", "text" };
@@ -230,7 +236,7 @@ public static class LangCheck
         }
         var mobImages = Read("mob-images.json");
         if (mobImages != null) try { using var doc = JsonDocument.Parse(mobImages); foreach (var p in doc.RootElement.EnumerateObject()) Add(p.Name); } catch (JsonException) { }
-        foreach (var sv in KinahLedger.Data.Servers.All) { Add(sv.Label); Add(sv.Name); }
+        foreach (var sv in KinahLedger.Data.Servers.All) { Add(sv.Label); Add(sv.Name); } foreach (var r in KinahLedger.Data.Servers.Regions) Add(r.Name);
         foreach (var extra in Extra) Add(extra);
         _names = n;
         return n;
