@@ -351,6 +351,50 @@ static class Wk
         Text = s, FontSize = size, Foreground = fg, FontFamily = face, FontWeight = w, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.None,
     };
 
+    /// <summary>The widest a meter row's DPS is written ("999.9K", "9.99M": Amounts.Meter), and its share ("99.9%", "100%").</summary>
+    public static readonly string[] DpsForms = { "888.8K", "8.88M" }, ShareForms = { "88.8%", "100%" };
+
+    /// <summary>
+    /// The room a figure column needs (Steven, 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!"): the
+    /// widest of its forms in its face, size and weight, tabular digits, rounded up, plus <paramref name="gap"/> before it.
+    /// </summary>
+    public static double Room(FontFamily face, double size, FontWeight w, string[] forms, double gap)
+    {
+        double max = 0;
+        foreach (var s in forms)
+        {
+            var t = new TextBlock { Text = s, FontFamily = face, FontSize = size, FontWeight = w };
+            System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+            TextOptions.SetTextFormattingMode(t, TextFormattingMode.Display);
+            t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            max = Math.Max(max, t.DesiredSize.Width);
+        }
+        return Math.Ceiling(max + 1) + gap;
+    }
+
+    /// <summary>
+    /// The expanded row's detail: the damage, then the crit rate with its word as a label in the look's small label style (the
+    /// "CP" before the Combat Power's), so the figures keep their size and the line its room ("127.81M · 38% crit").
+    /// </summary>
+    public static void Detail(TextBlock t, MeterMember m, MeterContext c, System.Windows.Documents.Run label)
+    {
+        t.Inlines.Clear();
+        if (!c.Expanded || m.Damage.Length == 0) { t.Visibility = Visibility.Collapsed; return; }
+        t.Inlines.Add(new System.Windows.Documents.Run(m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " : "")));
+        if (m.Crit.Length > 0) { label.Text = L.T("crit"); t.Inlines.Add(label); }
+        t.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// A row's DPS and share columns: sized for the widest DPS and share (<see cref="Room"/>), or before any damage for the
+    /// Combat Power ("888,888") and its "CP" label in the language shown.
+    /// </summary>
+    public static void FigureCols(ColumnDefinition fig, ColumnDefinition share, bool cpOnly, FontFamily figFace, double figSize, FontWeight figW, FontFamily shareFace, double shareSize, FontWeight shareW)
+    {
+        fig.Width = new GridLength(Room(figFace, figSize, figW, cpOnly ? new[] { "888,888" } : DpsForms, 6));
+        share.Width = new GridLength(Room(shareFace, shareSize, shareW, cpOnly ? new[] { L.T("CP") } : ShareForms, 5));
+    }
+
     /// <summary>A tilted part keeps smooth letters (Display mode snaps them to the pixel grid, which a turn breaks).</summary>
     public static T Tilt<T>(T el, double angle) where T : FrameworkElement
     {

@@ -730,9 +730,13 @@ sealed class HudNeon : WackyLook, IThemeCard
         readonly TextBlock _heal = Wk.Words("", 11, Wk.S(TubeC), Wk.Bahn, FontWeights.Bold);
         readonly Border _top = new() { BorderThickness = new Thickness(1.3), CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _topText = Wk.Words("", 9, WhiteB, Wk.Bahn, FontWeights.Bold);
-        readonly TextBlock _dead = Wk.Words("", 11, Wk.S(0xFF4545), Wk.Bahn, FontWeights.Bold);
         readonly TextBlock _detail = Wk.Words("", 10, Wk.S(LilacC, .9), Wk.Bahn, FontWeights.SemiBold);
         readonly TextBlock _figure, _share;
+        readonly Border _topSign;
+        static readonly double FigureW = Wk.Room(Wk.Bahn, 15, FontWeights.Bold, Wk.DpsForms, 6), ShareW = Wk.Room(Wk.Bahn, 11, FontWeights.SemiBold, Wk.ShareForms, 5);
+        Grid _row = null!;
+        bool? _cpOnly;
+        readonly Run _critWord = new() { FontSize = 8, FontWeight = FontWeights.Bold, Foreground = Wk.S(LilacC, .6) };
 
         public FrameworkElement Root => _root;
 
@@ -747,9 +751,12 @@ sealed class HudNeon : WackyLook, IThemeCard
             _root.Children.Add(_tubeHost);
             _healHost.Children.Add(_healTube);
             _healFill = new Wk.BarFill(_healHost, _healTube, 8);
-            var row = new Grid { Margin = new Thickness(6, 0, 8, 6) };
-            foreach (var w in new[] { new GridLength(34), new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(50), new GridLength(44) })
+            var row = new Grid { Margin = new Thickness(6, 0, 6, 6) };
+            // the DPS and the share in columns sized for their widest forms ("888.8K", "88.8%"), a gap before each (Steven,
+            // 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!")
+            foreach (var w in new[] { new GridLength(34), new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(FigureW), new GridLength(ShareW) })
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+            _row = row;
             _rank.RenderTransform = new SkewTransform(Skew, 0); _rank.RenderTransformOrigin = new Point(.5, .5);
             row.Children.Add(_rank);
             // the name glows in the class's colour: four copies a pixel out, round it
@@ -760,7 +767,7 @@ sealed class HudNeon : WackyLook, IThemeCard
             nameGrid.Children.Add(_name);
             _youTag = new Border { BorderBrush = MagB, BorderThickness = new Thickness(1.3), CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Background = Wk.S(Mag, .18), Child = Wk.Words(L.T("YOU"), 9, Wk.S(0xFFB8F2), Wk.Bahn, FontWeights.Bold) };
-            _cp.Margin = new Thickness(7, 2, 0, 0);
+            _cp.Margin = new Thickness(5, 2, 0, 0);
             _cp.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 8, FontWeight = FontWeights.Bold, Foreground = Wk.S(LilacC, .6) });
             _cp.Inlines.Add(_cpValue);
             Typography.SetNumeralAlignment(_cp, FontNumeralAlignment.Tabular);
@@ -771,16 +778,22 @@ sealed class HudNeon : WackyLook, IThemeCard
             WkCard.Put(nameLine, nameGrid, 1); WkCard.Put(nameLine, _youTag, 2); WkCard.Put(nameLine, _cp, 3);
             Grid.SetColumn(nameLine, 1); row.Children.Add(nameLine);
             // a healer's heal: the figure in green over its own thin green tube, its share of the group's healing
-            var healCell = Slant(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 2, 0, 0), Children = { _heal, _healHost } });
+            var healCell = Slant(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 2, 0, 0), Children = { _heal, _healHost } }); healCell.Margin = new Thickness(4, 2, 0, 0);
             Grid.SetColumn(healCell, 2); row.Children.Add(healCell);
-            _top.Child = _topText; Grid.SetColumn(Slant(_top), 3); row.Children.Add(_top);
-            _dead.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(Slant(_dead), 4); row.Children.Add(_dead);
-            _detail.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(Slant(_detail), 5); row.Children.Add(_detail);
+            _detail.Margin = new Thickness(5, 1, 0, 0); Grid.SetColumn(Slant(_detail), 5); row.Children.Add(_detail);
             _figure = Figure("", 15, WhiteB, Wk.Bahn, FontWeights.Bold); _figure.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(Slant(_figure), 6); row.Children.Add(_figure);
             _share = Figure("", 11, Wk.S(0xB9A6F0), Wk.Bahn, FontWeights.SemiBold); _share.HorizontalAlignment = HorizontalAlignment.Right; _share.Margin = new Thickness(0, 1, 0, 0);
             Grid.SetColumn(Slant(_share), 7); row.Children.Add(_share);
             _root.Children.Add(row);
+            // TOP DPS and TOP HEALS: a lit sign hung on the row's top edge over the DPS, on the table's dark ground, off the name's
+            // line (beside the name, the heal and the deaths it left a ten-letter name two letters)
+            _top.Child = _topText; _top.Margin = new Thickness(0);
+            _topSign = new Border { Background = GroundB, CornerRadius = new CornerRadius(7), Child = _top, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 0, 6 + ShareW, 0), IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5),
+                RenderTransform = new TransformGroup { Children = { new SkewTransform(Skew, 0), new TranslateTransform(0, -11.5) } } };
+            TextOptions.SetTextFormattingMode(_topSign, TextFormattingMode.Ideal);
+            _root.Children.Add(_topSign);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -788,7 +801,9 @@ sealed class HudNeon : WackyLook, IThemeCard
             uint rc = RankColor(m.Rank);
             _rank.Inlines.Clear();
             _rank.Inlines.Add(new Run(m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture)) { FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc) });
-            _rank.Inlines.Add(new Run(Suffix(m.Rank)) { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc, .85) });
+            // deaths in the suffix's place, a red ✖ and the count ("4✖2"): on the row's own line, off the name's
+            if (m.Deaths > 0) _rank.Inlines.Add(new Run("✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture)) { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Wk.S(0xFF4545) });
+            else _rank.Inlines.Add(new Run(Suffix(m.Rank)) { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc, .85) });
             _band.Background = m.You ? Wk.Lin(0, 0, 1, 0, (Mag, .26, 0), (Mag, .06, 1)) : m.Rank % 2 == 0 ? Wk.S(0xFFFFFF, .035) : null;
             _edge.Background = m.You ? MagB : null;
             _you.Text = m.You ? "▶ " : ""; _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
@@ -802,13 +817,13 @@ sealed class HudNeon : WackyLook, IThemeCard
             _cpValue.Text = m.Cp; _cp.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _healHost.Visibility = m.Heal.Length > 0 && m.HealShare > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
+            _topSign.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
+            Panel.SetZIndex(_root, m.TopDps || m.TopHeals ? 2 : 0);   // its sign over the row above, never under
             uint tc = m.TopDps ? Yel : TubeC;
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS"); _topText.Foreground = Wk.S(tc);
             _top.BorderBrush = Wk.S(tc); _top.Background = Wk.S(tc, .14);
-            _dead.Text = m.Deaths > 0 ? "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture) : ""; _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") : "";
-            _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Wk.Detail(_detail, m, c, _critWord);
+            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Bahn, 15, FontWeights.Bold, Wk.Bahn, 11, FontWeights.SemiBold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             _figure.Foreground = m.Rank == 1 && !m.CpOnly ? YelB : WhiteB;
             // the tube: a lit outline in the class's colour round a dark core, its glow wider and faint

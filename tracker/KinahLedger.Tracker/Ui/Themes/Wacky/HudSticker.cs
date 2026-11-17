@@ -655,11 +655,15 @@ sealed class HudSticker : WackyLook, IThemeCard
         readonly TextBlock _heal = Wk.Words("", 10.5, Wk.S(0x0E7A3C), Wk.Heavy, FontWeights.Black);
         readonly Border _top = new() { BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _topText = Wk.Words("", 8.5, K, Wk.Heavy, FontWeights.Black);
-        readonly Border _dead;
+        readonly Border _dead, _healTag;
         readonly TextBlock _deadText = Wk.Words("", 9.5, WhiteB, Wk.Heavy, FontWeights.Black);
         readonly TextBlock _detail = Wk.Words("", 9.5, Wk.S(KC, .65), Wk.Segoe, FontWeights.Bold);
         readonly TextBlock _figure, _share;
         string _cls = "\0";
+        static readonly double FigureW = Wk.Room(Wk.Heavy, 14.5, FontWeights.Black, Wk.DpsForms, 6), ShareW = Wk.Room(Wk.Segoe, 10.5, FontWeights.Bold, Wk.ShareForms, 5);
+        Grid _row = null!;
+        bool? _cpOnly;
+        readonly Run _critWord = new() { FontFamily = Wk.Heavy, FontSize = 7.5, FontWeight = FontWeights.Black, Foreground = Wk.S(KC, .45) };
 
         double _lean = 1;
         void Turn() => _turn.Angle = _lean * Math.Min(1.1, 360 / Math.Max(200, _root.ActualWidth) * 1.1);
@@ -680,9 +684,12 @@ sealed class HudSticker : WackyLook, IThemeCard
             _die.Child = _face;
             _strip.Children.Add(_die);
             var inner = new Grid();
-            var row = new Grid { Margin = new Thickness(16, 0, 7, 6) };
-            foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(46), new GridLength(40) })
+            var row = new Grid { Margin = new Thickness(16, 0, 4, 6) };
+            // the DPS and the share in columns sized for their widest forms ("888.8K", "88.8%"), a gap before each: a figure never
+            // runs into the one before it (Steven, 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!")
+            foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(FigureW), new GridLength(ShareW) })
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+            _row = row;
             row.Children.Add(_iconHost);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _you = new Border { Background = Wk.S(Pink), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
@@ -692,10 +699,13 @@ sealed class HudSticker : WackyLook, IThemeCard
             Typography.SetNumeralAlignment(_cp, FontNumeralAlignment.Tabular);
             var nameLine = WkCard.NameLine(_name, _you, _cp);
             Grid.SetColumn(nameLine, 1); row.Children.Add(nameLine);
-            _heal.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_heal, 2); row.Children.Add(_heal);
+            // the heal: a paper tag of its own, slapped over the strip's top edge by the TOP sticker (off the name's line, so a
+            // name of ten letters keeps its room beside its Combat Power)
+            _healTag = new Border { Background = PaperB, BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Child = _heal };
+            Wk.Tilt(_healTag, -3);
             _top.Child = _topText;
-            _dead = new Border { Background = Wk.S(0xE5242F), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _deadText };
-            Grid.SetColumn(_dead, 4); row.Children.Add(_dead);
+            // deaths: a red tag slapped over the strip's top edge at its left, by the stamp
+            _dead = new Border { Background = Wk.S(0xE5242F), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 4, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(30, 0, 0, 0), Child = _deadText };
             _detail.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_detail, 5); row.Children.Add(_detail);
             _figure = Figure("", 14.5, K, Wk.Heavy, FontWeights.Black); _figure.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(_figure, 6); row.Children.Add(_figure);
@@ -716,13 +726,17 @@ sealed class HudSticker : WackyLook, IThemeCard
             _all.Children.Add(_strip);
             _all.Children.Add(words);
             _all.Children.Add(_stamp);
-            // TOP DPS and TOP HEALS: a little sticker slapped over the strip's top edge by the figure, off the name's line
-            _top.HorizontalAlignment = HorizontalAlignment.Right; _top.VerticalAlignment = VerticalAlignment.Top;
-            // (lifted by its transform: a negative margin would clip it at the row's top)
-            _top.Margin = new Thickness(0, 0, 64, 0);
+            // TOP DPS and TOP HEALS: a little sticker slapped over the strip's top edge by the figure, off the name's line, the heal's
+            // tag before it (lifted by their transform: a negative margin would clip them at the row's top)
+            _top.Margin = new Thickness(5, 0, 0, 0); _top.VerticalAlignment = VerticalAlignment.Center;
             Wk.Tilt(_top, 4);
-            _top.RenderTransform = new TransformGroup { Children = { new RotateTransform(4), new TranslateTransform(0, -7.5) } };
-            _all.Children.Add(_top);
+            var tags = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 64, 0),
+                RenderTransform = new TranslateTransform(0, -7.5), Children = { _healTag, _top } };
+            TextOptions.SetTextFormattingMode(tags, TextFormattingMode.Ideal);
+            _all.Children.Add(tags);
+            Wk.Tilt(_dead, -5);
+            _dead.RenderTransform = new TransformGroup { Children = { new RotateTransform(-5), new TranslateTransform(0, -7) } };
+            _all.Children.Add(_dead);
             _root.Children.Add(_all);
         }
 
@@ -743,15 +757,15 @@ sealed class HudSticker : WackyLook, IThemeCard
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
             _cpValue.Text = m.Cp; _cp.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
-            _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _healTag.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
             _top.Background = Wk.S(m.TopDps ? Gold2 : GoC);
-            Panel.SetZIndex(_root, m.TopDps || m.TopHeals ? 2 : 0);   // its sticker laps the strip over it, never under
+            Panel.SetZIndex(_root, m.TopDps || m.TopHeals || m.Heal.Length > 0 || m.Deaths > 0 ? 2 : 0);   // its stickers lap the strip over it, never under
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") : "";
-            _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Wk.Detail(_detail, m, c, _critWord);
+            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Heavy, 14.5, FontWeights.Black, Wk.Segoe, 10.5, FontWeights.Bold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             // the tape: the class's colour, full and a touch translucent, with a faint lit edge
             uint mc = Wk.Vivid(Wk.Hex(m.ClassColor));
