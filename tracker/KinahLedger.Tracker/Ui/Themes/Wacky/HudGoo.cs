@@ -733,11 +733,12 @@ sealed class HudGoo : WackyLook, IThemeCard
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent, Margin = new Thickness(3, 0, 3, 0) };
         readonly Border _glow = new() { CornerRadius = new CornerRadius(17), Margin = new Thickness(-3), BorderThickness = new Thickness(3) };
         readonly Border _bean = new() { CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(1.6) };
-        readonly Grid _groove = new() { Height = 7, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(50, 0, 12, 4.5) };
+        // the bar: the bean itself fills with jelly of the class's colour, the words over it (Steven, 2026-11-17: "figure out better
+        // looks that doesn't crowd everything and prioritizes the bar")
+        readonly Grid _groove = new() { Margin = new Thickness(1.6) };
         readonly Grid _wrap = new() { HorizontalAlignment = HorizontalAlignment.Left, RenderTransformOrigin = new Point(0, .5) };
         readonly ScaleTransform _wob = new();
-        readonly Border _candy = new() { CornerRadius = new CornerRadius(3.5) };
-        readonly Ellipse _cap = new() { Width = 9, Height = 9, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) };
+        readonly Border _candy = new() { CornerRadius = new CornerRadius(13.5) };
         readonly Wk.BarFill _fill;
         readonly Grid _sweet = new() { Width = 29, Height = 20, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
         readonly Ellipse _ball = new() { Width = 19, Height = 19, StrokeThickness = 1.2 };
@@ -775,15 +776,14 @@ sealed class HudGoo : WackyLook, IThemeCard
             _root.Children.Add(_bean);
             // the bean's specular streak along its top
             _root.Children.Add(new Border { Height = 3.5, Width = 90, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16, 2.5, 0, 0), CornerRadius = new CornerRadius(1.75), Background = Wk.Lin(0, 0, 1, 0, (0xFFFFFF, .55, 0), (0xFFFFFF, 0, 1)), IsHitTestVisible = false });
-            // the groove and its candy bar
-            _groove.Children.Add(new Border { CornerRadius = new CornerRadius(3.5), Background = Wk.S(0x1C0833), BorderBrush = Wk.Lin(0, 0, 0, 1, (0x0A0214, 1, 0), (0x7A40C0, .6, 1)), BorderThickness = new Thickness(0, 1, 0, .8) });
+            // the jelly: the class's colour, lit on top with a gloss streak, deep at its foot, its end rounded like the bean
             _wrap.RenderTransform = _wob;
-            _candy.Child = new Border { Height = 1.2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 1, 5, 0), CornerRadius = new CornerRadius(.6), Background = Wk.S(0xFFFFFF, .8) };
-            _wrap.Children.Add(_candy); _wrap.Children.Add(_cap);
+            _candy.Child = new Border { Height = 3, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, 2, 12, 0), CornerRadius = new CornerRadius(1.5), Background = Wk.Lin(0, 0, 1, 0, (0xFFFFFF, .5, 0), (0xFFFFFF, .12, 1)) };
+            _wrap.Children.Add(_candy);
             _groove.Children.Add(_wrap);
-            _fill = new Wk.BarFill(_groove, _wrap, 9);
-            _root.Children.Add(_groove);
-            var row = new Grid { Margin = new Thickness(6, 0, 12, 10) };
+            _fill = new Wk.BarFill(_groove, _wrap, 26);
+            _root.Children.Insert(_root.Children.IndexOf(_bean) + 1, _groove);
+            var row = new Grid { Margin = new Thickness(6, 0, 12, 8) };
             // the DPS and the share in columns sized for their widest forms ("888.8K", "88.8%"), a gap before each (Steven,
             // 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!")
             foreach (var w in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(FigureW), new GridLength(ShareW) })
@@ -854,16 +854,14 @@ sealed class HudGoo : WackyLook, IThemeCard
             Wk.Detail(_detail, m, c, _critWord);
             if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[7], _row.ColumnDefinitions[8], m.CpOnly, Wk.Heavy, 14, FontWeights.Black, Wk.Segoe, 10.5, FontWeights.Bold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
-            // the candy bar: the class's colour at full strength, lit on top, deep at the foot, a bulged round cap at its end
-            _candy.Background = Wk.Lin(0, 0, 0, 1, (Wk.Shade(vivid, .35), 1, 0), (vivid, 1, .5), (Wk.Shade(vivid, -.3), 1, 1));
-            _cap.Fill = Wk.Rad(.35, .3, .7, (Wk.Shade(vivid, .55), 1, 0), (vivid, 1, .6), (Wk.Shade(vivid, -.3), 1, 1));
-            _cap.Stroke = Wk.S(Wk.Shade(vivid, -.5)); _cap.StrokeThickness = .8;
-            double share = m.CpOnly ? 0 : m.Share;
+            // the jelly: the class's colour deepened, so the white words read on it, lit at its top and darker at its foot
+            _candy.Background = Wk.Lin(0, 0, 0, 1, (Wk.Shade(vivid, -.18), .96, 0), (Wk.Shade(vivid, -.38), .96, .55), (Wk.Shade(vivid, -.58), .96, 1));
+            double share = Wk.Bar(m, c);
             _groove.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
             bool moved = _fill.Set(share, c, "bar", fresh);
             // a bar that moves wobbles like jelly as it settles (the bar, not the figures)
             if (moved && c.Moves && _was >= 0 && Math.Abs(share - _was) > .01)
-                Motion.Play(_candy, 700, q => { double w = Wob(q, 2.2, 3.4); _wob.ScaleY = 1 + .3 * w; _wob.ScaleX = 1 - .02 * w; }, () => { _wob.ScaleX = _wob.ScaleY = 1; });
+                Motion.Play(_candy, 700, q => { double w = Wob(q, 2.2, 3.4); _wob.ScaleX = 1 + .025 * w; _wob.ScaleY = 1 - .04 * Math.Abs(w); }, () => { _wob.ScaleX = _wob.ScaleY = 1; });
             _was = share;
         }
     }

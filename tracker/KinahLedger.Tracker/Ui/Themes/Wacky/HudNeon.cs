@@ -711,11 +711,13 @@ sealed class HudNeon : WackyLook, IThemeCard
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly Border _band = new() { CornerRadius = new CornerRadius(3) };
         readonly Border _edge = new() { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(1.5), Margin = new Thickness(0, 2, 0, 2) };
-        readonly Grid _tubeHost = new() { Margin = new Thickness(40, 0, 10, 4), Height = 4, VerticalAlignment = VerticalAlignment.Bottom };
+        // the bar: a lit neon panel the row's height from the rank on, the name and figures over it (Steven, 2026-11-17: "figure
+        // out better looks that doesn't crowd everything and prioritizes the bar"): a tube of the class's colour round a tinted
+        // glass, its glow a wider faint ring, open at its end (no line crosses a figure there)
+        readonly Grid _tubeHost = new() { Margin = new Thickness(36, 1, 3, 7) };
         readonly Grid _tube = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
-        readonly Border _tubeGlow = new() { Margin = new Thickness(-2.5), CornerRadius = new CornerRadius(4.5) };
-        readonly Border _tubeLine = new() { CornerRadius = new CornerRadius(2) };
-        readonly Border _tubeCore = new() { Height = 1.6, Margin = new Thickness(1.5, 0, 1.5, 0), VerticalAlignment = VerticalAlignment.Center, CornerRadius = new CornerRadius(.8), Background = Wk.S(0xFFFFFF, .92) };
+        readonly Border _tubeGlow = new() { Margin = new Thickness(-2, -2, 0, -2), CornerRadius = new CornerRadius(5, 0, 0, 5), BorderThickness = new Thickness(2.2, 2.2, 0, 2.2) };
+        readonly Border _tubeLine = new() { CornerRadius = new CornerRadius(3.5, 0, 0, 3.5), BorderThickness = new Thickness(1.4, 1.4, 0, 1.4) };
         readonly Grid _healHost = new() { Height = 2, Margin = new Thickness(0, 1, 0, 0) };
         readonly Border _healTube = new() { HorizontalAlignment = HorizontalAlignment.Right, CornerRadius = new CornerRadius(1), Width = 0, Background = Wk.S(TubeC) };
         readonly Wk.BarFill _fill, _healFill;
@@ -745,9 +747,9 @@ sealed class HudNeon : WackyLook, IThemeCard
             TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Ideal);
             _root.Children.Add(_band);
             _root.Children.Add(_edge);
-            _tube.Children.Add(_tubeGlow); _tube.Children.Add(_tubeLine); _tube.Children.Add(_tubeCore);
+            _tube.Children.Add(_tubeGlow); _tube.Children.Add(_tubeLine);
             _tubeHost.Children.Add(_tube);
-            _fill = new Wk.BarFill(_tubeHost, _tube, 6);
+            _fill = new Wk.BarFill(_tubeHost, _tube, 10);
             _root.Children.Add(_tubeHost);
             _healHost.Children.Add(_healTube);
             _healFill = new Wk.BarFill(_healHost, _healTube, 8);
@@ -826,11 +828,13 @@ sealed class HudNeon : WackyLook, IThemeCard
             if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Bahn, 15, FontWeights.Bold, Wk.Bahn, 11, FontWeights.SemiBold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             _figure.Foreground = m.Rank == 1 && !m.CpOnly ? YelB : WhiteB;
-            // the tube: a lit outline in the class's colour round a dark core, its glow wider and faint
-            // the tube: a white-hot core in a body of the class's colour at full strength, its glow wide and faint
-            _tubeLine.Background = Wk.S(neon);
-            _tubeGlow.Background = Wk.S(neon, .4);
-            _fill.Set(m.CpOnly ? 0 : m.Share, c, "bar", fresh);
+            // the bar: the class's neon round a glass tinted in it (deeper at its start), its glow a wider faint ring; against the
+            // top member's damage, so the top row's runs the table's width
+            _tubeLine.BorderBrush = Wk.S(neon, .95);
+            _tubeLine.Background = Wk.Lin(0, 0, 1, 0, (neon, .34, 0), (neon, .16, 1));
+            _tubeGlow.BorderBrush = Wk.S(neon, .3);
+            _tubeHost.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
+            _fill.Set(Wk.Bar(m, c), c, "bar", fresh);
             _healFill.Set(m.HealShare, c, "heal", fresh);
         }
     }
