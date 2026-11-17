@@ -643,10 +643,12 @@ public partial class MainWindow
             b.Click += (_, _) => SetParserAlwaysOn(pick);
             meters.Children.Add(b);
         }
-        var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         AutomationProperties.SetName(mseg, "When the Parser's meter shows");
-        var left = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { seg, mseg } };
+        // the two picks wrap onto a second line when the window is narrow (at ~700 px "Always on" slid under the Overlay switch)
+        seg.Margin = new Thickness(0, 0, 10, 4); mseg.Margin = new Thickness(0, 0, 10, 4);
+        var left = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { seg, mseg } };
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         // the overlay's look, one click from here (Steven, 2026-11-14: "idk how to change the style"): its name, a click opens
