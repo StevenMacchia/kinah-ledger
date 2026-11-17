@@ -64,12 +64,14 @@ sealed class HudCorrupt : HudThemeLook
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TextBlock _hpText = Txt("", 11, White, Face);
     readonly TextBlock _ready = Txt("", 12, LilacDim, Face, trim: true);
-    readonly StackPanel _rowsHost = new() { Margin = new Thickness(-4, 5, -4, 0) };
-    readonly ContentControl _foot = new() { Margin = new Thickness(0, 6, 0, 0), Focusable = false };
+    readonly StackPanel _rowsHost = new() { Margin = new Thickness(0, 7, 0, 0) };
+    readonly ContentControl _foot = new() { Focusable = false };
     double _hpShare = -1;
 
     public HudCorrupt() : base(false, CodeFace)
     {
+        // the meter's rows: torn data rows (Ui/Themes/Glitch/CorruptRows.cs)
+        UseRows(CorruptRows.Pitch, _ => new CorruptRows.Row(), CorruptRows.GapHeight, CorruptRows.Gap);
         _deck.Ground.Children.Add(_deckGround);
         _cam.Ground.Children.Add(_camGround);
         foreach (var p in new[] { _deck, _cam }) p.Over.Children.Add(new Rectangle { Fill = Lines(Rgb(0xFFFFFF, .03), 2, 1) });
@@ -250,7 +252,7 @@ sealed class HudCorrupt : HudThemeLook
         if (i == null) { block.Visibility = Visibility.Collapsed; t.Text = ""; return; }
         var (text, tone) = TimerWords(i, now);
         var (name, rest) = TimerParts(i, text);
-        t.Text = (name.Length > 0 ? Caps(name) + (tone == TimerBadge.Tone.On ? "_" : " ") : "") + rest;
+        t.Text = (name.Length > 0 ? name + (tone == TimerBadge.Tone.On ? "_" : " ") : "") + rest;
         bool lit = tone != TimerBadge.Tone.Quiet;
         block.Background = tone == TimerBadge.Tone.On ? Br(GreenC) : tone == TimerBadge.Tone.Soon ? Br(GoldC2) : Br(GroundC, .6);
         block.BorderBrush = lit ? null : Br(LilacC, .55); block.BorderThickness = new Thickness(lit ? 0 : 1);
@@ -266,7 +268,7 @@ sealed class HudCorrupt : HudThemeLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
-        if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; ParserRows.Detach(Rows); _hpShare = -1; return; }
+        if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; _rowsHost.Children.Clear(); _foot.Content = null; _title.Text = ""; _hpShare = -1; return; }
         _cam.Root.Width = FightWidth;
         _title.Text = e.Title;
         _rowsHost.Children.Clear(); _foot.Content = null; _rowsHost.Visibility = Visibility.Collapsed; _foot.Visibility = Visibility.Collapsed;
@@ -291,13 +293,13 @@ sealed class HudCorrupt : HudThemeLook
             _hpRow.Visibility = Visibility.Visible;
         }
         else _hpRow.Visibility = Visibility.Collapsed;
-        PutRows(_rowsHost, e, now, FightWidth - 16);
+        PutRows(_rowsHost, e, now, FightWidth - 24);
         _rowsHost.Visibility = Visibility.Visible;
         var outcome = OutcomeText(e);
         _outcome.Text = outcome.Length > 0 ? outcome.ToUpper(System.Globalization.CultureInfo.CurrentCulture) : "";
         _outcome.Foreground = e.Outcome == "wipe" ? Br(0xFF5A6A) : e.Outcome is "kill" or "cleared" ? Br(0x5CFFB0) : LilacDim;
         _outcome.Visibility = outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (e.HasDamage) _foot.Content = ParserFoot.Line(e, now, 12);
+        if (e.HasDamage) _foot.Content = CorruptRows.Foot(e, now);
         _foot.Visibility = _foot.Content != null ? Visibility.Visible : Visibility.Collapsed;
         _cam.Root.Visibility = Visibility.Visible;
     }
@@ -321,6 +323,12 @@ sealed class HudCorrupt : HudThemeLook
     {
         if (KinahHidden) return;
         Tear(_deck, _deckGround, Hash(p.Id) < .5 ? 2 : 4, 700, 10);
+        foreach (var (y, c, dx) in new[] { (.42, Rgb(MagC, .55), 14.0), (.7, Rgb(CyanC, .45), -10.0) })
+        {
+            var strip = new Rectangle { Height = 3, VerticalAlignment = VerticalAlignment.Top, Fill = Frozen(c), Margin = new Thickness(0, Math.Round(_deck.H * y), 0, 0) };
+            var st = new TranslateTransform(); strip.RenderTransform = st;
+            _deck.Run(strip, 900, t => { int k = (int)(t * 12); st.X = (k % 3 - 1) * dx; strip.Opacity = t < .55 && k % 2 == 0 ? 1 : 0; }, under: true);
+        }
         _pickText.Text = (p.Worth.Length > 0 ? p.Worth + " " : "") + p.Name;
         _pickBlock.Visibility = Visibility.Visible;
         var ghostM = (TranslateTransform)((Border)_pickBlock.Children[0]).RenderTransform;
@@ -362,6 +370,17 @@ sealed class HudCorrupt : HudThemeLook
     {
         if (KinahHidden || _bestBlock == null) return;
         Tear(_deck, _deckGround, 2, 900, 7);
+        var bar = GlitchBlock(L.T("NEW_BEST.EXE") + "  ★  " + L.T("RECORD WRITTEN"), White, Black, 11.5);
+        bar.VerticalAlignment = VerticalAlignment.Top; bar.Margin = new Thickness(6, 5, 6, 0);
+        ((Border)bar.Children[2]).Padding = new Thickness(6, 1, 6, 1);
+        ((TextBlock)((Border)bar.Children[2]).Child).HorizontalAlignment = HorizontalAlignment.Center;
+        var bm = (TranslateTransform)((Border)bar.Children[0]).RenderTransform; var bc = (TranslateTransform)((Border)bar.Children[1]).RenderTransform;
+        _deck.Run(bar, 1600, t =>
+        {
+            int s = (int)(t * 20);
+            bar.Opacity = t < .03 ? 0 : t < .45 ? 1 : t < .55 ? (s % 2 == 0 ? .7 : .1) : 0;
+            bm.X = -3 - (t < .2 ? 5 * (s % 2) : 0); bc.X = 3 + (t < .2 ? 5 * ((s + 1) % 2) : 0);
+        });
         var b = _bestBlock;
         var ghostM = (TranslateTransform)((Border)b.Children[0]).RenderTransform;
         var ghostC = (TranslateTransform)((Border)b.Children[1]).RenderTransform;
@@ -431,7 +450,7 @@ sealed class HudCorrupt : HudThemeLook
             canvas.Children.Add(rect);
             blocks.Add((rect, .08 + r.NextDouble() * .4, x));
         }
-        _cam.Run(canvas, 1000, t =>
+        _cam.Run(canvas, 1000, under: true, step: t =>
         {
             cover.Opacity = t < .06 ? .9 : t < .4 ? .9 * (1 - (t - .06) / .34) : 0;
             int s = (int)(t * 20);
@@ -451,7 +470,7 @@ sealed class HudCorrupt : HudThemeLook
         banner.VerticalAlignment = VerticalAlignment.Top; banner.HorizontalAlignment = HorizontalAlignment.Stretch; banner.Margin = new Thickness(8, 5, 8, 0);
         var face = (Border)banner.Children[2];
         face.Padding = new Thickness(6, 3, 6, 3);
-        var words = Split(text, 14.5, Face, FontWeights.Bold, White, Rgb(MagC), Rgb(CyanC), 2);
+        var words = Split(text, 14.5, Face, FontWeights.Bold, White, Rgb(MagC, .5), Rgb(CyanC, .5), 1);
         words.HorizontalAlignment = HorizontalAlignment.Center;
         var lb = Txt("▌", 15, wipe ? White : Mag, Face); var rb = Txt("▐", 15, wipe ? White : Cyan, Face);
         DockPanel.SetDock(lb, Dock.Left); DockPanel.SetDock(rb, Dock.Right);
@@ -471,6 +490,7 @@ sealed class HudCorrupt : HudThemeLook
         });
         // the frame tears: a kill once, a wipe every slice, again and again
         Tear(_cam, _camGround, 1, 900, wipe ? 14 : 9);
+        if (!wipe && Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is CorruptRows.Row row) row.Glint(2200);
         if (wipe) { Tear(_cam, _camGround, 3, 2000, -12, .9); _cam.Flash(Rgb(RedC2), .3, 2200, .04, .3); }
         else _cam.Flash(Colors.White, .4, 2200, .03, .2);
     }

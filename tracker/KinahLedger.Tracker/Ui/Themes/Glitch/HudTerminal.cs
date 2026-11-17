@@ -57,14 +57,16 @@ sealed class HudTerminal : HudThemeLook
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TextBlock _hpText = Txt("", 11.5, PhosDim, Face, FontWeights.SemiBold);
     readonly TextBlock _ready = Txt("", 12, PhosDim, Face, FontWeights.SemiBold, trim: true);
-    readonly StackPanel _rowsHost = new() { Margin = new Thickness(-4, 5, -4, 0) };
+    readonly StackPanel _rowsHost = new() { Margin = new Thickness(0, 0, 0, 0) };
     readonly Border _endLine = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 0) };
     readonly TextBlock _end = Txt("", 12, Phos, Face);
-    readonly ContentControl _foot = new() { Margin = new Thickness(0, 5, 0, 0), Focusable = false };
+    readonly ContentControl _foot = new() { Focusable = false };
     double _hpShare = -1;
 
     public HudTerminal() : base(false, CrtFace)
     {
+        // the meter's rows: a `top` table (Ui/Themes/Glitch/TerminalRows.cs)
+        UseRows(TerminalRows.Pitch, _ => new TerminalRows.Row(), TerminalRows.GapHeight, TerminalRows.Gap);
         Build(_crt, _crtGround);
         Build(_cam, _camGround);
         TextElement.SetFontFamily(_cam.Body, Face);
@@ -178,8 +180,8 @@ sealed class HudTerminal : HudThemeLook
     public override void SetOpacity(double opacity)
     {
         double o = Math.Clamp(opacity, 0.3, 1);
-        _crtGround.Background = Br(GroundC, Math.Min(1, o * 1.05));
-        _camGround.Background = Br(GroundC, Math.Min(1, o * 1.08));
+        _crtGround.Background = Br(GroundC, Math.Min(1, o * 1.08));
+        _camGround.Background = Br(GroundC, Math.Min(1, o * 1.11));
     }
 
     protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{Picks(Values).FirstOrDefault()?.Id}";
@@ -279,7 +281,7 @@ sealed class HudTerminal : HudThemeLook
         var (text, tone) = TimerWords(i, now);
         var (name, rest) = TimerParts(i, text);
         var b = tone == TimerBadge.Tone.On ? Amber : tone == TimerBadge.Tone.Soon ? Br(AmberC, .9) : PhosDim;
-        t.Inlines.Add(Rn("  " + (name.Length > 0 ? name.ToLower(System.Globalization.CultureInfo.CurrentCulture) + ": " : ""), b));
+        t.Inlines.Add(Rn("  " + (name.Length > 0 ? name + ": " : ""), b));
         t.Inlines.Add(Rn(rest, b, null, tone == TimerBadge.Tone.On ? FontWeights.Bold : FontWeights.SemiBold));
         line.Visibility = Visibility.Visible;
     }
@@ -292,12 +294,12 @@ sealed class HudTerminal : HudThemeLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
-        if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; ParserRows.Detach(Rows); _hpShare = -1; return; }
+        if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; _rowsHost.Children.Clear(); _foot.Content = null; _fightPrompt.Inlines.Clear(); _end.Inlines.Clear(); _hpShare = -1; return; }
         _cam.Root.Width = FightWidth;
         var name = e.Title.ToLower(System.Globalization.CultureInfo.CurrentCulture);
         _fightPrompt.Inlines.Clear();
         _fightPrompt.Inlines.Add(Rn("> fight ", PhosDim));
-        _fightPrompt.Inlines.Add(Rn(name, Pale, null, FontWeights.Bold));
+        _fightPrompt.Inlines.Add(Rn(e.Title, Pale, null, FontWeights.Bold));
         _rowsHost.Children.Clear(); _foot.Content = null; _rowsHost.Visibility = Visibility.Collapsed; _foot.Visibility = Visibility.Collapsed;
         if (e.Waiting)
         {
@@ -323,7 +325,8 @@ sealed class HudTerminal : HudThemeLook
             _hpRow.Visibility = Visibility.Visible;
         }
         else _hpRow.Visibility = Visibility.Collapsed;
-        PutRows(_rowsHost, e, now, FightWidth - 16);
+        _rowsHost.Children.Add(TerminalRows.Header());
+        PutRows(_rowsHost, e, now, FightWidth - 24);
         _rowsHost.Visibility = Visibility.Visible;
         // over: the process's exit line, a kill in mint, a wipe a segfault in red
         var outcome = OutcomeText(e);
@@ -339,7 +342,7 @@ sealed class HudTerminal : HudThemeLook
             _endLine.Visibility = Visibility.Visible;
         }
         else _endLine.Visibility = Visibility.Collapsed;
-        if (e.HasDamage) _foot.Content = ParserFoot.Line(e, now, 12);
+        if (e.HasDamage) _foot.Content = TerminalRows.Foot(e, now);
         _foot.Visibility = _foot.Content != null ? Visibility.Visible : Visibility.Collapsed;
         _cam.Root.Visibility = Visibility.Visible;
     }
@@ -413,10 +416,11 @@ sealed class HudTerminal : HudThemeLook
     {
         // the boot lines: the screen clears, three lines come up one after another (each whole), then the meter shows through
         var name = e.Title.ToLower(System.Globalization.CultureInfo.CurrentCulture);
-        var cover = new Border { CornerRadius = new CornerRadius(7), Background = Br(GroundC), Padding = new Thickness(12, 8, 12, 8) };
+        // the boot lines over the head (the meter stays drawn under them)
+        var cover = new Border { CornerRadius = new CornerRadius(7, 7, 0, 0), Background = Br(GroundC), Padding = new Thickness(12, 7, 12, 6), VerticalAlignment = VerticalAlignment.Top, BorderBrush = Br(PhosC, .5), BorderThickness = new Thickness(0, 0, 0, 1) };
         var lines = new StackPanel();
         var l1 = Txt("> fight start", 12.5, Pale, Face);
-        var l2 = Txt("  " + L.F("attach {0} ... ok", name), 12, Phos, Face, FontWeights.SemiBold, trim: true);
+        var l2 = Txt("  " + L.F("attach {0} ... ok", e.Title), 12, Phos, Face, FontWeights.SemiBold, trim: true);
         var l3 = Txt("  " + L.T("[ ok ] meter online"), 12, Phos, Face, FontWeights.SemiBold);
         var cur = new Border { Width = 7.5, Height = 14, Background = Phos, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
         foreach (var l in new UIElement[] { l1, l2, l3, cur }) lines.Children.Add(l);
@@ -438,5 +442,6 @@ sealed class HudTerminal : HudThemeLook
         bool wipe = e.Outcome == "wipe";
         Flicker(_cam, wipe ? Rgb(RedC2) : Glow, 800);
         Bloom(_endLine, wipe ? Rgb(RedC2) : Rgb(0x7DFFC4), 2000, .34);
+        if (!wipe && Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is TerminalRows.Row row) row.Bloom(Rgb(AmberC), 2000);
     }
 }
