@@ -120,7 +120,7 @@ public partial class MainWindow
             if (saved == null) { ShowMarkNotice(MarkFailed); return; }
         }
         var key = MarkKey(line);
-        var text = L.F("Marked {0:HH:mm:ss} {1} as wrong", line.At.ToLocalTime(), line.Text);
+        var text = L.F("Marked {0:HH:mm:ss} {1} as wrong", line.At.ToLocalTime(), line.TextShown);
         CrashLog.Note("mark wrong: " + $"Marked {line.At.ToLocalTime():HH:mm:ss} {line.Text} as wrong");
         _ = Offer("mark", text,
             apply: () => { _marked.Add(key); ShowMarkLine(line, text); Redraw(); },

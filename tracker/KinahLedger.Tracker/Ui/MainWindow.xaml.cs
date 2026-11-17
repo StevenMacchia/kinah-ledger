@@ -592,7 +592,7 @@ public partial class MainWindow : Window
         {
             StartBtn.IsEnabled = true;
             ShowFix(true);   // the fix is one click away, in Options › Game reading
-            Say(ex.Message, "Warn");
+            Say(HudKit.Say(ex.Message), "Warn");
         }
     }
 
@@ -631,7 +631,7 @@ public partial class MainWindow : Window
         else if (!_prefs.Share) msg = L.F("Run stopped ({0}). Sharing is off, so it stays on this PC.", ran);
         else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = L.F("Run stopped ({0}). No sharing address in settings.json, so it stays on this PC.", ran);
         else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = L.F("Run stopped ({0}) and shared anonymously.", ran); tone = "Good"; shared = true; }
-        else { msg = L.F("Run stopped ({0}). Not shared: {1}. Kept on this PC.", ran, Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : L.T("couldn't reach the site")); tone = "Warn"; }
+        else { msg = L.F("Run stopped ({0}). Not shared: {1}. Kept on this PC.", ran, Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastErrorShown : L.T("couldn't reach the site")); tone = "Warn"; }
         if (e.Events > 0)
         {
             SessionStore.Append(e, _items, activity, _settings, shared, Server?.Label ?? "");
@@ -732,9 +732,9 @@ public partial class MainWindow : Window
         // with no zone on the list, what the minimap corner said, so a zone the list doesn't have yet can be named and added
         ZoneLbl.ToolTip = chat?.Zone == null && chat?.ZoneNote is { Length: > 0 } zn ? zn + "\n\n" + L.T("A zone has to be on the tracker's zone list to count. Send the name shown here to have it added.") : null;
         if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }
-        else if (chat == null) Tell(_watcher.GameRect == null ? L.T("Waiting for the game. Reading starts on its own once the game is open.") : L.F("Looking for the chat… {0}", _watcher.ChatNote), "Faint");
-        else if (chat.LastError.Length > 0) Tell(L.F("Read problem: {0}", chat.LastError), "Bad");
-        else if (chat.Paused.Length > 0) Tell(L.F("Paused: {0}. Only the game is read, so reading picks up when the chat is in view again · {1}", chat.Paused, MarketShort()), "Warn");
+        else if (chat == null) Tell(_watcher.GameRect == null ? L.T("Waiting for the game. Reading starts on its own once the game is open.") : L.F("Looking for the chat… {0}", HudKit.Say(_watcher.ChatNote)), "Faint");
+        else if (chat.LastError.Length > 0) Tell(L.F("Read problem: {0}", HudKit.Say(chat.LastError)), "Bad");
+        else if (chat.Paused.Length > 0) Tell(L.F("Paused: {0}. Only the game is read, so reading picks up when the chat is in view again · {1}", HudKit.Say(chat.Paused), MarketShort()), "Warn");
         else
         {
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
@@ -1209,7 +1209,7 @@ public partial class MainWindow : Window
             _hudValues["best"] = Fk(best.PerHr);
         }
         JoinCompare();
-        BestLine.ToolTip = L.F("Your best hour in {0} on {1}: {2:N0} Kinah plus loot after tax, over {3} minutes on {4}. A stay counts once it has {5} minutes here; loot is valued at today's prices.", zone, Server?.Label ?? L.T("this server"), best.PerHr, best.Minutes, best.At, BestRuns.MinMinutes);
+        BestLine.ToolTip = L.F("Your best hour in {0} on {1}: {2:N0} Kinah plus loot after tax, over {3} minutes on {4}. A stay counts once it has {5} minutes here; loot is valued at today's prices.", zone, Server?.LabelShown ?? L.T("this server"), best.PerHr, best.Minutes, best.At, BestRuns.MinMinutes);
     }
 
     /// <summary>The comparison line: a dot between your best and the players' figure when both show, the first word capitalised.</summary>
@@ -1742,7 +1742,7 @@ public partial class MainWindow : Window
         bool ok = HasServer;
         // on the Welcome card Options is out of reach, so the way to a server is the card's own chips
         // the character counted for, then the server (Ui/MainWindow.Characters.cs)
-        FillServerChip(Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? L.T("No server chosen · pick yours below") : L.T("No server chosen · pick one in Options"));
+        FillServerChip(Server is { } s ? $"{s.LabelShown} · {s.Region.Shown}" : _welcome ? L.T("No server chosen · pick yours below") : L.T("No server chosen · pick one in Options"));
         ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
@@ -1791,7 +1791,7 @@ public partial class MainWindow : Window
             if (hidden) { Show(); Activate(); hidden = false; }
             if (asks == 0) Say(note, "Warn");
             else if (!sent) Say(items == 1 ? L.F("Read {0} prices for {1} item, but {2}. They go out with the next batch.", asks, items, note) : L.F("Read {0} prices for {1} items, but {2}. They go out with the next batch.", asks, items, note), "Warn");
-            else Say(items == 1 ? L.F("Shared {0} prices for {1} item. They're {2}'s current prices on the site now.", asks, items, Server?.Label) : L.F("Shared {0} prices for {1} items. They're {2}'s current prices on the site now.", asks, items, Server?.Label), "Good");
+            else Say(items == 1 ? L.F("Shared {0} prices for {1} item. They're {2}'s current prices on the site now.", asks, items, Server?.LabelShown) : L.F("Shared {0} prices for {1} items. They're {2}'s current prices on the site now.", asks, items, Server?.LabelShown), "Good");
         }
         catch (Exception ex) { CrashLog.Write("share market", ex); Say(L.F("Couldn't read the Market: {0}", ex.Message), "Bad"); }
         finally { if (hidden) { Show(); Activate(); } }
@@ -1867,7 +1867,7 @@ public partial class MainWindow : Window
         var updates = new WF.ToolStripMenuItem(L.T("Check for updates")); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
         // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
-        var clearAll = new WF.ToolStripMenuItem(ClearAllText);
+        var clearAll = new WF.ToolStripMenuItem(L.T(ClearAllText));
         clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
         var copyPic = new WF.ToolStripMenuItem(L.T("Copy share picture"));
         copyPic.Click += (_, _) =>

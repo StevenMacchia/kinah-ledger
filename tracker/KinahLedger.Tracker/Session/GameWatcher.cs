@@ -1,6 +1,7 @@
 using System.Drawing;
 using KinahLedger.Data;
 using KinahLedger.Ocr;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Session;
 
@@ -56,10 +57,10 @@ public sealed class GameWatcher
 
     /// <summary>The one line the window shows for sharing: "Sharing: last sent 12:04", "Sharing: couldn't reach the site, will retry", or off.</summary>
     public string ShareLine =>
-        !_settings.Upload.Enabled ? "Sharing: off"
-        : ShareFailing ? "Sharing: couldn't reach the site, will retry"
-        : LastSharedAt is { } at ? $"Sharing: last sent {at:HH:mm}"
-        : "Sharing: nothing sent yet";
+        !_settings.Upload.Enabled ? L.T("Sharing: off")
+        : ShareFailing ? L.T("Sharing: couldn't reach the site, will retry")
+        : LastSharedAt is { } at ? L.F("Sharing: last sent {0}", at.ToString("HH:mm"))
+        : L.T("Sharing: nothing sent yet");
 
     /// <summary>The currency counter at the top-left, read every <see cref="BalanceEverySec"/> while the game is open.</summary>
     public BalanceReader Balance { get; } = new();

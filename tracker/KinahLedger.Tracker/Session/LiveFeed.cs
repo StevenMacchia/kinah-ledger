@@ -1,4 +1,5 @@
 using System.Text.Json;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Session;
 
@@ -29,6 +30,22 @@ public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name
         "craft" => $"{(Name.Length > 0 ? Name : "A craft")}{(Ok && Makes > 1 ? $" ×{Makes}" : "")} {(Ok ? "worked" : "failed")}",
         _ => $"{Name} ×{Amount:N0}" + (Bound ? " (bound)" : ""),
     };
+
+    /// <summary><see cref="Text"/> as the window says it, in the language in use (<see cref="Text"/> stays English: reports and saved marks key on it).</summary>
+    public string TextShown
+    {
+        get
+        {
+            var nm = Name.Length > 0 ? Name : L.T("A craft");
+            return Kind switch
+            {
+                "kinah" => L.F("{0:N0} Kinah", Amount) + (Enemy.Length > 0 ? $" · {Enemy}" : ""),
+                "craft" when Combo => L.F(Ok ? "{0}: combo won" : "{0}: combo lost", nm),
+                "craft" => L.F(Ok ? "{0}: worked" : "{0}: failed", nm + (Ok && Makes > 1 ? $" ×{Makes}" : "")),
+                _ => L.F(Bound ? "{0} ×{1:N0} (bound)" : "{0} ×{1:N0}", Name, Amount),
+            };
+        }
+    }
 }
 
 /// <summary>

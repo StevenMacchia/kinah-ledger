@@ -513,7 +513,7 @@ public partial class MainWindow
         if (_demo) text = _demoPaused ? L.T("Paused: the chat is out of view. Counting picks up when it shows again.") : L.T("Ready. Pick something up and it shows here, newest first.");
         else if (c == null && _watcher.GameRect == null) text = L.T("Waiting for Aion 2 to start. Reading starts on its own once it is open.");
         else if (c == null || !c.ChatFound) { text = L.T("Game found, looking for the chat. Keep the chat window open at the bottom left of the game.") + " "; link = true; }
-        else if (c.LastError.Length > 0) { text = L.F("The game can't be read right now: {0}", c.LastError) + " "; link = true; }
+        else if (c.LastError.Length > 0) { text = L.F("The game can't be read right now: {0}", HudKit.Say(c.LastError)) + " "; link = true; }
         else if (c.Paused.Length > 0) text = L.T("Paused: the chat is out of view. Counting picks up when it shows again.");
         else text = L.T("Ready. Pick something up and it shows here, newest first.");
         // a new player's checklist (Ui/MainWindow.Onboard.cs) says the game and the chat itself, so only a read problem or a
@@ -545,12 +545,12 @@ public partial class MainWindow
         string t; bool ok = true;
         if (_demo) { t = _demoPaused ? L.T("Paused: the chat is out of view") : L.T("Reading the chat"); ok = !_demoPaused; }
         else if (c == null) { t = _watcher.GameRect == null ? L.T("Waiting for the game") : L.T("Looking for the chat"); ok = false; }
-        else if (c.LastError.Length > 0) { t = L.F("Read problem: {0}", c.LastError); ok = false; }
+        else if (c.LastError.Length > 0) { t = L.F("Read problem: {0}", HudKit.Say(c.LastError)); ok = false; }
         else if (c.Paused.Length > 0) { t = L.T("Paused: the chat is out of view"); ok = false; }
         else if (!c.ChatFound) { t = L.T("Reading the game · the chat not seen yet"); ok = false; }
         else t = L.T("Reading the chat");
         if (text.Text != t) text.Text = t;
-        var reads = _demo ? L.F("{0} reads so far.", "3,620") : c != null && c.ChatFound ? L.F("{0:N0} reads so far.", c.Reads) : "";
+        var reads = _demo ? L.F("{0} reads so far.", "3,620") : c != null && c.ChatFound ? L.F("{0} reads so far.", c.Reads.ToString("N0")) : "";
         text.ToolTip = _demo ? reads : c == null ? null : string.Join("\n", new[] { reads, $"{MarketShort()}.", $"{BalanceShort()}.",
             _watcher.Flushed > 0 ? (_watcher.Flushed == 1 ? L.F("{0} batch shared with the site.", _watcher.Flushed) : L.F("{0} batches shared with the site.", _watcher.Flushed)) : "" }.Where(x => x.Length > 0));
         // the hover covers the whole line, the tick too
@@ -876,7 +876,7 @@ public partial class MainWindow
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             g.Children.Add(CkText(line.At.ToLocalTime().ToString("HH:mm:ss"), CkFaint, 12, mono: true));
-            var what = CkText(line.Text, CkInk, 13, FontWeights.Normal); what.Margin = new Thickness(12, 0, 12, 0); Grid.SetColumn(what, 1); g.Children.Add(what);
+            var what = CkText(line.TextShown, CkInk, 13, FontWeights.Normal); what.Margin = new Thickness(12, 0, 12, 0); Grid.SetColumn(what, 1); g.Children.Add(what);
             var val = tab == FeedTab.Crafting ? CraftValue(line) : PickupValue(line);
             var v = CkText(val.Text, val.Muted ? CkFaint : CkGold, 12.5, mono: true); Grid.SetColumn(v, 2); g.Children.Add(v);
             body.Children.Add(CkBox(g, new Thickness(20, 0, 20, 0)));
