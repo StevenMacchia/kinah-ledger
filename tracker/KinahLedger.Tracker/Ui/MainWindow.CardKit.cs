@@ -143,8 +143,8 @@ public partial class MainWindow
         var sp = new StackPanel { Margin = new Thickness(20, 14, 20, 0) };
         var top = new Grid();
         top.ColumnDefinitions.Add(new ColumnDefinition()); top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(CkText($"Success {success:P0}", CkMuted, 12.5));
-        var f = CkText($"Fail {1 - success:P0}", CkMuted, 12.5); Grid.SetColumn(f, 1); top.Children.Add(f);
+        top.Children.Add(CkText(L.F("Success {0:P0}", success), CkMuted, 12.5));
+        var f = CkText(L.F("Fail {0:P0}", 1 - success), CkMuted, 12.5); Grid.SetColumn(f, 1); top.Children.Add(f);
         sp.Children.Add(top);
         var bar = new Grid { Height = 8, Margin = new Thickness(0, 6, 0, 0) };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, success), GridUnitType.Star) });

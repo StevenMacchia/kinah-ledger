@@ -47,7 +47,77 @@ public partial class MainWindow
 
     void InitWrapped() => TodayWrapBtn.Click += (_, _) => OpenWrapped(_runsWeek ? Wrapped.Week : Wrapped.Day);
 
-    static string WrapLabel(string scope) => scope == Wrapped.Week ? "Week wrapped" : "Day wrapped";
+    static string WrapLabel(string scope) => L.T(scope == Wrapped.Week ? "Week wrapped" : "Day wrapped");
+
+    /// <summary>A day with its weekday as the language writes it: "11월 13일 (금)", "11月13日 (週五)".</summary>
+    static string DayWd(DateTime d) => DayShort(d) + " (" + WeekdayShort(d) + ")";
+
+    /// <summary>
+    /// The sheet's words (Wrapped.Text in Session/Wrapped.cs has them in English: its sentences are written there, so the same
+    /// ones are written here with their pieces in the order the language wants). English stays as Wrapped.Text makes it.
+    /// </summary>
+    internal static WrappedText WrappedTextT(WrappedFacts f)
+    {
+        if (L.Code == "en") return Wrapped.Text(f, Fk);
+        bool week = f.Scope == Wrapped.Week;
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        bool both = f.Farmed > 0 && f.FromRuns > 0;
+        string Fig(long v, long? side = null) => v == f.Total || (both && v == side) ? "" : Fk(v);
+        var split = both ? L.F("{0} farming · {1} from {2}", Fk(f.Farmed), Fk(f.FromRuns), RunsN(f.Runs)) : "";
+        var stats = new List<WrappedStat>();
+        if (f.FarmSeconds >= 60) stats.Add(new(DurT(f.FarmSeconds), L.T(f.Attempts > f.Kills ? "gathering" : "farming")));
+        else if (f.RunSeconds >= 60) stats.Add(new(DurT(f.RunSeconds), L.T("in runs")));
+        if (f.PerHour is double h) stats.Add(new(Fk(h), L.T("an hour farming")));
+        else if (f.PerRun is double pr && f.Counted > 1) stats.Add(new(Fk(pr), L.T("a run")));
+        if (week) stats.Add(new(L.F("{0} of {1}", f.DaysPlayed, f.Days), L.T("days played")));
+        else if (f.Kills > 0) stats.Add(new(f.Kills.ToString("N0", c), L.T(f.Kills == 1 ? "kill" : "kills")));
+        else if (f.Attempts > 0) stats.Add(new(f.Attempts.ToString("N0", c), L.T(f.Attempts == 1 ? "gathering attempt" : "gathering attempts")));
+        else if (f.Runs > 0) stats.Add(new(f.Runs.ToString("N0", c), L.T(f.Runs == 1 ? "run" : "runs")));
+        var rows = new List<WrappedRow>();
+        if (f.Top is { } top && !(top.IsRun && top.Runs == 1))
+            rows.Add(top.IsRun
+                ? new("place", L.T("TOP PLACE"), top.Name, Fig(top.Made, f.FromRuns), RunsN(top.Runs) + (top.Seconds >= 60 ? " · " + DurT(top.Seconds) : ""))
+                : new("zone", L.T("TOP ZONE"), top.Name, Fig(top.Made, f.Farmed), DurT(top.Seconds) + (top.Seconds >= 60 ? " · " + L.F("{0} an hour", Fk(top.Made / (top.Seconds / 3600))) : "")));
+        if (f.BestRun is { } r)
+        {
+            var when = week ? " · " + DayShort(r.Day) : "";
+            rows.Add(new("run", L.T(f.Counted >= 2 ? "BEST RUN" : "THE RUN"), r.Name, Fig(r.Value, f.FromRuns), (r.Kind.Length > 0 ? KindT(r.Kind) : L.T("Run")) + when + (r.Seconds >= 60 ? " · " + DurT(r.Seconds) : "")));
+        }
+        else if (f.BestDay is { } d)
+            rows.Add(new("day", L.T("BEST DAY"), DayShort(d.Date) + " (" + WeekdayLong(d.Date) + ")", Fig(d.Farm.Made, f.Farmed), L.F("{0} farming", DurT(d.Farm.Active))));
+        if (f.Drop is { } x)
+            rows.Add(new("drop", L.T("BIGGEST DROP"), x.Name, Fig(x.Worth), L.F("×{0} · {1}", x.Count.ToString("N0", c), x.Where) + (week ? " · " + DayShort(x.Day) : "")));
+        if (f.Craft is { } cr)
+            rows.Add(new("craft", L.T("CRAFTING"), L.F(cr.Tries == 1 ? "{0} craft this session" : "{0} crafts this session", cr.Tries.ToString("N0", c)),
+                (cr.AtMost ? "≤ " : "") + (cr.Net >= 0 ? "+" : "−") + Fk(Math.Abs(cr.Net)),
+                L.F(cr.AtMost ? "profit, {0}, at most (a price is missing)" : "profit, {0}", CutT)));
+        string change = "", changeLabel = ""; int tone = 0;
+        if (f.Change is double ch && f.Before is long b)
+        {
+            changeLabel = L.F("vs last week, {0}", Fk(b));
+            if (Math.Abs(ch) < Wrapped.Same) change = L.T("about the same");
+            else if (ch >= 1) { tone = 1; change = $"▲ {(1 + ch).ToString("0.#", c)}×"; }
+            else { tone = ch > 0 ? 1 : -1; change = $"{(ch > 0 ? "▲" : "▼")} {Math.Abs(ch * 100).ToString(Math.Abs(ch) < 0.095 ? "0.#" : "N0", c)}%"; }
+        }
+        string thinHead = "", thinBody = "", soFar = "";
+        if (f.Thin)
+        {
+            thinHead = L.T(week ? "Your week wraps up after two days of play." : "Your day wraps up after 10 minutes of farming or your first run.");
+            thinBody = L.T(week ? "Then this sheet shows what you made, your time and Kinah an hour, your top zone, best run and biggest drop, and how the week did against the last one, ready to share."
+                : "Then this sheet shows what you made, your time and Kinah an hour, your top zone, best run and biggest drop, ready to share.");
+            var bits = new List<string>();
+            if (f.FarmSeconds >= 60) bits.Add(L.F("{0} farming", DurT(f.FarmSeconds)));
+            if (f.Runs > 0) bits.Add(RunsN(f.Runs));
+            if (f.Total > 0) bits.Add(L.F("{0} made", Fk(f.Total)));
+            soFar = week
+                ? f.DaysPlayed == 0 ? L.T("Nothing counted on this character yet this week.")
+                    : bits.Count > 0 ? L.F("So far: {0} of play, {1}. Play on another day this week and it fills in.", L.F(f.DaysPlayed == 1 ? "{0} day" : "{0} days", f.DaysPlayed), string.Join(", ", bits))
+                    : L.F("So far: {0} of play. Play on another day this week and it fills in.", L.F(f.DaysPlayed == 1 ? "{0} day" : "{0} days", f.DaysPlayed))
+                : bits.Count == 0 ? L.T("Nothing counted yet today.") : L.F("So far today: {0}.", string.Join(", ", bits));
+        }
+        return new WrappedText(L.T(week ? "WEEK WRAPPED" : "DAY WRAPPED"), f.From.Date == f.To.Date ? DayWd(f.To) : L.F("{0} to {1}", DayWd(f.From), DayWd(f.To)), Fk(f.Total),
+            L.T(week ? "made this week" : "made today"), split, stats, rows, change, changeLabel, tone, thinHead, thinBody, soFar);
+    }
 
     /// <summary>A button's face: the sheet's medallion and its name.</summary>
     static void WrapFace(Button b, string scope)
@@ -59,7 +129,7 @@ public partial class MainWindow
         sp.Children.Add(new TextBlock { Text = WrapLabel(scope), VerticalAlignment = VerticalAlignment.Center });
         b.Content = sp;
         b.Tag = "wrapped-" + scope;
-        b.ToolTip = scope == Wrapped.Week ? "Your last 7 days on one sheet, to copy or save as a picture." : "Today on one sheet, to copy or save as a picture.";
+        b.ToolTip = L.T(scope == Wrapped.Week ? "Your last 7 days on one sheet, to copy or save as a picture." : "Today on one sheet, to copy or save as a picture.");
         AutomationProperties.SetName(b, WrapLabel(scope));
     }
 
@@ -128,20 +198,20 @@ public partial class MainWindow
     void OpenWrapped(string scope)
     {
         var f = WrappedFor(scope);
-        var t = Wrapped.Text(f, Fk);
+        var t = WrappedTextT(f);
         _wrapShown = (f, t);
         var (sheet, cues) = BuildWrappedSheet(f, t);
         if (_wrapWin == null) { _wrapWin = new WrappedWindow(this); _wrapWin.Closed += (_, _) => { _wrapWin = null; _wrapShown = null; }; }
         var acts = new List<(string, string, Action)>();
         if (!f.Thin)
         {
-            acts.Add(("Copy picture", "Puts the sheet on the clipboard as a picture. Paste it with Ctrl+V.", CopyWrapped));
-            acts.Add(("Save picture", @"Saves the sheet as a PNG in Pictures\Kinah Ledger.", SaveWrapped));
+            acts.Add((L.T("Copy picture"), L.T("Puts the sheet on the clipboard as a picture. Paste it with Ctrl+V."), CopyWrapped));
+            acts.Add((L.T("Save picture"), L.T(@"Saves the sheet as a PNG in Pictures\Kinah Ledger."), SaveWrapped));
         }
         // a week of one day: that day has a sheet of its own
         else if (scope == Wrapped.Week && !WrappedFor(Wrapped.Day).Thin)
-            acts.Add(("See Day wrapped", "Today on its own sheet.", () => OpenWrapped(Wrapped.Day)));
-        _wrapWin.Present(sheet, cues, acts, f.Thin ? "" : SharePicture.Note, offscreen: _demo);
+            acts.Add((L.T("See Day wrapped"), L.T("Today on its own sheet."), () => OpenWrapped(Wrapped.Day)));
+        _wrapWin.Present(sheet, cues, acts, f.Thin ? "" : L.T(SharePicture.Note), offscreen: _demo);
     }
 
     /// <summary>
@@ -198,7 +268,7 @@ public partial class MainWindow
         var what = new TextBlock { FontSize = 14, Margin = new Thickness(2, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, Tag = "wrapped-split" };
         what.Inlines.Add(PR(t.TotalLabel, "Ink", FontWeights.Medium));
         if (t.Split.Length > 0) { var s = PR("   " + t.Split, "Muted"); s.FontSize = 13; what.Inlines.Add(s); }
-        what.ToolTip = "Made farming and in expeditions and events: Kinah plus drops, gathering and rewards at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
+        what.ToolTip = L.F("Made farming and in expeditions and events: Kinah plus drops, gathering and rewards at the lowest Market price, {0}. Bound items and items with no price yet add nothing.", CutT);
         body.Children.Add(what);
         Cue(LineAt, Motion.Arrive(what, 0, 8));
 
@@ -272,7 +342,7 @@ public partial class MainWindow
             var line = new TextBlock { FontSize = 13.5, Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, Tag = "wrapped-who" };
             if (who.Length > 0) line.Inlines.Add(PR(who, "Ink", FontWeights.SemiBold));
             if (server.Length > 0) line.Inlines.Add(PR((who.Length > 0 ? " · " : "") + server, "Muted"));
-            line.ToolTip = who.Length > 0 ? $"The figures of {who}, the character counted for now." : null;
+            line.ToolTip = who.Length > 0 ? L.F("The figures of {0}, the character counted for now.", who) : null;
             words.Children.Add(line);
         }
         Grid.SetColumn(words, 1); g.Children.Add(words);
@@ -372,8 +442,8 @@ public partial class MainWindow
     void CopyWrapped()
     {
         if (RenderWrapped() is not { } bmp) return;
-        try { CopyPng(bmp); _wrapWin?.SetNote("Copied. Paste it in Discord or anywhere with Ctrl+V."); }
-        catch (Exception ex) { CrashLog.Write("wrapped picture", ex); _wrapWin?.SetNote("Couldn't copy the picture: " + ex.Message); }
+        try { CopyPng(bmp); _wrapWin?.SetNote(L.T("Copied. Paste it in Discord or anywhere with Ctrl+V.")); }
+        catch (Exception ex) { CrashLog.Write("wrapped picture", ex); _wrapWin?.SetNote(L.F("Couldn't copy the picture: {0}", ex.Message)); }
     }
 
     void SaveWrapped()
@@ -382,9 +452,9 @@ public partial class MainWindow
         try
         {
             var path = SavePicture(bmp, Wrapped.FileName(shown.Facts.Scope, DateTime.Now));
-            _wrapWin?.SetNote(@"Saved in Pictures\Kinah Ledger as " + System.IO.Path.GetFileName(path));
+            _wrapWin?.SetNote(L.F(@"Saved in Pictures\Kinah Ledger as {0}", System.IO.Path.GetFileName(path)));
         }
-        catch (Exception ex) { CrashLog.Write("wrapped save", ex); _wrapWin?.SetNote("Couldn't save the picture: " + ex.Message); }
+        catch (Exception ex) { CrashLog.Write("wrapped save", ex); _wrapWin?.SetNote(L.F("Couldn't save the picture: {0}", ex.Message)); }
     }
 
     /* ---------------- layout renders and the self-test ---------------- */

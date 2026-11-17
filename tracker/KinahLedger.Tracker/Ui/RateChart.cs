@@ -113,7 +113,7 @@ sealed class RateChart
         _tip.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
         var text = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         var sep = new Run(" · ");
-        var unit = new Run(" /h");
+        var unit = new Run(" " + L.T("/h"));
         foreach (var r in new[] { _tipTime, sep, unit }) r.SetResourceReference(TextElement.ForegroundProperty, "Faint");
         _tipRate.SetResourceReference(TextElement.ForegroundProperty, "Ink");
         _tipRate.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont");
@@ -148,7 +148,7 @@ sealed class RateChart
         double bestY = hasBest ? Math.Clamp(_h - 2 - (_h - 4) * (best - lo) / (hi - lo), BestInset, _h - BestInset) : _bestY;
         bool bestNew = hasBest && _best.Visibility != Visibility.Visible;
         _best.Visibility = _bestLbl.Visibility = hasBest ? Visibility.Visible : Visibility.Collapsed;
-        if (hasBest) _bestLbl.Text = "best here " + Amounts.Short(best);
+        if (hasBest) _bestLbl.Text = L.F("best here {0}", Amounts.Short(best));
         _bestRate = best;
         bool moving = _wasLive && Motion.On;
         _wasLive = true;

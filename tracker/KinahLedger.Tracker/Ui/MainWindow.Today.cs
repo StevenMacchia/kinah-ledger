@@ -70,7 +70,7 @@ public partial class MainWindow
         if (r == null || week == null || !any) return;
         TodayDayBtn.Style = (Style)FindResource(_runsWeek ? "SegOff" : "SegOn");
         TodayWeekBtn.Style = (Style)FindResource(_runsWeek ? "SegOn" : "SegOff");
-        TodayTitle.Text = _runsWeek ? "WEEK" : "TODAY";
+        TodayTitle.Text = L.T(_runsWeek ? "WEEK" : "TODAY");
         SetWrapButton(_runsWeek ? Wrapped.Week : Wrapped.Day);
         if (_runsWeek) { FillRunsWeek(week); return; }
 
@@ -81,17 +81,17 @@ public partial class MainWindow
         if (Changed("today-line", noteSig))
         {
             TodayNote.Inlines.Clear();
-            if (note.Count == 0) TodayNote.Inlines.Add(PR("No runs yet today", "Faint"));
+            if (note.Count == 0) TodayNote.Inlines.Add(PR(L.T("No runs yet today"), "Faint"));
             for (int i = 0; i < note.Count; i++)
             {
                 if (i > 0) TodayNote.Inlines.Add(PR(" · ", "Faint"));
                 TodayNote.Inlines.Add(PR(note[i].Fig, "Ink", FontWeights.Bold));
-                TodayNote.Inlines.Add(PR(note[i].Word, "Muted"));
+                TodayNote.Inlines.Add(PR(NoteWord(note[i].Word), "Muted"));
             }
             if (made > 0) Motion.Number(TodaySum, "today-sum", made, v => Fk(v)); else Motion.Blank(TodaySum, "today-sum", "");
             TodaySum.ToolTip = made <= 0 ? null
-                : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, " + PriceBook.Cut + ". Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
-            TodayHead.ToolTip = "Today's expeditions and events since midnight on this PC. Week has the last 7 days.";
+                : L.F("Made in expeditions and events today: Kinah plus rewards at the lowest Market price, {0}. Gear, currencies, items with no price yet and runs left out of the averages add nothing.", CutT);
+            TodayHead.ToolTip = L.T("Today's expeditions and events since midnight on this PC. Week has the last 7 days.");
         }
         // the day's rewards are the place box's LOOT under the strip (one box, Steven 2026-11-06); the strip's own row of
         // them, with its sort links and its sum, said the same again (0.10.21, tools/ui-review.md), so the Today side is
@@ -118,7 +118,7 @@ public partial class MainWindow
         if (worth > 0)
         {
             var v = PT(Fk(worth), "Gold", 13, null, "MonoFont"); v.Margin = new Thickness(12, 0, 0, 0);
-            v.ToolTip = "Kinah plus loot at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
+            v.ToolTip = L.F("Kinah plus loot at the lowest Market price, {0}. Bound items and items with no price yet add nothing.", CutT);
             Grid.SetColumn(v, 2); head.Children.Add(v);
         }
         sp.Children.Add(head);
@@ -129,7 +129,7 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = QLinkify(PT(all ? "Show fewer" : $"Show all {slots.Count}", "Link", 12, FontWeights.SemiBold));
+            var m = QLinkify(PT(all ? L.T("Show fewer") : L.F("Show all {0}", slots.Count), "Link", 12, FontWeights.SemiBold));
             m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); again(); };
             sp.Children.Add(m);
@@ -150,7 +150,7 @@ public partial class MainWindow
         // the picked chip as the lit pill everywhere: its ink on SegOnBg (gold on the light pill until the colour pass, 2026-11-13)
         sp.Children.Add(PT(text, on ? "SegOnInk" : "Ink", 12.5, on ? FontWeights.SemiBold : null));
         if (time.Length > 0) { var tm = PT(time, on ? "SegOnInk" : "Muted", 12, null, "MonoFont"); tm.Margin = new Thickness(7, 0, 0, 0); sp.Children.Add(tm); }
-        var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = tip };
+        var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = L.T(tip) };
         b.SetResourceReference(Border.BackgroundProperty, on ? "SegOnBg" : "ChipOff");
         b.SetResourceReference(Border.BorderBrushProperty, on ? "SegOnBg" : "ChipOffLine");
         ToolTipService.SetInitialShowDelay(b, 400);
@@ -161,22 +161,22 @@ public partial class MainWindow
     /// <summary>"1 in 7 kills" and "23 an hour" for a drop, against the kills and the farming time of what the strip shows.</summary>
     static (string Odds, string Hour) FarmOdds(TodaySlot s, int kills, double activeSecs)
     {
-        var odds = kills <= 0 || s.Count <= 0 ? "" : s.Count >= kills ? $"{s.Count / (double)kills:0.0} a kill" : $"1 in {Math.Round(kills / (double)s.Count):N0} kills";
+        var odds = kills <= 0 || s.Count <= 0 ? "" : s.Count >= kills ? L.F("{0:0.0} a kill", s.Count / (double)kills) : L.F("1 in {0:N0} kills", Math.Round(kills / (double)s.Count));
         return (odds, HourText(s.Count, activeSecs));
     }
 
-    static string HourText(long count, double activeSecs) => activeSecs < 60 ? "" : $"{Whole(count / (activeSecs / 3600))} an hour";   // whole numbers, as the tables
+    static string HourText(long count, double activeSecs) => activeSecs < 60 ? "" : L.F("{0} an hour", Whole(count / (activeSecs / 3600)));   // whole numbers, as the tables
 
     /// <summary>An item's slot: its icon in its grade frame with the stack count, the game-tooltip card on hover, pinned with Set a goal on a click.</summary>
     FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false, string when = "today")
     {
         var tile = QTile(QItemIcon(s.Name, s.Id, 28, round: false, grade: _items.Get(s.Id)?.Grade ?? ""), s.Count.ToString("N0"), s.Name,
-            s.Worth > 0 ? Fk(s.Worth) : s.Gear || (s.Bound > 0 && s.Bound >= s.Count) ? "bound" : s.Currency ? "a currency" : "no price yet", s.Worth > 0 ? "Gold" : "Faint");
+            s.Worth > 0 ? Fk(s.Worth) : s.Gear || (s.Bound > 0 && s.Bound >= s.Count) ? L.T("bound") : s.Currency ? L.T("a currency") : L.T("no price yet"), s.Worth > 0 ? "Gold" : "Faint");
         CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs, when));
         // a click pins the card with Set a goal at its foot (0.9; a right-click until 2026-10-31); a currency is an amount, not something picked up
         // ...and, on today's farming loot, "Not a drop" (Ui/MainWindow.NotDrop.cs): one of it out of today's totals, or its Undo
         if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs, when),
-            new[] { ("Set a goal for this", (Action)(() => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile))) }.Concat(!runs && when == "today" ? NotDropActions(s.Id) : Enumerable.Empty<(string, Action)>()).ToArray());
+            new[] { (L.T("Set a goal for this"), (Action)(() => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile))) }.Concat(!runs && when == "today" ? NotDropActions(s.Id) : Enumerable.Empty<(string, Action)>()).ToArray());
         return tile;
     }
 
@@ -191,11 +191,11 @@ public partial class MainWindow
     /// <param name="whereTitle">The heading over <paramref name="where"/>: zones for the day, enemies for LOOT's first side.</param>
     FrameworkElement KinahSlot(long kinah, List<(string Where, long Count)> where, string line, string foot = "Picked up today", string whereTitle = "WHERE")
     {
-        var tile = QTile(QCoin(28),Fk(kinah), "Kinah", line.Length > 0 ? line.Split(" · ").Last() : "", "Muted");
+        var tile = QTile(QCoin(28),Fk(kinah), L.T("Kinah"), line.Length > 0 ? line.Split(" · ").Last() : "", "Muted");
         tile.ToolTip = null;
         CardTip(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle));
         // a click on farming's Kinah pins its card with Set a Kinah goal (0.9); a run's Kinah isn't farming's, so not on the Events page
-        if (_part == "Farming") PinOnClick(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle), ("Set a Kinah goal", () => OpenGoalSheet(null, new GoalDraft(), tile)));
+        if (_part == "Farming") PinOnClick(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle), (L.T("Set a Kinah goal"), () => OpenGoalSheet(null, new GoalDraft(), tile)));
         return tile;
     }
 
@@ -213,24 +213,24 @@ public partial class MainWindow
         var (card, body) = CkShell(300);
         var item = _items.Get(s.Id);
         var grade = item?.Grade ?? "";
-        var cat = s.Gear ? "Gear" : s.Currency ? "Currency" : item?.Category is { Length: > 0 } c ? c : runs ? "Reward" : "Drop";
-        body.Children.Add(CkBand(s.Name, grade, $"{cat} · ×{s.Count:N0} {when}"));
+        var cat = s.Gear ? L.T("Gear") : s.Currency ? L.T("Currency") : item?.Category is { Length: > 0 } c ? c : L.T(runs ? "Reward" : "Drop");
+        body.Children.Add(CkBand(s.Name, grade, $"{cat} · ×{s.Count:N0} {L.T(when)}"));
         if (showWhere && s.Where.Count > 0)
         {
-            body.Children.Add(CkSection("WHERE"));
+            body.Children.Add(CkSection(L.T("WHERE")));
             foreach (var (where, n) in s.Where.Take(6)) body.Children.Add(CkKv(where, n.ToString("N0"), CkInk));
-            if (s.Where.Count > 6) body.Children.Add(CkNote($"and {s.Where.Count - 6} more"));
+            if (s.Where.Count > 6) body.Children.Add(CkNote(L.F("and {0} more", s.Where.Count - 6)));
         }
         if (rate.Odds.Length + rate.Hour.Length > 0)
         {
-            body.Children.Add(CkSection(runs ? "PACE" : "ODDS"));
+            body.Children.Add(CkSection(L.T(runs ? "PACE" : "ODDS")));
             body.Children.Add(CkKv(rate.Odds.Length > 0 ? rate.Odds : rate.Hour, rate.Odds.Length > 0 ? rate.Hour : "", CkInk));
         }
-        if (s.Bound > 0 && s.Bound < s.Count) body.Children.Add(CkNote($"{s.Bound:N0} of these are bound and add nothing."));
-        body.Children.Add(s.Worth > 0 ? TodayFooter("Worth, " + PriceBook.Cut, Fk(s.Worth))
-            : s.Gear || s.Bound >= s.Count ? TodayFooter("Bound to you", "can't be sold", muted: true)
-            : s.Currency ? TodayFooter("A currency", "not sold", muted: true)
-            : TodayFooter("No Market price yet", "adds nothing", muted: true));
+        if (s.Bound > 0 && s.Bound < s.Count) body.Children.Add(CkNote(L.F("{0:N0} of these are bound and add nothing.", s.Bound)));
+        body.Children.Add(s.Worth > 0 ? TodayFooter(L.F("Worth, {0}", CutT), Fk(s.Worth))
+            : s.Gear || s.Bound >= s.Count ? TodayFooter(L.T("Bound to you"), L.T("can't be sold"), muted: true)
+            : s.Currency ? TodayFooter(L.T("A currency"), L.T("not sold"), muted: true)
+            : TodayFooter(L.T("No Market price yet"), L.T("adds nothing"), muted: true));
         return card;
     }
 
@@ -242,7 +242,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         var coin = CoinTile(64); coin.Margin = new Thickness(0, 0, 16, 0); g.Children.Add(coin);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(CkText("Kinah", CkGold, 20, FontWeights.Normal, display: true));
+        names.Children.Add(CkText(L.T("Kinah"), CkGold, 20, FontWeights.Normal, display: true));
         if (line.Length > 0) { var l = CkText(line, CkMuted, 13); l.Margin = new Thickness(0, 3, 0, 0); names.Children.Add(l); }
         Grid.SetColumn(names, 1); g.Children.Add(names);
         body.Children.Add(new Border
@@ -252,11 +252,11 @@ public partial class MainWindow
         });
         if (where.Count > 1 || (where.Count == 1 && (line.Length == 0 || whereTitle != "WHERE")))
         {
-            body.Children.Add(CkSection(whereTitle));
+            body.Children.Add(CkSection(L.T(whereTitle)));
             foreach (var (w, n) in where.Take(6)) body.Children.Add(CkKv(w, Fk(n), CkInk));
-            if (where.Count > 6) body.Children.Add(CkNote($"and {where.Count - 6} more"));
+            if (where.Count > 6) body.Children.Add(CkNote(L.F("and {0} more", where.Count - 6)));
         }
-        body.Children.Add(TodayFooter(foot, Fk(kinah), tip: Amounts.Full(kinah)));
+        body.Children.Add(TodayFooter(L.T(foot), Fk(kinah), tip: Amounts.Full(kinah)));
         return card;
     }
 
@@ -313,11 +313,11 @@ public partial class MainWindow
     {
         if (TodayCardSample() is Border b) SaveCard(b, System.IO.Path.Combine(dir, "ui-today-card.png"));
         // the same card pinned by a click, its action at the foot (2026-10-31)
-        if (PinnedCard(() => TodayCardSample() ?? new Border(), new (string, Action)[] { ("Set a goal for this", () => { }) }) is Border pin && pin.Child != null)
+        if (PinnedCard(() => TodayCardSample() ?? new Border(), new (string, Action)[] { (L.T("Set a goal for this"), () => { }) }) is Border pin && pin.Child != null)
             SaveCard(pin, System.IO.Path.Combine(dir, "ui-today-card-pinned.png"));
         var day = TodayEngine; if (day == null) return;
         var f = TodayLoot.Farm(day, _items);
-        if (f.Kinah > 0 && KinahTodayCard(f.Kinah, f.KinahWhere, f.Kills > 0 ? $"{f.Kills:N0} kills · {Fk(f.Kinah / (double)f.Kills)} a kill" : "") is Border k) SaveCard(k, System.IO.Path.Combine(dir, "ui-today-kinah.png"));
+        if (f.Kinah > 0 && KinahTodayCard(f.Kinah, f.KinahWhere, f.Kills > 0 ? L.F("{0:N0} kills · {1} a kill", f.Kills, Fk(f.Kinah / (double)f.Kills)) : "") is Border k) SaveCard(k, System.IO.Path.Combine(dir, "ui-today-kinah.png"));
     }
 
     /// <summary>Layout render of the Events page: the cards a hover on today's first run reward and on the runs' Kinah open (ui-today-run-card.png, ui-today-run-kinah.png).</summary>

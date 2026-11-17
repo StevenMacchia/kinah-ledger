@@ -65,15 +65,15 @@ public partial class MainWindow
     FrameworkElement SortLinks(string sigKey, Action redraw)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var label = PT("Sort", "Muted", 12); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
+        var label = PT(L.T("Sort"), "Muted", 12); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
         for (int i = 0; i < LootOrder.Modes.Length; i++)
         {
             var mode = LootOrder.Modes[i];
             bool on = mode == LootSortMode;
             if (i > 0) { var dot = PT("·", "Muted", 12); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
-            var t = PT(mode, "Ink", 12, on ? FontWeights.SemiBold : null);
+            var t = PT(L.T(mode), "Ink", 12, on ? FontWeights.SemiBold : null);
             if (!on) QLinkify(t);
-            t.Cursor = on ? Cursors.Arrow : Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
+            t.Cursor = on ? Cursors.Arrow : Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = L.T(LootOrder.Tip(mode)); ToolTipService.SetInitialShowDelay(t, 400);
             t.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (mode == LootSortMode) return; _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); };
             sp.Children.Add(t);
         }
@@ -102,8 +102,8 @@ public partial class MainWindow
         // Quest (2026-11-07): the bag opens from the loot chip in Compact; Full view has it as a column of its own
         SummaryCard.Visibility = show && (FullShown || _qChip == "bag") ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
-        LootHereBtn.Content = LootHereName;
-        LootHereBtn.ToolTip = RunShown ? "This run." : "Every zone since your last break (15 minutes with nothing farmed). The figures at the top say how much of it came here.";
+        LootHereBtn.Content = L.T(LootHereName);
+        LootHereBtn.ToolTip = L.T(RunShown ? "This run." : "Every zone since your last break (15 minutes with nothing farmed). The figures at the top say how much of it came here.");
         LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
@@ -121,7 +121,7 @@ public partial class MainWindow
         if (h == null || !_hasSummary)
         {
             FootTotalNote.Text = ""; FootTotal.Text = " "; FootTotal.ToolTip = null;
-            if (Changed("loot", "here-empty")) { LootHost.Children.Clear(); LootEmpty("Loot shows here as it's picked up. Today has what came in other zones."); }
+            if (Changed("loot", "here-empty")) { LootHost.Children.Clear(); LootEmpty(L.T("Loot shows here as it's picked up. Today has what came in other zones.")); }
             return;
         }
         var drops = SortRows(h.S.Drops.Where(r => !r.Header));
@@ -131,7 +131,7 @@ public partial class MainWindow
         int kinds = drops.Count + gathered.Count + (crystals > 0 ? 1 : 0);
         // the UX pass (2026-11-13): this side's Kinah, loot and how long are the hero's (its line and its "Open world · 42 min"),
         // so the bag says only how many kinds; no Kinah slot and no total, which was the hero line's two figures added up
-        FootTotalNote.Text = kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")}" : "";
+        FootTotalNote.Text = kinds > 0 ? L.F(kinds == 1 ? "{0} kind" : "{0} kinds", kinds) : "";
         Motion.Blank(FootTotal, "foot|here|" + LootHereName, " ");
         FootTotal.ToolTip = null;
         FootTotal.Visibility = Visibility.Collapsed;
@@ -155,7 +155,7 @@ public partial class MainWindow
             slots.Add(t);
         }
         if (crystals > 0) { var c = SoulSlot(pets, crystals, where); Motion.Slot(c, landHost, "soul crystals", crystals); slots.Add(c); }
-        if (slots.Count == 0) LootEmpty("Nothing picked up here yet.");
+        if (slots.Count == 0) LootEmpty(L.T("Nothing picked up here yet."));
         else LootGroup("here", slots);
         Motion.End(landHost);
     }
@@ -166,17 +166,17 @@ public partial class MainWindow
         if (whole == null || !whole.Any)
         {
             FootTotalNote.Text = ""; FootTotal.Text = " "; FootTotal.ToolTip = null;
-            if (Changed("loot", "day-empty")) { LootHost.Children.Clear(); LootEmpty("Nothing picked up from farming yet today."); }
+            if (Changed("loot", "day-empty")) { LootHost.Children.Clear(); LootEmpty(L.T("Nothing picked up from farming yet today.")); }
             return;
         }
         // a zone under a minute gets no chip (2026-10-28: "Drana Cultivation Area 0:00", "Zone not read 0:00"); its loot stays in All zones
         var zones = whole.Zones.Where(z => z.Active >= 60).ToList();
         if (_todayZone != null && !zones.Any(z => z.Zone == _todayZone)) _todayZone = null;
         var farm = _todayZone != null ? TodayLoot.Farm(TodayEngine!, _items, _todayZone) : whole;
-        FootTotalNote.Text = string.Join(" · ", TodayLoot.FarmLine(farm).Select(n => n.Fig + n.Word));
+        FootTotalNote.Text = string.Join(" · ", TodayLoot.FarmLine(farm).Select(n => (n.Word.Trim() is "farming" or "gathering" ? DurT(farm.Active) : n.Fig) + NoteWord(n.Word)));
         long made = farm.Made;
         if (made > 0) Motion.Number(FootTotal, "foot|day|" + _todayZone, made, v => Fk(v)); else Motion.Blank(FootTotal, "foot|day|" + _todayZone, " ");
-        FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
+        FootTotal.ToolTip = made <= 0 ? null : _todayZone != null ? L.F("Made farming today in {0}: Kinah plus drops and gathering at the lowest Market price, {1}. Bound items and items with no price yet add nothing.", ZoneName(_todayZone), CutT) : L.F("Made farming today, every zone: Kinah plus drops and gathering at the lowest Market price, {0}. Bound items and items with no price yet add nothing.", CutT);
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
         var sig = $"day|{_todayZone}|{LootSortMode}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
             + $"{Slots(farm.Drops)}|{Slots(farm.Gathered)}|{string.Join(",", _todayAll)}|{FullShown}|{Skins.Current}";
@@ -185,12 +185,12 @@ public partial class MainWindow
         if (zones.Count >= 2)
         {
             var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-            chips.Children.Add(ZoneChip("All zones", "", _todayZone == null, () => _todayZone = null));
+            chips.Children.Add(ZoneChip(L.T("All zones"), "", _todayZone == null, () => _todayZone = null));
             foreach (var z in zones)
             {
                 var zone = z.Zone;
-                chips.Children.Add(ZoneChip(ZoneName(zone), TodayLoot.Dur(z.Active), _todayZone == zone, () => _todayZone = zone,
-                    $"{ZoneName(zone)}: {TodayLoot.Dur(z.Active)} farming, {z.Kills:N0} kills, {Fk(z.Made)} made {PriceBook.Cut}. Click to see only its loot; it stays pinned when you move."));
+                chips.Children.Add(ZoneChip(ZoneName(zone), DurT(z.Active), _todayZone == zone, () => _todayZone = zone,
+                    L.F("{0}: {1} farming, {2:N0} kills, {3} made {4}. Click to see only its loot; it stays pinned when you move.", ZoneName(zone), DurT(z.Active), z.Kills, Fk(z.Made), CutT)));
             }
             LootHost.Children.Add(chips);
         }
@@ -199,19 +199,19 @@ public partial class MainWindow
         LootOrderForTest.Clear(); LootOrderForTest.AddRange(dayDrops.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)).Concat(dayGathered.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", true))));
         if (dayDrops.Count + dayGathered.Count >= 2) LootSortRow();
         var kills = new List<FrameworkElement>();
-        if (farm.Kinah > 0) kills.Add(KinahSlot(farm.Kinah, farm.KinahWhere, farm.Kills > 0 ? $"{farm.Kills:N0} kills · {Fk(farm.Kinah / (double)farm.Kills)} a kill" : ""));
+        if (farm.Kinah > 0) kills.Add(KinahSlot(farm.Kinah, farm.KinahWhere, farm.Kills > 0 ? L.F("{0:N0} kills · {1} a kill", farm.Kills, Fk(farm.Kinah / (double)farm.Kills)) : ""));
         if (farm.Abyss > 0) kills.Add(AbyssSlot(farm.Abyss, farm.Active, "today"));
         foreach (var s in dayDrops) kills.Add(ItemSlot(s, FarmOdds(s, farm.Kills, farm.Active), showWhere));
-        var gather = dayGathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? ($"{s.Count / (double)farm.Attempts:0.00} a try", HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), showWhere)).ToList();
+        var gather = dayGathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? (L.F("{0:0.00} a try", s.Count / (double)farm.Attempts), HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), showWhere)).ToList();
         // one group needs no heading; with both, each says what it is
         bool both = kills.Count > 0 && gather.Count > 0;
-        if (kills.Count > 0) LootGroup("farm", kills, both ? "FROM KILLS" : "");
-        if (gather.Count > 0) LootGroup("gather", gather, both ? "GATHERED" : "");
-        if (kills.Count + gather.Count == 0) LootEmpty(_todayZone != null ? "Nothing picked up here yet today." : "Nothing picked up from farming yet today.");
+        if (kills.Count > 0) LootGroup("farm", kills, both ? L.T("FROM KILLS") : "");
+        if (gather.Count > 0) LootGroup("gather", gather, both ? L.T("GATHERED") : "");
+        if (kills.Count + gather.Count == 0) LootEmpty(L.T(_todayZone != null ? "Nothing picked up here yet today." : "Nothing picked up from farming yet today."));
         LootHost.Children.Add(WrappedButton(Wrapped.Day));
     }
 
-    static string ZoneName(string zone) => zone == SessionEngine.UnknownZone ? "Zone not read" : zone;
+    static string ZoneName(string zone) => zone == SessionEngine.UnknownZone ? L.T("Zone not read") : zone;
 
     static long Qty(string drops) => long.TryParse(drops, System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n
         : long.TryParse(drops, System.Globalization.NumberStyles.AllowThousands, null, out n) ? n : 0;
@@ -235,7 +235,7 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = QLinkify(PT(all ? "Show fewer" : $"{slots.Count - max} more", "Link", 12, FontWeights.SemiBold));   // tiles, not kinds: Kinah has one too
+            var m = QLinkify(PT(all ? L.T("Show fewer") : string.Format(System.Globalization.CultureInfo.CurrentCulture, L.T("{0} more", "link"), slots.Count - max), "Link", 12, FontWeights.SemiBold));   // tiles, not kinds: Kinah has one too
             m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); _drawnSig.Remove("loot"); FillLoot(); };
             sp.Children.Add(m);
@@ -249,7 +249,7 @@ public partial class MainWindow
         var name = r.Report.Length > 0 ? r.Report : r.Name;
         // the Quest tile (2026-11-07): the game's icon, the count, the name, the worth or why there is none
         var tile = QTile(QItemIcon(name, _items.IdOf(name), 28, round: false, grade: r.Grade), Qty(r.Drops).ToString("N0"), name,
-            r.Worth > 0 ? r.Value : r.Sub.Contains("bound", StringComparison.OrdinalIgnoreCase) ? "bound" : "no price yet", r.Worth > 0 ? "Gold" : "Faint",
+            r.Worth > 0 ? r.Value : r.Sub.Contains("bound", StringComparison.OrdinalIgnoreCase) ? L.T("bound") : L.T("no price yet"), r.Worth > 0 ? "Gold" : "Faint",
             roll: ("loot-count|" + LootHereName + "|" + name, Qty(r.Drops)));
         if (r.Reported) tile.Opacity = 0.55;
         CardTip(tile, () => ItemHereCard(r, gathered, where));
@@ -265,35 +265,35 @@ public partial class MainWindow
     {
         var (card, body) = CkShell(300);
         var name = r.Report.Length > 0 ? r.Report : r.Name;
-        var cat = gathered ? "Gathering material" : _items.Get(_items.IdOf(name))?.Category is { Length: > 0 } c ? c : "Drop";
-        body.Children.Add(CkBand(name, r.Grade, $"{cat} · ×{r.Drops} {where}"));
-        if (r.Reported) body.Children.Add(CkNote("Reported: kept out of what's sent to the site."));
+        var cat = gathered ? L.T("Gathering material") : _items.Get(_items.IdOf(name))?.Category is { Length: > 0 } c ? c : L.T("Drop");
+        body.Children.Add(CkBand(name, r.Grade, $"{cat} · ×{r.Drops} {L.T(where)}"));
+        if (r.Reported) body.Children.Add(CkNote(L.T("Reported: kept out of what's sent to the site.")));
         if (r.DropPct.Length + r.PerHour.Length > 0)
         {
-            body.Children.Add(CkSection(gathered ? "PACE" : "ODDS"));
-            if (r.DropPct.Length > 0) body.Children.Add(CkKv(gathered ? "A try" : "Odds", r.DropPct, CkInk));
-            if (r.PerHour.Length > 0) body.Children.Add(CkKv("An hour", r.PerHour, CkInk));
+            body.Children.Add(CkSection(L.T(gathered ? "PACE" : "ODDS")));
+            if (r.DropPct.Length > 0) body.Children.Add(CkKv(L.T(gathered ? "A try" : "Odds"), r.DropPct, CkInk));
+            if (r.PerHour.Length > 0) body.Children.Add(CkKv(L.T("An hour"), r.PerHour, CkInk));
         }
         if (r.Tip.Length > 0) { var n = CkNote(r.Tip); n.Margin = new Thickness(20, 10, 20, 2); body.Children.Add(n); }
-        if (r.Report.Length > 0) { var n = CkNote(r.Reported ? "Reported · click to set a goal or undo the report" : "Click to set a goal or report it"); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
+        if (r.Report.Length > 0) { var n = CkNote(L.T(r.Reported ? "Reported · click to set a goal or undo the report" : "Click to set a goal or report it")); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
         bool bound = r.Sub.Contains("bound");
-        body.Children.Add(r.Value.Length > 0 ? TodayFooter("Worth, " + PriceBook.Cut, r.Value)
-            : bound ? TodayFooter("Bound to you", "can't be sold", muted: true)
-            : TodayFooter("No Market price yet", "adds nothing", muted: true));
+        body.Children.Add(r.Value.Length > 0 ? TodayFooter(L.F("Worth, {0}", CutT), r.Value)
+            : bound ? TodayFooter(L.T("Bound to you"), L.T("can't be sold"), muted: true)
+            : TodayFooter(L.T("No Market price yet"), L.T("adds nothing"), muted: true));
         return card;
     }
 
     /// <summary>The Soul Crystals of the count on screen as one slot, each kind on its card.</summary>
     FrameworkElement SoulSlot(List<DropRow> pets, long crystals, string where)
     {
-        var tile = QTile(QIconBox("Gem", "Lime", 28),crystals.ToString("N0"), "Soul Crystals", "pet food", "Faint");
+        var tile = QTile(QIconBox("Gem", "Lime", 28),crystals.ToString("N0"), "Soul Crystals", L.T("pet food"), "Faint");
         CardTip(tile, () =>
         {
             var (card, body) = CkShell(300);
             body.Children.Add(CkSection("SOUL CRYSTALS"));
             foreach (var p in pets.Take(6)) body.Children.Add(CkKv(p.Name, p.Drops, CkInk));
-            if (pets.Count > 6) body.Children.Add(CkNote($"and {pets.Count - 6} more"));
-            body.Children.Add(TodayFooter("Picked up " + where, Fk(crystals), tip: Amounts.Full(crystals)));
+            if (pets.Count > 6) body.Children.Add(CkNote(L.F("and {0} more", pets.Count - 6)));
+            body.Children.Add(TodayFooter(L.F("Picked up {0}", L.T(where)), Fk(crystals), tip: Amounts.Full(crystals)));
             return card;
         });
         return tile;
@@ -321,21 +321,21 @@ public partial class MainWindow
         {
             case "run":
                 _demoRun = true; SetTrackingUi(true); _tableWhat = "this run";
-                Say("Run started · Western Cantas Valley. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
+                Say(L.F("Run started · {0}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Western Cantas Valley"), "Faint");
                 break;
             case "paused":
                 _demoPaused = true; LiveMark.Visibility = Visibility.Collapsed;
-                Tell("Paused: the chat is out of view. Only the game is read, so reading picks up when the chat is in view again", "Warn");
+                Tell(L.T("Paused: the chat is out of view. Only the game is read, so reading picks up when the chat is in view again"), "Warn");
                 break;
             // "fresh" (0.9.13): just after Start run with counts on the tables, the run on at zero and its Undo bar up
             case "fresh":
                 _demoRun = true; _tableWhat = "this run";
                 _ = OfferFromZero();
-                Say("Run started from zero · Western Cantas Valley. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
+                Say(L.F("Run started from zero · {0}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Western Cantas Valley"), "Faint");
                 SetTrackingUi(true);
                 break;
             case "stopped":
-                SayOnLine("Run stopped (00:42:17 · 632K Kinah · 161 kills) and shared anonymously. Saved to your history (12 runs). Still counting.", "Good");
+                SayOnLine(L.F("Run stopped ({0} · {1} Kinah · {2} kills) and shared anonymously. Saved to your history ({3} runs). Still counting.", "00:42:17", "632K", 161, 12), "Good");
                 break;
             // "onboard" (2026-11-04): the empty feed with a new player's checklist, halfway through (Ui/MainWindow.Onboard.cs)
             case "empty":
@@ -372,7 +372,7 @@ public partial class MainWindow
         _drawnSig.Remove("loot");
         Redraw();
         if (state == "onboard") ShowOnboardSample(true);
-        if (state == "paused" && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
+        if (state == "paused" && !TableTitle.Text.EndsWith(" · paused") && !TableTitle.Text.EndsWith(" · " + L.T("paused"))) TableTitle.Text += " · " + L.T("paused");
         // Share (0.9.3): the sheet open on This session, Last run or This week; share-picture also draws the pictures themselves
         if (state.StartsWith("share-")) OpenShareSample(state);
         // the hero's rate chart open, live (Ui/MainWindow.RateChart.cs)

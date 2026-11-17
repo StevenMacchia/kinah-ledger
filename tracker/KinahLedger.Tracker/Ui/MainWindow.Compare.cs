@@ -75,7 +75,7 @@ public partial class MainWindow
         var sp = new StackPanel { Orientation = Orientation.Horizontal };
         Button B(string text, bool lit, string tip, Action click)
         {
-            var b = new Button { Content = text, Height = 26, FontSize = 12.5, Padding = new Thickness(10, 0, 10, 0), Style = (Style)FindResource(lit ? "SegOn" : "SegOff"), ToolTip = tip };
+            var b = new Button { Content = L.T(text), Height = 26, FontSize = 12.5, Padding = new Thickness(10, 0, 10, 0), Style = (Style)FindResource(lit ? "SegOn" : "SegOff"), ToolTip = L.T(tip) };
             b.Click += (_, _) => click();
             return b;
         }
@@ -87,7 +87,7 @@ public partial class MainWindow
         g.Children.Add(seg);
         if (on)
         {
-            var l = PT(runs ? "Kinah a run · runs" : "Kinah an hour · time there", "Faint", 12);
+            var l = PT(L.T(runs ? "Kinah a run · runs" : "Kinah an hour · time there"), "Faint", 12);
             l.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(l, 1); g.Children.Add(l);
         }
@@ -112,7 +112,7 @@ public partial class MainWindow
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
         LootHost.Children.Add(CmpSwitch(false, true));
-        if (zones.Count == 0) { LootEmpty("A zone shows here once you farm it 10 minutes or more this week."); return; }
+        if (zones.Count == 0) { LootEmpty(L.T("A zone shows here once you farm it 10 minutes or more this week.")); return; }
         double max = Math.Max(1, zones.Max(z => z.PerHour));
         var list = new StackPanel { Tag = "cmp-rows" };
         foreach (var z in zones)
@@ -120,26 +120,51 @@ public partial class MainWindow
             bool isHere = string.Equals(z.Zone, here, StringComparison.OrdinalIgnoreCase);
             var key = z.Zone;
             list.Children.Add(CmpRow(key, ZoneName(z.Zone), isHere ? "here now" : "", z.PerHour / max, Fk(z.PerHour), BarTime(z.Active), picks.Contains(key, StringComparer.OrdinalIgnoreCase), false,
-                $"{ZoneName(z.Zone)}: {Fk(z.Made)} made in {TodayLoot.Dur(z.Active)} of farming this week, {z.Kills:N0} kills. Tick it to compare.",
+                L.F("{0}: {1} made in {2} of farming this week, {3:N0} kills. Tick it to compare.", ZoneName(z.Zone), Fk(z.Made), DurT(z.Active), z.Kills),
                 () => { _zonePicks = Cmp.Toggle(picks, key); _zonePicksTouched = true; _drawnSig.Remove("loot"); FillLoot(); }));
         }
         LootHost.Children.Add(list);
         var picked = picks.Select(p => zones.First(z => string.Equals(z.Zone, p, StringComparison.OrdinalIgnoreCase))).ToList();
-        if (picked.Count < 2) { LootHost.Children.Add(CmpHint(picked.Count == 0 ? "Tick two zones to compare them side by side." : "Tick one more to compare.")); return; }
+        if (picked.Count < 2) { LootHost.Children.Add(CmpHint(L.T(picked.Count == 0 ? "Tick two zones to compare them side by side." : "Tick one more to compare."))); return; }
         // the better hour on the left, as the mock reads
         var (a, b) = picked[0].PerHour >= picked[1].PerHour ? (picked[0], picked[1]) : (picked[1], picked[0]);
-        static string Over(ZoneWeek z) => $"{TodayLoot.Dur(z.Active)} over {z.Days} day{(z.Days == 1 ? "" : "s")}";
+        static string Over(ZoneWeek z) => L.F(z.Days == 1 ? "{0} over {1} day" : "{0} over {1} days", DurT(z.Active), z.Days);
         LootHost.Children.Add(VsCard(ZoneName(a.Zone), Over(a), ZoneName(b.Zone), Over(b), new()
         {
-            ("Kinah an hour", Fk(a.PerHour), Fk(b.PerHour), Win(a.PerHour, b.PerHour)),
-            ("Kills an hour", a.Kills > 0 ? Fk(a.KillsHour) : "–", b.Kills > 0 ? Fk(b.KillsHour) : "–", Win(a.KillsHour, b.KillsHour)),
-            ("Kinah a kill", a.Kills > 0 ? Fk(a.PerKill) : "–", b.Kills > 0 ? Fk(b.PerKill) : "–", 0),
-            ("Best drop", a.BestDrop.Length > 0 ? a.BestDrop : "–", b.BestDrop.Length > 0 ? b.BestDrop : "–", 0),
+            (L.T("Kinah an hour"), Fk(a.PerHour), Fk(b.PerHour), Win(a.PerHour, b.PerHour)),
+            (L.T("Kills an hour"), a.Kills > 0 ? Fk(a.KillsHour) : "–", b.Kills > 0 ? Fk(b.KillsHour) : "–", Win(a.KillsHour, b.KillsHour)),
+            (L.T("Kinah a kill"), a.Kills > 0 ? Fk(a.PerKill) : "–", b.Kills > 0 ? Fk(b.PerKill) : "–", 0),
+            (L.T("Best drop"), a.BestDrop.Length > 0 ? a.BestDrop : "–", b.BestDrop.Length > 0 ? b.BestDrop : "–", 0),
         }, Win(a.PerHour, b.PerHour) < 0));
-        LootHost.Children.Add(Verdict(Cmp.ZoneVerdict(a, b, v => Fk(v))));
+        LootHost.Children.Add(Verdict(ZoneVerdictT(a, b)));
     }
 
     /// <summary>Which side's figure is better: -1 the left, 1 the right, 0 the same or nothing to say.</summary>
+    /// <summary>The verdict under two zones (Session/Compare.cs has the same sentences in English), in the language in use.</summary>
+    static (string Lead, string Bold, string Tail) ZoneVerdictT(ZoneWeek a, ZoneWeek b)
+    {
+        var (hi, lo) = a.PerHour >= b.PerHour ? (a, b) : (b, a);
+        if (hi.PerHour <= 0) return (L.T("Neither made anything yet this week."), "", "");
+        if (hi.PerHour - lo.PerHour < hi.PerHour * Cmp.Close) return (L.F("Close: {0} and {1} made ", hi.Zone, lo.Zone), L.T("about the same an hour"), L.T(" this week."));
+        var why = hi.KillsHour > lo.KillsHour * (1 + Cmp.Close) ? L.T(", mostly from more kills.") : hi.PerKill > lo.PerKill * (1 + Cmp.Close) ? L.T(", from more a kill.") : L.T(" this week.");
+        return (L.F("{0} made ", hi.Zone), L.F("{0} more an hour", Fk(hi.PerHour - lo.PerHour)), why);
+    }
+    /// <summary>The verdict under two places, in the language in use.</summary>
+    static (string Lead, string Bold, string Tail) PlaceVerdictT(PlaceWeek a, PlaceWeek b)
+    {
+        var (hi, lo) = a.PerRun >= b.PerRun ? (a, b) : (b, a);
+        if (hi.PerRun <= 0) return (L.T("Neither paid anything yet this week."), "", "");
+        bool closeRun = hi.PerRun - lo.PerRun < hi.PerRun * Cmp.Close;
+        if (closeRun) return (L.F("Close: {0} and {1} pay ", hi.Place, lo.Place), L.T("about the same a run"), lo.PerHour > hi.PerHour * (1 + Cmp.Close) ? L.F(", and {0} is quicker, so it makes more an hour.", lo.Place) : L.T("."));
+        string rest;
+        if (lo.PerHour <= 0 || hi.PerHour <= 0 || hi.MinutesARun <= lo.MinutesARun) rest = L.T(".");
+        else if (lo.PerHour > hi.PerHour * (1 + Cmp.Close)) rest = L.F(", but {0} is quicker, so it makes more an hour.", lo.Place);
+        else if (lo.PerHour >= hi.PerHour * (1 - Cmp.Close)) rest = L.F(", but {0} is quicker, so an hour comes out about even.", lo.Place);
+        else rest = L.T(".");
+        return (L.F("{0} pays ", hi.Place), L.F("{0} more a run", Fk(hi.PerRun - lo.PerRun)), rest);
+    }
+    /// <summary>"2nd" in English; the plain number in Korean and Chinese.</summary>
+    static string NthT(int n) => L.Code == "en" ? Cmp.Nth(n) : n.ToString("N0");
     static int Win(double a, double b) => a <= 0 && b <= 0 ? 0 : Math.Abs(a - b) < Math.Max(a, b) * 0.005 ? 0 : a > b ? -1 : 1;
 
     /* ---------------- A: Places ---------------- */
@@ -184,7 +209,7 @@ public partial class MainWindow
         box.Children.Add(CmpSwitch(true, true));
         if (places.Count == 0)
         {
-            var e = PT("A place shows here once one of its runs this week is counted.", "Faint", 12.5); e.TextWrapping = TextWrapping.Wrap; e.TextTrimming = TextTrimming.None;
+            var e = PT(L.T("A place shows here once one of its runs this week is counted."), "Faint", 12.5); e.TextWrapping = TextWrapping.Wrap; e.TextTrimming = TextTrimming.None;
             box.Children.Add(e); TodayHost.Children.Add(box); return;
         }
         double max = Math.Max(1, places.Max(p => p.PerRun));
@@ -193,25 +218,25 @@ public partial class MainWindow
         {
             var key = p.Place;
             string mark = string.Equals(key, here, StringComparison.OrdinalIgnoreCase) ? "here now" : here == null && string.Equals(key, last, StringComparison.OrdinalIgnoreCase) ? "last run" : "";
-            list.Children.Add(CmpRow(key, key, mark, p.PerRun / max, Fk(p.PerRun), $"{p.Runs:N0} run{(p.Runs == 1 ? "" : "s")}", picks.Contains(key, StringComparer.OrdinalIgnoreCase), true,
-                $"{key}: {p.Runs:N0} run{(p.Runs == 1 ? "" : "s")} this week, {Fk(p.Value)} made. Tick it to compare.",
+            list.Children.Add(CmpRow(key, key, mark, p.PerRun / max, Fk(p.PerRun), RunsN(p.Runs), picks.Contains(key, StringComparer.OrdinalIgnoreCase), true,
+                L.F(p.Runs == 1 ? "{0}: {1:N0} run this week, {2} made. Tick it to compare." : "{0}: {1:N0} runs this week, {2} made. Tick it to compare.", key, p.Runs, Fk(p.Value)),
                 () => { _placePicks = Cmp.Toggle(picks, key); _placePicksTouched = true; _drawnSig.Remove("today"); FillToday(); }));
         }
         box.Children.Add(list);
         var picked = picks.Select(k => places.First(p => string.Equals(p.Place, k, StringComparison.OrdinalIgnoreCase))).ToList();
-        if (picked.Count < 2) box.Children.Add(CmpHint(picked.Count == 0 ? "Tick two places to compare them side by side." : "Tick one more to compare."));
+        if (picked.Count < 2) box.Children.Add(CmpHint(L.T(picked.Count == 0 ? "Tick two places to compare them side by side." : "Tick one more to compare.")));
         else
         {
             var (a, b) = picked[0].PerRun >= picked[1].PerRun ? (picked[0], picked[1]) : (picked[1], picked[0]);
-            static string Sub(PlaceWeek p) => $"{p.Counted:N0} run{(p.Counted == 1 ? "" : "s")}" + (p.MinutesARun >= 1 ? $" · {p.MinutesARun:0} min a run" : "");
+            static string Sub(PlaceWeek p) => p.MinutesARun >= 1 ? L.F("{0} · {1:0} min a run", RunsN(p.Counted), p.MinutesARun) : RunsN(p.Counted);
             box.Children.Add(VsCard(a.Place, Sub(a), b.Place, Sub(b), new()
             {
-                ("Kinah a run", Fk(a.PerRun), Fk(b.PerRun), Win(a.PerRun, b.PerRun)),
-                ("Kinah an hour", a.PerHour > 0 ? Fk(a.PerHour) : "–", b.PerHour > 0 ? Fk(b.PerHour) : "–", Win(a.PerHour, b.PerHour)),
-                ("Best run", Fk(a.BestRun), Fk(b.BestRun), 0),
-                ("Best drop", a.BestDrop.Length > 0 ? a.BestDrop : "–", b.BestDrop.Length > 0 ? b.BestDrop : "–", 0),
+                (L.T("Kinah a run"), Fk(a.PerRun), Fk(b.PerRun), Win(a.PerRun, b.PerRun)),
+                (L.T("Kinah an hour"), a.PerHour > 0 ? Fk(a.PerHour) : "–", b.PerHour > 0 ? Fk(b.PerHour) : "–", Win(a.PerHour, b.PerHour)),
+                (L.T("Best run"), Fk(a.BestRun), Fk(b.BestRun), 0),
+                (L.T("Best drop"), a.BestDrop.Length > 0 ? a.BestDrop : "–", b.BestDrop.Length > 0 ? b.BestDrop : "–", 0),
             }, Win(a.PerRun, b.PerRun) < 0));
-            box.Children.Add(Verdict(Cmp.PlaceVerdict(a, b, v => Fk(v))));
+            box.Children.Add(Verdict(PlaceVerdictT(a, b)));
         }
         TodayHost.Children.Add(box);
     }
@@ -246,7 +271,7 @@ public partial class MainWindow
         g.Children.Add(tick);
         var t = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, CmpGap, 0) };
         t.Inlines.Add(PR(name, mark == "here now" ? "Gold" : "Ink"));
-        if (mark.Length > 0) { var m = PR("  " + mark, "Faint"); m.FontSize = 12; t.Inlines.Add(m); }
+        if (mark.Length > 0) { var m = PR("  " + L.T(mark), "Faint"); m.FontSize = 12; t.Inlines.Add(m); }
         Grid.SetColumn(t, 1); g.Children.Add(t);
         // the bar: a slot-dark track, filled gold (blue for runs) as far as this row's figure goes against the best
         var track = new Border { Height = 8, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
@@ -316,7 +341,7 @@ public partial class MainWindow
             return box;
         }
         g.Children.Add(Side(aName, aSub, true, aWins));
-        var mid = PT("vs", "Faint", 12); mid.Margin = new Thickness(10, 0, 10, 0); mid.VerticalAlignment = VerticalAlignment.Center;
+        var mid = PT(L.T("vs"), "Faint", 12); mid.Margin = new Thickness(10, 0, 10, 0); mid.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(mid, 1); g.Children.Add(mid);
         var bs = Side(bName, bSub, false, false); Grid.SetColumn(bs, 2); g.Children.Add(bs);
         return g;
@@ -353,20 +378,20 @@ public partial class MainWindow
         if (u == null) { UsualBox.Visibility = Visibility.Collapsed; return false; }
         UsualLine.Inlines.Clear();
         void Fig(string text) { var r = PR(text, "Ink"); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); UsualLine.Inlines.Add(r); }
-        UsualLine.Inlines.Add(PR("Your usual here ", "Muted")); Fig(Fk(u.Usual));
+        UsualLine.Inlines.Add(PR(L.T("Your usual here "), "Muted")); Fig(Fk(u.Usual));
         var vs = _rateWarming ? null : Cmp.Versus(u.Usual, headline, staySeconds, v => Fk(v));
         if (vs is { } x)
         {
             UsualLine.Inlines.Add(new LineBreak());
-            UsualLine.Inlines.Add(PR(x.Text, x.Sign > 0 ? "Good" : x.Sign < 0 ? "Coral" : "Muted"));
+            UsualLine.Inlines.Add(PR(x.Sign == 0 ? L.T("about your usual") : L.F(x.Sign > 0 ? "{0} more than usual" : "{0} less than usual", Fk(Math.Abs(x.Diff))), x.Sign > 0 ? "Good" : x.Sign < 0 ? "Coral" : "Muted"));
         }
         // the higher of your best day there and the card's own "best here" (Session/BestRuns.cs, your best hour), so the
         // figure is the same one the card shows with Compare off
         long? shownBest = u.Best is long bd ? Math.Max(bd, bestHour ?? 0) : bestHour;
-        if (shownBest is long best) { UsualLine.Inlines.Add(new LineBreak()); UsualLine.Inlines.Add(PR("Your best here ", "Muted")); Fig(Fk(best)); }
-        UsualBox.ToolTip = $"Made an hour in {ZoneName(zone!)} on this PC: your usual is over {TodayLoot.Dur(u.EarlierActive)} on earlier days"
-            + (vs != null ? $", set against the hour above ({Fk(headline)}, this stay)" : "") + (shownBest != null ? "; your best is your best hour there." : ".")
-            + " Kinah plus loot " + PriceBook.Cut + ".";
+        if (shownBest is long best) { UsualLine.Inlines.Add(new LineBreak()); UsualLine.Inlines.Add(PR(L.T("Your best here "), "Muted")); Fig(Fk(best)); }
+        UsualBox.ToolTip = L.F("Made an hour in {0} on this PC: your usual is over {1} on earlier days", ZoneName(zone!), DurT(u.EarlierActive))
+            + (vs != null ? L.F(", set against the hour above ({0}, this stay)", Fk(headline)) : "") + (shownBest != null ? L.T("; your best is your best hour there.") : L.T("."))
+            + " " + L.F("Kinah plus loot {0}.", CutT);
         UsualBox.Visibility = Visibility.Visible;
         return true;
     }
@@ -389,9 +414,9 @@ public partial class MainWindow
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var t = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var k = PR("LAST RUN", "Muted", FontWeights.SemiBold); k.FontSize = 12; t.Inlines.Add(k);
+        var k = PR(L.T("LAST RUN"), "Muted", FontWeights.SemiBold); k.FontSize = 12; t.Inlines.Add(k);
         var when = (last.LastLoot ?? last.Start).ToLocalTime();
-        var w = PR($"   {(when.Date == DateTime.Today ? when.ToString("HH:mm", CultureInfo.InvariantCulture) : when.ToString("MMM d", CultureInfo.InvariantCulture))} · {TodayLoot.Dur(last.Seconds)}", "Faint"); w.FontSize = 12; t.Inlines.Add(w);
+        var w = PR($"   {(when.Date == DateTime.Today ? when.ToString("HH:mm", CultureInfo.InvariantCulture) : DayShort(when))} · {DurT(last.Seconds)}", "Faint"); w.FontSize = 12; t.Inlines.Add(w);
         head.Children.Add(t);
         var big = PT(Fk(value), "Gold", 26, FontWeights.Light, "DisplayFont"); big.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(big, 1); head.Children.Add(big);
@@ -409,19 +434,19 @@ public partial class MainWindow
         }
         long diff = v.Diff;
         bool same = Math.Abs(diff) < Math.Max(1_000, v.Average * 0.03);
-        Cell(0, "Your average there", Fk(v.Average), "Ink");
-        Cell(1, "This run", same ? "about the same" : $"{Fk(Math.Abs(diff))} {(diff > 0 ? "more" : "less")}", same ? "Ink" : diff > 0 ? "Good" : "Coral");
-        Cell(2, "Your best there", Fk(v.Best), "Ink");
+        Cell(0, L.T("Your average there"), Fk(v.Average), "Ink");
+        Cell(1, L.T("This run"), same ? L.T("about the same") : string.Format(System.Globalization.CultureInfo.CurrentCulture, diff > 0 ? L.T("{0} more", "amount") : L.T("{0} less"), Fk(Math.Abs(diff))), same ? "Ink" : diff > 0 ? "Good" : "Coral");
+        Cell(2, L.T("Your best there"), Fk(v.Best), "Ink");
         var rule = new Border { Child = row, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 12, 0, 0) };
         rule.SetResourceReference(Border.BorderBrushProperty, "Line");
         sp.Children.Add(rule);
         var line = new TextBlock { FontSize = 13, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap, Tag = "cmp-rank" };
-        line.Inlines.Add(PR("Your ", "Muted"));
-        line.Inlines.Add(PR(v.Rank == 1 ? "best run" : Cmp.Nth(v.Rank) + " best", "Gold", FontWeights.Normal));
-        line.Inlines.Add(PR(v.Rank == 1 ? " here yet." : " run here.", "Muted"));
+        line.Inlines.Add(PR(L.T("Your "), "Muted"));
+        line.Inlines.Add(PR(v.Rank == 1 ? L.T("best run") : L.F("{0} best", NthT(v.Rank)), "Gold", FontWeights.Normal));
+        line.Inlines.Add(PR(L.T(v.Rank == 1 ? " here yet." : " run here."), "Muted"));
         sp.Children.Add(line);
         var card = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(20, 16, 20, 0),
-            ToolTip = "This run against your earlier runs on this card (flagged ones left out): Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ", as the figures above count them." };
+            ToolTip = L.F("This run against your earlier runs on this card (flagged ones left out): Kinah plus materials at the lowest Market price, {0}, as the figures above count them.", CutT) };
         card.SetResourceReference(Border.BackgroundProperty, "GoldTint");
         card.SetResourceReference(Border.BorderBrushProperty, "GoldLine");
         ToolTipService.SetInitialShowDelay(card, 500);
@@ -446,7 +471,7 @@ public partial class MainWindow
         _lootWeek = true; _lootZones = true;
         _drawnSig.Remove("loot"); FillLoot();
         SummaryCard.BringIntoView();
-        if (!Has(zone)) Say($"{zone} isn't in Compare yet: it lists the zones you farmed 10 minutes or more this week.", "Muted");
+        if (!Has(zone)) Say(L.F("{0} isn't in Compare yet: it lists the zones you farmed 10 minutes or more this week.", zone), "Muted");
     }
 
     /// <summary>For options-test: Where to farm now's rows by zone, the one marked as here, whether each shows a hand, and the rows' "your best" lines.</summary>
