@@ -63,7 +63,15 @@ sealed partial class HudFighter
         readonly TacSketch _art;
         readonly TextBlock _rank = Tt("", 12, PhosDim, Face, FontWeights.Bold), _name = Tt("", 13, Phos, Face, FontWeights.Bold),
             _dps = Tt("", 14.5, Pale, Face, FontWeights.Bold), _pct = Tt("", 11, PhosDim, Face, FontWeights.SemiBold), _dmg = Tt("", 12.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 11, PhosDim, Face, FontWeights.SemiBold);
-        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16, 2, 0, 0) };
+        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(15, 2, 0, 0) };
+        /// <summary>
+        /// Combat Power after the callsign: a small dim "CP" tight on the figure, a step under the name's weight. Always this
+        /// compact form (the mono face is wide: every row of the list says it the same way, and the callsign keeps its room).
+        /// </summary>
+        readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 1, 0, 0) };
+        readonly TextBlock _cpFig = Tt("", 10.5, Frozen(Tac.A(PaleC, .74)), Face, FontWeights.SemiBold);
+        readonly List<FrameworkElement> _keep = new();
+        readonly List<(FrameworkElement, FrameworkElement?)> _give = new();
         MeterMember? _m;
         double _bar;
         bool _expanded;
@@ -72,7 +80,8 @@ sealed partial class HudFighter
 
         public TargetRow()
         {
-            foreach (var w in new[] { 34.0, double.NaN, 62, 50, 0, 0 })
+            // the rank, the callsign's line, the DPS, the share (as narrow as their widest figures: the callsign gets the room)
+            foreach (var w in new[] { 30.0, double.NaN, 54, 45, 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
@@ -82,13 +91,16 @@ sealed partial class HudFighter
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
             Put(_nameLine, 1);
+            Grid.SetColumnSpan(_nameLine, 2);   // the name may run on into the DPS's column, as far as its figure leaves free (Fit)
             foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
             {
                 t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Top;
-                t.Margin = new Thickness(0, t == _dps ? 1 : 4, 6, 0);
+                t.Margin = new Thickness(0, t == _dps ? 1 : 4, t == _pct ? 4 : 6, 0);
                 Put(t, col);
             }
             _dps.Tag = "row-dps";
+            var cpWord = Tt(L.T("CP"), 7.5, PhosDim, Face, FontWeights.Bold); cpWord.Margin = new Thickness(0, 1, 2, 0);
+            _cp.Children.Add(cpWord); _cp.Children.Add(_cpFig);
             _root.SizeChanged += (_, _) => Fit();
         }
 
@@ -109,16 +121,28 @@ sealed partial class HudFighter
             _name.Text = m.Name;
             _name.Foreground = Frozen(m.NameColor);
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
-            if (m.You) _nameLine.Children.Add(Mark(L.T("YOU"), Amber, Dark, solid: true));
-            if (m.Deaths > 0) _nameLine.Children.Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Red, Red, solid: false));
-            if (m.Heal.Length > 0)
+            _keep.Clear(); _give.Clear();
+            FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
+            // Combat Power beside the callsign once there's damage (before it, the figure itself is the CP). Short of room, in
+            // turn: TOP DPS goes to its star, TOP HEALS folds into the heal figure (framed in mint), the YOU tag goes (the amber
+            // frame says it); only then is the name cut
+            FrameworkElement? you = null;
+            if (m.Cp.Length > 0) { _cpFig.Text = m.Cp; _keep.Add(Add(_cp)); }
+            if (m.You) you = Add(Mark(L.T("YOU"), Amber, Dark, solid: true));
+            if (m.Deaths > 0) _keep.Add(Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Red, Red, solid: false)));
+            var mint = Frozen(MintC);
+            if (m.Heal.Length > 0 && m.TopHeals)
             {
-                var h = Tt("+" + m.Heal, 11, Frozen(Color.FromRgb(0x5E, 0xF0, 0xA0)), Face, FontWeights.Bold);
-                h.Tag = "heal-figures"; h.Margin = new Thickness(6, 1, 0, 0);
-                _nameLine.Children.Add(h);
+                var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { HealFig(m.Heal), Plate(L.T("TOP HEALS"), mint, "top-heals") } };
+                var framed = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tt("✚", 9, mint, Face, FontWeights.Bold), HealFig(m.Heal, 3, plus: false) } };
+                var shrt = new Border { BorderBrush = mint, BorderThickness = new Thickness(1), Background = Frozen(Tac.A(InkC0, .6)), Padding = new Thickness(2, 0, 3, 0), Margin = new Thickness(5, 1, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center, Child = framed, Tag = "top-heals", ToolTip = L.T("Top heals") };
+                _give.Add((Add(full), Add(shrt)));
             }
-            if (m.TopDps) { var p = Mark(L.T("TOP DPS"), Amber, Amber, solid: false); p.Tag = "top-dps"; _nameLine.Children.Add(p); }
-            if (m.TopHeals) { var p = Mark(L.T("TOP HEALS"), Frozen(Color.FromRgb(0x5E, 0xF0, 0xA0)), Frozen(Color.FromRgb(0x5E, 0xF0, 0xA0)), solid: false); p.Tag = "top-heals"; _nameLine.Children.Add(p); }
+            else if (m.Heal.Length > 0) _keep.Add(Add(HealFig(m.Heal)));
+            else if (m.TopHeals) _give.Add((Add(Plate(L.T("TOP HEALS"), mint, "top-heals")), Add(Plate("✚", mint, "top-heals", L.T("Top heals")))));
+            if (m.TopDps) _give.Insert(0, (Add(Plate(L.T("TOP DPS"), Amber, "top-dps")), Add(Plate("★", Amber, "top-dps", L.T("Top DPS")))));
+            if (you != null) _give.Add((you, null));
             _dps.Text = m.Figure;
             _dps.Foreground = m.You ? Amber : Pale;
             _pct.Text = m.ShareText;
@@ -132,11 +156,22 @@ sealed partial class HudFighter
         void Fit()
         {
             double room = _root.ColumnDefinitions[1].ActualWidth;
-            if (room <= 0) { _name.ClearValue(FrameworkElement.MaxWidthProperty); return; }
-            double marks = 0;
-            for (int i = 1; i < _nameLine.Children.Count; i++) { var el = (FrameworkElement)_nameLine.Children[i]; el.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); marks += el.DesiredSize.Width; }
-            _name.MaxWidth = Math.Max(28, room - _nameLine.Margin.Left - marks - 6);
+            if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
+            Tac.FitName(_name, room + Tac.FreeLeft(_dps, _root.ColumnDefinitions[2].ActualWidth) - _nameLine.Margin.Left - 6, _keep, _give);
         }
+
+        static readonly Color MintC = Color.FromRgb(0x5E, 0xF0, 0xA0);
+
+        /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
+        static TextBlock HealFig(string heal, double left = 5, bool plus = true)
+        {
+            var h = Tt((plus ? "+" : "") + heal, 10.5, Frozen(MintC), Face, FontWeights.Bold);
+            h.Tag = "heal-figures"; h.Margin = new Thickness(left, 1, 0, 0);
+            return h;
+        }
+
+        /// <summary>A kill's plate (TOP DPS, TOP HEALS) as an outlined tag, or its glyph (★, ✚) when the line is short of room.</summary>
+        static Border Plate(string s, Brush tone, string tag, string? tip = null) { var b = Mark(s, tone, tone, solid: false); b.Tag = tag; b.ToolTip = tip; return b; }
 
         /// <summary>A tag in the name's line: solid (YOU) or an outline (a death, a kill's plates).</summary>
         static Border Mark(string s, Brush line, Brush fg, bool solid) => new()
@@ -175,7 +210,7 @@ sealed partial class HudFighter
             // the class's diamond before the callsign
             double dy = 3 + 8;
             var dia = new StreamGeometry();
-            using (var x = dia.Open()) { x.BeginFigure(new Point(x0 + 6, dy - 5), true, true); x.LineTo(new Point(x0 + 11, dy), true, false); x.LineTo(new Point(x0 + 6, dy + 5), true, false); x.LineTo(new Point(x0 + 1, dy), true, false); }
+            using (var x = dia.Open()) { x.BeginFigure(new Point(x0 + 7, dy - 4.5), true, true); x.LineTo(new Point(x0 + 11.5, dy), true, false); x.LineTo(new Point(x0 + 7, dy + 4.5), true, false); x.LineTo(new Point(x0 + 2.5, dy), true, false); }
             dia.Freeze();
             dc.DrawGeometry(Frozen(tone), Tac.P(Frozen(Tac.A(Colors.White, .4)), .8), dia);
             // the vector bar: a baseline with a tick each tenth, the fill a fine line in the class's colour, a bright tick at its end

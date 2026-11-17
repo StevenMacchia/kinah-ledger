@@ -505,9 +505,9 @@ sealed partial class HudFighter : TacticalLook
         _lineAnchor.Children.Add(call);
         Motion.Play(call, 1800, t =>
         {
-            // the lock: in from 16 px out over the first third, a white flash as it seats
+            // the lock: in from 11 px out over the first third (inside the window's 14 px room: never cut), a white flash as it seats
             double lk = Seg(t, 0, .32); lk = lk * lk * (3 - 2 * lk);
-            _lineSpread = 18 * (1 - lk);
+            _lineSpread = 11 * (1 - lk);
             _lineFlash = t < .3 ? .6 * lk : 1 - Seg(t, .3, .5);
             _lineFlash = Math.Clamp(_lineFlash, 0, 1);
             _lineBrackets.InvalidateVisual();
@@ -528,7 +528,7 @@ sealed partial class HudFighter : TacticalLook
         var ring = new TacSketch((dc, s) =>
         {
             if (ping <= 0 || ping >= 1) return;
-            double grow = 12 * Out(ping);
+            double grow = 10 * Out(ping);   // at its widest still inside the window's 14 px room (its outline and halo in)
             var r = new Rect(-grow, -grow, s.Width + 2 * grow, s.Height + 2 * grow);
             dc.DrawGeometry(null, HaloPen2, Tac.Cut(r, 8, all: true));
             dc.DrawGeometry(null, Tac.P(Frozen(Tac.A(AmberC, Math.Max(.35, 1 - ping))), 2.2), Tac.Cut(r, 8, all: true));
@@ -591,7 +591,8 @@ sealed partial class HudFighter : TacticalLook
         Motion.Play(_fightFx, 1500, t =>
         {
             double k = Seg(t, 0, .3); k = k * k * (3 - 2 * k);
-            _fightSpread = 22 * (1 - k) - (t > .3 && t < .38 ? 3 * Math.Sin((t - .3) / .08 * Math.PI) : 0);
+            // from 11 px out (the window's room round the box is 14: the slam is never cut at its edge)
+            _fightSpread = 11 * (1 - k) -(t > .3 && t < .38 ? 3 * Math.Sin((t - .3) / .08 * Math.PI) : 0);
             _fightFlash = t < .3 ? 0 : 1 - Seg(t, .3, .5);
             _fightBrackets.InvalidateVisual();
             banner.Step(Seg(t, .26, 1));

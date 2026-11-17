@@ -27,6 +27,10 @@ sealed partial class HudScorebug
         readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly Border _iconHost = new() { Width = 22, Height = 22, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
         string _cls = "\0";
+        /// <summary>The CP's short form when the plate is short of room: the word smaller, tight after the figure (never a bare figure).</summary>
+        readonly TextBlock _cpShort = T("", 11, Frozen(Color.FromRgb(0x8A, 0x91, 0xA3)), FontWeights.SemiBold);
+        readonly List<FrameworkElement> _keep = new();
+        readonly List<(FrameworkElement, FrameworkElement?)> _give = new();
         MeterMember? _m;
         double _bar;
         bool _expanded;
@@ -58,7 +62,9 @@ sealed partial class HudScorebug
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
             Grid.SetColumn(_nameLine, 1); plate.Children.Add(_nameLine);
-            _cp.Margin = new Thickness(6, 2, 0, 0); Grid.SetColumn(_cp, 2); plate.Children.Add(_cp);
+            _cp.Margin = new Thickness(5, 2, 0, 0); _cpShort.Margin = new Thickness(5, 2, 0, 0);
+            var cpHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _cp, _cpShort } };
+            Grid.SetColumn(cpHost, 2); plate.Children.Add(cpHost);
             Put(plate, 2);
             _dps.Tag = "row-dps"; _dps.HorizontalAlignment = HorizontalAlignment.Right; _dps.Margin = new Thickness(0, 0, 9, 0); Put(_dps, 3);
             _pct.HorizontalAlignment = HorizontalAlignment.Right; _pct.Margin = new Thickness(0, 1, 9, 0); Put(_pct, 4);
@@ -74,12 +80,18 @@ sealed partial class HudScorebug
         void Fit()
         {
             double room = _root.ColumnDefinitions[2].ActualWidth;
-            if (room <= 0) { _name.ClearValue(FrameworkElement.MaxWidthProperty); return; }
-            double marks = 0;
-            for (int i = 1; i < _nameLine.Children.Count; i++) { var el = (FrameworkElement)_nameLine.Children[i]; el.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); marks += el.DesiredSize.Width; }
-            _cp.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double cp = _cp.Text.Length > 0 ? _cp.DesiredSize.Width + 6 : 0;
-            _name.MaxWidth = Math.Max(28, room - _plate.Margin.Left - _plate.Margin.Right - 29 - marks - cp + Sl - 8);
+            if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
+            // the plate's own width as laid out (its emblem off, a hair before its end), else the column's less the plate's margins
+            double plate = _plate.ActualWidth > 0 ? _plate.ActualWidth : room - _plate.Margin.Left - _plate.Margin.Right + Sl;
+            Tac.FitName(_name, plate - 2, _keep, _give);
+        }
+
+        /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
+        static TextBlock HealFig(string heal, Color c, double left = 7, double top = 1, bool plus = true)
+        {
+            var h = T((plus ? "+" : "") + heal, 12, Frozen(c), FontWeights.SemiBold);
+            h.Tag = "heal-figures"; h.Margin = new Thickness(left, top, 0, 0);
+            return h;
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _text.Children.Add(el); }
@@ -101,19 +113,38 @@ sealed partial class HudScorebug
             _name.Foreground = m.You ? InkB : Frozen(m.NameColor);
             // the marks after the name: YOU, deaths, the heal figure, the end of a kill's plates
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
-            if (m.You) _nameLine.Children.Add(Mark(L.T("YOU"), RedC, Colors.White));
-            if (m.Deaths > 0) _nameLine.Children.Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Color.FromRgb(0x3A, 0x0C, 0x12), Color.FromRgb(0xFF, 0x6B, 0x78)));
-            if (m.Heal.Length > 0)
+            _keep.Clear(); _give.Clear();
+            FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
+            var you = m.You ? Add(Mark(L.T("YOU"), RedC, Colors.White)) : null;
+            if (m.Deaths > 0) _keep.Add(Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Color.FromRgb(0x3A, 0x0C, 0x12), Color.FromRgb(0xFF, 0x6B, 0x78))));
+            // short of room, in turn: TOP DPS goes to its star, TOP HEALS folds into the heal figure (a green plate), the YOU tag
+            // goes (the light plate and the red DPS cell say it), the CP's word shrinks; only then is the name cut
+            var healC = m.You ? Color.FromRgb(0x0E, 0x8A, 0x4C) : GreenC;
+            if (m.Heal.Length > 0 && m.TopHeals)
             {
-                var h = T("+" + m.Heal, 12, Frozen(m.You ? Color.FromRgb(0x0E, 0x8A, 0x4C) : GreenC), FontWeights.SemiBold);
-                h.Tag = "heal-figures"; h.Margin = new Thickness(7, 1, 0, 0);
-                _nameLine.Children.Add(h);
+                var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { HealFig(m.Heal, healC), Plate(true) } };
+                var plateFig = new StackPanel { Orientation = Orientation.Horizontal, Children = { T("✚", 10.5, InkB), HealFig(m.Heal, InkC0, 3, 0, plus: false) } };
+                var b = new Block(GreenC, plateFig, 16, new Thickness(5, 0, 5, 0));
+                b.Root.Tag = "top-heals"; b.Root.ToolTip = L.T("Top heals"); b.Root.Margin = new Thickness(6, 0, 0, 0); b.Root.VerticalAlignment = VerticalAlignment.Center;
+                _give.Add((Add(full), Add(b.Root)));
             }
-            if (m.TopDps) _nameLine.Children.Add(Plate(false));
-            if (m.TopHeals) _nameLine.Children.Add(Plate(true));
-            // Combat Power at the plate's end while there's room (a kill's plates or a death mark take it)
-            _cp.Text = m.Cp.Length > 0 && !c.Expanded && !m.TopDps && !m.TopHeals && m.Deaths == 0 ? m.Cp + " " + L.T("CP") : "";
-            _cp.Foreground = Frozen(m.You ? Color.FromRgb(0x5A, 0x60, 0x70) : Color.FromRgb(0x8A, 0x91, 0xA3));
+            else if (m.Heal.Length > 0) _keep.Add(Add(HealFig(m.Heal, healC)));
+            else if (m.TopHeals) _give.Add((Add(Plate(true)), Add(Plate(true, glyph: true))));
+            if (m.TopDps) _give.Insert(0, (Add(Plate(false)), Add(Plate(false, glyph: true))));
+            if (you != null) _give.Add((you, null));
+            // last before the name is cut: the class's emblem (the team stripe and the name's colour still say the class)
+            _give.Add((_iconHost, null));
+            // Combat Power at the plate's end, always (Steven, 2026-11-16: "dont forget the combat power next to ppls names");
+            // before any damage the figure itself is the CP
+            _cp.Text = m.Cp.Length > 0 ? m.Cp + " " + L.T("CP") : "";
+            _cpShort.Inlines.Clear();
+            if (m.Cp.Length > 0) { _cpShort.Inlines.Add(new System.Windows.Documents.Run(m.Cp)); _cpShort.Inlines.Add(new System.Windows.Documents.Run(" " + L.T("CP")) { FontSize = 8 }); }
+            // on your light plate a darker ink, so the CP still reads there
+            _cp.Foreground = _cpShort.Foreground = Frozen(m.You ? Color.FromRgb(0x4A, 0x4F, 0x58) : Color.FromRgb(0x8A, 0x91, 0xA3));
+            // "CP" a fixed slot after the figure, the same on every row: the figures end on one edge
+            _cpShort.Visibility = Visibility.Collapsed;
+            if (m.Cp.Length > 0) { _cp.Visibility = Visibility.Visible; _keep.Add(_cp); }
+            else _cp.Visibility = Visibility.Collapsed;
             _dps.Text = m.Figure;
             _pct.Text = m.ShareText;
             _pct.Foreground = m.You ? Frozen(Color.FromRgb(0xFF, 0xD6, 0xDB)) : Grey;
@@ -133,10 +164,11 @@ sealed partial class HudScorebug
         }
 
         /// <summary>The end of a boss kill's plate (TOP DPS gold, TOP HEALS green), slanted as the board's.</summary>
-        static FrameworkElement Plate(bool heals)
+        static FrameworkElement Plate(bool heals, bool glyph = false)
         {
-            var b = new Block(heals ? GreenC : YellowC, Tt(L.T(heals ? "TOP HEALS" : "TOP DPS"), 9.5, InkB, Face, FontWeights.Bold, Tight), 16, new Thickness(6, 0, 6, 0));
+            var b = new Block(heals ? GreenC : YellowC, Tt(glyph ? (heals ? "✚" : "★") : L.T(heals ? "TOP HEALS" : "TOP DPS"), glyph ? 10.5 : 9.5, InkB, Face, FontWeights.Bold, FontStretches.Normal), 16, new Thickness(6, 0, 6, 0));
             b.Root.Tag = heals ? "top-heals" : "top-dps";
+            if (glyph) b.Root.ToolTip = L.T(heals ? "Top heals" : "Top DPS");
             b.Root.Margin = new Thickness(6, 0, 0, 0); b.Root.VerticalAlignment = VerticalAlignment.Center;
             return b.Root;
         }
