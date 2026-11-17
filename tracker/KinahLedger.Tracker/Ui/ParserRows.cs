@@ -81,6 +81,62 @@ public sealed partial class ParserRows : Grid
         _host.Children.Add(_gap);
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(this, HudKit.Text);
+        // the expanded columns that fit are picked by the rows' width: laid out at another width, the rows are built again for it
+        SizeChanged += (_, ev) => { if (ev.WidthChanged && _shownE is { } se && ColsKey(ExpandedPref, se, _shownAt) != _colsKey) Show(se, _shownAt); };
+    }
+
+    // ---- the columns (Steven, 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!"; then "figure out
+    // better looks that doesn't crowd everything and prioritizes the bar"): each figure's column is as wide as its widest real
+    // form in its own font, and the expanded columns come in only while the name keeps its room; the rest is on the hover card
+
+    /// <summary>The expanded columns built now (damage, crit, back, the DPS over time), as a key: rows built for another set are built again.</summary>
+    string _colsKey = "";
+    /// <summary>The least room the name's line keeps beside the expanded columns: a ten-letter name, its Combat Power and a death mark.</summary>
+    public const double NameRoom = 150;
+    const double ChipCol = 28, IconCol = 24, RateCol = 44, SparkCol = 66, ColsMargin = 11, NameLineMargin = 6;
+
+    static readonly Dictionary<string, double> Widths = new();
+    /// <summary>The widest of <paramref name="forms"/> in the meter's face at this size and weight, tabular digits (kept per language).</summary>
+    static double Widest(double size, FontWeight w, params string[] forms)
+    {
+        string key = $"{L.Code}|{size}|{w}|{string.Join("|", forms)}";
+        if (Widths.TryGetValue(key, out var had)) return had;
+        double max = 0;
+        foreach (var s in forms)
+        {
+            var t = new TextBlock { Text = s, FontSize = size, FontWeight = w, FontFamily = HudKit.Text };
+            System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+            TextOptions.SetTextFormattingMode(t, TextFormattingMode.Display);
+            t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            max = Math.Max(max, t.DesiredSize.Width);
+        }
+        return Widths[key] = Math.Ceiling(max);
+    }
+    /// <summary>The DPS's column: "888.8K" at 16 bold (the party's Combat Power before a hit, "888,888", may reach into the name's room).</summary>
+    static double DpsCol => Math.Max(60, Widest(16, FontWeights.Bold, "888.8K", "8.88M") + 4);
+    /// <summary>The share's column: "88.8%" (or "CP" before a hit) at 12, and its gap from the DPS.</summary>
+    static double ShareCol => Math.Max(46, Widest(12, FontWeights.SemiBold, "88.8%", L.T("CP")) + 8);
+    /// <summary>The damage's column, expanded: "888.88M" at 11.</summary>
+    static double DamageCol => Math.Max(52, Widest(11, FontWeights.SemiBold, "888.88M") + 8);
+
+    /// <summary>The rows' width now (before they are laid out, the meter's width as set).</summary>
+    double RowsWidth => ActualWidth > 1 ? ActualWidth : HudStackLook.FightWidth - 4;
+
+    /// <summary>The expanded columns that fit beside the name's room, in their order: the damage, crit, back attacks, the DPS over time.</summary>
+    (bool Damage, bool Crit, bool Back, bool Spark) FitCols(bool expanded, bool crit, bool back, bool spark)
+    {
+        if (!expanded) return (false, false, false, false);
+        double room = RowsWidth - ColsMargin - ChipCol - IconCol - DpsCol - ShareCol - NameLineMargin;
+        bool Take(bool want, double w) { if (!want || room - w < NameRoom) return false; room -= w; return true; }
+        bool d = Take(true, DamageCol);
+        return (d, Take(crit, RateCol), Take(back, RateCol), Take(spark, SparkCol));
+    }
+
+    string ColsKey(bool expanded, Encounter e, DateTime now)
+    {
+        var view = expanded ? FightView.Of(e, now, null) : null;
+        var c = FitCols(expanded, view?.HasCrit == true, view?.HasBack == true, view?.HasTimeline == true);
+        return $"{c.Damage}{c.Crit}{c.Back}{c.Spark}";
     }
 
     /// <summary>Takes the rows off the panel they were on (a look that builds its panel again each draw).</summary>
@@ -140,8 +196,13 @@ public sealed partial class ParserRows : Grid
             if (HoverCard(e, om, now) is { } fresh) oc.Content = fresh;
         }
         bool expanded = ExpandedPref;
-        if (e.Id != _fightId || expanded != _expanded)
+        // the view of what the record carries: crit and the timeline columns only when it does, and only those that fit
+        var view = expanded ? FightView.Of(e, now, null) : null;
+        var (dmgCol, crit, back, spark) = FitCols(expanded, view?.HasCrit == true, view?.HasBack == true, view?.HasTimeline == true);
+        string colsKey = $"{dmgCol}{crit}{back}{spark}";
+        if (e.Id != _fightId || expanded != _expanded || colsKey != _colsKey)
         {
+            _colsKey = colsKey;
             foreach (var r in _rows.Values) _host.Children.Remove(r.Root);
             _rows.Clear();
             _pops.Children.Clear(); _popsOn = 0; _popGen++;   // the rows go too, and their pop-ups with them
@@ -158,10 +219,8 @@ public sealed partial class ParserRows : Grid
         var you = all.FirstOrDefault(f => f.You);
         bool pin = you != null && !visible.Contains(you);
         if (pin) visible = all.Take(max - 1).Append(you!).ToList();
-        // the view of what the record carries: crit and the timeline columns only when it does
-        var view = expanded ? FightView.Of(e, now, null) : null;
-        bool crit = view?.HasCrit == true, back = view?.HasBack == true, spark = view?.HasTimeline == true;
         double top = Math.Max(1, all.Select(e.Measure).DefaultIfEmpty(1).Max());   // the figure (boss damage or all targets), else Combat Power
+        double topShare = Math.Max(0.0001, all.Select(e.Share).DefaultIfEmpty(1).Max());   // the bars' measure: the top member's share
         long topDps = e.TopDps(now)?.Id ?? long.MinValue, topHeals = e.TopHealer(now)?.Id ?? long.MinValue;
         foreach (var gone in _rows.Keys.Where(id => !visible.Any(f => f.Id == id)).ToList()) { _host.Children.Remove(_rows[gone].Root); _rows.Remove(gone); }
         bool platesSlid = false;
@@ -172,7 +231,7 @@ public sealed partial class ParserRows : Grid
             bool pinnedRow = pin && f.You;
             double y = i * _rowH + (pinnedRow ? _gap.Height : 0);
             bool fresh = !_rows.TryGetValue(f.Id, out var r);
-            if (fresh) { r = Build(f, expanded, crit, back, spark); _rows[f.Id] = r; _host.Children.Add(r.Root); }
+            if (fresh) { r = Build(f, expanded, dmgCol, crit, back, spark); _rows[f.Id] = r; _host.Children.Add(r.Root); }
             var row = r!;
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
@@ -193,9 +252,10 @@ public sealed partial class ParserRows : Grid
             // Combat Power beside the name once there is damage (before it, the figure's column says it whole)
             string cpText = dmg && f.CombatPower > 0 ? Amounts.Meter(f.CombatPower) : "";
             if (row.Cp.Text != cpText) { row.Cp.Text = cpText; row.Cp.ToolTip = f.CombatPower > 0 ? L.F("Combat Power {0:N0}", f.CombatPower) : null; FitName(row); }
-            // the bar slides to its new length: the member's share of the group's damage, so 33% fills a third (Steven,
-            // 2026-11-15: "the bars shouldn't be full really and should be percentage based"; the top member's was full)
-            double share = dmg ? e.Share(f) : 0;
+            // the bar slides to its new length: the member's share of the group's damage, in proportion to the top member's,
+            // whose bar reaches BarTop of the row (Steven, 2026-11-15: "the bars shouldn't be full really and should be percentage
+            // based"; 2026-11-17: "prioritizes the bar": a party of six at 15-20% each drew bars no longer than the rank chip)
+            double share = dmg ? BarTop * e.Share(f) / topShare : 0;
             Motion.Slide(row.BarFill, $"parser|ovbar|{e.Id}|{f.Id}|{(int)_kind}", share, v => SetBar(row, v));
             // a move of the bar of a couple of points leaves its ghost: what it lost holds and shrinks away, what it gained flashes
             if (double.IsNaN(row.GhostBase) || fresh) row.GhostBase = share;
@@ -304,6 +364,8 @@ public sealed partial class ParserRows : Grid
         return dps / best.Dps;
     }
     public const double HeatFrom = 0.8, HeatAfterSeconds = 8;
+    /// <summary>The top member's bar reaches this much of the row (never full: the others' bars in proportion to it).</summary>
+    public const double BarTop = 0.92;
     /// <summary>A share move this big (of the group's damage) leaves the bar's ghost.</summary>
     public const double GhostStep = 0.02;
     /// <summary>A big hit pops only while it is this fresh (a meter shown again later shows none of the ones it missed).</summary>
@@ -643,12 +705,12 @@ public sealed partial class ParserRows : Grid
     /// <summary>The heal chip sits on the name's line: the name gives way to it (FitName), nothing else to fit.</summary>
     static void FitHeal(RowEl r) { }
 
-    RowEl Build(Fighter f, bool expanded, bool crit, bool back, bool spark)
+    RowEl Build(Fighter f, bool expanded, bool dmgCol, bool crit, bool back, bool spark)
     {
         var c = ClassArt.ColorOf(f.Class);
         bool bare = _kind == Kind.Bare;
-        var widths = new List<double> { 28, 24, -1, 60, 46 };
-        if (expanded) { widths.Add(56); if (crit) widths.Add(44); if (back) widths.Add(44); if (spark) widths.Add(66); }
+        var widths = new List<double> { ChipCol, IconCol, -1, DpsCol, ShareCol };
+        if (expanded) { if (dmgCol) widths.Add(DamageCol); if (crit) widths.Add(RateCol); if (back) widths.Add(RateCol); if (spark) widths.Add(SparkCol); }
         var cols = PK.Cols(widths.ToArray());
         // your row sits in the gold frame (a 1 px edge all round): its inside is that much shorter, so nothing at its foot (the heal
         // line, the heat's line) is cut off and its text is centred as on the other rows
@@ -718,11 +780,13 @@ public sealed partial class ParserRows : Grid
         var odo = new Odometer(16, FontWeights.Bold, (HudKit.Ink as SolidColorBrush)?.Color ?? Colors.White) { Effect = TextHalo(), Visibility = Visibility.Collapsed };
         var dpsHost = new Grid { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { dps, odo }, Effect = Outline() };
         var shareHost = new Grid { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { share }, Effect = Outline() };
-        cols.Children.Add(PK.Col(dpsHost, 3)); cols.Children.Add(PK.Col(shareHost, 4));
+        // the DPS ends at its column's right edge; a figure wider than the column (the party's Combat Power before a hit, in full)
+        // reaches into the name's room, which gives it that much (FitName)
+        cols.Children.Add(PK.Col(dpsHost, 2, 2)); cols.Children.Add(PK.Col(shareHost, 4));
         int k = 5;
-        if (expanded) { cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (back) cols.Children.Add(PK.Col(backT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
+        if (expanded) { if (dmgCol) cols.Children.Add(PK.Col(damage, k++)); if (crit) cols.Children.Add(PK.Col(critT, k++)); if (back) cols.Children.Add(PK.Col(backT, k++)); if (spark) cols.Children.Add(PK.Col(sparkG, k++)); }
         // the bar: a quiet track the row's width, the fill in the class's colour, angled at its end, fading to the right
-        var track = new Border { CornerRadius = new CornerRadius(3), Background = PK.C(c, bare ? 0 : 0.10) };
+        var track = new Border { CornerRadius = new CornerRadius(3), Background = PK.C(c, bare ? 0 : 0.15) };   // the row's whole length reads as the bar's gauge
         var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         // your row's bar quieter: under the gold frame's wash a full-strength bar made the name hard to read
         // 2026-11-16: "really hard to see the damage bars cause transparent": more solid, the fade gentler (names keep their halo)
@@ -791,49 +855,81 @@ public sealed partial class ParserRows : Grid
         var you = r.NameLine.Children.OfType<Border>().FirstOrDefault(b => b.Tag as string == "you");
         if (you != null) you.Visibility = Visibility.Visible;
         r.Cp.Visibility = r.Cp.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (r.Heal.Text.Length > 0) r.HealPill.Visibility = Visibility.Visible;
-        double Others()
-        {
-            double o = r.NameLine.Margin.Left + r.NameLine.Margin.Right;
-            foreach (UIElement c in r.NameLine.Children)
-            {
-                if (ReferenceEquals(c, r.Name) || c.Visibility == Visibility.Collapsed) continue;
-                c.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                o += c.DesiredSize.Width;
-            }
-            return o;
-        }
-        double others = Others();
-        // short of room, Combat Power gives way first (its tooltip and the card still say it)
-        if (r.Cp.Visibility == Visibility.Visible && w - others < NameMin) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
-        // a plate and YOU both: the name first; the YOU chip gives way (the gold frame and chip still say it's you)
-        if (you != null && r.Plates.Visibility == Visibility.Visible)
-        {
-            r.Name.MaxWidth = double.PositiveInfinity;
-            r.Name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            if (r.Name.DesiredSize.Width > w - others) { you.Visibility = Visibility.Collapsed; others = Others(); }
-        }
-        // the heal chip shows whole or not at all, the name keeping NameMin beside it: short of room, YOU gives way first (the
-        // gold frame says it), then the tab's word (a green + stays), then the chip (never a figure without its HEAL tab; the pop-up on the row still says the healing)
+        PlatesWide(r, true);
         if (r.Heal.Text.Length > 0)
         {
             r.HealPill.Visibility = Visibility.Visible;
             if (r.HealFull.Length > 0 && r.Heal.Text != r.HealFull) r.Heal.Text = r.HealFull;
             // the figure's length may have changed: the chip measured afresh (a parent's Measure keeps its last size until the layout pass reaches it)
             r.Heal.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure();
-            others = Others();
-            if (w - others < NameMin && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
-            // then the total: the figure a second alone
-            if (w - others < NameMin && r.HealShort.Length > 0 && r.HealShort != r.Heal.Text)
+        }
+        // a figure wider than the DPS's column (the Combat Power before a hit) takes its overflow from the name's room
+        r.Dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double dpsCol = r.Cols.ColumnDefinitions.Count > 3 && r.Cols.ColumnDefinitions[3].ActualWidth > 0 ? r.Cols.ColumnDefinitions[3].ActualWidth : DpsCol;
+        double over = Math.Max(0, r.Dps.DesiredSize.Width - dpsCol + 4);
+        double Others()
+        {
+            double o = r.NameLine.Margin.Left + r.NameLine.Margin.Right + over;
+            foreach (UIElement c in r.NameLine.Children)
+            {
+                if (ReferenceEquals(c, r.Name) || c.Visibility == Visibility.Collapsed) continue;
+                c.InvalidateMeasure();
+                c.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                o += c.DesiredSize.Width;
+            }
+            return o;
+        }
+        // the name keeps its first ten letters whole (a longer one trims after them); what follows it on the line gives way in
+        // turn while it doesn't fit: YOU (the gold frame and chip say it), the TOP DPS plate to its mark, Combat Power (its
+        // tooltip and the card say it), the heal chip's total, then the chip (the card says the healing)
+        double keep = NameKeep(r);
+        double others = Others();
+        bool Short() => w - others < keep;
+        if (Short() && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
+        if (Short() && r.Plates.Visibility == Visibility.Visible) { PlatesWide(r, false); others = Others(); }
+        if (Short() && r.Cp.Visibility == Visibility.Visible) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
+        if (r.Heal.Text.Length > 0)
+        {
+            if (Short() && r.HealShort.Length > 0 && r.HealShort != r.Heal.Text)
             {
                 r.Heal.Text = r.HealShort;
                 r.Heal.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure();
                 others = Others();
             }
-            // the chip keeps the name to its first letters (the class icon and colour still say who): the healing beats the name
-            if (w - others < NameTight) { r.HealPill.Visibility = Visibility.Collapsed; others = Others(); }
+            if (Short()) { r.HealPill.Visibility = Visibility.Collapsed; others = Others(); }
         }
         r.Name.MaxWidth = Math.Max(24, w - others);
+    }
+
+    /// <summary>The room a name keeps on its line: whole up to ten letters, else its first ten and the "…".</summary>
+    static double NameKeep(RowEl r)
+    {
+        var n = r.Name;
+        if (n.Text.Length <= 10)
+        {
+            n.MaxWidth = double.PositiveInfinity;
+            n.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Ceiling(n.DesiredSize.Width) + 1;
+        }
+        var t = new TextBlock { Text = n.Text[..10] + "…", FontSize = n.FontSize, FontWeight = n.FontWeight, FontFamily = n.FontFamily };
+        TextOptions.SetTextFormattingMode(t, TextFormattingMode.Display);
+        t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Ceiling(t.DesiredSize.Width) + 2;
+    }
+
+    /// <summary>The TOP DPS plate in words, or short of room its mark (a gold ★ on the same plate; its tooltip says it).</summary>
+    static void PlatesWide(RowEl r, bool wide)
+    {
+        foreach (var p in r.Plates.Children.OfType<Border>())
+        {
+            var word = p.Child as TextBlock ?? (p.Child as Panel)?.Children.OfType<TextBlock>().FirstOrDefault();
+            if (word == null) continue;
+            string text = wide ? L.T("TOP DPS") : "\u2605";
+            if (word.Text == text) continue;
+            word.Text = text;
+            word.FontSize = wide ? 8 : 9.5;
+            p.Padding = wide ? new Thickness(4, 0, 4, 0) : new Thickness(3, 0, 3, 0);
+        }
     }
 
     /// <summary>The heal chip's figure, short: 940, 7.8K, 91.8K, 1.24M (the tooltip has it whole).</summary>
