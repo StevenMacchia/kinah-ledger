@@ -246,5 +246,11 @@ public static class LangCheck
     public static readonly List<string> Extra = new()
     {
         "Shugo",
+        // the game's modes and instance kinds, written as the game writes them
+        "Conquest", "Expedition", "Transcendence", "Sanctuary", "Conquest · Expedition",
+        // the demo's characters, fights and buffs (sample data in renders and tests)
+        "Aerinwyn", "Kaelith", "Thornecrest", "Thornwick", "Lyrandel", "Lysandra", "Brannoc", "Ithrandel", "Selunaire", "Vexmora",
+        "Ground Slam", "Tail Sweep", "Horn Charge", "Searing Breath", "Void Fragment", "Invasion",
+        "Group buff A", "Group buff B", "Self buff", "Short burst buff",
     };
 }
