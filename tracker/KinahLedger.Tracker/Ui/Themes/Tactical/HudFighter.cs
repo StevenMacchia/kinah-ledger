@@ -410,6 +410,8 @@ sealed partial class HudFighter : TacticalLook
             right.Children.Add(Halo("T+" + Pad(Clock(e.Duration(now))), 15, e.Live ? Amber : Phos, FontWeights.Bold));
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
+        // a long title gives way to the outcome and the clock: cut with "…", its brackets kept round it (it ran under them)
+        head.SizeChanged += (_, _) => FitTitle(tt, e.Title, head.ColumnDefinitions[0].ActualWidth - ((FrameworkElement)title.Children[0]).ActualWidth - ((FrameworkElement)title.Children[2]).ActualWidth - tt.Margin.Left - tt.Margin.Right - 2);
         _fightBody.Children.Add(head);
         if (e.Waiting)
         {
@@ -674,6 +676,20 @@ sealed partial class HudFighter : TacticalLook
     }
 
     // ================================================================ parts
+
+    /// <summary>A title cut to its room with "…" (whole when it fits).</summary>
+    static void FitTitle(TacHalo t, string full, double room)
+    {
+        if (room <= 0) return;
+        string s = full;
+        if (Tac.TextW(t.Block, full) > room)
+        {
+            int n = full.Length;
+            while (n > 1 && Tac.TextW(t.Block, full[..n].TrimEnd() + "…") > room) n--;
+            s = full[..n].TrimEnd() + "…";
+        }
+        t.Text = s;
+    }
 
     static TacHalo Halo(string s, double size, Brush fg, FontWeight w) => new(Tt(s, size, fg, Face, w), InkC0, Math.Clamp(size * 0.15, 2.6, 4));
 
