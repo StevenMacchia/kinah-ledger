@@ -68,7 +68,17 @@ public static class SkinDeco
         el.Loaded += (_, _) => Paint(el);
         el.SizeChanged += (_, e) => { if (GetFrame(el) != null && (Math.Abs(e.NewSize.Width - e.PreviousSize.Width) >= 1 || Math.Abs(e.NewSize.Height - e.PreviousSize.Height) >= 1)) Paint(el); };
         if (el is TextBlock tb)
-            System.ComponentModel.DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock)).AddValueChanged(tb, (_, _) => { if (!st.Busy && tb.Text != st.TextShown) Paint(el); });
+        {
+            // a head's text set again by its page: drawn again. Watched only while the head is on screen (a value-changed
+            // handler is held by WPF until removed, which would keep every head ever made, and its page, alive)
+            var text = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock));
+            EventHandler changed = (_, _) => { if (!st.Busy && tb.Text != st.TextShown) Paint(el); };
+            bool on = false;
+            void Watch(bool w) { if (w == on) return; on = w; if (w) text.AddValueChanged(tb, changed); else text.RemoveValueChanged(tb, changed); }
+            tb.Loaded += (_, _) => Watch(true);
+            tb.Unloaded += (_, _) => Watch(false);
+            if (tb.IsLoaded) Watch(true);
+        }
         if (el.IsLoaded) Paint(el);
     }
 
