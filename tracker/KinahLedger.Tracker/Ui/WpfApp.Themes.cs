@@ -85,6 +85,27 @@ public static partial class WpfApp
             if (missing.Count > 0) cards.Add($"{k}: {string.Join(", ", missing)}");
             h.Close();
         }
+        // one fight through every look's fullest card: the same "N more" figure, deaths and specialties in each (a figure
+        // that changes with the theme can't ship)
+        {
+            var full = FullCardSample(KinahLedger.Ui.WpfApp.WithKindsForTest(live));
+            string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+            Encounter.CritKey = Encounter.CritKeyOf(KinahLedger.Parser.ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(KinahLedger.Parser.ParserPrefs.BackPick);
+            var youF = full.Roster.First(f => f.You);
+            var mcF = MemberCard.Of(full, youF, now)!;
+            foreach (var k in keys)
+            {
+                var h = new HudWindow(null, k, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                h.Update(kinah); h.ShowParser(full, now, ParserMode.Bosses, details: false); h.SetKinahHidden(true);
+                h.Show(); DoEvents();
+                var card = ThemeRowsOf(h).FirstOrDefault()?.CardForTest(youF.Id);
+                string t = card == null ? "" : string.Join(" ", LogicalTexts(card));
+                var miss = new[] { mcF.More, mcF.MoreDamage, mcF.DeathsText.Split(' ')[0], mcF.Abilities.First(a => a.Picks.Length > 0).Picks }.Where(x => !t.Replace(" ", "").Contains(x.Replace(" ", ""), StringComparison.OrdinalIgnoreCase)).ToList();   // "1 · 2" spaced is the same
+                if (miss.Count > 0) cards.Add($"{k} full card: missing {string.Join(", ", miss)}");
+                h.Close();
+            }
+            Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+        }
         check(cards.Count == 0, "every theme's look opens its own skills card on a row, with the member's DPS, share, damage, Combat Power and top skill, and shows each member's Combat Power on the meter" + (cards.Count > 0 ? ": " + string.Join("; ", cards) : ""));
     }
 
@@ -200,15 +221,7 @@ public static partial class WpfApp
                     h.Update(kinah);
                     var withKinds = WithKinds(live!);
                     string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
-                    // the fullest card: yours with crit and back rates, specialties, a long name, "3 more" abilities and 2 deaths
-                    var full = BossParser.Copy(withKinds);
-                    if (full.Roster.FirstOrDefault(f => f.You) is { } youF)
-                    {
-                        youF.Name = "Valkyriestrider"; youF.Deaths = 2;
-                        long low = youF.Abilities.Where(a => a.Damage > 0).Select(a => a.Damage).DefaultIfEmpty(1000).Min();
-                        foreach (var (a, i) in full.Roster.Where(f => !f.You && !f.Other).SelectMany(f => f.Abilities).Where(a => a.Damage > 0).Take(3).Select((a, i) => (a, i)))
-                            youF.Abilities.Add(new AbilityShare { Skill = a.Skill, Damage = low / (2 + i), BossDamage = low / (2 + i), Hits = 3 + i, BossHits = 3 + i });
-                    }
+                    var full = FullCardSample(withKinds);
                     foreach (var (tag, e) in new[] { ("", live!), ("-crit", withKinds), ("-full", full) })
                     {
                         if (tag.Length > 0) { Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick); }
@@ -254,6 +267,20 @@ public static partial class WpfApp
         if (d is System.Windows.Controls.TextBlock t) yield return MainWindow.InlineText(t);
         foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
             foreach (var x in LogicalTexts(ch)) yield return x;
+    }
+
+    /// <summary>The fullest card's fight: yours with crit and back rates, specialties, a long name, "3 more" abilities and 2 deaths.</summary>
+    static Encounter FullCardSample(Encounter withKinds)
+    {
+        var full = BossParser.Copy(withKinds);
+        if (full.Roster.FirstOrDefault(f => f.You) is { } youF)
+        {
+            youF.Name = "Valkyriestrider"; youF.Deaths = 2;
+            long low = youF.Abilities.Where(a => a.Damage > 0).Select(a => a.Damage).DefaultIfEmpty(1000).Min();
+            foreach (var (a, i) in full.Roster.Where(f => !f.You && !f.Other).SelectMany(f => f.Abilities).Where(a => a.Damage > 0).Take(3).Select((a, i) => (a, i)))
+                youF.Abilities.Add(new AbilityShare { Skill = a.Skill, Damage = low / (2 + i), BossDamage = low / (2 + i), Hits = 3 + i, BossHits = 3 + i });
+        }
+        return full;
     }
 
     /// <summary>A theme look's meter rows in a window (its own, Ui/Themes/ThemeRows.cs).</summary>

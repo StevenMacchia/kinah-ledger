@@ -145,7 +145,7 @@ sealed partial class HudFighter : IThemeCard
             }
             if (c.MoreLine.Length > 0)
             {
-                var more = Tt("+ " + c.MoreLine.ToUpperInvariant(), 9.5, PhosDim, Face, FontWeights.Bold); more.Margin = new Thickness(0, 6, 0, 0);
+                var more = Tt("+ " + c.MoreLine.ToUpperInvariant(), 10.5, PhosDim, Face, FontWeights.Bold); more.Margin = new Thickness(0, 6, 0, 0);
                 stack.Children.Add(more);
             }
         }

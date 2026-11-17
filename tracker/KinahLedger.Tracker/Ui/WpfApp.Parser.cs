@@ -85,6 +85,7 @@ public static partial class WpfApp
     }
 
     /// <summary>A fight's copy with each skill's crit and back-attack rates and specialties (Settings' crit switch on): the cards' sample.</summary>
+    internal static Encounter WithKindsForTest(Encounter live) => WithKinds(live);
     static Encounter WithKinds(Encounter live)
     {
         var withKinds = BossParser.Copy(live);
