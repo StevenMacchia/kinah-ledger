@@ -256,11 +256,21 @@ public partial class MainWindow
     void InitQuestUpload()
     {
         RunPayload.QuestsPending = () => _questPending;
-        RunPayload.QuestsCarried = sent => Dispatcher.BeginInvoke(() =>
+        // on the window's thread, as a character switch is: a batch for the character played now marks the log in memory;
+        // one for another character (its backlog, or the one played before a switch) marks that character's own file
+        RunPayload.QuestsCarried = (who, sent) => Dispatcher.BeginInvoke(() =>
         {
-            Quests.MarkSent(_questLog, sent.Select(q => q.key + "|" + q.scope));
-            SaveQuests();
+            var keys = sent.Select(q => q.key + "|" + q.scope).ToList();
+            if (who == null || who == Characters.Current?.Id) { Quests.MarkSent(_questLog, keys); SaveQuests(); }
+            else if (!_demo) QuestBacklog.MarkSent(who, keys);
         });
+        // every other character's waiting quests, read from their folders by the uploader (2026-11-17)
+        RunPayload.QuestsBacklog = () =>
+        {
+            if (_demo || !QuestsOn || !_questLoaded) return null;
+            var next = QuestBacklog.Next(Characters.All, Characters.Current?.Id, QuestBacklog.Load, RunPayload.QuestsMaxPerUpload);
+            return next is { } n && n.Quests.Count > 0 && CharacterPayload.From(n.Who) is { } who ? (who, n.Who.Server, n.Quests) : null;
+        };
         RefreshQuestPending();
     }
 
@@ -269,8 +279,7 @@ public partial class MainWindow
         if (_demo || !QuestsOn || !_questLoaded) { _questPending = null; return; }
         // the tier is the grade, 1 to 5 (0.10.30): the site reads it so for a batch from 0.10.30 on (kinah-ledger-site PR #153, which
         // must be live before this ships: an older site drops a tier above 3, and the batch would still mark it sent)
-        var list = Quests.Unsent(_questLog).Take(RunPayload.QuestsMaxPerUpload).Select(d => new QuestDonePayload(d.Key, d.Kind, d.Horizon, d.Subject, d.Target, d.Tier, d.Points, d.Worth, d.Have,
-            d.DoneAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture), d.Scope)).ToList();
+        var list = QuestBacklog.Payloads(_questLog, RunPayload.QuestsMaxPerUpload);
         _questPending = list.Count > 0 ? list : null;
     }
 

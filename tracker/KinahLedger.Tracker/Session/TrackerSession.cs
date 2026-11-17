@@ -5227,6 +5227,7 @@ public sealed partial class TrackerSession
     async Task SendQuestsAsync(Settings s)
     {
         if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint)) return;
+        await SendBacklogAsync(s);
         if ((DateTime.UtcNow - _questsSentAt).TotalMinutes < QuestsAloneMinutes) return;
         if (RunPayload.QuestsPending?.Invoke() is not { Count: > 0 }) return;
         _questsSentAt = DateTime.UtcNow;
@@ -5235,6 +5236,26 @@ public sealed partial class TrackerSession
         if (ok) RunPayload.Took(batch);
         CrashLog.Note(ok ? $"quests sent on their own: {batch.quests?.Count ?? 0}" : $"quests not sent: {Uploader.LastError}; tried again in {QuestsAloneMinutes:0} minutes");
     }
+
+    /// <summary>
+    /// The other characters' completed quests (Session/QuestBacklog.cs), each batch under its own character: the one whose
+    /// oldest waiting quest is the oldest, 50 a send, one send every <see cref="QuestsAloneMinutes"/>. Its own clock, so the
+    /// current character's sends (with farming, runs or alone) never hold it back. Steven, 2026-11-17: Swoles had 117
+    /// waiting and SwolyDaBooly 134, sent only once each was played again.
+    /// </summary>
+    async Task SendBacklogAsync(Settings s)
+    {
+        if ((DateTime.UtcNow - _backlogSentAt).TotalMinutes < QuestsAloneMinutes) return;
+        _backlogSentAt = DateTime.UtcNow;   // the folders are read once a wait, whether or not anything is in them
+        if (RunPayload.QuestsBacklog?.Invoke() is not { } next || next.Quests.Count == 0) return;
+        // filed under its own server when it has one (a character on another server is another character)
+        var batch = RunPayload.QuestsFor(RegionKey.Length > 0 ? RegionKey : s.Region, next.Server.Length > 0 ? next.Server : Server, next.Who, next.Quests);
+        bool ok = await Uploader.SendAsync(batch, s.Upload);
+        if (ok) RunPayload.Took(batch);
+        CrashLog.Note(ok ? $"quests of {next.Who.name ?? next.Who.id} (not played now) sent: {next.Quests.Count}" : $"quests of {next.Who.name ?? next.Who.id} not sent: {Uploader.LastError}; tried again in {QuestsAloneMinutes:0} minutes");
+    }
+    /// <summary>The first look waits a minute after a start, so the window has loaded its characters.</summary>
+    DateTime _backlogSentAt = DateTime.UtcNow.AddMinutes(1 - QuestsAloneMinutes);
 
     /// <summary>
     /// Sends the runs the gear repair changed (InstanceLog.RepairGear) once more, each marked as a correction of the copy

@@ -1,5 +1,6 @@
 using System.Globalization;
 using KinahLedger.Data;
+using KinahLedger.Upload;
 
 namespace KinahLedger.Session;
 
@@ -154,6 +155,10 @@ public static class QuestsTests
 
             // i. words
             Check("titles and points", $"{Quests.Title(live[0], Fk)} / {Quests.Pts(12)} / {Quests.Pts(12, plus: true)} / {Quests.TierWord(3)}", "2M this session / 12 pts / +12 pts / legend");
+
+            // j. every character's backlog, not only the one played (2026-11-17: Swoles 117 and SwolyDaBooly 134 waited
+            // until each was played again): the oldest waiting goes first, under its own character, marked in its own file
+            ok &= BacklogTest(Check);
         }
         catch (Exception ex) { Console.WriteLine("  quests tests threw: " + ex); ok = false; }
         finally
@@ -161,6 +166,65 @@ public static class QuestsTests
             CrashLog.DirOverride = keepDir;
             try { Directory.Delete(dir, true); } catch (Exception) { }
         }
+        return ok;
+    }
+
+    /// <summary>The other characters' quests (QuestBacklog): picked by the oldest waiting, 50 a batch, sent as that character, marked in that character's quests.json. Runs inside Run's own DirOverride folder.</summary>
+    static bool BacklogTest(Action<string, string, string> check)
+    {
+        var t0 = new DateTime(2026, 11, 12, 18, 0, 0, DateTimeKind.Utc);
+        QuestDone Q(string subject, DateTime at, bool sent = false, string horizon = Horizon.Today) => new()
+        {
+            Key = Quests.KeyOf("material", horizon, subject, 10), Kind = "material", Horizon = horizon, Subject = subject, Target = 10, Tier = 1,
+            Points = 2, Worth = 2, Have = 10, DoneAtUtc = at, Scope = horizon == Horizon.AllTime ? "a" : "d:" + at.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), Sent = sent,
+        };
+        var main = new Character { Id = "c1", Name = "Swoly", Server = "Siel (Elyos)" };
+        var harp = new Character { Id = "c2", Name = "Swoles", Server = "Siel (Elyos)" };
+        var knot = new Character { Id = "c3", Name = "SwolyDaBooly", Server = "Siel (Elyos)" };
+        var none = new Character { Id = "c4", Name = "Fresh" };
+        var all = new List<Character> { main, harp, knot, none };
+        // Swoles: 120 waiting from Nov 12, plus one sent and an all-time one (the site's own, never sent); SwolyDaBooly: 3 from Nov 13
+        var harpLog = new QuestLog();
+        for (int i = 0; i < 120; i++) harpLog.Done.Add(Q("Spiritstone" + i, t0.AddMinutes(i)));
+        harpLog.Done.Add(Q("Thick hide", t0.AddDays(-1), sent: true));
+        harpLog.Done.Add(Q("Odyle", t0.AddDays(-2), horizon: Horizon.AllTime));
+        var knotLog = new QuestLog();
+        for (int i = 0; i < 3; i++) knotLog.Done.Add(Q("Odyle" + i, t0.AddDays(1).AddMinutes(i)));
+        // the one played now has the oldest of all, but its own log in the window sends those; the backlog leaves it out
+        var mainLog = new QuestLog(); mainLog.Done.Add(Q("Wrathful Ego", t0.AddDays(-5)));
+        foreach (var (c, l) in new[] { (main, mainLog), (harp, harpLog), (knot, knotLog) }) Quests.Save(l, QuestBacklog.PathOf(c.Id));
+        bool ok = true;
+        void Check(string what, string got, string expect) { ok &= got == expect; check(what, got, expect); }
+
+        var waiting = QuestBacklog.Waiting(all, "c1", QuestBacklog.Load);
+        Check("backlog: waiting by character, the played one left out", string.Join(" ", waiting.Select(kv => $"{kv.Key}={kv.Value}")), "c2=120 c3=3 c4=0");
+        var next = QuestBacklog.Next(all, "c1", QuestBacklog.Load, RunPayload.QuestsMaxPerUpload);
+        Check("backlog: the oldest waiting first, 50 a batch, oldest of its own", next is { } n ? $"{n.Who.Name} {n.Quests.Count} {n.Quests[0].subject} {n.Quests[0].done_at}" : "none", "Swoles 50 Spiritstone0 2026-11-12T18:00:00Z");
+        Check("backlog: with Swoles played, Swoly's (the oldest) go", QuestBacklog.Next(all, "c2", QuestBacklog.Load, 50) is { } k ? $"{k.Who.Name} {k.Quests.Count}" : "none", "Swoly 1");
+        Check("backlog: with Swoly played too, SwolyDaBooly's", QuestBacklog.Next(all.Where(c => c.Id != "c1").ToList(), "c2", QuestBacklog.Load, 50) is { } k2 ? $"{k2.Who.Name} {k2.Quests.Count}" : "none", "SwolyDaBooly 3");
+        Check("backlog: before any character was seen, every character's", QuestBacklog.Next(all, null, QuestBacklog.Load, 50)?.Who.Name ?? "none", "Swoly");
+
+        // the batch goes under that character and its server, with no runs and no boss bests; the site taking it marks that file
+        var keepCarried = RunPayload.QuestsCarried;
+        try
+        {
+            string? carriedFor = null; int carried = 0;
+            RunPayload.QuestsCarried = (who, q) => { carriedFor = who; carried = q.Count; };
+            var batch = RunPayload.QuestsFor("na_e", harp.Server, CharacterPayload.From(harp)!, next!.Value.Quests);
+            Check("backlog batch: character, quests, runs, boss bests, runs only", $"{batch.character?.id}/{batch.character?.name} {batch.quests?.Count} {batch.instance_runs?.Count} {batch.boss_bests == null} {batch.runs_only}", "c2/Swoles 50 0 True True");
+            RunPayload.Took(batch);
+            Check("backlog batch taken: the window hears which character", $"{carriedFor} {carried}", "c2 50");
+            int marked = QuestBacklog.MarkSent("c2", next.Value.Quests.Select(q => q.key + "|" + q.scope));
+            Check("backlog: marked sent in Swoles' own file, the next 50 follow", $"{marked} {QuestBacklog.Waiting(all, "c1", QuestBacklog.Load)["c2"]} {QuestBacklog.Next(all, "c1", QuestBacklog.Load, 50)?.Quests[0].subject}", "50 70 Spiritstone50");
+            Check("backlog: the other files untouched", $"{Quests.Unsent(Quests.Load(QuestBacklog.PathOf("c1"))).Count} {Quests.Unsent(Quests.Load(QuestBacklog.PathOf("c3"))).Count}", "1 3");
+            Check("backlog: a character with no file marks nothing", QuestBacklog.MarkSent("c4", new[] { "x|y" }).ToString(), "0");
+            // drained: 70 more in two batches, then SwolyDaBooly's 3, then nothing
+            var order = new List<string>();
+            for (int i = 0; i < 5 && QuestBacklog.Next(all, "c1", QuestBacklog.Load, 50) is { } b; i++) { order.Add($"{b.Who.Name}:{b.Quests.Count}"); QuestBacklog.MarkSent(b.Who.Id, b.Quests.Select(q => q.key + "|" + q.scope)); }
+            Check("backlog drains: batches in order", string.Join(" ", order), "Swoles:50 Swoles:20 SwolyDaBooly:3");
+            Check("backlog: the all-time quest and the one sent before stay as they were", string.Join(",", Quests.Load(QuestBacklog.PathOf("c2")).Done.Where(d => d.Subject is "Thick hide" or "Odyle").Select(d => $"{d.Subject}:{d.Sent}")), "Thick hide:True,Odyle:False");
+        }
+        finally { RunPayload.QuestsCarried = keepCarried; }
         return ok;
     }
 }
