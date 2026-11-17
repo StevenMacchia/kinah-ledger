@@ -29,7 +29,8 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
     static readonly Color Glow = Rgb(PhosC);
 
     readonly StackPanel _root = new() { HorizontalAlignment = HorizontalAlignment.Left };
-    readonly GlitchPanel _crt = new(new Thickness(12, 7, 12, 8)), _cam = new(new Thickness(12, 7, 12, 8));
+    // the fight's screen 7 px in at the sides (4 expanded: Side): the `top` table's nine columns take real fights' figures whole
+    readonly GlitchPanel _crt = new(new Thickness(12, 7, 12, 8)), _cam = new(new Thickness(7, 7, 7, 8));
     readonly Border _crtGround = Screen(), _camGround = Screen();
 
     readonly Border _promptLine = new();
@@ -123,6 +124,8 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _ready.Margin = new Thickness(0, 5, 0, 1); _ready.Visibility = Visibility.Collapsed;
         _cam.Body.Children.Add(_ready);
         _cam.Body.Children.Add(_rowsHost);
+        // a long boss's exit line wraps as a terminal's does (it ran past the meter's edge: "...exited (0)  KIL")
+        _end.TextWrapping = TextWrapping.Wrap;
         _endLine.Child = _end;
         _cam.Body.Children.Add(_endLine);
         _cam.Body.Children.Add(_foot);
@@ -295,10 +298,22 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _cam.Root.Margin = new Thickness(0, shown ? 4 : 0, 0, 0);
     }
 
+    /// <summary>
+    /// The fight's screen's inset at the sides, set on it: 7 px, 4 expanded (its damage and crit column takes the 70 px the meter
+    /// widens by and more, in Korean and Chinese most), so every column keeps its widest figure.
+    /// </summary>
+    double Side()
+    {
+        double side = ParserRows.ExpandedPref ? 4 : 7;
+        _cam.Body.Margin = new Thickness(side, 7, side, 8);
+        return side;
+    }
+
     protected override void DrawFight(Encounter? e, DateTime now)
     {
         if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; _rowsHost.Children.Clear(); _foot.Content = null; _fightPrompt.Inlines.Clear(); _end.Inlines.Clear(); _hpShare = -1; return; }
         _cam.Root.Width = FightWidth;
+        Side();
         var name = e.Title.ToLower(System.Globalization.CultureInfo.CurrentCulture);
         _fightPrompt.Inlines.Clear();
         _fightPrompt.Inlines.Add(Rn(L.T("> fight "), PhosDim));
@@ -312,7 +327,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
             _ready.Inlines.Add(Rn("  " + e.ReadyText + " ", PhosDim));
             _ready.Inlines.Add(Rn("█", Phos));
             _ready.Visibility = Visibility.Visible;
-            if (PartyBeforeHit(e)) { PutRows(_rowsHost, e, now, FightWidth - 24); _rowsHost.Visibility = Visibility.Visible; }
+            if (PartyBeforeHit(e)) { PutRows(_rowsHost, e, now, FightWidth - 2 * Side()); _rowsHost.Visibility = Visibility.Visible; }
             _cam.Root.Visibility = Visibility.Visible;
             return;
         }
@@ -329,8 +344,8 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
             _hpRow.Visibility = Visibility.Visible;
         }
         else _hpRow.Visibility = Visibility.Collapsed;
-        _rowsHost.Children.Add(TerminalRows.Header());
-        PutRows(_rowsHost, e, now, FightWidth - 24);
+        _rowsHost.Children.Add(TerminalRows.Header(ParserRows.ExpandedPref));
+        PutRows(_rowsHost, e, now, FightWidth - 2 * Side());
         _rowsHost.Visibility = Visibility.Visible;
         // over: the process's exit line, a kill in mint, a wipe a segfault in red
         var outcome = OutcomeText(e);
