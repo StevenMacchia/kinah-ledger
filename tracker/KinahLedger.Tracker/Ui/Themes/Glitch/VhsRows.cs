@@ -47,7 +47,7 @@ static class VhsRows
         readonly StackPanel _tags = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _healText = Txt("", 9.5, Green, Face);
         readonly GlitchLevel _bar = new(5, Br(0xFFFFFF, .11), Cells), _heal = new(2, Br(GreenC, .12));
-        readonly TextBlock _code = Txt("", 8.5, White, Face);
+        readonly TextBlock _code = Txt("", 9.5, White, Face);
         readonly TextBlock _extra = Txt("", 10, Dim, Face), _fig = FigCell(13.5, White, Face, 40), _share = FigCell(10, Dim, Face, 42);
 
         public FrameworkElement Root => _root;
@@ -74,7 +74,7 @@ static class VhsRows
             // the level: segmented cells in the class's colour, a healer's green trace under them
             _code.VerticalAlignment = VerticalAlignment.Top; _code.Margin = new Thickness(0, -1, 0, 0);
             Grid.SetRow(_code, 1); Grid.SetColumn(_code, 2); _root.Children.Add(_code);
-            var level = new Grid { Margin = new Thickness(27, 1, 0, 0), VerticalAlignment = VerticalAlignment.Top, Height = 8 };
+            var level = new Grid { Margin = new Thickness(29, 1, 0, 0), VerticalAlignment = VerticalAlignment.Top, Height = 8 };
             _bar.Root.VerticalAlignment = VerticalAlignment.Top; level.Children.Add(_bar.Root);
             _heal.Fill.Background = Green; _heal.Root.VerticalAlignment = VerticalAlignment.Bottom; level.Children.Add(_heal.Root);
             Grid.SetRow(level, 1); Grid.SetColumn(level, 2); Grid.SetColumnSpan(level, 3); _root.Children.Add(level);
@@ -94,7 +94,7 @@ static class VhsRows
             var cc = m.ClassColor;
             _tick.Background = Frozen(cc);
             _code.Text = ClassCode(m.Class);
-            _code.Foreground = Frozen(cc);
+            _code.Foreground = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 30), (byte)Math.Min(255, cc.G + 30), (byte)Math.Min(255, cc.B + 30)));
             _name.Text = Caps(m.Name);
             _name.Foreground = you ? Br(0xFFF4C4) : White;
             _tags.Children.Clear();

@@ -357,10 +357,10 @@ sealed class HudVhs : HudThemeLook
     {
         double h = p.H;
         var band = new Grid { Height = height, VerticalAlignment = VerticalAlignment.Top, OpacityMask = SoftEdges };
-        var nb = NoiseBrush(alpha);
+        var nb = NoiseBrush(alpha * .7);
+        band.Children.Add(new Rectangle { Fill = Br(0x000000, .45) });
         band.Children.Add(new Rectangle { Fill = nb });
-        band.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .14) });
-        band.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .75), Height = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 3) });
+        band.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .5), Height = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 3) });
         var tt = new TranslateTransform(); band.RenderTransform = tt;
         p.Run(band, ms, t => { tt.Y = -height + (h + height) * t; Shift(nb, t, 30); }, under: true);
     }
@@ -384,7 +384,7 @@ sealed class HudVhs : HudThemeLook
         // the freeze-frame: two noise bars held across the still picture, seething in place
         foreach (var (y, hh) in new[] { (.28, 3.0), (.74, 2.0) })
         {
-            var nb = NoiseBrush(.8);
+            var nb = NoiseBrush(.5);
             var bar = new Rectangle { Fill = nb, Height = hh, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Round(_deck.H * y), 0, 0) };
             _deck.Run(bar, 2300, t => { bar.Opacity = Gate(t, .05, .9, .02, .12); Shift(nb, t, 40); }, under: true);
         }
@@ -423,16 +423,17 @@ sealed class HudVhs : HudThemeLook
     protected override void FightStarted(Encounter e, bool held)
     {
         // a channel switch: the picture drops to static, a roll line crosses, the channel's OSD stands in the corner
-        var veil = new Rectangle { Fill = NoiseBrush(1) };
+        var veil = new Rectangle { Fill = NoiseBrush(.6) };
         _cam.Run(veil, 1100, t => { veil.Opacity = t < .04 ? .8 : t < .25 ? .8 * (1 - (t - .04) / .21) : 0; Shift((ImageBrush)veil.Fill, t, 36); }, under: true);
         double h = _cam.H;
         // two heavy static bands roll down the picture, one after the other
         for (int k = 0; k < 2; k++)
         {
-            var nb = NoiseBrush(.95);
+            var nb = NoiseBrush(.6);
             var bar = new Grid { Height = 26, VerticalAlignment = VerticalAlignment.Top, OpacityMask = SoftEdges };
+            bar.Children.Add(new Rectangle { Fill = Br(0x000000, .45) });
             bar.Children.Add(new Rectangle { Fill = nb });
-            bar.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .8), Height = 2, VerticalAlignment = VerticalAlignment.Center });
+            bar.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .55), Height = 2, VerticalAlignment = VerticalAlignment.Center });
             var bt = new TranslateTransform(); bar.RenderTransform = bt;
             double a = k * .22;
             _cam.Run(bar, 1100, t => { double q = Math.Clamp((t - a) / .4, 0, 1); bt.Y = -26 + (h + 26) * q; bar.Opacity = t >= a && q < 1 ? 1 : 0; Shift(nb, t, 30); }, under: true);
@@ -458,7 +459,7 @@ sealed class HudVhs : HudThemeLook
             words.Text = L.T("TRACKING LOST");
             for (int k = 0; k < 3; k++)
             {
-                var nb = NoiseBrush(.75);
+                var nb = NoiseBrush(.5);
                 var bar = new Rectangle { Fill = nb, Height = 4 + 3 * k, VerticalAlignment = VerticalAlignment.Top };
                 var tt = new TranslateTransform(); bar.RenderTransform = tt;
                 double h = _cam.H; int kk = k;

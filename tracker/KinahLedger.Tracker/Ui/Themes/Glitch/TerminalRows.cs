@@ -71,6 +71,7 @@ static class TerminalRows
         readonly Border _rules = new() { BorderBrush = Br(PhosC, .55), BorderThickness = new Thickness(0, 1, 0, 1), Margin = new Thickness(-3, -1, -3, -1), Visibility = Visibility.Collapsed };
         readonly TextBlock _name = Txt("", 11.5, Phos, Face, FontWeights.SemiBold, trim: true);
         readonly Border _tags = new() { Padding = new Thickness(2, 0, 2, 0) };
+        readonly StackPanel _marks = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0) };
         readonly GlitchLevel _bar = new(9, Br(PhosC, .1), Cells);
         readonly TextBlock _heal = Txt("", 10.5, Mint2, Face, FontWeights.SemiBold), _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
         readonly TextBlock _fig = FigCell(12, Pale, Face, DpsW), _share = FigCell(10.5, Br(PhosC, .82), Face, ShareW, FontWeights.SemiBold);
@@ -84,8 +85,7 @@ static class TerminalRows
             _cls.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_cls, 1); _root.Children.Add(_cls);
             Grid.SetColumnSpan(_rules, 8); _root.Children.Add(_rules);
             var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-            DockPanel.SetDock(_death, Dock.Right);
-            name.Children.Add(_death); name.Children.Add(_name);
+            name.Children.Add(_name);
             Grid.SetColumn(name, 2); _root.Children.Add(name);
             // the load: [cells] in the class's colour
             var load = new Grid { Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -96,8 +96,10 @@ static class TerminalRows
             var close = Txt("]", 11.5, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 2); load.Children.Add(close);
             Grid.SetColumn(load, 3); _root.Children.Add(load);
             // a kill's tags over the load's start, on the screen's ground (the name keeps its room)
-            _tags.HorizontalAlignment = HorizontalAlignment.Right; _tags.Margin = new Thickness(0, 0, 9, 0); _tags.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(_tags, 3); _root.Children.Add(_tags);
+            // a death and a kill's top sit at the load's end, where its empty cells are (the name keeps its room)
+            _tags.VerticalAlignment = VerticalAlignment.Center; _death.Margin = new Thickness(0, 0, 3, 0);
+            _marks.Children.Add(_death); _marks.Children.Add(_tags);
+            Grid.SetColumn(_marks, 3); _root.Children.Add(_marks);
             _heal.Margin = new Thickness(5, 0, 0, 0); At(_root, 4, _heal);
             _extra.Margin = new Thickness(5, 0, 0, 0); At(_root, 5, _extra);
             At(_root, 6, _fig); At(_root, 7, _share);

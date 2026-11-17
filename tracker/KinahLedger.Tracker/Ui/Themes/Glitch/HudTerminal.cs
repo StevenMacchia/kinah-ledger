@@ -132,7 +132,7 @@ sealed class HudTerminal : HudThemeLook
     }
 
     /// <summary>The screen's glass: the dark green ground in a faint green rim, rounded as a tube's.</summary>
-    static Border Screen() => new() { Background = Br(GroundC, .9), CornerRadius = new CornerRadius(7), BorderBrush = Br(PhosC, .3), BorderThickness = new Thickness(1) };
+    static Border Screen() => new() { Background = Br(GroundC, .96), CornerRadius = new CornerRadius(7), BorderBrush = Br(PhosC, .3), BorderThickness = new Thickness(1) };
 
     /// <summary>The screen's layers: the glass, a centre glow and a darker curve to the rim; the scanlines over the text.</summary>
     static void Build(GlitchPanel p, Border ground)
@@ -180,8 +180,8 @@ sealed class HudTerminal : HudThemeLook
     public override void SetOpacity(double opacity)
     {
         double o = Math.Clamp(opacity, 0.3, 1);
-        _crtGround.Background = Br(GroundC, Math.Min(1, o * 1.08));
-        _camGround.Background = Br(GroundC, Math.Min(1, o * 1.11));
+        _crtGround.Background = Br(GroundC, Math.Min(1, o * 1.1));
+        _camGround.Background = Br(GroundC, Math.Min(1, o * 1.12));
     }
 
     protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{Picks(Values).FirstOrDefault()?.Id}";
@@ -428,8 +428,8 @@ sealed class HudTerminal : HudThemeLook
         _cam.Run(cover, 1300, t =>
         {
             l1.Visibility = t >= 0 ? Visibility.Visible : Visibility.Hidden;
-            l2.Visibility = t >= .18 ? Visibility.Visible : Visibility.Hidden;
-            l3.Visibility = t >= .36 ? Visibility.Visible : Visibility.Hidden;
+            l2.Visibility = t >= .1 ? Visibility.Visible : Visibility.Hidden;
+            l3.Visibility = t >= .3 ? Visibility.Visible : Visibility.Hidden;
             cur.Opacity = (int)(t * 8) % 2 == 0 ? 1 : .2;
             // the boot lines clear first, then the screen comes up under them
             lines.Opacity = t < .56 ? 1 : 0;

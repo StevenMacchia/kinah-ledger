@@ -323,9 +323,15 @@ sealed class HudCorrupt : HudThemeLook
     {
         if (KinahHidden) return;
         Tear(_deck, _deckGround, Hash(p.Id) < .5 ? 2 : 4, 700, 10);
-        foreach (var (y, c, dx) in new[] { (.42, Rgb(MagC, .55), 14.0), (.7, Rgb(CyanC, .45), -10.0) })
+        // the tears run in the gaps under the hour's line and under the session's, never through a figure
+        double Under(FrameworkElement el, double fallback)
         {
-            var strip = new Rectangle { Height = 3, VerticalAlignment = VerticalAlignment.Top, Fill = Frozen(c), Margin = new Thickness(0, Math.Round(_deck.H * y), 0, 0) };
+            try { return el.ActualHeight > 0 ? el.TranslatePoint(new Point(0, el.ActualHeight), _deck.Root).Y + 1 : fallback; }
+            catch (InvalidOperationException) { return fallback; }
+        }
+        foreach (var (y, c, dx) in new[] { (Under(_figRow, _deck.H * .62), Rgb(MagC, .6), 14.0), (Under(_sessRow, _deck.H * .9), Rgb(CyanC, .5), -10.0) })
+        {
+            var strip = new Rectangle { Height = 2, VerticalAlignment = VerticalAlignment.Top, Fill = Frozen(c), Margin = new Thickness(0, Math.Round(y), 0, 0) };
             var st = new TranslateTransform(); strip.RenderTransform = st;
             _deck.Run(strip, 900, t => { int k = (int)(t * 12); st.X = (k % 3 - 1) * dx; strip.Opacity = t < .55 && k % 2 == 0 ? 1 : 0; }, under: true);
         }
@@ -440,7 +446,7 @@ sealed class HudCorrupt : HudThemeLook
         var cover = new Rectangle { Width = w, Height = h, Fill = Br(GroundC) };
         canvas.Children.Add(cover);
         var blocks = new List<(Rectangle R, double Gone, double X)>();
-        Brush[] fills = { Br(MagC, .7), Br(CyanC, .65), Br(0xFFFFFF, .55), Br(0x2A1A3A, .8), Br(MagC, .4), Br(CyanC, .35), NoiseBrush(.6) };
+        Brush[] fills = { Br(MagC, .45), Br(CyanC, .4), Br(0xFFFFFF, .3), Br(0x2A1A3A, .8), Br(MagC, .3), Br(CyanC, .25), NoiseBrush(.4) };
         for (int k = 0; k < 30; k++)
         {
             double bw = 14 + r.NextDouble() * w * .45, bh = 1 + r.NextDouble() * 4;
@@ -547,6 +553,9 @@ sealed class SlicedGround : FrameworkElement
             if (i == 0) dc.DrawRectangle(GhostL, null, new Rect(dx - Ghost, y0 - 2, w, 2));
             if (i == _slices.Length - 1) dc.DrawRectangle(GhostR, null, new Rect(dx + Ghost, y1, w, 2));
             dc.DrawRectangle(ground, null, new Rect(dx, y0, w, y1 - y0));
+            // a slice knocked out past the frame keeps its own edges: a hairline over and under the part that hangs out
+            if (dx > 0) { dc.DrawRectangle(GhostR, null, new Rect(w, y0, dx, 1)); dc.DrawRectangle(GhostR, null, new Rect(w, y1 - 1, dx, 1)); }
+            else if (dx < 0) { dc.DrawRectangle(GhostL, null, new Rect(dx, y0, -dx, 1)); dc.DrawRectangle(GhostL, null, new Rect(dx, y1 - 1, -dx, 1)); }
         }
     }
 }

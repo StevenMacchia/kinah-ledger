@@ -43,7 +43,7 @@ static class CorruptRows
         readonly Border _foot = new() { BorderThickness = new Thickness(1, 0, 1, 1), Margin = new Thickness(0, 10, 0, 0) };
         readonly TranslateTransform _footShift = new();
         readonly Border _edge = new() { Width = 4, HorizontalAlignment = HorizontalAlignment.Left };
-        readonly TextBlock _code = Txt("", 9, Lilac, Face);
+        readonly TextBlock _code = Txt("", 10, Lilac, Face);
         readonly TranslateTransform _tear = new();
         readonly Border _glint = new() { Opacity = 0, IsHitTestVisible = false, Margin = new Thickness(-4, 0, -4, 0) };
         readonly Border _rankBox = new() { Width = 20, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center };
@@ -69,7 +69,7 @@ static class CorruptRows
             _bar.Echo(2, 0).Background = Br(CyanC, .6);
             _bar.Root.VerticalAlignment = VerticalAlignment.Bottom; _bar.Root.Margin = new Thickness(0, 0, 0, 1);
             _root.Children.Add(_bar.Root);
-            var g = new Grid { Margin = new Thickness(4, 0, 2, 3) };
+            var g = new Grid { Margin = new Thickness(4, 0, 10, 3) };
             foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto })
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
             _rank.HorizontalAlignment = HorizontalAlignment.Center; _rankBox.Child = _rank;
@@ -99,7 +99,7 @@ static class CorruptRows
             _ground.BorderBrush = _foot.BorderBrush = you ? Br(0xFFFFFF, .75) : null;
             _footShift.X = Split[(m.Rank - 1 + Split.Length) % Split.Length];
             _code.Text = ClassCode(m.Class).ToLower(CultureInfo.InvariantCulture);
-            _code.Foreground = Frozen(cc);
+            _code.Foreground = Frozen(Color.FromArgb(0xD9, cc.R, cc.G, cc.B));
             _edge.Background = Frozen(cc);
             _rank.Text = m.Rank.ToString("00", CultureInfo.InvariantCulture);
             _rankBox.Background = you ? Mag : null;
