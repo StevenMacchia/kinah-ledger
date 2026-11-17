@@ -40,7 +40,9 @@ public static class InstallId
 /// Since 0.10.55 the character it was played on (<see cref="CharacterPayload"/>: its slot and its name), which only the
 /// profile it is linked to shows. Since 0.7: the change in the Kinah balance over the run (rounded, never the balance
 /// itself) and craft and enchant outcome counts. Since 0.7.2: the expedition and event runs that finished meanwhile
-/// (area, length, Kinah, kills, tradeable items), each sent once.
+/// (area, length, Kinah, kills, tradeable items), each sent once. Since 2026-11-15, only with Options › Sharing › Show my
+/// boss bests on my kinahledger.com profile on (off by default): the player's own best boss kills (<see cref="BossBestPayload"/>),
+/// never another player's numbers.
 /// </summary>
 public sealed record RunPayload(
     string app,
@@ -83,7 +85,12 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? pvp_kills = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? mob_kills = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths_pvp = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths_pvp = null,
+    // since 2026-11-15, opt-in (Options › Sharing › Show my boss bests on my kinahledger.com profile, off by default): the
+    // player's OWN best kill per boss and their last pull of it, for the character in `character` (BossBests.cs). Never
+    // anything about the rest of the group. Absent unless the switch is on and the list changed; [] once after it goes off
+    // (the site then forgets them). A site from before ignores it
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<BossBestPayload>? boss_bests = null)
 {
     static long? Nz(long v) => v > 0 ? v : null;
     static int? Nz(int v) => v > 0 ? v : null;
@@ -97,9 +104,13 @@ public sealed record RunPayload(
     /// "Quests are completely broken": they rode only with farming, so a day of dungeons sent none; 1,716 waited). With no
     /// runs it is the quests' own send (TrackerSession.SendQuestsAsync).
     /// </summary>
-    public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs) =>
-        new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
-            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: CharacterPayload.Now(), quests: QuestsPending?.Invoke());
+    public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs)
+    {
+        var who = CharacterPayload.Now();
+        return new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
+            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: who, quests: QuestsPending?.Invoke(),
+            boss_bests: BossBests.Pending(who?.id ?? "", DateTime.UtcNow));
+    }
 
     /// <summary>The site keeps this many completed quests a batch (quests.maxPerUpload); a batch carries no more, so none is marked sent that wasn't kept.</summary>
     public const int QuestsMaxPerUpload = 50;
@@ -128,8 +139,10 @@ public sealed record RunPayload(
         string Key(long id) => dict?.KeyOf(id) ?? id.ToString();
         // a drop the player flagged "Something looks wrong" never leaves this PC, in any list
         bool Off(long id) => KinahLedger.Session.ReportedDrops.Has(s.ItemName(id));
+        bool Bound(long id) => dict?.BoundId(id) == true;
         int Flagged(SessionEngine.ZoneStats z) => z.Items.Where(x => Off(x.Key)).Sum(x => x.Value) + z.ItemsBound.Where(x => Off(x.Key)).Sum(x => x.Value);
         var quests = QuestsPending?.Invoke();
+        var who = CharacterPayload.Now();
         return new(
             AppVersion,
             region,
@@ -145,33 +158,36 @@ public sealed record RunPayload(
             s.Nodes,
             s.Kinah,
             s.KinahBound,
-            Merge(s.Items, Key, Off),
-            Merge(s.ItemsBound, Key, Off),
+            // an item bound by its own id goes with the bound ones however it was counted (gear binds on equip, so a piece
+            // with a tradable id is sold like any drop; Steven, 2026-11-17)
+            Merge(s.Items, Key, id => Off(id) || Bound(id)),
+            Merge(s.ItemsBound, Key, Off, s.Items.Where(x => Bound(x.Key) && !Off(x.Key))),
             s.PetSnapshot(),
             // each zone carries its own items, so the site files them under the zone they dropped in, never all under the main one
             zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0 || kv.Value.Items.Count > 0 || kv.Value.ItemsBound.Count > 0 || kv.Value.AbyssPoints > 0 || kv.Value.Deaths > 0)
-                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, Math.Max(0, kv.Value.Drops - Flagged(kv.Value)), kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key, Off), Merge(kv.Value.ItemsBound, Key, Off),
+                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, Math.Max(0, kv.Value.Drops - Flagged(kv.Value)), kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key, id => Off(id) || Bound(id)), Merge(kv.Value.ItemsBound, Key, Off, kv.Value.Items.Where(x => Bound(x.Key) && !Off(x.Key))),
                      Nz(kv.Value.AbyssPoints), Nz(kv.Value.RankPoints), Nz(kv.Value.RankLost), Nz(kv.Value.PlayerKills), Nz(kv.Value.MonsterKills), Nz(kv.Value.Deaths))),
             InstallId.Get(),
             net,
             OddsPayload.From(s),
             MobRun.From(s, Key, Off),
-            InstanceRunPayload.From(instances, Key, Off),
+            InstanceRunPayload.From(instances, Key, Off, Bound),
             s.Focus,
             quests: quests is { Count: > 0 } ? quests : null,
-            character: CharacterPayload.Now(),
+            character: who,
             abyss_points: Nz(s.AbyssPoints), rank_points: Nz(s.RankPoints), rank_lost: Nz(s.RankPointsLost),
-            pvp_kills: Nz(s.PlayerKills), mob_kills: Nz(s.MonsterKills), deaths: Nz(s.Deaths), deaths_pvp: Nz(s.DeathsToPlayers));
+            pvp_kills: Nz(s.PlayerKills), mob_kills: Nz(s.MonsterKills), deaths: Nz(s.Deaths), deaths_pvp: Nz(s.DeathsToPlayers),
+            boss_bests: BossBests.Pending(who?.id ?? "", DateTime.UtcNow));
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
     public static long RoundNet(long n) => (long)Math.Round(n / 100.0, MidpointRounding.AwayFromZero) * 100;
 
     /// <summary>Counts keyed the way the site reads them; two synthetic IDs that carry the same name add up.</summary>
-    static Dictionary<string, int> Merge(Dictionary<long, int> counts, Func<long, string> key, Func<long, bool>? off = null)
+    static Dictionary<string, int> Merge(Dictionary<long, int> counts, Func<long, string> key, Func<long, bool>? off = null, IEnumerable<KeyValuePair<long, int>>? more = null)
     {
         var d = new Dictionary<string, int>();
-        foreach (var (id, n) in counts) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
+        foreach (var (id, n) in more == null ? counts : counts.Concat(more)) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
         return d;
     }
 
@@ -301,7 +317,8 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     public const int MaxRuns = 50;
     public const int MaxSeconds = 4 * 3600;
 
-    public static List<InstanceRunPayload>? From(IEnumerable<InstanceRun>? runs, Func<long, string> key, Func<long, bool>? off = null)
+    /// <param name="boundId">An item bound by its own id (<see cref="ItemDictionary.BoundId"/>): among items_bound however it was counted.</param>
+    public static List<InstanceRunPayload>? From(IEnumerable<InstanceRun>? runs, Func<long, string> key, Func<long, bool>? off = null, Func<long, bool>? boundId = null)
     {
         if (runs == null) return null;
         var list = runs
@@ -323,6 +340,9 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 var fix = RunCorrection.Of(r, key, off);
                 var bound = new Dictionary<string, int>();
                 foreach (var (id, n) in r.BoundItems) { if (off?.Invoke(id) == true) continue; var k = key(id); bound[k] = bound.GetValueOrDefault(k) + n; }
+                // a reward bound by its own id (a reward table's bound copy of a piece of gear): bound on the site too, never valued
+                if (boundId != null)
+                    foreach (var (id, n) in r.Items) { if (n <= 0 || off?.Invoke(id) == true || !boundId(id)) continue; var k = key(id); bound[k] = bound.GetValueOrDefault(k) + n; }
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
                     r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
                     // a count in doubt (InstanceRun.SlotDoubts) keeps the run out of the site's averages the same way
@@ -430,8 +450,14 @@ public static class Uploader
     public static async Task<bool> SendAsync(RunPayload p, UploadSettings u) => (await SendResultAsync(p, u)).Ok;
 
     /// <summary>Like <see cref="SendAsync"/>, with how the site answered, so a caller can tell a send worth trying again from a refusal.</summary>
-    public static async Task<SendResult> SendResultAsync(RunPayload p, UploadSettings u) =>
-        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? SendResult.NoConnection : await PostAsync(u.Endpoint, p);
+    public static async Task<SendResult> SendResultAsync(RunPayload p, UploadSettings u)
+    {
+        if (!u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint)) return SendResult.NoConnection;
+        var r = await PostAsync(u.Endpoint, p);
+        // the boss bests it carried: kept by the site (or not linked yet), so the next upload knows whether to carry them again
+        if (p.boss_bests != null) BossBests.Took(p, r, DateTime.UtcNow);
+        return r;
+    }
 
     /// <summary>Market asks have their own switch in the window; here only the route matters.</summary>
     public static Task<SendResult> SendPricesAsync(PriceBatch p, UploadSettings u) =>

@@ -133,6 +133,8 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                // the boss bests the profile gets with its switch on (Upload/BossBests.cs), on made-up fights; part of parse-test too
+                case "boss-bests-test": return Upload.BossBestTests.Run() ? 0 : 1;
                 case "accuracy-test": return Session.AccuracyTests.Run(settings);
                 case "accuracy-sample": return Session.AccuracyTests.Sample(settings, pos, opts);
                 case "replay-bank": return ReplayBankCmd(settings, pos, opts);
@@ -481,6 +483,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
   market-watch [--server ..]    only the Market reader, as the window runs it in the background; Ctrl+C to stop
   parse-test                    self-test of the chat-line parser, the 0.7 reads and the balance counter logic
+  boss-bests-test               self-test of the boss bests sent to your profile when you turn that on (made-up fights)
   balance-test [--save]         read the currency counters at the top-left once and list the numbers (--save keeps the crop)
   options-test                  self-test of the Options window: changes, Save, Cancel (saves nothing)
   market-test                   self-test of the Market row parser
@@ -1712,6 +1715,7 @@ options: --process aion[,other]");
         ok &= Session.QuestsTests.Run(items, s);
         ok &= Session.HistoryTests.Run(items, s);
         ok &= Session.CharacterTests.Run(items, s);
+        ok &= Upload.BossBestTests.Run();
         ok &= Session.CompareTests.Run(items, s);
         ok &= Session.WrappedTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);

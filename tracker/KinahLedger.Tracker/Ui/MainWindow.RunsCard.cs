@@ -208,7 +208,7 @@ public partial class MainWindow
 
         InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}" + (_placesShown.Count > 1 ? $" · {Fk(made)} made" : "") : "";
 
-        InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ", over the counted runs. Gear is bound and not in it." : null;
+        InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus loot and gear at the lowest Market price, " + PriceBook.Cut + ", over the counted runs. Bound items add nothing." : null;
 
         InstEmpty.Visibility = InstHost.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
 
@@ -218,9 +218,9 @@ public partial class MainWindow
 
     /// <summary>
 
-    /// A run's worth: its Kinah plus the loot that can be sold at the lowest Market price, after the Market's cut. Gear from
+    /// A run's worth: its Kinah plus the loot that can be sold at the lowest Market price, after the Market's cut. Gear counts
 
-    /// an event or expedition is bound to the character, so only the materials count (Steven, 2026-10-22).
+    /// like any loot: all gear binds on equip, not on the drop (Steven, 2026-11-17); a bound copy by its own id adds nothing.
 
     /// </summary>
 
@@ -232,7 +232,7 @@ public partial class MainWindow
 
         foreach (var (id, count) in r.Items)
 
-            if (!_items.IsGear(id) && PriceBook.Price(_items.NameOf(id)) is long p) v += p * count * PriceBook.SellerKeeps;
+            if (!_items.BoundId(id) && PriceBook.Price(_items.NameOf(id)) is long p) v += p * count * PriceBook.SellerKeeps;
 
         return (long)Math.Round(v);
 
@@ -872,7 +872,7 @@ public partial class MainWindow
 
         box.SetResourceReference(Border.BorderBrushProperty, "Line");
 
-        box.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
+        box.ToolTip = "Over the counted runs: Kinah plus loot and gear at the lowest Market price, " + PriceBook.Cut + ". Bound items add nothing. Flagged runs are left out.";
 
         return box;
 
@@ -888,7 +888,7 @@ public partial class MainWindow
 
         // currencies are amounts, never pieces (the 16:02 Hidden Lugi run read as "3,740 items": its Abyss Points and stones);
 
-        // gear is bound and worth nothing, so it is counted apart from the loot's pieces (GearRow; 2026-11-10, Fire Temple's 19)
+        // gear is counted apart from the loot's pieces, so a run says how many it brought (GearRow; 2026-11-10, Fire Temple's 19)
 
         var (gearN, other) = r.Pieces(_items.IsGear, IsCurrency, withUnknown: true);
 
@@ -950,7 +950,9 @@ public partial class MainWindow
 
     /// The loot of the counted runs: an inventory row of the best of it (the Kinah first, then materials by value, gear by
 
-    /// grade, currencies), then three folded groups: Materials (with their value), Gear, bound, and Not named yet.
+    /// grade, currencies), then three folded groups: Materials (with their value), Gear (with its value: gear binds on equip,
+
+    /// not on the drop; Steven, 2026-11-17), and Not named yet.
 
     /// </summary>
 
@@ -960,7 +962,7 @@ public partial class MainWindow
 
         int n = counted.Count;
 
-        var mats = new Dictionary<long, (int Count, int Runs, long Value, bool Priced)>(); var gear = new Dictionary<long, int>(); int unread = 0, unknownGear = 0;
+        var mats = new Dictionary<long, (int Count, int Runs, long Value, bool Priced)>(); var gear = new Dictionary<long, (int Count, int Bound, long Value, bool Priced)>(); int unread = 0, unknownGear = 0;
 
         // currencies (Abyss Points, Enhance Stone, tokens) are amounts, not pieces: a group of their own
 
@@ -984,13 +986,25 @@ public partial class MainWindow
 
                 if (IsCurrency(id)) continue;
 
-                if (_items.IsGear(id)) { gear[id] = gear.GetValueOrDefault(id) + c; continue; }
+                // bound by its own id (a reward table's bound copy): counted, no value
 
-                var p = PriceBook.Price(_items.NameOf(id));
+                var p = _items.BoundId(id) ? null : PriceBook.Price(_items.NameOf(id));
+
+                if (_items.IsGear(id))
+
+                {
+
+                    var g = gear.GetValueOrDefault(id);
+
+                    gear[id] = (g.Count + c, g.Bound + (_items.BoundId(id) ? c : 0), g.Value + (p is long gp ? (long)Math.Round(gp * c * PriceBook.SellerKeeps) : 0), g.Priced || p != null);
+
+                    continue;
+
+                }
 
                 var o = mats.GetValueOrDefault(id);
 
-                mats[id] = (o.Count + c, o.Runs, o.Value + (p is long pp ? (long)Math.Round(pp * c * PriceBook.SellerKeeps) : 0), o.Priced || p != null);
+                mats[id] = (o.Count + c, o.Runs, o.Value + (p is long pp ? (long)Math.Round(pp * c * PriceBook.SellerKeeps) : 0), o.Priced || p != null || _items.BoundId(id));
 
             }
 
@@ -1000,7 +1014,7 @@ public partial class MainWindow
 
                 if (IsCurrency(id)) continue;
 
-                if (_items.IsGear(id)) { gear[id] = gear.GetValueOrDefault(id) + c; continue; }
+                if (_items.IsGear(id)) { var g = gear.GetValueOrDefault(id); gear[id] = (g.Count + c, g.Bound + c, g.Value, g.Priced); continue; }
 
                 var o = mats.GetValueOrDefault(id);
 
@@ -1042,7 +1056,7 @@ public partial class MainWindow
 
             .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value)), _items.NameOf(x.Key))).ToList();
 
-        // gear is bound and worth nothing: no slot of its own, only the quiet line below (GearNote)
+        // gear has no slot of its own in the row: its group below says each piece and what it sells for
 
         pick.AddRange(matSlots.Concat(currSlots).Take(Math.Max(0, 9 - pick.Count)));
 
@@ -1114,11 +1128,19 @@ public partial class MainWindow
 
         {
 
-            // apart from the loot, a count per piece and no value (GearRow)
+            // apart from the loot, a count per piece and what it sells for (GearRow): gear binds on equip, so a drop is tradable
 
-            int pieces = gear.Values.Sum() + unknownGear;
+            int pieces = gear.Values.Sum(x => x.Count) + unknownGear;
 
-            var sum = new List<Inline> { PR($"{pieces} piece{(pieces == 1 ? "" : "s")}", "Muted"), PR(" · ", "Faint"), PR("bound, no value", "Faint") };
+            long gv = gear.Values.Sum(x => x.Value); int gb = gear.Values.Sum(x => x.Bound);
+
+            var sum = new List<Inline> { PR($"{pieces} piece{(pieces == 1 ? "" : "s")}", "Muted"), PR(" · ", "Faint") };
+
+            if (gv > 0) { var v = PR(Fk(gv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" " + PriceBook.Cut, "Muted")); }
+
+            else sum.Add(PR(gb >= pieces ? "bound, no value" : "no prices yet", "Faint"));
+
+            if (gb > 0 && gb < pieces) sum.Add(PR($" · {gb} bound", "Faint"));
 
             sec.Children.Add(RunsGroup(zone, "Gear", sum, () =>
 
@@ -1126,9 +1148,9 @@ public partial class MainWindow
 
                 var sp = new StackPanel();
 
-                foreach (var (id, c) in gear.OrderByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value))
+                foreach (var (id, x) in gear.OrderByDescending(x => x.Value.Value).ThenByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value.Count))
 
-                    sp.Children.Add(RunsItem(_items.NameOf(id), c, "", "", ""));
+                    sp.Children.Add(RunsItem(_items.NameOf(id), x.Count, x.Bound > 0 && x.Bound < x.Count ? $"{x.Bound} bound" : "", x.Value > 0 ? Fk(x.Value) : "", x.Value > 0 ? "" : x.Bound >= x.Count ? "bound" : "no price yet"));
 
                 // a piece whose icon two items share: gear all the same, its name not known
 

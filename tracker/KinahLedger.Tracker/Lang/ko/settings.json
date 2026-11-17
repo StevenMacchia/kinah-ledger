@@ -52,6 +52,8 @@
   "What's sent": "전송되는 정보",
   "What's read from the Market": "거래소에서 읽는 정보",
   "Help improve counting": "집계 개선에 참여",
+  "Show my boss bests on my kinahledger.com profile": "kinahledger.com 프로필에 내 보스 최고 기록 표시",
+  "Nothing about your fights leaves your PC unless this is on. Then only your own best kill on each boss goes to your signed-in profile, for you alone; your group's numbers stay on this PC.": "이 설정을 켜지 않으면 전투 정보는 PC 밖으로 나가지 않아요. 켜면 보스별 내 최고 처치 기록만 로그인한 내 프로필로 보내져 나만 볼 수 있고, 파티원의 수치는 이 PC에 남아요.",
   "Sends what it read and small pictures of item names and icons, never your chat or names. Off here any time.": "읽은 내용과 아이템 이름·아이콘의 작은 이미지를 보내요. 채팅이나 이름은 보내지 않아요. 언제든 여기서 끌 수 있어요.",
   "Send report pictures so the tracker learns to read them": "리포트 이미지를 보내 추적기가 읽는 법 학습",
   "With each miscount report, the loot list and crafting panel pictures go to kinahledger.com and become tests the tracker must pass before each release. Never the chat, never the whole screen.": "집계 오류를 신고할 때마다 전리품 목록과 제작 패널 이미지가 kinahledger.com으로 전송되고, 매 릴리스 전에 추적기가 통과해야 하는 테스트가 돼요. 채팅이나 전체 화면은 보내지 않아요.",
