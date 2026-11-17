@@ -39,5 +39,27 @@ The tables in `Lang/ko/*.json` and `Lang/zh-TW/*.json` map the English text exac
 | server / region / faction | 서버 / 지역 / 진영 | 伺服器 / 地區 / 陣營 |
 | Market | 거래소 | 交易所 |
 | Kinah Ledger (the app's name) | Kinah Ledger | Kinah Ledger |
+| Farming (page), farm | 파밍 | 刷寶 |
+| Crafting (page), craft | 제작 | 製作 |
+| Events (page) / Quests (page) | 이벤트 / 퀘스트 | 活動 / 任務 |
+| Abyss / Gathering | 어비스 / 채집 | 深淵 / 採集 |
+| loot / drop / pickup | 전리품 / 드롭 / 획득 | 戰利品 / 掉落 / 拾取 |
+| rare drop / watched item | 희귀 드롭 / 관심 아이템 | 稀有掉落 / 關注物品 |
+| Start run / Stop | 런 시작 / 중지 | 開始一輪 / 停止 |
+| per hour, /h, an hour | 시간당, /시간 | 每小時, /小時 |
+| today / this week / session | 오늘 / 이번 주 / 세션 | 今天 / 本週 / 本次 |
+| goal / points / reward | 목표 / 포인트 / 보상 | 目標 / 點數 / 獎勵 |
+| report (a miscount) | 오류 신고 | 回報 |
+| share (a picture), Share [button] | 공유 | 分享 |
+| inventory, bag | 인벤토리 | 背包 |
+| timers / boss timers | 타이머 / 보스 타이머 | 計時器 / 首領計時器 |
+| character / alt | 캐릭터 / 부캐 | 角色 / 分身 |
+| gear / gear score | 장비 / 장비 점수 | 裝備 / 裝備分數 |
+| bound / sellable | 귀속 / 판매 가능 | 綁定 / 可販售 |
+| Elyos / Asmodians / Balaur (factions) | 천족 / 마족 / 용족 | 天族 / 魔族 / 龍族 |
+| Gladiator, Templar, Assassin, Ranger | 검성, 수호성, 살성, 궁성 | 劍星, 守護星, 殺星, 弓星 |
+| Sorcerer, Spiritmaster, Cleric, Chanter | 마도성, 정령성, 치유성, 호법성 | 魔道星, 精靈星, 治癒星, 護法星 |
 
-Never translate: game names (skills, bosses, instances, modes like Conquest, items, classes), the app's name, key names (Ctrl, Alt), units the game writes in English, "DPS", "HPS", "PB".
+Never translate: game names (skills, bosses, instances, zones, modes like Conquest, items; the global servers' client writes them in English and the tracker reads them so; classes and factions are the exception, with the game's official Korean and Taiwanese names above), the app's name, key names (Ctrl, Alt), units the game writes in English, "DPS", "HPS", "PB".
+
+Same English, two meanings: key the second one with a context, `L.T("Share", "button")` → table key `"Share [button]"`. Since 1.0 the whole window is translated: every text set in code goes through `L.T`/`L.F`, XAML windows through `L.Apply`; options-test fails on English left in a Korean or Chinese render (Ui/LangCheck.cs). Check a page while working on it: `KL_LANG=ko KL_LANG_AUDIT=out.txt ui-shot <dir> …`.

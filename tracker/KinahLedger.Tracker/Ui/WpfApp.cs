@@ -2728,6 +2728,7 @@ public static partial class WpfApp
             dc.DrawRectangle(new VisualBrush(el) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill }, null, new Rect(pad, pad, w, h));
         }
         var rtb = new RenderTargetBitmap(wpx, hpx, 96, 96, PixelFormats.Pbgra32);
+        LangCheck.Scan(el, System.IO.Path.GetFileName(path));
         rtb.Render(dv);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));
@@ -2753,6 +2754,7 @@ public static partial class WpfApp
             using (var dc = under.RenderOpen()) dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, 0, wpx, hpx));
             rtb.Render(under);
         }
+        LangCheck.Scan(root, System.IO.Path.GetFileName(path));
         rtb.Render(root);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));

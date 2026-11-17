@@ -55,7 +55,7 @@ public partial class MainWindow
                 if (win.Content is FrameworkElement root)
                 {
                     var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-                    bmp.Render(root);
+                    LangCheck.Scan(root, "craft window"); bmp.Render(root);
                     var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
                     using var f = File.Create(Path.Combine(dir, "ui-craft-window.png")); enc.Save(f);
                 }

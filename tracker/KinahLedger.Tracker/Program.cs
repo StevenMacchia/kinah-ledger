@@ -36,6 +36,7 @@ internal static class Program
         // KL_LANG names one (a render in Korean)
         bool window = args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg;
         Ui.L.Init(window ? null : Environment.GetEnvironmentVariable("KL_LANG") ?? "en");
+        if (!window) Ui.LangCheck.FromEnvironment();   // KL_LANG_AUDIT=file: the English left in a render (Ui/LangCheck.cs)
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
             // double-clicked, started with Windows (in the tray), or restarted by an update: open the window.

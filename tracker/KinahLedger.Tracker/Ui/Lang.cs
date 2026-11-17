@@ -24,7 +24,32 @@ public static class L
     static Dictionary<string, string> _t = new(StringComparer.Ordinal);
 
     /// <summary>The English text in the language in use (itself when it has no translation).</summary>
-    public static string T(string en) => en.Length > 0 && _t.TryGetValue(en, out var s) ? s : en;
+    public static string T(string en)
+    {
+        if (en.Length == 0) return en;
+        if (_t.TryGetValue(en, out var s)) return s;
+        if (Misses != null && Code != "en") lock (Misses) Misses.Add(en);   // the language test and audit renders (LangCheck)
+        return en;
+    }
+
+    /// <summary>
+    /// English that says two things ("Share": a share of the damage, and a button that shares a picture): the table keys
+    /// it as "Share [button]". English when there is no such key (never the other meaning's translation).
+    /// </summary>
+    public static string T(string en, string ctx)
+    {
+        var key = $"{en} [{ctx}]";
+        if (Code == "en" || en.Length == 0) return en;
+        if (_t.TryGetValue(key, out var s)) return s;
+        if (Misses != null) lock (Misses) Misses.Add(key);
+        return en;
+    }
+
+    /// <summary>Set while the language test or an audit render runs: each English text asked for that has no translation.</summary>
+    public static HashSet<string>? Misses { get; set; }
+
+    /// <summary>The table in use (English to the language in use; empty in English).</summary>
+    public static IReadOnlyDictionary<string, string> CurrentTable() => _t;
 
     /// <summary>A sentence with figures: the English pattern's translation filled in ({0}, {1} … as in string.Format).</summary>
     public static string F(string en, params object?[] args)

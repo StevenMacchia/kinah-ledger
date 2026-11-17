@@ -599,7 +599,7 @@ public partial class MainWindow
         v.Arrange(new Rect(0, 0, PicW, PicH));
         v.UpdateLayout();
         var rtb = new RenderTargetBitmap(SharePicture.Width, SharePicture.Height, 192, 192, PixelFormats.Pbgra32);
-        rtb.Render(v);
+        LangCheck.Scan(v, "share picture"); rtb.Render(v);
         rtb.Freeze();
         return rtb;
     }
@@ -697,7 +697,7 @@ public partial class MainWindow
         IconCache.Drain(TimeSpan.FromSeconds(5));
         holder.UpdateLayout();
         var bmp = new RenderTargetBitmap((int)Math.Ceiling(holder.ActualWidth), (int)Math.Ceiling(holder.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bmp.Render(holder);
+        LangCheck.Scan(holder, "share"); bmp.Render(holder);
         SavePng(bmp, path);
     }
 

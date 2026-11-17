@@ -233,13 +233,13 @@ public partial class MainWindow
             if (ground is { } g)
             {
                 var b0 = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-                b0.Render(root);
+                LangCheck.Scan(root, "bosses"); b0.Render(root);
                 var page = new Border { Background = new SolidColorBrush(g), Padding = new Thickness(18), Child = new System.Windows.Controls.Image { Source = b0, Width = root.ActualWidth, Height = root.ActualHeight } };
                 page.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); page.Arrange(new Rect(page.DesiredSize)); page.UpdateLayout();
                 what = page;
             }
             var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(what.ActualWidth), (int)Math.Ceiling(what.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-            bmp.Render(what);
+            LangCheck.Scan(what, "bosses"); bmp.Render(what);
             var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
             using var f = File.Create(Path.Combine(dir, file)); enc.Save(f);
         }
@@ -282,7 +282,7 @@ public partial class MainWindow
                 var page = new Border { Background = new SolidColorBrush(ground), Padding = new Thickness(18), Child = root };
                 page.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); page.Arrange(new Rect(page.DesiredSize)); page.UpdateLayout();
                 var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(page.ActualWidth), (int)Math.Ceiling(page.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-                bmp.Render(page);
+                LangCheck.Scan(page, "bosses"); bmp.Render(page);
                 var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
                 using var f = File.Create(Path.Combine(dir, file)); enc.Save(f);
             }

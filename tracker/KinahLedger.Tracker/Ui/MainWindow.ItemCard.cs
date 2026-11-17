@@ -162,7 +162,7 @@ public partial class MainWindow
         b.Resources = Resources;
         b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); b.Arrange(new Rect(b.DesiredSize)); b.UpdateLayout();
         var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(b.ActualWidth + 16), (int)Math.Ceiling(b.ActualHeight + 16), 96, 96, PixelFormats.Pbgra32);
-        bmp.Render(b);
+        LangCheck.Scan(b, "item card"); bmp.Render(b);
         var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
         using var f = File.Create(path); enc.Save(f);
     }

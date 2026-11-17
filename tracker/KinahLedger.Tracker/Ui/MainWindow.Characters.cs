@@ -479,7 +479,7 @@ public partial class MainWindow
         using (var dc = under.RenderOpen()) dc.DrawRectangle(TryFindResource("Bg") as Brush ?? Brushes.Black, null, new Rect(0, 0, w, h));
         rtb.Render(under);
         rtb.Render(root);
-        rtb.Render(card);
+        LangCheck.Scan(card, "characters"); rtb.Render(card);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));
         using var fs = System.IO.File.Create(file);

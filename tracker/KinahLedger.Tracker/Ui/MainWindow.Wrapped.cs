@@ -364,7 +364,7 @@ public partial class MainWindow
         sheet.Arrange(new Rect(sheet.DesiredSize));
         sheet.UpdateLayout();
         var rtb = new RenderTargetBitmap((int)Math.Ceiling(sheet.ActualWidth * 2), (int)Math.Ceiling(sheet.ActualHeight * 2), 192, 192, PixelFormats.Pbgra32);
-        rtb.Render(sheet);
+        LangCheck.Scan(sheet, "wrapped"); rtb.Render(sheet);
         rtb.Freeze();
         return rtb;
     }

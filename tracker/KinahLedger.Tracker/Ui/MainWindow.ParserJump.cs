@@ -111,7 +111,7 @@ public partial class MainWindow
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen()) dc.DrawRectangle(new VisualBrush(el) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill }, null, new Rect(0, 0, w, h));
         var rtb = new RenderTargetBitmap((int)Math.Ceiling(w), (int)Math.Ceiling(h), 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(dv); rtb.Freeze();
+        LangCheck.Scan(el, "parser jump"); rtb.Render(dv); rtb.Freeze();
         return rtb;
     }
 
