@@ -17,7 +17,7 @@ namespace KinahLedger.Ui;
 /// light trail and RECORD; an entry opening traces the chip's outline in; a fight's start projects its panel out of a line;
 /// its end says TARGET ELIMINATED or SIGNAL LOST.
 /// </summary>
-sealed class HudHolo : TacticalLook
+sealed partial class HudHolo : TacticalLook
 {
     static readonly Color CyanC = Color.FromRgb(0x00, 0xE5, 0xFF), LiteC = Color.FromRgb(0x7F, 0xE9, 0xFF), PaleC = Color.FromRgb(0xBF, 0xF6, 0xFF),
         GroundC = Color.FromRgb(0x06, 0x20, 0x2A), Ground2C = Color.FromRgb(0x0A, 0x30, 0x3E), GreenC = Color.FromRgb(0x2B, 0xFF, 0x9A), AmberC = Color.FromRgb(0xFF, 0xC8, 0x4A),
@@ -63,6 +63,8 @@ sealed class HudHolo : TacticalLook
 
     public HudHolo() : base(bare: false, Face)
     {
+        // the holographic list: the look's own rows (Ui/Themes/ThemeRows.cs)
+        UseRows(HoloRow.Pitch, m => new HoloRow(), 20, GapLine);
         _lineGlass = new TacSketch((dc, s) => Glass(dc, s, 1));
         _line.Children.Add(_lineGlass); _line.Children.Add(_lineBody); _line.Children.Add(_lineFx); _line.Children.Add(_lineAnchor);
         _fightGlass = new TacSketch((dc, s) => { Glass(dc, s, 1.06); if (_projectLine > 0) ProjectLine(dc, s); });
@@ -171,7 +173,7 @@ sealed class HudHolo : TacticalLook
             {
                 var gl = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, -3, 0, 0) };
                 gl.Children.Add(Tt("◇", 10, Cyan, Face, FontWeights.Bold));
-                gl.Children.Add(Tt(" " + gap, 12.5, f.Beat ? Green : Pale, Face, FontWeights.SemiBold));
+                gl.Children.Add(Tt(" " + gap.TrimStart('−'), 12.5, f.Beat ? Green : Pale, Face, FontWeights.SemiBold));
                 var tb = Label(f.Beat ? L.T(" BEST") : L.T(" TO BEST")); tb.Margin = new Thickness(3, 1, 0, 0); gl.Children.Add(tb);
                 hour.Children.Add(gl);
             }
@@ -216,7 +218,8 @@ sealed class HudHolo : TacticalLook
             _hexHost = hex;
             rr.Children.Add(hex);
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0) };
-            words.Children.Add(Label(L.T("RARE DROP")));
+            _rareLabel = Label(L.T("RARE DROP"));
+            words.Children.Add(_rareLabel);
             var nm = new StackPanel { Orientation = Orientation.Horizontal };
             nm.Children.Add(Tt(r.Name, 15, Frozen(c), Face, FontWeights.Bold));
             if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 12, Lite, Face, FontWeights.SemiBold); cn.Margin = new Thickness(3, 1, 0, 0); nm.Children.Add(cn); }
@@ -378,11 +381,11 @@ sealed class HudHolo : TacticalLook
                 track.Children.Add(new TacSketch((dc, s) =>
                 {
                     double y = s.Height / 2, x1 = s.Width * hp;
-                    dc.DrawRectangle(Frozen(Tac.A(CyanC, .16)), null, new Rect(0, y - .5, s.Width, 1));
+                    dc.DrawRectangle(Frozen(Tac.A(Color.FromRgb(0xFF, 0x8A, 0x7A), .18)), null, new Rect(0, y - 2.5, s.Width, 5));
                     // the coral line glowing: a wide faint band under a bright core
-                    dc.DrawRectangle(Frozen(Tac.A(CoralC, .22)), null, new Rect(0, y - 3.5, x1, 7));
-                    dc.DrawRectangle(Frozen(Tac.A(CoralC, .5)), null, new Rect(0, y - 2, x1, 4));
-                    dc.DrawRectangle(Frozen(Color.FromRgb(0xFF, 0xB4, 0xB0)), null, new Rect(0, y - 1, x1, 2));
+                    dc.DrawRectangle(Frozen(Tac.A(CoralC, .22)), null, new Rect(0, y - 4.5, x1, 9));
+                    dc.DrawRectangle(Frozen(Tac.A(CoralC, .85)), null, new Rect(0, y - 2.5, x1, 5));
+                    dc.DrawRectangle(Frozen(Color.FromRgb(0xFF, 0xB4, 0xB0)), null, new Rect(0, y - 1, x1, 1.5));
                     dc.DrawRectangle(White, null, new Rect(Math.Max(0, x1 - 1.5), y - 3.5, 1.5, 7));
                     for (int k = 1; k <= 2; k++) { double x = Math.Round(s.Width * k / 3); dc.DrawRectangle(Lite, null, new Rect(x - .5, 0, 1, s.Height)); }
                 }));
@@ -400,7 +403,7 @@ sealed class HudHolo : TacticalLook
             if (e.HasDamage)
             {
                 _fightBody.Children.Add(Hairline(new Thickness(0, 6, 0, 5)));
-                _fightBody.Children.Add(ParserFoot.Line(e, now, 12.5));
+                _fightBody.Children.Add(Foot(e, now));
             }
         }
         _fight.Visibility = Visibility.Visible;
@@ -473,8 +476,19 @@ sealed class HudHolo : TacticalLook
     protected override void RareDrop(Pick p, bool held)
     {
         if (_hexHost is not Grid hex || hex.Children[0] is not TacSketch art) return;
-        Motion.Play(hex, 1300, t => { _hex = Out(Seg(t, 0, .7)); art.InvalidateVisual(); }, () => { _hex = 1; art.InvalidateVisual(); });
+        // the frame unfolds and the tile blooms in (from 0.6, past 1.15, settling); RARE DROP lights amber while it plays
+        var sc = new ScaleTransform(1, 1);
+        hex.RenderTransformOrigin = new Point(.5, .5); hex.RenderTransform = sc;
+        var label = _rareLabel;
+        Motion.Play(hex, 1600, t =>
+        {
+            _hex = Out(Seg(t, 0, .6)); art.InvalidateVisual();
+            double k = Seg(t, 0, .4);
+            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(k, 2.4);
+            if (label != null) { label.Foreground = t < .9 ? Amber : Lite; label.FontSize = t < .9 ? 10.5 : 9.5; }
+        }, () => { _hex = 1; art.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; if (label != null) { label.Foreground = Lite; label.FontSize = 9.5; } });
     }
+    TextBlock? _rareLabel;
 
     /// <summary>Your best passed: the ring's arc runs on round to full with a light trail and RECORD lights under it.</summary>
     protected override void BestPassed(bool held)
@@ -542,13 +556,15 @@ sealed class HudHolo : TacticalLook
         var small = Tt(wipe ? L.T("RECONNECTING") : "◇ " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 10, Frozen(Tac.A(c, .85)), Small, FontWeights.SemiBold); small.HorizontalAlignment = HorizontalAlignment.Center;
         words.Children.Add(big); words.Children.Add(small);
         band.Children.Add(words);
-        _fightFx.Children.Clear(); _fightFx.Children.Add(band);
+        var dim = new Border { Background = Frozen(Tac.A(DeepC, .78)), Opacity = 0 };
+        _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band);
         Motion.Play(_fightFx, 2600, t =>
         {
             scale.ScaleY = Math.Max(.03, Out(Seg(t, .04, .2)));
             scale.ScaleX = Out(Seg(t, 0, .1)) * .9 + .1;
             words.Opacity = t < .16 ? 0 : t < .19 ? .4 : t < .84 ? 1 : 1 - Seg(t, .84, 1);
             band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
+            dim.Opacity = t < .84 ? Out(Seg(t, 0, .14)) : 1 - Seg(t, .84, 1);
         }, () => _fightFx.Children.Clear());
     }
 }

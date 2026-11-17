@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using KinahLedger.Parser;
 using KinahLedger.Session;
 using static KinahLedger.Ui.HudKit;
 
@@ -43,6 +44,35 @@ abstract class TacticalLook : HudThemeLook
 
     /// <summary>The timer's tone, said once for the three looks.</summary>
     protected static TimerBadge.Tone ToneOf(TimerBoard.Item i, DateTime now) => TimerBadge.Of(i, now).Tone;
+
+    /// <summary>
+    /// The meter's foot as the Parser's (ParserFoot.Line) says it, for a look that draws its own: the fight's total, the
+    /// group's figure and its word ("Group DPS", "Your DPS" alone on the meter, "(boss pulls)" in a run), and whether it is
+    /// the held fight's average (the AVG. DPS badge).
+    /// </summary>
+    protected static (string Total, string GroupWord, string Group, bool Held) FootOf(Encounter e, DateTime now)
+    {
+        bool held = e.HeldAverage;
+        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
+        bool solo = ParserFoot.SoloYou(e);
+        string word = L.T(solo ? (held ? "You" : pulls ? "Your DPS (boss pulls)" : "Your DPS") : held ? "Group" : pulls ? "Group DPS (boss pulls)" : "Group DPS");
+        return (Amounts.Meter(e.Credited), word, e.GroupDpsText(held ? e.End ?? now : now), held);
+    }
+
+    /// <summary>A look's own foot marked as the meter's foot (its words read aloud as the Parser's are).</summary>
+    protected static T AsFoot<T>(T foot, Encounter e, DateTime now) where T : FrameworkElement
+    {
+        foot.Tag = "parser-foot";
+        System.Windows.Automation.AutomationProperties.SetName(foot, e.FootText(now));
+        return foot;
+    }
+
+    /// <summary>A bar's share shown through <paramref name="apply"/>: slid there while effects play, else set (Motion.Slide's rules).</summary>
+    protected static void SlideBar(UIElement el, MeterContext c, string part, double share, Action<double> apply)
+    {
+        if (c.Moves) Motion.Slide(el, c.Key + "|" + part, share, apply);
+        else apply(share);
+    }
 
     /// <summary>A text in a face, tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontFamily face, FontWeight weight, FontStretch? stretch = null) => Tac.Text(s, size, fg, face, weight, stretch);

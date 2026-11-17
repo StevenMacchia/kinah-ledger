@@ -17,7 +17,7 @@ namespace KinahLedger.Ui;
 /// CONTACT box round its tile; your best passed stamps NEW RECORD across the reticle as it turns a quarter; an entry opening
 /// blinks the timer's block; a fight's start slams brackets onto its box with ENGAGE; its end says SPLASH ONE or MISSION FAILED.
 /// </summary>
-sealed class HudFighter : TacticalLook
+sealed partial class HudFighter : TacticalLook
 {
     static readonly Color PhosC = Color.FromRgb(0x7C, 0xFF, 0x9E), AmberC = Color.FromRgb(0xFF, 0xB8, 0x3D), RedC = Color.FromRgb(0xFF, 0x55, 0x55),
         InkC0 = Color.FromRgb(0x01, 0x0A, 0x04), PaleC = Color.FromRgb(0xDC, 0xFF, 0xE6);
@@ -67,6 +67,8 @@ sealed class HudFighter : TacticalLook
 
     public HudFighter() : base(bare: true, Face)
     {
+        // the target list: the look's own rows (Ui/Themes/ThemeRows.cs)
+        UseRows(TargetRow.Pitch, m => new TargetRow(), 20, GapLine);
         _lineBrackets = new TacSketch(DrawLineBrackets);
         _lineScrim = new TacSketch((dc, s) => Glass(dc, s, 3));
         _line.Children.Add(_lineScrim);
@@ -161,7 +163,7 @@ sealed class HudFighter : TacticalLook
             var rateTone = f.Warm ? PhosDim : f.Abyss ? Pale : Phos;
             var rate = Halo(f.Warm ? f.Rate.ToUpperInvariant() : f.Rate, f.Warm ? 17 : 27, rateTone, FontWeights.Bold);
             top.Children.Add(rate);
-            if (f.Unit.Length > 0) { var u = Halo(f.Unit.ToUpperInvariant(), 13, PhosDim, FontWeights.Bold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 5); top.Children.Add(u); }
+            if (f.Unit.Length > 0) { var u = Halo(f.Unit, 13, PhosDim, FontWeights.Bold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 5); top.Children.Add(u); }
             _figs.Children.Add(top);
             // SES 894K · BEST −130K (in the Abyss: AP 24.7K)
             var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, -1, 0, 0) };
@@ -170,8 +172,8 @@ sealed class HudFighter : TacticalLook
             if (gap.Length > 0 && !f.Abyss)
             {
                 if (sub.Children.Count > 0) sub.Children.Add(Dot());
-                sub.Children.Add(Label(L.T("BEST")));
-                sub.Children.Add(Fig(gap, f.Beat ? Amber : PhosDim, 13));
+                sub.Children.Add(Label(f.Beat ? L.T("BEST") : L.T("TO BEST")));
+                sub.Children.Add(Fig(gap.TrimStart('−'), f.Beat ? Amber : PhosDim, 13));
             }
             if (sub.Children.Count > 0) _figs.Children.Add(sub);
         }
@@ -232,10 +234,10 @@ sealed class HudFighter : TacticalLook
 
     void DrawFightBrackets(DrawingContext dc, Size s) => Brackets(dc, s, _fightSpread, _fightFlash, 12);
 
-    static void Brackets(DrawingContext dc, Size s, double spread, double flash, double arm)
+    static void Brackets(DrawingContext dc, Size s, double spread, double flash, double arm, double alpha = 1)
     {
-        if (s.Width <= 0 || s.Height <= 0) return;
-        var tone = Frozen(Tac.Mix(PhosC, Colors.White, flash));
+        if (s.Width <= 0 || s.Height <= 0 || alpha <= 0) return;
+        var tone = Frozen(Tac.A(Tac.Mix(PhosC, Colors.White, flash), alpha));
         double l = 1 - spread, t = 1 - spread, r = s.Width - 1 + spread, b = s.Height - 1 + spread;
         var g = new StreamGeometry();
         using (var x = g.Open())
@@ -358,7 +360,17 @@ sealed class HudFighter : TacticalLook
     }
 
     /// <summary>A part with a dark hairline round it (a solid block on snow keeps its edge).</summary>
-    static FrameworkElement Grounded(Border b) => new Border { BorderBrush = Frozen(Tac.A(InkC0, .7)), BorderThickness = new Thickness(1), Child = b, VerticalAlignment = VerticalAlignment.Center };
+    FrameworkElement Grounded(Border b)
+    {
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new Border { BorderBrush = Frozen(Tac.A(InkC0, .7)), BorderThickness = new Thickness(1), Child = b });
+        // the entry's lock: brackets round the block, snapping in as it blinks (drawn only while an entry opens)
+        _blockBrackets = new TacSketch((dc, s) => { if (_blockLock >= 0) Brackets(dc, s, _blockLock, 0, 6, _blockLockA); });
+        g.Children.Add(_blockBrackets);
+        return g;
+    }
+    TacSketch? _blockBrackets;
+    double _blockLock = -1, _blockLockA = 1;
 
     /// <summary>The timers above everything, or inside the fight's box in a dungeon (the Kinah line away).</summary>
     void PlaceTimers()
@@ -433,7 +445,7 @@ sealed class HudFighter : TacticalLook
                 {
                     dc.DrawLine(Tac.P(PhosDim, 1, dash: new DashStyle(new double[] { 3, 3 }, 0)), new Point(0, 0.5), new Point(s.Width, 0.5));
                 }) { Height = 1, Margin = new Thickness(0, 6, 0, 5) });
-                _fightBody.Children.Add(ParserFoot.Line(e, now, 12));
+                _fightBody.Children.Add(Foot(e, now));
             }
         }
         _fight.Visibility = Visibility.Visible;
@@ -537,21 +549,25 @@ sealed class HudFighter : TacticalLook
     protected override void BestPassed(bool held)
     {
         if (_reticle.Visibility != Visibility.Visible) return;
-        var band = new Border { Background = Amber, BorderBrush = Frozen(Tac.A(InkC0, .9)), BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 5, 0), Child = Tt(L.T("NEW RECORD"), 10.5, Dark, Face, FontWeights.Bold) };
+        var band = new Border { Background = Amber, BorderBrush = Frozen(Tac.A(InkC0, .9)), BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 5, 0), Child = Tt(L.T("NEW RECORD"), 9.5, Dark, Face, FontWeights.Bold) };
         band.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var clip = new RectangleGeometry(new Rect(0, 0, 0, 30));
         band.Clip = clip;
-        // its right end on the reticle's right edge: it runs out over the bracket's corner, never over the hour
-        Canvas.SetLeft(band, 27 - band.DesiredSize.Width); Canvas.SetTop(band, -band.DesiredSize.Height / 2);
+        // centred across the reticle, an amber rule through it behind the plate
+        Canvas.SetLeft(band, -band.DesiredSize.Width / 2); Canvas.SetTop(band, -band.DesiredSize.Height / 2);
+        var rule = new Border { Height = 1.5, Width = 0, Background = Amber };
+        Canvas.SetTop(rule, -.75);
         _reticleAnchor.Children.Clear();
+        _reticleAnchor.Children.Add(rule);
         _reticleAnchor.Children.Add(band);
         double bw = band.DesiredSize.Width;
         Motion.Play(band, 2000, t =>
         {
             _spin = 90 * Back(Seg(t, 0, .35)); _reticleArt.InvalidateVisual();
             clip.Rect = new Rect(0, 0, bw * Out(Seg(t, .12, .3)), 30);
+            double rw = 64 * Out(Seg(t, .05, .2)); rule.Width = rw; Canvas.SetLeft(rule, -rw / 2); rule.Opacity = band.Opacity;
             band.Opacity = t < .85 ? (t > .3 && t < .4 && (int)((t - .3) / .025) % 2 == 1 ? .25 : 1) : 1 - Seg(t, .85, 1);
-        }, () => { _reticleAnchor.Children.Remove(band); _spin = 0; _reticleArt.InvalidateVisual(); });
+        }, () => { _reticleAnchor.Children.Clear(); _spin = 0; _reticleArt.InvalidateVisual(); });
     }
 
     /// <summary>An entry opened: the timer's block blinks twice (the block: its words stay put).</summary>
@@ -561,7 +577,10 @@ sealed class HudFighter : TacticalLook
         {
             bool on = t >= .6 || (int)(t / .15) % 2 == 1;
             if (_timerBlock != null) PaintBlock(_timerBlock, TimerBadge.Tone.On, on);
-        }, () => { if (_timerBlock != null) PaintBlock(_timerBlock, _timerTone, true); });
+            _blockLock = 7 * (1 - Out(Seg(t, 0, .55))) + 2;
+            _blockLockA = 1 - Seg(t, .7, 1);
+            _blockBrackets?.InvalidateVisual();
+        }, () => { if (_timerBlock != null) PaintBlock(_timerBlock, _timerTone, true); _blockLock = -1; _blockBrackets?.InvalidateVisual(); });
     }
 
     /// <summary>A fight started: brackets slam onto its box from wide and ENGAGE flashes across it.</summary>
@@ -605,13 +624,18 @@ sealed class HudFighter : TacticalLook
     {
         var outer = new Grid();
         // the box under the callout dims, so the words stand alone on it
-        var dim = new Border { Background = Frozen(Tac.A(InkC0, .6)), Opacity = 0 };
+        var dim = new Border { Background = Frozen(Tac.A(InkC0, .82)), Opacity = 0 };
         outer.Children.Add(dim);
         var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
         outer.Children.Add(grid);
+        // the two rules run out from the middle first, then the band fills between them
         var scale = new ScaleTransform(0, 1);
-        var band = new Border { Background = Frozen(Tac.A(InkC0, .9)), BorderBrush = Frozen(toneC), BorderThickness = new Thickness(0, 2, 0, 2), RenderTransformOrigin = new Point(.5, .5), RenderTransform = scale };
+        var band = new Border { Background = Frozen(Tac.A(InkC0, .92)), Opacity = 0 };
         grid.Children.Add(band);
+        var rules = new Grid { RenderTransformOrigin = new Point(.5, .5), RenderTransform = scale };
+        rules.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Top, Background = Frozen(toneC) });
+        rules.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, Background = Frozen(toneC) });
+        grid.Children.Add(rules);
         var words = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 7, 0, 8) };
         var bt = Tt(big, 22, tone, Face, FontWeights.Bold); bt.HorizontalAlignment = HorizontalAlignment.Center;
         words.Children.Add(bt);
@@ -633,15 +657,17 @@ sealed class HudFighter : TacticalLook
         grid.Children.Add(words);
         return (outer, t =>
         {
-            dim.Opacity = t < .82 ? Out(Seg(t, 0, .2)) : 1 - Seg(t, .82, 1);
-            double k = Seg(t, 0, open);
+            dim.Opacity = t < .82 ? Out(Seg(t, 0, Math.Max(.12, open * .5))) : 1 - Seg(t, .82, 1);
+            double k = Seg(t, 0, open * .6);
             scale.ScaleX = open > .2 ? k * k * (3 - 2 * k) : Out(k);
+            double fill = Seg(t, open * .45, open);
             double on = open > .2 ? open : .1;
             double w = t < on ? 0 : t < .82 ? 1 : 1 - Seg(t, .82, 1);
             // the words come on hard, with one flicker as a HUD's would
             words.Opacity = t > on + .03 && t < on + .06 ? .3 : w;
             chev.Opacity = w;
-            band.Opacity = t < .82 ? 1 : 1 - Seg(t, .82, 1);
+            band.Opacity = t < .82 ? fill : 1 - Seg(t, .82, 1);
+            rules.Opacity = t < .82 ? 1 : 1 - Seg(t, .82, 1);
         });
     }
 
