@@ -316,6 +316,9 @@
        to swap it for the hover tint, so a pill just clicked went dark until the pointer left it) -->
   <Style x:Key="SegOff" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="ui:Motion.Switch" Value="True"/>
+    <!-- no drop on a button with no ground: the skins' hard drop (Wacky's ink) fell on the words themselves and doubled them
+         (Steven, 2026-11-17: "cant read the text"); a lit pill (SegOn) has a ground and takes it again -->
+    <Setter Property="Effect" Value="{x:Null}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderBrush" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
@@ -342,6 +345,7 @@
     </Setter>
   </Style>
   <Style x:Key="SegOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
+    <Setter Property="Effect" Value="{DynamicResource BtnFx}"/>
     <Setter Property="ui:Motion.Lit" Value="True"/>
     <Setter Property="Background" Value="{DynamicResource SegOnBg}"/>
     <Setter Property="Foreground" Value="{DynamicResource SegOnInk}"/>
