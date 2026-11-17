@@ -271,10 +271,24 @@ static class ParserCommand
     /// </summary>
     public static Border Group(FightView v, CommandCtx ctx, bool live, bool detail)
     {
+        if (v.Members.Count == 0) { var none = new StackPanel(); none.Children.Add(T(L.T("The group wasn't seen."), 12, Faint)); return Glass(none, new Thickness(14, 12, 14, 12), 14); }
+        return Glass(Fit(w => GroupBody(v, ctx, live, detail, w)), new Thickness(6, 12, 6, 10), 14);
+    }
+
+    /// <summary>
+    /// The group's table at a width: the columns that fit it (Steven, 2026-11-16, the window at 84%: "everything is cut off"),
+    /// the least needed going first: the DPS over time, the max hit, crit, then damage. The member's name keeps room.
+    /// </summary>
+    static StackPanel GroupBody(FightView v, CommandCtx ctx, bool live, bool detail, double width)
+    {
         var e = v.E;
         var body = new StackPanel();
-        if (v.Members.Count == 0) { body.Children.Add(T(L.T("The group wasn't seen."), 12, Faint)); return Glass(body, new Thickness(14, 12, 14, 12), 14); }
         bool dmg = v.HasDamage, dmgCol = dmg && (detail || ctx.Details), crit = v.HasCrit, max = v.HasMax, spark = v.HasTimeline;
+        double Need() => 20 + 30 + 38 + GroupNameMin + (dmgCol ? 70 : 0) + (dmg ? 126 : 0) + (crit ? 52 : 0) + (max ? 62 : 0) + (spark ? 80 : 0) + 18;
+        if (Need() > width) spark = false;
+        if (Need() > width) max = false;
+        if (Need() > width) crit = false;
+        if (Need() > width) dmgCol = false;
         var widths = new List<double> { 30, 38, -1 };
         if (dmgCol) widths.Add(70);
         if (dmg) { widths.Add(70); widths.Add(56); }
@@ -372,7 +386,7 @@ static class ParserCommand
         }
         // how much of the boss's HP the rows hold (no "Other" row), the rest and why on hover
         if (ctx.GroupFoot(e) is { } gf) body.Children.Add(M(gf, 12, 8, 12, 0));
-        return Glass(body, new Thickness(6, 12, 6, 10), 14);
+        return body;
     }
 
     /// <summary>The death recap a hover on a death tag shows: when, the killing blow, the last five hits and the HP after each.</summary>
@@ -487,7 +501,10 @@ static class ParserCommand
     }
 
     /// <summary>Every ability: its icon and name, damage, share, DPS, hits, average; casts, crit, max and min once the record carries them. A click on a column's name sorts by it.</summary>
-    static Border Abilities(FightView v, MemberView m, CommandCtx ctx)
+    static Border Abilities(FightView v, MemberView m, CommandCtx ctx) => Glass(Fit(w => AbilitiesBody(v, m, ctx, w)), new Thickness(6, 12, 6, 10), 14);
+
+    /// <summary>The abilities' table at a width: the columns that fit it, the least needed going first (Min, Back, Max, Casts, Average, Crit, Hits, DPS).</summary>
+    static StackPanel AbilitiesBody(FightView v, MemberView m, CommandCtx ctx, double width)
     {
         var body = new StackPanel();
         bool casts = m.Abilities.Any(a => a.Casts != null), crit = m.Abilities.Any(a => a.Crit != null), max = m.Abilities.Any(a => a.Max != null), min = m.Abilities.Any(a => a.Min != null);
@@ -504,6 +521,12 @@ static class ParserCommand
         if (max) cols.Add(("Max", 56, a => a.Max ?? 0, a => a.Max is { } x ? Amounts.Short(x) : "–"));
         if (min) cols.Add(("Min", 52, a => a.Min ?? 0, a => a.Min is { } x ? Amounts.Short(x) : "–"));
         cols.Add(("Average", 60, a => a.Average, a => a.Avg is { } x ? Amounts.Short(x) : "–"));
+        // what fits (Steven, 2026-11-16, the window at 84%: "everything is cut off"): the name and its SPEC chip keep their room
+        foreach (var k in new[] { "Min", "Back", "Max", "Casts", "Average", "Crit", "Hits", "DPS" })
+        {
+            if (16 + 38 + AbilityNameMin + cols.Sum(x => x.W) <= width) break;
+            cols.RemoveAll(x => x.Key == k);
+        }
         Grid Row() => Cols(new[] { 38.0, -1 }.Concat(cols.Select(x => x.W)).ToArray());
         var sortCol = cols.FirstOrDefault(x => x.Key == ctx.Sort);
         if (sortCol.Key == null) sortCol = cols[0];
@@ -541,8 +564,9 @@ static class ParserCommand
                 line.Children.Add(an);
                 var chip = SpecChip(a.Skill, a.Name, a.Picks);
                 Grid.SetColumn(chip, 1); line.Children.Add(chip);
-                // the name takes what the chip leaves (Auto then *: the chip is never the one cut)
-                line.ColumnDefinitions[0].Width = GridLength.Auto; an.MaxWidth = 150;
+                // the chip right after the name, the name trimmed for it (the grid sized to its content, never past the column):
+                // the chip is never the one cut
+                line.HorizontalAlignment = HorizontalAlignment.Left;
                 nb.Children.Add(line);
             }
             else nb.Children.Add(an);
@@ -554,7 +578,29 @@ static class ParserCommand
             body.Children.Add(new Border { Padding = new Thickness(8, 0, 8, 0), Child = r });
             if (i < list.Count - 1) body.Children.Add(M(new Border { Height = 1, Background = Hair }, 8, 0, 8, 0));
         }
-        return Glass(body, new Thickness(6, 12, 6, 10), 14);
+        return body;
+    }
+
+    /// <summary>The room an ability's name and its SPEC chip keep; a member's name in the group.</summary>
+    const double AbilityNameMin = 190, GroupNameMin = 150;
+
+    /// <summary>
+    /// A table drawn for the width it has, again when that changes (the window resized or its size picked): built once at any
+    /// width first, then for the width laid out.
+    /// </summary>
+    static FrameworkElement Fit(Func<double, FrameworkElement> build)
+    {
+        var holder = new Border();
+        double at = double.NaN;
+        holder.Child = build(double.PositiveInfinity);
+        holder.SizeChanged += (_, e) =>
+        {
+            double w = Math.Round(e.NewSize.Width);
+            if (w < 1 || w == at) return;
+            at = w;
+            holder.Child = build(w);
+        };
+        return holder;
     }
 
     /// <summary>

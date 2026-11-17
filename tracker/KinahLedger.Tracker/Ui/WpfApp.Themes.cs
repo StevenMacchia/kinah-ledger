@@ -55,6 +55,37 @@ public static partial class WpfApp
                 h.Close();
             }
         check(bad.Count == 0, "the themes' looks never name packets or traffic" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        // each look's own skills card on a row (Steven, 2026-11-16: "the extra DPS stats per player display classic standard
+        // meter"), with the card's figures; and Combat Power beside every name on the meter ("dont forget the combat power")
+        var cards = new List<string>();
+        var ranked = live!.Ranked().Where(f => !f.Other).ToList();
+        foreach (var k in keys)
+        {
+            var h = new HudWindow(null, k, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Update(kinah); h.ShowParser(live, now, ParserMode.Bosses, details: false); h.SetKinahHidden(true);
+            h.Show(); DoEvents();
+            var texts = VisibleTexts(h);
+            var rows = ThemeRowsOf(h).FirstOrDefault();
+            var top = ranked[0];
+            var card = rows?.CardForTest(top.Id);
+            var mc = MemberCard.Of(live, top, now);
+            var cardTexts = card == null ? new List<string>() : LogicalTexts(card).ToList();   // a card not yet shown: its words by the logical tree
+            string cardText = string.Join(" ", cardTexts);
+            var missing = new List<string>();
+            if (HudThemes.Make(k, true) is not IThemeCard) missing.Add("its own card");
+            if (card == null || mc == null) missing.Add("a card");
+            else
+            {
+                foreach (var want in new[] { mc.Name, mc.Dps, mc.Share, mc.Damage, mc.Cp, mc.Abilities.FirstOrDefault()?.Name ?? "" }.Where(x => x.Length > 0))
+                    if (!cardText.Contains(want, StringComparison.OrdinalIgnoreCase)) missing.Add($"card {want}");
+            }
+            string rowText = string.Join(" ", texts);
+            foreach (var f in ranked.Take(KinahLedger.Ui.ParserRows.CompactRows).Where(f => f.CombatPower > 0))
+                if (!rowText.Contains(Amounts.Meter(f.CombatPower))) missing.Add($"CP {Amounts.Meter(f.CombatPower)} by {f.Name}");
+            if (missing.Count > 0) cards.Add($"{k}: {string.Join(", ", missing)}");
+            h.Close();
+        }
+        check(cards.Count == 0, "every theme's look opens its own skills card on a row, with the member's DPS, share, damage, Combat Power and top skill, and shows each member's Combat Power on the meter" + (cards.Count > 0 ? ": " + string.Join("; ", cards) : ""));
     }
 
     static void ShotThemes(MainWindow w, string dir)
@@ -206,6 +237,14 @@ public static partial class WpfApp
             if (tag is "rare-drop" or "best-passed" or "entry-opened" or "fight-started" or "fight-ended" or "fight-wiped") foreach (var k in c.Keys.Where(k => k.StartsWith("pick")).ToList()) c[k] = "";
             return c;
         }
+    }
+
+    /// <summary>Every TextBlock's words under an element by its logical tree (one not laid out yet has no visual tree).</summary>
+    static IEnumerable<string> LogicalTexts(DependencyObject d)
+    {
+        if (d is System.Windows.Controls.TextBlock t) yield return MainWindow.InlineText(t);
+        foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
+            foreach (var x in LogicalTexts(ch)) yield return x;
     }
 
     /// <summary>A theme look's meter rows in a window (its own, Ui/Themes/ThemeRows.cs).</summary>
