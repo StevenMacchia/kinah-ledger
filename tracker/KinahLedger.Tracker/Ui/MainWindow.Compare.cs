@@ -176,7 +176,7 @@ public partial class MainWindow
         return WeekRunList().Where(r => DayHistory.LocalStart(r).Date >= first).ToList();
     }
 
-    /// <summary>A run's best drop over runs: the sellable material worth most in all, "Fine Odyle ×2" (gear is bound, currencies aren't sold).</summary>
+    /// <summary>A run's best drop over runs: the sellable item worth most in all, "Fine Odyle ×2" (gear too: it binds on equip; bound copies and currencies aren't sold).</summary>
     string RunsBestDrop(IEnumerable<InstanceRun> runs)
     {
         var sum = new Dictionary<long, int>();
@@ -184,7 +184,7 @@ public partial class MainWindow
         string best = ""; double bestW = 0;
         foreach (var (id, c) in sum)
         {
-            if (_items.IsGear(id) || IsCurrency(id)) continue;
+            if (_items.BoundId(id) || IsCurrency(id)) continue;
             var name = _items.NameOf(id);
             if (PriceBook.Price(name) is long p && p * c > bestW) { bestW = p * c; best = $"{name} ×{c:N0}"; }
         }

@@ -320,6 +320,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
             _clock.Text = "‖ " + L.T("Ready").ToUpper(System.Globalization.CultureInfo.CurrentCulture); _clock.Foreground = Dim; _clock.FontSize = 12;
             _hpRow.Visibility = Visibility.Collapsed;
             _ready.Text = e.ReadyText; _ready.Visibility = Visibility.Visible;
+            if (PartyBeforeHit(e)) { PutRows(_rowsHost, e, now, FightWidth - 26); _rowsHost.Visibility = Visibility.Visible; }
             _cam.Root.Visibility = Visibility.Visible;
             return;
         }

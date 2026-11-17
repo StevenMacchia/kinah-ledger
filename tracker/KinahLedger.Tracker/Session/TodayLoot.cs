@@ -92,8 +92,12 @@ public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Activ
 /// <summary>Today's expeditions and events: every run since midnight (expeditions and events apart), and the loot of the counted ones.</summary>
 public sealed record TodayRuns(int Runs, int Counted, int Places, int Expeditions, int Events, long Kinah, long Value, List<TodaySlot> Items, List<(string Where, long Count)> KinahWhere, int Gear = 0, List<TodaySlot>? GearItems = null)
 {
-    /// <summary>The run's gear, one slot per piece kind with its count, best grade first: bound, worth nothing, never in <see cref="Items"/>.</summary>
+    /// <summary>The run's gear, one slot per piece kind with its count, best grade first, never in <see cref="Items"/>: worth its Market price (gear binds on equip), its bound copies nothing.</summary>
     public List<TodaySlot> GearSlots => GearItems ?? new();
+    /// <summary>What the gear sells for, after the Market's cut (in <see cref="Value"/>); the pieces with a price; the bound pieces (no value).</summary>
+    public long GearWorth => GearSlots.Sum(s => s.Worth);
+    public bool GearPriced => GearSlots.Any(s => s.Priced && s.Count > s.Bound);
+    public long GearBound => GearSlots.Sum(s => s.Bound);
 }
 
 /// <summary>
@@ -134,6 +138,7 @@ public static class TodayLoot
         {
             long sell = its.GetValueOrDefault(id), b = bound.GetValueOrDefault(id);
             if (sell + b <= 0) continue;
+            if (items.BoundId(id)) { b += sell; sell = 0; }   // its own id says bound: no value (gear binds on equip, not here)
             var name = items.NameOf(id);
             var w = sell > 0 ? Worth(name, sell) : null;
             var where = zone != null ? new List<(string, long)> { (ZoneName(zone), sell + b) }
@@ -152,6 +157,7 @@ public static class TodayLoot
                 string best = ""; int bestN = 0; long bestW = 0;
                 foreach (var x in kv.Value.Items)
                 {
+                    if (items.BoundId(x.Key)) continue;
                     var name = items.NameOf(x.Key);
                     long w = Worth(name, x.Value) ?? 0;
                     made += w;
@@ -191,30 +197,31 @@ public static class TodayLoot
             foreach (var (id, c) in r.BoundItems) Add(id, c, true);
         }
         var slots = new List<TodaySlot>();
-        // gear from a run is bound to the character: worth nothing, so it is kept apart from the loot, a row of its own with
-        // each piece's count (Steven, 2026-11-10 after Fire Temple: "gear from dungeons is of no value", then "keep the gear
-        // but no value i want to see how many of X type of gear i got")
+        // the runs' gear is a row of its own with each piece's count (Steven, 2026-11-10: "i want to see how many of X type of
+        // gear i got"). All gear binds on equip (Steven, 2026-11-17), so a piece is worth its Market price like any loot,
+        // unless its own id is the bound copy (a reward table's pick, Items.BoundId) or the game called it bound
         int gearPieces = counted.Sum(r => r.UnknownGear);
         var gearSlots = new List<TodaySlot>();
         foreach (var (id, c) in count)
         {
+            var name = items.NameOf(id);
+            long b = items.BoundId(id) ? c : bound.GetValueOrDefault(id);
             if (items.IsGear(id))
             {
                 gearPieces += (int)Math.Min(c, int.MaxValue);
-                gearSlots.Add(new TodaySlot(id, items.NameOf(id), c, c, 0, false, true, false, where[id].Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList()));
+                long? gw = Worth(name, c - b);
+                gearSlots.Add(new TodaySlot(id, name, c, b, gw ?? 0, gw != null, true, false, where[id].Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList()));
                 continue;
             }
-            var name = items.NameOf(id);
-            bool gear = false, curr = isCurrency(id);
-            long b = bound.GetValueOrDefault(id);
-            // gear from a run is bound to the character, and currencies aren't sold: neither is in the value (as RunValue)
-            long? w = gear || curr ? null : Worth(name, c - b);
-            slots.Add(new TodaySlot(id, name, c, gear ? c : b, w ?? 0, w != null, gear, curr, where[id].Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList()));
+            bool curr = isCurrency(id);
+            // currencies aren't sold, and bound copies can't be: neither is in the value (as RunValue)
+            long? w = curr ? null : Worth(name, c - b);
+            slots.Add(new TodaySlot(id, name, c, b, w ?? 0, w != null, false, curr, where[id].Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList()));
         }
         // as the Events page's loot row: the most valuable materials, then the gear best grade first, then the currencies
         static int Rank(TodaySlot s) => s.Currency ? 2 : s.Gear ? 1 : 0;
         slots = slots.OrderBy(Rank).ThenByDescending(s => s.Worth).ThenByDescending(s => s.Gear ? LootOrder.GradeRank(items.Get(s.Id)?.Grade ?? "") : 0).ThenByDescending(s => s.Count).ToList();
-        long value = kinah + slots.Sum(s => s.Worth);
+        long value = kinah + slots.Sum(s => s.Worth) + gearSlots.Sum(s => s.Worth);
         int places = today.Select(r => r.Zone).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         int exp = today.Count(r => string.Equals(r.Kind, "Expedition", StringComparison.OrdinalIgnoreCase));
         int ev = today.Count(r => string.Equals(r.Kind, "Event", StringComparison.OrdinalIgnoreCase));

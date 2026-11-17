@@ -371,6 +371,7 @@ sealed partial class HudHolo : TacticalLook
         {
             var wt = Tt(e.ReadyText, 13.5, Pale, Face, FontWeights.SemiBold); wt.Margin = new Thickness(0, 7, 0, 1);
             _fightBody.Children.Add(wt);
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, w - 24); }
         }
         else
         {

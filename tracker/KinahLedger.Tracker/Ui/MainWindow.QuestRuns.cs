@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 /// The Expeditions and events page in the Quest look (Steven, 2026-11-07, step 4): the place's box is a column of cards.
 /// The hero names the place (its band's dropdown kept) and makes the open run a timer: the ring and the chase bar count
 /// it against the average run here, so "almost paid" reads without a number; between runs they hold the last run against
-/// the best. Three chips say what the counted runs paid out: Kinah, materials, bound gear. A flagged run's question is a
+/// the best. Three chips say what the counted runs paid out: Kinah, materials, gear. A flagged run's question is a
 /// lilac card with the sheet it had. Runs is the last three on their lines, the rest behind "earlier runs" (the every-run
 /// box from the ⋯ menu). Paid out here is the loot as 46 px slots with count badges, two rows and Show all. Every figure
 /// and every string the figures check reads (tools/ui-review.md) is the same text as before, in a text block of its own.
@@ -70,7 +70,7 @@ public partial class MainWindow
         return (g, fill);
     }
 
-    /// <summary>What the counted runs paid out, for the chips: the Kinah, the materials' worth and kinds, the bound gear's pieces, the slots not named, the currencies.</summary>
+    /// <summary>What the counted runs paid out, for the chips: the Kinah, the materials' worth and kinds, the gear's pieces, the slots not named, the currencies.</summary>
     (long Kinah, long Mats, int MatKinds, int Gear, int Unread, int Curr) RunLootSums(List<InstanceRun> counted)
     {
         long kinah = 0, mats = 0; var kinds = new HashSet<long>(); int gear = 0, unread = 0; var curr = new HashSet<long>();
@@ -83,7 +83,7 @@ public partial class MainWindow
                 if (IsCurrency(id)) continue;
                 if (_items.IsGear(id)) { gear += c; continue; }
                 kinds.Add(id);
-                if (PriceBook.Price(_items.NameOf(id)) is long p) mats += (long)Math.Round(p * c * PriceBook.SellerKeeps);
+                if (!_items.BoundId(id) && PriceBook.Price(_items.NameOf(id)) is long p) mats += (long)Math.Round(p * c * PriceBook.SellerKeeps);
             }
             foreach (var (id, c) in r.BoundItems.Where(x => x.Value > 0))
             {
@@ -160,7 +160,7 @@ public partial class MainWindow
         else if (!known) { big.Inlines.Add(Q(L.T("no prices yet"), 22, FontWeights.Bold, "Muted")); big.Inlines.Add(Q("  " + L.T("what the rewards sell for isn't known"), 12, FontWeights.Medium, "Faint")); }
         else if (secs > 10) { big.Inlines.Add(Q(Fk(value / secs * 3600), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" " + L.T("an hour"), 13, FontWeights.Medium, "Muted")); }
         else { big.Inlines.Add(Q(Fk(value / (double)n), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" " + L.T("a run"), 13, FontWeights.Medium, "Muted")); }
-        big.ToolTip = L.F("Over the counted runs: Kinah plus materials at the lowest Market price, {0}. Gear is bound and not in the value. Flagged runs are left out.", QCut());
+        big.ToolTip = L.F("Over the counted runs: Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing. Flagged runs are left out.", QCut());
         left.Children.Add(big);
 
         // the chase: the open run against the average run here (a timer), or the last run against the best
@@ -291,7 +291,7 @@ public partial class MainWindow
 
     /// <summary>
     /// What the counted runs paid out, as the hero's second line (UX pass, 2026-11-13; three chips under the hero until
-    /// then, the Farming page's grammar now): the Kinah, the materials' worth, the bound gear (or the slots not named).
+    /// then, the Farming page's grammar now): the Kinah, the materials' worth, the gear (or the slots not named).
     /// Each figure is a text block of its own, as the figures check reads it.
     /// </summary>
     FrameworkElement QRunStats(List<InstanceRun> counted, long value)
@@ -304,7 +304,7 @@ public partial class MainWindow
             new(mats > 0 ? Fk(mats) : matKinds > 0 ? L.T("no price") : "–", L.T("materials"),
                 (matKinds > 0 ? L.F(matKinds == 1 ? "{0} kind of materials. " : "{0} kinds of materials. ", matKinds) : "") + (mats > 0 ? L.F("They sell for {0} at the lowest Market price, {1}.", Fk(mats), QCut()) : L.T("Nothing priced among the materials yet."))),
         };
-        // the bound gear and the currencies are Paid out here's own line and slots ("13 gear · bound, no value"): said once, there
+        // the gear and the currencies are Paid out here's own line and slots ("13 gear · 2.4M"): said once, there
         if (unread > 0 && gear == 0)
             parts.Add(new(unread.ToString("N0"), L.T(unread == 1 ? "slot not named" : "slots not named"), L.T("Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value.")));
         _ = curr;
@@ -332,17 +332,19 @@ public partial class MainWindow
 
     /// <summary>Paid out here: the head with the runs it covers and the worth, the sort links, the slots two rows deep, Show all.</summary>
     /// <summary>
-    /// The runs' gear apart from the loot: "19 gear · bound, no value", then a slot per piece with its count. Gear from an
-    /// expedition, dungeon or event is bound to the character, so it is worth nothing and sits outside the paid-out slots
-    /// (Steven, 2026-11-10: "gear from dungeons is of no value"; "keep the gear but no value i want to see how many of X
-    /// type of gear i got").
+    /// The runs' gear apart from the loot: "19 gear · 2.4M", then a slot per piece with its count (Steven, 2026-11-10: "i
+    /// want to see how many of X type of gear i got"). All gear binds on equip (Steven, 2026-11-17): a piece that drops is
+    /// tradable until it is worn, so it is in the value at its Market price; a bound copy by its own id adds nothing. The
+    /// tracker doesn't see a piece being equipped, so a piece later worn still counts.
     /// </summary>
     FrameworkElement? GearRow(TodayRuns tr, string when, bool slots = true)
     {
         if (tr.Gear <= 0) return null;
         var sp = new StackPanel();
-        var t = QT(L.F("{0:N0} gear · bound, no value", tr.Gear), 12, FontWeights.Medium, "Faint");
-        t.ToolTip = L.T("Gear from an expedition, dungeon or event is bound to you: it can't be sold, so it isn't in the value. Each piece shows how many you got.");
+        long bound = tr.GearBound;
+        string worth = tr.GearWorth > 0 ? Fk(tr.GearWorth) : bound >= tr.Gear ? L.T("bound, no value") : L.T("no price yet");
+        var t = QT(bound > 0 && bound < tr.Gear ? L.F("{0:N0} gear · {1} · {2:N0} bound", tr.Gear, worth, bound) : L.F("{0:N0} gear · {1}", tr.Gear, worth), 12, FontWeights.Medium, tr.GearWorth > 0 ? "Muted" : "Faint");
+        t.ToolTip = L.F("Gear binds on equip: a piece that drops can be sold until you wear it, so it counts at the lowest Market price, {0}. A bound copy adds nothing. Each piece shows how many you got.", QCut());
         ToolTipService.SetInitialShowDelay(t, 300);
         sp.Children.Add(t);
         if (slots && tr.GearSlots.Count > 0)
@@ -363,7 +365,7 @@ public partial class MainWindow
         if (tr.Value > 0)
         {
             var v = QT(Fk(tr.Value), 14, FontWeights.Bold, "Gold"); v.Margin = new Thickness(10, 0, 0, 0); v.VerticalAlignment = VerticalAlignment.Center;
-            v.ToolTip = L.F("Kinah plus loot at the lowest Market price, {0}. Bound items and items with no price yet add nothing.", QCut());
+            v.ToolTip = L.F("Kinah plus loot and gear at the lowest Market price, {0}. Bound items and items with no price yet add nothing.", QCut());
             Grid.SetColumn(v, 3); head.Children.Add(v);
         }
         sp.Children.Add(head);

@@ -86,6 +86,9 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     /// <summary>The line a dungeon's ready card shows where the members will be.</summary>
     protected const string ReadyLine = "Waiting for the first pull";
 
+    /// <summary>A dungeon's ready card with a party formed (two or more members): the rows go under the ready line.</summary>
+    internal static bool PartyWaiting(Encounter e) => e.Waiting && e.Roster.Count(f => !f.Other) >= 2;
+
     protected static TextBlock Tx(string s, double size, Brush fg, FontWeight? w = null) => new()
     {
         Text = s, FontSize = size, Foreground = fg, FontWeight = w ?? FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
@@ -355,7 +358,12 @@ sealed class HudCapsule : HudStackLook
         head.Children.Add(Tx(e.Title, 13.5, Ink, FontWeights.Bold));
         var clk = e.Waiting ? Tx(L.T("Ready"), 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _meterBody.Children.Add(head);
-        if (e.Waiting) { var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w); _meter.Visibility = Visibility.Visible; return; }
+        if (e.Waiting)
+        {
+            var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w);
+            if (PartyWaiting(e)) { ParserRows.Detach(_prows); _meterBody.Children.Add(_prows); _prows.Show(e, now); }
+            _meter.Visibility = Visibility.Visible; return;
+        }
         if (e.BossHpLeft is { } hp && e.Live)
         {
             // the HP as a hairline with "47% · 1.82M left" at its end
@@ -547,6 +555,7 @@ sealed class HudMeter : HudStackLook
             _hpFill.Width = _hpLine.Width = 0; _hpNow = null; PlaceHp();
             var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(10, 7, 10, 8);
             _rows.Children.Add(w);
+            if (PartyWaiting(e)) { ParserRows.Detach(_prows); _rows.Children.Add(_prows); _prows.Show(e, now); }
             _rows.Children.Add(new Border { Height = 1, Background = HudGlass.Rule });
             _rows.Visibility = Visibility.Visible;
             if (_figs is { } fw && !was) { DrawFoot(fw); _figSig = ""; }
@@ -692,7 +701,11 @@ sealed class HudFloat : HudStackLook
         if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); bar.Children.Add(HudKit.HpTicks()); }
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
-        if (e.Waiting) rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));
+        if (e.Waiting)
+        {
+            rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));
+            if (PartyWaiting(e)) { ParserRows.Detach(_prows); rows.Children.Add(_prows); _prows.Show(e, now); }
+        }
         else
         {
             ParserRows.Detach(_prows); rows.Children.Add(_prows); _prows.Show(e, now);

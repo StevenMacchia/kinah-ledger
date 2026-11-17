@@ -57,7 +57,7 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "packet-replay" or "packet-live" or "packet-record")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "parser-bench" or "packet-replay" or "packet-live" or "packet-record")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -134,6 +134,8 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                // the boss bests the profile gets with its switch on (Upload/BossBests.cs), on made-up fights; part of parse-test too
+                case "boss-bests-test": return Upload.BossBestTests.Run() ? 0 : 1;
                 case "accuracy-test": return Session.AccuracyTests.Run(settings);
                 case "accuracy-sample": return Session.AccuracyTests.Sample(settings, pos, opts);
                 case "replay-bank": return ReplayBankCmd(settings, pos, opts);
@@ -146,6 +148,7 @@ internal static class Program
                 // the boss-fight Parser (Parser/): its rules on made-up fight events
                 case "parser-test": return KinahLedger.Parser.ParserTests.Run(settings);
                 // a recording through the decoder and the Parser at full speed: each record and its members' shares (Parser/ParserTests.cs)
+                case "parser-bench": if (pos.Count == 0 || !opts.ContainsKey("truth")) { Console.WriteLine("parser-bench <capture.pcapng> --truth truth.json [--baseline baseline.json --run name] [--record]"); return 2; } return KinahLedger.Parser.ParserTests.ParserBench(pos[0], opts["truth"], opts.GetValueOrDefault("baseline"), opts.GetValueOrDefault("run"), opts.ContainsKey("record"));
                 case "parser-replay": if (pos.Count == 0) { Console.WriteLine("parser-replay <capture.pcapng> [--mode boss|run|fight] [--port 13328] [--save records.jsonl] [--crit] [--always]"); return 2; } return KinahLedger.Parser.ParserTests.ParserReplay(pos[0], opts.GetValueOrDefault("mode") ?? "boss", int.TryParse(opts.GetValueOrDefault("port"), out var prp) ? prp : 13328, opts.GetValueOrDefault("save"), opts.ContainsKey("crit"), opts.ContainsKey("always"));
                 // the party list's classes over a folder of game pictures (Ocr/PartyFrame.cs): totals by class, --rows for each picture's
                 case "party-scan": if (pos.Count == 0) { Console.WriteLine("party-scan <folder of pictures> [--rows]"); return 2; } return KinahLedger.Parser.ParserTests.PartyScan(pos[0], opts.ContainsKey("rows") || opts.ContainsKey("names"), opts.ContainsKey("names"));
@@ -481,6 +484,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
   market-watch [--server ..]    only the Market reader, as the window runs it in the background; Ctrl+C to stop
   parse-test                    self-test of the chat-line parser, the 0.7 reads and the balance counter logic
+  boss-bests-test               self-test of the boss bests sent to your profile when you turn that on (made-up fights)
   balance-test [--save]         read the currency counters at the top-left once and list the numbers (--save keeps the crop)
   options-test                  self-test of the Options window: changes, Save, Cancel (saves nothing)
   market-test                   self-test of the Market row parser
@@ -1712,6 +1716,7 @@ options: --process aion[,other]");
         ok &= Session.QuestsTests.Run(items, s);
         ok &= Session.HistoryTests.Run(items, s);
         ok &= Session.CharacterTests.Run(items, s);
+        ok &= Upload.BossBestTests.Run();
         ok &= Session.CompareTests.Run(items, s);
         ok &= Session.WrappedTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);

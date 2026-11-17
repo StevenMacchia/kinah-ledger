@@ -52,6 +52,8 @@
   "What's sent": "傳送的內容",
   "What's read from the Market": "從交易所讀取的內容",
   "Help improve counting": "協助改善計數",
+  "Show my boss bests on my kinahledger.com profile": "在我的 kinahledger.com 個人頁面顯示我的首領最佳紀錄",
+  "Nothing about your fights leaves your PC unless this is on. Then only your own best kill on each boss goes to your signed-in profile, for you alone; your group's numbers stay on this PC.": "除非開啟此選項，否則任何戰鬥資料都不會離開你的電腦。開啟後，只會把你在每個首領的最佳擊殺紀錄傳到你登入後的個人頁面，只有你看得到；隊友的數據會留在這台電腦。",
   "Sends what it read and small pictures of item names and icons, never your chat or names. Off here any time.": "傳送讀取到的內容，以及物品名稱與圖示的小圖，絕不傳送你的聊天或名稱。隨時可在這裡關閉。",
   "Send report pictures so the tracker learns to read them": "傳送回報圖片，讓追蹤器學會讀取",
   "With each miscount report, the loot list and crafting panel pictures go to kinahledger.com and become tests the tracker must pass before each release. Never the chat, never the whole screen.": "每次回報計數錯誤時，戰利品列表與製作面板的圖片會傳到 kinahledger.com，成為追蹤器每次發布前必須通過的測試。絕不傳送聊天或整個畫面。",

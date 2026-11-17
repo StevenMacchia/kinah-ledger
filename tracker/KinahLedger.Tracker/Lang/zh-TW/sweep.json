@@ -20,5 +20,17 @@
   "{0}: combo won": "{0}：連擊成功",
   "{0}: combo lost": "{0}：連擊失敗",
   "{0}: worked": "{0}：成功",
-  "{0}: failed": "{0}：失敗"
+  "{0}: failed": "{0}：失敗",
+  "Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing.": "基納加戰利品與裝備，以交易所最低價計（{0}）。綁定物品不計入。",
+  "Over the counted runs: Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing. Flagged runs are left out.": "統計過的各輪：基納加戰利品與裝備（以交易所最低價計，{0}）。綁定物品不計入；被標記的各輪不計。",
+  "Kinah plus loot and gear at the lowest Market price, {0}. Bound items and items with no price yet add nothing.": "基納加戰利品與裝備（以交易所最低價計，{0}）。綁定物品和尚無價格的物品不計入。",
+  "This run's Kinah plus its loot and gear at the lowest Market price, {0}. Bound items add nothing.": "這一輪的基納加戰利品與裝備，以交易所最低價計（{0}）。綁定物品不計入。",
+  "Made: Kinah plus loot and gear at the lowest Market price, {0}, over the counted runs. Bound items add nothing.": "收益：統計過各輪的基納加戰利品與裝備，以交易所最低價計（{0}）。綁定物品不計入。",
+  "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, {0}. Bound items, currencies, items with no price yet and runs left out of the averages add nothing.": "今天在遠征與活動的收益：基納加獎勵，以交易所最低價計（{0}）。綁定物品、貨幣、尚無價格的物品與被排除於平均的一輪不計入。",
+  "Gear binds on equip: a piece that drops can be sold until you wear it, so it counts at the lowest Market price, {0}. A bound copy adds nothing. Each piece shows how many you got.": "裝備穿上才會綁定：掉落的裝備在穿上前都能販售，所以以交易所最低價計（{0}）。已綁定的不計入。每件裝備會顯示你得到的數量。",
+  "{0:N0} gear · {1}": "裝備 {0:N0} · {1}",
+  "{0:N0} gear · {1} · {2:N0} bound": "裝備 {0:N0} · {1} · 綁定 {2:N0}",
+  "{0} bound": "綁定 {0}",
+  " · {0} bound": " · 綁定 {0}",
+  "×{0} ({1} bound) · last {2}": "×{0}（綁定 {1}）· 最近 {2}"
 }

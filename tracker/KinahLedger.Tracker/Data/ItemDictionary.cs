@@ -63,11 +63,19 @@ public sealed class ItemDictionary
         }
     }
     /// <summary>
-    /// A weapon, armour or accessory. Gear from an event or expedition is bound to the character and can't be sold, so it
-    /// carries no value in a run (Steven, 2026-10-22); only the materials can be sold. The list's own tradable flag can't
-    /// say this: one name has a tradable and a bound copy (Ethereal Longsword).
+    /// A weapon, armour or accessory. All gear binds on equip (Steven, 2026-11-17): a piece that drops, or comes out of a
+    /// reward table, a box or a craft, can be sold until it is worn, so it is valued like any other item; whether it is
+    /// bound is <see cref="BoundId"/>'s, as for everything else (until then, 2026-10-22, gear from a run was taken as bound).
     /// </summary>
     public bool IsGear(long id) { lock (_lock) return _gear.Contains(id); }
+
+    /// <summary>
+    /// Bound by its own id: the item list's "(Bound)" name, or an id the list says isn't tradable (the bound copy of a pair,
+    /// Black Claw Bow 110440048 beside the tradable 110440046). A bound item can't be sold, so it has no value in any figure;
+    /// an item the list doesn't know is not taken as bound (its name says so when it is, see <see cref="IdOf"/>). Gear is no
+    /// exception: it binds on equip, not on the drop (Steven, 2026-11-17).
+    /// </summary>
+    public bool BoundId(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) && (!i.Tradable || i.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase)); }
 
     /// <summary>
     /// The item a name is known by, as the list, the extras, the skins or a misread already snapped spell it, or null.

@@ -312,6 +312,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
             _ready.Inlines.Add(Rn("  " + e.ReadyText + " ", PhosDim));
             _ready.Inlines.Add(Rn("█", Phos));
             _ready.Visibility = Visibility.Visible;
+            if (PartyBeforeHit(e)) { PutRows(_rowsHost, e, now, FightWidth - 24); _rowsHost.Visibility = Visibility.Visible; }
             _cam.Root.Visibility = Visibility.Visible;
             return;
         }

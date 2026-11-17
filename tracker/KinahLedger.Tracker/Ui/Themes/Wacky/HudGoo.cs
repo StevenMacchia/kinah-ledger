@@ -273,6 +273,7 @@ sealed class HudGoo : WackyLook, IThemeCard
         {
             var w = Wk.Words(e.ReadyText, 13, Wk.S(0xE2CCFF), Wk.Segoe, FontWeights.Bold); w.Margin = new Thickness(15, 0, 12, 12);
             _fightStack.Children.Add(w);
+            if (PartyBeforeHit(e)) { var party = new StackPanel { Margin = new Thickness(6, 0, 6, 9) }; PutRows(party, e, now); _fightStack.Children.Add(party); }
         }
         else
         {

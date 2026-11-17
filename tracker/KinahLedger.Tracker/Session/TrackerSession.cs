@@ -2529,7 +2529,8 @@ public sealed partial class TrackerSession
                 || _runPickups.Any(p => (now - p.At).TotalSeconds <= 20 && p.Bound && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
                 || _boundLines.Any(b => (now - b.At).TotalSeconds is >= -2 and <= 20 && names.Contains(b.Name, StringComparer.OrdinalIgnoreCase));
             // of two ids that are one piece of gear (Black Claw Bow 110440046, tradable, and 110440048, not), a reward's is the
-            // one that isn't tradable: run gear is bound to the character (the chat names that one; 2026-11-16, the site saw the two disagree)
+            // one that isn't tradable: the chat names that one (2026-11-16, the site saw the two disagree), so the game's own id
+            // says this piece is bound and it adds nothing (gear otherwise binds on equip and sells; Steven, 2026-11-17)
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).ThenBy(i => _items.IsGear(i.Id) && i.Tradable).First();
             // every slot ends counted or not read: here a chat line doesn't decide between the names a picture leaves open;
             // the chat's lines of those seconds are judged together once they are all in (TableWitness), one line one piece
@@ -5199,7 +5200,7 @@ public sealed partial class TrackerSession
         if ((DateTime.UtcNow - _runsSentAt).TotalSeconds < 30) return false;
         _runsSentAt = DateTime.UtcNow;
         var runs = KeepUnread(Instances.TakeUnshared(DateTime.UtcNow.AddHours(-RunsSendHours)));
-        var pay = InstanceRunPayload.From(runs, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)));
+        var pay = InstanceRunPayload.From(runs, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)), _items.BoundId);
         if (pay == null)
         {
             if (runs.Count > 0) CrashLog.Note($"runs not sent: {string.Join(", ", runs.Select(r => $"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}"))}: in no listed area, or under a second or over {InstanceRunPayload.MaxSeconds / 3600} h");
@@ -5249,7 +5250,7 @@ public sealed partial class TrackerSession
         var todo = Instances.Resends.Where(r => r.RepairedFrom.Count > 0 || RunCorrection.AddsTaken).Take(InstanceRunPayload.MaxRuns).ToList();
         if (todo.Count == 0) return;
         _correctionsAt = DateTime.UtcNow;
-        var pay = InstanceRunPayload.From(todo, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)))?.Where(p => p.correction != null).ToList();
+        var pay = InstanceRunPayload.From(todo, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)), _items.BoundId)?.Where(p => p.correction != null).ToList();
         if (pay == null || pay.Count == 0)
         {
             foreach (var r in todo) Instances.Resent(r);
@@ -5428,6 +5429,10 @@ public sealed class UserPrefs
     public bool SendReportFrames { get; set; }
     /// <summary>Help improve counting (Options › Sharing): confirmed reads and small item crops become training pairs (Session/LabelWriter.cs). On by default, said once on first run.</summary>
     public bool HelpImproveCounting { get; set; } = true;
+    /// <summary>Options › Sharing › Show my boss bests on my kinahledger.com profile (2026-11-15, Upload/BossBests.cs): your own best kill per boss goes to your signed-in profile. Off until the player turns it on.</summary>
+    public bool ShareBossBests { get; set; }
+    /// <summary>The switch above went off and the site hasn't been told to forget the bests yet: the next upload tells it.</summary>
+    public bool BossBestsClearPending { get; set; }
     /// <summary>Options › Reading › Show accuracy details (0.8.34): the Accuracy chip, its counts and the panel and Discord lines. Off, a player sees only things to look at.</summary>
     public bool ShowAccuracy { get; set; }
     /// <summary>Share (0.9.3): the character name on the picture. Off until the player turns it on; the name is the one they typed in the sheet.</summary>

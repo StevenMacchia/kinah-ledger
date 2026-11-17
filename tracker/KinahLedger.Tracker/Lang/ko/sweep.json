@@ -20,5 +20,17 @@
   "{0}: combo won": "{0}: 콤보 성공",
   "{0}: combo lost": "{0}: 콤보 실패",
   "{0}: worked": "{0}: 성공",
-  "{0}: failed": "{0}: 실패"
+  "{0}: failed": "{0}: 실패",
+  "Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing.": "키나, 전리품, 장비를 거래소 최저가로 계산한 값이에요 ({0}). 귀속 아이템은 더하지 않아요.",
+  "Over the counted runs: Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing. Flagged runs are left out.": "집계된 런 기준: 키나 + 전리품과 장비(거래소 최저가, {0}). 귀속 아이템은 더하지 않고, 확인 필요한 런은 빠져요.",
+  "Kinah plus loot and gear at the lowest Market price, {0}. Bound items and items with no price yet add nothing.": "키나 + 전리품과 장비(거래소 최저가, {0}). 귀속 아이템과 시세 없는 아이템은 더하지 않아요.",
+  "This run's Kinah plus its loot and gear at the lowest Market price, {0}. Bound items add nothing.": "이 런의 키나, 전리품, 장비를 거래소 최저가로 계산한 값이에요 ({0}). 귀속 아이템은 빠져요.",
+  "Made: Kinah plus loot and gear at the lowest Market price, {0}, over the counted runs. Bound items add nothing.": "번 돈: 집계된 런의 키나, 전리품, 장비를 거래소 최저가로 계산했어요 ({0}). 귀속 아이템은 빠져요.",
+  "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, {0}. Bound items, currencies, items with no price yet and runs left out of the averages add nothing.": "오늘 원정과 이벤트에서 번 돈: 키나와 보상을 거래소 최저가로 계산했어요 ({0}). 귀속 아이템, 재화, 시세 없는 아이템, 평균에서 제외된 런은 빠져요.",
+  "Gear binds on equip: a piece that drops can be sold until you wear it, so it counts at the lowest Market price, {0}. A bound copy adds nothing. Each piece shows how many you got.": "장비는 착용하면 귀속돼요. 드롭된 장비는 착용 전까지 팔 수 있어서 거래소 최저가로 계산해요 ({0}). 귀속된 장비는 더하지 않아요. 장비마다 획득 수가 표시돼요.",
+  "{0:N0} gear · {1}": "장비 {0:N0} · {1}",
+  "{0:N0} gear · {1} · {2:N0} bound": "장비 {0:N0} · {1} · 귀속 {2:N0}",
+  "{0} bound": "귀속 {0}",
+  " · {0} bound": " · 귀속 {0}",
+  "×{0} ({1} bound) · last {2}": "×{0} (귀속 {1}) · 마지막 {2}"
 }

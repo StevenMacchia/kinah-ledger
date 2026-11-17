@@ -962,8 +962,12 @@ public sealed partial class SessionEngine
     {
         lock (_lock)
         {
+            // an item bound by its own id (the item list's bound copy) is bound however it was counted: no value anywhere
+            // (gear included: it binds on equip, so a dropped piece with a tradable id sells; Steven, 2026-11-17)
             return Items.Keys.Union(ItemsBound.Keys)
-                .Select(id => (id, ItemName(id), Items.GetValueOrDefault(id), ItemsBound.GetValueOrDefault(id)))
+                .Select(id => _items.BoundId(id)
+                    ? (id, ItemName(id), 0, Items.GetValueOrDefault(id) + ItemsBound.GetValueOrDefault(id))
+                    : (id, ItemName(id), Items.GetValueOrDefault(id), ItemsBound.GetValueOrDefault(id)))
                 .OrderByDescending(r => r.Item3 + r.Item4)
                 .ToList();
         }

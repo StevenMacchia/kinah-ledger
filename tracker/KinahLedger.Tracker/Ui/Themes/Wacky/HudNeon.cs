@@ -301,6 +301,7 @@ sealed class HudNeon : WackyLook, IThemeCard
         {
             var w = Slant(Wk.Words(e.ReadyText, 13, LilacB, Wk.Bahn, FontWeights.SemiBold)); w.Margin = new Thickness(13, 0, 12, 10);
             _fightStack.Children.Add(w);
+            if (PartyBeforeHit(e)) { var party = new StackPanel { Margin = new Thickness(5, 0, 5, 7) }; PutRows(party, e, now); _fightStack.Children.Add(party); }
         }
         else
         {

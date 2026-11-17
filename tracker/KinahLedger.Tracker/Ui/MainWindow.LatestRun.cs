@@ -94,7 +94,7 @@ public partial class MainWindow
         var big = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         if (known) { big.Inlines.Add(Q(Fk(value), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" " + L.T(isOpen ? "so far" : "this run"), 13, FontWeights.Medium, "Muted")); }
         else big.Inlines.Add(Q(L.T(isOpen ? "Nothing yet" : "no prices yet"), 22, FontWeights.Bold, "Muted"));
-        big.ToolTip = L.F("Kinah plus materials at the lowest Market price, {0}. Gear is bound and not in the value.", CutT);
+        big.ToolTip = L.F("Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing.", CutT);
         left.Children.Add(big);
         var why = FlagReason(run, Median(counted.Select(r => r.Seconds)));
         // the figures line: its Kinah, its loot, its kills
@@ -130,7 +130,7 @@ public partial class MainWindow
         }
         Grid.SetColumn(right, 2); g.Children.Add(right);
 
-        // its drops: the slots, a row deep, then Show all; its gear apart, bound
+        // its drops: the slots, a row deep, then Show all; its gear apart, with its worth
         var tr = TodayLoot.Runs(new List<InstanceRun> { run }, _items, IsCurrency);
         var slots = SortSlots(tr.Items).Select(s => RunItemSlot(s, "this run")).ToList();
         var outer = new StackPanel();
@@ -163,40 +163,41 @@ public partial class MainWindow
     }
 
     /// <summary>One item over the place's counted runs: how many, what they sell for, when it last dropped.</summary>
-    sealed record BestDrop(long Id, string Name, long Count, long Value, bool Priced, bool Gear, DateTime Last);
+    sealed record BestDrop(long Id, string Name, long Count, long Value, bool Priced, bool Gear, DateTime Last, long Bound = 0);
 
     List<BestDrop> BestDrops(List<InstanceRun> counted)
     {
-        var by = new Dictionary<long, (long Count, DateTime Last)>();
-        void Add(long id, long n, DateTime at)
+        var by = new Dictionary<long, (long Count, long Bound, DateTime Last)>();
+        void Add(long id, long n, DateTime at, bool bound)
         {
             if (id <= 0 || n <= 0 || IsCurrency(id)) return;
-            by[id] = by.TryGetValue(id, out var x) ? (x.Count + n, at > x.Last ? at : x.Last) : (n, at);
+            long b = bound || _items.BoundId(id) ? n : 0;
+            by[id] = by.TryGetValue(id, out var x) ? (x.Count + n, x.Bound + b, at > x.Last ? at : x.Last) : (n, b, at);
         }
         foreach (var r in counted)
         {
             var at = r.LastLoot ?? r.Start;
-            foreach (var (id, n) in r.Items) Add(id, n, at);
-            foreach (var (id, n) in r.BoundItems) Add(id, n, at);
+            foreach (var (id, n) in r.Items) Add(id, n, at, false);
+            foreach (var (id, n) in r.BoundItems) Add(id, n, at, true);
         }
         var list = new List<BestDrop>();
         foreach (var (id, x) in by)
         {
+            // gear binds on equip, so a dropped piece sells like any loot (Steven, 2026-11-17); bound copies add nothing
             var nm = _items.NameOf(id);
-            bool gear = _items.IsGear(id);
-            long? price = gear ? null : PriceBook.Price(nm);
-            list.Add(new BestDrop(id, nm, x.Count, price is long p ? (long)Math.Round(p * x.Count * PriceBook.SellerKeeps) : 0, price != null, gear, x.Last));
+            long? price = x.Bound >= x.Count ? null : PriceBook.Price(nm);
+            list.Add(new BestDrop(id, nm, x.Count, price is long p ? (long)Math.Round(p * (x.Count - x.Bound) * PriceBook.SellerKeeps) : 0, price != null, _items.IsGear(id), x.Last, x.Bound));
         }
         return SortBestDrops(list, _bestDropsSort);
     }
 
-    /// <summary>Best drops in an order: by value (priced first, then the rest, gear last), count, name, or when it last dropped.</summary>
+    /// <summary>Best drops in an order: by value (priced first, then the rest, bound last), count, name, or when it last dropped.</summary>
     static List<BestDrop> SortBestDrops(List<BestDrop> l, string by) => by switch
     {
         "count" => l.OrderByDescending(d => d.Count).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
         "name" => l.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
         "when" => l.OrderByDescending(d => d.Last).ThenByDescending(d => d.Value).ToList(),
-        _ => l.OrderByDescending(d => d.Priced).ThenBy(d => d.Gear).ThenByDescending(d => d.Value).ThenByDescending(d => d.Count).ToList(),
+        _ => l.OrderByDescending(d => d.Priced).ThenBy(d => d.Bound >= d.Count).ThenByDescending(d => d.Value).ThenByDescending(d => d.Count).ToList(),
     };
 
     /// <summary>
@@ -240,8 +241,10 @@ public partial class MainWindow
         {
             var local = d.Last.ToLocalTime();
             string when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : DayShort(local);
-            string val = d.Gear ? L.T("bound") : d.Priced ? Fk(d.Value) : L.T("no price");
-            var row = QRow(QItemIcon(d.Name, d.Id, 28, round: false, grade: _items.Get(d.Id)?.Grade ?? ""), d.Name, L.F("×{0} · last {1}", d.Count.ToString("N0", CultureInfo.InvariantCulture), when), val, d.Priced && !d.Gear ? "Gold" : "Faint", rule: i > 0);
+            string val = d.Bound >= d.Count ? L.T("bound") : d.Priced ? Fk(d.Value) : L.T("no price");
+            string count = d.Count.ToString("N0", CultureInfo.InvariantCulture);
+            string sub = d.Bound > 0 && d.Bound < d.Count ? L.F("×{0} ({1} bound) · last {2}", count, d.Bound.ToString("N0", CultureInfo.InvariantCulture), when) : L.F("×{0} · last {1}", count, when);
+            var row = QRow(QItemIcon(d.Name, d.Id, 28, round: false, grade: _items.Get(d.Id)?.Grade ?? ""), d.Name, sub, val, d.Priced ? "Gold" : "Faint", rule: i > 0);
             row.Tag = "best-row:" + d.Name;
             sp.Children.Add(row); i++;
         }
