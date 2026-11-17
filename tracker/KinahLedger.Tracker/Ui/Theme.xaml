@@ -166,6 +166,7 @@
     <Setter Property="BorderThickness" Value="{DynamicResource CardEdge}"/>
     <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}"/>
     <Setter Property="Effect" Value="{DynamicResource CardFx}"/>
+    <Setter Property="ui:SkinDeco.Frame" Value="group"/>
   </Style>
 
   <Style x:Key="LabelStyle" TargetType="TextBlock">
@@ -245,6 +246,7 @@
 
   <Style TargetType="Button">
     <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+    <Setter Property="Effect" Value="{DynamicResource BtnFx}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="Background" Value="{DynamicResource Card2}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
@@ -281,7 +283,7 @@
   <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Background" Value="{DynamicResource BtnPrimary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BtnPrimaryLine}"/>
-    <Setter Property="Effect" Value="{DynamicResource BtnFx}"/>
+    <Setter Property="Effect" Value="{DynamicResource PrimaryFx}"/>
     <Setter Property="Foreground" Value="{DynamicResource BtnPrimaryInk}"/>
     <Setter Property="FontSize" Value="13"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -349,7 +351,7 @@
   <Style x:Key="NavOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
     <Setter Property="ui:Motion.Lit" Value="True"/>
     <Setter Property="Background" Value="{DynamicResource NavOnBg}"/>
-    <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+    <Setter Property="Foreground" Value="{DynamicResource NavOnInk}"/>
   </Style>
   <!-- a quiet button: Start run under the ring (coral while a run is on). Rounded rectangles everywhere, no ovals (Steven, 2026-11-07) -->
   <Style x:Key="PillBtn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -405,6 +407,7 @@
     <Setter Property="BorderThickness" Value="{DynamicResource CardEdge}"/>
     <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}"/>
     <Setter Property="Effect" Value="{DynamicResource CardFx}"/>
+    <Setter Property="ui:SkinDeco.Frame" Value="card"/>
     <Setter Property="Padding" Value="14,12,14,12"/>
   </Style>
   <!-- the three tiers (UX pass, 2026-11-13): the hero (QCard on HeroBg), working cards (QCard: the bag, Next up, the
@@ -416,9 +419,11 @@
     <Setter Property="BorderThickness" Value="{DynamicResource CardEdge}"/>
     <Setter Property="CornerRadius" Value="{DynamicResource RefRadius}"/>
     <Setter Property="Effect" Value="{DynamicResource RefFx}"/>
+    <Setter Property="ui:SkinDeco.Frame" Value="ref"/>
     <Setter Property="Padding" Value="12,8,12,8"/>
   </Style>
   <Style x:Key="RefHead" TargetType="TextBlock">
+    <Setter Property="ui:SkinDeco.Head" Value="True"/>
     <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>

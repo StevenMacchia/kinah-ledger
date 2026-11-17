@@ -571,6 +571,7 @@ public partial class MainWindow
     {
         DrawFeed(FeedHost, FeedEmptyBox, FeedFor(FeedTab.Farming), FeedTab.Farming, PickupValue);
         FillFeedEmpty();
+        FillThemeHero();   // a themed look's overlay art in the hero (Ui/MainWindow.ThemeHero.cs)
         // the hint under the feed stays hidden (2026-10-28): its words are the feed's hover, its action ⋯ › A pickup is missing;
         // the line a marked row's Undo takes still goes where it stood (ShowMarkLine)
     }

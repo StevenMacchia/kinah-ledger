@@ -187,6 +187,7 @@ public partial class MainWindow
         g.Children.Add(track);
         var fill = new Border { CornerRadius = new CornerRadius(height / 2), HorizontalAlignment = HorizontalAlignment.Left, Effect = QGlow(tone, 8, 0.6) };
         fill.SetResourceReference(Border.BackgroundProperty, tone);
+        SkinDeco.SetBar(fill, true);
         fill.Child = new Border { CornerRadius = new CornerRadius(height / 2), Margin = new Thickness(1, 1, 1, 0),
             Background = new LinearGradientBrush(Color.FromArgb(0x55, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90) };
         g.Children.Add(fill);
@@ -257,6 +258,7 @@ public partial class MainWindow
         }
         var row = new Border { Child = g, Padding = new Thickness(6, inline ? 4 : 7, 6, inline ? 4 : 7), Margin = new Thickness(-6, 0, -6, 0), CornerRadius = new CornerRadius(9), Background = Brushes.Transparent, Cursor = Cursors.Hand };
         if (rule) { row.BorderThickness = new Thickness(0, 1, 0, 0); row.SetResourceReference(Border.BorderBrushProperty, "Line"); }
+        SkinDeco.SetRow(row, true);   // the themed looks' rows (Ui/SkinDeco.cs)
         row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "HoverTint");
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
         Motion.SetFeel(row, Feel.Lift);
@@ -407,6 +409,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var ic = QGlyph(icon, quiet ? 13 : 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, quiet ? 7 : 8, 0); if (quiet) ic.Opacity = 0.75; g.Children.Add(ic);
         var t = QT(title, 12, quiet ? FontWeights.Medium : FontWeights.SemiBold, quiet ? "Muted" : "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
+        SkinDeco.SetHead(t, true);   // the themed looks' head (Ui/SkinDeco.cs)
         var r = QT(right, 12, FontWeights.Medium, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
         Grid.SetColumn(r, 2); g.Children.Add(r);
         if (chev != null) { Grid.SetColumn(chev, 3); g.Children.Add(chev); g.Cursor = Cursors.Hand; }

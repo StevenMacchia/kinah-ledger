@@ -20,9 +20,9 @@ public static class Skins
         new("abyss", L.T("Abyss"), true, L.T("navy and soft gold on near-black")),
         new("daylight", L.T("Daylight"), false, L.T("light, for a bright room")),
         // the overlay themes' colours on the window (1.0, Steven 2026-11-17: "add the skins for 1.0"): palettes only, no motion
-        new(HudThemes.Wacky, L.T("Wacky"), true, L.T("neon arcade: magenta and cyan on deep purple")),
-        new(HudThemes.Tactical, L.T("Tactical"), true, L.T("a pro's HUD: steel, amber and cyan lines")),
-        new(HudThemes.Glitch, L.T("Glitch"), true, L.T("an old green screen: phosphor and amber on black")),
+        new(HudThemes.Wacky, L.T("Wacky"), false, L.T("a comic page: sticker cards in thick ink, a yellow hero")),
+        new(HudThemes.Tactical, L.T("Tactical"), true, L.T("a pro's HUD: bracketed glass panels over a grid")),
+        new(HudThemes.Glitch, L.T("Glitch"), true, L.T("a haunted tape: scanlines, split frames, REC")),
     };
 
     /// <summary>The app skin that matches an overlay theme (Wacky, Tactical, Glitch share their keys), or null for Classic.</summary>
@@ -34,6 +34,8 @@ public static class Skins
 
     public static Skin Get(string? key) => All.FirstOrDefault(s => s.Key == key) ?? All[0];
     public static bool IsDark(string? key) => Get(key).Dark;
+    /// <summary>A look that draws its overlay theme's parts on the window (Wacky, Tactical, Glitch; Ui/SkinDeco.cs).</summary>
+    public static bool Themed => Current is HudThemes.Wacky or HudThemes.Tactical or HudThemes.Glitch;
 
     /// <summary>Merges the skin's brushes over the theme. Safe to call before any window exists and again at any time.</summary>
     public static void Apply(string? key)
@@ -45,6 +47,7 @@ public static class Skins
         if (_current != null) app.Resources.MergedDictionaries.Remove(_current);
         app.Resources.MergedDictionaries.Add(dict);
         _current = dict; Current = skin.Key;
+        SkinDeco.Refresh();   // the themed looks' frames, heads and bars (Ui/SkinDeco.cs)
     }
 
     /// <summary>Night's brushes, for a part drawn dark in every look (the Share sheet sets them on itself).</summary>
@@ -102,12 +105,12 @@ public static class Skins
         // a look's shape (1.0): every look sets every key, so a switch never leaves one behind and the Share sheet (Night) has
         // its own. Night, Abyss and Daylight keep the rounded cards; the themed looks override below
         void Shape(double card, double refCard, double btn, double chip, double edge, double btnEdge, double glow, FontFamily body, FontFamily display, FontFamily label,
-            Effect? cardFx = null, Effect? refFx = null, Effect? btnFx = null, Effect? displayFx = null)
+            Effect? cardFx = null, Effect? refFx = null, Effect? btnFx = null, Effect? displayFx = null, Effect? primaryFx = null)
         {
             d["CardRadius"] = new CornerRadius(card); d["RefRadius"] = new CornerRadius(refCard); d["BtnRadius"] = new CornerRadius(btn); d["ChipRadius"] = new CornerRadius(chip);
             d["CardEdge"] = new Thickness(edge); d["BtnEdge"] = new Thickness(btnEdge); d["PrimaryGlow"] = glow;
             d["BodyFont"] = body; d["DisplayFont"] = display; d["LabelFont"] = label;
-            d["CardFx"] = cardFx; d["RefFx"] = refFx; d["BtnFx"] = btnFx; d["DisplayFx"] = displayFx;
+            d["CardFx"] = cardFx; d["RefFx"] = refFx; d["BtnFx"] = btnFx; d["DisplayFx"] = displayFx; d["PrimaryFx"] = primaryFx ?? btnFx;
         }
         Shape(12, 10, 8, 6, 1, 1, 0.5, Inter, InterDisplay, Inter);
         switch (key)
@@ -144,82 +147,84 @@ public static class Skins
                 S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("GradeSpecial", "#0E8C83"); S("BtnPrimaryInk", "#261702");
                 break;
             case HudThemes.Wacky:
-                // Neon's arcade cabinet (Ui/Themes/Wacky/HudNeon.cs): deep purple ground, magenta and cyan tubes, a lemon for Kinah
-                Quest("#7FE9FF", "#D9C8FF", "#FF6B8A", "#B6FF6B", "#1F1300", "#1A0F00", "#3A2760", "#5C3E94", 0x29);
-                S("MintTint", "#2948F59A"); S("GoldIcTint", "#29FFE14D"); S("NoticeTint", "#2900E5FF");
-                Controls(true, "#2A1B47", "#5C3E94", "#271843", "#33205A", "#170D28", "#FFE14D", "#FFE14D", "#1A00E5FF", "#6600E5FF", "#140A22", "#33224F",
-                    "#FFFFFF", "#4A3470", "#4A3470", "#0DFFFFFF", "#1AFFE14D", "#80FFE14D", "#29FF2BD6", "#0DFF2BD6", "#59FF2BD6", "#1AFFE14D", "#FFE66B", "#59FFE14D");
-                S("Bg", "#120A20"); S("Card", "#1C1030"); S("Card2", "#251742"); S("CardQuiet", "#170D28"); S("CardHair", "#2E1F4A"); S("Line", "#33224F"); S("LineStrong", "#4A3470");
-                S("Ink", "#F6F0FF"); S("Muted", "#C4B6E0"); S("Text2", "#DCD0F2"); S("Faint", "#A08FC4");
-                S("Link", "#7FE9FF"); S("LinkHover", "#C4F7FF"); S("Progress", "#A48CE0");
-                S("Gold", "#FFE14D"); S("Violet", "#C9B0FF"); S("Mint", "#48F59A"); S("Accent", "#FF5BDF"); S("AccentDim", "#3A1450");
-                S("Good", "#48F59A"); S("Warn", "#FFB35C"); S("Bad", "#FF6B8A");
-                S("RowHead", "#180E2A"); S("RowHover", "#251742"); S("Mark", "#2A1B47"); S("Slot", "#140A22");
-                R("HeroBg", "#41166A", "#1C1030", "#1C1030"); S("HeroLine", "#80FF2BD6"); S("Inset", "#38000000"); C("SlotColor", "#140A22");
-                S("CommonInk", "#E4DCF5"); S("GradeRare", "#62E08F"); S("GradeLegend", "#62AEFF"); S("GradeUnique", "#F5D65E"); S("GradeEpic", "#D2B4FF"); S("GradeSpecial", "#3FDBCE"); S("BtnPrimaryInk", "#1F1300");
-                G("BtnPrimary", "#FFE14D", "#FFE14D"); G("BtnPrimaryHover", "#FFEE94", "#FFEE94"); G("BtnStop", "#FF6B8A", "#FF6B8A");
-                // Sticker's comic panels (Ui/Themes/Wacky/HudSticker.cs): ink outlines, a hard pink drop under every card, cyan
-                // under the quiet ones, a halftone ground, Segoe UI Black for the figures and the small labels
-                S("CardLine", "#06030C"); S("CardLineHover", "#FFE14D"); S("CardHair", "#06030C"); S("GroupLine", "#06030C"); S("BtnPrimaryLine", "#06030C");
-                d["BgArt"] = Tiled("#120A20", 12, 12, g => g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#2A1748")), null, new EllipseGeometry(new Point(6, 6), 1.6, 1.6))));
+                // Sticker's comic page (Ui/Themes/Wacky/HudSticker.cs): cream sticker cards in thick ink with hard ink drops on a
+                // lilac halftone page, the hero a yellow sticker (Ui/SkinDeco.cs), hot pink and cyan the accents, Segoe UI Black
+                Quest("#0A6FB8", "#5A2BB0", "#D61F4C", "#2E7D12", "#111111", "#111111", "#111111", "#111111", 0x26);
+                S("MintTint", "#260A7A3E"); S("GoldIcTint", "#33F2B705"); S("NoticeTint", "#1F0A6FB8");
+                Controls(false, "#FFE98A", "#111111", "#FFF0C2", "#FFE14D", "#F3E3C4", "#FFE14D", "#B0103A", "#26FF3DA6", "#111111", "#FFF3DC", "#5E4F6B",
+                    "#111111", "#111111", "#111111", "#14111111", "#33FFE14D", "#111111", "#66FFE14D", "#26FFE14D", "#111111", "#FFE14D", "#111111", "#111111");
+                S("Bg", "#E6D3FA"); S("Card", "#FFF8E8"); S("Card2", "#FFEFCC"); S("CardQuiet", "#FFF3DC"); S("CardHair", "#111111"); S("Line", "#2E111111"); S("LineStrong", "#111111");
+                S("Ink", "#111111"); S("Muted", "#4A3B55"); S("Text2", "#2E2338"); S("Faint", "#5E4F6B");
+                S("Link", "#0A5E9E"); S("LinkHover", "#C2125F"); S("Progress", "#6B5A80");
+                S("Gold", "#A34E00"); S("Violet", "#5A2BB0"); S("Mint", "#0A7A3E"); S("Accent", "#C2125F"); S("AccentDim", "#FFD6EA");
+                S("Good", "#0A7A3E"); S("Warn", "#A34E00"); S("Bad", "#C2123F");
+                S("RowHead", "#FFF0D0"); S("RowHover", "#FFF0C2"); S("Mark", "#FFE14D"); S("Slot", "#FFF3DC");
+                R("HeroBg", "#FFE14D", "#FFE14D", "#FFE14D"); S("HeroLine", "#111111"); S("Inset", "#FFF8E8"); C("SlotColor", "#FFF3DC");
+                S("CommonInk", "#2A2A2A"); S("GradeRare", "#1A7F45"); S("GradeLegend", "#1F5FB8"); S("GradeUnique", "#8A6400"); S("GradeEpic", "#6A2BC9"); S("GradeSpecial", "#0B7F78"); S("BtnPrimaryInk", "#111111");
+                G("BtnPrimary", "#FFE14D", "#FFE14D"); G("BtnPrimaryHover", "#FFEB80", "#FFEB80"); G("BtnStop", "#FF6B8A", "#FF6B8A");
+                S("CardLine", "#111111"); S("CardLineHover", "#C2125F"); S("GroupLine", "#111111"); S("BtnPrimaryLine", "#111111");
+                S("NavOnBg", "#FF3DA6"); S("NavOnInk", "#111111");   // the page tab on show: a hot pink sticker
+                d["BgArt"] = Tiled("#E6D3FA", 10, 10, g =>
+                {
+                    g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#D4B6F5")), null, new EllipseGeometry(new Point(2.5, 2.5), 1.9, 1.9)));
+                    g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#D4B6F5")), null, new EllipseGeometry(new Point(7.5, 7.5), 1.9, 1.9)));
+                });
                 var black = new FontFamily("Segoe UI Black, Segoe UI");
-                Shape(18, 14, 12, 10, 2, 2, 0, Inter, black, black,
-                    cardFx: Hard("#FF3DA6", 5), refFx: Hard("#3DF5C8", 4), btnFx: Hard("#06030C", 3), displayFx: Hard("#FF2BD6", 3));
+                Shape(12, 10, 10, 8, 2.5, 2, 0, Inter, black, black,
+                    cardFx: Hard("#111111", 5), refFx: Hard("#111111", 4), btnFx: Hard("#111111", 2.5), displayFx: null, primaryFx: Hard("#111111", 3.5));
                 break;
             case HudThemes.Tactical:
-                // the jet HUD and the scorebug (Ui/Themes/Tactical): gunmetal, amber for Kinah, HUD cyan for focus, a squared face
-                Quest("#8FD3EA", "#C9D1DC", "#FF6B78", "#B8C9A0", "#1A1000", "#04121A", "#24303D", "#3E4E60", 0x24);
+                // Fighter and Holo (Ui/Themes/Tactical): teal-black HUD glass over a range grid, chamfered frames with lit L
+                // brackets (Ui/SkinDeco.cs), amber for Kinah and the [ HEADS ], HUD cyan for focus, the window in Bahnschrift
+                Quest("#8FD3EA", "#C9D1DC", "#FF6B78", "#9CE6B4", "#1A1000", "#04121A", "#24414C", "#3E6A78", 0x24);
                 S("MintTint", "#245EF0A0"); S("GoldIcTint", "#24FFC84A"); S("NoticeTint", "#1F7FE9FF");
-                Controls(true, "#1B232C", "#3E4E60", "#19212A", "#212B36", "#0C1015", "#7FE9FF", "#FFC84A", "#147FE9FF", "#597FE9FF", "#0B0F13", "#222C38",
-                    "#FFFFFF", "#34414F", "#34414F", "#0DFFFFFF", "#14FFC84A", "#80FFC84A", "#1F7FE9FF", "#0A7FE9FF", "#4D7FE9FF", "#14FFC84A", "#FFD27A", "#4DFFC84A");
-                S("Bg", "#080B0F"); S("Card", "#10151B"); S("Card2", "#161D25"); S("CardQuiet", "#0C1015"); S("CardHair", "#1C242E"); S("Line", "#222C38"); S("LineStrong", "#34414F");
-                S("Ink", "#F2F4F7"); S("Muted", "#AEB8C5"); S("Text2", "#C9D1DC"); S("Faint", "#8C97A8");
-                S("Link", "#7FE9FF"); S("LinkHover", "#BFF6FF"); S("Progress", "#7F93A8");
+                Controls(true, "#12242B", "#3E6A78", "#10222A", "#173039", "#081114", "#7FE9FF", "#FFC84A", "#147FE9FF", "#597FE9FF", "#071013", "#1C2A33",
+                    "#FFFFFF", "#2E5560", "#2E5560", "#0D7FE9FF", "#14FFC84A", "#80FFC84A", "#1F7FE9FF", "#0A7FE9FF", "#4D7FE9FF", "#14FFC84A", "#FFD27A", "#4DFFC84A");
+                S("Bg", "#05090C"); S("Card", "#0A1519"); S("Card2", "#102026"); S("CardQuiet", "#08120F"); S("CardHair", "#1C2A33"); S("Line", "#1A2C33"); S("LineStrong", "#2E5560");
+                S("Ink", "#EAF6F8"); S("Muted", "#A3BAC2"); S("Text2", "#C3D5DB"); S("Faint", "#859DA6");
+                S("Link", "#7FE9FF"); S("LinkHover", "#BFF6FF"); S("Progress", "#6F96A3");
                 S("Gold", "#FFC84A"); S("Violet", "#B9A6FF"); S("Mint", "#5EF0A0"); S("Accent", "#7FE9FF"); S("AccentDim", "#0F2A33");
                 S("Good", "#5EF0A0"); S("Warn", "#FFA53D"); S("Bad", "#FF6B78");
-                S("RowHead", "#0E1318"); S("RowHover", "#161D25"); S("Mark", "#18232C"); S("Slot", "#0B0F13");
-                R("HeroBg", "#15303B", "#10151B", "#10151B"); S("HeroLine", "#4D7FE9FF"); S("Inset", "#38000000"); C("SlotColor", "#0B0F13");
-                S("CommonInk", "#D9DFE8"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B98FFF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A1000");
-                G("BtnPrimary", "#FFD066", "#F5B42E"); G("BtnPrimaryHover", "#FFDC85", "#FFC24A"); G("BtnStop", "#FF6B78", "#E04A58");
-                G("BtnPrimary", "#FFC84A", "#FFC84A"); G("BtnPrimaryHover", "#FFD67A", "#FFD67A");
-                // the jet HUD (Ui/Themes/Tactical): square-cut frames lit at their corners ([ ]), a range grid on the ground, the
-                // whole window in Bahnschrift (a DIN, the instruments' face), a cyan glow on the big figures, no soft glow anywhere else
-                d["CardLine"] = Brackets("#7FE9FF", "#26323F"); d["CardLineHover"] = Brackets("#BFF6FF", "#3E4E60"); d["CardHair"] = Brackets("#4D7FE9FF", "#1C242E");
-                d["GroupLine"] = Brackets("#7FE9FF", "#26323F", 0.015); S("BtnPrimaryLine", "#FFC84A");
-                d["BgArt"] = Tiled("#080B0F", 32, 32, g =>
+                S("RowHead", "#0B181C"); S("RowHover", "#102026"); S("Mark", "#123039"); S("Slot", "#071013");
+                R("HeroBg", "#0E2E22", "#0A1A16", "#0A1519"); S("HeroLine", "#4D5CFF9A"); S("Inset", "#40000000"); C("SlotColor", "#071013");
+                S("CommonInk", "#D9E6EA"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B98FFF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A1000");
+                G("BtnPrimary", "#FFC84A", "#FFC84A"); G("BtnPrimaryHover", "#FFD67A", "#FFD67A"); G("BtnStop", "#FF6B78", "#FF6B78");
+                S("CardLine", "#24414C"); S("CardLineHover", "#7FE9FF"); S("GroupLine", "#24414C"); S("BtnPrimaryLine", "#FFC84A");
+                S("NavOnBg", "#E8263A"); S("NavOnInk", "#FFFFFF");   // the page tab on show: the scorebug's red block
+                d["BgArt"] = Tiled("#05090C", 32, 32, g =>
                 {
-                    var grid = new SolidColorBrush(Hex("#0F161D"));
+                    var grid = new SolidColorBrush(Hex("#0C171C"));
                     g.Children.Add(new GeometryDrawing(grid, null, new RectangleGeometry(new Rect(0, 0, 32, 1))));
                     g.Children.Add(new GeometryDrawing(grid, null, new RectangleGeometry(new Rect(0, 0, 1, 32))));
-                    g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#1D2B38")), null, new RectangleGeometry(new Rect(0, 0, 3, 1))));
-                    g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#1D2B38")), null, new RectangleGeometry(new Rect(0, 0, 1, 3))));
+                    var cross = new SolidColorBrush(Hex("#1A3540"));
+                    g.Children.Add(new GeometryDrawing(cross, null, new RectangleGeometry(new Rect(0, 0, 4, 1))));
+                    g.Children.Add(new GeometryDrawing(cross, null, new RectangleGeometry(new Rect(0, 0, 1, 4))));
                 });
                 var din = new FontFamily("Bahnschrift, Segoe UI");
-                Shape(2, 2, 2, 1, 1, 1, 0, din, din, din, displayFx: Glow("#7FE9FF", 12, 0.45));
+                Shape(0, 0, 0, 0, 0, 1, 0, din, din, din, displayFx: Glow("#7FE9FF", 12, 0.45));
                 break;
             case HudThemes.Glitch:
-                // the Terminal's green screen (Ui/Themes/Glitch/HudTerminal.cs): phosphor on black, amber for Kinah, magenta for a miss
-                Quest("#5CE8FF", "#C9B8FF", "#FF5C86", "#A8FF6B", "#1A0F00", "#021008", "#1C2E27", "#2F4A3F", 0x24);
-                S("MintTint", "#245CFF9A"); S("GoldIcTint", "#24FFB641"); S("NoticeTint", "#1F5CE8FF");
-                Controls(true, "#15201C", "#2F4A3F", "#14201B", "#1A2A23", "#0A0E10", "#5CFF9A", "#FFB641", "#145CFF9A", "#595CFF9A", "#080C0D", "#1C2A26",
-                    "#FFFFFF", "#2B4038", "#2B4038", "#0DFFFFFF", "#14FFB641", "#80FFB641", "#1F5CFF9A", "#0A5CFF9A", "#4D5CFF9A", "#14FFB641", "#FFCB73", "#4DFFB641");
-                S("Bg", "#05080A"); S("Card", "#0C1113"); S("Card2", "#121A1B"); S("CardQuiet", "#090D0F"); S("CardHair", "#17221F"); S("Line", "#1C2A26"); S("LineStrong", "#2B4038");
-                S("Ink", "#E2FFEC"); S("Muted", "#A6C6B3"); S("Text2", "#C2DECD"); S("Faint", "#80A391");
-                S("Link", "#5CE8FF"); S("LinkHover", "#B5F5FF"); S("Progress", "#6FA088");
-                S("Gold", "#FFB641"); S("Violet", "#C9B8FF"); S("Mint", "#5CFF9A"); S("Accent", "#5CFF9A"); S("AccentDim", "#0C2A1A");
-                S("Good", "#5CFF9A"); S("Warn", "#FFD23F"); S("Bad", "#FF5C86");
-                S("RowHead", "#0A0F10"); S("RowHover", "#121A1B"); S("Mark", "#13221C"); S("Slot", "#080C0D");
-                R("HeroBg", "#0E2C1D", "#0C1113", "#0C1113"); S("HeroLine", "#4D5CFF9A"); S("Inset", "#38000000"); C("SlotColor", "#080C0D");
-                S("CommonInk", "#D2E8DA"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A0F00");
-                G("BtnPrimary", "#FFC665", "#FFAE2E"); G("BtnPrimaryHover", "#FFD38A", "#FFBC4D"); G("BtnStop", "#FF5C86", "#D93D66");
-                // the green screen and the tape (Ui/Themes/Glitch): scanlines over the ground, square frames with a phosphor bloom,
-                // every title and big figure split red from green like a bad signal, the primary a lit phosphor block, mono labels
-                G("BtnPrimary", "#5CFF9A", "#5CFF9A"); G("BtnPrimaryHover", "#8CFFB8", "#8CFFB8"); S("BtnPrimaryInk", "#021008"); S("BtnPrimaryLine", "#5CFF9A");
-                S("CardLine", "#2E5C46"); S("CardLineHover", "#5CFF9A"); S("CardHair", "#1F3A2E"); S("GroupLine", "#2E5C46");
-                d["BgArt"] = Tiled("#070B0E", 4, 3, g => g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#C0000000")), null, new RectangleGeometry(new Rect(0, 2, 4, 1)))));
+                // VHS and Corrupt (Ui/Themes/Glitch): black tape with scanlines, thin OSD frames split magenta and cyan, the hero
+                // boxed with REC (Ui/SkinDeco.cs), white OSD ink, titles split red, a white block for the lit pill, mono heads
+                Quest("#2BE6FF", "#C9B8FF", "#FF2B6A", "#3DFF8C", "#0A0A0E", "#050507", "#3A3A46", "#9A9AAA", 0x24);
+                S("MintTint", "#243DFF8C"); S("GoldIcTint", "#24FFD24A"); S("NoticeTint", "#1F2BE6FF");
+                Controls(true, "#1A1A22", "#9A9AAA", "#16161D", "#20202A", "#0B0B10", "#F2F2F5", "#FFD24A", "#142BE6FF", "#592BE6FF", "#08080B", "#2A2A33",
+                    "#FFFFFF", "#4A4A57", "#4A4A57", "#0DFFFFFF", "#14FFD24A", "#80FFD24A", "#1FFF2B6A", "#0AFF2B6A", "#4DFF2B6A", "#14FFD24A", "#FFD24A", "#4DFFD24A");
+                S("Bg", "#050507"); S("Card", "#0B0B10"); S("Card2", "#15151C"); S("CardQuiet", "#09090D"); S("CardHair", "#2A2A33"); S("Line", "#24242E"); S("LineStrong", "#4A4A57");
+                S("Ink", "#F2F2F5"); S("Muted", "#B4B4C0"); S("Text2", "#CFCFD8"); S("Faint", "#8E8E9C");
+                S("Link", "#2BE6FF"); S("LinkHover", "#A8F4FF"); S("Progress", "#8A8A9A");
+                S("Gold", "#FFD24A"); S("Violet", "#C9B8FF"); S("Mint", "#3DFF8C"); S("Accent", "#2BE6FF"); S("AccentDim", "#0B2A30");
+                S("Good", "#3DFF8C"); S("Warn", "#FFD24A"); S("Bad", "#FF2B6A");
+                S("RowHead", "#0E0E13"); S("RowHover", "#15151C"); S("Mark", "#1A1A24"); S("Slot", "#08080B");
+                R("HeroBg", "#0B0B10", "#0B0B10", "#0B0B10"); S("HeroLine", "#E8E8EE"); S("Inset", "#40000000"); C("SlotColor", "#08080B");
+                S("CommonInk", "#DADAE2"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#050507");
+                G("BtnPrimary", "#F2F2F5", "#F2F2F5"); G("BtnPrimaryHover", "#FFFFFF", "#FFFFFF"); G("BtnStop", "#FF2B6A", "#FF2B6A");
+                S("CardLine", "#6C6C7A"); S("CardLineHover", "#F2F2F5"); S("GroupLine", "#6C6C7A"); S("BtnPrimaryLine", "#F2F2F5");
+                S("NavOnBg", "#F2F2F5"); S("NavOnInk", "#050507");   // the page tab on show: an OSD's inverted box
+                d["BgArt"] = Tiled("#07070A", 4, 3, g => g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#C0000000")), null, new RectangleGeometry(new Rect(0, 2, 4, 1)))));
                 var mono = new FontFamily("Cascadia Mono, Consolas");
-                Shape(0, 0, 0, 0, 1, 1, 0, Inter, mono, mono,
-                    cardFx: Glow("#5CFF9A", 14, 0.16), refFx: Glow("#5CFF9A", 10, 0.10), btnFx: Hard("#FF2B6A", 2, 180, 0.9), displayFx: Hard("#FF2B6A", 2, 180, 0.85));
+                Shape(0, 0, 0, 0, 0, 1, 0, Inter, mono, mono,
+                    displayFx: Hard("#FF2B6A", 2, 180, 0.85), primaryFx: Hard("#FF2B6A", 3, 180, 0.95));
                 break;
             default:   // night, the v2 palette since 2026-11-10 (the site's kl-v2.css tokens): near-black neutral, gold the one
                        // accent, mint and coral for up and down, the game's grade colours; the old candy roles (sky, lilac, lime) are
@@ -243,6 +248,7 @@ public static class Skins
                 break;
         }
         if (!d.Contains("BgArt")) d["BgArt"] = d["Bg"];
+        if (!d.Contains("NavOnInk")) d["NavOnInk"] = d["Ink"];
         if (!d.Contains("GroupLine")) d["GroupLine"] = d["Line"];
         if (!d.Contains("BtnPrimaryLine")) d["BtnPrimaryLine"] = d["Gold"];
         return d;

@@ -337,7 +337,7 @@ public partial class MainWindow
     {
         var tag = new Border
         {
-            Child = CkText(L.T("★ NEW BEST HERE"), RecapTagInk, 12, FontWeights.SemiBold), CornerRadius = Skins.Corner(10), Padding = new Thickness(9, 3, 10, 4),
+            Child = CkText(L.T("★ NEW BEST HERE"), RecapTagInk, 12, FontWeights.SemiBold), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 10, 4),
             VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 3, 0, 0),
             Effect = new DropShadowEffect { Color = CkGold, BlurRadius = 14, ShadowDepth = 0, Opacity = 0.45 },
         };
