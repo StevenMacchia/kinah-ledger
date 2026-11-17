@@ -42,6 +42,7 @@
   },
   {
    "id": null,
+   "gameId": 930100017,
    "name": "Phantasmal Fragment",
    "grade": "Common",
    "tradable": false,
@@ -79,6 +80,7 @@
   },
   {
    "id": null,
+   "gameId": 535200001,
    "name": "Soul Codex: Reset (Bound)",
    "grade": "Special",
    "tradable": false,
@@ -91,6 +93,7 @@
   },
   {
    "id": null,
+   "gameId": 630840002,
    "name": "Silentium (Bound)",
    "grade": "Special",
    "tradable": false,
@@ -140,6 +143,7 @@
   },
   {
    "id": null,
+   "gameId": 503700031,
    "name": "Odyle Energy (Bound)",
    "grade": "Special",
    "tradable": false,
@@ -176,6 +180,7 @@
   },
   {
    "id": null,
+   "gameId": 930100019,
    "name": "Oath Coin",
    "grade": "Common",
    "tradable": false,
@@ -188,6 +193,7 @@
   },
   {
    "id": null,
+   "gameId": 532760001,
    "name": "Resurrection Spiritstone (Bound)",
    "grade": "Common",
    "tradable": false,
@@ -200,6 +206,7 @@
   },
   {
    "id": null,
+   "gameId": 531900010,
    "name": "Stigma Shard (Bound)",
    "grade": "Special",
    "tradable": false,
@@ -708,6 +715,7 @@
   },
   {
    "id": null,
+   "gameId": 531900009,
    "name": "Soul Crystal (Bound)",
    "grade": "Special",
    "tradable": false,

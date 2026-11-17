@@ -984,7 +984,20 @@ options: --process aion[,other]");
         // runs closed by an earlier replay are not this one's
         try { File.Delete(Path.Combine(CrashLog.DirOverride, "instances.jsonl")); } catch (Exception) { }
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
-        var s = new TrackerSession(null, settings, items, "Replay");
+        // --pcap a.pcapng,b.pcapng: the game's data recorded beside the trace (the tracker's packets folder), fed in at its own
+        // times, so the replay counts items, Kinah and kills from it as the live tracker did (2026-11-17: bound drops lost
+        // between the chat and the game's data could only be proved with both)
+        var feed = new List<(DateTime At, object Ev)>();
+        KinahLedger.Packets.PacketReader? reader = null;
+        if (opts.TryGetValue("pcap", out var pcaps) && pcaps.Length > 0)
+        {
+            feed.AddRange(KinahLedger.Packets.PacketTests.Decode(pcaps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)));
+            feed = feed.OrderBy(x => x.At).ToList();
+            if (feed.Count == 0) { Console.Error.WriteLine("--pcap: nothing decoded (this build has no decoder, or the recording is empty)"); return 1; }
+            reader = new KinahLedger.Packets.PacketReader { FromGame = items.FromGame, NameOf = items.NameOf };
+            Console.WriteLine($"Game data: {feed.Count:N0} decoded changes, {feed[0].At.ToLocalTime():HH:mm:ss} to {feed[^1].At.ToLocalTime():HH:mm:ss}.");
+        }
+        var s = new TrackerSession(null, settings, items, "Replay") { Packets = reader };
         // the window's overall count, so a replay says how often it would have started over (0.10.70: how steady a day was)
         s.AllView = new SessionEngine(items);
         s.OverallRestart += _ => { var a = s.FreshAll ?? new SessionEngine(items); if (s.FreshAll == null) a.SetZone(s.Zone); s.AllView = a; };
@@ -1032,6 +1045,34 @@ options: --process aion[,other]");
         int si = 0; string? zoneNow = null; string rewardNow = ""; DateTime tickAt = DateTime.MinValue, rewardUntil = DateTime.MinValue, clock = DateTime.MinValue;
         // the replay's notes carry the replayed reads' times, so they line up with the player's own reads.log
         CrashLog.Clock = () => clock == DateTime.MinValue ? DateTime.Now : clock.ToLocalTime();
+        if (reader != null) KinahLedger.Packets.PacketClock.Fixed = () => clock == DateTime.MinValue ? DateTime.UtcNow : clock;
+        // the game's data up to a time, each piece drained as it came (the live loop drains on every arrival), the agreement
+        // check every 2 s. Before the cut only the currencies' amounts are kept, as baselines, so the cut counts what is in it
+        int fi = 0; DateTime agreedAt = DateTime.MinValue; bool fedBase = false;
+        void FeedUntil(DateTime t)
+        {
+            if (reader == null) return;
+            if (!fedBase)
+            {
+                fedBase = true;
+                var start = t.AddSeconds(-30);
+                var lastAmount = new Dictionary<KinahLedger.Packets.CurrencyKind, (DateTime At, long Amount)>();
+                for (; fi < feed.Count && feed[fi].At < start; fi++)
+                    if (feed[fi].Ev is KinahLedger.Packets.CurrencyChange c0) lastAmount[c0.What] = (c0.At, c0.Amount);
+                    else if (feed[fi].Ev is KinahLedger.Packets.FightEvent { Kind: KinahLedger.Packets.FightKind.RankPoints } r0) lastAmount[KinahLedger.Packets.CurrencyKind.RankPoints] = (r0.At, r0.Total);
+                foreach (var (k, (at0, amount)) in lastAmount) { clock = at0; reader.ReplayFeed(new KinahLedger.Packets.CurrencyChange(at0, k, 0, amount, true), at0); }
+            }
+            while (fi < feed.Count && feed[fi].At <= t)
+            {
+                var (at, ev) = feed[fi++];
+                clock = at;
+                reader.ReplayFeed(ev, at);
+                s.DrainPacketsForTest();
+                if ((at - agreedAt).TotalSeconds >= 2) { reader.AgreeForTest(); agreedAt = at; }
+            }
+            clock = t;
+            s.DrainPacketsForTest();
+        }
         // the live tracker reads the minimap every few seconds (3 s in an instance): the replay repeats the last zone as often
         void SignalsUntil(DateTime t)
         {
@@ -1078,6 +1119,7 @@ options: --process aion[,other]");
                 // so the replay stops repeating the old zone until the next zone read it has
                 if (last is { } prevT && (t - prevT).TotalSeconds > 60) zoneNow = null;
                 SignalsUntil(t);
+                FeedUntil(t);
                 clock = t;
                 first ??= t; last = t;
                 if (k == "chat") { s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++; }
@@ -1091,6 +1133,12 @@ options: --process aion[,other]");
             catch (Exception ex) { Console.Error.WriteLine("skipped a trace line: " + ex.Message); }
         }
         if (last != null) { s.FlushVotes(last.Value); SignalsUntil(last.Value.AddSeconds(ReplayTailSeconds)); }
+        // the game's data to the end of the cut, then held items and the agreement check let run out
+        if (last != null && reader != null)
+        {
+            FeedUntil(last.Value.AddSeconds(2));
+            for (int i = 1; i <= 20; i++) { clock = last.Value.AddSeconds(2 + i); s.DrainPacketsForTest(); reader.AgreeForTest(); s.DrainPacketsForTest(); }
+        }
         s.Instances.Close();
         var e = s.Engine; var tot = e.Totals();
         Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}.");
@@ -1115,7 +1163,7 @@ options: --process aion[,other]");
         Console.WriteLine($"  place moves (the zone view started over): {s.PlaceMoves} · overall count started over: {notes.Count(n => n.Contains("so the overall count starts over"))} at a zone change, {notes.Count(n => n.Contains("back from a break"))} after a break");
         PrintRuns(s, items, landed, first, signals);
         if (opts.TryGetValue("notes", out var notesOut)) File.Copy(Path.Combine(CrashLog.DirOverride, "reads.log"), notesOut, true);
-        CrashLog.DirOverride = null; CrashLog.Clock = null; _ = real;
+        CrashLog.DirOverride = null; CrashLog.Clock = null; KinahLedger.Packets.PacketClock.Fixed = null; _ = real;
         return 0;
     }
 
