@@ -134,6 +134,8 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "meter") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterMotionChecks(Check); HealChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter motion): all passed" : $"options test (meter motion): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=share: the Parser overlay's Share alone (shown, and reachable from the meter: Ui/WpfApp.MeterShare.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "share") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterShareOverlayChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (overlay share): all passed" : $"options test (overlay share): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=cutoff: the meter's figures never cut, every look in the worst-case fight (Ui/WpfApp.CutOff.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "cutoff") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); CutOffChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter cut-off): all passed" : $"options test (meter cut-off): {fails} failed"); return fails == 0 ? 0 : 1; }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -340,6 +342,7 @@ public static partial class WpfApp
             Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter, Float and every theme's look draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
+        CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
