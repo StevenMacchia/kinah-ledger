@@ -35,11 +35,11 @@ public partial class MainWindow
     List<MenuEntry> EventsMoreEntries()
     {
         var list = new List<MenuEntry>();   // the timers have their own page since the redesign (Ui/MainWindow.TimersPage.cs)
-        if (EventsShareBtn.IsEnabled) list.Add(new MenuEntry("Share the last run", () => ToggleShare("Events"), "A picture of the last run, to paste in Discord or anywhere. Nothing is uploaded."));
-        list.Add(new MenuEntry(_runListShown ? "Hide every run" : "Show every run", () => { _runListShown = !_runListShown; _drawnSig.Remove("runs"); ShowInstances(); }, "Each run on its line with what it gave, in a box under the place's. A click on a run opens it in the place's box."));
-        list.Add(new MenuEntry(SaveRunsText + "…", () => SaveRunsCsv(_shownRuns), "The runs shown, one line each, for a spreadsheet. A dialog asks where; nothing is uploaded."));
+        if (EventsShareBtn.IsEnabled) list.Add(new MenuEntry(L.T("Share the last run"), () => ToggleShare("Events"), L.T("A picture of the last run, to paste in Discord or anywhere. Nothing is uploaded.")));
+        list.Add(new MenuEntry(L.T(_runListShown ? "Hide every run" : "Show every run"), () => { _runListShown = !_runListShown; _drawnSig.Remove("runs"); ShowInstances(); }, L.T("Each run on its line with what it gave, in a box under the place's. A click on a run opens it in the place's box.")));
+        list.Add(new MenuEntry(L.T(SaveRunsText) + "…", () => SaveRunsCsv(_shownRuns), L.T("The runs shown, one line each, for a spreadsheet. A dialog asks where; nothing is uploaded.")));
         list.Add(new MenuEntry("", Rule: true));
-        list.Add(new MenuEntry("Clear the runs shown", () => _ = ClearRuns(), "Clears the runs on this page. Undo is on the status line for a while."));
+        list.Add(new MenuEntry(L.T("Clear the runs shown"), () => _ = ClearRuns(), L.T("Clears the runs on this page. Undo is on the status line for a while.")));
         return list;
     }
 
@@ -69,9 +69,9 @@ public partial class MainWindow
             var last = (newest.LastLoot ?? newest.Start).ToLocalTime();
             var parts = new List<string>();
             if (newest.Kind.Length > 0) parts.Add(newest.Kind);
-            parts.Add($"{runs.Count} run{(runs.Count == 1 ? "" : "s")}");
-            if (value > 0) parts.Add($"{Fk(value)} made");
-            parts.Add(string.Equals(zone, live, StringComparison.OrdinalIgnoreCase) ? "open now" : last.Date == DateTime.Today ? $"last {last:HH:mm}" : $"last {last.ToString("MMM d", CultureInfo.InvariantCulture)}");
+            parts.Add(RunsN(runs.Count));
+            if (value > 0) parts.Add(L.F("{0} made", Fk(value)));
+            parts.Add(string.Equals(zone, live, StringComparison.OrdinalIgnoreCase) ? L.T("open now") : L.F("last {0}", last.Date == DateTime.Today ? last.ToString("HH:mm", CultureInfo.InvariantCulture) : DayShort(last)));
             list.Add(new MenuEntry(zone, () => { OpenPlace(zone); _drawnSig.Remove("runs"); redraw(); }, string.Join(" · ", parts), Key: string.Equals(zone, picked, StringComparison.OrdinalIgnoreCase) ? "✓" : ""));
         }
         return list;
@@ -85,11 +85,11 @@ public partial class MainWindow
         card.SetResourceReference(StyleProperty, "QCard");
         card.Padding = new Thickness(0);
         // the head (the Quest look, 2026-11-07): the icon and the title, the count, the order's dropdown and Save as CSV on the right
-        var head = QHead("Timer", "Every run", $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · what each one gave");
+        var head = QHead("Timer", L.T("Every run"), L.F("{0} · what each one gave", RunsN(runs.Count)));
         head.Margin = new Thickness(14, 12, 14, 6);
-        var pick = PickButton(RunsOrder.Label(RunsSortMode), () => RunsSortEntries(redraw), "The order of the runs: newest first, the best first, by place, or the longest first.");
+        var pick = PickButton(L.T(RunsOrder.Label(RunsSortMode)), () => RunsSortEntries(redraw), L.T("The order of the runs: newest first, the best first, by place, or the longest first."));
         // Save as CSV (0.10.11, Ui/MainWindow.Export.cs): the runs shown, in this order, for a spreadsheet
-        var save = PillButton(SaveRunsText, () => SaveRunsCsv(runs), "One file for a spreadsheet: these runs in this order, each with when it started, the place, how long it took, its Kinah, kills, worth and items. Nothing is uploaded.");
+        var save = PillButton(L.T(SaveRunsText), () => SaveRunsCsv(runs), L.T("One file for a spreadsheet: these runs in this order, each with when it started, the place, how long it took, its Kinah, kills, worth and items. Nothing is uploaded."));
         save.Margin = new Thickness(0, 0, 8, 0);
         var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         tools.Children.Add(save); tools.Children.Add(pick);
@@ -101,7 +101,7 @@ public partial class MainWindow
         foreach (var run in _runListAll ? order : order.Take(RunListFirst)) host.Children.Add(RunGroup(run, redraw));
         if (order.Count > RunListFirst)
         {
-            var m = QLinkify(QT(_runListAll ? "Show fewer" : $"Show all {order.Count} runs", 12, FontWeights.SemiBold, "Link"));
+            var m = QLinkify(QT(_runListAll ? L.T("Show fewer") : L.F("Show all {0} runs", order.Count), 12, FontWeights.SemiBold, "Link"));
             m.Margin = new Thickness(0, 6, 0, 8);
             m.MouseLeftButtonUp += (_, _) => { _runListAll = !_runListAll; redraw(); };
             host.Children.Add(m);
@@ -113,7 +113,7 @@ public partial class MainWindow
 
     /// <summary>The dropdown's choices for the runs' order, the one on with a tick; a pick keeps it (ui.json) and draws the page again.</summary>
     List<MenuEntry> RunsSortEntries(Action redraw)
-        => RunsOrder.Modes.Select(mode => new MenuEntry(RunsOrder.Label(mode), () => { _prefs.RunsSort = mode; SavePrefs(); _drawnSig.Remove("runs"); redraw(); }, RunsOrder.Tip(mode), Key: mode == RunsSortMode ? "✓" : "")).ToList();
+        => RunsOrder.Modes.Select(mode => new MenuEntry(L.T(RunsOrder.Label(mode)), () => { _prefs.RunsSort = mode; SavePrefs(); _drawnSig.Remove("runs"); redraw(); }, L.T(RunsOrder.Tip(mode)), Key: mode == RunsSortMode ? "✓" : "")).ToList();
 
     /// <summary>
     /// One run: when it started, its place, how long it took, "left out of the figures" when it is, and what it made on
@@ -126,19 +126,19 @@ public partial class MainWindow
         var sp = new StackPanel { Margin = new Thickness(0, 2, 0, 2), Tag = run };
         bool out_ = run.OutOfAverages;
         var local = run.Start.ToLocalTime();
-        var whenQ = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+        var whenQ = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : DayHm(local);
         long valueQ = RunValue(run);
-        var subQ = whenQ + (run.Seconds > 0 ? " · took " + Clock(TimeSpan.FromSeconds(run.Seconds)) : "") + " · " + RunSub(run, out_ ? FlagReason(run, 0) : "") + (out_ ? " · left out of the figures" : "");
+        var subQ = whenQ + (run.Seconds > 0 ? " · " + L.F("took {0}", Clock(TimeSpan.FromSeconds(run.Seconds))) : "") + " · " + RunSub(run, out_ ? FlagReason(run, 0) : "") + (out_ ? " · " + L.T("left out of the figures") : "");
         var iconQ = out_ ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(PlaceIcon(run.Zone, run.Kind), "Sky", 28, round: true);
         var line = QRow(iconQ, run.Label, subQ, out_ || valueQ <= 0 ? "–" : Fk(valueQ), out_ || valueQ <= 0 ? "Faint" : "Gold", rule: false);
-        line.ToolTip = out_ ? "This run's Kinah or rewards weren't read in full, so it isn't in the figures. Click for the fix, in its place's card." : "Click for this run in its place's card: the details, or Remove if it's wrong.";
+        line.ToolTip = L.T(out_ ? "This run's Kinah or rewards weren't read in full, so it isn't in the figures. Click for the fix, in its place's card." : "Click for this run in its place's card: the details, or Remove if it's wrong.");
         ToolTipService.SetInitialShowDelay(line, 500);
         line.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenPlace(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); redraw(); };
         sp.Children.Add(line);
         var slotsQ = new List<FrameworkElement>();
         if (one.Kinah > 0) slotsQ.Add(RunKinahSlot(one.Kinah, one.KinahWhere, "Picked up this run"));
         foreach (var s in SortSlots(one.Items)) slotsQ.Add(RunItemSlot(s, "this run"));
-        if (slotsQ.Count == 0 && one.Gear == 0) { var t = QT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
+        if (slotsQ.Count == 0 && one.Gear == 0) { var t = QT(L.T(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen."), 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
         else if (slotsQ.Count > 0) { var wrap = new WrapPanel { Margin = new Thickness(38, 2, 0, 2) }; foreach (var s in slotsQ) wrap.Children.Add(s); sp.Children.Add(wrap); }
         if (GearRow(one, "this run") is FrameworkElement gn) { gn.Margin = new Thickness(38, 2, 0, 6); sp.Children.Add(gn); }
         return sp;
@@ -154,20 +154,20 @@ public partial class MainWindow
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bool out_ = run.OutOfAverages;
         var local = run.Start.ToLocalTime();
-        var when = PT(local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture), "Faint", 12, null, "MonoFont");
+        var when = PT(local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : DayHm(local), "Faint", 12, null, "MonoFont");
         when.VerticalAlignment = VerticalAlignment.Center; head.Children.Add(when);
         var name = PT(run.Label, out_ ? "Faint" : "Ink", 12.5, FontWeights.Normal); name.Margin = new Thickness(10, 0, 0, 0); name.VerticalAlignment = VerticalAlignment.Center; name.MaxWidth = 280; Grid.SetColumn(name, 1); head.Children.Add(name);
         if (run.Seconds > 0) { var took = PT(Clock(TimeSpan.FromSeconds(run.Seconds)), "Faint", 12, null, "MonoFont"); took.Margin = new Thickness(10, 0, 0, 0); took.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(took, 2); head.Children.Add(took); }
-        if (out_) { var o = PT("left out of the figures", "Faint", 12); o.Margin = new Thickness(10, 0, 0, 0); o.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(o, 3); head.Children.Add(o); }
+        if (out_) { var o = PT(L.T("left out of the figures"), "Faint", 12); o.Margin = new Thickness(10, 0, 0, 0); o.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(o, 3); head.Children.Add(o); }
         long value = RunValue(run);
         if (value > 0)
         {
             var v = PT(Fk(value), out_ ? "Faint" : "Gold", 12.5, null, "MonoFont"); v.VerticalAlignment = VerticalAlignment.Center; v.Margin = new Thickness(12, 0, 0, 0);
-            v.ToolTip = "This run's Kinah plus its loot at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in it.";
+            v.ToolTip = L.F("This run's Kinah plus its loot at the lowest Market price, {0}. Gear is bound and not in it.", CutT);
             Grid.SetColumn(v, 5); head.Children.Add(v);
         }
         var line = new Border { Child = head, Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(-8, 0, -8, 4), CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Cursor = Cursors.Hand,
-            ToolTip = out_ ? "This run's Kinah or rewards weren't read in full, so it isn't in the figures. Click for the fix, in its place's card." : "Click for this run in its place's card: the details, or Remove if it's wrong." };
+            ToolTip = L.T(out_ ? "This run's Kinah or rewards weren't read in full, so it isn't in the figures. Click for the fix, in its place's card." : "Click for this run in its place's card: the details, or Remove if it's wrong.") };
         ToolTipService.SetInitialShowDelay(line, 500);
         line.MouseEnter += (_, _) => { line.SetResourceReference(Border.BackgroundProperty, "HoverTint"); name.SetResourceReference(TextBlock.ForegroundProperty, "Gold"); };
         line.MouseLeave += (_, _) => { line.Background = Brushes.Transparent; name.SetResourceReference(TextBlock.ForegroundProperty, out_ ? "Faint" : "Ink"); };
@@ -177,7 +177,7 @@ public partial class MainWindow
         var slots = new List<FrameworkElement>();
         if (one.Kinah > 0) slots.Add(KinahSlot(one.Kinah, one.KinahWhere, "", "Picked up this run"));
         foreach (var s in SortSlots(one.Items)) slots.Add(ItemSlot(s, ("", ""), false, runs: true, when: "this run"));
-        if (slots.Count == 0) { var t = PT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", "Faint", 12); t.Margin = new Thickness(0, 0, 0, 6); sp.Children.Add(t); }
+        if (slots.Count == 0) { var t = PT(L.T(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen."), "Faint", 12); t.Margin = new Thickness(0, 0, 0, 6); sp.Children.Add(t); }
         else sp.Children.Add(SlotWrap(slots));
         return sp;
     }
