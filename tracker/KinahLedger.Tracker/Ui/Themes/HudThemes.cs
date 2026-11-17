@@ -46,7 +46,7 @@ public static class HudThemes
     /// <summary>A theme's look, or null for Classic's (the window and the Parser's own window make those themselves).</summary>
     internal static HudThemeLook? Make(string key, bool still) => key switch
     {
-        Sticker => new HudSticker { Still = still }, Neon => new HudNeon { Still = still }, Goo => new HudGoo { Still = still },
+        Sticker => new HudSticker { Still = still }, Neon => new HudNeon { Still = still }, Goo => new HudHoloCard { Still = still },
         Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Studio => new HudScorebug(studio: true) { Still = still }, Holo => new HudHolo { Still = still },
         Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
         ModernGlass => new HudModernGlass { Still = still },
