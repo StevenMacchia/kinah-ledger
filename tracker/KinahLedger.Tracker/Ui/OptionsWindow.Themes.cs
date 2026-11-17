@@ -26,7 +26,7 @@ public partial class OptionsWindow
             HudThemeHost.Children.Add(chip);
         }
         // the window's skin to match (1.0): tried on like a theme chip under General, kept by Save, put back by Cancel
-        if (_host.MatchAppLink(_hudTheme, _edit.Skin, skin => Edit(_edit with { Skin = skin }, previewSkin: true)) is { } match) HudThemeHost.Children.Add(match);
+        if (_host.MatchAppLink(_hudTheme, _edit.Skin, skin => { Edit(_edit with { Skin = skin }, previewSkin: true); HudThemeShown(_edit.HudLook); }) is { } match) HudThemeHost.Children.Add(match);
         return _hudTheme;
     }
 

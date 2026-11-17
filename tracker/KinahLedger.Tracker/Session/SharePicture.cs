@@ -227,7 +227,7 @@ public static class SharePicture
             ? string.Join(" · ", zones.Take(2).Select(z => $"{z.Name} {fk(z.Made)}")) + (zones.Count > 2 ? " · " + L.F("+{0} more", zones.Count - 2) : "")
             : "";
         var bestLine = f.Note.Length > 0 ? Cap(f.Note)
-            : bestDrop is { } bd ? L.F("Best drop: {0} ×{1}", bd.Name, N(bd.Count)) + (GradeRank(bd.Grade) > 0 ? $" · {bd.Grade}" : "")
+            : bestDrop is { } bd ? L.F("Best drop: {0} ×{1}", bd.Name, N(bd.Count)) + (GradeRank(bd.Grade) > 0 ? $" · {L.T(bd.Grade)}" : "")
             : "";
 
         var pic = new SharePic(head, f.Title, sub, rate, RateLabel, fk(f.Made), MadeLabel, icons, best, Site)
