@@ -12,6 +12,14 @@
 # Nightmare: https://metabot.gg/en/aion-2/dungeons/nightmare-altar (2026-11-17: Divided Aponos, its only and final boss,
 # "Stage 1: Nightmare Altar (Hell)"); https://metabot.gg/en/aion-2/dungeons/nightmare (2026-11-17) lists no bosses, so
 # Nightmare is filed with none and its pulls keep the game's names.
+# The game's own code names ("Instance|Kind||Code"): its map events are CODE_Mode_..._MapEvent (FierceHornCave_Easy_Mapevent), and
+# when the game enters an instance with no name (Ferocious Horn Den on Easy since 2026-11-16) the code names it; the word
+# after the code is the mode (Easy, Normal = Conquest), never the name. From the tracker's packets.log, 2026-11-14 to 11-17.
+Ferocious Horn Den|Expedition||FierceHornCave
+Vakron Sky Island|Expedition||BakronIsland
+Fire Temple|Expedition||Fire_Temple
+Krao Cave|Expedition||KraoCave
+Shattered Arkanis|Expedition||Arkanis
 Abyssal Horn Den|Expedition|Kapu|
 Abyssal Horn Den|Expedition|Dhakan|
 Abyssal Horn Den|Expedition|Gargaum|final

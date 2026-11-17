@@ -84,17 +84,23 @@ internal sealed class BossMapper
     long _instance;
     /// <summary>A death row carries its killer and killing skill (interface version 10); before, those fields meant nothing.</summary>
     public bool Killers { get; init; }
+    /// <summary>
+    /// Inside an instance (between its entered and left rows). There a damage row or hit with no pull (encounter 0) is trash's:
+    /// a monster that is no boss's and no wave's, sent for the live meter (Steven, 2026-11-17: "this needs to track the dps
+    /// but only LOG the bosses"); a decoder from before sends none.
+    /// </summary>
+    public bool Inside { get; private set; }
 
-    public void Reset() => _group.Clear();
+    public void Reset() { _group.Clear(); Inside = false; }
 
     public BossEvent? Map(BossRow r)
     {
         switch (r.Kind)
         {
             case 1:
-                _group.Clear();
+                _group.Clear(); Inside = true;
                 return new InstanceEntered(r.At, r.Content is >= 1 and <= 3 ? (ContentKind)r.Content : ContentKind.Other, r.Zone, ++_instance);
-            case 2: _group.Clear(); return new InstanceLeft(r.At);
+            case 2: _group.Clear(); Inside = false; return new InstanceLeft(r.At);
             case 4: return new BossEngaged(r.At, r.Boss, r.BossEntity);
             case 5: return new BossEnded(r.At, r.BossEntity, r.Outcome switch { 1 => BossOutcome.Kill, 2 => BossOutcome.Wipe, _ => BossOutcome.Left });
             case 6:
@@ -104,7 +110,7 @@ internal sealed class BossMapper
             case 11: return r.Boss.Length > 0 ? new InstanceMode(r.At, r.Boss) : null;   // the mode rides in the boss field
             // a damage row: ItemLevel carries the hits (0 = not counted), Outcome, on a share with no source (source 0), the
             // reason it has none (0: not said)
-            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), Reason: r.Entity == 0 ? r.Outcome : 0);
+            case 8: return new DamageDealt(r.At, r.Entity, r.BossEntity, r.Amount, r.Name, r.Self, r.Skill, (int)Math.Clamp(r.ItemLevel, 0, int.MaxValue), Reason: r.Entity == 0 ? r.Outcome : 0, Trash: Inside && r.Pull == 0);
             case 9: return new BossHealth(r.At, r.BossEntity, r.Amount, r.Max);
             case 10: return new UnitDied(r.At, r.Entity, r.Boss.Length > 0 ? r.Boss : r.Name, r.Amount == 1, Killers ? r.CombatPower : 0, Killers ? r.Skill : 0);   // version 10: killer and skill
             default: return null;   // a boss seen (its HP comes with the pull), or a kind this build doesn't know
@@ -275,12 +281,13 @@ public sealed unsafe class NativeDecoder : IGameDecoder
             if (MapHit(x) is { } e) return e;
         }
     }
-    static BossEvent? MapHit(in KlHit x)
+    BossEvent? MapHit(in KlHit x)
     {
         var at = new DateTime(x.AtUtcTicks, DateTimeKind.Utc);
         return x.Kind switch
         {
-            1 => new HitDealt(at, x.Source, x.Actor, x.Target, x.Amount, x.Skill, x.Cast, x.N, (x.Flags & 2) != 0, (x.Flags & 4) != 0, x.Result, x.Marks, x.Multi, x.Why, x.SkillId),
+            1 => new HitDealt(at, x.Source, x.Actor, x.Target, x.Amount, x.Skill, x.Cast, x.N, (x.Flags & 2) != 0, (x.Flags & 4) != 0, x.Result, x.Marks, x.Multi, x.Why, x.SkillId,
+                Trash: _bosses.Inside && x.Encounter == 0),
             2 => new HitTaken(at, x.Source, x.Target, x.Amount, x.Skill, x.Extra),
             3 => new CastMade(at, x.Source, x.Actor, x.Skill, x.Cast),
             4 or 5 => new EffectChanged(at, x.Target, x.N, x.Skill, x.Kind == 4, x.Extra),
