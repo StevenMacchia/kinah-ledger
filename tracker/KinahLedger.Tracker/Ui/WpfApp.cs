@@ -122,6 +122,9 @@ public static partial class WpfApp
     public static int OptionsSelfTest(Settings settings)
     {
         Ensure();
+        // the timers strip stays parked off every screen for the whole test: the window's tick opens it whenever a real
+        // watched timer is within 5 minutes, so a run near the hour put "Kinah Ledger timers" on the player's screen (2026-11-17)
+        TimersOverlay.InvisibleForTest = true;
         int fails = 0;
         void Check(bool ok, string what) { Console.WriteLine((ok ? "ok    " : "FAIL  ") + what); if (!ok) fails++; }
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -164,7 +167,10 @@ public static partial class WpfApp
         Check(!w.Prefs.CloseToTray && w.Prefs.Share && w.Prefs.GearScore != 1450 && w.Prefs.FollowActivity, "nothing applies before Save");
         Click(o.SaveBtn);
         DoEvents();
-        Check(!o.IsVisible, "Save closes the window");
+        // Save keeps Options open (Steven, 2026-11-17: "save shouldn't close the options"); Cancel then closes it
+        Check(o.IsVisible && o.SavedForTest, "Save keeps the window open and says Saved.");
+        Click(o.CancelBtn);
+        DoEvents();
         var p = w.Prefs;
         Check(p.CloseToTray && p.MinimizeToTray && p.HideWhenGameCloses, "window and tray choices saved");
         Check(!p.FollowActivity, "Switch pages to what I'm doing: turned off and saved");
@@ -221,7 +227,7 @@ public static partial class WpfApp
         var add = HudFields.All.First(f => !before.Contains(f.Key)).Key;
         Click((System.Windows.Controls.Button)o.HudFieldHost.Children[Array.FindIndex(HudFields.All, f => f.Key == add)]);
         Check(o.SaveBtn.IsEnabled && HudFields.Parse(p.HudFields).SequenceEqual(before), "a panel figure waits for Save");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(HudFields.Parse(p.HudFields).Contains(add) && HudFields.Parse(p.HudFields).Count == before.Count + 1, "panel figure saved: " + p.HudFields);
 
@@ -232,7 +238,7 @@ public static partial class WpfApp
         Check(o.HudLockChk.IsChecked == lockedBefore, "Lock the panel in place opens as saved: " + lockedBefore);
         Flip(o.HudLockChk);
         Check(o.SaveBtn.IsEnabled && w.HudLocked == lockedBefore, "the panel lock waits for Save");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(w.HudLocked == !lockedBefore, "panel lock saved");
 
@@ -334,13 +340,13 @@ public static partial class WpfApp
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(w.HudLook == HudLooks.Ticker && w.HudPrefsForTest.LookPicked, "panel look saved, as a pick by hand: " + w.HudLook);
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
         o.PickHudLookForTest(HudLooks.Strip);
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(w.HudLook == HudLooks.Strip, "Badge picked from its thumbnail");
         // Badge's state lines each start with a sign (2026-11-08 audit: they differed by text colour alone): the stop's flash
@@ -368,13 +374,13 @@ public static partial class WpfApp
         Check(o.RecapChk.IsChecked == true && p.RunRecap, "Show a recap when a run ends: on by default");
         Flip(o.RecapChk);
         Check(o.SaveBtn.IsEnabled && p.RunRecap, "the recap switch waits for Save");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(!p.RunRecap, "recap turned off and saved");
         o = Open();
         Check(o.RecapChk.IsChecked == false, "Options opens with the recap off");
         Flip(o.RecapChk);
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(p.RunRecap, "recap back on");
         Check(w.SampleRecapCard() is System.Windows.Controls.Border, "the recap card builds");
@@ -464,13 +470,13 @@ public static partial class WpfApp
         Check(!w.SampleLineReportExplains(), "a line's card has no WHY IT WAS COUNTED with it off");
         Flip(o.ExplainChk);
         Check(o.SaveBtn.IsEnabled && !p.ExplainCounts, "the explain switch waits for Save");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(p.ExplainCounts && w.SampleLineReportExplains(), "explain turned on and saved; the line's card says why");
         o = Open();
         Check(o.ExplainChk.IsChecked == true, "Options opens with explain on");
         Flip(o.ExplainChk);
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(!p.ExplainCounts && !w.SampleLineReportExplains(), "explain back off");
 
@@ -479,9 +485,9 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.Reading);
         Check(o.PacketChk.IsChecked == true && p.PacketReading && o.PacketStateLbl.Text.StartsWith("Now: "), $"packet reading: on Game reading, on by default, \"{o.PacketStateLbl.Text}\"");
-        Flip(o.PacketChk); Click(o.SaveBtn); DoEvents();
+        Flip(o.PacketChk); o.SaveForTest(); DoEvents();
         Check(!p.PacketReading && !w.PacketsForTest.Enabled, "...off and saved: the reader is off");
-        o = Open(); Flip(o.PacketChk); Click(o.SaveBtn); DoEvents();
+        o = Open(); Flip(o.PacketChk); o.SaveForTest(); DoEvents();
         Check(p.PacketReading && !w.PacketsForTest.On, "...on again, and a test window still reads nothing");
 
         // Options › Shortcuts & tips (2026-11-04): the three groups, the tips, the start/stop key as it is now
@@ -500,7 +506,7 @@ public static partial class WpfApp
         o.Go(OptionsWindow.Page.InGame);
         Check(Math.Abs(o.HudOpacity.Value - opacityBefore) < 0.01 && Math.Abs(o.HudScale.Value - scaleBefore) < 0.01, "Options opens with the saved opacity and size");
         o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
 
@@ -514,7 +520,7 @@ public static partial class WpfApp
         Check(p.WindowScale == 1 && w.FitState.Scale == 1, "Cancel draws the window at the saved size again");
         o = Open();
         o.WindowScale.Value = 1.25;
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(Math.Abs(p.WindowScale - 1.25) < 0.001 && Math.Abs(w.FitState.Scale - 1.25) < 0.001, $"window size saved: {p.WindowScale:P0}, drawn at {w.FitState.Scale:P0}");
         w.StepWindowScaleForTest(1);
@@ -541,7 +547,7 @@ public static partial class WpfApp
         o = Open();
         Flip(o.TopmostChk);
         Check(o.SaveBtn.IsEnabled && !w.Topmost, "the switch waits for Save");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(w.Topmost && p.AlwaysOnTop, "saved: the window is on top");
         var onTop = w.MoreEntries().First(e => e.Text == MainWindow.AlwaysOnTopText);
@@ -648,7 +654,7 @@ public static partial class WpfApp
 
         o = Open();
         Click(o.HotkeyResetBtn);
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
         // shortcut rules (2026-10-25): nothing Windows or typing needs is taken from every app on the PC
@@ -1201,7 +1207,6 @@ public static partial class WpfApp
                     $"the separate strip: first shown just above the Kinah overlay ({above}); the overlays' glass, corner and face ({sibling}); Reset position in Settings forgets the spot and puts it above the Kinah overlay again ({reset} {backAbove}); no Move button or placement mode ({resetOnly})");
                 tw.TimerPrefsForTest = Session.TimerPrefs.Defaults();
             }
-            TimersOverlay.InvisibleForTest = false;
             to.Close();
         }
             w.ShowPartForTest("Farming"); DoEvents();
@@ -1322,9 +1327,9 @@ public static partial class WpfApp
             so.Close();
             Check(w.QuestCard(w.QuestsNowForTest[1]) is { } qc && qc.Child is System.Windows.Controls.StackPanel qb && qb.Children.Count >= 8, "a quest's hover card: band, bar, the horizon, Have, To go, pace, POINTS, Worth, Tier, unlocks");
             // Options > General > Quests off: the rows go (Quests has no tab: Next up's head opens it); on again brings them back
-            var og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
+            var og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); og.SaveForTest(); DoEvents();
             Check(w.QuestsForTest().Rows == 0, "Options > General > Quests off: no quest rows on Next up");
-            og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
+            og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); og.SaveForTest(); DoEvents();
             Check(w.QuestsForTest().Rows > 0, "...and on again");
             // the Crafting page's Next up carries the two materials' quests while the farming count is on
             w.ShowDemo("Crafting"); DoEvents();
@@ -1457,7 +1462,7 @@ public static partial class WpfApp
             o = Open();
             o.Go(OptionsWindow.Page.InGame);
             o.RecordForTest(true, C | S, System.Windows.Input.Key.J);
-            Click(o.SaveBtn);
+            o.SaveForTest();
             DoEvents();
             Check(w.MarkWrongText == "Ctrl+Shift+J", "That was wrong saved: " + w.MarkWrongText);
             if (o.IsVisible) { Console.WriteLine("      (Options stayed open: " + o.FooterNote.Text + ")"); Click(o.CancelBtn); DoEvents(); }
@@ -1465,7 +1470,7 @@ public static partial class WpfApp
             o.Go(OptionsWindow.Page.InGame);
             Check(o.MarkKeyBox.Text == "Ctrl+Shift+J" && o.RecordForTest(false, C | S, System.Windows.Input.Key.J) is { } back && back.Contains("That was wrong"), "Options opens with it; start/stop can't take its keys");
             Click(o.MarkKeyOffBtn);
-            Click(o.SaveBtn);
+            o.SaveForTest();
             DoEvents();
             Check(w.MarkWrongText == "" && p.Hotkey == Platform.Hotkey.Default, "That was wrong turned off again, start/stop untouched");
 

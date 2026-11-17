@@ -17,12 +17,13 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class OptionsWindow : Window
 {
-    public enum Page { General, Server, Sharing, Reading, InGame, Timers, Tips, Updates, About }
+    /// <summary>InGame is the Buddy page (the Kinah overlay); Meter the DPS meter's (Steven, 2026-11-17: "Make a buddy settings in options and a DPS meter setting in the options on the left bar to make them easier to find").</summary>
+    public enum Page { General, Server, Sharing, Reading, InGame, Meter, Timers, Tips, Updates, About }
 
     static readonly (Page Page, string Name)[] Pages =
     {
         (Page.General, "General"), (Page.Server, "Server"), (Page.Sharing, "Sharing"), (Page.Reading, "Game reading"),
-        (Page.InGame, "In game"), (Page.Timers, "Timers"), (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates"), (Page.About, "About"),
+        (Page.InGame, "Buddy"), (Page.Meter, "DPS meter"), (Page.Timers, "Timers"), (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates"), (Page.About, "About"),
     };
     static readonly string[] GameStartChoices = { "Open the window", "Stay in the tray" };
 
@@ -106,7 +107,7 @@ public partial class OptionsWindow : Window
     {
         _page = page;
         foreach (var (p, el) in new (Page, FrameworkElement)[] { (Page.General, PageGeneral), (Page.Server, PageServer), (Page.Sharing, PageSharing),
-                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Timers, PageTimers), (Page.Tips, PageTips), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
+                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Meter, PageMeter), (Page.Timers, PageTimers), (Page.Tips, PageTips), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
             el.Visibility = p == page ? Visibility.Visible : Visibility.Collapsed;
         // the style's trigger matches the text "True" (Tag holds an object, so a bool would not match it)
         for (int i = 0; i < Nav.Children.Count; i++) ((Button)Nav.Children[i]).Tag = Pages[i].Page == page ? "True" : "False";
@@ -449,9 +450,18 @@ public partial class OptionsWindow : Window
         if (_resetSpot) { _host.ResetHudPosition(); _resetSpot = false; }   // Reset position, tried until now
         _saved = _edit = _host.CurrentOptions();
         Load(_edit);
-        if (problem != null) { Footer(L.T("Saved, but: ") + problem, "Warn"); return; }   // stays open so the note can be read
-        _closeConfirmed = true;
-        Close();
+        if (problem != null) { Footer(L.T("Saved, but: ") + problem, "Warn"); return; }
+        // Options stays open after a save (Steven, 2026-11-17: "save shouldn't close the options"); Close or Cancel leaves
+        Footer(L.T("Saved."), "Good");
+    }
+
+    /// <summary>For the self-tests: the footer says the last Save went through.</summary>
+    internal bool SavedForTest => FooterNote.Text == L.T("Saved.");
+    /// <summary>For the self-tests: Save, then Options closed as a player would after it (Save keeps it open since 2026-11-17); a Save that stopped on a note stays open.</summary>
+    internal void SaveForTest()
+    {
+        Save();
+        if (SavedForTest) { _closeConfirmed = true; Close(); }
     }
 
     /// <summary>Ctrl+= or Ctrl+- pressed in the window while Options is open: the slider here moves to <paramref name="scale"/>, so Save keeps it.</summary>

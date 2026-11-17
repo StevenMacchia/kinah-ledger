@@ -20,6 +20,20 @@ public partial class OptionsWindow
     FrameworkElement? _parserLookRow, _parserLookDivider, _parserAllLooks;
     /// <summary>The look picked for the Parser's own window (saved with the Parser's switches).</summary>
     string _parserLookPick = ParserPrefs.StandardLook;
+    /// <summary>
+    /// The theme whose looks the Parser's own window offers, apart from the Kinah overlay's theme (Steven, 2026-11-17: "you
+    /// shouldnt have to choose the corresponding buddy if u dont want to in order to choose the DPS overlay"). Null: the
+    /// theme of the look in use.
+    /// </summary>
+    string? _parserTheme;
+    WrapPanel? _parserThemeHost;
+
+    /// <summary>The Parser window's looks in a theme: Classic's are Standard and the four drawn for fights; another theme's, all of its own.</summary>
+    internal static IReadOnlyList<string> ParserLooksOf(string theme) =>
+        theme == HudThemes.Classic ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).ToList() : HudThemes.Looks(theme).Select(l => l.Key).ToList();
+
+    /// <summary>The theme a Parser look belongs to (Standard: Classic).</summary>
+    static string ParserThemeOf(string look) => look == ParserPrefs.StandardLook ? HudThemes.Classic : HudThemes.Of(look);
     UniformGrid? _parserLookHost;
     TextBlock? _parserLookHint;
     /// <summary>The big preview under the look buttons (Steven, 2026-11-15: "can't really see the previews... they're so small"):
@@ -165,10 +179,8 @@ public partial class OptionsWindow
         stack.Children.Insert(0, _parserLookDivider = Styled(new Border(), "Divider"));
         stack.Children.Insert(0, BuildParserLookRow());
         var group = Styled(new Border { Child = stack }, "Group");
-        // before Rare drops, which stays the page's last group
-        int at = _rareLabel != null ? PageInGame.Children.IndexOf(_rareLabel) : -1;
-        if (at < 0) { PageInGame.Children.Add(_parserLabel); PageInGame.Children.Add(group); }
-        else { PageInGame.Children.Insert(at, group); PageInGame.Children.Insert(at, _parserLabel); }
+        // the DPS meter's own page on the left bar (Steven, 2026-11-17), apart from the Buddy page
+        PageMeter.Children.Add(_parserLabel); PageMeter.Children.Add(group);
     }
 
     FrameworkElement BuildParserLookRow()
@@ -183,13 +195,17 @@ public partial class OptionsWindow
         all.SetResourceReference(TextBlock.ForegroundProperty, "Link");
         all.MouseEnter += (_, _) => all.TextDecorations = TextDecorations.Underline;
         all.MouseLeave += (_, _) => all.TextDecorations = null;
-        all.MouseLeftButtonUp += (_, _) => HudLookHost.BringIntoView();
+        all.MouseLeftButtonUp += (_, _) => { Go(Page.InGame); Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => HudLookHost.BringIntoView()); };
         AutomationProperties.SetName(all, "All panel looks");
         Grid.SetColumn(all, 1); top.Children.Add(all);
         _parserAllLooks = all;
         box.Children.Add(top);
         _parserLookHint = Styled(new TextBlock(), "RowHint");
         box.Children.Add(_parserLookHint);
+        // the Parser window's own theme chips: its looks come from here, whatever the Kinah overlay's theme
+        _parserThemeHost = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+        AutomationProperties.SetName(_parserThemeHost, "Parser overlay theme");
+        box.Children.Add(_parserThemeHost);
         _parserLookHost = new UniformGrid { Columns = 4, Margin = new Thickness(0, 10, 0, 0) };
         box.Children.Add(_parserLookHost);
         _parserLookStage = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 8, 0, 0), MinHeight = 200 };
@@ -357,8 +373,22 @@ public partial class OptionsWindow
         if (_parserLookDivider != null) _parserLookDivider.Visibility = Visibility.Visible;
         if (_parserAllLooks != null) _parserAllLooks.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
         var current = separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook);
-        var themeLooks = HudThemes.FightLooks(_hudTheme ?? HudThemes.Of(_edit.HudLook));   // the theme picked's (Ui/OptionsWindow.Themes.cs)
-        var keys = separate ? new[] { ParserPrefs.StandardLook }.Concat(themeLooks).ToArray() : themeLooks.ToArray();
+        // in its own window the Parser has a theme of its own (its chips); inside the Kinah overlay it is the overlay's theme
+        if (separate) _parserTheme ??= ParserThemeOf(current);
+        if (_parserThemeHost != null)
+        {
+            _parserThemeHost.Children.Clear();
+            _parserThemeHost.Visibility = separate ? Visibility.Visible : Visibility.Collapsed;
+            if (separate)
+                foreach (var t in HudThemes.All)
+                {
+                    var tk = t.Key;
+                    var chip = _host.Chip(L.T(t.Name), tk == _parserTheme, () => { if (tk == _parserTheme) return; _parserTheme = tk; DrawParserLooks(); }, L.T(t.Hint));
+                    chip.Tag = "parser-theme:" + tk;
+                    _parserThemeHost.Children.Add(chip);
+                }
+        }
+        var keys = separate ? ParserLooksOf(_parserTheme!).ToArray() : HudThemes.FightLooks(_hudTheme ?? HudThemes.Of(_edit.HudLook)).ToArray();   // the Kinah overlay's theme (Ui/OptionsWindow.Themes.cs)
         if (_parserLookHost is UniformGrid ug) ug.Columns = keys.Length;
         string inUseName = separate ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
         _parserLookHint.Text = separate
@@ -417,7 +447,7 @@ public partial class OptionsWindow
     /// <summary>In game, scrolled to the Parser's look row (the Parser page's "Look" link).</summary>
     public void ShowParserLook()
     {
-        Go(Page.InGame);
+        Go(Page.Meter);
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
         {
             if (_parserLabel == null) return;
@@ -437,6 +467,10 @@ public partial class OptionsWindow
         var card = _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => key == null ? b.IsMouseOver == false : (string)b.Tag == key);
         card?.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = key == null ? UIElement.MouseLeaveEvent : UIElement.MouseEnterEvent });
     }
+
+    /// <summary>For the options test: the Parser window's own theme, and a click on one of its theme chips.</summary>
+    internal string? ParserThemeForTest => _parserTheme;
+    internal void PickParserThemeForTest(string theme) { if (theme == _parserTheme) return; _parserTheme = theme; DrawParserLooks(); }
 
     internal (List<string> Keys, string? On) ParserLooksForTest => (_parserLookHost?.Children.OfType<Border>().Select(b => (string)b.Tag).ToList() ?? new(),
         _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
