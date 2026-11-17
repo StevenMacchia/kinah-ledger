@@ -54,74 +54,63 @@ sealed partial class HudFighter
     }
 
     /// <summary>
-    /// One member as a line of the target list: the rank in brackets ("[01]", amber for the lead), a diamond in the class's
-    /// colour, the callsign (the name in its class's colour) and its marks, the DPS and share at the right, and under it a
-    /// thin vector bar with a tick each tenth, its fill in the class's colour ending in a bright tick. You: amber corner
-    /// brackets lock round the row and the YOU tag is solid amber.
+    /// One member as a bar of the target list (Steven, 2026-11-17: "better looks that doesn't crowd everything and prioritizes
+    /// the bar"): the rank in brackets ("[01]", amber for the lead), then the bar, the row's height and the rest of its width:
+    /// a vector frame with a tick each tenth, filled in the class's colour to the member's share and ending in a bright tick. On
+    /// it: the class's diamond and the callsign with its marks (a kill's star, deaths), Combat Power small under it (and a
+    /// healer's healing a second), the DPS big at the right and the share small after it. You: amber corner brackets lock round
+    /// the row. Short of room a plate goes to its glyph, then YOU, then the CP (the skills card says them all): never a figure cut.
     /// </summary>
-    sealed class TargetRow : IThemeRow, IThemeRowGrows
+    sealed class TargetRow : IThemeRow
     {
-        public const double H = 27, Pitch = 30;
+        public const double H = 33, Pitch = 36;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
         readonly TextBlock _rank = Tt("", 12, PhosDim, Face, FontWeights.Bold), _name = Tt("", 13, Phos, Face, FontWeights.Bold),
             _dps = Tt("", 14.5, Pale, Face, FontWeights.Bold), _pct = Tt("", 11, PhosDim, Face, FontWeights.SemiBold), _dmg = Tt("", 12.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 11, PhosDim, Face, FontWeights.SemiBold);
-        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
-        /// <summary>The marks that don't fit beside the callsign, on a line under it (Tac.FitLines); the bar moves down under them.</summary>
-        readonly StackPanel _sub = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0) };
-        readonly StackPanel _lines = new() { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(15, 2, 0, 0) };
-        List<FrameworkElement> _order = new();
-        public double Extra { get; private set; }
-        public event Action? Grew;
-        /// <summary>
-        /// Combat Power after the callsign: a small dim "CP" tight on the figure, a step under the name's weight. Always this
-        /// compact form (the mono face is wide: every row of the list says it the same way, and the callsign keeps its room).
-        /// </summary>
-        readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 1, 0, 0) };
-        readonly TextBlock _cpFig = Tt("", 10.5, Frozen(Tac.A(PaleC, .74)), Face, FontWeights.SemiBold);
-        readonly List<FrameworkElement> _keep = new();
-        readonly List<(FrameworkElement, FrameworkElement?)> _give = new();
+        /// <summary>The bar's two lines of words: the callsign and its marks; under it, Combat Power and a healer's healing.</summary>
+        readonly StackPanel _top = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(TextIn, 2, 0, 0) };
+        readonly StackPanel _under = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(TextIn, 0, 0, 3) };
+        /// <summary>Combat Power under the callsign: a small dim "CP" tight on the figure, quiet beside the DPS.</summary>
+        readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock _cpFig = Tt("", 10.5, Frozen(Tac.A(PaleC, .78)), Face, FontWeights.SemiBold);
+        readonly TextBlock _none = new();
+        readonly List<FrameworkElement> _keep = new(), _keepUnder = new();
+        readonly List<(FrameworkElement, FrameworkElement?)> _give = new(), _giveUnder = new();
+        readonly double _dmgW, _critW;
         MeterMember? _m;
         double _bar;
         bool _expanded;
+        /// <summary>Where the words start on the bar: past the class's diamond.</summary>
+        const double TextIn = 17;
 
         public FrameworkElement Root => _root;
 
         public TargetRow()
         {
-            // the rank, the callsign's line, the DPS, the share (as narrow as their widest figures: the callsign gets the room)
-            foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
-                t.Margin = new Thickness(0, t == _dps ? 1 : 4, t == _pct ? 4 : 6, 0);
-            // sized for the widest real figure (Steven, 2026-11-17: "a lot of numbers ... you can't see, it's cut off!": "199.9K" lost its 1)
+            foreach (var t in new[] { _dps, _pct, _dmg, _crit }) { t.Margin = new Thickness(0, 0, t == _pct ? 6 : 7, 0); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; }
+            // the figure columns sized for the widest real figure (a 54 px column cut the 1 off "199.9K"); the bar gets the rest
             _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
-            foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, "88.8%", "100%"), 0, 0 })
+            foreach (var w in new[] { 32.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, "88.8%", "100%", L.T("CP")), 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
             _root.Children.Add(_art);
-            _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.VerticalAlignment = VerticalAlignment.Top; _rank.Margin = new Thickness(0, 3, 0, 0);
+            _rank.HorizontalAlignment = HorizontalAlignment.Center;
             Put(_rank, 0);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
-            _nameLine.Children.Add(_name);
-            _lines.Children.Add(_nameLine); _lines.Children.Add(_sub);
-            Put(_lines, 1);
-            Grid.SetColumnSpan(_lines, 5);   // the name may run on into the DPS's column, as far as its figure leaves free; the line under it, under the figures (Fit)
-            foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
-            {
-                t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Top;
-                Put(t, col);
-            }
+            _top.Children.Add(_name);
+            Put(_top, 1); Put(_under, 1);
+            Grid.SetColumnSpan(_top, 2); Grid.SetColumnSpan(_under, 2);   // as far as the DPS leaves free (Fit)
+            Put(_dps, 1); Grid.SetColumnSpan(_dps, 2);   // over its column and the bar's: a wider figure ("167,548" before a hit) takes room from the words, never a digit
+            Put(_pct, 3); Put(_dmg, 4); Put(_crit, 5);
             _dps.Tag = "row-dps";
-            // the DPS right-aligned over its column and the name's: a wider figure (Combat Power "167,548" before the first hit) takes
-            // room from the name, never loses a digit; its own column is what the name never takes
-            Grid.SetColumn(_dps, 1); Grid.SetColumnSpan(_dps, 2);
             var cpWord = Tt(L.T("CP"), 7.5, PhosDim, Face, FontWeights.Bold); cpWord.Margin = new Thickness(0, 1, 2, 0);
             _cp.Children.Add(cpWord); _cp.Children.Add(_cpFig);
             _root.SizeChanged += (_, _) => Fit();
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _root.Children.Add(el); }
-        readonly double _dmgW, _critW;
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -136,39 +125,33 @@ sealed partial class HudFighter
             _rank.Text = m.Rank.ToString("00", CultureInfo.InvariantCulture);
             _rank.Foreground = lead || m.You ? Amber : PhosDim;
             _name.Text = m.Name;
-            _name.Foreground = Frozen(m.NameColor);
-            _sub.Children.Clear();
-            while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
-            _keep.Clear(); _give.Clear();
-            FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
-            // Combat Power beside the callsign once there's damage (before it, the figure itself is the CP). Short of room, in
-            // turn: TOP DPS goes to its star, TOP HEALS folds into the heal figure (framed in mint), the YOU tag goes (the amber
-            // frame says it); only then is the name cut
-            FrameworkElement? you = null;
-            if (m.Cp.Length > 0) { _cpFig.Text = m.Cp; _keep.Add(Add(_cp)); }
-            if (m.You) you = Add(Mark(L.T("YOU"), Amber, Dark, solid: true));
-            if (m.Deaths > 0) _keep.Add(Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Red, Red, solid: false)));
+            // the callsign in a light tint of its class: it reads on its own class's fill
+            _name.Foreground = Frozen(Tac.Mix(m.NameColor, Colors.White, .35));
+            while (_top.Children.Count > 1) _top.Children.RemoveAt(1);
+            _under.Children.Clear();
+            _keep.Clear(); _give.Clear(); _keepUnder.Clear(); _giveUnder.Clear();
+            FrameworkElement Add(FrameworkElement el) { _top.Children.Add(el); return el; }
+            FrameworkElement Under(FrameworkElement el) { if (_under.Children.Count > 0) el.Margin = new Thickness(7, el.Margin.Top, 0, 0); else el.Margin = new Thickness(0, el.Margin.Top, 0, 0); _under.Children.Add(el); return el; }
             var mint = Frozen(MintC);
-            if (m.Heal.Length > 0 && m.TopHeals)
-            {
-                var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { HealFig(m.Heal), Plate(L.T("TOP HEALS"), mint, "top-heals") } };
-                var framed = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tt("✚", 9, mint, Face, FontWeights.Bold), HealFig(m.Heal, 3, plus: false) } };
-                var shrt = new Border { BorderBrush = mint, BorderThickness = new Thickness(1), Background = Frozen(Tac.A(InkC0, .6)), Padding = new Thickness(2, 0, 3, 0), Margin = new Thickness(5, 1, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center, Child = framed, Tag = "top-heals", ToolTip = L.T("Top heals") };
-                _give.Add((Add(full), Add(shrt)));
-            }
-            else if (m.Heal.Length > 0) _keep.Add(Add(HealFig(m.Heal)));
-            else if (m.TopHeals) _give.Add((Add(Plate(L.T("TOP HEALS"), mint, "top-heals")), Add(Plate("✚", mint, "top-heals", L.T("Top heals")))));
-            if (m.TopDps) _give.Insert(0, (Add(Plate(L.T("TOP DPS"), Amber, "top-dps")), Add(Plate("★", Amber, "top-dps", L.T("Top DPS")))));
-            if (you != null) _give.Add((you, null));
-            _order = _nameLine.Children.Cast<FrameworkElement>().Skip(1).ToList();
+            // the callsign's line: a kill's plates (to their glyph when short of room), deaths, YOU (it goes: the brackets say it)
+            if (m.TopDps) _give.Add((Add(Plate(L.T("TOP DPS"), Amber, "top-dps")), Add(Plate("★", Amber, "top-dps", L.T("Top DPS")))));
+            if (m.TopHeals) _give.Add((Add(Plate(L.T("TOP HEALS"), mint, "top-heals")), Add(Plate("✚", mint, "top-heals", L.T("Top heals")))));
+            if (m.Deaths > 0) _keep.Add(Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Red, Red, solid: false)));
+            if (m.You) _give.Add((Add(Mark(L.T("YOU"), Amber, Dark, solid: true)), null));
+            // under it, quiet: Combat Power once there's damage (before it, the figure itself is the CP), a healer's healing
+            if (m.Cp.Length > 0) { _cpFig.Text = m.Cp; _giveUnder.Add((Under(_cp), null)); }
+            if (m.Heal.Length > 0) _keepUnder.Add(Under(HealFig(m.Heal)));
+            // nothing under it (before the first hit): the callsign in the bar's middle
+            bool two = _under.Children.Count > 0;
+            _top.VerticalAlignment = two ? VerticalAlignment.Top : VerticalAlignment.Center;
+            _top.Margin = new Thickness(TextIn, two ? 2 : 0, 0, 0);
             _dps.Text = m.Figure;
             _dps.Foreground = m.You ? Amber : Pale;
             _pct.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
-            SlideBar(_art, c, "bar", m.Share, v => { _bar = v; _art.InvalidateVisual(); });
+            SlideBar(_art, c, "bar", Tac.BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); });
             _art.InvalidateVisual();
         }
 
@@ -177,36 +160,31 @@ sealed partial class HudFighter
             var cols = _root.ColumnDefinitions;
             double room = cols[1].ActualWidth;
             if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
-            // the name's line runs into the DPS's column as far as its figure leaves free; the line under it, under every figure
+            // the words run on into the DPS's column as far as its figure leaves free
             _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double free = Math.Min(cols[2].ActualWidth, cols[2].ActualWidth - _dps.DesiredSize.Width) - 6;
-            Tac.FitLines(_name, room + free - _lines.Margin.Left - 6, _root.ActualWidth - cols[0].ActualWidth - _lines.Margin.Left - 6,
-                _nameLine, _sub, _order, _keep, _give);
-            _sub.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double extra = _sub.Children.Count > 0 ? Math.Ceiling(_sub.DesiredSize.Height) : 0;
-            if (Math.Abs(extra - Extra) < 0.5) return;
-            Extra = extra;
-            _root.Height = H + extra;
-            Grew?.Invoke();
+            double w = room + free - TextIn - 4, floor = Tac.NameFloor(_name);
+            Tac.FitName(_name, w, _keep, _give, floor, floor);
+            Tac.FitName(_none, w, _keepUnder, _giveUnder, 0, 0);
         }
 
         static readonly Color MintC = Color.FromRgb(0x5E, 0xF0, 0xA0);
 
-        /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
-        static TextBlock HealFig(string heal, double left = 5, bool plus = true)
+        /// <summary>A healer's healing a second ("+1.1K/s").</summary>
+        static TextBlock HealFig(string heal)
         {
-            var h = Tt((plus ? "+" : "") + heal, 10.5, Frozen(MintC), Face, FontWeights.Bold);
-            h.Tag = "heal-figures"; h.Margin = new Thickness(left, 1, 0, 0);
+            var h = Tt("+" + heal, 10.5, Frozen(MintC), Face, FontWeights.Bold);
+            h.Tag = "heal-figures";
             return h;
         }
 
         /// <summary>A kill's plate (TOP DPS, TOP HEALS) as an outlined tag, or its glyph (★, ✚) when the line is short of room.</summary>
         static Border Plate(string s, Brush tone, string tag, string? tip = null) { var b = Mark(s, tone, tone, solid: false); b.Tag = tag; b.ToolTip = tip; return b; }
 
-        /// <summary>A tag in the name's line: solid (YOU) or an outline (a death, a kill's plates).</summary>
+        /// <summary>A tag on the callsign's line: solid (YOU) or an outline (a death, a kill's plates).</summary>
         static Border Mark(string s, Brush line, Brush fg, bool solid) => new()
         {
-            Background = solid ? line : Frozen(Tac.A(InkC0, .6)), BorderBrush = line, BorderThickness = new Thickness(1), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 1, 0, 0),
+            Background = solid ? line : Frozen(Tac.A(InkC0, .7)), BorderBrush = line, BorderThickness = new Thickness(1), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center, Child = Tt(s, 9.5, fg, Face, FontWeights.Bold),
         };
 
@@ -216,7 +194,7 @@ sealed partial class HudFighter
             var cols = _root.ColumnDefinitions;
             double x0 = cols[0].ActualWidth, h = s.Height;
             var tone = m.ClassColor;
-            var light = Tac.Mix(tone, Colors.White, .25);
+            var light = Tac.Mix(tone, Colors.White, .3);
             // you: a faint amber wash and corner brackets locked round the row
             if (m.You)
             {
@@ -232,28 +210,32 @@ sealed partial class HudFighter
                 b.Freeze();
                 dc.DrawGeometry(null, Tac.P(Amber, 1.5), b);
             }
-            // the rank's brackets
-            double rx = cols[0].ActualWidth / 2, ry = 3 + 8;
+            // the rank's brackets, on the bar's middle
+            double rx = x0 / 2, ry = h / 2;
             var rb = Tac.P(m.Rank == 1 || m.You ? Amber : PhosFaint, 1.2);
             dc.DrawLine(rb, new Point(rx - 13, ry - 7), new Point(rx - 13, ry + 7)); dc.DrawLine(rb, new Point(rx - 13, ry - 7), new Point(rx - 10, ry - 7)); dc.DrawLine(rb, new Point(rx - 13, ry + 7), new Point(rx - 10, ry + 7));
             dc.DrawLine(rb, new Point(rx + 13, ry - 7), new Point(rx + 13, ry + 7)); dc.DrawLine(rb, new Point(rx + 13, ry - 7), new Point(rx + 10, ry - 7)); dc.DrawLine(rb, new Point(rx + 13, ry + 7), new Point(rx + 10, ry + 7));
-            // the class's diamond before the callsign
-            double dy = 3 + 8;
-            var dia = new StreamGeometry();
-            using (var x = dia.Open()) { x.BeginFigure(new Point(x0 + 7, dy - 4.5), true, true); x.LineTo(new Point(x0 + 11.5, dy), true, false); x.LineTo(new Point(x0 + 7, dy + 4.5), true, false); x.LineTo(new Point(x0 + 2.5, dy), true, false); }
-            dia.Freeze();
-            dc.DrawGeometry(Frozen(tone), Tac.P(Frozen(Tac.A(Colors.White, .4)), .8), dia);
-            // the vector bar: a baseline with a tick each tenth, the fill a fine line in the class's colour, a bright tick at its end
-            double bx = x0 + 1, bw = s.Width - bx - 4, by = h - 4;
-            dc.DrawRectangle(PhosFaint, null, new Rect(bx, by, bw, 1));
-            for (int i = 0; i <= 10; i++) { double tx = Math.Round(bx + bw * i / 10); dc.DrawRectangle(i % 5 == 0 ? PhosDim : PhosFaint, null, new Rect(tx, by - (i % 5 == 0 ? 3 : 2), 1, i % 5 == 0 ? 4 : 3)); }
+            // the bar: a vector frame from the rank to the DPS's end (the share and the expanded figures small after it), a tick
+            // each tenth along its foot, filled in the class's colour to the member's part of the top, a bright line along the
+            // fill's top and a light tick at its end
+            double bx = x0, by = m.You ? 3 : 1.5, bw = cols[1].ActualWidth + cols[2].ActualWidth - 1, bh = h - 2 * by;
+            dc.DrawRectangle(Frozen(Tac.A(InkC0, .45)), Tac.P(PhosFaint, 1), new Rect(bx + .5, by + .5, bw - 1, bh - 1));
             double fx = bw * Math.Clamp(_bar, 0, 1);
             if (fx > .5)
             {
-                dc.DrawRectangle(Frozen(Tac.A(tone, .35)), null, new Rect(bx, by - 2, fx, 4));
-                dc.DrawRectangle(Frozen(light), null, new Rect(bx, by - 1, fx, 2));
-                dc.DrawRectangle(Frozen(Colors.White), null, new Rect(bx + fx - 1, by - 4, 1.6, 7));
+                dc.DrawRectangle(Tac.Grad(false, (Tac.A(tone, .52), 0), (Tac.A(tone, .34), 1)), null, new Rect(bx, by, fx, bh));
+                dc.DrawRectangle(Frozen(light), null, new Rect(bx, by, fx, 1.5));
+                // its end: a bright tick at the top and the foot (a line the bar's height ran through the figures)
+                var end = Frozen(Tac.Mix(tone, Colors.White, .7));
+                dc.DrawRectangle(end, null, new Rect(bx + fx - 1.5, by, 1.5, 5)); dc.DrawRectangle(end, null, new Rect(bx + fx - 1.5, by + bh - 5, 1.5, 5));
             }
+            for (int i = 1; i < 10; i++) { double tx = Math.Round(bx + bw * i / 10); dc.DrawRectangle(i == 5 ? PhosDim : PhosFaint, null, new Rect(tx, by + bh - (i == 5 ? 4 : 3), 1, i == 5 ? 4 : 3)); }
+            // the class's diamond at the callsign's line
+            double dy = _under.Children.Count > 0 ? by + 9.5 : h / 2;
+            var dia = new StreamGeometry();
+            using (var x = dia.Open()) { x.BeginFigure(new Point(bx + 8.5, dy - 4.5), true, true); x.LineTo(new Point(bx + 13, dy), true, false); x.LineTo(new Point(bx + 8.5, dy + 4.5), true, false); x.LineTo(new Point(bx + 4, dy), true, false); }
+            dia.Freeze();
+            dc.DrawGeometry(Frozen(light), Tac.P(Frozen(Tac.A(Colors.White, .55)), .8), dia);
         }
     }
 }
