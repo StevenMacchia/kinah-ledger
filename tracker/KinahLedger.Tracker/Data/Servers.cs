@@ -1,4 +1,5 @@
 using KinahLedger.Upload;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Data;
 
@@ -6,6 +7,8 @@ namespace KinahLedger.Data;
 public sealed record GameRegion(string Key, string Name)
 {
     public override string ToString() => Name;
+    /// <summary>The region's name as the window draws it ("NA East", "북미 동부"). <see cref="Name"/> stays English: the keys and saved labels are built from it.</summary>
+    public string Shown => L.T(Name);
 }
 
 /// <summary>One home server: a region and a faction's world name. The same names exist in every region, so the key carries both.</summary>
@@ -13,6 +16,10 @@ public sealed record GameServer(GameRegion Region, string Name, string Faction)
 {
     /// <summary>As the window shows it and the prefs keep it: "Siel (Elyos)".</summary>
     public string Label => $"{Name} ({Faction})";
+    /// <summary>The faction as the window draws it (the game's own names in Korean and Chinese: 천족, 마족). <see cref="Faction"/> stays English: keys and saved labels use it.</summary>
+    public string FactionShown => Servers.FactionWord(Faction);
+    /// <summary>The label as the window draws it: "Siel (Elyos)" in English, "Siel (천족)" in Korean. Never saved or compared: use <see cref="Label"/> for that.</summary>
+    public string LabelShown => $"{Name} ({FactionShown})";
     /// <summary>What prices and runs are filed under on the site: "na_e-siel-elyos".</summary>
     public string Key => ServerKeys.Build(Region.Key, Label);
     public override string ToString() => Label;
@@ -56,6 +63,13 @@ public static class Servers
             ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan"),
             ("Ariel", "Azphel"), ("Fregion", "Ereshkigal"), ("Meslamtaeda", "Beritra"), ("Hithanya", "Nemon"), ("Nania", "Hadala")
         },
+    };
+
+    /// <summary>A faction's name as the window draws it ("Elyos", "Asmodian", "Balaur"); any other word is returned as it is.</summary>
+    public static string FactionWord(string faction) => faction switch
+    {
+        "Elyos" or "Asmodian" or "Asmodians" or "Balaur" => L.T(faction),
+        _ => faction,
     };
 
     public static GameRegion? Region(string? key) => Regions.FirstOrDefault(r => r.Key == key);

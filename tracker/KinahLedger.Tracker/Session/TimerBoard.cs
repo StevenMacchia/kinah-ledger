@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -31,22 +33,22 @@ public static class TimerBoard
     {
         var list = new List<Item>();
         foreach (var r in events.Rows(now, region))
-            list.Add(new Item(EventKey(r.Event.Name), "Events", r.Event.Name, r.Event.Every, r.OnNow ? Kind.On : Kind.Waiting,
-                r.OnNow ? (r.Event.EntryMinutes > 0 ? r.StartPc.AddMinutes(r.Event.EntryMinutes) : null) : r.StartPc, r.OnNow && r.Event.EntryMinutes == 0 ? "On now" : r.When,
-                r.OnNow ? (r.Event.EntryMinutes > 0 ? "left to enter" : r.When) : $"at {r.StartPc.ToLocalTime():HH:mm}", r.OnNow ? r.StartPc : null));
+            list.Add(new Item(EventKey(r.Event.Name), "Events", r.Event.Name, L.T(r.Event.Every), r.OnNow ? Kind.On : Kind.Waiting,
+                r.OnNow ? (r.Event.EntryMinutes > 0 ? r.StartPc.AddMinutes(r.Event.EntryMinutes) : null) : r.StartPc, r.OnNow && r.Event.EntryMinutes == 0 ? L.T("On now") : r.When,
+                r.OnNow ? (r.Event.EntryMinutes > 0 ? L.T("left to enter") : r.When) : L.F("at {0}", $"{r.StartPc.ToLocalTime():HH:mm}"), r.OnNow ? r.StartPc : null));
         foreach (var r in bosses.Rows(now))
         {
             if (r.Boss.State == BossTimers.Kind.NoTimer) continue;
             var kind = r.UpNow ? Kind.On : r.Due ? Kind.Due : r.Boss.State == BossTimers.Kind.Up ? Kind.WasUp : Kind.Waiting;
-            string big = kind switch { Kind.On => "Up now", Kind.Due => "Due", Kind.WasUp => "Was up", _ => r.When };
+            string big = kind switch { Kind.On => L.T("Up now"), Kind.Due => L.T("Due"), Kind.WasUp => L.T("Was up"), _ => r.When };
             list.Add(new Item(BossKey(r.Boss.Name), r.Boss.Region.Length > 0 ? r.Boss.Region : "World bosses", r.Boss.Name, r.Boss.Place, kind,
-                kind == Kind.Waiting ? r.Boss.SpawnPc : null, big, kind == Kind.Waiting ? $"at {r.Boss.SpawnPc.ToLocalTime():HH:mm}" : r.When,
+                kind == Kind.Waiting ? r.Boss.SpawnPc : null, big, kind == Kind.Waiting ? L.F("at {0}", $"{r.Boss.SpawnPc.ToLocalTime():HH:mm}") : r.When,
                 kind == Kind.Waiting ? null : r.Boss.SpawnPc));
         }
         foreach (var r in AbyssBosses.Rows(now, events.Offset, region))
             list.Add(new Item(AbyssKey(r.Boss.Name), r.Boss.Map, r.Boss.Spots > 1 ? $"{r.Boss.Name} ×{r.Boss.Spots}" : r.Boss.Name, r.Boss.Place,
-                r.Spawned ? Kind.Due : Kind.Waiting, r.Spawned ? null : r.SpawnPc, r.Spawned ? "Spawned" : r.When,
-                r.Spawned ? r.When : r.Left.TotalHours >= 20 ? $"{r.SpawnPc.ToLocalTime():ddd HH:mm}" : $"at {r.SpawnPc.ToLocalTime():HH:mm}",
+                r.Spawned ? Kind.Due : Kind.Waiting, r.Spawned ? null : r.SpawnPc, r.Spawned ? L.T("Spawned") : r.When,
+                r.Spawned ? r.When : r.Left.TotalHours >= 20 ? $"{r.SpawnPc.ToLocalTime():ddd HH:mm}" : L.F("at {0}", $"{r.SpawnPc.ToLocalTime():HH:mm}"),
                 r.Spawned ? r.SpawnPc : null));
         var shorts = ShortNames(list.Select(i => i.Name).Distinct());
         return list.Select(i => i with { Short = shorts.TryGetValue(i.Name, out var s) ? s : i.Name })

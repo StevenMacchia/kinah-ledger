@@ -3,6 +3,8 @@ using KinahLedger.Data;
 using KinahLedger.Ocr;
 using KinahLedger.Upload;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -388,11 +390,11 @@ public sealed class MarketCapture
         if (n == 0)
         {
             if (!Manual) { Layout = null; Detected = false; }
-            return (0, 0, false, "No prices could be read. Open a Market page with listings showing, then press Share again.");
+            return (0, 0, false, L.T("No prices could be read. Open a Market page with listings showing, then press Share again."));
         }
         bool sent = true;
         for (int i = 0; i < 20 && Pending > 0; i++) if (!await FlushAsync()) { sent = false; break; }
-        return (n, names.Count, sent, sent ? "" : LastError.Length > 0 ? LastError : "nothing could be sent");
+        return (n, names.Count, sent, sent ? "" : LastError.Length > 0 ? LastError : L.T("nothing could be sent"));
     }
 
     async Task<bool> FlushCoreAsync()
@@ -427,7 +429,7 @@ public sealed class MarketCapture
                 _pending.RemoveRange(0, batch.Count); _sales.RemoveRange(0, sales.Count); _expired.RemoveRange(0, expired.Count);
                 Refused += n;
                 var why = res.Status + (res.Field.Length > 0 ? " " + res.Field : "");
-                LastError = $"the site refused {n:N0} price{(n == 1 ? "" : "s")} ({why}); not sent again";
+                LastError = L.F(n == 1 ? "the site refused {0} price ({1}); not sent again" : "the site refused {0} prices ({1}); not sent again", n.ToString("N0"), why);
                 note = $"market prices: the site answered {why}; {n} dropped, not sent again";
                 _firstPendingAt = DateTime.UtcNow;
             }
@@ -438,9 +440,9 @@ public sealed class MarketCapture
                 {
                     var wait = res.RetryAfter ?? TimeSpan.FromMinutes(1);
                     _holdUntil = DateTime.UtcNow + wait;
-                    LastError = $"the site asked to wait {Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds))} s";
+                    LastError = L.F("the site asked to wait {0} s", Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds)));
                 }
-                else LastError = "couldn't reach the site";
+                else LastError = L.T("couldn't reach the site");
                 _firstPendingAt = DateTime.UtcNow;
                 if (_pending.Count > 500) _pending.RemoveRange(0, _pending.Count - 500);   // keep the newest for the retry
             }
@@ -454,13 +456,13 @@ public sealed class MarketCapture
     {
         get
         {
-            if (!Enabled) return "Off. The Market is never read; everything else keeps working.";
-            string state = Detected ? "Market open" : Manual ? "Watching the chosen area" : "Watching for the Market window";
-            string counts = AsksSeen == 0 ? "nothing read yet" : $"{AsksSeen:N0} ask{(AsksSeen == 1 ? "" : "s")} read · {Items:N0} item{(Items == 1 ? "" : "s")} · {Shared:N0} shared";
-            if (SalesSeen + ExpiredSeen > 0) counts += $" · your sales: {SalesSeen:N0} sold, {ExpiredSeen:N0} expired";
-            string last = LastReadAt == DateTime.MinValue ? "" : " · last read " + Ago(LastReadAt);
+            if (!Enabled) return L.T("Off. The Market is never read; everything else keeps working.");
+            string state = L.T(Detected ? "Market open" : Manual ? "Watching the chosen area" : "Watching for the Market window");
+            string counts = AsksSeen == 0 ? L.T("nothing read yet") : L.F("{0} {1} read · {2} {3} · {4} shared", AsksSeen.ToString("N0"), L.T(AsksSeen == 1 ? "ask" : "asks", "count"), Items.ToString("N0"), L.T(Items == 1 ? "item" : "items", "count"), Shared.ToString("N0"));
+            if (SalesSeen + ExpiredSeen > 0) counts += " · " + L.F("your sales: {0} sold, {1} expired", SalesSeen.ToString("N0"), ExpiredSeen.ToString("N0"));
+            string last = LastReadAt == DateTime.MinValue ? "" : " · " + L.F("last read {0}", Ago(LastReadAt));
             string why = AsksSeen > 0 && Shared == 0
-                ? string.IsNullOrWhiteSpace(Server) ? " · choose your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · no sharing address in settings.json" : LastError.Length > 0 ? " · " + LastError : ""
+                ? string.IsNullOrWhiteSpace(Server) ? " · " + L.T("choose your server to share") : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · " + L.T("no sharing address in settings.json") : LastError.Length > 0 ? " · " + LastError : ""
                 : "";
             return $"{state} · {counts}{last}{why}";
         }
@@ -469,6 +471,6 @@ public sealed class MarketCapture
     static string Ago(DateTime at)
     {
         var s = (DateTime.UtcNow - at).TotalSeconds;
-        return s < 60 ? $"{Math.Max(0, (int)s)} s ago" : s < 3600 ? $"{(int)(s / 60)} min ago" : $"{(int)(s / 3600)} h ago";
+        return s < 60 ? L.F("{0} s ago", Math.Max(0, (int)s)) : s < 3600 ? L.F("{0} min ago", (int)(s / 60)) : L.F("{0} h ago", (int)(s / 3600));
     }
 }
