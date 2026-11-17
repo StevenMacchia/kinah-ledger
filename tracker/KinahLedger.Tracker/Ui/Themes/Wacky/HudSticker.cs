@@ -41,6 +41,7 @@ sealed class HudSticker : WackyLook
 
     public HudSticker() : base(new Thickness(12, 56, 56, 16), Wk.Segoe)
     {
+        UseRows(34, _ => new StickerRow(), 16, StickerGap);   // 36 tall on a 34 pitch: each sticker laps the one under it
         _tagClock = Figure("", 13, K, Wk.Heavy, FontWeights.Black);
         _tagClock.Margin = new Thickness(5, 0, 0, 0);
         _tagFace.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _tagName, _tagClock } };
@@ -109,7 +110,7 @@ sealed class HudSticker : WackyLook
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             var rate = Figure(f.Rate, f.Warm ? 20 : 29, K, Wk.Heavy, Black);
-            if (f.Warm) rate.Opacity = .5;
+            if (f.Warm) rate.Opacity = .7;
             row.Children.Add(rate);
             if (f.Unit.Length > 0)
             {
@@ -333,9 +334,15 @@ sealed class HudSticker : WackyLook
         double k = slap >= 1 ? Math.Sin(after * Math.PI * 2) * (1 - after) : 0;
         double sx = scale * (1 + .18 * k), sy = scale * (1 - .22 * k);
         double rot = Lerp(rot0, rot1, slap) + 3 * Wob(after, 2, 3);
-        double op = Seg(p, 0, .05) * (1 - Seg(p, peelAt + (1 - peelAt) * .3, .97));
-        if (fall > 0) s.Set(sx, sy * (1 - .12 * peel), rot + fall * 20 * peel, 4 * peel, fall * 22 * peel * peel, op);
-        else s.Set(sx * (1 - .08 * peel), sy * (1 - .55 * peel), rot + 22 * peel, 10 * peel, -3 * Seg(p, inEnd + .2, peelAt) - 16 * peel, op);
+        // the peel: the sticker lifts from its foot up (flattening toward its top edge, leaning), then is flicked away up and
+        // turning, off the panel; it keeps its full colour (no fade to grey) until the last moment
+        double op = Seg(p, 0, .05) * (1 - Seg(p, .93, 1));
+        // (the sticker's own height: the action lines round it are wider than it)
+        double h = s.El is Grid sg ? sg.Children.OfType<FrameworkElement>().Where(c => !ReferenceEquals(c, lines)).Select(c => c.DesiredSize.Height).DefaultIfEmpty(s.El.DesiredSize.Height).Max() : s.El.DesiredSize.Height;
+        double lift = 1 - .72 * InOut(peel);
+        double keep = -h * (1 - lift) / 2 * sy;
+        if (fall > 0) s.Set(sx, sy * (1 - .25 * peel), rot + fall * 22 * peel, 4 * peel, fall * 26 * peel * peel, op, -6 * peel);
+        else s.Set(sx * (1 - .06 * peel), sy * lift, rot + 11 * peel, 20 * peel * peel, keep - 3 * Seg(p, inEnd + .2, peelAt), op, 16 * peel);
         if (lines != null)
         {
             lines.Opacity = Seg(p, inEnd * .9, inEnd) * (1 - Seg(p, inEnd + .04, inEnd + .2));
@@ -377,7 +384,7 @@ sealed class HudSticker : WackyLook
         var g = new Grid { Children = { lines, burst } };
         // a banner burst slapped across the line's top edge: the hour and the session stay in view under it
         var at = At(_pill, .78, 0);
-        var s = Spawn(g, new Point(at.X, at.Y - 24), "rare");
+        var s = Spawn(g, new Point(at.X, at.Y - 30), "rare");
         Play(s, "rare", 2700, q => Slap(s, q, 2.3, -14, -3, .18, .62, lines));
     }
 
@@ -413,7 +420,7 @@ sealed class HudSticker : WackyLook
     }
 
     /// <summary>Where a fight's stamp lands: across the card's top edge, over the head's top and the room above it.</summary>
-    Point StampAt(double fx) { var at = At(_card, fx, 0); return new Point(at.X, at.Y - 21); }
+    Point StampAt(double fx) { var at = At(_card, fx, 0); return new Point(at.X, at.Y - 25); }
 
     protected override void FightStarted(Encounter e, bool held)
     {
@@ -423,8 +430,8 @@ sealed class HudSticker : WackyLook
         stamp.HorizontalAlignment = HorizontalAlignment.Center;
         var lines = Lines(70, 96, 12, 13);
         var g = new Grid { Children = { lines, stamp } };
-        var s = Spawn(g, StampAt(.5), "fight");
-        Play(s, "fight", 1500, q => Slap(s, q, 2.1, -18, -7, .2, .56, lines));
+        var s = Spawn(g, StampAt(.64), "fight");
+        Play(s, "fight", 1500, q => Slap(s, q, 1.7, -18, -7, .2, .56, lines));
     }
 
     protected override void FightEnded(Encounter e, bool held)
@@ -434,7 +441,7 @@ sealed class HudSticker : WackyLook
         {
             var txt = Wk.Outlined(L.T("OOF"), Wk.Impact, FontWeights.Normal, 26, WhiteB, K, 3);
             var sad = Sticker(txt, Wk.S(0x8FA3D9), 10, new Thickness(14, 0, 14, 1), 3, 5);
-            var s = Spawn(sad, StampAt(.42), "end");
+            var s = Spawn(sad, StampAt(.6), "end");
             Play(s, "end", 2100, q => Slap(s, q, 1.8, -4, 6, .2, .56, null, 1));
             return;
         }
@@ -443,7 +450,150 @@ sealed class HudSticker : WackyLook
         var burst = Wk.Burst(62, 28, 18, .74, 41, YelB, K, 3, 5, ko);
         var lines = Lines(70, 100, 14, 17);
         var g = new Grid { Children = { lines, burst } };
-        var s2 = Spawn(g, StampAt(.42), "end");
-        Play(s2, "end", 2300, q => Slap(s2, q, 2.2, -20, -6, .18, .58, lines));
+        var s2 = Spawn(g, StampAt(.6), "end");
+        Play(s2, "end", 2300, q => Slap(s2, q, 1.7, -20, -6, .18, .58, lines));
+    }
+
+    // ---- the meter's rows: a sticker strip per member
+
+    /// <summary>"2 more": a dashed paper line with a small ink tag, between the party and you pinned below it.</summary>
+    static FrameworkElement StickerGap(int n)
+    {
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new Rectangle { Height = 2, Stroke = Wk.S(Paper, .45), StrokeThickness = 2, StrokeDashArray = new DoubleCollection { 3, 3 }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) });
+        if (n > 0)
+            g.Children.Add(new Border
+            {
+                Background = Wk.S(KC), BorderBrush = Wk.S(Paper, .7), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 0, 6, 1), HorizontalAlignment = HorizontalAlignment.Center,
+                Child = Wk.Words(L.F("{0} more", n), 10, PaperB, Wk.Heavy, FontWeights.Black),
+            });
+        return g;
+    }
+
+    /// <summary>
+    /// A member as a die-cut sticker slapped on the card: a white die-cut margin round a black outline, a hard black shadow,
+    /// turned a little (every other one the other way) and nudged off the line, each lapping the one under it. The rank is a
+    /// rough-edged ink stamp, the name heavy ink on paper, and the damage share a separate piece of tape in the class's
+    /// colour stuck across the sticker's foot (turned against it, torn at its end, its start running off the sticker's
+    /// edge). You are edged in hot pink with a pink stamp and YOU tag; a healer's heal a green cross; deaths a red tag; TOP DPS
+    /// and TOP HEALS stickers at a kill. DPS and % right-aligned and tabular, never moving.
+    /// </summary>
+    sealed class StickerRow : IThemeRow
+    {
+        const double H = 36;
+        readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
+        readonly Grid _strip = new() { RenderTransformOrigin = new Point(.5, .5), Margin = new Thickness(10, 1, 6, 3) };
+        readonly TransformGroup _place = new();
+        readonly RotateTransform _turn = new();
+        readonly TranslateTransform _nudge = new();
+        readonly Border _die = new() { CornerRadius = new CornerRadius(8), Background = WhiteB, Padding = new Thickness(2) };
+        readonly Border _face = new() { BorderBrush = K, BorderThickness = new Thickness(2.5), CornerRadius = new CornerRadius(6), Background = PaperB };
+        // the tape: its own piece across the sticker's foot
+        readonly Grid _tapeHost = new() { Height = 8, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-6, 0, 40, 1) };
+        readonly Grid _tape = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, RenderTransformOrigin = new Point(0, .5), RenderTransform = new RotateTransform(-1.6) };
+        readonly Border _tapeBody = new() { Margin = new Thickness(0, 0, 5, 0) };
+        readonly Path _tear = new() { Width = 6, HorizontalAlignment = HorizontalAlignment.Right, Stretch = Stretch.Fill, Data = Tear };
+        readonly Wk.BarFill _fill;
+        readonly Grid _stamp = new() { Width = 25, Height = 25, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 2) };
+        readonly Path _stampInk = new() { Data = Wk.Star(12.5, 12.5, 15, .88, 61), Stretch = Stretch.Fill, StrokeThickness = 1.4 };
+        readonly RotateTransform _stampTurn = new(-6);
+        readonly TextBlock _rank = Wk.Words("", 14.5, YelB, Wk.Impact, FontWeights.Normal);
+        readonly Border _iconHost = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+        readonly TextBlock _name = Wk.Words("", 12.5, K, Wk.Heavy, FontWeights.Black);
+        readonly Border _you;
+        readonly TextBlock _heal = Wk.Words("", 10.5, Wk.S(0x0E7A3C), Wk.Heavy, FontWeights.Black);
+        readonly Border _top = new() { BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock _topText = Wk.Words("", 8.5, K, Wk.Heavy, FontWeights.Black);
+        readonly Border _dead;
+        readonly TextBlock _deadText = Wk.Words("", 9.5, WhiteB, Wk.Heavy, FontWeights.Black);
+        readonly TextBlock _detail = Wk.Words("", 9.5, Wk.S(KC, .65), Wk.Segoe, FontWeights.Bold);
+        readonly TextBlock _figure, _share;
+        string _cls = "\0";
+
+        double _lean = 1;
+        void Turn() => _turn.Angle = _lean * Math.Min(1.1, 360 / Math.Max(200, _root.ActualWidth) * 1.1);
+
+        /// <summary>The tape's torn end: a ragged edge.</summary>
+        static readonly Geometry Tear = Geometry.Parse("M0,0 L5,0 L3,2 L6,4 L2.5,6 L5.5,8 L3,9 L0,9 Z");
+
+        public FrameworkElement Root => _root;
+
+        public StickerRow()
+        {
+            _place.Children.Add(_turn); _place.Children.Add(_nudge);
+            // the turn keeps the strip's ends within about 3 px of level however wide the meter is dragged
+            _root.SizeChanged += (_, _) => Turn();
+            _strip.RenderTransform = _place;
+            TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Ideal);
+            _strip.Children.Add(new Border { Background = K, CornerRadius = new CornerRadius(8), RenderTransform = new TranslateTransform(3, 3) });
+            _die.Child = _face;
+            _strip.Children.Add(_die);
+            var inner = new Grid();
+            var row = new Grid { Margin = new Thickness(16, 0, 7, 6) };
+            foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(46), new GridLength(40) })
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+            row.Children.Add(_iconHost);
+            _name.TextTrimming = TextTrimming.CharacterEllipsis;
+            _you = new Border { Background = Wk.S(Pink), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                Child = Wk.Words(L.T("YOU"), 8.5, WhiteB, Wk.Heavy, FontWeights.Black), RenderTransform = new RotateTransform(-4) };
+            var nameLine = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _name, _you } };
+            Grid.SetColumn(nameLine, 1); row.Children.Add(nameLine);
+            _heal.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_heal, 2); row.Children.Add(_heal);
+            _top.Child = _topText; Grid.SetColumn(_top, 3); row.Children.Add(_top);
+            _dead = new Border { Background = Wk.S(0xE5242F), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _deadText };
+            Grid.SetColumn(_dead, 4); row.Children.Add(_dead);
+            _detail.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_detail, 5); row.Children.Add(_detail);
+            _figure = Figure("", 14.5, K, Wk.Heavy, FontWeights.Black); _figure.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(_figure, 6); row.Children.Add(_figure);
+            _share = Figure("", 10.5, Wk.S(KC, .72), Wk.Segoe, FontWeights.Bold); _share.HorizontalAlignment = HorizontalAlignment.Right; _share.Margin = new Thickness(0, 1, 0, 0);
+            Grid.SetColumn(_share, 7); row.Children.Add(_share);
+            inner.Children.Add(row);
+            // the words stay level, in the same columns on every row: only the sticker under them turns and shifts
+            var words = new Grid { Margin = new Thickness(14.5, 5.5, 10.5, 7.5), Children = { inner } };
+            // the tape over the sticker's foot (outside the face, so its start runs off the edge)
+            _tape.Children.Add(_tapeBody); _tape.Children.Add(_tear);
+            _tape.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 1.5, 8, 0), Background = Wk.S(0xFFFFFF, .4) });
+            _tapeHost.Children.Add(_tape);
+            _fill = new Wk.BarFill(_tapeHost, _tape, 16);
+            _strip.Children.Add(_tapeHost);
+            _stamp.Children.Add(_stampInk);
+            _stamp.Children.Add(_rank); _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.Margin = new Thickness(0, 0, 0, 1);
+            _stamp.RenderTransformOrigin = new Point(.5, .5); _stamp.RenderTransform = _stampTurn;
+            _root.Children.Add(_strip);
+            _root.Children.Add(words);
+            _root.Children.Add(_stamp);
+        }
+
+        public void Set(MeterMember m, MeterContext c, bool fresh)
+        {
+            bool odd = m.Rank % 2 == 1;
+            _lean = odd ? -1 : 1; Turn();
+            _nudge.X = odd ? -2 : 2;
+            _stampTurn.Angle = odd ? -8 : 5;
+            // you: edged in hot pink (the stamp and the YOU tag pink too), so it reads at a glance
+            _face.BorderBrush = m.You ? Wk.S(Pink) : K;
+            _face.BorderThickness = new Thickness(m.You ? 3 : 2.5);
+            _stampInk.Fill = Wk.S(m.You ? Pink : KC); _stampInk.Stroke = m.You ? K : PaperB;
+            _rank.Text = m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _rank.Foreground = m.You ? WhiteB : m.Rank == 1 ? YelB : PaperB;
+            if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ClassArt.Icon(m.Class, 17, m.Name); }
+            _name.Text = m.Name;
+            _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
+            _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
+            _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
+            _top.Background = Wk.S(m.TopDps ? Gold2 : GoC);
+            _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") + (m.Cp.Length > 0 ? " · " + m.Cp + " " + L.T("CP") : "") : "";
+            _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _figure.Text = m.Figure; _share.Text = m.ShareText;
+            // the tape: the class's colour, full and a touch translucent, with a faint lit edge
+            uint mc = Wk.Vivid(Wk.Hex(m.ClassColor));
+            var tape = Wk.Lin(0, 0, 0, 1, (Wk.Shade(mc, .25), .9, 0), (mc, .9, .6), (Wk.Shade(mc, -.12), .9, 1));
+            _tapeBody.Background = tape; _tear.Fill = tape;
+            _tapeHost.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
+            _fill.Set(m.CpOnly ? 0 : m.Share, c, "bar", fresh);
+        }
     }
 }
