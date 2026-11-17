@@ -147,15 +147,30 @@
   <FontFamily x:Key="DisplayFont">pack://application:,,,/Fonts/#Inter, Segoe UI Variable Display, Segoe UI</FontFamily>
   <FontFamily x:Key="BodyFont">pack://application:,,,/Fonts/#Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
+  <!-- a look's shape (1.0, the app skins that match the overlay themes): corners, edges, the window's texture, the small
+       labels' face, and the effects a card, a button and a big figure wear. Night's values here; Ui/Skins.cs sets every one
+       per look (Wacky: sticker outlines and hard shadows; Tactical: square HUD frames; Glitch: a CRT's scanlines) -->
+  <FontFamily x:Key="LabelFont">pack://application:,,,/Fonts/#Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
+  <CornerRadius x:Key="CardRadius">12</CornerRadius>
+  <CornerRadius x:Key="RefRadius">10</CornerRadius>
+  <CornerRadius x:Key="BtnRadius">8</CornerRadius>
+  <CornerRadius x:Key="ChipRadius">6</CornerRadius>
+  <Thickness x:Key="CardEdge">1</Thickness>
+  <Thickness x:Key="BtnEdge">1</Thickness>
+  <SolidColorBrush x:Key="BgArt" Color="#0A0B10"/>
+  <SolidColorBrush x:Key="GroupLine" Color="#232736"/>
 
   <Style x:Key="CardStyle" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource Card}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource GroupLine}"/>
+    <Setter Property="BorderThickness" Value="{DynamicResource CardEdge}"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}"/>
+    <Setter Property="Effect" Value="{DynamicResource CardFx}"/>
+    <Setter Property="ui:SkinDeco.Frame" Value="group"/>
   </Style>
 
   <Style x:Key="LabelStyle" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource LabelFont}"/>
     <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
@@ -194,6 +209,7 @@
     <Setter Property="FontSize" Value="26"/>
     <Setter Property="FontWeight" Value="Bold"/>
     <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+    <Setter Property="Effect" Value="{DynamicResource DisplayFx}"/>
     <Setter Property="Margin" Value="0,6,0,0"/>
   </Style>
 
@@ -230,6 +246,7 @@
 
   <Style TargetType="Button">
     <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+    <Setter Property="Effect" Value="{DynamicResource BtnFx}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="Background" Value="{DynamicResource Card2}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
@@ -241,7 +258,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource BtnEdge}" CornerRadius="{DynamicResource BtnRadius}" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
@@ -265,7 +282,8 @@
 
   <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Background" Value="{DynamicResource BtnPrimary}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource Gold}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BtnPrimaryLine}"/>
+    <Setter Property="Effect" Value="{DynamicResource PrimaryFx}"/>
     <Setter Property="Foreground" Value="{DynamicResource BtnPrimaryInk}"/>
     <Setter Property="FontSize" Value="13"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -274,10 +292,10 @@
         <ControlTemplate TargetType="Button">
           <!-- v2 (2026-11-10, as the site's primary button): a soft gold glow under it, on a layer of its own so the label stays crisp -->
           <Grid>
-            <Border x:Name="glow" Background="{DynamicResource Gold}" CornerRadius="8" Margin="4,6,4,0" Opacity="0.5">
+            <Border x:Name="glow" Background="{DynamicResource Gold}" CornerRadius="{DynamicResource BtnRadius}" Margin="4,6,4,0" Opacity="{DynamicResource PrimaryGlow}">
               <Border.Effect><BlurEffect Radius="14"/></Border.Effect>
             </Border>
-            <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+            <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource BtnEdge}" CornerRadius="{DynamicResource BtnRadius}" Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
           </Grid>
@@ -308,7 +326,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource BtnEdge}" CornerRadius="{DynamicResource BtnRadius}" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
@@ -333,7 +351,7 @@
   <Style x:Key="NavOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
     <Setter Property="ui:Motion.Lit" Value="True"/>
     <Setter Property="Background" Value="{DynamicResource NavOnBg}"/>
-    <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+    <Setter Property="Foreground" Value="{DynamicResource NavOnInk}"/>
   </Style>
   <!-- a quiet button: Start run under the ring (coral while a run is on). Rounded rectangles everywhere, no ovals (Steven, 2026-11-07) -->
   <Style x:Key="PillBtn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -347,7 +365,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource BtnEdge}" CornerRadius="{DynamicResource BtnRadius}" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
@@ -370,7 +388,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource BtnEdge}" CornerRadius="{DynamicResource BtnRadius}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
@@ -386,8 +404,10 @@
   <Style x:Key="QCard" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource Card}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource CardLine}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="BorderThickness" Value="{DynamicResource CardEdge}"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}"/>
+    <Setter Property="Effect" Value="{DynamicResource CardFx}"/>
+    <Setter Property="ui:SkinDeco.Frame" Value="card"/>
     <Setter Property="Padding" Value="14,12,14,12"/>
   </Style>
   <!-- the three tiers (UX pass, 2026-11-13): the hero (QCard on HeroBg), working cards (QCard: the bag, Next up, the
@@ -396,18 +416,21 @@
   <Style x:Key="QRefCard" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource CardQuiet}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource CardHair}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="BorderThickness" Value="{DynamicResource CardEdge}"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RefRadius}"/>
+    <Setter Property="Effect" Value="{DynamicResource RefFx}"/>
+    <Setter Property="ui:SkinDeco.Frame" Value="ref"/>
     <Setter Property="Padding" Value="12,8,12,8"/>
   </Style>
   <Style x:Key="RefHead" TargetType="TextBlock">
+    <Setter Property="ui:SkinDeco.Head" Value="True"/>
     <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
   <Style x:Key="QChip" TargetType="Border" BasedOn="{StaticResource QCard}">
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RefRadius}"/>
     <Setter Property="Padding" Value="11,8,11,8"/>
     <Setter Property="Cursor" Value="Hand"/>
     <!-- v2 motion (2026-11-10, as the site's cards): a card that opens something lifts a pixel under the mouse and its edge
@@ -446,7 +469,7 @@
   </Style>
   <!-- a small rounded label: "this run · this zone", "best guess" -->
   <Style x:Key="Chip" TargetType="Border">
-    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource ChipRadius}"/>
     <Setter Property="Padding" Value="10,3"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Background" Value="{DynamicResource ChipBg}"/>
@@ -497,7 +520,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TextBox">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{DynamicResource BtnEdge}" CornerRadius="{DynamicResource BtnRadius}">
             <Grid>
               <TextBlock x:Name="ph" Text="{TemplateBinding Tag}" Foreground="{DynamicResource Faint}" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False"/>
               <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" Focusable="False"/>
@@ -643,6 +666,7 @@
   <!-- Options window: pages, groups of rows, switches and the side navigation -->
   <Style x:Key="PageTitle" TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+    <Setter Property="Effect" Value="{DynamicResource DisplayFx}"/>
     <Setter Property="FontSize" Value="22"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>

@@ -127,9 +127,12 @@ public partial class MainWindow
 
     Border TimersShell(UIElement child)
     {
-        var b = new Border { Child = child, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(16, 12, 16, 8), Margin = new Thickness(0, 0, 0, 10) };
+        var b = new Border { Child = child, CornerRadius = Skins.Corner(12), BorderThickness = new Thickness(1), Padding = new Thickness(16, 12, 16, 8), Margin = new Thickness(0, 0, 0, 10) };
         b.SetResourceReference(Border.BackgroundProperty, "Card");
         b.SetResourceReference(Border.BorderBrushProperty, "Line");
+        b.SetResourceReference(Border.BorderThicknessProperty, "CardEdge"); b.SetResourceReference(UIElement.EffectProperty, "CardFx");
+        if (Skins.Current == HudThemes.Wacky) b.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+        SkinDeco.SetFrame(b, "card");   // the themed looks' frame (Ui/SkinDeco.cs)
         return b;
     }
 

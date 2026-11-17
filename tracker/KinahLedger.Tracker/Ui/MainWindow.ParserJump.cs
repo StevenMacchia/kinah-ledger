@@ -47,7 +47,7 @@ public partial class MainWindow
             var g = new Grid { MinHeight = 38 };
             foreach (var w in new[] { 30.0, -1, 64, 82, 18 }) g.ColumnDefinitions.Add(new ColumnDefinition { Width = w < 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             var tone = isLive ? "Gold" : e.Outcome == "kill" ? "Mint" : e.Outcome == "wipe" ? "Coral" : "Muted";
-            var mark = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            var mark = new Border { Width = 20, Height = 20, CornerRadius = Skins.Corner(10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
             mark.SetResourceReference(Border.BackgroundProperty, isLive ? "GoldTint" : e.Outcome == "kill" ? "MintTint" : e.Outcome == "wipe" ? "CoralTint" : "ChipBg");
             var mt = PT(isLive ? "●" : e.Outcome == "kill" ? "✓" : e.Outcome == "wipe" ? "✕" : "·", isLive ? 8 : 11, FontWeights.Bold, tone); mt.HorizontalAlignment = HorizontalAlignment.Center;
             mark.Child = mt;

@@ -373,7 +373,7 @@ static class ParserCommand
             }
             FrameworkElement row;
             if (m.You) row = M(YouFrame(g, 10, new Thickness(9, 2, 9, 2)), 0, 2, 0, 2);
-            else row = new Border { Padding = new Thickness(10, 2, 10, 2), CornerRadius = new CornerRadius(10), Background = Brushes.Transparent, Child = g, Opacity = dmg && m.Damage <= 0 ? 0.6 : 1 };
+            else row = new Border { Padding = new Thickness(10, 2, 10, 2), CornerRadius = Skins.Corner(10), Background = Brushes.Transparent, Child = g, Opacity = dmg && m.Damage <= 0 ? 0.6 : 1 };
             row.Tag = "parser-member";
             if (canOpen)
             {
@@ -652,7 +652,7 @@ static class ParserCommand
             row.ColumnDefinitions.Add(new ColumnDefinition());
             var num = new Border
             {
-                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0),
+                Width = 20, Height = 20, CornerRadius = Skins.Corner(10), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0),
                 Background = on ? GoldInk : C(Color.FromRgb(0xFF, 0xFF, 0xFF), 0.08),
                 Child = new TextBlock { Text = s.N.ToString(CultureInfo.InvariantCulture), FontSize = 11, FontWeight = FontWeights.Bold, Foreground = on ? new SolidColorBrush(Color.FromRgb(0x1D, 0x13, 0x00)) : Muted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
@@ -668,7 +668,7 @@ static class ParserCommand
         }
         var card = new Border
         {
-            Tag = "spec-card", CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 12, 14, 12), BorderThickness = new Thickness(1), Child = sp,
+            Tag = "spec-card", CornerRadius = Skins.Corner(10), Padding = new Thickness(14, 12, 14, 12), BorderThickness = new Thickness(1), Child = sp,
             Background = new SolidColorBrush(Color.FromRgb(0x17, 0x1A, 0x22)), BorderBrush = C(Color.FromRgb(0xF5, 0xB9, 0x42), 0.35),
             Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 18, ShadowDepth = 4, Opacity = 0.55 },
         };
@@ -693,7 +693,7 @@ static class ParserCommand
         {
             var sp = Stat(L.T(label), T(value, 24, tone, FontWeights.Bold, tab: true), sub, Muted, Faint);
             return lit ? M(YouFrame(sp, 10, new Thickness(12, 8, 12, 9), 0.6), 4, 0, 4, 0)
-                : M(new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 9), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1), Child = sp }, 4, 0, 4, 0);
+                : M(new Border { CornerRadius = Skins.Corner(10), Padding = new Thickness(12, 8, 12, 9), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1), Child = sp }, 4, 0, 4, 0);
         }
         tiles.Children.Add(Tile("This pull", Int(you.Dps), L.F("{0} · {1} in the group", BossParser.Clock(v.E.Duration(v.Now)), Rank(you.Rank)), GoldInk, true));
         if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; tiles.Children.Add(Tile("Your best kill", Int(v.Best.Dps), L.F("{0:MMM d} · you're {1}", v.Best.When.ToLocalTime(), Signed(d)), Ink, false)); }

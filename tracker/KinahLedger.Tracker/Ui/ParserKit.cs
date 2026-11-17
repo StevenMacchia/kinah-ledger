@@ -93,6 +93,15 @@ static class PK
     /// </summary>
     public static Border Glass(UIElement content, Thickness pad, double radius = 14, Color? glow = null, Brush? edge = null)
     {
+        if (Skins.Themed)
+        {
+            // a themed look's card instead of the glass (Ui/SkinDeco.cs): the hero (the one with a glow) its hero
+            var card = new Border { Child = content };
+            card.SetResourceReference(FrameworkElement.StyleProperty, "QCard");
+            card.Padding = pad;
+            if (glow != null) { card.SetResourceReference(Border.BackgroundProperty, "HeroBg"); SkinDeco.SetFrame(card, "hero"); }
+            return card;
+        }
         bool dark = Dark;
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         fill.GradientStops.Add(new GradientStop(dark ? Color.FromRgb(0x18, 0x1B, 0x25) : KC("Card"), 0));

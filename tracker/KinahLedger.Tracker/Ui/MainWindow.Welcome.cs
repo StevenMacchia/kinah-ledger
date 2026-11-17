@@ -291,6 +291,7 @@ public partial class MainWindow
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.DarkTitleBar(h, Skins.IsDark(key));
         _options?.SkinChanged();
+        FillThemeHero();
         BuildSkinChips(SkinChips);
         BuildRegionChips(); BuildFactionChips(); BuildServerChips();   // chips hold their own brushes, so repaint them
     }

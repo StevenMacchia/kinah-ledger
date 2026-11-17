@@ -328,7 +328,7 @@ public partial class OptionsWindow : Window
         var view = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(14, 34, 14, 10), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         return new Border
         {
-            Height = height, CornerRadius = new CornerRadius(12), Background = HudKit.GameScene(), ClipToBounds = true,
+            Height = height, CornerRadius = Skins.Corner(12), Background = HudKit.GameScene(), ClipToBounds = true,
             BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromRgb(0x23, 0x27, 0x36)),
             Child = new Grid { Children = { view, pill } },
         };
@@ -351,7 +351,7 @@ public partial class OptionsWindow : Window
         label.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
         var card = new Border
         {
-            CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(5, 5, 5, 5), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
+            CornerRadius = Skins.Corner(8), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(5, 5, 5, 5), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
             Child = new StackPanel { Children = { thumb, label } }, ToolTip = hint, Focusable = true, Tag = key,
         };
         card.SetResourceReference(Border.BackgroundProperty, "Card2");

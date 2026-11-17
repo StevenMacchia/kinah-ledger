@@ -257,6 +257,7 @@ public partial class MainWindow
         if (weight is { } w) t.FontWeight = w;
 
         if (font != null) t.SetResourceReference(TextBlock.FontFamilyProperty, font);
+        if (font == "DisplayFont") t.SetResourceReference(EffectProperty, "DisplayFx");   // the look's mark on a big figure (Ui/Skins.cs)
 
         return t;
 
@@ -376,7 +377,7 @@ public partial class MainWindow
 
         sp.Children.Add(PT(text, on ? "Ink" : "Muted", 12, on ? FontWeights.Normal : null));
 
-        var b = new Border { Child = sp, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 3, 11, 4), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0) };
+        var b = new Border { Child = sp, CornerRadius = Skins.Corner(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 3, 11, 4), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0) };
 
         b.SetResourceReference(Border.BorderBrushProperty, on ? "CardLineHover" : "Line");
 
@@ -630,7 +631,7 @@ public partial class MainWindow
 
         var body = new StackPanel { Width = width - 2 };
 
-        var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
+        var card = new Border { Child = body, CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
 
         card.SetResourceReference(Border.BackgroundProperty, "Card");
 

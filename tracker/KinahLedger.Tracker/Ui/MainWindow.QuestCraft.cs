@@ -132,7 +132,7 @@ public partial class MainWindow
         var n = QT(name, 12.5, FontWeights.SemiBold, "Ink"); n.Margin = new Thickness(0, 6, 0, 0); n.TextWrapping = TextWrapping.Wrap; n.MaxHeight = 34; n.LineHeight = 16; n.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sp.Children.Add(n);
         sp.Children.Add(QT(sub, 12, FontWeights.Medium, "Muted", trim: true));
         var p = QT(profit.Length > 0 ? profit : L.T("no price yet"), 15, FontWeights.Bold, tone); p.Margin = new Thickness(0, 4, 0, 0); sp.Children.Add(p);
-        var card = new Border { Width = 205, Padding = new Thickness(10), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 8, 8) };
+        var card = new Border { Width = 205, Padding = new Thickness(10), CornerRadius = Skins.Corner(12), Child = sp, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 8, 8) };
         card.SetResourceReference(Border.BackgroundProperty, "Card2");
         card.MouseEnter += (_, _) => card.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         card.MouseLeave += (_, _) => card.SetResourceReference(Border.BackgroundProperty, "Card2");

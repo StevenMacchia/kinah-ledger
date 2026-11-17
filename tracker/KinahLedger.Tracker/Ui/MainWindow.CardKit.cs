@@ -43,6 +43,19 @@ public partial class MainWindow
             Background = new LinearGradientBrush(Color.FromRgb(0x1E, 0x22, 0x30), Color.FromRgb(0x0F, 0x11, 0x17), 90),
             Effect = new DropShadowEffect { BlurRadius = 26, ShadowDepth = 5, Opacity = 0.6 }, ClipToBounds = false,
         };
+        // the card is dark in every look: on a light one its words take Night's colours, not the page's dark ink
+        if (!Skins.IsDark(Skins.Current)) card.Resources.MergedDictionaries.Add(Skins.Night());
+        switch (Skins.Current)
+        {
+            case HudThemes.Wacky:   // Neon's cabinet (Ui/Themes/Wacky/HudNeon.cs): a magenta tube for its edge, cyan light round it
+                card.BorderBrush = Ck(Color.FromRgb(0xFF, 0x2B, 0xD6)); card.BorderThickness = new Thickness(2);
+                card.Effect = new DropShadowEffect { Color = Color.FromRgb(0x00, 0xE5, 0xFF), BlurRadius = 22, ShadowDepth = 0, Opacity = 0.7 };
+                break;
+            case HudThemes.Tactical or HudThemes.Glitch:   // the look's frame (Ui/SkinDeco.cs) over the dark card, square
+                card.CornerRadius = new CornerRadius(0); card.BorderThickness = new Thickness(0);
+                SkinDeco.SetFrame(card, "card");
+                break;
+        }
         return (card, body);
     }
 

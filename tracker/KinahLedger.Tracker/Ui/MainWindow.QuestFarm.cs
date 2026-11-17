@@ -117,7 +117,7 @@ public partial class MainWindow
         foreach (var s in slots.Take(slots.Count > Max ? Max - 1 : slots.Count)) BagStripHost.Children.Add(s);
         if (slots.Count > Max)
         {
-            var more = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = L.T("The rest of the bag") };
+            var more = new Border { Width = 42, Height = 42, CornerRadius = Skins.Corner(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = L.T("The rest of the bag") };
             more.SetResourceReference(Border.BackgroundProperty, "Card2");
             more.Child = QT($"+{slots.Count - (Max - 1)}", 12, FontWeights.Bold, "Muted");
             more.MouseLeftButtonUp += (_, _) => { if (_qChip != "bag") ToggleChip("bag"); };
