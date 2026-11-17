@@ -609,10 +609,14 @@ public static partial class WpfApp
             var (keys0, on0) = opt.ParserLooksForTest;
             string kinahLook = w.HudLook;
             bool rowShown = opt.ParserLookRowShownForTest == true;
+            bool save0 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest("capsule"); DoEvents();
             var (_, on1) = opt.ParserLooksForTest;
             string stage1 = opt.ParserLookStageForTest ?? "";
+            bool save1 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest(ParserPrefs.StandardLook); DoEvents();
+            // a look picked here alone is a change to save (Steven, 2026-11-16: "i cant save it unless i also change the buddy")
+            check(!save0 && save1 && !opt.SaveBtn.IsEnabled, $"Options › In game › Parser: a look picked for its own window alone lights Save, and picking the saved one again puts it out (before {save0}, picked {save1}, back {opt.SaveBtn.IsEnabled})");
             check(rowShown && keys0.SequenceEqual(new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
                 && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.StandardLook,
                 $"Options › In game › Parser: its own window's look row ({string.Join(", ", keys0)}), Standard by default ({on0}); a pick outlines it and draws it big ({on1}, {stage1}), the Kinah overlay's look left alone");
