@@ -97,9 +97,10 @@ public partial class MainWindow
         var beforeRuns = before != null ? Wrapped.RunsIn(runs, before[0].Date, before[^1].Date) : new();
         long Made(List<InstanceRun> rs) => week ? rs.Where(r => !r.OutOfAverages).Sum(RunValue) : TodayLoot.Runs(rs, _items, IsCurrency).Value;
         WrappedRun Run(InstanceRun r) => new(r.Label, ZoneCompare.PlaceOf(r), DayHistory.KindOf(r.Kind) is { Length: > 0 } k ? k : r.Kind, DayHistory.LocalStart(r).Date, RunValue(r), r.Seconds, !r.OutOfAverages);
-        // each counted run's rewards that sell, at the lowest Market price after the cut (gear is bound, currencies aren't sold)
+        // each counted run's rewards that sell, at the lowest Market price after the cut (gear too: it binds on equip; bound
+        // copies and currencies aren't sold)
         var drops = nowRuns.Where(r => !r.OutOfAverages).SelectMany(r => r.Items
-            .Where(kv => kv.Value > 0 && !_items.IsGear(kv.Key) && !IsCurrency(kv.Key) && PriceBook.Price(_items.NameOf(kv.Key)) != null)
+            .Where(kv => kv.Value > 0 && !_items.BoundId(kv.Key) && !IsCurrency(kv.Key) && PriceBook.Price(_items.NameOf(kv.Key)) != null)
             .Select(kv => new WrappedDrop(_items.NameOf(kv.Key), _items.Get(kv.Key)?.Grade ?? "", kv.Value,
                 (long)Math.Round(PriceBook.Price(_items.NameOf(kv.Key))!.Value * kv.Value * PriceBook.SellerKeeps), r.Label, DayHistory.LocalStart(r).Date)));
         // crafting is this session's, as the Crafting page sums it: on a sheet only when the session began within its days

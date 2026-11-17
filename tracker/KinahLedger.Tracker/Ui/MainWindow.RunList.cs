@@ -163,7 +163,7 @@ public partial class MainWindow
         if (value > 0)
         {
             var v = PT(Fk(value), out_ ? "Faint" : "Gold", 12.5, null, "MonoFont"); v.VerticalAlignment = VerticalAlignment.Center; v.Margin = new Thickness(12, 0, 0, 0);
-            v.ToolTip = "This run's Kinah plus its loot at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in it.";
+            v.ToolTip = "This run's Kinah plus its loot and gear at the lowest Market price, " + PriceBook.Cut + ". Bound items add nothing.";
             Grid.SetColumn(v, 5); head.Children.Add(v);
         }
         var line = new Border { Child = head, Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(-8, 0, -8, 4), CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Cursor = Cursors.Hand,

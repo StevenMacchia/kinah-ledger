@@ -142,18 +142,41 @@ public static class TodayTests
             Check("today's runs: count, places, Kinah", $"{rt.Runs} {rt.Places} {rt.Kinah}", "2 2 600000");
             var rs = rt.Items.First(x => x.Id == stone);
             Check("a run item: summed, with its places", $"{rs.Count} " + string.Join(",", rs.Where.Select(w => $"{w.Where} {w.Count}")), "9 Urugugu Canyon 7,Shugo Festival 2");
-            // gear from a run is bound, worth nothing: never a loot slot, only counted for the quiet note (Steven, 2026-11-10,
-            // Fire Temple: 19 pieces showed as its loot; "gear from dungeons is of no value")
-            if (items.Find("Corrupted Judicator Gloves") is long gloves && items.Find("Murute Earrings") is long ears && items.IsGear(gloves))
+            // all gear binds on equip (Steven, 2026-11-17): a run's gear keeps its row of its own with each piece's count
+            // (2026-11-10: "i want to see how many of X type of gear i got"), and a piece with a tradable id is worth its Market
+            // price, in the run's value; the bound copy of a pair (the id the item list says isn't tradable, as a reward table
+            // picks it) and a piece the game called bound are counted and add nothing
+            const long glovesT = 210540028, glovesB = 210540044, earsT = 310240028;   // Corrupted Judicator Gloves, tradable and not; Murute Earrings
+            if (items.IsGear(glovesT) && items.IsGear(glovesB) && items.IsGear(earsT))
             {
-                var fire = new InstanceRun { Zone = "Fire Temple", Kind = "Expedition", Start = midnight.AddHours(16).ToUniversalTime(), LastLoot = midnight.AddHours(16.1).ToUniversalTime(), Kinah = 800_000, UnknownGear = 1 };
-                fire.Items[gloves] = 2; fire.BoundItems[ears] = 1; fire.Items[stone] = 3;
-                var fr = TodayLoot.Runs(new[] { fire }, items, _ => false);
-                Check("a run's gear: no loot slot, a row of its own with each piece's count, nothing in the value",
-                    $"{string.Join(",", fr.Items.Select(x => items.NameOf(x.Id)))} | gear {fr.Gear}: {string.Join(", ", fr.GearSlots.Select(s => $"{s.Name} x{s.Count} worth {s.Worth}").OrderBy(x => x))} | {fr.Value - fr.Kinah == fr.Items.Sum(x => x.Worth)}",
-                    "Qzx Todaytest Stone | gear 4: Corrupted Judicator Gloves x2 worth 0, Murute Earrings x1 worth 0 | True");
+                Check("gear binds on equip: bound by its id only (the pair's bound copy), a dropped piece's id is tradable",
+                    $"{items.BoundId(glovesT)} {items.BoundId(glovesB)} {items.BoundId(earsT)} {items.BoundId(stone)}", "False True False False");
+                PriceBook.SetBoard(new() { ["Corrupted Judicator Gloves"] = 100_000, ["Murute Earrings"] = 40_000 });
+                try
+                {
+                    var fire = new InstanceRun { Zone = "Fire Temple", Kind = "Expedition", Start = midnight.AddHours(16).ToUniversalTime(), LastLoot = midnight.AddHours(16.1).ToUniversalTime(), Kinah = 800_000, UnknownGear = 1 };
+                    fire.Items[glovesT] = 2; fire.Items[glovesB] = 1; fire.BoundItems[earsT] = 1; fire.Items[stone] = 3;
+                    var fr = TodayLoot.Runs(new[] { fire }, items, _ => false);
+                    long two = (long)Math.Round(100_000 * 2 * PriceBook.SellerKeeps);
+                    Check("a run's gear: a row of its own, each piece's count, the tradable pieces at their price",
+                        $"{string.Join(",", fr.Items.Select(x => items.NameOf(x.Id)))} | gear {fr.Gear}: {string.Join(", ", fr.GearSlots.Select(s => $"{s.Id} x{s.Count} bound {s.Bound} worth {(s.Worth == two ? "2 at the price" : s.Worth.ToString())}").OrderBy(x => x))}",
+                        $"Qzx Todaytest Stone | gear 5: {glovesT} x2 bound 0 worth 2 at the price, {glovesB} x1 bound 1 worth 0, {earsT} x1 bound 1 worth 0");
+                    Check("...the gear's worth is in the run's value", $"{fr.GearWorth == two} {fr.Value == fr.Kinah + fr.Items.Sum(x => x.Worth) + two} {fr.GearBound}", "True True 2");
+                    // the site gets the bound copy among items_bound, so it never values it either
+                    var sent = Upload.InstanceRunPayload.From(new[] { fire }, id => items.KeyOf(id), null, items.BoundId)![0];
+                    Check("...and the site: every piece in items, the bound ones (by id or by the game's word) in items_bound",
+                        $"{sent.items.GetValueOrDefault(glovesT.ToString())} {sent.items.GetValueOrDefault(glovesB.ToString())} | bound {string.Join(",", (sent.items_bound ?? new()).OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} {kv.Value}"))}",
+                        $"2 1 | bound {glovesB} 1,{earsT} 1");
+                    // the farming side: a piece of gear dropped in the open world sells too; a bound copy counted as a drop doesn't
+                    var fe = new SessionEngine(items);
+                    fe.Apply(new ItemAcquired(midnight.AddHours(17).ToUniversalTime(), glovesT, 1, false));
+                    fe.Apply(new ItemAcquired(midnight.AddHours(17).ToUniversalTime(), glovesB, 1, false));
+                    Check("open-world gear: the tradable piece sells, the bound copy is bound however it was counted",
+                        string.Join(", ", fe.ItemRows().OrderBy(r => r.Id).Select(r => $"{r.Id} {r.Count}+{r.Bound}b")), $"{glovesT} 1+0b, {glovesB} 0+1b");
+                }
+                finally { PriceBook.SetBoard(new()); }
             }
-            else Check("a run's gear: the test's gear names are in the item list", "missing", "found");
+            else Check("a run's gear: the test's gear ids are in the item list", "missing", "found");
 
             // e. each page's strip is its own day (0.8.51): Farming says only farming, Events only the runs
             string Line(List<(string Fig, string Word)> l) => string.Join(" ·", l.Select(n => n.Fig + n.Word));

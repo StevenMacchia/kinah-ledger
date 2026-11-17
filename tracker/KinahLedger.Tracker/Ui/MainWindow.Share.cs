@@ -129,7 +129,7 @@ public partial class MainWindow
         var its = new Dictionary<long, (int Sell, int Bound)>();
         foreach (var (_, z) in zones)
         {
-            foreach (var (id, n) in z.Items) { var h = its.GetValueOrDefault(id); its[id] = (h.Sell + n, h.Bound); }
+            foreach (var (id, n) in z.Items) { var h = its.GetValueOrDefault(id); its[id] = _items.BoundId(id) ? (h.Sell, h.Bound + n) : (h.Sell + n, h.Bound); }
             foreach (var (id, n) in z.ItemsBound) { var h = its.GetValueOrDefault(id); its[id] = (h.Sell, h.Bound + n); }
         }
         var drops = its.Where(kv => kv.Value.Sell + kv.Value.Bound > 0).Select(kv =>
@@ -204,10 +204,10 @@ public partial class MainWindow
         var drops = new Dictionary<long, (int N, long Worth, int Bound)>();
         foreach (var (id, n) in r.Items)
         {
-            // gear from a run is bound to the character: worth nothing, as RunValue counts it
-            bool gear = _items.IsGear(id);
-            long worth = !gear && PriceBook.Price(_items.NameOf(id)) is long p ? (long)Math.Round(p * n * PriceBook.SellerKeeps) : 0;
-            drops[id] = (n, worth, gear ? n : 0);
+            // gear binds on equip, so a dropped piece sells like any loot; a bound copy by its own id is worth nothing (as RunValue)
+            bool bound = _items.BoundId(id);
+            long worth = !bound && PriceBook.Price(_items.NameOf(id)) is long p ? (long)Math.Round(p * n * PriceBook.SellerKeeps) : 0;
+            drops[id] = (n, worth, bound ? n : 0);
         }
         foreach (var (id, n) in r.BoundItems) { var had = drops.GetValueOrDefault(id); drops[id] = (had.N + n, had.Worth, had.Bound + n); }
         var list = drops.Select(kv => new ShareDrop(_items.NameOf(kv.Key), _items.Get(kv.Key)?.Grade ?? "", kv.Value.N, kv.Value.Worth) { Bound = kv.Value.Bound }).ToList();
