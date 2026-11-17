@@ -52,7 +52,7 @@ static class VhsRows
 
         public FrameworkElement Root => _root;
         /// <summary>Where the level starts on the second line: past the class's code and the CP ("GLA  CP 38.2K").</summary>
-        const double LevelAt = 82;
+        const double LevelAt = 72;
 
         public Row()
         {
@@ -99,7 +99,7 @@ static class VhsRows
             var codeFg = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 30), (byte)Math.Min(255, cc.G + 30), (byte)Math.Min(255, cc.B + 30)));
             _code.Inlines.Clear();
             _code.Inlines.Add(Rn(ClassCode(m.Class), codeFg));
-            if (m.Cp.Length > 0) { _code.Inlines.Add(Rn("  " + L.T("CP") + " ", Faint, 8.5)); _code.Inlines.Add(Rn(m.Cp, CpInk)); }
+            if (m.Cp.Length > 0) { _code.Inlines.Add(Rn(" " + L.T("CP") + " ", Faint, 8)); _code.Inlines.Add(Rn(m.Cp, CpInk)); }
             _name.Text = Caps(m.Name);
             _name.Foreground = you ? Br(0xFFF4C4) : White;
             _tags.Children.Clear();

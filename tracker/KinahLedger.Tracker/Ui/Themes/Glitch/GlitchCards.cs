@@ -192,7 +192,7 @@ static class GlitchCards
         var rates = Rates(c);
         if (rates.Count > 0)
         {
-            var rw = Words(rates.Select(r => (Up(r), yellow)), 10, face, null, faint, gap: 16);
+            var rw = Words(rates.Select(r => (Up(r), yellow)), 9.5, face, null, faint, gap: 12);
             rw.Margin = new Thickness(0, 6, 0, 0);
             body.Children.Add(rw);
         }
@@ -240,7 +240,7 @@ static class GlitchCards
             }
             if (c.MoreLine.Length > 0)
             {
-                var more = Txt("+ " + Up(c.MoreLine), 9.5, faint, face); more.Margin = new Thickness(13, 4, 0, 0);
+                var more = Txt("+ " + Up(c.MoreLine), 9.5, Br(0xFFFFFF, .7), face); more.Margin = new Thickness(13, 4, 0, 0);
                 body.Children.Add(more);
             }
         }
@@ -471,7 +471,7 @@ static class GlitchCards
         Brush phos = Br(PhosC), phosDim = Br(PhosC, .74), phosFaint = Br(PhosC, .5), pale = Br(PaleC), amber = Br(AmberC), ground = Br(GroundC), red = Br(0xFF6B5E);
         var cc = c.ClassColor;
         var glow = Rgb(PhosC);
-        double w = Wide(c, 318);
+        double w = Wide(c, 300);
         var body = new StackPanel { Width = w, Margin = new Thickness(12, 8, 12, 10) };
         string Low(string s) => s.ToLower(CultureInfo.CurrentCulture);
 
@@ -507,10 +507,10 @@ static class GlitchCards
         cells.Add((Low(L.T("damage")), c.Damage));
         foreach (var (label, value) in cells)
         {
-            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 13, 0) };
-            var l = Txt(label + " ", 11, phosDim, face, FontWeights.SemiBold); l.VerticalAlignment = VerticalAlignment.Bottom; l.Margin = new Thickness(0, 0, 0, 2);
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 10, 0) };
+            var l = Txt(label + " ", 10.5, phosDim, face, FontWeights.SemiBold); l.VerticalAlignment = VerticalAlignment.Bottom; l.Margin = new Thickness(0, 0, 0, 2);
             sp.Children.Add(l);
-            sp.Children.Add(Phosphor(value, 16, face, FontWeights.Bold, pale, glow, .8, .3));
+            sp.Children.Add(Phosphor(value, 15, face, FontWeights.Bold, pale, glow, .8, .3));
             sums.Children.Add(sp);
         }
         body.Children.Add(sums);
