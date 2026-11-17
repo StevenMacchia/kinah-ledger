@@ -53,6 +53,30 @@ public static class IconIndex
     /// </summary>
     public static double Distance(double[] cell, Color bg, Entry e) => Distance(cell, bg, e, null);
 
+    /// <summary>
+    /// The same over a backing that changes across the slot (<paramref name="backing"/>, one colour per grid cell, row by
+    /// row): a gold or blue slot's backing is a gradient, and one colour for all of it put right gear 70 to 86 from its own
+    /// icon (2026-11-16, Ferocious Horn Den: 53 of 64 runs left gold and blue gear unnamed).
+    /// </summary>
+    public static double Distance(double[] cell, Color[] backing, Entry e, bool[]? skip)
+    {
+        double sum = 0, wsum = 0;
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                if (y >= N - 4 && (x < 4 || x >= N - 6)) continue;
+                if (skip != null && skip[y * N + x]) continue;
+                int i = (y * N + x), j = i * 4, k = i * 3;
+                var bg = backing[i];
+                double a = e.Rgba[j + 3] / 255.0;
+                double r = e.Rgba[j] * a + bg.R * (1 - a), g = e.Rgba[j + 1] * a + bg.G * (1 - a), bl = e.Rgba[j + 2] * a + bg.B * (1 - a);
+                double w = 0.35 + a;
+                sum += w * (Math.Abs(r - cell[k]) + Math.Abs(g - cell[k + 1]) + Math.Abs(bl - cell[k + 2]));
+                wsum += w;
+            }
+        return sum / Math.Max(wsum, 1);
+    }
+
     /// <summary>The same, leaving out the grid cells <paramref name="skip"/> marks (a badge the game draws over the art).</summary>
     public static double Distance(double[] cell, Color bg, Entry e, bool[]? skip)
     {
@@ -731,15 +755,39 @@ public static class RewardGrid
         return skip;
     }
 
-    /// <summary>The icons closest to the slot's picture: each icon laid on the slot's own colour, compared where it is drawn.</summary>
+    /// <summary>Lay each icon on the slot's backing as it changes from corner to corner (off only to score the reader as it was).</summary>
+    public static bool GradientBacking { get; set; } = true;
+
+    /// <summary>
+    /// The slot's backing over the 16×16 grid: blended from its four corners' colours (a gold slot is lighter at its top
+    /// left, a blue one at its top), one colour per grid cell.
+    /// </summary>
+    internal static Color[] Backing(Bitmap f, Rectangle b)
+    {
+        int d = Math.Max(3, b.Width / 20);
+        Color tl = f.GetPixel(b.Left + d, b.Top + d), tr = f.GetPixel(b.Right - d, b.Top + d), bl = f.GetPixel(b.Left + d, b.Bottom - d), br = f.GetPixel(b.Right - d, b.Bottom - d);
+        const int n = 16;
+        var res = new Color[n * n];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                double u = x / (double)(n - 1), v = y / (double)(n - 1);
+                int Mix(int a, int b2, int c, int e2) => (int)Math.Round((a * (1 - u) + b2 * u) * (1 - v) + (c * (1 - u) + e2 * u) * v);
+                res[y * n + x] = Color.FromArgb(Mix(tl.R, tr.R, bl.R, br.R), Mix(tl.G, tr.G, bl.G, br.G), Mix(tl.B, tr.B, bl.B, br.B));
+            }
+        return res;
+    }
+
+    /// <summary>The icons closest to the slot's picture: each icon laid on the slot's own backing, compared where it is drawn.</summary>
     static List<(string, double)> Match(Bitmap f, Rectangle b, Color bg)
     {
         // the icon fills the slot but for a thin margin; a 16×16 grid over that area
         int m = (int)Math.Round(b.Width * 0.04);
         var cell = IconIndex.Cell(f, Rectangle.Inflate(b, -m, -m));
         var skip = MaskBadges ? BadgeMask(cell) : null;
+        var backing = GradientBacking ? Backing(f, b) : null;
         var res = new List<(string, double)>();
-        foreach (var e in IconIndex.All) res.Add((e.Key, IconIndex.Distance(cell, bg, e, skip)));
+        foreach (var e in IconIndex.All) res.Add((e.Key, backing != null ? IconIndex.Distance(cell, backing, e, skip) : IconIndex.Distance(cell, bg, e, skip)));
         // the best per icon: an icon with two fingerprints (the game's file and its art as drawn in a slot) is one answer
         return res.GroupBy(x => x.Item1).Select(g => g.OrderBy(x => x.Item2).First()).OrderBy(x => x.Item2).Take(5).ToList();
     }

@@ -61,6 +61,8 @@ public sealed class RemoteConfig
     /// with the farming chunks as before.
     /// </summary>
     public bool RunSync { get; init; } = true;
+    /// <summary>The site adds a correction's raised counts to the sender's own profile rows ("correctionsAdd": true at the top, site PR 229; 0.10.134). Off until the site says so.</summary>
+    public bool CorrectionsAdd { get; init; }
     /// <summary>The loot ledger (a loot line no read showed, wherever it sits) counts. Off: it only logs what it would count.</summary>
     public bool Ledger { get; init; }   // off until it stops overcounting noisy chat (synthetic, 2026-10-23: +2.7% Kinah)
 
@@ -249,6 +251,9 @@ public sealed class RemoteConfig
             WitnessSeconds = Num(pick, "witness_seconds", b.WitnessSeconds, 0, 20),
             RunSync = r.TryGetProperty("runs", out var rs) && rs.ValueKind == JsonValueKind.Object && rs.TryGetProperty("sync", out var rsy) && rsy.ValueKind is JsonValueKind.True or JsonValueKind.False
                 ? rsy.ValueKind == JsonValueKind.True : b.RunSync,
+            // top level ("correctionsAdd": true, site PR 229), or under "runs"
+            CorrectionsAdd = (r.TryGetProperty("correctionsAdd", out var cat) && cat.ValueKind == JsonValueKind.True)
+                || (r.TryGetProperty("runs", out var rca) && rca.ValueKind == JsonValueKind.Object && rca.TryGetProperty("correctionsAdd", out var cav) && cav.ValueKind == JsonValueKind.True),
             Ledger = pick is { } pl && pl.TryGetProperty("ledger", out var lg) && lg.ValueKind == JsonValueKind.True,
             Killed = killed,
             SceneGate = !(scene is { } sg && sg.TryGetProperty("gate", out var sgv) && (sgv.ValueKind == JsonValueKind.False

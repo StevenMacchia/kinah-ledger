@@ -346,6 +346,19 @@
   },
   {
    "id": null,
+   "name": "Balaur's Essence (Bound)",
+   "grade": "Legend",
+   "tradable": false,
+   "category": "Crafting Material",
+   "icon": "https://assets.playnccdn.com/static-aion2-gamedata/resources/Icon_Item_Craft_Drop_Draconic_Soul_All_A_u_001a.png",
+   "iconSource": "NC CDN",
+   "metabotCategory": "Crafting Material",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/balaurs-essence",
+   "sourceNote": "The bound copy an expedition's reward table gives (Ferocious Horn Den, Fire Temple): the dragon-soul swirl on a blue (Legend) slot, its chat line in blue (2026-11-16 15:14 Howling Throne: \"Balaur's Essence (Bound) acquired.\"). In about 50 of Steven's 87 kept tables, left unread until 0.10.134; its slot as the game draws it is data/icon-slots/Balaur-Essence-Bound-howling.png."
+  },
+  {
+   "id": null,
    "name": "Wisdom Stone (Bound)",
    "grade": "",
    "tradable": false,

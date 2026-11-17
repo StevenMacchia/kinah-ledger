@@ -42,6 +42,8 @@ public sealed class CharacterBook
     /// once. Kept here beside Sorted and Placed: one flag for the whole PC, every character's runs at once.
     /// </summary>
     public bool Recounted { get; set; }
+    /// <summary>The runs with slots not read were read again with the reader that sees the slot's backing (0.10.134), once.</summary>
+    public bool Reread { get; set; }
 }
 
 /// <summary>
@@ -257,6 +259,8 @@ public static class Characters
     /// <summary>The one-time re-count of old reward tables ran (Session/RunRecount.cs), or had nothing to do.</summary>
     public static bool Recounted { get { lock (Gate) return Book.Recounted; } }
     public static void MarkRecounted() { lock (Gate) { Book.Recounted = true; SaveLocked(); } }
+    public static bool Reread { get { lock (Gate) return Book.Reread; } }
+    public static void MarkReread() { lock (Gate) { Book.Reread = true; SaveLocked(); } }
 
     /// <summary>The kept history still waits for the place pass: characters were seen, and it has not run (a 0.10.51 or 0.10.52 install, or a first character just adopted).</summary>
     public static bool NeedsPlacing { get { lock (Gate) return Book.List.Count > 0 && !Book.Placed; } }
