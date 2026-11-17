@@ -195,6 +195,102 @@ static class Tac
 
     public static Color A(Color c, double a) => Color.FromArgb((byte)Math.Round(255 * Math.Clamp(a, 0, 1)), c.R, c.G, c.B);
 
+    // ---- the members' skills cards (IThemeCard): what the three looks' cards share
+
+    public static double Clamp01(double x) => Math.Clamp(x, 0, 1);
+
+    /// <summary>
+    /// A meter row's name line fitted to its room (Steven, 2026-11-16: Combat Power beside every name): the name whole when it
+    /// fits; else the parts give way in <paramref name="give"/>'s order, each to its short form (a TOP DPS plate to its star,
+    /// "CP 4.8K" to its compact form, the YOU tag to none: the row's own frame says it), and only then is the name cut (to
+    /// <paramref name="nameMin"/> at the least: the marks are never cut at the line's end). <paramref name="keep"/>: the parts
+    /// that never give way (the CP in a look that always shows it compact, a death, the heal figure).
+    /// </summary>
+    public static void FitName(TextBlock name, double room, IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give, double nameMin = 22)
+    {
+        var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
+        static double W(FrameworkElement e, Size inf) { var v = e.Visibility; e.Visibility = Visibility.Visible; e.Measure(inf); double w = e.DesiredSize.Width; e.Visibility = v; return w; }
+        name.ClearValue(FrameworkElement.MaxWidthProperty);
+        name.Measure(inf);
+        double nw = name.DesiredSize.Width, fixedW = keep.Sum(e => W(e, inf));
+        var full = give.Select(p => W(p.Full, inf)).ToList();
+        var shrt = give.Select(p => p.Short is { } s ? W(s, inf) : 0).ToList();
+        int level = give.Count;
+        for (int i = 0; i <= give.Count; i++)
+        {
+            double m = fixedW;
+            for (int j = 0; j < give.Count; j++) m += j < i ? shrt[j] : full[j];
+            if (nw + m <= room) { level = i; break; }
+        }
+        double marks = fixedW;
+        for (int j = 0; j < give.Count; j++)
+        {
+            bool cut = j < level;
+            give[j].Full.Visibility = cut ? Visibility.Collapsed : Visibility.Visible;
+            if (give[j].Short is { } s) s.Visibility = cut ? Visibility.Visible : Visibility.Collapsed;
+            marks += cut ? shrt[j] : full[j];
+        }
+        name.MaxWidth = Math.Max(Math.Min(nameMin, nw), room - marks);
+    }
+
+    /// <summary>A rate column's width on a card (crit, back attacks).</summary>
+    public const double CardRate = 36;
+
+    /// <summary>
+    /// A card's entrance: <paramref name="step"/> run from 0 to 1 over <paramref name="ms"/> (under 300) once the card shows; set
+    /// at 1 at once, and left there in a render, a test, a held frame or with Windows's animations off (the card is complete).
+    /// </summary>
+    public static void CardIn(FrameworkElement card, double ms, Action<double> step)
+    {
+        step(1);
+        if (Motion.Still || !Motion.On || Motion.FrozenAt != null) return;
+        card.Loaded += (_, _) => { step(0); Motion.Play(card, ms, step, () => step(1)); };
+    }
+
+    /// <summary>An ability table's columns: the name (the rest of the width), its share, its damage, then crit and back when the card has them.</summary>
+    public static Grid CardGrid(MemberCard c, double share, double damage, double height = double.NaN)
+    {
+        var g = new Grid { Height = height };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(damage) });
+        if (c.CritCol) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardRate) });
+        if (c.BackCol) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardRate) });
+        return g;
+    }
+
+    /// <summary>A cell of an ability table (column 1 share, 2 damage, 3 crit, 4 back: back moves to 3 without crit).</summary>
+    public static T Cell<T>(Grid g, T el, int col, MemberCard c) where T : UIElement
+    {
+        if (col == 4 && !c.CritCol) col = 3;
+        Grid.SetColumn(el, col);
+        g.Children.Add(el);
+        return el;
+    }
+
+    /// <summary>An ability's name and, after it, the specialties its hits named in <paramref name="picks"/>'s colour ("Pummel  3·4").</summary>
+    public static TextBlock AbilityName(CardAbility a, double size, Brush fg, FontFamily face, FontWeight w, Brush picks, double picksSize, FontStretch? stretch = null)
+    {
+        var t = Text("", size, fg, face, w, stretch);
+        t.TextTrimming = TextTrimming.CharacterEllipsis;
+        t.Inlines.Add(new System.Windows.Documents.Run(a.Name));
+        if (a.Picks.Length > 0) t.Inlines.Add(new System.Windows.Documents.Run("  " + a.Picks) { FontSize = picksSize, FontWeight = FontWeights.Bold, Foreground = picks });
+        return t;
+    }
+
+    /// <summary>An ability row's hover line: its whole name (a long one is cut on the card) and its hits.</summary>
+    public static string AbilityTip(CardAbility a) => a.Tip.Length > 0 ? a.Name + "\n" + a.Tip : a.Name;
+
+    /// <summary>The rates line as labelled figures: (word, figure) for the crit rate, the crits' share of the damage and the share from behind.</summary>
+    public static List<(string Word, string Fig)> Rates(MemberCard c)
+    {
+        var l = new List<(string, string)>();
+        if (c.Crit.Length > 0) l.Add((L.T("crit"), c.Crit));
+        if (c.CritShare.Length > 0) l.Add((L.T("from crits"), c.CritShare));
+        if (c.Back.Length > 0) l.Add((L.T("from behind"), c.Back));
+        return l;
+    }
+
     /// <summary>A canvas of no size, for an effect that hangs off a part without moving the layout (it never takes a click).</summary>
     public static Canvas Anchor(HorizontalAlignment h = HorizontalAlignment.Left, VerticalAlignment v = VerticalAlignment.Top) =>
         new() { Width = 0, Height = 0, HorizontalAlignment = h, VerticalAlignment = v, IsHitTestVisible = false };

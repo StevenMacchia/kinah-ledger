@@ -27,7 +27,8 @@ sealed partial class HudHolo : TacticalLook
     static readonly FontFamily Face = HudThemes.Bahn, Small = HudThemes.Mono;
     const double Cut = 11;
 
-    readonly Grid _root = new() { Margin = new Thickness(6, 6, 84, 8), HorizontalAlignment = HorizontalAlignment.Left };
+    // 98 at the right: the pickup's chip (8 out, 88 at most) hangs beside the line there, never cut
+    readonly Grid _root = new() { Margin = new Thickness(6, 6, 98, 8), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
@@ -414,7 +415,8 @@ sealed partial class HudHolo : TacticalLook
     {
         // the projector's line: a bright cyan line across the middle as the panel opens out of it
         double y = s.Height / 2;
-        dc.DrawRectangle(Frozen(Tac.A(CyanC, .35 * _projectLine)), null, new Rect(-10, y - 3 / Math.Max(.05, _project.ScaleY), s.Width + 20, 6 / Math.Max(.05, _project.ScaleY)));
+        // 4 past the glass each side (the window's room is 6): never cut
+        dc.DrawRectangle(Frozen(Tac.A(CyanC, .35 * _projectLine)), null, new Rect(-4, y - 3 / Math.Max(.05, _project.ScaleY), s.Width + 8, 6 / Math.Max(.05, _project.ScaleY)));
     }
 
     // ================================================================ the moments
@@ -435,7 +437,7 @@ sealed partial class HudHolo : TacticalLook
         });
         _lineFx.Children.Clear(); _lineFx.Children.Add(scan);
         // the chip beside the panel: the worth in white, the name small; revealed through scan lines, then still
-        var chip = new Grid();
+        var chip = new Grid { MaxWidth = 88 };
         chip.Children.Add(new TacSketch((dc, s) =>
         {
             var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
@@ -444,7 +446,7 @@ sealed partial class HudHolo : TacticalLook
         var words = new StackPanel { Margin = new Thickness(9, 3, 10, 4) };
         var worth = p.Worth.Length > 0 ? p.Worth : p.Count;
         words.Children.Add(Tt(worth, 17, White, Face, FontWeights.Bold));
-        var nm = Tt(p.Name.Length > 12 ? p.Name[..11].TrimEnd() + "…" : p.Name, 9.5, Lite, Small, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
+        var nm = Tt(p.Name.Length > 12 ? p.Name[..11].TrimEnd() + "…" : p.Name, 9.5, Lite, Small, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0); nm.TextTrimming = TextTrimming.CharacterEllipsis;
         words.Children.Add(nm);
         chip.Children.Add(words);
         double lines = 1;

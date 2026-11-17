@@ -27,7 +27,8 @@ sealed partial class HudScorebug : TacticalLook
     static readonly FontStretch Tight = FontStretches.Condensed;
     const double BugH = 42, Lean = 7.4;   // tan(10°) of the bug's height
 
-    readonly Grid _root = new() { Margin = new Thickness(4, 4, 12, 30), HorizontalAlignment = HorizontalAlignment.Left };
+    // 35 under the bug: the NEW PERSONAL BEST lower third (3 down, 30 tall, its hairline) hangs there, never cut
+    readonly Grid _root = new() { Margin = new Thickness(4, 4, 12, 35), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
@@ -241,8 +242,9 @@ sealed partial class HudScorebug : TacticalLook
         {
             double p = Math.Clamp(_timerPulse * 2 - k * .55, 0, 1);
             if (p <= 0 || p >= 1) continue;
+            // wide to the side, shallow up and down: the bug sits 4 px under the window's top, the ring stays inside it
             double g = 9 * Out(p);
-            var r = new Rect(-g, -g * .6, s.Width + 2 * g, s.Height + 1.2 * g);
+            var r = new Rect(-g, -g * .25, s.Width + 2 * g, s.Height + .5 * g);
             var shape = Tac.Lean(r, Lean + g * .2);
             dc.DrawGeometry(null, Tac.P(Frozen(Tac.A(GreenC, (1 - p) * .95)), 2.5 * (1 - p) + 1), shape);
         }
@@ -300,7 +302,7 @@ sealed partial class HudScorebug : TacticalLook
         _bugHost.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         _under.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         _fight.Margin = new Thickness(0, 0, 0, shown ? 6 : 0);
-        _root.Margin = new Thickness(4, 4, 12, shown ? 30 : 4);
+        _root.Margin = new Thickness(4, 4, 12, shown ? 35 : 4);
     }
 
     // ================================================================ the timers

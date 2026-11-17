@@ -69,6 +69,14 @@ sealed partial class HudHolo
         readonly TextBlock _rank = Tt("", 12, White, Face, FontWeights.Bold), _name = Tt("", 14.5, White, Face, FontWeights.SemiBold),
             _dps = Tt("", 16, White, Face, FontWeights.Bold), _pct = Tt("", 12, Lite, Face, FontWeights.SemiBold), _dmg = Tt("", 13.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 12, Lite, Face, FontWeights.SemiBold);
         readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(7, 2, 0, 0) };
+        /// <summary>Combat Power after the name: "CP" in the small mono, the figure light cyan, both under the name's weight (the name gives way first).</summary>
+        readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 2, 0, 0) };
+        readonly TextBlock _cpFig = Tt("", 11.5, Frozen(Tac.A(LiteC, .85)), Face, FontWeights.SemiBold);
+        /// <summary>The CP's short form when the line is short of room: the word smaller and tight to the figure (never a bare figure).</summary>
+        readonly StackPanel _cpShort = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 2, 0, 0) };
+        readonly TextBlock _cpShortFig = Tt("", 11.5, Frozen(Tac.A(LiteC, .85)), Face, FontWeights.SemiBold);
+        readonly List<FrameworkElement> _keep = new();
+        readonly List<(FrameworkElement, FrameworkElement?)> _give = new();
         MeterMember? _m;
         double _bar;
         bool _expanded;
@@ -94,6 +102,10 @@ sealed partial class HudHolo
                 Put(t, col);
             }
             _dps.Tag = "row-dps";
+            var cpWord = Tt(L.T("CP"), 8.5, LiteDim, Small, FontWeights.Bold); cpWord.Margin = new Thickness(0, 1, 3, 0);
+            _cp.Children.Add(cpWord); _cp.Children.Add(_cpFig);
+            var cpTiny = Tt(L.T("CP"), 7.5, LiteDim, Small, FontWeights.Bold); cpTiny.Margin = new Thickness(0, 1, 1, 0);
+            _cpShort.Children.Add(cpTiny); _cpShort.Children.Add(_cpShortFig);
             _root.SizeChanged += (_, _) => Fit();
         }
 
@@ -112,16 +124,30 @@ sealed partial class HudHolo
             _name.Text = m.Name;
             _name.Foreground = Frozen(m.NameColor);
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
-            if (m.You) { var y = Chip(L.T("YOU"), CyanC, filled: true); y.Margin = new Thickness(7, 1, 0, 0); _nameLine.Children.Add(y); }
-            if (m.Deaths > 0) { var d = Tt(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", 11, Coral, Face, FontWeights.Bold); d.Margin = new Thickness(6, 2, 0, 0); _nameLine.Children.Add(d); }
-            if (m.Heal.Length > 0)
+            _keep.Clear(); _give.Clear();
+            FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
+            // Combat Power beside the name once there's damage (before it, the figure itself is the CP). Short of room, in turn:
+            // TOP DPS goes to its star, TOP HEALS folds into the heal figure (a green cut frame), the YOU chip goes (the lit glass
+            // says it), "CP" shrinks onto its figure; only then is the name cut
+            FrameworkElement? cpFull = null, cpShort = null, you = null;
+            if (m.Cp.Length > 0) { _cpFig.Text = _cpShortFig.Text = m.Cp; cpFull = Add(_cp); cpShort = Add(_cpShort); }
+            if (m.You) { var y = Chip(L.T("YOU"), CyanC, filled: true); y.Margin = new Thickness(7, 1, 0, 0); you = Add(y); }
+            if (m.Deaths > 0) { var d = Tt(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", 11, Coral, Face, FontWeights.Bold); d.Margin = new Thickness(6, 2, 0, 0); _keep.Add(Add(d)); }
+            FrameworkElement Top(string s, Color c, string tag, string? tip = null) { var p = Chip(s, c, filled: false); p.Tag = tag; p.ToolTip = tip; p.Margin = new Thickness(6, 1, 0, 0); return p; }
+            if (m.Heal.Length > 0 && m.TopHeals)
             {
-                var h = Tt("+" + m.Heal, 12, Green, Face, FontWeights.SemiBold);
-                h.Tag = "heal-figures"; h.Margin = new Thickness(6, 2, 0, 0);
-                _nameLine.Children.Add(h);
+                var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Children = { HealFig(m.Heal), Top(L.T("TOP HEALS"), GreenC, "top-heals") } };
+                var framed = new Grid { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(6, 1, 0, 0), Tag = "top-heals", ToolTip = L.T("Top heals") };
+                framed.Children.Add(new TacSketch((dc, sz) => dc.DrawGeometry(Frozen(Tac.A(DeepC, .7)), Tac.P(Green, 1), Tac.Cut(new Rect(.5, .5, sz.Width - 1, sz.Height - 1), 4))));
+                var inner = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(5, 0, 6, 1), Children = { Tt("✚", 9, Green, Face, FontWeights.Bold), HealFig(m.Heal, 3, 1) } };
+                framed.Children.Add(inner);
+                _give.Add((Add(full), Add(framed)));
             }
-            if (m.TopDps) { var p = Chip(L.T("TOP DPS"), AmberC, filled: false); p.Tag = "top-dps"; p.Margin = new Thickness(6, 1, 0, 0); _nameLine.Children.Add(p); }
-            if (m.TopHeals) { var p = Chip(L.T("TOP HEALS"), GreenC, filled: false); p.Tag = "top-heals"; p.Margin = new Thickness(6, 1, 0, 0); _nameLine.Children.Add(p); }
+            else if (m.Heal.Length > 0) _keep.Add(Add(HealFig(m.Heal)));
+            else if (m.TopHeals) _give.Add((Add(Top(L.T("TOP HEALS"), GreenC, "top-heals")), Add(Top("✚", GreenC, "top-heals", L.T("Top heals")))));
+            if (m.TopDps) _give.Insert(0, (Add(Top(L.T("TOP DPS"), AmberC, "top-dps")), Add(Top("★", AmberC, "top-dps", L.T("Top DPS")))));
+            if (you != null) _give.Add((you, null));
+            if (cpFull != null) _give.Add((cpFull, cpShort));
             _dps.Text = m.Figure;
             _pct.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
@@ -134,10 +160,16 @@ sealed partial class HudHolo
         void Fit()
         {
             double room = _root.ColumnDefinitions[1].ActualWidth;
-            if (room <= 0) { _name.ClearValue(FrameworkElement.MaxWidthProperty); return; }
-            double marks = 0;
-            for (int i = 1; i < _nameLine.Children.Count; i++) { var el = (FrameworkElement)_nameLine.Children[i]; el.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); marks += el.DesiredSize.Width; }
-            _name.MaxWidth = Math.Max(28, room - _nameLine.Margin.Left - marks - 6);
+            if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
+            Tac.FitName(_name, room - _nameLine.Margin.Left - 6, _keep, _give);
+        }
+
+        /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
+        static TextBlock HealFig(string heal, double left = 6, double top = 2)
+        {
+            var h = Tt("+" + heal, 12, Green, Face, FontWeights.SemiBold);
+            h.Tag = "heal-figures"; h.Margin = new Thickness(left, top, 0, 0);
+            return h;
         }
 
         void Draw(DrawingContext dc, Size s)
