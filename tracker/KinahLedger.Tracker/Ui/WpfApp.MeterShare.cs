@@ -156,7 +156,8 @@ public static partial class WpfApp
             "meter share: other names hidden by default, its shortcut Off by default");
         check(MeterShare.FileName(kill) is var fn && fn.StartsWith("kinah-ledger-") && fn.EndsWith(".png") && fn.IndexOfAny(Path.GetInvalidFileNameChars()) < 0, $"meter share: a file name safe to save ({MeterShare.FileName(kill)})");
 
-        // the overlay's Share: with the pointer over it while it takes clicks; never while clicks go through, nor on a ready card
+        // the overlay's Share: with the pointer over it, clicks taken or going through (with them going through it shows with the
+        // grab handle, the pointer over the overlay; Steven, 2026-11-17: "it needs to be shareable"); never on a ready card
         var po = new ParserOverlay { Left = -12000, Top = -12000, Mode = kill.ModeKind };
         try
         {
@@ -165,15 +166,17 @@ public static partial class WpfApp
             bool away = !po.ShareShownForTest;
             po.HoverForTest(true);
             bool over = po.ShareShownForTest;
-            po.SetClickThrough(true); po.HoverForTest(true);
-            bool through = po.ShareShownForTest;
+            po.SetClickThrough(true); po.HoverForTest(false);
+            bool throughAway = !po.ShareShownForTest;
+            po.ShowGrabForTest();
+            bool through = po.ShareShownForTest && throughAway;
             po.SetClickThrough(false); po.ShareShown = false; po.HoverForTest(true);
             bool ready = po.ShareShownForTest;
             po.ShareShown = true;
             po.Flash(L.T("Picture copied"), good: true);
             bool flashed = po.HintTextForTest == L.T("Picture copied") && !po.ShareShownForTest;
-            check(away && over && !through && !ready && flashed,
-                $"meter share: the overlay's Share shows with the pointer over it ({over}, away {!away}), not while clicks go through ({through}), not on a ready card ({ready}); \"Picture copied\" in the hint's place after ({flashed})");
+            check(away && over && through && !ready && flashed,
+                $"meter share: the overlay's Share shows with the pointer over it ({over}, away {!away}), with clicks going through too once the pointer is over it ({through}), not on a ready card ({ready}); \"Picture copied\" in the hint's place after ({flashed})");
         }
         finally { po.Close(); }
 

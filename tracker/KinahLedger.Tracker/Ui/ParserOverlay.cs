@@ -304,7 +304,9 @@ public sealed class ParserOverlay : Window
         _hint.Text = _clickThrough ? L.T("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the mode");
         _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : PointerOver) ? Visibility.Visible : Visibility.Collapsed;
         // Share with the pointer over the meter, only while the overlay takes clicks (click-through on: the shortcut in Settings)
-        _share.Visibility = !_still && !_clickThrough && PointerOver && ShareShown ? Visibility.Visible : Visibility.Collapsed;
+        // with clicks going through too (Steven, 2026-11-17: "it needs to be shareable"): the pointer over the overlay shows it, and
+        // over the button the window takes the pointer (WatchGrab), as over the grab handle
+        _share.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : PointerOver) && ShareShown ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---- Share (Ui/MeterShare.cs): a picture of the meter for Discord, Reddit and X ----
@@ -415,6 +417,18 @@ public sealed class ParserOverlay : Window
             int gx = r.Left + (int)Math.Round(tl.X * dpi.DpiScaleX), gy = r.Top + (int)Math.Round(tl.Y * dpi.DpiScaleY);
             int gw = (int)Math.Round(_grab.ActualWidth * _scale * dpi.DpiScaleX), gh = (int)Math.Round(_grab.ActualHeight * _scale * dpi.DpiScaleY);
             onGrab = c.X >= gx - 4 && c.X < gx + gw + 4 && c.Y >= gy - 2 && c.Y < gy + gh + 4;
+            // the Share button under the meter takes the pointer the same way, so a click there shares
+            if (!onGrab && ShareShown)
+            {
+                if (_share.Visibility != Visibility.Visible) { ShowHint(); UpdateLayout(); }
+                if (_share.Visibility == Visibility.Visible && _share.ActualWidth > 0)
+                {
+                    var st = _share.TranslatePoint(new Point(0, 0), this);
+                    int sx = r.Left + (int)Math.Round(st.X * dpi.DpiScaleX), sy = r.Top + (int)Math.Round(st.Y * dpi.DpiScaleY);
+                    int sw = (int)Math.Round(_share.ActualWidth * _scale * dpi.DpiScaleX), sh = (int)Math.Round(_share.ActualHeight * _scale * dpi.DpiScaleY);
+                    onGrab = c.X >= sx - 2 && c.X < sx + sw + 2 && c.Y >= sy - 2 && c.Y < sy + sh + 2;
+                }
+            }
             // an edge of the meter takes the pointer too (a drag there widens it)
             _overEdge = !onGrab && EdgeAt(new Point((c.X - r.Left) / dpi.DpiScaleX, (c.Y - r.Top) / dpi.DpiScaleY)) != 0;
             Cursor = _overEdge ? System.Windows.Input.Cursors.SizeWE : null;

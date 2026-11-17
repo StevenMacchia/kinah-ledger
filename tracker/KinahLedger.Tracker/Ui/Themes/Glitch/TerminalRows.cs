@@ -23,17 +23,17 @@ static class TerminalRows
     static readonly Brush Phos = Br(PhosC), PhosDim = Br(PhosC, .72), Pale = Br(PaleC), Amber = Br(AmberC), Ground = Br(GroundC), Red = Br(RedC), Mint2 = Br(MintC2);
     static readonly Brush Cells = Segments(Rgb(GroundC), 5, 1.5);
 
-    public const double Pitch = 19, Height = 17, GapHeight = 15;
-    const double RankW = 16, ClsW = 30, CpW = 30, HealW = 48, DpsW = 41, ShareW = 44;
+    public const double Pitch = 21, Height = 19, GapHeight = 15;
+    const double RankW = 16, ClsW = 28, CpW = 40, HealW = 47, DpsW = 41, ShareW = 38;
 
     /// <summary>The columns every line and the header share: rank, class, name, Combat Power, load, heal, extra, DPS, share.</summary>
     static Grid Columns(double height)
     {
         var g = new Grid { Height = height };
         // the name takes the room: the load is a third of it, never under 36 px (a few cells between its brackets)
-        foreach (var w in new[] { new GridLength(RankW), new GridLength(ClsW), new GridLength(3, GridUnitType.Star), new GridLength(CpW), new GridLength(1, GridUnitType.Star), new GridLength(HealW), GridLength.Auto, new GridLength(DpsW), new GridLength(ShareW) })
+        foreach (var w in new[] { new GridLength(RankW), new GridLength(ClsW), new GridLength(3, GridUnitType.Star), new GridLength(CpW), new GridLength(2, GridUnitType.Star), new GridLength(HealW), GridLength.Auto, new GridLength(DpsW), new GridLength(ShareW) })
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
-        g.ColumnDefinitions[4].MinWidth = 36;
+        g.ColumnDefinitions[2].MinWidth = 71; g.ColumnDefinitions[4].MinWidth = 40;   // the [load] brackets, never squeezed small (Steven, 2026-11-17: "too small")
         return g;
     }
 
@@ -79,7 +79,7 @@ static class TerminalRows
         readonly StackPanel _marks = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         /// <summary>The load: [cells] in the class's colour; a death or a kill's top takes its place (the share stays in SHR%).</summary>
         readonly Grid _load = new() { Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        readonly GlitchLevel _bar = new(9, Br(PhosC, .1), Cells);
+        readonly GlitchLevel _bar = new(13, Br(PhosC, .12), Cells);
         readonly TextBlock _heal = Txt("", 10, Mint2, Face, FontWeights.SemiBold), _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
         readonly TextBlock _fig = FigCell(12, Pale, Face, DpsW), _share = FigCell(10.5, Br(PhosC, .82), Face, ShareW, FontWeights.SemiBold);
 
@@ -100,10 +100,10 @@ static class TerminalRows
             // the load: [cells] in the class's colour
             var load = _load;
             load.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); load.ColumnDefinitions.Add(new ColumnDefinition()); load.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            load.Children.Add(Txt("[", 11.5, PhosDim, Face, FontWeights.SemiBold));
+            load.Children.Add(Txt("[", 14, PhosDim, Face, FontWeights.SemiBold));
             _bar.Root.Margin = new Thickness(1, 0, 1, 0); _bar.Root.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(_bar.Root, 1); load.Children.Add(_bar.Root);
-            var close = Txt("]", 11.5, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 2); load.Children.Add(close);
+            var close = Txt("]", 14, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 2); load.Children.Add(close);
             Grid.SetColumn(load, 4); _root.Children.Add(load);
             // a kill's tags over the load's start, on the screen's ground (the name keeps its room)
             // a death and a kill's top sit at the load's end, where its empty cells are (the name keeps its room)
