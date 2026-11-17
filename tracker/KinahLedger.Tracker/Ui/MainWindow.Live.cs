@@ -614,7 +614,7 @@ public partial class MainWindow
             WhereNote.Inlines.Add(PR(L.F("{0} an hour", Fk(topHr)), "Gold", FontWeights.SemiBold));   // money an hour: gold (colour pass, 2026-11-13)
             WhereNote.Inlines.Add(PR(more + " · " + (atGear ? L.F("{0} runs from {1} players at your gear", top!.Runs, top.Players) : L.F("{0} runs from {1} players at any gear", top!.Runs, top.Players)), "Muted"));
         }
-        WhereSum.Text = open || zones.Count <= 1 ? "" : L.F("{0} more", zones.Count - 1);
+        WhereSum.Text = open || zones.Count <= 1 ? "" : L.F("{0} more zones", zones.Count - 1);
         // your own best hour in each zone on your server (Session/BestRuns.cs, the card's "best here"), beside the players' figure (0.9.11)
         var bests = zones.Select(z => YourBestHour(z.Zone)).ToList();
         bool cmp = _prefs.CompareZones;

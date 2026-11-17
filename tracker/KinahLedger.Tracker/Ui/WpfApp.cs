@@ -2594,7 +2594,7 @@ public static partial class WpfApp
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Show();
             h.Update(values);
-            if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
+            if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ " + L.T("Nothing looked wrong"), hudAcc != null && hudToLook);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1 · sells for 28K on Siel", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
             if (Motion.FrozenAt != null) { h.MotionFrameForRender(values); DoEvents(); }
@@ -2621,19 +2621,19 @@ public static partial class WpfApp
         if (!demo || kind != "Open world") return problems;
         foreach (var (file, fields, extra) in new (string, List<string>, Dictionary<string, string>)[]
         {
-            ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
+            ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = L.T("Update ready · installs when you leave the game") }),
             // being moved from the tray: the dashed outline and the "drag me" hint
             ("ui-hud-unlocked.png", HudFields.Parse(null), new() { ["unlocked"] = "move" }),
             // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
-            ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
-            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["run"] = "", ["flash"] = "Run stopped · 1.27M this run" }),
+            ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = L.T("Run started") }),
+            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["run"] = "", ["flash"] = L.F("Run stopped · {0} this run", "1.27M") }),
             // past your best here: the ring full in mint with its star, the chase line mint
-            ("ui-hud-best.png", HudFields.Parse(null), new() { ["chase"] = "1.000", ["toBest"] = "New best here" }),
+            ("ui-hud-best.png", HudFields.Parse(null), new() { ["chase"] = "1.000", ["toBest"] = L.T("New best here") }),
             // Options at its far ends: 30% background (the figures stay solid) at 150%
             ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
             // the first two minutes: the hour says it is warming up instead of a wild figure, on the feed and on the classic set
-            ("ui-hud-warming.png", HudFields.Parse(null), new() { ["warm"] = "1", ["rate"] = "warming up", ["feedRate"] = "warming up", ["feedUnit"] = "" }),
-            ("ui-hud-warming-classic.png", HudFields.Parse("time,rate,total"), new() { ["warm"] = "1", ["rate"] = "warming up", ["time"] = "0:48", ["total"] = "21.4K" }),
+            ("ui-hud-warming.png", HudFields.Parse(null), new() { ["warm"] = "1", ["rate"] = L.T("warming up"), ["feedRate"] = L.T("warming up"), ["feedUnit"] = "" }),
+            ("ui-hud-warming-classic.png", HudFields.Parse("time,rate,total"), new() { ["warm"] = "1", ["rate"] = L.T("warming up"), ["time"] = "0:48", ["total"] = "21.4K" }),
         })
         {
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };

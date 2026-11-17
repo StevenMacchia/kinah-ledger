@@ -700,5 +700,9 @@
   "Night": "夜間",
   "Abyss": "深淵",
   "Daylight": "日間",
-  "What sits over the game while you farm. Pick a theme, then a look. Change it any time in Options.": "刷寶時顯示在遊戲上方的浮動視窗。先選主題，再選外觀。隨時可到設定中更改。"
+  "What sits over the game while you farm. Pick a theme, then a look. Change it any time in Options.": "刷寶時顯示在遊戲上方的浮動視窗。先選主題，再選外觀。隨時可到設定中更改。",
+  "{0} more zones": "還有 {0} 個區域",
+  "Nothing looked wrong": "沒有發現異常",
+  "Update ready · installs when you leave the game": "更新已就緒 · 離開遊戲時安裝",
+  "Couldn't draw this card.": "無法繪製這張卡片。"
 }
