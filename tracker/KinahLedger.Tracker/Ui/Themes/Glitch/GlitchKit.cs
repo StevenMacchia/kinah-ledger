@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using KinahLedger.Parser;
 using KinahLedger.Session;
 using static KinahLedger.Ui.HudKit;
 
@@ -236,6 +237,49 @@ static class GlitchKit
     public static void Share(Grid track, FrameworkElement fill, double share) =>
         fill.Width = Math.Max(0, track.ActualWidth * Math.Clamp(double.IsFinite(share) ? share : 0, 0, 1));
 
+    // ---- a fight's foot, worked out as the Parser's (Ui/ParserFoot.cs): the total, and the group's DPS (yours alone)
+
+    /// <param name="Held">The fight is held (over, or Always on at rest): the group figure is the whole fight's average.</param>
+    public sealed record FootFigures(string Total, string Label, string Dps, bool Held);
+
+    public static FootFigures FootOf(Encounter e, DateTime now)
+    {
+        bool held = e.HeldAverage;
+        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
+        bool solo = ParserFoot.SoloYou(e);
+        string label = L.T(solo ? (held ? "You " : pulls ? "Your DPS (boss pulls) " : "Your DPS ") : held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ").Trim();
+        return new(Amounts.Meter(e.Credited), label, e.GroupDpsText(held ? e.End ?? now : now), held);
+    }
+
+    /// <summary>A look's own foot carries the Parser foot's tag and its words for the tests and a screen reader.</summary>
+    public static void TagFoot(FrameworkElement el, Encounter e, DateTime now)
+    {
+        el.Tag = "parser-foot";
+        System.Windows.Automation.AutomationProperties.SetName(el, e.FootText(now));
+    }
+
+    /// <summary>A row's figure column: right-aligned, tabular, never trimmed (a figure that changes never shifts).</summary>
+    public static TextBlock FigCell(double size, Brush fg, FontFamily face, double minWidth, FontWeight? w = null)
+    {
+        var t = Txt("", size, fg, face, w);
+        t.TextAlignment = TextAlignment.Right; t.HorizontalAlignment = HorizontalAlignment.Right; t.MinWidth = minWidth;
+        return t;
+    }
+
+    /// <summary>A small tag: words on a block of colour ("TOP DPS").</summary>
+    public static Border Tag(string text, Brush bg, Brush fg, FontFamily face, double size = 9, Thickness? margin = null) => new()
+    {
+        Background = bg, Padding = new Thickness(3, 0, 3, 0), Margin = margin ?? new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock { Text = text, FontFamily = face, FontSize = size, FontWeight = FontWeights.Bold, Foreground = fg, VerticalAlignment = VerticalAlignment.Center },
+    };
+
+    /// <summary>A class's three-letter code, as a list's class column says it ("GLA", "CLR"); empty for none.</summary>
+    public static string ClassCode(string? cls) => ClassArt.Key(cls) switch
+    {
+        "gladiator" => "GLA", "templar" => "TMP", "assassin" => "ASN", "ranger" => "RNG", "sorcerer" => "SOR",
+        "spiritmaster" => "SPM", "cleric" => "CLR", "chanter" => "CHN", _ => "",
+    };
+
     /// <summary>A timer's words split at its name: ("Shugo", "ENTER 2:41").</summary>
     public static (string Name, string Tail) TimerParts(TimerBoard.Item i, string text)
     {
@@ -256,11 +300,13 @@ sealed class GlitchPanel
     public readonly StackPanel Body = new();
     public readonly Grid Over = new() { IsHitTestVisible = false };
     public readonly Grid Fx = new() { IsHitTestVisible = false, ClipToBounds = true };
+    /// <summary>The effects on the picture under the words (noise, static, tears): the figures are always drawn clean over them.</summary>
+    public readonly Grid Under = new() { IsHitTestVisible = false, ClipToBounds = true };
 
     public GlitchPanel(Thickness pad)
     {
         Body.Margin = pad;
-        Root.Children.Add(Ground); Root.Children.Add(Body); Root.Children.Add(Over); Root.Children.Add(Fx);
+        Root.Children.Add(Ground); Root.Children.Add(Under); Root.Children.Add(Body); Root.Children.Add(Over); Root.Children.Add(Fx);
     }
 
     public double W => Root.ActualWidth > 0 ? Root.ActualWidth : 300;
@@ -270,10 +316,11 @@ sealed class GlitchPanel
     /// One transient effect: <paramref name="el"/> on the effect layer for <paramref name="ms"/>, stepped by
     /// <paramref name="step"/> (a held render frame calls it once at its point), then taken away.
     /// </summary>
-    public void Run(UIElement el, double ms, Action<double> step)
+    public void Run(UIElement el, double ms, Action<double> step, bool under = false)
     {
-        Fx.Children.Add(el);
-        Motion.Play(el, ms, step, () => Fx.Children.Remove(el));
+        var layer = under ? Under : Fx;
+        layer.Children.Add(el);
+        Motion.Play(el, ms, step, () => layer.Children.Remove(el));
     }
 
     /// <summary>A full-panel flash of <paramref name="c"/>: up to <paramref name="peak"/> by <paramref name="up"/> of the course, gone by <paramref name="gone"/>.</summary>
@@ -282,4 +329,50 @@ sealed class GlitchPanel
         var r = new Rectangle { Fill = HudKit.Frozen(c), Opacity = 0 };
         Run(r, ms, p => r.Opacity = p < up ? peak * p / up : p < gone ? peak * (1 - Motion.Out((p - up) / (gone - up))) : 0);
     }
+}
+
+/// <summary>
+/// A meter row's level bar: a track, the fill a share of its width (kept on the track's size), echoes of the fill set a
+/// few px off (the Corrupted ghosts), and an overlay over it all (segments, cells). The share slides (Motion.Slide).
+/// </summary>
+sealed class GlitchLevel
+{
+    public readonly Grid Root = new() { IsHitTestVisible = false };
+    public readonly Border Fill = new() { HorizontalAlignment = HorizontalAlignment.Left };
+    readonly List<Border> _echoes = new();
+    double _share;
+
+    public GlitchLevel(double height, Brush track, Brush? over = null)
+    {
+        Root.Height = height;
+        Root.Children.Add(new Border { Background = track });
+        Root.Children.Add(Fill);
+        if (over != null) Root.Children.Add(new Rectangle { Fill = over });
+        Root.SizeChanged += (_, _) => Apply();
+    }
+
+    /// <summary>A copy of the fill <paramref name="dx"/>, <paramref name="dy"/> px off, behind it.</summary>
+    public Border Echo(double dx, double dy)
+    {
+        var b = new Border { HorizontalAlignment = HorizontalAlignment.Left, RenderTransform = new TranslateTransform(dx, dy) };
+        Root.Children.Insert(1, b);
+        _echoes.Add(b);
+        return b;
+    }
+
+    public double Share
+    {
+        get => _share;
+        set { _share = Math.Clamp(double.IsFinite(value) ? value : 0, 0, 1); Apply(); }
+    }
+
+    void Apply()
+    {
+        double w = Math.Max(0, Root.ActualWidth * _share);
+        Fill.Width = w;
+        foreach (var e in _echoes) e.Width = w;
+    }
+
+    /// <summary>The share shown: slid from the last one under <paramref name="key"/> (set at once in a render or a first draw).</summary>
+    public void Slide(string key, double share) => Motion.Slide(Root, key, Math.Clamp(double.IsFinite(share) ? share : 0, 0, 1), v => Share = v);
 }

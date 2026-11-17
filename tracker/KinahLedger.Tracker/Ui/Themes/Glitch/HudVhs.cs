@@ -46,7 +46,7 @@ sealed class HudVhs : HudThemeLook
     readonly Border _play = PlayTag();
     readonly TextBlock _stats = Txt("", 11, Dim, Face);
     readonly Grid _rare = new() { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
-    readonly Border _pause = new() { Background = White, Padding = new Thickness(4, 1, 4, 0), VerticalAlignment = VerticalAlignment.Center, Child = Txt("‖ PAUSE", 10, Black, VhsFace) };
+    readonly Border _pause = new() { Background = Yellow, Padding = new Thickness(4, 1, 4, 0), VerticalAlignment = VerticalAlignment.Center, Child = Txt("‖ " + L.T("FREEZE"), 10, Black, VhsFace) };
     FrameworkElement? _rareTile;
     readonly TextBlock _note = Txt("", 11, Dim, Face, FontWeights.Bold, trim: true);
 
@@ -62,13 +62,15 @@ sealed class HudVhs : HudThemeLook
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TextBlock _hpText = Txt("", 11, White, Face);
     readonly TextBlock _ready = Txt("", 12, Dim, Face, trim: true);
-    readonly StackPanel _rowsHost = new() { Margin = new Thickness(-4, 5, -4, 0) };
-    readonly ContentControl _foot = new() { Margin = new Thickness(0, 6, 0, 0), Focusable = false };
+    readonly StackPanel _rowsHost = new() { Margin = new Thickness(0, 7, 0, 0) };
+    readonly ContentControl _foot = new() { Focusable = false };
     readonly TextBlock _outcome = Txt("", 12, White, Face);
     double _hpShare = -1;
 
     public HudVhs() : base(false, CodeFace)
     {
+        // the meter's rows: the OSD's own list (Ui/Themes/Glitch/VhsRows.cs)
+        UseRows(VhsRows.Pitch, _ => new VhsRows.Row(), VhsRows.GapHeight, VhsRows.Gap);
         Build(_deck, _deckGround);
         Build(_cam, _camGround);
         _cam.Root.Width = FightWidth;
@@ -106,12 +108,13 @@ sealed class HudVhs : HudThemeLook
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(_ch);
         Grid.SetColumn(_title, 1); head.Children.Add(_title);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), Children = { _outcome, _clock } };
-        _outcome.Margin = new Thickness(0, 0, 9, 0);
-        Grid.SetColumn(right, 2); head.Children.Add(right);
+        _clock.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(_clock, 2); head.Children.Add(_clock);
         _cam.Body.Children.Add(head);
         _camTimerCell.Children.Add(_camTimer); _camTimerCell.Children.Add(_camPlay);
         _cam.Body.Children.Add(_camTimerCell);
+        _outcome.Margin = new Thickness(0, 5, 0, 0); _outcome.Visibility = Visibility.Collapsed;
+        _cam.Body.Children.Add(_outcome);
         // the HP: a level of red segments on a faint track, notches at the thirds standing out of it, the words at its end
         _hpRow.ColumnDefinitions.Add(new ColumnDefinition()); _hpRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _hpTrack.Children.Add(new Border { Background = Br(0xFFFFFF, .13) });
@@ -291,7 +294,7 @@ sealed class HudVhs : HudThemeLook
         var (name, rest) = TimerParts(i, text);
         var b = tone == TimerBadge.Tone.On ? Green : tone == TimerBadge.Tone.Soon ? Yellow : White;
         t.Inlines.Add(Rn(tone == TimerBadge.Tone.On ? "▶ " : "◷ ", b));
-        if (name.Length > 0) t.Inlines.Add(Rn(Caps(name) + " ", b));
+        if (name.Length > 0) t.Inlines.Add(Rn(name + " ", b));
         t.Inlines.Add(Rn(rest, b));
     }
 
@@ -303,10 +306,10 @@ sealed class HudVhs : HudThemeLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
-        if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; ParserRows.Detach(Rows); _hpShare = -1; return; }
+        if (e == null) { _cam.Root.Visibility = Visibility.Collapsed; _rowsHost.Children.Clear(); _foot.Content = null; _title.Text = ""; _hpShare = -1; return; }
         _cam.Root.Width = FightWidth;
         _chText.Text = $"CH {1 + (int)(Hash(e.Title) * 12):00}";
-        _title.Text = Caps(e.Title);
+        _title.Text = e.Title;
         _rowsHost.Children.Clear(); _foot.Content = null; _rowsHost.Visibility = Visibility.Collapsed; _foot.Visibility = Visibility.Collapsed;
         if (e.Waiting)
         {
@@ -330,14 +333,19 @@ sealed class HudVhs : HudThemeLook
             _hpRow.Visibility = Visibility.Visible;
         }
         else _hpRow.Visibility = Visibility.Collapsed;
-        PutRows(_rowsHost, e, now, FightWidth - 18);
+        PutRows(_rowsHost, e, now, FightWidth - 26);
         _rowsHost.Visibility = Visibility.Visible;
         // the outcome stamped in the head, before the clock: "■ KILLED 2:19" (mint), "■ WIPED" (red)
         var outcome = OutcomeText(e);
-        _outcome.Text = outcome.Length > 0 ? "■ " + outcome.ToUpper(System.Globalization.CultureInfo.CurrentCulture) : "";
+        _outcome.Inlines.Clear();
+        if (outcome.Length > 0)
+        {
+            _outcome.Inlines.Add(Rn("■ " + L.T("STOP") + "  ·  ", White));
+            _outcome.Inlines.Add(Rn(outcome.ToUpper(System.Globalization.CultureInfo.CurrentCulture), e.Outcome == "wipe" ? Br(0xFF5A4F) : e.Outcome is "kill" or "cleared" ? Br(MintTextC) : Dim));
+        }
         _outcome.Foreground = e.Outcome == "wipe" ? Br(0xFF5A4F) : e.Outcome is "kill" or "cleared" ? Br(MintTextC) : Dim;
         _outcome.Visibility = outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (e.HasDamage) _foot.Content = ParserFoot.Line(e, now, 12);
+        if (e.HasDamage) _foot.Content = VhsRows.Foot(e, now);
         _foot.Visibility = _foot.Content != null ? Visibility.Visible : Visibility.Collapsed;
         _cam.Root.Visibility = Visibility.Visible;
     }
@@ -349,12 +357,12 @@ sealed class HudVhs : HudThemeLook
     {
         double h = p.H;
         var band = new Grid { Height = height, VerticalAlignment = VerticalAlignment.Top, OpacityMask = SoftEdges };
-        var nb = NoiseBrush(alpha);
+        var nb = NoiseBrush(alpha * .7);
+        band.Children.Add(new Rectangle { Fill = Br(0x000000, .45) });
         band.Children.Add(new Rectangle { Fill = nb });
-        band.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .14) });
-        band.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .75), Height = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 3) });
+        band.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .5), Height = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 3) });
         var tt = new TranslateTransform(); band.RenderTransform = tt;
-        p.Run(band, ms, t => { tt.Y = -height + (h + height) * t; Shift(nb, t, 30); });
+        p.Run(band, ms, t => { tt.Y = -height + (h + height) * t; Shift(nb, t, 30); }, under: true);
     }
 
     protected override void Pickup(Pick p, bool held)
@@ -376,9 +384,9 @@ sealed class HudVhs : HudThemeLook
         // the freeze-frame: two noise bars held across the still picture, seething in place
         foreach (var (y, hh) in new[] { (.28, 3.0), (.74, 2.0) })
         {
-            var nb = NoiseBrush(.8);
+            var nb = NoiseBrush(.5);
             var bar = new Rectangle { Fill = nb, Height = hh, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Round(_deck.H * y), 0, 0) };
-            _deck.Run(bar, 2300, t => { bar.Opacity = Gate(t, .05, .9, .02, .12); Shift(nb, t, 40); });
+            _deck.Run(bar, 2300, t => { bar.Opacity = Gate(t, .05, .9, .02, .12); Shift(nb, t, 40); }, under: true);
         }
         // PAUSE blinks, the tile lands
         Motion.Play(_pause, 2300, t => _pause.Opacity = Blink(t, 4, .5) ? 1 : .2, () => _pause.Opacity = 1);
@@ -415,19 +423,20 @@ sealed class HudVhs : HudThemeLook
     protected override void FightStarted(Encounter e, bool held)
     {
         // a channel switch: the picture drops to static, a roll line crosses, the channel's OSD stands in the corner
-        var veil = new Rectangle { Fill = NoiseBrush(1) };
-        _cam.Run(veil, 1100, t => { veil.Opacity = t < .04 ? .5 : t < .2 ? .5 * (1 - (t - .04) / .16) : 0; Shift((ImageBrush)veil.Fill, t, 36); });
+        var veil = new Rectangle { Fill = NoiseBrush(.6) };
+        _cam.Run(veil, 1100, t => { veil.Opacity = t < .04 ? .8 : t < .25 ? .8 * (1 - (t - .04) / .21) : 0; Shift((ImageBrush)veil.Fill, t, 36); }, under: true);
         double h = _cam.H;
         // two heavy static bands roll down the picture, one after the other
         for (int k = 0; k < 2; k++)
         {
-            var nb = NoiseBrush(.95);
+            var nb = NoiseBrush(.6);
             var bar = new Grid { Height = 26, VerticalAlignment = VerticalAlignment.Top, OpacityMask = SoftEdges };
+            bar.Children.Add(new Rectangle { Fill = Br(0x000000, .45) });
             bar.Children.Add(new Rectangle { Fill = nb });
-            bar.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .8), Height = 2, VerticalAlignment = VerticalAlignment.Center });
+            bar.Children.Add(new Rectangle { Fill = Br(0xFFFFFF, .55), Height = 2, VerticalAlignment = VerticalAlignment.Center });
             var bt = new TranslateTransform(); bar.RenderTransform = bt;
             double a = k * .22;
-            _cam.Run(bar, 1100, t => { double q = Math.Clamp((t - a) / .4, 0, 1); bt.Y = -26 + (h + 26) * q; bar.Opacity = t >= a && q < 1 ? 1 : 0; Shift(nb, t, 30); });
+            _cam.Run(bar, 1100, t => { double q = Math.Clamp((t - a) / .4, 0, 1); bt.Y = -26 + (h + 26) * q; bar.Opacity = t >= a && q < 1 ? 1 : 0; Shift(nb, t, 30); }, under: true);
         }
         var osd = Split(_chText.Text, 22, Face, FontWeights.Bold, Green, Rgb(RedC, .6), Rgb(CyanC, .6), 1.4);
         osd.HorizontalAlignment = HorizontalAlignment.Right; osd.VerticalAlignment = VerticalAlignment.Top; osd.Margin = new Thickness(0, 26, 16, 0);
@@ -440,28 +449,30 @@ sealed class HudVhs : HudThemeLook
     {
         bool wipe = e.Outcome == "wipe";
         var outcome = OutcomeText(e).ToUpper(System.Globalization.CultureInfo.CurrentCulture);
-        var band = new Border { VerticalAlignment = VerticalAlignment.Top, Height = 30, Margin = new Thickness(0, 3, 0, 0) };
+        var band = new Border { VerticalAlignment = VerticalAlignment.Top, Height = 44, Margin = new Thickness(0, 1, 0, 0) };
         var words = Txt("", 14, White, Face);
         words.HorizontalAlignment = HorizontalAlignment.Center;
         if (wipe)
         {
             // the tracking lost: a blue band, the picture torn by noise bars that jump about
-            band.Background = Br(BlueC, .96);
+            band.Background = Br(BlueC);
             words.Text = L.T("TRACKING LOST");
             for (int k = 0; k < 3; k++)
             {
-                var nb = NoiseBrush(.75);
+                var nb = NoiseBrush(.5);
                 var bar = new Rectangle { Fill = nb, Height = 4 + 3 * k, VerticalAlignment = VerticalAlignment.Top };
                 var tt = new TranslateTransform(); bar.RenderTransform = tt;
                 double h = _cam.H; int kk = k;
-                _cam.Run(bar, 2200, t => { tt.Y = h * ((Hash(kk + ":" + Steps(t, 9)) * .8) + .1); bar.Opacity = Gate(t, .04, .8, 0, .15); Shift(nb, t, 30); });
+                _cam.Run(bar, 2200, t => { tt.Y = h * ((Hash(kk + ":" + Steps(t, 9)) * .8) + .1); bar.Opacity = Gate(t, .04, .8, 0, .15); Shift(nb, t, 30); }, under: true);
             }
         }
         else
         {
             // STOP: a white flash, the stop card over the head
             _cam.Flash(Colors.White, .6, 2200, .04, .22);
-            band.Background = Br(0x000000, .94); band.BorderBrush = Br(0xFFFFFF, .85); band.BorderThickness = new Thickness(0, 1.5, 0, 1.5);
+            // the top DPS's line glints as the picture stops
+            if (Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is VhsRows.Row row) row.Glint(2200);
+            band.Background = Br(0x000000); band.BorderBrush = Br(0xFFFFFF, .85); band.BorderThickness = new Thickness(0, 1.5, 0, 1.5);
             words.Inlines.Add(Rn("■ " + L.T("STOP") + "  —  ", White));
             words.Inlines.Add(Rn(outcome, Br(MintTextC)));
         }
