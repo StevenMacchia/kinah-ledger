@@ -140,7 +140,7 @@ public static class LangCheck
             for (int len = Math.Min(10, parts.Length - i); len >= 1; len--)
             {
                 var span = string.Join(' ', parts, i, len);
-                if (names.Contains(span) || names.Contains(Bare(span)) || names.Contains(span.TrimEnd(',', '.', ':', ';', '·', '!')))
+                if (names.Contains(span) || names.Contains(Bare(span)) || names.Contains(span.TrimEnd(',', '.', ':', ';', '·', '!')) || _kept.Contains(span))
                 {
                     for (int k = i; k < i + len; k++) covered[k] = true;
                     break;
@@ -163,6 +163,8 @@ public static class LangCheck
     }
 
     static HashSet<string>? _allowed;
+    /// <summary>Texts the current language's table keeps in English on purpose (a terminal look's commands): allowed whole.</summary>
+    static HashSet<string> _kept = new(StringComparer.Ordinal);
     static string _allowedFor = "";
 
     /// <summary>
@@ -179,8 +181,10 @@ public static class LangCheck
             "Ctrl", "Alt", "Shift", "Tab", "Esc", "Enter", "Space", "Home", "End", "PgUp", "PgDn", "Del", "Ins", "Win", "Num", "Pause",
             "Lv", "min", "sec", "ms", "fps",
         };
-        foreach (var (_, v) in L.CurrentTable())
-            foreach (Match m in Token.Matches(v)) a.Add(m.Value);
+        // (a text kept as it is, "> kinah --rate", allows itself whole, in Kept, never its words one by one)
+        foreach (var (k, v) in L.CurrentTable())
+            if (v != k) foreach (Match m in Token.Matches(v)) a.Add(m.Value);
+        _kept = new HashSet<string>(L.CurrentTable().Where(kv => kv.Value == kv.Key).Select(kv => kv.Key.Trim()), StringComparer.Ordinal);
         _allowed = a; _allowedFor = L.Code;
         return a;
     }
