@@ -130,6 +130,26 @@ public static partial class WpfApp
         check(cards.Count == 0, "every theme's look opens its own skills card on a row, with the member's DPS, share, damage, Combat Power and top skill, and shows each member's Combat Power on the meter" + (cards.Count > 0 ? ": " + string.Join("; ", cards) : ""));
     }
 
+    /// <summary>
+    /// --parser looks: every look of the Parser's own window as Settings › DPS meter's preview stage draws it (the stage's
+    /// width, over the game scene, scaled down only past it): ui-settings-look-&lt;key&gt;.png, to catch a look cut off there.
+    /// </summary>
+    static void ShotSettingsLooks(string dir)
+    {
+        var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+        var (_, fight) = KinahLedger.Parser.ParserDemo.Sample(now, live: true);
+        foreach (var theme in HudThemes.All)
+            foreach (var key in OptionsWindow.ParserLooksOf(theme.Key))
+            {
+                var face = ParserOverlay.PreviewFace(key, fight, now, fight.ModeKind, false);
+                face.HorizontalAlignment = HorizontalAlignment.Center; face.VerticalAlignment = VerticalAlignment.Center;
+                var stage = new System.Windows.Controls.Border { Width = 600, CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 14, 16, 14), MinHeight = 200, Background = HudKit.GameScene(),
+                    Child = new System.Windows.Controls.Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = System.Windows.Controls.StretchDirection.DownOnly } };
+                stage.Measure(new Size(600, double.PositiveInfinity)); stage.Arrange(new Rect(stage.DesiredSize)); stage.UpdateLayout();
+                SavePart(stage, Path.Combine(dir, "ui-settings-look-" + key + ".png"), null);
+            }
+    }
+
     static void ShotThemes(MainWindow w, string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
