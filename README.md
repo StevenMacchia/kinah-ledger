@@ -37,7 +37,9 @@ docs/      notes on data sources and the pipeline
 ## Tracker status
 
 The tracker never reads or changes the game's memory, never modifies the client and never sends input to
-the game; everything runs on the player's PC, and what leaves it is listed below.
+the game; everything runs on the player's PC, and what leaves it is listed below. It reads the chat off the screen;
+its DPS meter (the Parser) passively reads the game's combat data as it arrives on your PC, and never sends anything
+to the game or changes or blocks anything.
 
 Since 0.6.2 it reads only the parts of the game that nothing covers. While another window sits over the chat
 (a browser, a chat app, the tracker's own window) or the game is minimized, reading pauses, the window says

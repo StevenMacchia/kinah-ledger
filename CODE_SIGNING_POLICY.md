@@ -26,9 +26,11 @@ authentication for GitHub and Azure.
 
 ## Privacy
 
-The tracker reads only what the game shows on the screen: the chat area, the zone name on the minimap, the target
-bar and, when it is open, the Market window. It never reads game memory or files, never captures network traffic
-and never sends input to the game. It sends data to these places, and nowhere else:
+The tracker reads what the game shows on the screen: the chat area, the zone name on the minimap, the target bar
+and, when it is open, the Market window. Its DPS meter (the Parser) passively reads the game's combat data as it
+arrives on your PC. It never sends anything to the game, never changes or blocks anything, never reads game memory or
+files and never sends input to the game. Fight data stays on your PC unless you turn on "Show my boss bests on my
+kinahledger.com profile" (below). It sends data to these places, and nowhere else:
 
 - **kinahledger.com, only while sharing is on.** The first-run screen asks before anything is read or sent, with
   sharing switched on; Options › Sharing turns it off at any time.
