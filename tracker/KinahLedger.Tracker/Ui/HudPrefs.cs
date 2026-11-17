@@ -57,7 +57,8 @@ public sealed class HudPrefs
     /// The choices a new install starts with, kept apart from the player's hud.json: the windows the self-tests and the layout
     /// renders make (MainWindow's watch: false) draw the same on every PC, whatever look the player picked, and Save does nothing.
     /// </summary>
-    public static HudPrefs Defaults() => new() { _detached = true };
+    /// KL_HUD_SCALE=1.1 draws a render's overlays at that size (Steven plays at 110%, 2026-11-15).
+    public static HudPrefs Defaults() => new() { _detached = true, Scale = double.TryParse(Environment.GetEnvironmentVariable("KL_HUD_SCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sc) && sc >= MinScale && sc <= MaxScale ? sc : 1 };
 
     /// <summary>The player's hud.json; the first choice is written down at once, so a later start makes the same one.</summary>
     /// <param name="existingInstall">The tracker ran here before this file existed: the panel stays draggable, as it was.</param>
