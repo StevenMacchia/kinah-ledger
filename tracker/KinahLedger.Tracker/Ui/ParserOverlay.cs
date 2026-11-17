@@ -631,7 +631,7 @@ public sealed class ParserPanel : Border
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
-        var where = e.Where;
+        var where = PK.WhereOf(e);
         // the mode, said once at the head of the sub line, so a glance tells a run from a pull
         var mode = e.Always ? L.T("Always on") : L.T(BossParser.Name(e.ModeKind));
         var sub = T(where.Length > 0 ? $"{mode} · {where}" : mode, 11, FontWeights.Medium, HudKit.Faint);
@@ -642,7 +642,7 @@ public sealed class ParserPanel : Border
             sub.Margin = new Thickness(0);
             row.Children.Add(sub);
             row.Children.Add(T(L.T("  ·  partial"), 11, FontWeights.SemiBold, HudKit.Warn));
-            row.ToolTip = string.Join("; ", e.PartialWhy);
+            row.ToolTip = ParserCommand.WhyText(e);
             _body.Children.Add(row);
         }
         else _body.Children.Add(sub);

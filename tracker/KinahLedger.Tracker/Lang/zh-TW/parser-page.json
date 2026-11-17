@@ -237,5 +237,22 @@
  "skill level {0}": "技能等級 {0}",
  "Specialties picked are lit": "已選的特化會亮起",
  "No details for this skill's specializations yet": "這個技能的特化資料還沒有",
- "Specialties {0}": "特化 {0}"
+ "Specialties {0}": "特化 {0}",
+  "boss HP": "首領 HP",
+  "{0} died": "{0} 死亡",
+  "Boss fights  ·  {0}": "首領戰  ·  {0}",
+  "{0} · group DPS": "{0} · 隊伍 DPS",
+  "under way": "進行中",
+  "Combat Power {0:N0}": "戰力 {0:N0}",
+  "Gladiator": "劍星",
+  "Templar": "守護星",
+  "Assassin": "殺星",
+  "Ranger": "弓星",
+  "Sorcerer": "魔道星",
+  "Spiritmaster": "精靈星",
+  "Cleric": "治癒星",
+  "Chanter": "護法星",
+  "Open world": "野外",
+  "Abyss": "深淵",
+  "back attack": "背擊"
 }
