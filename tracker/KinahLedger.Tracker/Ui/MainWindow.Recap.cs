@@ -70,7 +70,7 @@ public partial class MainWindow
         var f = fr.Facts;
         long kinah = e.Totals().Kinah;
         var standing = FarmStanding(e, bestBefore);
-        OfferRecap(() => BuildRecap("Run done", f, kinah, standing, expedition: false), $"Run done: {Fk(worth)} Kinah");
+        OfferRecap(() => BuildRecap(L.T("Run done"), f, kinah, standing, expedition: false), L.F("Run done: {0} Kinah", Fk(worth)));
     }
 
     /// <summary>
@@ -92,8 +92,8 @@ public partial class MainWindow
         long rate = hours > 0 ? (long)Math.Round(worth / hours) : 0;
         bool timed = seconds >= BestRuns.MinMinutes * 60;
         var b = bestBefore is { PerHr: > 0 } had ? had : null;
-        if (b != null && timed && rate > b.PerHr) return new($"{Fk(rate)} Kinah/h · it was {Fk(b.PerHr)}", true, null);
-        var best = b != null ? $"Your best here: {Fk(b.PerHr)} Kinah/h" : "";
+        if (b != null && timed && rate > b.PerHr) return new(L.F("{0} Kinah/h · it was {1}", Fk(rate), Fk(b.PerHr)), true, null);
+        var best = b != null ? L.F("Your best here: {0} Kinah/h", Fk(b.PerHr)) : "";
         // the line against your average is one of Compare's figures: only with Options › Compare zones and runs on
         if (!_prefs.CompareZones || !timed || rate <= 0) return new(best, false, null);
         var earlier = BestRuns.Stays(Server?.Label ?? "", e.Zone, SessionStore.StartedKey(e.Started));
@@ -106,9 +106,9 @@ public partial class MainWindow
         if (_demo || !_prefs.RunRecap) return;
         if (r.Kinah <= 0 && r.Items.Count == 0 && r.BoundItems.Count == 0) return;
         var f = EventShareFacts(r);
-        var what = r.Kind switch { "Event" => "Event", InstanceLog.WorldBoss => "World boss", _ => "Expedition" };
+        var what = KindT(r.Kind switch { "Event" => "Event", InstanceLog.WorldBoss => InstanceLog.WorldBoss, _ => "Expedition" });
         var standing = PlaceStanding(r);
-        OfferRecap(() => BuildRecap($"{what} done · {r.Label}", f, r.Kinah, standing, expedition: true), $"{what} done: {Fk(f.Made)} Kinah");
+        OfferRecap(() => BuildRecap(L.F("{0} done · {1}", what, r.Label), f, r.Kinah, standing, expedition: true), L.F("{0} done: {1} Kinah", what, Fk(f.Made)));
     }
 
     /// <summary>
@@ -118,12 +118,12 @@ public partial class MainWindow
     /// </summary>
     RecapStanding PlaceStanding(InstanceRun r)
     {
-        string best = BestRuns.For(Server?.Label ?? "", r.Zone) is { PerHr: > 0 } b ? $"Your best here: {Fk(b.PerHr)} Kinah/h" : "";
+        string best = BestRuns.For(Server?.Label ?? "", r.Zone) is { PerHr: > 0 } b ? L.F("Your best here: {0} Kinah/h", Fk(b.PerHr)) : "";
         if (r.OutOfAverages) return new(best, false, null);
         var place = ZoneCompare.PlaceOf(r);
         var earlier = WeekRunList().Where(x => x.Start < r.Start && !x.OutOfAverages && string.Equals(ZoneCompare.PlaceOf(x), place, StringComparison.OrdinalIgnoreCase)).Select(RunValue);
         if (ZoneCompare.VsPlace(RunValue(r), earlier) is not { Average: > 0 } v) return new(best, false, null);
-        if (v.This > v.Best) return new($"Best of your {v.Of:N0} runs here · it was {Fk(v.Best)}", true, null);
+        if (v.This > v.Best) return new(L.F("Best of your {0:N0} runs here · it was {1}", v.Of, Fk(v.Best)), true, null);
         return new(best, false, _prefs.CompareZones ? RunStanding.Share(v.This, v.Average) : null);
     }
 
@@ -133,7 +133,7 @@ public partial class MainWindow
         if (IsVisible && WindowState != WindowState.Minimized && IsActive) { OpenRecap(build()); return; }
         _recapWaiting = build; _recapWaitingAt = DateTime.UtcNow;
         if (IsVisible) return;
-        try { _tray.ShowBalloonTip(6000, trayTitle, "Open the tracker for the recap.", WF.ToolTipIcon.Info); }
+        try { _tray.ShowBalloonTip(6000, trayTitle, L.T("Open the tracker for the recap."), WF.ToolTipIcon.Info); }
         catch (Exception ex) { CrashLog.Write("recap notice", ex); }
     }
 
@@ -200,7 +200,7 @@ public partial class MainWindow
         top.Children.Add(t);
         if (standing.NewBest) { var tag = NewBestTag(intro); Grid.SetColumn(tag, 1); top.Children.Add(tag); }
         head.Children.Add(top);
-        var sub = string.Join(" · ", new[] { expedition ? "" : f.Title, f.Server, f.Day.ToString("ddd HH:mm") }.Where(x => x.Length > 0));
+        var sub = string.Join(" · ", new[] { expedition ? "" : f.Title, f.Server, WeekdayShort(f.Day) + " " + f.Day.ToString("HH:mm", DateCulture) }.Where(x => x.Length > 0));
         if (sub.Length > 0) { var s = CkText(sub, CkFaint, 12.5); s.Margin = new Thickness(0, 3, 0, 0); head.Children.Add(s); }
         body.Children.Add(head);
 
@@ -210,12 +210,12 @@ public partial class MainWindow
         static string Whole(double v) => Math.Round(v).ToString("N0");
         static string Money(double v) => Fk(Math.Round(v));
 
-        body.Children.Add(CkSection("THIS RUN"));
-        var time = CkKv("Time", Clock(f.Seconds), CkInk); body.Children.Add(time);
+        body.Children.Add(CkSection(L.T("THIS RUN")));
+        var time = CkKv(L.T("Time"), Clock(f.Seconds), CkInk); body.Children.Add(time);
         Count(time, 1, f.Seconds, Clock);
         if (f.Count > 0)
         {
-            var count = CkKv(f.CountWord == "attempt" ? "Attempts" : "Kills", f.Count.ToString("N0"), CkInk); body.Children.Add(count);
+            var count = CkKv(L.T(f.CountWord == "attempt" ? "Attempts" : "Kills"), f.Count.ToString("N0"), CkInk); body.Children.Add(count);
             Count(count, 2, f.Count, Whole);
         }
         // Kinah and Loot each get a line only when the loot adds something: with no loot worth anything Made is the Kinah, and
@@ -224,12 +224,12 @@ public partial class MainWindow
         int pieces = f.Drops.Sum(d => d.Count);
         if (loot > 0)
         {
-            var kin = CkKv("Kinah", kinah > 0 ? Fk(kinah) : "none", kinah > 0 ? CkGold : CkFaint); body.Children.Add(kin);
+            var kin = CkKv(L.T("Kinah"), kinah > 0 ? Fk(kinah) : L.T("none"), kinah > 0 ? CkGold : CkFaint); body.Children.Add(kin);
             if (kinah > 0) Count(kin, 0, kinah, Money);
         }
         if (loot > 0 || pieces > 0)
         {
-            var lootRow = CkKv("Loot", loot > 0 ? Fk(loot) : "no price yet", loot > 0 ? CkGold : CkFaint, sub: pieces > 0 ? $"{pieces:N0} item{(pieces == 1 ? "" : "s")}, {PriceBook.Cut}" : "");
+            var lootRow = CkKv(L.T("Loot"), loot > 0 ? Fk(loot) : L.T("no price yet"), loot > 0 ? CkGold : CkFaint, sub: pieces > 0 ? L.F(pieces == 1 ? "{0:N0} item, {1}" : "{0:N0} items, {1}", pieces, CutT) : "");
             body.Children.Add(lootRow);
             if (loot > 0) Count(lootRow, 3, loot, Money);
         }
@@ -238,11 +238,11 @@ public partial class MainWindow
         if (drops.Count > 0) AddRecapDrops(body, intro, drops);
         AddRecapStanding(body, intro, standing);
 
-        var made = CkFooter("Made", loot > 0 || kinah <= 0 ? PriceBook.Cut : "all Kinah", Fk(f.Made), f.Made > 0);
+        var made = CkFooter(L.T("Made"), loot > 0 || kinah <= 0 ? CutT : L.T("all Kinah"), Fk(f.Made), f.Made > 0);
         made.CornerRadius = new CornerRadius(0);
         body.Children.Add(made);
         if (f.Made > 0) Count(made, 4, f.Made, Money);
-        body.Children.Add(CkActions(("Share", () => ShareLastRun(expedition)), ("Close", () => { })));
+        body.Children.Add(CkActions((L.T("Share", "button"), () => ShareLastRun(expedition)), (L.T("Close"), () => { })));
         return new RecapCard(card, intro);
     }
 
@@ -258,7 +258,7 @@ public partial class MainWindow
     void AddRecapDrops(StackPanel body, Motion.Cues intro, List<ShareDrop> drops)
     {
         var top = drops[0];
-        body.Children.Add(CkSection("DROPS"));
+        body.Children.Add(CkSection(L.T("DROPS")));
         var g = new Grid { Margin = new Thickness(20, 2, 20, 2) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         // the icon in a holder of its own: the landing's glow comes and goes on the holder, and the icon's frame glow stays
@@ -268,7 +268,7 @@ public partial class MainWindow
         // in the dark cards' grade colour where they have one (a Special drop keeps the window's own)
         intro.Add(RecapBestDropAt, Motion.LandCourse(top.Grade), Motion.Landing(icon, top.Grade, rare ? GradeColor(top.Grade) : null));
         var n = CkText($"{top.Name} ×{top.Count:N0}", top.Grade is "" or "Common" ? CkInk : GradeColor(top.Grade), 13.5, FontWeights.Normal); Grid.SetColumn(n, 1); g.Children.Add(n);
-        var w = CkText(top.Worth > 0 ? Fk(top.Worth) : "no price", top.Worth > 0 ? CkGold : CkFaint, 13, FontWeights.Normal, mono: true); w.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(w, 2); g.Children.Add(w);
+        var w = CkText(top.Worth > 0 ? Fk(top.Worth) : L.T("no price"), top.Worth > 0 ? CkGold : CkFaint, 13, FontWeights.Normal, mono: true); w.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(w, 2); g.Children.Add(w);
         intro.Add(RecapBestDropAt, RecapDropTextMs, Motion.Arrive(n, RecapTextTravel, 0));
         intro.Add(RecapBestDropAt, RecapDropTextMs, Motion.Arrive(w, RecapTextTravel, 0));
         body.Children.Add(g);
@@ -283,7 +283,7 @@ public partial class MainWindow
             var tile = new Grid
             {
                 Width = RecapTileBox, Height = RecapTileBox, Margin = new Thickness(0, 0, RecapTileGap, 0), Background = Brushes.Transparent,
-                ToolTip = $"{d.Name} ×{d.Count:N0} · {(d.Worth > 0 ? Fk(d.Worth) : "no price yet")}",
+                ToolTip = $"{d.Name} ×{d.Count:N0} · {(d.Worth > 0 ? Fk(d.Worth) : L.T("no price yet"))}",
             };
             var face = CkIcon(d.Name, RecapTileIcon, GradeColor(d.Grade), badge: d.Count > 1 ? d.Count.ToString("N0") : "");
             face.HorizontalAlignment = HorizontalAlignment.Left; face.VerticalAlignment = VerticalAlignment.Top;
@@ -321,7 +321,7 @@ public partial class MainWindow
                 line.Children.Add(pct);
                 intro.Add(RecapStandingAt, RecapStandingMs, Motion.CountUp(pct, Math.Round(Math.Abs(share) * 100), v => RunStanding.Percent(sign, v)));
             }
-            line.Children.Add(CkText(words, figure.Length > 0 ? CkMuted : tone, 12.5));
+            line.Children.Add(CkText((figure.Length > 0 ? " " : "") + L.T(words.Trim()), figure.Length > 0 ? CkMuted : tone, 12.5));
             body.Children.Add(line);
             intro.Add(RecapStandingAt, RecapStandingMs, Motion.Arrive(line, 0, RecapLineRise));
         }
@@ -337,7 +337,7 @@ public partial class MainWindow
     {
         var tag = new Border
         {
-            Child = CkText("★ NEW BEST HERE", RecapTagInk, 12, FontWeights.SemiBold), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 10, 4),
+            Child = CkText(L.T("★ NEW BEST HERE"), RecapTagInk, 12, FontWeights.SemiBold), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 10, 4),
             VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 3, 0, 0),
             Effect = new DropShadowEffect { Color = CkGold, BlurRadius = 14, ShadowDepth = 0, Opacity = 0.45 },
         };
@@ -397,9 +397,9 @@ public partial class MainWindow
         switch (state)
         {
             case "new-best":
-                return BuildRecap("Run done", Farm(secs, made, drops), kinah, new($"{Fk(made / (secs / 3600))} Kinah/h · it was {Fk(1_050_000)}", true, null), expedition: false);
+                return BuildRecap(L.T("Run done"), Farm(secs, made, drops), kinah, new(L.F("{0} Kinah/h · it was {1}", Fk(made / (secs / 3600)), Fk(1_050_000)), true, null), expedition: false);
             case "no-loot":
-                return BuildRecap("Run done", Farm(12 * 60 + 40, 148_000, new()), 148_000, new("Your best here: 1.4M Kinah/h", false, null), expedition: false);
+                return BuildRecap(L.T("Run done"), Farm(12 * 60 + 40, 148_000, new()), 148_000, new(L.F("Your best here: {0} Kinah/h", "1.4M"), false, null), expedition: false);
             case "long-name":
             {
                 var many = drops.Concat(new ShareDrop[]
@@ -410,10 +410,10 @@ public partial class MainWindow
                 const string place = "The Forgotten Sanctuary of the Silvermoon";
                 const long paid = 412_000;
                 var f = new ShareFacts(SharePicture.Run, DateTime.Now, ShareServer(), place, "Expedition", 23 * 60 + 5, 48, "kill", paid + many.Sum(d => d.Worth), many);
-                return BuildRecap($"Expedition done · {place}", f, paid, new("", false, -0.07), expedition: true);
+                return BuildRecap(L.F("{0} done · {1}", L.T("Expedition"), place), f, paid, new("", false, -0.07), expedition: true);
             }
             default:
-                return BuildRecap("Run done", Farm(secs, made, drops), kinah, new("Your best here: 1.4M Kinah/h", false, 0.18), expedition: false);
+                return BuildRecap(L.T("Run done"), Farm(secs, made, drops), kinah, new(L.F("Your best here: {0} Kinah/h", "1.4M"), false, 0.18), expedition: false);
         }
     }
 }

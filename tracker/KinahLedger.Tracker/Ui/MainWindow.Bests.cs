@@ -140,8 +140,8 @@ public partial class MainWindow
     {
         if (!HeadRate.IsVisible) return;
         var tag = _dayTag!;
-        _dayTagText!.Text = Amounts.Short(mark) + " Kinah today";
-        tag.ToolTip = $"Today's Kinah passed {Amounts.Full(mark)}: the loose Kinah picked up farming since midnight on this PC, as LOOT's Today side counts it.";
+        _dayTagText!.Text = L.F("{0} Kinah today", Amounts.Short(mark));
+        tag.ToolTip = L.F("Today's Kinah passed {0}: the loose Kinah picked up farming since midnight on this PC, as LOOT's Today side counts it.", Amounts.Full(mark));
         if (TagFits(tag)) TagIn(tag, DayTagInMs, _dayTagHold!);
         Motion.LightSweep(HeadLight, HeadRate, "Gold");
     }
@@ -213,8 +213,8 @@ public partial class MainWindow
     void MakeBestTags()
     {
         if (_bestTag != null) return;
-        var best = MomentTag("★ New best", "MintTint", "Mint", "Mint", out _);
-        best.ToolTip = "This hour is past your best hour in this zone. It becomes your best here if it holds until you leave the zone, end the run or close the tracker, after ten minutes or more there.";
+        var best = MomentTag(L.T("★ New best"), "MintTint", "Mint", "Mint", out _);
+        best.ToolTip = L.T("This hour is past your best hour in this zone. It becomes your best here if it holds until you leave the zone, end the run or close the tracker, after ten minutes or more there.");
         var day = MomentTag("", "FlagBg", "FlagLine", "FlagInk", out _dayTagText);
         Canvas.SetLeft(best, TagsLeft); Canvas.SetLeft(day, TagsLeft);
         Canvas.SetTop(day, TagHeight + TagGap);
