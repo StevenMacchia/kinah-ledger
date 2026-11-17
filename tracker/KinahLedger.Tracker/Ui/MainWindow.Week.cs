@@ -83,11 +83,23 @@ public partial class MainWindow
         pick is { } p && days.Any(d => d.Date == p.Date && !d.BeforeHistory) ? p.Date : days[^1].Date;
 
     /// <summary>"Fri 23".</summary>
-    static string DayName(DateTime d) => d.ToString("ddd d", CultureInfo.InvariantCulture);
-    static string DayLabel(HistoryDay d) => d.IsToday ? "Today" : DayName(d.Date);
+    static string DayName(DateTime d) => WeekdayShort(d) + " " + d.Day;
+    /// <summary>A day's runs by kind, in words ("2 expeditions · 1 event"), in the language in use.</summary>
+    static string KindsLineT(RunsDay d) => string.Join(" · ", d.Kinds.Select(k => L.F(KindKey(k.Kind, k.Count), k.Count)));
+    static string KindKey(string kind, int n) => kind switch
+    {
+        "Expedition" => n == 1 ? "{0:N0} expedition" : "{0:N0} expeditions",
+        InstanceLog.Transcendence => n == 1 ? "{0:N0} Transcendence run" : "{0:N0} Transcendence runs",
+        "Event" => n == 1 ? "{0:N0} event" : "{0:N0} events",
+        "Arena" => n == 1 ? "{0:N0} arena" : "{0:N0} arenas",
+        "Legion" => n == 1 ? "{0:N0} legion run" : "{0:N0} legion runs",
+        InstanceLog.WorldBoss => n == 1 ? "{0:N0} world boss" : "{0:N0} world bosses",
+        _ => n == 1 ? "{0:N0} run" : "{0:N0} runs",
+    };
+    static string DayLabel(HistoryDay d) => d.IsToday ? L.T("Today") : DayName(d.Date);
 
     /// <summary>Farming time under a bar: "1 h 45 min", "22 min", "&lt;1 min", "0 min".</summary>
-    static string BarTime(double secs) => secs >= 60 ? TodayLoot.Dur(secs) : secs > 0 ? "<1 min" : "0 min";
+    static string BarTime(double secs) => secs >= 60 ? DurT(secs) : secs > 0 ? L.T("<1 min") : L.T("0 min");
 
     /* ---------------- LOOT's Week side ---------------- */
 
@@ -97,10 +109,10 @@ public partial class MainWindow
         var days = FarmWeekDays();
         var picked = PickedDay(days, _weekPick);
         var t = DayHistory.Totals(days.Where(d => !d.BeforeHistory));
-        FootTotalNote.Text = $"{DayName(days[0].Date)} to {DayName(days[^1].Date)}";
+        FootTotalNote.Text = L.F("{0} to {1}", DayName(days[0].Date), DayName(days[^1].Date));
         FootTotal.Text = t.Made > 0 ? Fk(t.Made) : " ";
         FootTotal.ToolTip = t.Made <= 0 ? null
-            : "Made farming in the last 7 days on this PC: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + " (each earlier day as priced that day). Bound items and items with no price yet add nothing.";
+            : L.F("Made farming in the last 7 days on this PC: Kinah plus drops and gathering at the lowest Market price, {0} (each earlier day as priced that day). Bound items and items with no price yet add nothing.", CutT);
         var pd = days.First(d => d.Date == picked);
         // Compare (0.9.3, Ui/MainWindow.Compare.cs): with it on, Days | Zones over the bars; Zones ranks the week's zones
         if (_prefs.CompareZones && _lootZones) { FillLootZones(days); return; }
@@ -110,16 +122,16 @@ public partial class MainWindow
         LootHost.Children.Clear();
         if (_prefs.CompareZones) LootHost.Children.Add(CmpSwitch(false, false));
         var right = new List<(string, string)>();
-        if (t.Active >= 60) { right.Add((TodayLoot.Dur(t.Active), "")); if (t.Made > 0) right.Add((Fk(t.Made / (t.Active / 3600)), " an hour")); }
-        LootHost.Children.Add(WeekSum(Fk(t.Made), "from farming this week", right,
-            "Made farming in the last 7 days, the time spent farming, and what it made an hour over that time."));
+        if (t.Active >= 60) { right.Add((DurT(t.Active), "")); if (t.Made > 0) right.Add((Fk(t.Made / (t.Active / 3600)), " " + L.T("an hour"))); }
+        LootHost.Children.Add(WeekSum(Fk(t.Made), L.T("from farming this week"), right,
+            L.T("Made farming in the last 7 days, the time spent farming, and what it made an hour over that time.")));
         LootHost.Children.Add(WeekBars(days, d => d.Farm.Made, d => BarTime(d.Farm.Active), FarmTip, picked, false,
             date => { _weekPick = date; _drawnSig.Remove("loot"); FillLoot(); }));
         // once, under the bars: why the first days say "–" (the first day after them is the day history began)
         if (days.Any(d => d.BeforeHistory))
         {
             var since = days.First(d => !d.BeforeHistory).Date;
-            var n = PT($"Farming history starts {(since == DateTime.Today ? "today" : since.ToString("MMM d", CultureInfo.InvariantCulture))}, when 0.9 was installed.", "Faint", 12);
+            var n = PT(L.F("Farming history starts {0}, when 0.9 was installed.", since == DateTime.Today ? L.T("today") : DayShort(since)), "Faint", 12);
             n.Margin = new Thickness(0, 10, 0, 0); n.TextWrapping = TextWrapping.Wrap; n.TextTrimming = TextTrimming.None;
             LootHost.Children.Add(n);
         }
@@ -130,9 +142,9 @@ public partial class MainWindow
     static string FarmTip(HistoryDay d)
     {
         var f = d.Farm;
-        if (!f.Any) return $"{DayLabel(d)}: nothing farmed{(d.IsToday ? " yet" : "")}.";
-        var what = f.Kills > 0 ? $", {f.Kills:N0} kills" : f.Attempts > 0 ? $", {f.Attempts:N0} attempts" : "";
-        return $"{DayLabel(d)}: {Fk(f.Made)} made in {TodayLoot.Dur(f.Active)} of farming{what}. Click to see its zones.";
+        if (!f.Any) return L.F(d.IsToday ? "{0}: nothing farmed yet." : "{0}: nothing farmed.", DayLabel(d));
+        int whatK = f.Kills > 0 ? 1 : f.Attempts > 0 ? 2 : 0;
+        return whatK switch { 1 => L.F("{0}: {1} made in {2} of farming, {3:N0} kills. Click to see its zones.", DayLabel(d), Fk(f.Made), DurT(f.Active), f.Kills), 2 => L.F("{0}: {1} made in {2} of farming, {3:N0} attempts. Click to see its zones.", DayLabel(d), Fk(f.Made), DurT(f.Active), f.Attempts), _ => L.F("{0}: {1} made in {2} of farming. Click to see its zones.", DayLabel(d), Fk(f.Made), DurT(f.Active)) };
     }
 
     /// <summary>The picked day under the bars: its name, kills and hour, its total; then its zones with what each made (read-only).</summary>
@@ -140,18 +152,18 @@ public partial class MainWindow
     {
         var f = d.Farm;
         string line;
-        if (!f.Any) line = d.IsToday ? "Nothing farmed yet today." : "Nothing farmed.";
+        if (!f.Any) line = L.T(d.IsToday ? "Nothing farmed yet today." : "Nothing farmed.");
         else
         {
             var parts = new List<string>();
-            if (f.Kills > 0) parts.Add($"{f.Kills:N0} {(f.Kills == 1 ? "kill" : "kills")}");
-            else if (f.Attempts > 0) parts.Add($"{f.Attempts:N0} {(f.Attempts == 1 ? "attempt" : "attempts")}");
-            if (f.Active >= 60 && f.Made > 0) parts.Add($"{Fk(f.Made / (f.Active / 3600))} an hour");
+            if (f.Kills > 0) parts.Add(L.F(f.Kills == 1 ? "{0:N0} kill" : "{0:N0} kills", f.Kills));
+            else if (f.Attempts > 0) parts.Add(L.F(f.Attempts == 1 ? "{0:N0} attempt" : "{0:N0} attempts", f.Attempts));
+            if (f.Active >= 60 && f.Made > 0) parts.Add(L.F("{0} an hour", Fk(f.Made / (f.Active / 3600))));
             line = string.Join(" · ", parts);
         }
         // the zones farmed a minute or more, as the Today side's chips (2026-10-28: a zone passed through gets none)
         var chips = f.Zones.Where(z => z.Active >= 60).OrderByDescending(z => z.Made).ThenByDescending(z => z.Active)
-            .Select(z => WeekChip(ZoneName(z.Zone), Fk(z.Made), $"{ZoneName(z.Zone)}: {TodayLoot.Dur(z.Active)} farming, {z.Kills:N0} kills, {Fk(z.Made)} made {PriceBook.Cut}.")).ToList();
+            .Select(z => WeekChip(ZoneName(z.Zone), Fk(z.Made), L.F("{0}: {1} farming, {2:N0} kills, {3} made {4}.", ZoneName(z.Zone), DurT(z.Active), z.Kills, Fk(z.Made), CutT))).ToList();
         return DayDetail(DayLabel(d), line, f.Made > 0 ? Fk(f.Made) : "", chips, "Gold");
     }
 
@@ -161,14 +173,14 @@ public partial class MainWindow
     void FillRunsWeek(List<HistoryDay> days)
     {
         var t = DayHistory.Totals(days);
-        var range = $"{DayName(days[0].Date)} to {DayName(days[^1].Date)}";
+        var range = L.F("{0} to {1}", DayName(days[0].Date), DayName(days[^1].Date));
         if (Changed("today-line", $"week|{range}|{t.RunKinah}|{t.Runs}"))
         {
             TodayNote.Inlines.Clear();
             TodayNote.Inlines.Add(PR(range, "Faint"));
             TodaySum.Text = t.RunKinah > 0 ? Fk(t.RunKinah) : "";
-            TodaySum.ToolTip = t.RunKinah <= 0 ? null : "Kinah from expeditions and events in the last 7 days, each run on the day it started. Runs left out of the averages add nothing.";
-            TodayHead.ToolTip = "The last 7 days of expeditions and events on this PC. Click to fold or open.";
+            TodaySum.ToolTip = t.RunKinah <= 0 ? null : L.T("Kinah from expeditions and events in the last 7 days, each run on the day it started. Runs left out of the averages add nothing.");
+            TodayHead.ToolTip = L.T("The last 7 days of expeditions and events on this PC. Click to fold or open.");
         }
         bool open = _prefs.TodayOpen;
         TodayChev.Visibility = Visibility.Visible; TodayHead.Cursor = Cursors.Hand;   // the Today side has no body (0.10.21), the Week side folds and opens
@@ -185,24 +197,24 @@ public partial class MainWindow
         var box = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
         if (_prefs.CompareZones) box.Children.Add(CmpSwitch(true, false));
         var right = new List<(string, string)>();
-        if (t.Counted > 0 && t.RunKinah > 0) right.Add((Fk(t.RunKinah / (double)t.Counted), " a run"));
-        box.Children.Add(WeekSum(Fk(t.RunKinah), $"from {t.Runs:N0} run{(t.Runs == 1 ? "" : "s")} this week", right,
-            "Kinah from the week's runs; a run is the counted runs' average (a run whose Kinah wasn't read, or that looks wrong, is left out)."));
-        box.Children.Add(WeekBars(days, d => d.Runs.Kinah, d => $"{d.Runs.Runs:N0} run{(d.Runs.Runs == 1 ? "" : "s")}", RunTip, picked, true,
+        if (t.Counted > 0 && t.RunKinah > 0) right.Add((Fk(t.RunKinah / (double)t.Counted), " " + L.T("a run")));
+        box.Children.Add(WeekSum(Fk(t.RunKinah), L.F(t.Runs == 1 ? "from {0:N0} run this week" : "from {0:N0} runs this week", t.Runs), right,
+            L.T("Kinah from the week's runs; a run is the counted runs' average (a run whose Kinah wasn't read, or that looks wrong, is left out).")));
+        box.Children.Add(WeekBars(days, d => d.Runs.Kinah, d => L.F(d.Runs.Runs == 1 ? "{0:N0} run" : "{0:N0} runs", d.Runs.Runs), RunTip, picked, true,
             date => { _runsPick = date; _drawnSig.Remove("today"); FillToday(); }));
         box.Children.Add(RunDayDetail(pd));
         TodayHost.Children.Add(box);
     }
 
-    static string RunTip(HistoryDay d) => d.Runs.Runs == 0 ? $"{DayLabel(d)}: no runs."
-        : $"{DayLabel(d)}: {d.Runs.Runs:N0} run{(d.Runs.Runs == 1 ? "" : "s")}, {Fk(d.Runs.Kinah)} Kinah. Click to see them.";
+    static string RunTip(HistoryDay d) => d.Runs.Runs == 0 ? L.F("{0}: no runs.", DayLabel(d))
+        : L.F(d.Runs.Runs == 1 ? "{0}: {1:N0} run, {2} Kinah. Click to see them." : "{0}: {1:N0} runs, {2} Kinah. Click to see them.", DayLabel(d), d.Runs.Runs, Fk(d.Runs.Kinah));
 
     /// <summary>The picked day's runs: their kinds and Kinah, then each name with how many ("Urugugu Canyon ×7").</summary>
     FrameworkElement RunDayDetail(HistoryDay d)
     {
         var r = d.Runs;
-        var line = r.Runs == 0 ? (d.IsToday ? "No runs yet today." : "No runs.") : DayHistory.KindsLine(r);
-        var chips = r.Names.Select(n => WeekChip(n.Name, $"×{n.Count:N0}", $"{n.Name}: {n.Count:N0} run{(n.Count == 1 ? "" : "s")}{(n.Kinah > 0 ? $", {Fk(n.Kinah)} Kinah" : "")}.")).ToList();
+        var line = r.Runs == 0 ? L.T(d.IsToday ? "No runs yet today." : "No runs.") : KindsLineT(r);
+        var chips = r.Names.Select(n => WeekChip(n.Name, $"×{n.Count:N0}", (n.Kinah > 0 ? L.F(n.Count == 1 ? "{0}: {1:N0} run, {2} Kinah." : "{0}: {1:N0} runs, {2} Kinah.", n.Name, n.Count, Fk(n.Kinah)) : L.F(n.Count == 1 ? "{0}: {1:N0} run." : "{0}: {1:N0} runs.", n.Name, n.Count)))).ToList();
         return DayDetail(DayLabel(d), line, r.Kinah > 0 ? Fk(r.Kinah) : "", chips, "Gold");
     }
 
