@@ -42,7 +42,8 @@ public static class HudLooks
         new(HudThemes.Fighter, L.T("Fighter"), L.T("A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup"), HudThemes.Tactical),
         new(HudThemes.Scorebug, L.T("Scorebug"), L.T("A tournament broadcast: slanted blocks and a ranked leaderboard"), HudThemes.Tactical),
         new(HudThemes.Holo, L.T("Holo"), L.T("Projected cyan glass with clipped corners; a scan line sweeps each pickup"), HudThemes.Tactical),
-        new(HudThemes.Vhs, L.T("VHS"), L.T("A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup"), HudThemes.Glitch),
+        new(HudThemes.Vhs, L.T("Viewfinder"), L.T("A camcorder's viewfinder: REC and the tape's counter round crisp figures, the bar first"), HudThemes.Glitch),
+        new(HudThemes.Deck, L.T("Deck"), L.T("A VCR's front: a glowing display window, each member a bar, the DPS in a counter"), HudThemes.Glitch),
         new(HudThemes.Corrupt, L.T("Corrupted"), L.T("A broken signal: torn slices and colour ghosts round steady figures"), HudThemes.Glitch),
         new(HudThemes.Terminal, L.T("Terminal"), L.T("An old green screen: a prompt, a cursor, each pickup typed in as a line"), HudThemes.Glitch),
     };

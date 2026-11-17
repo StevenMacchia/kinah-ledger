@@ -17,6 +17,8 @@ public static class HudThemes
 {
     public const string Classic = "classic", Wacky = "wacky", Tactical = "tactical", Glitch = "glitch";
     public const string Sticker = "sticker", Neon = "neon", Goo = "goo", Fighter = "fighter", Scorebug = "scorebug", Holo = "holo", Vhs = "vhs", Corrupt = "corrupt", Terminal = "terminal";
+    /// <summary>The Glitch theme's VCR look (Ui/Themes/Glitch/HudVhs.cs, its Deck tape; "vhs" is its Viewfinder).</summary>
+    public const string Deck = "deck";
 
     public sealed record Theme(string Key, string Name, string Hint);
 
@@ -45,7 +47,7 @@ public static class HudThemes
     {
         Sticker => new HudSticker { Still = still }, Neon => new HudNeon { Still = still }, Goo => new HudGoo { Still = still },
         Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Holo => new HudHolo { Still = still },
-        Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
+        Vhs => new HudVhs { Still = still }, Deck => new HudVhs(HudVhs.Tape.Deck) { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
         _ => null,
     };
 
