@@ -200,7 +200,16 @@ public static partial class WpfApp
                     h.Update(kinah);
                     var withKinds = WithKinds(live!);
                     string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
-                    foreach (var (tag, e) in new[] { ("", live!), ("-crit", withKinds) })
+                    // the fullest card: yours with crit and back rates, specialties, a long name, "3 more" abilities and 2 deaths
+                    var full = BossParser.Copy(withKinds);
+                    if (full.Roster.FirstOrDefault(f => f.You) is { } youF)
+                    {
+                        youF.Name = "Valkyriestrider"; youF.Deaths = 2;
+                        long low = youF.Abilities.Where(a => a.Damage > 0).Select(a => a.Damage).DefaultIfEmpty(1000).Min();
+                        foreach (var (a, i) in full.Roster.Where(f => !f.You && !f.Other).SelectMany(f => f.Abilities).Where(a => a.Damage > 0).Take(3).Select((a, i) => (a, i)))
+                            youF.Abilities.Add(new AbilityShare { Skill = a.Skill, Damage = low / (2 + i), BossDamage = low / (2 + i), Hits = 3 + i, BossHits = 3 + i });
+                    }
+                    foreach (var (tag, e) in new[] { ("", live!), ("-crit", withKinds), ("-full", full) })
                     {
                         if (tag.Length > 0) { Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick); }
                         h.ShowParser(e, now, e.ModeKind, details: false); h.SetKinahHidden(true);
