@@ -318,7 +318,7 @@ public partial class MainWindow
         if (c.Region != was.Region || c.Server != was.Server)
         {
             ApplyServer(c.Region, c.Server);
-            if (Server is { } s && !Farming) Say(L.F("Server set to {0} · {1}.", s.Label, s.Region.Name), "Good");
+            if (Server is { } s && !Farming) Say(L.F("Server set to {0} · {1}.", s.LabelShown, s.Region.Shown), "Good");
         }
         if (c.Share != was.Share) { _prefs.Share = c.Share; MarketSwitch(c.Share); }
         if (c.Hud != was.Hud)

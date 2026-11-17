@@ -110,7 +110,7 @@ public static class PriceBook
                 var typedQuote = new Quote(typed.price, From.Typed, 1, true, typed.at);
                 // a week-old typed price gives way to a sure board price; with none, it stands
                 if (DateTime.UtcNow - typed.at <= TypedFor || SharedQuote(k) is not { Sure: true, From: From.Server or From.Sold or From.Feed } board) return typedQuote;
-                return board with { Note = $"you typed {typed.price:N0} on {typed.at.ToLocalTime():yyyy-MM-dd}; the board says {board.Price:N0}" };
+                return board with { Note = L.F("you typed {0:N0} on {1}; the board says {2:N0}", typed.price, typed.at.ToLocalTime().ToString("yyyy-MM-dd"), board.Price) };
             }
             if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
             return SharedQuote(k);

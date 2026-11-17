@@ -271,7 +271,7 @@ public partial class MainWindow
         var head = new Grid { Margin = new Thickness(18, 4, 18, 8) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(CkText(L.T("Your characters"), CkInk, 14, FontWeights.SemiBold));
-        var where = CkText(Server is { } sv ? $"{sv.Label} · {sv.Region.Name}" : _prefs.Server ?? "", CkFaint, 12);
+        var where = CkText(Server is { } sv ? $"{sv.LabelShown} · {sv.Region.Shown}" : _prefs.Server ?? "", CkFaint, 12);
         where.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(where, 1); head.Children.Add(where);
         body.Children.Add(head);
         // the gear the character wears, with its +levels (Steven, 2026-11-14: "if you click on your name in the menu it can show
@@ -296,7 +296,7 @@ public partial class MainWindow
             body.Children.Add(MenuRow(new MenuEntry(L.T("Count as a new character"), () => { if (!_demo) _ = SplitNewCharacter(); },
                 Sub: L.T("A second character of the same class: the icon can't tell them apart."))));
         }
-        body.Children.Add(MenuRow(new MenuEntry(L.T("Server and region…"), () => OpenOptions(OptionsWindow.Page.Server), Sub: Server is { } s ? $"{s.Label} · {s.Region.Name}" : L.T("None chosen"))));
+        body.Children.Add(MenuRow(new MenuEntry(L.T("Server and region…"), () => OpenOptions(OptionsWindow.Page.Server), Sub: Server is { } s ? $"{s.LabelShown} · {s.Region.Shown}" : L.T("None chosen"))));
         body.Children.Add(new Border { Height = 6 });
         card.PreviewKeyDown += (_, k) => { if (k.Key == Key.Escape && _card != null) { k.Handled = true; _card.IsOpen = false; } };
         return card;

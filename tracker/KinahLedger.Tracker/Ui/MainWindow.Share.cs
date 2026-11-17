@@ -169,7 +169,7 @@ public partial class MainWindow
     SharePic? CurrentSharePic() => ShareFactsFor(_shareScope) is { } f ? SharePicture.Compose(f, _prefs.ShareShowName, _prefs.ShareName, Fk) : null;
 
     /// <summary>"Siel · NA East", or nothing before a server is chosen.</summary>
-    string ShareServer() => Server is { } sv ? $"{sv.Name} · {sv.Region.Name}" : "";
+    string ShareServer() => Server is { } sv ? $"{sv.Name} · {sv.Region.Shown}" : "";
 
     /// <summary>The items a count picked up, each with its grade and its worth at the lowest Market price after the Market's cut (0 with no price), so the drops add up to the picture's total.</summary>
     List<ShareDrop> ShareDropsOf(SessionEngine e) => e.ItemRows()

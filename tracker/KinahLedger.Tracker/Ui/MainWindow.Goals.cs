@@ -215,7 +215,7 @@ public partial class MainWindow
     /// <summary>The dashed "+" slot after the goals, while fewer than three: a click opens Set a goal.</summary>
     FrameworkElement AddGoalSlot()
     {
-        var slot = new StackPanel { Width = GoalSlotWidth, Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = "add", ToolTip = "Set a goal: Kinah, an item or runs, for today." };
+        var slot = new StackPanel { Width = GoalSlotWidth, Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = "add", ToolTip = L.T("Set a goal: Kinah, an item or runs, for today.") };
         ToolTipService.SetInitialShowDelay(slot, 400);
         var ring = new Grid { Width = GoalRingSize, Height = GoalRingSize, HorizontalAlignment = HorizontalAlignment.Center };
         var dash = new Ellipse { Width = 62, Height = 62, StrokeThickness = 1.2, StrokeDashArray = new DoubleCollection { 3, 3 }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };

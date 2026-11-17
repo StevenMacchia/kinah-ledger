@@ -86,7 +86,7 @@ public partial class MainWindow
             if (q.Mine && PriceBook.BoardOf(name) is { } b)
                 body.Children.Add(CkKv(L.F("{0}'s board", server.Length > 0 ? server : L.T("Your server")), b.Price.ToString("N0"), CkMuted, PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))));
             if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } rg)
-                body.Children.Add(CkKv(L.F("Other {0} {1} servers", Server?.Region.Name ?? "", Server?.Faction ?? "").Replace("  ", " "), rg.Price.ToString("N0"), CkMuted, L.F("middle of {0} servers", rg.Servers)));
+                body.Children.Add(CkKv(L.F("Other {0} {1} servers", Server?.Region.Shown ?? "", Server?.FactionShown ?? "").Replace("  ", " "), rg.Price.ToString("N0"), CkMuted, L.F("middle of {0} servers", rg.Servers)));
         }
         if (q != null && sell > 0) body.Children.Add(CkKv(L.T("Yours are worth"), (q.Price * sell).ToString("N0"), q.Sure ? CkGold : CkWarn, L.F("{0} × {1:N0}, before the Market's cut", sell, q.Price)));
         if (q is { Sure: false }) body.Children.Add(CkNote(q.From == PriceBook.From.Region

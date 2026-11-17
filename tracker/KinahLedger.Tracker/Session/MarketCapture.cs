@@ -370,7 +370,7 @@ public sealed class MarketCapture
         {
             var (found, note) = await MarketLocator.DetectAsync(game, Read);
             Note = note;
-            if (found == null) return (0, 0, false, "The Market isn't open on screen. Open it in the game, then press Share again.");
+            if (found == null) return (0, 0, false, L.T("The Market isn't open on screen. Open it in the game, then press Share again."));
             Layout = layout = found; Detected = true; _emptyReads = 0;
         }
         var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);

@@ -49,6 +49,7 @@ public partial class OptionsWindow : Window
 
         BuildNav();
         GameStartBox.ItemsSource = GameStartChoices.Select(L.T).ToList();
+        RegionPick.DisplayMemberPath = "Shown"; ServerPick.DisplayMemberPath = "LabelShown";   // the names as the language writes them (factions, regions)
         RegionPick.ItemsSource = Servers.Regions;
         Load(_edit);
         Wire();
