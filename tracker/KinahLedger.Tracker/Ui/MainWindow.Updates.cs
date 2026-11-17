@@ -229,7 +229,7 @@ public partial class MainWindow
                 if (gh.Ok && gh.Newer != null && RolloutAllows(gh.Newer.Version, manual))
                 {
                     _release = gh.Newer; _vInfo = null; _staged = null; _updateNeedsSite = true;
-                    _updateError = "this version comes as an installer";
+                    _updateError = L.T("this version comes as an installer");
                     ShowUpdate();
                     return;
                 }
@@ -270,7 +270,7 @@ public partial class MainWindow
             finally { _downloading = false; ShowUpdate(); }
             return;
         }
-        if (_exe == null) { _updateError = "this copy isn't running as KinahLedger.exe"; _updateNeedsSite = true; ShowUpdate(); return; }
+        if (_exe == null) { _updateError = L.T("this copy isn't running as KinahLedger.exe"); _updateNeedsSite = true; ShowUpdate(); return; }
         _downloading = true; _updateProgress = 0; _updateError = null; _updateNeedsSite = false;
         ShowUpdate();
         try

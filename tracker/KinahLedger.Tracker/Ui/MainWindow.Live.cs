@@ -129,7 +129,7 @@ public partial class MainWindow
             var row = FeedRow(l, i == 0, i == 0 && justNow, i == LiveFeed.Shown - 1, i > 0, value(l), icon?.Invoke(l) ?? FeedIcon(l));
             // a Just crafted line opens its recipe in the craft window, with the line's report a link in it (2026-11-10, Steven:
             // anything on the Crafting page opens how to craft it); a pickup's line opens its report, as before
-            if (tab == FeedTab.Crafting && l.Name.Length > 0) { row.MouseLeftButtonUp += (_, _) => OpenCraftWindow(l.Name, report: () => ShowLineReport(l, tab, row)); row.ToolTip = "Click for its recipe, prices and market. A line counted wrong is reported from there."; }
+            if (tab == FeedTab.Crafting && l.Name.Length > 0) { row.MouseLeftButtonUp += (_, _) => OpenCraftWindow(l.Name, report: () => ShowLineReport(l, tab, row)); row.ToolTip = L.T("Click for its recipe, prices and market. A line counted wrong is reported from there."); }
             else row.MouseLeftButtonUp += (_, _) => ShowLineReport(l, tab, row);
             if (IsMarked(l)) MarkRow(row, l);   // marked with the That was wrong key: a gold edge and a flag (Ui/MainWindow.MarkWrong.cs)
             host.Children.Add(row);
@@ -147,17 +147,17 @@ public partial class MainWindow
     {
         var (bold, rest, small) = FeedWords(l);
         var local = l.At.ToLocalTime();
-        var when = justNow ? "just now" : local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d HH:mm");
+        var when = justNow ? L.T("just now") : local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : (L.Code == "ko" ? local.ToString("M월 d일 HH:mm") : L.Code == "zh-TW" ? local.ToString("M月d日 HH:mm") : local.ToString("MMM d HH:mm"));
         var row = QRow(icon, bold + rest, small.Length > 0 ? when + " · " + small : when, value.Text, value.Text.StartsWith("−") || value.Text.StartsWith("≤ −") ? "Coral" : value.Muted ? "Faint" : l.Kind == "kinah" ? "Gold" : "Mint", rule: rule, inline: true);
         // the why is behind Options › Game reading › Explain each count (Steven, 2026-11-04), so the hover offers it only then
-        var click = _prefs.ExplainCounts ? "Click to see why, or to report it." : "Click if it's wrong.";
+        var click = _prefs.ExplainCounts ? L.T("Click to see why, or to report it.") : L.T("Click if it's wrong.");
         row.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " " + click : click;
         ToolTipService.SetInitialShowDelay(row, 400);
         // the big card on hover (Steven, 2026-11-07: the item cards stay), the report on a click, as LOOT's slots do
         if (_lootHere is { } lh && _part == "Farming" && tabOf(l) == FeedTab.Farming)
         {
             if (l.Kind == "kinah" && lh.Kinah > 0)
-                CardTip(row, () => KinahTodayCard(lh.Kinah, lh.ByEnemy, lh.Kills > 0 ? $"{lh.Kills:N0} kills · {Fk(lh.Kinah / (double)lh.Kills)} a kill" : "", "Picked up " + CountWhere(), "BY ENEMY"));
+                CardTip(row, () => KinahTodayCard(lh.Kinah, lh.ByEnemy, lh.Kills > 0 ? L.F("{0:N0} kills · {1} a kill", lh.Kills, Fk(lh.Kinah / (double)lh.Kills)) : "", L.F("Picked up {0}", CountWhere()), L.T("BY ENEMY")));
             else if (l.Kind == "item")
             {
                 var r = lh.S.Drops.FirstOrDefault(x => !x.Header && string.Equals(x.Name, l.Name, StringComparison.OrdinalIgnoreCase));
@@ -180,12 +180,12 @@ public partial class MainWindow
             case "kinah":
             {
                 var enemy = l.Enemy.Length > 0 ? l.Enemy : _watcher.Chat?.Engine.CreditedTo(l.At, l.Amount) ?? "";
-                return ($"{l.Amount:N0} Kinah", "", l.Tab == FeedTab.Events ? "in the run" : enemy);
+                return (L.F("{0:N0} Kinah", l.Amount), "", l.Tab == FeedTab.Events ? L.T("in the run") : enemy);
             }
-            case "craft" when l.Combo: return (l.Name.Length > 0 ? l.Name : "A craft", "", l.Ok ? ComboWon(l.Name) : "combo lost");
-            case "craft": return (l.Name.Length > 0 ? l.Name : "A craft", CraftMakes(l) is int m && m > 1 && l.Ok ? $" ×{m}" : "", l.Ok ? "worked" : "failed");
+            case "craft" when l.Combo: return (l.Name.Length > 0 ? l.Name : L.T("A craft"), "", l.Ok ? ComboWon(l.Name) : L.T("combo lost"));
+            case "craft": return (l.Name.Length > 0 ? l.Name : L.T("A craft"), CraftMakes(l) is int m && m > 1 && l.Ok ? $" ×{m}" : "", l.Ok ? L.T("worked") : L.T("failed"));
             default:
-                var small = l.Bound ? "bound" : GatheringCatalog.Find(l.Name) != null ? "gathered" : l.Tab == FeedTab.Events && l.Via.Contains("reward table") ? "reward screen" : "";
+                var small = l.Bound ? L.T("bound") : GatheringCatalog.Find(l.Name) != null ? L.T("gathered") : l.Tab == FeedTab.Events && l.Via.Contains("reward table") ? L.T("reward screen") : "";
                 return (l.Name, $" ×{l.Amount:N0}", small);
         }
     }
@@ -291,9 +291,9 @@ public partial class MainWindow
     /// <summary>The faint word after a won combo roll: what it made of the craft before it ("combo ×2", "combo: Splendent Orichalcum Longsword").</summary>
     static string ComboWon(string recipe) => CraftLedger.ComboOf(recipe) switch
     {
-        RecipeBook.ComboMakes.Double => "combo ×2",
-        RecipeBook.ComboMakes.Upgrade => "combo: " + RecipeBook.ForOutput(recipe)!.Upgrade!.Item,
-        _ => "combo won",
+        RecipeBook.ComboMakes.Double => L.T("combo ×2"),
+        RecipeBook.ComboMakes.Upgrade => L.F("combo: {0}", RecipeBook.ForOutput(recipe)!.Upgrade!.Item),
+        _ => L.T("combo won"),
     };
 
     (string Text, bool Muted) CraftValue(FeedLine l)
@@ -348,21 +348,21 @@ public partial class MainWindow
         // the first line: the hour, and the place's own hour beside it once the session has been in more than one place
         // (0.10.70: one screen, the place a sub-number of the whole). What it adds up, on the second
         string hereHr = _here is { Hours: >= HereRateHours } hr && (ap ? hr.Abyss : hr.Kinah + hr.Value) > 0
-            ? $" · {Fk((ap ? hr.Abyss : hr.Kinah + hr.Value) / hr.Hours)} here" : "";
-        string which = "an hour" + hereHr;
-        HeadRateLbl.Text = ap ? (abyss <= 0 ? "Abyss Points an hour, once some are picked up" : which + "\nAbyss Points")
-            : total <= 0 ? "Kinah and loot an hour, once something is counted"
-            : priced > 0 || loot > 0 ? which + "\n" + (_mode == Mode.Gather && kinah == 0 ? "loot after tax" : "Kinah and loot after tax")
-            : which + "\nKinah; loot not priced yet";
+            ? L.F(" · {0} here", Fk((ap ? hr.Abyss : hr.Kinah + hr.Value) / hr.Hours)) : "";
+        string which = L.T("an hour") + hereHr;
+        HeadRateLbl.Text = ap ? (abyss <= 0 ? L.T("Abyss Points an hour, once some are picked up") : which + "\n" + L.T("Abyss Points"))
+            : total <= 0 ? L.T("Kinah and loot an hour, once something is counted")
+            : priced > 0 || loot > 0 ? which + "\n" + (_mode == Mode.Gather && kinah == 0 ? L.T("loot after tax") : L.T("Kinah and loot after tax"))
+            : which + "\n" + L.T("Kinah; loot not priced yet");
         // warming up (FillNumbers): the figure dimmed, and said so, until the count is old enough for an hour to mean something
         bool warm = _rateWarming && hero > 0;
         HeadRate.Opacity = warm ? 0.4 : 1;
-        if (warm) HeadRateLbl.Text += " · warming up";
-        string flip = RunShown ? "" : $"\nEvery zone since your last break ({TrackerSession.BreakMinutes:0} minutes with nothing farmed)."
-            + (hereHr.Length > 0 && _here is { } hh ? $" {hereHr[3..]}: the hour in {hh.Place} alone, over its {TodayLoot.Dur(hh.Hours * 3600)}." : "");
-        HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It shows after {RateWarmup.TotalSeconds:0} seconds of farming and {RateWarmupCounts} things counted."
-            : ap ? (abyss > 0 ? $"{Amounts.Full(abyss / h)} Abyss Points an hour: {abyss:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it." : "No Abyss Points picked up yet.")
-            : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
+        if (warm) HeadRateLbl.Text += " · " + L.T("warming up");
+        string flip = RunShown ? "" : "\n" + L.F("Every zone since your last break ({0:0} minutes with nothing farmed).", TrackerSession.BreakMinutes)
+            + (hereHr.Length > 0 && _here is { } hh ? " " + L.F("{0}: the hour in {1} alone, over its {2}.", hereHr[3..], hh.Place, TodayLoot.Dur(hh.Hours * 3600)) : "");
+        HeadRate.ToolTip = (warm ? L.F("Warming up: a rate from the first moments swings wildly. It shows after {0:0} seconds of farming and {1} things counted.", RateWarmup.TotalSeconds, RateWarmupCounts)
+            : ap ? (abyss > 0 ? L.F("{0} Abyss Points an hour: {1:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it.", Amounts.Full(abyss / h), abyss) : L.T("No Abyss Points picked up yet."))
+            : total > 0 ? L.F("{0} an hour", Amounts.Full(total / h)) : L.T("Nothing counted yet.")) + flip;
         FillHeroTicket(ap, total, h, priced, loot, _rateWarming && total > 0);
         FillRankTicket(ap, e.RankPoints, e.RankPointsLost, h, _rateWarming);
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
@@ -376,26 +376,26 @@ public partial class MainWindow
         }
         KvLine.Inlines.Clear();
         void Fig(string text) { var r = new Run(text); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextElement.ForegroundProperty, "Ink"); KvLine.Inlines.Add(r); }
-        if (_mode == Mode.Gather) { Fig($"{nodes:N0}"); KvLine.Inlines.Add(new Run(" attempts · ")); Fig(itemsPerTry > 0 ? itemsPerTry.ToString("0.0") : "0"); KvLine.Inlines.Add(new Run(" a try")); }
-        else if (kills > 0) { Fig($"{kills:N0}"); KvLine.Inlines.Add(new Run($" kill{(kills == 1 ? "" : "s")} · ")); Fig(Fk(kinah / (double)kills)); KvLine.Inlines.Add(new Run(" a kill")); }
+        if (_mode == Mode.Gather) { Fig($"{nodes:N0}"); KvLine.Inlines.Add(new Run(L.T(" attempts · "))); Fig(itemsPerTry > 0 ? itemsPerTry.ToString("0.0") : "0"); KvLine.Inlines.Add(new Run(L.T(" a try"))); }
+        else if (kills > 0) { Fig($"{kills:N0}"); KvLine.Inlines.Add(new Run(kills == 1 ? L.T(" kill · ") : L.T(" kills · "))); Fig(Fk(kinah / (double)kills)); KvLine.Inlines.Add(new Run(L.T(" a kill"))); }
         var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", _watcher.Chat?.ZoneView?.Zone ?? e.Zone);
         double bestHr = best?.PerHr ?? 0, nowHr = total > 0 ? total / h : 0;
         _lastRateHr = nowHr;
         // Compare (0.9.3, Ui/MainWindow.Compare.cs): your usual and best here under the hour; it says "best here" itself, so this line doesn't
         // and it shows the same best as this line, so switching Compare on never changes what "best here" means
         if (FillUsual(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone, total > 0 ? (long)Math.Round(total / h) : 0, h * 3600, best?.PerHr)) best = null;
-        if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run("best here ")); Fig(Fk(best.PerHr)); }
+        if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run(L.T("best here "))); Fig(Fk(best.PerHr)); }
         // the chase (Quest): this hour against your best here, as the bar toward the flag and the ring; the panel's Badge and
         // Buddy draw the same ring from "chase" (the share) and "toBest" (the words)
         // in the Abyss the chase stays the Kinah hour's (your bests here are Kinah hours) and says so, the figure above being the points
         FillChase(nowHr, bestHr, warm);
-        if (ap && ChaseBox.Visibility == Visibility.Visible) ChaseLbl.Text = "Kinah: " + ChaseLbl.Text;
+        if (ap && ChaseBox.Visibility == Visibility.Visible) ChaseLbl.Text = L.F("Kinah: {0}", ChaseLbl.Text);
         FillBests(e, h, kinah, nowHr, bestHr, warm);   // a new best here and today's milestones get a moment (Ui/MainWindow.Bests.cs)
         bool chase = nowHr > 0 && bestHr > 0 && !warm;
         _hudValues["chase"] = chase ? QShare(nowHr, bestHr).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) : "";
-        _hudValues["toBest"] = !chase ? "" : nowHr >= bestHr ? "New best here" : $"{Fk(bestHr - nowHr)} to your best here";
+        _hudValues["toBest"] = !chase ? "" : nowHr >= bestHr ? L.T("New best here") : L.F("{0} to your best here", Fk(bestHr - nowHr));
         // the chart's dashed best is a Kinah hour: none over the points' line
-        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now", ap ? 0 : bestHr);
+        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? L.F("{0} ago", "42 min") : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", L.T("now"), ap ? 0 : bestHr);
         KvLine.Visibility = Visibility.Collapsed;   // the chips and the chase say it (Quest)
         FillHealth(HealthText, HealthMark, hideOk: true);
     }
@@ -426,7 +426,7 @@ public partial class MainWindow
         return new HereShare(place, kinah, value, mine.Sum(z => z.Kills), abyss, mine.Sum(z => z.Seconds) / 3600);
     }
 
-    static string AgoMinutes(DateTime minuteUtc) => TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds) + " ago";
+    static string AgoMinutes(DateTime minuteUtc) => L.F("{0} ago", TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds));
 
     /// <summary>The hour this count is at, for the Where next line's "43% more than here".</summary>
     double _lastRateHr;
@@ -478,18 +478,18 @@ public partial class MainWindow
     {
         string text = "", tone = "Faint", dot = "Good";
         if (c == null) { }
-        else if (c.LastError.Length > 0) { text = "Read problem · Game reading options"; dot = "Bad"; }
-        else if (c.Paused.Length > 0) { text = "Paused · the chat is out of view"; dot = "Gold"; }
-        else if (!c.ChatFound) { text = "Looking for the chat · reading the game"; dot = "Gold"; }
+        else if (c.LastError.Length > 0) { text = L.T("Read problem · Game reading options"); dot = "Bad"; }
+        else if (c.Paused.Length > 0) { text = L.T("Paused · the chat is out of view"); dot = "Gold"; }
+        else if (!c.ChatFound) { text = L.T("Looking for the chat · reading the game"); dot = "Gold"; }
         else
         {
             var now = DateTime.UtcNow;
-            if (now - c.LastLinesAt >= NothingReadAfter) { text = $"Nothing read for {(int)(now - c.LastLinesAt).TotalMinutes} min. Is chat visible?"; tone = "Warn"; dot = "Gold"; }
+            if (now - c.LastLinesAt >= NothingReadAfter) { text = L.F("Nothing read for {0} min. Is chat visible?", (int)(now - c.LastLinesAt).TotalMinutes); tone = "Warn"; dot = "Gold"; }
             else
             {
-                text = c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue ? "Reading · last pickup " + Ago(now - p.At) + " ago" : "Reading · nothing picked up yet";
+                text = c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue ? L.F("Reading · last pickup {0} ago", Ago(now - p.At)) : L.T("Reading · nothing picked up yet");
                 // when the count on screen began: a run's start, or this zone's / this session's (it starts over with Start run and Clear everything)
-                if (shown != null) text += " · counting since " + shown.Started.ToLocalTime().ToString("HH:mm");
+                if (shown != null) text += " · " + L.F("counting since {0}", shown.Started.ToLocalTime().ToString("HH:mm"));
             }
         }
         if (ReadingLbl.Text != text) ReadingLbl.Text = text;
@@ -499,7 +499,7 @@ public partial class MainWindow
         if (ReadingLine.Visibility != vis) ReadingLine.Visibility = vis;
         // the rate column's health line said the same paused or read problem a second time: this line says it now
         if (vis == Visibility.Visible && HealthLine.Visibility == Visibility.Visible) HealthLine.Visibility = Visibility.Collapsed;
-        if (ReadingLine.ToolTip == null) ReadingLine.ToolTip = "How reading goes. Click for Options › Game reading.";
+        if (ReadingLine.ToolTip == null) ReadingLine.ToolTip = L.T("How reading goes. Click for Options › Game reading.");
     }
 
     /// <summary>
@@ -510,12 +510,12 @@ public partial class MainWindow
     {
         var c = _watcher.Chat;
         string text; bool link = false;
-        if (_demo) text = _demoPaused ? "Paused: the chat is out of view. Counting picks up when it shows again." : "Ready. Pick something up and it shows here, newest first.";
-        else if (c == null && _watcher.GameRect == null) text = "Waiting for Aion 2 to start. Reading starts on its own once it is open.";
-        else if (c == null || !c.ChatFound) { text = "Game found, looking for the chat. Keep the chat window open at the bottom left of the game. "; link = true; }
-        else if (c.LastError.Length > 0) { text = "The game can't be read right now: " + c.LastError + " "; link = true; }
-        else if (c.Paused.Length > 0) text = "Paused: the chat is out of view. Counting picks up when it shows again.";
-        else text = "Ready. Pick something up and it shows here, newest first.";
+        if (_demo) text = _demoPaused ? L.T("Paused: the chat is out of view. Counting picks up when it shows again.") : L.T("Ready. Pick something up and it shows here, newest first.");
+        else if (c == null && _watcher.GameRect == null) text = L.T("Waiting for Aion 2 to start. Reading starts on its own once it is open.");
+        else if (c == null || !c.ChatFound) { text = L.T("Game found, looking for the chat. Keep the chat window open at the bottom left of the game.") + " "; link = true; }
+        else if (c.LastError.Length > 0) { text = L.F("The game can't be read right now: {0}", c.LastError) + " "; link = true; }
+        else if (c.Paused.Length > 0) text = L.T("Paused: the chat is out of view. Counting picks up when it shows again.");
+        else text = L.T("Ready. Pick something up and it shows here, newest first.");
         // a new player's checklist (Ui/MainWindow.Onboard.cs) says the game and the chat itself, so only a read problem or a
         // pause stays above it: reading problems must stay in view
         var steps = OnboardSteps();
@@ -529,7 +529,7 @@ public partial class MainWindow
         FeedEmpty.Inlines.Add(new Run(text));
         if (link)
         {
-            var go = new Hyperlink(new Run("Game reading options")) { Cursor = Cursors.Hand };
+            var go = new Hyperlink(new Run(L.T("Game reading options"))) { Cursor = Cursors.Hand };
             go.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
             go.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
             FeedEmpty.Inlines.Add(go);
@@ -537,22 +537,22 @@ public partial class MainWindow
     }
     string _feedEmptySig = "";
 
-    static string Ago(TimeSpan t) => t.TotalSeconds < 60 ? $"{Math.Max(0, (int)t.TotalSeconds)}s" : t.TotalMinutes < 60 ? $"{(int)t.TotalMinutes} min" : $"{(int)t.TotalHours} h";
+    static string Ago(TimeSpan t) => t.TotalSeconds < 60 ? L.F("{0}s", Math.Max(0, (int)t.TotalSeconds)) : t.TotalMinutes < 60 ? L.F("{0} min", (int)t.TotalMinutes) : L.F("{0} h", (int)t.TotalHours);
 
     void FillHealth(TextBlock text, Path? mark, bool hideOk = false)
     {
         var c = _watcher.Chat;
         string t; bool ok = true;
-        if (_demo) { t = _demoPaused ? "Paused: the chat is out of view" : "Reading the chat"; ok = !_demoPaused; }
-        else if (c == null) { t = _watcher.GameRect == null ? "Waiting for the game" : "Looking for the chat"; ok = false; }
-        else if (c.LastError.Length > 0) { t = "Read problem: " + c.LastError; ok = false; }
-        else if (c.Paused.Length > 0) { t = "Paused: the chat is out of view"; ok = false; }
-        else if (!c.ChatFound) { t = "Reading the game · the chat not seen yet"; ok = false; }
-        else t = "Reading the chat";
+        if (_demo) { t = _demoPaused ? L.T("Paused: the chat is out of view") : L.T("Reading the chat"); ok = !_demoPaused; }
+        else if (c == null) { t = _watcher.GameRect == null ? L.T("Waiting for the game") : L.T("Looking for the chat"); ok = false; }
+        else if (c.LastError.Length > 0) { t = L.F("Read problem: {0}", c.LastError); ok = false; }
+        else if (c.Paused.Length > 0) { t = L.T("Paused: the chat is out of view"); ok = false; }
+        else if (!c.ChatFound) { t = L.T("Reading the game · the chat not seen yet"); ok = false; }
+        else t = L.T("Reading the chat");
         if (text.Text != t) text.Text = t;
-        var reads = _demo ? "3,620 reads so far." : c != null && c.ChatFound ? $"{c.Reads:N0} reads so far." : "";
+        var reads = _demo ? L.F("{0} reads so far.", "3,620") : c != null && c.ChatFound ? L.F("{0:N0} reads so far.", c.Reads) : "";
         text.ToolTip = _demo ? reads : c == null ? null : string.Join("\n", new[] { reads, $"{MarketShort()}.", $"{BalanceShort()}.",
-            _watcher.Flushed > 0 ? $"{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "" }.Where(x => x.Length > 0));
+            _watcher.Flushed > 0 ? (_watcher.Flushed == 1 ? L.F("{0} batch shared with the site.", _watcher.Flushed) : L.F("{0} batches shared with the site.", _watcher.Flushed)) : "" }.Where(x => x.Length > 0));
         // the hover covers the whole line, the tick too
         if (text.Parent is Panel line)
         {
@@ -582,7 +582,7 @@ public partial class MainWindow
     /// replaced on 2026-10-28). Your best hour here is said once, under the hour on the live card.
     /// </summary>
     string PlayersHereLine(string? zone)
-        => PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v ? $"{(h.AtGear ? "Players at your gear" : "Players")} make {Fk(v)} an hour here{(h.Everywhere ? ", everywhere" : "")}." : "";
+        => PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v ? (h.AtGear ? (h.Everywhere ? L.F("Players at your gear make {0} an hour here, everywhere.", Fk(v)) : L.F("Players at your gear make {0} an hour here.", Fk(v))) : (h.Everywhere ? L.F("Players make {0} an hour here, everywhere.", Fk(v)) : L.F("Players make {0} an hour here.", Fk(v)))) : "";
 
     /// <summary>
     /// Where next (Quest): at rest one line, the zone that pays more than here (or that you are in the one that pays most)
@@ -599,35 +599,35 @@ public partial class MainWindow
         // a section with nothing to suggest isn't shown (2026-10-28: "not enough runs on your server yet" took a line for nothing)
         WhereSection.Visibility = _part == "Farming" && !_welcome && (zones.Count > 0 || otherHas) ? Visibility.Visible : Visibility.Collapsed;
         bool open = SecOpen("Where");
-        var server = Server?.Name ?? "your server";
-        var scope = all ? "every region" : server;
+        var server = Server?.Name ?? L.T("your server");
+        var scope = all ? L.T("every region") : server;
         int hereAt = zone == null ? -1 : zones.FindIndex(z => string.Equals(zone, z.Zone, StringComparison.OrdinalIgnoreCase));
         var top = zones.Count > 0 ? zones[0] : null;
         long topHr = top?.ValueHr ?? 0;
-        string more = top != null && _lastRateHr > 0 && topHr > _lastRateHr * 1.05 ? $", {Math.Round(100 * (topHr / _lastRateHr - 1)):0}% more than here" : "";
-        WhereTitle.Text = zones.Count == 0 || open ? "Where to farm" : hereAt == 0 ? "You are in the zone that pays most" : $"{top!.Zone} pays more";
+        string more = top != null && _lastRateHr > 0 && topHr > _lastRateHr * 1.05 ? L.F(", {0:0}% more than here", Math.Round(100 * (topHr / _lastRateHr - 1))) : "";
+        WhereTitle.Text = zones.Count == 0 || open ? L.T("Where to farm") : hereAt == 0 ? L.T("You are in the zone that pays most") : L.F("{0} pays more", top!.Zone);
         WhereNote.Inlines.Clear();
-        if (zones.Count == 0) WhereNote.Inlines.Add(PR($"nothing published for {scope} yet", "Muted"));
-        else if (open) WhereNote.Inlines.Add(PR("Kinah and loot an hour · " + (atGear ? $"gear {GearBracket!.Replace("-", "–")}" : "all players") + $" · {(all ? "all regions" : server)} · last 7 days", "Muted"));
+        if (zones.Count == 0) WhereNote.Inlines.Add(PR(L.F("nothing published for {0} yet", scope), "Muted"));
+        else if (open) WhereNote.Inlines.Add(PR(L.T("Kinah and loot an hour") + " · " + (atGear ? L.F("gear {0}", GearBracket!.Replace("-", "–")) : L.T("all players")) + " · " + (all ? L.T("all regions") : server) + " · " + L.T("last 7 days"), "Muted"));
         else
         {
-            WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Gold", FontWeights.SemiBold));   // money an hour: gold (colour pass, 2026-11-13)
-            WhereNote.Inlines.Add(PR($"{more} · {top!.Runs} runs from {top.Players} players at {(atGear ? "your gear" : "any gear")}", "Muted"));
+            WhereNote.Inlines.Add(PR(L.F("{0} an hour", Fk(topHr)), "Gold", FontWeights.SemiBold));   // money an hour: gold (colour pass, 2026-11-13)
+            WhereNote.Inlines.Add(PR(more + " · " + (atGear ? L.F("{0} runs from {1} players at your gear", top!.Runs, top.Players) : L.F("{0} runs from {1} players at any gear", top!.Runs, top.Players)), "Muted"));
         }
-        WhereSum.Text = open || zones.Count <= 1 ? "" : $"{zones.Count - 1} more";
+        WhereSum.Text = open || zones.Count <= 1 ? "" : L.F("{0} more", zones.Count - 1);
         // your own best hour in each zone on your server (Session/BestRuns.cs, the card's "best here"), beside the players' figure (0.9.11)
         var bests = zones.Select(z => YourBestHour(z.Zone)).ToList();
         bool cmp = _prefs.CompareZones;
         if (!Changed("where", $"{zone}|{all}|{server}|{cmp}|{Skins.Current}|" + string.Join(";", zones.Select((z, i) => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}|{bests[i]}")))) return;
         WhereBody.Children.Clear();
         WhereBody.Children.Add(WhereScopeSwitch(all));
-        if (zones.Count == 0) WhereBody.Children.Add(Faint(all ? "No zone has enough runs across the regions yet." : $"No zone has enough runs on {server} yet. Every region has some."));
+        if (zones.Count == 0) WhereBody.Children.Add(Faint(all ? L.T("No zone has enough runs across the regions yet.") : L.F("No zone has enough runs on {0} yet. Every region has some.", server)));
         for (int i = 0; i < zones.Count; i++)
         {
             var z = zones[i];
             var key = z.Zone;
             bool isHere = i == hereAt;
-            var sub = $"{z.Runs} runs · {z.Players} players" + (isHere ? " · you are here" : "");
+            var sub = L.F("{0} runs · {1} players", z.Runs, z.Players) + (isHere ? " · " + L.T("you are here") : "");
             var row = QRow(isHere ? QIconBox("Flag", "Gold", 30, round: true) : QIconBox("Pin", "Sky", 30, round: true), z.Zone, sub, Fk(z.ValueHr ?? 0), "Ink",
                 topHr > 0 ? (z.ValueHr ?? 0) / (double)topHr : null, "Gold", rule: i > 0);   // Kinah an hour: gold on every row (colour pass review, 2026-11-13)
             var g = (Grid)row.Child;
@@ -636,7 +636,7 @@ public partial class MainWindow
             {
                 // "your best 1.4M" under the figure (options-test reads it by its tag)
                 var y = new TextBlock { FontSize = 12, FontWeight = FontWeights.Medium, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Tag = "where-best", Margin = new Thickness(0, 0, 0, -1) };
-                y.Inlines.Add(PR("your best ", "Faint")); y.Inlines.Add(PR(Fk(yb), "Muted"));
+                y.Inlines.Add(PR(L.T("your best "), "Faint")); y.Inlines.Add(PR(Fk(yb), "Muted"));
                 foreach (var v in g.Children.OfType<TextBlock>().Where(t => Grid.GetColumn(t) == 2 && Grid.GetRow(t) == 0)) { v.VerticalAlignment = VerticalAlignment.Top; v.Margin = new Thickness(0, -2, 0, 0); }
                 Grid.SetColumn(y, 2); g.Children.Add(y);
             }
@@ -644,10 +644,10 @@ public partial class MainWindow
             g.MouseRightButtonUp += (_, e) => { e.Handled = true; Open(ZonePageUrl(key)); };
             // the zone you are in: the look's gold tint stays under the mouse
             if (isHere) { row.SetResourceReference(Border.BackgroundProperty, "GoldTint"); row.MouseLeave += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "GoldTint"); }
-            var tip = $"{(isHere ? "You are here. " : "")}{z.Runs} runs from {z.Players} players {(all ? "across every region" : "on " + server)} in the last 7 days · Kinah plus loot {PriceBook.Cut}, an hour."
-                + (bests[i] is long tb ? $"\nYour best hour here on {server}: {Fk(tb)}." : "")
-                + (cmp ? "\nClick to compare it with your zones this week (LOOT › Week › Zones). Right-click for its page on kinahledger.com."
-                       : "\nClick for its page on kinahledger.com. Turn on Compare zones and runs in Options › General to compare zones here.");
+            var tip = (isHere ? L.T("You are here.") + " " : "") + (all ? L.F("{0} runs from {1} players across every region in the last 7 days · Kinah plus loot {2}, an hour.", z.Runs, z.Players, L.T(PriceBook.Cut)) : L.F("{0} runs from {1} players on {2} in the last 7 days · Kinah plus loot {3}, an hour.", z.Runs, z.Players, server, L.T(PriceBook.Cut)))
+                + (bests[i] is long tb ? "\n" + L.F("Your best hour here on {0}: {1}.", server, Fk(tb)) : "")
+                + (cmp ? "\n" + L.T("Click to compare it with your zones this week (LOOT › Week › Zones). Right-click for its page on kinahledger.com.")
+                       : "\n" + L.T("Click for its page on kinahledger.com. Turn on Compare zones and runs in Options › General to compare zones here."));
             var b = new Border { Child = row, ToolTip = tip, Tag = "where-row|" + key + (isHere ? "|here" : "") };
             ToolTipService.SetInitialShowDelay(b, 500);
             WhereBody.Children.Add(b);
@@ -670,8 +670,8 @@ public partial class MainWindow
         }
         var group = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 8),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = {
-                Seg("All regions", all, false, "Every region's players pooled, the last 7 days."),
-                Seg("Your server", !all, true, $"Only players on {Server?.Name ?? "your server"}, the last 7 days.") } } };
+                Seg(L.T("All regions"), all, false, L.T("Every region's players pooled, the last 7 days.")),
+                Seg(L.T("Your server"), !all, true, Server?.Name is { } sn ? L.F("Only players on {0}, the last 7 days.", sn) : L.T("Only players on your server, the last 7 days.")) } } };
         group.SetResourceReference(Border.BorderBrushProperty, "LineStrong"); group.SetResourceReference(Border.BackgroundProperty, "SegGroup");
         return group;
     }
@@ -736,15 +736,15 @@ public partial class MainWindow
         // changed since the last draw (the icons, tiles with an image each, are the cost)
         void Chips()
         {
-            if (gathered.Count > 0) Chip("Gather", () => ItemTile(gathered[0].Name, _items.IdOf(gathered[0].Name), 24, gathered[0].Grade, round: true), "Gathered", $"{gathered.Count} kind{(gathered.Count == 1 ? "" : "s")}", gathered[0].Name + gathered[0].Grade);
+            if (gathered.Count > 0) Chip("Gather", () => ItemTile(gathered[0].Name, _items.IdOf(gathered[0].Name), 24, gathered[0].Grade, round: true), L.T("Gathered"), gathered.Count == 1 ? L.F("{0} kind", gathered.Count) : L.F("{0} kinds", gathered.Count), gathered[0].Name + gathered[0].Grade);
             foreach (var sk in skills)
             {
                 var first = gathered.FirstOrDefault(g => SkillOf(g.Name) == sk.Name);
-                Chip("skill:" + sk.Name, () => first != null ? ItemTile(first.Name, _items.IdOf(first.Name), 24, first.Grade, round: true) : GlyphTile(24, "M4,20 L14,10 M12,4 L20,12 L17,15 L9,7 Z", round: true), sk.Name.Split(" · ")[0], sk.Value > 0 ? Fk(sk.Value) : $"{sk.Attempts:N0} tries", first?.Name + first?.Grade);
+                Chip("skill:" + sk.Name, () => first != null ? ItemTile(first.Name, _items.IdOf(first.Name), 24, first.Grade, round: true) : GlyphTile(24, "M4,20 L14,10 M12,4 L20,12 L17,15 L9,7 Z", round: true), sk.Name.Split(" · ")[0], sk.Value > 0 ? Fk(sk.Value) : (sk.Attempts == 1 ? L.F("{0:N0} try", sk.Attempts) : L.F("{0:N0} tries", sk.Attempts)), first?.Name + first?.Grade);
             }
             int crystals = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
             if (pets.Count > 0) Chip("Pet", () => GlyphTile(24, "M12,2 L18,9 L12,22 L6,9 Z M6,9 H18", round: true, tint: Color.FromRgb(0x3E, 0x9E, 0x62)), "Soul Crystals", crystals.ToString("N0"), "");
-            if (mobs.Count > 0) Chip("Mob", () => CoinTile(24, round: true), "Kinah by enemy", _lastMobKinah > 0 ? Fk(_lastMobKinah) : "", "");
+            if (mobs.Count > 0) Chip("Mob", () => CoinTile(24, round: true), L.T("Kinah by enemy"), _lastMobKinah > 0 ? Fk(_lastMobKinah) : "", "");
         }
         Chips();
         if (Changed("chips", words.ToString()))
@@ -766,15 +766,15 @@ public partial class MainWindow
         switch (_extraOpen)
         {
             case "Gather":
-                Heads("Qty", "Per try", "Value");
-                gatherRows = Top(gathered.Select(r => r with { Sub = r.Reported ? "reported" : "" }).ToList());
-                if (gathered.Any(r => r.Value.Length == 0)) { InPlaceNote.Text = $"{gathered.Count(r => r.Value.Length == 0)} have no price yet."; InPlaceNote.Visibility = Visibility.Visible; }
+                Heads(L.T("Qty"), L.T("Per try"), L.T("Value"));
+                gatherRows = Top(gathered.Select(r => r with { Sub = r.Reported ? L.T("reported") : "" }).ToList());
+                if (gathered.Any(r => r.Value.Length == 0)) { var np = gathered.Count(r => r.Value.Length == 0); InPlaceNote.Text = np == 1 ? L.F("{0} has no price yet.", np) : L.F("{0} have no price yet.", np); InPlaceNote.Visibility = Visibility.Visible; }
                 break;
             case { } s when s.StartsWith("skill:"):
             {
                 var sk = skills.First(x => "skill:" + x.Name == s);
                 int ok = sk.Attempts - sk.Failed;
-                Heads("Qty", "Per try", "Value");
+                Heads(L.T("Qty"), L.T("Per try"), L.T("Value"));
                 InPlaceLead.Text = SkillLead(sk);
                 InPlaceLead.Visibility = Visibility.Visible;
                 // a line per kind of node when there is more than one, or when the game's messages said the nodes and upgrades
@@ -789,15 +789,15 @@ public partial class MainWindow
                 break;
             }
             case "Pet":
-                Heads("Qty", "An hour", "");
+                Heads(L.T("Qty"), L.T("An hour"), "");
                 petRows = Top(pets.Select(r => r with { DropPct = r.PerHour, Sub = "" }).ToList());
                 break;
             case "Mob":
             {
-                Heads("Kills", "A kill", "Kinah");
+                Heads(L.T("Kills"), L.T("A kill"), L.T("Kinah"));
                 mobRows = Top(mobs.Select(r => r.Child ? r with { Sub = r.Sub } : r with { Sub = "" }).ToList());
                 long none = kinah - _lastMobKinah;
-                if (none > 0) { InPlaceNote.Text = $"{Fk(none)} of the session's Kinah came with no enemy named."; InPlaceNote.Visibility = Visibility.Visible; }
+                if (none > 0) { InPlaceNote.Text = L.F("{0} of the session's Kinah came with no enemy named.", Fk(none)); InPlaceNote.Visibility = Visibility.Visible; }
                 MobCredit.Visibility = Visibility.Visible;
                 break;
             }
@@ -818,30 +818,31 @@ public partial class MainWindow
     static string SkillLead(SkillBox sk)
     {
         int ok = sk.Attempts - sk.Failed;
-        string tries = $"{sk.Attempts:N0} tr{(sk.Attempts == 1 ? "y" : "ies")}";
-        string worth = sk.ValuePerHour > 0 ? $" · {Amounts.Short((long)Math.Round(sk.ValuePerHour))} an hour" : "";
+        string tries = sk.Attempts == 1 ? L.F("{0:N0} try", sk.Attempts) : L.F("{0:N0} tries", sk.Attempts);
+        string worth = sk.ValuePerHour > 0 ? " · " + L.F("{0} an hour", Amounts.Short((long)Math.Round(sk.ValuePerHour))) : "";
         if (sk.Nodes > 0)
         {
-            var ends = new List<string> { $"{ok - sk.Upgrades:N0} worked" };
-            if (sk.Upgrades > 0) ends.Add($"{sk.Upgrades:N0} upgrade{(sk.Upgrades == 1 ? "" : "s")}");
-            if (sk.Failed > 0) ends.Add($"{sk.Failed:N0} failed");
-            return $"{tries} on {sk.Nodes:N0} node{(sk.Nodes == 1 ? "" : "s")} · {string.Join(", ", ends)} · {Whole(sk.PerHour)} tries an hour{worth}";
+            var ends = new List<string> { L.F("{0:N0} worked", ok - sk.Upgrades) };
+            if (sk.Upgrades > 0) ends.Add(sk.Upgrades == 1 ? L.F("{0:N0} upgrade", sk.Upgrades) : L.F("{0:N0} upgrades", sk.Upgrades));
+            if (sk.Failed > 0) ends.Add(L.F("{0:N0} failed", sk.Failed));
+            return (sk.Nodes == 1 ? L.F("{0} on {1:N0} node · {2} · {3} tries an hour", tries, sk.Nodes, string.Join(", ", ends), Whole(sk.PerHour)) : L.F("{0} on {1:N0} nodes · {2} · {3} tries an hour", tries, sk.Nodes, string.Join(", ", ends), Whole(sk.PerHour))) + worth;
         }
-        return $"{tries}, {ok:N0} worked · {Whole(sk.PerHour)} an hour" + (ok > 0 && sk.Plentiful > 0 ? $" · {Math.Round(100.0 * sk.Plentiful / ok)}% plentiful" : "") + worth;
+        return L.F("{0}, {1:N0} worked · {2} an hour", tries, ok, Whole(sk.PerHour)) + (ok > 0 && sk.Plentiful > 0 ? " · " + L.F("{0}% plentiful", Math.Round(100.0 * sk.Plentiful / ok)) : "") + worth;
     }
 
     /// <summary>One kind of node's line under its skill ("Orichalcum Ore nodes · 12 tries on 4 · 3 upgrades · 1 failed · 71 an hour").</summary>
     static string NodeKindText(NodeKindLine k)
     {
-        var parts = new List<string> { k.Nodes > 0 ? $"{k.Node} · {k.Attempts:N0} tr{(k.Attempts == 1 ? "y" : "ies")} on {k.Nodes:N0} node{(k.Nodes == 1 ? "" : "s")}" : $"{k.Node} · {k.Attempts:N0} tr{(k.Attempts == 1 ? "y" : "ies")}" };
-        if (k.Upgrades > 0) parts.Add($"{k.Upgrades:N0} upgrade{(k.Upgrades == 1 ? "" : "s")}");
-        if (k.Failed > 0) parts.Add($"{k.Failed:N0} failed");
-        parts.Add($"{Whole(k.PerHour)} an hour");
+        var tr = k.Attempts == 1 ? L.F("{0:N0} try", k.Attempts) : L.F("{0:N0} tries", k.Attempts);
+        var parts = new List<string> { k.Nodes > 0 ? (k.Nodes == 1 ? L.F("{0} · {1} on {2:N0} node", k.Node, tr, k.Nodes) : L.F("{0} · {1} on {2:N0} nodes", k.Node, tr, k.Nodes)) : $"{k.Node} · {tr}" };
+        if (k.Upgrades > 0) parts.Add(k.Upgrades == 1 ? L.F("{0:N0} upgrade", k.Upgrades) : L.F("{0:N0} upgrades", k.Upgrades));
+        if (k.Failed > 0) parts.Add(L.F("{0:N0} failed", k.Failed));
+        parts.Add(L.F("{0} an hour", Whole(k.PerHour)));
         return string.Join(" · ", parts);
     }
 
     /// <summary>A rate as a whole number ("58", "10"; under one, "under 1").</summary>
-    static string Whole(double v) => v <= 0 ? "0" : v < 0.5 ? "under 1" : Math.Round(v).ToString("N0");
+    static string Whole(double v) => v <= 0 ? "0" : v < 0.5 ? L.T("under 1") : Math.Round(v).ToString("N0");
 
     /* ---------------- click a line: the miscount report ---------------- */
 
@@ -861,7 +862,7 @@ public partial class MainWindow
     {
         if (line.Why.Length > 0) return new() { Capital(line.Why) };
         var near = CrashLog.NotesNear(line.At, 3).TakeLast(4).Select(n => Capital(n.Text)).ToList();
-        return near.Count > 0 ? near : new() { "No note for this one. The reads log has the full trail: Options › About › Open logs." };
+        return near.Count > 0 ? near : new() { L.T("No note for this one. The reads log has the full trail: Options › About › Open logs.") };
     }
 
     static string Capital(string s) => s.Length > 0 && char.IsLower(s[0]) ? char.ToUpperInvariant(s[0]) + s[1..] : s;
@@ -869,7 +870,7 @@ public partial class MainWindow
     internal Border BuildLineReport(FeedLine? line, FeedTab tab, string label, string note = "")
     {
         var (card, body) = CkShell(420);
-        var head = CkSection(line == null || label == "missing" ? "A PICKUP THAT NEVER SHOWED" : "REPORT THIS LINE"); body.Children.Add(head);
+        var head = CkSection(line == null || label == "missing" ? L.T("A PICKUP THAT NEVER SHOWED") : L.T("REPORT THIS LINE")); body.Children.Add(head);
         if (line != null)
         {
             var g = new Grid();
@@ -886,7 +887,7 @@ public partial class MainWindow
             // you can turn on, in dev mode or something"): it is for checking the reading, not for every player.
             if (_prefs.ExplainCounts)
             {
-                body.Children.Add(CkSection("WHY IT WAS COUNTED"));
+                body.Children.Add(CkSection(L.T("WHY IT WAS COUNTED")));
                 foreach (var w in WhyLines(line)) body.Children.Add(CkNote(w));
             }
         }
@@ -901,7 +902,7 @@ public partial class MainWindow
                 bool on = key == chosen;
                 var pill = new Border
                 {
-                    Child = CkText(text, on ? CkLink : CkMuted, 12.5), Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
+                    Child = CkText(L.T(text), on ? CkLink : CkMuted, 12.5), Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
                     BorderBrush = on ? Ck(CkLink, 0x99) : Ck(CkSlotLine), Background = on ? Ck(CkLink, 0x14) : Brushes.Transparent,
                 };
                 pill.MouseLeftButtonUp += (_, _) => Redo(key);
@@ -909,19 +910,19 @@ public partial class MainWindow
             }
         else
         {
-            var lbl = CkText("What should have been counted? A name and amount helps.", CkMuted, 12.5); lbl.Margin = new Thickness(0, 0, 0, 6);
+            var lbl = CkText(L.T("What should have been counted? A name and amount helps."), CkMuted, 12.5); lbl.Margin = new Thickness(0, 0, 0, 6);
             missing = new TextBox { Width = 380, FontSize = 13, Padding = new Thickness(6, 4, 6, 4), Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), Foreground = Ck(CkInk), CaretBrush = Ck(CkGold), Text = note };
             var sp = new StackPanel(); sp.Children.Add(lbl); sp.Children.Add(missing);
             picks.Children.Add(sp);
         }
         body.Children.Add(picks);
         bool sends = _prefs.SendReportFrames && _prefs.Share;
-        var how2 = CkNote("Saves the last minute of what was read, with this " + (line != null && label != "missing" ? "line" : "note") + " marked, to your reports folder. "
-            + (sends ? "Pictures of the loot list and crafting panel go to the site too (Options › Sharing)." : ReportBuffer.KeepFrames ? "Nothing is sent." : "Pictures aren't kept (Options › Sharing), so it holds the text read."));
+        var how2 = CkNote((line != null && label != "missing" ? L.T("Saves the last minute of what was read, with this line marked, to your reports folder.") : L.T("Saves the last minute of what was read, with this note marked, to your reports folder.")) + " "
+            + (sends ? L.T("Pictures of the loot list and crafting panel go to the site too (Options › Sharing).") : ReportBuffer.KeepFrames ? L.T("Nothing is sent.") : L.T("Pictures aren't kept (Options › Sharing), so it holds the text read.")));
         how2.Margin = new Thickness(20, 4, 20, 0); body.Children.Add(how2);
         var acts = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 12, 20, 0) };
         // one name for it everywhere: Report on the action, Looks wrong? as the hint, Fine to leave the line as it is
-        var save = new Button { Content = "Report", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
+        var save = new Button { Content = L.T("Report"), Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
         save.SetResourceReference(StyleProperty, "PrimaryButton");
         save.Click += (_, _) =>
         {
@@ -932,11 +933,11 @@ public partial class MainWindow
         // Not a drop: the line was no pickup (bought at the Market, a reward): out of the totals at once, with Undo (Ui/MainWindow.NotDrop.cs)
         if (line != null && label != "missing" && CanNotDrop(line))
         {
-            var nd = new Button { Content = "Not a drop", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0), ToolTip = "Takes this pickup out of your totals (the run, today, the week, the quest points it gave). Undo puts it back." };
+            var nd = new Button { Content = L.T("Not a drop"), Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0), ToolTip = L.T("Takes this pickup out of your totals (the run, today, the week, the quest points it gave). Undo puts it back.") };
             nd.Click += (_, _) => { if (_card != null) _card.IsOpen = false; NotADrop(line); };
             acts.Children.Add(nd);
         }
-        var cancel = new Button { Content = line != null && label != "missing" ? "Fine" : "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = line != null && label != "missing" ? L.T("Fine") : L.T("Cancel"), Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { if (_card != null) _card.IsOpen = false; };
         acts.Children.Add(cancel);
         body.Children.Add(acts);
@@ -944,7 +945,7 @@ public partial class MainWindow
         if (line != null)
         {
             var other = new TextBlock { Margin = new Thickness(20, 12, 20, 14), FontSize = 12 };
-            var link = new Hyperlink(new Run(label == "missing" ? "Report this line instead" : "Missing a pickup")) { Foreground = Ck(CkLink), TextDecorations = null };
+            var link = new Hyperlink(new Run(label == "missing" ? L.T("Report this line instead") : L.T("Missing a pickup"))) { Foreground = Ck(CkLink), TextDecorations = null };
             link.Click += (_, _) => Redo(label == "missing" ? "wrong_amount" : "missing");
             other.Inlines.Add(link);
             body.Children.Add(other);
@@ -961,7 +962,7 @@ public partial class MainWindow
     void FileLineReport(MiscountLine m, string note)
     {
         if (SaveLineReport(m, note) is not { } saved) return;
-        SayOnLine("Report saved with the line marked, in your reports folder. Thanks: it becomes a test the tracker must pass.", "Good");
+        SayOnLine(L.T("Report saved with the line marked, in your reports folder. Thanks: it becomes a test the tracker must pass."), "Good");
         Status.ToolTip = saved.Dir;
         _ = SendReportPictures(saved.Dir, saved.Why);
     }
@@ -974,7 +975,7 @@ public partial class MainWindow
     (string Dir, string Why)? SaveLineReport(MiscountLine m, string note)
     {
         var c = _watcher.Chat;
-        if (c == null) { Say("Nothing to report yet: the last minute is kept once the tracker is reading the game.", "Warn"); return null; }
+        if (c == null) { Say(L.T("Nothing to report yet: the last minute is kept once the tracker is reading the game."), "Warn"); return null; }
         try
         {
             var why = m.Why + (note.Length > 0 ? $" · {note}" : "");
@@ -984,7 +985,7 @@ public partial class MainWindow
             CrashLog.Note($"feed line reported: {why}");
             return (dir, why);
         }
-        catch (Exception ex) { CrashLog.Write("line report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); return null; }
+        catch (Exception ex) { CrashLog.Write("line report", ex); Say(L.F("Couldn't save the report: {0}", ex.Message), "Bad"); return null; }
     }
 
     /* ---------------- the panel over the game ---------------- */
@@ -1021,7 +1022,7 @@ public partial class MainWindow
         // the farming hour beside the line: "warming up" alone while the count is young (FillNumbers), else "1.27M an hour"
         var hour = _hudValues.GetValueOrDefault("rate", "");
         // in the Abyss the hour is the Abyss Points' (HudAbyssValues)
-        var hourUnit = hour == WarmingUp ? "" : _hudValues.GetValueOrDefault("abyss", "") == "1" ? "AP an hour" : "an hour";
+        var hourUnit = hour == WarmingUp ? "" : _hudValues.GetValueOrDefault("abyss", "") == "1" ? L.T("AP an hour") : L.T("an hour");
         if (l == null) { d["feedRate"] = hour; d["feedUnit"] = hourUnit; return d; }
         var (bold, plain, small) = FeedWords(l);
         d["feedText"] = l.Kind == "craft" ? $"{bold}{plain} {small}" : l.Kind == "kinah" ? bold : $"{bold}{(l.Amount > 1 ? plain : "")}";
@@ -1031,8 +1032,8 @@ public partial class MainWindow
         d["feedTone"] = d["feedValue"].StartsWith("−") || d["feedValue"].StartsWith("≤ −") ? "coral" : l.Kind == "kinah" ? "gold" : "mint";
         (d["feedRate"], d["feedUnit"]) = l.Tab switch
         {
-            FeedTab.Crafting => (_craftNet, "today"),
-            FeedTab.Events => (_eventsRate, "an hour"),
+            FeedTab.Crafting => (_craftNet, L.T("today")),
+            FeedTab.Events => (_eventsRate, L.T("an hour")),
             _ => (hour, hourUnit),
         };
         return d;

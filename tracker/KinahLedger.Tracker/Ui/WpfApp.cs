@@ -72,7 +72,7 @@ public static partial class WpfApp
             dialogUp = true;
             try
             {
-                var open = MessageBox.Show("Something went wrong, but Kinah Ledger is still running and carried on.\n\nThe details were saved to a log. Do you want to open the log folder? (If it keeps happening, the log helps to fix it.)", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+                var open = MessageBox.Show(L.T("Something went wrong, but Kinah Ledger is still running and carried on.") + "\n\n" + L.T("The details were saved to a log. Do you want to open the log folder? (If it keeps happening, the log helps to fix it.)"), "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
                 if (open == MessageBoxResult.Yes) MainWindow.Open(CrashLog.Dir);
             }
             finally { dialogUp = false; dialogAt = DateTime.UtcNow; }
