@@ -156,29 +156,7 @@ public static partial class WpfApp
             "meter share: other names hidden by default, its shortcut Off by default");
         check(MeterShare.FileName(kill) is var fn && fn.StartsWith("kinah-ledger-") && fn.EndsWith(".png") && fn.IndexOfAny(Path.GetInvalidFileNameChars()) < 0, $"meter share: a file name safe to save ({MeterShare.FileName(kill)})");
 
-        // the overlay's Share: with the pointer over it, clicks taken or going through (with them going through it shows with the
-        // grab handle, the pointer over the overlay; Steven, 2026-11-17: "it needs to be shareable"); never on a ready card
-        var po = new ParserOverlay { Left = -12000, Top = -12000, Mode = kill.ModeKind };
-        try
-        {
-            po.Draw(kill, end); po.Show(); DoEvents();
-            po.HoverForTest(false);
-            bool away = !po.ShareShownForTest;
-            po.HoverForTest(true);
-            bool over = po.ShareShownForTest;
-            po.SetClickThrough(true); po.HoverForTest(false);
-            bool throughAway = !po.ShareShownForTest;
-            po.ShowGrabForTest();
-            bool through = po.ShareShownForTest && throughAway;
-            po.SetClickThrough(false); po.ShareShown = false; po.HoverForTest(true);
-            bool ready = po.ShareShownForTest;
-            po.ShareShown = true;
-            po.Flash(L.T("Picture copied"), good: true);
-            bool flashed = po.HintTextForTest == L.T("Picture copied") && !po.ShareShownForTest;
-            check(away && over && through && !ready && flashed,
-                $"meter share: the overlay's Share shows with the pointer over it ({over}, away {!away}), with clicks going through too once the pointer is over it ({through}), not on a ready card ({ready}); \"Picture copied\" in the hint's place after ({flashed})");
-        }
-        finally { po.Close(); }
+        MeterShareOverlayChecks(check);   // the overlay's Share (KL_OPTIONS_ONLY=share runs it alone)
 
         // the shortcut and the buttons copy the fight on the meter (a test's sink, never the clipboard or Pictures)
         var got = new List<(int W, int H, string File)>();
@@ -217,6 +195,52 @@ public static partial class WpfApp
             for (int i = 0; i < px.Length; i += 4 * 7) set.Add(px[i] | px[i + 1] << 8 | px[i + 2] << 16);
             return set.Count;
         }
+    }
+
+    /// <summary>options-test: the Parser overlay's Share under the meter (shown, reachable, its fill). <c>KL_OPTIONS_ONLY=share</c> runs it alone.</summary>
+    static void MeterShareOverlayChecks(Action<bool, string> check)
+    {
+        var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+        var kill = ParserDemo.Sample(now, live: true, damage: true).Past.Last(e => e.Outcome == "kill");
+        var end = kill.End!.Value;
+        // the overlay's Share: with the pointer over it, clicks taken or going through (with them going through it shows with the
+        // grab handle, the pointer over the overlay; Steven, 2026-11-17: "it needs to be shareable"); never on a ready card
+        var po = new ParserOverlay { Left = -12000, Top = -12000, Mode = kill.ModeKind };
+        try
+        {
+            po.Draw(kill, end); po.Show(); DoEvents();
+            po.HoverForTest(false);
+            bool away = !po.ShareShownForTest;
+            po.HoverForTest(true);
+            bool over = po.ShareShownForTest;
+            po.SetClickThrough(true); po.HoverForTest(false);
+            bool throughAway = !po.ShareShownForTest;
+            po.ShowGrabForTest();
+            bool through = po.ShareShownForTest && throughAway;
+            po.SetClickThrough(false); po.ShareShown = false; po.HoverForTest(true);
+            bool ready = po.ShareShownForTest;
+            po.ShareShown = true;
+            po.Flash(L.T("Picture copied"), good: true);
+            bool flashed = po.HintTextForTest == L.T("Picture copied") && !po.ShareShownForTest;
+            check(away && over && through && !ready && flashed,
+                $"meter share: the overlay's Share shows with the pointer over it ({over}, away {!away}), with clicks going through too once the pointer is over it ({through}), not on a ready card ({ready}); \"Picture copied\" in the hint's place after ({flashed})");
+            // Share can be reached: from the meter down to it and over it, every pixel holds the pointer, so the hover never ends on
+            // the way (Steven, 2026-11-17: the layered window's clear gap let the pointer through to the game and Share went away).
+            // At 100% and at Steven's 110% (hud.json Scale 1.1); the fill is gone away from the pointer and while clicks go through.
+            po.FlashDoneForTest();
+            var holes = new List<string>();
+            foreach (var scale in new[] { 1.0, 1.1 })
+            {
+                po.SetScale(scale); po.HoverForTest(true); DoEvents();
+                if (po.ShareReachHoleForTest() is { } hole) holes.Add($"{scale:0.0}: {hole}");
+            }
+            po.HoverForTest(false); bool fillAway = po.HoverFillForTest;
+            po.SetClickThrough(true); po.HoverForTest(true); bool fillThrough = po.HoverFillForTest;
+            po.SetClickThrough(false); po.SetScale(1);
+            check(holes.Count == 0 && !fillAway && !fillThrough,
+                $"meter share: the overlay's Share sits inside the area that keeps it shown, no clear gap from the meter to it (at 100% and 110%{(holes.Count > 0 ? ": " + string.Join("; ", holes) : "")}); the fill is off away from the pointer ({!fillAway}) and while clicks go through ({!fillThrough})");
+        }
+        finally { po.Close(); }
     }
 
     /// <summary>options-test: Settings › In game › Parser has Hide other names (on) and the Share picture shortcut (Off, recorded as the others are).</summary>
