@@ -50,6 +50,14 @@ public sealed class ItemDictionary
     public long FromGame(long id) { lock (_lock) return _gameAlias.TryGetValue(id, out var x) ? x : id; }
 
     /// <summary>
+    /// A monster's soul by the game's item id (534660001 to 534669999, the loot list's "Soul: Swarm (Bound)", "Soul: Klaw
+    /// (Bound)"...): one comes with each kill the player loots and the game takes it into the Soul Codex the moment it
+    /// lands (it goes down again in the next update). A kill's evidence, never loot. Found 2026-11-17 from two days of the
+    /// game's updates beside the loot list's soul rows; the item list doesn't have them.
+    /// </summary>
+    public static bool IsMonsterSoul(long gameId) => gameId / 10_000 == 53_466;
+
+    /// <summary>
     /// A synthetic id's name, as a kept run wrote it (InstanceRun.Names): known again after a restart even before the
     /// name is read off the screen again. A real id, or one the list already names, is left as it is.
     /// </summary>

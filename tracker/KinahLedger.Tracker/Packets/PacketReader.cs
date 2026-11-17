@@ -39,6 +39,27 @@ public sealed class PacketReader : IDisposable, IBossFeed
         if (first || amount != was) Take(new CurrencyChange(at, k, first ? 0 : amount - was, amount, first));
     }
     internal void AgreeForTest() => Agree();
+
+    /// <summary>
+    /// For replay --pcap: one thing a recording's decoder gave (a currency change, one data chunk's item changes, a fight, a
+    /// gather, an event's part), handed in at its own time as the capture thread would, so a replay of the trace counts with
+    /// the game's data beside it as the live tracker did.
+    /// </summary>
+    internal void ReplayFeed(object ev, DateTime at)
+    {
+        _testOn = true; _testItems = true; _testFights = true; _testGathers = true; _packetAt = at;
+        switch (ev)
+        {
+            case CurrencyChange c: Take(c); break;
+            case IReadOnlyList<ItemChange> rows: TakeItems(rows); break;
+            case FightEvent f:
+                if (f.Kind == FightKind.RankPoints) Take(new CurrencyChange(f.At, CurrencyKind.RankPoints, f.Delta, f.Total, f.Delta == 0));
+                TakeFight(f);
+                break;
+            case GatherResult g: TakeGather(g); break;
+            case AreaEvent a: TakeArea(a); break;
+        }
+    }
     public string Kind { get; private set; } = "";
     public long Packets => Interlocked.Read(ref _packets);
     /// <summary>Messages and bundles the decoder read, its resyncs and its currency messages, for the log.</summary>
@@ -154,6 +175,10 @@ public sealed class PacketReader : IDisposable, IBossFeed
     void TakeItems(IReadOnlyList<ItemChange> rows)
     {
         foreach (var r in rows) Bag.Take(r);
+        // the session's id for each: an extra the item list lacks under the game's own id (Enhance Stone, Soul Codex, Oath
+        // Coin...) is the extra the chat names, so its line and its rise are one pickup (2026-11-17: an auto-dismantle's
+        // "Acquired Enhance Stone x23." was called a pickup the game never showed, and counted from the chat)
+        if (FromGame is { } map) rows = rows.Select(r => map(r.ItemId) is var m && m != r.ItemId ? r with { ItemId = m } : r).ToList();
         foreach (var b in ItemBatch.Cut(rows))
         {
             lock (_gate) foreach (var r in b.Rows) _itemSeen.Add((r.ItemId, r.Delta, r.First, r.At));
@@ -162,6 +187,22 @@ public sealed class PacketReader : IDisposable, IBossFeed
         }
     }
     string ItemName(long id) { try { return NameOf?.Invoke(id) ?? $"item {id}"; } catch (Exception) { return $"item {id}"; } }
+
+    /// <summary>The session's id for the game's item id (ItemDictionary.FromGame); unset, the game's id.</summary>
+    public Func<long, long>? FromGame { get; set; }
+
+    /// <summary>
+    /// One item or its bound twin: the chat's line names "Artisan's Refining Stone" for the game's "Artisan's Refining Stone
+    /// (Bound)" (it reads "(Bound)" off, or guesses the plain name), and both are the same pickup (2026-11-17 12:41:40: the
+    /// bound stone's rise found no line of its own id, the line found no rise of its own, and the drop was lost).
+    /// </summary>
+    bool Twin(long a, long b)
+    {
+        if (a == b) return true;
+        string na = ItemName(a), nb = ItemName(b);
+        return !na.StartsWith("item ", StringComparison.Ordinal) && string.Equals(UnboundName(na), UnboundName(nb), StringComparison.OrdinalIgnoreCase);
+    }
+    static string UnboundName(string n) => n.EndsWith(" (Bound)", StringComparison.OrdinalIgnoreCase) ? n[..^8] : n;
 
     /// <summary>The next boss parser event (klnet.dll version 4), null when there is none: only inside Transcendence, Expedition and Sanctuary, and a FeedGap when traffic was lost or a connection began.</summary>
     public BossEvent? NextBossEvent() => _bosses.TryDequeue(out var b) ? b : null;
@@ -342,11 +383,11 @@ public sealed class PacketReader : IDisposable, IBossFeed
         }
     }
     readonly List<(long Id, DateTime At)> _chatItemsAll = new();
-    /// <summary>Whether the chat (not the loot list) said a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>: its say on the pickup is in.</summary>
-    public bool ChatNearItem(long id, DateTime at, double seconds) { lock (_gate) return _chatItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }
+    /// <summary>Whether the chat (not the loot list) said a pickup of the item, or of its bound twin, within <paramref name="seconds"/> of <paramref name="at"/>: its say on the pickup is in.</summary>
+    public bool ChatNearItem(long id, DateTime at, double seconds) { lock (_gate) return _chatItemsAll.Any(s => Math.Abs((s.At - at).TotalSeconds) <= seconds && Twin(s.Id, id)); }
 
-    /// <summary>Whether the screen read a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>.</summary>
-    public bool ScreenNearItem(long id, DateTime at, double seconds) { lock (_gate) return _screenItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }
+    /// <summary>Whether the screen read a pickup of the item, or of its bound twin, within <paramref name="seconds"/> of <paramref name="at"/>.</summary>
+    public bool ScreenNearItem(long id, DateTime at, double seconds) { lock (_gate) return _screenItemsAll.Any(s => Math.Abs((s.At - at).TotalSeconds) <= seconds && Twin(s.Id, id)); }
 
     /// <summary>The traffic showed a craft's materials or its item at <paramref name="at"/>.</summary>
     public void CraftSeen(DateTime at) { lock (_gate) { _craftSeen.Add(at); _craftSeen.RemoveAll(c => (at - c).TotalMinutes > 2); } }
@@ -663,7 +704,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
             bool Near((long Id, long Delta, bool First, DateTime At) p) => (p.At - s.At).TotalSeconds is >= -ItemBefore and <= ItemAfter;
             // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
             // screen's to count, no miss); another item's rise (the line misread its name)
-            var own = _itemSeen.Where(p => Near(p) && p.Id == s.Id && !p.First && p.Delta > 0 && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ToList();
+            var own = _itemSeen.Where(p => Near(p) && !p.First && p.Delta > 0 && Twin(p.Id, s.Id) && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ThenBy(p => p.Id == s.Id ? 0 : 1).ToList();
             if (own.Count > 0)
             {
                 _risesTaken.Add((own[0].Id, own[0].At)); Verdicts.Add("covered");
@@ -687,7 +728,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
             }
             // a rise the tracker didn't count (bought, a reward, in a base) before the line: the line is that item's, read
             // now, never a pickup, however late the chat showed it
-            if (_itemExcluded.LastOrDefault(x => x.Id == s.Id && (s.At - x.At).TotalSeconds is >= -ItemAfter and <= ExcludedSeconds) is { Why: not null } ex)
+            if (_itemExcluded.LastOrDefault(x => (s.At - x.At).TotalSeconds is >= -ItemAfter and <= ExcludedSeconds && Twin(x.Id, s.Id)) is { Why: not null } ex)
             {
                 Verdicts.Add($"covered: {ex.Why}");
                 Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)}: the game's update of it at {Local(ex.At)} wasn't a pickup ({ex.Why}): not counted");
@@ -695,7 +736,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
             }
             // a rise of the item that already covered a line, a little before this one, and no new rise: the same line read
             // again (the chat covered by a window, then shown once more), not a second pickup
-            if (_itemSeen.Any(p => p.Id == s.Id && !p.First && p.Delta > 0 && _risesTaken.Contains((p.Id, p.At)) && (s.At - p.At).TotalSeconds is >= 0 and <= RereadSeconds))
+            if (_itemSeen.Any(p => !p.First && p.Delta > 0 && _risesTaken.Contains((p.Id, p.At)) && (s.At - p.At).TotalSeconds is >= 0 and <= RereadSeconds && Twin(p.Id, s.Id)))
             {
                 Verdicts.Add("covered: read again");
                 Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)} again: its update was taken by an earlier line; not counted");
