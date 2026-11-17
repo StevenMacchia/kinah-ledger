@@ -467,7 +467,7 @@
         <!-- In game: the shortcut and the panel over the game -->
         <StackPanel x:Name="PageInGame" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="In game"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="The panel: a small strip over the game that shows whenever the chat is being read, run or no run. It shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The panel: a small strip over the game that shows whenever the chat is being read, run or no run. It stays up while the game is open, also when you tab out, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUTS"/>
           <!-- the two keys moved to Shortcuts &amp; tips (2026-11-08 audit: they were set here and shown again there); a pointer stays -->
@@ -489,7 +489,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top panel with your run and pickups, shown while the game is in front."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top panel with your run and pickups, shown while the game is open, also when you tab out."/>
                 </StackPanel>
                 <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>

@@ -46,7 +46,7 @@ public static class HudFields
 
 /// <summary>
 /// One line over the game, like the site's compact mode: the figures the player picked (HudFields), worked out by the
-/// window itself so the panel and the window always agree. Like a game overlay it shows only while the game is in front
+/// window itself so the panel and the window always agree. Like a game overlay it shows while the game is open (a tab out keeps it, 2026-11-17)
 /// ("show"), and locked it lets clicks through to the game ("unlocked"); unlocked, drag it anywhere. Its opacity is a
 /// slider in Options. Everything it shows comes in through Update's values, worked out by the window.
 /// </summary>
