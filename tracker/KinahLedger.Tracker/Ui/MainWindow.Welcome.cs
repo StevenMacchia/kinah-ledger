@@ -76,7 +76,7 @@ public partial class MainWindow
         SetWelcome(false);
         // first run: check the chat, the loot list and the HP bar read, step by step; then place the panel over the game
         OpenCalibration(this).Closed += (_, _) => PlacementGuideOwed();
-        Say(L.F("Server set to {0} · {1}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", _wServer.Label, _wServer.Region.Name), "Good");
+        Say(L.F("Server set to {0} · {1}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", _wServer.LabelShown, _wServer.Region.Shown), "Good");
     }
 
     /* ---------------- the look step ---------------- */
@@ -240,7 +240,7 @@ public partial class MainWindow
         foreach (var s in Servers.In(_wRegion).Where(s => s.Faction == _wFaction))
         {
             var srv = s;
-            ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.Label} · {srv.Region.Name}"; WelcomeHint.Foreground = B("Good"); }));
+            ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.LabelShown} · {srv.Region.Shown}"; WelcomeHint.Foreground = B("Good"); }));
         }
         WelcomeGo.IsEnabled = _wServer != null;
         if (_wServer == null) { WelcomeHint.Text = L.T("Pick your server to continue."); WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }

@@ -197,7 +197,7 @@ public partial class MainWindow
         FarmLine.Visibility = Visibility.Visible;
         // after "Your best here 1.40M · " (JoinCompare); "everywhere" when only the pooled all-regions board has a row for this zone
         FarmLine.Text = (h.AtGear ? L.F("Players at your gear {0}", Fk(v)) : L.F("Players here {0}", Fk(v))) + (h.Everywhere ? " " + L.T("everywhere") : "");
-        var who = L.F("{0} runs from {1} players {2} in the last 7 days", h.Row.Runs, h.Row.Players, h.Everywhere ? L.T("across every region") : L.F("on {0}", Server?.Label ?? L.T("your server")));
+        var who = L.F("{0} runs from {1} players {2} in the last 7 days", h.Row.Runs, h.Row.Players, h.Everywhere ? L.T("across every region") : L.F("on {0}", Server?.LabelShown ?? L.T("your server")));
         var gear = h.AtGear ? L.F("{0}, gear score {1}.", who, GearBracket) : GearBracket != null ? L.F("{0}. Not enough players at gear score {1} yet, so this is everyone's.", who, GearBracket) : L.F("{0}. Set your gear score in Options › Server to compare with players at your gear.", who);
         FarmLine.ToolTip = L.F("What players made an hour in {0}: Kinah plus tradeable loot at today's prices, {1}.", h.Row.Zone, L.T(PriceBook.Cut)) + "\n" + gear;
     }

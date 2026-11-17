@@ -33,7 +33,7 @@ public partial class MainWindow
         var lines = new List<string> { $"{q.Price:N0} · {PriceBook.Describe(q)}" };
         var server = Server?.Name ?? L.T("your server");
         if (q.Mine && PriceBook.BoardOf(name) is { } b) lines.Add(L.F("{0}'s board: {1:N0} · {2}", server, b.Price, PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))));
-        if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } r) lines.Add(L.F("Other {0} servers in {1}: {2:N0} · middle of {3}", Server?.Faction ?? "", Server?.Region.Name ?? L.T("your region"), r.Price, r.Servers).Replace("  ", " "));
+        if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } r) lines.Add(L.F("Other {0} servers in {1}: {2:N0} · middle of {3}", Server?.FactionShown ?? "", Server?.Region.Shown ?? L.T("your region"), r.Price, r.Servers).Replace("  ", " "));
         if (!q.Sure) lines.Add(q.At is DateTime seen && DateTime.UtcNow - seen > PriceBook.BoardMaxAge
             ? L.F("Unsure: last seen {0}, too old to count, so it's left out of totals and profit.", PriceBook.Ago(seen, DateTime.UtcNow))
             : L.T("Unsure: one reading isn't a price, so it's left out of totals and profit."));
