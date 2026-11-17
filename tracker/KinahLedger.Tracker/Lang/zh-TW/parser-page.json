@@ -127,7 +127,7 @@
  "Last run": "上一輪",
  "Last fight": "上一場戰鬥",
  "Last pull": "上一場首領戰",
- "Every record of this character, kept on this PC only: never uploaded. Each is kept in the mode it was counted in.": "此角色的所有紀錄只存在這台電腦，不會上傳。每筆紀錄會保留在當時計算的模式下。",
+ "Every record of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers. Each is kept in the mode it was counted in.": "此角色的所有紀錄都存在這台電腦。除非在「分享」開啟「在我的 kinahledger.com 個人頁面顯示我的首領最佳紀錄」，否則任何戰鬥資料都不會離開你的電腦；開啟後只會把你在每個首領的最佳擊殺傳到個人頁面，不含隊友的數據。每筆紀錄會保留在當時計算的模式下。",
  "Any instance": "所有副本",
  "Any boss": "所有首領",
  "Show one instance's runs": "只顯示單一副本的輪次",

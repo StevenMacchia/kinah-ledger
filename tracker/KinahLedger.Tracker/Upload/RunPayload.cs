@@ -40,7 +40,9 @@ public static class InstallId
 /// Since 0.10.55 the character it was played on (<see cref="CharacterPayload"/>: its slot and its name), which only the
 /// profile it is linked to shows. Since 0.7: the change in the Kinah balance over the run (rounded, never the balance
 /// itself) and craft and enchant outcome counts. Since 0.7.2: the expedition and event runs that finished meanwhile
-/// (area, length, Kinah, kills, tradeable items), each sent once.
+/// (area, length, Kinah, kills, tradeable items), each sent once. Since 2026-11-15, only with Options › Sharing › Show my
+/// boss bests on my kinahledger.com profile on (off by default): the player's own best boss kills (<see cref="BossBestPayload"/>),
+/// never another player's numbers.
 /// </summary>
 public sealed record RunPayload(
     string app,
@@ -83,7 +85,12 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? pvp_kills = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? mob_kills = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths_pvp = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? deaths_pvp = null,
+    // since 2026-11-15, opt-in (Options › Sharing › Show my boss bests on my kinahledger.com profile, off by default): the
+    // player's OWN best kill per boss and their last pull of it, for the character in `character` (BossBests.cs). Never
+    // anything about the rest of the group. Absent unless the switch is on and the list changed; [] once after it goes off
+    // (the site then forgets them). A site from before ignores it
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<BossBestPayload>? boss_bests = null)
 {
     static long? Nz(long v) => v > 0 ? v : null;
     static int? Nz(int v) => v > 0 ? v : null;
@@ -97,9 +104,13 @@ public sealed record RunPayload(
     /// "Quests are completely broken": they rode only with farming, so a day of dungeons sent none; 1,716 waited). With no
     /// runs it is the quests' own send (TrackerSession.SendQuestsAsync).
     /// </summary>
-    public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs) =>
-        new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
-            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: CharacterPayload.Now(), quests: QuestsPending?.Invoke());
+    public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs)
+    {
+        var who = CharacterPayload.Now();
+        return new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
+            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: who, quests: QuestsPending?.Invoke(),
+            boss_bests: BossBests.Pending(who?.id ?? "", DateTime.UtcNow));
+    }
 
     /// <summary>The site keeps this many completed quests a batch (quests.maxPerUpload); a batch carries no more, so none is marked sent that wasn't kept.</summary>
     public const int QuestsMaxPerUpload = 50;
@@ -130,6 +141,7 @@ public sealed record RunPayload(
         bool Off(long id) => KinahLedger.Session.ReportedDrops.Has(s.ItemName(id));
         int Flagged(SessionEngine.ZoneStats z) => z.Items.Where(x => Off(x.Key)).Sum(x => x.Value) + z.ItemsBound.Where(x => Off(x.Key)).Sum(x => x.Value);
         var quests = QuestsPending?.Invoke();
+        var who = CharacterPayload.Now();
         return new(
             AppVersion,
             region,
@@ -159,9 +171,10 @@ public sealed record RunPayload(
             InstanceRunPayload.From(instances, Key, Off),
             s.Focus,
             quests: quests is { Count: > 0 } ? quests : null,
-            character: CharacterPayload.Now(),
+            character: who,
             abyss_points: Nz(s.AbyssPoints), rank_points: Nz(s.RankPoints), rank_lost: Nz(s.RankPointsLost),
-            pvp_kills: Nz(s.PlayerKills), mob_kills: Nz(s.MonsterKills), deaths: Nz(s.Deaths), deaths_pvp: Nz(s.DeathsToPlayers));
+            pvp_kills: Nz(s.PlayerKills), mob_kills: Nz(s.MonsterKills), deaths: Nz(s.Deaths), deaths_pvp: Nz(s.DeathsToPlayers),
+            boss_bests: BossBests.Pending(who?.id ?? "", DateTime.UtcNow));
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
@@ -430,8 +443,14 @@ public static class Uploader
     public static async Task<bool> SendAsync(RunPayload p, UploadSettings u) => (await SendResultAsync(p, u)).Ok;
 
     /// <summary>Like <see cref="SendAsync"/>, with how the site answered, so a caller can tell a send worth trying again from a refusal.</summary>
-    public static async Task<SendResult> SendResultAsync(RunPayload p, UploadSettings u) =>
-        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? SendResult.NoConnection : await PostAsync(u.Endpoint, p);
+    public static async Task<SendResult> SendResultAsync(RunPayload p, UploadSettings u)
+    {
+        if (!u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint)) return SendResult.NoConnection;
+        var r = await PostAsync(u.Endpoint, p);
+        // the boss bests it carried: kept by the site (or not linked yet), so the next upload knows whether to carry them again
+        if (p.boss_bests != null) BossBests.Took(p, r, DateTime.UtcNow);
+        return r;
+    }
 
     /// <summary>Market asks have their own switch in the window; here only the route matters.</summary>
     public static Task<SendResult> SendPricesAsync(PriceBatch p, UploadSettings u) =>

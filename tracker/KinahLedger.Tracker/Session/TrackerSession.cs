@@ -5428,6 +5428,10 @@ public sealed class UserPrefs
     public bool SendReportFrames { get; set; }
     /// <summary>Help improve counting (Options › Sharing): confirmed reads and small item crops become training pairs (Session/LabelWriter.cs). On by default, said once on first run.</summary>
     public bool HelpImproveCounting { get; set; } = true;
+    /// <summary>Options › Sharing › Show my boss bests on my kinahledger.com profile (2026-11-15, Upload/BossBests.cs): your own best kill per boss goes to your signed-in profile. Off until the player turns it on.</summary>
+    public bool ShareBossBests { get; set; }
+    /// <summary>The switch above went off and the site hasn't been told to forget the bests yet: the next upload tells it.</summary>
+    public bool BossBestsClearPending { get; set; }
     /// <summary>Options › Reading › Show accuracy details (0.8.34): the Accuracy chip, its counts and the panel and Discord lines. Off, a player sees only things to look at.</summary>
     public bool ShowAccuracy { get; set; }
     /// <summary>Share (0.9.3): the character name on the picture. Off until the player turns it on; the name is the one they typed in the sheet.</summary>
