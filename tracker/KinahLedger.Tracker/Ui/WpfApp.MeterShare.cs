@@ -152,8 +152,10 @@ public static partial class WpfApp
                     }
             check(cut.Count == 0, $"meter share picture: nothing cut off in any look (no text ends in \"…\" or is trimmed)" + (cut.Count > 0 ? ": " + string.Join("; ", cut.Distinct().Take(12)) : ""));
         }
-        check(new ParserPrefs().ShareHideNames && new ParserPrefs().ShareHotkey == ParserPrefs.DefaultHotkey && Platform.Hotkey.Parse(new ParserPrefs().ShareHotkey) == null,
-            "meter share: other names hidden by default, its shortcut Off by default");
+        // names shown by default (Steven, 2026-11-17: "it should say the members names"), under a key the old default's "on" can't set
+        var oldSaved = System.Text.Json.JsonSerializer.Deserialize<ParserPrefs>("{\"ShareHideNames\": true}")!;
+        check(!new ParserPrefs().ShareHideNames && !oldSaved.ShareHideNames && new ParserPrefs().ShareHotkey == ParserPrefs.DefaultHotkey && Platform.Hotkey.Parse(new ParserPrefs().ShareHotkey) == null,
+            "meter share: other names shown by default, an old saved \"hidden\" left behind, its shortcut Off by default");
         check(MeterShare.FileName(kill) is var fn && fn.StartsWith("kinah-ledger-") && fn.EndsWith(".png") && fn.IndexOfAny(Path.GetInvalidFileNameChars()) < 0, $"meter share: a file name safe to save ({MeterShare.FileName(kill)})");
 
         MeterShareOverlayChecks(check);   // the overlay's Share (KL_OPTIONS_ONLY=share runs it alone)
