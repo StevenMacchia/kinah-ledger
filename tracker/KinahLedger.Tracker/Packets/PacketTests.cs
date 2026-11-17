@@ -1519,7 +1519,7 @@ public static class PacketTests
                 case InstanceMode md: Console.WriteLine($"{Local(md.At)}  mode: {md.Mode}"); break;
                 case GroupChanged g:
                     foreach (var m in g.Members) names[m.Id] = m.Name;
-                    Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Server.Length > 0 ? $"[{m.Server}] " : "")}{(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
+                    Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Server.Length > 0 ? $"[{m.Server}] " : "")}{(m.Class.Length > 0 ? m.Class + " " : "")}item level {(m.ItemLevel > 0 ? m.ItemLevel.ToString("N0") : "unknown")}, Combat Power {(m.CombatPower > 0 ? m.CombatPower.ToString("N0") : "unknown")}"))}");
                     break;
                 case BossEngaged b: boss = b.Boss; open = b.BossId; dmg[b.BossId] = new(); mine[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
                 case DamageDealt d:
