@@ -124,7 +124,8 @@ public static class LangCheck
         return sb.ToString();
     }
 
-    static readonly Regex Token = new(@"[A-Za-z][A-Za-z'’\-]*[A-Za-z]|[A-Za-z]", RegexOptions.Compiled);
+    static readonly Regex Cjk = new(@"(?<=[A-Za-z0-9'’)\]])(?=[ᄀ-ᇿ　-鿿가-힯豈-﫿＀-￯])|(?<=[ᄀ-ᇿ　-鿿가-힯豈-﫿＀-￯])(?=[A-Za-z(])", RegexOptions.Compiled);
+    static readonly Regex Token =new(@"[A-Za-z][A-Za-z'’\-]*[A-Za-z]|[A-Za-z]", RegexOptions.Compiled);
 
     /// <summary>The English words left in a text: three letters or more, not a game name, not a word the translations keep.</summary>
     public static IEnumerable<string> English(string text)
@@ -134,6 +135,8 @@ public static class LangCheck
         var names = GameNames();
         // a text that is a game name whole, or one with a known name in it ("Fire Temple · 12:04"), keeps the name
         var parts = text.Split(new[] { ' ', ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        // a Korean particle or a Chinese word stuck to a name ("Western Cantas Valley에서", "在Siel") is not part of it: split it off
+        parts = parts.SelectMany(p => Cjk.Split(p)).Where(p => p.Length > 0).ToArray();
         var covered = new bool[parts.Length];
         static string Bare(string p) => p.Trim('(', ')', '[', ']', ',', '.', ':', ';', '!', '?', '“', '”', '"', '‘', '’', '\'', '·', '•', '—', '–', '-', '+', '×', '/', '…', '«', '»', '「', '」', '『', '』', '（', '）', '，', '。', '：');
         for (int i = 0; i < parts.Length; i++)
