@@ -71,13 +71,13 @@ public partial class MainWindow
         var rest = items.Where(i => !IsTimerWatched(i.Key)).ToList();
         bool mapRead = items.Any(i => i.Key.StartsWith("boss:", StringComparison.Ordinal));   // the Abyss's bosses are on a schedule; the others need the map once
         var watchedRows = watched.Select(TimerRow).ToList();
-        if (watchedRows.Count == 0) watchedRows.Add(TimersNote("Ring the bell on any timer below to watch it: it shows on the overlay and chimes before it starts."));
-        TimersPage.Children.Add(TimersCard("Watched", TimersGrid(watchedRows)));
+        if (watchedRows.Count == 0) watchedRows.Add(TimersNote(L.T("Ring the bell on any timer below to watch it: it shows on the overlay and chimes before it starts.")));
+        TimersPage.Children.Add(TimersCard(L.T("Watched"), TimersGrid(watchedRows)));
         var events = rest.Where(i => i.Key.StartsWith("event:", StringComparison.Ordinal)).ToList();
-        if (events.Count > 0) TimersPage.Children.Add(TimersCard("Events", TimersGrid(events.Select(TimerRow))));
+        if (events.Count > 0) TimersPage.Children.Add(TimersCard(L.T("Events"), TimersGrid(events.Select(TimerRow))));
         foreach (var map in rest.Where(i => !i.Key.StartsWith("event:", StringComparison.Ordinal)).GroupBy(i => i.Group))
             TimersPage.Children.Add(TimersFold(map.Key, map.ToList()));
-        if (!mapRead) TimersPage.Children.Add(TimersCard("World bosses", TimersNote("Open the world map in the game (Exploration › Field Boss) once: the bosses' timers fill in here and count down after you close it.")));
+        if (!mapRead) TimersPage.Children.Add(TimersCard(L.T("World bosses"), TimersNote(L.T("Open the world map in the game (Exploration › Field Boss) once: the bosses' timers fill in here and count down after you close it."))));
         if (scroll > 0) { LowerScroll.UpdateLayout(); LowerScroll.ScrollToVerticalOffset(scroll); }
     }
 
@@ -87,25 +87,25 @@ public partial class MainWindow
         var g = new Grid { Margin = new Thickness(2, 0, 0, 12) };
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new TextBlock { Text = "Timers", FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = L.T("Timers"), FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         title.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         g.Children.Add(title);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var ol = QT("Overlay", 12.5, FontWeights.SemiBold, "Muted"); ol.Margin = new Thickness(0, 0, 8, 0);
+        var ol = QT(L.T("Overlay"), 12.5, FontWeights.SemiBold, "Muted"); ol.Margin = new Thickness(0, 0, 8, 0);
         right.Children.Add(ol);
         var overlay = new CheckBox { IsChecked = TimersOverlayOn, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
-            ToolTip = "The timers over the game: a tiny line on top of the Kinah overlay when a watched timer is near, with a chime." };
+            ToolTip = L.T("The timers over the game: a tiny line on top of the Kinah overlay when a watched timer is near, with a chime.") };
         overlay.SetResourceReference(StyleProperty, "Switch");
         overlay.Click += (_, _) => { SetTimersOverlay(overlay.IsChecked == true); DrawOverlayPills(); };
         right.Children.Add(overlay);
-        _timersPopOutBtn = new Button { Content = "Pop out", Height = 30, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "Opens every timer in a window of its own, to keep beside the game or on a second screen." };
+        _timersPopOutBtn = new Button { Content = L.T("Pop out"), Height = 30, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = L.T("Opens every timer in a window of its own, to keep beside the game or on a second screen.") };
         System.Windows.Automation.AutomationProperties.SetName(overlay, "Timers overlay");
         System.Windows.Automation.AutomationProperties.SetName(_timersPopOutBtn, "Pop out the timers");
         _timersPopOutBtn.Click += (_, _) => OpenTimersPopOut();
         right.Children.Add(_timersPopOutBtn);
-        var gear = new Button { Margin = new Thickness(6, 0, 0, 0), ToolTip = "The timers' settings: how far ahead the overlay shows, the chime, which timers ring." };
+        var gear = new Button { Margin = new Thickness(6, 0, 0, 0), ToolTip = L.T("The timers' settings: how far ahead the overlay shows, the chime, which timers ring.") };
         gear.SetResourceReference(StyleProperty, "RoundBtn");
         var gi = new System.Windows.Shapes.Path(); gi.SetResourceReference(StyleProperty, "QIconStyle"); gi.SetResourceReference(System.Windows.Shapes.Path.DataProperty, "IcGear");
         gear.Content = gi;
@@ -179,10 +179,10 @@ public partial class MainWindow
         bool open = _timerGroupsOpen.Contains(group);
         var sp = new StackPanel();
         var soonest = items.Where(i => i.State == TimerBoard.Kind.Waiting).OrderBy(i => i.AtPc).FirstOrDefault();
-        string note = $"{items.Count} more" + (!open && soonest != null ? $" · next {soonest.Short} in {soonest.Big}" : "");
+        string note = string.Format(L.T("{0} more", "timers"), items.Count) + (!open && soonest != null ? L.F(" · next {0} in {1}", soonest.Short, TimerSay.Text(soonest.Big)) : "");
         var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse(open ? "M0,4 L4,0 L8,4" : "M0,0 L4,4 L8,0"), StrokeThickness = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 2, 0) };
         chev.SetResourceReference(Shape.StrokeProperty, "Muted");
-        var head = TimersHeading(group + " world bosses", note, chev);
+        var head = TimersHeading(L.F("{0} world bosses", group), note, chev);
         head.Background = Brushes.Transparent; head.Cursor = Cursors.Hand;
         if (!open) head.Margin = new Thickness(0, 0, 0, 4);
         head.MouseLeftButtonUp += (_, e) => { if (!_timerGroupsOpen.Remove(group)) _timerGroupsOpen.Add(group); FillTimersPage(); e.Handled = true; };
@@ -205,6 +205,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (key != null) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+        sub = TimerSay.Text(sub); big = TimerSay.Text(big); small = TimerSay.Text(small);
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var nm = QT(name, 12.5, FontWeights.SemiBold, "Ink");
         nm.TextWrapping = TextWrapping.Wrap; nm.TextTrimming = TextTrimming.None;   // a full name always shows: a long one takes a second line
@@ -234,7 +235,7 @@ public partial class MainWindow
         else { p.SetResourceReference(Shape.StrokeProperty, "Faint"); }
         var b = new Border { Child = p, Width = 24, Height = 24, CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Cursor = Cursors.Hand, Focusable = true,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Tag = "bell:" + key,
-            ToolTip = on ? $"Watched: {name} shows on the overlay and chimes before it starts. Click to stop." : $"Watch {name}: it shows on the overlay and chimes before it starts." };
+            ToolTip = on ? L.F("Watched: {0} shows on the overlay and chimes before it starts. Click to stop.", name) : L.F("Watch {0}: it shows on the overlay and chimes before it starts.", name) };
         System.Windows.Automation.AutomationProperties.SetName(b, (on ? "Stop watching " : "Watch ") + name);
         void Flip() { SetTimerWatched(key, !IsTimerWatched(key)); FillTimersPage(); }
         b.MouseLeftButtonUp += (_, e) => { Flip(); e.Handled = true; };
@@ -249,7 +250,7 @@ public partial class MainWindow
         if (next?.AtPc is { } when && when - now <= TabCountdownFrom)
         {
             TimersTabNext.Text = TimerBoard.Clock(when - now);
-            TimersTabNext.ToolTip = $"{next.Name} in {TimerBoard.Clock(when - now)}";
+            TimersTabNext.ToolTip = L.F("{0} in {1}", next.Name, TimerBoard.Clock(when - now));
             TimersTabNext.Visibility = Visibility.Visible;
         }
         else TimersTabNext.Visibility = Visibility.Collapsed;

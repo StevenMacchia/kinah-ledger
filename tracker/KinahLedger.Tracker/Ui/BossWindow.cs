@@ -31,7 +31,7 @@ sealed class BossWindow : Window
     {
         _main = main;
         _prefs = prefs;
-        Title = "Kinah Ledger timers";
+        Title = L.T("Kinah Ledger timers");
         Icon = main.Icon;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -46,7 +46,7 @@ sealed class BossWindow : Window
         _host.Cursor = Cursors.SizeAll;
         _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
         _host.Children.Add(_scroll);
-        var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 19, 33, 0), ToolTip = "Close (Esc)" };
+        var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 19, 33, 0), ToolTip = L.T("Close (Esc)") };
         close.SetResourceReference(StyleProperty, "RoundBtn");
         System.Windows.Automation.AutomationProperties.SetName(close, "Close the timers");
         close.Click += (_, _) => Close();

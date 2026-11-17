@@ -141,14 +141,14 @@ public partial class MainWindow
             if (i >= lines.Count) { foreach (var k in PickKeys) d[p + k] = ""; continue; }
             var l = lines[i];
             bool kinah = l.Kind == "kinah";
-            d[p] = kinah ? $"{l.Amount:N0} Kinah" : l.Name;
+            d[p] = kinah ? L.F("{0:N0} Kinah", l.Amount) : l.Name;
             d[p + "Id"] = $"{l.At.Ticks}:{l.Kind}:{l.Name}:{l.Amount}";
             d[p + "At"] = l.At.Ticks.ToString();
             d[p + "Count"] = kinah ? (l.Amount >= 10_000 ? Fk(l.Amount) : l.Amount.ToString()) : $"×{l.Amount:N0}";
             d[p + "Worth"] = PickupValue(l).Text;
             d[p + "Grade"] = kinah ? "" : GradeOf(l.Name);
             d[p + "Icon"] = kinah ? KinahIcon : _items.IconUrl(l.ItemId != 0 ? l.ItemId : _items.IdOf(l.Name));
-            d[p + "Note"] = kinah ? "" : l.Bound ? "bound" : GatheringCatalog.Find(l.Name) != null ? "gathered" : "";
+            d[p + "Note"] = kinah ? "" : l.Bound ? L.T("bound") : GatheringCatalog.Find(l.Name) != null ? L.T("gathered") : "";
             d[p + "Kind"] = l.Kind;
         }
         return d;
@@ -191,7 +191,7 @@ public partial class MainWindow
             ("Spiritstone", "×1", "+7.5K", "item", "", ""),
             ("1,192 Kinah", "1192", "+1.2K", "kinah", "", KinahIcon),
             ("Raw Leather", "×1", "+1.1K", "item", "", ""),
-            ("Orichalcum Ore", "×1", "+2.0K", "item", "gathered", ""),
+            ("Orichalcum Ore", "×1", "+2.0K", "item", L.T("gathered"), ""),
         };
         for (int i = 0; i < picks.Length; i++)
         {

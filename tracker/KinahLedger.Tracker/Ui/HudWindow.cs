@@ -18,14 +18,14 @@ public static class HudFields
 
     public static readonly Field[] All =
     {
-        new("feed", "Newest line and rate", "", "The last thing counted and the rate beside it, as the window's feed"),
-        new("time", "Timer", "", "How long you've farmed here"),
-        new("rate", "Total per hour", "/ hr", "Kinah plus loot after tax: the window's big number"),
-        new("kinah", "Kinah per hour", "Kinah / hr", "Kinah picked up, per hour"),
-        new("loot", "Loot per hour", "loot / hr", "What the hour's loot sells for, after tax; hidden when it is the whole hour, as in gathering"),
-        new("total", "Session total", "total", "Kinah plus loot after tax, so far"),
-        new("best", "Your best here", "best here", "Your best hour in this zone"),
-        new("last", "Last pickup", "", "The last thing picked up"),
+        new("feed", L.T("Newest line and rate"), "", L.T("The last thing counted and the rate beside it, as the window's feed")),
+        new("time", L.T("Timer"), "", L.T("How long you've farmed here")),
+        new("rate", L.T("Total per hour"), L.T("/ hr"), L.T("Kinah plus loot after tax: the window's big number")),
+        new("kinah", L.T("Kinah per hour"), L.T("Kinah / hr"), L.T("Kinah picked up, per hour")),
+        new("loot", L.T("Loot per hour"), L.T("loot / hr"), L.T("What the hour's loot sells for, after tax; hidden when it is the whole hour, as in gathering")),
+        new("total", L.T("Session total"), L.T("total"), L.T("Kinah plus loot after tax, so far")),
+        new("best", L.T("Your best here"), L.T("best here"), L.T("Your best hour in this zone")),
+        new("last", L.T("Last pickup"), "", L.T("The last thing picked up")),
     };
 
     /// <summary>The newest feed line and the rate beside it (direction C, 0.8.30), the same the window's live card shows.</summary>
@@ -292,7 +292,7 @@ public sealed partial class HudWindow : Window
     readonly TextBlock _chaseLine;
     string _ringSig = "";
     readonly Rectangle _outline;
-    readonly TextBlock _dragHint = new() { Text = "drag me", FontSize = 11.5, Foreground = Muted, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
+    readonly TextBlock _dragHint = new() { Text = L.T("drag me"), FontSize = 11.5, Foreground = Muted, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
     /// <summary>The "unlocked" value: "" locked (clicks go through to the game), "1" unlocked, "move" unlocked for a while from the tray.</summary>
     string _unlock = "";
 
@@ -353,7 +353,7 @@ public sealed partial class HudWindow : Window
     public void Alert(string text, Color color, double seconds = 5)
     {
         if (_look != null) return;   // the Card and the Ticker draw the drop from the window's "rare" values, held as long
-        _alert.Text = text; _alert.Foreground = new SolidColorBrush(color); _alert.Visibility = Visibility.Visible;
+        _alert.Text = HudKit.Say(text); _alert.Foreground = new SolidColorBrush(color); _alert.Visibility = Visibility.Visible;
         _alertSign.Source = HudKit.DropSign(color);
         _frame.BorderBrush = new SolidColorBrush(color); _frame.BorderThickness = new Thickness(2);
         AlertLanded(color);   // the line comes in, the frame beats (Ui/HudWindow.BadgeMotion.cs)
@@ -463,7 +463,7 @@ public sealed partial class HudWindow : Window
         flag.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse("M3.5,14 V2.5 M3.5,3 H11.5 L9.9,5.8 L11.5,8.6 H3.5"), Stroke = Gold, StrokeThickness = 1.4, Width = 13, Height = 13, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         _flagText = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextTrimming = TextTrimming.CharacterEllipsis };
         flag.Children.Add(_flagText);
-        flag.Children.Add(new TextBlock { Text = "fix in tracker", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Gold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        flag.Children.Add(new TextBlock { Text = L.T("fix in tracker"), FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Gold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         _flagLine = flag; cell.Children.Add(flag);
         // the dot goes with the line, not with a flag
         cell.Tag = dot;
@@ -484,6 +484,7 @@ public sealed partial class HudWindow : Window
 
     public void Update(IReadOnlyDictionary<string, string> values)
     {
+        values = HudKit.Say(values);   // the panel's free texts in the player's language (Ui/HudLooks.cs)
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
@@ -530,7 +531,7 @@ public sealed partial class HudWindow : Window
             _flagLine!.Visibility = flagged ? Visibility.Visible : Visibility.Collapsed;
             if (((FrameworkElement)_feedLine.Parent).Tag is UIElement dot) dot.Visibility = flagged ? Visibility.Collapsed : Visibility.Visible;
             _flagText!.Text = V("flag");
-            _feedText!.Text = V("feedText").Length > 0 ? V("feedText") : "Waiting for the first count";
+            _feedText!.Text = V("feedText").Length > 0 ? V("feedText") : L.T("Waiting for the first count");
             _feedValue!.Text = V("feedValue");
             // Kinah in gold, a loot value's plus in mint, a loss in coral: the window's feed and the ticker's roles (colour pass, 2026-11-13)
             _feedValue.Foreground = V("feedTone") switch { "gold" => Gold, "coral" => Coral, _ => Mint };
@@ -541,12 +542,12 @@ public sealed partial class HudWindow : Window
         }
         foreach (var (key, cell) in _cells)
         {
-            cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? v : "";
+            cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? (key == "time" && v.StartsWith("RUN ", StringComparison.Ordinal) ? L.T("RUN") + v[3..] : v) : "";
             if (cell.Parent is FrameworkElement box) box.Visibility = cell.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         // warming up ("warm"): the hour's figure reads "warming up", dimmed and without its "/ hr"
         if (_cells.TryGetValue("rate", out var rate)) rate.Opacity = warm ? WarmOpacity : 1;
-        if (_labels.TryGetValue("rate", out var rateLabel)) { rateLabel.Visibility = warm ? Visibility.Collapsed : Visibility.Visible; rateLabel.Text = abyss ? "AP / hr" : HudFields.All.First(f => f.Key == "rate").Label; }
+        if (_labels.TryGetValue("rate", out var rateLabel)) { rateLabel.Visibility = warm ? Visibility.Collapsed : Visibility.Visible; rateLabel.Text = abyss ? L.T("AP / hr") : HudFields.All.First(f => f.Key == "rate").Label; }
         if (_labels.TryGetValue("total", out var totalLabel)) totalLabel.Text = abyss ? "AP" : HudFields.All.First(f => f.Key == "total").Label;
         if (_cells.TryGetValue("rate", out var rc)) rc.Foreground = abyss ? Ink : Gold;
         if (_cells.TryGetValue("total", out var tc)) tc.Foreground = abyss ? Ink : Gold;
