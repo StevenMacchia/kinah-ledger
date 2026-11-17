@@ -20,15 +20,14 @@ public partial class MainWindow
 
     /// <summary>
     /// How the panel shows now, as its "show" value: "" over the game; "dim" (the paused look) while the chat reader is
-    /// paused or the chat is covered; "hidden" when the game isn't in front, is minimized or has closed. The tracker's own
-    /// windows count as the game, so the window and Options can be used with the panel in view.
+    /// paused or the chat is covered; "hidden" when the game is minimized or has closed. A tab out keeps it in view
+    /// (Steven, 2026-11-17: "make sure the overlay doesnt disappear when we are tabbed out of the game").
     /// </summary>
     string HudPresence()
     {
         if (_guide != null) return "hidden";   // the placement guide draws it in its outline meanwhile
         if (_demo || HudMoving) return "";   // being moved from the tray: in view wherever the player is
         if (_watcher.GameRect == null) return "hidden";
-        if (Native.ForegroundPid() != (uint)Environment.ProcessId && !GameWindow.InFront(_settings.ProcessHints)) return "hidden";
         var chat = _watcher.Chat;
         return chat == null || chat.Paused.Length > 0 ? "dim" : "";
     }

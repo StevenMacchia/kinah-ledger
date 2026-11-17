@@ -374,7 +374,8 @@ public partial class MainWindow
         _hud?.SetKinahHidden(false);
         _hud?.ShowParser(null, now, ParserModeNow, PDetails);
         _parserOwnWanted = _parserPrefs.Overlay && show != null;
-        bool inFront = ParserOverlayForceForTest || (_watcher.GameRect != null && (Native.ForegroundPid() == (uint)Environment.ProcessId || GameInFront()));
+        // shown while the game is open, a tab out included (Steven, 2026-11-17); minimized or closed takes it away
+        bool inFront = ParserOverlayForceForTest || _watcher.GameRect != null;
         bool want = _parserOwnWanted && inFront;
         if (!want) { _parserOverlay?.ShowWanted(false); return; }
         if (_parserOverlay == null)
