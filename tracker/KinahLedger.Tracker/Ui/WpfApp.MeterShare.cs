@@ -110,7 +110,12 @@ public static partial class WpfApp
                 string all = string.Join(" | ", texts);
                 var miss = new List<string>();
                 if (bmp.PixelWidth != MeterShare.PixelWidth || bmp.PixelHeight < 630 || bmp.PixelHeight > 2400 || bmp.PixelHeight % 2 != 0) miss.Add($"size {bmp.PixelWidth}×{bmp.PixelHeight}");
-                foreach (var want in new[] { kill.Title, L.F("Killed in {0}", BossParser.Clock(kill.Duration(end))), L.Day(kill.Start.ToLocalTime()), "Kinah Ledger", "kinahledger.com", L.F("Member {0}", 2) })
+                // the outcome said once, by the look ("KILLED", "Killed in 2:19") or by the frame's pill when the look has none
+                if (!all.Contains(L.T("Killed"), StringComparison.OrdinalIgnoreCase)) miss.Add("no outcome");
+                // no repeats: the boss's name drawn once as a text of its own (the look's title, or the frame's for a look without one)
+                int titles = texts.Count(t => t.Trim().Trim('[', ']', ' ').EndsWith(kill.Title, StringComparison.OrdinalIgnoreCase));
+                if (titles > 1) miss.Add($"the boss's name drawn {titles} times");
+                foreach (var want in new[] { kill.Title, L.Day(kill.Start.ToLocalTime()), "Kinah Ledger", "kinahledger.com", L.F("Member {0}", 2) })
                     if (!all.Contains(want, StringComparison.OrdinalIgnoreCase)) miss.Add($"no \"{want}\"");   // a look may write names in capitals (VHS)
                 var leaked = others.Where(n => all.Contains(n, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (leaked.Count > 0) miss.Add("names shown: " + string.Join(", ", leaked));
@@ -129,7 +134,24 @@ public static partial class WpfApp
             }
             catch (Exception ex) { bad.Add($"{look}: {ex.GetType().Name} {ex.Message}"); }
         }
-        check(bad.Count == 0, $"meter share picture: 1200 px wide in the standard look and one of each theme, with the boss, the outcome, the day, the mark and kinahledger.com, the meter drawn, other names hidden (figures kept), shown when the switch is off" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        check(bad.Count == 0, $"meter share picture: 1200 px wide in the standard look and one of each theme, with the boss once, the outcome, the day, the mark and kinahledger.com, the meter drawn, other names hidden (figures kept), shown when the switch is off" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        // no cut-off label in any look's picture (names hidden or shown, a kill, a wipe, a fight under way), at Steven's width
+        {
+            var wipe = past.Last(e => e.Outcome == "wipe");
+            var cut = new List<string>();
+            foreach (var look in MeterShareLooks(all: true))
+                foreach (var (e, at) in new[] { (kill, end), (wipe, wipe.End!.Value), (live!, now) })
+                    foreach (var hide in new[] { true, false })
+                    {
+                        try
+                        {
+                            var v = MeterShare.Laid(e, at, ShareLookOf(look, e.ModeKind), hide);
+                            foreach (var t in MeterShare.Trimmed(v)) cut.Add($"{look}{(e == kill ? "" : e == wipe ? " wipe" : " live")}{(hide ? "" : " named")}: \"{t}\"");
+                        }
+                        catch (Exception ex) { cut.Add($"{look}: {ex.GetType().Name} {ex.Message}"); }
+                    }
+            check(cut.Count == 0, $"meter share picture: nothing cut off in any look (no text ends in \"…\" or is trimmed)" + (cut.Count > 0 ? ": " + string.Join("; ", cut.Distinct().Take(12)) : ""));
+        }
         check(new ParserPrefs().ShareHideNames && new ParserPrefs().ShareHotkey == ParserPrefs.DefaultHotkey && Platform.Hotkey.Parse(new ParserPrefs().ShareHotkey) == null,
             "meter share: other names hidden by default, its shortcut Off by default");
         check(MeterShare.FileName(kill) is var fn && fn.StartsWith("kinah-ledger-") && fn.EndsWith(".png") && fn.IndexOfAny(Path.GetInvalidFileNameChars()) < 0, $"meter share: a file name safe to save ({MeterShare.FileName(kill)})");

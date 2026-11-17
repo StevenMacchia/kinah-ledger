@@ -12,8 +12,9 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// The meter's share picture (Steven, 2026-11-17: "add a share button on hover on the dps meter overlay that shares a picture
 /// of the DPS meter for socials"). The meter exactly as the Parser's own window draws it, in the player's look (Classic,
-/// Wacky, Tactical or Glitch) and width, settled (no motion, no hover card), on a clean dark frame: the boss, the place, how
-/// it ended and when on top; the Kinah Ledger mark and kinahledger.com at the foot. 1200 px wide (drawn at twice its size,
+/// Wacky, Tactical or Glitch), settled (no motion, no hover card), wide enough that no name or label is cut off, on a clean
+/// dark frame: a slim line on top with only what the look doesn't say (the portrait, the place and mode, the day), the Kinah
+/// Ledger mark and kinahledger.com at the foot. 1200 px wide (drawn at twice its size,
 /// never a screenshot), at least 630 tall, so Discord, Reddit and X show it sharp. Other members' names are hidden by default
 /// (Settings › In game › Parser › Hide other names): their class icon and figures stay, each called "Member 2" and on;
 /// you keep yours. Copied to the clipboard and saved in Pictures\Kinah Ledger, as the Farming share picture. Nothing is uploaded.
@@ -45,15 +46,11 @@ public static class MeterShare
     }
 
     /// <summary>
-    /// The picture, at half its pixel size (600 wide; a meter wider than the frame takes widens it rather than shrink): the
-    /// frame, its head, the meter scaled to fill it, its foot.
+    /// The picture around a meter already laid out (<see cref="With{T}"/> makes it): its head, the meter scaled to fill the
+    /// frame (600 wide; a meter wider than that keeps its size and the frame grows round it), its foot.
     /// </summary>
-    public static Border Visual(Encounter e, DateTime now, Look look, bool hideNames)
+    static Border Frame(Encounter e, DateTime now, FrameworkElement face)
     {
-        var shown = hideNames ? Hidden(e) : e;
-        var face = ParserOverlay.MeterFace(look.Key, shown, now, look.Mode, look.Details, look.Radius, look.Pad);
-        face.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        // the meter as large as the frame takes it; a meter wider than that keeps its own size and the frame grows round it
         double fw = Math.Max(1, face.DesiredSize.Width);
         double scale = Math.Clamp((Width - 2 * Side) / fw, 1, 1.6);
         double width = Math.Max(Width, Math.Ceiling(fw * scale + 2 * Side));
@@ -64,8 +61,8 @@ public static class MeterShare
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        page.Children.Add(Head(e, now));
-        var mid = new Border { Child = meter, Margin = new Thickness(0, 18, 0, 18) };
+        page.Children.Add(Head(e, now, face));
+        var mid = new Border { Child = meter, Margin = new Thickness(0, 14, 0, 18) };
         Grid.SetRow(mid, 1); page.Children.Add(mid);
         var foot = Foot();
         Grid.SetRow(foot, 2); page.Children.Add(foot);
@@ -87,7 +84,7 @@ public static class MeterShare
             Height = 2, VerticalAlignment = VerticalAlignment.Top,
             Background = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0, tone.R, tone.G, tone.B), 0), new(Color.FromArgb(0xCC, tone.R, tone.G, tone.B), 0.5), new(Color.FromArgb(0, tone.R, tone.G, tone.B), 1) }, 0),
         };
-        var layers = new Grid { Children = { glow, topLine, new Border { Padding = new Thickness(Side, 22, Side, 16), Child = page } } };
+        var layers = new Grid { Children = { glow, topLine, new Border { Padding = new Thickness(Side, 18, Side, 16), Child = page } } };
         var card = new Border
         {
             Width = width, MinHeight = MinHeight, Background = bg, BorderBrush = new SolidColorBrush(Line), BorderThickness = new Thickness(1), Child = layers, ClipToBounds = true,
@@ -98,39 +95,74 @@ public static class MeterShare
         return card;
     }
 
-    /// <summary>The head: the boss (or the run, the fight) large, its outcome on the right; the place and the day under it.</summary>
-    static FrameworkElement Head(Encounter e, DateTime now)
+    /// <summary>
+    /// The head, never saying what the meter already says (Steven's coordinator, 2026-11-17: "No repeats"): a slim muted line,
+    /// the boss's portrait (when the look draws none), the place and mode (when the look doesn't name them) and the day. The
+    /// boss's name large and the outcome pill come back only for a look that draws no title or no outcome of its own.
+    /// </summary>
+    static FrameworkElement Head(Encounter e, DateTime now, FrameworkElement face)
     {
+        string said = string.Join(" | ", Texts(face));
+        bool Has(string s) => s.Length > 0 && said.Contains(s, StringComparison.OrdinalIgnoreCase);
+        bool title = Has(e.Title);
+        var (outText, ink) = e.Live ? ($"{L.T("Fighting")} {BossParser.Clock(e.Duration(now))}", HudKit.Gold) : ParserPanel.OutcomeOf(e, now);
+        string word = L.T(e.Outcome switch { "kill" => "Killed", "wipe" => "Wiped", "cleared" => "Cleared", "ended" => "Ended", "left" => "Left", _ => "Over" });
+        bool outcome = e.Live || Has(outText) || Has(word) || Has(L.T("Over"));
+        string artKey = e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss";
+        bool art = Images(face).Any(s => ReferenceEquals(s, GameArt.Image(artKey)));
+        var where = PK.WhereOf(e);
+        var day = L.Day(e.Start.ToLocalTime());
+
         var box = new StackPanel { Tag = "share-head" };
-        var top = new Grid();
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var art = GameArt.Element(e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss", 30);
-        art.Margin = new Thickness(0, 0, 12, 0); art.VerticalAlignment = VerticalAlignment.Center;
-        top.Children.Add(art);
-        var title = new TextBlock { Text = e.Title, FontSize = 22, FontWeight = FontWeights.Bold, Foreground = HudKit.Ink, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Tag = "share-title" };
-        Grid.SetColumn(title, 1); top.Children.Add(title);
-        // how it ended and how long it took ("Killed in 2:31"), on a pill of its colour; a fight under way says its clock
-        var (said, ink) = e.Live ? ($"{L.T("Fighting")} {BossParser.Clock(e.Duration(now))}", HudKit.Gold) : ParserPanel.OutcomeOf(e, now);
+        if (!title)
+        {
+            // a look without a title of its own: the boss large, the outcome beside it
+            var top = new Grid();
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (!art) { var a = GameArt.Element(artKey, 30); a.Margin = new Thickness(0, 0, 12, 0); a.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(a); }
+            var big = new TextBlock { Text = e.Title, FontSize = 22, FontWeight = FontWeights.Bold, Foreground = HudKit.Ink, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Tag = "share-title" };
+            Grid.SetColumn(big, 1); top.Children.Add(big);
+            if (!outcome) { var pill = Pill(outText, ink); Grid.SetColumn(pill, 2); top.Children.Add(pill); }
+            box.Children.Add(top);
+            box.Children.Add(Slim(Has(where) ? "" : where, day, null, !art ? 42 : 0));
+            return box;
+        }
+        // the slim line: the portrait, the place and mode the look doesn't say, the day; the outcome only if the look has none
+        var line = new Grid();
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.Children.Add(Slim(Has(where) ? "" : where, day, art ? null : GameArt.Element(artKey, 20), 0));
+        if (!outcome) { var pill = Pill(outText, ink); Grid.SetColumn(pill, 1); line.Children.Add(pill); }
+        box.Children.Add(line);
+        return box;
+    }
+
+    /// <summary>"[portrait] Ferocious Horn Den · Conquest · Expedition · Nov 13, 2026", small and muted, wrapping rather than cut.</summary>
+    static FrameworkElement Slim(string where, string day, FrameworkElement? art, double indent)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(indent, art == null && indent > 0 ? 2 : 0, 0, 0), Tag = "share-sub" };
+        if (art != null) { art.Margin = new Thickness(0, 0, 9, 0); art.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(art); }
+        var t = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.Medium, Foreground = HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = Width - 2 * Side - 60 };
+        if (where.Length > 0) { t.Inlines.Add(new Run(where)); t.Inlines.Add(new Run("  ·  ") { Foreground = HudKit.Faint }); }
+        t.Inlines.Add(new Run(day) { Foreground = HudKit.Faint });
+        row.Children.Add(t);
+        return row;
+    }
+
+    /// <summary>How it ended and how long it took ("Killed in 2:31"), on a pill of its colour.</summary>
+    static Border Pill(string text, SolidColorBrush ink)
+    {
         var c = ink.Color;
-        var outcome = new Border
+        var pill = new Border
         {
             CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 3, 11, 4), Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             Background = new SolidColorBrush(Color.FromArgb(0x24, c.R, c.G, c.B)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = said, FontSize = 13, FontWeight = FontWeights.Bold, Foreground = ink, Tag = "share-outcome" },
+            Child = new TextBlock { Text = text, FontSize = 13, FontWeight = FontWeights.Bold, Foreground = ink, Tag = "share-outcome" },
         };
-        Typography.SetNumeralAlignment(outcome, FontNumeralAlignment.Tabular);
-        Grid.SetColumn(outcome, 2); top.Children.Add(outcome);
-        box.Children.Add(top);
-        // the place and the day: "Ferocious Horn Den · Conquest · Expedition  ·  Nov 17, 2026"
-        var where = PK.WhereOf(e);
-        var day = L.Day(e.Start.ToLocalTime());
-        var sub = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.Medium, Foreground = HudKit.Muted, Margin = new Thickness(42, 2, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, Tag = "share-sub" };
-        if (where.Length > 0) { sub.Inlines.Add(new Run(where)); sub.Inlines.Add(new Run("   ·   ") { Foreground = HudKit.Faint }); }
-        sub.Inlines.Add(new Run(day) { Foreground = HudKit.Faint });
-        box.Children.Add(sub);
-        return box;
+        Typography.SetNumeralAlignment(pill, FontNumeralAlignment.Tabular);
+        return pill;
     }
 
     /// <summary>The foot: a hairline, the mark and Kinah Ledger on the left, kinahledger.com on the right.</summary>
@@ -159,38 +191,120 @@ public static class MeterShare
         return foot;
     }
 
-    /// <summary>The picture laid out at its size (600 wide, as tall as it needs, 315 at least), settled.</summary>
-    public static Border Laid(Encounter e, DateTime now, Look look, bool hideNames)
+    // ---- no cut-off label (the coordinator, 2026-11-17: "No cut-off labels anywhere") ----
+
+    /// <summary>How much wider the meter is tried at each step until no name or label on it is cut off.</summary>
+    const double WidthStep = 20;
+
+    static void LayOut(FrameworkElement el, double width = double.PositiveInfinity)
     {
-        bool still0 = Motion.Still; Motion.Still = true;
-        try
-        {
-            var v = Visual(e, now, look, hideNames);
-            v.Measure(new Size(v.Width, double.PositiveInfinity));
-            v.Arrange(new Rect(0, 0, v.Width, v.DesiredSize.Height));
-            v.UpdateLayout();
-            IconCache.Drain(TimeSpan.FromSeconds(2));
-            v.UpdateLayout();
-            return v;
-        }
-        finally { Motion.Still = still0; }
+        el.Measure(new Size(width, double.PositiveInfinity));
+        el.Arrange(new Rect(0, 0, double.IsInfinity(width) ? el.DesiredSize.Width : width, el.DesiredSize.Height));
+        el.UpdateLayout();
     }
 
-    /// <summary>The PNG: the visual laid out and drawn at twice its size (1200 px wide), settled; never a screenshot.</summary>
-    public static BitmapSource Render(Encounter e, DateTime now, Look look, bool hideNames)
+    /// <summary>
+    /// The picture laid out, settled, handed to <paramref name="use"/> while it is still at its size. The meter is drawn at the
+    /// player's width, and a step wider each time until nothing on it ends cut off ("Member 4" with a heal chip in Neon), up
+    /// to the widest meter; only past the frame's room does the frame grow.
+    /// </summary>
+    static T With<T>(Encounter e, DateTime now, Look look, bool hideNames, Func<Border, T> use)
     {
         bool still0 = Motion.Still; Motion.Still = true;
+        double w0 = HudStackLook.FightWidth;
         try
         {
-            var v = Laid(e, now, look, hideNames);
-            int h = (int)Math.Ceiling(v.ActualHeight) * 2;   // twice the height, whole pixels
-            var rtb = new RenderTargetBitmap((int)Math.Round(v.Width * 2), h, 192, 192, PixelFormats.Pbgra32);
-            LangCheck.Scan(v, "meter share picture");
-            rtb.Render(v);
-            rtb.Freeze();
-            return rtb;
+            var shown = hideNames ? Hidden(e) : e;
+            FrameworkElement face;
+            for (double w = w0; ; w = Math.Min(HudStackLook.FightWidthMax, w + WidthStep))
+            {
+                HudStackLook.FightWidth = w;
+                face = ParserOverlay.MeterFace(look.Key, shown, now, look.Mode, look.Details, look.Radius, look.Pad);
+                LayOut(face);
+                if (Trimmed(face).Count == 0 || HudStackLook.FightWidth >= HudStackLook.FightWidthMax) break;
+            }
+            var v = Frame(e, now, face);
+            LayOut(v, v.Width);
+            IconCache.Drain(TimeSpan.FromSeconds(2));
+            v.UpdateLayout();
+            return use(v);
         }
-        finally { Motion.Still = still0; }
+        finally { HudStackLook.FightWidth = w0; Motion.Still = still0; }
+    }
+
+    /// <summary>The picture laid out at its size (600 wide or more, as tall as it needs, 315 at least), settled.</summary>
+    public static Border Laid(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v => v);
+
+    /// <summary>The PNG: the picture drawn at twice its size (1200 px wide), settled; never a screenshot.</summary>
+    public static BitmapSource Render(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v =>
+    {
+        int h = (int)Math.Ceiling(v.ActualHeight) * 2;   // twice the height, whole pixels
+        var rtb = new RenderTargetBitmap((int)Math.Round(v.Width * 2), h, 192, 192, PixelFormats.Pbgra32);
+        LangCheck.Scan(v, "meter share picture");
+        rtb.Render(v);
+        rtb.Freeze();
+        return (BitmapSource)rtb;
+    });
+
+    /// <summary>The words of every text drawn under <paramref name="root"/> (a part collapsed left out), its runs joined.</summary>
+    internal static List<string> Texts(DependencyObject root) => Blocks(root).Select(Plain).Where(s => s.Length > 0).ToList();
+
+    static IEnumerable<TextBlock> Blocks(DependencyObject d)
+    {
+        if (d is UIElement u && u.Visibility != Visibility.Visible) yield break;
+        if (d is TextBlock t) yield return t;
+        if (d is Visual) for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) foreach (var x in Blocks(VisualTreeHelper.GetChild(d, i))) yield return x;
+    }
+
+    static IEnumerable<ImageSource> Images(DependencyObject d)
+    {
+        if (d is UIElement u && u.Visibility != Visibility.Visible) yield break;
+        if (d is Image { Source: { } s }) yield return s;
+        if (d is Visual) for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) foreach (var x in Images(VisualTreeHelper.GetChild(d, i))) yield return x;
+    }
+
+    static string Plain(TextBlock tb)
+    {
+        if (tb.Inlines.Count == 0) return tb.Text;
+        var sb = new System.Text.StringBuilder();
+        void Add(InlineCollection ins) { foreach (var i in ins) { if (i is Run r) sb.Append(r.Text); else if (i is Span s) Add(s.Inlines); else if (i is LineBreak) sb.Append(' '); } }
+        Add(tb.Inlines);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The texts drawn cut off under <paramref name="root"/>: one that ends in "…", or one whose trimming cut it (its words
+    /// need more room than it was given). Measured on a copy with the same face, size, weight and runs.
+    /// </summary>
+    internal static List<string> Trimmed(DependencyObject root)
+    {
+        var cut = new List<string>();
+        foreach (var tb in Blocks(root))
+        {
+            var text = Plain(tb);
+            if (text.Length == 0 || tb.ActualWidth <= 0) continue;
+            if (text.TrimEnd().EndsWith('…') || text.TrimEnd().EndsWith("...", StringComparison.Ordinal)) { cut.Add(text); continue; }
+            if (tb.TextTrimming == TextTrimming.None) continue;
+            var copy = new TextBlock { FontFamily = tb.FontFamily, FontSize = tb.FontSize, FontWeight = tb.FontWeight, FontStyle = tb.FontStyle, FontStretch = tb.FontStretch, Padding = tb.Padding };
+            TextOptions.SetTextFormattingMode(copy, TextOptions.GetTextFormattingMode(tb));
+            Typography.SetNumeralAlignment(copy, Typography.GetNumeralAlignment(tb));
+            if (tb.Inlines.Count == 0) copy.Text = tb.Text;
+            else
+            {
+                void Copy(InlineCollection ins)
+                {
+                    foreach (var i in ins)
+                    {
+                        if (i is Run r) copy.Inlines.Add(new Run(r.Text) { FontFamily = r.FontFamily, FontSize = r.FontSize, FontWeight = r.FontWeight, FontStyle = r.FontStyle });
+                        else if (i is Span s) Copy(s.Inlines);
+                    }
+                }
+                Copy(tb.Inlines);
+            }
+            copy.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (copy.DesiredSize.Width > tb.ActualWidth + 1) cut.Add(text);
+        }
+        return cut;
     }
 
     /// <summary>"kinah-ledger-2026-11-17-2130-fight-Kromede.png": the day and time it started and the boss or the place, safe for a file name.</summary>
