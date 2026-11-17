@@ -1,5 +1,7 @@
 using KinahLedger.Packets;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -48,12 +50,12 @@ public sealed class EventTimers
     public static RegionClock ClockOf(string? region) => region switch
     {
         // no region yet: NA East, Settings.Region's default
-        null or "" or "na_e" => new("na_e", "NA East", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, true, "US Eastern time"),
-        "na_w" => new("na_w", "NA West", Zone("Pacific Standard Time", "America/Los_Angeles") ?? Utc9, false, "US Pacific time, not checked for NA West yet"),
-        "eu" => new("eu", "Europe", Zone("Romance Standard Time", "Europe/Paris") ?? Utc9, false, "Central European time, not checked for Europe yet"),
-        "latam" => new("latam", "Latin America", Zone("E. South America Standard Time", "America/Sao_Paulo") ?? Utc9, false, "Brasília time, not checked for Latin America yet"),
-        "asia" => new("asia", "Asia", Zone("Korea Standard Time", "Asia/Seoul") ?? Utc9, false, "Korea time, not checked for Asia yet"),
-        _ => new(region, "this region", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, false, "US Eastern time, not checked for this region"),
+        null or "" or "na_e" => new("na_e", L.T("NA East"), Zone("Eastern Standard Time", "America/New_York") ?? Utc9, true, L.T("US Eastern time")),
+        "na_w" => new("na_w", L.T("NA West"), Zone("Pacific Standard Time", "America/Los_Angeles") ?? Utc9, false, L.T("US Pacific time, not checked for NA West yet")),
+        "eu" => new("eu", L.T("Europe"), Zone("Romance Standard Time", "Europe/Paris") ?? Utc9, false, L.T("Central European time, not checked for Europe yet")),
+        "latam" => new("latam", L.T("Latin America"), Zone("E. South America Standard Time", "America/Sao_Paulo") ?? Utc9, false, L.T("Brasília time, not checked for Latin America yet")),
+        "asia" => new("asia", L.T("Asia"), Zone("Korea Standard Time", "Asia/Seoul") ?? Utc9, false, L.T("Korea time, not checked for Asia yet")),
+        _ => new(region, L.T("this region"), Zone("Eastern Standard Time", "America/New_York") ?? Utc9, false, L.T("US Eastern time, not checked for this region")),
     };
 
     static TimeZoneInfo? Zone(params string[] ids)
@@ -97,7 +99,7 @@ public sealed class EventTimers
     /// <summary>The event the player is in, as its server told it. Times are UTC on this PC's clock.</summary>
     public sealed record Live(string Family, string Name, AreaEvent.Stage Stage, DateTime? StartedPc, DateTime SeenAt, DateTime? OverAt, DateTime? LeftAt)
     {
-        public string Label => Name.Length > 0 ? Name : Family.Length > 0 ? Family : "An event";
+        public string Label => Name.Length > 0 ? Name : Family.Length > 0 ? Family : L.T("An event");
     }
 
     /// <summary>A scheduled event's row at a moment: on now (since when) or its next start (in how long). Times UTC, this PC's clock.</summary>
@@ -128,7 +130,7 @@ public sealed class EventTimers
         lock (_gate)
         {
             if (_clockAt == DateTime.MinValue) return "";
-            return (now - _clockAt).TotalSeconds <= ClockLiveSeconds ? "" : $"Last read {BossTimers.Ago(now - _clockAt)}";
+            return (now - _clockAt).TotalSeconds <= ClockLiveSeconds ? "" : L.F("Last read {0}", BossTimers.Ago(now - _clockAt));
         }
     }
 
@@ -212,7 +214,7 @@ public sealed class EventTimers
             }
         }
         else if (since >= TimeSpan.Zero && since.TotalMinutes < r.OnMinutes)
-            return new Row(r, true, last + offset, TimeSpan.Zero, since, $"started {BossTimers.Span(since)} ago");
+            return new Row(r, true, last + offset, TimeSpan.Zero, since, L.F("started {0} ago", BossTimers.Span(since)));
         var left = next - serverUtc;
         // a day or more off (the Artifact Siege): days and hours, the seconds ticking there would only be noise
         string when = left.TotalHours >= 24 ? $"{(int)left.TotalDays}d {left.Hours}h {left.Minutes:00}m" : BossTimers.Countdown(left);
@@ -259,13 +261,13 @@ public sealed class EventTimers
     }
 
     /// <summary>What the event the player is in says now: "Getting ready" / "Under way" / "Over: rewards next" / "Left".</summary>
-    public static string StageText(Live l) => l.LeftAt != null ? "Left" : l.Stage switch
+    public static string StageText(Live l) => L.T(l.LeftAt != null ? "Left" : l.Stage switch
     {
         AreaEvent.Stage.Preparing => "Getting ready",
         AreaEvent.Stage.UnderWay => "Under way",
         AreaEvent.Stage.Over => "Over: rewards next",
         _ => "On",
-    };
+    });
 
     /// <summary>For renders and tests: the clock and the event set by hand.</summary>
     internal void SetForTest(TimeSpan offset, bool clockKnown, Live? live)

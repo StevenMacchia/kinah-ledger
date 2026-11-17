@@ -1,5 +1,7 @@
 using System.Windows.Input;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Platform;
 
 /// <summary>
@@ -111,20 +113,20 @@ public readonly record struct Hotkey(ModifierKeys Modifiers, Key Key)
     public static string? Refusal(ModifierKeys mods, Key key)
     {
         if (key is Key.None or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin or Key.System)
-            return "Hold Ctrl, Alt or Shift and press a key.";
-        if (mods == ModifierKeys.None) return "Use Ctrl, Alt or Shift together with a key, so typing in the game can't trigger it.";
-        if (mods.HasFlag(ModifierKeys.Windows)) return "Windows keeps the Win key combinations for itself. Use Ctrl, Alt or Shift.";
+            return L.T("Hold Ctrl, Alt or Shift and press a key.");
+        if (mods == ModifierKeys.None) return L.T("Use Ctrl, Alt or Shift together with a key, so typing in the game can't trigger it.");
+        if (mods.HasFlag(ModifierKeys.Windows)) return L.T("Windows keeps the Win key combinations for itself. Use Ctrl, Alt or Shift.");
         bool ctrlOrAlt = (mods & (ModifierKeys.Control | ModifierKeys.Alt)) != 0;
         // switching windows, the Start menu, the window menu, closing; and the keys that move, select or edit text
         if (key is Key.Tab or Key.Escape or Key.Space or Key.Enter or Key.Back or Key.Delete or Key.Insert or Key.Home or Key.End
                 or Key.PageUp or Key.PageDown or Key.Left or Key.Right or Key.Up or Key.Down or Key.Snapshot or Key.Apps
                 or Key.CapsLock or Key.NumLock or Key.Scroll or Key.Pause or Key.Cancel or Key.Clear)
-            return $"{Name(key)} belongs to Windows or to typing. Pick another key, an F key for one.";
-        if (key == Key.F4 && ctrlOrAlt) return "Alt+F4 and Ctrl+F4 close windows. Pick another key.";
+            return L.F("{0} belongs to Windows or to typing. Pick another key, an F key for one.", Name(key));
+        if (key == Key.F4 && ctrlOrAlt) return L.T("Alt+F4 and Ctrl+F4 close windows. Pick another key.");
         // a letter, a number or a typing mark: Shift with Ctrl or Alt, so copy, paste, undo and the game's own keys keep working
         bool typing = key is >= Key.A and <= Key.Z or >= Key.D0 and <= Key.D9 or >= Key.NumPad0 and <= Key.Divide or >= Key.OemSemicolon and <= Key.OemBackslash;
         if (typing && !(ctrlOrAlt && mods.HasFlag(ModifierKeys.Shift)))
-            return $"With a letter or number, hold Shift and Ctrl or Alt (like Ctrl+Shift+{(key is >= Key.A and <= Key.Z ? key.ToString() : "K")}), so copy, paste and typing keep working.";
+            return L.F("With a letter or number, hold Shift and Ctrl or Alt (like Ctrl+Shift+{0}), so copy, paste and typing keep working.", key is >= Key.A and <= Key.Z ? key.ToString() : "K");
         return null;
     }
 

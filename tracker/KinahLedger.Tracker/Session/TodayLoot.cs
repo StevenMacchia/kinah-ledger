@@ -1,4 +1,5 @@
 using KinahLedger.Data;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Session;
 
@@ -231,18 +232,18 @@ public static class TodayLoot
     public static string Dur(double secs)
     {
         int m = (int)(Math.Max(0, secs) / 60);
-        if (m < 1) return "under a minute";
-        if (m < 60) return $"{m} min";
-        return m % 60 == 0 ? $"{m / 60} h" : $"{m / 60} h {m % 60} min";
+        if (m < 1) return L.T("under a minute");
+        if (m < 60) return L.F("{0} min", m);
+        return m % 60 == 0 ? L.F("{0} h", m / 60) : L.F("{0} h {1} min", m / 60, m % 60);
     }
 
     /// <summary>The Farming page's line: time farming (or gathering), then the kills (or the attempts). It never says a run.</summary>
     public static List<(string Fig, string Word)> FarmLine(TodayFarm f)
     {
         var note = new List<(string, string)>();
-        if (f.Active >= 60 || f.Kills > 0) note.Add((Dur(f.Active), f.Attempts > f.Kills ? " gathering" : " farming"));
-        if (f.Kills > 0) note.Add((f.Kills.ToString("N0"), f.Kills == 1 ? " kill" : " kills"));
-        else if (f.Attempts > 0) note.Add((f.Attempts.ToString("N0"), f.Attempts == 1 ? " attempt" : " attempts"));
+        if (f.Active >= 60 || f.Kills > 0) note.Add((Dur(f.Active), " " + L.T(f.Attempts > f.Kills ? "gathering" : "farming", "count")));
+        if (f.Kills > 0) note.Add((f.Kills.ToString("N0"), " " + L.T(f.Kills == 1 ? "kill" : "kills", "count")));
+        else if (f.Attempts > 0) note.Add((f.Attempts.ToString("N0"), " " + L.T(f.Attempts == 1 ? "attempt" : "attempts", "count")));
         return note;
     }
 
@@ -250,10 +251,10 @@ public static class TodayLoot
     public static List<(string Fig, string Word)> RunsLine(TodayRuns r)
     {
         var note = new List<(string, string)>();
-        void Add(int n, string one, string many) { if (n > 0) note.Add((n.ToString("N0"), n == 1 ? one : many)); }
-        Add(r.Expeditions, " expedition", " expeditions");
-        Add(r.Events, " event", " events");
-        Add(r.Runs - r.Expeditions - r.Events, " run", " runs");
+        void Add(int n, string one, string many) { if (n > 0) note.Add((n.ToString("N0"), " " + L.T(n == 1 ? one : many, "count"))); }
+        Add(r.Expeditions, "expedition", "expeditions");
+        Add(r.Events, "event", "events");
+        Add(r.Runs - r.Expeditions - r.Events, "run", "runs");
         return note;
     }
 }

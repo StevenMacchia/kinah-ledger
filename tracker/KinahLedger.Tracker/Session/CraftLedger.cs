@@ -1,5 +1,7 @@
 using KinahLedger.Data;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -190,9 +192,9 @@ public sealed class CraftLedger
     /// <summary>The rolls' label on the card and the tab, by what a won one makes: "Upgrade rolls", "Combo rolls (each makes two)", or that it isn't known.</summary>
     public static string ComboRollsLabel(string recipe) => ComboOf(recipe) switch
     {
-        RecipeBook.ComboMakes.Upgrade => "Upgrade rolls",
-        RecipeBook.ComboMakes.Double => "Combo rolls (each makes two)",
-        _ => "Combo rolls (what a won one makes isn't known)",
+        RecipeBook.ComboMakes.Upgrade => L.T("Upgrade rolls"),
+        RecipeBook.ComboMakes.Double => L.T("Combo rolls (each makes two)"),
+        _ => L.T("Combo rolls (what a won one makes isn't known)"),
     };
 
     /// <summary>
@@ -207,11 +209,11 @@ public sealed class CraftLedger
         if (!recipeName.Contains("True Dragon", cmp) && !recipeName.Contains("Star Dragon", cmp)) return "";
         var r = RecipeBook.ForOutput(recipeName);
         if (r?.SuccessRate is double sr && sr >= 1) return "";
-        return "A safe recipe for this gear exists since Nov 4 (100%, no combo, Bound output that can't be sold). The tracker can't tell which recipe you used: if every craft works and none rolls a combo, that's the safe one, and the sale value here doesn't apply.";
+        return L.T("A safe recipe for this gear exists since Nov 4 (100%, no combo, Bound output that can't be sold). The tracker can't tell which recipe you used: if every craft works and none rolls a combo, that's the safe one, and the sale value here doesn't apply.");
     }
 
     /// <summary>"2 crafts not seen" for a recipe's crafts the queue's count jumped past; "" with none.</summary>
-    public static string UnseenNote(Recipe r) => r.Unseen > 0 ? $"{r.Unseen} craft{(r.Unseen == 1 ? "" : "s")} not seen (the bars were covered): counted as nothing" : "";
+    public static string UnseenNote(Recipe r) => r.Unseen > 0 ? L.F(r.Unseen == 1 ? "{0} craft not seen (the bars were covered): counted as nothing" : "{0} crafts not seen (the bars were covered): counted as nothing", r.Unseen) : "";
 
     /// <summary>
     /// The pop-up beside the character naming the recipe's item with its count, right after a craft that worked: the game's

@@ -1,6 +1,6 @@
 using KinahLedger.Data;
-using KinahLedger.Ui;
 using System.Globalization;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Session;
 
@@ -88,7 +88,7 @@ public static class SharePicture
     public const string Site = "kinahledger.com";
     public static string RateLabel => L.T("Kinah an hour");
     /// <summary>"made, after the Market's cut", or "before" it while Options shows amounts before the fee.</summary>
-    public static string MadeLabel => L.T(PriceBook.ShowGross ? "made, before the Market's cut" : "made, after the Market's cut");
+    public static string MadeLabel => L.F("made, {0}", PriceBook.Cut);
     /// <summary>The one line under the sheet's buttons.</summary>
     public static string Note => L.T("Paste it in Discord or anywhere. Nothing is uploaded.");
     public const int Width = 1200, Height = 630;
@@ -114,27 +114,48 @@ public static class SharePicture
     }
 
     /// <summary>"1 h 12 min", "42 min", "under a minute": the one way the window writes time.</summary>
-    public static string Dur(double secs)
-    {
-        int m = (int)(Math.Max(0, secs) / 60);
-        if (m < 1) return L.T("under a minute");
-        if (m < 60) return L.F("{0} min", m);
-        return m % 60 == 0 ? L.F("{0} h", m / 60) : L.F("{0} h {1} min", m / 60, m % 60);
-    }
+    public static string Dur(double secs) => TodayLoot.Dur(secs);
 
     static string N(long n) => n.ToString("N0", Inv);
-    static string Plural(long n, string word) => $"{N(n)} {L.T(word + (n == 1 ? "" : "s"))}";
+    /// <summary>"3 kills": the count and its word (<paramref name="word"/> is the English singular), in the language in use.</summary>
+    static string Plural(long n, string word) => $"{N(n)} {L.T(word + (n == 1 ? "" : "s"), "count")}";
 
-    /// <summary>A day as the picture's head writes it: "Fri 13 Nov", "11월 13일 (금)", "11月13日 (週五)".</summary>
-    static string DayHead(DateTime d) => L.Code switch
+    /// <summary>
+    /// A day as the language writes it, for the pictures and sheets: "Fri 13 Nov", "11월 13일 (금)", "11月13日 (週五)". Without the
+    /// month: "Fri 13", "13일 (금)", "13日 (週五)". <paramref name="longDay"/>: the whole day name ("Friday 13 Nov", "11월 13일 금요일").
+    /// </summary>
+    public static string DayWord(DateTime d, bool month = true, bool longDay = false)
     {
-        "ko" => d.ToString("M월 d일 (ddd)", CultureInfo.CurrentCulture),
-        "zh-TW" => d.ToString("M月d日 (ddd)", CultureInfo.CurrentCulture),
-        _ => d.ToString("ddd d MMM", Inv),
+        switch (L.Code)
+        {
+            case "ko":
+                {
+                    var c = new CultureInfo("ko-KR");
+                    return longDay ? d.ToString("M월 d일 dddd", c) : month ? d.ToString("M월 d일 (ddd)", c) : d.ToString("d일 (ddd)", c);
+                }
+            case "zh-TW":
+                {
+                    var c = new CultureInfo("zh-TW");
+                    return longDay ? d.ToString("M月d日 dddd", c) : month ? d.ToString("M月d日 (ddd)", c) : d.ToString("d日 (ddd)", c);
+                }
+            default:
+                return d.ToString(longDay ? "dddd d MMM" : month ? "ddd d MMM" : "ddd d", Inv);
+        }
+    }
+
+    /// <summary>A run's kind as the language says it ("Expedition", "Event", "Arena", "Legion", "Run"); any other kind (Transcendence) stays as the game writes it.</summary>
+    public static string KindWord(string kind) => kind switch
+    {
+        "Expedition" or "Event" or "Arena" or "Legion" or "Run" => L.T(kind, "kind"),
+        _ => kind,
     };
 
-    /// <summary>A day for a row or a note: "Thu 30", "목 30", "週四 30".</summary>
-    static string DayShort(DateTime d) => d.ToString("ddd d", L.Code == "en" ? Inv : CultureInfo.CurrentCulture);
+    /// <summary>What a side was ("of farming", "Expedition", "in the Abyss"), in the language in use.</summary>
+    static string WhatWord(string what) => what switch
+    {
+        "of farming" or "of gathering" or "in the Abyss" => L.T(what, "what"),
+        _ => KindWord(what),
+    };
 
     /// <summary>
     /// The picture's words. <paramref name="showName"/> off (the default): no character name anywhere, whatever is typed.
@@ -143,10 +164,11 @@ public static class SharePicture
     public static SharePic Compose(ShareFacts f, bool showName, string? name, Func<double, string> fk)
     {
         var who = showName && !string.IsNullOrWhiteSpace(name) ? name.Trim() : "";
-        var head = string.Join(" · ", new[] { DayHead(f.Day), who, f.Server }.Where(s => s.Length > 0));
+        var head = string.Join(" · ", new[] { DayWord(f.Day), who, f.Server }.Where(s => s.Length > 0));
         var time = Dur(f.Seconds);
         // "1 h 12 min of farming · 722 kills"; a run says what it was first: "Expedition · 7 min · 18 kills"
-        var sub = f.What.StartsWith("of ", StringComparison.Ordinal) ? $"{time} {L.T(f.What)}" : f.What.Length > 0 ? $"{L.T(f.What)} · {time}" : time;
+        var what = WhatWord(f.What);
+        var sub = f.What.StartsWith("of ", StringComparison.Ordinal) ? $"{time} {what}" : f.What.Length > 0 ? $"{what} · {time}" : time;
         if (f.Count > 0 && f.CountWord.Length > 0) sub += $" · {Plural(f.Count, f.CountWord)}";
         // an hour's rate needs a minute to mean anything
         var rate = f.Seconds >= 60 && f.Made > 0 ? fk(f.Made / (f.Seconds / 3600)) : "–";
@@ -156,17 +178,17 @@ public static class SharePicture
 
         // over the title: the side and what it was ("TODAY · FARMING", "LAST RUN · EXPEDITION")
         bool gather = f.CountWord == "attempt";
-        var activity = f.Scope == Run ? (f.What.EndsWith(" run", StringComparison.Ordinal) ? f.What[..^4] : f.What) : gather ? "Gathering" : "Farming";
-        var side = L.T(f.Scope switch { Today => "Today", Run => "Last run", Week => "Last 7 days", _ => "This session" });
-        var kicker = activity.Length > 0 ? $"{side} · {L.T(activity)}" : side;
+        var activity = f.Scope == Run ? KindWord(f.What.EndsWith(" run", StringComparison.Ordinal) ? f.What[..^4] : f.What) : L.T(gather ? "Gathering" : "Farming");
+        var side = Side(f.Scope);
+        var kicker = activity.Length > 0 ? $"{side} · {activity}" : side;
 
         // under the total: the rate, the time, the kills
         var stats = new List<ShareStat>
         {
             new(rate, RateLabel),
-            new(Short(f.Seconds), L.T(f.Scope == Run ? "run time" : gather ? "gathering" : "farming")),
+            new(Short(f.Seconds), f.Scope == Run ? L.T("run time") : L.T(gather ? "gathering" : "farming", "count")),
         };
-        if (f.Count > 0 && f.CountWord.Length > 0) stats.Add(new ShareStat(N(f.Count), L.T(f.CountWord + (f.Count == 1 ? "" : "s"))));
+        if (f.Count > 0 && f.CountWord.Length > 0) stats.Add(new ShareStat(N(f.Count), L.T(f.CountWord + (f.Count == 1 ? "" : "s"), "count")));
 
         ShareSplit? split = null;
         if (f.Kinah >= 0 && f.Made > 0)
@@ -181,7 +203,7 @@ public static class SharePicture
         {
             long max = f.Days.Max(d => d.Made);
             var top = f.Days.Where(d => d.Made > 0).OrderByDescending(d => d.Made).FirstOrDefault();
-            rows = f.Days.Select(d => new ShareRow(d.IsToday ? L.T("Today") : DayShort(d.Date), "", "", d.Made > 0 ? fk(d.Made) : "–",
+            rows = f.Days.Select(d => new ShareRow(d.IsToday ? L.T("Today") : DayWord(d.Date, month: false), "", "", d.Made > 0 ? fk(d.Made) : "–",
                 max > 0 ? Math.Max(0, d.Made) / (double)max : 0, false, d == top, d.Made <= 0)).ToList();
             rowsHead = L.T("By day");
             int farmed = f.Days.Count(d => d.Made > 0);
@@ -196,7 +218,7 @@ public static class SharePicture
                 d.Worth > 0 ? fk(d.Worth) : d.Bound >= d.Count ? L.T("bound") : L.T("no price"),
                 max > 0 ? Math.Max(0, d.Worth) / (double)max : 0, true, top.Count > 1 && d == bestDrop, d.Worth <= 0)).ToList();
             rowsHead = L.T("Top drops");
-            rowsSide = all.Count > top.Count ? L.F("top {0} of {1} kinds", top.Count, all.Count) : all.Count > 0 ? (all.Count == 1 ? L.F("{0} kind", all.Count) : L.F("{0} kinds", all.Count)) : "";
+            rowsSide = all.Count > top.Count ? L.F("top {0} of {1} kinds", top.Count, all.Count) : all.Count > 0 ? Plural(all.Count, "kind") : "";
         }
 
         // the foot: today's zones, else the best drop (or the week's best day and zone)
@@ -218,6 +240,9 @@ public static class SharePicture
 
     public static string AbyssRateLabel => L.T("Abyss Points an hour");
 
+    /// <summary>The picture's side ("Today", "Last run", "Last 7 days", "This session") in the language in use.</summary>
+    static string Side(string scope) => L.T(scope switch { Today => "Today", Run => "Last run", Week => "Last 7 days", _ => "This session" });
+
     /// <summary>
     /// The picture in the Abyss: the Abyss Points an hour and the points as its figures, then Rank Points, PvP kills (or
     /// every kill) and deaths; the time is the Abyss's; the drops (already the Abyss's own) and the best drop stay; no
@@ -230,17 +255,17 @@ public static class SharePicture
         // beside the points ("Abyss Points in 1h")
         var stats = new List<ShareStat> { new(rate, L.T("AP an hour")) };
         if (a.Rank > 0) stats.Add(new ShareStat(fk(a.Rank), L.T("Rank Points")));
-        if (a.Pvp > 0) stats.Add(new ShareStat(N(a.Pvp), L.T(a.Pvp == 1 ? "PvP kill" : "PvP kills")));
-        else if (a.Kills > 0) stats.Add(new ShareStat(N(a.Kills), L.T(a.Kills == 1 ? "kill" : "kills")));
-        if (stats.Count < 3) stats.Add(new ShareStat(Short(f.Seconds), L.T("in the Abyss")));
-        var side = L.T(f.Scope switch { Today => "Today", Run => "Last run", Week => "Last 7 days", _ => "This session" });
+        if (a.Pvp > 0) stats.Add(new ShareStat(N(a.Pvp), L.T(a.Pvp == 1 ? "PvP kill" : "PvP kills", "count")));
+        else if (a.Kills > 0) stats.Add(new ShareStat(N(a.Kills), L.T(a.Kills == 1 ? "kill" : "kills", "count")));
+        if (stats.Count < 3) stats.Add(new ShareStat(Short(f.Seconds), L.T("in the Abyss", "stat")));
+        var side = Side(f.Scope);
         var sub = L.F("{0} in the Abyss", Dur(f.Seconds)) + (a.Pvp > 0 ? $" · {Plural(a.Pvp, "PvP kill")}" : a.Kills > 0 ? $" · {Plural(a.Kills, "kill")}" : "")
             + (f.Made > 0 ? " · " + L.F("{0} Kinah and loot", fk(f.Made)) : "");
         return p with
         {
             Sub = sub, Rate = rate, RateLabel = AbyssRateLabel, Made = fk(a.Points), MadeLabel = L.F("Abyss Points in {0}", Short(f.Seconds)),
             Kicker = $"{side} · {L.T("Abyss")}".ToUpperInvariant(), Stats = stats, Split = null, Zones = "",
-            RowsHead = L.T("ABYSS DROPS"),
+            RowsHead = L.T("Abyss drops").ToUpperInvariant(),
         };
     }
 
@@ -263,10 +288,10 @@ public static class SharePicture
             p.Sub,
             $"{p.Rate} {p.RateLabel} · {p.Made} {p.MadeLabel}",
         };
-        if (p.Split is { } s) lines.Add($"{L.T("loot")} {s.Loot} · {L.T("Kinah")} {s.Kinah}");
+        if (p.Split is { } s) lines.Add(L.F("loot {0} · Kinah {1}", s.Loot, s.Kinah));
         if (p.Rows.Count > 0)
-            lines.Add((p.Rows[0].Item ? L.T("top drops") + ": " : L.T("by day") + ": ") + string.Join(" · ", p.Rows.Select(r => r.Item ? $"{r.Name} {r.Count} {r.Fig}" : $"{r.Name} {r.Fig}")));
-        if (p.Zones.Length > 0) lines.Add(L.T("zones") + ": " + p.Zones);
+            lines.Add((p.Rows[0].Item ? L.T("top drops: ") : L.T("by day: ")) + string.Join(" · ", p.Rows.Select(r => r.Item ? $"{r.Name} {r.Count} {r.Fig}" : $"{r.Name} {r.Fig}")));
+        if (p.Zones.Length > 0) lines.Add(L.T("zones: ") + p.Zones);
         if (p.Best.Length > 0) lines.Add(p.Best);
         lines.Add(p.Site);
         return string.Join("\n", lines);
@@ -276,7 +301,7 @@ public static class SharePicture
     public static string WeekNote(DateTime? bestDay, long bestMade, string? topZone, Func<double, string> fk)
     {
         var bits = new List<string>();
-        if (bestDay is { } d && bestMade > 0) bits.Add(L.F("best day: {0}, {1}", DayShort(d), fk(bestMade)));
+        if (bestDay is { } d && bestMade > 0) bits.Add(L.F("best day: {0}, {1}", DayWord(d, month: false), fk(bestMade)));
         if (!string.IsNullOrWhiteSpace(topZone)) bits.Add(L.F("most made in {0}", topZone));
         return string.Join(" · ", bits);
     }

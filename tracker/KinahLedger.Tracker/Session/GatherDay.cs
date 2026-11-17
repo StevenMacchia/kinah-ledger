@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -120,8 +122,8 @@ public static class GatherDay
             said.Add(level);
             Save(s, path);
             return level == Limit
-                ? "Daily gathering limit reached (1,000 a server): gathers fail until 00:00 Pacific"
-                : "900 of 1,000 gathers today: 100 left before the game's daily limit";
+                ? L.T("Daily gathering limit reached (1,000 a server): gathers fail until 00:00 Pacific")
+                : L.T("900 of 1,000 gathers today: 100 left before the game's daily limit");
         }
     }
 
@@ -130,6 +132,6 @@ public static class GatherDay
     {
         int n = Count(server, nowUtc, path);
         if (n <= 0) return "";
-        return $"{n:N0} of {Limit:N0} gathers today · resets 00:00 Pacific ({ResetsAt(nowUtc):HH:mm} here)";
+        return L.F("{0} of {1} gathers today · resets 00:00 Pacific ({2} here)", n.ToString("N0"), Limit.ToString("N0"), $"{ResetsAt(nowUtc):HH:mm}");
     }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Data;
 
@@ -54,7 +55,7 @@ public static class PriceBook
     /// <summary>The full wording for a figure: "after the 12% Market fee" (the HUD card, the first tooltips), or "before the Market fee".</summary>
     public static string Fee => ShowGross ? "before the Market fee" : $"after the {FeeRate:P0} Market fee";
     /// <summary>The short wording, where space is tight: "after the Market's cut", or "before the Market's cut".</summary>
-    public static string Cut => ShowGross ? "before the Market's cut" : "after the Market's cut";
+    public static string Cut => L.T(ShowGross ? "before the Market's cut" : "after the Market's cut");
     /// <summary>Readings a price needs to count in totals and profit; an ask this many times the other servers' middle is dropped.</summary>
     public const int SureReadings = 2;
     public const double OutlierX = 3;

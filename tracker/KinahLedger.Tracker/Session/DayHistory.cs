@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using KinahLedger.Data;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>One farming zone of a kept day: what it made (Kinah plus loot after the Market's cut), how long, the kills.</summary>
@@ -292,7 +294,7 @@ public static class DayHistory
     /// <summary>The kinds of a day's runs in words: "11 expeditions · 3 events · 2 world bosses".</summary>
     public static string KindsLine(RunsDay d) => string.Join(" · ", d.Kinds.Select(k => $"{k.Count:N0} {KindWord(k.Kind, k.Count)}"));
 
-    static string KindWord(string kind, int n) => kind switch
+    static string KindWord(string kind, int n) => L.T(kind switch
     {
         "Expedition" => n == 1 ? "expedition" : "expeditions",
         InstanceLog.Transcendence => n == 1 ? "Transcendence run" : "Transcendence runs",
@@ -301,5 +303,5 @@ public static class DayHistory
         "Legion" => n == 1 ? "legion run" : "legion runs",
         InstanceLog.WorldBoss => n == 1 ? "world boss" : "world bosses",
         _ => n == 1 ? "run" : "runs",
-    };
+    }, "count");
 }

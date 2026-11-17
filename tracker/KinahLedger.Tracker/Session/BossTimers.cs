@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using KinahLedger.Packets;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -96,17 +98,17 @@ public sealed class BossTimers
                 {
                     var since = now - b.SpawnPc;
                     return live
-                        ? new Row(b, "Up now", $"up {Span(since)}", TimeSpan.Zero, true, false, false)
-                        : new Row(b, "Up when last seen", $"seen {Ago(now - b.SeenAt)}", TimeSpan.Zero, false, false, true);
+                        ? new Row(b, L.T("Up now"), L.F("up {0}", Span(since)), TimeSpan.Zero, true, false, false)
+                        : new Row(b, L.T("Up when last seen"), L.F("seen {0}", Ago(now - b.SeenAt)), TimeSpan.Zero, false, false, true);
                 }
             case Kind.Waiting:
                 {
                     var left = b.SpawnPc - now;
-                    if (left > TimeSpan.Zero) return new Row(b, "Spawns in", Countdown(left), left, false, false, !live);
-                    return new Row(b, "Due", $"{Span(-left)} ago", left, false, true, true);
+                    if (left > TimeSpan.Zero) return new Row(b, L.T("Spawns in"), Countdown(left), left, false, false, !live);
+                    return new Row(b, L.T("Due"), L.F("{0} ago", Span(-left)), left, false, true, true);
                 }
             default:
-                return new Row(b, "No timer", "", TimeSpan.Zero, false, false, !live);
+                return new Row(b, L.T("No timer"), "", TimeSpan.Zero, false, false, !live);
         }
     }
 
@@ -123,20 +125,20 @@ public sealed class BossTimers
     public static string Span(TimeSpan t)
     {
         if (t < TimeSpan.Zero) t = TimeSpan.Zero;
-        if (t.TotalSeconds < 60) return $"{(int)t.TotalSeconds} s";
-        if (t.TotalMinutes < 60) return $"{(int)t.TotalMinutes} min";
-        if (t.TotalHours < 48) return t.Minutes == 0 ? $"{(int)t.TotalHours} h" : $"{(int)t.TotalHours} h {t.Minutes} min";
-        return $"{(int)t.TotalDays} days";
+        if (t.TotalSeconds < 60) return L.F("{0} s", (int)t.TotalSeconds);
+        if (t.TotalMinutes < 60) return L.F("{0} min", (int)t.TotalMinutes);
+        if (t.TotalHours < 48) return t.Minutes == 0 ? L.F("{0} h", (int)t.TotalHours) : L.F("{0} h {1} min", (int)t.TotalHours, t.Minutes);
+        return L.F("{0} days", (int)t.TotalDays);
     }
 
-    public static string Ago(TimeSpan t) => t.TotalSeconds < 5 ? "just now" : Span(t) + " ago";
+    public static string Ago(TimeSpan t) => t.TotalSeconds < 5 ? L.T("just now") : L.F("{0} ago", Span(t));
 
     /// <summary>One line on how fresh the reading is: "Live from the world map", "Read 2 h 5 min ago: open the world map to refresh".</summary>
     public string Freshness(DateTime now)
     {
-        if (LastSeen is not { } at) return "No reading yet";
+        if (LastSeen is not { } at) return L.T("No reading yet");
         var age = now - at;
-        return age.TotalSeconds <= LiveSeconds ? "Live from the world map" : $"Read {Ago(age)}: open the world map to refresh";
+        return age.TotalSeconds <= LiveSeconds ? L.T("Live from the world map") : L.F("Read {0}: open the world map to refresh", Ago(age));
     }
 
     // ---- saved copy ----

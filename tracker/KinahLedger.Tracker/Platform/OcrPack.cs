@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Windows;
 using Windows.Media.Ocr;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Platform;
 
 /// <summary>
@@ -28,8 +30,8 @@ public static class OcrPack
     /// </summary>
     public static bool OfferInstall(Window? owner)
     {
-        var ask = "Kinah Ledger reads the game's chat with Windows' built-in text recognition, and the English part of it isn't installed on this PC.\n\n" +
-                  "Add it now? Windows asks for permission once, then downloads it (about a minute).";
+        var ask = L.T("Kinah Ledger reads the game's chat with Windows' built-in text recognition, and the English part of it isn't installed on this PC.") + "\n\n" +
+                  L.T("Add it now? Windows asks for permission once, then downloads it (about a minute).");
         var yes = (owner != null ? MessageBox.Show(owner, ask, "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Information)
                                  : MessageBox.Show(ask, "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Information)) == MessageBoxResult.Yes;
         if (!yes) return false;
@@ -43,8 +45,8 @@ public static class OcrPack
         catch (System.ComponentModel.Win32Exception) { /* the Windows prompt was declined */ }
         catch (Exception ex) { CrashLog.Write("ocr pack", ex); }
         if (HasEnglish()) return true;
-        MessageBox.Show("English text recognition still isn't installed.\n\nTo add it by hand: Settings › Time & language › Language & region › Add a language › English (United States), " +
-                        "with Optical character recognition ticked. Then start Kinah Ledger again.", "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageBox.Show(L.T("English text recognition still isn't installed.") + "\n\n" + L.T("To add it by hand: Settings › Time & language › Language & region › Add a language › English (United States), with Optical character recognition ticked. Then start Kinah Ledger again."),
+                        "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
         return false;
     }
 }

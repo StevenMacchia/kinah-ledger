@@ -1,3 +1,5 @@
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>What the player is doing, as one state (Steven, 2026-10-23: "what event is happening, what event tree it's part of, what the user is doing").</summary>
@@ -22,6 +24,24 @@ public sealed record Activity(ActivityKind Kind, string Where = "", string Event
         ActivityKind.Market => "Market",
         ActivityKind.RewardScreen => $"Reward screen · {Where}",
         _ => "Not read yet",
+    };
+
+    /// <summary>
+    /// <see cref="Label"/> as the window draws it, in the language in use. The Label itself stays English: it is kept with the
+    /// pickups, written to the logs and reports, and read back by <see cref="IsRunLabel"/>.
+    /// </summary>
+    public string Shown => Kind switch
+    {
+        ActivityKind.Event => L.T("Event") + " · " + (Event.Length > 0 && !string.Equals(Event, Where, StringComparison.OrdinalIgnoreCase) ? $"{Event} ({Where})" : Where) + (Leaving ? " · " + L.T("rewards landing") : ""),
+        ActivityKind.Expedition or ActivityKind.Arena or ActivityKind.Legion => $"{L.T(Kind.ToString(), "kind")} · {Where}" + (Leaving ? " · " + L.T("rewards landing") : ""),
+        ActivityKind.WorldBoss => L.F("World boss · {0}", Where),
+        ActivityKind.Farming => L.F("Farming · {0}", Where),
+        ActivityKind.Town => L.F("Town · {0}", Where),
+        ActivityKind.Idle => Where.Length > 0 ? L.F("Idle · {0}", Where) : L.T("Idle"),
+        ActivityKind.Crafting => L.T("Crafting"),
+        ActivityKind.Market => L.T("Market"),
+        ActivityKind.RewardScreen => L.F("Reward screen · {0}", Where),
+        _ => L.T("Not read yet"),
     };
 
     /// <summary>

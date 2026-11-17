@@ -1,3 +1,5 @@
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -38,8 +40,8 @@ public static class RunStanding
     public static (string Figure, string Words, int Sign) Line(double share)
     {
         int pct = (int)Math.Round(Math.Abs(share) * 100);
-        if (Math.Abs(share) < About) return ("", "About your average here", 0);
-        return (Percent(Math.Sign(share), pct), " vs your average here", Math.Sign(share));
+        if (Math.Abs(share) < About) return ("", L.T("About your average here"), 0);
+        return (Percent(Math.Sign(share), pct), " " + L.T("vs your average here"), Math.Sign(share));
     }
 
     /// <summary>A percent with its sign: "+18%", "−7%", "+1,240%".</summary>
