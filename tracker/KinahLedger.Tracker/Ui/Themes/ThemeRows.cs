@@ -38,17 +38,6 @@ public interface IThemeRow
 }
 
 /// <summary>
-/// A row that takes a second line when its marks don't fit beside the name (Steven, 2026-11-17: "a lot of numbers in all the
-/// meters you can't see, it's cut off!"): its pitch grows by <see cref="Extra"/>, and it says so (<see cref="Grew"/>) so the
-/// rows under it move down.
-/// </summary>
-public interface IThemeRowGrows
-{
-    double Extra { get; }
-    event Action? Grew;
-}
-
-/// <summary>
 /// A theme's meter rows: the members of the fight as the Parser's rows rank and show them (a party of five at most, ten when
 /// expanded; you pinned last when ranked lower), each in a row the look builds (<see cref="IThemeRow"/>). Rows are kept per
 /// member between draws, so a bar can slide and a row glides to its new rank. Each row opens the member's skills card
@@ -146,11 +135,10 @@ public sealed class ThemeRows : Grid
         Members = members;
         foreach (var gone in _rows.Keys.Where(id => members.All(m => m.Id != id)).ToList()) { Children.Remove(_rows[gone].Row.Root); _rows.Remove(gone); }
         bool pin = members.Any(m => m.Pinned);
-        double next = 0;
         for (int i = 0; i < members.Count; i++)
         {
             var m = members[i];
-            double y = next + (m.Pinned ? _gapH : 0);
+            double y = i * _rowH + (m.Pinned ? _gapH : 0);
             bool fresh = !_rows.TryGetValue(m.Id, out var s);
             if (fresh)
             {
@@ -159,7 +147,6 @@ public sealed class ThemeRows : Grid
                 row.Root.VerticalAlignment = VerticalAlignment.Top;
                 row.Root.RenderTransform = s.Shift;
                 Hover(row.Root, m.Id);
-                if (row is IThemeRowGrows g) g.Grew += Replace;
                 _rows[m.Id] = s;
                 Children.Add(row.Root);
             }
@@ -175,7 +162,6 @@ public sealed class ThemeRows : Grid
                 Motion.Play(slot.Row.Root, 320, p => sh.Y = from * (1 - Motion.Out(p)), () => sh.Y = 0);
             }
             slot.Rank = m.Rank;
-            next = y + _rowH + ExtraOf(slot.Row);
         }
         // the line between the party and you below it
         if (_gap != null) { Children.Remove(_gap); _gap = null; }
@@ -183,36 +169,11 @@ public sealed class ThemeRows : Grid
         {
             int left = Math.Max(0, e.Shown(now).Count(f => !f.Other) - members.Count);
             _gap = _makeGap?.Invoke(left) ?? new Border { Height = 1, Background = HudKit.B(0xFFFFFF, .14), VerticalAlignment = VerticalAlignment.Center };
-            var host = new Grid { Height = _gapH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, PinnedY(members) - _gapH, 0, 0), IsHitTestVisible = false, Children = { _gap } };
+            var host = new Grid { Height = _gapH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, (members.Count - 1) * _rowH, 0, 0), IsHitTestVisible = false, Children = { _gap } };
             _gap = host;
             Children.Add(host);
         }
-        Height = next;
-    }
-
-    static double ExtraOf(IThemeRow r) => r is IThemeRowGrows g ? Math.Max(0, g.Extra) : 0;
-
-    /// <summary>Where the pinned row (you, below the party) sits: under the others and the gap.</summary>
-    double PinnedY(IReadOnlyList<MeterMember> members)
-    {
-        double y = 0;
-        foreach (var m in members) { if (m.Pinned) return y + _gapH; y += _rowH + (_rows.TryGetValue(m.Id, out var s) ? ExtraOf(s.Row) : 0); }
-        return y;
-    }
-
-    /// <summary>A row took or gave back its second line: every row at its place again (no glide), the gap and the height with them.</summary>
-    void Replace()
-    {
-        double next = 0;
-        foreach (var m in Members)
-        {
-            if (!_rows.TryGetValue(m.Id, out var s)) continue;
-            double y = next + (m.Pinned ? _gapH : 0);
-            if (Math.Abs(s.Y - y) > 0.01) { Motion.Halt(s.Row.Root); s.Y = y; s.Row.Root.Margin = new Thickness(0, y, 0, 0); s.Shift.Y = 0; }
-            next = y + _rowH + ExtraOf(s.Row);
-        }
-        if (_gap != null) _gap.Margin = new Thickness(0, PinnedY(Members) - _gapH, 0, 0);
-        Height = Members.Count == 0 ? 0 : next;
+        Height = members.Count == 0 ? 0 : (members.Count - 1) * _rowH + (pin ? _gapH : 0) + _rowH;
     }
 
     // ---- the member's card (as the Parser's rows open it)
