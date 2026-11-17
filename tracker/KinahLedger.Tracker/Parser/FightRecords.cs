@@ -61,9 +61,12 @@ public sealed class FightRecords
     /// <param name="seed">Every kept fight in a folder, oldest first: the records built from them when the folder has none yet.</param>
     public FightRecords(Func<string> dir, Func<string, IEnumerable<Encounter>> seed) { _dir = dir; _seed = seed; }
 
-    /// <summary>The fight a record is kept for: the boss (its id, else its name), the instance and the instance's mode.</summary>
+    /// <summary>
+    /// The fight a record is kept for: the boss (its id, else its name), the instance and the instance's mode. A world boss by
+    /// its name and place always: each spawn of it comes with another id, and its records are the boss's, not the spawn's.
+    /// </summary>
     public static string KeyOf(Encounter e) =>
-        $"{(e.BossId > 0 ? e.BossId.ToString(System.Globalization.CultureInfo.InvariantCulture) : e.Boss.Trim().ToLowerInvariant())}|{BossBook.Strip(e.Instance).Trim().ToLowerInvariant()}|{e.GameMode.Trim().ToLowerInvariant()}";
+        $"{(e.BossId > 0 && !e.WorldBoss ?e.BossId.ToString(System.Globalization.CultureInfo.InvariantCulture) : e.Boss.Trim().ToLowerInvariant())}|{BossBook.Strip(e.Instance).Trim().ToLowerInvariant()}|{e.GameMode.Trim().ToLowerInvariant()}";
 
     /// <summary>A fight that counts toward a record: a boss kill with your damage in it.</summary>
     public static bool Counts(Encounter e) => e.ModeKind == ParserMode.Bosses && !e.Live && !e.Wave && e.Outcome == "kill"

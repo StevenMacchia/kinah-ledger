@@ -39,8 +39,11 @@ static class PK
     public static string Pct(double v, int d = 1) => (v * 100).ToString(d == 0 ? "0" : "0.0", CultureInfo.InvariantCulture) + "%";
     public static string Signed(double v) => (v >= 0 ? "+" : "−") + Pct(Math.Abs(v));
 
-    /// <summary>A record's kind in the language in use: the open world and the Abyss are words; the instance kinds (Transcendence, Expedition, Sanctuary) are the game's names and stay.</summary>
-    public static string KindWord(string kind) => kind is "Open world" or "Abyss" ? L.T(kind) : kind;
+    /// <summary>
+    /// A record's kind in the language in use: the open world, the Abyss, a world boss and Nightmare are words (월드 보스, 악몽;
+    /// 世界首領, 惡夢); the instance kinds (Transcendence, Expedition, Sanctuary) are the game's names and stay.
+    /// </summary>
+    public static string KindWord(string kind) => kind is "Open world" or "Abyss" or Encounter.WorldBossKind or Encounter.NightmareKind ? L.T(kind) : kind;
 
     /// <summary>The sub line under a record's title (as <see cref="Encounter.Where"/>), its kind and place in the language in use.</summary>
     public static string WhereOf(Encounter e)

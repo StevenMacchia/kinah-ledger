@@ -53,6 +53,15 @@ public sealed class BossTimers
 
     public int Count { get { lock (_gate) return _bosses.Count; } }
 
+    /// <summary>Every boss the list named, with its place (the Parser's world boss list, Parser/WorldBosses.cs); unnamed ones left out.</summary>
+    public List<(string Name, string Place)> Named()
+    {
+        lock (_gate) return _bosses.Values.Where(b => b.Name.Length > 0 && !Unnamed(b.Name)).Select(b => (b.Name, b.Place)).ToList();
+    }
+
+    /// <summary>The name a boss gets when the list gave none ("A Verteron boss", "A field boss").</summary>
+    static bool Unnamed(string name) => name.StartsWith("A ", StringComparison.Ordinal) && name.EndsWith(" boss", StringComparison.Ordinal);
+
     /// <summary>A boss as the decoder read it from the list; true when its state or spawn changed (not a refresh of the same reading).</summary>
     public bool Take(BossSighting s)
     {
