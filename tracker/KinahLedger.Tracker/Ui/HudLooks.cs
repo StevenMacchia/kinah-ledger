@@ -45,6 +45,11 @@ public static class HudLooks
         new(HudThemes.Vhs, L.T("VHS"), L.T("A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup"), HudThemes.Glitch),
         new(HudThemes.Corrupt, L.T("Corrupted"), L.T("A broken signal: torn slices and colour ghosts round steady figures"), HudThemes.Glitch),
         new(HudThemes.Terminal, L.T("Terminal"), L.T("An old green screen: a prompt, a cursor, each pickup typed in as a line"), HudThemes.Glitch),
+        // Modern (Steven, 2026-11-17): Ui/Themes/Modern/
+        new(HudThemes.ModernGlass, L.T("Glass"), L.T("Frosted glass over the game: lit pills filled to each share, crisp white figures"), HudThemes.Modern),
+        new(HudThemes.ModernMono, L.T("Mono"), L.T("Swiss minimal: near-black, off-white and one accent, flat bars on an exact grid"), HudThemes.Modern),
+        new(HudThemes.ModernLine, L.T("Line"), L.T("Barely there: a hairline frame and slim class-colour bars under each name"), HudThemes.Modern),
+        new(HudThemes.ModernFade, L.T("Fade"), L.T("No panel: each row a soft class-colour wash fading out to the right"), HudThemes.Modern),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>

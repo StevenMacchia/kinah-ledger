@@ -26,7 +26,9 @@ public static class Skins
     };
 
     /// <summary>The app skin that matches an overlay theme (Wacky, Tactical, Glitch share their keys), or null for Classic.</summary>
-    public static Skin? ForTheme(string? theme) => theme == HudThemes.Classic ? null : All.FirstOrDefault(s => s.Key == theme);
+    public static Skin? ForTheme(string? theme) => theme == HudThemes.Classic ? null
+        : theme == HudThemes.Modern ? Get(Default)   // Modern has no skin of its own yet: Night, the site's look
+        : All.FirstOrDefault(s => s.Key == theme);
 
     public const string Default = "night";
     static ResourceDictionary? _current;
