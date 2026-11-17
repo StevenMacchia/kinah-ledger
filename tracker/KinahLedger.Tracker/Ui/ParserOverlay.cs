@@ -91,7 +91,8 @@ public sealed class ParserOverlay : Window
         _hint.Margin = new Thickness(0, 3, 6, 0); _share.Margin = new Thickness(0, 3, 0, 0);
         foot.Children.Add(_hint);
         Grid.SetColumn(_share, 1); foot.Children.Add(_share);
-        Content = new StackPanel { Children = { _faceGrid, foot } };
+        _root = new StackPanel { Children = { _faceGrid, foot } };
+        Content = _root;
         // the hint wraps under the meter, never wider than it (the window sizes to its content)
         _hint.TextWrapping = TextWrapping.Wrap;
         foot.SetBinding(MaxWidthProperty, new System.Windows.Data.Binding(nameof(ActualWidth)) { Source = _faceGrid });
@@ -289,6 +290,11 @@ public sealed class ParserOverlay : Window
 
     void ShowHint()
     {
+        // With the pointer over it (clicks taken), the whole window holds the pointer, the gap under the meter and round Share
+        // included. The window is layered: a fully clear pixel lets the pointer through to the game, so crossing the gap from
+        // the meter to Share ended the hover and Share went away before it could be pressed (Steven, 2026-11-17). A fill at
+        // 1/255 is never seen. Only while hovered: away from it, and with clicks going through, only what's drawn takes the pointer.
+        _root.Background = !_still && !_clickThrough && PointerOver ? HoverFill : null;
         // a picture just copied: said in the hint's place for a moment, whatever the pointer does
         if (_flashUntil > DateTime.UtcNow)
         {
@@ -314,6 +320,11 @@ public sealed class ParserOverlay : Window
     /// <summary>The window has a fight to share (the button stays away on a ready card).</summary>
     public bool ShareShown { get; set; } = true;
     readonly Button _share;
+    /// <summary>The window's content (the meter, then the hint and Share under it).</summary>
+    readonly StackPanel _root;
+    /// <summary>The fill that keeps the pointer in the window while it's hovered (ShowHint): alpha 1, unseen.</summary>
+    static readonly SolidColorBrush HoverFill = Frozen(new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)));
+    static SolidColorBrush Frozen(SolidColorBrush b) { b.Freeze(); return b; }
     DateTime _flashUntil = DateTime.MinValue;
     string _flashText = "";
     bool _flashGood;
@@ -358,6 +369,7 @@ public sealed class ParserOverlay : Window
     }
 
     void FlashDone(object? sender, EventArgs e) { _flashTimer?.Stop(); _flashUntil = DateTime.MinValue; ShowHint(); }
+    internal void FlashDoneForTest() => FlashDone(null, EventArgs.Empty);
 
     /// <summary>For the options test: Share under the meter shows (the pointer over it), and what the hint says now.</summary>
     internal bool ShareShownForTest => _share.Visibility == Visibility.Visible;
@@ -365,6 +377,32 @@ public sealed class ParserOverlay : Window
     internal void ShareForTest() => ShareAsked?.Invoke();
     /// <summary>For the options test: the hint and Share as the pointer over the overlay would show them.</summary>
     internal void HoverForTest(bool over) { _hoverForTest = over; ShowHint(); }
+    /// <summary>For the options test: the hover's fill is on (the whole window holds the pointer).</summary>
+    internal bool HoverFillForTest => _root.Background != null;
+    /// <summary>
+    /// For the options test: the window drawn as the screen gets it, and any fully clear pixel in the path from the meter's
+    /// bottom edge to Share and over Share (the meter's width, down to Share's bottom). A clear pixel lets the pointer through to
+    /// the game, which ends the hover and hides Share. Null when every pixel there holds the pointer; else where the first hole is.
+    /// </summary>
+    internal string? ShareReachHoleForTest()
+    {
+        UpdateLayout();
+        if (_share.Visibility != Visibility.Visible) return "Share not shown";
+        var face = _faceGrid.TransformToAncestor(this).TransformBounds(new Rect(_faceGrid.RenderSize));
+        var share = _share.TransformToAncestor(this).TransformBounds(new Rect(_share.RenderSize));
+        if (share.Top < face.Bottom - 0.5 || share.Left < face.Left - 0.5 || share.Right > face.Right + 0.5) return $"Share at {share} outside the meter's column {face}";
+        int w = (int)Math.Ceiling(ActualWidth), h = (int)Math.Ceiling(ActualHeight);
+        var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(this);
+        var px = new byte[w * h * 4];
+        bmp.CopyPixels(px, w * 4, 0);
+        int x0 = (int)Math.Ceiling(face.Left), x1 = Math.Min(w, (int)Math.Floor(face.Right));
+        int y0 = Math.Max(0, (int)Math.Floor(face.Bottom) - 2), y1 = Math.Min(h, (int)Math.Floor(share.Bottom));
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                if (px[(y * w + x) * 4 + 3] == 0) return $"clear pixel at {x},{y} (meter bottom {face.Bottom:0.#}, Share {share.Left:0.#},{share.Top:0.#} to {share.Right:0.#},{share.Bottom:0.#})";
+        return null;
+    }
     bool? _hoverForTest;
     bool PointerOver => _hoverForTest ?? IsMouseOver;
 
