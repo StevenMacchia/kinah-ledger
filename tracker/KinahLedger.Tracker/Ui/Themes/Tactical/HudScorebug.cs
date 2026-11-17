@@ -431,8 +431,11 @@ sealed partial class HudScorebug : TacticalLook
         tv.Root.Margin = new Thickness(-Lean + 2.5, 0, 0, 0);
         Grid.SetColumn(tv.Root, 1); g.Children.Add(tv.Root);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(-Lean + 2.5, 0, 0, 0) };
-        Row(right, new Block(SlateC, Cap(word, Frozen(Color.FromRgb(0xC9, 0xD1, 0xDC)), 10.5), 28, new Thickness(11, 0, 11, 0)));
-        Row(right, Ink(T(group, 17, Yellow), 28, new Thickness(11, 0, held ? 11 : 12, 0), r: held));
+        if (word.Length > 0)   // alone with no best and no peak yet: no figure (ParserFoot.Right)
+        {
+            Row(right, new Block(SlateC, Cap(word, Frozen(Color.FromRgb(0xC9, 0xD1, 0xDC)), 10.5), 28, new Thickness(11, 0, 11, 0)));
+            Row(right, Ink(T(group, 17, Yellow), 28, new Thickness(11, 0, held ? 11 : 12, 0), r: held));
+        }
         if (held)
         {
             var badge = new Block(GreenC, Cap(L.T(Encounter.AvgBadge), InkB, 10), 28, new Thickness(10, 0, 10, 0), leanRight: false);

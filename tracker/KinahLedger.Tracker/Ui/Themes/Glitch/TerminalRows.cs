@@ -190,8 +190,11 @@ static class TerminalRows
         left.Inlines.Add(Rn(ff.Total, Pale));
         g.Children.Add(left);
         var r = Txt("", 13, Pale, Face);
-        r.Inlines.Add(Rn(ff.Label.ToLower(CultureInfo.CurrentCulture) + " ", PhosDim, 11.5, FontWeights.SemiBold));
-        r.Inlines.Add(Rn(ff.Dps, Pale));
+        if (ff.Label.Length > 0)
+        {
+            r.Inlines.Add(Rn(ff.Label.ToLower(CultureInfo.CurrentCulture) + " ", PhosDim, 11.5, FontWeights.SemiBold));
+            r.Inlines.Add(Rn(ff.Dps, Pale));
+        }
         if (ff.Held) r.Inlines.Add(Rn(" [" + L.T("avg") + "]", Amber, 11.5));
         Grid.SetColumn(r, 1); g.Children.Add(r);
         sp.Children.Add(g);

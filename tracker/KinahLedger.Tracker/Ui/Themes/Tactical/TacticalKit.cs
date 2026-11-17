@@ -53,11 +53,8 @@ abstract class TacticalLook : HudThemeLook
     /// </summary>
     protected static (string Total, string GroupWord, string Group, bool Held) FootOf(Encounter e, DateTime now)
     {
-        bool held = e.HeldAverage;
-        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
-        bool solo = ParserFoot.SoloYou(e);
-        string word = L.T(solo ? (held ? "You" : pulls ? "Your DPS (boss pulls)" : "Your DPS") : held ? "Group" : pulls ? "Group DPS (boss pulls)" : "Group DPS");
-        return (Amounts.Meter(e.Credited), word, e.GroupDpsText(held ? e.End ?? now : now), held);
+        var (word, value, held) = ParserFoot.Right(e, now);   // the group's DPS; alone, your best or peak (none: GroupWord "")
+        return (Amounts.Meter(e.Credited), word, value, held);
     }
 
     /// <summary>A look's own foot marked as the meter's foot (its words read aloud as the Parser's are).</summary>

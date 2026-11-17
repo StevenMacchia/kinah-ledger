@@ -244,11 +244,8 @@ static class GlitchKit
 
     public static FootFigures FootOf(Encounter e, DateTime now)
     {
-        bool held = e.HeldAverage;
-        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
-        bool solo = ParserFoot.SoloYou(e);
-        string label = L.T(solo ? (held ? "You " : pulls ? "Your DPS (boss pulls) " : "Your DPS ") : held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ").Trim();
-        return new(Amounts.Meter(e.Credited), label, e.GroupDpsText(held ? e.End ?? now : now), held);
+        var (word, value, held) = ParserFoot.Right(e, now);   // the group's DPS; alone, your best or peak (none: Label "")
+        return new(Amounts.Meter(e.Credited), word, value, held);
     }
 
     /// <summary>A look's own foot carries the Parser foot's tag and its words for the tests and a screen reader.</summary>

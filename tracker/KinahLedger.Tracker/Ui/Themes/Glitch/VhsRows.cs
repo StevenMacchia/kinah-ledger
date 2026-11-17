@@ -152,8 +152,11 @@ static class VhsRows
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         var r = Txt("", 13, White, Face);
-        r.Inlines.Add(Rn(ff.Label.ToUpper(CultureInfo.CurrentCulture) + " ", Dim, 10));
-        r.Inlines.Add(Rn(ff.Dps, White));
+        if (ff.Label.Length > 0)
+        {
+            r.Inlines.Add(Rn(ff.Label.ToUpper(CultureInfo.CurrentCulture) + " ", Dim, 10));
+            r.Inlines.Add(Rn(ff.Dps, White));
+        }
         right.Children.Add(r);
         if (ff.Held) right.Children.Add(Tag(L.T("AVG"), Yellow, Black, Face, 9, new Thickness(6, 0, 0, 0)));
         Grid.SetColumn(right, 1); g.Children.Add(right);

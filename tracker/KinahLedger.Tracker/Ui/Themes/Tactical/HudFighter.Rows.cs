@@ -28,8 +28,11 @@ sealed partial class HudFighter
         });
         Grid.SetColumn(lead, 1); g.Children.Add(lead);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
-        right.Children.Add(Tt(word.ToUpperInvariant(), 10.5, PhosDim, Face, FontWeights.Bold));
-        var gv = Tt(group, 14, Phos, Face, FontWeights.Bold); gv.Margin = new Thickness(6, 0, 0, 0); right.Children.Add(gv);
+        if (word.Length > 0)
+        {
+            right.Children.Add(Tt(word.ToUpperInvariant(), 10.5, PhosDim, Face, FontWeights.Bold));
+            var gv = Tt(group, 14, Phos, Face, FontWeights.Bold); gv.Margin = new Thickness(6, 0, 0, 0); right.Children.Add(gv);
+        }
         if (held)
         {
             var badge = new Border { Tag = "avg-badge", BorderBrush = Amber, BorderThickness = new Thickness(1), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,

@@ -22,6 +22,42 @@ static class ParserFoot
     /// <summary>You are the only one on the meter (no member but you with damage): the group's figure is yours.</summary>
     public static bool SoloYou(Encounter e) => e.Members.Any(f => f.You) && e.Members.Where(f => !f.Other && f.Damage > 0).All(f => f.You);
 
+    /// <summary>The seconds a peak is measured over: the best stretch of this many seconds in a row.</summary>
+    public const int PeakSeconds = 5;
+
+    /// <summary>
+    /// The foot's right-hand figure: its word, the figure, and whether it is the held fight's average (the AVG. DPS badge).
+    /// With others on the meter, the group's DPS. Alone, the group's figure is your row's again (Steven, 2026-11-17: "isnt
+    /// the avg thing redundant?"), so it says something the row doesn't: your best on this fight before this one ("Best"),
+    /// else your best <see cref="PeakSeconds"/> seconds in a row ("Peak"), else nothing (Word "").
+    /// </summary>
+    public static (string Word, string Value, bool Held) Right(Encounter e, DateTime now)
+    {
+        bool held = e.HeldAverage;
+        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
+        if (!SoloYou(e))
+            return (L.T(held ? "Group" : pulls ? "Group DPS (boss pulls)" : "Group DPS"), e.GroupDpsText(held ? e.End ?? now : now), held);
+        double best = 0;
+        try { best = ParserRows.BestOf?.Invoke(e)?.Dps ?? 0; } catch (Exception) { best = 0; }
+        if (best > 0) return (L.T("Best"), Amounts.Meter(best), false);
+        if (PeakDps(e) is { } peak) return (L.T("Peak"), Amounts.Meter(peak), false);
+        return ("", "", false);
+    }
+
+    /// <summary>Your damage over your best <see cref="PeakSeconds"/> seconds in a row, a second; null with fewer seconds than that one more.</summary>
+    public static double? PeakDps(Encounter e)
+    {
+        if (e.You?.PerSecond is not { } ps || ps.Count <= PeakSeconds) return null;
+        long sum = 0, top = 0;
+        for (int i = 0; i < ps.Count; i++)
+        {
+            sum += ps[i];
+            if (i >= PeakSeconds) sum -= ps[i - PeakSeconds];
+            if (i >= PeakSeconds - 1 && sum > top) top = sum;
+        }
+        return top > 0 ? top / (double)PeakSeconds : null;
+    }
+
     public static Grid Line(Encounter e, DateTime now, double size = 12, TextBlock? lead = null)
     {
         var g = new Grid { Tag = "parser-foot" };
@@ -38,17 +74,16 @@ static class ParserFoot
         left.Inlines.Add(new Run(Amounts.Meter(e.Credited)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-        bool held = e.HeldAverage;
-        var gt = new TextBlock { FontSize = size, VerticalAlignment = VerticalAlignment.Center };
+        // the group's DPS (a run's counts its boss pulls only, said so); alone, your best on this fight or your peak (Right)
+        var (word, value, held) = Right(e, now);
+        var gt = new TextBlock { FontSize = size, VerticalAlignment = VerticalAlignment.Center, Tag = word.Length > 0 ? "foot-right" : null };
         Typography.SetNumeralAlignment(gt, FontNumeralAlignment.Tabular);
-        // a run's DPS counts its boss pulls only: said while it runs, as the panel always has
-        bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
-        // alone on the meter it is your DPS, said so (Steven, 2026-11-16: "it needs to be my individual one if I'm alone")
-        bool solo = SoloYou(e);
-        string label = L.T(solo ? (held ? "You " : pulls ? "Your DPS (boss pulls) " : "Your DPS ") : held ? "Group " : pulls ? "Group DPS (boss pulls) " : "Group DPS ");
-        gt.Inlines.Add(new Run(label) { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
-        gt.Inlines.Add(new Run(e.GroupDpsText(held ? e.End ?? now : now)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
-        right.Children.Add(gt);
+        if (word.Length > 0)
+        {
+            gt.Inlines.Add(new Run(word + " ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
+            gt.Inlines.Add(new Run(value) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
+            right.Children.Add(gt);
+        }
         if (e.Live && !e.Waiting) SawLive(e.Id);
         if (held)
         {
