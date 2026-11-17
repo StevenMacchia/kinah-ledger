@@ -51,6 +51,10 @@ static class TerminalRows
     {
         var g = new Grid { Height = height };
         var (name, dps) = Widths();
+        // a wider meter gives the name the room past the default width (up to the game's longest, 16 letters), the bar the rest
+        // (the share picture widens the meter until nothing trims: "Thornecrest" stayed cut at any width)
+        double longest = Math.Ceiling(4 + W("Thornecrestwarde", 11.5, FontWeights.Bold) + Gap0);
+        name = Math.Min(longest, name + Math.Max(0, HudStackLook.FightWidth - HudStackLook.FightWidthDefault) * 0.5);
         foreach (var w in new[] { new GridLength(RankW), new GridLength(name), new GridLength(1, GridUnitType.Star), new GridLength(dps) })
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
         return g;
