@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using KinahLedger.Parser;
 using KinahLedger.Session;
 
@@ -53,11 +55,64 @@ public static partial class WpfApp
                 h.Close();
             }
         check(bad.Count == 0, "the themes' looks never name packets or traffic" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        // each look's own skills card on a row (Steven, 2026-11-16: "the extra DPS stats per player display classic standard
+        // meter"), with the card's figures; and Combat Power beside every name on the meter ("dont forget the combat power")
+        var cards = new List<string>();
+        var ranked = live!.Ranked().Where(f => !f.Other).ToList();
+        foreach (var k in keys)
+        {
+            var h = new HudWindow(null, k, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Update(kinah); h.ShowParser(live, now, ParserMode.Bosses, details: false); h.SetKinahHidden(true);
+            h.Show(); DoEvents();
+            var texts = VisibleTexts(h);
+            var rows = ThemeRowsOf(h).FirstOrDefault();
+            var top = ranked[0];
+            var card = rows?.CardForTest(top.Id);
+            var mc = MemberCard.Of(live, top, now);
+            var cardTexts = card == null ? new List<string>() : LogicalTexts(card).ToList();   // a card not yet shown: its words by the logical tree
+            string cardText = string.Join(" ", cardTexts);
+            var missing = new List<string>();
+            if (HudThemes.Make(k, true) is not IThemeCard) missing.Add("its own card");
+            if (card == null || mc == null) missing.Add("a card");
+            else
+            {
+                foreach (var want in new[] { mc.Name, mc.Dps, mc.Share, mc.Damage, mc.Cp, mc.Abilities.FirstOrDefault()?.Name ?? "" }.Where(x => x.Length > 0))
+                    if (!cardText.Contains(want, StringComparison.OrdinalIgnoreCase)) missing.Add($"card {want}");
+            }
+            string rowText = string.Join(" ", texts);
+            foreach (var f in ranked.Take(KinahLedger.Ui.ParserRows.CompactRows).Where(f => f.CombatPower > 0))
+                if (!rowText.Contains(Amounts.Meter(f.CombatPower))) missing.Add($"CP {Amounts.Meter(f.CombatPower)} by {f.Name}");
+            if (missing.Count > 0) cards.Add($"{k}: {string.Join(", ", missing)}");
+            h.Close();
+        }
+        // one fight through every look's fullest card: the same "N more" figure, deaths and specialties in each (a figure
+        // that changes with the theme can't ship)
+        {
+            var full = FullCardSample(KinahLedger.Ui.WpfApp.WithKindsForTest(live));
+            string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+            Encounter.CritKey = Encounter.CritKeyOf(KinahLedger.Parser.ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(KinahLedger.Parser.ParserPrefs.BackPick);
+            var youF = full.Roster.First(f => f.You);
+            var mcF = MemberCard.Of(full, youF, now)!;
+            foreach (var k in keys)
+            {
+                var h = new HudWindow(null, k, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                h.Update(kinah); h.ShowParser(full, now, ParserMode.Bosses, details: false); h.SetKinahHidden(true);
+                h.Show(); DoEvents();
+                var card = ThemeRowsOf(h).FirstOrDefault()?.CardForTest(youF.Id);
+                string t = card == null ? "" : string.Join(" ", LogicalTexts(card));
+                var miss = new[] { mcF.More, mcF.MoreDamage, mcF.DeathsText.Split(' ')[0], mcF.Abilities.First(a => a.Picks.Length > 0).Picks }.Where(x => !t.Replace(" ", "").Contains(x.Replace(" ", ""), StringComparison.OrdinalIgnoreCase)).ToList();   // "1 · 2" spaced is the same
+                if (miss.Count > 0) cards.Add($"{k} full card: missing {string.Join(", ", miss)}");
+                h.Close();
+            }
+            Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+        }
+        check(cards.Count == 0, "every theme's look opens its own skills card on a row, with the member's DPS, share, damage, Combat Power and top skill, and shows each member's Combat Power on the meter" + (cards.Count > 0 ? ": " + string.Join("; ", cards) : ""));
     }
 
     static void ShotThemes(MainWindow w, string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        try { File.Delete(Path.Combine(dir, "spill.txt")); } catch (IOException) { }   // what each frame draws past its edges (SpillNote)
         var looks = HudLooks.All.Where(l => HudThemes.Themed(l.Key) && (only.Length == 0 || only.Contains(l.Key))).Select(l => l.Key).ToList();
         var kinah = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         var sample = w.HudSample();
@@ -137,7 +192,9 @@ public static partial class WpfApp
                     DoEvents();
                     Motion.FrozenAt = frozen0;
                 }
-                Save((FrameworkElement)h.Content, Path.Combine(dir, $"ui-theme-{look}-{tag}{(frame is double ff ? "-" + Math.Round(ff * 100) : "")}.png"), 0, ShotGround);
+                string file = $"ui-theme-{look}-{tag}{(frame is double ff ? "-" + Math.Round(ff * 100) : "")}.png";
+                Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
+                SpillNote(dir, file, (FrameworkElement)h.Content);
                 h.Close();
             }
             try
@@ -155,7 +212,38 @@ public static partial class WpfApp
                     var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = e.ModeKind, Look = look };
                     o.Draw(e, at); o.Show(); DoEvents();
                     Save((FrameworkElement)o.Content, Path.Combine(dir, $"ui-theme-{look}-overlay-{tag}.png"), 0, ShotGround);
+                    SpillNote(dir, $"ui-theme-{look}-overlay-{tag}.png", (FrameworkElement)o.Content);
                     o.Close();
+                }
+                // the members' skills cards (a row hovered): the top member's, yours, a healer's, and yours with crit and back-attack rates
+                {
+                    var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                    h.Update(kinah);
+                    var withKinds = WithKinds(live!);
+                    string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+                    var full = FullCardSample(withKinds);
+                    foreach (var (tag, e) in new[] { ("", live!), ("-crit", withKinds), ("-full", full) })
+                    {
+                        if (tag.Length > 0) { Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick); }
+                        h.ShowParser(e, now, e.ModeKind, details: false); h.SetKinahHidden(true);
+                        if (!h.IsVisible) h.Show();
+                        DoEvents();
+                        var rows = ThemeRowsOf(h).FirstOrDefault();
+                        var ranked = e.Ranked().Where(f => !f.Other).ToList();
+                        var picks = tag.Length > 0 ? new[] { ("you", ranked.FirstOrDefault(f => f.You) ?? ranked[0]) }
+                            : new[] { ("top", ranked[0]), ("you", ranked.FirstOrDefault(f => f.You) ?? ranked[0]), ("healer", ranked.FirstOrDefault(f => f.Healing > 0 && !f.You) ?? ranked[^1]) };
+                        foreach (var (who, f) in picks)
+                            if (rows?.CardForTest(f.Id) is { } card)
+                            {
+                                var file = $"ui-theme-{look}-card-{who}{tag}.png";
+                                var host = new System.Windows.Controls.Border { Child = card, Padding = new Thickness(14) };
+                                Save(host, Path.Combine(dir, file), 460, ShotGround);
+                                SpillNote(dir, file, card);
+                            }
+                            else File.AppendAllText(Path.Combine(dir, "spill.txt"), $"ui-theme-{look}-card-{who}{tag}.png: no card (rows {(rows == null ? "missing" : "found")})" + Environment.NewLine);
+                        Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+                    }
+                    h.Close();
                 }
             }
             catch (Exception ex) { Console.WriteLine($"{look}: {ex}"); }
@@ -171,5 +259,81 @@ public static partial class WpfApp
             if (tag is "rare-drop" or "best-passed" or "entry-opened" or "fight-started" or "fight-ended" or "fight-wiped") foreach (var k in c.Keys.Where(k => k.StartsWith("pick")).ToList()) c[k] = "";
             return c;
         }
+    }
+
+    /// <summary>Every TextBlock's words under an element by its logical tree (one not laid out yet has no visual tree).</summary>
+    static IEnumerable<string> LogicalTexts(DependencyObject d)
+    {
+        if (d is System.Windows.Controls.TextBlock t) yield return MainWindow.InlineText(t);
+        foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
+            foreach (var x in LogicalTexts(ch)) yield return x;
+    }
+
+    /// <summary>The fullest card's fight: yours with crit and back rates, specialties, a long name, "3 more" abilities and 2 deaths.</summary>
+    static Encounter FullCardSample(Encounter withKinds)
+    {
+        var full = BossParser.Copy(withKinds);
+        if (full.Roster.FirstOrDefault(f => f.You) is { } youF)
+        {
+            youF.Name = "Valkyriestrider"; youF.Deaths = 2;
+            long low = youF.Abilities.Where(a => a.Damage > 0).Select(a => a.Damage).DefaultIfEmpty(1000).Min();
+            foreach (var (a, i) in full.Roster.Where(f => !f.You && !f.Other).SelectMany(f => f.Abilities).Where(a => a.Damage > 0).Take(3).Select((a, i) => (a, i)))
+                youF.Abilities.Add(new AbilityShare { Skill = a.Skill, Damage = low / (2 + i), BossDamage = low / (2 + i), Hits = 3 + i, BossHits = 3 + i });
+        }
+        return full;
+    }
+
+    /// <summary>A theme look's meter rows in a window (its own, Ui/Themes/ThemeRows.cs).</summary>
+    static IEnumerable<ThemeRows> ThemeRowsOf(DependencyObject d)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+        {
+            var ch = VisualTreeHelper.GetChild(d, i);
+            if (ch is ThemeRows tr) { yield return tr; continue; }
+            foreach (var x in ThemeRowsOf(ch)) yield return x;
+        }
+    }
+
+    /// <summary>
+    /// What a frame draws past its own edges, in pixels per side (Steven, 2026-11-16: "some animations get cut off"): the
+    /// window over the game is exactly its content's size, so an effect drawn outside it is cut there. Empty when nothing spills.
+    /// Drawn through a brush of the whole visual (its descendants' bounds), so what Save's bitmap crops still shows here.
+    /// </summary>
+    internal static string Spill(FrameworkElement el)
+    {
+        double w = el.ActualWidth, h = el.ActualHeight;
+        var b = VisualTreeHelper.GetDescendantBounds(el);
+        if (b.IsEmpty || w < 1 || h < 1) return "";
+        var all = Rect.Union(b, new Rect(0, 0, w, h));
+        all.Intersect(new Rect(-600, -600, w + 1200, h + 1200));
+        if (all.Left >= 0 && all.Top >= 0 && all.Right <= w + 0.5 && all.Bottom <= h + 0.5) return "";
+        int pw = (int)Math.Ceiling(all.Width), ph = (int)Math.Ceiling(all.Height);
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+            dc.DrawRectangle(new VisualBrush(el) { Stretch = Stretch.None, ViewboxUnits = BrushMappingMode.Absolute, Viewbox = all, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(0, 0, pw, ph));
+        var rtb = new RenderTargetBitmap(pw, ph, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        var px = new byte[pw * ph * 4];
+        rtb.CopyPixels(px, pw * 4, 0);
+        double ox = -all.X, oy = -all.Y;
+        int l = 0, t = 0, r = 0, bt = 0;
+        for (int y = 0; y < ph; y++)
+            for (int x = 0; x < pw; x++)
+            {
+                if (px[(y * pw + x) * 4 + 3] < 20) continue;   // faint glow edges don't count
+                double cx = x + 0.5 - ox, cy = y + 0.5 - oy;
+                if (cx < 0) l = Math.Max(l, (int)Math.Ceiling(-cx));
+                if (cx > w) r = Math.Max(r, (int)Math.Ceiling(cx - w));
+                if (cy < 0) t = Math.Max(t, (int)Math.Ceiling(-cy));
+                if (cy > h) bt = Math.Max(bt, (int)Math.Ceiling(cy - h));
+            }
+        return l + t + r + bt == 0 ? "" : $"cut: left {l} top {t} right {r} bottom {bt} px";
+    }
+
+    static void SpillNote(string dir, string file, FrameworkElement el)
+    {
+        string s;
+        try { s = Spill(el); } catch (Exception ex) { s = "spill check failed: " + ex.Message; }
+        if (s.Length > 0) File.AppendAllText(Path.Combine(dir, "spill.txt"), file + ": " + s + Environment.NewLine);
     }
 }

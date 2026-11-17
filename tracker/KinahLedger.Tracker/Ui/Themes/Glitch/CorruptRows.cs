@@ -13,7 +13,7 @@ namespace KinahLedger.Ui;
 /// Corrupted's meter: torn data rows. Each member is a dark slab knocked a few px sideways (the slab, never the words),
 /// an edge in their class's colour on its left, a thin level along its foot in their class's colour with a magenta ghost
 /// and a cyan ghost of it a hair off, the name in white, the DPS and the share right-aligned. You: the rank in a magenta
-/// block, a cyan pointer, a white edge round your slab. Deaths an ERR block, TOP_DPS / TOP_HEAL stamped as blocks at a kill.
+/// block, a cyan pointer, a white edge round your slab. Deaths a red ✕ block, TOP / HEAL stamped as blocks at a kill (short, so the name and its CP keep their room).
 /// The foot: total and group_dps in the stream's words, AVG stamped once the fight is held.
 /// </summary>
 static class CorruptRows
@@ -50,6 +50,8 @@ static class CorruptRows
         readonly TextBlock _rank = Txt("", 10.5, Lilac, Face);
         readonly TextBlock _you = Txt("▶", 9, Cyan, Face);
         readonly TextBlock _name = Txt("", 12, White, Face, trim: true);
+        /// <summary>The Combat Power ("4.7K") beside the name, smaller and in dim lavender; it gives way before the name is cut short.</summary>
+        readonly TextBlock _cp = Txt("", 9.5, LilacDim, Face);
         readonly StackPanel _tags = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _heal = Txt("", 10, Green, Face);
         readonly TextBlock _extra = Txt("", 10, LilacDim, Face), _fig = FigCell(13, White, Face, 42), _share = FigCell(10.5, Lilac, Face, 46);
@@ -77,8 +79,9 @@ static class CorruptRows
             _code.Margin = new Thickness(5, 1, 0, 0);
             _you.Margin = new Thickness(0, 0, 4, 0);
             DockPanel.SetDock(_you, Dock.Left); DockPanel.SetDock(_tags, Dock.Right);
-            DockPanel.SetDock(_code, Dock.Left);
-            var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0, 0, 0), Children = { _code, _you, _tags, _name } };
+            _cp.Margin = new Thickness(6, 2, 0, 0);
+            // the code, the pointer, the name, cp= and the tags packed from the left: the cp gives way before the name is cut short
+            var name = new GlitchNameLine { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0, 0, 0), Text = _name, Yields = _cp, Children = { _code, _you, _name, _cp, _tags } };
             _code.Margin = new Thickness(5, 1, 6, 0);
             Grid.SetColumn(name, 1); g.Children.Add(name);
             _heal.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_heal, 2); g.Children.Add(_heal);
@@ -106,10 +109,14 @@ static class CorruptRows
             _rank.Foreground = you ? White : Lilac;
             _you.Visibility = you ? Visibility.Visible : Visibility.Collapsed;
             _name.Text = m.Name;
+            _name.Foreground = you ? Br(0xFFD24A) : White;
+            _cp.Inlines.Clear();
+            if (m.Cp.Length > 0) _cp.Inlines.Add(Rn(m.Cp, LilacDim));
+            _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _tags.Children.Clear();
-            if (m.Deaths > 0) _tags.Children.Add(Tag(L.T("ERR") + "×" + m.Deaths.ToString(CultureInfo.InvariantCulture), Br(RedC), White, Face, 9));
-            if (m.TopDps) _tags.Children.Add(Tag(L.T("TOP_DPS"), White, Black, Face, 9));
-            if (m.TopHeals) _tags.Children.Add(Tag(L.T("TOP_HEAL"), Green, Black, Face, 9));
+            if (m.Deaths > 0) _tags.Children.Add(Tag("✕" + m.Deaths.ToString(CultureInfo.InvariantCulture), Br(RedC), White, Face, 9));
+            if (m.TopDps) _tags.Children.Add(Tag(L.T("TOP"), White, Black, Face, 9));
+            if (m.TopHeals) _tags.Children.Add(Tag(L.T("HEAL"), Green, Black, Face, 9));
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _extra.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " " + m.Crit : "") : "";

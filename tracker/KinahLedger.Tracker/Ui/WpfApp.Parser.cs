@@ -84,6 +84,25 @@ public static partial class WpfApp
         return ready;
     }
 
+    /// <summary>A fight's copy with each skill's crit and back-attack rates and specialties (Settings' crit switch on): the cards' sample.</summary>
+    internal static Encounter WithKindsForTest(Encounter live) => WithKinds(live);
+    static Encounter WithKinds(Encounter live)
+    {
+        var withKinds = BossParser.Copy(live);
+        foreach (var f in withKinds.Roster)
+            foreach (var a in f.Abilities)
+            {
+                int seen = Math.Max(12, a.Hits); uint h = (uint)(a.Skill * 2654435761u ^ (uint)f.Id);
+                double crit = 0.22 + (h % 37) / 100.0, back = (h / 37 % 41) / 100.0;
+                a.StreamHits = seen; a.StreamDamage = a.Damage;
+                a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
+                a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
+                // and the specialties its hits named (a class skill's id: the picks x 10)
+                if (a.Skill is >= 11_000_000 and < 20_000_000) a.Picks = KinahLedger.Parser.Abilities.PicksOf((uint)a.Skill + (uint)((h % 4) switch { 0 => 340, 1 => 120, 2 => 450, _ => 0 }));
+            }
+        return withKinds;
+    }
+
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
         // the card a specialties chip opens (0.10.133): Judgment with 4 and 5 picked
@@ -109,18 +128,7 @@ public static partial class WpfApp
             if (ParserRows.HoverCard(live!, who, now) is { } card) { card.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = card }, Path.Combine(dir, file), 320, ShotGround); }
         // the same card with Settings' crit and back-attack switch on: each skill's rates from hits kept one by one
         {
-            var withKinds = BossParser.Copy(live!);
-            foreach (var f in withKinds.Roster)
-                foreach (var a in f.Abilities)
-                {
-                    int seen = Math.Max(12, a.Hits); uint h = (uint)(a.Skill * 2654435761u ^ (uint)f.Id);
-                    double crit = 0.22 + (h % 37) / 100.0, back = (h / 37 % 41) / 100.0;
-                    a.StreamHits = seen; a.StreamDamage = a.Damage;
-                    a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
-                    a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
-                    // and the specialties its hits named (a class skill's id: the picks x 10)
-                    if (a.Skill is >= 11_000_000 and < 20_000_000) a.Picks = KinahLedger.Parser.Abilities.PicksOf((uint)a.Skill + (uint)((h % 4) switch { 0 => 340, 1 => 120, 2 => 450, _ => 0 }));
-                }
+            var withKinds = WithKinds(live!);
             string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
             Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
             var youK = withKinds.Roster.FirstOrDefault(f => f.You) ?? withKinds.Ranked().First(f => !f.Other);
@@ -602,10 +610,14 @@ public static partial class WpfApp
             var (keys0, on0) = opt.ParserLooksForTest;
             string kinahLook = w.HudLook;
             bool rowShown = opt.ParserLookRowShownForTest == true;
+            bool save0 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest("capsule"); DoEvents();
             var (_, on1) = opt.ParserLooksForTest;
             string stage1 = opt.ParserLookStageForTest ?? "";
+            bool save1 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest(ParserPrefs.StandardLook); DoEvents();
+            // a look picked here alone is a change to save (Steven, 2026-11-16: "i cant save it unless i also change the buddy")
+            check(!save0 && save1 && !opt.SaveBtn.IsEnabled, $"Options › In game › Parser: a look picked for its own window alone lights Save, and picking the saved one again puts it out (before {save0}, picked {save1}, back {opt.SaveBtn.IsEnabled})");
             check(rowShown && keys0.SequenceEqual(new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
                 && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.StandardLook,
                 $"Options › In game › Parser: its own window's look row ({string.Join(", ", keys0)}), Standard by default ({on0}); a pick outlines it and draws it big ({on1}, {stage1}), the Kinah overlay's look left alone");

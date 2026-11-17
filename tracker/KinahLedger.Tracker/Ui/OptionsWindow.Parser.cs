@@ -52,8 +52,21 @@ public partial class OptionsWindow
         _parserWidthLoading = false;
         _parserWidthLoaded = p.Width;
         DrawParserLooks();
+        _parserSnap = ParserSnap();
     }
     bool _parserWidthLoading;
+
+    /// <summary>
+    /// The Parser group as loaded, to tell an unsaved change: its switches, look and width live in parser.json, not in the
+    /// page's edited copy, so a look picked here alone never lit Save (Steven, 2026-11-16: "i cant save it unless i also change the buddy").
+    /// </summary>
+    string _parserSnap = "";
+    string ParserSnap() => _parserLabel == null ? "" : string.Join("|",
+        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk }
+            .Select(c => c.IsChecked == true ? "1" : "0"))
+        + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0);
+    /// <summary>Something in the Parser group differs from parser.json: Save lights up for it.</summary>
+    internal bool ParserDirty => _parserLabel != null && ParserSnap() != _parserSnap;
     double _parserWidthLoaded = double.NaN;
 
     /// <summary>Options closed without saving: the meter back to its saved width, only if the slider moved it.</summary>
@@ -115,6 +128,7 @@ public partial class OptionsWindow
             g.Children.Add(cb);
             if (stack.Children.Count > 0) stack.Children.Add(Styled(new Border(), "Divider"));
             stack.Children.Add(g);
+            cb.Click += (_, _) => Refresh();   // the footer says there is something to save
             return cb;
         }
         _parserExpandedChk = Row("Expanded meter", "The overlay's meter shows everyone with their damage. Off, the top four, and you always. A click on the meter switches it too.", "Parser expanded meter");
@@ -191,7 +205,7 @@ public partial class OptionsWindow
         _parserWidth.ValueChanged += (_, e) =>
         {
             Label();
-            if (!_parserWidthLoading) _host.PreviewFightWidth(Math.Round(e.NewValue));
+            if (!_parserWidthLoading) { _host.PreviewFightWidth(Math.Round(e.NewValue)); Refresh(); }
         };
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _parserWidth, _parserWidthLbl } };
         Grid.SetColumn(right, 1); g.Children.Add(right);
@@ -256,7 +270,7 @@ public partial class OptionsWindow
             card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
             card.FocusVisualStyle = (Style)FindResource("FocusRing");
             AutomationProperties.SetName(card, lookName + " overlay look" + (on ? ", in use" : ""));
-            void Pick() { if (separate) { _parserLookPick = key; DrawParserLooks(); } else PickHudLook(key); }
+            void Pick() { if (separate) { _parserLookPick = key; DrawParserLooks(); Refresh(); } else PickHudLook(key); }
             card.MouseLeftButtonUp += (_, _) => Pick();
             card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Pick(); e.Handled = true; } };
             card.MouseEnter += (_, _) => ShowParserLook(key, sample, fight!, now, scene);

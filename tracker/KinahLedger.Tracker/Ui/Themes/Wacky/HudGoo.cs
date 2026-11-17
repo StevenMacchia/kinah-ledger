@@ -20,7 +20,7 @@ namespace KinahLedger.Ui;
 /// item; your best inflates the blob under a YUM! NEW BEST bubble; the bean bounces when an entry opens; a fight's panel
 /// drips in; a kill throws sprinkles.
 /// </summary>
-sealed class HudGoo : WackyLook
+sealed class HudGoo : WackyLook, IThemeCard
 {
     const uint P1 = 0x7B2CFF, P2 = 0xC23CFF, P3 = 0xFF4FA3, Lime = 0xB6FF3D, Butter = 0xFFF27A, Grape = 0x3A0E6E, Grape2 = 0x24073F, Deep = 0x2A0A55, Night = 0x12021F;
     static readonly Brush ButterB = Wk.S(Butter), WhiteB = Wk.S(0xFFFFFF), GrapeB = Wk.S(Grape), LimeB = Wk.S(Lime), NightB = Wk.S(Night);
@@ -70,7 +70,7 @@ sealed class HudGoo : WackyLook
     readonly ScaleTransform _beanSquash = new();
     FrameworkElement? _ring, _hour;
 
-    public HudGoo() : base(new Thickness(12, 56, 36, 30), Wk.Segoe)
+    public HudGoo() : base(new Thickness(12, 66, 36, 44), Wk.Segoe)
     {
         UseRows(34, _ => new GooRow(), 16, GooGap);
         _beanClock = Figure("", 13, Wk.S(Grape2), Wk.Heavy, FontWeights.Black);
@@ -343,14 +343,17 @@ sealed class HudGoo : WackyLook
         return bits;
     }
 
-    static void Pop(Wk.Bits bits, double t, double reach, int seed)
+    /// <param name="up">How far the droplets may fly up from the bubble's middle (the room the window has over it).</param>
+    static void Pop(Wk.Bits bits, double t, double reach, int seed, double up = double.MaxValue)
     {
         var rnd = new Random(seed);
+        // the ones flung up go only as high as the window lets them (the splash flattens, the window never cuts it)
+        double uk = Math.Clamp(up / (reach * 1.2 * .8), 0, 1);
         for (int i = 0; i < bits.Count; i++)
         {
             double a = 2 * Math.PI * i / bits.Count + rnd.NextDouble() * .5, d = reach * (.7 + rnd.NextDouble() * .5);
-            double k = Out(t);
-            bits.Set(i, Math.Cos(a) * d * k, Math.Sin(a) * d * k * .8 + 26 * t * t, 0, 1 - .5 * t, t <= 0 ? 0 : 1 - In(t));
+            double k = Out(t), dy = Math.Sin(a) * d * k * .8;
+            bits.Set(i, Math.Cos(a) * d * k, (dy < 0 ? dy * uk : dy * .45) + 10 * t * t, 0, 1 - .5 * t, t <= 0 ? 0 : 1 - InOut(t));
         }
     }
 
@@ -367,6 +370,16 @@ sealed class HudGoo : WackyLook
     /// <summary>A bubble that rises out of the jelly with a squash and stretch, bobs, then pops into droplets.</summary>
     void Float(Grid bubble, uint c, Point from, double rise, string slot, double ms, double popAt, int drops, double dropSize)
     {
+        // whole inside the window at its biggest (its swell before the pop: about 0.82 of its width and 0.75 of its height
+        // either side of its middle), and it rises only as high as the room over it lets it
+        var win = WinSize;
+        const double pad = 4;
+        double hw = bubble.Width * .82, hh = bubble.Height * .75;
+        double x = win.Width > 0 ? Math.Clamp(from.X, pad + hw, Math.Max(pad + hw, win.Width - pad - hw)) : from.X;
+        double over = from.Y - pad - hh - 9;   // the room over it (its bob and drift take 9)
+        double y = over < 0 ? from.Y - over : from.Y;
+        rise = Math.Clamp(Math.Min(rise, over), 0, rise);
+        from = new Point(x, y);
         var bits = Droplets(c, drops, dropSize, bubble.Width * 2);
         var host = new Grid { Width = bubble.Width * 2, Height = Math.Max(bubble.Height * 2, bubble.Width * 2), Children = { bubble, bits.Host } };
         var bs = new ScaleTransform(); var bt = new TranslateTransform();
@@ -385,7 +398,7 @@ sealed class HudGoo : WackyLook
             bt.Y = -rise * up - 6 * Seg(q, .22, popAt) + 3 * bob;
             bubble.Opacity = Seg(q, 0, .05) * (1 - pop);
             bits.Host.RenderTransform = new TranslateTransform(0, bt.Y);
-            Pop(bits, Seg(q, popAt, 1), bubble.Width * .55, 3);
+            Pop(bits, Seg(q, popAt, 1), bubble.Width * .55, 3, from.Y + bt.Y - pad - dropSize * 1.3);
             s.Set(1, 1, 0, 0, 0, 1);
         });
     }
@@ -425,7 +438,7 @@ sealed class HudGoo : WackyLook
         Motion.Play(_blob.Layer, 1300, q =>
         {
             double k = Math.Sin(Seg(q, 0, .3) * Math.PI / 2) * (1 - Seg(q, .3, 1)) + .5 * Wob(Seg(q, .3, 1), 2, 3) * (1 - Seg(q, .3, 1));
-            _blob.Wobble.ScaleX = 1 + .07 * k; _blob.Wobble.ScaleY = 1 + .12 * k;
+            _blob.Wobble.ScaleX = 1 + .055 * k; _blob.Wobble.ScaleY = 1 + .12 * k;
         }, () => { _blob.Wobble.ScaleX = _blob.Wobble.ScaleY = 1; });
         var words = Wk.Outlined(L.T("YUM! NEW BEST"), Wk.Heavy, FontWeights.Black, 14, WhiteB, Wk.S(0x8A0F4A), 2.4);
         var b = Bubble(Math.Max(120, words.Width + 26), 44, 0xFF4FA3, words);
@@ -460,6 +473,12 @@ sealed class HudGoo : WackyLook
         var cv = new Canvas { Width = w, Height = 56 };
         var drips = new List<(Path Drip, Grid Drop, double Len)>();
         double[] xs = { .2, .52, .8 }, lens = { 22, 34, 16 };
+        // the drips and their drops end inside the window: as long as the room under the panel lets them, and the drops
+        // fall only that far before they're gone
+        var (_, _, _, below) = Room(At(_panel.Root, .5, 1));
+        double kl = Math.Clamp((below - 18) / 34, .4, 1);
+        var falls = new double[xs.Length];
+        for (int i = 0; i < lens.Length; i++) { lens[i] *= kl; falls[i] = Math.Clamp(below - 6 - lens[i], 0, 36); }
         var tear = Geometry.Parse("M5,0 C5,0 10,9 10,13 A5,5 0 1 1 0,13 C0,9 5,0 5,0 Z");
         for (int i = 0; i < xs.Length; i++)
         {
@@ -483,7 +502,7 @@ sealed class HudGoo : WackyLook
                 double lag = i * .07, grow = Out(Seg(q, .06 + lag, .42 + lag)), fall = Seg(q, .42 + lag, .78 + lag), back = Seg(q, .44 + lag, .7 + lag);
                 drip.Height = Math.Max(0, Math.Max(grow > 0 ? 12 * Math.Min(1, grow * 3) : 0, (len + 6) * grow * (1 - .8 * back)));
                 drip.Opacity = 1 - Seg(q, .7 + lag, .82 + lag);
-                Canvas.SetTop(drop, (len + 6) * grow - 12 + 36 * fall * fall);
+                Canvas.SetTop(drop, (len + 6) * grow - 12 + falls[i] * fall * fall);
                 drop.Opacity = fall > 0 ? 1 - Seg(q, .7 + lag, .86 + lag) : 0;
             }
             s.Set(1, 1, 0, 0, 0, 1);
@@ -545,6 +564,147 @@ sealed class HudGoo : WackyLook
         });
     }
 
+    // ---- the member's skills card: a box of candy
+
+    /// <summary>A candy pill: a glossy gradient from <paramref name="hi"/> to <paramref name="lo"/> on its lip, a gloss strip across its top.</summary>
+    static Grid Candy(UIElement child, uint hi, uint lo, uint lip, double radius, Thickness pad)
+    {
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new Border { CornerRadius = new CornerRadius(radius), Background = Wk.S(lip), RenderTransform = new TranslateTransform(0, 2.2) });
+        g.Children.Add(new Border { CornerRadius = new CornerRadius(radius), Background = Wk.Lin(0, 0, 0, 1, (hi, 1, 0), (lo, 1, 1)), Padding = pad, Child = child });
+        g.Children.Add(new Border { Height = 3.5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(radius * .7, 2, radius * .9, 0), CornerRadius = new CornerRadius(1.75), Background = Wk.S(0xFFFFFF, .55), IsHitTestVisible = false });
+        return g;
+    }
+
+    /// <summary>
+    /// A member's skills card as a box of candy: a grape jelly panel (gloss on top, a darker lip under it). The class's emblem
+    /// and the name with its purple drop line in its class's colour (gold for you), the Combat Power on a white candy after
+    /// it, the class in lilac; the DPS on a butter candy, the share on a pink one, the damage on a lilac one; the rates in
+    /// butter; then the abilities, each name over a recessed groove with a candy bar of the class's colour as long as its
+    /// damage against the top one (they squish in when the card opens), share, damage (crit, back) right-aligned and
+    /// tabular; "N more"; the foot in lilac with heals lime and deaths cherry.
+    /// </summary>
+    public FrameworkElement DrawCard(MemberCard c)
+    {
+        double w = WkCard.Width(c, 278);
+        var jelly = new Jelly(new CornerRadius(20, 14, 22, 16), new Thickness(12, 10, 12, 12), Night, 9);
+        jelly.Body.Background = Wk.Lin(0, 0, 0, 1, (0x4A1590, 1, 0), (Grape, 1, .3), (Grape2, 1, 1));
+        jelly.Root.Width = w;
+        var lilac = Wk.S(0xE2CCFF);
+        var lilacDim = Wk.S(0xE2CCFF, .8);
+        var stack = new StackPanel();
+        // the head
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var icon = ClassArt.Icon(c.Class, 20, c.Name); icon.Margin = new Thickness(0, 0, 7, 0);
+        head.Children.Add(icon);
+        TextBlock N(Brush b) { var t = Wk.Words(c.Name, 15, b, Wk.Heavy, FontWeights.Black); t.TextTrimming = TextTrimming.CharacterEllipsis; return t; }
+        var dropName = N(NightB); dropName.RenderTransform = new TranslateTransform(0, 2);
+        var name = new Grid { Children = { dropName, N(c.You ? Wk.S(0xFFD84A) : new SolidColorBrush(c.NameColor)) } };
+        var cpText = new TextBlock { FontFamily = Wk.Heavy, VerticalAlignment = VerticalAlignment.Center };
+        cpText.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 8, FontWeight = FontWeights.Black, Foreground = Wk.S(0x6B3FA0) });
+        cpText.Inlines.Add(new Run(c.Cp) { FontSize = 11, FontWeight = FontWeights.Black, Foreground = GrapeB });
+        Typography.SetNumeralAlignment(cpText, FontNumeralAlignment.Tabular);
+        var cp = Candy(cpText, 0xFFFFFF, 0xEBDCFF, 0x8E6CC8, 9, new Thickness(7, 0, 8, 1));
+        cp.Margin = new Thickness(8, 0, 0, 0); cp.Visibility = c.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        WkCard.Put(head, WkCard.NameLine(name, cp), 1);
+        var cls = Wk.Words(c.Class, 10.5, lilac, Wk.Segoe, FontWeights.Bold); cls.Margin = new Thickness(10, 1, 0, 0); cls.Opacity = .85;
+        WkCard.Put(head, cls, 2);
+        stack.Children.Add(head);
+        // the figures: three candies
+        var figs = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 9, 0, 0) };
+        // each a candy: its word small over the figure
+        void Piece(string fig, string word, double size, Brush fg, uint hi, uint lo, uint lip)
+        {
+            var sp = new StackPanel();
+            var wd = Wk.Words(word.ToUpperInvariant(), 7.5, Wk.S(Grape2), Wk.Heavy, FontWeights.Black); wd.Opacity = .72; wd.Margin = new Thickness(0, 0, 0, -3);
+            sp.Children.Add(wd);
+            sp.Children.Add(Figure(fig, size, fg, Wk.Heavy, FontWeights.Black));
+            var cd = Candy(sp, hi, lo, lip, 12, new Thickness(10, 3, 11, 2));
+            cd.VerticalAlignment = VerticalAlignment.Bottom;
+            cd.Margin = new Thickness(0, 0, 8, 0);
+            figs.Children.Add(cd);
+        }
+        if (c.Dps.Length > 0) Piece(c.Dps, L.T("DPS"), 20, Wk.S(Grape2), 0xFFF7A8, 0xFFCF3A, 0xB98500);
+        Piece(c.Share, L.T("share"), 15, WhiteB, 0xFF8AC4, 0xFF4FA3, 0x9E1F5E);
+        Piece(c.Damage, L.T("damage"), 15, Wk.S(Grape2), 0xF6EDFF, 0xCFB6FF, 0x7E5BC4);
+        stack.Children.Add(figs);
+        if (c.RatesLine.Length > 0)
+        {
+            var rates = Wk.Words(c.RatesLine, 10.5, Wk.S(Butter, .92), Wk.Segoe, FontWeights.Bold);
+            rates.TextWrapping = TextWrapping.Wrap; rates.Margin = new Thickness(1, 8, 0, 0);
+            stack.Children.Add(rates);
+        }
+        // a soft groove across the box
+        stack.Children.Add(new Border { Height = 3, CornerRadius = new CornerRadius(1.5), Margin = new Thickness(0, 9, 0, 5), Background = Wk.S(Night, .7), BorderBrush = Wk.Lin(0, 0, 0, 1, (0x0A0214, 1, 0), (0x8E4BFF, .45, 1)), BorderThickness = new Thickness(0, .8, 0, .8) });
+        var bars = new List<ScaleTransform>();
+        if (c.Abilities.Count > 0)
+        {
+            if (c.CritCol || c.BackCol)
+            {
+                var names = WkCard.Cols(c, 46, 54, 13);
+                TextBlock Head(string s) => WkCard.Num(s.ToUpperInvariant(), 8, lilacDim, Wk.Heavy, FontWeights.Black);
+                WkCard.Put(names, Head(L.T("share")), 1); WkCard.Put(names, Head(L.T("damage")), 2);
+                if (c.CritCol) WkCard.Put(names, Head(L.T("crit")), WkCard.CritAt);
+                if (c.BackCol) WkCard.Put(names, Head(L.T("back")), WkCard.BackAt(c));
+                stack.Children.Add(names);
+            }
+            uint vivid = Wk.Vivid(Wk.Hex(c.ClassColor));
+            foreach (var a in c.Abilities)
+            {
+                var row = WkCard.Cols(c, 46, 54, 25);
+                var cell = new Grid();
+                // the groove and its candy bar, with a round cap; the bar squishes in when the card opens
+                var groove = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(1, 0, 8, 2), ClipToBounds = true };
+                groove.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = Wk.S(0x1C0833), BorderBrush = Wk.Lin(0, 0, 0, 1, (0x0A0214, 1, 0), (0x7A40C0, .6, 1)), BorderThickness = new Thickness(0, 1, 0, .8) });
+                var candy = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, RenderTransformOrigin = new Point(0, .5) };
+                candy.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = Wk.Lin(0, 0, 0, 1, (Wk.Shade(vivid, .35), 1, 0), (vivid, 1, .5), (Wk.Shade(vivid, -.3), 1, 1)) });
+                candy.Children.Add(new Border { Height = 1.2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 1, 4, 0), CornerRadius = new CornerRadius(.6), Background = Wk.S(0xFFFFFF, .8) });
+                // the jelly bead at its end, as on the meter's bars
+                candy.Children.Add(new Ellipse { Width = 6, Height = 6, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Fill = Wk.Rad(.35, .3, .7, (Wk.Shade(vivid, .6), 1, 0), (vivid, 1, .6), (Wk.Shade(vivid, -.3), 1, 1)), Stroke = Wk.S(Wk.Shade(vivid, -.5)), StrokeThickness = .7 });
+                var grow = new ScaleTransform(); candy.RenderTransform = grow; bars.Add(grow);
+                new Wk.BarFill(groove, candy, 7).Apply(a.OfTop);
+                groove.Children.Add(candy);
+                cell.Children.Add(groove);
+                var an = WkCard.Ability(a, 11.5, WhiteB, Wk.Heavy, FontWeights.Black, ButterB, 9.5);
+                an.VerticalAlignment = VerticalAlignment.Top; an.Margin = new Thickness(2, 1, 6, 0);
+                cell.Children.Add(an);
+                row.Children.Add(cell);
+                TextBlock Fig(string s, double size, Brush b, FontFamily f, FontWeight fw) { var t = WkCard.Num(s, size, b, f, fw); t.VerticalAlignment = VerticalAlignment.Top; t.Margin = new Thickness(0, size > 11 ? 1 : 2, 0, 0); return t; }
+                WkCard.Put(row, Fig(a.ShareText, 10.5, lilac, Wk.Segoe, FontWeights.Bold), 1);
+                WkCard.Put(row, Fig(a.Damage, 12, WhiteB, Wk.Heavy, FontWeights.Black), 2);
+                if (c.CritCol) WkCard.Put(row, Fig(a.Crit, 10.5, a.Crit == "–" ? lilacDim : ButterB, Wk.Segoe, FontWeights.Bold), WkCard.CritAt);
+                if (c.BackCol) WkCard.Put(row, Fig(a.Back, 10.5, lilac, Wk.Segoe, FontWeights.Bold), WkCard.BackAt(c));
+                if (a.Tip.Length > 0) row.ToolTip = a.Tip;
+                row.Background = Brushes.Transparent;
+                stack.Children.Add(row);
+            }
+            if (c.MoreLine.Length > 0) { var more = Wk.Words(c.MoreLine, 10, lilacDim, Wk.Segoe, FontWeights.Bold); more.Margin = new Thickness(2, 3, 0, 0); stack.Children.Add(more); }
+        }
+        if (c.FootLine.Length > 0)
+        {
+            var foot = WkCard.Foot(c, 10.5, Wk.Segoe, FontWeights.Bold, lilac, LimeB, Wk.S(0xFF6A80), Wk.S(0xE2CCFF, .4));
+            foot.Margin = new Thickness(1, 9, 0, 0);
+            stack.Children.Add(foot);
+        }
+        jelly.Content.Child = stack;
+        // transparent room round the jelly: its lip under it and its wobble as it lands
+        var card = new Border { Padding = new Thickness(8, 8, 8, 10), Background = Brushes.Transparent, Child = jelly.Root };
+        // it drops in like jelly (a squash settling from its foot, a hair either way) and the candy bars squish in one by one
+        var squash = new ScaleTransform();
+        jelly.Root.RenderTransformOrigin = new Point(.5, 1);
+        jelly.Root.RenderTransform = squash;
+        WkCard.Enter(card, 280, p =>
+        {
+            double t = Seg(p, 0, .7), e = Math.Exp(-3.2 * t) * (t >= 1 ? 0 : 1), osc = Math.Cos(t * Math.PI * 2.5);
+            squash.ScaleY = 1 - .1 * e * osc; squash.ScaleX = 1 + .03 * e * osc;
+            for (int i = 0; i < bars.Count; i++) { double k = Seg(p, .22 + .06 * i, .62 + .06 * i); bars[i].ScaleX = Back(k, 2.2); bars[i].ScaleY = 1 + .35 * Math.Sin(k * Math.PI) * (1 - k); }
+        });
+        return card;
+    }
+
     // ---- the meter's rows: jelly beans with candy bars
 
     /// <summary>"2 more": a small grape pill between the party and you below it.</summary>
@@ -586,7 +746,9 @@ sealed class HudGoo : WackyLook
         readonly Border _iconHost = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 6, 0) };
         readonly TextBlock _name = Wk.Words("", 12.5, WhiteB, Wk.Heavy, FontWeights.Black);
         readonly Border _you;
-        readonly TextBlock _cp = Wk.Words("", 9.5, Wk.S(0xF0E4FF, .8), Wk.Segoe, FontWeights.Bold);
+        // the Combat Power after the name, in soft lilac, its "CP" smaller
+        readonly TextBlock _cp = new() { FontFamily = Wk.Heavy, VerticalAlignment = VerticalAlignment.Center };
+        readonly Run _cpValue = new() { FontSize = 10, FontWeight = FontWeights.Black, Foreground = Wk.S(0xE2CCFF, .78) };
         readonly Border _healPill;
         readonly TextBlock _heal = Wk.Words("", 10, Wk.S(Grape2), Wk.Heavy, FontWeights.Black);
         readonly Border _top = new() { CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 0, 5, 0), BorderThickness = new Thickness(1), BorderBrush = Wk.S(Night, .8) };
@@ -630,10 +792,13 @@ sealed class HudGoo : WackyLook
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _you = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xFFF7A8, 1, 0), (0xFFCF3A, 1, 1)), Padding = new Thickness(5, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Child = Wk.Words(L.T("YOU"), 8.5, Wk.S(Grape2), Wk.Heavy, FontWeights.Black) };
-            _cp.Margin = new Thickness(5, 2, 0, 0);
-            var nameLine = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _name, _you, _cp } };
+            _cp.Margin = new Thickness(6, 1, 0, 0);
+            _cp.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 7.5, FontWeight = FontWeights.Black, Foreground = Wk.S(0xE2CCFF, .55) });
+            _cp.Inlines.Add(_cpValue);
+            Typography.SetNumeralAlignment(_cp, FontNumeralAlignment.Tabular);
+            var nameLine = WkCard.NameLine(_name, _you, _cp);
             Grid.SetColumn(nameLine, 2); row.Children.Add(nameLine);
-            _healPill = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xDDFF7A, 1, 0), (0x92E21C, 1, 1)), Padding = new Thickness(4, 0, 4, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _heal };
+            _healPill = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xDDFF7A, 1, 0), (0x92E21C, 1, 1)), Padding = new Thickness(3, 0, 4, 1), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _heal };
             Grid.SetColumn(_healPill, 3); row.Children.Add(_healPill);
             _top.Child = _topText;
             _dead = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xFF6A80, 1, 0), (0xE8344E, 1, 1)), Padding = new Thickness(4, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _deadText };
@@ -664,14 +829,15 @@ sealed class HudGoo : WackyLook
             if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ClassArt.Icon(m.Class, 17, m.Name); }
             _name.Text = m.Name;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
-            _cp.Visibility = Visibility.Collapsed;   // the Combat Power is in the expanded line, not crowding the name
-            _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _healPill.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
+            _cpValue.Text = m.Cp; _cp.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
+            _heal.Text = m.Heal.Length > 0 ? "✚" + m.Heal : ""; _healPill.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
             _top.Background = m.TopDps ? Wk.Lin(0, 0, 0, 1, (0xFFF7A8, 1, 0), (0xFFCF3A, 1, 1)) : Wk.Lin(0, 0, 0, 1, (0xC8FFE0, 1, 0), (0x3DD68C, 1, 1));
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") + (m.Cp.Length > 0 ? " · " + m.Cp + " " + L.T("CP") : "") : "";
+            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") : "";
             _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             // the candy bar: the class's colour at full strength, lit on top, deep at the foot, a bulged round cap at its end

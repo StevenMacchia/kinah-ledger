@@ -238,7 +238,7 @@ abstract class HudThemeLook : HudStackLook, IHudMotionFrame
 
     /// <param name="rowHeight">Each row's pitch (height and the space under it).</param>
     protected void UseRows(double rowHeight, Func<MeterMember, IThemeRow> make, double gapHeight = 12, Func<int, FrameworkElement>? makeGap = null)
-        => Meter = new ThemeRows(rowHeight, make, gapHeight, makeGap);
+        => Meter = new ThemeRows(rowHeight, make, gapHeight, makeGap) { Card = this is IThemeCard tc ? tc.DrawCard : null };   // the look's own skills card
 
     /// <summary>The rows shown now (the look's own, or the Parser's).</summary>
     protected int RowsShown => Meter?.Shown ?? Rows.Shown;

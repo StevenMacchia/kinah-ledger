@@ -427,7 +427,7 @@ public partial class OptionsWindow : Window
         HotkeyResetBtn.IsEnabled = _edit.Hotkey != Hotkey.Default;
         StartupTip.Visibility = _edit.StartWithWindows && !_edit.CloseToTray ? Visibility.Visible : Visibility.Collapsed;
         ServerWarn.Visibility = _edit.Server.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        bool dirty = _edit != _saved || _resetSpot;
+        bool dirty = _edit != _saved || _resetSpot || ParserDirty;   // the Parser group lives in parser.json (Ui/OptionsWindow.Parser.cs)
         SaveBtn.IsEnabled = dirty;
         if (dirty) Footer(L.T("Unsaved changes. Save puts them into effect."), "Muted");
         else if (FooterNote.Text == L.T("Unsaved changes. Save puts them into effect.")) Footer("", "Muted");
@@ -475,7 +475,7 @@ public partial class OptionsWindow : Window
     {
         EndCapture();
         // a parked window never asks: its question would open on the player's screen
-        if (!_closeConfirmed && !Parked && (_edit != _saved || _resetSpot))
+        if (!_closeConfirmed && !Parked && (_edit != _saved || _resetSpot || ParserDirty))
         {
             var r = MessageBox.Show(this, L.T("Save your changes to Kinah Ledger's options?"), "Kinah Ledger", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }

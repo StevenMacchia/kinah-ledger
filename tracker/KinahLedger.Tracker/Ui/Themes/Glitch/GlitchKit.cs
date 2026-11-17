@@ -376,3 +376,50 @@ sealed class GlitchLevel
     /// <summary>The share shown: slid from the last one under <paramref name="key"/> (set at once in a render or a first draw).</summary>
     public void Slide(string key, double share) => Motion.Slide(Root, key, Math.Clamp(double.IsFinite(share) ? share : 0, 0, 1), v => Share = v);
 }
+
+/// <summary>
+/// A meter row's name line: its parts left to right, packed from the left. The name is the part that gives way, but only
+/// after the Combat Power beside it (<see cref="Yields"/>) has: the CP is put away when keeping it would cut the name shorter
+/// than <see cref="NameMin"/> (the Parser's rows' rule, ParserRows.FitName), so a name never shrinks to a stub for it.
+/// </summary>
+sealed class GlitchNameLine : Panel
+{
+    public UIElement? Text, Yields;
+    /// <summary>The least room the name keeps before the CP is put away (a short name: all of it).</summary>
+    public double NameMin = 60;
+    double _nameW;
+    bool _drop = true;
+
+    protected override Size MeasureOverride(Size a)
+    {
+        var inf = new Size(double.PositiveInfinity, a.Height);
+        double others = 0, h = 0, drop = 0, nameW = 0;
+        foreach (UIElement c in InternalChildren)
+        {
+            c.Measure(inf);
+            h = Math.Max(h, c.DesiredSize.Height);
+            if (c == Text) nameW = c.DesiredSize.Width;
+            else if (c == Yields) drop = c.DesiredSize.Width;
+            else others += c.DesiredSize.Width;
+        }
+        bool open = double.IsInfinity(a.Width);
+        _drop = drop > 0 && (open || a.Width - others - drop >= Math.Min(nameW, NameMin));
+        double room = open ? nameW : Math.Max(0, a.Width - others - (_drop ? drop : 0));
+        _nameW = Math.Min(nameW, room);
+        Text?.Measure(new Size(_nameW, a.Height));
+        return new Size(others + _nameW + (_drop ? drop : 0), h);
+    }
+
+    protected override Size ArrangeOverride(Size f)
+    {
+        double x = 0;
+        foreach (UIElement c in InternalChildren)
+        {
+            double w = c == Text ? _nameW : c == Yields ? (_drop ? c.DesiredSize.Width : 0) : c.DesiredSize.Width;
+            double ch = Math.Min(f.Height, c.DesiredSize.Height);
+            c.Arrange(new Rect(x, Math.Max(0, (f.Height - ch) / 2), w, ch));
+            x += w;
+        }
+        return f;
+    }
+}

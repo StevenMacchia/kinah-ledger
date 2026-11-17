@@ -21,7 +21,7 @@ namespace KinahLedger.Ui;
 /// timer's block (a datamosh); a fight boots the panel out of corrupted blocks; a kill stamps "TARGET.DELETED", a wipe
 /// "FATAL ERROR" with the frame torn apart.
 /// </summary>
-sealed class HudCorrupt : HudThemeLook
+sealed class HudCorrupt : HudThemeLook, IThemeCard
 {
     static readonly FontFamily Face = CodeFace;
     const uint MagC = 0xFF2B6A, CyanC = 0x2BE6FF, LilacC = 0xC9B8FF, GroundC = 0x0A0A12, GreenC = 0x3DFF8C, GoldC2 = 0xFFD24A, RedC2 = 0xFF3B3B;
@@ -156,6 +156,9 @@ sealed class HudCorrupt : HudThemeLook
     }
 
     public override FrameworkElement Root => _root;
+
+    /// <summary>The member's skills card in this look (Ui/Themes/Glitch/GlitchCards.cs).</summary>
+    public FrameworkElement DrawCard(MemberCard c) => GlitchCards.Corrupt(c, Moves);
     public override Thickness Inset => _root.Margin;
     public override double Corner => 0;
     public override FrameworkElement? FightFrame => _cam.Root.Visibility == Visibility.Visible ? _cam.Root : null;
@@ -512,6 +515,11 @@ sealed class SlicedGround : FrameworkElement
     readonly (double Y0, double Y1, double Dx)[] _slices;
     readonly double[] _torn;
     public double Alpha = .9;
+    /// <summary>
+    /// The farthest a slice ever sits sideways, torn or not: with its ghost edge (<see cref="Ghost"/>) it stays inside the room
+    /// the panel keeps round it (the look's Inset, 14 px), so a tear is never cut at the window's edge.
+    /// </summary>
+    public double Reach = 10;
     static readonly Color Ground = Color.FromRgb(0x0A, 0x0A, 0x12);
     static readonly Brush GhostL = HudKit.Frozen(Color.FromArgb(0xE6, 0xFF, 0x2B, 0x6A)), GhostR = HudKit.Frozen(Color.FromArgb(0xE6, 0x2B, 0xE6, 0xFF));
     const double Ghost = 3;
@@ -545,7 +553,7 @@ sealed class SlicedGround : FrameworkElement
         {
             var dx0 = _slices[i].Dx;
             if (dx0 != 0 && shortOne && sideways++ > 0) dx0 = 0;
-            double y0 = ys[i], y1 = Math.Max(ys[i], ys[i + 1]), dx = Math.Round(dx0 + _torn[i]);
+            double y0 = ys[i], y1 = Math.Max(ys[i], ys[i + 1]), dx = Math.Clamp(Math.Round(dx0 + _torn[i]), -Reach, Reach);
             if (y1 <= y0) continue;
             // the ghost edges: magenta out of the left, cyan out of the right; over the top and under the foot too
             dc.DrawRectangle(GhostL, null, new Rect(dx - Ghost, y0, Ghost, y1 - y0));

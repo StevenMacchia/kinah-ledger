@@ -19,7 +19,7 @@ namespace KinahLedger.Ui;
 /// pickup streaks up in cyan with a light trail as the rim flares; a rare drop cycles the rim's colours and runs a RARE!
 /// marquee across; HIGH SCORE!; the tube flickers on like a sign; READY? FIGHT!; K.O. STAGE CLEAR or GAME OVER.
 /// </summary>
-sealed class HudNeon : WackyLook
+sealed class HudNeon : WackyLook, IThemeCard
 {
     const uint GroundC = 0x140A24, Mag = 0xFF2BD6, Cy = 0x00E5FF, Yel = 0xFFE66B, LilacC = 0xB79CFF, TubeC = 0x39FF88, RedC = 0xFF3355, Ice = 0xE9E4FF;
     static readonly Brush YelB = Wk.S(Yel), MagB = Wk.S(Mag), CyB = Wk.S(Cy), LilacB = Wk.S(LilacC), IceB = Wk.S(Ice), WhiteB = Wk.S(0xFFFFFF), GroundB = Wk.S(GroundC);
@@ -100,7 +100,7 @@ sealed class HudNeon : WackyLook
     readonly TextBlock _tubeName = Wk.Words("", 11, IceB, Wk.Bahn, FontWeights.SemiBold), _tubeClock;
     FrameworkElement? _ring, _hour;
 
-    public HudNeon() : base(new Thickness(12, 48, 30, 12), Wk.Bahn)
+    public HudNeon() : base(new Thickness(12, 56, 30, 12), Wk.Bahn)
     {
         UseRows(30, _ => new NeonRow(), 16, NeonGap);
         _tubeClock = Figure("", 13, Wk.S(TubeC), Wk.Bahn, FontWeights.Bold);
@@ -351,12 +351,19 @@ sealed class HudNeon : WackyLook
     static Grid Band(double w, double h, UIElement content)
     {
         var g = new Grid { Width = w, Height = h, ClipToBounds = true };
+        // what scrolls along it fades in and out at its ends (never sliced by the edge)
+        // (the mask in the band's own pixels: one sized to the lane's content would slide along with it)
+        var fade = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(Math.Max(1, w - 12), 0) };
+        foreach (var (a, at) in new[] { (0.0, 0.0), (1.0, Math.Min(.4, 40 / w)), (1.0, 1 - Math.Min(.4, 40 / w)), (0.0, 1.0) }) fade.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(255 * a), 255, 255, 255), at));
+        fade.Freeze();
+        var lane = new Grid { Margin = new Thickness(6, 0, 6, 0), OpacityMask = fade };
         g.Children.Add(new Border { Background = Wk.S(GroundC, .95) });
         g.Children.Add(new Border { Background = Scan });
         g.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Top, Background = Wk.Lin(0, 0, 1, 0, (Mag, 1, 0), (Cy, 1, 1)) });
         g.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, Background = Wk.Lin(0, 0, 1, 0, (Cy, 1, 0), (Mag, 1, 1)) });
         if (content is FrameworkElement fe) { fe.HorizontalAlignment = HorizontalAlignment.Center; fe.VerticalAlignment = VerticalAlignment.Center; }
-        g.Children.Add(content);
+        lane.Children.Add(content);
+        g.Children.Add(lane);
         return g;
     }
 
@@ -400,7 +407,12 @@ sealed class HudNeon : WackyLook
         main.VerticalAlignment = VerticalAlignment.Top;
         streak.Margin = new Thickness(0, main.Height - 8, 0, 0);
         var at = At(_hour, .78, 0);
-        var s = Spawn(g, new Point(at.X, at.Y + 6 + 30), "pickup");
+        var c = new Point(at.X, at.Y + 6 + 30);
+        // it flies up as far as the window lets it (the sign's top stays inside, its stretch at the end too)
+        double top = c.Y - (main.Height + 60) / 2;
+        double fly = Math.Clamp((top - 4 - main.Height * .1) / 62, .35, 1);
+        var sign = new Rect(0, 0, main.Width, main.Height);
+        var s = Spawn(g, c, "pickup");
         Flare(_cab, 700);
         Play(s, "pickup", 1400, q =>
         {
@@ -408,7 +420,8 @@ sealed class HudNeon : WackyLook
             streak.Height = Math.Max(1, 26 * (1 - k));
             streak.Opacity = 1 - Seg(q, .22, .4);   // a short streak while it flies, gone well before the figure settles
             double sc = 1 + .2 * (1 - k);
-            s.Set(sc * (1 - .1 * Seg(q, .6, 1)), sc * (1 + .15 * Seg(q, .6, 1)), 0, 8 * rise, -40 * rise - 22 * Seg(q, .6, 1), Seg(q, 0, .05) * (1 - Seg(q, .62, .95)));
+            s.Set(sc * (1 - .1 * Seg(q, .6, 1)), sc * (1 + .15 * Seg(q, .6, 1)), 0, 8 * rise, (-40 * rise - 22 * Seg(q, .6, 1)) * fly, Seg(q, 0, .05) * (1 - Seg(q, .62, .95)));
+            Keep(s, sign);
         });
     }
 
@@ -449,7 +462,9 @@ sealed class HudNeon : WackyLook
         var cold = Sign(L.T("HIGH SCORE!"), 22, Wk.Lin(0, 0, 0, 1, (0xFFFFFF, 1, 0), (Cy, 1, 1)), Cy);
         var g = new Grid { Children = { hot, cold } };
         var at = At(_cab.Root, 0, 0);
-        var s = Spawn(g, new Point(at.X + 26 + g.Children.OfType<FrameworkElement>().Max(x => x.Width) / 2, at.Y - 15), "best");
+        var sign = Centred(g, hot);
+        double big = Fit(1.7, sign.Size);
+        var s = Spawn(g, Inside(new Point(at.X + 26 + g.Children.OfType<FrameworkElement>().Max(x => x.Width) / 2, at.Y - 15), sign.Size), "best");
         // the ring sends out a ring of light
         var c0 = At(_ring ?? anchor, .5, .5);
         var ps = Spawn(new Grid { Width = 44, Height = 44, Children = { new Ellipse { Stroke = CyB, StrokeThickness = 2.5 } } }, c0, "best-ring");
@@ -460,8 +475,9 @@ sealed class HudNeon : WackyLook
             bool blink = q > .2 && q < .55 && (int)(q * 22) % 2 == 0;
             cold.Visibility = blink ? Visibility.Visible : Visibility.Hidden;
             hot.Visibility = blink ? Visibility.Hidden : Visibility.Visible;
-            double sc = Lerp(1.7, 1, drop * drop);
+            double sc = Lerp(big, 1, drop * drop);
             s.Set(sc, sc, 0, 0, -26 * (1 - drop * drop), Seg(q, 0, .06) * PowerDown(Seg(q, .62, .95)));
+            Keep(s, sign);
         });
     }
 
@@ -529,6 +545,140 @@ sealed class HudNeon : WackyLook
         });
     }
 
+    // ---- the member's skills card: an arcade stats screen
+
+    /// <summary>
+    /// A member's skills card as an arcade cabinet's stats screen: the violet cabinet with its scanlines and glowing rim. The
+    /// name lit in its class's neon (yellow for you) with the Combat Power on a cyan tube after it and the class in lilac
+    /// capitals; a score bar of DPS (lit yellow), SHARE and DAMAGE; the rates; then the abilities as a numbered high-score
+    /// table, each with a neon tube under its name as long as its damage against the top one, share, damage (crit, back)
+    /// right-aligned and tabular; "N MORE"; the foot in lilac with heals green and deaths red.
+    /// </summary>
+    public FrameworkElement DrawCard(MemberCard c)
+    {
+        double w = WkCard.Width(c, 282);
+        var cab = new Cabinet(Rgb(Mag), Rgb(Cy), new Thickness(12, 9, 12, 11));
+        cab.SetGround(.97);
+        cab.Root.Width = w;
+        var stack = new StackPanel();
+        uint neon = Wk.Vivid(Wk.Hex(c.ClassColor), .85, 1);
+        var lilacDim = Wk.S(0xC9B8FF, .85);
+        // the head: the lit name, the Combat Power's tube, the class
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var nameFg = c.You ? YelB : new SolidColorBrush(c.NameColor);
+        TextBlock N(Brush b) { var t = Wk.Words(c.Name, 17, b, Wk.Bahn, FontWeights.Bold); t.TextTrimming = TextTrimming.CharacterEllipsis; return t; }
+        var halo = N(Wk.S(c.You ? 0xFFB800u : neon)); halo.Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 8, RenderingBias = System.Windows.Media.Effects.RenderingBias.Performance }; halo.Opacity = .8;
+        var drop = N(Wk.S(Mag, .7)); drop.RenderTransform = new TranslateTransform(1.5, 1.5);
+        var name = new Grid { Children = { halo, drop, N(nameFg) } };
+        var cp = new Border { BorderBrush = CyB, BorderThickness = new Thickness(1.3), CornerRadius = new CornerRadius(7), Background = Wk.S(Cy, .14), Padding = new Thickness(6, 0, 7, 1), Margin = new Thickness(9, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Visibility = c.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed };
+        var cpText = new TextBlock { FontFamily = Wk.Bahn, VerticalAlignment = VerticalAlignment.Center };
+        cpText.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Wk.S(Cy, .85) });
+        cpText.Inlines.Add(new Run(c.Cp) { FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = WhiteB });
+        Typography.SetNumeralAlignment(cpText, FontNumeralAlignment.Tabular);
+        cp.Child = cpText;
+        head.Children.Add(Slant(WkCard.NameLine(name, cp)));
+        var cls = Slant(Wk.Words(c.Class.ToUpperInvariant(), 9.5, LilacB, Wk.Bahn, FontWeights.Bold)); cls.Margin = new Thickness(10, 2, 2, 0);
+        WkCard.Put(head, cls, 1);
+        stack.Children.Add(head);
+        // the score bar: DPS, SHARE, DAMAGE, each under its label, lit
+        var score = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, 8, 0, 0) };
+        void Cell(string label, FrameworkElement fig)
+        {
+            if (score.Children.Count > 0)
+                score.Children.Add(new Border { Width = 2, Height = 30, Margin = new Thickness(12, 2, 12, 0), Background = Wk.Lin(0, 0, 0, 1, (Mag, 1, 0), (Cy, 1, 1)), RenderTransform = new SkewTransform(Skew, 0), VerticalAlignment = VerticalAlignment.Center });
+            var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            sp.Children.Add(Slant(Wk.Words(label, 8.5, lilacDim, Wk.Bahn, FontWeights.Bold)));
+            fig.Margin = new Thickness(0, -2, 0, 0); fig.HorizontalAlignment = HorizontalAlignment.Left;
+            sp.Children.Add(fig);
+            score.Children.Add(sp);
+        }
+        if (c.Dps.Length > 0) Cell(L.T("DPS"), Lit(c.Dps, 22, YelB, Rgb(0xFFB800)));
+        Cell(L.T("SHARE"), Lit(c.Share, 17, WhiteB, Rgb(Cy)));
+        Cell(L.T("DAMAGE"), Lit(c.Damage, 17, WhiteB, Rgb(Mag)));
+        stack.Children.Add(score);
+        if (c.RatesLine.Length > 0)
+        {
+            var rates = Slant(Wk.Words(c.RatesLine, 10.5, Wk.S(Yel, .92), Wk.Bahn, FontWeights.SemiBold));
+            rates.TextWrapping = TextWrapping.Wrap; rates.Margin = new Thickness(1, 7, 0, 0);
+            stack.Children.Add(rates);
+        }
+        // a lit rule under the score
+        stack.Children.Add(new Grid
+        {
+            Height = 6, Margin = new Thickness(0, 7, 0, 3),
+            Children =
+            {
+                new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = Wk.Lin(0, 0, 1, 0, (Mag, .28, 0), (Cy, .28, 1)) },
+                new Border { Height = 1.4, Background = Wk.Lin(0, 0, 1, 0, (Mag, 1, 0), (Cy, 1, 1)) },
+            },
+        });
+        var tubes = new List<ScaleTransform>();
+        if (c.Abilities.Count > 0)
+        {
+            var names = WkCard.Cols(c, 46, 54, 14);
+            TextBlock Head(string s, bool right = true) { var t = Wk.Words(s.ToUpperInvariant(), 8.5, lilacDim, Wk.Bahn, FontWeights.Bold); t.HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left; return Slant(t); }
+            var skill = Head(L.T("skill"), false); skill.Margin = new Thickness(20, 0, 0, 0); names.Children.Add(skill);
+            WkCard.Put(names, Head(L.T("share")), 1); WkCard.Put(names, Head(L.T("damage")), 2);
+            if (c.CritCol) WkCard.Put(names, Head(L.T("crit")), WkCard.CritAt);
+            if (c.BackCol) WkCard.Put(names, Head(L.T("back")), WkCard.BackAt(c));
+            stack.Children.Add(names);
+            int n = 0;
+            foreach (var a in c.Abilities)
+            {
+                var row = WkCard.Cols(c, 46, 54, 23);
+                var cell = new Grid();
+                var no = Slant(Wk.Words((++n).ToString("00", System.Globalization.CultureInfo.InvariantCulture), 9.5, Wk.S(n == 1 ? Yel : LilacC, n == 1 ? .95 : .55), Wk.Bahn, FontWeights.Bold));
+                no.Margin = new Thickness(0, 0, 0, 3);
+                cell.Children.Add(no);
+                // the tube: a white-hot core in the class's neon, its glow wide and faint, its length the ability's against the top one
+                var host = new Grid { Height = 3, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(20, 0, 8, 2.5) };
+                var tube = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, RenderTransformOrigin = new Point(0, .5) };
+                tube.Children.Add(new Border { Margin = new Thickness(-2), CornerRadius = new CornerRadius(3.5), Background = Wk.S(neon, .32) });
+                tube.Children.Add(new Border { CornerRadius = new CornerRadius(1.5), Background = Wk.S(neon) });
+                tube.Children.Add(new Border { Height = 1, Margin = new Thickness(1.5, 0, 1.5, 0), VerticalAlignment = VerticalAlignment.Center, Background = Wk.S(0xFFFFFF, .85) });
+                var grow = new ScaleTransform(); tube.RenderTransform = grow; tubes.Add(grow);
+                new Wk.BarFill(host, tube, 6).Apply(a.OfTop);
+                host.Children.Add(tube);
+                cell.Children.Add(host);
+                var an = Slant(WkCard.Ability(a, 11.5, n == 1 ? WhiteB : IceB, Wk.Bahn, FontWeights.SemiBold, MagB, 9.5)); an.Margin = new Thickness(20, 0, 6, 5);
+                cell.Children.Add(an);
+                row.Children.Add(cell);
+                TextBlock Fig(string s, double size, Brush b, FontWeight fw) { var t = WkCard.Num(s, size, b, Wk.Bahn, fw); t.Margin = new Thickness(0, 0, 1, 4); return Slant(t); }
+                WkCard.Put(row, Fig(a.ShareText, 10.5, Wk.S(0xB9A6F0), FontWeights.SemiBold), 1);
+                WkCard.Put(row, Fig(a.Damage, 12, WhiteB, FontWeights.Bold), 2);
+                if (c.CritCol) WkCard.Put(row, Fig(a.Crit, 10.5, a.Crit == "–" ? lilacDim : YelB, FontWeights.Bold), WkCard.CritAt);
+                if (c.BackCol) WkCard.Put(row, Fig(a.Back, 10.5, Wk.S(0xB9A6F0), FontWeights.SemiBold), WkCard.BackAt(c));
+                if (a.Tip.Length > 0) row.ToolTip = a.Tip;
+                row.Background = Brushes.Transparent;
+                stack.Children.Add(row);
+            }
+            if (c.MoreLine.Length > 0) { var more = Slant(Wk.Words(c.MoreLine.ToUpperInvariant(), 9.5, lilacDim, Wk.Bahn, FontWeights.Bold)); more.Margin = new Thickness(20, 1, 0, 0); stack.Children.Add(more); }
+        }
+        if (c.FootLine.Length > 0)
+        {
+            var foot = Slant(WkCard.Foot(c, 10.5, Wk.Bahn, FontWeights.SemiBold, LilacB, Wk.S(TubeC), Wk.S(0xFF4D6D), Wk.S(Mag, .7)));
+            foot.Margin = new Thickness(1, 8, 0, 0);
+            stack.Children.Add(foot);
+        }
+        cab.Content.Child = stack;
+        // transparent room round the cabinet for its glow and keyline
+        var card = new Border { Padding = new Thickness(7), Background = Brushes.Transparent, Child = cab.Root };
+        // the screen powers on: a lit line opening to the full screen, a flash of the rim, then the tubes light in turn
+        var crt = new ScaleTransform();
+        cab.Root.RenderTransformOrigin = new Point(.5, .5);
+        cab.Root.RenderTransform = crt;
+        WkCard.Enter(card, 280, p =>
+        {
+            crt.ScaleY = .04 + .96 * Out(Seg(p, 0, .4));
+            cab.Flare.Opacity = Seg(p, .3, .4) * (1 - Seg(p, .4, .85));
+            for (int i = 0; i < tubes.Count; i++) tubes[i].ScaleX = Out(Seg(p, .28 + .06 * i, .66 + .06 * i));
+        });
+        return card;
+    }
+
     // ---- the meter's rows: an arcade high-score table
 
     /// <summary>"· · · 2 MORE · · ·" in lilac between the party and you below it.</summary>
@@ -573,7 +723,9 @@ sealed class HudNeon : WackyLook
         readonly TextBlock _name = Wk.Words("", 13, WhiteB, Wk.Bahn, FontWeights.Bold);
         readonly TextBlock _you = Wk.Words("", 13, MagB, Wk.Bahn, FontWeights.Bold);
         readonly Border _youTag;
-        readonly TextBlock _cp = Wk.Words("", 10, Wk.S(LilacC, .8), Wk.Bahn, FontWeights.SemiBold);
+        // the Combat Power after the name, in dim lilac, its "CP" smaller
+        readonly TextBlock _cp = new() { FontFamily = Wk.Bahn, VerticalAlignment = VerticalAlignment.Center };
+        readonly Run _cpValue = new() { FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Wk.S(0xC9B8FF, .85) };
         readonly TextBlock _heal = Wk.Words("", 11, Wk.S(TubeC), Wk.Bahn, FontWeights.Bold);
         readonly Border _top = new() { BorderThickness = new Thickness(1.3), CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _topText = Wk.Words("", 9, WhiteB, Wk.Bahn, FontWeights.Bold);
@@ -607,8 +759,15 @@ sealed class HudNeon : WackyLook
             nameGrid.Children.Add(_name);
             _youTag = new Border { BorderBrush = MagB, BorderThickness = new Thickness(1.3), CornerRadius = new CornerRadius(7), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Background = Wk.S(Mag, .18), Child = Wk.Words(L.T("YOU"), 9, Wk.S(0xFFB8F2), Wk.Bahn, FontWeights.Bold) };
-            _cp.Margin = new Thickness(6, 2, 0, 0);
-            var nameLine = Slant(new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _you, nameGrid, _youTag, _cp } });
+            _cp.Margin = new Thickness(7, 2, 0, 0);
+            _cp.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 8, FontWeight = FontWeights.Bold, Foreground = Wk.S(LilacC, .6) });
+            _cp.Inlines.Add(_cpValue);
+            Typography.SetNumeralAlignment(_cp, FontNumeralAlignment.Tabular);
+            // the name is cut before its marks: YOU and the Combat Power keep their room
+            var nameLine = Slant(new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
+            foreach (var cw in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto }) nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = cw });
+            nameLine.Children.Add(_you);
+            WkCard.Put(nameLine, nameGrid, 1); WkCard.Put(nameLine, _youTag, 2); WkCard.Put(nameLine, _cp, 3);
             Grid.SetColumn(nameLine, 1); row.Children.Add(nameLine);
             // a healer's heal: the figure in green over its own thin green tube, its share of the group's healing
             var healCell = Slant(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 2, 0, 0), Children = { _heal, _healHost } });
@@ -638,7 +797,8 @@ sealed class HudNeon : WackyLook
             _name.Foreground = new SolidColorBrush(m.NameColor);
             foreach (var g in _glows) { g.Text = m.Name; g.Foreground = Wk.S(neon, .38); }
             _youTag.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
-            _cp.Visibility = Visibility.Collapsed;   // the Combat Power is in the expanded line, not crowding the name
+            // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
+            _cpValue.Text = m.Cp; _cp.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _healHost.Visibility = m.Heal.Length > 0 && m.HealShare > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
@@ -646,7 +806,7 @@ sealed class HudNeon : WackyLook
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS"); _topText.Foreground = Wk.S(tc);
             _top.BorderBrush = Wk.S(tc); _top.Background = Wk.S(tc, .14);
             _dead.Text = m.Deaths > 0 ? "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture) : ""; _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") + (m.Cp.Length > 0 ? " · " + m.Cp + " " + L.T("CP") : "") : "";
+            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") : "";
             _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             _figure.Foreground = m.Rank == 1 && !m.CpOnly ? YelB : WhiteB;

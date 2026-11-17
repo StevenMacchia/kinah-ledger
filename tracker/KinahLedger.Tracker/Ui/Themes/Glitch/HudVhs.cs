@@ -22,7 +22,7 @@ namespace KinahLedger.Ui;
 /// opening flashes "▶ PLAY" on its timer; a fight starts with a channel switch (a static burst, the channel's OSD); a kill
 /// stamps "■ STOP — KILLED", a wipe loses the tracking on a blue band.
 /// </summary>
-sealed class HudVhs : HudThemeLook
+sealed class HudVhs : HudThemeLook, IThemeCard
 {
     static readonly FontFamily Face = VhsFace;
     const uint RedC = 0xFF3B30, CyanC = 0x28E0FF, YellowC = 0xFFD23F, GreenC = 0x45FF86, BlueC = 0x1432C8, MintTextC = 0x5CFFB0;
@@ -168,6 +168,9 @@ sealed class HudVhs : HudThemeLook
     }
 
     public override FrameworkElement Root => _root;
+
+    /// <summary>The member's skills card in this look (Ui/Themes/Glitch/GlitchCards.cs).</summary>
+    public FrameworkElement DrawCard(MemberCard c) => GlitchCards.Vhs(c, Moves);
     public override double Corner => 2;
     public override FrameworkElement? FightFrame => _cam.Root.Visibility == Visibility.Visible ? _cam.Root : null;
 

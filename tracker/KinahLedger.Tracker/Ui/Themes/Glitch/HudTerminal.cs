@@ -21,7 +21,7 @@ namespace KinahLedger.Ui;
 /// and the screen flickers once; your best passed runs "> record --new  OK"; an entry opening sounds a "BEEP" mark beside
 /// its timer; a fight starts with its boot lines; a kill or a wipe blooms its exit line ("segfault: party wiped").
 /// </summary>
-sealed class HudTerminal : HudThemeLook
+sealed class HudTerminal : HudThemeLook, IThemeCard
 {
     static readonly FontFamily Face = CrtFace;
     const uint PhosC = 0x5CFF9A, PaleC = 0xD6FFE4, AmberC = 0xFFB641, GroundC = 0x031008, RedC2 = 0xFF6B5E;
@@ -174,6 +174,9 @@ sealed class HudTerminal : HudThemeLook
     }
 
     public override FrameworkElement Root => _root;
+
+    /// <summary>The member's skills card in this look (Ui/Themes/Glitch/GlitchCards.cs).</summary>
+    public FrameworkElement DrawCard(MemberCard c) => GlitchCards.Terminal(c, Moves);
     public override double Corner => 7;
     public override FrameworkElement? FightFrame => _cam.Root.Visibility == Visibility.Visible ? _cam.Root : null;
 
