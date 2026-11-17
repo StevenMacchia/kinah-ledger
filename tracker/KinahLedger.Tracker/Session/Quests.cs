@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -35,7 +37,7 @@ public static class Horizon
     public static readonly string[] All = { Session, Today, Week, AllTime };
     /// <summary>A quest over a longer horizon is worth more for the same figure (Steven, 2026-11-08: far fewer points overall, so the multipliers stay small).</summary>
     public static double Mult(string h) => h switch { AllTime => 8, Week => 4, Today => 2, _ => 1 };
-    public static string Word(string h) => h switch { AllTime => "all time", Week => "this week", Today => "today", _ => "this session" };
+    public static string Word(string h) => L.T(h switch { AllTime => "all time", Week => "this week", Today => "today", _ => "this session" });
     public static int Rank(string h) => Array.IndexOf(All, h);
 }
 
@@ -693,9 +695,9 @@ public static class Quests
     {
         QuestKind.Kinah => $"{fk(q.Target)} {Horizon.Word(q.Horizon)}",
         QuestKind.Material => $"{N(q.Target)} {q.Subject}",
-        QuestKind.Runs => $"{N(q.Target)} {q.Subject} {(q.Target == 1 ? "run" : "runs")}",
-        QuestKind.BestRun => $"Beat your best run · {q.Subject}",
-        QuestKind.Gather => $"{N(q.Target)} gathers",
+        QuestKind.Runs => L.F(q.Target == 1 ? "{0} {1} run" : "{0} {1} runs", N(q.Target), q.Subject),
+        QuestKind.BestRun => L.F("Beat your best run · {0}", q.Subject),
+        QuestKind.Gather => L.F("{0} gathers", N(q.Target)),
         _ => q.Key,
     };
 
@@ -708,7 +710,7 @@ public static class Quests
     public static string Amount(Quest q, long n, Func<double, string> fk) => q.Kind is QuestKind.Kinah or QuestKind.BestRun ? fk(n) : N(n);
 
     /// <summary>"12 pts", "+12 pts".</summary>
-    public static string Pts(long n, bool plus = false) => (plus && n > 0 ? "+" : "") + n.ToString("N0", CultureInfo.InvariantCulture) + " pts";
+    public static string Pts(long n, bool plus = false) => (plus && n > 0 ? "+" : "") + L.F("{0} pts", n.ToString("N0", CultureInfo.InvariantCulture));
 
     /// <summary>The tier in the game's grade words: common, rare (green), legend (blue), unique (gold), epic.</summary>
     public static string TierWord(int tier) => tier switch { >= TierEpic => "epic", TierUnique => "unique", TierLegend => "legend", TierRare => "rare", _ => "common" };
