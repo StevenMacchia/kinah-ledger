@@ -79,6 +79,7 @@ public static class ParserTests
         // one decoder for the whole recording, reset at each new connection, as the tracker does (PacketReader): its count
         // of instances entered carries on, and the Parser hears of each new connection as a gap
         using var dec = NativeDecoder.TryOpen()!;
+        var screen = ScreenOf(pcapng);   // place.tsv beside the recording: the minimap's run, for instances the game leaves unnamed
         bool events = Environment.GetEnvironmentVariable("KL_REPLAY_EVENTS") == "1";
         bool firstConn = true;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
@@ -102,6 +103,7 @@ public static class ParserTests
                         p.Take(b);
                     }
                     while (dec.NextHit() is { } h) p.Take(h);
+                    screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
             };
@@ -243,6 +245,7 @@ public static class ParserTests
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == port) segs.Add((at, s));
         DateTime last = DateTime.MinValue;
+        var screen = ScreenOf(pcapng);
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
@@ -257,6 +260,7 @@ public static class ParserTests
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
                     while (dec.NextBossEvent() is { } b) p.Take(b);
                     while (dec.NextHit() is { } h) { if (hits) p.Take(h); }
+                    screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
             };
@@ -266,9 +270,115 @@ public static class ParserTests
         return kept;
     }
 
-    /// <summary>Steven's recordings for the store v2 cases (his tracker's own, 2026-11-14 14:00 to 17:00), when they are on this PC.</summary>
-    static List<string> Recordings() => new[] { "20261114-14", "20261114-15", "20261114-16" }
-        .Select(n => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "packets", n + ".pcapng")).Where(File.Exists).ToList();
+    /// <summary>
+    /// The screen's place over a recording, from place.tsv beside it (utc start, utc end, kind, instance; one stretch a line),
+    /// handed to the Parser as the live pass hands it the minimap's run (ScreenPlace), or null with no such file. Since
+    /// 2026-11-16 the game's messages enter Ferocious Horn Den and Shattered Arkanis with no name and their bosses with none:
+    /// the live tracker names them from the screen, so a replay without it keeps no pull at all.
+    /// </summary>
+    internal static Action<BossParser, DateTime>? ScreenOf(string pcapng)
+    {
+        var f = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(pcapng)) ?? ".", "place.tsv");
+        if (!File.Exists(f)) return null;
+        var rows = File.ReadAllLines(f).Where(l => l.Trim().Length > 0 && !l.StartsWith('#')).Select(l => l.Split('\t')).Where(c => c.Length >= 4)
+            .Select(c => (From: DateTime.Parse(c[0], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime(),
+                To: DateTime.Parse(c[1], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime(), Kind: c[2], Name: c[3]))
+            .ToList();
+        return (p, at) =>
+        {
+            var u = at.Kind == DateTimeKind.Local ? at.ToUniversalTime() : at;
+            var r = rows.FirstOrDefault(x => u >= x.From && u <= x.To);
+            if (r.Name != null) p.ScreenPlace(r.Kind, r.Name); else p.ScreenPlace(null, null);
+        };
+    }
+
+    /// <summary>
+    /// One of Steven's recordings by name: kinah-bench/packets/rec-NAME/capture.pcapng (KL_BENCH, or beside the repo), where
+    /// copies are kept, else the tracker's own packets\NAME.pcapng (which it prunes after two days), else null.
+    /// </summary>
+    static string? Recording(string name)
+    {
+        var bench = Environment.GetEnvironmentVariable("KL_BENCH") is { Length: > 0 } kb ? kb : null;
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); bench == null && d != null; d = d.Parent)
+            if (Directory.Exists(Path.Combine(d.FullName, "kinah-bench", "packets"))) bench = Path.Combine(d.FullName, "kinah-bench", "packets");
+        if (bench != null && Path.Combine(bench, "rec-" + name, "capture.pcapng") is var b && File.Exists(b)) return b;
+        var own = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "packets", name + ".pcapng");
+        return File.Exists(own) ? own : null;
+    }
+
+    /// <summary>
+    /// Steven's recordings for the store v2 cases, when they are on this PC: Vakron Sky Island (2026-11-14 14:00), Ferocious
+    /// Horn Den (2026-11-16 14:00 and 15:05) and Shattered Arkanis (2026-11-16 17:00), his tracker's own, kept in kinah-bench.
+    /// (The first set, 2026-11-14 14:00 to 17:00, was pruned before it was copied.)
+    /// </summary>
+    static List<string> Recordings() => new[] { "20261114-14-vakron", "20261116-14", "20261116-15-2", "20261116-17" }
+        .Select(Recording).OfType<string>().ToList();
+
+    /// <summary>
+    /// A recording replayed (with its place.tsv) against the boss pulls the live tracker kept over it (truth.json: boss, start,
+    /// outcome, the group's damage and yours; a pull marked "seen": false lies outside the recording and is not scored). A pull
+    /// is matched by its boss and a start within 3 s; matched but with another outcome or a damage off by more than a tenth of
+    /// a percent it is off; a replayed pull with no live one is extra.
+    /// </summary>
+    internal static (int Truths, int Exact, List<string> Missed, List<string> Off, List<string> Extra) ScoreLive(string capture, string truthPath)
+    {
+        var got = Replay(capture, hits: true).Where(e => e.Mode == "boss" && e.Boss.Length > 0).ToList();
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(truthPath));
+        var all = doc.RootElement.GetProperty("pulls").EnumerateArray()
+            .Select(t => (Boss: t.GetProperty("boss").GetString() ?? "", Start: t.GetProperty("start").GetDateTime(), Outcome: t.GetProperty("outcome").GetString() ?? "",
+                Group: t.GetProperty("group").GetInt64(), You: t.GetProperty("you").GetInt64(), Seen: !t.TryGetProperty("seen", out var sn) || sn.GetBoolean())).ToList();
+        bool Near(Encounter e, DateTime start, string boss) => e.Boss == boss && Math.Abs((e.Start - start).TotalSeconds) <= 3;
+        int truths = 0, exact = 0; List<string> missed = new(), off = new(), extra = new();
+        foreach (var t in all.Where(t => t.Seen))
+        {
+            truths++;
+            var e = got.FirstOrDefault(x => Near(x, t.Start, t.Boss));
+            if (e == null) { missed.Add($"{t.Start.ToLocalTime():HH:mm:ss} {t.Boss} not kept"); continue; }
+            long g = e.Roster.Sum(f => f.Damage), y = e.You?.Damage ?? 0;
+            if (e.Outcome != t.Outcome || Math.Abs(g - t.Group) * 1000 > t.Group || Math.Abs(y - t.You) * 1000 > Math.Max(t.You, 1))
+                off.Add($"{t.Start.ToLocalTime():HH:mm:ss} {t.Boss}: {e.Outcome} vs {t.Outcome}, group {g:N0} vs {t.Group:N0}, yours {y:N0} vs {t.You:N0}");
+            else if (g == t.Group && y == t.You) exact++;
+        }
+        foreach (var e in got.Where(e => !all.Any(t => Near(e, t.Start, t.Boss))))
+            extra.Add($"{e.Start.ToLocalTime():HH:mm:ss} {e.Boss} {e.Outcome} kept, not in the live records");
+        return (truths, exact, missed, off, extra);
+    }
+
+    /// <summary>
+    /// parser-bench &lt;capture.pcapng&gt; --truth truth.json [--baseline baseline.json --run name] [--record]: the accuracy bench's
+    /// boss-pull runs (tests/bench/run.ps1, kinah-bench/bench.json "capture" entries): <see cref="ScoreLive"/>, held against the
+    /// baseline as the screen runs are (a build may not miss, be off or add more than the recorded one).
+    /// </summary>
+    public static int ParserBench(string capture, string truthPath, string? basePath, string? run, bool record)
+    {
+        if (NativeDecoder.Version < 10) { Console.WriteLine($"  this build's decoder (interface {NativeDecoder.Version}) reads no boss pulls: put klnet.dll in tracker\\KinahLedger.Tracker\\native"); return 2; }
+        var (truths, exact, missed, off, extra) = ScoreLive(capture, truthPath);
+        Console.WriteLine($"  {truths - missed.Count} of {truths} boss pulls kept again, {truths - missed.Count - off.Count} with the same outcome and damage ({exact} to the point), {extra.Count} more, with {Upload.RunPayload.AppVersion}");
+        foreach (var x in missed) Console.WriteLine($"  missed  {x}");
+        foreach (var x in off) Console.WriteLine($"  off     {x}");
+        foreach (var x in extra) Console.WriteLine($"  extra   {x}");
+        if (basePath == null || run == null) { Console.WriteLine("  no --baseline given: scored only"); return missed.Count + off.Count + extra.Count > 0 ? 1 : 0; }
+        var baseline = File.Exists(basePath) ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>>(File.ReadAllText(basePath)) ?? new() : new();
+        System.Text.Json.JsonElement J(object v) => System.Text.Json.JsonSerializer.SerializeToElement(v);
+        var now = new Dictionary<string, System.Text.Json.JsonElement>
+        {
+            ["events"] = J(truths), ["missed"] = J(missed.Count), ["off"] = J(off.Count), ["extra"] = J(extra.Count),
+            ["version"] = J(Upload.RunPayload.AppVersion), ["recorded"] = J(DateTime.Now.ToString("yyyy-MM-dd")),
+        };
+        if (record || !baseline.ContainsKey(run))
+        {
+            baseline[run] = now;
+            File.WriteAllText(basePath, System.Text.Json.JsonSerializer.Serialize(baseline, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"  RECORDED  baseline for {run}: missed {missed.Count}, off {off.Count}, extra {extra.Count} ({basePath})");
+            return 0;
+        }
+        var b = baseline[run];
+        int bm = b["missed"].GetInt32(), bo = b.TryGetValue("off", out var bv) ? bv.GetInt32() : 0, bx = b["extra"].GetInt32();
+        Console.WriteLine($"  baseline missed {bm}, off {bo}, extra {bx} (recorded with {b["version"]} on {b["recorded"]})");
+        if (missed.Count > bm || off.Count > bo || extra.Count > bx) { Console.WriteLine($"  FAIL      {run}: missed {missed.Count}, off {off.Count}, extra {extra.Count}"); return 1; }
+        Console.WriteLine(missed.Count < bm || off.Count < bo || extra.Count < bx ? $"  PASS      {run}: better than the baseline; --record to keep this as the new one" : $"  PASS      {run}: no regression");
+        return 0;
+    }
 
     /// <summary>Steven's saved fights (tracker/tests/parser/NAME.jsonl, his encounters.jsonl as kept), read as the tracker reads them.</summary>
     static List<Encounter> Saved(string name)
@@ -1564,12 +1674,12 @@ public static class ParserTests
                 $"specializations: {Specialties.Count} skills; Judgment {j.Count} ({string.Join(" / ", j.Select(s => $"{s.N} {s.Text} L{s.Level}"))}); by a rank's id {byRank.Count}; a combination row never one");
         }
 
-        // heals on Steven's recordings (20261114-08 Ferocious Horn Den, 20261114-14 Vakron Sky Island) through a decoder that reads
-        // them: every boss pull's top healer is the group's Cleric; Duanka's LMZ111 heals 62,608 effective (the heal verdict's
-        // figure, kinah-bench); the effective part never more than done; only Clerics and Chanters heal others
+        // heals on Steven's recordings (kinah-bench's snapshots rec-20261114-08, Ferocious Horn Den to 08:42, and
+        // rec-20261114-14-vakron, Vakron Sky Island to 14:48: 3 + 5 boss pulls) through a decoder that reads them: every boss
+        // pull's top healer is the group's Cleric; Duanka's LMZ111 heals 62,608 effective (the heal verdict's figure,
+        // kinah-bench); the effective part never more than done; only Clerics and Chanters heal others
         {
-            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "packets");
-            var recs = new[] { "20261114-08", "20261114-14" }.Select(n => Path.Combine(dir, n + ".pcapng")).Where(File.Exists).ToList();
+            var recs = new[] { "20261114-08", "20261114-14-vakron" }.Select(Recording).OfType<string>().ToList();
             var pulls = NativeDecoder.Version >= 10 && recs.Count == 2 ? recs.SelectMany(r => Replay(r, hits: true)).ToList() : new();
             if (pulls.Count == 0 || !pulls.Any(e => e.HasHealing))
                 Console.WriteLine($"skip  heals on Steven's recordings: decoder interface {NativeDecoder.Version}{(pulls.Count > 0 ? " without heals" : "")}, {recs.Count} recordings here");
@@ -1581,8 +1691,10 @@ public static class ParserTests
                 var duanka = pulls.Single(e => e.Boss == "Necromancer Duanka").Members.Single(f => f.Name == "LMZ111");
                 var healers = pulls.SelectMany(e => e.Members).Where(f => f.HealingOthers > 0).ToList();
                 // the verdict's 62,608 had a potion of hers in it (2,190 effective); potions are in no heal figure since 0.10.120
-                Check(pulls.Count == 11 && clerics && duanka.HealingEffective == 60_418 && duanka.HealingPotions > 0 && duanka.HealingIsEstimate,
-                    $"heals, Steven's recordings: {pulls.Count} boss pulls, each one's TOP HEALS the group's Cleric; Duanka's LMZ111 {duanka.Healing:N0} done, ≈{duanka.HealingEffective:N0} effective (the verdict's 62,608 less her potion), potions {duanka.HealingPotions:N0} apart");
+                // (60,418). Since 0.10.128 healing goes to its skill's caster: Yustiel's Power over time, 4,709 effective that
+                // landed on the Spiritmaster, is hers (65,127; the group's 299,601 the same; 0.10.127 replays the snapshot to 60,418)
+                Check(pulls.Count == 8 && clerics && duanka.HealingEffective == 65_127 && duanka.HealingPotions > 0 && duanka.HealingIsEstimate,
+                    $"heals, Steven's recordings: {pulls.Count} boss pulls, each one's TOP HEALS the group's Cleric; Duanka's LMZ111 {duanka.Healing:N0} done, ≈{duanka.HealingEffective:N0} effective (the verdict's 62,608 less her potion, with her Yustiel's Power), potions {duanka.HealingPotions:N0} apart");
                 Check(pulls.SelectMany(e => e.Members).All(f => f.HealingEffective <= f.Healing && f.HealingEstimated <= f.HealingEffective && f.HealingSelf <= f.Healing)
                     && healers.Where(f => f.HealingOthers * 10 > f.Healing).All(f => f.Class is "Cleric" or "Chanter" or "Spiritmaster" or "Sorcerer"),
                     $"...effective never more than done; the big healers of others Clerics and Chanters ({string.Join(", ", healers.Where(f => f.HealingOthers * 10 > f.Healing).Select(f => f.Class).Distinct())})");
@@ -1597,8 +1709,8 @@ public static class ParserTests
         // and the recordings are on this PC
         {
             var recs = Recordings();
-            if (NativeDecoder.Version < 10 || recs.Count < 3)
-                Console.WriteLine($"skip  store v2 on Steven's recordings: decoder interface {NativeDecoder.Version}, {recs.Count} of its 3 recordings here (the tracker prunes old ones)");
+            if (NativeDecoder.Version < 10 || recs.Count < 4)
+                Console.WriteLine($"skip  store v2 on Steven's recordings: decoder interface {NativeDecoder.Version}, {recs.Count} of its 4 recordings here (kinah-bench/packets/rec-*)");
             else
             {
                 var with = recs.SelectMany(r => Replay(r, hits: true)).ToList();
@@ -1618,6 +1730,26 @@ public static class ParserTests
                     $"...every death with its killer, killing skill and last hits ({deaths.Count} deaths, {deaths.Count(d => d.Killer.Length > 0)} by the boss by name), one record each");
                 Check(members.Any(f => f.Taken is { Count: > 0 }) && members.Any(f => f.Buffs is { Count: > 0 }) && with.All(e => e.BossHpPerSecond is { Count: > 0 }),
                     $"...damage taken, uptimes and the boss's HP timeline filled ({members.Sum(f => f.Taken?.Sum(x => x.Damage) ?? 0):N0} taken, {members.Sum(f => f.Buffs?.Count ?? 0)} uptimes)");
+            }
+        }
+
+        // the live tracker's own pulls, replayed: Steven's recordings of 2026-11-16 (Ferocious Horn Den 14:00 and 15:05, Shattered
+        // Arkanis 17:00; kinah-bench/packets/rec-*), each with the screen's place over it (place.tsv) and the pulls his tracker kept
+        // that hour (truth.json, from characters\*\encounters.jsonl; 0.10.127 to 0.10.130): every one kept again, the same boss,
+        // start and outcome, the group's damage and yours within a tenth of a percent. Only where the decoder and they are here
+        {
+            var names = new[] { "20261116-14", "20261116-15-2", "20261116-17" };
+            var recs = names.Select(Recording).OfType<string>().Where(r => File.Exists(Path.Combine(Path.GetDirectoryName(r)!, "truth.json"))).ToList();
+            if (NativeDecoder.Version < 10 || recs.Count < names.Length)
+                Console.WriteLine($"skip  the live pulls replayed: decoder interface {NativeDecoder.Version}, {recs.Count} of {names.Length} recordings with their truth here (kinah-bench/packets/rec-*)");
+            else
+            {
+                var scores = recs.Select(r => ScoreLive(r, Path.Combine(Path.GetDirectoryName(r)!, "truth.json"))).ToList();
+                int truths = scores.Sum(x => x.Truths), missed = scores.Sum(x => x.Missed.Count), off = scores.Sum(x => x.Off.Count), extra = scores.Sum(x => x.Extra.Count);
+                var why = scores.SelectMany(x => x.Missed.Concat(x.Off).Concat(x.Extra)).Take(5).ToList();
+                Check(truths >= 30 && missed == 0 && off == 0 && extra == 0,
+                    $"the live pulls replayed: {truths - missed} of the {truths} boss pulls Steven's tracker kept on Nov 16 kept again (Horn Den, Talisra), {truths - missed - off} with the same outcome and damage, {scores.Sum(x => x.Exact)} to the point; {extra} more"
+                    + (why.Count > 0 ? "; " + string.Join("; ", why) : ""));
             }
         }
 
@@ -1698,7 +1830,7 @@ public static class ParserTests
         // the hits can hold, at the rates and multipliers the statistics found (result 3: a caster's x1.5 to x2.1 at 10 to 60%;
         // mark 0x08: about x2 at a few to 25%). Only where the decoder and the recording are on this PC
         {
-            var rec = Recordings().FirstOrDefault(r => r.EndsWith("20261114-14.pcapng"));
+            var rec = Recording("20261114-14-vakron");
             if (NativeDecoder.Version < 10 || rec == null) Console.WriteLine($"skip  crit candidates on Steven's recordings: decoder interface {NativeDecoder.Version}, {(rec == null ? "no" : "the")} recording here");
             else
             {

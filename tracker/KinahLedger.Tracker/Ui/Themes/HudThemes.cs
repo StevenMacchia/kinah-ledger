@@ -250,6 +250,13 @@ abstract class HudThemeLook : HudStackLook, IHudMotionFrame
     /// <summary>The boss's HP left (0 to 1) while it is known and the fight runs; else null.</summary>
     protected static double? HpOf(Encounter e) => e.Live && e.BossHpLeft is { } hp ? hp : null;
 
+    /// <summary>
+    /// A dungeon before its first pull with a party formed: its rows go under the ready line, each with Combat Power (0.10.132,
+    /// Steven, 2026-11-16: "when people join the group / pty it should show the people even if not DPSing"). That release drew
+    /// them on the classic Parser window only; every look draws them since 0.10.140 (his Parser is in Neon).
+    /// </summary>
+    protected static bool PartyBeforeHit(Encounter e) => HudStackLook.PartyWaiting(e);
+
     /// <summary>"1.82M left" (ParserOverlay.HpLeft).</summary>
     protected static string HpLeftText(Encounter e) => ParserPanel.HpLeft(e);
 
