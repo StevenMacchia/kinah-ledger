@@ -10,54 +10,49 @@ using static KinahLedger.Ui.GlitchKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Terminal's meter: a `top` table. An inverted header bar ("  #  NAME   LOAD   DPS   SHR%"), then one line a member in
-/// Cascadia Mono: the rank, a square in their class's colour, the name in phosphor green, the load as a bracketed bar of
-/// block cells in their class's colour, a healer's "+1.1K/s", the DPS in pale green and the share, right-aligned. You:
-/// the rank inverted, your name bright, a lit band behind the line. Deaths a red †, [top] / [heal] in amber / mint at a
-/// kill. The foot: a dashed rule, "total 2.03M" and "group dps 12.7K", [avg] once the fight is held.
+/// Terminal's meter: `htop` over `top`. An inverted header bar ("  #  NAME   LOAD   DPS"), then two lines a member in Cascadia
+/// Mono. The first is the bar line, the row's hero (Steven, 2026-11-17: "figure out better looks that doesn't crowd everything
+/// and prioritizes the bar"): the rank, the name in phosphor green, the load as a wide bracketed bar of block cells in their
+/// class's colour, as long as their DPS against the top member's, the share inside its brackets as htop prints a meter's
+/// percent, and the DPS big in pale green at the end. The second, quiet, under the name: the class's code, the Combat Power,
+/// a death's red †, [top] / [heal] in amber / mint at a kill, a healer's "+12.3K/s", and an expanded meter's damage and crit
+/// under the DPS. You: the rank inverted, your name bright, a lit band behind both lines. The foot: a dashed rule,
+/// "total 2.03M" and "group dps 12.7K", [avg] once the fight is held.
 /// </summary>
 static class TerminalRows
 {
     static readonly FontFamily Face = CrtFace;
     const uint PhosC = 0x5CFF9A, PaleC = 0xD6FFE4, AmberC = 0xFFB641, GroundC = 0x031008, RedC = 0xFF6B5E, MintC2 = 0x7DFFC4;
-    static readonly Brush Phos = Br(PhosC), PhosDim = Br(PhosC, .72), Pale = Br(PaleC), Amber = Br(AmberC), Ground = Br(GroundC), Red = Br(RedC), Mint2 = Br(MintC2);
+    static readonly Brush Phos = Br(PhosC), PhosDim = Br(PhosC, .72), PhosFaint = Br(PhosC, .5), Pale = Br(PaleC), Amber = Br(AmberC), Ground = Br(GroundC), Red = Br(RedC), Mint2 = Br(MintC2);
     static readonly Brush Cells = Segments(Rgb(GroundC), 5, 1.5);
 
-    public const double Pitch = 21, Height = 19, GapHeight = 15;
-    const double RankW = 11, Gap0 = 5;
+    /// <summary>A member's two lines (the bar's, then the quiet one), the pitch with the space under them, the line before you pinned below.</summary>
+    public const double Pitch = 35, Height = 32, GapHeight = 15;
+    const double BarLine = 18, RankW = 12, Gap0 = 6;
 
     /// <summary>A text's width in the screen's face (one line, no trimming).</summary>
     static double W(string s, double size, FontWeight w) => TextW(s, Face, size, w);
 
     /// <summary>
-    /// The columns' widths from the widest form each figure takes in a real fight (Steven, 2026-11-17: "a lot of numbers in all
-    /// the meters you can't see, it's cut off!"): DPS "199.9K", Combat Power "167.5K", a heal "+12.3K/s" (in its TOP HEALS block),
-    /// a share "33.3%", an expanded row's "888.88M 88%", the class codes in the language shown; each <see cref="Gap0"/> px clear
-    /// of its neighbour. Worked out once per language, so its own words count.
+    /// The columns every bar line and the header share: the rank, the name (a 10-letter name whole, so every bar starts at one
+    /// place), the bar (the rest), the DPS (its widest real form, "199.9K"). Worked out once per language.
     /// </summary>
-    static (double Cls, double Cp, double Heal, double Extra, double Dps, double Share) Widths()
+    static (double Name, double Dps) Widths()
     {
         if (_widths is { } w0 && _widthsLang == L.Code) return w0;
-        double cls = new[] { "gladiator", "templar", "assassin", "ranger", "sorcerer", "spiritmaster", "cleric", "chanter" }.Max(c => W(ClassCode(c), 10.5, FontWeights.Bold));
-        string per = L.F("{0}/s", "");
-        var w = (Math.Ceiling(cls + 4), Math.Ceiling(Gap0 - 1 + W("167.5K", 10, FontWeights.SemiBold) + 2), Math.Ceiling(4 + 2 + W("+12.3K", 10, FontWeights.SemiBold) + W(per, 8.5, FontWeights.SemiBold) + 4),
-            Math.Ceiling(Gap0 - 1 + W("888.88M 88%", 10.5, FontWeights.SemiBold)), Math.Ceiling(Gap0 + W("199.9K", 12, FontWeights.Bold)), Math.Ceiling(Gap0 + W("33.3%", 10.5, FontWeights.SemiBold) + 2));
+        var w = (Math.Ceiling(4 + W("Mordwulfen", 11.5, FontWeights.Bold) + Gap0), Math.Ceiling(Gap0 + W("199.9K", 13, FontWeights.Bold)));
         _widths = w; _widthsLang = L.Code;
         return w;
     }
-    static (double, double, double, double, double, double)? _widths;
+    static (double, double)? _widths;
     static string _widthsLang = "";
 
-    /// <summary>The columns every line and the header share: rank, class, name, Combat Power, load, heal, extra (expanded), DPS, share.</summary>
-    static Grid Columns(double height, bool expanded)
+    static Grid Columns(double height)
     {
         var g = new Grid { Height = height };
-        var (cls, cp, heal, extra, dps, share) = Widths();
-        // the name takes the room: the load is a third of it, never under 36 px (a few cells between its brackets)
-        foreach (var w in new[] { new GridLength(RankW), new GridLength(cls), new GridLength(3, GridUnitType.Star), new GridLength(cp), new GridLength(2, GridUnitType.Star), new GridLength(heal), new GridLength(expanded ? extra : 0), new GridLength(dps), new GridLength(share) })
+        var (name, dps) = Widths();
+        foreach (var w in new[] { new GridLength(RankW), new GridLength(name), new GridLength(1, GridUnitType.Star), new GridLength(dps) })
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
-        // a 10-character name whole (its own margin in), and the [load] brackets never squeezed small (Steven, 2026-11-17: "too small")
-        g.ColumnDefinitions[2].MinWidth = Math.Ceiling(4 + W("Mordwulfen", 11, FontWeights.Bold)); g.ColumnDefinitions[4].MinWidth = 40;
         return g;
     }
 
@@ -66,17 +61,14 @@ static class TerminalRows
     /// <summary>The table's head, inverted as `top` draws it.</summary>
     public static FrameworkElement Header(bool expanded)
     {
-        var g = Columns(15, expanded);
+        var g = Columns(15);
         var bar = new Border { Background = Br(PhosC, .85) };
-        Grid.SetColumnSpan(bar, 9); g.Children.Add(bar);
+        Grid.SetColumnSpan(bar, 4); g.Children.Add(bar);
         var rank = At(g, 0, Txt("#", 10, Ground, Face)); rank.HorizontalAlignment = HorizontalAlignment.Right;
-        var cls = At(g, 1, Txt(L.T("CLS"), 10, Ground, Face)); cls.Margin = new Thickness(4, 0, 0, 0);
-        At(g, 2, Txt(L.T("NAME"), 10, Ground, Face)).Margin = new Thickness(4, 0, 0, 0);
-        var cp = At(g, 3, Txt(L.T("CP"), 10, Ground, Face)); cp.HorizontalAlignment = HorizontalAlignment.Right; cp.Margin = new Thickness(0, 0, 2, 0);
-        var load = At(g, 4, Txt(L.T("LOAD"), 10, Ground, Face)); load.Margin = new Thickness(4, 0, 0, 0);
-        var dps = At(g, 7, Txt(L.T("DPS"), 10, Ground, Face)); dps.HorizontalAlignment = HorizontalAlignment.Right;
-        var shr = At(g, 8, Txt(L.T("SHR%"), 10, Ground, Face)); shr.HorizontalAlignment = HorizontalAlignment.Right; shr.Margin = new Thickness(0, 0, 2, 0);
-        g.Margin = new Thickness(0, 6, 0, 3);
+        At(g, 1, Txt(L.T("NAME"), 10, Ground, Face)).Margin = new Thickness(4, 0, 0, 0);
+        At(g, 2, Txt(L.T("LOAD"), 10, Ground, Face)).Margin = new Thickness(2, 0, 0, 0);
+        var dps = At(g, 3, Txt(L.T("DPS"), 10, Ground, Face)); dps.HorizontalAlignment = HorizontalAlignment.Right; dps.Margin = new Thickness(0, 0, 2, 0);
+        g.Margin = new Thickness(0, 6, 0, 4);
         return g;
     }
 
@@ -88,60 +80,57 @@ static class TerminalRows
 
     public sealed class Row : IThemeRow
     {
-        readonly Grid _root = Columns(TerminalRows.Height, false);
+        readonly Grid _root = new() { Height = TerminalRows.Height };
+        readonly Grid _line = Columns(BarLine);
         readonly Border _band = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(-3, -1, -3, -1) };
         readonly Border _bloom = new() { IsHitTestVisible = false, Margin = new Thickness(-3, -1, -3, -1) };
-        readonly Border _rankBox = new() { HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(2, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center };
-        readonly TextBlock _rank = Txt("", 11, PhosDim, Face, FontWeights.SemiBold);
-        readonly TextBlock _cls = Txt("", 10.5, Phos, Face);
-        readonly Border _death = new() { Background = Br(0x3A0D0D), Padding = new Thickness(1.5, 0, 1.5, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         readonly Border _rules = new() { BorderBrush = Br(PhosC, .55), BorderThickness = new Thickness(0, 1, 0, 1), Margin = new Thickness(-3, -1, -3, -1), Visibility = Visibility.Collapsed };
-        readonly TextBlock _name = Txt("", 11, Phos, Face, FontWeights.SemiBold, trim: true);
-        /// <summary>The Combat Power in the CP column beside the name, smaller and dimmer than it.</summary>
-        readonly TextBlock _cp = Txt("", 10, PhosDim, Face, FontWeights.SemiBold);
-        readonly Border _tags = new() { Padding = new Thickness(1.5, 0, 1.5, 0) };
-        // a death and a tag side by side fit the load's least width (a healer's "†2 HEAL"): from its left, never past either edge
-        readonly StackPanel _marks = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
-        /// <summary>A healer's figure; the top healer's inverted in mint (the TOP HEALS tag, its figure in it: a HEAL tag in the load beside a death had no room).</summary>
-        readonly Border _healBox = new() { Padding = new Thickness(2, 0, 3, 0), Margin = new Thickness(4, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        /// <summary>The load: [cells] in the class's colour; a death or a kill's top takes its place (the share stays in SHR%).</summary>
-        readonly Grid _load = new() { Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly Border _rankBox = new() { HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(2, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock _rank = Txt("", 11.5, PhosDim, Face, FontWeights.SemiBold);
+        readonly TextBlock _name = Txt("", 11.5, Phos, Face, FontWeights.SemiBold, trim: true);
+        /// <summary>The load: [cells    20.0%] in the class's colour, as long as the member's DPS against the top member's.</summary>
+        readonly Grid _load = new() { VerticalAlignment = VerticalAlignment.Center };
         readonly GlitchLevel _bar = new(13, Br(PhosC, .12), Cells);
-        readonly TextBlock _heal = Txt("", 10, Mint2, Face, FontWeights.SemiBold), _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
-        readonly TextBlock _fig = FigCell(12, Pale, Face, 0), _share = FigCell(10.5, Br(PhosC, .82), Face, 0, FontWeights.SemiBold);
+        readonly TextBlock _share = Txt("", 10.5, Br(PhosC, .82), Face, FontWeights.SemiBold);
+        readonly TextBlock _fig = FigCell(13, Pale, Face, 0);
+        // the quiet line: the class, the CP, the marks, a healer's figure; an expanded meter's damage and crit at its end
+        readonly TextBlock _cls = Txt("", 10.5, Phos, Face);
+        readonly TextBlock _cp = Txt("", 10, PhosDim, Face, FontWeights.SemiBold);
+        readonly Border _death = new() { Background = Br(0x3A0D0D), Padding = new Thickness(2, 0, 2, 0), Margin = new Thickness(Gap0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        readonly Border _tags = new() { Padding = new Thickness(2, 0, 2, 0), Margin = new Thickness(Gap0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        readonly TextBlock _heal = Txt("", 10, Mint2, Face, FontWeights.SemiBold);
+        readonly TextBlock _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
 
         public FrameworkElement Root => _root;
 
         public Row()
         {
-            Grid.SetColumnSpan(_band, 9); _root.Children.Add(_band);
-            _rankBox.Child = _rank; _root.Children.Add(_rankBox);
-            _cls.Margin = new Thickness(4, 0, 0, 0); Grid.SetColumn(_cls, 1); _root.Children.Add(_cls);
-            Grid.SetColumnSpan(_rules, 9); _root.Children.Add(_rules);
-            var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
-            name.Children.Add(_name);
-            // the Combat Power in its own column right after the name, as `top` lists a figure a column
-            _cp.TextAlignment = TextAlignment.Right; _cp.HorizontalAlignment = HorizontalAlignment.Right; _cp.Margin = new Thickness(0, 0, 2, 0);
-            Grid.SetColumn(_cp, 3); _root.Children.Add(_cp);
-            Grid.SetColumn(name, 2); _root.Children.Add(name);
-            // the load: [cells] in the class's colour
+            _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(BarLine) });
+            _root.RowDefinitions.Add(new RowDefinition());
+            Grid.SetRowSpan(_band, 2); _root.Children.Add(_band);
+            Grid.SetRowSpan(_rules, 2); _root.Children.Add(_rules);
+            _root.Children.Add(_line);
+            // the bar line: the rank, the name, [the load  share], the DPS
+            _rankBox.Child = _rank; _line.Children.Add(_rankBox);
+            _name.Margin = new Thickness(4, 0, Gap0, 0); Grid.SetColumn(_name, 1); _line.Children.Add(_name);
             var load = _load;
-            load.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); load.ColumnDefinitions.Add(new ColumnDefinition()); load.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
+                load.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
             load.Children.Add(Txt("[", 14, PhosDim, Face, FontWeights.SemiBold));
-            _bar.Root.Margin = new Thickness(1, 0, 1, 0); _bar.Root.VerticalAlignment = VerticalAlignment.Center;
+            _bar.Root.Margin = new Thickness(1, 0, 0, 0); _bar.Root.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(_bar.Root, 1); load.Children.Add(_bar.Root);
-            var close = Txt("]", 14, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 2); load.Children.Add(close);
-            Grid.SetColumn(load, 4); _root.Children.Add(load);
-            // a kill's tags over the load's start, on the screen's ground (the name keeps its room)
-            // a death and a kill's top sit at the load's end, where its empty cells are (the name keeps its room)
-            _tags.VerticalAlignment = VerticalAlignment.Center; _death.Margin = new Thickness(0, 0, 2, 0);
-            _marks.Children.Add(_death); _marks.Children.Add(_tags);
-            Grid.SetColumn(_marks, 4); _root.Children.Add(_marks);
-            _healBox.Child = _heal; Grid.SetColumn(_healBox, 5); _root.Children.Add(_healBox);
-            _extra.Margin = new Thickness(Gap0 - 1, 0, 0, 0); At(_root, 6, _extra);
-            At(_root, 7, _fig); At(_root, 8, _share);
-            _share.Margin = new Thickness(0, 0, 2, 0);
-            Grid.SetColumnSpan(_bloom, 9); _root.Children.Add(_bloom);
+            _share.Margin = new Thickness(5, 0, 1, 0); Grid.SetColumn(_share, 2); load.Children.Add(_share);
+            var close = Txt("]", 14, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 3); load.Children.Add(close);
+            Grid.SetColumn(load, 2); _line.Children.Add(load);
+            _fig.Margin = new Thickness(0, 0, 2, 0); Grid.SetColumn(_fig, 3); _line.Children.Add(_fig);
+            // the quiet line under the name
+            var quiet = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(RankW + 4, 0, 2, 0) };
+            _extra.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(_extra, Dock.Right); quiet.Children.Add(_extra);
+            _cls.Margin = new Thickness(0, 0, Gap0, 0);
+            foreach (var el in new UIElement[] { _cls, _cp, _death, _tags, _heal }) { DockPanel.SetDock(el, Dock.Left); quiet.Children.Add(el); }
+            _heal.Margin = new Thickness(Gap0, 0, 0, 0);
+            Grid.SetRow(quiet, 1); _root.Children.Add(quiet);
+            Grid.SetRowSpan(_bloom, 2); _root.Children.Add(_bloom);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -152,50 +141,48 @@ static class TerminalRows
             _rankBox.Background = you ? Phos : null;
             _rank.Foreground = you ? Ground : PhosDim;
             _band.Visibility = you ? Visibility.Visible : Visibility.Collapsed;
-            _band.Background = Br(PhosC, .22);
+            _band.Background = Br(PhosC, .2);
             _rules.Visibility = you ? Visibility.Visible : Visibility.Collapsed;
-            _cls.Text = ClassCode(m.Class);
-            _cls.Foreground = Frozen(cc);
-            _name.Foreground = you ? Pale : Phos;
-            _name.FontWeight = you ? FontWeights.Bold : FontWeights.SemiBold;
-            // a death: a red dagger after the name; a kill's tops: an inverted block at the load's end, where its empty cells are
             _name.Inlines.Clear();
             _name.Inlines.Add(Rn(m.Name, you ? Br(0xE8FFEE) : Phos));
             if (you) _name.Inlines.Add(Rn("*", Amber));
+            _name.FontWeight = you ? FontWeights.Bold : FontWeights.SemiBold;
+            _bar.Fill.Background = Frozen(cc);
+            _bar.Slide(c.Key + "|bar", BarOf(m, c));
+            _share.Text = m.ShareText;
+            // before a hit no load: the Combat Power short ("cp 167.5K") in the DPS's place, free to run into the empty load
+            _load.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
+            Grid.SetColumn(_fig, m.CpOnly ? 2 : 3); Grid.SetColumnSpan(_fig, m.CpOnly ? 2 : 1);
+            _fig.Inlines.Clear();
+            if (m.CpOnly && m.FigureValue > 0) { _fig.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 10, FontWeights.SemiBold)); _fig.Inlines.Add(Rn(Amounts.Meter(m.FigureValue), PhosDim)); }
+            else _fig.Inlines.Add(Rn(m.Figure, Pale));
+            _fig.FontWeight = FontWeights.Bold;
+            // the quiet line
+            _cls.Text = ClassCode(m.Class);
+            _cls.Foreground = Frozen(cc);
             _cp.Inlines.Clear();
-            if (m.Cp.Length > 0) _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim));
+            if (m.Cp.Length > 0) { _cp.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 9.5)); _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim)); }
             _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _death.Child = m.Deaths > 0 ? Txt("†" + m.Deaths.ToString(CultureInfo.InvariantCulture), 11, Red, Face) : null;
             _death.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
-            bool healTag = m.TopHeals && !m.TopDps && m.Heal.Length > 0;   // the top healer's tag is their heal figure, inverted
-            bool top = m.TopDps || (m.TopHeals && !healTag);
-            _load.Visibility = m.Deaths > 0 || top ? Visibility.Hidden : Visibility.Visible;
+            bool top = m.TopDps || m.TopHeals;
             _tags.Background = m.TopDps ? Amber : Mint2;
             _tags.Child = top ? Txt(L.T(m.TopDps ? "TOP" : "HEAL"), 10, Ground, Face) : null;
             _tags.Visibility = top ? Visibility.Visible : Visibility.Collapsed;
-            _bar.Fill.Background = Frozen(cc);
-            _bar.Root.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
-            _bar.Slide(c.Key + "|bar", m.Share);
             _heal.Inlines.Clear();
             if (m.Heal.Length > 0)
             {
-                // "+1.1K" whole, its "/s" dimmer and smaller, so the rate fits its column
+                // "+1.1K" whole, its "/s" dimmer and smaller
                 int sl = m.Heal.LastIndexOf('/'); bool ps = sl > 0;   // "/s" in English, "/초" in Korean
-                _heal.Inlines.Add(Rn("+" + (ps ? m.Heal[..sl] : m.Heal), healTag ? Ground : Mint2));
-                if (ps) _heal.Inlines.Add(Rn(m.Heal[sl..], healTag ? Br(GroundC, .75) : Br(MintC2, .6), 8.5));
+                _heal.Inlines.Add(Rn("+" + (ps ? m.Heal[..sl] : m.Heal), Mint2));
+                if (ps) _heal.Inlines.Add(Rn(m.Heal[sl..], Br(MintC2, .6), 8.5));
             }
-            _healBox.Background = healTag ? Mint2 : null;
-            _healBox.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _root.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? Widths().Extra : 0);
+            _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _extra.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " " + m.Crit : "") : "";
             _extra.Visibility = _extra.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            // before a hit: the Combat Power short, as the CP column writes it ("167.5K"), so it keeps the DPS's column
-            _fig.Text = m.CpOnly && m.FigureValue > 0 ? Amounts.Meter(m.FigureValue) : m.Figure;
-            _fig.FontWeight = FontWeights.Bold;
-            _share.Text = m.ShareText;
         }
 
-        /// <summary>A phosphor bloom on this line (a kill's top DPS), decaying as phosphor does.</summary>
+        /// <summary>A phosphor bloom on this member's lines (a kill's top DPS), decaying as phosphor does.</summary>
         public void Bloom(Color c, double ms)
         {
             var bg = new SolidColorBrush(Color.FromArgb(0, c.R, c.G, c.B));
