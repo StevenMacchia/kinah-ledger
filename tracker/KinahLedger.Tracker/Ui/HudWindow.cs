@@ -79,6 +79,10 @@ public sealed partial class HudWindow : Window
     /// </summary>
     public static async Task HiddenIfOver(System.Drawing.Rectangle area, Func<Task> read)
     {
+        // read from the game's own window (Ocr/WindowCapture, the default): no overlay is in that picture, so nothing steps
+        // aside. Hiding anyway made the panel blink out on every pass it overlapped (Steven, 2026-11-17: "the little buddy
+        // keeps disappearing mid game"); the screen copy, the fallback, still has the overlays step aside
+        if (Ocr.WindowCapture.Active) { await read(); return; }
         // the fight overlay steps aside the same way (Ui/ParserOverlay.cs)
         if (ParserOverlay.Current != null) { var inner = read; read = () => ParserOverlay.HiddenIfOver(area, inner); }
         var h = Current;

@@ -28,12 +28,18 @@ public static partial class WpfApp
         var said = new List<string>();
         foreach (var t in themes.Where(t => t != HudThemes.Classic))
         {
+            var meterBefore = o.ParserThemeForTest;
             o.PickHudThemeForTest(t); DoEvents();
             var shown = o.HudLookHost.Children.OfType<FrameworkElement>().Select(c => c.Tag as string).ToList();
             var want = HudThemes.Looks(t).Select(l => l.Key).ToList();
             said.Add($"{t}: {string.Join(",", shown)}");
-            check(want.Count == 3 && shown.SequenceEqual(want) && o.HudLookPreview.Children.Count == 1 && o.ParserLooksForTest.Keys.Where(k => k != KinahLedger.Parser.ParserPrefs.StandardLook).SequenceEqual(want),
-                $"...{t} shows its three looks as thumbnails and in the Parser's look row, the look in use still drawn big ({string.Join(", ", shown)})");
+            // the DPS meter's look row has a theme of its own (Steven, 2026-11-17: "you shouldnt have to choose the corresponding
+            // buddy ... in order to choose the DPS overlay"): the Buddy's theme leaves it alone, the meter's own chips change it
+            bool meterKept = o.ParserThemeForTest == meterBefore;
+            o.PickParserThemeForTest(t); DoEvents();
+            check(want.Count == 3 && shown.SequenceEqual(want) && o.HudLookPreview.Children.Count == 1 && meterKept && o.ParserThemeForTest == t && o.ParserLooksForTest.Keys.SequenceEqual(want),
+                $"...{t} shows its three looks as thumbnails; the DPS meter's row keeps its own theme, and its {t} chip shows the same three ({string.Join(", ", shown)} | {string.Join(", ", o.ParserLooksForTest.Keys)})");
+            o.PickParserThemeForTest(meterBefore ?? HudThemes.Classic); DoEvents();
         }
         o.PickHudThemeForTest(HudThemes.Of(w.HudLook)); DoEvents();
         var keys = HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key).ToList();

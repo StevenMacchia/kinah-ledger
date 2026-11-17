@@ -541,6 +541,7 @@ public sealed class ParserOverlay : Window
     /// <summary>A screen read with the overlay out of the way when it sits over the area read (as the panel over the game does).</summary>
     public static async Task HiddenIfOver(System.Drawing.Rectangle area, Func<Task> read)
     {
+        if (Ocr.WindowCapture.Active) { await read(); return; }   // the game's own window is read: the meter is never in it (HudWindow.HiddenIfOver)
         var o = Current;
         bool hide = false;
         if (o != null) { try { hide = await o.Dispatcher.InvokeAsync(() => o.PixelBounds().IntersectsWith(area)); } catch (Exception) { hide = false; } }

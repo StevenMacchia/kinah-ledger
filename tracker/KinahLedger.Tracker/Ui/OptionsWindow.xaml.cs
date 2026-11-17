@@ -455,6 +455,15 @@ public partial class OptionsWindow : Window
         Footer(L.T("Saved."), "Good");
     }
 
+    /// <summary>For the self-tests: the footer says the last Save went through.</summary>
+    internal bool SavedForTest => FooterNote.Text == L.T("Saved.");
+    /// <summary>For the self-tests: Save, then Options closed as a player would after it (Save keeps it open since 2026-11-17); a Save that stopped on a note stays open.</summary>
+    internal void SaveForTest()
+    {
+        Save();
+        if (SavedForTest) { _closeConfirmed = true; Close(); }
+    }
+
     /// <summary>Ctrl+= or Ctrl+- pressed in the window while Options is open: the slider here moves to <paramref name="scale"/>, so Save keeps it.</summary>
     public void SetWindowScale(double scale)
     {
