@@ -1841,6 +1841,37 @@ public static class ParserTests
             }
         }
 
+        // Combat Power beside every name (the live check, 2026-11-17: Talisra showed none for the Cleric and the Assassin, who
+        // were in before Steven, and the Horn Den duo on his alt showed none for either): each member of every pull on these
+        // recordings with the CP the game gave for them; the meter's rows say a member's CP only when there is one
+        {
+            var want = new (string Rec, (string Name, int Cp)[] Members)[]
+            {
+                ("20261116-17", new[] { ("Swoly", 158_094), ("huai1", 124_154), ("Alenlen", 123_091), ("Spidercookie", 120_060), ("Slash", 124_028) }),
+                ("20261116-15-2", new[] { ("SwolyDaBooly", 114_063), ("TheTilly", 144_717) }),
+            };
+            var recs = want.Select(w => (w, Path: Recording(w.Rec))).Where(x => x.Path != null && File.Exists(Path.Combine(Path.GetDirectoryName(x.Path)!, "place.tsv"))).ToList();
+            if (NativeDecoder.Version < 10 || recs.Count < want.Length)
+                Console.WriteLine($"skip  Combat Power on Steven's recordings: decoder interface {NativeDecoder.Version}, {recs.Count} of {want.Length} recordings here (kinah-bench/packets/rec-*)");
+            else
+            {
+                foreach (var (w, path) in recs)
+                {
+                    var pulls = Replay(path!, hits: false);
+                    var members = pulls.SelectMany(e => e.Members).ToList();
+                    var last = pulls.LastOrDefault()?.Members.ToDictionary(f => f.Name, f => f.CombatPower) ?? new();
+                    Check(pulls.Count > 0 && members.All(f => f.CombatPower > 0) && w.Members.All(m => last.GetValueOrDefault(m.Name) == m.Cp),
+                        $"Combat Power, {w.Rec}: every member of its {pulls.Count} pulls has one ({members.Count(f => f.CombatPower == 0)} without); the last pull: {string.Join(", ", last.Select(kv => $"{kv.Key} {kv.Value:N0}"))}");
+                }
+            }
+            var e0 = new Encounter { Id = "cp-none", Start = t, Boss = "Talisra of the Void", HasDamage = true };
+            e0.Roster.Add(new Fighter { Id = 1, Name = "Swoly", You = true, CombatPower = 158_094, Damage = 1_000 });
+            e0.Roster.Add(new Fighter { Id = 2, Name = "Nobody", CombatPower = 0, Damage = 1_000 });
+            var rows = Ui.ThemeRows.Of(e0, t.AddSeconds(10), expanded: false);
+            Check(rows.Single(r => r.F.Id == 1).Cp.Length > 0 && rows.Single(r => r.F.Id == 2).Cp == "" && !rows.Any(r => r.Cp == "0"),
+                $"...a member without one shows nothing beside the name, never 0 ({string.Join(", ", rows.Select(r => $"{r.Name} '{r.Cp}'"))})");
+        }
+
         // crit, ready to switch on: each hit kind's hits, damage and biggest hit kept per ability (store v2); nothing shown as
         // crit until ParserPrefs.CritSource picks a kind; then the inspect view and the overlay get crit rate, crit share, max crit
         {
