@@ -17,7 +17,7 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>"boss", "run" or "fight" (BossParser.ModeKey); a record kept before the modes is a boss pull.</summary>
     public string Mode { get; set; } = "boss";
     [JsonIgnore] public ParserMode ModeKind => BossParser.ModeOf(Mode);
-    /// <summary>"Transcendence", "Expedition" or "Sanctuary".</summary>
+    /// <summary>"Transcendence", "Expedition", "Sanctuary", "Nightmare" or "World boss" (a fight's: "Open world", "Abyss").</summary>
     public string Kind { get; set; } = "";
     /// <summary>The instance's name ("Shattered Arkanis").</summary>
     public string Instance { get; set; } = "";
@@ -245,9 +245,10 @@ public sealed class Encounter : IJsonOnDeserialized
 
     /// <summary>
     /// The share of the HP the boss lost that is credited to a member, 0 to 1 (null when the boss's damage isn't known): the
-    /// group card's "99.8% of the boss's HP credited".
+    /// group card's "99.8% of the boss's HP credited". Never for a world boss: a crowd fights it, and the HP it lost to players
+    /// outside the group is no part of this record (0.10.122: a crowd's HP falls are never the group's figure).
     /// </summary>
-    [JsonIgnore] public double? Coverage => HasDamage && BossDamage > 0 ? Math.Clamp((BossDamage - UncreditedBoss) / (double)BossDamage, 0, 1) : null;
+    [JsonIgnore] public double? Coverage => HasDamage && BossDamage > 0 && !WorldBoss ?Math.Clamp((BossDamage - UncreditedBoss) / (double)BossDamage, 0, 1) : null;
 
     /// <summary>
     /// The seconds DPS is over: a run's boss pulls when its figures are the bosses' damage (and an older run's, which counted
@@ -368,11 +369,12 @@ public sealed class Encounter : IJsonOnDeserialized
     public const string AvgBadge = "Avg. DPS";
 
     /// <summary>
-    /// The end of a boss fight in a dungeon (a pull's kill or wipe, a run cleared, in an Expedition, Transcendence or Sanctuary),
-    /// with two or more members who dealt damage: the meter puts TOP DPS (and TOP HEALS when heals are known) on their rows.
+    /// The end of a boss fight in a dungeon (a pull's kill or wipe, a run cleared, in an Expedition, Transcendence, Sanctuary or
+    /// Nightmare instance) or of a world boss's pull, with two or more members who dealt damage: the meter puts TOP DPS (and
+    /// TOP HEALS when heals are known) on their rows.
     /// </summary>
     [JsonIgnore] public bool TopsShown => !Live && HasDamage && !Waiting && Outcome is "kill" or "wipe" or "cleared"
-        && (Boss.Length > 0 || ModeKind == ParserMode.Run) && KindOf(Kind) is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary
+        && (Boss.Length > 0 || ModeKind == ParserMode.Run) && KeptKind(KindOf(Kind))
         && Members.Count(f => Figure(f) > 0) >= 2;
 
     /// <summary>The member with the fight's highest DPS (the one TOP DPS marks), or null when <see cref="TopsShown"/> is off.</summary>
@@ -472,13 +474,30 @@ public sealed class Encounter : IJsonOnDeserialized
 
     public static string KindName(ContentKind k) => k switch
     {
-        ContentKind.Transcendence => "Transcendence", ContentKind.Expedition => "Expedition", ContentKind.Sanctuary => "Sanctuary", _ => "",
+        ContentKind.Transcendence => "Transcendence", ContentKind.Expedition => "Expedition", ContentKind.Sanctuary => "Sanctuary",
+        ContentKind.Nightmare => NightmareKind, ContentKind.WorldBoss => WorldBossKind, _ => "",
     };
 
     public static ContentKind KindOf(string? name) => name?.Trim().ToLowerInvariant() switch
     {
-        "transcendence" => ContentKind.Transcendence, "expedition" => ContentKind.Expedition, "sanctuary" => ContentKind.Sanctuary, _ => ContentKind.Other,
+        "transcendence" => ContentKind.Transcendence, "expedition" => ContentKind.Expedition, "sanctuary" => ContentKind.Sanctuary,
+        "nightmare" => ContentKind.Nightmare, "world boss" => ContentKind.WorldBoss, _ => ContentKind.Other,
     };
+
+    /// <summary>The kinds' names as records keep them (English, like the others; the UI shows them in the player's language).</summary>
+    public const string NightmareKind = "Nightmare", WorldBossKind = "World boss";
+
+    /// <summary>
+    /// A dungeon the Parser keeps fights for: a Transcendence, an Expedition, a Sanctuary or a Nightmare instance (its pulls,
+    /// its runs in Full run, its fights in Every fight). A world boss is not a place: <see cref="KeptKind"/>.
+    /// </summary>
+    public static bool Dungeon(ContentKind k) => k is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary or ContentKind.Nightmare;
+
+    /// <summary>A kind whose boss pulls are kept: a dungeon's, or a world boss's wherever it is fought.</summary>
+    public static bool KeptKind(ContentKind k) => Dungeon(k) || k == ContentKind.WorldBoss;
+
+    /// <summary>A world boss's pull (kept wherever it was fought, its instance the zone).</summary>
+    [JsonIgnore] public bool WorldBoss => KindOf(Kind) == ContentKind.WorldBoss;
 
     public static string OutcomeName(BossOutcome o) => o switch { BossOutcome.Kill => "kill", BossOutcome.Wipe => "wipe", _ => "left" };
 

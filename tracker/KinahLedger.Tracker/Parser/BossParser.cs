@@ -6,9 +6,9 @@ namespace KinahLedger.Parser;
 /// <summary>What the Parser keeps (Steven, 2026-11-13: "allow users to select just boss only for parser or full run etc").</summary>
 public enum ParserMode
 {
-    /// <summary>One record per boss pull in a Transcendence, an Expedition or a Sanctuary (the default).</summary>
+    /// <summary>One record per boss pull in a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and per world boss pull (the default).</summary>
     Bosses = 0,
-    /// <summary>One record per instance run of those three, entering to leaving, trash included, each boss a split.</summary>
+    /// <summary>One record per instance run of those dungeons, entering to leaving, trash included, each boss a split.</summary>
     Run = 1,
     /// <summary>One record per fight anywhere (the open world and the Abyss too): the first hit or kill to a pause.</summary>
     Fights = 2,
@@ -20,7 +20,9 @@ public enum ParserMode
 /// parser or full run etc". The rules:
 /// <list type="bullet">
 /// <item>Boss pulls are followed whatever the mode (a run's splits and a fight's name come from them). A pull exists
-///   only inside a Transcendence, an Expedition or a Sanctuary. The decoder says a pull only for the bosses on its own
+///   inside a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and for a world boss the timers know
+///   wherever it is fought (<see cref="World"/>; Steven, 2026-11-17: "add boss names / bars etc for nightmare dungeons and
+///   world bosses etc and add them to the parser logs"). The decoder says a pull only for the bosses on its own
 ///   list; the tracker's list (Parser/BossBook.cs) gives the kind (a Sanctuary), the final boss and the name as players
 ///   know it. A name that list doesn't have is logged, not dropped: a spelling between the two lists must never lose a
 ///   fight. Pulling another boss (or a new spawn of the same one) ends the pull under way. A pull ends with the boss's
@@ -315,7 +317,14 @@ public sealed class BossParser
         return c;
     }
 
-    static bool Kept(ContentKind k) => k is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
+    /// <summary>A dungeon whose fights are kept (Encounter.Dungeon): a Transcendence, an Expedition, a Sanctuary, a Nightmare instance.</summary>
+    static bool Kept(ContentKind k) => Encounter.Dungeon(k);
+
+    /// <summary>
+    /// The world bosses whose pulls are kept wherever they are fought (Parser/WorldBosses.cs): the session gives the timers'
+    /// list; none by default, so a boss outside a dungeon is the live-only meter's.
+    /// </summary>
+    public WorldBossBook World { get; set; } = WorldBossBook.None;
 
     // ---- the mode ----
 
@@ -347,9 +356,9 @@ public sealed class BossParser
     /// <summary>What the mode counts, in one sentence (the Parser page's head, the overlay's menu).</summary>
     public static string Counts(ParserMode m) => m switch
     {
-        ParserMode.Run => "Each Transcendence, Expedition or Sanctuary run, from entering to leaving, trash included, with every boss as a split.",
+        ParserMode.Run => "Each Transcendence, Expedition, Sanctuary or Nightmare run, from entering to leaving, trash included, with every boss as a split.",
         ParserMode.Fights => $"Every fight anywhere, the open world and the Abyss too: from the first hit or kill to {PauseSeconds:0} seconds without one. Open-world and Abyss fights show while they last and are never kept.",
-        _ => "Each boss pull in Transcendence, Expeditions and Sanctuaries; trash and the open world never count.",
+        _ => "Each boss pull in Transcendence, Expeditions, Sanctuaries and Nightmare, and each world boss; trash and the rest of the open world never count.",
     };
 
     public static string ModeKey(ParserMode m) => m switch { ParserMode.Run => "run", ParserMode.Fights => "fight", _ => "boss" };
@@ -489,7 +498,8 @@ public sealed class BossParser
                     break;
                 }
                 // the boss of a pull that ended with no end said (a wipe found by its quiet or its reset) hit again: a new pull
-                if (_cur == null && _inferred is { } inf && dd.TargetId != 0 && dd.TargetId == inf.BossId && Kept(_kind) && _instanceId == inf.InstanceId)
+                if (_cur == null && _inferred is { } inf && dd.TargetId != 0 && dd.TargetId == inf.BossId
+                    && (Kept(_kind) ? _instanceId == inf.InstanceId : World.Find(inf.Boss) != null))
                 {
                     _inferred = null;
                     Log($"{inf.Boss} hit again after its pull ended: a new pull");
@@ -498,8 +508,8 @@ public sealed class BossParser
                 if (_mode == ParserMode.Fights && _fight == null) OpenFight(dd.At);
                 FarmAt(dd.At);
                 if (Ours(dd.SourceId, dd.SourceIsYou)) AlwaysFight(dd.At, open: true);
-                // damage to a boss just ahead of its pull: kept for it (Engage takes it)
-                if (_cur == null && Kept(_kind) && dd.TargetId != 0)
+                // damage to a boss just ahead of its pull: kept for it (Engage takes it); out of a dungeon for a world boss's
+                if (_cur == null && dd.TargetId != 0)
                 {
                     _preHits.Enqueue(dd);
                     while (_preHits.Count > 0 && (dd.At - _preHits.Peek().At).TotalSeconds > PreSeconds) _preHits.Dequeue();
@@ -839,10 +849,19 @@ public sealed class BossParser
     void Engage(BossEngaged be, List<Encounter> done)
     {
         var name = be.Boss.Trim();
-        if (name.Length == 0) name = Kept(_kind) ? NameUnnamed(be.BossId) : UnnamedBoss;   // a pull the decoder couldn't name: still a fight
-        if (!Kept(_kind))
+        // out of a dungeon, a world boss the timers know (by its name, its short name, or the only one they place here when the
+        // pull came unnamed) is a kept pull wherever it is fought, under the timers' full name and with its place
+        WorldBossBook.Boss? world = null;
+        if (!Kept(_kind) && (World.Find(name) ?? (name.Length == 0 ? World.OnlyIn(_zone) : null)) is { } wb)
         {
-            Log($"{name}: not in a Transcendence, Expedition or Sanctuary{(_instance.Length > 0 ? $" ({_instance})" : "")}, no boss pull kept");
+            world = wb;
+            if (!wb.Name.Equals(name, StringComparison.Ordinal)) Log($"{(name.Length > 0 ? name : "an unnamed boss")}: the world boss {wb.Name} on the timers");
+            name = wb.Name;
+        }
+        if (name.Length == 0) name = Kept(_kind) ? NameUnnamed(be.BossId) : UnnamedBoss;   // a pull the decoder couldn't name: still a fight
+        if (!Kept(_kind) && world == null)
+        {
+            Log($"{name}: not in a dungeon{(_instance.Length > 0 ? $" ({_instance})" : "")} and not a world boss the timers know, no boss pull kept");
             if (_mode == ParserMode.Fights) { if (_fight == null) OpenFight(be.At); _fight!.LastAt = Max(_fight.LastAt, be.At); if (_fight.Boss.Length == 0) _fight.Boss = name; }
             FarmAt(be.At);
             // Always on: a boss out here (a field or world boss) starts the meter from 0, under its name; the same boss again carries on
@@ -857,11 +876,11 @@ public sealed class BossParser
             if (_farm != null) { _farm.LastAt = Max(_farm.LastAt, be.At); if (_farm.Boss.Length == 0) _farm.Boss = name; }
             return;
         }
-        BossBook.Boss? listed = _book.Find(_instance, name);
-        if (_book.Knows(_instance) && listed == null && name != UnnamedBoss) Log($"{name}: not on data/bosses.txt for {_instance}; kept under the game's name");
+        BossBook.Boss? listed = world == null ? _book.Find(_instance, name) : null;
+        if (world == null && _book.Knows(_instance) && listed == null && name != UnnamedBoss) Log($"{name}: not on data/bosses.txt for {_instance}; kept under the game's name");
         // back into an instance of the same name (Reentry): a boss already down here pulled again is a new run of it; any
         // other boss, the same copy
-        if (_reentry != null)
+        if (_reentry != null && world == null)
         {
             if (_downHere.Contains(listed?.Name ?? name)) NewCopy(done, $"{listed?.Name ?? name} pulled again after its kill");
             else { _reentry = null; Log($"{_instance}: {listed?.Name ?? name} pulled, not down yet, a reconnect into the same copy"); }
@@ -873,12 +892,19 @@ public sealed class BossParser
             // a new boss (or a new spawn of this one): the pull under way is over, and this one starts afresh
             ClosePull(_cur, BossOutcome.Left, Max(_cur.LastAt, _cur.Start), done, $"{name} was pulled");
         }
-        _cur = new Encounter
-        {
-            Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
-            Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true, Wave = listed?.Wave == true,
-            Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
-        };
+        _cur = world != null
+            ? new Encounter
+            {
+                // a world boss: its kind, its place as the instance (the timers', else where the session reads the player is)
+                Mode = "boss", Kind = Encounter.WorldBossKind, Instance = world.Zone.Length > 0 ? world.Zone : _zone, GameMode = "",
+                Boss = world.Name, BossId = be.BossId, Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
+            }
+            : new Encounter
+            {
+                Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
+                Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true, Wave = listed?.Wave == true,
+                Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
+            };
         MergeGroup(_cur, _group, null);
         ApplyClasses(_cur);
         _inferred = null;
@@ -900,7 +926,7 @@ public sealed class BossParser
             }
         }
         _preHits.Clear();
-        if (_mode == ParserMode.Run && _run == null) OpenRun(be.At, midway: true);
+        if (_mode == ParserMode.Run && _run == null && world == null) OpenRun(be.At, midway: true);   // no run out of a dungeon
         if (_mode == ParserMode.Fights)
         {
             if (_fight == null) OpenFight(be.At);
@@ -1295,7 +1321,8 @@ public sealed class BossParser
         }
         if (!worth) return;
         if (_run != null) _run.Splits.Add(Split.From(e, e.End.Value, live: false));
-        if (_mode == ParserMode.Bosses && !e.Wave) done.Add(Copy(e));
+        // a world boss's pull is kept in every mode: out of a dungeon no run holds it, and the open world's fight is never kept
+        if ((_mode == ParserMode.Bosses || e.WorldBoss) && !e.Wave) done.Add(Copy(e));
     }
 
     /// <summary>A run's end: cleared when its final boss died, else left.</summary>
@@ -1347,7 +1374,8 @@ public sealed class BossParser
                 && (now - (q.LastHpFallAt is { } fall && fall > lastHit ? fall : lastHit)).TotalSeconds >= WipeQuietSeconds)
             {
                 _inferred = (q.Boss, q.BossId, _instanceId);
-                ClosePull(q, BossOutcome.Wipe, now, done, $"no damage for {WipeQuietSeconds:0} s and no end said");
+                // a world boss going quiet is you walking off (the crowd fights on, out of sight), never a wipe
+                ClosePull(q, q.WorldBoss ? BossOutcome.Left : BossOutcome.Wipe, now, done, $"no damage for {WipeQuietSeconds:0} s and no end said");
                 _version++;
             }
             if (_cur is { } c && (now - c.LastAt).TotalMinutes >= StaleMinutes)
@@ -1444,7 +1472,8 @@ public sealed class BossParser
                 if (carry)
                 {
                     MarkPartial(s, "the tracker restarted during it");
-                    if (m != ParserMode.Fights) { _kind = Encounter.KindOf(s.Kind); _instance = s.Instance; _instanceId = s.InstanceId; }
+                    // a world boss's pull carries on where the player is, never a place of its own
+                    if (m != ParserMode.Fights && !s.WorldBoss) { _kind = Encounter.KindOf(s.Kind); _instance = s.Instance; _instanceId = s.InstanceId; }
                     Log($"{s.TitleWord}: carries on after the tracker restarted");
                     continue;
                 }

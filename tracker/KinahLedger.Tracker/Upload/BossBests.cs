@@ -39,7 +39,11 @@ public static class BossBests
     public const int MaxSent = 40;
     /// <summary>A list the site kept nowhere (no profile linked yet) is offered again after this long.</summary>
     public static readonly TimeSpan RetryUnlinked = TimeSpan.FromHours(1);
-    /// <summary>The kinds a boss pull is kept for (Encounter.Kind).</summary>
+    /// <summary>
+    /// The kinds whose bests go to the profile (Encounter.Kind): the three the site takes. Nightmare and world boss pulls are
+    /// kept on this PC (the Parser's list, its records) but not sent: the site drops a kind it doesn't know, so they wait
+    /// for the site to take them (it ships first, then this list grows).
+    /// </summary>
     static readonly HashSet<string> Kinds = new(StringComparer.OrdinalIgnoreCase) { "Transcendence", "Expedition", "Sanctuary" };
 
     /// <summary>Options › Sharing › Show my boss bests on my kinahledger.com profile. Off by default.</summary>
