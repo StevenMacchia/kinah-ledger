@@ -46,13 +46,20 @@ static class VhsRows
         readonly TextBlock _name = Txt("", 12, White, Face, trim: true);
         readonly StackPanel _tags = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _healText = Txt("", 9.5, Green, Face);
+        /// <summary>A healer's "+12.3K/s" after the name's tags; the top healer's stamped green, the TOP HEAL tag with its figure in it
+        /// (the tag and the figure side by side cut a 10-letter name short at a kill).</summary>
+        readonly Border _healBox = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
         readonly GlitchLevel _bar = new(5, Br(0xFFFFFF, .11), Cells), _heal = new(2, Br(GreenC, .12));
         readonly TextBlock _code = Txt("", 9.5, White, Face);
-        readonly TextBlock _extra = Txt("", 10, Dim, Face), _fig = FigCell(13.5, White, Face, 40), _share = FigCell(10, Dim, Face, 42);
+        readonly TextBlock _extra = Txt("", 10, Dim, Face), _fig = FigCell(13.5, White, Face, Math.Ceiling(TextW("199.9K", Face, 13.5, FontWeights.Bold))), _share = FigCell(10, Dim, Face, 42);
 
         public FrameworkElement Root => _root;
-        /// <summary>Where the level starts on the second line: past the class's code and the CP ("GLA  CP 38.2K").</summary>
-        static double LevelAt => L.Code == "en" ? 72 : 92;   // the Korean and Chinese words for the class and the Combat Power are wider
+        /// <summary>
+        /// Where the level starts on the second line: past the widest class code and a real Combat Power ("GLA CP 167.5K"), in the
+        /// language shown (a fixed 72 px let "167.5K" run under the level: Steven, 2026-11-17, "a lot of numbers ... cut off").
+        /// </summary>
+        static double LevelAt => Math.Ceiling(new[] { "gladiator", "templar", "assassin", "ranger", "sorcerer", "spiritmaster", "cleric", "chanter" }.Max(k => TextW(ClassCode(k), Face, 9.5, FontWeights.Bold))
+            + TextW(" " + L.T("CP") + " ", Face, 8, FontWeights.Bold) + TextW("167.5K", Face, 9.5, FontWeights.Bold) + 6);
 
         public Row()
         {
@@ -65,13 +72,12 @@ static class VhsRows
             _rank.HorizontalAlignment = HorizontalAlignment.Center; _rankBox.Child = _rank;
             Grid.SetRowSpan(_rankBox, 2); _root.Children.Add(_rankBox);
             _tick.Height = 18; Grid.SetColumn(_tick, 1); Grid.SetRowSpan(_tick, 2); _root.Children.Add(_tick);
-            DockPanel.SetDock(_dot, Dock.Left); DockPanel.SetDock(_tags, Dock.Right);
-            var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Children = { _dot, _tags, _name } };
+            DockPanel.SetDock(_dot, Dock.Left); DockPanel.SetDock(_tags, Dock.Right); DockPanel.SetDock(_healBox, Dock.Right);
+            _healBox.Child = _healText;
+            var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Children = { _dot, _healBox, _tags, _name } };
             Grid.SetColumn(name, 2); _root.Children.Add(name);
-            _healText.Margin = new Thickness(8, 1, 0, 0); _healText.HorizontalAlignment = HorizontalAlignment.Right;
-            Grid.SetColumn(_healText, 3); _root.Children.Add(_healText);
-            _extra.Margin = new Thickness(8, 1, 0, 0); Grid.SetColumn(_extra, 4); _root.Children.Add(_extra);
-            _fig.Margin = new Thickness(8, 0, 0, 0); Grid.SetColumn(_fig, 5); Grid.SetRowSpan(_fig, 2); _root.Children.Add(_fig);
+            _extra.Margin = new Thickness(5, 1, 0, 0); Grid.SetColumn(_extra, 4); _root.Children.Add(_extra);
+            _fig.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_fig, 5); Grid.SetRowSpan(_fig, 2); _root.Children.Add(_fig);
             _share.Margin = new Thickness(5, 1, 0, 0); Grid.SetColumn(_share, 6); Grid.SetRowSpan(_share, 2); _root.Children.Add(_share);
             // the level: segmented cells in the class's colour, a healer's green trace under them
             _code.VerticalAlignment = VerticalAlignment.Top; _code.Margin = new Thickness(0, -1, 0, 0);
@@ -103,11 +109,16 @@ static class VhsRows
             _name.Text = Caps(m.Name);
             _name.Foreground = you ? Br(0xFFF4C4) : White;
             _tags.Children.Clear();
+            bool healTag = m.TopHeals && m.Heal.Length > 0;
             _healText.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
-            _healText.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (m.Deaths > 0) _tags.Children.Add(Tag("✕" + (m.Deaths > 1 ? m.Deaths.ToString(CultureInfo.InvariantCulture) : ""), Red, White, Face, 9));
-            if (m.TopDps) _tags.Children.Add(Tag(L.T("TOP DPS"), Yellow, Black, Face, 8.5));
-            if (m.TopHeals) _tags.Children.Add(Tag(L.T("TOP HEAL"), Green, Black, Face, 8.5));
+            _healText.Foreground = healTag ? Black : Green;
+            _healBox.Background = healTag ? Green : null;
+            _healBox.Padding = healTag ? new Thickness(2, 0, 2, 0) : new Thickness(0, 1, 0, 0);
+            _healBox.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            var tm = new Thickness(3, 0, 0, 0);
+            if (m.Deaths > 0) _tags.Children.Add(Tag("✕" + (m.Deaths > 1 ? m.Deaths.ToString(CultureInfo.InvariantCulture) : ""), Red, White, Face, 9, tm));
+            if (m.TopDps) _tags.Children.Add(Tag(L.T("TOP DPS"), Yellow, Black, Face, 8.5, tm));
+            if (m.TopHeals && !healTag) _tags.Children.Add(Tag(L.T("TOP HEAL"), Green, Black, Face, 8.5, tm));
             _bar.Fill.Background = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 25), (byte)Math.Min(255, cc.G + 25), (byte)Math.Min(255, cc.B + 25)));
             _bar.Root.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
             _bar.Slide(c.Key + "|bar", m.Share);
