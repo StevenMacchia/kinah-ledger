@@ -20,8 +20,8 @@ namespace KinahLedger.Ui;
 /// </summary>
 public static class LangCheck
 {
-    /// <summary>On while a test or an audit render runs in a language: what is found is kept here ("where | text").</summary>
-    public static SortedSet<string>? Found { get; private set; }
+    /// <summary>On while a test or an audit render runs in a language: each text found, with the first picture it was in.</summary>
+    public static SortedDictionary<string, string>? Found { get; private set; }
     /// <summary>The file an audit render appends to (KL_LANG_AUDIT).</summary>
     static string? _file;
 
@@ -37,7 +37,7 @@ public static class LangCheck
     /// <summary>Stops listing; returns what was found on screen and what <see cref="L.T"/> had no translation of.</summary>
     public static (List<string> OnScreen, List<string> NoEntry) End()
     {
-        var found = Found?.ToList() ?? new();
+        var found = Found?.Select(kv => $"{kv.Value} | {kv.Key}").ToList() ?? new();
         var misses = (L.Misses ?? new()).Where(m => English(m).Any()).OrderBy(m => m, StringComparer.Ordinal).ToList();
         Found = null; L.Misses = null; _file = null;
         return (found, misses);
@@ -59,7 +59,7 @@ public static class LangCheck
         try
         {
             var lines = new List<string> { $"# {L.Code}: {Found.Count} texts with English on screen" };
-            lines.AddRange(Found);
+            lines.AddRange(Found.Select(kv => $"{kv.Value} | {kv.Key}"));
             var misses = (L.Misses ?? new()).Where(m => English(m).Any()).OrderBy(m => m, StringComparer.Ordinal).ToList();
             lines.Add($"# {misses.Count} texts asked of L.T with no {L.Code} entry");
             lines.AddRange(misses.Select(m => "no entry | " + m));
@@ -77,7 +77,7 @@ public static class LangCheck
         {
             if (string.IsNullOrWhiteSpace(s)) return;
             var words = English(s).ToList();
-            if (words.Count > 0) lock (Found) Found.Add($"{where} | {s.Replace('\n', ' ').Replace('\r', ' ').Trim()}");
+            if (words.Count > 0) lock (Found) Found.TryAdd(s.Replace('\n', ' ').Replace('\r', ' ').Trim(), where);
         }
         void Walk(DependencyObject d)
         {

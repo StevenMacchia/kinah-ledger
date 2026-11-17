@@ -127,6 +127,7 @@ public static partial class WpfApp
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         static void Flip(System.Windows.Controls.CheckBox c) { c.IsChecked = c.IsChecked != true; Click(c); }
         // KL_OPTIONS_ONLY=meter: the meter's motion checks alone (a quick run while working on them; the whole test runs them too)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "lang") { LangChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (languages): all passed" : $"options test (languages): {fails} failed"); return fails == 0 ? 0 : 1; }
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "meter") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterMotionChecks(Check); HealChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter motion): all passed" : $"options test (meter motion): {fails} failed"); return fails == 0 ? 0 : 1; }
 
 
@@ -2266,6 +2267,7 @@ public static partial class WpfApp
             }
             Motion.FrozenAt = frozenWas;
         }
+        LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs)
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
     }
