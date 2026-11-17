@@ -65,6 +65,17 @@ public partial class MainWindow
         foreach (var (k, v) in HudCraftValuesFor(e, crafts, _craftTime, chat?.CraftQueue)) _hudValues[k] = v;
     }
 
+    /// <summary>The queue's line as TrackerSession.CraftQueueView.Text writes it ("3 of 10 · 2 worked · 1 combo · 1 unsure"; "Done: …" after), in the language.</summary>
+    static string QueueText(TrackerSession.CraftQueueView q)
+    {
+        var parts = new List<string> { q.Of > 0 ? L.F("{0} of {1}", q.Done, q.Of) : L.F("{0} done", q.Done) };
+        if (q.Worked > 0) parts.Add(L.F("{0} worked", q.Worked));
+        if (q.Combos > 0) parts.Add(L.F(q.Combos == 1 ? "{0} combo" : "{0} combos", q.Combos));
+        if (q.Unsure > 0) parts.Add(L.F("{0} unsure", q.Unsure));
+        var t = string.Join(" · ", parts);
+        return !q.Open && q.EndedAt != null ? L.F("Done: {0}", t) : t;
+    }
+
     static Dictionary<string, string> HudCraftBlank()
     {
         var d = CraftHeadKeys.ToDictionary(k => k, _ => "");
@@ -118,7 +129,7 @@ public partial class MainWindow
         if (queue is { } q && (q.Open || q.EndedAt is DateTime end && (DateTime.UtcNow - end).TotalSeconds <= CraftLedger.PanelSeconds))
         {
             d["craftQueue"] = "1";
-            d["craftQueueText"] = q.Text;
+            d["craftQueueText"] = QueueText(q);
             d["craftQueueDone"] = q.Done.ToString();
             d["craftQueueOf"] = q.Of > 0 ? q.Of.ToString() : "";
         }
@@ -169,7 +180,7 @@ public partial class MainWindow
             // a won roll's line carries the recipe, not the upgrade the blue panel named, so its words and worth are the recipe's
             if (l.Combo && QueueRecipe(ledger, new[] { l }) is { Length: >= 2 } rn && rn != l.Name) l = l with { Name = rn };
             long id = l.Name.Length >= 2 ? _items.IdOf(l.Name) : 0;
-            d[c] = l.Name.Length >= 2 ? l.Name : "A craft";
+            d[c] = l.Name.Length >= 2 ? l.Name : L.T("A craft");
             d[c + "Id"] = $"{l.At.Ticks}:{l.Name}:{l.Ok}{(l.Combo ? ":combo" : "")}";
             d[c + "Item"] = id != 0 ? id.ToString() : "";
             d[c + "Ok"] = l.Ok ? "1" : "";

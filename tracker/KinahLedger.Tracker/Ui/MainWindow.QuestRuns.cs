@@ -131,7 +131,7 @@ public partial class MainWindow
         {
             var chev = QIcon("Chev", 12, "Faint", 2); chev.Margin = new Thickness(7, 2, 0, 0); chev.VerticalAlignment = VerticalAlignment.Center; chev.HorizontalAlignment = HorizontalAlignment.Left; chev.RenderTransformOrigin = new Point(0.5, 0.5); chev.RenderTransform = new RotateTransform(90);
             Grid.SetColumn(chev, 1); nameRow.Children.Add(chev);
-            kick.Cursor = Cursors.Hand; kick.ToolTip = "Click to pick another place: its figures, its runs and their loot."; ToolTipService.SetInitialShowDelay(kick, 500);
+            kick.Cursor = Cursors.Hand; kick.ToolTip = L.T("Click to pick another place: its figures, its runs and their loot."); ToolTipService.SetInitialShowDelay(kick, 500);
             kick.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(kick, pickPlace()); };
         }
         titles.Children.Add(nameRow);
@@ -142,25 +142,25 @@ public partial class MainWindow
         if (open != null)
         {
             var pill = QPill(RunPillText(open), true);
-            pill.ToolTip = "A run is open here. Where it is: Entered, In the run, Reward screen, Paid. Its clock is the ring."; pill.Margin = new Thickness(10, 0, 0, 0);
+            pill.ToolTip = L.T("A run is open here. Where it is: Entered, In the run, Reward screen, Paid. Its clock is the ring."); pill.Margin = new Thickness(10, 0, 0, 0);
             Grid.SetColumn(pill, 2); kick.Children.Add(pill);
             if (live && pill.Child is StackPanel ps && ps.Children.Count > 1 && ps.Children[1] is TextBlock pt) { _livePill = pt; _liveOpen = open; }
         }
         else if (newest != null)
         {
             var last = (newest.LastLoot ?? newest.Start).ToLocalTime();
-            var pill = QPill(last.Date == DateTime.Today ? $"last {last:HH:mm}" : $"last {last.ToString("MMM d", CultureInfo.InvariantCulture)}", false);
+            var pill = QPill(last.Date == DateTime.Today ? L.F("last {0:HH:mm}", last) : L.F("last {0}", QDayShort(last)), false);
             pill.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(pill, 2); kick.Children.Add(pill);
         }
         left.Children.Add(kick);
 
         // the hour, big in gold; a place that pays nothing priced says so; a short record says what a run pays
         var big = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        if (n == 0) { big.Inlines.Add(Q(runs.Count == 0 ? "No run here yet." : "No run counted yet.", 15, FontWeights.SemiBold, "Muted")); }
-        else if (!known) { big.Inlines.Add(Q("no prices yet", 22, FontWeights.Bold, "Muted")); big.Inlines.Add(Q("  what the rewards sell for isn't known", 12, FontWeights.Medium, "Faint")); }
-        else if (secs > 10) { big.Inlines.Add(Q(Fk(value / secs * 3600), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" an hour", 13, FontWeights.Medium, "Muted")); }
-        else { big.Inlines.Add(Q(Fk(value / (double)n), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" a run", 13, FontWeights.Medium, "Muted")); }
-        big.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
+        if (n == 0) { big.Inlines.Add(Q(runs.Count == 0 ? L.T("No run here yet.") : L.T("No run counted yet."), 15, FontWeights.SemiBold, "Muted")); }
+        else if (!known) { big.Inlines.Add(Q(L.T("no prices yet"), 22, FontWeights.Bold, "Muted")); big.Inlines.Add(Q("  " + L.T("what the rewards sell for isn't known"), 12, FontWeights.Medium, "Faint")); }
+        else if (secs > 10) { big.Inlines.Add(Q(Fk(value / secs * 3600), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" " + L.T("an hour"), 13, FontWeights.Medium, "Muted")); }
+        else { big.Inlines.Add(Q(Fk(value / (double)n), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" " + L.T("a run"), 13, FontWeights.Medium, "Muted")); }
+        big.ToolTip = L.F("Over the counted runs: Kinah plus materials at the lowest Market price, {0}. Gear is bound and not in the value. Flagged runs are left out.", QCut());
         left.Children.Add(big);
 
         // the chase: the open run against the average run here (a timer), or the last run against the best
@@ -175,7 +175,7 @@ public partial class MainWindow
             var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             // the average's figure is the line under the bar's ("7:26 a run"); said once (UX pass, 2026-11-13)
-            var chase = QT("this run against the average run here", 12, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
+            var chase = QT(L.T("this run against the average run here"), 12, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
             var togo = QT("", 12, FontWeights.SemiBold, "Gold"); togo.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(togo, 1); row.Children.Add(togo);
             left.Children.Add(row);
             var (bar, fill) = QLiveBar("Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
@@ -197,16 +197,16 @@ public partial class MainWindow
             bool isBest = lastV >= best;
             var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var chase = QT($"last run {Fk(lastV)}" + (isBest ? " · your best here" : $" · {Math.Round(100.0 * lastV / best):0}% of your best here"), 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
+            var chase = QT(L.F("last run {0}", Fk(lastV)) + (isBest ? " · " + L.T("your best here") : " · " + L.F("{0:0}% of your best here", Math.Round(100.0 * lastV / best))), 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
             var flag = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
             var fi = QGlyph("Flag", 12, "Gold", 2);   // gold beaten or not: the chase toward a target (colour pass, 2026-11-13) fi.Margin = new Thickness(0, 0, 5, 0); fi.VerticalAlignment = VerticalAlignment.Center; flag.Children.Add(fi);
-            flag.Children.Add(QT($"{Fk(best)} best run", 12, FontWeights.SemiBold, "Gold"));
+            flag.Children.Add(QT(L.F("{0} best run", Fk(best)), 12, FontWeights.SemiBold, "Gold"));
             Grid.SetColumn(flag, 1); row.Children.Add(flag);
             left.Children.Add(row);
             var bar = QBar(QShare(lastV, best), "Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
             bestInFlag = true;
-            ring = isBest ? QRing(76, 7, 1, "Gold", "★", "best run") : QRing(76, 7, QShare(lastV, best), "Gold", $"{Math.Round(100.0 * lastV / best):0}%", "of best");
-            ring.ToolTip = $"The last run here, {Fk(lastV)}, against the best, {Fk(best)}.";
+            ring = isBest ? QRing(76, 7, 1, "Gold", "★", L.T("best run")) : QRing(76, 7, QShare(lastV, best), "Gold", $"{Math.Round(100.0 * lastV / best):0}%", L.T("of best"));
+            ring.ToolTip = L.F("The last run here, {0}, against the best, {1}.", Fk(lastV), Fk(best));
         }
 
         // the figures line: a run (Kinah and loot), how long a run takes, the best run (when the flag doesn't carry it)
@@ -214,9 +214,9 @@ public partial class MainWindow
         {
             var figs = new List<(string Fig, string Word)>();
             if (known && secs <= 10) { /* the big figure is the run's */ }
-            else if (known) figs.Add((Fk(value / (double)n), "a run"));
-            figs.Add((Clock(TimeSpan.FromSeconds(avg)), "a run"));
-            if (known && n > 1 && !bestInFlag) figs.Add((Fk(best), "best run"));
+            else if (known) figs.Add((Fk(value / (double)n), L.T("a run")));
+            figs.Add((Clock(TimeSpan.FromSeconds(avg)), L.T("a run")));
+            if (known && n > 1 && !bestInFlag) figs.Add((Fk(best), L.T("best run")));
             // set as the paid-out line under it (QStatsFill's sizes and spacing), so the hero's two lines read as one block
             var fl = new TextBlock { FontSize = 12, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
             for (int i = 0; i < figs.Count; i++)
@@ -244,6 +244,14 @@ public partial class MainWindow
     }
 
     /// <summary>A run of text in a size, weight and brush, for a block that mixes a figure with its word.</summary>
+    /// <summary>A day as "Nov 13", "11월 13일", "11月13日".</summary>
+    internal static string QDayShort(DateTime d) => L.Code switch
+    {
+        "ko" => d.ToString("M월 d일", new CultureInfo("ko-KR")),
+        "zh-TW" => d.ToString("M月d日", new CultureInfo("zh-TW")),
+        _ => d.ToString("MMM d", CultureInfo.InvariantCulture),
+    };
+
     static Run Q(string text, double size, FontWeight weight, string brush)
     {
         var r = new Run(text) { FontSize = size, FontWeight = weight };
@@ -260,7 +268,7 @@ public partial class MainWindow
         var el = Clock(TimeSpan.FromSeconds(elapsedSecs));
         if (_liveToGo != null)
         {
-            _liveToGo.Text = past ? "past the average" : at ? "at the average" : $"{Clock(TimeSpan.FromSeconds(_liveAvg - elapsedSecs))} to go";
+            _liveToGo.Text = past ? L.T("past the average") : at ? L.T("at the average") : L.F("{0} to go", Clock(TimeSpan.FromSeconds(_liveAvg - elapsedSecs)));
             _liveToGo.SetResourceReference(TextBlock.ForegroundProperty, past || at ? "Muted" : "Gold");   // past the average is no gain: never green
         }
         if (_liveFill != null) { _liveFill.SetResourceReference(Border.BackgroundProperty, "Gold"); _liveFill.Effect = QGlow("Gold", 8, 0.6); }
@@ -268,8 +276,8 @@ public partial class MainWindow
         if (_liveRingHost != null)
         {
             _liveRingHost.Children.Clear();
-            var ring = QRing(76, 7, share, "Gold", el, $"run {_liveK}");
-            ring.ToolTip = _liveAvg <= 0 ? $"Run {_liveK}, {el} in. The first counted run here sets the average to chase." : past ? "This run has gone past the average run here." : $"Run {_liveK}, {el} in; runs here take {Clock(TimeSpan.FromSeconds(_liveAvg))} on average.";
+            var ring = QRing(76, 7, share, "Gold", el, L.F("run {0}", _liveK));
+            ring.ToolTip = _liveAvg <= 0 ? L.F("Run {0}, {1} in. The first counted run here sets the average to chase.", _liveK, el) : past ? L.T("This run has gone past the average run here.") : L.F("Run {0}, {1} in; runs here take {2} on average.", _liveK, el, Clock(TimeSpan.FromSeconds(_liveAvg)));
             _liveRingHost.Children.Add(ring);
         }
     }
@@ -291,14 +299,14 @@ public partial class MainWindow
         var (kinah, mats, matKinds, gear, unread, curr) = RunLootSums(counted);
         var parts = new List<QStat>
         {
-            new(kinah > 0 ? Fk(kinah) : "–", "Kinah",
-                (kinah > 0 ? $"{kinah:N0} Kinah paid by the counted runs here" + (value > 0 ? $", {Math.Round(100.0 * kinah / value):0}% of the value." : ".") : "No Kinah read from the runs here.")),
-            new(mats > 0 ? Fk(mats) : matKinds > 0 ? "no price" : "–", "materials",
-                (matKinds > 0 ? $"{matKinds} kind{(matKinds == 1 ? "" : "s")} of materials. " : "") + (mats > 0 ? $"They sell for {Fk(mats)} at the lowest Market price, {PriceBook.Cut}." : "Nothing priced among the materials yet.")),
+            new(kinah > 0 ? Fk(kinah) : "–", L.T("Kinah"),
+                (kinah > 0 ? L.F("{0:N0} Kinah paid by the counted runs here", kinah) + (value > 0 ? ", " + L.F("{0:0}% of the value.", Math.Round(100.0 * kinah / value)) : ".") : L.T("No Kinah read from the runs here."))),
+            new(mats > 0 ? Fk(mats) : matKinds > 0 ? L.T("no price") : "–", L.T("materials"),
+                (matKinds > 0 ? L.F(matKinds == 1 ? "{0} kind of materials. " : "{0} kinds of materials. ", matKinds) : "") + (mats > 0 ? L.F("They sell for {0} at the lowest Market price, {1}.", Fk(mats), QCut()) : L.T("Nothing priced among the materials yet."))),
         };
         // the bound gear and the currencies are Paid out here's own line and slots ("13 gear · bound, no value"): said once, there
         if (unread > 0 && gear == 0)
-            parts.Add(new(unread.ToString("N0"), $"slot{(unread == 1 ? "" : "s")} not named", "Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value."));
+            parts.Add(new(unread.ToString("N0"), L.T(unread == 1 ? "slot not named" : "slots not named"), L.T("Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value.")));
         _ = curr;
         var line = new WrapPanel { Margin = new Thickness(-6, 4, 0, -3) };
         QStatsFill(line, parts);
@@ -310,7 +318,7 @@ public partial class MainWindow
     {
         var slot = QSlot(QItemIcon(s.Name, s.Id, 46, round: false, grade: _items.Get(s.Id)?.Grade ?? ""), CountBadge(s.Count));
         CardTip(slot, () => ItemTodayCard(s, ("", ""), false, true, when));
-        if (!s.Currency) PinOnClick(slot, () => ItemTodayCard(s, ("", ""), false, true, when), ("Set a goal for this", () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), slot)));
+        if (!s.Currency) PinOnClick(slot, () => ItemTodayCard(s, ("", ""), false, true, when), (L.T("Set a goal for this"), () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), slot)));
         return slot;
     }
 
@@ -333,8 +341,8 @@ public partial class MainWindow
     {
         if (tr.Gear <= 0) return null;
         var sp = new StackPanel();
-        var t = QT($"{tr.Gear:N0} gear · bound, no value", 12, FontWeights.Medium, "Faint");
-        t.ToolTip = "Gear from an expedition, dungeon or event is bound to you: it can't be sold, so it isn't in the value. Each piece shows how many you got.";
+        var t = QT(L.F("{0:N0} gear · bound, no value", tr.Gear), 12, FontWeights.Medium, "Faint");
+        t.ToolTip = L.T("Gear from an expedition, dungeon or event is bound to you: it can't be sold, so it isn't in the value. Each piece shows how many you got.");
         ToolTipService.SetInitialShowDelay(t, 300);
         sp.Children.Add(t);
         if (slots && tr.GearSlots.Count > 0)
@@ -351,11 +359,11 @@ public partial class MainWindow
         var sp = new StackPanel();
         var card = new Border { Child = sp, Margin = new Thickness(0, 8, 0, 0) };
         card.SetResourceReference(StyleProperty, "QCard");
-        var head = QHead("Sack", "Paid out here", n == 0 ? "" : n == 1 ? "from the run here" : $"from the {n} runs here");
+        var head = QHead("Sack", L.T("Paid out here"), n == 0 ? "" : n == 1 ? L.T("from the run here") : L.F("from the {0} runs here", n));
         if (tr.Value > 0)
         {
             var v = QT(Fk(tr.Value), 14, FontWeights.Bold, "Gold"); v.Margin = new Thickness(10, 0, 0, 0); v.VerticalAlignment = VerticalAlignment.Center;
-            v.ToolTip = "Kinah plus loot at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
+            v.ToolTip = L.F("Kinah plus loot at the lowest Market price, {0}. Bound items and items with no price yet add nothing.", QCut());
             Grid.SetColumn(v, 3); head.Children.Add(v);
         }
         sp.Children.Add(head);
@@ -370,12 +378,12 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = QLinkify(QT(all ? "Show fewer" : $"Show all {slots.Count}", 12, FontWeights.SemiBold, "Link"));
+            var m = QLinkify(QT(all ? L.T("Show fewer") : L.F("Show all {0}", slots.Count), 12, FontWeights.SemiBold, "Link"));
             m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 2, 0, 0);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); redraw(); };
             sp.Children.Add(m);
         }
-        if (slots.Count == 0 && tr.Gear == 0) { var t = QT(n == 0 ? "The rewards show here once a run is counted." : tr.Kinah > 0 ? "Kinah only: nothing else read from the reward screens yet." : "Nothing read from the reward screens yet.", 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
+        if (slots.Count == 0 && tr.Gear == 0) { var t = QT(n == 0 ? L.T("The rewards show here once a run is counted.") : tr.Kinah > 0 ? L.T("Kinah only: nothing else read from the reward screens yet.") : L.T("Nothing read from the reward screens yet."), 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
         // the gear as its count line; each piece with its count is in Best drops
         if (GearRow(tr, "here", slots: false) is FrameworkElement gn) { gn.Margin = new Thickness(0, slots.Count == 0 ? 8 : 6, 0, 2); sp.Children.Add(gn); }
         return card;
@@ -392,7 +400,7 @@ public partial class MainWindow
         card.SetResourceReference(StyleProperty, "QCard");
         // the place's own icon on its list (Shugo Festival's key), the kind's otherwise
         var placeIcon = runs.FirstOrDefault() is { } r0 ? PlaceIcon(r0.Zone, r0.Kind) : "Timer";
-        sp.Children.Add(QHead(placeIcon, "Runs", "newest first"));
+        sp.Children.Add(QHead(placeIcon, L.T("Runs"), L.T("newest first")));
         var order = runs.OrderByDescending(r => ReferenceEquals(r, open)).ThenByDescending(r => r.LastLoot ?? r.Start).ToList();
         int i = 0;
         foreach (var r in order.Take(3))
@@ -400,13 +408,13 @@ public partial class MainWindow
             bool isOpen = ReferenceEquals(r, open);
             var why = FlagReason(r, med);
             var local = r.Start.ToLocalTime();
-            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
-            string title = isOpen ? $"Run {_liveK} · open" : $"{when} · took {Clock(TimeSpan.FromSeconds(r.Seconds))}";
-            string sub = isOpen ? $"since {when} · {PiecesText(r)}" : RunSub(r, why);
+            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : QDayShort(local) + " " + local.ToString("HH:mm", CultureInfo.InvariantCulture);
+            string title = isOpen ? L.F("Run {0} · open", _liveK) : L.F("{0} · took {1}", when, Clock(TimeSpan.FromSeconds(r.Seconds)));
+            string sub = isOpen ? L.F("since {0} · {1}", when, PiecesText(r)) : RunSub(r, why);
             long v = RunValue(r);
             var icon = isOpen ? QIconBox(PlaceIcon(r.Zone, r.Kind), "Gold", 28, round: true) : why.Length > 0 ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(PlaceIcon(r.Zone, r.Kind), "Sky", 28, round: true);
             var row = QRow(icon, title, sub, r.OutOfAverages || v <= 0 ? "–" : Fk(v), r.OutOfAverages || v <= 0 ? "Faint" : "Gold", rule: i > 0);
-            row.ToolTip = why.Length > 0 ? why + " Click for the fix." : "Click for this run's details, or Remove if it's wrong.";
+            row.ToolTip = why.Length > 0 ? why + " " + L.T("Click for the fix.") : L.T("Click for this run's details, or Remove if it's wrong.");
             ToolTipService.SetInitialShowDelay(row, 500);
             var run = r;
             row.MouseLeftButtonUp += (_, e) => { e.Handled = true; _fixOpen = _fixOpen == RunKey(run) ? null : RunKey(run); _drawnSig.Remove("runs"); redraw(); };
@@ -414,9 +422,9 @@ public partial class MainWindow
         }
         if (order.Count > 3)
         {
-            var m = QLinkify(QT($"{order.Count - 3} earlier run{(order.Count - 3 == 1 ? "" : "s")}  ›", 12, FontWeights.SemiBold, "Link"));
+            var m = QLinkify(QT(L.F(order.Count - 3 == 1 ? "{0} earlier run  ›" : "{0} earlier runs  ›", order.Count - 3), 12, FontWeights.SemiBold, "Link"));
             m.Margin = new Thickness(0, 6, 0, 0);
-            m.ToolTip = "Every run on its line, in a box under this one, with what each one gave.";
+            m.ToolTip = L.T("Every run on its line, in a box under this one, with what each one gave.");
             m.MouseLeftButtonUp += (_, _) => { _runListShown = true; _drawnSig.Remove("runs"); redraw(); };
             sp.Children.Add(m);
         }
@@ -437,8 +445,8 @@ public partial class MainWindow
     {
         var card = new Border { Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(10, 6, 10, 6) };
         card.SetResourceReference(StyleProperty, "QCard"); card.SetResourceReference(Border.BackgroundProperty, "NoticeTint");
-        var row = QRow(QIconBox("Q", "Lilac", 28, round: true), $"{flagged.Count} run{(flagged.Count == 1 ? "" : "s")} to look at", FlagReason(flagged[0], med) + " · out of the figures until fixed", "fix  ›", "Lilac", rule: false, inline: true);
-        row.ToolTip = FlagReason(flagged[0], med) + " Click for the fix.";
+        var row = QRow(QIconBox("Q", "Lilac", 28, round: true), L.F(flagged.Count == 1 ? "{0} run to look at" : "{0} runs to look at", flagged.Count), FlagReason(flagged[0], med) + " · " + L.T("out of the figures until fixed"), L.T("fix  ›"), "Lilac", rule: false, inline: true);
+        row.ToolTip = FlagReason(flagged[0], med) + " " + L.T("Click for the fix.");
         row.MouseLeftButtonUp += (_, e) => { e.Handled = true; _fixOpen = RunKey(flagged[0]); _drawnSig.Remove("runs"); redraw(); };
         card.Child = row;
         return card;

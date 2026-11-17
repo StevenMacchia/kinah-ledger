@@ -32,6 +32,9 @@ public partial class MainWindow
     /* ---------------- the sheets ---------------- */
 
     /// <summary>A sheet under a run, in the look: a flagged run's in the flag's tint, any other run's plain.</summary>
+    /// <summary>A day and time as "Nov 13 16:16", "11월 13일 16:16", "11月13日 16:16".</summary>
+    static string QDayTime(DateTime local) => QDayShort(local) + " " + local.ToString("HH:mm", CultureInfo.InvariantCulture);
+
     static (Border Sheet, StackPanel Body) SheetShell(bool flagged)
     {
         var sp = new StackPanel();
@@ -65,11 +68,11 @@ public partial class MainWindow
         acts.ColumnDefinitions.Add(new ColumnDefinition()); acts.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { Orientation = Orientation.Horizontal }; acts.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
-        var close = SheetBtn("Close", quiet: true);
+        var close = SheetBtn(L.T("Close"), quiet: true);
         close.Click += (_, _) => { _fixOpen = null; redraw(); };
         right.Children.Add(close);
-        var remove = SheetBtn(removeText, quiet: true); remove.Margin = new Thickness(0);
-        remove.ToolTip = "It leaves the list and the figures; a copy is kept aside in instances.removed.jsonl.";
+        var remove = SheetBtn(L.T(removeText), quiet: true); remove.Margin = new Thickness(0);
+        remove.ToolTip = L.T("It leaves the list and the figures; a copy is kept aside in instances.removed.jsonl.");
         remove.Click += (_, _) => RemoveRun(r, redraw);
         right.Children.Add(remove);
         Grid.SetColumn(right, 1); acts.Children.Add(right);
@@ -81,9 +84,9 @@ public partial class MainWindow
     {
         var (sheet, sp) = SheetShell(false);
         var local = r.Start.ToLocalTime();
-        var paid = r.KinahUnknown ? "its Kinah not read" : r.Kinah > 0 ? $"{r.Kinah:N0} Kinah" : "no Kinah";
-        sp.Children.Add(SheetText($"{r.Zone}, {local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture)}.",
-            $"{Clock(TimeSpan.FromSeconds(r.Seconds))} long, {paid}, {PiecesText(r)}{(r.SlotsUnread > 0 ? $", {r.SlotsUnread} slot{(r.SlotsUnread == 1 ? "" : "s")} not named" : "")}. Worth {Fk(RunValue(r))} with the Market's prices."));
+        var paid = r.KinahUnknown ? L.T("its Kinah not read") : r.Kinah > 0 ? L.F("{0:N0} Kinah", r.Kinah) : L.T("no Kinah");
+        sp.Children.Add(SheetText($"{r.Zone}, {QDayShort(local)} {local.ToString("HH:mm", CultureInfo.InvariantCulture)}.",
+            L.F("{0} long, {1}, {2}", Clock(TimeSpan.FromSeconds(r.Seconds)), paid, PiecesText(r)) + (r.SlotsUnread > 0 ? ", " + L.F(r.SlotsUnread == 1 ? "{0} slot not named" : "{0} slots not named", r.SlotsUnread) : "") + ". " + L.F("Worth {0} with the Market's prices.", Fk(RunValue(r)))));
         var (acts, _) = SheetActions(r, redraw, "Remove, it's wrong");
         sp.Children.Add(acts);
         return sheet;
@@ -103,8 +106,8 @@ public partial class MainWindow
         {
             var screens = RunFixes.ScreensIn(r, _demoInst != null ? _demoScreens ?? new() : _screenLines ??= RunFixes.Load());
             int k = why.Split(' ')[0] is var w && int.TryParse(w, out var kk) ? kk : screens.Count;
-            sp.Children.Add(SheetText(k >= 2 ? $"Looks like {k} runs." : "Looks like several runs.",
-                screens.Count >= 2 ? $"The reward screen came {screens.Count} times." : "Its reward screens weren't kept (a record from before 0.8.30), so it can't be split here."));
+            sp.Children.Add(SheetText(k >= 2 ? L.F("Looks like {0} runs.", k) : L.T("Looks like several runs."),
+                screens.Count >= 2 ? L.F("The reward screen came {0} times.", screens.Count) : L.T("Its reward screens weren't kept (a record from before 0.8.30), so it can't be split here.")));
             if (screens.Count >= 2)
             {
                 var parts = RunFixes.Split(r, screens);
@@ -119,46 +122,46 @@ public partial class MainWindow
                     mini.Children.Add(cell);
                 }
                 sp.Children.Add(mini);
-                var split = SheetBtn("Split at the reward screens", primary: true);
+                var split = SheetBtn(L.T("Split at the reward screens"), primary: true);
                 split.Click += (_, _) => SplitRun(r, parts, redraw);
                 left.Children.Add(split);
             }
-            var keep = SheetBtn("Keep as one");
-            keep.Click += (_, _) => { if (_demoInst != null) return; RunFixes.KeepAsOne(r); _fixOpen = null; Say($"Kept as one run: {r.Zone}, {r.Start.ToLocalTime():MMM d HH:mm}. It counts in the figures now.", "Good"); redraw(); };
+            var keep = SheetBtn(L.T("Keep as one"));
+            keep.Click += (_, _) => { if (_demoInst != null) return; RunFixes.KeepAsOne(r); _fixOpen = null; Say(L.F("Kept as one run: {0}, {1}. It counts in the figures now.", r.Zone, QDayTime(r.Start.ToLocalTime())), "Good"); redraw(); };
             left.Children.Add(keep);
         }
         else if (r.Suspect == "not a run")
         {
             // the bag after leaving the dungeon read as a reward screen (2026-10-24 19:03:54), or another screen moments after entering
-            sp.Children.Add(SheetText("This wasn't a run.",
-                r.Seconds < InstanceLog.FalseRunSeconds ? "Another reward screen was read as its table moments after entering. It's left out of the figures."
-                                                        : "Its \"reward screen\" named nothing and showed no Kinah: another window, like your bag, was read as one. It's left out of the figures."));
-            var itWas = SheetBtn("It was a run");
-            itWas.ToolTip = "Count it in the figures as it stands.";
-            itWas.Click += (_, _) => { if (_demoInst != null) return; RunFixes.KeepAsOne(r); _fixOpen = null; Say($"Counted as a run: {r.Zone}, {r.Start.ToLocalTime():MMM d HH:mm}.", "Good"); redraw(); };
+            sp.Children.Add(SheetText(L.T("This wasn't a run."),
+                r.Seconds < InstanceLog.FalseRunSeconds ? L.T("Another reward screen was read as its table moments after entering. It's left out of the figures.")
+                                                        : L.T("Its \"reward screen\" named nothing and showed no Kinah: another window, like your bag, was read as one. It's left out of the figures.")));
+            var itWas = SheetBtn(L.T("It was a run"));
+            itWas.ToolTip = L.T("Count it in the figures as it stands.");
+            itWas.Click += (_, _) => { if (_demoInst != null) return; RunFixes.KeepAsOne(r); _fixOpen = null; Say(L.F("Counted as a run: {0}, {1}.", r.Zone, QDayTime(r.Start.ToLocalTime())), "Good"); redraw(); };
             left.Children.Add(itWas);
         }
         else if (r.PartlyRead && !r.KinahUnknown && !r.OldUnread)
         {
             // partly read (0.8.30, the event cards): what was read was sent, marked partly read; nothing to type
-            sp.Children.Add(SheetText($"Partly read: {r.SlotsUnread} slot{(r.SlotsUnread == 1 ? "" : "s")} on its reward cards weren't read.",
-                "What was read was sent, marked partly read, and the run is left out of the figures. Remove it if the run is wrong."));
+            sp.Children.Add(SheetText(L.F(r.SlotsUnread == 1 ? "Partly read: {0} slot on its reward cards wasn't read." : "Partly read: {0} slots on its reward cards weren't read.", r.SlotsUnread),
+                L.T("What was read was sent, marked partly read, and the run is left out of the figures. Remove it if the run is wrong.")));
         }
         else
         {
-            sp.Children.Add(SheetText(r.RewardsNotRead ? "Its reward screen wasn't read." : "Kinah wasn't read.", "Type it from the reward screen."));
-            var box = new TextBox { Width = 150, Height = 32, FontSize = 12.5, Margin = new Thickness(0, 0, 8, 0), Tag = "Kinah", ToolTip = "The Kinah on the run's reward screen" };
-            System.Windows.Automation.AutomationProperties.SetName(box, "Kinah from the reward screen");
+            sp.Children.Add(SheetText(r.RewardsNotRead ? L.T("Its reward screen wasn't read.") : L.T("Kinah wasn't read."), L.T("Type it from the reward screen.")));
+            var box = new TextBox { Width = 150, Height = 32, FontSize = 12.5, Margin = new Thickness(0, 0, 8, 0), Tag = "Kinah", ToolTip = L.T("The Kinah on the run's reward screen") };
+            System.Windows.Automation.AutomationProperties.SetName(box, L.T("Kinah from the reward screen"));
             left.Children.Add(box);
-            var save = SheetBtn("Save", primary: true);
+            var save = SheetBtn(L.T("Save"), primary: true);
             save.Click += (_, _) =>
             {
                 long n = long.TryParse(new string(box.Text.Where(char.IsDigit).ToArray()), out var x) ? x : 0;
-                if (n <= 0) { Say("Type the Kinah from the run's reward screen first.", "Warn"); return; }
+                if (n <= 0) { Say(L.T("Type the Kinah from the run's reward screen first."), "Warn"); return; }
                 FixKinah(r, n, redraw);
             };
             left.Children.Add(save);
-            var without = SheetBtn("Count without Kinah");
+            var without = SheetBtn(L.T("Count without Kinah"));
             without.Click += (_, _) => FixKinah(r, 0, redraw);
             left.Children.Add(without);
         }
@@ -170,9 +173,9 @@ public partial class MainWindow
     void SplitRun(InstanceRun r, List<InstanceRun> parts, Action redraw)
     {
         if (_watcher.Chat?.Instances is not { } il || _demoInst != null) return;
-        if (MessageBox.Show(this, $"Split this record ({r.Zone}, {r.Start.ToLocalTime():MMM d HH:mm}) into {parts.Count} runs at its reward screens?\n\nThe record as it was is kept aside in instances.repaired.jsonl.",
+        if (MessageBox.Show(this, L.F("Split this record ({0}, {1}) into {2} runs at its reward screens?", r.Zone, QDayTime(r.Start.ToLocalTime()), parts.Count) + "\n\n" + L.T("The record as it was is kept aside in instances.repaired.jsonl."),
                 "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        if (il.ReplaceRun(r, parts)) { _fixOpen = null; Say($"Split into {parts.Count} runs. They count in the figures now.", "Good"); }
+        if (il.ReplaceRun(r, parts)) { _fixOpen = null; Say(L.F("Split into {0} runs. They count in the figures now.", parts.Count), "Good"); }
         redraw();
     }
 
@@ -185,7 +188,7 @@ public partial class MainWindow
         RunFixes.KeepAsOne(r);
         CrashLog.Note($"run fixed by the player: {r.Label} started {r.Start.ToLocalTime():MMM d HH:mm:ss}: Kinah {(kinah > 0 ? kinah.ToString("N0") + " typed from the reward screen" : "counted as none")}");
         _fixOpen = null;
-        Say(kinah > 0 ? $"Saved: {kinah:N0} Kinah for that run." : "Counted without Kinah.", "Good");
+        Say(kinah > 0 ? L.F("Saved: {0:N0} Kinah for that run.", kinah) : L.T("Counted without Kinah."), "Good");
         redraw();
     }
 

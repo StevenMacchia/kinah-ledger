@@ -29,6 +29,7 @@ public partial class MainWindow
     /// <summary>Wires the hero's chart, the chips, Next up's head and the chase bar's width, once from the constructor.</summary>
     void InitQuest()
     {
+        if (L.Code != "en") EventsShareBtn.Content = L.T("Share", "button");   // "Share" alone is the damage share (L.Apply would give that one)
         ChartToggle.MouseLeftButtonUp += (_, _) => { _qOpen["chart"] = !QOpen("chart"); ShowChart(QOpen("chart") && ChartToggle.Visibility == Visibility.Visible); QSetChev(ChartChev, QOpen("chart")); };
         ChaseTrack.SizeChanged += (_, _) => LayoutChase();
         CraftChaseTrack.SizeChanged += (_, _) => LayoutCraftChase();
@@ -89,7 +90,7 @@ public partial class MainWindow
         bool show = _part == "Farming" && !_welcome && !FullShown && _hasSummary && h != null && _qChip != "bag" && kinds > 0;
         BagStrip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
-        BagStripNote.Text = $"{kinds} kind{(kinds == 1 ? "" : "s")}";
+        BagStripNote.Text = L.F(kinds == 1 ? "{0} kind" : "{0} kinds", kinds);
         BagStripTotal.Text = ""; BagStripTotal.ToolTip = null;
         QSetChev(BagStripChev, false);
         var sig = $"{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}";
@@ -116,7 +117,7 @@ public partial class MainWindow
         foreach (var s in slots.Take(slots.Count > Max ? Max - 1 : slots.Count)) BagStripHost.Children.Add(s);
         if (slots.Count > Max)
         {
-            var more = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = "The rest of the bag" };
+            var more = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = L.T("The rest of the bag") };
             more.SetResourceReference(Border.BackgroundProperty, "Card2");
             more.Child = QT($"+{slots.Count - (Max - 1)}", 12, FontWeights.Bold, "Muted");
             more.MouseLeftButtonUp += (_, _) => { if (_qChip != "bag") ToggleChip("bag"); };
@@ -140,12 +141,12 @@ public partial class MainWindow
         ChaseBox.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
         if (has)
         {
-            ChaseLbl.Text = beat ? "Past your best here · a new best if it holds" : $"{Fk(bestHr - nowHr)} an hour to your best here";
+            ChaseLbl.Text = beat ? L.T("Past your best here · a new best if it holds") : L.F("{0} an hour to your best here", Fk(bestHr - nowHr));
             ChaseBest.Text = Fk(bestHr);
             ChaseFill.SetResourceReference(Border.BackgroundProperty, tone);
             ChaseFill.Effect = QGlow(tone, 10, 0.6);
             ChaseBest.SetResourceReference(TextBlock.ForegroundProperty, tone);
-            ChaseBox.ToolTip = $"Your best hour in this zone on this server: {Amounts.Full(bestHr)}. This hour: {Amounts.Full(nowHr)}.";
+            ChaseBox.ToolTip = L.F("Your best hour in this zone on this server: {0}. This hour: {1}.", Amounts.Full(bestHr), Amounts.Full(nowHr));
             // the bar slides to its new share (Motion.Slide); keyed by where it counts, so a switch to this zone doesn't slide
             Motion.Slide(ChaseFill, ChaseKey, share, s => { _chaseShare = s; LayoutChase(); });
         }
@@ -153,9 +154,9 @@ public partial class MainWindow
         var sig = $"{has}|{beat}|{Math.Round(share, 3)}|{nowHr > 0}|{Skins.Current}";
         if (!Changed("ring", sig)) return;
         RingHost.Children.Clear();
-        RingHost.Children.Add(has ? QRing(76, 7, share, tone, beat ? "★" : $"{Math.Round(share * 100):0}%", beat ? "new best" : "of best")
-            : QRing(76, 7, 0, "Gold", nowHr > 0 ? "–" : "", nowHr > 0 ? "no best yet" : ""));
-        RingHost.ToolTip = has ? ChaseBox.ToolTip : nowHr > 0 ? "No best hour here yet: this one sets it." : null;
+        RingHost.Children.Add(has ? QRing(76, 7, share, tone, beat ? "★" : $"{Math.Round(share * 100):0}%", beat ? L.T("new best") : L.T("of best"))
+            : QRing(76, 7, 0, "Gold", nowHr > 0 ? "–" : "", nowHr > 0 ? L.T("no best yet") : ""));
+        RingHost.ToolTip = has ? ChaseBox.ToolTip : nowHr > 0 ? L.T("No best hour here yet: this one sets it.") : null;
     }
 
     /* ---------------- the hero's trend ---------------- */
@@ -231,14 +232,15 @@ public partial class MainWindow
         if (!show) return;
         string words = priced > 0 || loot > 0 ? "Kinah and loot an hour" : "Kinah an hour";
         HeroTicket.Opacity = warm ? 0.4 : 1;
-        HeroTicket.ToolTip = $"{Amounts.Full(total / h)} {words}" + (priced > 0 || loot > 0 ? $", loot at the lowest Market price {PriceBook.Cut}" : "") + ": the Kinah picked up here and what the loot sells for, the hour the big figure says outside the Abyss.";
+        HeroTicket.ToolTip = priced > 0 || loot > 0 ? L.F("{0} Kinah and loot an hour, loot at the lowest Market price {1}: the Kinah picked up here and what the loot sells for, the hour the big figure says outside the Abyss.", Amounts.Full(total / h), QCut())
+            : L.F("{0} Kinah an hour: the Kinah picked up here and what the loot sells for, the hour the big figure says outside the Abyss.", Amounts.Full(total / h));
         var sig = $"{Fk(total / h)}|{words}|{Skins.Current}";
         if (!Changed("ticket", sig)) return;
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         var art = GameArt.Element("kinah", 14); art.VerticalAlignment = VerticalAlignment.Center; art.Margin = new Thickness(0, 0, 5, 0);
         row.Children.Add(art);
         var fig = QT(Fk(total / h), 13, FontWeights.Bold, "Gold"); fig.VerticalAlignment = VerticalAlignment.Center;
-        var word = QT(" " + words, 12, FontWeights.Medium, "Muted"); word.VerticalAlignment = VerticalAlignment.Center;
+        var word = QT(" " + L.T(words), 12, FontWeights.Medium, "Muted"); word.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(fig); row.Children.Add(word);
         HeroTicket.Child = row;
         HeroTicket.SetResourceReference(Border.BackgroundProperty, QTintOf("Gold"));
@@ -254,12 +256,12 @@ public partial class MainWindow
         RankTicket.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         RankTicket.Opacity = warm ? 0.4 : 1;
-        RankTicket.ToolTip = $"{Amounts.Full(rank / h)} Rank Points an hour: {rank:N0} earned in the Abyss" + (lost > 0 ? $", {lost:N0} lost on deaths ({(rank - lost) / h:N0} an hour kept)." : ".");
+        RankTicket.ToolTip = L.F("{0} Rank Points an hour: {1:N0} earned in the Abyss", Amounts.Full(rank / h), rank) + (lost > 0 ? L.F(", {0:N0} lost on deaths ({1:N0} an hour kept).", lost, (rank - lost) / h) : ".");
         var sig = $"{Fk(rank / h)}|{Skins.Current}";
         if (!Changed("rank-ticket", sig)) return;
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         var fig = QT(Fk(rank / h), 13, FontWeights.Bold, "Lilac"); fig.VerticalAlignment = VerticalAlignment.Center;
-        var word = QT(" Rank an hour", 12, FontWeights.Medium, "Muted"); word.VerticalAlignment = VerticalAlignment.Center;
+        var word = QT(" " + L.T("Rank an hour"), 12, FontWeights.Medium, "Muted"); word.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(fig); row.Children.Add(word);
         RankTicket.Child = row;
         RankTicket.SetResourceReference(Border.BackgroundProperty, QTintOf("Lilac"));
@@ -288,10 +290,10 @@ public partial class MainWindow
     static string GatherHow(SessionEngine e, Tables s, int tries, int upgrades)
     {
         int failed = e.Totals().Failed;
-        var lines = new List<string> { $"\n{tries - failed - upgrades:N0} worked, {upgrades:N0} upgrade roll{(upgrades == 1 ? "" : "s")} won, {failed:N0} failed." };
+        var lines = new List<string> { "\n" + L.F(upgrades == 1 ? "{0:N0} worked, {1:N0} upgrade roll won, {2:N0} failed." : "{0:N0} worked, {1:N0} upgrade rolls won, {2:N0} failed.", tries - failed - upgrades, upgrades, failed) };
         foreach (var sk in s.Skills ?? new())
         {
-            lines.Add($"\n{sk.Name.Split(" · ")[0]}: {sk.Attempts:N0} tr{(sk.Attempts == 1 ? "y" : "ies")}{(sk.Nodes > 0 ? $" on {sk.Nodes:N0} node{(sk.Nodes == 1 ? "" : "s")}" : "")}" + (sk.ValuePerHour > 0 ? $", {Fk(sk.ValuePerHour)} an hour" : ""));
+            lines.Add("\n" + L.F(sk.Attempts == 1 ? "{0}: {1:N0} try" : "{0}: {1:N0} tries", sk.Name.Split(" · ")[0], sk.Attempts) + (sk.Nodes > 0 ? " " + L.F(sk.Nodes == 1 ? "on {0:N0} node" : "on {0:N0} nodes", sk.Nodes) : "") + (sk.ValuePerHour > 0 ? ", " + L.F("{0} an hour", Fk(sk.ValuePerHour)) : ""));
             foreach (var k in sk.Kinds ?? new()) if (k.Attempts > 0) lines.Add("\n  " + NodeKindText(k));
         }
         return string.Concat(lines);
@@ -301,7 +303,7 @@ public partial class MainWindow
     {
         bool farm = _part == "Farming" && !_welcome && _hasSummary;
         HeroStats.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        FeedNote.Text = farm ? "last five" : "";
+        FeedNote.Text = farm ? L.T("last five") : "";
         if (!farm) { ChipPanel.Visibility = Visibility.Collapsed; return; }
         _qMobs = e.MobSnapshot(); _qKinah = kinah; _qKills = kills; _qElapsed = elapsed;
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);
@@ -319,26 +321,26 @@ public partial class MainWindow
         var at = CountWhere();
         // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
         Action? Open(string key) => FullShown ? null : () => ToggleChip(key);
-        string kindsText = $"{kinds} kind{(kinds == 1 ? "" : "s")}";
+        string kindsText = L.F(kinds == 1 ? "{0} kind" : "{0} kinds", kinds);
         // how Kinah and loot add up (the bag's total said it on hover until it went): on the loot figure's hover
         string total = _lootHere?.TotalTip is { Length: > 0 } tt ? "\n\n" + tt : "";
         var parts = new List<QStat>();
         // the place's share beside each figure (0.10.70), and on its hover
-        string Here(long v, bool money) => hs == null ? "" : (money ? Fk(v) : v.ToString("N0")) + " here";
-        string In(long v, bool money, string what) => hs == null ? "" : $"\n{(money ? Fk(v) : v.ToString("N0"))} {what} in {hs.Place}.";
+        string Here(long v, bool money) => hs == null ? "" : L.F("{0} here", money ? Fk(v) : v.ToString("N0"));
+        string In(long v, bool money, string what) => hs == null ? "" : "\n" + L.F(what == "of them" ? "{0} of them in {1}." : "{0} of it in {1}.", money ? Fk(v) : v.ToString("N0"), hs.Place);
         if (gather)
         {
             double perTry = nodes > 0 ? s.GatherCount / (double)nodes : 0;
             // with the game's own messages (0.10.80): the nodes the tries were on, and on the hover how they ended and each
             // skill's and each kind of node's tries, nodes, upgrades, fails and pace
-            parts.Add(new QStat(nodes.ToString("N0"), visits > 0 ? $"tr{(nodes == 1 ? "y" : "ies")} · {visits:N0} node{(visits == 1 ? "" : "s")}" : $"attempt{(nodes == 1 ? "" : "s")}",
-                $"{nodes:N0} gathering attempts{(visits > 0 ? $" on {visits:N0} nodes" : "")} {at}" + (elapsed.TotalMinutes >= 1 ? $", {Fk(nodes / elapsed.TotalHours)} an hour" : "") + "."
+            parts.Add(new QStat(nodes.ToString("N0"), visits > 0 ? L.T(nodes == 1 ? "try" : "tries") + " · " + L.F(visits == 1 ? "{0:N0} node" : "{0:N0} nodes", visits) : L.T(nodes == 1 ? "attempt" : "attempts"),
+                (visits > 0 ? L.F("{0:N0} gathering attempts on {1:N0} nodes {2}", nodes, visits, at) : L.F("{0:N0} gathering attempts {1}", nodes, at)) + (elapsed.TotalMinutes >= 1 ? ", " + L.F("{0} an hour", Fk(nodes / elapsed.TotalHours)) : "") + "."
                 + (visits > 0 ? GatherHow(e, s, nodes, upgrades) : "")));
-            parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 ? "gathered" : kinds > 0 ? (kinds == 1 ? "kind gathered" : "kinds gathered") : "gathered",
-                kinds == 0 ? "Nothing gathered yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (FullShown ? "." : ". Click for the bag."),
+            parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 ? L.T("gathered") : kinds > 0 ? L.T(kinds == 1 ? "kind gathered" : "kinds gathered") : L.T("gathered"),
+                kinds == 0 ? L.T("Nothing gathered yet.") : $"{kindsText} {at}" + (s.Priced > 0 ? ": " + L.F("{0} at the lowest Market price, {1}", Fk(s.Value), QCut()) : "") + (FullShown ? "." : ". " + L.T("Click for the bag.")),
                 Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null));
-            parts.Add(new QStat(Fk(s.GatherCount), nodes > 0 ? $"items · {perTry:0.0} a try" : "items",
-                nodes > 0 ? $"{s.GatherCount:N0} items from {nodes:N0} attempts, {perTry:0.0} a try." : "Items show here as nodes are gathered."));
+            parts.Add(new QStat(Fk(s.GatherCount), nodes > 0 ? L.F("items · {0:0.0} a try", perTry) : L.T("items"),
+                nodes > 0 ? L.F("{0:N0} items from {1:N0} attempts, {2:0.0} a try.", s.GatherCount, nodes, perTry) : L.T("Items show here as nodes are gathered.")));
         }
         else
         {
@@ -346,35 +348,35 @@ public partial class MainWindow
             // in the Abyss the points the hero is the hour of lead the line (2026-11-13): their one home on the page, as Kinah's is
             if (abyss > 0)
                 // "AP" once Rank Points sit beside it (0.10.76): the hero right above says Abyss Points, and the line stays one line
-                parts.Add(new QStat(Fk(abyss), rank > 0 || rankLost > 0 ? "AP" : "Abyss Points", $"{abyss:N0} Abyss Points picked up {at}" + (kills > 0 ? $", {Fk(abyss / (double)kills)} a kill" : "") + "." + In(hs?.Abyss ?? 0, true, "of them"),
+                parts.Add(new QStat(Fk(abyss), rank > 0 || rankLost > 0 ? "AP" : L.T("Abyss Points"), L.F("{0:N0} Abyss Points picked up {1}", abyss, at) + (kills > 0 ? ", " + L.F("{0} a kill", Fk(abyss / (double)kills)) : "") + "." + In(hs?.Abyss ?? 0, true, "of them"),
                     null, false, "Sky", ("chip-abyss|" + at, abyss, false), Here(hs?.Abyss ?? 0, true)));
             if (rank > 0 || rankLost > 0)
             {
                 double rankHr = elapsed.TotalHours > 0 ? rank / elapsed.TotalHours : 0;
-                string lost = rankLost > 0 ? $"\n{rankLost:N0} lost on {deaths:N0} death{(deaths == 1 ? "" : "s")}{(deathsPvp > 0 ? $" ({deathsPvp:N0} to players)" : "")}: {rank - rankLost:N0} kept." : "";
-                parts.Add(new QStat(Fk(rank), "Rank", $"{rank:N0} Rank Points earned {at} in {TodayLoot.Dur(elapsed.TotalSeconds)}, {Fk(rankHr)} an hour" + (kills > 0 ? $", {rank / (double)kills:0.#} a kill" : "") + "." + lost,
+                string lost = rankLost > 0 ? "\n" + L.F(deaths == 1 ? "{0:N0} lost on {1:N0} death" : "{0:N0} lost on {1:N0} deaths", rankLost, deaths) + (deathsPvp > 0 ? " " + L.F("({0:N0} to players)", deathsPvp) : "") + ": " + L.F("{0:N0} kept.", rank - rankLost) : "";
+                parts.Add(new QStat(Fk(rank), L.T("Rank"), L.F("{0:N0} Rank Points earned {1} in {2}, {3} an hour", rank, at, QDur(elapsed.TotalSeconds), Fk(rankHr)) + (kills > 0 ? ", " + L.F("{0:0.#} a kill", rank / (double)kills) : "") + "." + lost,
                     null, false, "Lilac", ("chip-rank|" + at, rank, false)));   // its hour is the ticket beside the Kinah one (FillRankTicket)
             }
-            parts.Add(new QStat(Fk(kinah), "Kinah",
-                $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + (_boundInKinah ? ". Bound Kinah is in it: in the Abyss every Kinah drop is bound." : ". Quest rewards and bound Kinah are left out.") + (FullShown ? "" : " Click for Kinah by enemy.") + In(hs?.Kinah ?? 0, true, "of it"),
+            parts.Add(new QStat(Fk(kinah), L.T("Kinah"),
+                L.F("{0:N0} Kinah picked up {1}", kinah, at) + (kills > 0 ? ", " + L.F("{0} a kill", Fk(kinah / (double)kills)) : "") + (_boundInKinah ? ". " + L.T("Bound Kinah is in it: in the Abyss every Kinah drop is bound.") : ". " + L.T("Quest rewards and bound Kinah are left out.")) + (FullShown ? "" : " " + L.T("Click for Kinah by enemy.")) + In(hs?.Kinah ?? 0, true, "of it"),
                 Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null, Here(hs?.Kinah ?? 0, true)));
-            parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 || kinds == 0 ? "loot" : (kinds == 1 ? "kind of loot" : "kinds of loot"),
-                (kinds == 0 ? "Nothing picked up yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ".")
-                + (FullShown ? "" : " Click for the bag.") + (s.Value > 0 ? In(hs?.Value ?? 0, true, "of it") : "") + total,
+            parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 || kinds == 0 ? L.T("loot") : L.T(kinds == 1 ? "kind of loot" : "kinds of loot"),
+                (kinds == 0 ? L.T("Nothing picked up yet.") : $"{kindsText} {at}" + (s.Priced > 0 ? ": " + L.F("{0} at the lowest Market price, {1}", Fk(s.Value), QCut()) : "") + (s.Unpriced > 0 ? " · " + L.F("{0} with no price yet", s.Unpriced) : "") + ".")
+                + (FullShown ? "" : " " + L.T("Click for the bag.")) + (s.Value > 0 ? In(hs?.Value ?? 0, true, "of it") : "") + total,
                 Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null, s.Value > 0 ? Here(hs?.Value ?? 0, true) : ""));
-            string died = deaths > 0 ? $" You died {deaths:N0} time{(deaths == 1 ? "" : "s")}{(deathsPvp > 0 ? $", {deathsPvp:N0} of them to players" : "")}." : "";
+            string died = deaths > 0 ? " " + L.F(deaths == 1 ? "You died {0:N0} time" : "You died {0:N0} times", deaths) + (deathsPvp > 0 ? ", " + L.F("{0:N0} of them to players", deathsPvp) : "") + "." : "";
             if (pvp >= 0)
             {
                 int monsters = Math.Max(0, kills - pvp);
-                string both = $"{kills:N0} kills {at} in {TodayLoot.Dur(elapsed.TotalSeconds)}: {pvp:N0} player{(pvp == 1 ? "" : "s")} and {monsters:N0} monster{(monsters == 1 ? "" : "s")}." + died;
+                string both = L.F("{0:N0} kills {1} in {2}", kills, at, QDur(elapsed.TotalSeconds)) + ": " + L.F(pvp == 1 ? (monsters == 1 ? "{0:N0} player and {1:N0} monster." : "{0:N0} player and {1:N0} monsters.") : (monsters == 1 ? "{0:N0} players and {1:N0} monster." : "{0:N0} players and {1:N0} monsters."), pvp, monsters) + died;
                 // in Steven's words ("pvp kills vs. mob kills"): short enough for the line beside Abyss Points, Kinah and loot
-                parts.Add(new QStat(pvp.ToString("N0"), "PvP", both, null, false, "Coral", ("chip-pvp|" + at, pvp, false)));
-                parts.Add(new QStat(monsters.ToString("N0"), monsters == 1 ? "mob" : "mobs", both + (FullShown ? "" : " Click for kills by enemy."),
+                parts.Add(new QStat(pvp.ToString("N0"), L.T("PvP"), both, null, false, "Coral", ("chip-pvp|" + at, pvp, false)));
+                parts.Add(new QStat(monsters.ToString("N0"), L.T(monsters == 1 ? "mob" : "mobs"), both + (FullShown ? "" : " " + L.T("Click for kills by enemy.")),
                     Open("kills"), _qChip == "kills", "Coral", monsters > 0 ? ("chip-kills|" + at, monsters, false) : null));
             }
             else
-            parts.Add(new QStat(kills.ToString("N0"), kills == 1 ? "kill" : "kills",
-                (kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + $", {Fk(kinah / (double)kills)} Kinah a kill." + (FullShown ? "" : " Click for kills by enemy.") : "Kills show here as enemies pay out.") + died,
+            parts.Add(new QStat(kills.ToString("N0"), L.T(kills == 1 ? "kill" : "kills"),
+                (kills > 0 ? L.F("{0:N0} kills in {1}", kills, QDur(elapsed.TotalSeconds)) + (perMin > 0 ? ", " + L.F("{0:0.0} a minute", perMin) : "") + ", " + L.F("{0} Kinah a kill.", Fk(kinah / (double)kills)) + (FullShown ? "" : " " + L.T("Click for kills by enemy.")) : L.T("Kills show here as enemies pay out.")) + died,
                 Open("kills"), _qChip == "kills", "Coral", kills > 0 ? ("chip-kills|" + at, kills, false) : null, kills > 0 ? Here(hs?.Kills ?? 0, false) : ""));
         }
         QStatsFill(HeroStats, parts);
@@ -400,7 +402,10 @@ public partial class MainWindow
     /// <summary>For options-test: a chip's click.</summary>
     internal void ToggleChipForTest(string key) => ToggleChip(key);
 
-    string CountWhere() => RunShown ? "this run" : "since your last break";
+    string CountWhere() => L.T(RunShown ? "this run" : "since your last break");
+
+    /// <summary>"after the Market's cut" / "before the Market's cut", in the language.</summary>
+    internal static string QCut() => L.T(PriceBook.Cut);
 
     void ToggleChip(string key)
     {
@@ -439,7 +444,16 @@ public partial class MainWindow
         return (n / step + 1) * step;
     }
 
-    static string Eta(double secs) => secs < 60 ? "under a minute" : "about " + TodayLoot.Dur(secs);
+    static string Eta(double secs) => secs < 60 ? L.T("under a minute") : L.F("about {0}", QDur(secs));
+
+    /// <summary>A length of time as TodayLoot.Dur writes it ("under a minute", "12 min", "1 h 5 min"), in the language.</summary>
+    internal static string QDur(double secs)
+    {
+        int m = (int)(Math.Max(0, secs) / 60);
+        if (m < 1) return L.T("under a minute");
+        if (m < 60) return L.F("{0} min", m);
+        return m % 60 == 0 ? L.F("{0} h", m / 60) : L.F("{0} h {1} min", m / 60, m % 60);
+    }
 
     /// <summary>A goal as a Next up row: the item, coin or door, the goal, have and to go with the pace, the share; the card on hover, the sheet on a click.</summary>
     FrameworkElement GoalRow(Goal g, GoalProgress p, bool rule)
@@ -451,7 +465,7 @@ public partial class MainWindow
             _ => QCoin(28),
         };
         var pace = Goals.PaceText(p);
-        var sub = p.Done ? "reached today ✓" : $"{GoalAmount(g, p.Have)} so far · {GoalAmount(g, p.ToGo)} to go" + (pace.Length > 0 ? " · " + pace : "");
+        var sub = p.Done ? L.T("reached today ✓") : L.F("{0} so far · {1} to go", GoalAmount(g, p.Have), GoalAmount(g, p.ToGo)) + (pace.Length > 0 ? " · " + pace : "");
         // the bar in the colour of what it tracks (colour pass, 2026-11-13): a Kinah goal gold, an item or runs the Progress
         // tone; the ✓ of a reached goal green, a success
         var tone = g.Kind is Goal.KindItem or Goal.KindRuns ? "Progress" : "Gold";
@@ -459,7 +473,7 @@ public partial class MainWindow
         var row = QRow(icon, Goals.Label(g), sub, p.Done ? "✓" : $"{Math.Round(p.Fraction * 100):0}%", p.Done ? "Good" : tone == "Gold" ? "Gold" : "Ink", p.Fraction, tone, rule, inline: true, barKey: key);
         Motion.Reached(row, key, p.Done, tone == "Gold" ? "Gold" : "Good");   // the draw where it is reached washes it once
         row.Tag = "goal";
-        AutomationProperties.SetName(row, $"Goal: {Goals.Label(g)}, {GoalCountText(g, p)}");
+        AutomationProperties.SetName(row, L.F("Goal: {0}, {1}", Goals.Label(g), GoalCountText(g, p)));
         CardTip(row, () => GoalCard(g));
         row.MouseLeftButtonUp += (_, _) => OpenGoalSheet(g, GoalDraft.From(g), row);
         return row;
@@ -468,10 +482,10 @@ public partial class MainWindow
     /// <summary>The "Set a goal" row after the goals, while fewer than three: a click opens Set a goal.</summary>
     FrameworkElement AddGoalRow(bool rule)
     {
-        var row = QRow(QIconBox("Plus", "Dim", 28, round: true), "Set a goal for today", "Kinah, an item or runs · up to three", "", "Ink", rule: rule, inline: true);
+        var row = QRow(QIconBox("Plus", "Dim", 28, round: true), L.T("Set a goal for today"), L.T("Kinah, an item or runs · up to three"), "", "Ink", rule: rule, inline: true);
         row.Tag = "add";
         ToolTipService.SetInitialShowDelay(row, 400);
-        AutomationProperties.SetName(row, "Add a goal");
+        AutomationProperties.SetName(row, L.T("Add a goal"));
         row.MouseLeftButtonUp += (_, _) => OpenGoalSheet(null, new GoalDraft(), row);
         return row;
     }
