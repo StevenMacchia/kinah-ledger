@@ -191,10 +191,10 @@ public partial class MainWindow
 
             var price = new TextBlock { FontSize = 13, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
             Run Part(string text, string brush, bool strong = false) { var r = new Run(text) { FontWeight = strong ? FontWeights.SemiBold : FontWeights.Normal }; r.SetResourceReference(TextElement.ForegroundProperty, brush); price.Inlines.Add(r); return r; }
-            if (f.Price.Length == 0) Part("no price yet", "Faint");
+            if (f.Price.Length == 0) Part(L.T("no price yet"), "Faint");
             else
             {
-                Part("sells for ", "Muted");
+                Part(L.T("sells for") + " ", "Muted");
                 _figure = Part(f.Price, "Gold", strong: true);
                 if (f.Where.Length > 0) Part(" " + f.Where, "Muted");
             }
@@ -253,7 +253,7 @@ public partial class MainWindow
         /// <summary>"+2 more" while more came with the drop; none for one alone. A pill that comes up during the moment fades in from there.</summary>
         public void SetMore(int more)
         {
-            _moreText.Text = $"+{more} more";
+            _moreText.Text = L.F("+{0} more", more);
             bool comes = more > 0 && _morePill.Visibility != Visibility.Visible;
             _morePill.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (comes && _at > MoreFrom) { _moreAt = _at; _morePill.Opacity = 0; }
