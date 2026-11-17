@@ -239,6 +239,12 @@ static class Tac
         name.MaxWidth = Math.Max(Math.Min(nameMin, nw), room - marks);
     }
 
+    /// <summary>
+    /// A member's bar, 0 to 1, against the fight's top (Steven, 2026-11-17: "prioritizes the bar"): the top member's runs the
+    /// whole row, the others to their part of it; before any damage, by Combat Power.
+    /// </summary>
+    public static double BarOf(MeterMember m, MeterContext c) { double top = c.E.TopMeasure(); return top > 0 ? Clamp01(c.E.Measure(m.F) / top) : 0; }
+
     /// <summary>A part's width laid out on its own (shown for the measure, then as it was).</summary>
     static double W(FrameworkElement e)
     {
@@ -253,7 +259,7 @@ static class Tac
 
     /// <summary>
     /// The least room a name keeps: whole up to <see cref="NameKeep"/> characters, else its first <see cref="NameKeepLong"/> and
-    /// "…" (a long name gives way before a mark goes to a second line).
+    /// "…" (a long name gives way before a mark goes to its glyph).
     /// </summary>
     public static double NameFloor(TextBlock name)
     {
@@ -276,55 +282,6 @@ static class Tac
 
     /// <summary>A figure column's width: the widest of <paramref name="forms"/> in the block's face, its margins and a pixel of air.</summary>
     public static double FigCol(TextBlock fig, params string[] forms) => forms.Max(f => TextW(fig, f)) + fig.Margin.Left + fig.Margin.Right + 1;
-
-    /// <summary>
-    /// A meter row's name and its marks on one line, or two when they can't share one (Steven, 2026-11-17: "a lot of numbers in
-    /// all the meters you can't see, it's cut off!"): the name keeps <see cref="NameFloor"/> on its line (a 10-character name
-    /// whole), the marks after it in <paramref name="order"/> move to <paramref name="sub"/> from the last until the line fits
-    /// (a part and its short form move together), and each line's marks then take their full form where they fit (FitName).
-    /// Parts in <paramref name="keep"/> or <paramref name="give"/> that aren't in <paramref name="order"/> (a CP at the plate's
-    /// end) count against the first line. Returns true when the second line is in use.
-    /// </summary>
-    public static bool FitLines(TextBlock name, double room, double subRoom, Panel line, Panel sub, IReadOnlyList<FrameworkElement> order,
-        IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give)
-    {
-        // the marks in groups: a part with its short form
-        var groups = new List<List<FrameworkElement>>();
-        foreach (var e in order)
-        {
-            var pair = give.FirstOrDefault(p => ReferenceEquals(p.Short, e));
-            if (pair.Full != null && groups.Count > 0 && groups[^1].Contains(pair.Full)) groups[^1].Add(e);
-            else groups.Add(new List<FrameworkElement> { e });
-        }
-        double floor = NameFloor(name);
-        int n = groups.Count, k = n;
-        for (int i = 0; i <= n; i++)
-        {
-            var down = groups.Skip(n - i).SelectMany(g => g).ToHashSet();
-            double least = keep.Where(e => !down.Contains(e)).Sum(W) + give.Where(p => !down.Contains(p.Full)).Sum(p => p.Short is { } s ? W(s) : 0);
-            if (floor + least <= room) { k = i; break; }
-        }
-        var under = groups.Skip(n - k).SelectMany(g => g).ToList();
-        var lower = under.ToHashSet();
-        // the children where they go (only when they move: a part re-added is laid out again)
-        var top = new List<UIElement> { name };
-        top.AddRange(order.Where(e => !lower.Contains(e)));
-        if (!line.Children.Cast<UIElement>().SequenceEqual(top) || !sub.Children.Cast<UIElement>().SequenceEqual(under))
-        {
-            line.Children.Clear(); sub.Children.Clear();
-            foreach (var e in top) line.Children.Add(e);
-            foreach (var e in under) sub.Children.Add(e);
-        }
-        FitName(name, room, keep.Where(e => !lower.Contains(e)).ToList(), give.Where(p => !lower.Contains(p.Full)).ToList(), floor, floor);
-        // the second line's marks: full where they fit, else short in the give's order
-        var subGive = give.Where(p => lower.Contains(p.Full)).ToList();
-        if (subGive.Count > 0)
-        {
-            var dummy = new TextBlock();
-            FitName(dummy, subRoom, keep.Where(lower.Contains).ToList(), subGive, 0, 0);
-        }
-        return k > 0;
-    }
 
     /// <summary>A rate column's width on a card (crit, back attacks).</summary>
     public const double CardRate = 36;
