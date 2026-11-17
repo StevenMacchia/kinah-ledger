@@ -870,7 +870,7 @@ public static class ParserTests
             static string Places(string x) => string.Join(",", System.Text.RegularExpressions.Regex.Matches(x, @"\{(\d+)(?:[,:][^}]*)?\}").Select(m => m.Groups[1].Value).Distinct().OrderBy(v => v));
             var badPlaces = tables.SelectMany(t => t.Table.Where(kv => Places(kv.Key) != Places(kv.Value)).Select(kv => $"{t.Code}: \"{kv.Key}\" → \"{kv.Value}\"")).ToList();
             static bool Script(string code, string v) => v.Any(ch => code == "ko" ? ch is >= '가' and <= '힣' : ch is >= '一' and <= '鿿');
-            var untranslated = tables.SelectMany(t => t.Table.Where(kv => kv.Key.Count(char.IsLetter) > 3 && !Script(t.Code, kv.Value)).Select(kv => $"{t.Code}: \"{kv.Key}\"")).ToList();
+            var untranslated = tables.SelectMany(t => t.Table.Where(kv => kv.Key.Count(char.IsLetter) > 3 && !Script(t.Code, kv.Value) && !KinahLedger.Ui.LangCheck.KeptOnPurpose(kv.Key, kv.Value)).Select(kv => $"{t.Code}: \"{kv.Key}\"")).ToList();
             Check(tables.Count == 2 && tables.All(t => t.Table.Count > 0) && onlyOne.Count == 0,
                 $"the Korean and Traditional Chinese tables are built in with the same keys ({string.Join(", ", tables.Select(t => $"{t.Code} {t.Table.Count}"))}){(onlyOne.Count > 0 ? ": in one only: " + string.Join("; ", onlyOne.Take(6)) : "")}");
             Check(badPlaces.Count == 0, $"...each translation keeps its key's {{0}} places{(badPlaces.Count > 0 ? ": " + string.Join("; ", badPlaces.Take(6)) : "")}");

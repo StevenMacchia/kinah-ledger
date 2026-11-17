@@ -165,6 +165,40 @@ public static class LangCheck
         }
     }
 
+    /// <summary>
+    /// Table entries that stay in English on purpose: the Terminal look's commands (shell syntax) and the site's name. Every
+    /// other translation is written in its language's own script (parser-test), unless it only keeps the key's own fixed
+    /// words or punctuation (<see cref="KeptOnPurpose"/>).
+    /// </summary>
+    public static readonly HashSet<string> KeptEnglish = new(StringComparer.Ordinal)
+    {
+        "> record --new", "> abyss --rate", "> kinah --rate", "> fight ", "> fight start", "perf report --sort sym",
+        "KINAHLEDGER.COM · {0}", "NPC {0:N0}",
+    };
+
+    /// <summary>
+    /// A translation with none of its language's letters that is still right: a kept text above, or one that adds no
+    /// English of its own (" this week." → "." where the sentence's verb moved; "Ctrl+1 to 5" → "Ctrl+1~5").
+    /// </summary>
+    public static bool KeptOnPurpose(string key, string value)
+    {
+        if (KeptEnglish.Contains(key) && value == key) return true;
+        var keyWords = Token.Matches(key).Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
+        return Token.Matches(value).All(m => keyWords.Contains(m.Value) && Fixed.Contains(m.Value));
+    }
+
+    /// <summary>Words that stay English in every language whatever the tables say: names, key names, units.</summary>
+    static readonly HashSet<string> Fixed = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Kinah", "Ledger", "Aion", "NCSOFT", "NCSoft", "Windows", "Discord", "GitHub", "Reddit", "MetaBot", "Steam", "Purple",
+        "DPS", "HPS", "CP", "PB", "AP", "RP", "GP", "XP", "EXP", "HP", "MP", "PvP", "PvE", "OCR", "UTC", "CSV", "PNG", "JSON", "Npcap",
+        "Ctrl", "Alt", "Shift", "Tab", "Esc", "Enter", "Space", "Home", "End", "PgUp", "PgDn", "Del", "Ins", "Win", "Num", "Pause",
+        "Lv", "min", "sec", "ms", "fps",
+        "Chrome", "Edge", "Firefox", "Ko-fi",
+        // a chat line quoted as the game wrote it ("Last: Diamond Powder acquired")
+        "acquired", "Acquired",
+    };
+
     static HashSet<string>? _allowed;
     /// <summary>Texts the current language's table keeps in English on purpose (a terminal look's commands): allowed whole.</summary>
     static HashSet<string> _kept = new(StringComparer.Ordinal);
@@ -177,19 +211,10 @@ public static class LangCheck
     static HashSet<string> Allowed()
     {
         if (_allowed != null && _allowedFor == L.Code) return _allowed;
-        var a = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "Kinah", "Ledger", "Aion", "NCSOFT", "NCSoft", "Windows", "Discord", "GitHub", "Reddit", "MetaBot", "Steam", "Purple",
-            "DPS", "HPS", "CP", "PB", "AP", "RP", "GP", "XP", "EXP", "HP", "MP", "PvP", "PvE", "OCR", "UTC", "CSV", "PNG", "JSON", "Npcap",
-            "Ctrl", "Alt", "Shift", "Tab", "Esc", "Enter", "Space", "Home", "End", "PgUp", "PgDn", "Del", "Ins", "Win", "Num", "Pause",
-            "Lv", "min", "sec", "ms", "fps",
-            "Chrome", "Edge", "Firefox", "Ko-fi",
-            // a chat line quoted as the game wrote it ("Last: Diamond Powder acquired")
-            "acquired", "Acquired",
-        };
+        var a = new HashSet<string>(Fixed, StringComparer.OrdinalIgnoreCase);
         // (a text kept as it is, "> kinah --rate", allows itself whole, in Kept, never its words one by one)
         foreach (var (k, v) in L.CurrentTable())
-            if (v != k) foreach (Match m in Token.Matches(v)) a.Add(m.Value);
+            if (v != k && !KeptOnPurpose(k, v)) foreach (Match m in Token.Matches(v)) a.Add(m.Value);
         _kept = new HashSet<string>(L.CurrentTable().Where(kv => kv.Value == kv.Key).Select(kv => kv.Key.Trim()), StringComparer.Ordinal);
         _allowed = a; _allowedFor = L.Code;
         return a;
