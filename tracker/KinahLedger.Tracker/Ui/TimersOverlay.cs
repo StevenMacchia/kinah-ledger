@@ -218,6 +218,30 @@ sealed class TimersOverlay : Window
         if (!_placed) PlaceFirst();
     }
 
+    /// <summary>
+    /// The strip as it draws <paramref name="items"/>, apart from any window (Options › Timers' preview): the same frame, dot
+    /// and badges, at <paramref name="scale"/>.
+    /// </summary>
+    public static FrameworkElement PreviewFace(IReadOnlyList<TimerBoard.Item> items, DateTime now, double scale = 1)
+    {
+        var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        TimerBadge.Fill(line, items, now, 12);
+        bool anyGold = items.Any(i => TimerBadge.Of(i, now).Tone != TimerBadge.Tone.Quiet);
+        var dot = new Ellipse { Width = 6, Height = 6, Fill = anyGold ? Gold : Muted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var frame = new Border
+        {
+            Background = Frozen(Color.FromArgb(0xF0, Surface.R, Surface.G, Surface.B)), BorderBrush = FrameLine, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 6, 12, 6), Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { dot, line } },
+        };
+        TextOptions.SetTextFormattingMode(frame, TextFormattingMode.Display);
+        FrameworkElement face = frame;
+        if (HudGlass.On) { HudGlass.Apply(frame, 0.94); face = HudGlass.Ring(frame); }
+        var holder = new Border { Child = face, LayoutTransform = new ScaleTransform(scale, scale) };
+        System.Windows.Documents.TextElement.SetFontFamily(holder, HudKit.Text);
+        System.Windows.Documents.TextElement.SetFontWeight(holder, FontWeights.Medium);
+        return holder;
+    }
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
     /// <summary>For the options self-test: the window's extended style (never activates; click-through when set).</summary>
     internal long ExStyleForTest => _hwnd == IntPtr.Zero ? 0 : GetWindowLongPtr(_hwnd, -20).ToInt64();

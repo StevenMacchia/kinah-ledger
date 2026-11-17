@@ -217,7 +217,7 @@ public partial class MainWindow
         if (_welcome) { Restore(); return; }   // the server comes first; the welcome card asks for it
         if (!IsVisible) Restore();
         if (_options != null) { if (page is { } p) _options.Go(p); _options.Activate(); return; }
-        _options = new OptionsWindow(this, page ?? OptionsWindow.Page.General) { Owner = this };
+        _options = new OptionsWindow(this, page ?? OptionsWindow.Page.InGame) { Owner = this };   // the overlays first (the settings revamp, 2026-11-17)
         _options.Closed += (_, _) => { _options = null; SuspendHotkey(false); };
         _options.Show();
     }
