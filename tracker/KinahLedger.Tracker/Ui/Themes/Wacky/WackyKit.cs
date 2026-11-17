@@ -67,7 +67,72 @@ abstract class WackyLook : HudThemeLook
             El.Visibility = op <= 0.001 ? Visibility.Hidden : Visibility.Visible;
             return this;
         }
+        /// <summary>Where a part of the sprite (<paramref name="part"/>, in the sprite's own room) is on the effects' canvas now.</summary>
+        public Rect Where(Rect part)
+        {
+            double w = El.DesiredSize.Width, h = El.DesiredSize.Height;
+            var m = new Matrix();
+            m.Translate(-w / 2, -h / 2);
+            m.Append(El.RenderTransform.Value);
+            m.Translate(w / 2 + Canvas.GetLeft(El), h / 2 + Canvas.GetTop(El));
+            return Rect.Transform(part, m);
+        }
+        public void Shift(double dx, double dy) { _t.X += dx; _t.Y += dy; }
     }
+
+    // ---- keeping the effects inside the window (Steven, 2026-11-16: "some animations get cut off"): the window over the
+    // game is exactly the look's size, so anything drawn past its edge is cut there
+
+    /// <summary>The window's size (the look's root, its clear margin included).</summary>
+    protected Size WinSize { get { _root.UpdateLayout(); return new Size(_root.ActualWidth, _root.ActualHeight); } }
+
+    /// <summary>A part of <paramref name="host"/> centred in it (a sprite's sticker or bubble inside its wider room).</summary>
+    protected static Rect Centred(FrameworkElement host, FrameworkElement part)
+    {
+        host.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        part.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Size h = host.DesiredSize, p = part.DesiredSize;
+        return new Rect((h.Width - p.Width) / 2, (h.Height - p.Height) / 2, p.Width, p.Height);
+    }
+
+    /// <summary>
+    /// The sprite moved back inside the window when its part (<paramref name="part"/>, in the sprite's room) reaches past an
+    /// edge at this point of its course: a slam from big or a peel that turns it slides along the edge instead of being cut.
+    /// </summary>
+    protected void Keep(Sprite s, Rect part, double pad = 3)
+    {
+        double w = _root.ActualWidth, h = _root.ActualHeight;
+        if (w <= 0 || h <= 0 || s.El.Visibility != Visibility.Visible) return;
+        var r = s.Where(part);
+        double dx = r.Width > w - 2 * pad ? (w - r.Width) / 2 - r.Left : r.Left < pad ? pad - r.Left : r.Right > w - pad ? w - pad - r.Right : 0;
+        double dy = r.Height > h - 2 * pad ? (h - r.Height) / 2 - r.Top : r.Top < pad ? pad - r.Top : r.Bottom > h - pad ? h - pad - r.Bottom : 0;
+        if (dx != 0 || dy != 0) s.Shift(dx, dy);
+    }
+
+    /// <summary>The largest scale up to <paramref name="want"/> at which a part this size, turned up to <paramref name="turn"/> degrees, fits the window.</summary>
+    protected double Fit(double want, Size part, double turn = 0, double pad = 3)
+    {
+        var win = WinSize;
+        double a = Math.Abs(turn) * Math.PI / 180;
+        double bw = part.Width * Math.Cos(a) + part.Height * Math.Sin(a), bh = part.Width * Math.Sin(a) + part.Height * Math.Cos(a);
+        if (win.Width <= 0 || bw <= 0 || bh <= 0) return want;
+        return Math.Max(1, Math.Min(want, Math.Min((win.Width - 2 * pad) / bw, (win.Height - 2 * pad) / bh)));
+    }
+
+    /// <summary><paramref name="c"/> moved so a part this size (at <paramref name="scale"/>, turned up to <paramref name="turn"/> degrees) centred on it fits the window.</summary>
+    protected Point Inside(Point c, Size part, double scale = 1, double turn = 0, double pad = 3)
+    {
+        var win = WinSize;
+        if (win.Width <= 0) return c;
+        double a = Math.Abs(turn) * Math.PI / 180;
+        double hw = (part.Width * Math.Cos(a) + part.Height * Math.Sin(a)) * scale / 2, hh = (part.Width * Math.Sin(a) + part.Height * Math.Cos(a)) * scale / 2;
+        double x = hw * 2 > win.Width - 2 * pad ? win.Width / 2 : Math.Clamp(c.X, pad + hw, win.Width - pad - hw);
+        double y = hh * 2 > win.Height - 2 * pad ? win.Height / 2 : Math.Clamp(c.Y, pad + hh, win.Height - pad - hh);
+        return new Point(x, y);
+    }
+
+    /// <summary>How far a point is from each edge of the window.</summary>
+    protected (double L, double T, double R, double B) Room(Point c) { var win = WinSize; return (c.X, c.Y, win.Width - c.X, win.Height - c.Y); }
 
     /// <summary>
     /// <paramref name="el"/> on the effects' canvas, centred on <paramref name="centre"/>, in place of the one this
@@ -348,5 +413,102 @@ static class Wk
             var (el, t, r, s) = _all[i];
             t.X = dx; t.Y = dy; r.Angle = rot; s.ScaleX = s.ScaleY = scale; el.Opacity = Math.Clamp(op, 0, 1);
         }
+    }
+}
+
+/// <summary>
+/// What the Wacky looks' skills cards share (Ui/Themes/MemberCard.cs; Steven, 2026-11-16: the pop-up on a meter row was
+/// the Classic card in every theme): the ability table's columns, right-aligned tabular figures, the foot line in parts,
+/// and the card's entrance (played only with effects on, settled in under 300 ms, nothing on the figures).
+/// </summary>
+static class WkCard
+{
+    /// <summary>A crit or back-attack column's width.</summary>
+    public const double RateCol = 36;
+
+    /// <summary>The card's width: <paramref name="w"/> plus the rate columns it carries.</summary>
+    public static double Width(MemberCard c, double w) => w + (c.CritCol ? RateCol : 0) + (c.BackCol ? RateCol : 0);
+
+    /// <summary>A row of the ability table: the name (and its bar) taking the room, then share, damage, crit and back.</summary>
+    public static Grid Cols(MemberCard c, double share, double damage, double height)
+    {
+        var g = new Grid { Height = height };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(damage) });
+        if (c.CritCol) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RateCol) });
+        if (c.BackCol) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RateCol) });
+        return g;
+    }
+
+    /// <summary>
+    /// A name with its marks after it (YOU, Combat Power): the marks follow the name and keep their room, the name is cut
+    /// first when the line is short (a left-aligned grid whose star column shrinks to the name).
+    /// </summary>
+    public static Grid NameLine(FrameworkElement name, params FrameworkElement[] after)
+    {
+        var g = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.Children.Add(name);
+        for (int i = 0; i < after.Length; i++)
+        {
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(after[i], i + 1); g.Children.Add(after[i]);
+        }
+        return g;
+    }
+
+    public static int CritAt => 3;
+    public static int BackAt(MemberCard c) => c.CritCol ? 4 : 3;
+
+    public static T Put<T>(Grid g, T el, int col) where T : UIElement { Grid.SetColumn(el, col); g.Children.Add(el); return el; }
+
+    /// <summary>A figure in its column: right-aligned, tabular digits.</summary>
+    public static TextBlock Num(string s, double size, Brush fg, FontFamily face, FontWeight w)
+    {
+        var t = new TextBlock { Text = s, FontSize = size, Foreground = fg, FontFamily = face, FontWeight = w, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        return t;
+    }
+
+    /// <summary>An ability's name, its specialties after it in <paramref name="picks"/> ("Pummel  3·4"), cut with an ellipsis when long.</summary>
+    public static TextBlock Ability(CardAbility a, double size, Brush fg, FontFamily face, FontWeight w, Brush picks, double picksSize)
+    {
+        var t = new TextBlock { FontSize = size, Foreground = fg, FontFamily = face, FontWeight = w, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        t.Inlines.Add(new System.Windows.Documents.Run(a.Name));
+        if (a.Picks.Length > 0) t.Inlines.Add(new System.Windows.Documents.Run("  " + a.Picks) { FontSize = picksSize, Foreground = picks });
+        return t;
+    }
+
+    /// <summary>The foot line in its parts, each in its tone: hits, biggest, healed (green), deaths (red), dots between.</summary>
+    public static TextBlock Foot(MemberCard c, double size, FontFamily face, FontWeight w, Brush plain, Brush healed, Brush deaths, Brush dot)
+    {
+        var t = new TextBlock { FontSize = size, FontFamily = face, FontWeight = w, Foreground = plain, TextWrapping = TextWrapping.Wrap };
+        System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        foreach (var (s, b) in new[] { (c.Hits, plain), (c.Biggest, plain), (c.Healed, healed), (c.DeathsText, deaths) })
+        {
+            if (s.Length == 0) continue;
+            if (t.Inlines.Count > 0) t.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = dot });
+            t.Inlines.Add(new System.Windows.Documents.Run(s) { Foreground = b });
+        }
+        return t;
+    }
+
+    /// <summary>
+    /// The card's entrance: <paramref name="step"/> 0 to 1 over <paramref name="ms"/> once it is first shown, with effects
+    /// on; otherwise (a render, Windows's animations off) it is drawn whole at once. It never moves a figure.
+    /// </summary>
+    public static void Enter(FrameworkElement card, double ms, Action<double> step)
+    {
+        step(1);
+        if (Motion.Still || Motion.FrozenAt != null || !SystemParameters.ClientAreaAnimation) return;
+        bool played = false;
+        card.Loaded += (_, _) =>
+        {
+            if (played) return;
+            played = true;
+            step(0);
+            Motion.Play(card, Math.Min(ms, 290), step, () => step(1));
+        };
     }
 }

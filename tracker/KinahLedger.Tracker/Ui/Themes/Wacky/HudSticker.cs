@@ -17,7 +17,7 @@ namespace KinahLedger.Ui;
 /// (green once its entry is open). A fight is a yellow sticker card whose body is dark ink for the rows. Moments slap
 /// burst stickers on: POW for a pickup, a big one in the grade's colour for a rare drop, NEW BEST!, GO!, FIGHT!, K.O.!
 /// </summary>
-sealed class HudSticker : WackyLook
+sealed class HudSticker : WackyLook, IThemeCard
 {
     const uint Yel = 0xFFE14D, KC = 0x111111, Pink = 0xFF3DA6, Cyan = 0x3DF5C8, GoC = 0x6CFF8E, Paper = 0xFFF8E8, CardC = 0x141414, Gold2 = 0xFFC21A, RedC = 0xFF4D4D, Lilac = 0xD9C8FF;
     static readonly Brush K = Wk.S(KC), PaperB = Wk.S(Paper), YelB = Wk.S(Yel), WhiteB = Wk.S(0xFFFFFF);
@@ -39,7 +39,7 @@ sealed class HudSticker : WackyLook
     readonly StackPanel _cardStack = new();
     FrameworkElement? _ring, _pill;
 
-    public HudSticker() : base(new Thickness(12, 56, 56, 16), Wk.Segoe)
+    public HudSticker() : base(new Thickness(12, 68, 56, 16), Wk.Segoe)
     {
         UseRows(34, _ => new StickerRow(), 16, StickerGap);   // 36 tall on a 34 pitch: each sticker laps the one under it
         _tagClock = Figure("", 13, K, Wk.Heavy, FontWeights.Black);
@@ -306,8 +306,11 @@ sealed class HudSticker : WackyLook
 
     // ---- the moments
 
-    /// <summary>Comic action lines round a point, for a slap's impact.</summary>
-    static Path Lines(double r0, double r1, int n, int seed)
+    /// <summary>
+    /// Comic action lines round a point, for a slap's impact: <paramref name="sx"/> and <paramref name="sy"/> squash their
+    /// reach across and up, so they end inside the window at their widest (their scale peaks at 1.3).
+    /// </summary>
+    static Path Lines(double r0, double r1, int n, int seed, double sx = 1, double sy = .7)
     {
         var rnd = new Random(seed);
         var sg = new StreamGeometry();
@@ -316,8 +319,8 @@ sealed class HudSticker : WackyLook
             {
                 double a = 2 * Math.PI * i / n + rnd.NextDouble() * .3;
                 double k0 = r0 * (0.9 + rnd.NextDouble() * .2), k1 = r1 * (0.85 + rnd.NextDouble() * .3);
-                c.BeginFigure(new Point(r1 * 1.2 + Math.Cos(a) * k0, r1 * 1.2 + Math.Sin(a) * k0 * .7), false, false);
-                c.LineTo(new Point(r1 * 1.2 + Math.Cos(a) * k1, r1 * 1.2 + Math.Sin(a) * k1 * .7), true, false);
+                c.BeginFigure(new Point(r1 * 1.2 + Math.Cos(a) * k0 * sx, r1 * 1.2 + Math.Sin(a) * k0 * sy), false, false);
+                c.LineTo(new Point(r1 * 1.2 + Math.Cos(a) * k1 * sx, r1 * 1.2 + Math.Sin(a) * k1 * sy), true, false);
             }
         sg.Freeze();
         return new Path { Data = sg, Stroke = K, StrokeThickness = 3.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = r1 * 2.4, Height = r1 * 2.4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -327,7 +330,7 @@ sealed class HudSticker : WackyLook
     /// The slap every sticker moment shares: slammed in from big and turned (faster as it hits), a squash and rebound on
     /// impact with a little shake, held, then peeled off (its far edge lifting: turned, flattened, raised and gone).
     /// </summary>
-    static void Slap(Sprite s, double p, double from, double rot0, double rot1, double inEnd, double peelAt, FrameworkElement? lines = null, double fall = 0)
+    static void Slap(Sprite s, double p, double from, double rot0, double rot1, double inEnd, double peelAt, double h, FrameworkElement? lines = null, double fall = 0)
     {
         double slap = Seg(p, 0, inEnd), after = Seg(p, inEnd, inEnd + .2), peel = Seg(p, peelAt, 1);
         double scale = from - (from - 1) * slap * slap;
@@ -337,8 +340,6 @@ sealed class HudSticker : WackyLook
         // the peel: the sticker lifts from its foot up (flattening toward its top edge, leaning), then is flicked away up and
         // turning, off the panel; it keeps its full colour (no fade to grey) until the last moment
         double op = Seg(p, 0, .05) * (1 - Seg(p, .93, 1));
-        // (the sticker's own height: the action lines round it are wider than it)
-        double h = s.El is Grid sg ? sg.Children.OfType<FrameworkElement>().Where(c => !ReferenceEquals(c, lines)).Select(c => c.DesiredSize.Height).DefaultIfEmpty(s.El.DesiredSize.Height).Max() : s.El.DesiredSize.Height;
         double lift = 1 - .72 * InOut(peel);
         double keep = -h * (1 - lift) / 2 * sy;
         if (fall > 0) s.Set(sx, sy * (1 - .25 * peel), rot + fall * 22 * peel, 4 * peel, fall * 26 * peel * peel, op, -6 * peel);
@@ -351,6 +352,38 @@ sealed class HudSticker : WackyLook
         }
     }
 
+    /// <summary>
+    /// A sticker slapped on at <paramref name="at"/> (moved in so it lands whole inside the window), with action lines round
+    /// it that reach no further than the window lets them, slammed from no bigger than the window holds, and kept inside
+    /// the window through its whole course (a slam or a peel that would reach an edge slides along it).
+    /// </summary>
+    void SlapOn(FrameworkElement sticker, Point at, string slot, double ms, double from, double rot0, double rot1, double inEnd, double peelAt, (double R0, double R1, int N, int Seed)? lines = null, double fall = 0)
+    {
+        sticker.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var size = sticker.DesiredSize;
+        double turn = Math.Max(Math.Abs(rot0), Math.Abs(rot1)) + 3;
+        // where it lands: whole, at its impact squash (a little wider, never taller), at its resting turn and shake (the slam's
+        // wider turn and the peel's are kept inside as they play)
+        var c = Inside(at, size, 1.06, Math.Abs(rot1) + 3);
+        var g = new Grid();
+        Path? ln = null;
+        if (lines is { } l)
+        {
+            // the lines' widest (scale 1.3, 15% past their radius) inside the window round the landing point
+            var (rl, rt, rr, rb) = Room(c);
+            double reach = l.R1 * 1.15 * 1.3;
+            double sx = Math.Clamp((Math.Min(rl, rr) - 6) / reach, .3, 1), sy = Math.Clamp((Math.Min(rt, rb) - 6) / reach, .2, .7);
+            ln = Lines(l.R0, l.R1, l.N, l.Seed, sx, sy);
+            g.Children.Add(ln);
+        }
+        g.Children.Add(sticker);
+        // (a sticker's hard shadow sits past its own box, down and right)
+        var part = Centred(g, sticker); part = new Rect(part.X - 2, part.Y - 2, part.Width + 8, part.Height + 8);
+        double big = Fit(from, size, turn);
+        var s = Spawn(g, c, slot);
+        Play(s, slot, ms, q => { Slap(s, q, big, rot0, rot1, inEnd, peelAt, size.Height, ln, fall); Keep(s, part); });
+    }
+
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _pill == null) return;
@@ -360,12 +393,9 @@ sealed class HudSticker : WackyLook
         words.Children.Add(pow); words.Children.Add(fig);
         double rx = Math.Max(42, fig.Width / 2 + 20);
         var burst = Wk.Burst(rx, 30, 15, .74, 7, Wk.S(Pink), K, 3, 4, words);
-        var lines = Lines(rx * .9, rx * 1.2, 9, 3);
-        var g = new Grid { Children = { lines, burst } };
         // over the pill's top right corner, clear of the hour's digits
         var at = At(_pill, .96, 0);
-        var s = Spawn(g, new Point(at.X + 8, at.Y - 18), "pickup");
-        Play(s, "pickup", 1700, q => Slap(s, q, 1.9, -18, -7, .2, .56, lines));
+        SlapOn(burst, new Point(at.X + 8, at.Y - 18), "pickup", 1700, 1.9, -18, -7, .2, .56, (rx * .9, rx * 1.2, 9, 3));
     }
 
     protected override void RareDrop(Pick p, bool held)
@@ -380,12 +410,9 @@ sealed class HudSticker : WackyLook
         row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double rx = Math.Max(66, row.DesiredSize.Width / 2 + 30);
         var burst = Wk.Burst(rx, 26, 22, .8, 11, Wk.S(Wk.Hex(c)), K, 3, 5, row);
-        var lines = Lines(rx * .95, rx * 1.25, 12, 5);
-        var g = new Grid { Children = { lines, burst } };
         // a banner burst slapped across the line's top edge: the hour and the session stay in view under it
         var at = At(_pill, .78, 0);
-        var s = Spawn(g, new Point(at.X, at.Y - 30), "rare");
-        Play(s, "rare", 2700, q => Slap(s, q, 2.3, -14, -3, .18, .62, lines));
+        SlapOn(burst, new Point(at.X, at.Y - 30), "rare", 2700, 2.3, -14, -3, .18, .62, (rx * .95, rx * 1.25, 12, 5));
     }
 
     protected override void BestPassed(bool held)
@@ -397,8 +424,7 @@ sealed class HudSticker : WackyLook
         var burst = Wk.Burst(Math.Max(56, txt.Width / 2 + 22), 23, 18, .8, 21, Wk.S(Gold2), K, 3, 4, txt);
         // on the ring's top edge, up and off the hour
         var at = At(anchor, .5, 0);
-        var s = Spawn(burst, new Point(at.X + 64, at.Y - 24), "best");
-        Play(s, "best", 2100, q => Slap(s, q, 2, 14, -6, .2, .58));
+        SlapOn(burst, new Point(at.X + 64, at.Y - 24), "best", 2100, 2, 14, -6, .2, .58);
     }
 
     protected override void EntryOpened(TimerBoard.Item i, bool held)
@@ -415,8 +441,7 @@ sealed class HudSticker : WackyLook
         var burst = Wk.Burst(30, 21, 11, .7, 31, Wk.S(Pink), K, 3, 3, go);
         // over the tag's top right corner, clear of its clock
         var at = At(_tag, 1, 0);
-        var s = Spawn(burst, new Point(at.X + 8, at.Y - 18), "go");
-        Play(s, "go", 1400, q => Slap(s, q, 1.6, 22, 8, .2, .56));
+        SlapOn(burst, new Point(at.X + 8, at.Y - 18), "go", 1400, 1.6, 22, 8, .2, .56);
     }
 
     /// <summary>Where a fight's stamp lands: across the card's top edge, over the head's top and the room above it.</summary>
@@ -428,10 +453,7 @@ sealed class HudSticker : WackyLook
         var txt = Wk.Outlined(L.T("FIGHT!"), Wk.Impact, FontWeights.Normal, 26, WhiteB, K, 3);
         var stamp = Sticker(txt, Wk.S(0xFF2E3F), 8, new Thickness(12, 0, 12, 1), 3, 5);
         stamp.HorizontalAlignment = HorizontalAlignment.Center;
-        var lines = Lines(70, 96, 12, 13);
-        var g = new Grid { Children = { lines, stamp } };
-        var s = Spawn(g, StampAt(.64), "fight");
-        Play(s, "fight", 1500, q => Slap(s, q, 1.7, -18, -7, .2, .56, lines));
+        SlapOn(stamp, StampAt(.64), "fight", 1500, 1.7, -18, -7, .2, .56, (70, 96, 12, 13));
     }
 
     protected override void FightEnded(Encounter e, bool held)
@@ -441,17 +463,139 @@ sealed class HudSticker : WackyLook
         {
             var txt = Wk.Outlined(L.T("OOF"), Wk.Impact, FontWeights.Normal, 26, WhiteB, K, 3);
             var sad = Sticker(txt, Wk.S(0x8FA3D9), 10, new Thickness(14, 0, 14, 1), 3, 5);
-            var s = Spawn(sad, StampAt(.6), "end");
-            Play(s, "end", 2100, q => Slap(s, q, 1.8, -4, 6, .2, .56, null, 1));
+            SlapOn(sad, StampAt(.6), "end", 2100, 1.8, -4, 6, .2, .56, null, 1);
             return;
         }
         if (!Won(e)) return;
         var ko = Wk.Outlined(L.T("K.O.!"), Wk.Impact, FontWeights.Normal, 28, Wk.S(0xFF2E3F), K, 3, 0, WhiteB, 2.5);
         var burst = Wk.Burst(62, 28, 18, .74, 41, YelB, K, 3, 5, ko);
-        var lines = Lines(70, 100, 14, 17);
-        var g = new Grid { Children = { lines, burst } };
-        var s2 = Spawn(g, StampAt(.6), "end");
-        Play(s2, "end", 2300, q => Slap(s2, q, 1.7, -20, -6, .18, .58, lines));
+        SlapOn(burst, StampAt(.6), "end", 2300, 1.7, -20, -6, .18, .58, (70, 100, 14, 17));
+    }
+
+    // ---- the member's skills card: a sticker sheet
+
+    /// <summary>
+    /// A member's skills card as a sticker sheet: cream backing paper with a black outline and a hard shadow. Slapped on it:
+    /// an ink sticker with the class's emblem, the name in its class's colour (gold for you), the Combat Power after it and
+    /// the class; the DPS on a yellow sticker, the share on a pink one, the damage on a white one; a "cut here" line; then
+    /// the abilities, each name swiped with a highlighter in the class's colour as long as its damage against the top one,
+    /// share, damage (and crit and back) right-aligned in tabular figures; "N more"; the foot on an ink tag.
+    /// </summary>
+    public FrameworkElement DrawCard(MemberCard c)
+    {
+        double w = WkCard.Width(c, 276);
+        var ink = Wk.S(KC);
+        var muted = Wk.S(KC, .6);
+        var hot = Wk.S(0xD0156E);
+        var stack = new StackPanel();
+        // the head: an ink sticker
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var icon = ClassArt.Icon(c.Class, 20, c.Name); icon.Margin = new Thickness(0, 0, 7, 0);
+        head.Children.Add(icon);
+        var name = Wk.Words(c.Name, 15, c.You ? Wk.S(0xFFC94A) : new SolidColorBrush(c.NameColor), Wk.Heavy, Black);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        var cp = new TextBlock { FontFamily = Wk.Heavy, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 2, 0, 0), Visibility = c.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed };
+        cp.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 8.5, FontWeight = Black, Foreground = Wk.S(Paper, .55) });
+        cp.Inlines.Add(new Run(c.Cp) { FontSize = 11.5, FontWeight = Black, Foreground = Wk.S(Paper, .78) });
+        Typography.SetNumeralAlignment(cp, FontNumeralAlignment.Tabular);
+        WkCard.Put(head, WkCard.NameLine(name, cp), 1);
+        var cls = Wk.Words(c.Class, 10.5, Wk.S(Paper, .72), Wk.Segoe, FontWeights.Bold); cls.Margin = new Thickness(10, 1, 0, 0);
+        WkCard.Put(head, cls, 2);
+        var headTag = Wk.Tilt(Sticker(head, ink, 6, new Thickness(7, 4, 10, 5), 2, 3, PaperB), -1);
+        headTag.Margin = new Thickness(0, 0, 3, 0);
+        stack.Children.Add(headTag);
+        // the figures: three stickers
+        var figs = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, 9, 0, 0) };
+        // each a stat sticker: its word in small capitals over the figure
+        FrameworkElement FigSticker(string fig, string word, double size, Brush fill, Brush fg, double tilt)
+        {
+            var sp = new StackPanel();
+            var wd = Wk.Words(word.ToUpperInvariant(), 7.5, fg, Wk.Heavy, Black); wd.Opacity = .7; wd.Margin = new Thickness(0, 0, 0, -3);
+            sp.Children.Add(wd);
+            sp.Children.Add(Figure(fig, size, fg, Wk.Heavy, Black));
+            var st = Wk.Tilt(Sticker(sp, fill, 7, new Thickness(8, 2, 9, 1), 2.5, 3), tilt);
+            st.VerticalAlignment = VerticalAlignment.Bottom;
+            st.Margin = new Thickness(0, 0, 10, 0);
+            return st;
+        }
+        if (c.Dps.Length > 0) figs.Children.Add(FigSticker(c.Dps, L.T("DPS"), 21, YelB, ink, -2.5));
+        figs.Children.Add(FigSticker(c.Share, L.T("share"), 16, Wk.S(Pink), WhiteB, 2.5));
+        figs.Children.Add(FigSticker(c.Damage, L.T("damage"), 16, WhiteB, ink, -1.5));
+        stack.Children.Add(figs);
+        if (c.RatesLine.Length > 0)
+        {
+            var rates = Wk.Words(c.RatesLine, 10.5, hot, Wk.Segoe, FontWeights.Bold);
+            rates.TextWrapping = TextWrapping.Wrap; rates.Margin = new Thickness(2, 8, 0, 0);
+            stack.Children.Add(rates);
+        }
+        // the die-cut line between the figures and the abilities
+        stack.Children.Add(new Rectangle { Height = 1.5, Stroke = Wk.S(KC, .4), StrokeThickness = 1.5, StrokeDashArray = new DoubleCollection { 3, 2.5 }, Margin = new Thickness(0, 9, 0, 5) });
+        var marks = new List<ScaleTransform>();
+        if (c.Abilities.Count > 0)
+        {
+            if (c.CritCol || c.BackCol)
+            {
+                var names = WkCard.Cols(c, 46, 54, 13);
+                TextBlock Head(string s) => WkCard.Num(s.ToUpperInvariant(), 8, Wk.S(KC, .5), Wk.Heavy, Black);
+                WkCard.Put(names, Head(L.T("share")), 1); WkCard.Put(names, Head(L.T("damage")), 2);
+                if (c.CritCol) WkCard.Put(names, Head(L.T("crit")), WkCard.CritAt);
+                if (c.BackCol) WkCard.Put(names, Head(L.T("back")), WkCard.BackAt(c));
+                stack.Children.Add(names);
+            }
+            uint hl = Wk.Vivid(Wk.Hex(c.ClassColor));
+            foreach (var a in c.Abilities)
+            {
+                var row = WkCard.Cols(c, 46, 54, 21);
+                // the highlighter: swiped across the name's lower half, its length the ability's damage against the top one
+                var cell = new Grid();
+                var mark = new Border { Height = 10, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 3.5), CornerRadius = new CornerRadius(1.5, 5, 5, 1.5), Width = 0,
+                    Background = Wk.Lin(0, 0, 1, 0, (hl, .62, 0), (hl, .5, 1)) };
+                var grow = new ScaleTransform();
+                mark.RenderTransform = new TransformGroup { Children = { grow, new SkewTransform(-8, 0) } };
+                marks.Add(grow);
+                new Wk.BarFill(cell, mark, 8).Apply(a.OfTop);
+                cell.Children.Add(mark);
+                var an = WkCard.Ability(a, 11.5, ink, Wk.Heavy, Black, hot, 9.5); an.Margin = new Thickness(3, 0, 6, 0);
+                cell.Children.Add(an);
+                row.Children.Add(cell);
+                WkCard.Put(row, WkCard.Num(a.ShareText, 10.5, muted, Wk.Segoe, FontWeights.Bold), 1);
+                WkCard.Put(row, WkCard.Num(a.Damage, 12, ink, Wk.Heavy, Black), 2);
+                if (c.CritCol) WkCard.Put(row, WkCard.Num(a.Crit, 10.5, a.Crit == "–" ? Wk.S(KC, .4) : hot, Wk.Segoe, FontWeights.Bold), WkCard.CritAt);
+                if (c.BackCol) WkCard.Put(row, WkCard.Num(a.Back, 10.5, muted, Wk.Segoe, FontWeights.Bold), WkCard.BackAt(c));
+                if (a.Tip.Length > 0) row.ToolTip = a.Tip;
+                row.Background = Brushes.Transparent;
+                stack.Children.Add(row);
+            }
+            if (c.MoreLine.Length > 0) { var more = Wk.Words(c.MoreLine, 10, Wk.S(KC, .55), Wk.Heavy, Black); more.Margin = new Thickness(3, 2, 0, 0); stack.Children.Add(more); }
+        }
+        if (c.FootLine.Length > 0)
+        {
+            var foot = WkCard.Foot(c, 10.5, Wk.Segoe, FontWeights.Bold, PaperB, Wk.S(GoC), Wk.S(0xFF6B6B), Wk.S(Paper, .4));
+            foot.MaxWidth = w - 50;
+            var tag = Wk.Tilt(Sticker(foot, ink, 5, new Thickness(8, 2, 9, 3), 2, 2.5, PaperB), -.8);
+            tag.HorizontalAlignment = HorizontalAlignment.Left; tag.Margin = new Thickness(0, 9, 0, 0);
+            stack.Children.Add(tag);
+        }
+        // the sheet: cream backing paper, a black outline, a hard shadow; transparent room round it for the shadow and the slap
+        var sheet = new Grid { Width = w, RenderTransformOrigin = new Point(.5, .5) };
+        sheet.Children.Add(new Border { Background = ink, CornerRadius = new CornerRadius(12), RenderTransform = new TranslateTransform(5, 5) });
+        sheet.Children.Add(new Border { Background = Wk.Lin(0, 0, 0, 1, (0xFFFBF0, 1, 0), (Paper, 1, .5), (0xF6EBD2, 1, 1)), BorderBrush = ink, BorderThickness = new Thickness(3), CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 10, 11, 11), Child = stack });
+        var card = new Border { Padding = new Thickness(4, 4, 10, 10), Background = Brushes.Transparent, Child = sheet };
+        TextOptions.SetTextFormattingMode(stack, TextFormattingMode.Display);
+        // slapped on (a small turn and a settle, never past its room), then the highlighters swipe across one by one
+        var place = new TransformGroup { Children = { new ScaleTransform(), new RotateTransform() } };
+        sheet.RenderTransform = place;
+        WkCard.Enter(card, 280, p =>
+        {
+            double k = Out(Seg(p, 0, .55));
+            var sc = (ScaleTransform)place.Children[0]; sc.ScaleX = sc.ScaleY = .95 + .05 * k;
+            ((RotateTransform)place.Children[1]).Angle = -1.6 * (1 - k);
+            for (int i = 0; i < marks.Count; i++) marks[i].ScaleX = Out(Seg(p, .18 + .06 * i, .6 + .06 * i));
+        });
+        return card;
     }
 
     // ---- the meter's rows: a sticker strip per member
@@ -480,8 +624,11 @@ sealed class HudSticker : WackyLook
     /// </summary>
     sealed class StickerRow : IThemeRow
     {
-        const double H = 36;
+        // the row is its pitch tall (34) and the sticker in it 36, run 2 past its foot: a row taller than its room would be
+        // clipped to its own box (the last row's foot and a TOP sticker lifted over its top edge)
+        const double H = 34;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
+        readonly Grid _all = new() { Margin = new Thickness(0, 0, 0, -2) };
         readonly Grid _strip = new() { RenderTransformOrigin = new Point(.5, .5), Margin = new Thickness(10, 1, 6, 3) };
         readonly TransformGroup _place = new();
         readonly RotateTransform _turn = new();
@@ -501,6 +648,9 @@ sealed class HudSticker : WackyLook
         readonly Border _iconHost = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
         readonly TextBlock _name = Wk.Words("", 12.5, K, Wk.Heavy, FontWeights.Black);
         readonly Border _you;
+        // the Combat Power after the name: small, in faded ink, its "CP" smaller still
+        readonly TextBlock _cp = new() { FontFamily = Wk.Heavy, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 1, 0, 0) };
+        readonly Run _cpValue = new() { FontSize = 10, FontWeight = FontWeights.Black, Foreground = Wk.S(KC, .58) };
         readonly TextBlock _heal = Wk.Words("", 10.5, Wk.S(0x0E7A3C), Wk.Heavy, FontWeights.Black);
         readonly Border _top = new() { BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _topText = Wk.Words("", 8.5, K, Wk.Heavy, FontWeights.Black);
@@ -536,10 +686,13 @@ sealed class HudSticker : WackyLook
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _you = new Border { Background = Wk.S(Pink), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Child = Wk.Words(L.T("YOU"), 8.5, WhiteB, Wk.Heavy, FontWeights.Black), RenderTransform = new RotateTransform(-4) };
-            var nameLine = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _name, _you } };
+            _cp.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 7.5, FontWeight = FontWeights.Black, Foreground = Wk.S(KC, .45) });
+            _cp.Inlines.Add(_cpValue);
+            Typography.SetNumeralAlignment(_cp, FontNumeralAlignment.Tabular);
+            var nameLine = WkCard.NameLine(_name, _you, _cp);
             Grid.SetColumn(nameLine, 1); row.Children.Add(nameLine);
             _heal.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_heal, 2); row.Children.Add(_heal);
-            _top.Child = _topText; Grid.SetColumn(_top, 3); row.Children.Add(_top);
+            _top.Child = _topText;
             _dead = new Border { Background = Wk.S(0xE5242F), BorderBrush = K, BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 4, 0), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _deadText };
             Grid.SetColumn(_dead, 4); row.Children.Add(_dead);
             _detail.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_detail, 5); row.Children.Add(_detail);
@@ -559,9 +712,17 @@ sealed class HudSticker : WackyLook
             _stamp.Children.Add(_stampInk);
             _stamp.Children.Add(_rank); _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.Margin = new Thickness(0, 0, 0, 1);
             _stamp.RenderTransformOrigin = new Point(.5, .5); _stamp.RenderTransform = _stampTurn;
-            _root.Children.Add(_strip);
-            _root.Children.Add(words);
-            _root.Children.Add(_stamp);
+            _all.Children.Add(_strip);
+            _all.Children.Add(words);
+            _all.Children.Add(_stamp);
+            // TOP DPS and TOP HEALS: a little sticker slapped over the strip's top edge by the figure, off the name's line
+            _top.HorizontalAlignment = HorizontalAlignment.Right; _top.VerticalAlignment = VerticalAlignment.Top;
+            // (lifted by its transform: a negative margin would clip it at the row's top)
+            _top.Margin = new Thickness(0, 0, 64, 0);
+            Wk.Tilt(_top, 4);
+            _top.RenderTransform = new TransformGroup { Children = { new RotateTransform(4), new TranslateTransform(0, -7.5) } };
+            _all.Children.Add(_top);
+            _root.Children.Add(_all);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -579,13 +740,16 @@ sealed class HudSticker : WackyLook
             if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ClassArt.Icon(m.Class, 17, m.Name); }
             _name.Text = m.Name;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
+            // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
+            _cpValue.Text = m.Cp; _cp.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
             _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
             _top.Background = Wk.S(m.TopDps ? Gold2 : GoC);
+            Panel.SetZIndex(_root, m.TopDps || m.TopHeals ? 2 : 0);   // its sticker laps the strip over it, never under
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") + (m.Cp.Length > 0 ? " · " + m.Cp + " " + L.T("CP") : "") : "";
+            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") : "";
             _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             // the tape: the class's colour, full and a touch translucent, with a faint lit edge
