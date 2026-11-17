@@ -264,8 +264,10 @@ static class VhsRows
             on.Children.Add(_chip);
             var line = NameLine();
             Grid.SetColumn(line, 1); on.Children.Add(line);
-            Small.Margin = new Thickness(6, 0, 6, 0);
-            Grid.SetColumn(Small, 2); on.Children.Add(Small);
+            // the share on a dark plate, so the fill's end never cuts through its digits
+            var plate = new Border { Background = Br(0x000000, .45), CornerRadius = new CornerRadius(2), Padding = new Thickness(3, 0, 3, 0), Margin = new Thickness(4, 0, 4, 0),
+                VerticalAlignment = VerticalAlignment.Center, Child = Small };
+            Grid.SetColumn(plate, 2); on.Children.Add(plate);
             Box.Children.Add(on);
             _fig.Margin = new Thickness(7, 0, 6, 0); _fig.VerticalAlignment = VerticalAlignment.Center;
             _counter.Child = _fig;
