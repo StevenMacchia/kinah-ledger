@@ -263,6 +263,7 @@ sealed class HudSticker : WackyLook, IThemeCard
         {
             var w = Wk.Words(e.ReadyText, 13, PaperB, Wk.Segoe, FontWeights.Bold); w.Margin = new Thickness(6, 2, 6, 3);
             bs.Children.Add(w);
+            if (PartyBeforeHit(e)) PutRows(bs, e, now);
         }
         else
         {

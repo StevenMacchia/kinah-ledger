@@ -55,6 +55,27 @@ public static partial class WpfApp
                 h.Close();
             }
         check(bad.Count == 0, "the themes' looks never name packets or traffic" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        // the party before the first pull in every look (0.10.132 drew it on the classic Parser window only; Steven's is Neon):
+        // the ready line and each member's row with their Combat Power, in the Parser's window and on the Kinah overlay; alone, no rows
+        {
+            var party = ReadyWithParty(Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), live!);
+            var names = party.Roster.Where(f => !f.Other).Select(f => f.Name).ToList();
+            var solo = Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now);
+            solo.Roster.Add(new Fighter { Id = 1, Name = names[0], Class = "Gladiator", CombatPower = 4_812, You = true });
+            var missing = new List<string>();
+            foreach (var k in keys.Concat(HudLooks.FightLooks).Distinct())
+            {
+                var po = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = ParserMode.Bosses, Look = k };
+                po.Draw(party, now); po.Show(); DoEvents();
+                var t = string.Join(" ", VisibleTexts(po));
+                var gone = names.Where(n => !t.Contains(n, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (gone.Count > 0 || !t.Contains("Waiting for the first pull", StringComparison.OrdinalIgnoreCase)) missing.Add($"{k}: {(gone.Count > 0 ? "no row for " + string.Join(", ", gone) : "no ready line")}");
+                po.Draw(solo, now); DoEvents();
+                if (VisibleTexts(po).Any(x => x.Contains("4,812"))) missing.Add($"{k}: a row on your own");
+                po.Close();
+            }
+            check(missing.Count == 0, $"the party before the first pull: every look's Parser window lists its {names.Count} members under the ready line, and none on your own" + (missing.Count > 0 ? ": " + string.Join("; ", missing) : ""));
+        }
         // each look's own skills card on a row (Steven, 2026-11-16: "the extra DPS stats per player display classic standard
         // meter"), with the card's figures; and Combat Power beside every name on the meter ("dont forget the combat power")
         var cards = new List<string>();

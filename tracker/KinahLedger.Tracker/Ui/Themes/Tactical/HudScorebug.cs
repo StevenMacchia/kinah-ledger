@@ -355,7 +355,20 @@ sealed partial class HudScorebug : TacticalLook
             var wt = T(e.ReadyText, 14, Grey, FontWeights.SemiBold);
             var wb = Ink(wt, 34, new Thickness(14, 0, 14, 0), l: false);
             wb.Root.Margin = new Thickness(0, 2, 0, 0);
-            _rowsHost.Child = wb.Root;
+            if (PartyBeforeHit(e))
+            {
+                // the party under the ready plate, on the leaderboard's dark ground
+                var party = new StackPanel();
+                party.Children.Add(wb.Root);
+                var rowsGrid = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+                rowsGrid.Children.Add(new Border { Background = Frozen(Ink(.96)) });
+                var rowsIn = new Grid { Margin = new Thickness(4, 5, 4, 3) };
+                rowsGrid.Children.Add(rowsIn);
+                PutRows(rowsIn, e, now, w - 8);
+                party.Children.Add(rowsGrid);
+                _rowsHost.Child = party;
+            }
+            else _rowsHost.Child = wb.Root;
         }
         else
         {

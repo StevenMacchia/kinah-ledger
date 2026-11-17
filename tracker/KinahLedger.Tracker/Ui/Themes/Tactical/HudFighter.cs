@@ -417,6 +417,7 @@ sealed partial class HudFighter : TacticalLook
             wr.Children.Add(Tag(L.T("STBY"), PhosDim, Dark, 10));
             var wt = Halo(e.ReadyText, 12.5, PhosDim, FontWeights.SemiBold); wt.Margin = new Thickness(7, 0, 0, 0); wr.Children.Add(wt);
             _fightBody.Children.Add(wr);
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, w - 20); }
         }
         else
         {

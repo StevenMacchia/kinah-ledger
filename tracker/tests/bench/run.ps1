@@ -31,12 +31,18 @@ if (-not $runs) { throw "no run named $Only in $Manifest" }
 Write-Host "bench: $Exe"
 $failed = @(); $results = @()
 foreach ($r in $runs) {
-    $cli = @("bench-replay", (Join-Path $bench $r.frames), "--start", $r.start, "--truth", (Join-Path $bench $r.truth),
-             "--baseline", $baseline, "--run", $r.name)
-    if ($r.reads) { $cli += @("--reads", (Join-Path $bench $r.reads)) }
-    if ($r.offset) { $cli += @("--offset", "$($r.offset)") }
-    if ($r.chat) { $cli += @("--chat", $r.chat) }
-    if ($Fresh) { $cli += "--fresh" }
+    if ($r.capture) {
+        # a boss-pull run: a recording of the game's traffic (with its place.tsv) replayed through this build's decoder and
+        # Parser, scored against the pulls the live tracker kept over it (truth.json); needs native\klnet.dll in the build
+        $cli = @("parser-bench", (Join-Path $bench $r.capture), "--truth", (Join-Path $bench $r.truth), "--baseline", $baseline, "--run", $r.name)
+    } else {
+        $cli = @("bench-replay", (Join-Path $bench $r.frames), "--start", $r.start, "--truth", (Join-Path $bench $r.truth),
+                 "--baseline", $baseline, "--run", $r.name)
+        if ($r.reads) { $cli += @("--reads", (Join-Path $bench $r.reads)) }
+        if ($r.offset) { $cli += @("--offset", "$($r.offset)") }
+        if ($r.chat) { $cli += @("--chat", $r.chat) }
+        if ($Fresh) { $cli += "--fresh" }
+    }
     if ($Record) { $cli += "--record" }
     Write-Host ""
     Write-Host "== $($r.name)"

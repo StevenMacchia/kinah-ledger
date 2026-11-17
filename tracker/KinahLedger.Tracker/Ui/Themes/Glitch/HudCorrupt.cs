@@ -281,6 +281,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
             _clock.Text = L.T("READY") + "_"; _clock.Foreground = LilacDim; _clock.FontSize = 12;
             _hpRow.Visibility = Visibility.Collapsed;
             _ready.Text = e.ReadyText; _ready.Visibility = Visibility.Visible;
+            if (PartyBeforeHit(e)) { PutRows(_rowsHost, e, now, FightWidth - 24); _rowsHost.Visibility = Visibility.Visible; }
             _cam.Root.Visibility = Visibility.Visible;
             return;
         }
