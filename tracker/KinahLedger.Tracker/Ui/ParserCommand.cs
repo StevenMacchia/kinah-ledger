@@ -166,7 +166,7 @@ static class ParserCommand
         else if (e.GameMode.Length > 0) parts.Add(e.GameMode);
         int i = e.Instance.IndexOf(" [", StringComparison.Ordinal);
         var stage = i > 0 ? e.Instance[(i + 2)..].TrimEnd(']') : "";
-        if (e.Kind.Length > 0) parts.Add(stage.Length > 0 ? $"{e.Kind} {stage}" : e.Kind);
+        if (e.Kind.Length > 0) parts.Add(stage.Length > 0 ? $"{PK.KindWord(e.Kind)} {stage}" : PK.KindWord(e.Kind));
         if (e.ModeKind != ParserMode.Run && e.FinalBoss) parts.Add(L.T("final boss"));
         if (e.ModeKind == ParserMode.Run) parts.Add(L.F("{0} of {1} bosses down", e.Splits.Count(x => x.Outcome == "kill"), e.Splits.Select(x => x.Boss).Distinct().Count()));
         return string.Join(" · ", parts.Where(p => p.Length > 0));
@@ -333,7 +333,7 @@ static class ParserCommand
             if (ctx.Details)
             {
                 var bits = new List<string>();
-                if (m.F.Class.Length > 0) bits.Add(ClassArt.Title(m.F.Class));
+                if (m.F.Class.Length > 0) bits.Add(L.T(ClassArt.Title(m.F.Class)));
                 if (m.F.CombatPower > 0) bits.Add(L.F("{0} CP", m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)));
                 if (m.F.ItemLevel > 0 && !(crit || max || spark)) bits.Add(L.F("{0} item level", m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)));
                 if (bits.Count > 0) nameBox.Children.Add(T(string.Join(" · ", bits), 11, Muted));
@@ -427,7 +427,7 @@ static class ParserCommand
         if (m.You) nm.Children.Add(YouTag());
         mid.Children.Add(nm);
         var who = new List<string>();
-        if (m.F.Class.Length > 0) who.Add(ClassArt.Title(m.F.Class));
+        if (m.F.Class.Length > 0) who.Add(L.T(ClassArt.Title(m.F.Class)));
         if (m.F.Server.Length > 0) who.Add(m.F.Server);
         if (m.F.ItemLevel > 0) who.Add(L.F("{0} item level", m.F.ItemLevel.ToString("N0", CultureInfo.InvariantCulture)));
         if (m.F.CombatPower > 0) who.Add(L.F("{0} Combat Power", m.F.CombatPower.ToString("N0", CultureInfo.InvariantCulture)));
@@ -553,7 +553,7 @@ static class ParserCommand
             var nb = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
             var an = T(a.Name, 13, a.Skill == 0 ? Muted : Ink, FontWeights.SemiBold);
             an.TextTrimming = TextTrimming.CharacterEllipsis;
-            if (a.Kinds is { Count: > 0 } kinds) an.ToolTip = string.Join(" · ", kinds.Select(k => $"{k.Value} {k.Key}"));
+            if (a.Kinds is { Count: > 0 } kinds) an.ToolTip = string.Join(" · ", kinds.Select(k => $"{k.Value} {(k.Key == Encounter.CritKey ? L.T("crit") : k.Key == Encounter.BackKey ? L.T("back attack") : k.Key)}"));
             // the specialties its hits named, after the name, as a chip that opens what each does (Steven, 2026-11-16: "make
             // these clickable in the app so u can see which specialties are grabbed"): "Pummel  [SPEC 3·4 ▾]"
             if (a.Picks != 0)

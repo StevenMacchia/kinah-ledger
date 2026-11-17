@@ -479,7 +479,7 @@ public sealed partial class ParserRows : Grid
         bool critCol = m.Abilities.Any(x => x.Damage > 0 && x.Crit != null), backCol = m.Abilities.Any(x => x.Damage > 0 && x.Back != null);
         var stack = new StackPanel { Width = 250 + (critCol ? CardRateCol : 0) + (backCol ? CardRateCol : 0) };
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
-        var cls = T(f.Class, 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); DockPanel.SetDock(cls, Dock.Right); head.Children.Add(cls);
+        var cls = T(L.T(ClassArt.Title(f.Class)), 10.5, HudKit.Muted, FontWeights.Medium, HorizontalAlignment.Right); DockPanel.SetDock(cls, Dock.Right); head.Children.Add(cls);
         head.Children.Add(T(NameOf(f), 13, f.You ? PK.C(PK.Gold) : ClassArt.NameBrush(f.Class), FontWeights.Bold));
         stack.Children.Add(head);
         var sums = new List<string>();
