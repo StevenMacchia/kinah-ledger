@@ -38,7 +38,7 @@ public static class HudLooks
         // the themes (Steven, 2026-11-16: "let us choose a theme and then let us choose from that theme"), Ui/Themes/
         new(HudThemes.Sticker, L.T("Sticker"), L.T("Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup"), HudThemes.Wacky),
         new(HudThemes.Neon, L.T("Neon"), L.T("An arcade cabinet's glowing rim; pickups streak up like combo scores"), HudThemes.Wacky),
-        new(HudThemes.Goo, L.T("Goo"), L.T("A squishy candy jelly; pickups bounce out as bubbles"), HudThemes.Wacky),
+        new(HudThemes.Goo, L.T("Holo card"), L.T("A holographic trading card; pickups flip out as foil chips"), HudThemes.Wacky),   // "goo" kept: a saved Goo is the Holo card
         new(HudThemes.Fighter, L.T("Fighter"), L.T("A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup"), HudThemes.Tactical),
         new(HudThemes.Scorebug, L.T("Scorebug"), L.T("A tournament broadcast: slanted blocks and a ranked leaderboard"), HudThemes.Tactical),
         new(HudThemes.Holo, L.T("Holo"), L.T("Projected cyan glass with clipped corners; a scan line sweeps each pickup"), HudThemes.Tactical),

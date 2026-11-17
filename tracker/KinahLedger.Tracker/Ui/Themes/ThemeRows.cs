@@ -46,7 +46,8 @@ public interface IThemeRow
 public sealed class ThemeRows : Grid
 {
     readonly Func<MeterMember, IThemeRow> _make;
-    readonly double _rowH, _gapH;
+    double _rowH;
+    readonly double _gapH;
     readonly Func<int, FrameworkElement>? _makeGap;
     readonly string _key = "theme-rows|" + Guid.NewGuid().ToString("N")[..8] + "|";
     sealed class Slot { public required IThemeRow Row; public required TranslateTransform Shift; public double Y = double.NaN; public int Rank; }
@@ -80,6 +81,8 @@ public sealed class ThemeRows : Grid
     public int Shown => Members.Count;
     /// <summary>A member's row as built, for a look's moment (a kill's glint over the top row, say).</summary>
     public IThemeRow? RowOf(long id) => _rows.TryGetValue(id, out var s) ? s.Row : null;
+    /// <summary>Each row's pitch, for a look whose rows grow when the meter is expanded (the Holo card's detail line).</summary>
+    public double Pitch { get => _rowH; set => _rowH = value; }
 
     /// <summary>The members of a fight as the rows show them (the Parser's rules), without drawing anything.</summary>
     public static List<MeterMember> Of(Encounter e, DateTime now, bool expanded)
