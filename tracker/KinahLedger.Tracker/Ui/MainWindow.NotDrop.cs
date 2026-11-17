@@ -35,7 +35,7 @@ public partial class MainWindow
     {
         var name = _items.NameOf(id);
         if (_demo) return;   // a layout render draws the link, and changes nothing
-        if (NotDrops.Has(at, id, count)) { Say($"{name} ×{count} is out of your totals already.", "Faint"); return; }
+        if (NotDrops.Has(at, id, count)) { Say(L.F("{0} ×{1} is out of your totals already.", name, count), "Faint"); return; }
         var a = new ItemAcquired(at, id, count, bound);
         var zone = where.Contains(" · ") ? where[(where.IndexOf(" · ", StringComparison.Ordinal) + 3)..] : null;
         TrackerSession.NotDropTaken? t = null;
@@ -46,7 +46,7 @@ public partial class MainWindow
             else day = _watcher.DayView.Unapply(a, zone);
         }
         catch (Exception ex) { CrashLog.Write("not a drop", ex); }
-        if (!(t?.Any ?? false) && day == null) { Say($"Couldn't find {name} ×{count} in the counts any more: nothing changed.", "Warn"); return; }
+        if (!(t?.Any ?? false) && day == null) { Say(L.F("Couldn't find {0} ×{1} in the counts any more: nothing changed.", name, count), "Warn"); return; }
         // the counts redrawn first: the quests read the rows on screen and Today
         Redraw();
         var gone = new List<QuestDone>();
@@ -67,9 +67,9 @@ public partial class MainWindow
         int pts = gone.Sum(d => d.Points);
         CrashLog.Note($"not a drop: {name} ×{count} at {at.ToLocalTime():HH:mm:ss} taken out of the totals{(pts > 0 ? $", {pts} quest point(s) taken back" : "")}");
         Redraw(); RedrawGoals();
-        var said = $"{name} ×{count} is out of your totals{(pts > 0 ? $" (−{pts:N0} pts)" : "")}.";
+        var said = pts > 0 ? L.F("{0} ×{1} is out of your totals (−{2:N0} pts).", name, count, pts) : L.F("{0} ×{1} is out of your totals.", name, count);
         _ = Offer("notdrop", said, apply: () => { }, undo: () => UndoNotADrop(at, id, count), commit: () => Task.CompletedTask);
-        Say(said + " Undo puts it back.", "Good");
+        Say(said + " " + L.T("Undo puts it back."), "Good");
     }
 
     /// <summary>Undo of "Not a drop": the pickup counts again everywhere it left, and its quest points are back.</summary>
@@ -89,7 +89,7 @@ public partial class MainWindow
         NotDrops.Remove(at, id, count);
         _watcher.SaveDay();
         Redraw(); RedrawGoals();
-        Say($"{name} ×{count} counts again.", "Faint");
+        Say(L.F("{0} ×{1} counts again.", name, count), "Faint");
     }
 
     /// <summary>
@@ -107,8 +107,8 @@ public partial class MainWindow
         foreach (var d in today)
         {
             if (tb.Inlines.Count > 0) tb.Inlines.Add(new LineBreak());
-            tb.Inlines.Add(new Run($"Not a drop: {d.Name} ×{d.Count} at {d.At.ToLocalTime():HH:mm:ss}   "));
-            var undo = new Hyperlink(new Run("Undo")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "Counts it again, with the quest points it gave." };
+            tb.Inlines.Add(new Run(L.F("Not a drop: {0} ×{1} at {2:HH:mm:ss}", d.Name, d.Count, d.At.ToLocalTime()) + "   "));
+            var undo = new Hyperlink(new Run(L.T("Undo"))) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = L.T("Counts it again, with the quest points it gave.") };
             var (at, n) = (d.At, d.Count);
             undo.Click += (_, _) => { if (_card != null) _card.IsOpen = false; UndoNotADrop(at, id, n); };
             tb.Inlines.Add(undo);
@@ -117,7 +117,7 @@ public partial class MainWindow
         {
             if (tb.Inlines.Count > 0) tb.Inlines.Add(new LineBreak());
             bool bound = _watcher.DayView.Items.GetValueOrDefault(id) <= 0;
-            var take = new Hyperlink(new Run("Not a drop? Take one out of today")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "One of it was no drop (bought, a reward): it leaves today's and the week's figures and the quest points it gave." };
+            var take = new Hyperlink(new Run(L.T("Not a drop? Take one out of today"))) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = L.T("One of it was no drop (bought, a reward): it leaves today's and the week's figures and the quest points it gave.") };
             take.Click += (_, _) => { if (_card != null) _card.IsOpen = false; NotADrop(id, 1, bound, DateTime.UtcNow, "Today", null, todayOnly: true); };
             tb.Inlines.Add(take);
         }
@@ -133,11 +133,11 @@ public partial class MainWindow
         if (_demo || id <= 0 || IsCurrency(id)) yield break;
         int tr = 0, bd = 0;
         try { tr = _watcher.DayView.Items.GetValueOrDefault(id); bd = _watcher.DayView.ItemsBound.GetValueOrDefault(id); } catch (Exception) { }
-        if (tr + bd > 0) yield return ("Not a drop: take one out of today", () => NotADrop(id, 1, tr <= 0, DateTime.UtcNow, "Today", null, todayOnly: true));
+        if (tr + bd > 0) yield return (L.T("Not a drop: take one out of today"), () => NotADrop(id, 1, tr <= 0, DateTime.UtcNow, "Today", null, todayOnly: true));
         foreach (var d in NotDrops.On(DayStore.Today).Where(d => d.ItemId == id))
         {
             var (at, n) = (d.At, d.Count);
-            yield return ($"Undo Not a drop ({d.At.ToLocalTime():HH:mm})", () => UndoNotADrop(at, id, n));
+            yield return (L.F("Undo Not a drop ({0:HH:mm})", d.At.ToLocalTime()), () => UndoNotADrop(at, id, n));
         }
     }
 
@@ -145,7 +145,7 @@ public partial class MainWindow
     UIElement NotDropLink(FeedLine l)
     {
         var tb = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-        var h = new Hyperlink(new Run("Not a drop")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "This one was no drop (bought at the Market, a reward): it leaves your totals, today's and the week's, and the quest points it gave. Undo puts it back." };
+        var h = new Hyperlink(new Run(L.T("Not a drop"))) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = L.T("This one was no drop (bought at the Market, a reward): it leaves your totals, today's and the week's, and the quest points it gave. Undo puts it back.") };
         h.Click += (_, _) => { if (_card != null) _card.IsOpen = false; NotADrop(l); };
         tb.Inlines.Add(h);
         return tb;

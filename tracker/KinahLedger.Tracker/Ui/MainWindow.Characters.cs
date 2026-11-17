@@ -43,14 +43,14 @@ public partial class MainWindow
             var who = Characters.Label(cur);
             CharName.Text = who;
             CharIconHost.Child = CharacterIcon.Tile(cur.Badges.FirstOrDefault(), who, 16);
-            CharChip.ToolTip = $"Counting for {who}: the tracker reads the class icon between the health and mana bars and follows the character in the game.\nClick to see every character's week, rename one, or count for another.";
-            AutomationProperties.SetName(CharChip, $"Characters: counting for {who}");
+            CharChip.ToolTip = L.F("Counting for {0}: the tracker reads the class icon between the health and mana bars and follows the character in the game.\nClick to see every character's week, rename one, or count for another.", who);
+            AutomationProperties.SetName(CharChip, L.F("Characters: counting for {0}", who));
             CharChip.Visibility = Visibility.Visible;
         }
         else CharChip.Visibility = Visibility.Collapsed;
-        ServerChip.ToolTip = _welcome ? "Pick your server below."
+        ServerChip.ToolTip = L.T(_welcome ? "Pick your server below."
             : cur != null ? "Your server and region: prices and drops are kept per server. Click for your characters, or change the server."
-            : "Your server and region. Click to change it. Your character shows here once you're in the world: it is read from the class icon between the health and mana bars.";
+            : "Your server and region. Click to change it. Your character shows here once you're in the world: it is read from the class icon between the health and mana bars.");
     }
 
     /// <summary>For options-test: the header's chip as drawn (shown, the name, whether the class icon is a picture).</summary>
@@ -85,7 +85,7 @@ public partial class MainWindow
             if (_watcher.Chat is { } ch) ch.Instances.Reload(() => Characters.Adopt(first)); else Characters.Adopt(first);
             BestRuns.Reset();
             ServerRowState(); Redraw();
-            Say($"Counting for {Characters.Label(first)} from now on. Each character keeps its own numbers; click the name at the top to name it.", "Good");
+            Say(L.F("Counting for {0} from now on. Each character keeps its own numbers; click the name at the top to name it.", Characters.Label(first)), "Good");
             _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);
             if (Characters.NeedsPlacing) _ = PlaceHistoryAsync();
             return;
@@ -113,10 +113,10 @@ public partial class MainWindow
             var outcome = CharacterSort.Place(adopter, server, shots, act => { if (_watcher.Chat is { } ch) ch.Instances.Reload(act); else act(); });
             ReloadCharacterState();
             var said = new List<string>();
-            if (outcome.Named.Count > 0) said.Add("named " + string.Join(", ", outcome.Named.Select(x => x.Name)) + " from their pictures");
-            if (outcome.Moved > 0) said.Add("runs sorted by class icon: " + string.Join(", ", outcome.To.Select(x => $"{x.Runs} to {Characters.Label(x.Who)}")));
-            if (outcome.HistoryMoved && outcome.Main != null) said.Add($"the days, bests, goals and quest points from before go to {Characters.Label(outcome.Main)}, your most played");
-            if (said.Count > 0) { Say("Characters: " + string.Join("; ", said) + ".", "Faint"); _statusHoldUntil = DateTime.UtcNow.AddSeconds(20); }
+            if (outcome.Named.Count > 0) said.Add(L.F("named {0} from their pictures", string.Join(", ", outcome.Named.Select(x => x.Name))));
+            if (outcome.Moved > 0) said.Add(L.F("runs sorted by class icon: {0}", string.Join(", ", outcome.To.Select(x => L.F("{0} to {1}", x.Runs, Characters.Label(x.Who))))));
+            if (outcome.HistoryMoved && outcome.Main != null) said.Add(L.F("the days, bests, goals and quest points from before go to {0}, your most played", Characters.Label(outcome.Main)));
+            if (said.Count > 0) { Say(L.F("Characters: {0}.", string.Join("; ", said)), "Faint"); _statusHoldUntil = DateTime.UtcNow.AddSeconds(20); }
         }
         catch (Exception ex) { CrashLog.Write("characters place", ex); Characters.MarkSorted(); }
         finally { _placing = false; }
@@ -156,13 +156,13 @@ public partial class MainWindow
         try
         {
             CrashLog.Note($"character: counting for {Characters.Label(c)} now (was {(Characters.Current is { } was ? Characters.Label(was) : "nobody")})");
-            await StartFresh(why == "A new character" ? "Another character" : $"{why} is in the world");
+            await StartFresh(why == "A new character" ? L.T("Another character") : L.F("{0} is in the world", why));
             SaveCharacterState();
             Characters.SetCurrent(c);
             ReloadCharacterState();
             Say(why == "A new character"
-                ? $"A character not seen before: counting for {Characters.Label(c)}, with numbers of its own. Click its name at the top to name it."
-                : $"Counting for {Characters.Label(c)} now: its own today, days, runs, goals and quest points.", "Good");
+                ? L.F("A character not seen before: counting for {0}, with numbers of its own. Click its name at the top to name it.", Characters.Label(c))
+                : L.F("Counting for {0} now: its own today, days, runs, goals and quest points.", Characters.Label(c)), "Good");
             _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);
         }
         finally { _switchingCharacter = false; }
@@ -209,22 +209,23 @@ public partial class MainWindow
             .Select(c =>
             {
                 bool counting = c.Id == cur?.Id;
-                return new SwitcherRow(c, counting, Characters.Label(c), counting ? "Counting now" : Played(c.LastSeen), LookOf(c, counting));
+                return new SwitcherRow(c, counting, Characters.Label(c), counting ? L.T("Counting now") : Played(c.LastSeen), LookOf(c, counting));
             }).ToList();
     }
 
     /// <summary>"Played 3 h ago", "Played yesterday", "Played Nov 9": when the character was last in the world.</summary>
     static string Played(DateTime lastSeenUtc)
     {
-        if (lastSeenUtc == default) return "Not played yet";
+        if (lastSeenUtc == default) return L.T("Not played yet");
         var ago = DateTime.UtcNow - lastSeenUtc;
         var local = lastSeenUtc.ToLocalTime();
-        if (ago.TotalMinutes < 1) return "Played just now";
-        if (ago.TotalMinutes < 60) return $"Played {(int)ago.TotalMinutes} min ago";
-        if (local.Date == DateTime.Today) return $"Played {(int)ago.TotalHours} h ago";
-        if (local.Date == DateTime.Today.AddDays(-1)) return "Played yesterday";
-        if (local.Date > DateTime.Today.AddDays(-7)) return "Played " + local.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture);
-        return "Played " + local.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture);
+        var cult = L.Code == "en" ? System.Globalization.CultureInfo.InvariantCulture : System.Globalization.CultureInfo.CurrentCulture;
+        if (ago.TotalMinutes < 1) return L.T("Played just now");
+        if (ago.TotalMinutes < 60) return L.F("Played {0} min ago", (int)ago.TotalMinutes);
+        if (local.Date == DateTime.Today) return L.F("Played {0} h ago", (int)ago.TotalHours);
+        if (local.Date == DateTime.Today.AddDays(-1)) return L.T("Played yesterday");
+        if (local.Date > DateTime.Today.AddDays(-7)) return L.F("Played {0}", local.ToString("dddd", cult));
+        return L.F("Played {0}", local.ToString("MMM d", cult));
     }
 
     /// <summary>
@@ -250,9 +251,9 @@ public partial class MainWindow
     internal static string WeekLine(CharacterLook l)
     {
         var parts = new List<string>();
-        if (l.Farmed > 0) parts.Add($"{Fk(l.Farmed)} farmed");
-        if (l.Runs > 0) parts.Add($"{l.Runs:N0} run{(l.Runs == 1 ? "" : "s")}");
-        return parts.Count == 0 ? "Nothing counted in the last 7 days" : "Last 7 days: " + string.Join(", ", parts);
+        if (l.Farmed > 0) parts.Add(L.F("{0} farmed", Fk(l.Farmed)));
+        if (l.Runs > 0) parts.Add(L.F(l.Runs == 1 ? "{0:N0} run" : "{0:N0} runs", l.Runs));
+        return parts.Count == 0 ? L.T("Nothing counted in the last 7 days") : L.F("Last 7 days: {0}", string.Join(", ", parts));
     }
 
     /// <summary>The switcher's card: the head, a row a character, how characters are told apart, then the actions.</summary>
@@ -261,7 +262,7 @@ public partial class MainWindow
         var rows = SwitcherRows();
         var (card, body) = CkShell(SwitcherWidth);
         card.Focusable = true; card.FocusVisualStyle = null;
-        AutomationProperties.SetName(card, "Characters");
+        AutomationProperties.SetName(card, L.T("Characters"));
         body.Children.Add(new Border
         {
             Height = 2, CornerRadius = new CornerRadius(5, 5, 0, 0), Margin = new Thickness(0, 0, 0, 6),
@@ -269,8 +270,8 @@ public partial class MainWindow
         });
         var head = new Grid { Margin = new Thickness(18, 4, 18, 8) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(CkText("Your characters", CkInk, 14, FontWeights.SemiBold));
-        var where = CkText(Server is { } sv ? $"{sv.Label} · {sv.Region.Name}" : _prefs.Server ?? "", CkFaint, 12);
+        head.Children.Add(CkText(L.T("Your characters"), CkInk, 14, FontWeights.SemiBold));
+        var where = CkText(Server is { } sv ? $"{sv.LabelShown} · {sv.Region.Shown}" : _prefs.Server ?? "", CkFaint, 12);
         where.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(where, 1); head.Children.Add(where);
         body.Children.Add(head);
         // the gear the character wears, with its +levels (Steven, 2026-11-14: "if you click on your name in the menu it can show
@@ -278,7 +279,7 @@ public partial class MainWindow
         if (CharacterGear(rows.FirstOrDefault(r => r.Counting)?.Name ?? "") is { } gear) { body.Children.Add(gear); body.Children.Add(MenuRow(MenuEntry.Line)); }
         if (rows.Count == 0)
         {
-            var none = CkText("Your character shows here once you're in the world: the tracker reads the class icon between the health and mana bars. Each character you play keeps its own days, runs, goals and bests.", CkMuted, 12);
+            var none = CkText(L.T("Your character shows here once you're in the world: the tracker reads the class icon between the health and mana bars. Each character you play keeps its own days, runs, goals and bests."), CkMuted, 12);
             none.TextWrapping = TextWrapping.Wrap; none.TextTrimming = TextTrimming.None; none.Margin = new Thickness(18, 0, 18, 8);
             body.Children.Add(none);
         }
@@ -288,14 +289,14 @@ public partial class MainWindow
         body.Children.Add(MenuRow(MenuEntry.Line));
         if (rows.Count > 0)
         {
-            var how = CkText("The tracker counts for the character in the game: it reads the class icon between the health and mana bars and switches by itself."
-                + (elsewhere > 0 ? $" {elsewhere} more on other servers." : ""), CkFaint, 12);
+            var how = CkText(L.T("The tracker counts for the character in the game: it reads the class icon between the health and mana bars and switches by itself.")
+                + (elsewhere > 0 ? " " + L.F("{0} more on other servers.", elsewhere) : ""), CkFaint, 12);
             how.TextWrapping = TextWrapping.Wrap; how.TextTrimming = TextTrimming.None; how.Margin = new Thickness(18, 0, 18, 4);
             body.Children.Add(how);
-            body.Children.Add(MenuRow(new MenuEntry("Count as a new character", () => { if (!_demo) _ = SplitNewCharacter(); },
-                Sub: "A second character of the same class: the icon can't tell them apart.")));
+            body.Children.Add(MenuRow(new MenuEntry(L.T("Count as a new character"), () => { if (!_demo) _ = SplitNewCharacter(); },
+                Sub: L.T("A second character of the same class: the icon can't tell them apart."))));
         }
-        body.Children.Add(MenuRow(new MenuEntry("Server and region…", () => OpenOptions(OptionsWindow.Page.Server), Sub: Server is { } s ? $"{s.Label} · {s.Region.Name}" : "None chosen")));
+        body.Children.Add(MenuRow(new MenuEntry(L.T("Server and region…"), () => OpenOptions(OptionsWindow.Page.Server), Sub: Server is { } s ? $"{s.LabelShown} · {s.Region.Shown}" : L.T("None chosen"))));
         body.Children.Add(new Border { Height = 6 });
         card.PreviewKeyDown += (_, k) => { if (k.Key == Key.Escape && _card != null) { k.Handled = true; _card.IsOpen = false; } };
         return card;
@@ -335,9 +336,9 @@ public partial class MainWindow
         words.Children.Add(week);
         if (r.Look.Best is { } best)
         {
-            var b = CkText($"Best hour {Fk(best.PerHr)}" + (r.Look.BestZone.Length > 0 ? " · " + r.Look.BestZone : ""), CkFaint, 12);
+            var b = CkText(L.F("Best hour {0}", Fk(best.PerHr)) + (r.Look.BestZone.Length > 0 ? " · " + r.Look.BestZone : ""), CkFaint, 12);
             b.Margin = new Thickness(0, 1, 0, 0);
-            b.ToolTip = $"The best hour {r.Name} has farmed on this server: {Amounts.Full(best.PerHr)} Kinah and loot after the Market's cut, over {best.Minutes} minutes" + (r.Look.BestZone.Length > 0 ? $" in {r.Look.BestZone}" : "") + (best.At.Length > 0 ? $", on {best.At}." : ".");
+            b.ToolTip = L.F("The best hour {0} has farmed on this server: {1} Kinah and loot after the Market's cut, over {2} minutes", r.Name, Amounts.Full(best.PerHr), best.Minutes) + (r.Look.BestZone.Length > 0 ? L.F(" in {0}", r.Look.BestZone) : "") + (best.At.Length > 0 ? L.F(", on {0}.", best.At) : ".");
             words.Children.Add(b);
         }
         Grid.SetColumn(words, 1); g.Children.Add(words);
@@ -347,10 +348,10 @@ public partial class MainWindow
 
         var acts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var who = r.Who;
-        acts.Children.Add(SwitcherButton(IcPencil, $"Rename {r.Name}", $"Rename {r.Name}. Names are read off the nameplate and can come out wrong; a name you type is kept.",
+        acts.Children.Add(SwitcherButton(IcPencil, L.F("Rename {0}", r.Name), L.F("Rename {0}. Names are read off the nameplate and can come out wrong; a name you type is kept.", r.Name),
             () => { if (!_demo) OpenNameSheet(who); }));
         if (!r.Counting)
-            acts.Children.Add(SwitcherButton(IcSwap, $"Count for {r.Name}", $"Count for {r.Name} from now on. For two characters of one class, which the icon can't tell apart; another class in the game switches back by itself. A run in progress ends first.",
+            acts.Children.Add(SwitcherButton(IcSwap, L.F("Count for {0}", r.Name), L.F("Count for {0} from now on. For two characters of one class, which the icon can't tell apart; another class in the game switches back by itself. A run in progress ends first.", r.Name),
                 () => { if (!_demo) _ = SwitchByHand(who); }));
         Grid.SetColumn(acts, 3); g.Children.Add(acts);
 
@@ -359,7 +360,7 @@ public partial class MainWindow
             Child = g, Padding = new Thickness(12, 9, 6, 9), Margin = new Thickness(6, 0, 6, 3), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1),
             Background = r.Counting ? Ck(CkGold, 0x12) : Brushes.Transparent, BorderBrush = r.Counting ? Ck(CkGold, 0x48) : Ck(CkSlotLine, 0x99), Tag = "character",
         };
-        AutomationProperties.SetName(row, r.Name + (r.Counting ? ", counting now" : ", " + r.Status));
+        AutomationProperties.SetName(row, r.Name + (r.Counting ? ", " + L.T("counting now") : ", " + r.Status));
         return row;
     }
 
@@ -386,16 +387,16 @@ public partial class MainWindow
                 Width = barW, Height = h, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(1.5), Margin = new Thickness(0, 0, d.IsToday ? 0 : gap, 0),
                 Background = made <= 0 ? Ck(CkSlotLine) : d.IsToday ? Ck(CkGold) : Ck(CkMuted, 0x99),
             };
-            var label = d.IsToday ? "Today" : d.Date.ToString("ddd d", System.Globalization.CultureInfo.InvariantCulture);
+            var label = d.IsToday ? L.T("Today") : d.Date.ToString("ddd d", L.Code == "en" ? System.Globalization.CultureInfo.InvariantCulture : System.Globalization.CultureInfo.CurrentCulture);
             var said = new List<string>();
-            if (d.Farm.Made > 0) said.Add($"{Fk(d.Farm.Made)} farmed");
-            if (d.Runs.Runs > 0) said.Add($"{d.Runs.Runs:N0} run{(d.Runs.Runs == 1 ? "" : "s")}, {Fk(d.Runs.Kinah)}");
+            if (d.Farm.Made > 0) said.Add(L.F("{0} farmed", Fk(d.Farm.Made)));
+            if (d.Runs.Runs > 0) said.Add(L.F(d.Runs.Runs == 1 ? "{0:N0} run, {1}" : "{0:N0} runs, {1}", d.Runs.Runs, Fk(d.Runs.Kinah)));
             // a hit area the bar's full height, so a short bar is as easy to point at as a tall one
-            var hit = new Border { Background = Brushes.Transparent, Child = bar, Height = high, ToolTip = $"{label}: " + (d.BeforeHistory ? "before this character's history began" : said.Count > 0 ? string.Join(" · ", said) : "nothing counted") };
+            var hit = new Border { Background = Brushes.Transparent, Child = bar, Height = high, ToolTip = $"{label}: " + (d.BeforeHistory ? L.T("before this character's history began") : said.Count > 0 ? string.Join(" · ", said) : L.T("nothing counted")) };
             ToolTipService.SetInitialShowDelay(hit, 200);
             panel.Children.Add(hit);
         }
-        AutomationProperties.SetName(panel, "Last 7 days");
+        AutomationProperties.SetName(panel, L.T("Last 7 days"));
         return panel;
     }
 
@@ -479,7 +480,7 @@ public partial class MainWindow
         using (var dc = under.RenderOpen()) dc.DrawRectangle(TryFindResource("Bg") as Brush ?? Brushes.Black, null, new Rect(0, 0, w, h));
         rtb.Render(under);
         rtb.Render(root);
-        rtb.Render(card);
+        LangCheck.Scan(card, "characters"); rtb.Render(card);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));
         using var fs = System.IO.File.Create(file);
@@ -520,9 +521,9 @@ public partial class MainWindow
     {
         if (_card != null) _card.IsOpen = false;
         var (card, body) = CkShell(320);
-        var title = CkText("Name this character", CkInk, 14); title.FontWeight = FontWeights.SemiBold; title.Margin = new Thickness(20, 14, 20, 4);
+        var title = CkText(L.T("Name this character"), CkInk, 14); title.FontWeight = FontWeights.SemiBold; title.Margin = new Thickness(20, 14, 20, 4);
         body.Children.Add(title);
-        var hint = CkText("As it is in the game, or anything that tells it apart. Only on this PC.", CkFaint, 12);
+        var hint = CkText(L.T("As it is in the game, or anything that tells it apart. Only on this PC."), CkFaint, 12);
         hint.TextWrapping = TextWrapping.Wrap; hint.TextTrimming = TextTrimming.None; hint.Margin = new Thickness(20, 0, 20, 10);
         body.Children.Add(hint);
         var box = new TextBox
@@ -533,9 +534,9 @@ public partial class MainWindow
         AutomationProperties.SetName(box, "Character name");
         body.Children.Add(box);
         var acts = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 0, 20, 16) };
-        var save = new Button { Content = "Save", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
+        var save = new Button { Content = L.T("Save"), Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
         save.SetResourceReference(StyleProperty, "PrimaryButton");
-        var cancel = new Button { Content = "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = L.T("Cancel"), Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         void Save()
         {
             Characters.Rename(c, box.Text);

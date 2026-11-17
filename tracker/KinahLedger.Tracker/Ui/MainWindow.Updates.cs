@@ -229,7 +229,7 @@ public partial class MainWindow
                 if (gh.Ok && gh.Newer != null && RolloutAllows(gh.Newer.Version, manual))
                 {
                     _release = gh.Newer; _vInfo = null; _staged = null; _updateNeedsSite = true;
-                    _updateError = "this version comes as an installer";
+                    _updateError = L.T("this version comes as an installer");
                     ShowUpdate();
                     return;
                 }
@@ -246,8 +246,8 @@ public partial class MainWindow
         }
         var r = await Updater.CheckAsync(_settings.Update.Manifest);
         var at = DateTime.Now.ToString("t");
-        if (!r.Ok) { if (_release == null) SetUpdateStatus(L.F("Couldn't check for updates at {0}: {1}. It tries again in an hour.", at, r.Note)); return; }
-        if (r.Newer == null) { if (_release == null) SetUpdateStatus(L.F("{0} Checked at {1}.", r.Note, at)); return; }
+        if (!r.Ok) { if (_release == null) SetUpdateStatus(L.F("Couldn't check for updates at {0}: {1}. It tries again in an hour.", at, r.Display)); return; }
+        if (r.Newer == null) { if (_release == null) SetUpdateStatus(L.F("{0} Checked at {1}.", r.Display, at)); return; }
         if (_release == null && !RolloutAllows(r.Newer.Version, manual)) return;
         if (_release != null && r.Newer.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
         _release = r.Newer; _staged = null; _updateError = null; _updateNeedsSite = false;
@@ -270,7 +270,7 @@ public partial class MainWindow
             finally { _downloading = false; ShowUpdate(); }
             return;
         }
-        if (_exe == null) { _updateError = "this copy isn't running as KinahLedger.exe"; _updateNeedsSite = true; ShowUpdate(); return; }
+        if (_exe == null) { _updateError = L.T("this copy isn't running as KinahLedger.exe"); _updateNeedsSite = true; ShowUpdate(); return; }
         _downloading = true; _updateProgress = 0; _updateError = null; _updateNeedsSite = false;
         ShowUpdate();
         try
@@ -279,7 +279,7 @@ public partial class MainWindow
             var staged = await Updater.DownloadAsync(r, _exe, progress);
             if (ReferenceEquals(_release, r)) _staged = staged;
         }
-        catch (UpdateException ex) { _updateError = ex.Message; _updateNeedsSite = ex.NeedsSite; }
+        catch (UpdateException ex) { _updateError = ex.Shown; _updateNeedsSite = ex.NeedsSite; }
         catch (Exception ex) { _updateError = ex.Message; CrashLog.Write("update", ex); }
         finally { _downloading = false; ShowUpdate(); }
     }
@@ -362,7 +362,7 @@ public partial class MainWindow
         {
             CrashLog.Write("update", ex);
             if (_restartForUpdate)
-                MessageBox.Show(L.F("The update couldn't be installed ({0}). Kinah Ledger starts again as it was; the update is tried again later.", ex.Message),
+                MessageBox.Show(L.F("The update couldn't be installed ({0}). Kinah Ledger starts again as it was; the update is tried again later.", (ex as UpdateException)?.Shown ?? ex.Message),
                     "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         if (!_restartForUpdate) return;
@@ -405,7 +405,7 @@ public partial class MainWindow
         catch (Exception ex)
         {
             CrashLog.Write("install", ex);
-            UpdateText.Text = L.F("Couldn't install: {0}. The tracker keeps working as it is.", ex.Message.TrimEnd('.'));
+            UpdateText.Text = L.F("Couldn't install: {0}. The tracker keeps working as it is.", ((ex as UpdateException)?.Shown ?? HudKit.Say(ex.Message)).TrimEnd('.'));
             UpdateBtn.Content = L.T("Not now"); UpdateBtn.IsEnabled = true;
             _offeringInstall = false; Installer.NotNow();
             UpdateBtn.Click += (_, _) => UpdateCard.Visibility = Visibility.Collapsed;

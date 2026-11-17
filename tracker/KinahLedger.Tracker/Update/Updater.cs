@@ -4,18 +4,26 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Update;
 
 /// <summary>The newest tracker, as kinahledger.com/download/latest.json describes it.</summary>
 public sealed record Release(Version Version, string Url, string Sha256, long Size, string NotesUrl);
 
 /// <summary>What one check found. Newer is set only when the newest release is above this version.</summary>
-public sealed record CheckResult(bool Ok, Release? Newer, string Note);
+public sealed record CheckResult(bool Ok, Release? Newer, string Note, string? Shown = null)
+{
+    /// <summary>The note as the window says it, in the language in use (<see cref="Note"/> stays English for the command line and the logs).</summary>
+    public string Display => Shown ?? Note;
+}
 
 /// <summary>An update that didn't go through. NeedsSite: trying again won't help (the folder can't be written), the releases page will.</summary>
-public sealed class UpdateException(string message, bool needsSite = false) : Exception(message)
+public sealed class UpdateException(string message, bool needsSite = false, string? shown = null) : Exception(message)
 {
     public bool NeedsSite { get; } = needsSite;
+    /// <summary>The reason as the window says it, in the language in use (<see cref="Exception.Message"/> stays English for the command line and the logs).</summary>
+    public string Shown { get; } = shown ?? message;
 }
 
 /// <summary>
@@ -139,18 +147,19 @@ public static class Updater
             var uri = new Uri(manifestUrl);
             using var http = Client(TimeSpan.FromSeconds(20));
             using var res = await http.GetAsync(uri, ct).ConfigureAwait(false);
-            if (res.StatusCode == HttpStatusCode.NotFound) return new CheckResult(true, null, "No release with automatic updates published yet.");
-            if (!res.IsSuccessStatusCode) return new CheckResult(false, null, $"the update check answered HTTP {(int)res.StatusCode}");
+            if (res.StatusCode == HttpStatusCode.NotFound) return new CheckResult(true, null, "No release with automatic updates published yet.", L.T("No release with automatic updates published yet."));
+            if (!res.IsSuccessStatusCode) return new CheckResult(false, null, $"the update check answered HTTP {(int)res.StatusCode}", L.F("the update check answered HTTP {0}", (int)res.StatusCode));
             var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var rel = Parse(body, uri, out var why);
-            if (rel == null) return new CheckResult(false, null, "the newest release can't be installed automatically (" + why + ")");
+            if (rel == null) return new CheckResult(false, null, "the newest release can't be installed automatically (" + why + ")", L.F("the newest release can't be installed automatically ({0})", why));
             return rel.Version > Current
-                ? new CheckResult(true, rel, $"Version {Show(rel.Version)} is available (you have {Show(Current)}).")
-                : new CheckResult(true, null, $"You have the latest version ({Show(Current)}).");
+                ? new CheckResult(true, rel, $"Version {Show(rel.Version)} is available (you have {Show(Current)}).", L.F("Version {0} is available (you have {1}).", Show(rel.Version), Show(Current)))
+                : new CheckResult(true, null, $"You have the latest version ({Show(Current)}).", L.F("You have the latest version ({0}).", Show(Current)));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            return new CheckResult(false, null, ex is TaskCanceledException ? "GitHub didn't answer in time" : "couldn't reach GitHub (" + ex.Message + ")");
+            return new CheckResult(false, null, ex is TaskCanceledException ? "GitHub didn't answer in time" : "couldn't reach GitHub (" + ex.Message + ")",
+                ex is TaskCanceledException ? L.T("GitHub didn't answer in time") : L.F("couldn't reach GitHub ({0})", ex.Message));
         }
     }
 
@@ -217,7 +226,8 @@ public static class Updater
         try { dst = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            throw new UpdateException($"Kinah Ledger can't write to its folder ({Path.GetDirectoryName(exe)}). Move it to a folder of your own, such as Downloads or Desktop, or download the new version from the releases page.", needsSite: true);
+            throw new UpdateException($"Kinah Ledger can't write to its folder ({Path.GetDirectoryName(exe)}). Move it to a folder of your own, such as Downloads or Desktop, or download the new version from the releases page.", needsSite: true,
+                shown: L.F("Kinah Ledger can't write to its folder ({0}). Move it to a folder of your own, such as Downloads or Desktop, or download the new version from the releases page.", Path.GetDirectoryName(exe)));
         }
 
         long got = 0;
@@ -228,8 +238,8 @@ public static class Updater
             {
                 using var http = Client(TimeSpan.FromMinutes(15));
                 using var res = await http.GetAsync(r.Url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                if (!res.IsSuccessStatusCode) throw new UpdateException($"the download answered HTTP {(int)res.StatusCode}");
-                if (res.Content.Headers.ContentLength is long len && len != r.Size) throw new UpdateException($"the download is {len:N0} bytes, the release says {r.Size:N0}");
+                if (!res.IsSuccessStatusCode) throw new UpdateException($"the download answered HTTP {(int)res.StatusCode}", shown: L.F("the download answered HTTP {0}", (int)res.StatusCode));
+                if (res.Content.Headers.ContentLength is long len && len != r.Size) throw new UpdateException($"the download is {len:N0} bytes, the release says {r.Size:N0}", shown: L.F("the download is {0} bytes, the release says {1}", len.ToString("N0"), r.Size.ToString("N0")));
                 using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 await using var src = await res.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 var buf = new byte[1 << 16];
@@ -237,7 +247,7 @@ public static class Updater
                 while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
                 {
                     got += n;
-                    if (got > r.Size) throw new UpdateException("the download is larger than the release says");
+                    if (got > r.Size) throw new UpdateException("the download is larger than the release says", shown: L.T("the download is larger than the release says"));
                     hash.AppendData(buf, 0, n);
                     await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
                     int pct = (int)(got * 100 / r.Size);
@@ -250,11 +260,12 @@ public static class Updater
         {
             TryDelete(part);
             if (ex is UpdateException || (ex is OperationCanceledException && ct.IsCancellationRequested)) throw;
-            throw new UpdateException(ex is TaskCanceledException ? "the download timed out" : "the download failed (" + ex.Message + ")");
+            throw new UpdateException(ex is TaskCanceledException ? "the download timed out" : "the download failed (" + ex.Message + ")",
+                shown: ex is TaskCanceledException ? L.T("the download timed out") : L.F("the download failed ({0})", ex.Message));
         }
 
-        if (got != r.Size) { TryDelete(part); throw new UpdateException($"the download stopped at {got:N0} of {r.Size:N0} bytes"); }
-        if (hex != r.Sha256) { TryDelete(part); throw new UpdateException("the download didn't match the release's checksum, so it was thrown away"); }
+        if (got != r.Size) { TryDelete(part); throw new UpdateException($"the download stopped at {got:N0} of {r.Size:N0} bytes", shown: L.F("the download stopped at {0} of {1} bytes", got.ToString("N0"), r.Size.ToString("N0"))); }
+        if (hex != r.Sha256) { TryDelete(part); throw new UpdateException("the download didn't match the release's checksum, so it was thrown away", shown: L.T("the download didn't match the release's checksum, so it was thrown away")); }
         File.Move(part, staged, overwrite: true);
         return staged;
     }
@@ -271,7 +282,7 @@ public static class Updater
     /// </summary>
     public static void Apply(string staged, string exe)
     {
-        if (!File.Exists(staged)) throw new UpdateException("the downloaded update is gone");
+        if (!File.Exists(staged)) throw new UpdateException("the downloaded update is gone", shown: L.T("the downloaded update is gone"));
         var old = OldPath(exe);
         TryDelete(old);
         // an .old still held by a process that hasn't exited yet: park this one under its own name

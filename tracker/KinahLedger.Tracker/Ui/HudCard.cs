@@ -50,7 +50,7 @@ public sealed partial class HudCard : IHudLook
     public HudCard()
     {
         _dot = Dot(7);
-        _run = T("RUN", 10.5, Gold, weight: FontWeights.Bold); _run.Margin = new Thickness(6, 0, 0, 0);
+        _run = T(L.T("RUN"), 10.5, Gold, weight: FontWeights.Bold); _run.Margin = new Thickness(6, 0, 0, 0);
         _time = T("", 13, Ink, mono: true); _time.Margin = new Thickness(6, 0, 0, 0);
         _zone = T("", 12, Muted, weight: FontWeights.SemiBold); _zone.Margin = new Thickness(10, 0, 0, 0);
         _newest = T("", 13, Ink); _newest.Margin = new Thickness(6, 0, 0, 0); _newest.TextTrimming = TextTrimming.None;
@@ -169,12 +169,12 @@ public sealed partial class HudCard : IHudLook
             _rate.Inlines.Clear(); _rateRun = _totalRun = null;
             if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R(Waiting(abyss), 13, Faint));
             else if (warm) _rate.Inlines.Add(R(V("rate"), 16, _rateTone, weight: FontWeights.Bold));
-            else { _rateRun = R(V("rate"), 22, _rateTone, weight: FontWeights.Bold); _rate.Inlines.Add(_rateRun); _rate.Inlines.Add(R(abyss ? " AP an hour" : " an hour", 12, Muted, weight: FontWeights.SemiBold)); }
+            else { _rateRun = R(V("rate"), 22, _rateTone, weight: FontWeights.Bold); _rate.Inlines.Add(_rateRun); _rate.Inlines.Add(R(abyss ? L.T(" AP an hour") : L.T(" an hour"), 12, Muted, weight: FontWeights.SemiBold)); }
             if (_rateRun != null) Roll(_rate, "rate", () => _rateRun, V("rate"), rose, true);
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
             // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
-            if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(abyss ? " AP session" : " session", 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
+            if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(abyss ? L.T(" AP session") : L.T(" session"), 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
             if (rose && Moves) EdgeGlow();
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten
@@ -199,7 +199,7 @@ public sealed partial class HudCard : IHudLook
         if (paused.Length > 0) { note = paused; tone = Warn; sign = true; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
         else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; clockV = V("noticeClock"); }
-        else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
+        else if (V("flag").Length > 0) { note = V("flag") + L.T(" · fix in tracker"); tone = Gold; }
         else { note = ""; tone = Warn; }
         if (Changed("notice", $"{note}|{sign}|{clockV}"))
         {

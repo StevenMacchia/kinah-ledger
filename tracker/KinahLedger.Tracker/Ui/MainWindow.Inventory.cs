@@ -41,10 +41,10 @@ public partial class MainWindow
     internal MenuEntry InventoryMenuEntry()
     {
         var drops = SessionDrops();
-        string sub = drops.Count == 0 ? "This session's drops, and your bag if you choose it"
-            : BagValue.Of(drops, null, _items, n => PriceBook.Price(n), PriceBook.SellerKeeps) is { Sellable: > 0 } w ? $"Dropped this session: {Fk(w.Sellable)}" : $"{drops.Count:N0} kinds dropped this session";
-        return new MenuEntry("Inventory", OpenInventoryWindow, Sub: sub,
-            Tip: "What dropped this session, worth at today's Market prices after the Market's cut (bound items can't be sold and have no value). Pick The bag to see everything in your bag, what you had before too.");
+        string sub = drops.Count == 0 ? L.T("This session's drops, and your bag if you choose it")
+            : BagValue.Of(drops, null, _items, n => PriceBook.Price(n), PriceBook.SellerKeeps) is { Sellable: > 0 } w ? L.F("Dropped this session: {0}", Fk(w.Sellable)) : L.F("{0:N0} kinds dropped this session", drops.Count);
+        return new MenuEntry(L.T("Inventory"), OpenInventoryWindow, Sub: sub,
+            Tip: L.T("What dropped this session, worth at today's Market prices after the Market's cut (bound items can't be sold and have no value). Pick The bag to see everything in your bag, what you had before too."));
     }
 
     /// <summary>Opens the inventory's window, or brings it forward; it redraws every two seconds while open.</summary>
@@ -90,13 +90,13 @@ public partial class MainWindow
     {
         var (card, body) = CkShell(InventoryCardWidth);
         var band = new StackPanel { Margin = new Thickness(20, 16, 56, 4) };
-        band.Children.Add(CkText("Inventory", CkInk, 18, FontWeights.Normal, display: true));
+        band.Children.Add(CkText(L.T("Inventory"), CkInk, 18, FontWeights.Normal, display: true));
         body.Children.Add(band);
         // the choice: the session's drops (always first), or the whole bag, which the player has to pick
         var seg = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 6, 20, 4) };
         void Seg(string text, bool on, bool bagSide, string tip)
         {
-            var b = new Button { Content = text, Height = 26, FontSize = 12, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 4, 0), ToolTip = tip };
+            var b = new Button { Content = L.T(text), Height = 26, FontSize = 12, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 4, 0), ToolTip = L.T(tip) };
             b.SetResourceReference(StyleProperty, on ? "SegOn" : "SegOff");
             b.Click += (_, _) => { if (_invShowBag == bagSide) return; _invShowBag = bagSide; _invWin?.ShowCard(BuildInventoryCard()); };
             seg.Children.Add(b);
@@ -113,9 +113,9 @@ public partial class MainWindow
     void SessionDropsSection(StackPanel body)
     {
         var drops = SessionDrops();
-        if (drops.Count == 0) { body.Children.Add(CkNote("Nothing has dropped this session yet. What you pick up shows here, worth at today's Market prices.")); return; }
+        if (drops.Count == 0) { body.Children.Add(CkNote(L.T("Nothing has dropped this session yet. What you pick up shows here, worth at today's Market prices."))); return; }
         var w = BagValue.Of(drops, null, _items, n => PriceBook.Price(n), PriceBook.SellerKeeps);
-        Figures(body, w, null, "What dropped this session, what the tradable items sell for at the lowest Market price the tracker knows, after the Market's cut. Bound items can't be sold: they have no value here.");
+        Figures(body, w, null, L.T("What dropped this session, what the tradable items sell for at the lowest Market price the tracker knows, after the Market's cut. Bound items can't be sold: they have no value here."));
         Slots(body, w, null, null);
     }
 
@@ -126,17 +126,17 @@ public partial class MainWindow
         var now = bag?.Totals();
         if (bag == null || now == null)
         {
-            body.Children.Add(CkNote(bag == null
+            body.Children.Add(CkNote(L.T(bag == null
                 ? "Your bag isn't available right now. Check Options › Game reading."
-                : "Known at your next teleport or Abyss trip."));
+                : "Known at your next teleport or Abyss trip.")));
             return;
         }
         var first = bag.FirstAt != null ? bag.FirstTotals : null;
         var w = BagValue.Of(now, first, _items, n => PriceBook.Price(n), PriceBook.SellerKeeps);
         long? kinah = bag.Money(CurrencyKind.Kinah);
-        Figures(body, w, bag, "Everything in your bag now, what you had before the session too (not your storage), what the tradable items sell for at the lowest Market price the tracker knows, after the Market's cut. Bound items can't be sold: they have no value here."
-            + (kinah is long k ? $"\nKinah held: {k:N0} (not in the worth)." : "")
-            + (bag.KnownAt is DateTime ka ? $"\nUp to date since {ka.ToLocalTime():HH:mm}." : ""));
+        Figures(body, w, bag, L.T("Everything in your bag now, what you had before the session too (not your storage), what the tradable items sell for at the lowest Market price the tracker knows, after the Market's cut. Bound items can't be sold: they have no value here.")
+            + (kinah is long k ? "\n" + L.F("Kinah held: {0:N0} (not in the worth).", k) : "")
+            + (bag.KnownAt is DateTime ka ? "\n" + L.F("Up to date since {0:HH:mm}.", ka.ToLocalTime()) : ""));
         Slots(body, w, first, bag.FirstAt);
     }
 
@@ -144,18 +144,18 @@ public partial class MainWindow
     {
         var head = new Grid { Margin = new Thickness(20, 8, 20, 0) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var worth = CkText(w.Sellable > 0 ? Fk(w.Sellable) : "No price yet", w.Sellable > 0 ? CkGold : CkMuted, 22, FontWeights.SemiBold);
+        var worth = CkText(w.Sellable > 0 ? Fk(w.Sellable) : L.T("No price yet"), w.Sellable > 0 ? CkGold : CkMuted, 22, FontWeights.SemiBold);
         head.Children.Add(worth);
-        var kinds = CkText($"{w.Kinds:N0} kind{(w.Kinds == 1 ? "" : "s")}" + (bag?.BagStacks is int st ? $" · {st:N0} slots" : ""), CkMuted, 12.5);
+        var kinds = CkText(L.F(w.Kinds == 1 ? "{0:N0} kind" : "{0:N0} kinds", w.Kinds) + (bag?.BagStacks is int st ? " · " + L.F("{0:N0} slots", st) : ""), CkMuted, 12.5);
         kinds.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(kinds, 1); head.Children.Add(kinds);
         body.Children.Add(head);
         worth.ToolTip = Details ? tip : null;
         if (!Details) return;   // minimal by default: the worth and the items (Options › Game reading › Inventory details)
         var parts = new List<string>();
-        if (w.Sellable > 0) parts.Add(PriceBook.Cut);
-        if (w.BoundKinds > 0) parts.Add($"{w.BoundCount:N0} bound, no value (can't be sold)");
-        if (w.Unpriced > 0) parts.Add($"{w.Unpriced:N0} without a price yet");
-        if (w.Change is long c && c != 0 && bag?.FirstAt is DateTime fa) parts.Add($"{(c > 0 ? "+" : "−")}{Fk(Math.Abs(c * PriceBook.SellerKeeps))} since {fa.ToLocalTime():HH:mm}");
+        if (w.Sellable > 0) parts.Add(L.T(PriceBook.Cut));
+        if (w.BoundKinds > 0) parts.Add(L.F("{0:N0} bound, no value (can't be sold)", w.BoundCount));
+        if (w.Unpriced > 0) parts.Add(L.F("{0:N0} without a price yet", w.Unpriced));
+        if (w.Change is long c && c != 0 && bag?.FirstAt is DateTime fa) parts.Add(L.F("{0}{1} since {2:HH:mm}", c > 0 ? "+" : "−", Fk(Math.Abs(c * PriceBook.SellerKeeps)), fa.ToLocalTime()));
         if (parts.Count > 0) body.Children.Add(CkNote(string.Join(" · ", parts)));
     }
 
@@ -166,8 +166,8 @@ public partial class MainWindow
         {
             var info = _items.Get(l.Id);
             var slot = QSlot(QItemIcon(l.Name, l.Id, 42, round: false, grade: info?.Grade ?? ""), CountBadge(l.Count));
-            slot.ToolTip = !Details ? $"{l.Name} ×{l.Count:N0}" : $"{l.Name} ×{l.Count:N0}" + (l.Bound ? ": bound, can't be sold, no value" : l.Price is long p ? $": {Fk(l.Value)} ({Fk(p)} each, before the Market's cut)" : ": no price yet")
-                + (first != null && since is DateTime t && l.Change != 0 ? $"\n{(l.Change > 0 ? "+" : "−")}{Math.Abs(l.Change):N0} since {t.ToLocalTime():HH:mm}" : "");
+            slot.ToolTip = !Details ? $"{l.Name} ×{l.Count:N0}" : $"{l.Name} ×{l.Count:N0}" + (l.Bound ? L.T(": bound, can't be sold, no value") : l.Price is long p ? L.F(": {0} ({1} each, before the Market's cut)", Fk(l.Value), Fk(p)) : L.T(": no price yet"))
+                + (first != null && since is DateTime t && l.Change != 0 ? "\n" + L.F("{0}{1:N0} since {2:HH:mm}", l.Change > 0 ? "+" : "−", Math.Abs(l.Change), t.ToLocalTime()) : "");
             slots.Children.Add(slot);
         }
         if (slots.Children.Count > 0) body.Children.Add(slots);
@@ -183,7 +183,7 @@ public partial class MainWindow
         var worn = ShownBag?.WornGear();
         if (worn is not { Count: > 0 }) return null;
         var panel = new StackPanel { Margin = new Thickness(18, 0, 18, 6) };
-        panel.Children.Add(CkText(who.Length > 0 ? $"{who}'s gear" : "Gear worn", CkMuted, 12, FontWeights.SemiBold));
+        panel.Children.Add(CkText(who.Length > 0 ? L.F("{0}'s gear", who) : L.T("Gear worn"), CkMuted, 12, FontWeights.SemiBold));
         var gear = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
         foreach (var g in worn)
         {
@@ -193,7 +193,7 @@ public partial class MainWindow
             var slot = QSlot(icon, level);
             if (level.Length == 0 && slot is Grid sg && sg.Children.Count > 1) sg.Children[1].Visibility = Visibility.Collapsed;   // no level said: no empty badge
             slot.ToolTip = info != null ? (level.Length > 0 ? $"{info.Name} {level}" : info.Name)
-                : $"A piece the item list doesn't have yet (item {g.ItemId}){(level.Length > 0 ? ", " + level : "")}.";
+                : L.F("A piece the item list doesn't have yet (item {0}){1}.", g.ItemId, level.Length > 0 ? ", " + level : "");
             gear.Children.Add(slot);
         }
         panel.Children.Add(gear);
@@ -237,7 +237,7 @@ public partial class MainWindow
             if (win.Content is FrameworkElement root)
             {
                 var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-                bmp.Render(root);
+                LangCheck.Scan(root, "inventory"); bmp.Render(root);
                 var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
                 using var f = File.Create(Path.Combine(dir, $"inventory-{state}{sfx}.png")); enc.Save(f);
             }

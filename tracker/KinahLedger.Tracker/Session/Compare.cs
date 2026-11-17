@@ -1,3 +1,5 @@
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>One farming zone over the week (the Week side's seven days): what it made, the time there, its kills, on how many days, its best drop.</summary>
@@ -165,8 +167,8 @@ public static class ZoneCompare
     public static string Nth(int n)
     {
         int t = n % 100;
-        string s = t is >= 11 and <= 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
-        return n.ToString("N0") + s;
+        string s = t is >= 11 and <= 13 ? "{0}th" : (n % 10) switch { 1 => "{0}st", 2 => "{0}nd", 3 => "{0}rd", _ => "{0}th" };
+        return L.F(s, n.ToString("N0"));
     }
 
     /// <summary>The stay must be this long before the hour on the card is set against your usual (10 minutes).</summary>
@@ -186,32 +188,32 @@ public static class ZoneCompare
         if (usual <= 0 || headline <= 0 || staySeconds < VersusStaySeconds) return null;
         // the two figures as the card shows them ("1.27M", "805K"), so the difference adds up on screen: 1.27M less 805K is 465K
         long diff = Shown(headline) - Shown(usual);
-        if (Math.Abs(diff) < Math.Max(1_000, usual * 0.03)) return ("about your usual", 0, diff);
-        return diff > 0 ? ($"{fk(diff)} more than usual", 1, diff) : ($"{fk(-diff)} less than usual", -1, diff);
+        if (Math.Abs(diff) < Math.Max(1_000, usual * 0.03)) return (L.T("about your usual"), 0, diff);
+        return diff > 0 ? (L.F("{0} more than usual", fk(diff)), 1, diff) : (L.F("{0} less than usual", fk(-diff)), -1, diff);
     }
 
     /// <summary>The verdict under two zones: (lead, bold part, rest), "Kraka Footpath made" "123K more an hour" "this week."</summary>
     public static (string Lead, string Bold, string Tail) ZoneVerdict(ZoneWeek a, ZoneWeek b, Func<double, string> fk)
     {
         var (hi, lo) = a.PerHour >= b.PerHour ? (a, b) : (b, a);
-        if (hi.PerHour <= 0) return ("Neither made anything yet this week.", "", "");
-        if (hi.PerHour - lo.PerHour < hi.PerHour * Close) return ($"Close: {hi.Zone} and {lo.Zone} made ", "about the same an hour", " this week.");
-        var why = hi.KillsHour > lo.KillsHour * (1 + Close) ? ", mostly from more kills." : hi.PerKill > lo.PerKill * (1 + Close) ? ", from more a kill." : " this week.";
-        return ($"{hi.Zone} made ", $"{fk(hi.PerHour - lo.PerHour)} more an hour", why);
+        if (hi.PerHour <= 0) return (L.T("Neither made anything yet this week."), "", "");
+        if (hi.PerHour - lo.PerHour < hi.PerHour * Close) return (L.F("Close: {0} and {1} made ", hi.Zone, lo.Zone), L.T("about the same an hour"), L.T(" this week.", "same"));
+        var why = L.T(hi.KillsHour > lo.KillsHour * (1 + Close) ? ", mostly from more kills." : hi.PerKill > lo.PerKill * (1 + Close) ? ", from more a kill." : " this week.");
+        return (L.F("{0} made ", hi.Zone), L.F("{0} more an hour", fk(hi.PerHour - lo.PerHour)), why);
     }
 
     /// <summary>The verdict under two places: more a run, and whether the quicker one makes up for it an hour.</summary>
     public static (string Lead, string Bold, string Tail) PlaceVerdict(PlaceWeek a, PlaceWeek b, Func<double, string> fk)
     {
         var (hi, lo) = a.PerRun >= b.PerRun ? (a, b) : (b, a);
-        if (hi.PerRun <= 0) return ("Neither paid anything yet this week.", "", "");
+        if (hi.PerRun <= 0) return (L.T("Neither paid anything yet this week."), "", "");
         bool closeRun = hi.PerRun - lo.PerRun < hi.PerRun * Close;
-        if (closeRun) return ($"Close: {hi.Place} and {lo.Place} pay ", "about the same a run", lo.PerHour > hi.PerHour * (1 + Close) ? $", and {lo.Place} is quicker, so it makes more an hour." : ".");
+        if (closeRun) return (L.F("Close: {0} and {1} pay ", hi.Place, lo.Place), L.T("about the same a run"), lo.PerHour > hi.PerHour * (1 + Close) ? L.F(", and {0} is quicker, so it makes more an hour.", lo.Place) : L.T(".", "run"));
         string rest;
-        if (lo.PerHour <= 0 || hi.PerHour <= 0 || hi.MinutesARun <= lo.MinutesARun) rest = ".";
-        else if (lo.PerHour > hi.PerHour * (1 + Close)) rest = $", but {lo.Place} is quicker, so it makes more an hour.";
-        else if (lo.PerHour >= hi.PerHour * (1 - Close)) rest = $", but {lo.Place} is quicker, so an hour comes out about even.";
-        else rest = ".";
-        return ($"{hi.Place} pays ", $"{fk(hi.PerRun - lo.PerRun)} more a run", rest);
+        if (lo.PerHour <= 0 || hi.PerHour <= 0 || hi.MinutesARun <= lo.MinutesARun) rest = L.T(".", "run");
+        else if (lo.PerHour > hi.PerHour * (1 + Close)) rest = L.F(", but {0} is quicker, so it makes more an hour.", lo.Place);
+        else if (lo.PerHour >= hi.PerHour * (1 - Close)) rest = L.F(", but {0} is quicker, so an hour comes out about even.", lo.Place);
+        else rest = L.T(".", "run");
+        return (L.F("{0} pays ", hi.Place), L.F("{0} more a run", fk(hi.PerRun - lo.PerRun)), rest);
     }
 }

@@ -108,7 +108,7 @@ sealed partial class HudScorebug
             bool podium = m.Rank <= 3 && !m.CpOnly;
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
             _rank.Foreground = podium ? InkB : White;
-            if (_cls != m.Class + "|" + m.Name) { _cls = m.Class + "|" + m.Name; _iconHost.Child = ClassArt.Icon(m.Class, 22, m.Name); }
+            if (_cls != m.Class + "|" + m.Name) { _cls = m.Class + "|" + m.Name; _iconHost.Child = ThemeText.Icon(m.Class, 22, m.Name); }
             _name.Text = m.Name;
             _name.Foreground = m.You ? InkB : Frozen(m.NameColor);
             // the marks after the name: YOU, deaths, the heal figure, the end of a kill's plates

@@ -43,6 +43,10 @@ static class CraftKit
     }
 
     /// <summary>A craft that worked, or a won combo roll: anything but a failed craft.</summary>
+    /// <summary>A craft's note (kept in English, the looks compare it) as it is drawn: "worked", "failed", "combo ×2", "combo: Splendent …", "combo won".</summary>
+    public static string NoteText(string note) =>
+        note.StartsWith("combo: ", StringComparison.Ordinal) ? L.F("combo: {0}", note["combo: ".Length..]) : L.T(note);
+
     public static bool Worked(Pick p) => p.Note != "failed";
     /// <summary>A won combo roll's line: the craft before it made more, or better.</summary>
     public static bool IsCombo(Pick p) => p.Note.StartsWith("combo", StringComparison.Ordinal);
@@ -110,7 +114,7 @@ public sealed partial class HudCard
     {
         _farmHead = head; _farmBody = body;
         _cDot = Dot(7);
-        var label = T("CRAFT", 11, CraftKit.Label, weight: FontWeights.Medium); label.Margin = new Thickness(6, 0, 0, 0);
+        var label = T(L.T("CRAFT"), 11, CraftKit.Label, weight: FontWeights.Medium); label.Margin = new Thickness(6, 0, 0, 0);
         _cTime = T("", 13, Ink, mono: true); _cTime.Margin = new Thickness(6, 0, 0, 0);
         _cRecipe = T("", 13, Ink); _cRecipe.Margin = new Thickness(10, 0, 0, 0);
         _cNewest = T("", 13, Ink); _cNewest.Margin = new Thickness(8, 0, 0, 0); _cNewest.TextTrimming = TextTrimming.None;
@@ -170,7 +174,7 @@ public sealed partial class HudCard
             if (newest != null)
             {
                 bool ok = CraftKit.Worked(newest), combo = CraftKit.IsCombo(newest);
-                _cNewest.Inlines.Add(R(newest.Note, 13, combo ? Gold : ok ? CraftKit.Ok2 : CraftKit.Fail));
+                _cNewest.Inlines.Add(R(CraftKit.NoteText(newest.Note), 13, combo ? Gold : ok ? CraftKit.Ok2 : CraftKit.Fail));
                 if (newest.Worth.Length > 0) { _cNewest.Inlines.Add(R("  ", 13, Ink)); _cNewest.Inlines.Add(R(newest.Worth, 13, ok ? Gold : CraftKit.Fail, mono: true)); }
             }
         }
@@ -185,15 +189,15 @@ public sealed partial class HudCard
             int.TryParse(V("craftFail").Replace(",", ""), out int fail);
             if (ok + fail == 0)
             {
-                _cFigs.Inlines.Add(R("Waiting for the first craft", 13, Faint));
+                _cFigs.Inlines.Add(R(L.T("Waiting for the first craft"), 13, Faint));
                 _cLine2.Visibility = Visibility.Collapsed;
             }
             else
             {
                 _cFigs.Inlines.Add(R(V("craftTries"), 13, Ink, mono: true));
-                _cFigs.Inlines.Add(R(ok + fail == 1 ? " craft · " : " crafts · ", 13, Muted));
+                _cFigs.Inlines.Add(R(L.T(ok + fail == 1 ? " craft · " : " crafts · "), 13, Muted));
                 _cFigs.Inlines.Add(R(V("craftFail"), 13, Ink, mono: true));
-                _cFigs.Inlines.Add(R(" failed", 13, Muted));
+                _cFigs.Inlines.Add(R(L.T(" failed"), 13, Muted));
                 var profit = V("craftProfit");
                 if (profit.Length > 0)
                 {
@@ -205,17 +209,17 @@ public sealed partial class HudCard
                 if (per.Length > 0)
                 {
                     _cSells.Inlines.Add(R(per, 12, per.Contains('−') ? CraftKit.Fail : Gold, mono: true));
-                    _cSells.Inlines.Add(R(" a craft", 12, Faint));
+                    _cSells.Inlines.Add(R(L.T(" a craft"), 12, Faint));
                     if (V("craftPerHr").Length > 0)
                     {
                         _cSells.Inlines.Add(R(" · ", 12, Faint));
-                        _cSells.Inlines.Add(R(V("craftPerHr") + "/h", 12, V("craftPerHr").Contains('−') ? CraftKit.Fail : Gold, mono: true));
+                        _cSells.Inlines.Add(R(V("craftPerHr") + L.T("/h"), 12, V("craftPerHr").Contains('−') ? CraftKit.Fail : Gold, mono: true));
                     }
                 }
-                else _cSells.Inlines.Add(R("no sure price yet", 12, Faint));
+                else _cSells.Inlines.Add(R(L.T("no sure price yet"), 12, Faint));
                 if (V("craftCombos").Length > 0)
                 {
-                    _cCombos.Inlines.Add(R(V("craftCombosKind") switch { "×2" => "Combos ×2 ", "upgrade" => "Upgrades ", _ => "Combos " }, 12, Faint));
+                    _cCombos.Inlines.Add(R(L.T(V("craftCombosKind") switch { "×2" => "Combos ×2 ", "upgrade" => "Upgrades ", _ => "Combos " }), 12, Faint));
                     _cCombos.Inlines.Add(R(V("craftCombos"), 12, Ink, mono: true));
                     _cCombos.Visibility = Visibility.Visible;
                 }
@@ -276,7 +280,7 @@ public sealed partial class HudTicker
     {
         _farmRow = _pill.Child;
         _cDot = Dot(8); _cDot.Margin = new Thickness(0, 0, 7, 0);
-        var label = T("CRAFT", 11, CraftKit.Label, weight: FontWeights.Medium); label.Margin = new Thickness(0, 0, 7, 0);
+        var label = T(L.T("CRAFT"), 11, CraftKit.Label, weight: FontWeights.Medium); label.Margin = new Thickness(0, 0, 7, 0);
         _cProfit = T("", 15, Gold, mono: true);
         _cCount = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         _cBar = CraftKit.Bar(40, 5); _cBar.Margin = new Thickness(8, 0, 0, 0);
@@ -300,13 +304,13 @@ public sealed partial class HudTicker
             int.TryParse(V("craftOk").Replace(",", ""), out int ok);
             int.TryParse(V("craftFail").Replace(",", ""), out int fail);
             _cCount.Inlines.Clear();
-            if (ok + fail == 0) _cCount.Inlines.Add(R("no crafts yet", 12, Muted));
+            if (ok + fail == 0) _cCount.Inlines.Add(R(L.T("no crafts yet"), 12, Muted));
             else
             {
                 _cCount.Inlines.Add(R(V("craftTries"), 12, Muted, mono: true));
                 _cCount.Inlines.Add(R(" · ", 12, Muted));
                 _cCount.Inlines.Add(R(V("craftFail"), 12, Muted, mono: true));
-                _cCount.Inlines.Add(R(" failed", 12, Muted));
+                _cCount.Inlines.Add(R(L.T(" failed"), 12, Muted));
             }
             // the queue under way, its count against its size: " · 3/10"
             if (V("craftQueue") == "1" && V("craftQueueDone").Length > 0 && V("craftQueueOf").Length > 0)
@@ -335,7 +339,7 @@ public sealed partial class HudTicker
         Grid.SetColumn(name, 1); g.Children.Add(name);
         if (!ok || combo)
         {
-            var note = T(p.Note, 11.5, combo ? Gold : CraftKit.Fail, weight: FontWeights.SemiBold); note.Margin = new Thickness(6, 0, 0, 0); note.MaxWidth = 120;
+            var note = T(CraftKit.NoteText(p.Note), 11.5, combo ? Gold : CraftKit.Fail, weight: FontWeights.SemiBold); note.Margin = new Thickness(6, 0, 0, 0); note.MaxWidth = 120;
             Grid.SetColumn(note, 2); g.Children.Add(note);
         }
         var worth = T(p.Worth, 13, ok ? Mint : CraftKit.Fail, weight: FontWeights.Bold); worth.Margin = new Thickness(9, 0, 0, 0);

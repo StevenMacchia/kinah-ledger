@@ -107,14 +107,14 @@ public partial class MainWindow
         GoalsChev.Visibility = QuestsOn ? Visibility.Visible : Visibility.Collapsed;
         QSetChev(GoalsChev, false);
         var parts = new List<string>();
-        if (_goals.Count > 0) parts.Add($"today · {done} of {_goals.Count} done");
-        if (QuestsOn) parts.Add(score.Session > 0 ? Quests.Pts(score.Session) + " this session" : "at this pace");
+        if (_goals.Count > 0) parts.Add(L.F("today · {0} of {1} done", done, _goals.Count));
+        if (QuestsOn) parts.Add(score.Session > 0 ? L.F("{0} this session", Quests.Pts(score.Session)) : L.T("at this pace"));
         int more = Math.Max(0, quests.Count + _goals.Count - primaries);
-        if (QuestsOn && more > 0) parts.Add($"{more} more");
+        if (QuestsOn && more > 0) parts.Add(string.Format(System.Globalization.CultureInfo.CurrentCulture, L.T("{0} more", "quests"), more));
         GoalsNote.Text = string.Join(" · ", parts);
         if (QuestsOn) CardTip(GoalsNote, ScoreCard); else GoalsNote.ToolTip = null;
         GoalsHead.Cursor = QuestsOn ? Cursors.Hand : Cursors.Arrow;
-        GoalsHead.ToolTip = QuestsOn ? "Every quest, pins, today's and all time, what you have done: the Quests page." : null;
+        GoalsHead.ToolTip = QuestsOn ? L.T("Every quest, pins, today's and all time, what you have done: the Quests page.") : null;
     }
 
     /// <summary>The count under a slot: "137K / 300K", "9 / 20", "8 / 8 ✓".</summary>
@@ -125,6 +125,31 @@ public partial class MainWindow
     }
 
     /// <summary>An amount in the goal's own words: "300K" Kinah, "20" pieces or runs.</summary>
+    /// <summary>What a goal is called (Goals.Label in English), in the language in use.</summary>
+    internal static string GoalLabelT(Goal g) => g.Kind switch
+    {
+        Goal.KindItem => g.Name,
+        Goal.KindRuns => L.T(g.Which switch { Goal.Expeditions => "Expeditions", Goal.Events => "Events", _ => "Runs" }),
+        _ => L.T("Kinah from farming"),
+    };
+    /// <summary>A goal's target in words (Goals.What in English): "20 Spiritstone", "5 expeditions", "300K from farming".</summary>
+    internal static string GoalWhatT(Goal g, long n) => g.Kind switch
+    {
+        Goal.KindItem => n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " " + g.Name,
+        Goal.KindRuns => L.F(g.Which switch
+        {
+            Goal.Expeditions => n == 1 ? "{0} expedition" : "{0} expeditions",
+            Goal.Events => n == 1 ? "{0} event" : "{0} events",
+            _ => n == 1 ? "{0} run" : "{0} runs",
+        }, n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)),
+        _ => L.F("{0} from farming", Fk(n)),
+    };
+    /// <summary>"about 1 h 10 min" at today's pace (Goals.PaceText in English), in the language in use; "" when reached or with no pace yet.</summary>
+    internal static string GoalPaceT(GoalProgress p)
+    {
+        if (p.Done || p.SecondsToGo is not double s) return "";
+        return s < 60 ? L.T("under a minute") : L.F("about {0}", DurT(s));
+    }
     static string GoalAmount(Goal g, long n) => g.Kind == Goal.KindKinah ? Fk(n) : n.ToString("N0");
 
     /// <summary>The goal's tile: the coin for Kinah, the item's icon in its grade frame, the gate for runs.</summary>
@@ -154,10 +179,10 @@ public partial class MainWindow
         var count = PT(GoalCountText(g, p), p.Done ? "Gold" : "Ink", 12.5, null, "MonoFont");
         count.HorizontalAlignment = HorizontalAlignment.Center; count.Margin = new Thickness(0, 7, 0, 0);
         slot.Children.Add(count);
-        var name = PT(Goals.Label(g), "Faint", 12);
+        var name = PT(GoalLabelT(g), "Faint", 12);
         name.HorizontalAlignment = HorizontalAlignment.Center; name.TextAlignment = TextAlignment.Center; name.TextWrapping = TextWrapping.Wrap; name.MaxHeight = 31; name.Margin = new Thickness(0, 3, 0, 0);
         slot.Children.Add(name);
-        AutomationProperties.SetName(slot, $"Goal: {Goals.Label(g)}, {GoalCountText(g, p)}");
+        AutomationProperties.SetName(slot, L.F("Goal: {0}, {1}", GoalLabelT(g), GoalCountText(g, p)));
         CardTip(slot, () => GoalCard(g));
         slot.MouseEnter += (_, _) => sel.Visibility = Visibility.Visible;
         slot.MouseLeave += (_, _) => sel.Visibility = Visibility.Hidden;
@@ -190,7 +215,7 @@ public partial class MainWindow
     /// <summary>The dashed "+" slot after the goals, while fewer than three: a click opens Set a goal.</summary>
     FrameworkElement AddGoalSlot()
     {
-        var slot = new StackPanel { Width = GoalSlotWidth, Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = "add", ToolTip = "Set a goal: Kinah, an item or runs, for today." };
+        var slot = new StackPanel { Width = GoalSlotWidth, Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = "add", ToolTip = L.T("Set a goal: Kinah, an item or runs, for today.") };
         ToolTipService.SetInitialShowDelay(slot, 400);
         var ring = new Grid { Width = GoalRingSize, Height = GoalRingSize, HorizontalAlignment = HorizontalAlignment.Center };
         var dash = new Ellipse { Width = 62, Height = 62, StrokeThickness = 1.2, StrokeDashArray = new DoubleCollection { 3, 3 }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -200,9 +225,9 @@ public partial class MainWindow
         plus.HorizontalAlignment = HorizontalAlignment.Center; plus.Margin = new Thickness(0, -4, 0, 0);
         ring.Children.Add(plus);
         slot.Children.Add(ring);
-        var name = PT("Add a goal", "Faint", 12); name.HorizontalAlignment = HorizontalAlignment.Center; name.Margin = new Thickness(0, 7, 0, 0);
+        var name = PT(L.T("Add a goal"), "Faint", 12); name.HorizontalAlignment = HorizontalAlignment.Center; name.Margin = new Thickness(0, 7, 0, 0);
         slot.Children.Add(name);
-        AutomationProperties.SetName(slot, "Add a goal");
+        AutomationProperties.SetName(slot, L.T("Add a goal"));
         slot.MouseEnter += (_, _) => dash.SetResourceReference(Shape.StrokeProperty, "Gold");
         slot.MouseLeave += (_, _) => dash.SetResourceReference(Shape.StrokeProperty, "LineStrong");
         slot.MouseLeftButtonUp += (_, _) => OpenGoalSheet(null, new GoalDraft(), slot);
@@ -214,16 +239,16 @@ public partial class MainWindow
     {
         var p = ProgressOf(g, TodayGoalCounts());
         var (card, body) = CkShell(300);
-        var sub = g.Kind == Goal.KindKinah ? $"Goal · {Fk(g.Target)} from farming today" : $"Goal · {g.Target:N0} today";
+        var sub = g.Kind == Goal.KindKinah ? L.F("Goal · {0} from farming today", Fk(g.Target)) : L.F("Goal · {0:N0} today", g.Target);
         body.Children.Add(g.Kind == Goal.KindItem ? CkBand(g.Name, GradeOf(g.Name), sub)
-            : GoalBand(GoalTileFor(g, 64, gold: true), g.Kind == Goal.KindKinah ? "Kinah" : Goals.Label(g), sub));
+            : GoalBand(GoalTileFor(g, 64, gold: true), g.Kind == Goal.KindKinah ? L.T("Kinah") : GoalLabelT(g), sub));
         body.Children.Add(GoalBar(p.Fraction));
-        body.Children.Add(CkSection("TODAY"));
-        body.Children.Add(CkKv("Have", GoalAmount(g, p.Have), CkInk));
-        body.Children.Add(p.Done ? CkKv("Reached", "✓", CkGold) : CkKv("To go", GoalAmount(g, p.ToGo), CkInk));
-        if (Goals.PaceText(p) is { Length: > 0 } pace) body.Children.Add(CkKv("At today's pace", pace, CkInk, mono: false));
-        if (g.Kind == Goal.KindItem) { var n = CkNote("Drops, gathering and run rewards picked up today."); n.Margin = new Thickness(20, 8, 20, 0); body.Children.Add(n); }
-        var how = CkNote("Click to change or remove it"); how.Margin = new Thickness(20, 12, 20, 14);
+        body.Children.Add(CkSection(L.T("TODAY")));
+        body.Children.Add(CkKv(L.T("Have"), GoalAmount(g, p.Have), CkInk));
+        body.Children.Add(p.Done ? CkKv(L.T("Reached"), "✓", CkGold) : CkKv(L.T("To go"), GoalAmount(g, p.ToGo), CkInk));
+        if (GoalPaceT(p) is { Length: > 0 } pace) body.Children.Add(CkKv(L.T("At today's pace"), pace, CkInk, mono: false));
+        if (g.Kind == Goal.KindItem) { var n = CkNote(L.T("Drops, gathering and run rewards picked up today.")); n.Margin = new Thickness(20, 8, 20, 0); body.Children.Add(n); }
+        var how = CkNote(L.T("Click to change or remove it")); how.Margin = new Thickness(20, 12, 20, 14);
         body.Children.Add(how);
         return card;
     }
@@ -269,12 +294,12 @@ public partial class MainWindow
     {
         int at = _goals.IndexOf(g);
         if (at < 0) return;
-        _ = Offer("goal", "Goal removed",
+        _ = Offer("goal", L.T("Goal removed"),
             apply: () => { _goals.Remove(g); SaveGoals(); RedrawGoals(); },
             undo: () =>
             {
                 if (!_goals.Contains(g) && _goals.Count < Goals.Max) { _goals.Insert(Math.Min(at, _goals.Count), g); SaveGoals(); }
-                RedrawGoals(); Say("The goal is back.", "Good");
+                RedrawGoals(); Say(L.T("The goal is back."), "Good");
             },
             commit: () => Task.CompletedTask);
     }
@@ -326,7 +351,7 @@ public partial class MainWindow
     /// <param name="editing">The goal a click or Change opened, replaced in place on Set goal; null adds one.</param>
     void OpenGoalSheet(Goal? editing, GoalDraft d, FrameworkElement? at)
     {
-        if (editing == null && _goals.Count >= Goals.Max) { Say("Three goals are set. Click one to change or remove it.", "Warn"); return; }
+        if (editing == null && _goals.Count >= Goals.Max) { Say(L.T("Three goals are set. Click one to change or remove it."), "Warn"); return; }
         if (_card != null) _card.IsOpen = false;
         _card = new InCard { Child = BuildGoalSheet(d, editing), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at ?? (UIElement)Content };
         _card.IsOpen = true;
@@ -340,9 +365,9 @@ public partial class MainWindow
     {
         var (card, body) = CkShell(420);
         void Redo() { if (_card is { IsOpen: true }) _card.Child = BuildGoalSheet(d, editing); }
-        var title = CkText(editing != null ? "Change this goal" : "Set a goal", CkInk, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 16, 20, 2);
+        var title = CkText(L.T(editing != null ? "Change this goal" : "Set a goal"), CkInk, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 16, 20, 2);
         body.Children.Add(title);
-        var sub = CkText("It counts today, from midnight on this PC.", CkMuted, 12.5); sub.Margin = new Thickness(20, 0, 20, 12);
+        var sub = CkText(L.T("It counts today, from midnight on this PC."), CkMuted, 12.5); sub.Margin = new Thickness(20, 0, 20, 12);
         body.Children.Add(sub);
 
         // the three kinds
@@ -364,9 +389,9 @@ public partial class MainWindow
             b.MouseLeftButtonUp += (_, _) => { if (d.Kind != kind) { d.Kind = kind; Redo(); } };
             Grid.SetColumn(b, col); kinds.Children.Add(b);
         }
-        Kind(0, Goal.KindKinah, CoinTile(36), "Kinah");
-        Kind(2, Goal.KindItem, d.Item.Length > 0 ? CkIcon(d.Item, 36, FrameOf(_items.IdOf(d.Item))) : GlyphTile(36, BoxPath), "An item");
-        Kind(4, Goal.KindRuns, GlyphTile(36, GatePath), "Runs");
+        Kind(0, Goal.KindKinah, CoinTile(36), L.T("Kinah"));
+        Kind(2, Goal.KindItem, d.Item.Length > 0 ? CkIcon(d.Item, 36, FrameOf(_items.IdOf(d.Item))) : GlyphTile(36, BoxPath), L.T("An item"));
+        Kind(4, Goal.KindRuns, GlyphTile(36, GatePath), L.T("Runs"));
         body.Children.Add(kinds);
 
         var today = TodayGoalCounts();
@@ -374,7 +399,7 @@ public partial class MainWindow
         // An item: the one picked, today's pickups to pick from, and a search of the item list
         if (d.Kind == Goal.KindItem)
         {
-            var row = SheetRow("Item");
+            var row = SheetRow(L.T("Item"));
             var pick = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             if (d.Item.Length > 0)
             {
@@ -382,7 +407,7 @@ public partial class MainWindow
                 var g = GradeOf(d.Item);
                 pick.Children.Add(CkText(d.Item, g is "" or "Common" ? CkInk : GradeColor(g), 13.5, FontWeights.Normal));
             }
-            else pick.Children.Add(CkText("Pick one below", CkFaint, 12.5));
+            else pick.Children.Add(CkText(L.T("Pick one below"), CkFaint, 12.5));
             Grid.SetColumn(pick, 1); row.Children.Add(pick);
             body.Children.Add(row);
             var mine = today.Farmed.Concat(today.FromRuns).GroupBy(kv => kv.Key).Select(gr => (Id: gr.Key, N: gr.Sum(x => x.Value))).Where(x => x.N > 0)
@@ -395,7 +420,7 @@ public partial class MainWindow
                     var nm = _items.NameOf(id);
                     bool on = string.Equals(nm, d.Item, StringComparison.OrdinalIgnoreCase);
                     var t = CkIcon(nm, 34, FrameOf(id), glow: on);
-                    t.Margin = new Thickness(0, 0, 6, 6); t.Cursor = Cursors.Hand; t.ToolTip = $"{nm} · {n:N0} today";
+                    t.Margin = new Thickness(0, 0, 6, 6); t.Cursor = Cursors.Hand; t.ToolTip = L.F("{0} · {1:N0} today", nm, n);
                     AutomationProperties.SetName(t, nm);
                     t.MouseLeftButtonUp += (_, _) => { d.Item = nm; Redo(); };
                     tiles.Children.Add(t);
@@ -404,8 +429,8 @@ public partial class MainWindow
             }
             var finding = new TextBox { Height = 30, FontSize = 12.5, Padding = new Thickness(8, 0, 8, 0), VerticalContentAlignment = VerticalAlignment.Center, Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), Foreground = Ck(CkInk), CaretBrush = Ck(CkGold) };
             find = finding;
-            AutomationProperties.SetName(finding, "Find an item");
-            var findHint = CkText(d.Item.Length > 0 ? "Find another item…" : "Find an item…", CkFaint, 12.5); findHint.Margin = new Thickness(10, 0, 0, 0); findHint.IsHitTestVisible = false;
+            AutomationProperties.SetName(finding, L.T("Find an item"));
+            var findHint = CkText(L.T(d.Item.Length > 0 ? "Find another item…" : "Find an item…"), CkFaint, 12.5); findHint.Margin = new Thickness(10, 0, 0, 0); findHint.IsHitTestVisible = false;
             var findBox = new Grid { Margin = new Thickness(96, 2, 20, 0) }; findBox.Children.Add(finding); findBox.Children.Add(findHint);
             body.Children.Add(findBox);
             var found = new StackPanel { Margin = new Thickness(96, 4, 20, 4) };
@@ -428,7 +453,7 @@ public partial class MainWindow
                     g.MouseLeftButtonUp += (_, _) => { d.Item = name; Redo(); };
                     found.Children.Add(g);
                 }
-                if (found.Children.Count == 0) found.Children.Add(CkText("No item by that name.", CkFaint, 12));
+                if (found.Children.Count == 0) found.Children.Add(CkText(L.T("No item by that name."), CkFaint, 12));
             }
             finding.TextChanged += (_, _) => Suggest();
             // Enter takes the first name offered (a name typed by hand never makes a goal: only the item list's)
@@ -442,11 +467,11 @@ public partial class MainWindow
         // Runs: which ones count
         if (d.Kind == Goal.KindRuns)
         {
-            var row = SheetRow("Which");
+            var row = SheetRow(L.T("Which"));
             var pills = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             foreach (var (key, text) in new[] { (Goal.Expeditions, "Expeditions"), (Goal.Events, "Events"), (Goal.AnyRun, "Any run") })
             {
-                var pill = SheetPill(text, d.Which == key, mono: false);
+                var pill = SheetPill(L.T(text), d.Which == key, mono: false);
                 pill.MouseLeftButtonUp += (_, _) => { d.Which = key; Redo(); };
                 pills.Children.Add(pill);
             }
@@ -455,15 +480,15 @@ public partial class MainWindow
         }
 
         // the amount, with its presets under it
-        var amt = SheetRow(d.Kind == Goal.KindKinah ? "Make" : d.Kind == Goal.KindItem ? "Pick up" : "Do");
+        var amt = SheetRow(L.T(d.Kind == Goal.KindKinah ? "Make" : d.Kind == Goal.KindItem ? "Pick up" : "Do"));
         amt.Margin = new Thickness(20, d.Kind == Goal.KindKinah ? 0 : 8, 20, 0);
         var box = new TextBox
         {
             Height = 34, FontSize = 13, Padding = new Thickness(10, 0, 10, 0), VerticalContentAlignment = VerticalAlignment.Center, Text = d.Amount[d.Kind],
             Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), Foreground = Ck(CkInk), CaretBrush = Ck(CkGold), FontFamily = new FontFamily("Cascadia Mono, Consolas"),
         };
-        AutomationProperties.SetName(box, "How much");
-        var unit = CkText(d.Kind == Goal.KindKinah ? "from farming, today" : "today", CkFaint, 12); unit.HorizontalAlignment = HorizontalAlignment.Right; unit.Margin = new Thickness(0, 0, 12, 0); unit.IsHitTestVisible = false;
+        AutomationProperties.SetName(box, L.T("How much"));
+        var unit = CkText(L.T(d.Kind == Goal.KindKinah ? "from farming, today" : "today"), CkFaint, 12); unit.HorizontalAlignment = HorizontalAlignment.Right; unit.Margin = new Thickness(0, 0, 12, 0); unit.IsHitTestVisible = false;
         var amtBox = new Grid(); amtBox.Children.Add(box); amtBox.Children.Add(unit);
         Grid.SetColumn(amtBox, 1); amt.Children.Add(amtBox);
         body.Children.Add(amt);
@@ -482,10 +507,10 @@ public partial class MainWindow
 
         // Set goal and Cancel, under a rule
         var acts = new StackPanel { Orientation = Orientation.Horizontal };
-        var set = new Button { Content = "Set goal", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
+        var set = new Button { Content = L.T("Set goal"), Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
         set.SetResourceReference(StyleProperty, "PrimaryButton");
         acts.Children.Add(set);
-        var cancel = new Button { Content = "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = L.T("Cancel"), Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { if (_card != null) _card.IsOpen = false; };
         acts.Children.Add(cancel);
         var foot = new DockPanel { LastChildFill = false };
@@ -493,7 +518,7 @@ public partial class MainWindow
         // changing a goal: Remove goal at the right, gone at once with Undo (what a right-click used to hide)
         if (editing != null)
         {
-            var remove = new Button { Content = "Remove goal", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, ToolTip = "Takes the goal off, with Undo." };
+            var remove = new Button { Content = L.T("Remove goal"), Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, ToolTip = L.T("Takes the goal off, with Undo.") };
             remove.Click += (_, _) => { if (_card != null) _card.IsOpen = false; RemoveGoal(editing); };
             DockPanel.SetDock(remove, Dock.Right); foot.Children.Add(remove);
         }
@@ -547,16 +572,16 @@ public partial class MainWindow
     /// <summary>The sheet's one line: what's missing, or how long at today's pace, and that the panel says it once with no sound.</summary>
     string GoalHint(Goal g, GoalCounts today)
     {
-        if (g.Kind == Goal.KindItem && g.Name.Length == 0) return "Pick an item.";
-        if (g.Target <= 0) return g.Kind == Goal.KindKinah ? "Type an amount, like 300K." : "Type how many.";
+        if (g.Kind == Goal.KindItem && g.Name.Length == 0) return L.T("Pick an item.");
+        if (g.Target <= 0) return L.T(g.Kind == Goal.KindKinah ? "Type an amount, like 300K." : "Type how many.");
         var p = ProgressOf(g, today);
-        if (p.Done) return $"Already reached today ({GoalAmount(g, p.Have)} so far).";
-        var pace = Goals.PaceText(p);
-        var first = pace.Length > 0 ? $"At today's pace, {pace} to go."
-            : g.Kind == Goal.KindKinah ? "No Kinah from farming yet today."
-            : g.Kind == Goal.KindRuns ? (p.Have > 0 ? $"{p.Have:N0} so far today." : "No runs yet today.")
-            : p.Have > 0 ? $"{p.Have:N0} so far today, from runs." : "None picked up yet today.";
-        return first + " When it's reached, the game panel says so once. No sound.";
+        if (p.Done) return L.F("Already reached today ({0} so far).", GoalAmount(g, p.Have));
+        var pace = GoalPaceT(p);
+        var first = pace.Length > 0 ? L.F("At today's pace, {0} to go.", pace)
+            : g.Kind == Goal.KindKinah ? L.T("No Kinah from farming yet today.")
+            : g.Kind == Goal.KindRuns ? (p.Have > 0 ? L.F("{0:N0} so far today.", p.Have) : L.T("No runs yet today."))
+            : p.Have > 0 ? L.F("{0:N0} so far today, from runs.", p.Have) : L.T("None picked up yet today.");
+        return first + " " + L.T("When it's reached, the game panel says so once. No sound.");
     }
 
     /// <summary>Set goal: added (or put in place of the one changed), saved, drawn, and said in the status line.</summary>
@@ -567,11 +592,11 @@ public partial class MainWindow
         Goals.Settle(g, p, DayStore.Today);   // already reached when set: nothing announced for it
         int at = editing != null ? _goals.IndexOf(editing) : -1;
         if (at >= 0) _goals[at] = g;
-        else if (!Goals.Add(_goals, g)) { Say("Three goals are set. Click one to change or remove it.", "Warn"); return; }
+        else if (!Goals.Add(_goals, g)) { Say(L.T("Three goals are set. Click one to change or remove it."), "Warn"); return; }
         SaveGoals();
         if (_card != null) _card.IsOpen = false;
         RedrawGoals();
-        Say((at >= 0 ? "Goal changed: " : "Goal set: ") + Goals.What(g, g.Target, Fk) + " today" + (p.Done ? ". Already reached." : "."), "Good");
+        Say(L.F(at >= 0 ? (p.Done ? "Goal changed: {0} today. Already reached." : "Goal changed: {0} today.") : (p.Done ? "Goal set: {0} today. Already reached." : "Goal set: {0} today."), GoalWhatT(g, g.Target)), "Good");
     }
 
     /* ---------------- reaching one ---------------- */
@@ -595,8 +620,8 @@ public partial class MainWindow
         var reached = Goals.JustReached(_goals, g => CountsFor(g, today), _items, DayStore.Today);
         if (reached.Count == 0) return new();
         SaveGoals();
-        var said = reached.Select(g => Goals.ReachedText(g, Fk)).ToList();
-        var line = said.Count == 1 ? said[0] : "Goals reached · " + string.Join(" · ", reached.Select(g => Goals.What(g, g.Target, Fk)));
+        var said = reached.Select(g => L.F("Goal reached · {0}", GoalWhatT(g, g.Target))).ToList();
+        var line = said.Count == 1 ? said[0] : L.F("Goals reached · {0}", string.Join(" · ", reached.Select(g => GoalWhatT(g, g.Target))));
         if (HudLook == HudLooks.Strip) _hud?.Alert(line, GoalGold, 6); else FlashHud(line);
         Say(line, "Gold");
         CrashLog.Note(line);

@@ -276,8 +276,8 @@ static class GlitchKit
     /// <summary>A class's three-letter code, as a list's class column says it ("GLA", "CLR"); empty for none.</summary>
     public static string ClassCode(string? cls) => ClassArt.Key(cls) switch
     {
-        "gladiator" => "GLA", "templar" => "TMP", "assassin" => "ASN", "ranger" => "RNG", "sorcerer" => "SOR",
-        "spiritmaster" => "SPM", "cleric" => "CLR", "chanter" => "CHN", _ => "",
+        "gladiator" => L.T("GLA"), "templar" => L.T("TMP"), "assassin" => L.T("ASN"), "ranger" => L.T("RNG"), "sorcerer" => L.T("SOR"),
+        "spiritmaster" => L.T("SPM"), "cleric" => L.T("CLR"), "chanter" => L.T("CHN"), _ => "",
     };
 
     /// <summary>A timer's words split at its name: ("Shugo", "ENTER 2:41").</summary>

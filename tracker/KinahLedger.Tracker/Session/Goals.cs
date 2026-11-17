@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Text.Json;
 using KinahLedger.Data;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -210,7 +212,7 @@ public static class Goals
     public static string PaceText(GoalProgress p)
     {
         if (p.Done || p.SecondsToGo is not double s) return "";
-        return s < 60 ? "under a minute" : "about " + TodayLoot.Dur(s);
+        return s < 60 ? L.T("under a minute") : L.F("about {0}", TodayLoot.Dur(s));
     }
 
     /// <summary>
@@ -239,8 +241,8 @@ public static class Goals
     public static string Label(Goal g) => g.Kind switch
     {
         Goal.KindItem => g.Name,
-        Goal.KindRuns => g.Which switch { Goal.Expeditions => "Expeditions", Goal.Events => "Events", _ => "Runs" },
-        _ => "Kinah from farming",
+        Goal.KindRuns => L.T(g.Which switch { Goal.Expeditions => "Expeditions", Goal.Events => "Events", _ => "Runs" }),
+        _ => L.T("Kinah from farming"),
     };
 
     /// <summary>An amount of the goal's thing in words: "300K from farming", "20 Spiritstone", "8 expeditions".</summary>
@@ -248,18 +250,18 @@ public static class Goals
     {
         Goal.KindItem => $"{N(n)} {g.Name}",
         Goal.KindRuns => $"{N(n)} {RunWord(g.Which, n)}",
-        _ => $"{fk(n)} from farming",
+        _ => L.F("{0} from farming", fk(n)),
     };
 
     /// <summary>What the panel and the status line say once: "Goal reached · 300K from farming".</summary>
-    public static string ReachedText(Goal g, Func<double, string> fk) => "Goal reached · " + What(g, g.Target, fk);
+    public static string ReachedText(Goal g, Func<double, string> fk) => L.F("Goal reached · {0}", What(g, g.Target, fk));
 
-    static string RunWord(string which, long n) => which switch
+    static string RunWord(string which, long n) => L.T(which switch
     {
         Goal.Expeditions => n == 1 ? "expedition" : "expeditions",
         Goal.Events => n == 1 ? "event" : "events",
         _ => n == 1 ? "run" : "runs",
-    };
+    }, "count");
 
     static string N(long n) => n.ToString("N0", CultureInfo.InvariantCulture);
 

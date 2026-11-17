@@ -30,7 +30,7 @@ sealed class WrappedWindow : Window
     public WrappedWindow(Window owner)
     {
         Owner = owner;
-        Title = "Wrapped";
+        Title = L.T("Wrapped");
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -75,9 +75,9 @@ sealed class WrappedWindow : Window
         _sheetHost.Children.Add(sheet);
         _bar.Width = sheet.Width;   // as wide as the sheet: a long line under the buttons wraps, the window never widens
         var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 12, 12, 0), ToolTip = "Close (Esc)" };
+            Margin = new Thickness(0, 12, 12, 0), ToolTip = L.T("Close (Esc)") };
         close.SetResourceReference(StyleProperty, "RoundBtn");
-        AutomationProperties.SetName(close, "Close the recap");
+        AutomationProperties.SetName(close, L.T("Close the recap"));
         close.Click += (_, _) => Close();
         _sheetHost.Children.Add(close);
         _acts.Children.Clear();

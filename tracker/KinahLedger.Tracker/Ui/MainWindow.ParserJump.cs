@@ -38,7 +38,7 @@ public partial class MainWindow
         card.Margin = new Thickness(0, 8, 0, 0);
         var body = new StackPanel();
         var place = BossBook.Strip((live ?? pulls[^1]).Instance);
-        body.Children.Add(QHead("Shield", $"Boss fights  ·  {pulls.Count + (live != null ? 1 : 0)}", place.Length > 0 ? $"{place} · group DPS" : "group DPS"));
+        body.Children.Add(QHead("Shield", L.F("Boss fights  ·  {0}", pulls.Count + (live != null ? 1 : 0)), place.Length > 0 ? L.F("{0} · group DPS", place) : L.T("group DPS")));
         var rows = pulls.Select(e => (E: e, Live: false)).ToList();
         if (live != null) rows.Add((live, true));
         for (int i = 0; i < rows.Count; i++)
@@ -54,7 +54,7 @@ public partial class MainWindow
             g.Children.Add(mark);
             var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var r1 = new Run(e.Boss) { FontSize = 13.5, FontWeight = FontWeights.SemiBold }; r1.SetResourceReference(TextElement.ForegroundProperty, "Ink"); name.Inlines.Add(r1);
-            var sub = isLive ? "   under way" : e.FinalBoss ? "   final boss" : "";
+            var sub = isLive ? "   " + L.T("under way") : e.FinalBoss ? "   " + L.T("final boss") : "";
             if (sub.Length > 0) { var r2 = new Run(sub) { FontSize = 12, FontWeight = FontWeights.Medium }; r2.SetResourceReference(TextElement.ForegroundProperty, isLive ? "Gold" : "Muted"); name.Inlines.Add(r2); }
             Grid.SetColumn(name, 1); g.Children.Add(name);
             var end = isLive ? ParserNow : e.End ?? e.LastAt;
@@ -111,7 +111,7 @@ public partial class MainWindow
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen()) dc.DrawRectangle(new VisualBrush(el) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill }, null, new Rect(0, 0, w, h));
         var rtb = new RenderTargetBitmap((int)Math.Ceiling(w), (int)Math.Ceiling(h), 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(dv); rtb.Freeze();
+        LangCheck.Scan(el, "parser jump"); rtb.Render(dv); rtb.Freeze();
         return rtb;
     }
 

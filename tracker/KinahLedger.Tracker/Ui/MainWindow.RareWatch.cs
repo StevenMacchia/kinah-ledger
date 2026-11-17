@@ -47,8 +47,9 @@ public partial class MainWindow
     {
         if (PriceBook.QuoteOf(name) is not { Sure: true } q || q.Price <= 0) return ("", "");
         var server = Server?.Name ?? "";
-        var each = count is "" or "×1" ? "" : "each ";
-        return ((q.From == PriceBook.From.Region ? "≈" : "") + Fk(q.Price), (each + (server.Length > 0 ? "on " + server : "")).Trim());
+        bool each = count is not ("" or "×1");
+        var where = server.Length > 0 ? (each ? L.F("each on {0}", server) : L.F("on {0}", server)) : each ? L.T("each") : "";
+        return ((q.From == PriceBook.From.Region ? "≈" : "") + Fk(q.Price), where);
     }
 
     /// <summary>The drop's own values on top of HoldRareOnHud's: the item, its price, whether it is watched and whether the chime played.</summary>

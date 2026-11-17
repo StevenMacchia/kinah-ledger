@@ -17,14 +17,15 @@ public partial class MainWindow
     /// <summary>Window size (0.10.11, Ui/MainWindow.Fit.cs): a step bigger, a step smaller, back to 100%. The numeric keypad's + - 0 work too.</summary>
     public const string WindowBiggerKey = "Ctrl+=", WindowSmallerKey = "Ctrl+-", WindowResetKey = "Ctrl+0";
     /// <summary>The pages (0.10.26): Ctrl+1 Farming, Ctrl+2 Crafting, Ctrl+3 Events; the keypad's 1 2 3 too. Nothing before a server is chosen.</summary>
-    public const string PageKeys = "Ctrl+1 to 5";
+    public static string PageKeys => L.T("Ctrl+1 to 5");
     /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
-    public const string ClearAllText = "Clear everything";
+    public static string ClearAllText => L.T("Clear everything");
 
     /// <summary>The Farming count has been drawn once, so Share has something to open on (it was the header's Share button's IsEnabled).</summary>
     bool _shareReady;
     /// <summary>The Farming ⋯ menu's rows for the two things that left the header (UX pass 2026-11-13).</summary>
-    public const string ShareText = "Share a picture…", FullViewText = "Full view";
+    public static string ShareText => L.T("Share a picture…");
+    public static string FullViewText => L.T("Full view");
 
     void InitShortcuts()
     {
@@ -45,7 +46,7 @@ public partial class MainWindow
             var p = part;
             InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!_welcome && _part != p) ShowPart(p); }), key, ModifierKeys.Control));
         }
-        OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{OptionsKey} opens them.";
+        OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{L.F("{0} opens them.", OptionsKey)}";
         // a button that is off says why: Start until a server is chosen (Share, in the Farming ⋯ menu, says so on its row)
         ToolTipService.SetShowOnDisabled(StartBtn, true); StartBtn.IsEnabledChanged += (_, _) => ButtonTips();
         // whether a run would clear counts changes with every pickup: said as the tooltip opens (0.9.13)
@@ -58,15 +59,15 @@ public partial class MainWindow
     {
         var key = HotkeyText;
         StartBtn.ToolTip = !StartBtn.IsEnabled
-            ? (!HasServer && !Farming ? "Pick your server first, in Options › Server: prices and drops are kept per server." : "A moment: the run is starting or stopping.")
-            : (key.Length > 0 ? $"{StartTip}\n{key} in the game starts or stops it." : StartTip)
-              + (!Farming && HasCounts() ? "\nStarting a run clears the counts on the tables first (Undo brings them back). The Today strip keeps the day." : "");
+            ? (!HasServer && !Farming ? L.T("Pick your server first, in Options › Server: prices and drops are kept per server.") : L.T("A moment: the run is starting or stopping."))
+            : (key.Length > 0 ? $"{StartTip}\n{L.F("{0} in the game starts or stops it.", key)}" : StartTip)
+              + (!Farming && HasCounts() ? "\n" + L.T("Starting a run clears the counts on the tables first (Undo brings them back). The Today strip keeps the day.") : "");
     }
 
     /// <summary>Ctrl+N and the tray's Clear everything: the Farming page, then the ⋯ menu's own clear with its Undo bar.</summary>
     async Task ClearAllFromKey()
     {
-        if (_welcome) { Say("Choose your server first.", "Warn"); return; }
+        if (_welcome) { Say(L.T("Choose your server first."), "Warn"); return; }
         if (_part != "Farming") ShowPart("Farming");
         await ClearFarmTables();
     }
@@ -80,7 +81,7 @@ public partial class MainWindow
         if (_shareOn == null) _shareScope = SharePicture.Today;
         if (CurrentSharePic() == null)
         {
-            Say(_shareScope is SharePicture.Today or SharePicture.Session ? "Nothing to share yet. Kill or gather something and the picture fills in." : "Nothing on this side of Share yet.", "Warn");
+            Say(_shareScope is SharePicture.Today or SharePicture.Session ? L.T("Nothing to share yet. Kill or gather something and the picture fills in.") : L.T("Nothing on this side of Share yet."), "Warn");
             return false;
         }
         return CopySharePicture();

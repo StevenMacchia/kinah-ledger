@@ -776,7 +776,7 @@ public partial class MainWindow
         // "Shattered Arkanis [Stage 3]" says its stage beside the kind
         int i = e.Instance.IndexOf(" [", StringComparison.Ordinal);
         var stage = i > 0 ? e.Instance[(i + 2)..].TrimEnd(']') : "";
-        return stage.Length > 0 ? $"{e.Kind} {stage}" : e.Kind;
+        return stage.Length > 0 ? $"{PK.KindWord(e.Kind)} {stage}" : PK.KindWord(e.Kind);
     }
 
     /// <summary>"Killed", "Cleared" or "3 kills" in mint, "Wiped" or "Died" in coral, "Left" or "Ended" quiet, "In progress" in gold with a dot.</summary>
@@ -1016,7 +1016,7 @@ public partial class MainWindow
             foreach (var key in kindsHere.Prepend(""))
             {
                 int n = key.Length == 0 ? past.Count : past.Count(e => e.Kind == key);
-                var b = new Button { Content = $"{(key.Length == 0 ? L.T("All") : key)} {n}", Height = 24, FontSize = 12, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(kinds.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
+                var b = new Button { Content = $"{(key.Length == 0 ? L.T("All") : PK.KindWord(key))} {n}", Height = 24, FontSize = 12, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(kinds.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
                 b.SetResourceReference(StyleProperty, _parserPrefs.KindFilter == key ? "SegOn" : "SegOff");
                 var k = key;
                 b.Click += (_, _) => { _parserPrefs.KindFilter = k; _parserPrefs.BossFilter = ""; ParserFilterChanged(); };

@@ -38,6 +38,20 @@ static class PK
     public static string Int(double v) => Math.Round(v).ToString("N0", CultureInfo.InvariantCulture);
     public static string Pct(double v, int d = 1) => (v * 100).ToString(d == 0 ? "0" : "0.0", CultureInfo.InvariantCulture) + "%";
     public static string Signed(double v) => (v >= 0 ? "+" : "−") + Pct(Math.Abs(v));
+
+    /// <summary>A record's kind in the language in use: the open world and the Abyss are words; the instance kinds (Transcendence, Expedition, Sanctuary) are the game's names and stay.</summary>
+    public static string KindWord(string kind) => kind is "Open world" or "Abyss" ? L.T(kind) : kind;
+
+    /// <summary>The sub line under a record's title (as <see cref="Encounter.Where"/>), its kind and place in the language in use.</summary>
+    public static string WhereOf(Encounter e)
+    {
+        var bits = new List<string>();
+        var i = BossBook.Strip(e.Instance);
+        if (i.Length > 0 && i != e.Title && i != e.Kind) bits.Add(KindWord(i));
+        if (e.GameMode.Length > 0) bits.Add(e.GameMode);
+        if (e.Kind.Length > 0) bits.Add(KindWord(e.Kind));
+        return string.Join(" · ", bits);
+    }
     public static string Clock(double s) => BossParser.Clock(TimeSpan.FromSeconds(s));
     public static T M<T>(T el, double l, double t, double r, double b) where T : FrameworkElement { el.Margin = new Thickness(l, t, r, b); return el; }
     public static T Col<T>(T el, int c, int span = 1) where T : UIElement { Grid.SetColumn(el, c); if (span > 1) Grid.SetColumnSpan(el, span); return el; }
@@ -254,7 +268,7 @@ static class PK
             cv.Children.Add(new Path { Data = new PathGeometry(new[] { fig }), Stroke = C(Dark ? White : Black, 0.22), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 3, 2 } });
             foreach (var (v, s) in new[] { (1.0, "100%"), (0.5, "50%") })
             { var lt = T(s, 10.5, label, FontWeights.SemiBold); Canvas.SetLeft(lt, w - ch.Rt + 6); Canvas.SetTop(lt, ch.YHp(v) - 8); cv.Children.Add(lt); }
-            var hl = T("boss HP", 10, label, FontWeights.SemiBold); Canvas.SetLeft(hl, w - ch.Rt + 2); Canvas.SetTop(hl, ch.YHp(0) - 8); cv.Children.Add(hl);
+            var hl = T(L.T("boss HP"), 10, label, FontWeights.SemiBold); Canvas.SetLeft(hl, w - ch.Rt + 2); Canvas.SetTop(hl, ch.YHp(0) - 8); cv.Children.Add(hl);
         }
         return (cv, ch);
     }
@@ -276,7 +290,7 @@ static class PK
             Child = new TextBlock { Text = "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -1, 0, 0) },
             Effect = new DropShadowEffect { Color = Coral, BlurRadius = 10, ShadowDepth = 0, Opacity = 0.8 } };
         Canvas.SetLeft(dot, x - 7); Canvas.SetTop(dot, y - 7); cv.Children.Add(dot);
-        var lt = T($"{name} died", 10.5, C(Coral), FontWeights.SemiBold); Canvas.SetLeft(lt, x + 9); Canvas.SetTop(lt, y - 9); cv.Children.Add(lt);
+        var lt = T(L.F("{0} died", name), 10.5, C(Coral), FontWeights.SemiBold); Canvas.SetLeft(lt, x + 9); Canvas.SetTop(lt, y - 9); cv.Children.Add(lt);
     }
 
     /// <summary>A rolling average over a window of <paramref name="k"/> seconds each side, so a per-second line reads calmly.</summary>

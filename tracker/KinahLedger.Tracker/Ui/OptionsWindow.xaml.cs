@@ -49,6 +49,7 @@ public partial class OptionsWindow : Window
 
         BuildNav();
         GameStartBox.ItemsSource = GameStartChoices.Select(L.T).ToList();
+        RegionPick.DisplayMemberPath = "Shown"; ServerPick.DisplayMemberPath = "LabelShown";   // the names as the language writes them (factions, regions)
         RegionPick.ItemsSource = Servers.Regions;
         Load(_edit);
         Wire();
@@ -141,7 +142,7 @@ public partial class OptionsWindow : Window
         ExplainChk.IsChecked = c.ExplainCounts;
         InvDetailsChk.IsChecked = c.InventoryDetails;
         PacketChk.IsChecked = c.PacketReading;
-        PacketStateLbl.Text = c.PacketState.Length > 0 ? L.T("Now: ") + c.PacketState : "";
+        PacketStateLbl.Text = c.PacketState.Length > 0 ? L.T("Now: ") + PacketStateText(c.PacketState) : "";
         GrossHint.Text = L.F("Values and profit show after the Market's {0:P0} fee and tax by default. Turn this on to see what things sell for before it.", Data.PriceBook.FeeRate);
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
@@ -649,5 +650,22 @@ public partial class OptionsWindow : Window
         var why = Record(mods, key);
         if (why != null) EndCapture();
         return why;
+    }
+
+    /// <summary>
+    /// The game-reading state (Packets/PacketReader.State, English for the logs) in the player's language: "Off: …", the
+    /// waiting states, and "On (kind): counting A, B … from the game's server host:port".
+    /// </summary>
+    internal static string PacketStateText(string s)
+    {
+        if (L.Code == "en") return s;
+        var on = System.Text.RegularExpressions.Regex.Match(s, @"^On \((?<k>[^)]*)\): counting (?<what>.+) from the game's server (?<at>\S+)$");
+        if (on.Success)
+        {
+            var what = on.Groups["what"].Value.Split(", ").Select(w => L.T(w));
+            return L.F("On ({0}): counting {1} from the game's server {2}", on.Groups["k"].Value, string.Join(L.T(", "), what), on.Groups["at"].Value);
+        }
+        if (s.StartsWith("Off: ", StringComparison.Ordinal)) return L.F("Off: {0}", L.T(s["Off: ".Length..]));
+        return L.T(s);
     }
 }

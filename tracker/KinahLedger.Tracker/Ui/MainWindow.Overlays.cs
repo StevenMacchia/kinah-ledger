@@ -37,7 +37,7 @@ public partial class MainWindow
         if (!on) CloseHud();
         else if (!_demo && _watcher.Chat != null) EnsureHud();
         UpdateHud();
-    }, "Your hour, pickups and best. Its look: Options › In game.");
+    }, L.T("Your hour, pickups and best. Its look: Options › In game."));
 
     /// <summary>
     /// The button follows the overlays' switches: the green dot while any is on, and its tooltip naming those on. Call it
@@ -49,12 +49,12 @@ public partial class MainWindow
         var shown = _overlays.Where(o => o.Shown).ToList();
         var on = shown.Where(o => o.IsOn()).Select(o => o.Name).ToList();
         OverlaysDot.Visibility = on.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        OverlaysBtn.ToolTip = "Overlays over the game, each on or off: " + string.Join(", ", shown.Select(o => o.Name)) + "."
-            + (on.Count > 0 ? $"\nOn now: {string.Join(", ", on)}." : "\nNone on now.");
+        OverlaysBtn.ToolTip = L.F("Overlays over the game, each on or off: {0}.", string.Join(", ", shown.Select(o => L.T(o.Name))))
+            + (on.Count > 0 ? "\n" + L.F("On now: {0}.", string.Join(", ", on.Select(n => L.T(n)))) : "\n" + L.T("None on now."));
     }
 
     /// <summary>The menu's switches: one per overlay, its line saying what it shows and where it is set up.</summary>
-    internal List<MenuEntry> OverlayEntries() => _overlays.Where(o => o.Shown).Select(o => new MenuEntry($"{o.Name} overlay", () => { o.Set(!o.IsOn()); DrawOverlayPills(); }, Sub: o.Tip, On: o.IsOn())).ToList();
+    internal List<MenuEntry> OverlayEntries() => _overlays.Where(o => o.Shown).Select(o => new MenuEntry(L.F("{0} overlay", L.T(o.Name)), () => { o.Set(!o.IsOn()); DrawOverlayPills(); }, Sub: o.Tip, On: o.IsOn())).ToList();
 
     void OpenOverlaysMenu() => ShowMenu(OverlaysBtn, OverlayEntries());
 

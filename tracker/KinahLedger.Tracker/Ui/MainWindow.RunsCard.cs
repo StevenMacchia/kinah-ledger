@@ -112,13 +112,13 @@ public partial class MainWindow
 
         InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
 
-        InstEarlierBtn.Content = "All time";
+        InstEarlierBtn.Content = L.T("All time");
 
         // the panel over the game says so when a run of this session just closed flagged
 
         var flagged = runs.Where(r => r.OutOfAverages && r.LastLoot is { } l && (DateTime.UtcNow - l).TotalMinutes < 2).OrderByDescending(r => r.LastLoot).FirstOrDefault();
 
-        _hudFlag = flagged == null ? "" : flagged.Suspect == "looks like several runs" ? $"{flagged.Zone} record looks like several runs" : $"{flagged.Zone} run: {FlagReason(flagged, 0).ToLowerInvariant()}";
+        _hudFlag = flagged == null ? "" : flagged.Suspect == "looks like several runs" ? L.F("{0} record looks like several runs", flagged.Zone) : L.F("{0} run: {1}", flagged.Zone, FlagReason(flagged, 0).ToLowerInvariant());
 
         // the cards are built again only when what they show has changed: the runs themselves, which is live, what is
 
@@ -206,9 +206,9 @@ public partial class MainWindow
 
         // with one place, Paid out here's head says what was made (UI audit 2026-11-08: the same total twice); with several, this is their sum
 
-        InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}" + (_placesShown.Count > 1 ? $" · {Fk(made)} made" : "") : "";
+        InstWhat.Text = InstHost.Children.Count > 0 ? (_placesShown.Count > 1 ? L.F("{0} · {1} made", RunsN(runs.Count), Fk(made)) : RunsN(runs.Count)) : "";
 
-        InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus loot and gear at the lowest Market price, " + PriceBook.Cut + ", over the counted runs. Bound items add nothing." : null;
+        InstWhat.ToolTip = InstHost.Children.Count > 0 ? L.F("Made: Kinah plus loot and gear at the lowest Market price, {0}, over the counted runs. Bound items add nothing.", CutT) : null;
 
         InstEmpty.Visibility = InstHost.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
 
@@ -438,13 +438,13 @@ public partial class MainWindow
 
         title.Inlines.Add(PR(zone, "Gold"));
 
-        if (kind.Length > 0) title.Inlines.Add(PR(" · " + kind, "Faint", FontWeights.Normal));
+        if (kind.Length > 0) title.Inlines.Add(PR(" · " + KindT(kind), "Faint", FontWeights.Normal));
 
         titles.Children.Add(title);
 
-        var meta = $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}";
+        var meta = RunsN(runs.Count);
 
-        if (open != null) meta += $" · run {runs.OrderBy(r => r.Start).ToList().IndexOf(open) + 1} open since {open.Start.ToLocalTime():HH:mm}";
+        if (open != null) meta = L.F("{0} · run {1} open since {2:HH:mm}", meta, runs.OrderBy(r => r.Start).ToList().IndexOf(open) + 1, open.Start.ToLocalTime());
 
         var ml = PT(meta, "Muted", 12.5); ml.Margin = new Thickness(0, 3, 0, 0);
 
@@ -458,9 +458,9 @@ public partial class MainWindow
 
             int at = StepOf(open);
 
-            var pill = PPill($"{RunSteps[Math.Max(0, at)]} · {Clock((open.LastLoot ?? DateTime.UtcNow) - open.Start)} in", true);
+            var pill = PPill(L.F("{0} · {1} in", L.T(RunSteps[Math.Max(0, at)]), Clock((open.LastLoot ?? DateTime.UtcNow) - open.Start)), true);
 
-            pill.ToolTip = "A run is open here now.";
+            pill.ToolTip = L.T("A run is open here now.");
 
             Grid.SetColumn(pill, 2); band.Children.Add(pill);
 
@@ -474,7 +474,7 @@ public partial class MainWindow
 
             var last = (newest.LastLoot ?? newest.Start).ToLocalTime();
 
-            var pill = PPill(last.Date == DateTime.Today ? $"last {last:HH:mm}" : $"last {last.ToString("MMM d", CultureInfo.InvariantCulture)}", false);
+            var pill = PPill(L.F("last {0}", last.Date == DateTime.Today ? last.ToString("HH:mm", CultureInfo.InvariantCulture) : DayShort(last)), false);
 
             Grid.SetColumn(pill, 2); band.Children.Add(pill);
 
@@ -494,7 +494,7 @@ public partial class MainWindow
 
             title.Inlines.Add(PR("  ⌄", "Muted", FontWeights.Normal));
 
-            bandBox.Cursor = Cursors.Hand; bandBox.ToolTip = "Click to pick another place: its figures, its runs and their loot."; ToolTipService.SetInitialShowDelay(bandBox, 500);
+            bandBox.Cursor = Cursors.Hand; bandBox.ToolTip = L.T("Click to pick another place: its figures, its runs and their loot."); ToolTipService.SetInitialShowDelay(bandBox, 500);
 
             bandBox.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(bandBox, pickPlace()); };
 
@@ -684,9 +684,9 @@ public partial class MainWindow
 
             var local = picked.Start.ToLocalTime();
 
-            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : DayHm(local);
 
-            sec.Children.Add(PSection("RUN", $"{when} · {Clock(TimeSpan.FromSeconds(picked.Seconds))}"));
+            sec.Children.Add(PSection(L.T("RUN"), $"{when} · {Clock(TimeSpan.FromSeconds(picked.Seconds))}"));
 
             double med = Median(counted.Select(r => r.Seconds));
 
@@ -718,9 +718,9 @@ public partial class MainWindow
 
             fold.Children.Add(chev);
 
-            var ft = PT("Loot", "Ink", 13.5, FontWeights.Normal); Grid.SetColumn(ft, 1); fold.Children.Add(ft);
+            var ft = PT(L.T("Loot"), "Ink", 13.5, FontWeights.Normal); Grid.SetColumn(ft, 1); fold.Children.Add(ft);
 
-            var fs = PT(n == 1 ? "from the run here" : "from the runs here", "Muted", 12.5); fs.Margin = new Thickness(0, 0, 14, 0); Grid.SetColumn(fs, 2); fold.Children.Add(fs);
+            var fs = PT(L.T(n == 1 ? "from the run here" : "from the runs here"), "Muted", 12.5); fs.Margin = new Thickness(0, 0, 14, 0); Grid.SetColumn(fs, 2); fold.Children.Add(fs);
 
             var fb = new Border { Child = fold, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(20, 4, 20, 18) };
 
@@ -758,13 +758,13 @@ public partial class MainWindow
 
     static string RunBandLine(List<InstanceRun> runs, InstanceRun? open) =>
 
-        $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}" + (open != null ? $" · open since {open.Start.ToLocalTime():HH:mm}" : "");
+        open != null ? L.F("{0} · open since {1:HH:mm}", RunsN(runs.Count), open.Start.ToLocalTime()) : RunsN(runs.Count);
 
 
 
     /// <summary>The open run's pill: its step alone; the ring beside it carries the clock.</summary>
 
-    static string RunPillText(InstanceRun open) => RunSteps[Math.Max(0, StepOf(open))];
+    static string RunPillText(InstanceRun open) => L.T(RunSteps[Math.Max(0, StepOf(open))]);
 
 
 
@@ -832,7 +832,7 @@ public partial class MainWindow
 
             // nothing counted yet: one line instead of four empty boxes
 
-            var why = runs.Count == 0 ? "No run here yet." : "No run counted yet.";
+            var why = L.T(runs.Count == 0 ? "No run here yet." : "No run counted yet.");
 
             var t = PT(why, "Muted", 13); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None;
 
@@ -850,15 +850,15 @@ public partial class MainWindow
 
         bool known = value > 0 || paysKinah;
 
-        TextBlock Worth(string text, double size) => known ? Big(text, size) : PT("no prices yet", "Muted", 15);
+        TextBlock Worth(string text, double size) => known ? Big(text, size) : PT(L.T("no prices yet"), "Muted", 15);
 
-        Cell(0, Worth(secs > 10 ? Fk(value / secs * 3600) : "0", 30), PT("an hour", "Muted", 12));
+        Cell(0, Worth(secs > 10 ? Fk(value / secs * 3600) : "0", 30), PT(L.T("an hour"), "Muted", 12));
 
-        var runL = new TextBlock { FontSize = 12 }; runL.Inlines.Add(PR("a run", "Muted")); runL.Inlines.Add(PR(paysKinah ? " · Kinah + loot" : " · loot", "Faint"));
+        var runL = new TextBlock { FontSize = 12 }; runL.Inlines.Add(PR(L.T("a run"), "Muted")); runL.Inlines.Add(PR(" · " + L.T(paysKinah ? "Kinah + loot" : "loot"), "Faint"));
 
         Cell(1, Worth(Fk(value / (double)n), 26), runL);
 
-        Cell(2, Big(Clock(TimeSpan.FromSeconds(secs / n)), 26), PT("a run", "Muted", 12));
+        Cell(2, Big(Clock(TimeSpan.FromSeconds(secs / n)), 26), PT(L.T("a run"), "Muted", 12));
 
         // the fourth box is the best run here (2026-10-31): no "9 of 11 counted" or "why 2 aren't", players see no accuracy
 
@@ -866,13 +866,13 @@ public partial class MainWindow
 
         long best = counted.Max(RunValue);
 
-        Cell(3, Worth(Fk(best), 26), PT("best run", "Muted", 12));
+        Cell(3, Worth(Fk(best), 26), PT(L.T("best run"), "Muted", 12));
 
         var box = new Border { Child = g, BorderThickness = new Thickness(0, 0, 0, 1) };
 
         box.SetResourceReference(Border.BorderBrushProperty, "Line");
 
-        box.ToolTip = "Over the counted runs: Kinah plus loot and gear at the lowest Market price, " + PriceBook.Cut + ". Bound items add nothing. Flagged runs are left out.";
+        box.ToolTip = L.F("Over the counted runs: Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing. Flagged runs are left out.", CutT);
 
         return box;
 
@@ -894,11 +894,11 @@ public partial class MainWindow
 
         int pcs = other + r.UnknownItems;
 
-        var gearText = gearN > 0 ? $"{gearN} gear" : "";
+        var gearText = gearN > 0 ? L.F("{0} gear", gearN) : "";
 
-        if (pcs == 0) return gearN > 0 ? gearText : r.RewardsNotRead ? "rewards not read" : "Kinah only";
+        if (pcs == 0) return gearN > 0 ? gearText : r.RewardsNotRead ? L.T("rewards not read") : L.T("Kinah only");
 
-        return $"{pcs} piece{(pcs == 1 ? "" : "s")}" + (gearN > 0 ? " · " + gearText : "");
+        return gearN > 0 ? L.F("{0} · {1}", L.F(pcs == 1 ? "{0} piece" : "{0} pieces", pcs), gearText) : L.F(pcs == 1 ? "{0} piece" : "{0} pieces", pcs);
 
     }
 
@@ -916,17 +916,17 @@ public partial class MainWindow
 
             int k = medianSecs > 0 ? (int)Math.Round(r.Seconds / medianSecs) : 0;
 
-            return k >= 2 ? $"{k} runs merged" : "Several runs merged";
+            return k >= 2 ? L.F("{0} runs merged", k) : L.T("Several runs merged");
 
         }
 
-        if (r.Suspect == "not a run") return "Not a run";
+        if (r.Suspect == "not a run") return L.T("Not a run");
 
         if (r.Suspect.Length > 0) return char.ToUpperInvariant(r.Suspect[0]) + string.Join(' ', r.Suspect.Split(' ').Take(3))[1..];
 
-        if (r.RewardsNotRead) return "Rewards not read";
+        if (r.RewardsNotRead) return L.T("Rewards not read");
 
-        if (r.KinahNotRead || r.OldUnread) return "Kinah not read";
+        if (r.KinahNotRead || r.OldUnread) return L.T("Kinah not read");
 
         // a partly read run counts with what was read (2026-11-01): no flag, only its "unnamed" count
 
@@ -1032,9 +1032,9 @@ public partial class MainWindow
 
         var sec = new StackPanel { Margin = new Thickness(20, 8, 20, 18) };
 
-        var head = PSection("LOOT", n == 1 ? "from the run here" : "from the runs here");
+        var head = PSection(L.T("LOOT"), L.T(n == 1 ? "from the run here" : "from the runs here"));
 
-        if (foldable) { head.Cursor = Cursors.Hand; head.Background = Brushes.Transparent; head.MouseLeftButtonUp += (_, _) => { _runsOpen.Remove(zone + "|loot"); redraw(); }; head.ToolTip = "Fold the loot"; }
+        if (foldable) { head.Cursor = Cursors.Hand; head.Background = Brushes.Transparent; head.MouseLeftButtonUp += (_, _) => { _runsOpen.Remove(zone + "|loot"); redraw(); }; head.ToolTip = L.T("Fold the loot"); }
 
         sec.Children.Add(head);
 
@@ -1046,11 +1046,11 @@ public partial class MainWindow
 
         var pick = new List<FrameworkElement>();
 
-        if (kinah > 0) pick.Add(WithBadge(CoinTile(46), CountBadge(kinah), $"Kinah: {Fk(kinah)} ({Amounts.Full(kinah)})"));
+        if (kinah > 0) pick.Add(WithBadge(CoinTile(46), CountBadge(kinah), L.F("Kinah: {0} ({1})", Fk(kinah), Amounts.Full(kinah))));
 
         var matSlots = mats.OrderByDescending(x => x.Value.Value).ThenByDescending(x => x.Value.Count)
 
-            .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value.Count)), _items.NameOf(x.Key) + (x.Value.Value > 0 ? $": {Fk(x.Value.Value)} {PriceBook.Cut}" : ""))).ToList();
+            .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value.Count)), _items.NameOf(x.Key) + (x.Value.Value > 0 ? $": {Fk(x.Value.Value)} {CutT}" : ""))).ToList();
 
         var currSlots = curr.OrderByDescending(x => x.Value)
 
@@ -1080,13 +1080,13 @@ public partial class MainWindow
 
             long mv = mats.Values.Sum(x => x.Value);
 
-            var sum = new List<Inline> { PR($"{mats.Count} kind{(mats.Count == 1 ? "" : "s")}", "Muted") };
+            var sum = new List<Inline> { PR(L.F(mats.Count == 1 ? "{0} kind" : "{0} kinds", mats.Count), "Muted") };
 
             sum.Add(PR(" · ", "Faint"));
 
-            if (mv > 0) { var v = PR(Fk(mv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" " + PriceBook.Cut, "Muted")); }
+            if (mv > 0) { var v = PR(Fk(mv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" " + CutT, "Muted")); }
 
-            else sum.Add(PR("no prices yet", "Faint"));
+            else sum.Add(PR(L.T("no prices yet"), "Faint"));
 
             sec.Children.Add(RunsGroup(zone, "Materials", sum, () =>
 
@@ -1096,7 +1096,7 @@ public partial class MainWindow
 
                 foreach (var (id, x) in mats.OrderByDescending(x => x.Value.Value).ThenByDescending(x => x.Value.Count))
 
-                    sp.Children.Add(RunsItem(_items.NameOf(id), x.Count, $"in {x.Runs} of {n} runs", x.Value > 0 ? Fk(x.Value) : "", x.Value > 0 ? "" : x.Priced ? "bound" : "no price yet"));
+                    sp.Children.Add(RunsItem(_items.NameOf(id), x.Count, L.F("in {0} of {1} runs", x.Runs, n), x.Value > 0 ? Fk(x.Value) : "", x.Value > 0 ? "" : L.T(x.Priced ? "bound" : "no price yet")));
 
                 return sp;
 
@@ -1108,7 +1108,7 @@ public partial class MainWindow
 
         {
 
-            sec.Children.Add(RunsGroup(zone, "Currencies", new List<Inline> { PR($"{curr.Count} kind{(curr.Count == 1 ? "" : "s")}", "Muted") }, () =>
+            sec.Children.Add(RunsGroup(zone, "Currencies", new List<Inline> { PR(L.F(curr.Count == 1 ? "{0} kind" : "{0} kinds", curr.Count), "Muted") }, () =>
 
             {
 
@@ -1134,13 +1134,13 @@ public partial class MainWindow
 
             long gv = gear.Values.Sum(x => x.Value); int gb = gear.Values.Sum(x => x.Bound);
 
-            var sum = new List<Inline> { PR($"{pieces} piece{(pieces == 1 ? "" : "s")}", "Muted"), PR(" · ", "Faint") };
+            var sum = new List<Inline> { PR(L.F(pieces == 1 ? "{0} piece" : "{0} pieces", pieces), "Muted"), PR(" · ", "Faint") };
 
-            if (gv > 0) { var v = PR(Fk(gv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" " + PriceBook.Cut, "Muted")); }
+            if (gv > 0) { var v = PR(Fk(gv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" " + CutT, "Muted")); }
 
-            else sum.Add(PR(gb >= pieces ? "bound, no value" : "no prices yet", "Faint"));
+            else sum.Add(PR(gb >= pieces ? L.T("bound, no value") : L.T("no prices yet"), "Faint"));
 
-            if (gb > 0 && gb < pieces) sum.Add(PR($" · {gb} bound", "Faint"));
+            if (gb > 0 && gb < pieces) sum.Add(PR(L.F(" · {0} bound", gb), "Faint"));
 
             sec.Children.Add(RunsGroup(zone, "Gear", sum, () =>
 
@@ -1150,11 +1150,11 @@ public partial class MainWindow
 
                 foreach (var (id, x) in gear.OrderByDescending(x => x.Value.Value).ThenByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value.Count))
 
-                    sp.Children.Add(RunsItem(_items.NameOf(id), x.Count, x.Bound > 0 && x.Bound < x.Count ? $"{x.Bound} bound" : "", x.Value > 0 ? Fk(x.Value) : "", x.Value > 0 ? "" : x.Bound >= x.Count ? "bound" : "no price yet"));
+                    sp.Children.Add(RunsItem(_items.NameOf(id), x.Count, x.Bound > 0 && x.Bound < x.Count ? L.F("{0} bound", x.Bound) : "", x.Value > 0 ? Fk(x.Value) : "", x.Value > 0 ? "" : x.Bound >= x.Count ? L.T("bound") : L.T("no price yet")));
 
                 // a piece whose icon two items share: gear all the same, its name not known
 
-                if (unknownGear > 0) sp.Children.Add(RunsItem("Unknown gear", unknownGear, "its icon is shared by two items", "", "", unknown: true));
+                if (unknownGear > 0) sp.Children.Add(RunsItem(L.T("Unknown gear"), unknownGear, L.T("its icon is shared by two items"), "", "", unknown: true));
 
                 return sp;
 
@@ -1166,19 +1166,19 @@ public partial class MainWindow
 
         {
 
-            sec.Children.Add(RunsGroup(zone, "Not named yet", new List<Inline> { PR($"{unread:N0} slot{(unread == 1 ? "" : "s")} seen, not named", "Faint") }, () =>
+            sec.Children.Add(RunsGroup(zone, "Not named yet", new List<Inline> { PR(L.F(unread == 1 ? "{0:N0} slot seen, not named" : "{0:N0} slots seen, not named", unread), "Faint") }, () =>
 
             {
 
                 var sp = new StackPanel();
 
-                var note = PT("Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value.", "Faint", 12);
+                var note = PT(L.T("Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value."), "Faint", 12);
 
                 note.TextWrapping = TextWrapping.Wrap; note.TextTrimming = TextTrimming.None; note.Margin = new Thickness(0, 8, 0, 4);
 
                 sp.Children.Add(note);
 
-                sp.Children.Add(RunsItem("Unknown item", unread, "", "", "", unknown: true));
+                sp.Children.Add(RunsItem(L.T("Unknown item"), unread, "", "", "", unknown: true));
 
                 return sp;
 
@@ -1188,7 +1188,7 @@ public partial class MainWindow
 
         if (mats.Count + curr.Count + gear.Count + unknownGear + unread == 0 && kinah == 0)
 
-            sec.Children.Add(PT(n == 0 ? "Nothing counted yet." : "Nothing named on the reward screens yet.", "Faint", 12.5));
+            sec.Children.Add(PT(L.T(n == 0 ? "Nothing counted yet." : "Nothing named on the reward screens yet."), "Faint", 12.5));
 
         return sec;
 
@@ -1294,7 +1294,7 @@ public partial class MainWindow
 
         head.Children.Add(chev);
 
-        var nm = PT(name, "Ink", 13.5, FontWeights.Normal); nm.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(nm, 1); head.Children.Add(nm);
+        var nm = PT(L.T(name), "Ink", 13.5, FontWeights.Normal); nm.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(nm, 1); head.Children.Add(nm);
 
         var sum = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }; sum.Inlines.AddRange(summary); Grid.SetColumn(sum, 2); head.Children.Add(sum);
 
@@ -1416,7 +1416,7 @@ public partial class MainWindow
 
         var key = RunKey(r.Start, r.Zone); var start = r.Start; var zone = r.Zone;
 
-        _ = Offer("run", $"Removed: {zone}, {start.ToLocalTime():MMM d HH:mm}",
+        _ = Offer("run", L.F("Removed: {0}, {1}", zone, DayHm(start.ToLocalTime())),
 
             apply: () => { _hiddenRuns.Add(key); _fixOpen = null; redraw(); },
 
@@ -1428,7 +1428,7 @@ public partial class MainWindow
 
                 _hiddenRuns.Remove(key);
 
-                if (il.Remove(start, zone)) Say($"Removed: {zone}, {start.ToLocalTime():MMM d HH:mm}. A copy is kept aside in instances.removed.jsonl.", "Good");
+                if (il.Remove(start, zone)) Say(L.F("Removed: {0}, {1}. A copy is kept aside in instances.removed.jsonl.", zone, DayHm(start.ToLocalTime())), "Good");
 
                 ShowInstances();
 

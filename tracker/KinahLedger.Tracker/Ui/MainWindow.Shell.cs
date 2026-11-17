@@ -74,8 +74,8 @@ public partial class MainWindow
         Hide();
         if (_trayHintShown) return;
         _trayHintShown = true;
-        _tray.ShowBalloonTip(4000, "Kinah Ledger is still running",
-            "It's in the tray by the clock and opens when Aion 2 starts. Right-click the icon to quit.", WF.ToolTipIcon.Info);
+        _tray.ShowBalloonTip(4000, L.T("Kinah Ledger is still running"),
+            L.T("It's in the tray by the clock and opens when Aion 2 starts. Right-click the icon to quit."), WF.ToolTipIcon.Info);
     }
 
     /// <summary>Brings the window up without taking focus from the game that is starting.</summary>
@@ -110,7 +110,7 @@ public partial class MainWindow
         if (_prefs.OnGameStart == "open") { ShowQuietly(); return; }
         if (_gameBalloonShown) return;
         _gameBalloonShown = true;
-        _tray.ShowBalloonTip(4000, "Aion 2 is running", "Kinah Ledger is reading the chat from the tray. Double-click the icon to open it.", WF.ToolTipIcon.Info);
+        _tray.ShowBalloonTip(4000, L.T("Aion 2 is running"), L.T("Kinah Ledger is reading the chat from the tray. Double-click the icon to open it."), WF.ToolTipIcon.Info);
     }
 
     void OnGameClosed()
@@ -143,7 +143,7 @@ public partial class MainWindow
             Redraw();
             if (had)
             {
-                Say($"{why}, so this session ended: what was counted is saved, and counting starts fresh.", "Faint");
+                Say(L.F("{0}, so this session ended: what was counted is saved, and counting starts fresh.", L.T(why)), "Faint");
                 _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);   // said once, and left up long enough to be read after a tab back
             }
         }
@@ -156,14 +156,14 @@ public partial class MainWindow
     /// <summary>The shortcut as the player sees it ("Ctrl+Shift+K"); empty when it is off.</summary>
     public string HotkeyText => Hotkey.Parse(_prefs.Hotkey)?.ToString() ?? "";
 
-    const string StartTip = "Times a run. Counting happens anyway; a run is what gets saved and shared.";
+    static string StartTip => L.T("Times a run. Counting happens anyway; a run is what gets saved and shared.");
 
     /// <summary>The shortcut, as bound now, on the Start button's tooltip and as a faint hint beside it (never a key typed into the code).</summary>
     void UpdateStartHint(bool running)
     {
         var key = HotkeyText;
         ButtonTips();   // the tooltip with the key, or why Start is off (Ui/MainWindow.Shortcuts.cs)
-        StartHint.Text = key.Length > 0 ? (running ? $"{key} stops it" : $"{key} in game") : "";
+        StartHint.Text = key.Length > 0 ? (running ? L.F("{0} stops it", key) : L.F("{0} in game", key)) : "";
     }
 
     /// <summary>Registers the shortcut from the prefs. A message when Windows refused it (another app has it), else null.</summary>
@@ -176,13 +176,13 @@ public partial class MainWindow
         // one saved before the shortcut rules (Ctrl+K, say) is off, and says why (Platform/Hotkey.cs Refusal)
         if (Hotkey.Explain(_prefs.Hotkey) is { } why)
         {
-            _hotkeyProblem = ($"{_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another.", "");
+            _hotkeyProblem = (L.F("{0} is off: {1} Pick another.", _prefs.Hotkey.Trim(), $"{char.ToLowerInvariant(why[0])}{why[1..]}"), "");
             return null;
         }
         if (Hotkey.Parse(_prefs.Hotkey) is not { } key) { _hotkeyProblem = null; return null; }
         // taken: one quiet line beside the key in Options › Shortcuts (never a notice); by another Kinah Ledger, nothing
         var got = key.Register(h, HotkeyId);
-        _hotkeyProblem = got == Hotkey.Outcome.Taken ? ($"{key} is used by another app here, so it is off. Pick another.", "") : null;
+        _hotkeyProblem = got == Hotkey.Outcome.Taken ? (L.F("{0} is used by another app here, so it is off. Pick another.", key), "") : null;
         if (got is Hotkey.Outcome.Taken or Hotkey.Outcome.TakenByTracker) KeyTakenOnce($"start/stop shortcut {key}: {(got == Hotkey.Outcome.Taken ? "taken by another app" : "held by another Kinah Ledger")}, off");
         return null;
     }
@@ -238,7 +238,7 @@ public partial class MainWindow
     }
     /// <summary>The status bar's Always on top box: the same switch, saved at once.</summary>
     void TopmostBox_Click(object sender, RoutedEventArgs e) { SetAlwaysOnTop(TopmostBox.IsChecked == true); if (!_demo) _prefs.Save(); }
-    public const string AlwaysOnTopText = "Keep above other windows";
+    public static string AlwaysOnTopText => L.T("Keep above other windows");
 
     /// <summary>
     /// The panel's opacity and size while Options is open: shown on the panel at once, remembered only on Save (Cancel
@@ -320,7 +320,7 @@ public partial class MainWindow
         if (c.Region != was.Region || c.Server != was.Server)
         {
             ApplyServer(c.Region, c.Server);
-            if (Server is { } s && !Farming) Say($"Server set to {s.Label} · {s.Region.Name}.", "Good");
+            if (Server is { } s && !Farming) Say(L.F("Server set to {0} · {1}.", s.LabelShown, s.Region.Shown), "Good");
         }
         if (c.Share != was.Share) { _prefs.Share = c.Share; MarketSwitch(c.Share); }
         if (c.Hud != was.Hud)
@@ -377,8 +377,8 @@ public partial class MainWindow
         if (c.ShowAccuracy != was.ShowAccuracy) { _prefs.ShowAccuracy = c.ShowAccuracy; _accChipSig = _accSig = ""; FillAccuracyCard(); UpdateHud(); }
         if (c.StartWithWindows != was.StartWithWindows)
         {
-            if (_exe == null) problems.Add("Starting with Windows needs the downloaded KinahLedger.exe.");
-            else if (!AutoStart.Set(c.StartWithWindows, _exe, out var err)) problems.Add("Windows didn't accept the startup setting (" + err + ").");
+            if (_exe == null) problems.Add(L.T("Starting with Windows needs the downloaded KinahLedger.exe."));
+            else if (!AutoStart.Set(c.StartWithWindows, _exe, out var err)) problems.Add(L.F("Windows didn't accept the startup setting ({0}).", err));
         }
         SavePrefs();
         // the new shortcut and server show in the live lines straight away
@@ -390,16 +390,16 @@ public partial class MainWindow
 
     public string LinkCode()
     {
-        try { return Upload.InstallId.LinkCode(); } catch (Exception) { return "unavailable"; }
+        try { return Upload.InstallId.LinkCode(); } catch (Exception) { return L.T("unavailable"); }
     }
 
     /// <summary>Opens the site with this PC's link code; signed in, the site links it at once.</summary>
     public void LinkProfile()
     {
         var code = LinkCode();
-        if (!code.StartsWith("KL-")) { Report("No link code yet; try again in a moment.", "Warn"); return; }
+        if (!code.StartsWith("KL-")) { Report(L.T("No link code yet; try again in a moment."), "Warn"); return; }
         Open($"{SiteUrl}/?link={Uri.EscapeDataString(code)}#profile");
-        Report("Opened kinahledger.com in your browser. Sign in with Discord if it asks; this PC is then linked to your profile.", "Good");
+        Report(L.T("Opened kinahledger.com in your browser. Sign in with Discord if it asks; this PC is then linked to your profile."), "Good");
     }
 
     /// <summary>
@@ -419,13 +419,13 @@ public partial class MainWindow
     public void ShareWeek()
     {
         Open(ShareWeekUrl);
-        Report("Opened your profile on kinahledger.com with this week's card. Sign in with Discord if it asks.", "Good");
+        Report(L.T("Opened your profile on kinahledger.com with this week's card. Sign in with Discord if it asks."), "Good");
     }
 
     public void ResetInstallId()
     {
         Upload.InstallId.Reset();
-        Report("Install ID replaced. Runs from now on can't be tied to earlier ones; link the new code to keep them on your profile.", "Good");
+        Report(L.T("Install ID replaced. Runs from now on can't be tied to earlier ones; link the new code to keep them on your profile."), "Good");
     }
 
     /// <summary>Options › In game › Reset position: back where a first start puts it (PlaceHudDefault).</summary>

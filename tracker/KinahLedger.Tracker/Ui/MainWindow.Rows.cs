@@ -62,6 +62,56 @@ public partial class MainWindow
 {
     internal static readonly IReadOnlyList<DropRow> NoRows = Array.Empty<DropRow>();
 
+    /// <summary>"after the Market's cut" in the language in use (the data layer writes it in English).</summary>
+    internal static string CutT => L.T(KinahLedger.Data.PriceBook.Cut);
+
+    /// <summary>A run's kind as the player reads it ("Expedition", "Event"...), in the language in use; the game's own names stay as they are.</summary>
+    internal static string KindT(string kind) => kind switch
+    {
+        "Expedition" or "Event" or "Arena" or "Legion" => L.T(kind),
+        KinahLedger.Session.InstanceLog.WorldBoss => L.T("World boss"),
+        _ => kind,
+    };
+
+    /// <summary>"3 runs" / "1 run" in the language in use.</summary>
+    internal static string RunsN(int n) => L.F(n == 1 ? "{0} run" : "{0} runs", n);
+
+    static System.Globalization.CultureInfo DateCulture => L.Code switch
+    {
+        "ko" => new System.Globalization.CultureInfo("ko-KR"),
+        "zh-TW" => new System.Globalization.CultureInfo("zh-TW"),
+        _ => System.Globalization.CultureInfo.InvariantCulture,
+    };
+
+    /// <summary>A day as the language writes it: "Nov 13", "11월 13일", "11月13日".</summary>
+    internal static string DayShort(DateTime d) => L.Code switch
+    {
+        "ko" => d.ToString("M'월' d'일'", DateCulture),
+        "zh-TW" => d.ToString("M'月'd'日'", DateCulture),
+        _ => d.ToString("MMM d", DateCulture),
+    };
+
+    /// <summary>A day and the time: "Nov 13 16:16", "11월 13일 16:16", "11月13日 16:16".</summary>
+    internal static string DayHm(DateTime d) => DayShort(d) + " " + d.ToString("HH:mm", DateCulture);
+
+    /// <summary>A length of time as TodayLoot.Dur writes it, in the language in use: "42 min", "1 h 12 min", "under a minute".</summary>
+    internal static string DurT(double secs)
+    {
+        int m = (int)(Math.Max(0, secs) / 60);
+        if (m < 1) return L.T("under a minute");
+        if (m < 60) return L.F("{0} min", m);
+        return m % 60 == 0 ? L.F("{0} h", m / 60) : L.F("{0} h {1} min", m / 60, m % 60);
+    }
+
+    /// <summary>A word of TodayLoot's lines (" kills", " runs") in the language in use, with its space.</summary>
+    internal static string NoteWord(string w) => " " + L.T(w.Trim());
+
+    /// <summary>The weekday as the language writes it: "Fri", "금", "週五".</summary>
+    internal static string WeekdayShort(DateTime d) => d.ToString("ddd", DateCulture);
+
+    /// <summary>The weekday in full: "Friday", "금요일", "星期五".</summary>
+    internal static string WeekdayLong(DateTime d) => d.ToString("dddd", DateCulture);
+
     /// <summary>
     /// Puts <paramref name="rows"/> in a table, keeping its row controls: a row that is already there gets the new words, a
     /// new one is added at the end, extra ones are taken off the end. Rows match by position, so a row that moves up a place

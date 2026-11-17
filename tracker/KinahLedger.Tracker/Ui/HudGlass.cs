@@ -116,7 +116,7 @@ static class HudGlass
     {
         Background = Frozen(Color.FromArgb(0x24, 0xF5, 0xB9, 0x42)), BorderBrush = Frozen(Color.FromArgb(0x8C, 0xF5, 0xB9, 0x42)), BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = "YOU", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = HudKit.Gold },
+        Child = new TextBlock { Text = L.T("YOU"), FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = HudKit.Gold },
     };
 }
 

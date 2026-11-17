@@ -179,7 +179,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         var (run, clock, _) = RunClock(Values);
         run = run || Values.GetValueOrDefault("run") == "1";
         // the stream's header: the run's clock, the session's as T+, nothing counted yet NO_SIGNAL
-        _meta.Text = !f.Counted ? "NO_SIGNAL" : (run ? "RUN_" : "T+") + (clock.Length > 0 ? clock : "0:00");
+        _meta.Text = !f.Counted ? L.T("NO_SIGNAL") : (run ? L.T("RUN_") : "T+") + (clock.Length > 0 ? clock : "0:00");
         var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}";
         if (sig == _figSig) return;
         _figSig = sig;

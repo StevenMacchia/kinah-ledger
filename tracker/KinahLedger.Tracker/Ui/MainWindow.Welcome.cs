@@ -76,7 +76,7 @@ public partial class MainWindow
         SetWelcome(false);
         // first run: check the chat, the loot list and the HP bar read, step by step; then place the panel over the game
         OpenCalibration(this).Closed += (_, _) => PlacementGuideOwed();
-        Say(L.F("Server set to {0} · {1}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", _wServer.Label, _wServer.Region.Name), "Good");
+        Say(L.F("Server set to {0} · {1}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", _wServer.LabelShown, _wServer.Region.Shown), "Good");
     }
 
     /* ---------------- the look step ---------------- */
@@ -112,12 +112,12 @@ public partial class MainWindow
         {
             var l = HudLooks.All.First(x => x.Key == key);
             bool on = key == _wLook;
-            var name = new TextBlock { Text = l.Name, FontSize = 13.5, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
+            var name = new TextBlock { Text = L.T(l.Name), FontSize = 13.5, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
             name.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
             var b = new Border
             {
                 CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(14, 8, 14, 8), MinWidth = 72, Cursor = System.Windows.Input.Cursors.Hand,
-                BorderThickness = new Thickness(on ? 2 : 1), Child = name, ToolTip = l.Hint, Focusable = true, Tag = key,
+                BorderThickness = new Thickness(on ? 2 : 1), Child = name, ToolTip = L.T(l.Hint), Focusable = true, Tag = key,
             };
             b.SetResourceReference(Border.BackgroundProperty, on ? "AccentDim" : "Card2");
             b.SetResourceReference(Border.BorderBrushProperty, on ? "Accent" : "Line");
@@ -173,10 +173,10 @@ public partial class MainWindow
         WelcomeLookStage.Tag = key;
         WelcomeLookStage.Child = face;
         WelcomeLookName.Inlines.Clear();
-        var n = new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.Bold };
+        var n = new System.Windows.Documents.Run(L.T(l.Name)) { FontWeight = FontWeights.Bold };
         n.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Ink");
         WelcomeLookName.Inlines.Add(n);
-        WelcomeLookName.Inlines.Add(new System.Windows.Documents.Run("  ·  " + l.Hint));
+        WelcomeLookName.Inlines.Add(new System.Windows.Documents.Run("  ·  " + L.T(l.Hint)));
     }
 
     /// <summary>For the self-test and the render: the look step (Ui/WpfApp.cs).</summary>
@@ -230,7 +230,7 @@ public partial class MainWindow
         foreach (var f in Factions)
         {
             var name = f;
-            FactionChips.Children.Add(Chip(f, f == _wFaction, () => { _wFaction = name; _wServer = null; BuildFactionChips(); BuildServerChips(); }));
+            FactionChips.Children.Add(Chip(L.T(f), f == _wFaction, () => { _wFaction = name; _wServer = null; BuildFactionChips(); BuildServerChips(); }));
         }
     }
 
@@ -240,7 +240,7 @@ public partial class MainWindow
         foreach (var s in Servers.In(_wRegion).Where(s => s.Faction == _wFaction))
         {
             var srv = s;
-            ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.Label} · {srv.Region.Name}"; WelcomeHint.Foreground = B("Good"); }));
+            ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.LabelShown} · {srv.Region.Shown}"; WelcomeHint.Foreground = B("Good"); }));
         }
         WelcomeGo.IsEnabled = _wServer != null;
         if (_wServer == null) { WelcomeHint.Text = L.T("Pick your server to continue."); WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }
@@ -254,7 +254,7 @@ public partial class MainWindow
         foreach (var s in Skins.All)
         {
             var key = s.Key;
-            host.Children.Add(Chip(s.Name, Skins.Current == key, () => SetSkin(key), s.Blurb));
+            host.Children.Add(Chip(L.T(s.Name), Skins.Current == key, () => SetSkin(key), L.T(s.Blurb)));
         }
     }
 

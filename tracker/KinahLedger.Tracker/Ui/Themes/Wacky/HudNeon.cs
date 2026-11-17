@@ -581,7 +581,7 @@ sealed class HudNeon : WackyLook, IThemeCard
         Typography.SetNumeralAlignment(cpText, FontNumeralAlignment.Tabular);
         cp.Child = cpText;
         head.Children.Add(Slant(WkCard.NameLine(name, cp)));
-        var cls = Slant(Wk.Words(c.Class.ToUpperInvariant(), 9.5, LilacB, Wk.Bahn, FontWeights.Bold)); cls.Margin = new Thickness(10, 2, 2, 0);
+        var cls = Slant(Wk.Words(c.ClassName.ToUpperInvariant(), 9.5, LilacB, Wk.Bahn, FontWeights.Bold)); cls.Margin = new Thickness(10, 2, 2, 0);
         WkCard.Put(head, cls, 1);
         stack.Children.Add(head);
         // the score bar: DPS, SHARE, DAMAGE, each under its label, lit

@@ -63,13 +63,13 @@ public sealed partial class HudTicker : IHudLook
     public HudTicker()
     {
         _dot = Dot(8); _dot.Margin = new Thickness(0, 0, 7, 0);
-        _run = T("RUN", 10.5, Gold, weight: FontWeights.Bold); _run.Margin = new Thickness(0, 0, 7, 0);
+        _run = T(L.T("RUN"), 10.5, Gold, weight: FontWeights.Bold); _run.Margin = new Thickness(0, 0, 7, 0);
         _time = T("", 13, Ink, mono: true);
         _rate = T("", 15, Gold, weight: FontWeights.Bold);
-        _unit = T("/h", 11.5, Muted, weight: FontWeights.SemiBold); _unit.Margin = new Thickness(5, 0, 0, 0);
+        _unit = T(L.T("/h"), 11.5, Muted, weight: FontWeights.SemiBold); _unit.Margin = new Thickness(5, 0, 0, 0);
         _total = T("", 13, Ink, mono: true);
         _sep1 = Rule(14, 9); _sep2 = Rule(14, 9);
-        _idle = T("Waiting for the first count", 12, Faint); _idle.Visibility = Visibility.Collapsed;
+        _idle = T(L.T("Waiting for the first count"), 12, Faint); _idle.Visibility = Visibility.Collapsed;
         _pill = new Border
         {
             Height = 28, Padding = new Thickness(10, 0, 12, 0), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), BorderBrush = FrameLine,
@@ -116,7 +116,7 @@ public sealed partial class HudTicker : IHudLook
         bool abyss = Abyss(values);
         if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}|{abyss}"))
         {
-            _rate.Foreground = abyss ? Ink : Gold; _unit.Text = abyss ? "AP/h" : "/h";
+            _rate.Foreground = abyss ? Ink : Gold; _unit.Text = abyss ? L.T("AP/h") : L.T("/h");
             _idle.Text = Waiting(abyss);
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
@@ -143,7 +143,7 @@ public sealed partial class HudTicker : IHudLook
         if (paused.Length > 0) { note = paused; tone = Warn; sign = true; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
         else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; clockV = V("noticeClock"); }
-        else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
+        else if (V("flag").Length > 0) { note = V("flag") + L.T(" · fix in tracker"); tone = Gold; }
         else { note = ""; tone = Warn; }
         if (note.Length > 0) { var (n, t, s, cv) = (note, tone, sign, clockV); want.Add(("notice|" + n + cv, "notice", () => NoticeToast(n, t, s, HudClockNotice.Parse(cv)))); }
         if (_acc is { } acc) { var check = _accCheck; want.Add(("acc|" + acc + check, "notice", () => NoticeToast(acc, check ? Warn : Mint, check))); }
@@ -310,7 +310,7 @@ public sealed partial class HudTicker : IHudLook
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(Tile(p, 24));
-        var label = T("TOP DROP", 8.5, Gold, weight: FontWeights.Bold);
+        var label = T(L.T("TOP DROP"), 8.5, Gold, weight: FontWeights.Bold);
         var name = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
         name.Inlines.Add(R(p.Name, 12.5, p.Grade is "" or "Common" ? Ink : Frozen(GradeColor(p.Grade)), weight: FontWeights.SemiBold));
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0), Children = { label, name } };

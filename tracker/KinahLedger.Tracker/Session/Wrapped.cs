@@ -1,5 +1,6 @@
 using System.Globalization;
 using KinahLedger.Data;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Session;
 
@@ -136,12 +137,11 @@ public static class Wrapped
     /// <summary>"Thu 5 to Wed 11 Nov", "Fri 30 Oct to Thu 5 Nov"; a day, "Wed 11 Nov".</summary>
     public static string Range(DateTime from, DateTime to)
     {
-        var c = CultureInfo.InvariantCulture;
-        if (from.Date == to.Date) return to.ToString("ddd d MMM", c);
-        return from.Month == to.Month ? $"{from.ToString("ddd d", c)} to {to.ToString("ddd d MMM", c)}" : $"{from.ToString("ddd d MMM", c)} to {to.ToString("ddd d MMM", c)}";
+        if (from.Date == to.Date) return SharePicture.DayWord(to);
+        return L.F("{0} to {1}", SharePicture.DayWord(from, month: from.Month != to.Month), SharePicture.DayWord(to));
     }
 
-    static string Plural(int n, string one, string many) => $"{n.ToString("N0", CultureInfo.InvariantCulture)} {(n == 1 ? one : many)}";
+    static string Plural(int n, string one, string many) => $"{n.ToString("N0", CultureInfo.InvariantCulture)} {L.T(n == 1 ? one : many, "count")}";
 
     /// <summary>
     /// The sheet's words. <paramref name="fk"/> writes a figure the way the window does ("224K", "1.20M"). A figure the
@@ -156,42 +156,42 @@ public static class Wrapped
         bool both = f.Farmed > 0 && f.FromRuns > 0;
         // a line's figure, unless it is the total or its side of the split again (the line keeps its name and loses its figure)
         string Fig(long v, long? side = null) => v == f.Total || (both && v == side) ? "" : fk(v);
-        var split = both ? $"{fk(f.Farmed)} farming · {fk(f.FromRuns)} from {Plural(f.Runs, "run", "runs")}" : "";
+        var split = both ? L.F("{0} farming · {1} from {2}", fk(f.Farmed), fk(f.FromRuns), Plural(f.Runs, "run", "runs")) : "";
 
         var stats = new List<WrappedStat>();
-        if (f.FarmSeconds >= 60) stats.Add(new(TodayLoot.Dur(f.FarmSeconds), f.Attempts > f.Kills ? "gathering" : "farming"));
-        else if (f.RunSeconds >= 60) stats.Add(new(TodayLoot.Dur(f.RunSeconds), "in runs"));
-        if (f.PerHour is double h) stats.Add(new(fk(h), "an hour farming"));
-        else if (f.PerRun is double pr && f.Counted > 1) stats.Add(new(fk(pr), "a run"));
-        if (week) stats.Add(new($"{f.DaysPlayed} of {f.Days}", "days played"));
-        else if (f.Kills > 0) stats.Add(new(f.Kills.ToString("N0", c), f.Kills == 1 ? "kill" : "kills"));
-        else if (f.Attempts > 0) stats.Add(new(f.Attempts.ToString("N0", c), f.Attempts == 1 ? "gathering attempt" : "gathering attempts"));
-        else if (f.Runs > 0) stats.Add(new(f.Runs.ToString("N0", c), f.Runs == 1 ? "run" : "runs"));
+        if (f.FarmSeconds >= 60) stats.Add(new(TodayLoot.Dur(f.FarmSeconds), L.T(f.Attempts > f.Kills ? "gathering" : "farming", "count")));
+        else if (f.RunSeconds >= 60) stats.Add(new(TodayLoot.Dur(f.RunSeconds), L.T("in runs")));
+        if (f.PerHour is double h) stats.Add(new(fk(h), L.T("an hour farming")));
+        else if (f.PerRun is double pr && f.Counted > 1) stats.Add(new(fk(pr), L.T("a run")));
+        if (week) stats.Add(new(L.F("{0} of {1}", f.DaysPlayed, f.Days), L.T("days played")));
+        else if (f.Kills > 0) stats.Add(new(f.Kills.ToString("N0", c), L.T(f.Kills == 1 ? "kill" : "kills", "count")));
+        else if (f.Attempts > 0) stats.Add(new(f.Attempts.ToString("N0", c), L.T(f.Attempts == 1 ? "gathering attempt" : "gathering attempts", "count")));
+        else if (f.Runs > 0) stats.Add(new(f.Runs.ToString("N0", c), L.T(f.Runs == 1 ? "run" : "runs", "count")));
 
         var rows = new List<WrappedRow>();
         // a place of one run is that run, named below as the best
         if (f.Top is { } top && !(top.IsRun && top.Runs == 1))
             rows.Add(top.IsRun
-                ? new("place", "TOP PLACE", top.Name, Fig(top.Made, f.FromRuns), Plural(top.Runs, "run", "runs") + (top.Seconds >= 60 ? " · " + TodayLoot.Dur(top.Seconds) : ""))
-                : new("zone", "TOP ZONE", top.Name, Fig(top.Made, f.Farmed), TodayLoot.Dur(top.Seconds) + (top.Seconds >= 60 ? $" · {fk(top.Made / (top.Seconds / 3600))} an hour" : "")));
+                ? new("place", L.T("TOP PLACE"), top.Name, Fig(top.Made, f.FromRuns), Plural(top.Runs, "run", "runs") + (top.Seconds >= 60 ? " · " + TodayLoot.Dur(top.Seconds) : ""))
+                : new("zone", L.T("TOP ZONE"), top.Name, Fig(top.Made, f.Farmed), TodayLoot.Dur(top.Seconds) + (top.Seconds >= 60 ? " · " + L.F("{0} an hour", fk(top.Made / (top.Seconds / 3600))) : "")));
         if (f.BestRun is { } r)
         {
-            var when = week ? " · " + r.Day.ToString("ddd d", c) : "";
-            rows.Add(new("run", f.Counted >= 2 ? "BEST RUN" : "THE RUN", r.Name, Fig(r.Value, f.FromRuns), (r.Kind.Length > 0 ? r.Kind : "Run") + when + (r.Seconds >= 60 ? " · " + TodayLoot.Dur(r.Seconds) : "")));
+            var when = week ? " · " + SharePicture.DayWord(r.Day, month: false) : "";
+            rows.Add(new("run", L.T(f.Counted >= 2 ? "BEST RUN" : "THE RUN"), r.Name, Fig(r.Value, f.FromRuns), SharePicture.KindWord(r.Kind.Length > 0 ? r.Kind : "Run") + when + (r.Seconds >= 60 ? " · " + TodayLoot.Dur(r.Seconds) : "")));
         }
         else if (f.BestDay is { } d)
-            rows.Add(new("day", "BEST DAY", d.Date.ToString("dddd d MMM", c), Fig(d.Farm.Made, f.Farmed), TodayLoot.Dur(d.Farm.Active) + " farming"));
+            rows.Add(new("day", L.T("BEST DAY"), SharePicture.DayWord(d.Date, longDay: true), Fig(d.Farm.Made, f.Farmed), TodayLoot.Dur(d.Farm.Active) + " " + L.T("farming", "count")));
         if (f.Drop is { } x)
-            rows.Add(new("drop", "BIGGEST DROP", x.Name, Fig(x.Worth), $"×{x.Count.ToString("N0", c)} · {x.Where}" + (week ? " · " + x.Day.ToString("ddd d", c) : "")));
+            rows.Add(new("drop", L.T("BIGGEST DROP"), x.Name, Fig(x.Worth), $"×{x.Count.ToString("N0", c)} · {x.Where}" + (week ? " · " + SharePicture.DayWord(x.Day, month: false) : "")));
         if (f.Craft is { } cr)
-            rows.Add(new("craft", "CRAFTING", $"{Plural(cr.Tries, "craft", "crafts")} this session", (cr.AtMost ? "≤ " : "") + (cr.Net >= 0 ? "+" : "−") + fk(Math.Abs(cr.Net)),
-                "profit, " + PriceBook.Cut + (cr.AtMost ? ", at most (a price is missing)" : "")));
+            rows.Add(new("craft", L.T("CRAFTING"), L.F("{0} this session", Plural(cr.Tries, "craft", "crafts")), (cr.AtMost ? "≤ " : "") + (cr.Net >= 0 ? "+" : "−") + fk(Math.Abs(cr.Net)),
+                L.F("profit, {0}", PriceBook.Cut) + (cr.AtMost ? L.T(", at most (a price is missing)") : "")));
 
         string change = "", changeLabel = ""; int tone = 0;
         if (f.Change is double ch && f.Before is long b)
         {
-            changeLabel = "vs last week, " + fk(b);
-            if (Math.Abs(ch) < Same) change = "about the same";
+            changeLabel = L.F("vs last week, {0}", fk(b));
+            if (Math.Abs(ch) < Same) change = L.T("about the same");
             // twice the period before or more reads as a multiple ("▲ 7×"), not a four-figure share
             else if (ch >= 1) { tone = 1; change = $"▲ {(1 + ch).ToString("0.#", c)}×"; }
             else { tone = ch > 0 ? 1 : -1; change = $"{(ch > 0 ? "▲" : "▼")} {Math.Abs(ch * 100).ToString(Math.Abs(ch) < 0.095 ? "0.#" : "N0", c)}%"; }
@@ -201,17 +201,20 @@ public static class Wrapped
         string thinHead = "", thinBody = "", soFar = "";
         if (f.Thin)
         {
-            thinHead = week ? "Your week wraps up after two days of play." : "Your day wraps up after 10 minutes of farming or your first run.";
-            thinBody = $"Then this sheet shows what you made, your time and Kinah an hour, your top zone, best run and biggest drop{(week ? ", and how the week did against the last one" : "")}, ready to share.";
+            thinHead = L.T(week ? "Your week wraps up after two days of play." : "Your day wraps up after 10 minutes of farming or your first run.");
+            thinBody = L.T(week ? "Then this sheet shows what you made, your time and Kinah an hour, your top zone, best run and biggest drop, and how the week did against the last one, ready to share."
+                : "Then this sheet shows what you made, your time and Kinah an hour, your top zone, best run and biggest drop, ready to share.");
             var bits = new List<string>();
-            if (f.FarmSeconds >= 60) bits.Add(TodayLoot.Dur(f.FarmSeconds) + " farming");
+            if (f.FarmSeconds >= 60) bits.Add(TodayLoot.Dur(f.FarmSeconds) + " " + L.T("farming", "count"));
             if (f.Runs > 0) bits.Add(Plural(f.Runs, "run", "runs"));
-            if (f.Total > 0) bits.Add(fk(f.Total) + " made");
+            if (f.Total > 0) bits.Add(L.F("{0} made", fk(f.Total)));
             soFar = week
-                ? f.DaysPlayed == 0 ? "Nothing counted on this character yet this week." : $"So far: {Plural(f.DaysPlayed, "day", "days")} of play{(bits.Count > 0 ? ", " + string.Join(", ", bits) : "")}. Play on another day this week and it fills in."
-                : bits.Count == 0 ? "Nothing counted yet today." : "So far today: " + string.Join(", ", bits) + ".";
+                ? f.DaysPlayed == 0 ? L.T("Nothing counted on this character yet this week.")
+                    : bits.Count > 0 ? L.F("So far: {0} of play, {1}. Play on another day this week and it fills in.", Plural(f.DaysPlayed, "day", "days"), string.Join(", ", bits))
+                    : L.F("So far: {0} of play. Play on another day this week and it fills in.", Plural(f.DaysPlayed, "day", "days"))
+                : bits.Count == 0 ? L.T("Nothing counted yet today.") : L.F("So far today: {0}.", string.Join(", ", bits));
         }
-        return new WrappedText(week ? "WEEK WRAPPED" : "DAY WRAPPED", Range(f.From, f.To), fk(f.Total), week ? "made this week" : "made today", split, stats, rows,
+        return new WrappedText(L.T(week ? "WEEK WRAPPED" : "DAY WRAPPED"), Range(f.From, f.To), fk(f.Total), L.T(week ? "made this week" : "made today"), split, stats, rows,
             change, changeLabel, tone, thinHead, thinBody, soFar);
     }
 

@@ -39,14 +39,14 @@ public partial class MainWindow
         var text = new TextBlock { Style = (Style)FindResource("BodyStyle"), FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         // a resource reference, not B("Ink"): B() hands back the brush of the look at that moment, and the look is often picked
         // after this notice is up (first run: Welcome's look chips), which left Night's pale ink on Daylight's white card
-        var head = new System.Windows.Documents.Run("Help improve counting is on. ") { FontWeight = FontWeights.Normal };
+        var head = new System.Windows.Documents.Run(L.T("Help improve counting is on. ")) { FontWeight = FontWeights.Normal };
         head.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Ink");
         text.Inlines.Add(head);
-        text.Inlines.Add(new System.Windows.Documents.Run(CountingSentence));
-        var keep = new Button { Content = "Keep on", Style = (Style)FindResource("PrimaryButton"), Height = 34, Padding = new Thickness(16, 0, 16, 0), FontSize = 13, Margin = new Thickness(0, 0, 8, 0) };
-        var off = new Button { Content = "Turn off", Height = 34, Padding = new Thickness(14, 0, 14, 0), FontSize = 13 };
-        SetA11yName(keep, "Keep Help improve counting on");
-        SetA11yName(off, "Turn Help improve counting off");
+        text.Inlines.Add(new System.Windows.Documents.Run(L.T(CountingSentence)));
+        var keep = new Button { Content = L.T("Keep on"), Style = (Style)FindResource("PrimaryButton"), Height = 34, Padding = new Thickness(16, 0, 16, 0), FontSize = 13, Margin = new Thickness(0, 0, 8, 0) };
+        var off = new Button { Content = L.T("Turn off"), Height = 34, Padding = new Thickness(14, 0, 14, 0), FontSize = 13 };
+        SetA11yName(keep, L.T("Keep Help improve counting on"));
+        SetA11yName(off, L.T("Turn Help improve counting off"));
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         buttons.Children.Add(keep); buttons.Children.Add(off);
         var grid = new Grid();
@@ -70,6 +70,6 @@ public partial class MainWindow
         ApplyCounting();
         SavePrefs();
         if (_countingCard != null) { HeadStack.Children.Remove(_countingCard); _countingCard = null; }
-        Say(keep ? "Help improve counting stays on. Options › Sharing turns it off any time." : "Help improve counting is off. Nothing is written or sent for it.", keep ? "Good" : "Faint");
+        Say(keep ? L.T("Help improve counting stays on. Options › Sharing turns it off any time.") : L.T("Help improve counting is off. Nothing is written or sent for it."), keep ? "Good" : "Faint");
     }
 }

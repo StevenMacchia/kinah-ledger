@@ -94,7 +94,7 @@ public sealed partial class HudCard
         void Draw(double s)
         {
             _ringHost.Children.Clear();
-            _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? "best" : "of best"));
+            _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? L.T("best") : L.T("of best")));
         }
         if (Moves && !rose && !Motion.Playing(_ringHost)) Motion.ForgetShare(_key + "ring");   // set as it is: no slide
         if (Moves) Motion.Slide(_ringHost, _key + "ring", share, Draw); else Draw(share);
@@ -152,7 +152,7 @@ public sealed partial class HudCard
         if (share >= 0)
         {
             var tone = Rgb(GoldC);
-            Motion.ReplaySlide(_ringHost, _key + "ring", share * 0.7, share, s => { _ringHost.Children.Clear(); _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? "best" : "of best")); });
+            Motion.ReplaySlide(_ringHost, _key + "ring", share * 0.7, share, s => { _ringHost.Children.Clear(); _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? L.T("best") : L.T("of best"))); });
         }
         if (_tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement t0 && Picks(values).FirstOrDefault() is { } fp) Arrived(t0, fp);
         if (_ring.Visibility == Visibility.Visible) RareBeat();

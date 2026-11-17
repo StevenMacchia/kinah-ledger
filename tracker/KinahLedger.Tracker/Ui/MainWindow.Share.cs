@@ -139,7 +139,7 @@ public partial class MainWindow
             return new ShareDrop(name, GatheringCatalog.Find(name)?.Grade ?? _items.Get(kv.Key)?.Grade ?? "", kv.Value.Sell + kv.Value.Bound, worth) { Bound = kv.Value.Bound };
         }).ToList();
         var top = zones.OrderByDescending(z => z.Value.AbyssPoints).ThenByDescending(z => z.Value.Active).First().Key;
-        string title = zones.Count == 1 ? top : $"{top} and {zones.Count - 1} more";
+        string title = zones.Count == 1 ? top : L.F("{0} and {1} more", top, zones.Count - 1);
         return new ShareFacts(scope, DateTime.Now, ShareServer(), title, "in the Abyss", secs, kills, "kill", kinah + drops.Sum(d => d.Worth), drops)
         {
             Kinah = kinah, Abyss = new ShareAbyss(points, rank, lost, pvp, kills, deaths),
@@ -155,12 +155,12 @@ public partial class MainWindow
         bool gather = f.Kills == 0 && f.Attempts > 0;
         var drops = f.Drops.Concat(f.Gathered).Select(s => new ShareDrop(s.Name, GatheringCatalog.Find(s.Name)?.Grade ?? _items.Get(s.Id)?.Grade ?? "",
             (int)Math.Min(s.Count, int.MaxValue), s.Worth) { Bound = (int)Math.Min(s.Bound, int.MaxValue) }).ToList();
-        var zones = f.Zones.Where(z => z.Made > 0).Select(z => new ShareZone(z.Zone == SessionEngine.UnknownZone ? "Zone not read" : z.Zone, z.Made, z.Active)).ToList();
+        var zones = f.Zones.Where(z => z.Made > 0).Select(z => new ShareZone(z.Zone == SessionEngine.UnknownZone ? L.T("Zone not read") : z.Zone, z.Made, z.Active)).ToList();
         var title = zones.Count switch
         {
             0 => ShareZone(day),
             1 => zones[0].Name,
-            _ => $"{zones.Count} zones · most in {zones[0].Name}",
+            _ => L.F("{0} zones · most in {1}", zones.Count, zones[0].Name),
         };
         return new ShareFacts(SharePicture.Today, DateTime.Now, ShareServer(), title, gather ? "of gathering" : "of farming", f.Active,
             gather ? f.Attempts : f.Kills, gather ? "attempt" : "kill", f.Made, drops) { Kinah = f.Kinah, Zones = zones };
@@ -169,7 +169,7 @@ public partial class MainWindow
     SharePic? CurrentSharePic() => ShareFactsFor(_shareScope) is { } f ? SharePicture.Compose(f, _prefs.ShareShowName, _prefs.ShareName, Fk) : null;
 
     /// <summary>"Siel · NA East", or nothing before a server is chosen.</summary>
-    string ShareServer() => Server is { } sv ? $"{sv.Name} · {sv.Region.Name}" : "";
+    string ShareServer() => Server is { } sv ? $"{sv.Name} · {sv.Region.Shown}" : "";
 
     /// <summary>The items a count picked up, each with its grade and its worth at the lowest Market price after the Market's cut (0 with no price), so the drops add up to the picture's total.</summary>
     List<ShareDrop> ShareDropsOf(SessionEngine e) => e.ItemRows()
@@ -233,7 +233,7 @@ public partial class MainWindow
         var best = days.Where(d => d.Farm.Made > 0).OrderByDescending(d => d.Farm.Made).FirstOrDefault();
         var zone = days.SelectMany(d => d.Farm.Zones).GroupBy(z => z.Zone).Select(g => (Zone: g.Key, Made: g.Sum(z => z.Made))).OrderByDescending(x => x.Made).FirstOrDefault();
         var note = SharePicture.WeekNote(best?.Date, best?.Farm.Made ?? 0, zone.Made > 0 ? zone.Zone : null, Fk);
-        return new ShareFacts(SharePicture.Week, DateTime.Now, ShareServer(), "This week", "of farming", t.Active, t.Kills, "kill", t.Made, new List<ShareDrop>(), note)
+        return new ShareFacts(SharePicture.Week, DateTime.Now, ShareServer(), L.T("This week"), "of farming", t.Active, t.Kills, "kill", t.Made, new List<ShareDrop>(), note)
         {
             Kinah = days.Sum(d => d.Farm.Kinah),
             Days = days.Select(d => new ShareDay(d.Date, d.Farm.Made, d.IsToday)).ToList(),
@@ -275,7 +275,7 @@ public partial class MainWindow
         head.ColumnDefinitions.Add(new ColumnDefinition());
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var label = CkText("SHARE", CkMuted, 12, FontWeights.Medium); label.Margin = new Thickness(2, 0, 10, 0);
+        var label = CkText(L.T("SHARE"), CkMuted, 12, FontWeights.Medium); label.Margin = new Thickness(2, 0, 10, 0);
         head.Children.Add(label);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); head.Children.Add(rule);
@@ -288,7 +288,7 @@ public partial class MainWindow
             (SharePicture.Week, "This week", "The last 7 days of farming on this PC."),
         })
         {
-            var b = new Button { Content = text, Height = 26, FontSize = 12.5, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(seg.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = tip, Tag = "share-" + scope };
+            var b = new Button { Content = L.T(text), Height = 26, FontSize = 12.5, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(seg.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = L.T(tip), Tag = "share-" + scope };
             b.SetResourceReference(StyleProperty, _shareScope == scope ? "SegOn" : "SegOff");
             var s = scope;
             b.Click += (_, _) => { if (_shareScope == s) return; _shareScope = s; _shareSaved = ""; DrawShare(); };
@@ -299,7 +299,7 @@ public partial class MainWindow
         var close = new Button
         {
             Content = "✕", Width = 28, Height = 26, Padding = new Thickness(0), Margin = new Thickness(8, 0, 0, 0), FontSize = 14, FontWeight = FontWeights.Normal,
-            Background = Brushes.Transparent, BorderBrush = Brushes.Transparent, Foreground = Ck(CkFaint), ToolTip = "Close", VerticalAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent, BorderBrush = Brushes.Transparent, Foreground = Ck(CkFaint), ToolTip = L.T("Close"), VerticalAlignment = VerticalAlignment.Center,
         };
         AutomationProperties.SetName(close, "Close Share");
         close.Click += (_, _) => CloseShare();
@@ -318,7 +318,7 @@ public partial class MainWindow
         sw.SetResourceReference(StyleProperty, "Switch");
         AutomationProperties.SetName(sw, "Show my character name");
         nameRow.Children.Add(sw);
-        var swText = CkText("Show my character name", CkMuted, 12.5); swText.Margin = new Thickness(10, 0, 0, 0); swText.Cursor = Cursors.Hand;
+        var swText = CkText(L.T("Show my character name"), CkMuted, 12.5); swText.Margin = new Thickness(10, 0, 0, 0); swText.Cursor = Cursors.Hand;
         swText.MouseLeftButtonUp += (_, _) => sw.IsChecked = sw.IsChecked != true;
         nameRow.Children.Add(swText);
         void SetShow(bool on) { if (_prefs.ShareShowName == on) return; _prefs.ShareShowName = on; if (!_demo) _prefs.Save(); DrawShare(); }
@@ -332,7 +332,7 @@ public partial class MainWindow
                 VerticalContentAlignment = VerticalAlignment.Center, Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), Foreground = Ck(CkInk), CaretBrush = Ck(CkGold),
             };
             AutomationProperties.SetName(box, "Character name");
-            var hint = CkText("Your character's name", CkFaint, 12.5); hint.Margin = new Thickness(24, 0, 0, 0); hint.IsHitTestVisible = false;
+            var hint = CkText(L.T("Your character's name"), CkFaint, 12.5); hint.Margin = new Thickness(24, 0, 0, 0); hint.IsHitTestVisible = false;
             hint.Visibility = box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             box.TextChanged += (_, _) =>
             {
@@ -350,9 +350,9 @@ public partial class MainWindow
         var acts = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 14, 0, 0) };
         Button Act(string text, string tip, Action go, bool primary = false)
         {
-            var b = new Button { Content = text, Height = 32, FontSize = 12.5, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(acts.Children.Count > 0 ? 10 : 0, 0, 0, 0), ToolTip = tip, IsEnabled = pic != null };
+            var b = new Button { Content = L.T(text), Height = 32, FontSize = 12.5, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(acts.Children.Count > 0 ? 10 : 0, 0, 0, 0), ToolTip = L.T(tip), IsEnabled = pic != null };
             if (primary) b.SetResourceReference(StyleProperty, "PrimaryButton");
-            AutomationProperties.SetName(b, text);
+            AutomationProperties.SetName(b, L.T(text));
             b.Click += (_, _) => go();
             acts.Children.Add(b);
             return b;
@@ -366,8 +366,8 @@ public partial class MainWindow
         if (_shareSaved.Length > 0)
         {
             var saved = new TextBlock { FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Foreground = Ck(CkMuted), TextTrimming = TextTrimming.CharacterEllipsis };
-            saved.Inlines.Add(new Run(@"Saved in Pictures\Kinah Ledger as " + System.IO.Path.GetFileName(_shareSaved) + "   "));
-            var show = new Hyperlink(new Run("Show in folder")) { Foreground = Ck(CkLink), TextDecorations = null };
+            saved.Inlines.Add(new Run(L.F(@"Saved in Pictures\Kinah Ledger as {0}", System.IO.Path.GetFileName(_shareSaved)) + "   "));
+            var show = new Hyperlink(new Run(L.T("Show in folder"))) { Foreground = Ck(CkLink), TextDecorations = null };
             var path = _shareSaved;
             show.Click += (_, _) => { try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\""); } catch (Exception) { } };
             saved.Inlines.Add(show);
@@ -386,10 +386,10 @@ public partial class MainWindow
         {
             var why = _shareScope switch
             {
-                SharePicture.Run => "No run yet. Stop a run, or finish an expedition or event, and it shows here.",
-                SharePicture.Week => "Nothing farmed in the last 7 days yet.",
-                SharePicture.Today => "Nothing farmed today yet. Kill or gather something and it shows here.",
-                _ => "Nothing counted yet. Kill or gather something and it shows here.",
+                SharePicture.Run => L.T("No run yet. Stop a run, or finish an expedition or event, and it shows here."),
+                SharePicture.Week => L.T("Nothing farmed in the last 7 days yet."),
+                SharePicture.Today => L.T("Nothing farmed today yet. Kill or gather something and it shows here."),
+                _ => L.T("Nothing counted yet. Kill or gather something and it shows here."),
             };
             var t = CkText(why, CkFaint, 12.5); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None; t.TextAlignment = TextAlignment.Center;
             return new Border { Width = PicW, Height = 120, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine), Background = Ck(CkSlot, 0x99), Child = t, Padding = new Thickness(24, 0, 24, 0) };
@@ -498,8 +498,8 @@ public partial class MainWindow
                 legend.Children.Add(T(what + " ", 11, CkFaint));
                 legend.Children.Add(T(fig, 11, CkInk, FontWeights.Medium));
             }
-            Key(CkGold, "Loot", s.Loot);
-            Key(kinahC, "Kinah", s.Kinah);
+            Key(CkGold, L.T("Loot"), s.Loot);
+            Key(kinahC, L.T("Kinah"), s.Kinah);
             legend.Tag = "share-split";
             left.Children.Add(legend);
         }
@@ -563,7 +563,7 @@ public partial class MainWindow
             row.Children.Add(line);
             panel.Children.Add(row);
         }
-        if (p.Rows.Count == 0) panel.Children.Add(T(p.Split != null ? "Only Kinah so far, no items." : "No items yet.", 12, CkFaint));
+        if (p.Rows.Count == 0) panel.Children.Add(T(L.T(p.Split != null ? "Only Kinah so far, no items." : "No items yet."), 12, CkFaint));
         var box2 = new Border
         {
             Child = panel, Padding = new Thickness(11, 8, 11, 6), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
@@ -578,7 +578,7 @@ public partial class MainWindow
         var footText = new TextBlock { FontSize = 11.5, FontFamily = bodyFont, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Tag = "share-best" };
         if (p.Zones.Length > 0)
         {
-            footText.Inlines.Add(new Run("ZONES  ") { Foreground = Ck(CkFaint), FontSize = 10.5, FontWeight = FontWeights.SemiBold });
+            footText.Inlines.Add(new Run(L.T("ZONES") + "  ") { Foreground = Ck(CkFaint), FontSize = 10.5, FontWeight = FontWeights.SemiBold });
             footText.Inlines.Add(new Run(p.Zones) { Foreground = Ck(CkMuted) });
         }
         else footText.Inlines.Add(new Run(p.BestLine) { Foreground = Ck(CkMuted) });
@@ -599,7 +599,7 @@ public partial class MainWindow
         v.Arrange(new Rect(0, 0, PicW, PicH));
         v.UpdateLayout();
         var rtb = new RenderTargetBitmap(SharePicture.Width, SharePicture.Height, 192, 192, PixelFormats.Pbgra32);
-        rtb.Render(v);
+        LangCheck.Scan(v, "share picture"); rtb.Render(v);
         rtb.Freeze();
         return rtb;
     }
@@ -612,10 +612,10 @@ public partial class MainWindow
         try
         {
             CopyPng(RenderSharePicture(p));
-            Say("Picture copied. Paste it in Discord or anywhere with Ctrl+V.", "Good");
+            Say(L.T("Picture copied. Paste it in Discord or anywhere with Ctrl+V."), "Good");
             return true;
         }
-        catch (Exception ex) { CrashLog.Write("share picture", ex); Say("Couldn't copy the picture: " + ex.Message, "Bad"); return false; }
+        catch (Exception ex) { CrashLog.Write("share picture", ex); Say(L.F("Couldn't copy the picture: {0}", ex.Message), "Bad"); return false; }
     }
 
     void SaveSharePicture()
@@ -625,9 +625,9 @@ public partial class MainWindow
         {
             _shareSaved = SavePicture(RenderSharePicture(p), SharePicture.FileName(_shareScope, DateTime.Now));
             DrawShare();
-            Say(@"Picture saved in Pictures\Kinah Ledger.", "Good");
+            Say(L.T(@"Picture saved in Pictures\Kinah Ledger."), "Good");
         }
-        catch (Exception ex) { CrashLog.Write("share save", ex); Say("Couldn't save the picture: " + ex.Message, "Bad"); }
+        catch (Exception ex) { CrashLog.Write("share save", ex); Say(L.F("Couldn't save the picture: {0}", ex.Message), "Bad"); }
     }
 
     /// <summary>A picture on the clipboard as a PNG (Discord keeps it sharp) and as a plain bitmap for everything else (Share, and Week wrapped).</summary>
@@ -652,8 +652,8 @@ public partial class MainWindow
     void CopyShareText()
     {
         if (CurrentSharePic() is not { } p) return;
-        try { Clipboard.SetText(SharePicture.Text(p)); Say("Copied as text. Paste it in Discord or anywhere.", "Good"); }
-        catch (Exception ex) { CrashLog.Write("share text", ex); Say("Couldn't copy the text: " + ex.Message, "Bad"); }
+        try { Clipboard.SetText(SharePicture.Text(p)); Say(L.T("Copied as text. Paste it in Discord or anywhere."), "Good"); }
+        catch (Exception ex) { CrashLog.Write("share text", ex); Say(L.F("Couldn't copy the text: {0}", ex.Message), "Bad"); }
     }
 
     /* ---------------- layout renders and options-test ---------------- */
@@ -697,7 +697,7 @@ public partial class MainWindow
         IconCache.Drain(TimeSpan.FromSeconds(5));
         holder.UpdateLayout();
         var bmp = new RenderTargetBitmap((int)Math.Ceiling(holder.ActualWidth), (int)Math.Ceiling(holder.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bmp.Render(holder);
+        LangCheck.Scan(holder, "share"); bmp.Render(holder);
         SavePng(bmp, path);
     }
 

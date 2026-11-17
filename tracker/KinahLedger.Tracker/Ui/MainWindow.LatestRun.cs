@@ -35,9 +35,9 @@ public partial class MainWindow
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (key, text) in new[] { ("latest", "Latest run"), ("all", "All runs") })
         {
-            var b = new Button { Content = text, Height = 24, FontSize = 11.5, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(row.Children.Count > 0 ? 2 : 0, 0, 0, 0), Tag = "runs-view:" + key };
+            var b = new Button { Content = L.T(text), Height = 24, FontSize = 11.5, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(row.Children.Count > 0 ? 2 : 0, 0, 0, 0), Tag = "runs-view:" + key };
             b.SetResourceReference(StyleProperty, _runsView == key ? "SegOn" : "SegOff");
-            b.ToolTip = key == "latest" ? "The latest run here on its own: what it made and what it dropped." : "Every run here together: the hour, a run on average, the best run.";
+            b.ToolTip = L.T(key == "latest" ? "The latest run here on its own: what it made and what it dropped." : "Every run here together: the hour, a run on average, the best run.");
             var k = key;
             b.Click += (_, _) => { if (_runsView == k) return; _runsView = k; _drawnSig.Remove("runs"); redraw(); };
             row.Children.Add(b);
@@ -69,21 +69,21 @@ public partial class MainWindow
         var nameRow = new StackPanel { Orientation = Orientation.Horizontal };
         var name = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 330 };
         name.Inlines.Add(Q(zone, 15, FontWeights.Bold, "Ink"));
-        if (kind.Length > 0) name.Inlines.Add(Q(" · " + kind, 12, FontWeights.Medium, "Muted"));
+        if (kind.Length > 0) name.Inlines.Add(Q(" · " + KindT(kind), 12, FontWeights.Medium, "Muted"));
         nameRow.Children.Add(name);
         if (pickPlace != null)
         {
             var chev = QIcon("Chev", 12, "Faint", 2); chev.Margin = new Thickness(7, 2, 0, 0); chev.VerticalAlignment = VerticalAlignment.Center; chev.RenderTransformOrigin = new Point(0.5, 0.5); chev.RenderTransform = new RotateTransform(90);
             nameRow.Children.Add(chev);
-            kick.Cursor = Cursors.Hand; kick.ToolTip = "Click to pick another place: its latest run, what it paid out, its best drops."; ToolTipService.SetInitialShowDelay(kick, 500);
+            kick.Cursor = Cursors.Hand; kick.ToolTip = L.T("Click to pick another place: its latest run, what it paid out, its best drops."); ToolTipService.SetInitialShowDelay(kick, 500);
             kick.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(kick, pickPlace()); };
         }
         titles.Children.Add(nameRow);
         int number = runs.OrderBy(r => r.Start).ToList().IndexOf(run) + 1;
         var local = run.Start.ToLocalTime();
-        string when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+        string when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : DayHm(local);
         bool isOpen = ReferenceEquals(run, open);
-        string line = isOpen ? $"Run {number} · open since {when} · {RunPillText(run).ToLowerInvariant()}" : $"Run {number} · {when} · took {Clock(TimeSpan.FromSeconds(run.Seconds))}";
+        string line = isOpen ? L.F("Run {0} · open since {1} · {2}", number, when, RunPillText(run).ToLowerInvariant()) : L.F("Run {0} · {1} · took {2}", number, when, Clock(TimeSpan.FromSeconds(run.Seconds)));
         var ml = QT(line, 12, FontWeights.Medium, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); ml.Tag = "latest-line"; titles.Children.Add(ml);
         Grid.SetColumn(titles, 1); kick.Children.Add(titles);
         left.Children.Add(kick);
@@ -92,16 +92,16 @@ public partial class MainWindow
         long value = RunValue(run);
         bool known = value > 0 || run.Kinah > 0;
         var big = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        if (known) { big.Inlines.Add(Q(Fk(value), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(isOpen ? " so far" : " this run", 13, FontWeights.Medium, "Muted")); }
-        else big.Inlines.Add(Q(isOpen ? "Nothing yet" : "no prices yet", 22, FontWeights.Bold, "Muted"));
-        big.ToolTip = "Kinah plus loot and gear at the lowest Market price, " + PriceBook.Cut + ". Bound items add nothing.";
+        if (known) { big.Inlines.Add(Q(Fk(value), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" " + L.T(isOpen ? "so far" : "this run"), 13, FontWeights.Medium, "Muted")); }
+        else big.Inlines.Add(Q(L.T(isOpen ? "Nothing yet" : "no prices yet"), 22, FontWeights.Bold, "Muted"));
+        big.ToolTip = L.F("Kinah plus loot and gear at the lowest Market price, {0}. Bound items add nothing.", CutT);
         left.Children.Add(big);
         var why = FlagReason(run, Median(counted.Select(r => r.Seconds)));
         // the figures line: its Kinah, its loot, its kills
         var parts = new List<(string Fig, string Word)>();
-        if (run.Kinah > 0) parts.Add((Fk(run.Kinah), "Kinah"));
-        if (value - run.Kinah > 0) parts.Add((Fk(value - run.Kinah), "loot"));
-        if (run.Kills > 0) parts.Add((run.Kills.ToString("N0", CultureInfo.InvariantCulture), run.Kills == 1 ? "kill" : "kills"));
+        if (run.Kinah > 0) parts.Add((Fk(run.Kinah), L.T("Kinah")));
+        if (value - run.Kinah > 0) parts.Add((Fk(value - run.Kinah), L.T("loot")));
+        if (run.Kills > 0) parts.Add((run.Kills.ToString("N0", CultureInfo.InvariantCulture), L.T(run.Kills == 1 ? "kill" : "kills")));
         if (parts.Count > 0 || why.Length > 0)
         {
             var fl = new TextBlock { FontSize = 12, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
@@ -111,7 +111,7 @@ public partial class MainWindow
                 fl.Inlines.Add(Q(parts[i].Fig, 13, FontWeights.SemiBold, "Ink"));
                 fl.Inlines.Add(Q(" " + parts[i].Word, 12, FontWeights.Medium, "Muted"));
             }
-            if (why.Length > 0) { if (parts.Count > 0) fl.Inlines.Add(Q("   ·   ", 12, FontWeights.Bold, "Faint")); fl.Inlines.Add(Q((why.StartsWith("Kinah", StringComparison.Ordinal) ? why : char.ToLowerInvariant(why[0]) + why[1..]) + ", out of the figures", 12, FontWeights.SemiBold, "Coral")); }
+            if (why.Length > 0) { if (parts.Count > 0) fl.Inlines.Add(Q("   ·   ", 12, FontWeights.Bold, "Faint")); fl.Inlines.Add(Q(L.F("{0}, out of the figures", why == L.T("Kinah not read") ? why : char.ToLowerInvariant(why[0]) + why[1..]), 12, FontWeights.SemiBold, "Coral")); }
             left.Children.Add(fl);
         }
         g.Children.Add(left);
@@ -123,8 +123,8 @@ public partial class MainWindow
         if (known && !isOpen && counted.Count > 1 && best > 0 && !run.OutOfAverages)
         {
             bool isBest = value >= best;
-            var ring = isBest ? QRing(76, 7, 1, "Gold", "★", "best run") : QRing(76, 7, QShare(value, best), "Gold", $"{Math.Round(100.0 * value / best):0}%", "of best");
-            ring.ToolTip = $"This run, {Fk(value)}, against the best run here, {Fk(best)}.";
+            var ring = isBest ? QRing(76, 7, 1, "Gold", "★", L.T("best run")) : QRing(76, 7, QShare(value, best), "Gold", $"{Math.Round(100.0 * value / best):0}%", L.T("of best"));
+            ring.ToolTip = L.F("This run, {0}, against the best run here, {1}.", Fk(value), Fk(best));
             ring.HorizontalAlignment = HorizontalAlignment.Right; ring.Margin = new Thickness(0, 10, 0, 0);
             right.Children.Add(ring);
         }
@@ -144,7 +144,7 @@ public partial class MainWindow
             outer.Children.Add(wrap);
             if (slots.Count > RunSlotsPerRow)
             {
-                var m = QLinkify(QT(all ? "Show fewer" : $"Show all {slots.Count}", 12, FontWeights.SemiBold, "Link"));
+                var m = QLinkify(QT(all ? L.T("Show fewer") : L.F("Show all {0}", slots.Count), 12, FontWeights.SemiBold, "Link"));
                 m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 2, 0, 0);
                 m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); _drawnSig.Remove("runs"); redraw(); };
                 outer.Children.Add(m);
@@ -152,7 +152,7 @@ public partial class MainWindow
         }
         else if (!isOpen)
         {
-            var t = QT(run.Kinah > 0 ? "Kinah only: nothing else read from its reward screen." : "Nothing read from its reward screen.", 12, FontWeights.Medium, "Faint");
+            var t = QT(L.T(run.Kinah > 0 ? "Kinah only: nothing else read from its reward screen." : "Nothing read from its reward screen."), 12, FontWeights.Medium, "Faint");
             t.Margin = new Thickness(0, 10, 0, 0); outer.Children.Add(t);
         }
         if (GearRow(tr, "this run", slots: false) is FrameworkElement gn) { gn.Margin = new Thickness(0, slots.Count == 0 ? 10 : 6, 0, 0); outer.Children.Add(gn); }
@@ -216,18 +216,18 @@ public partial class MainWindow
         card.SetResourceReference(StyleProperty, "QCard");
         var chev = QIcon("Chev", 12, "Faint", 2); QSetChev(chev, open); chev.Margin = new Thickness(12, 0, 2, 0);
         int n = counted.Count;
-        var head = QHead("Trophy", "Best drops", $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")} · {(n == 1 ? "from the run here" : $"from the {n} runs here")}", chev);
-        head.ToolTip = open ? "Click to fold." : "Click to see every item the runs here brought, sorted as you like.";
+        var head = QHead("Trophy", L.T("Best drops"), L.F("{0} · {1}", L.F(drops.Count == 1 ? "{0} kind" : "{0} kinds", drops.Count), n == 1 ? L.T("from the run here") : L.F("from the {0} runs here", n)), chev);
+        head.ToolTip = L.T(open ? "Click to fold." : "Click to see every item the runs here brought, sorted as you like.");
         head.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (!_runsOpen.Remove(openKey)) _runsOpen.Add(openKey); _drawnSig.Remove("runs"); redraw(); };
         sp.Children.Add(head);
         if (!open) return card;
 
         // the sort: four small pills, the chosen one lit
         var sort = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 4) };
-        var sl = QT("Sort", 11.5, FontWeights.Medium, "Faint"); sl.Margin = new Thickness(0, 0, 6, 0); sl.VerticalAlignment = VerticalAlignment.Center; sort.Children.Add(sl);
+        var sl = QT(L.T("Sort"), 11.5, FontWeights.Medium, "Faint"); sl.Margin = new Thickness(0, 0, 6, 0); sl.VerticalAlignment = VerticalAlignment.Center; sort.Children.Add(sl);
         foreach (var (key, text) in new[] { ("value", "Value"), ("count", "Count"), ("name", "Name"), ("when", "When") })
         {
-            var b = new Button { Content = text, Height = 22, FontSize = 11.5, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(2, 0, 0, 0), Tag = "best-sort:" + key };
+            var b = new Button { Content = L.T(text), Height = 22, FontSize = 11.5, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(2, 0, 0, 0), Tag = "best-sort:" + key };
             b.SetResourceReference(StyleProperty, _bestDropsSort == key ? "SegOn" : "SegOff");
             var k = key;
             b.Click += (_, _) => { if (_bestDropsSort == k) return; _bestDropsSort = k; _drawnSig.Remove("runs"); redraw(); };
@@ -240,16 +240,17 @@ public partial class MainWindow
         foreach (var d in all ? drops : drops.Take(BestDropsShown))
         {
             var local = d.Last.ToLocalTime();
-            string when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d", CultureInfo.InvariantCulture);
-            string val = d.Bound >= d.Count ? "bound" : d.Priced ? Fk(d.Value) : "no price";
-            string sub = $"×{d.Count.ToString("N0", CultureInfo.InvariantCulture)}{(d.Bound > 0 && d.Bound < d.Count ? $" ({d.Bound.ToString("N0", CultureInfo.InvariantCulture)} bound)" : "")} · last {when}";
+            string when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : DayShort(local);
+            string val = d.Bound >= d.Count ? L.T("bound") : d.Priced ? Fk(d.Value) : L.T("no price");
+            string count = d.Count.ToString("N0", CultureInfo.InvariantCulture);
+            string sub = d.Bound > 0 && d.Bound < d.Count ? L.F("×{0} ({1} bound) · last {2}", count, d.Bound.ToString("N0", CultureInfo.InvariantCulture), when) : L.F("×{0} · last {1}", count, when);
             var row = QRow(QItemIcon(d.Name, d.Id, 28, round: false, grade: _items.Get(d.Id)?.Grade ?? ""), d.Name, sub, val, d.Priced ? "Gold" : "Faint", rule: i > 0);
             row.Tag = "best-row:" + d.Name;
             sp.Children.Add(row); i++;
         }
         if (drops.Count > BestDropsShown)
         {
-            var m = QLinkify(QT(all ? "Show fewer" : $"Show all {drops.Count}", 12, FontWeights.SemiBold, "Link"));
+            var m = QLinkify(QT(all ? L.T("Show fewer") : L.F("Show all {0}", drops.Count), 12, FontWeights.SemiBold, "Link"));
             m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 6, 0, 0);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(allKey)) _todayAll.Add(allKey); _drawnSig.Remove("runs"); redraw(); };
             sp.Children.Add(m);
@@ -320,8 +321,8 @@ public partial class MainWindow
             return card;
         }
         var placeIcon = runs.FirstOrDefault() is { } r0 ? PlaceIcon(r0.Zone, r0.Kind) : "Timer";
-        var h = QHead(placeIcon, "Runs", $"{runs.Count} here · newest first", chev);
-        h.ToolTip = "Click to see the runs here, newest first: a click on one opens its details.";
+        var h = QHead(placeIcon, L.T("Runs"), L.F("{0} here · newest first", runs.Count), chev);
+        h.ToolTip = L.T("Click to see the runs here, newest first: a click on one opens its details.");
         h.MouseLeftButtonUp += (_, e) => { e.Handled = true; Flip(); };
         var c = new Border { Child = h, Margin = new Thickness(0, 8, 0, 0), Tag = "runs-fold" };
         c.SetResourceReference(StyleProperty, "QCard");

@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -76,11 +78,11 @@ public sealed class AccuracyScore
     /// <summary>The reason as a player reads it under the item, one plain sentence.</summary>
     public static string Plain(Why w) => w switch
     {
-        Why.Refused => "The Kinah counter didn't rise for it, so it wasn't counted.",
-        Why.NoChatLine => "Only the loot list showed it and no chat line did, so it wasn't counted.",
-        Why.CountAssumed => "Its count never showed, so 1 was counted.",
-        Why.PartlyRead => "Some reward slots weren't read.",
-        _ => "Its rewards weren't read. The pictures are kept.",
+        Why.Refused => L.T("The Kinah counter didn't rise for it, so it wasn't counted."),
+        Why.NoChatLine => L.T("Only the loot list showed it and no chat line did, so it wasn't counted."),
+        Why.CountAssumed => L.T("Its count never showed, so 1 was counted."),
+        Why.PartlyRead => L.T("Some reward slots weren't read."),
+        _ => L.T("Its rewards weren't read. The pictures are kept."),
     };
 
     /// <summary>

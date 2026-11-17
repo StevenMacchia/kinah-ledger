@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using KinahLedger.Data;
 using KinahLedger.Session;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Upload;
 
@@ -465,6 +466,8 @@ public static class Uploader
 
     /// <summary>Why the last send failed, in plain words, so the window can say more than "couldn't reach the site".</summary>
     public static string LastError { get; private set; } = "";
+    /// <summary>The same reason as the window says it, in the language in use (<see cref="LastError"/> stays English for the logs and the command line).</summary>
+    public static string LastErrorShown { get; private set; } = "";
 
     /// <summary>The longest wait a site's retry-after is followed for; anything longer is read as this.</summary>
     public static readonly TimeSpan MaxRetryAfter = TimeSpan.FromHours(1);
@@ -478,12 +481,14 @@ public static class Uploader
             using var r = await http.PostAsJsonAsync(url, payload);
             string body = "";
             try { body = (await r.Content.ReadAsStringAsync()).Trim(); } catch (Exception) { /* no body */ }
-            if (r.IsSuccessStatusCode) { LastError = ""; return new SendResult(true, (int)r.StatusCode, null, body); }
-            LastError = $"the site answered {(int)r.StatusCode}" + (body.Length > 0 ? ": " + (body.Length > 140 ? body[..140] + "…" : body) : "");
+            if (r.IsSuccessStatusCode) { LastError = LastErrorShown = ""; return new SendResult(true, (int)r.StatusCode, null, body); }
+            var said = body.Length > 0 ? ": " + (body.Length > 140 ? body[..140] + "…" : body) : "";
+            LastError = $"the site answered {(int)r.StatusCode}" + said;
+            LastErrorShown = L.F("the site answered {0}", (int)r.StatusCode) + said;
             return new SendResult(false, (int)r.StatusCode, RetryAfterOf(r), body);
         }
-        catch (HttpRequestException ex) { LastError = "no connection: " + ex.Message; return SendResult.NoConnection; }
-        catch (TaskCanceledException) { LastError = "the site didn't answer within 15 s"; return SendResult.NoConnection; }
+        catch (HttpRequestException ex) { LastError = "no connection: " + ex.Message; LastErrorShown = L.F("no connection: {0}", ex.Message); return SendResult.NoConnection; }
+        catch (TaskCanceledException) { LastError = "the site didn't answer within 15 s"; LastErrorShown = L.T("the site didn't answer within 15 s"); return SendResult.NoConnection; }
     }
 
     /// <summary>The site's retry-after (seconds or a date), from now, at most <see cref="MaxRetryAfter"/>; null when it sent none.</summary>

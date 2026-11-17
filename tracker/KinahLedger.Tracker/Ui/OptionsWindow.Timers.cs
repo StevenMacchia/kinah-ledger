@@ -89,7 +89,7 @@ public partial class OptionsWindow
         var items = _host.TimerItemsNow();
         foreach (var group in items.GroupBy(i => i.Group).OrderBy(g => g.Key == "Events" ? 0 : g.Key.Contains("Reshanta") ? 2 : 1))
         {
-            Add(Styled(new TextBlock { Text = group.Key == "Events" ? L.T("EVENTS") : group.Key.Contains("Reshanta") ? group.Key.ToUpperInvariant() + L.T(" · ABYSS") : group.Key.ToUpperInvariant() + L.T(" · WORLD BOSSES") }, "GroupLabel"));
+            Add(Styled(new TextBlock { Text = group.Key == "Events" ? L.T("EVENTS") : group.Key.Contains("Reshanta") ? group.Key.ToUpperInvariant() + L.T(" · ABYSS") : group.Key == "World bosses" ? L.T("WORLD BOSSES") : group.Key.ToUpperInvariant() + L.T(" · WORLD BOSSES") }, "GroupLabel"));
             var list = new StackPanel();
             bool first = true;
             foreach (var i in group.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase))

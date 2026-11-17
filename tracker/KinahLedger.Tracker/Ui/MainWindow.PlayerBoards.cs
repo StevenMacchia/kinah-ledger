@@ -55,7 +55,7 @@ public partial class MainWindow
                 if (win.Content is FrameworkElement root)
                 {
                     var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-                    bmp.Render(root);
+                    LangCheck.Scan(root, "craft window"); bmp.Render(root);
                     var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
                     using var f = File.Create(Path.Combine(dir, "ui-craft-window.png")); enc.Save(f);
                 }
@@ -91,12 +91,12 @@ public partial class MainWindow
     void FillBestCrafts()
     {
         var host = BestCraftsHost;
-        var server = Server?.Name ?? "your server";
-        BestNote.Text = $"{server} · profit a craft";
+        var server = Server?.Name ?? L.T("your server");
+        BestNote.Text = L.F("{0} · profit a craft", server);
         if (PlayerBoards.CraftsAt == null)
         {
             _bestTop = null;
-            var note = HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options).";
+            var note = L.T(HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options).");
             if (!Changed("best", note)) return;
             host.Children.Clear();
             host.Children.Add(Faint(note));
@@ -114,13 +114,13 @@ public partial class MainWindow
         // drawn only when the rows' words change (a price board load, a tick on "I have these", Show all)
         if (!Changed("best", $"{server}|{_bestAll}|" + string.Join(";", rows.Select(x => $"{x.c.Id}|{x.adj.Profit}|{x.adj.Unpriced}|{x.Farmed}|{x.cost}")))) return;
         host.Children.Clear();
-        if (rows.Count == 0) { host.Children.Add(Faint($"No recipe makes a profit at today's lowest asks on {server}.")); return; }
+        if (rows.Count == 0) { host.Children.Add(Faint(L.F("No recipe makes a profit at today's lowest asks on {0}.", server))); return; }
         // the column labels, as the drops table's
         var heads = new Grid { Height = 24 };
         heads.ColumnDefinitions.Add(new ColumnDefinition()); heads.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); heads.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
         foreach (var (text, col) in new[] { ("Success", 1), ("Profit", 2) })
         {
-            var h = new TextBlock { Text = text, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
+            var h = new TextBlock { Text = L.T(text), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
             h.SetResourceReference(TextBlock.ForegroundProperty, "Faint"); Grid.SetColumn(h, col); heads.Children.Add(h);
         }
         host.Children.Add(heads);
@@ -130,7 +130,7 @@ public partial class MainWindow
         if (rows.Count > BestCraftsShown)
         {
             var more = new TextBlock { FontSize = 12, Margin = new Thickness(0, 8, 0, 0) };
-            var h = new Hyperlink(new Run(_bestAll ? "Show top 3" : $"Show all {rows.Count}"));
+            var h = new Hyperlink(new Run(_bestAll ? L.T("Show top 3") : L.F("Show all {0}", rows.Count)));
             h.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
             h.Click += (_, _) => { _bestAll = !_bestAll; FillBestCrafts(); };
             more.Inlines.Add(h);
@@ -150,7 +150,7 @@ public partial class MainWindow
     FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, int farmed = 0, long? cost = null)
     {
         var name = _items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name;
-        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = "Click for how to craft it, its prices and the market." };
+        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = L.T("Click for how to craft it, its prices and the market.") };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
@@ -164,10 +164,10 @@ public partial class MainWindow
         nt.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var oq = PriceBook.QuoteOf(name);
         var bits = new List<string>();
-        if (c.Makes > 1) bits.Add($"makes ×{c.Makes}");
-        bits.Add($"costs {Fk(cost ?? c.Cost)}" + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : ""));
-        bits.Add($"sells {Fk(oq?.Price ?? c.Price)}{(c.Makes > 1 ? " each" : "")}");   // one format on the line (it read "costs 18K · sells 9,999")
-        if (farmed > 0) bits.Add($"{farmed} farmed");
+        if (c.Makes > 1) bits.Add(L.F("makes ×{0}", c.Makes));
+        bits.Add(L.F("costs {0}", Fk(cost ?? c.Cost)) + (vendorUnpriced > 0 ? " " + L.F(vendorUnpriced == 1 ? "+ {0} vendor item" : "+ {0} vendor items", vendorUnpriced) : ""));
+        bits.Add(L.F(c.Makes > 1 ? "sells {0} each" : "sells {0}", Fk(oq?.Price ?? c.Price)));   // one format on the line (it read "costs 18K · sells 9,999")
+        if (farmed > 0) bits.Add(L.F("{0} farmed", farmed));
         var sub = new TextBlock { Text = string.Join(" · ", bits), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
         sub.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         mid.Children.Add(nt); mid.Children.Add(sub);
@@ -178,7 +178,7 @@ public partial class MainWindow
         var pt = new TextBlock
         {
             Text = Signed(profit), FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0),
-            ToolTip = vendorUnpriced > 0 ? "A craft's profit before the vendor items without a cost" : "A craft's profit at today's lowest asks, " + PriceBook.Cut,
+            ToolTip = vendorUnpriced > 0 ? L.T("A craft's profit before the vendor items without a cost") : L.F("A craft's profit at today's lowest asks, {0}", L.T(PriceBook.Cut)),
         };
         pt.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); pt.SetResourceReference(TextBlock.ForegroundProperty, profit >= 0 ? "Gold" : "Faint");
         Grid.SetColumn(pt, 3); g.Children.Add(pt);
@@ -196,10 +196,10 @@ public partial class MainWindow
         if (here is not { } h || h.Row.ValueHr is not long v) { FarmLine.Visibility = Visibility.Collapsed; return; }
         FarmLine.Visibility = Visibility.Visible;
         // after "Your best here 1.40M · " (JoinCompare); "everywhere" when only the pooled all-regions board has a row for this zone
-        FarmLine.Text = (h.AtGear ? $"Players at your gear {Fk(v)}" : $"Players here {Fk(v)}") + (h.Everywhere ? " everywhere" : "");
-        var who = $"{h.Row.Runs} runs from {h.Row.Players} players {(h.Everywhere ? "across every region" : "on " + (Server?.Label ?? "your server"))} in the last 7 days";
-        var gear = h.AtGear ? $", gear score {GearBracket}." : GearBracket != null ? $". Not enough players at gear score {GearBracket} yet, so this is everyone's." : ". Set your gear score in Options › Server to compare with players at your gear.";
-        FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, {PriceBook.Cut}.\n{who}{gear}";
+        FarmLine.Text = (h.AtGear ? L.F("Players at your gear {0}", Fk(v)) : L.F("Players here {0}", Fk(v))) + (h.Everywhere ? " " + L.T("everywhere") : "");
+        var who = L.F("{0} runs from {1} players {2} in the last 7 days", h.Row.Runs, h.Row.Players, h.Everywhere ? L.T("across every region") : L.F("on {0}", Server?.LabelShown ?? L.T("your server")));
+        var gear = h.AtGear ? L.F("{0}, gear score {1}.", who, GearBracket) : GearBracket != null ? L.F("{0}. Not enough players at gear score {1} yet, so this is everyone's.", who, GearBracket) : L.F("{0}. Set your gear score in Options › Server to compare with players at your gear.", who);
+        FarmLine.ToolTip = L.F("What players made an hour in {0}: Kinah plus tradeable loot at today's prices, {1}.", h.Row.Zone, L.T(PriceBook.Cut)) + "\n" + gear;
     }
 
     /* ---------------- small pieces in the window's own look ---------------- */

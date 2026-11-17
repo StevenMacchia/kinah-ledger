@@ -1,3 +1,5 @@
+using L = KinahLedger.Ui.L;
+
 namespace KinahLedger.Session;
 
 /// <summary>
@@ -66,7 +68,7 @@ public static class AbyssBosses
         var (last, next) = Around(b, serverUtc, zone);
         var since = serverUtc - last;
         if (since >= TimeSpan.Zero && since.TotalMinutes < SpawnedMinutes)
-            return new Row(b, true, last + offset, TimeSpan.Zero, since, $"{BossTimers.Span(since)} ago");
+            return new Row(b, true, last + offset, TimeSpan.Zero, since, L.F("{0} ago", BossTimers.Span(since)));
         var left = next - serverUtc;
         string when = left.TotalHours >= 24 ? $"{(int)left.TotalDays}d {left.Hours}h {left.Minutes:00}m" : BossTimers.Countdown(left);
         return new Row(b, false, next + offset, left, TimeSpan.Zero, when);

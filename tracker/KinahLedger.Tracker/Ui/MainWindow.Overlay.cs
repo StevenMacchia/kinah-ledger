@@ -48,11 +48,11 @@ public partial class MainWindow
     /// </summary>
     void MoveHudForAWhile()
     {
-        if (!_prefs.Hud) { _tray.ShowBalloonTip(4000, "The panel is off", "Turn it on in Options › In game, then move it from here.", System.Windows.Forms.ToolTipIcon.Info); return; }
+        if (!_prefs.Hud) { _tray.ShowBalloonTip(4000, L.T("The panel is off"), L.T("Turn it on in Options › In game, then move it from here."), System.Windows.Forms.ToolTipIcon.Info); return; }
         EnsureHud();
         _hudMoveUntil = DateTime.UtcNow.AddSeconds(HudMoveSeconds);
         UpdateHud();
-        Say($"Drag the panel where you want it. It locks again in {HudMoveSeconds} seconds.", "Faint");
+        Say(L.F("Drag the panel where you want it. It locks again in {0} seconds.", HudMoveSeconds), "Faint");
     }
 
     /// <summary>A short line on the panel ("Run started"), shown for <see cref="HudFlashSeconds"/> through its "flash" value.</summary>
@@ -132,10 +132,10 @@ public partial class MainWindow
     public string? OpenPlacementGuide()
     {
         if (_guide != null) { _guide.Activate(); return null; }
-        if (!HudWanted) return "The panel is off. Turn it on in Options › In game, then place it.";
-        if (_watcher.GameRect is not { } game) return "Open the game first: the guide goes over it.";
+        if (!HudWanted) return L.T("The panel is off. Turn it on in Options › In game, then place it.");
+        if (_watcher.GameRect is not { } game) return L.T("Open the game first: the guide goes over it.");
         var view = System.Drawing.Rectangle.Intersect(game, System.Windows.Forms.Screen.FromRectangle(game).Bounds);
-        if (view.Width < 320 || view.Height < 240) return "The game window is mostly off the screen. Move it back, then place the panel.";
+        if (view.Width < 320 || view.Height < 240) return L.T("The game window is mostly off the screen. Move it back, then place the panel.");
         var guide = MakePlacementGuide(game, view);
         _guide = guide;
         guide.Closed += (_, _) => { if (_guide == guide) _guide = null; UpdateHud(); };
@@ -162,7 +162,7 @@ public partial class MainWindow
         _hudSpotPreview = false;
         MarkPanelPlaced();   // the first-session checklist's "Panel placed"
         if (_hud != null && look == HudLook) { _hud.Left = x; _hud.Top = y; }
-        Say("Panel placed. Place it again any time from the tray menu or Options › In game.", "Good");
+        Say(L.T("Panel placed. Place it again any time from the tray menu or Options › In game."), "Good");
     }
 
     /// <summary>The first run's setup check closed: the guide is owed, and opens once the game is in front (<see cref="PlacementGuideTick"/>).</summary>

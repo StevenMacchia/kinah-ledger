@@ -35,7 +35,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
 
     // the deck (the Kinah line): the tape row, the hour and your best, the session and the timer, the Abyss's stats, a rare drop, the note
     readonly System.Windows.Shapes.Ellipse _dot = new() { Width = 8, Height = 8, Fill = Red, Margin = new Thickness(0, 0, 5, 1), VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBlock _recWord = Txt("REC", 11, Red, Face);
+    readonly TextBlock _recWord = Txt(L.T("REC"), 11, Red, Face);
     readonly StackPanel _rec = new() { Orientation = Orientation.Horizontal };
     readonly TextBlock _tc = Txt("", 11, White, Face), _ff = Txt("", 11, White, Face);
     readonly Grid _figRow = new() { Margin = new Thickness(0, 5, 0, 0) };
@@ -151,7 +151,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
     static Border PlayTag() => new()
     {
         Background = Br(GreenC), Padding = new Thickness(5, 0, 5, 0), Visibility = Visibility.Hidden, HorizontalAlignment = HorizontalAlignment.Stretch,
-        Child = new TextBlock { Text = "▶ PLAY", FontFamily = VhsFace, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Br(0x000000), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
+        Child = new TextBlock { Text = L.T("▶ PLAY"), FontFamily = VhsFace, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Br(0x000000), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
     };
 
     /// <summary>The notches at a third and two thirds, standing a little out of the bar.</summary>
@@ -191,7 +191,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         var (run, clock, odd) = RunClock(Values);
         // the tape records while the session counts (a run or not); nothing counted yet, it stands by
         run = run || Values.GetValueOrDefault("run") == "1" || f.Counted;
-        _recWord.Text = run ? "REC" : "STBY";
+        _recWord.Text = run ? L.T("REC") : L.T("STBY");
         _recWord.Foreground = run ? Red : Dim;
         _dot.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
         _dot.Opacity = odd ? 1 : .3;

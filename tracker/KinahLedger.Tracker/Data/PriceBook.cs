@@ -1,4 +1,5 @@
 using System.Text.Json;
+using L = KinahLedger.Ui.L;
 
 namespace KinahLedger.Data;
 
@@ -54,7 +55,7 @@ public static class PriceBook
     /// <summary>The full wording for a figure: "after the 12% Market fee" (the HUD card, the first tooltips), or "before the Market fee".</summary>
     public static string Fee => ShowGross ? "before the Market fee" : $"after the {FeeRate:P0} Market fee";
     /// <summary>The short wording, where space is tight: "after the Market's cut", or "before the Market's cut".</summary>
-    public static string Cut => ShowGross ? "before the Market's cut" : "after the Market's cut";
+    public static string Cut => L.T(ShowGross ? "before the Market's cut" : "after the Market's cut");
     /// <summary>Readings a price needs to count in totals and profit; an ask this many times the other servers' middle is dropped.</summary>
     public const int SureReadings = 2;
     public const double OutlierX = 3;
@@ -109,7 +110,7 @@ public static class PriceBook
                 var typedQuote = new Quote(typed.price, From.Typed, 1, true, typed.at);
                 // a week-old typed price gives way to a sure board price; with none, it stands
                 if (DateTime.UtcNow - typed.at <= TypedFor || SharedQuote(k) is not { Sure: true, From: From.Server or From.Sold or From.Feed } board) return typedQuote;
-                return board with { Note = $"you typed {typed.price:N0} on {typed.at.ToLocalTime():yyyy-MM-dd}; the board says {board.Price:N0}" };
+                return board with { Note = L.F("you typed {0:N0} on {1}; the board says {2:N0}", typed.price, typed.at.ToLocalTime().ToString("yyyy-MM-dd"), board.Price) };
             }
             if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
             return SharedQuote(k);
@@ -152,20 +153,20 @@ public static class PriceBook
         if (q.Note != null) parts.Add(q.Note);
         switch (q.From)
         {
-            case From.Typed: parts.Add("you typed it"); break;
-            case From.Market: parts.Add("your Market read"); break;
-            case From.Server: parts.Add(q.Readings == 1 ? "a player's read" : $"players' reads · {q.Readings} asks"); break;
-            case From.Sold: parts.Add($"sold average · {q.Readings} sold"); break;
-            case From.Feed: parts.Add(q.Readings == 1 ? "aion2.exchange · 1 listing" : $"aion2.exchange · lowest of {q.Readings} listings"); break;
-            case From.Region: parts.Add(q.Readings == 1 ? "another server's price" : $"other servers' middle · {q.Readings} servers"); break;
+            case From.Typed: parts.Add(KinahLedger.Ui.L.T("you typed it")); break;
+            case From.Market: parts.Add(KinahLedger.Ui.L.T("your Market read")); break;
+            case From.Server: parts.Add(q.Readings == 1 ? KinahLedger.Ui.L.T("a player's read") : KinahLedger.Ui.L.F("players' reads · {0} asks", q.Readings)); break;
+            case From.Sold: parts.Add(KinahLedger.Ui.L.F("sold average · {0} sold", q.Readings)); break;
+            case From.Feed: parts.Add(q.Readings == 1 ? KinahLedger.Ui.L.T("aion2.exchange · 1 listing") : KinahLedger.Ui.L.F("aion2.exchange · lowest of {0} listings", q.Readings)); break;
+            case From.Region: parts.Add(q.Readings == 1 ? KinahLedger.Ui.L.T("another server's price") : KinahLedger.Ui.L.F("other servers' middle · {0} servers", q.Readings)); break;
         }
         if (withAge)
         {
             // a board price the site gave no time for (a sold average, an older board) is as old as the last check of the board
             if (q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
-            else if (q.From is From.Server or From.Sold or From.Feed && BoardAt is DateTime bat) parts.Add("board checked " + Ago(bat, now ?? DateTime.UtcNow));
+            else if (q.From is From.Server or From.Sold or From.Feed && BoardAt is DateTime bat) parts.Add(KinahLedger.Ui.L.F("board checked {0}", Ago(bat, now ?? DateTime.UtcNow)));
         }
-        if (!q.Sure) parts.Add("unsure");
+        if (!q.Sure) parts.Add(KinahLedger.Ui.L.T("unsure"));
         return string.Join(" · ", parts);
     }
 
@@ -176,10 +177,10 @@ public static class PriceBook
     public static string Ago(DateTime at, DateTime now)
     {
         var d = now - at;
-        if (d.TotalMinutes < 1) return "just now";
-        if (d.TotalHours < 1) return $"{(int)d.TotalMinutes} min ago";
-        if (d.TotalDays < 1) return $"{(int)d.TotalHours} h ago";
-        return (int)d.TotalDays == 1 ? "1 day ago" : $"{(int)d.TotalDays} days ago";
+        if (d.TotalMinutes < 1) return KinahLedger.Ui.L.T("just now");
+        if (d.TotalHours < 1) return KinahLedger.Ui.L.F("{0} min ago", (int)d.TotalMinutes);
+        if (d.TotalDays < 1) return KinahLedger.Ui.L.F("{0} h ago", (int)d.TotalHours);
+        return (int)d.TotalDays == 1 ? KinahLedger.Ui.L.T("1 day ago") : KinahLedger.Ui.L.F("{0} days ago", (int)d.TotalDays);
     }
 
     /// <summary>
