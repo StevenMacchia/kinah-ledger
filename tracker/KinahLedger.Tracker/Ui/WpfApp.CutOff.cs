@@ -114,6 +114,8 @@ public static partial class WpfApp
         {
             name = "";
             if (names == null) return false;
+            // a look's own joiners (VHS writes "A⁠P" so no "AP" is read in its capitals) are no letters
+            s = new string(s.Where(ch => CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.Format).ToArray());
             var bare = s.EndsWith('…') ? s[..^1].TrimEnd() : s;
             foreach (var n in names)
                 if (string.Equals(n, s, StringComparison.OrdinalIgnoreCase) || (s.EndsWith('…') && bare.Length > 0 && n.StartsWith(bare, StringComparison.OrdinalIgnoreCase))) { name = n; return true; }

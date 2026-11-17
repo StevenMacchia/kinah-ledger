@@ -46,7 +46,7 @@ static class CorruptRows
         readonly TextBlock _code = Txt("", 10, Lilac, Face);
         readonly TranslateTransform _tear = new();
         readonly Border _glint = new() { Opacity = 0, IsHitTestVisible = false, Margin = new Thickness(-4, 0, -4, 0) };
-        readonly Border _rankBox = new() { Width = 20, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center };
+        readonly Border _rankBox = new() { Width = 17, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _rank = Txt("", 10.5, Lilac, Face);
         readonly TextBlock _you = Txt("▶", 9, Cyan, Face);
         readonly TextBlock _name = Txt("", 12, White, Face, trim: true);
@@ -54,7 +54,10 @@ static class CorruptRows
         readonly TextBlock _cp = Txt("", 9.5, LilacDim, Face);
         readonly StackPanel _tags = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _heal = Txt("", 10, Green, Face);
-        readonly TextBlock _extra = Txt("", 10, LilacDim, Face), _fig = FigCell(13, White, Face, 42), _share = FigCell(10.5, Lilac, Face, 46);
+        /// <summary>The heal figure's block: plain, or stamped green at a kill for the top healer (the TOP HEALS stamp, with its figure in it).</summary>
+        readonly Border _healBox = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) };
+        // the DPS and the share as wide as their widest forms ("199.9K", "33.3%"), so every row's columns line up and nothing crowds them
+        readonly TextBlock _extra = Txt("", 10, LilacDim, Face), _fig = FigCell(13, White, Face, Math.Ceiling(TextW("199.9K", Face, 13, FontWeights.Bold))), _share = FigCell(10.5, Lilac, Face, Math.Ceiling(TextW("33.3%", Face, 10.5, FontWeights.Bold)));
         readonly GlitchLevel _bar = new(4, Br(LilacC, .08));
 
         public FrameworkElement Root => _root;
@@ -71,7 +74,7 @@ static class CorruptRows
             _bar.Echo(2, 0).Background = Br(CyanC, .6);
             _bar.Root.VerticalAlignment = VerticalAlignment.Bottom; _bar.Root.Margin = new Thickness(0, 0, 0, 1);
             _root.Children.Add(_bar.Root);
-            var g = new Grid { Margin = new Thickness(4, 0, 10, 3) };
+            var g = new Grid { Margin = new Thickness(4, 0, 8, 3) };
             foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto })
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
             _rank.HorizontalAlignment = HorizontalAlignment.Center; _rankBox.Child = _rank;
@@ -79,15 +82,16 @@ static class CorruptRows
             _code.Margin = new Thickness(5, 1, 0, 0);
             _you.Margin = new Thickness(0, 0, 4, 0);
             DockPanel.SetDock(_you, Dock.Left); DockPanel.SetDock(_tags, Dock.Right);
-            _cp.Margin = new Thickness(6, 2, 0, 0);
-            // the code, the pointer, the name, cp= and the tags packed from the left: the cp gives way before the name is cut short
-            var name = new GlitchNameLine { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0, 0, 0), Text = _name, Yields = _cp, Children = { _code, _you, _name, _cp, _tags } };
-            _code.Margin = new Thickness(5, 1, 6, 0);
+            _cp.Margin = new Thickness(4, 2, 0, 0);
+            // the code, the pointer, the name, cp= and the tags packed from the left: the name gives way (it trims), the Combat
+            // Power stays on every row (Steven, 2026-11-17: real figures were cut off)
+            var name = new GlitchNameLine { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 0, 0, 0), Text = _name, Children = { _code, _you, _name, _cp, _tags } };
+            _code.Margin = new Thickness(4, 1, 4, 0);
             Grid.SetColumn(name, 1); g.Children.Add(name);
-            _heal.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_heal, 2); g.Children.Add(_heal);
+            _healBox.Child = _heal; Grid.SetColumn(_healBox, 2); g.Children.Add(_healBox);
             _extra.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_extra, 3); g.Children.Add(_extra);
             _fig.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_fig, 4); g.Children.Add(_fig);
-            _share.Margin = new Thickness(4, 1, 0, 0); Grid.SetColumn(_share, 5); g.Children.Add(_share);
+            _share.Margin = new Thickness(5, 1, 0, 0); Grid.SetColumn(_share, 5); g.Children.Add(_share);
             _root.Children.Add(g);
             _root.Children.Add(_glint);
         }
@@ -114,11 +118,16 @@ static class CorruptRows
             if (m.Cp.Length > 0) _cp.Inlines.Add(Rn(m.Cp, LilacDim));
             _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _tags.Children.Clear();
-            if (m.Deaths > 0) _tags.Children.Add(Tag("✕" + m.Deaths.ToString(CultureInfo.InvariantCulture), Br(RedC), White, Face, 9));
+            if (m.Deaths > 0) _tags.Children.Add(Tag("✕" + m.Deaths.ToString(CultureInfo.InvariantCulture), Br(RedC), White, Face, 9, new Thickness(4, 0, 0, 0)));
             if (m.TopDps) _tags.Children.Add(Tag(L.T("TOP"), White, Black, Face, 9));
-            if (m.TopHeals) _tags.Children.Add(Tag(L.T("HEAL"), Green, Black, Face, 9));
+            // the top healer: the heal figure stamped green, as the TOP / HEAL blocks are (a HEAL block beside it left the name no room)
+            bool topHeal = m.TopHeals && m.Heal.Length > 0;
+            if (m.TopHeals && !topHeal) _tags.Children.Add(Tag(L.T("HEAL"), Green, Black, Face, 9));
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
-            _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _heal.Foreground = topHeal ? Black : Green;
+            _healBox.Background = topHeal ? Green : null;
+            _healBox.Padding = topHeal ? new Thickness(2, 0, 2, 0) : new Thickness(1, 1, 0, 0);
+            _healBox.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _extra.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " " + m.Crit : "") : "";
             _extra.Visibility = _extra.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _bar.Fill.Background = Frozen(cc);

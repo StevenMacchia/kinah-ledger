@@ -255,6 +255,19 @@ static class GlitchKit
         System.Windows.Automation.AutomationProperties.SetName(el, e.FootText(now));
     }
 
+    /// <summary>
+    /// A text's width on one line in a look's face (to size a column for the widest form its figure takes), as the rows lay it out:
+    /// display mode snaps each glyph to the screen's whole pixels, so the width is the screen's own (measured ideal, "+12.3K/s"
+    /// lost its "s" on a screen at 125%).
+    /// </summary>
+    public static double TextW(string s, FontFamily face, double size, FontWeight w)
+    {
+        var tf = new Typeface(face, FontStyles.Normal, w, FontStretches.Normal);
+        return new FormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, tf, size, Brushes.Black, null, TextFormattingMode.Display, ScreenDip).WidthIncludingTrailingWhitespace;
+    }
+    static double ScreenDip => _screenDip ??= VisualTreeHelper.GetDpi(new DrawingVisual()).PixelsPerDip;
+    static double? _screenDip;
+
     /// <summary>A row's figure column: right-aligned, tabular, never trimmed (a figure that changes never shifts).</summary>
     public static TextBlock FigCell(double size, Brush fg, FontFamily face, double minWidth, FontWeight? w = null)
     {
