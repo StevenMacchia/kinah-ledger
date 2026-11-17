@@ -760,6 +760,10 @@ sealed class HudGoo : WackyLook, IThemeCard
         readonly TextBlock _figure, _share;
         string _cls = "\0";
         double _was = -1;
+        static readonly double FigureW = Wk.Room(Wk.Heavy, 14, FontWeights.Black, Wk.DpsForms, 6), ShareW = Wk.Room(Wk.Segoe, 10.5, FontWeights.Bold, Wk.ShareForms, 5);
+        Grid _row = null!;
+        bool? _cpOnly;
+        readonly Run _critWord = new() { FontFamily = Wk.Heavy, FontSize = 7.5, FontWeight = FontWeights.Black, Foreground = Wk.S(0xE2CCFF, .55) };
 
         public FrameworkElement Root => _root;
 
@@ -780,8 +784,11 @@ sealed class HudGoo : WackyLook, IThemeCard
             _fill = new Wk.BarFill(_groove, _wrap, 9);
             _root.Children.Add(_groove);
             var row = new Grid { Margin = new Thickness(6, 0, 12, 10) };
-            foreach (var w in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(48), new GridLength(42) })
+            // the DPS and the share in columns sized for their widest forms ("888.8K", "88.8%"), a gap before each (Steven,
+            // 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!")
+            foreach (var w in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(FigureW), new GridLength(ShareW) })
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+            _row = row;
             _sweet.Children.Add(_twistL); _sweet.Children.Add(_twistR);
             _sweet.Children.Add(_ball);
             _sweet.Children.Add(new Ellipse { Width = 7, Height = 3.5, Fill = Wk.S(0xFFFFFF, .75), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(9, 3, 0, 0), RenderTransform = new RotateTransform(-20) });
@@ -799,20 +806,25 @@ sealed class HudGoo : WackyLook, IThemeCard
             Typography.SetNumeralAlignment(_cp, FontNumeralAlignment.Tabular);
             var nameLine = WkCard.NameLine(_name, _you, _cp);
             Grid.SetColumn(nameLine, 2); row.Children.Add(nameLine);
-            _healPill = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xDDFF7A, 1, 0), (0x92E21C, 1, 1)), Padding = new Thickness(3, 0, 4, 1), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _heal };
-            Grid.SetColumn(_healPill, 3); row.Children.Add(_healPill);
+            // the heal: a lime candy at the groove's right end beside TOP's (below), off the name's line, so a name of ten letters
+            // keeps its room beside its Combat Power
+            _healPill = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xDDFF7A, 1, 0), (0x92E21C, 1, 1)), Padding = new Thickness(3, 0, 4, 1), Margin = new Thickness(0, 0, 4, 0), BorderThickness = new Thickness(1), BorderBrush = Wk.S(Night, .8), VerticalAlignment = VerticalAlignment.Bottom, Child = _heal };
             _top.Child = _topText;
-            _dead = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xFF6A80, 1, 0), (0xE8344E, 1, 1)), Padding = new Thickness(4, 0, 5, 1), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _deadText };
-            Grid.SetColumn(_dead, 5); row.Children.Add(_dead);
+            // deaths: a cherry candy stuck on the bean's top edge, over the class icon
+            _dead = new Border { CornerRadius = new CornerRadius(8), Background = Wk.Lin(0, 0, 0, 1, (0xFF6A80, 1, 0), (0xE8344E, 1, 1)), Padding = new Thickness(4, 0, 5, 1), BorderThickness = new Thickness(1), BorderBrush = Wk.S(Night, .8),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16, 0, 0, 0), RenderTransform = new TranslateTransform(0, -9), IsHitTestVisible = false, Child = _deadText };
+            // the candies at the groove's end held to their letters' height, clear of the DPS over them
+            foreach (var t in new[] { _heal, _topText }) { t.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; t.LineHeight = 11; }
             _detail.Margin = new Thickness(6, 1, 0, 0); Grid.SetColumn(_detail, 6); row.Children.Add(_detail);
             _figure = Figure("", 14, WhiteB, Wk.Heavy, FontWeights.Black); _figure.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(_figure, 7); row.Children.Add(_figure);
             _share = Figure("", 10.5, Wk.S(0xE2CCFF), Wk.Segoe, FontWeights.Bold); _share.HorizontalAlignment = HorizontalAlignment.Right; _share.Margin = new Thickness(0, 1, 0, 0);
             Grid.SetColumn(_share, 8); row.Children.Add(_share);
             _root.Children.Add(row);
-            // TOP DPS / TOP HEALS: a small candy at the groove's right end, off the name's line (the bar rarely reaches it)
-            _top.HorizontalAlignment = HorizontalAlignment.Right; _top.VerticalAlignment = VerticalAlignment.Bottom; _top.Margin = new Thickness(0, 0, 14, 1);
-            _root.Children.Add(_top);
+            // TOP DPS / TOP HEALS: a small candy at the groove's right end, off the name's line (the bar rarely reaches it), the heal's before it
+            _top.VerticalAlignment = VerticalAlignment.Bottom;
+            _root.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 14, -1.5), Children = { _healPill, _top } });
+            _root.Children.Add(_dead);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -837,9 +849,10 @@ sealed class HudGoo : WackyLook, IThemeCard
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
             _top.Background = m.TopDps ? Wk.Lin(0, 0, 0, 1, (0xFFF7A8, 1, 0), (0xFFCF3A, 1, 1)) : Wk.Lin(0, 0, 0, 1, (0xC8FFE0, 1, 0), (0x3DD68C, 1, 1));
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Panel.SetZIndex(_root, m.Deaths > 0 ? 2 : 0);   // its cherry over the bean above, never under
             _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _detail.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : "") : "";
-            _detail.Visibility = _detail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Wk.Detail(_detail, m, c, _critWord);
+            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[7], _row.ColumnDefinitions[8], m.CpOnly, Wk.Heavy, 14, FontWeights.Black, Wk.Segoe, 10.5, FontWeights.Bold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             // the candy bar: the class's colour at full strength, lit on top, deep at the foot, a bulged round cap at its end
             _candy.Background = Wk.Lin(0, 0, 0, 1, (Wk.Shade(vivid, .35), 1, 0), (vivid, 1, .5), (Wk.Shade(vivid, -.3), 1, 1));
