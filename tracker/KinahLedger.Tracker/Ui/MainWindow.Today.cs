@@ -90,7 +90,7 @@ public partial class MainWindow
             }
             if (made > 0) Motion.Number(TodaySum, "today-sum", made, v => Fk(v)); else Motion.Blank(TodaySum, "today-sum", "");
             TodaySum.ToolTip = made <= 0 ? null
-                : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, " + PriceBook.Cut + ". Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
+                : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, " + PriceBook.Cut + ". Bound items, currencies, items with no price yet and runs left out of the averages add nothing.";
             TodayHead.ToolTip = "Today's expeditions and events since midnight on this PC. Week has the last 7 days.";
         }
         // the day's rewards are the place box's LOOT under the strip (one box, Steven 2026-11-06); the strip's own row of
@@ -171,7 +171,7 @@ public partial class MainWindow
     FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false, string when = "today")
     {
         var tile = QTile(QItemIcon(s.Name, s.Id, 28, round: false, grade: _items.Get(s.Id)?.Grade ?? ""), s.Count.ToString("N0"), s.Name,
-            s.Worth > 0 ? Fk(s.Worth) : s.Gear || (s.Bound > 0 && s.Bound >= s.Count) ? "bound" : s.Currency ? "a currency" : "no price yet", s.Worth > 0 ? "Gold" : "Faint");
+            s.Worth > 0 ? Fk(s.Worth) : s.Bound > 0 && s.Bound >= s.Count ? "bound" : s.Currency ? "a currency" : "no price yet", s.Worth > 0 ? "Gold" : "Faint");
         CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs, when));
         // a click pins the card with Set a goal at its foot (0.9; a right-click until 2026-10-31); a currency is an amount, not something picked up
         // ...and, on today's farming loot, "Not a drop" (Ui/MainWindow.NotDrop.cs): one of it out of today's totals, or its Undo
@@ -228,7 +228,7 @@ public partial class MainWindow
         }
         if (s.Bound > 0 && s.Bound < s.Count) body.Children.Add(CkNote($"{s.Bound:N0} of these are bound and add nothing."));
         body.Children.Add(s.Worth > 0 ? TodayFooter("Worth, " + PriceBook.Cut, Fk(s.Worth))
-            : s.Gear || s.Bound >= s.Count ? TodayFooter("Bound to you", "can't be sold", muted: true)
+            : s.Bound > 0 && s.Bound >= s.Count ? TodayFooter("Bound to you", "can't be sold", muted: true)
             : s.Currency ? TodayFooter("A currency", "not sold", muted: true)
             : TodayFooter("No Market price yet", "adds nothing", muted: true));
         return card;

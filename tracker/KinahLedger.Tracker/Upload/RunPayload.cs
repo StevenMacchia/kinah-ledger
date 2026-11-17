@@ -128,6 +128,7 @@ public sealed record RunPayload(
         string Key(long id) => dict?.KeyOf(id) ?? id.ToString();
         // a drop the player flagged "Something looks wrong" never leaves this PC, in any list
         bool Off(long id) => KinahLedger.Session.ReportedDrops.Has(s.ItemName(id));
+        bool Bound(long id) => dict?.BoundId(id) == true;
         int Flagged(SessionEngine.ZoneStats z) => z.Items.Where(x => Off(x.Key)).Sum(x => x.Value) + z.ItemsBound.Where(x => Off(x.Key)).Sum(x => x.Value);
         var quests = QuestsPending?.Invoke();
         return new(
@@ -145,18 +146,20 @@ public sealed record RunPayload(
             s.Nodes,
             s.Kinah,
             s.KinahBound,
-            Merge(s.Items, Key, Off),
-            Merge(s.ItemsBound, Key, Off),
+            // an item bound by its own id goes with the bound ones however it was counted (gear binds on equip, so a piece
+            // with a tradable id is sold like any drop; Steven, 2026-11-17)
+            Merge(s.Items, Key, id => Off(id) || Bound(id)),
+            Merge(s.ItemsBound, Key, Off, s.Items.Where(x => Bound(x.Key) && !Off(x.Key))),
             s.PetSnapshot(),
             // each zone carries its own items, so the site files them under the zone they dropped in, never all under the main one
             zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0 || kv.Value.Items.Count > 0 || kv.Value.ItemsBound.Count > 0 || kv.Value.AbyssPoints > 0 || kv.Value.Deaths > 0)
-                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, Math.Max(0, kv.Value.Drops - Flagged(kv.Value)), kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key, Off), Merge(kv.Value.ItemsBound, Key, Off),
+                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, Math.Max(0, kv.Value.Drops - Flagged(kv.Value)), kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key, id => Off(id) || Bound(id)), Merge(kv.Value.ItemsBound, Key, Off, kv.Value.Items.Where(x => Bound(x.Key) && !Off(x.Key))),
                      Nz(kv.Value.AbyssPoints), Nz(kv.Value.RankPoints), Nz(kv.Value.RankLost), Nz(kv.Value.PlayerKills), Nz(kv.Value.MonsterKills), Nz(kv.Value.Deaths))),
             InstallId.Get(),
             net,
             OddsPayload.From(s),
             MobRun.From(s, Key, Off),
-            InstanceRunPayload.From(instances, Key, Off),
+            InstanceRunPayload.From(instances, Key, Off, Bound),
             s.Focus,
             quests: quests is { Count: > 0 } ? quests : null,
             character: CharacterPayload.Now(),
@@ -168,10 +171,10 @@ public sealed record RunPayload(
     public static long RoundNet(long n) => (long)Math.Round(n / 100.0, MidpointRounding.AwayFromZero) * 100;
 
     /// <summary>Counts keyed the way the site reads them; two synthetic IDs that carry the same name add up.</summary>
-    static Dictionary<string, int> Merge(Dictionary<long, int> counts, Func<long, string> key, Func<long, bool>? off = null)
+    static Dictionary<string, int> Merge(Dictionary<long, int> counts, Func<long, string> key, Func<long, bool>? off = null, IEnumerable<KeyValuePair<long, int>>? more = null)
     {
         var d = new Dictionary<string, int>();
-        foreach (var (id, n) in counts) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
+        foreach (var (id, n) in more == null ? counts : counts.Concat(more)) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
         return d;
     }
 
@@ -301,7 +304,8 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     public const int MaxRuns = 50;
     public const int MaxSeconds = 4 * 3600;
 
-    public static List<InstanceRunPayload>? From(IEnumerable<InstanceRun>? runs, Func<long, string> key, Func<long, bool>? off = null)
+    /// <param name="boundId">An item bound by its own id (<see cref="ItemDictionary.BoundId"/>): among items_bound however it was counted.</param>
+    public static List<InstanceRunPayload>? From(IEnumerable<InstanceRun>? runs, Func<long, string> key, Func<long, bool>? off = null, Func<long, bool>? boundId = null)
     {
         if (runs == null) return null;
         var list = runs
@@ -323,6 +327,9 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 var fix = RunCorrection.Of(r, key, off);
                 var bound = new Dictionary<string, int>();
                 foreach (var (id, n) in r.BoundItems) { if (off?.Invoke(id) == true) continue; var k = key(id); bound[k] = bound.GetValueOrDefault(k) + n; }
+                // a reward bound by its own id (a reward table's bound copy of a piece of gear): bound on the site too, never valued
+                if (boundId != null)
+                    foreach (var (id, n) in r.Items) { if (n <= 0 || off?.Invoke(id) == true || !boundId(id)) continue; var k = key(id); bound[k] = bound.GetValueOrDefault(k) + n; }
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
                     r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
                     // a count in doubt (InstanceRun.SlotDoubts) keeps the run out of the site's averages the same way
