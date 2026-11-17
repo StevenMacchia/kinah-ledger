@@ -189,6 +189,31 @@ public static partial class WpfApp
         Check(p.Hud == hudBefore, "Cancel keeps the panel setting as it was");
         Check(Skins.Current == other, "Cancel puts the saved theme back");
 
+        // the overlay themes' skins (1.0): each sets every key Night does, paints the window, and the saved look comes back
+        var nightKeys = Skins.KeysOf("night").ToHashSet();
+        foreach (var themed in new[] { HudThemes.Wacky, HudThemes.Tactical, HudThemes.Glitch })
+        {
+            var missing = nightKeys.Except(Skins.KeysOf(themed)).ToList();
+            Check(missing.Count == 0, $"the {themed} skin sets every colour Night does" + (missing.Count > 0 ? ": missing " + string.Join(", ", missing) : ""));
+            w.ApplySkin(themed);
+            var bg = (w.TryFindResource("Bg") as System.Windows.Media.SolidColorBrush)?.Color.ToString();
+            Check(Skins.Current == themed && Skins.ForTheme(themed)?.Key == themed && bg != null && bg != "#FF0A0B10", $"the {themed} skin applies (Bg {bg})");
+        }
+        w.ApplySkin(other);
+        Check(Skins.Current == other && (w.TryFindResource("Bg") as System.Windows.Media.SolidColorBrush)?.Color.ToString() == ((System.Windows.Media.SolidColorBrush)Skins.Night()["Bg"]).Color.ToString() == (other == "night"), "...and switching back puts the saved skin back");
+        Check(Skins.ForTheme(HudThemes.Classic) == null, "Classic has no matching skin to offer");
+        // Settings › In game: a theme picked offers "Match the app"; it previews the skin, never saves it by itself
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        o.PickHudThemeForTest(HudThemes.Tactical);
+        Check(Skins.Current == other, "picking an overlay theme never changes the app's skin");
+        Check(o.MatchAppForTest() && Skins.Current == HudThemes.Tactical, "\"Match the app\" tries the Tactical skin on");
+        Check(!o.MatchAppForTest(), "...and goes once the app matches");
+        Check(p.Skin == other, "...unsaved until Save");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(Skins.Current == other && p.Skin == other, "Cancel takes the matched skin back off");
+
         // the panel's figures: a chip adds one, Save hands it to the panel, the order stays the panel's
         o = Open();
         o.Go(OptionsWindow.Page.InGame);

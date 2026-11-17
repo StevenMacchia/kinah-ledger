@@ -47,7 +47,7 @@ public sealed class UiState
         var s = JsonSerializer.Deserialize<UiState>(File.ReadAllText(path), Json) ?? new UiState();
         s.Name = System.IO.Path.GetFileNameWithoutExtension(path);
         if (s.Scale is { } sc && (sc < 0.5 || sc > 2)) throw new InvalidOperationException($"{s.Name}: scale {sc} is outside 0.5..2");
-        if (s.Skin != null && Skins.All.All(k => k.Key != s.Skin)) throw new InvalidOperationException($"{s.Name}: no look named '{s.Skin}' (night, abyss, daylight)");
+        if (s.Skin != null && Skins.All.All(k => k.Key != s.Skin)) throw new InvalidOperationException($"{s.Name}: no look named '{s.Skin}' ({string.Join(", ", Skins.All.Select(k => k.Key))})");
         return s;
     }
 

@@ -6,7 +6,8 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// The app's looks. Every colour the window uses is a named brush in Theme.xaml, referenced as a DynamicResource,
 /// so a skin is just a dictionary of the same keys merged over the base theme; switching one re-paints the window
-/// in place. Three to pick from: Night (the site's palette), Abyss (violet on near-black) and Daylight (light).
+/// in place. Six to pick from: Night (the site's palette), Abyss (navy on near-black), Daylight (light), and Wacky,
+/// Tactical and Glitch, the overlay themes' colours (1.0).
 /// </summary>
 public static class Skins
 {
@@ -17,7 +18,14 @@ public static class Skins
         new("night", L.T("Night"), true, L.T("near-black with Kinah gold: the site's look")),
         new("abyss", L.T("Abyss"), true, L.T("navy and soft gold on near-black")),
         new("daylight", L.T("Daylight"), false, L.T("light, for a bright room")),
+        // the overlay themes' colours on the window (1.0, Steven 2026-11-17: "add the skins for 1.0"): palettes only, no motion
+        new(HudThemes.Wacky, L.T("Wacky"), true, L.T("neon arcade: magenta and cyan on deep purple")),
+        new(HudThemes.Tactical, L.T("Tactical"), true, L.T("a pro's HUD: steel, amber and cyan lines")),
+        new(HudThemes.Glitch, L.T("Glitch"), true, L.T("an old green screen: phosphor and amber on black")),
     };
+
+    /// <summary>The app skin that matches an overlay theme (Wacky, Tactical, Glitch share their keys), or null for Classic.</summary>
+    public static Skin? ForTheme(string? theme) => theme == HudThemes.Classic ? null : All.FirstOrDefault(s => s.Key == theme);
 
     public const string Default = "night";
     static ResourceDictionary? _current;
@@ -39,7 +47,12 @@ public static class Skins
     }
 
     /// <summary>Night's brushes, for a part drawn dark in every look (the Share sheet sets them on itself).</summary>
-    internal static ResourceDictionary Night() => Build("night");
+    internal static ResourceDictionary Night()
+    {
+        var d = Build("night");
+        d["DisplayFont"] = new FontFamily(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Display, Segoe UI");   // the base face, whatever the window's look
+        return d;
+    }
 
     static ResourceDictionary Build(string key)
     {
@@ -120,6 +133,56 @@ public static class Skins
                 R("HeroBg", "#FFF0D2", "#FFFFFF", "#FFFFFF"); S("HeroLine", "#66D9952F"); S("Inset", "#F4F6FA"); C("SlotColor", "#F1F4F9");
                 S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("GradeSpecial", "#0E8C83"); S("BtnPrimaryInk", "#261702");
                 break;
+            case HudThemes.Wacky:
+                // Neon's arcade cabinet (Ui/Themes/Wacky/HudNeon.cs): deep purple ground, magenta and cyan tubes, a lemon for Kinah
+                Quest("#7FE9FF", "#D9C8FF", "#FF6B8A", "#B6FF6B", "#1F1300", "#1A0F00", "#3A2760", "#5C3E94", 0x29);
+                S("MintTint", "#2948F59A"); S("GoldIcTint", "#29FFE14D"); S("NoticeTint", "#2900E5FF");
+                Controls(true, "#2A1B47", "#5C3E94", "#271843", "#33205A", "#170D28", "#FFE14D", "#FFE14D", "#1A00E5FF", "#6600E5FF", "#140A22", "#33224F",
+                    "#FFFFFF", "#4A3470", "#4A3470", "#0DFFFFFF", "#1AFFE14D", "#80FFE14D", "#29FF2BD6", "#0DFF2BD6", "#59FF2BD6", "#1AFFE14D", "#FFE66B", "#59FFE14D");
+                S("Bg", "#120A20"); S("Card", "#1C1030"); S("Card2", "#251742"); S("CardQuiet", "#170D28"); S("CardHair", "#2E1F4A"); S("Line", "#33224F"); S("LineStrong", "#4A3470");
+                S("Ink", "#F6F0FF"); S("Muted", "#C4B6E0"); S("Text2", "#DCD0F2"); S("Faint", "#A08FC4");
+                S("Link", "#7FE9FF"); S("LinkHover", "#C4F7FF"); S("Progress", "#A48CE0");
+                S("Gold", "#FFE14D"); S("Violet", "#C9B0FF"); S("Mint", "#48F59A"); S("Accent", "#FF5BDF"); S("AccentDim", "#3A1450");
+                S("Good", "#48F59A"); S("Warn", "#FFB35C"); S("Bad", "#FF6B8A");
+                S("RowHead", "#180E2A"); S("RowHover", "#251742"); S("Mark", "#2A1B47"); S("Slot", "#140A22");
+                R("HeroBg", "#41166A", "#1C1030", "#1C1030"); S("HeroLine", "#80FF2BD6"); S("Inset", "#38000000"); C("SlotColor", "#140A22");
+                S("CommonInk", "#E4DCF5"); S("GradeRare", "#62E08F"); S("GradeLegend", "#62AEFF"); S("GradeUnique", "#F5D65E"); S("GradeEpic", "#D2B4FF"); S("GradeSpecial", "#3FDBCE"); S("BtnPrimaryInk", "#1F1300");
+                G("BtnPrimary", "#FFE66B", "#FFC21A"); G("BtnPrimaryHover", "#FFEE94", "#FFCF45"); G("BtnStop", "#FF6B8A", "#E0456A");
+                break;
+            case HudThemes.Tactical:
+                // the jet HUD and the scorebug (Ui/Themes/Tactical): gunmetal, amber for Kinah, HUD cyan for focus, a squared face
+                Quest("#8FD3EA", "#C9D1DC", "#FF6B78", "#B8C9A0", "#1A1000", "#04121A", "#24303D", "#3E4E60", 0x24);
+                S("MintTint", "#245EF0A0"); S("GoldIcTint", "#24FFC84A"); S("NoticeTint", "#1F7FE9FF");
+                Controls(true, "#1B232C", "#3E4E60", "#19212A", "#212B36", "#0C1015", "#7FE9FF", "#FFC84A", "#147FE9FF", "#597FE9FF", "#0B0F13", "#222C38",
+                    "#FFFFFF", "#34414F", "#34414F", "#0DFFFFFF", "#14FFC84A", "#80FFC84A", "#1F7FE9FF", "#0A7FE9FF", "#4D7FE9FF", "#14FFC84A", "#FFD27A", "#4DFFC84A");
+                S("Bg", "#080B0F"); S("Card", "#10151B"); S("Card2", "#161D25"); S("CardQuiet", "#0C1015"); S("CardHair", "#1C242E"); S("Line", "#222C38"); S("LineStrong", "#34414F");
+                S("Ink", "#F2F4F7"); S("Muted", "#AEB8C5"); S("Text2", "#C9D1DC"); S("Faint", "#8C97A8");
+                S("Link", "#7FE9FF"); S("LinkHover", "#BFF6FF"); S("Progress", "#7F93A8");
+                S("Gold", "#FFC84A"); S("Violet", "#B9A6FF"); S("Mint", "#5EF0A0"); S("Accent", "#7FE9FF"); S("AccentDim", "#0F2A33");
+                S("Good", "#5EF0A0"); S("Warn", "#FFA53D"); S("Bad", "#FF6B78");
+                S("RowHead", "#0E1318"); S("RowHover", "#161D25"); S("Mark", "#18232C"); S("Slot", "#0B0F13");
+                R("HeroBg", "#15303B", "#10151B", "#10151B"); S("HeroLine", "#4D7FE9FF"); S("Inset", "#38000000"); C("SlotColor", "#0B0F13");
+                S("CommonInk", "#D9DFE8"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B98FFF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A1000");
+                G("BtnPrimary", "#FFD066", "#F5B42E"); G("BtnPrimaryHover", "#FFDC85", "#FFC24A"); G("BtnStop", "#FF6B78", "#E04A58");
+                d["DisplayFont"] = new FontFamily("Bahnschrift, Segoe UI Variable Display, Segoe UI");
+                break;
+            case HudThemes.Glitch:
+                // the Terminal's green screen (Ui/Themes/Glitch/HudTerminal.cs): phosphor on black, amber for Kinah, magenta for a miss
+                Quest("#5CE8FF", "#C9B8FF", "#FF5C86", "#A8FF6B", "#1A0F00", "#021008", "#1C2E27", "#2F4A3F", 0x24);
+                S("MintTint", "#245CFF9A"); S("GoldIcTint", "#24FFB641"); S("NoticeTint", "#1F5CE8FF");
+                Controls(true, "#15201C", "#2F4A3F", "#14201B", "#1A2A23", "#0A0E10", "#5CFF9A", "#FFB641", "#145CFF9A", "#595CFF9A", "#080C0D", "#1C2A26",
+                    "#FFFFFF", "#2B4038", "#2B4038", "#0DFFFFFF", "#14FFB641", "#80FFB641", "#1F5CFF9A", "#0A5CFF9A", "#4D5CFF9A", "#14FFB641", "#FFCB73", "#4DFFB641");
+                S("Bg", "#05080A"); S("Card", "#0C1113"); S("Card2", "#121A1B"); S("CardQuiet", "#090D0F"); S("CardHair", "#17221F"); S("Line", "#1C2A26"); S("LineStrong", "#2B4038");
+                S("Ink", "#E2FFEC"); S("Muted", "#A6C6B3"); S("Text2", "#C2DECD"); S("Faint", "#80A391");
+                S("Link", "#5CE8FF"); S("LinkHover", "#B5F5FF"); S("Progress", "#6FA088");
+                S("Gold", "#FFB641"); S("Violet", "#C9B8FF"); S("Mint", "#5CFF9A"); S("Accent", "#5CFF9A"); S("AccentDim", "#0C2A1A");
+                S("Good", "#5CFF9A"); S("Warn", "#FFD23F"); S("Bad", "#FF5C86");
+                S("RowHead", "#0A0F10"); S("RowHover", "#121A1B"); S("Mark", "#13221C"); S("Slot", "#080C0D");
+                R("HeroBg", "#0E2C1D", "#0C1113", "#0C1113"); S("HeroLine", "#4D5CFF9A"); S("Inset", "#38000000"); C("SlotColor", "#080C0D");
+                S("CommonInk", "#D2E8DA"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A0F00");
+                G("BtnPrimary", "#FFC665", "#FFAE2E"); G("BtnPrimaryHover", "#FFD38A", "#FFBC4D"); G("BtnStop", "#FF5C86", "#D93D66");
+                d["DisplayFont"] = new FontFamily("Cascadia Mono, Consolas");
+                break;
             default:   // night, the v2 palette since 2026-11-10 (the site's kl-v2.css tokens): near-black neutral, gold the one
                        // accent, mint and coral for up and down, the game's grade colours; the old candy roles (sky, lilac, lime) are
                        // quiet neutrals, and their icon boxes one neutral tint. The lit pill is ink on near-black, as the site's
@@ -143,6 +206,9 @@ public static class Skins
         }
         return d;
     }
+
+    /// <summary>For the options self-test: the resource keys a look sets (every look sets Night's, or a switch leaves some behind).</summary>
+    internal static IEnumerable<string> KeysOf(string key) => Build(key).Keys.OfType<string>();
 
     static Brush Frozen(Brush b) { b.Freeze(); return b; }
 }

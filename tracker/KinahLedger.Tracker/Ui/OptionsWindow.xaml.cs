@@ -539,6 +539,7 @@ public partial class OptionsWindow : Window
     public void SkinChanged()
     {
         BuildSkins(_edit.Skin);
+        HudThemeShown(_edit.HudLook);   // the theme chips hold their own brushes, and "Match the app" goes once it matches
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.DarkTitleBar(h, Skins.IsDark(Skins.Current));
     }
