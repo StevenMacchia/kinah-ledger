@@ -1,0 +1,10 @@
+{
+  "Member {0}": "隊員 {0}",
+  "A picture of this fight to paste in Discord or anywhere. Nothing is uploaded.": "這場戰鬥的圖片，可貼到 Discord 或任何地方。不會上傳任何內容。",
+  "No fight to share yet. Pull a boss and the picture fills in.": "目前沒有可分享的戰鬥。開打首領後圖片就會出現。",
+  "Hide other names": "隱藏其他名字",
+  "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.": "分享圖片上，其他隊員會顯示職業和「隊員 2」；你的名字照常顯示，數值也都保留。",
+  "Share picture shortcut": "分享圖片快捷鍵",
+  "Copies a picture of the meter, the fight under way or the last one, from anywhere, click-through on too. Off until you pick a key.": "在任何地方複製統計的圖片：進行中的戰鬥或上一場，點擊穿透開著也行。選好按鍵前保持關閉。",
+  "That's the Parser overlay's shortcut. Pick another key.": "那是戰鬥分析器浮動視窗的快捷鍵，請換一個按鍵。"
+}

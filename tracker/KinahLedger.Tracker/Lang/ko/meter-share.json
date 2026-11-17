@@ -1,0 +1,10 @@
+{
+  "Member {0}": "파티원 {0}",
+  "A picture of this fight to paste in Discord or anywhere. Nothing is uploaded.": "이 전투의 이미지예요. Discord 등 어디든 붙여 넣을 수 있고, 업로드되는 건 없어요.",
+  "No fight to share yet. Pull a boss and the picture fills in.": "아직 공유할 전투가 없어요. 보스와 싸우면 이미지가 채워져요.",
+  "Hide other names": "다른 이름 숨기기",
+  "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.": "공유 이미지에서 다른 파티원은 직업과 \"파티원 2\"처럼 보여요. 내 이름은 그대로고, 수치도 그대로 남아요.",
+  "Share picture shortcut": "공유 이미지 단축키",
+  "Copies a picture of the meter, the fight under way or the last one, from anywhere, click-through on too. Off until you pick a key.": "진행 중인 전투나 마지막 전투의 미터 이미지를 어디서든 복사해요. 클릭 통과가 켜져 있어도 돼요. 키를 고르기 전까지는 꺼져 있어요.",
+  "That's the Parser overlay's shortcut. Pick another key.": "그건 전투 분석기 오버레이 단축키예요. 다른 키를 고르세요."
+}

@@ -19,6 +19,13 @@ public sealed class ParserPrefs
     public int? Bottom { get; set; }
     /// <summary>The overlay's shortcut ("Off", the default, for none; e.g. "Ctrl+Shift+P").</summary>
     public string Hotkey { get; set; } = DefaultHotkey;
+    /// <summary>
+    /// The meter's share picture (Steven, 2026-11-17: "a share button on hover on the dps meter overlay that shares a picture of
+    /// the DPS meter for socials"): a shortcut that copies the fight's picture from anywhere, click-through on too ("Off", the
+    /// default, for none), and the other members' names hidden on it (on by default: their class and figures stay, you keep yours).
+    /// </summary>
+    public string ShareHotkey { get; set; } = DefaultHotkey;
+    public bool ShareHideNames { get; set; } = true;
     /// <summary>What the Parser keeps: "boss" (Bosses only, the default), "run" (Full run), "fight" (Every fight).</summary>
     public string Mode { get; set; } = "boss";
     /// <summary>

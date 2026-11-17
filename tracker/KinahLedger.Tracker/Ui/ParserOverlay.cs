@@ -82,10 +82,19 @@ public sealed class ParserOverlay : Window
         _panelFace = HudGlass.On ? HudGlass.Ring(_panel) : _panel;   // the glass's dark outer hairline round it
         _face.Child = _panelFace;
         _faceGrid = new Grid { Children = { _face, _grab } };
-        Content = new StackPanel { Children = { _faceGrid, _hint } };
+        // under the meter, with the pointer over it: the hint on the left, Share on the right (never over a figure)
+        _share = ShareButton();
+        _share.Click += (_, _) => ShareAsked?.Invoke();
+        var foot = new Grid();   // its parts keep the gap (collapsed, the window ends at the meter)
+        foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _hint.Margin = new Thickness(0, 3, 6, 0); _share.Margin = new Thickness(0, 3, 0, 0);
+        foot.Children.Add(_hint);
+        Grid.SetColumn(_share, 1); foot.Children.Add(_share);
+        Content = new StackPanel { Children = { _faceGrid, foot } };
         // the hint wraps under the meter, never wider than it (the window sizes to its content)
         _hint.TextWrapping = TextWrapping.Wrap;
-        _hint.SetBinding(MaxWidthProperty, new System.Windows.Data.Binding(nameof(ActualWidth)) { Source = _faceGrid });
+        foot.SetBinding(MaxWidthProperty, new System.Windows.Data.Binding(nameof(ActualWidth)) { Source = _faceGrid });
         _grabWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
         _grabWatch.Tick += (_, _) => WatchGrab();
         IsVisibleChanged += (_, _) => { if (!IsVisible) DropEdge(); if (IsVisible && _clickThrough && !_still) _grabWatch.Start(); else { _grabWatch.Stop(); HideGrab(); } };
@@ -280,11 +289,84 @@ public sealed class ParserOverlay : Window
 
     void ShowHint()
     {
+        // a picture just copied: said in the hint's place for a moment, whatever the pointer does
+        if (_flashUntil > DateTime.UtcNow)
+        {
+            _hint.Text = _flashText;
+            _hint.Foreground = _flashGood ? HudKit.Mint : HudKit.Warn;
+            _hint.Visibility = Visibility.Visible;
+            _share.Visibility = Visibility.Collapsed;
+            return;
+        }
+        _hint.Foreground = HudKit.Muted;
         // the edges widen it (either mode): said in the hint, the one place it can be found
         // ...and resting on a name opens its skills (with clicks going through too: ParserRows.Peek), said first: the one most looked for
         _hint.Text = _clickThrough ? L.T("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the mode");
-        _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
+        _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : PointerOver) ? Visibility.Visible : Visibility.Collapsed;
+        // Share with the pointer over the meter, only while the overlay takes clicks (click-through on: the shortcut in Settings)
+        _share.Visibility = !_still && !_clickThrough && PointerOver && ShareShown ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    // ---- Share (Ui/MeterShare.cs): a picture of the meter for Discord, Reddit and X ----
+
+    /// <summary>The Share button under the meter was pressed: the window copies the fight's picture.</summary>
+    public event Action? ShareAsked;
+    /// <summary>The window has a fight to share (the button stays away on a ready card).</summary>
+    public bool ShareShown { get; set; } = true;
+    readonly Button _share;
+    DateTime _flashUntil = DateTime.MinValue;
+    string _flashText = "";
+    bool _flashGood;
+    System.Windows.Threading.DispatcherTimer? _flashTimer;
+
+    /// <summary>A small dark pill in the hint's look: the share arrow and "Share".</summary>
+    static Button ShareButton()
+    {
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M6,1 L6,8.5 M3,4 L6,1 L9,4 M2.5,6.5 L1.5,6.5 L1.5,11 L10.5,11 L10.5,6.5 L9.5,6.5"), Stroke = HudKit.Gold, StrokeThickness = 1.4,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center,
+        };
+        var text = new TextBlock { Text = L.T("Share", "button"), FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = HudKit.Ink, Margin = new Thickness(6, 0, 0, 1), VerticalAlignment = VerticalAlignment.Center };
+        var face = new Border
+        {
+            CornerRadius = new CornerRadius(9), Padding = new Thickness(9, 2, 10, 3), Background = HudKit.B(HudKit.PanelC, 0.92), BorderBrush = HudKit.B(HudKit.GoldC, 0.45), BorderThickness = new Thickness(1),
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { icon, text } },
+        };
+        var b = new Button
+        {
+            Content = face, Cursor = System.Windows.Input.Cursors.Hand, Focusable = false, VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed,
+            ToolTip = L.T("A picture of this fight to paste in Discord or anywhere. Nothing is uploaded."),
+            Template = new ControlTemplate(typeof(Button)) { VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)) },
+        };
+        b.MouseEnter += (_, _) => face.BorderBrush = HudKit.Gold;
+        b.MouseLeave += (_, _) => face.BorderBrush = HudKit.B(HudKit.GoldC, 0.45);
+        System.Windows.Automation.AutomationProperties.SetName(b, "Share a picture of the meter");
+        return b;
+    }
+
+    /// <summary>"Picture copied" (or why not) in the hint's place under the meter for a few seconds.</summary>
+    public void Flash(string text, bool good)
+    {
+        _flashText = text; _flashGood = good;
+        _flashUntil = DateTime.UtcNow.AddSeconds(2.5);
+        ShowHint();
+        _flashTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6) };
+        _flashTimer.Stop();
+        _flashTimer.Tick -= FlashDone; _flashTimer.Tick += FlashDone;
+        _flashTimer.Start();
+    }
+
+    void FlashDone(object? sender, EventArgs e) { _flashTimer?.Stop(); _flashUntil = DateTime.MinValue; ShowHint(); }
+
+    /// <summary>For the options test: Share under the meter shows (the pointer over it), and what the hint says now.</summary>
+    internal bool ShareShownForTest => _share.Visibility == Visibility.Visible;
+    internal string HintTextForTest => _hint.Visibility == Visibility.Visible ? _hint.Text : "";
+    internal void ShareForTest() => ShareAsked?.Invoke();
+    /// <summary>For the options test: the hint and Share as the pointer over the overlay would show them.</summary>
+    internal void HoverForTest(bool over) { _hoverForTest = over; ShowHint(); }
+    bool? _hoverForTest;
+    bool PointerOver => _hoverForTest ?? IsMouseOver;
 
     /// <summary>Clicks go through to the game now: the rows' hover cards stay away then (only an edge or the handle takes the pointer).</summary>
     internal bool ClickThroughNow => _clickThrough;
@@ -459,6 +541,40 @@ public sealed class ParserOverlay : Window
         Typography.SetNumeralAlignment(host, FontNumeralAlignment.Tabular);
         return host;
     }
+    /// <summary>
+    /// The meter as the Parser's own window draws it, for the share picture (Ui/MeterShare.cs): the look picked, settled (no
+    /// motion), the standard panel in the Kinah overlay's frame. A theme's look keeps the room round itself for its effects as a
+    /// negative margin, so its glow still draws on the picture while the meter's own box is what is laid out.
+    /// </summary>
+    public static FrameworkElement MeterFace(string look, Encounter e, DateTime now, ParserMode mode, bool details, double radius, Thickness padding)
+    {
+        FrameworkElement face;
+        if (MakeLook(ParserPrefs.LookOf(look), still: true) is { } l)
+        {
+            if (l is IHudFightAbove fa) face = fa.FightAbove(e, now) ?? new Border();
+            else
+            {
+                l.ShowFight(e, now);
+                // (on a holder: a look's room can be its root's own margin, which must stay)
+                face = l is HudThemeLook && l.Inset is var i && i.Left + i.Top + i.Right + i.Bottom > 0
+                    ? new Border { Child = l.Root, Margin = new Thickness(-i.Left, -i.Top, -i.Right, -i.Bottom) } : l.Root;
+            }
+        }
+        else
+        {
+            var p = new ParserPanel(glass: HudGlass.On) { Mode = mode, ShowDetails = details };
+            p.SetFrame(radius, padding);
+            p.Draw(e, now);
+            face = HudGlass.On ? HudGlass.Ring(p) : p;
+        }
+        var host = new Border { Child = face };
+        TextElement.SetFontFamily(host, HudKit.Text);
+        TextElement.SetFontWeight(host, FontWeights.Medium);
+        TextOptions.SetTextFormattingMode(host, TextFormattingMode.Display);
+        Typography.SetNumeralAlignment(host, FontNumeralAlignment.Tabular);
+        return host;
+    }
+
     /// <summary>
     /// A look's face cut to what it draws, a few pixels round. The looks' own insets (HudWindow.Cropped) are for the Kinah
     /// overlay's window and cut the Tactical looks' fight (Fighter, Holo) at the right in Settings (Steven, 2026-11-17: "fight
@@ -759,17 +875,7 @@ public sealed class ParserPanel : Border
         TextBlock? outcome = null;
         if (!e.Live)
         {
-            var took = BossParser.Clock(e.Duration(now));
-            var (text, brush) = e.Outcome switch
-            {
-                "kill" when e.ModeKind == ParserMode.Fights => (L.F("{0} in {1}", e.OutcomeLabel, took), HudKit.Mint),
-                "kill" => (L.F("Killed in {0}", took), HudKit.Mint),
-                "cleared" => (L.F("Cleared in {0}", took), HudKit.Mint),
-                "wipe" => (L.F("Wiped after {0}", took), Coral),
-                "died" => (L.F("Died after {0}", took), Coral),
-                "ended" => (L.F("Ended after {0}", took), HudKit.Muted),
-                _ => (L.F("Left after {0}", took), HudKit.Muted),
-            };
+            var (text, brush) = OutcomeOf(e, now);
             outcome = T(text, 12, FontWeights.Bold, brush);
         }
         if (e.HasDamage)
@@ -789,6 +895,22 @@ public sealed class ParserPanel : Border
         }
         _body.Children.Add(foot);
         BorderBrush = e.Live ? (_glass ? HudGlass.Edge : HudKit.FrameLine) : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : _glass ? HudGlass.Edge : HudKit.FrameLine;
+    }
+
+    /// <summary>A record that ended, said with its time ("Killed in 2:31", "Wiped after 1:12") in its tone's colour (the meter's foot and the share picture's head).</summary>
+    public static (string Text, SolidColorBrush Ink) OutcomeOf(Encounter e, DateTime now)
+    {
+        var took = BossParser.Clock(e.Duration(now));
+        return e.Outcome switch
+        {
+            "kill" when e.ModeKind == ParserMode.Fights => (L.F("{0} in {1}", e.OutcomeLabel, took), HudKit.Mint),
+            "kill" => (L.F("Killed in {0}", took), HudKit.Mint),
+            "cleared" => (L.F("Cleared in {0}", took), HudKit.Mint),
+            "wipe" => (L.F("Wiped after {0}", took), Coral),
+            "died" => (L.F("Died after {0}", took), Coral),
+            "ended" => (L.F("Ended after {0}", took), HudKit.Muted),
+            _ => (L.F("Left after {0}", took), HudKit.Muted),
+        };
     }
 
     /// <summary>"1.82M left": the boss's HP left, or "" when the game hasn't given its HP.</summary>

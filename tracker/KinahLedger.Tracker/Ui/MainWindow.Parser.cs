@@ -84,6 +84,7 @@ public partial class MainWindow
         // the header's Overlays menu (Ui/MainWindow.Overlays.cs): the Parser is a section of the Kinah overlay by default, and
         // an overlay of its own in the menu only once Settings › In game › Parser separates it
         RegisterOverlay("Parser", () => ParserOverlayOn, on => ParserOverlayOn = on, L.T("Boss fights: DPS by member, the boss's HP, the pull timer."), visible: () => _parserPrefs.Separate || !HudWanted);
+        InitMeterShare(watch);   // the meter's share picture and its shortcut (Ui/MainWindow.MeterShare.cs)
         if (!watch) return;
         SourceInitialized += (_, _) =>
         {
@@ -357,6 +358,7 @@ public partial class MainWindow
         if (_parserPrefs.AlwaysOn) show = AlwaysMeter(now);
         // the meter's clock redraws this one between hits (MeterClockTick)
         _meterShown = _parserPrefs.Overlay ? show : null;
+        _meterOnOverlay = _meterShown;
         _meterInKinah = !ParserOverlaySeparate;
         StartMeterClock();
         if (!ParserOverlaySeparate)
@@ -385,6 +387,7 @@ public partial class MainWindow
             _parserOverlay.ModePicked += SetParserMode;
             _parserOverlay.HideAsked += () => SetParserOverlay(false);
             _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
+            WireOverlayShare(_parserOverlay);
             _parserOverlay.Clicked += ToggleMeterExpanded;
             // an edge dragged on the Parser's own window: its width kept from then on (Steven, 2026-11-15: "let the user drag size/width from the overlay itself")
             _parserOverlay.FightWidthSet += w => { _parserPrefs.Width = w - MeterExtraWidth; _parserPrefs.WidthPicked = true; if (!_demo) _parserPrefs.Save(); _hud?.ApplyFightWidth(); };
@@ -396,6 +399,7 @@ public partial class MainWindow
             _parserOverlay.Look = _parserPrefs.Look;
             _parserOverlay.Mode = ParserModeNow;
             _parserOverlay.ShowDetails = PDetails;
+            _parserOverlay.ShareShown = Shareable(show);
             _parserOverlay.Draw(show!, now);
             _parserOverlay.ShowWanted(true);
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
@@ -405,6 +409,7 @@ public partial class MainWindow
         _parserOverlay.Look = _parserPrefs.Look;   // Settings › In game › Parser › Overlay look, at once
         _parserOverlay.Mode = ParserModeNow;
         _parserOverlay.ShowDetails = PDetails;
+        _parserOverlay.ShareShown = Shareable(show);
         _parserOverlay.Draw(show!, now);
         _parserOverlay.ShowWanted(true);
     }

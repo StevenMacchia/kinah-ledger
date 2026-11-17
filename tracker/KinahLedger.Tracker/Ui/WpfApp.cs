@@ -337,6 +337,7 @@ public static partial class WpfApp
             Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter, Float and every theme's look draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
+        MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
         o.SaveForTest();
@@ -1338,6 +1339,7 @@ public static partial class WpfApp
 
         // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
         ParserChecks(w, Check);
+        MeterShareChecks(w, Check);   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
         MeterMotionChecks(Check);
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs

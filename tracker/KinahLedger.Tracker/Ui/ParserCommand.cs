@@ -68,7 +68,8 @@ static class ParserCommand
     // ================================================================ the hero
 
     /// <param name="extras">What the mode adds under the figures (a run's pull under way and its splits, the open world's line).</param>
-    public static Border Hero(FightView v, CommandCtx ctx, bool live, IEnumerable<FrameworkElement> extras)
+    /// <param name="action">A button on the hero's line, before the clock (the window's Share).</param>
+    public static Border Hero(FightView v, CommandCtx ctx, bool live, IEnumerable<FrameworkElement> extras, FrameworkElement? action = null)
     {
         var e = v.E;
         var body = new StackPanel();
@@ -84,6 +85,7 @@ static class ParserCommand
         if (where.Length > 0) line.Children.Add(M(T(where, 12.5, Muted), 10, 2, 0, 0));
         top.Children.Add(line);
         var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        if (action != null) { action.Margin = new Thickness(8, 0, 12, 0); action.VerticalAlignment = VerticalAlignment.Center; right.Children.Add(action); }
         var clock = T(BossParser.Clock(e.Duration(v.Now)), 22, live ? GoldInk : Ink, FontWeights.Bold, tab: true, trim: false);
         AutomationProperties.SetName(clock, "Time " + BossParser.Clock(e.Duration(v.Now)));
         right.Children.Add(clock);
