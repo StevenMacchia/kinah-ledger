@@ -194,8 +194,10 @@ sealed partial class HudScorebug
 
         public ArenaRow() : base(H)
         {
-            foreach (var w in new[] { 30.0, NameW, double.NaN, Tac.FigCol(_dps, "888.8K", "888,888") + 6, 0 })
-                Words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
+            foreach (var w in new[] { 30.0, -1, double.NaN, Tac.FigCol(_dps, "888.8K", "888,888") + 6, 0 })
+                Words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w < 0 ? new GridLength(.45, GridUnitType.Star) : new GridLength(w) });
+            // the name's column grows with a wider meter (a long name whole at 640), never under the room a 10-letter name needs
+            Words.ColumnDefinitions[1].MinWidth = NameW; Words.ColumnDefinitions[1].MaxWidth = 172;
             _moreW = Math.Max(Tac.FigCol(_dmg, "888.88M"), Tac.FigCol(_crit, "88%")) + 10;
             RootG.Children.Insert(0, _ground);
             // the position chip
