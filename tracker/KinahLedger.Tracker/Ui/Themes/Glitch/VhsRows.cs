@@ -21,7 +21,7 @@ static class VhsRows
     static readonly FontFamily Face = VhsFace;
     const uint RedC = 0xFF3B30, YellowC = 0xFFD23F, GreenC = 0x45FF86;
     static readonly Brush White = Br(0xFFFFFF), Dim = Br(0xFFFFFF, .62), Faint = Br(0xFFFFFF, .38), Black = Br(0x000000), Red = Br(RedC), Yellow = Br(YellowC), Green = Br(GreenC);
-    static readonly Brush Cells = Segments(Rgb(0x000000, .82), 4, 1.25);
+    static readonly Brush Cells = Segments(Rgb(0x000000, .82), 4, 1.25), CpInk = Br(0xFFFFFF, .74);
 
     /// <summary>A row's pitch, its height, the room for the line before you pinned below.</summary>
     public const double Pitch = 27, Height = 24, GapHeight = 16;
@@ -51,6 +51,8 @@ static class VhsRows
         readonly TextBlock _extra = Txt("", 10, Dim, Face), _fig = FigCell(13.5, White, Face, 40), _share = FigCell(10, Dim, Face, 42);
 
         public FrameworkElement Root => _root;
+        /// <summary>Where the level starts on the second line: past the class's code and the CP ("GLA  CP 38.2K").</summary>
+        const double LevelAt = 82;
 
         public Row()
         {
@@ -74,7 +76,8 @@ static class VhsRows
             // the level: segmented cells in the class's colour, a healer's green trace under them
             _code.VerticalAlignment = VerticalAlignment.Top; _code.Margin = new Thickness(0, -1, 0, 0);
             Grid.SetRow(_code, 1); Grid.SetColumn(_code, 2); _root.Children.Add(_code);
-            var level = new Grid { Margin = new Thickness(29, 1, 0, 0), VerticalAlignment = VerticalAlignment.Top, Height = 8 };
+            // under the name: the class's code and the Combat Power ("GLA  CP 4.8K"), then the level, every row's starting at one place
+            var level = new Grid { Margin = new Thickness(LevelAt, 1, 0, 0), VerticalAlignment = VerticalAlignment.Top, Height = 8 };
             _bar.Root.VerticalAlignment = VerticalAlignment.Top; level.Children.Add(_bar.Root);
             _heal.Fill.Background = Green; _heal.Root.VerticalAlignment = VerticalAlignment.Bottom; level.Children.Add(_heal.Root);
             Grid.SetRow(level, 1); Grid.SetColumn(level, 2); Grid.SetColumnSpan(level, 3); _root.Children.Add(level);
@@ -93,8 +96,10 @@ static class VhsRows
             _dot.Visibility = you ? Visibility.Visible : Visibility.Collapsed;
             var cc = m.ClassColor;
             _tick.Background = Frozen(cc);
-            _code.Text = ClassCode(m.Class);
-            _code.Foreground = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 30), (byte)Math.Min(255, cc.G + 30), (byte)Math.Min(255, cc.B + 30)));
+            var codeFg = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 30), (byte)Math.Min(255, cc.G + 30), (byte)Math.Min(255, cc.B + 30)));
+            _code.Inlines.Clear();
+            _code.Inlines.Add(Rn(ClassCode(m.Class), codeFg));
+            if (m.Cp.Length > 0) { _code.Inlines.Add(Rn("  " + L.T("CP") + " ", Faint, 8.5)); _code.Inlines.Add(Rn(m.Cp, CpInk)); }
             _name.Text = Caps(m.Name);
             _name.Foreground = you ? Br(0xFFF4C4) : White;
             _tags.Children.Clear();

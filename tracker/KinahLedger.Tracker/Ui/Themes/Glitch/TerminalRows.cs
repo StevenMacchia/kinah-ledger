@@ -24,14 +24,16 @@ static class TerminalRows
     static readonly Brush Cells = Segments(Rgb(GroundC), 5, 1.5);
 
     public const double Pitch = 19, Height = 17, GapHeight = 15;
-    const double RankW = 20, DpsW = 46, ShareW = 44;
+    const double RankW = 16, ClsW = 30, CpW = 30, HealW = 47, DpsW = 41, ShareW = 39;
 
-    /// <summary>The columns every line and the header share: rank, mark, name, load, heal, extra, DPS, share.</summary>
+    /// <summary>The columns every line and the header share: rank, class, name, Combat Power, load, heal, extra, DPS, share.</summary>
     static Grid Columns(double height)
     {
         var g = new Grid { Height = height };
-        foreach (var w in new[] { new GridLength(RankW), new GridLength(30), new GridLength(1.45, GridUnitType.Star), new GridLength(1, GridUnitType.Star), new GridLength(54), GridLength.Auto, new GridLength(DpsW), new GridLength(ShareW) })
+        // the name takes the room: the load is a third of it, never under 40 px (a few cells between its brackets)
+        foreach (var w in new[] { new GridLength(RankW), new GridLength(ClsW), new GridLength(3, GridUnitType.Star), new GridLength(CpW), new GridLength(1, GridUnitType.Star), new GridLength(HealW), GridLength.Auto, new GridLength(DpsW), new GridLength(ShareW) })
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+        g.ColumnDefinitions[4].MinWidth = 40;
         return g;
     }
 
@@ -42,13 +44,14 @@ static class TerminalRows
     {
         var g = Columns(15);
         var bar = new Border { Background = Br(PhosC, .85) };
-        Grid.SetColumnSpan(bar, 8); g.Children.Add(bar);
+        Grid.SetColumnSpan(bar, 9); g.Children.Add(bar);
         var rank = At(g, 0, Txt("#", 10, Ground, Face)); rank.HorizontalAlignment = HorizontalAlignment.Right;
         var cls = At(g, 1, Txt(L.T("CLS"), 10, Ground, Face)); cls.Margin = new Thickness(6, 0, 0, 0);
         At(g, 2, Txt(L.T("NAME"), 10, Ground, Face));
-        var load = At(g, 3, Txt(L.T("LOAD"), 10, Ground, Face)); load.Margin = new Thickness(6, 0, 0, 0);
-        var dps = At(g, 6, Txt(L.T("DPS"), 10, Ground, Face)); dps.HorizontalAlignment = HorizontalAlignment.Right;
-        var shr = At(g, 7, Txt(L.T("SHR%"), 10, Ground, Face)); shr.HorizontalAlignment = HorizontalAlignment.Right; shr.Margin = new Thickness(0, 0, 2, 0);
+        var cp = At(g, 3, Txt(L.T("CP"), 10, Ground, Face)); cp.HorizontalAlignment = HorizontalAlignment.Right; cp.Margin = new Thickness(0, 0, 2, 0);
+        var load = At(g, 4, Txt(L.T("LOAD"), 10, Ground, Face)); load.Margin = new Thickness(6, 0, 0, 0);
+        var dps = At(g, 7, Txt(L.T("DPS"), 10, Ground, Face)); dps.HorizontalAlignment = HorizontalAlignment.Right;
+        var shr = At(g, 8, Txt(L.T("SHR%"), 10, Ground, Face)); shr.HorizontalAlignment = HorizontalAlignment.Right; shr.Margin = new Thickness(0, 0, 2, 0);
         g.Margin = new Thickness(0, 6, 0, 3);
         return g;
     }
@@ -69,23 +72,28 @@ static class TerminalRows
         readonly TextBlock _cls = Txt("", 10.5, Phos, Face);
         readonly Border _death = new() { Background = Br(0x3A0D0D), Padding = new Thickness(2, 0, 2, 0), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         readonly Border _rules = new() { BorderBrush = Br(PhosC, .55), BorderThickness = new Thickness(0, 1, 0, 1), Margin = new Thickness(-3, -1, -3, -1), Visibility = Visibility.Collapsed };
-        readonly TextBlock _name = Txt("", 11.5, Phos, Face, FontWeights.SemiBold, trim: true);
+        readonly TextBlock _name = Txt("", 11, Phos, Face, FontWeights.SemiBold, trim: true);
+        /// <summary>The Combat Power in the CP column beside the name, smaller and dimmer than it.</summary>
+        readonly TextBlock _cp = Txt("", 10, PhosDim, Face, FontWeights.SemiBold);
         readonly Border _tags = new() { Padding = new Thickness(2, 0, 2, 0) };
         readonly StackPanel _marks = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0) };
         readonly GlitchLevel _bar = new(9, Br(PhosC, .1), Cells);
-        readonly TextBlock _heal = Txt("", 10.5, Mint2, Face, FontWeights.SemiBold), _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
+        readonly TextBlock _heal = Txt("", 10, Mint2, Face, FontWeights.SemiBold), _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
         readonly TextBlock _fig = FigCell(12, Pale, Face, DpsW), _share = FigCell(10.5, Br(PhosC, .82), Face, ShareW, FontWeights.SemiBold);
 
         public FrameworkElement Root => _root;
 
         public Row()
         {
-            Grid.SetColumnSpan(_band, 8); _root.Children.Add(_band);
+            Grid.SetColumnSpan(_band, 9); _root.Children.Add(_band);
             _rankBox.Child = _rank; _root.Children.Add(_rankBox);
             _cls.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_cls, 1); _root.Children.Add(_cls);
-            Grid.SetColumnSpan(_rules, 8); _root.Children.Add(_rules);
+            Grid.SetColumnSpan(_rules, 9); _root.Children.Add(_rules);
             var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
             name.Children.Add(_name);
+            // the Combat Power in its own column right after the name, as `top` lists a figure a column
+            _cp.TextAlignment = TextAlignment.Right; _cp.HorizontalAlignment = HorizontalAlignment.Right; _cp.Margin = new Thickness(0, 0, 2, 0);
+            Grid.SetColumn(_cp, 3); _root.Children.Add(_cp);
             Grid.SetColumn(name, 2); _root.Children.Add(name);
             // the load: [cells] in the class's colour
             var load = new Grid { Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -94,17 +102,17 @@ static class TerminalRows
             _bar.Root.Margin = new Thickness(1, 0, 1, 0); _bar.Root.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(_bar.Root, 1); load.Children.Add(_bar.Root);
             var close = Txt("]", 11.5, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 2); load.Children.Add(close);
-            Grid.SetColumn(load, 3); _root.Children.Add(load);
+            Grid.SetColumn(load, 4); _root.Children.Add(load);
             // a kill's tags over the load's start, on the screen's ground (the name keeps its room)
             // a death and a kill's top sit at the load's end, where its empty cells are (the name keeps its room)
             _tags.VerticalAlignment = VerticalAlignment.Center; _death.Margin = new Thickness(0, 0, 3, 0);
             _marks.Children.Add(_death); _marks.Children.Add(_tags);
-            Grid.SetColumn(_marks, 3); _root.Children.Add(_marks);
-            _heal.Margin = new Thickness(5, 0, 0, 0); At(_root, 4, _heal);
-            _extra.Margin = new Thickness(5, 0, 0, 0); At(_root, 5, _extra);
-            At(_root, 6, _fig); At(_root, 7, _share);
+            Grid.SetColumn(_marks, 4); _root.Children.Add(_marks);
+            _heal.Margin = new Thickness(5, 0, 0, 0); At(_root, 5, _heal);
+            _extra.Margin = new Thickness(5, 0, 0, 0); At(_root, 6, _extra);
+            At(_root, 7, _fig); At(_root, 8, _share);
             _share.Margin = new Thickness(0, 0, 2, 0);
-            Grid.SetColumnSpan(_bloom, 8); _root.Children.Add(_bloom);
+            Grid.SetColumnSpan(_bloom, 9); _root.Children.Add(_bloom);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -125,6 +133,9 @@ static class TerminalRows
             _name.Inlines.Clear();
             _name.Inlines.Add(Rn(m.Name, you ? Br(0xE8FFEE) : Phos));
             if (you) _name.Inlines.Add(Rn("*", Amber));
+            _cp.Inlines.Clear();
+            if (m.Cp.Length > 0) _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim));
+            _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _death.Child = m.Deaths > 0 ? Txt("†" + m.Deaths.ToString(CultureInfo.InvariantCulture), 11, Red, Face) : null;
             _death.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             bool top = m.TopDps || m.TopHeals;
