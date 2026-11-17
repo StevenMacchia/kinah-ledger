@@ -34,7 +34,7 @@ public partial class MainWindow
         var info = _items.Get(id);
         bool gathered = r.Sub.StartsWith("Gathering") || r.Sub == L.T("Gathering material");
         var (card, body) = CkShell(440);
-        body.Children.Add(CkBand(name, r.Grade, string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (gathered ? L.T("Gathering material") : L.T("Drop")), r.Grade }.Where(x => x.Length > 0))));
+        body.Children.Add(CkBand(name, r.Grade, string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (gathered ? L.T("Gathering material") : L.T("Drop")), L.T(r.Grade) }.Where(x => x.Length > 0))));
         if (r.Reported) body.Children.Add(CkNote(L.T("Reported: kept out of what's sent to the site.")));
 
         // what is live for the item (direction C): its last pickups, newest first, as the feed counted them

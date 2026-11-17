@@ -169,9 +169,9 @@ public sealed class CraftLedger
     /// </summary>
     public static string MadeLine(Recipe r)
     {
-        var multi = r.Tries.Where(kv => kv.Key > 1).OrderBy(kv => kv.Key).Select(kv => $"{kv.Value} craft{(kv.Value == 1 ? "" : "s")} of ×{kv.Key}").ToList();
+        var multi = r.Tries.Where(kv => kv.Key > 1).OrderBy(kv => kv.Key).Select(kv => kv.Value == 1 ? Ui.L.F("{0} craft of ×{1}", kv.Value, kv.Key) : Ui.L.F("{0} crafts of ×{1}", kv.Value, kv.Key)).ToList();
         if (multi.Count == 0 && r.MadeCount <= r.Ok) return "";
-        return string.Join(" · ", new[] { $"{r.MadeCount:N0} made" }.Concat(multi));
+        return string.Join(" · ", new[] { Ui.L.F("{0:N0} made", r.MadeCount) }.Concat(multi));
     }
 
     /// <summary>The last craft of a recipe that worked: when, and what it was credited as, so a won upgrade roll can swap that for the upgrade.</summary>

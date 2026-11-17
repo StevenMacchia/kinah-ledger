@@ -2231,7 +2231,7 @@ public partial class MainWindow : Window
         Tell("", "Faint");
         if (market)
         {
-            _demoMarket = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
+            _demoMarket = $"{L.T("Market open")} · {L.F("{0} {1} read · {2} {3} · {4} shared", "318", L.T("asks", "count"), "41", L.T("items", "count"), "318")} · {L.F("last read {0}", L.F("{0} s ago", 12))}";
         }
         // KL_SHOT_UNDO=1: a render with the Undo bar up, as it shows just after Clear the tables (Ui/MainWindow.Undo.cs)
         if (Environment.GetEnvironmentVariable("KL_SHOT_UNDO") == "1") ShowUndoSample();

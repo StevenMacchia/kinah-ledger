@@ -124,7 +124,7 @@ public static class LangCheck
         return sb.ToString();
     }
 
-    static readonly Regex Cjk = new(@"(?<=[A-Za-z0-9'’)\]])(?=[ᄀ-ᇿ　-鿿가-힯豈-﫿＀-￯])|(?<=[ᄀ-ᇿ　-鿿가-힯豈-﫿＀-￯])(?=[A-Za-z(])", RegexOptions.Compiled);
+    static readonly Regex Cjk = new(@"(?<=[A-Za-z0-9'’)\]])(?=\([가-힯])|(?<=[A-Za-z0-9'’)\]])(?=[ᄀ-ᇿ　-鿿가-힯豈-﫿＀-￯])|(?<=[ᄀ-ᇿ　-鿿가-힯豈-﫿＀-￯])(?=[A-Za-z(])", RegexOptions.Compiled);
     static readonly Regex Token =new(@"[A-Za-z][A-Za-z'’\-]*[A-Za-z]|[A-Za-z]", RegexOptions.Compiled);
 
     /// <summary>The English words left in a text: three letters or more, not a game name, not a word the translations keep.</summary>
@@ -140,7 +140,7 @@ public static class LangCheck
         var covered = new bool[parts.Length];
         static string Bare(string p) => p.Trim('(', ')', '[', ']', ',', '.', ':', ';', '!', '?', '“', '”', '"', '‘', '’', '\'', '·', '•', '—', '–', '-', '+', '×', '/', '…', '«', '»', '「', '」', '『', '』', '（', '）', '，', '。', '：');
         for (int i = 0; i < parts.Length; i++)
-            for (int len = Math.Min(10, parts.Length - i); len >= 1; len--)
+            for (int len = Math.Min(24, parts.Length - i); len >= 1; len--)   // a specialty's text runs to 15 words
             {
                 var span = string.Join(' ', parts, i, len);
                 if (names.Contains(span) || names.Contains(Bare(span)) || names.Contains(span.TrimEnd(',', '.', ':', ';', '·', '!')) || _kept.Contains(span))
@@ -183,6 +183,9 @@ public static class LangCheck
             "DPS", "HPS", "CP", "PB", "AP", "RP", "GP", "XP", "EXP", "HP", "MP", "PvP", "PvE", "OCR", "UTC", "CSV", "PNG", "JSON", "Npcap",
             "Ctrl", "Alt", "Shift", "Tab", "Esc", "Enter", "Space", "Home", "End", "PgUp", "PgDn", "Del", "Ins", "Win", "Num", "Pause",
             "Lv", "min", "sec", "ms", "fps",
+            "Chrome", "Edge", "Firefox", "Ko-fi",
+            // a chat line quoted as the game wrote it ("Last: Diamond Powder acquired")
+            "acquired", "Acquired",
         };
         // (a text kept as it is, "> kinah --rate", allows itself whole, in Kept, never its words one by one)
         foreach (var (k, v) in L.CurrentTable())
@@ -245,6 +248,9 @@ public static class LangCheck
         if (mobImages != null) try { using var doc = JsonDocument.Parse(mobImages); foreach (var p in doc.RootElement.EnumerateObject()) Add(p.Name); } catch (JsonException) { }
         foreach (var sv in KinahLedger.Data.Servers.All) { Add(sv.Label); Add(sv.Name); } foreach (var r in KinahLedger.Data.Servers.Regions) Add(r.Name);
         foreach (var extra in Extra) Add(extra);
+        // the timers' events and Abyss bosses, and the places they name
+        foreach (var e in KinahLedger.Session.EventTimers.Schedule) { Add(e.Name); Add(e.Where); }
+        foreach (var b in KinahLedger.Session.AbyssBosses.Schedule) { Add(b.Name); Add(b.Place); Add(b.Map); }
         _names = n;
         return n;
     }
@@ -259,5 +265,8 @@ public static class LangCheck
         "Aerinwyn", "Kaelith", "Thornecrest", "Thornwick", "Lyrandel", "Lysandra", "Brannoc", "Ithrandel", "Selunaire", "Vexmora",
         "Ground Slam", "Tail Sweep", "Horn Charge", "Searing Breath", "Void Fragment", "Invasion",
         "Group buff A", "Group buff B", "Self buff", "Short burst buff",
+        "Valkyriestrider", "The Forgotten Sanctuary of the Silvermoon",   // the long-names state
+        // the demo's world bosses as the timers shorten them ("Chaser Taulo" → "Taulo")
+        "Taulo", "Aulla", "Demiros", "Neikel", "Kashapa",
     };
 }

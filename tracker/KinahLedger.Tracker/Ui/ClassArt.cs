@@ -63,7 +63,7 @@ public static class ClassArt
             Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
             Background = Frozen(System.Windows.Media.Color.FromArgb(0xE6, 0x0E, 0x10, 0x16)),
             BorderBrush = Frozen(System.Windows.Media.Color.FromArgb(img != null ? (byte)0xC0 : (byte)0x60, c.R, c.G, c.B)), BorderThickness = new Thickness(Math.Max(1, size / 14)),
-            ToolTip = Key(cls) is { Length: > 0 } ? Title(cls!) : null,
+            ToolTip = Key(cls) is { Length: > 0 } ? L.T(Title(cls!)) : null,
         };
         if (img != null)
         {

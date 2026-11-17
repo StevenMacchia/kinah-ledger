@@ -1,0 +1,17 @@
+{
+  "{0} craft of ×{1}": "×{1} 제작 {0}회",
+  "{0} crafts of ×{1}": "×{1} 제작 {0}회",
+  "{0:N0} made": "{0:N0}개 제작",
+  "On ({0}): counting {1} from the game's server {2}": "켜짐 ({0}): 게임 서버 {2}에서 {1} 집계 중",
+  ", ": ", ",
+  "bound Kinah": "귀속 키나",
+  "item pickups and crafts": "아이템 획득과 제작",
+  "your kills and deaths": "내 처치와 사망",
+  "your gathering": "내 채집",
+  "your inventory": "내 인벤토리",
+  "Off: {0}": "꺼짐: {0}",
+  "Off in Options": "설정에서 꺼짐",
+  "Waiting for the game to connect to its server": "게임이 서버에 연결되기를 기다리는 중",
+  "this build can't read the game's traffic (the downloaded tracker can)": "이 빌드는 게임 트래픽을 읽지 못해요 (다운로드한 트래커는 가능)",
+  "install Npcap (npcap.com) to count from the game's traffic": "게임 트래픽으로 집계하려면 Npcap(npcap.com)을 설치하세요"
+}

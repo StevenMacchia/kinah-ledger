@@ -1,0 +1,17 @@
+{
+  "{0} craft of ×{1}": "×{1} 製作 {0} 次",
+  "{0} crafts of ×{1}": "×{1} 製作 {0} 次",
+  "{0:N0} made": "製作 {0:N0} 個",
+  "On ({0}): counting {1} from the game's server {2}": "開啟（{0}）：從遊戲伺服器 {2} 計算{1}",
+  ", ": "、",
+  "bound Kinah": "綁定基納",
+  "item pickups and crafts": "物品拾取與製作",
+  "your kills and deaths": "我的擊殺與死亡",
+  "your gathering": "我的採集",
+  "your inventory": "我的背包",
+  "Off: {0}": "關閉：{0}",
+  "Off in Options": "已在設定中關閉",
+  "Waiting for the game to connect to its server": "等待遊戲連線到伺服器",
+  "this build can't read the game's traffic (the downloaded tracker can)": "此版本無法讀取遊戲流量（下載的追蹤器可以）",
+  "install Npcap (npcap.com) to count from the game's traffic": "安裝 Npcap（npcap.com）才能從遊戲流量計算"
+}
