@@ -97,8 +97,18 @@ public sealed record RunPayload(
     static int? Nz(int v) => v > 0 ? v : null;
     /// <summary>The completed quests the next batch should carry (the window keeps them, Ui/MainWindow.QuestsPage.cs); null for none or with quests off.</summary>
     public static Func<List<QuestDonePayload>?>? QuestsPending { get; set; }
-    /// <summary>A batch the site took, with the quests it carried: the window marks them sent.</summary>
-    public static Action<List<QuestDonePayload>>? QuestsCarried { get; set; }
+    /// <summary>A batch the site took, with the character it was sent for (its slot, null before any was seen) and the quests it carried: the window marks them sent in that character's log.</summary>
+    public static Action<string?, List<QuestDonePayload>>? QuestsCarried { get; set; }
+    /// <summary>Another character's waiting quests, the oldest first, with its own server's label (Session/QuestBacklog.cs); null when none waits, in a render or with quests off.</summary>
+    public static Func<(CharacterPayload Who, string Server, List<QuestDonePayload> Quests)?>? QuestsBacklog { get; set; }
+
+    /// <summary>
+    /// The quests of a character not played now, on their own and under that character (2026-11-17: the alts' backlog waited
+    /// until each was played again). No runs, no boss bests: those are the current character's.
+    /// </summary>
+    public static RunPayload QuestsFor(string region, string server, CharacterPayload who, List<QuestDonePayload> quests) =>
+        new(AppVersion, region, ServerKeys.Build(region, server), "Runs", "Expedition", null, Gear,
+            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: new(), runs_only: true, character: who, quests: quests);
 
     /// <summary>
     /// A send of finished runs alone, with no farming in it (RunSync), and the completed quests waiting (Steven, 2026-11-16:
@@ -117,7 +127,7 @@ public sealed record RunPayload(
     public const int QuestsMaxPerUpload = 50;
 
     /// <summary>A batch the site took: the quests it carried are marked sent (every kind of send, not the farming one alone).</summary>
-    public static void Took(RunPayload p) { if (p.quests is { Count: > 0 } q) QuestsCarried?.Invoke(q); }
+    public static void Took(RunPayload p) { if (p.quests is { Count: > 0 } q) QuestsCarried?.Invoke(p.character?.id, q); }
 
     /// <summary>The gear the runs are shared under: "gs:1400-1599" from the player's gear score (Options), "unknown" until it is set (Data.GearScore).</summary>
     public static string Gear { get; set; } = "unknown";
