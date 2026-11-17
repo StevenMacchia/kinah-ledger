@@ -668,7 +668,7 @@ public partial class MainWindow
             b.Click += (_, _) => { _prefs.WhereYourServer = yourServer; if (!_demo) _prefs.Save(); _drawnSig.Remove("where"); FillWhere(_watcher.Chat?.ZoneView?.Zone ?? _demoZone); };
             return b;
         }
-        var group = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 8),
+        var group = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(12), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 8),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = {
                 Seg(L.T("All regions"), all, false, L.T("Every region's players pooled, the last 7 days.")),
                 Seg(L.T("Your server"), !all, true, Server?.Name is { } sn ? L.F("Only players on {0}, the last 7 days.", sn) : L.T("Only players on your server, the last 7 days.")) } } };

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 
 namespace KinahLedger.Ui;
 
@@ -49,9 +50,7 @@ public static class Skins
     /// <summary>Night's brushes, for a part drawn dark in every look (the Share sheet sets them on itself).</summary>
     internal static ResourceDictionary Night()
     {
-        var d = Build("night");
-        d["DisplayFont"] = new FontFamily(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Display, Segoe UI");   // the base face, whatever the window's look
-        return d;
+        return Build("night");   // every key a look sets, shapes and faces too, so nothing of the window's look reaches the sheet
     }
 
     static ResourceDictionary Build(string key)
@@ -100,6 +99,17 @@ public static class Skins
             string T(string hex) => "#" + tint.ToString("X2") + hex.TrimStart('#');
             S("SkyTint", T(sky)); S("LilacTint", T(lilac)); S("CoralTint", T(coral)); S("LimeTint", T(lime));
         }
+        // a look's shape (1.0): every look sets every key, so a switch never leaves one behind and the Share sheet (Night) has
+        // its own. Night, Abyss and Daylight keep the rounded cards; the themed looks override below
+        void Shape(double card, double refCard, double btn, double chip, double edge, double btnEdge, double glow, FontFamily body, FontFamily display, FontFamily label,
+            Effect? cardFx = null, Effect? refFx = null, Effect? btnFx = null, Effect? displayFx = null)
+        {
+            d["CardRadius"] = new CornerRadius(card); d["RefRadius"] = new CornerRadius(refCard); d["BtnRadius"] = new CornerRadius(btn); d["ChipRadius"] = new CornerRadius(chip);
+            d["CardEdge"] = new Thickness(edge); d["BtnEdge"] = new Thickness(btnEdge); d["PrimaryGlow"] = glow;
+            d["BodyFont"] = body; d["DisplayFont"] = display; d["LabelFont"] = label;
+            d["CardFx"] = cardFx; d["RefFx"] = refFx; d["BtnFx"] = btnFx; d["DisplayFx"] = displayFx;
+        }
+        Shape(12, 10, 8, 6, 1, 1, 0.5, Inter, InterDisplay, Inter);
         switch (key)
         {
             case "abyss":
@@ -147,7 +157,14 @@ public static class Skins
                 S("RowHead", "#180E2A"); S("RowHover", "#251742"); S("Mark", "#2A1B47"); S("Slot", "#140A22");
                 R("HeroBg", "#41166A", "#1C1030", "#1C1030"); S("HeroLine", "#80FF2BD6"); S("Inset", "#38000000"); C("SlotColor", "#140A22");
                 S("CommonInk", "#E4DCF5"); S("GradeRare", "#62E08F"); S("GradeLegend", "#62AEFF"); S("GradeUnique", "#F5D65E"); S("GradeEpic", "#D2B4FF"); S("GradeSpecial", "#3FDBCE"); S("BtnPrimaryInk", "#1F1300");
-                G("BtnPrimary", "#FFE66B", "#FFC21A"); G("BtnPrimaryHover", "#FFEE94", "#FFCF45"); G("BtnStop", "#FF6B8A", "#E0456A");
+                G("BtnPrimary", "#FFE14D", "#FFE14D"); G("BtnPrimaryHover", "#FFEE94", "#FFEE94"); G("BtnStop", "#FF6B8A", "#FF6B8A");
+                // Sticker's comic panels (Ui/Themes/Wacky/HudSticker.cs): ink outlines, a hard pink drop under every card, cyan
+                // under the quiet ones, a halftone ground, Segoe UI Black for the figures and the small labels
+                S("CardLine", "#06030C"); S("CardLineHover", "#FFE14D"); S("CardHair", "#06030C"); S("GroupLine", "#06030C"); S("BtnPrimaryLine", "#06030C");
+                d["BgArt"] = Tiled("#120A20", 12, 12, g => g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#2A1748")), null, new EllipseGeometry(new Point(6, 6), 1.6, 1.6))));
+                var black = new FontFamily("Segoe UI Black, Segoe UI");
+                Shape(18, 14, 12, 10, 2, 2, 0, Inter, black, black,
+                    cardFx: Hard("#FF3DA6", 5), refFx: Hard("#3DF5C8", 4), btnFx: Hard("#06030C", 3), displayFx: Hard("#FF2BD6", 3));
                 break;
             case HudThemes.Tactical:
                 // the jet HUD and the scorebug (Ui/Themes/Tactical): gunmetal, amber for Kinah, HUD cyan for focus, a squared face
@@ -164,7 +181,21 @@ public static class Skins
                 R("HeroBg", "#15303B", "#10151B", "#10151B"); S("HeroLine", "#4D7FE9FF"); S("Inset", "#38000000"); C("SlotColor", "#0B0F13");
                 S("CommonInk", "#D9DFE8"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B98FFF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A1000");
                 G("BtnPrimary", "#FFD066", "#F5B42E"); G("BtnPrimaryHover", "#FFDC85", "#FFC24A"); G("BtnStop", "#FF6B78", "#E04A58");
-                d["DisplayFont"] = new FontFamily("Bahnschrift, Segoe UI Variable Display, Segoe UI");
+                G("BtnPrimary", "#FFC84A", "#FFC84A"); G("BtnPrimaryHover", "#FFD67A", "#FFD67A");
+                // the jet HUD (Ui/Themes/Tactical): square-cut frames lit at their corners ([ ]), a range grid on the ground, the
+                // whole window in Bahnschrift (a DIN, the instruments' face), a cyan glow on the big figures, no soft glow anywhere else
+                d["CardLine"] = Brackets("#7FE9FF", "#26323F"); d["CardLineHover"] = Brackets("#BFF6FF", "#3E4E60"); d["CardHair"] = Brackets("#4D7FE9FF", "#1C242E");
+                d["GroupLine"] = Brackets("#7FE9FF", "#26323F", 0.015); S("BtnPrimaryLine", "#FFC84A");
+                d["BgArt"] = Tiled("#080B0F", 32, 32, g =>
+                {
+                    var grid = new SolidColorBrush(Hex("#0F161D"));
+                    g.Children.Add(new GeometryDrawing(grid, null, new RectangleGeometry(new Rect(0, 0, 32, 1))));
+                    g.Children.Add(new GeometryDrawing(grid, null, new RectangleGeometry(new Rect(0, 0, 1, 32))));
+                    g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#1D2B38")), null, new RectangleGeometry(new Rect(0, 0, 3, 1))));
+                    g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#1D2B38")), null, new RectangleGeometry(new Rect(0, 0, 1, 3))));
+                });
+                var din = new FontFamily("Bahnschrift, Segoe UI");
+                Shape(2, 2, 2, 1, 1, 1, 0, din, din, din, displayFx: Glow("#7FE9FF", 12, 0.45));
                 break;
             case HudThemes.Glitch:
                 // the Terminal's green screen (Ui/Themes/Glitch/HudTerminal.cs): phosphor on black, amber for Kinah, magenta for a miss
@@ -181,7 +212,14 @@ public static class Skins
                 R("HeroBg", "#0E2C1D", "#0C1113", "#0C1113"); S("HeroLine", "#4D5CFF9A"); S("Inset", "#38000000"); C("SlotColor", "#080C0D");
                 S("CommonInk", "#D2E8DA"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1A0F00");
                 G("BtnPrimary", "#FFC665", "#FFAE2E"); G("BtnPrimaryHover", "#FFD38A", "#FFBC4D"); G("BtnStop", "#FF5C86", "#D93D66");
-                d["DisplayFont"] = new FontFamily("Cascadia Mono, Consolas");
+                // the green screen and the tape (Ui/Themes/Glitch): scanlines over the ground, square frames with a phosphor bloom,
+                // every title and big figure split red from green like a bad signal, the primary a lit phosphor block, mono labels
+                G("BtnPrimary", "#5CFF9A", "#5CFF9A"); G("BtnPrimaryHover", "#8CFFB8", "#8CFFB8"); S("BtnPrimaryInk", "#021008"); S("BtnPrimaryLine", "#5CFF9A");
+                S("CardLine", "#2E5C46"); S("CardLineHover", "#5CFF9A"); S("CardHair", "#1F3A2E"); S("GroupLine", "#2E5C46");
+                d["BgArt"] = Tiled("#070B0E", 4, 3, g => g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex("#C0000000")), null, new RectangleGeometry(new Rect(0, 2, 4, 1)))));
+                var mono = new FontFamily("Cascadia Mono, Consolas");
+                Shape(0, 0, 0, 0, 1, 1, 0, Inter, mono, mono,
+                    cardFx: Glow("#5CFF9A", 14, 0.16), refFx: Glow("#5CFF9A", 10, 0.10), btnFx: Hard("#FF2B6A", 2, 180, 0.9), displayFx: Hard("#FF2B6A", 2, 180, 0.85));
                 break;
             default:   // night, the v2 palette since 2026-11-10 (the site's kl-v2.css tokens): near-black neutral, gold the one
                        // accent, mint and coral for up and down, the game's grade colours; the old candy roles (sky, lilac, lime) are
@@ -204,7 +242,61 @@ public static class Skins
                 G("BtnPrimary", "#F7C257", "#F2B23A"); G("BtnPrimaryHover", "#FFD27A", "#FBC966"); G("BtnStop", "#F26D6D", "#E35D5D");
                 break;
         }
+        if (!d.Contains("BgArt")) d["BgArt"] = d["Bg"];
+        if (!d.Contains("GroupLine")) d["GroupLine"] = d["Line"];
+        if (!d.Contains("BtnPrimaryLine")) d["BtnPrimaryLine"] = d["Gold"];
         return d;
+    }
+
+    /// <summary>
+    /// A card's corner as the look draws it, for a card built in code (built again when the look changes: its signature has
+    /// <see cref="Current"/>): Wacky rounder, Tactical square-cut, Glitch square.
+    /// </summary>
+    public static CornerRadius Corner(double r) => Current switch
+    {
+        HudThemes.Wacky => new CornerRadius(r + 6),
+        HudThemes.Tactical => new CornerRadius(Math.Min(r, 2)),
+        HudThemes.Glitch => new CornerRadius(0),
+        _ => new CornerRadius(r),
+    };
+
+    static readonly FontFamily Inter = new(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Text, Segoe UI");
+    static readonly FontFamily InterDisplay = new(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Display, Segoe UI");
+
+    static Color Hex(string hex) => (Color)ColorConverter.ConvertFromString(hex)!;
+
+    /// <summary>A hard-edged shadow (no blur): Wacky's sticker drop, Glitch's colour split.</summary>
+    static Effect Hard(string hex, double depth, double direction = 315, double opacity = 1)
+    {
+        var e = new DropShadowEffect { Color = Hex(hex), BlurRadius = 0, ShadowDepth = depth, Direction = direction, Opacity = opacity };
+        e.Freeze(); return e;
+    }
+
+    /// <summary>A soft glow round the element: Tactical's HUD figures, Glitch's phosphor bloom.</summary>
+    static Effect Glow(string hex, double radius, double opacity)
+    {
+        var e = new DropShadowEffect { Color = Hex(hex), BlurRadius = radius, ShadowDepth = 0, Opacity = opacity };
+        e.Freeze(); return e;
+    }
+
+    /// <summary>The window's ground: a colour with a pattern tiled over it every <paramref name="w"/> by <paramref name="h"/> px.</summary>
+    static Brush Tiled(string ground, double w, double h, Action<DrawingGroup> pattern)
+    {
+        var g = new DrawingGroup();
+        g.Children.Add(new GeometryDrawing(new SolidColorBrush(Hex(ground)), null, new RectangleGeometry(new Rect(0, 0, w, h))));
+        pattern(g);
+        var b = new DrawingBrush(g) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, w, h), ViewportUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.None };
+        b.Freeze(); return b;
+    }
+
+    /// <summary>A card's edge lit at its two sides and the ends of its top and bottom: a HUD's bracket frame ([ ]).</summary>
+    static Brush Brackets(string lit, string dim, double reach = 0.022)
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        b.GradientStops.Add(new GradientStop(Hex(lit), 0)); b.GradientStops.Add(new GradientStop(Hex(lit), reach));
+        b.GradientStops.Add(new GradientStop(Hex(dim), reach)); b.GradientStops.Add(new GradientStop(Hex(dim), 1 - reach));
+        b.GradientStops.Add(new GradientStop(Hex(lit), 1 - reach)); b.GradientStops.Add(new GradientStop(Hex(lit), 1));
+        b.Freeze(); return b;
     }
 
     /// <summary>For the options self-test: the resource keys a look sets (every look sets Night's, or a switch leaves some behind).</summary>

@@ -238,7 +238,7 @@
 
   </Window.Resources>
 
-  <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,10,22,10">
+  <Border x:Name="Root" Background="{DynamicResource BgArt}" Padding="22,10,22,10">
     <!-- FitHost: scaled down as one piece when Full view is wider than the screen (Ui/MainWindow.Fit.cs) -->
     <Grid x:Name="FitHost">
     <!-- the ledger: always the same width, wherever the settings are -->
@@ -263,7 +263,7 @@
           <Image Source="{StaticResource AppMark}" Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock Text="Kinah Ledger" Effect="{DynamicResource DisplayFx}" FontFamily="{DynamicResource DisplayFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="8,1,0,0" FontSize="12" FontWeight="Medium"/>
             </StackPanel>
             <!-- the character chip (UX pass 2026-11-13, Ui/MainWindow.Characters.cs): its class icon as read off the medallion,
@@ -354,7 +354,7 @@
       <!-- first run: region, faction, server and a look, before anything else. Everything shared is filed per server. -->
       <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
         <StackPanel>
-          <TextBlock Text="Welcome. Where do you play?" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Medium"/>
+          <TextBlock Text="Welcome. Where do you play?" Effect="{DynamicResource DisplayFx}" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Medium"/>
           <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three clicks and you are in; change any of it later in Options."/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="REGION" Margin="0,16,0,8"/>
           <WrapPanel x:Name="RegionChips"/>
@@ -404,7 +404,7 @@
            and a button per look under it (Ui/MainWindow.Welcome.cs, BuildWelcomeLooks) -->
       <Border x:Name="WelcomeLookCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
         <StackPanel>
-          <TextBlock Text="Pick your overlay" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Medium"/>
+          <TextBlock Text="Pick your overlay" Effect="{DynamicResource DisplayFx}" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Medium"/>
           <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="What sits over the game while you farm. Pick a theme, then a look. Change it any time in Options."/>
           <Border x:Name="WelcomeLookStage" CornerRadius="12" Height="230" Margin="0,16,0,0" Padding="16" BorderThickness="1" BorderBrush="#232736" ClipToBounds="True"/>
           <TextBlock x:Name="WelcomeLookName" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="2,8,0,0" TextWrapping="Wrap"/>
@@ -510,7 +510,7 @@
                 <StackPanel Orientation="Horizontal">
                   <!-- the light that crosses the figure on a new best or a day's milestone, and their tags after the unit, drawn over the card (Ui/MainWindow.Bests.cs) -->
                   <Grid>
-                    <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                    <TextBlock x:Name="HeadRate" Effect="{DynamicResource DisplayFx}" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
                     <Rectangle x:Name="HeadLight" IsHitTestVisible="False" Visibility="Collapsed"/>
                   </Grid>
                   <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
@@ -990,7 +990,7 @@
                   <TextBlock x:Name="CraftEmptyBody" Visibility="Collapsed" Margin="0,6,0,2" FontSize="13" LineHeight="19" Foreground="{DynamicResource Text2}" TextWrapping="Wrap" MaxWidth="470" HorizontalAlignment="Left"
                              Text="Your first craft starts the count: the profit after the Market's cut, how many worked, what the materials cost and what it sells for."/>
                   <StackPanel x:Name="CraftProfitRow" Orientation="Horizontal" Margin="0,6,0,0">
-                    <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Mint}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                    <TextBlock x:Name="CraftProfit" Effect="{DynamicResource DisplayFx}" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Mint}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
                     <TextBlock x:Name="CraftProfitNote" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="profit this session"/>
                   </StackPanel>
                   <!-- the chase: how many crafts worked, spent against sells for -->

@@ -69,7 +69,7 @@ public partial class MainWindow
     {
         var g = new Grid { Margin = new Thickness(0, 2, 0, 14), Tag = "cmp-switch" };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
-        var seg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left };
+        var seg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(12), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left };
         seg.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
         seg.SetResourceReference(Border.BackgroundProperty, "SegGroup");
         var sp = new StackPanel { Orientation = Orientation.Horizontal };

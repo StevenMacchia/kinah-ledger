@@ -616,7 +616,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var modes = new StackPanel { Orientation = Orientation.Horizontal };
-        var seg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var seg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         AutomationProperties.SetName(seg, "What the Parser keeps");
         foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
@@ -643,7 +643,7 @@ public partial class MainWindow
             b.Click += (_, _) => SetParserAlwaysOn(pick);
             meters.Children.Add(b);
         }
-        var mseg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         AutomationProperties.SetName(mseg, "When the Parser's meter shows");
         var left = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { seg, mseg } };
@@ -967,7 +967,7 @@ public partial class MainWindow
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var modes = new StackPanel { Orientation = Orientation.Horizontal };
-        var mseg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+        var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
             ToolTip = Tip(L.T("Every record of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers. Each is kept in the mode it was counted in.")) };
         mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         foreach (var (md, label) in new[] { (ParserMode.Bosses, "Boss pulls"), (ParserMode.Run, "Runs"), (ParserMode.Fights, "Fights") })
@@ -1020,7 +1020,7 @@ public partial class MainWindow
         if (kindsHere.Count > 1 && PFilters)
         {
             var kinds = new StackPanel { Orientation = Orientation.Horizontal };
-            var seg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = kinds, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
+            var seg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = kinds, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
             seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
             foreach (var key in kindsHere.Prepend(""))
             {
@@ -1146,7 +1146,7 @@ public partial class MainWindow
     static TextBlock PT(string text, double size, FontWeight weight, string brush, bool trim = false, bool display = false)
     {
         var t = QT(text, size, weight, brush, trim);
-        if (display) t.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
+        if (display) { t.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont"); t.SetResourceReference(EffectProperty, "DisplayFx"); }
         return t;
     }
 

@@ -290,7 +290,7 @@ public partial class MainWindow
         if (value.Length > 0) { var v = QT(value, 11.5, FontWeights.SemiBold, valueTone, trim: true); v.Margin = new Thickness(6, 1, 0, 0); v.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(v); }
         sp.Children.Add(line);
         g.Children.Add(sp);
-        var tile = new Border { Width = width, VerticalAlignment = VerticalAlignment.Stretch, Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(10), Child = g, Cursor = Cursors.Hand };
+        var tile = new Border { Width = width, VerticalAlignment = VerticalAlignment.Stretch, Padding = new Thickness(8, 6, 8, 6), CornerRadius = Skins.Corner(10), Child = g, Cursor = Cursors.Hand };
         tile.SetResourceReference(Border.BackgroundProperty, "Card2");
         tile.MouseEnter += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         tile.MouseLeave += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "Card2");
@@ -308,7 +308,7 @@ public partial class MainWindow
         sp.Children.Add(b);
         var n = QWrapName(name, 12, "Muted"); n.HorizontalAlignment = HorizontalAlignment.Center; n.TextAlignment = TextAlignment.Center;
         sp.Children.Add(n);
-        var badge = new Border { Padding = new Thickness(6, 8, 6, 8), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
+        var badge = new Border { Padding = new Thickness(6, 8, 6, 8), CornerRadius = Skins.Corner(12), Child = sp, Cursor = Cursors.Hand };
         badge.SetResourceReference(Border.BackgroundProperty, "Card2");
         badge.MouseEnter += (_, _) => badge.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         badge.MouseLeave += (_, _) => badge.SetResourceReference(Border.BackgroundProperty, "Card2");
