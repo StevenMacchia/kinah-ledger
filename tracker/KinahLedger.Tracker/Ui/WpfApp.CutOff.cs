@@ -166,19 +166,22 @@ public static partial class WpfApp
             // what is left of it on screen (each clip round it, in the window's terms): what another text can be drawn over
             var seen = Rect.Intersect(onTop, new Rect(topSize));
             string? cut = null;
-            for (var a = VisualTreeHelper.GetParent(el); a != null; a = VisualTreeHelper.GetParent(a))
+            // from the text itself: arranged short of its width, its own layout clip cuts it (a right-aligned figure loses its left digits)
+            for (DependencyObject? a = el; a != null; a = VisualTreeHelper.GetParent(a))
             {
                 if (a is not UIElement ue) continue;
                 Rect? clip = null;
                 if (ue.ClipToBounds) clip = new Rect(ue.RenderSize);
                 if (ue.Clip is { } g && !g.Bounds.IsEmpty) clip = clip is { } c0 ? Rect.Intersect(c0, g.Bounds) : g.Bounds;
                 if (ue is FrameworkElement fe && System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(fe) is { } lg && !lg.Bounds.IsEmpty) clip = clip is { } c1 ? Rect.Intersect(c1, lg.Bounds) : lg.Bounds;
+                // the clip the layout set on the visual itself (a part arranged short of its width): LayoutInformation doesn't always say it
+                if (VisualTreeHelper.GetClip(ue) is { } vc && !vc.Bounds.IsEmpty) clip = clip is { } c2 ? Rect.Intersect(c2, vc.Bounds) : vc.Bounds;
                 if (clip is { } r)
                 {
                     try
                     {
-                        var inA = el.TransformToAncestor((Visual)a).TransformBounds(box);
-                        if (cut == null && Outside(inA, r, out var by)) cut = $"\"{s}\": clipped by a {a.GetType().Name} ({by})";
+                        var inA = ReferenceEquals(a, el) ? box : el.TransformToAncestor((Visual)a).TransformBounds(box);
+                        if (cut == null && Outside(inA, r, out var by)) cut = ReferenceEquals(a, el) ? $"\"{s}\": cut by its box ({by})" : $"\"{s}\": clipped by a {a.GetType().Name} ({by})";
                         if (!ReferenceEquals(a, top)) seen.Intersect(((Visual)a).TransformToAncestor(top).TransformBounds(r)); else seen.Intersect(r);
                     }
                     catch (InvalidOperationException) { }

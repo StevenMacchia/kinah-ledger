@@ -212,21 +212,21 @@ static class Tac
     /// <paramref name="nameMin"/> at the least: the marks are never cut at the line's end). <paramref name="keep"/>: the parts
     /// that never give way (the CP in a look that always shows it compact, a death, the heal figure).
     /// </summary>
-    public static void FitName(TextBlock name, double room, IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give, double nameMin = 22)
+    /// <param name="nameFloor">The name gives way first, down to this (its marks keep their full form while it can); infinite: the marks first.</param>
+    public static void FitName(TextBlock name, double room, IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give, double nameMin = 22, double nameFloor = double.PositiveInfinity)
     {
         var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
-        static double W(FrameworkElement e, Size inf) { var v = e.Visibility; e.Visibility = Visibility.Visible; e.Measure(inf); double w = e.DesiredSize.Width; e.Visibility = v; return w; }
         name.ClearValue(FrameworkElement.MaxWidthProperty);
         name.Measure(inf);
-        double nw = name.DesiredSize.Width, fixedW = keep.Sum(e => W(e, inf));
-        var full = give.Select(p => W(p.Full, inf)).ToList();
-        var shrt = give.Select(p => p.Short is { } s ? W(s, inf) : 0).ToList();
+        double nw = name.DesiredSize.Width, fixedW = keep.Sum(e => W(e)), least = Math.Min(nw, nameFloor);
+        var full = give.Select(p => W(p.Full)).ToList();
+        var shrt = give.Select(p => p.Short is { } s ? W(s) : 0).ToList();
         int level = give.Count;
         for (int i = 0; i <= give.Count; i++)
         {
             double m = fixedW;
             for (int j = 0; j < give.Count; j++) m += j < i ? shrt[j] : full[j];
-            if (nw + m <= room) { level = i; break; }
+            if (least + m <= room) { level = i; break; }
         }
         double marks = fixedW;
         for (int j = 0; j < give.Count; j++)
@@ -237,6 +237,93 @@ static class Tac
             marks += cut ? shrt[j] : full[j];
         }
         name.MaxWidth = Math.Max(Math.Min(nameMin, nw), room - marks);
+    }
+
+    /// <summary>A part's width laid out on its own (shown for the measure, then as it was).</summary>
+    static double W(FrameworkElement e)
+    {
+        var v = e.Visibility; e.Visibility = Visibility.Visible;
+        e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double w = e.DesiredSize.Width; e.Visibility = v;
+        return w;
+    }
+
+    /// <summary>A name of up to this many characters always shows whole; a longer one keeps at least <see cref="NameKeepLong"/> and its "…".</summary>
+    public const int NameKeep = 10, NameKeepLong = 6;
+
+    /// <summary>
+    /// The least room a name keeps: whole up to <see cref="NameKeep"/> characters, else its first <see cref="NameKeepLong"/> and
+    /// "…" (a long name gives way before a mark goes to a second line).
+    /// </summary>
+    public static double NameFloor(TextBlock name)
+    {
+        name.ClearValue(FrameworkElement.MaxWidthProperty);
+        name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double nw = name.DesiredSize.Width;
+        if (name.Text.Length <= NameKeep) return nw;
+        return Math.Min(nw, TextW(name, name.Text[..NameKeepLong] + "…") + 1);
+    }
+
+    /// <summary>A text's width in a block's own face, size and weight (a figure column sized for its widest form).</summary>
+    public static double TextW(TextBlock like, string s)
+    {
+        var probe = new TextBlock { Text = s, FontFamily = like.FontFamily, FontSize = like.FontSize, FontWeight = like.FontWeight, FontStretch = like.FontStretch, FontStyle = like.FontStyle, Padding = like.Padding };
+        TextOptions.SetTextFormattingMode(probe, TextOptions.GetTextFormattingMode(like));
+        System.Windows.Documents.Typography.SetNumeralAlignment(probe, System.Windows.Documents.Typography.GetNumeralAlignment(like));
+        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Ceiling(probe.DesiredSize.Width);
+    }
+
+    /// <summary>A figure column's width: the widest of <paramref name="forms"/> in the block's face, its margins and a pixel of air.</summary>
+    public static double FigCol(TextBlock fig, params string[] forms) => forms.Max(f => TextW(fig, f)) + fig.Margin.Left + fig.Margin.Right + 1;
+
+    /// <summary>
+    /// A meter row's name and its marks on one line, or two when they can't share one (Steven, 2026-11-17: "a lot of numbers in
+    /// all the meters you can't see, it's cut off!"): the name keeps <see cref="NameFloor"/> on its line (a 10-character name
+    /// whole), the marks after it in <paramref name="order"/> move to <paramref name="sub"/> from the last until the line fits
+    /// (a part and its short form move together), and each line's marks then take their full form where they fit (FitName).
+    /// Parts in <paramref name="keep"/> or <paramref name="give"/> that aren't in <paramref name="order"/> (a CP at the plate's
+    /// end) count against the first line. Returns true when the second line is in use.
+    /// </summary>
+    public static bool FitLines(TextBlock name, double room, double subRoom, Panel line, Panel sub, IReadOnlyList<FrameworkElement> order,
+        IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give)
+    {
+        // the marks in groups: a part with its short form
+        var groups = new List<List<FrameworkElement>>();
+        foreach (var e in order)
+        {
+            var pair = give.FirstOrDefault(p => ReferenceEquals(p.Short, e));
+            if (pair.Full != null && groups.Count > 0 && groups[^1].Contains(pair.Full)) groups[^1].Add(e);
+            else groups.Add(new List<FrameworkElement> { e });
+        }
+        double floor = NameFloor(name);
+        int n = groups.Count, k = n;
+        for (int i = 0; i <= n; i++)
+        {
+            var down = groups.Skip(n - i).SelectMany(g => g).ToHashSet();
+            double least = keep.Where(e => !down.Contains(e)).Sum(W) + give.Where(p => !down.Contains(p.Full)).Sum(p => p.Short is { } s ? W(s) : 0);
+            if (floor + least <= room) { k = i; break; }
+        }
+        var under = groups.Skip(n - k).SelectMany(g => g).ToList();
+        var lower = under.ToHashSet();
+        // the children where they go (only when they move: a part re-added is laid out again)
+        var top = new List<UIElement> { name };
+        top.AddRange(order.Where(e => !lower.Contains(e)));
+        if (!line.Children.Cast<UIElement>().SequenceEqual(top) || !sub.Children.Cast<UIElement>().SequenceEqual(under))
+        {
+            line.Children.Clear(); sub.Children.Clear();
+            foreach (var e in top) line.Children.Add(e);
+            foreach (var e in under) sub.Children.Add(e);
+        }
+        FitName(name, room, keep.Where(e => !lower.Contains(e)).ToList(), give.Where(p => !lower.Contains(p.Full)).ToList(), floor, floor);
+        // the second line's marks: full where they fit, else short in the give's order
+        var subGive = give.Where(p => lower.Contains(p.Full)).ToList();
+        if (subGive.Count > 0)
+        {
+            var dummy = new TextBlock();
+            FitName(dummy, subRoom, keep.Where(lower.Contains).ToList(), subGive, 0, 0);
+        }
+        return k > 0;
     }
 
     /// <summary>A rate column's width on a card (crit, back attacks).</summary>
