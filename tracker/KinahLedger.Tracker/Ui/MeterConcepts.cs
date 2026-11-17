@@ -44,6 +44,13 @@ public static partial class WpfApp
     static void ShotConcepts(string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_CONCEPT_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // the no-cut-off check's other settings: KL_CONCEPT_SCALE=1.0, KL_CONCEPT_WIDTH=640, KL_CONCEPT_LANG=ko, KL_CONCEPT_EXPANDED=1 (adds 70, as the check does)
+        static string Env(string k) => Environment.GetEnvironmentVariable(k) ?? "";
+        double zoom = double.TryParse(Env("KL_CONCEPT_SCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var z) ? z : 1.1;
+        double width = double.TryParse(Env("KL_CONCEPT_WIDTH"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var wd) ? wd : 350;
+        bool expanded = Env("KL_CONCEPT_EXPANDED") == "1";
+        string lang0 = L.Code;
+        if (Env("KL_CONCEPT_LANG").Length > 0) L.Init(Env("KL_CONCEPT_LANG"));
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (live, killed, _, _) = WorstSample(now);
         string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
@@ -53,7 +60,7 @@ public static partial class WpfApp
         try
         {
             Encounter.CritKey = Encounter.CritKeyOf("result3"); Encounter.BackKey = Encounter.BackKeyOf("side1");
-            HudStackLook.FightWidth = 350; ParserRows.ExpandedPref = false;
+            HudStackLook.FightWidth = width + (expanded ? 70 : 0); ParserRows.ExpandedPref = expanded;
             var looks = new[] { ParserPrefs.StandardLook, HudLooks.Auto, HudThemes.Goo, HudThemes.Scorebug, HudThemes.Vhs }.Where(k => only.Length == 0 || only.Contains(k));
             foreach (var look in looks)
             {
@@ -66,7 +73,7 @@ public static partial class WpfApp
                         try { face = make(e); }
                         catch (Exception ex) { cuts.Add($"{look}-{key}-{tag}: failed: {ex.Message}"); continue; }
                         // over the game, at Steven's 110% (a window of its own: laid out and drawn as on screen)
-                        var scaled = new Border { Child = face, LayoutTransform = new ScaleTransform(1.1, 1.1), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+                        var scaled = new Border { Child = face, LayoutTransform = new ScaleTransform(zoom, zoom), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
                         var stage = new Border { Background = HudKit.GameScene(), Padding = new Thickness(28, 24, 28, 24), Child = scaled };
                         var win = new Window { WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, ShowInTaskbar = false, ShowActivated = false,
                             SizeToContent = SizeToContent.WidthAndHeight, Left = -12000, Top = -12000, WindowStartupLocation = WindowStartupLocation.Manual, Content = stage };
@@ -78,7 +85,7 @@ public static partial class WpfApp
                     }
             }
         }
-        finally { Encounter.CritKey = ck0; Encounter.BackKey = bk0; HudStackLook.FightWidth = fw0; ParserRows.ExpandedPref = exp0; }
+        finally { Encounter.CritKey = ck0; Encounter.BackKey = bk0; HudStackLook.FightWidth = fw0; ParserRows.ExpandedPref = exp0; if (L.Code != lang0) L.Init(lang0); }
         File.WriteAllLines(Path.Combine(dir, "concepts-cut.txt"), cuts);
         Console.WriteLine(cuts.Count == 0 ? "concepts: nothing cut" : $"concepts: {cuts.Count} cut (concepts-cut.txt)" + Environment.NewLine + string.Join(Environment.NewLine, cuts.Take(40)));
     }
