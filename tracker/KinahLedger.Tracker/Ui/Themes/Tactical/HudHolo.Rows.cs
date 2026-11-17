@@ -64,14 +64,21 @@ sealed partial class HudHolo
     /// in its class's colour and its marks, the DPS in white and the share in light cyan, and under it a glowing line bar on
     /// a dashed track, bright at its head. You: the row lit as cyan glass with a bright edge at its left and a YOU chip.
     /// </summary>
-    sealed class HoloRow : IThemeRow
+    sealed class HoloRow : IThemeRow, IThemeRowGrows
     {
         public const double H = 29, Pitch = 32;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
         readonly TextBlock _rank = Tt("", 12, White, Face, FontWeights.Bold), _name = Tt("", 14.5, White, Face, FontWeights.SemiBold),
             _dps = Tt("", 16, White, Face, FontWeights.Bold), _pct = Tt("", 12, Lite, Face, FontWeights.SemiBold), _dmg = Tt("", 13.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 12, Lite, Face, FontWeights.SemiBold);
-        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(7, 2, 0, 0) };
+        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
+        /// <summary>The marks that don't fit beside the name, on a line under it (Tac.FitLines); the bar moves down under them.</summary>
+        readonly StackPanel _sub = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0) };
+        readonly StackPanel _lines = new() { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(7, 2, 0, 0) };
+        List<FrameworkElement> _order = new();
+        readonly double _dmgW, _critW;
+        public double Extra { get; private set; }
+        public event Action? Grew;
         /// <summary>Combat Power after the name: "CP" in the small mono, the figure light cyan, both under the name's weight (the name gives way first).</summary>
         readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 2, 0, 0) };
         readonly TextBlock _cpFig = Tt("", 11.5, Frozen(Tac.A(LiteC, .85)), Face, FontWeights.SemiBold);
@@ -88,7 +95,10 @@ sealed partial class HudHolo
 
         public HoloRow()
         {
-            foreach (var w in new[] { 30.0, double.NaN, 62, 50, 0, 0 })
+            foreach (var t in new[] { _dps, _pct, _dmg, _crit }) t.Margin = new Thickness(0, t == _dps ? 1 : 4, 7, 0);
+            // sized for the widest real figure (Steven, 2026-11-17: "a lot of numbers ... you can't see, it's cut off!")
+            _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
+            foreach (var w in new[] { 30.0, double.NaN, Math.Max(62, Tac.FigCol(_dps, "888.8K")), Math.Max(50, Tac.FigCol(_pct, "88.8%", "100%")), 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
@@ -97,15 +107,18 @@ sealed partial class HudHolo
             Put(_rank, 0);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
-            Put(_nameLine, 1);
-            Grid.SetColumnSpan(_nameLine, 2);   // the name may run on into the DPS's column, as far as its figure leaves free (Fit)
+            _lines.Children.Add(_nameLine); _lines.Children.Add(_sub);
+            Put(_lines, 1);
+            Grid.SetColumnSpan(_lines, 5);   // the name may run on into the DPS's column, as far as its figure leaves free; the line under it, under the figures (Fit)
             foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
             {
                 t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Top;
-                t.Margin = new Thickness(0, t == _dps ? 1 : 4, 7, 0);
                 Put(t, col);
             }
             _dps.Tag = "row-dps";
+            // the DPS right-aligned over its column and the name's: a wider figure (Combat Power "167,548" before the first hit) takes
+            // room from the name, never loses a digit; its own column is what the name never takes
+            Grid.SetColumn(_dps, 1); Grid.SetColumnSpan(_dps, 2);
             var cpWord = Tt(L.T("CP"), 8.5, LiteDim, Small, FontWeights.Bold); cpWord.Margin = new Thickness(0, 1, 3, 0);
             _cp.Children.Add(cpWord); _cp.Children.Add(_cpFig);
             var cpTiny = Tt(L.T("CP"), 7.5, LiteDim, Small, FontWeights.Bold); cpTiny.Margin = new Thickness(0, 1, 1, 0);
@@ -121,12 +134,13 @@ sealed partial class HudHolo
             if (_expanded != c.Expanded)
             {
                 _expanded = c.Expanded;
-                _root.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? 58 : 0);
-                _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? 42 : 0);
+                _root.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? _dmgW : 0);
+                _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
             _name.Text = m.Name;
             _name.Foreground = Frozen(m.NameColor);
+            _sub.Children.Clear();
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
             _keep.Clear(); _give.Clear();
             FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
@@ -151,6 +165,7 @@ sealed partial class HudHolo
             else if (m.TopHeals) _give.Add((Add(Top(L.T("TOP HEALS"), GreenC, "top-heals")), Add(Top("✚", GreenC, "top-heals", L.T("Top heals")))));
             if (m.TopDps) _give.Insert(0, (Add(Top(L.T("TOP DPS"), AmberC, "top-dps")), Add(Top("★", AmberC, "top-dps", L.T("Top DPS")))));
             if (you != null) _give.Add((you, null));
+            _order = _nameLine.Children.Cast<FrameworkElement>().Skip(1).ToList();
             _dps.Text = m.Figure;
             _pct.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
@@ -162,9 +177,20 @@ sealed partial class HudHolo
 
         void Fit()
         {
-            double room = _root.ColumnDefinitions[1].ActualWidth;
+            var cols = _root.ColumnDefinitions;
+            double room = cols[1].ActualWidth;
             if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
-            Tac.FitName(_name, room + Tac.FreeLeft(_dps, _root.ColumnDefinitions[2].ActualWidth) - _nameLine.Margin.Left - 6, _keep, _give);
+            // the name's line runs into the DPS's column as far as its figure leaves free; the line under it, under every figure
+            _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double free = Math.Min(cols[2].ActualWidth, cols[2].ActualWidth - _dps.DesiredSize.Width) - 6;
+            Tac.FitLines(_name, room + free - _lines.Margin.Left - 6, _root.ActualWidth - cols[0].ActualWidth - _lines.Margin.Left - 7,
+                _nameLine, _sub, _order, _keep, _give);
+            _sub.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double extra = _sub.Children.Count > 0 ? Math.Ceiling(_sub.DesiredSize.Height) : 0;
+            if (Math.Abs(extra - Extra) < 0.5) return;
+            Extra = extra;
+            _root.Height = H + extra;
+            Grew?.Invoke();
         }
 
         /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>

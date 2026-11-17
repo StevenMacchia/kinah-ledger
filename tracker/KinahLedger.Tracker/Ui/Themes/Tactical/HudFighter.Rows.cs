@@ -59,14 +59,20 @@ sealed partial class HudFighter
     /// thin vector bar with a tick each tenth, its fill in the class's colour ending in a bright tick. You: amber corner
     /// brackets lock round the row and the YOU tag is solid amber.
     /// </summary>
-    sealed class TargetRow : IThemeRow
+    sealed class TargetRow : IThemeRow, IThemeRowGrows
     {
         public const double H = 27, Pitch = 30;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
         readonly TextBlock _rank = Tt("", 12, PhosDim, Face, FontWeights.Bold), _name = Tt("", 13, Phos, Face, FontWeights.Bold),
             _dps = Tt("", 14.5, Pale, Face, FontWeights.Bold), _pct = Tt("", 11, PhosDim, Face, FontWeights.SemiBold), _dmg = Tt("", 12.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 11, PhosDim, Face, FontWeights.SemiBold);
-        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(15, 2, 0, 0) };
+        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
+        /// <summary>The marks that don't fit beside the callsign, on a line under it (Tac.FitLines); the bar moves down under them.</summary>
+        readonly StackPanel _sub = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0) };
+        readonly StackPanel _lines = new() { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(15, 2, 0, 0) };
+        List<FrameworkElement> _order = new();
+        public double Extra { get; private set; }
+        public event Action? Grew;
         /// <summary>
         /// Combat Power after the callsign: a small dim "CP" tight on the figure, a step under the name's weight. Always this
         /// compact form (the mono face is wide: every row of the list says it the same way, and the callsign keeps its room).
@@ -84,7 +90,11 @@ sealed partial class HudFighter
         public TargetRow()
         {
             // the rank, the callsign's line, the DPS, the share (as narrow as their widest figures: the callsign gets the room)
-            foreach (var w in new[] { 30.0, double.NaN, 54, 45, 0, 0 })
+            foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
+                t.Margin = new Thickness(0, t == _dps ? 1 : 4, t == _pct ? 4 : 6, 0);
+            // sized for the widest real figure (Steven, 2026-11-17: "a lot of numbers ... you can't see, it's cut off!": "199.9K" lost its 1)
+            _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
+            foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, "88.8%", "100%"), 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
@@ -93,21 +103,25 @@ sealed partial class HudFighter
             Put(_rank, 0);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
-            Put(_nameLine, 1);
-            Grid.SetColumnSpan(_nameLine, 2);   // the name may run on into the DPS's column, as far as its figure leaves free (Fit)
+            _lines.Children.Add(_nameLine); _lines.Children.Add(_sub);
+            Put(_lines, 1);
+            Grid.SetColumnSpan(_lines, 5);   // the name may run on into the DPS's column, as far as its figure leaves free; the line under it, under the figures (Fit)
             foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
             {
                 t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Top;
-                t.Margin = new Thickness(0, t == _dps ? 1 : 4, t == _pct ? 4 : 6, 0);
                 Put(t, col);
             }
             _dps.Tag = "row-dps";
+            // the DPS right-aligned over its column and the name's: a wider figure (Combat Power "167,548" before the first hit) takes
+            // room from the name, never loses a digit; its own column is what the name never takes
+            Grid.SetColumn(_dps, 1); Grid.SetColumnSpan(_dps, 2);
             var cpWord = Tt(L.T("CP"), 7.5, PhosDim, Face, FontWeights.Bold); cpWord.Margin = new Thickness(0, 1, 2, 0);
             _cp.Children.Add(cpWord); _cp.Children.Add(_cpFig);
             _root.SizeChanged += (_, _) => Fit();
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _root.Children.Add(el); }
+        readonly double _dmgW, _critW;
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -115,14 +129,15 @@ sealed partial class HudFighter
             if (_expanded != c.Expanded)
             {
                 _expanded = c.Expanded;
-                _root.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? 58 : 0);
-                _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? 42 : 0);
+                _root.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? _dmgW : 0);
+                _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             bool lead = m.Rank == 1 && !m.CpOnly;
             _rank.Text = m.Rank.ToString("00", CultureInfo.InvariantCulture);
             _rank.Foreground = lead || m.You ? Amber : PhosDim;
             _name.Text = m.Name;
             _name.Foreground = Frozen(m.NameColor);
+            _sub.Children.Clear();
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
             _keep.Clear(); _give.Clear();
             FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
@@ -146,6 +161,7 @@ sealed partial class HudFighter
             else if (m.TopHeals) _give.Add((Add(Plate(L.T("TOP HEALS"), mint, "top-heals")), Add(Plate("✚", mint, "top-heals", L.T("Top heals")))));
             if (m.TopDps) _give.Insert(0, (Add(Plate(L.T("TOP DPS"), Amber, "top-dps")), Add(Plate("★", Amber, "top-dps", L.T("Top DPS")))));
             if (you != null) _give.Add((you, null));
+            _order = _nameLine.Children.Cast<FrameworkElement>().Skip(1).ToList();
             _dps.Text = m.Figure;
             _dps.Foreground = m.You ? Amber : Pale;
             _pct.Text = m.ShareText;
@@ -158,9 +174,20 @@ sealed partial class HudFighter
 
         void Fit()
         {
-            double room = _root.ColumnDefinitions[1].ActualWidth;
+            var cols = _root.ColumnDefinitions;
+            double room = cols[1].ActualWidth;
             if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
-            Tac.FitName(_name, room + Tac.FreeLeft(_dps, _root.ColumnDefinitions[2].ActualWidth) - _nameLine.Margin.Left - 6, _keep, _give);
+            // the name's line runs into the DPS's column as far as its figure leaves free; the line under it, under every figure
+            _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double free = Math.Min(cols[2].ActualWidth, cols[2].ActualWidth - _dps.DesiredSize.Width) - 6;
+            Tac.FitLines(_name, room + free - _lines.Margin.Left - 6, _root.ActualWidth - cols[0].ActualWidth - _lines.Margin.Left - 6,
+                _nameLine, _sub, _order, _keep, _give);
+            _sub.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double extra = _sub.Children.Count > 0 ? Math.Ceiling(_sub.DesiredSize.Height) : 0;
+            if (Math.Abs(extra - Extra) < 0.5) return;
+            Extra = extra;
+            _root.Height = H + extra;
+            Grew?.Invoke();
         }
 
         static readonly Color MintC = Color.FromRgb(0x5E, 0xF0, 0xA0);

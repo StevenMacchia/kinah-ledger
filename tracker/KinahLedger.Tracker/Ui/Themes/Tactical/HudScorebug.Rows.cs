@@ -14,7 +14,7 @@ sealed partial class HudScorebug
     /// bar, and stat cells for the DPS and the share (the damage and crit when expanded). You: the plate goes light and your
     /// DPS cell red, the way a broadcast features its player. Every shape is drawn in one pass; the text sits on top.
     /// </summary>
-    sealed class ScoreRow : IThemeRow
+    sealed class ScoreRow : IThemeRow, IThemeRowGrows
     {
         public const double H = 30, Pitch = 33;
         const double Sl = H * .1763, Gap = 2.5;
@@ -24,7 +24,15 @@ sealed partial class HudScorebug
         readonly TacSketch _art;
         readonly TextBlock _rank = T("", 18, InkB), _name = T("", 15.5, White), _dps = T("", 17.5, White), _pct = T("", 13, Grey, FontWeights.SemiBold),
             _cp = T("", 11, Frozen(Color.FromRgb(0x8A, 0x91, 0xA3)), FontWeights.SemiBold), _dmg = T("", 14, White), _crit = T("", 12.5, Grey, FontWeights.SemiBold);
-        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
+        /// <summary>The marks that don't fit beside the name, on a line under it in the plate (Tac.FitLines): the row grows by its height.</summary>
+        readonly StackPanel _sub = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
+        readonly StackPanel _lines = new() { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        StackPanel _cpHost = null!;
+        List<FrameworkElement> _order = new();
+        readonly double _dmgW, _critW;
+        public double Extra { get; private set; }
+        public event Action? Grew;
         readonly Border _iconHost = new() { Width = 22, Height = 22, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
         string _cls = "\0";
         /// <summary>The CP's short form when the plate is short of room: the word smaller, tight after the figure (never a bare figure).</summary>
@@ -43,7 +51,10 @@ sealed partial class HudScorebug
 
         public ScoreRow()
         {
-            var widths = new[] { 30.0, 9, double.NaN, 62, 50, 0, 0, Sl };
+            _dps.Margin = new Thickness(0, 0, 9, 0); _pct.Margin = new Thickness(0, 1, 9, 0); _dmg.Margin = new Thickness(0, 0, 9, 0); _crit.Margin = new Thickness(0, 1, 9, 0);
+            // the stat cells sized for the widest real figure (Steven, 2026-11-17: "a lot of numbers ... you can't see, it's cut off!")
+            _dmgW = Math.Max(60, Tac.FigCol(_dmg, "888.88M")); _critW = Math.Max(46, Tac.FigCol(_crit, "88%"));
+            var widths = new[] { 30.0, 9, double.NaN, Math.Max(62, Tac.FigCol(_dps, "888.8K")), Math.Max(50, Tac.FigCol(_pct, "88.8%", "100%")), 0, 0, Sl };
             foreach (var w in widths)
             {
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
@@ -61,15 +72,17 @@ sealed partial class HudScorebug
             plate.Children.Add(_iconHost);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
-            Grid.SetColumn(_nameLine, 1); plate.Children.Add(_nameLine);
+            _lines.Children.Add(_nameLine); _lines.Children.Add(_sub);
+            Grid.SetColumn(_lines, 1); Grid.SetColumnSpan(_lines, 2); plate.Children.Add(_lines);   // the line under the name may run on under the CP
             _cp.Margin = new Thickness(5, 2, 0, 0); _cpShort.Margin = new Thickness(5, 2, 0, 0);
             var cpHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _cp, _cpShort } };
             Grid.SetColumn(cpHost, 2); plate.Children.Add(cpHost);
+            _cpHost = cpHost;
             Put(plate, 2);
-            _dps.Tag = "row-dps"; _dps.HorizontalAlignment = HorizontalAlignment.Right; _dps.Margin = new Thickness(0, 0, 9, 0); Put(_dps, 3);
-            _pct.HorizontalAlignment = HorizontalAlignment.Right; _pct.Margin = new Thickness(0, 1, 9, 0); Put(_pct, 4);
-            _dmg.HorizontalAlignment = HorizontalAlignment.Right; _dmg.Margin = new Thickness(0, 0, 9, 0); Put(_dmg, 5);
-            _crit.HorizontalAlignment = HorizontalAlignment.Right; _crit.Margin = new Thickness(0, 1, 9, 0); Put(_crit, 6);
+            _dps.Tag = "row-dps"; _dps.HorizontalAlignment = HorizontalAlignment.Right; Put(_dps, 3);
+            _pct.HorizontalAlignment = HorizontalAlignment.Right; Put(_pct, 4);
+            _dmg.HorizontalAlignment = HorizontalAlignment.Right; Put(_dmg, 5);
+            _crit.HorizontalAlignment = HorizontalAlignment.Right; Put(_crit, 6);
             _plate = plate;
             _root.SizeChanged += (_, _) => Fit();
         }
@@ -83,7 +96,22 @@ sealed partial class HudScorebug
             if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
             // the plate's own width as laid out (its emblem off, a hair before its end), else the column's less the plate's margins
             double plate = _plate.ActualWidth > 0 ? _plate.ActualWidth : room - _plate.Margin.Left - _plate.Margin.Right + Sl;
-            Tac.FitName(_name, plate - 2, _keep, _give);
+            double icon = _iconHost.Visibility == Visibility.Visible ? _iconHost.Width + _iconHost.Margin.Right : 0;
+            bool two = Tac.FitLines(_name, plate - 2, plate - 2 - icon, _nameLine, _sub, _order, _keep, _give);
+            // two lines: the CP at the name's line (the plate's top), not between them
+            _cpHost.VerticalAlignment = two ? VerticalAlignment.Top : VerticalAlignment.Center;
+            _lines.VerticalAlignment = two ? VerticalAlignment.Top : VerticalAlignment.Center;
+            _iconHost.VerticalAlignment = two ? VerticalAlignment.Top : VerticalAlignment.Center;
+            var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
+            _nameLine.Measure(inf); _cpHost.Measure(inf); _sub.Measure(inf);
+            double extra = two ? Math.Ceiling(_sub.DesiredSize.Height) + 4 : 0, top = (H - _nameLine.DesiredSize.Height) / 2;
+            _lines.Margin = new Thickness(0, two ? top : 0, 0, 0);
+            _cpHost.Margin = new Thickness(0, two ? top + (_nameLine.DesiredSize.Height - _cpHost.DesiredSize.Height) / 2 : 0, 0, 0);
+            _iconHost.Margin = new Thickness(0, two ? (H - _iconHost.Height) / 2 : 0, 7, 0);
+            if (Math.Abs(extra - Extra) < 0.5) return;
+            Extra = extra;
+            _root.Height = H + extra;
+            Grew?.Invoke();
         }
 
         /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
@@ -102,8 +130,8 @@ sealed partial class HudScorebug
             if (_expanded != c.Expanded)
             {
                 _expanded = c.Expanded;
-                _root.ColumnDefinitions[5].Width = _text.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? 60 : 0);
-                _root.ColumnDefinitions[6].Width = _text.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? 46 : 0);
+                _root.ColumnDefinitions[5].Width = _text.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _dmgW : 0);
+                _root.ColumnDefinitions[6].Width = _text.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             bool podium = m.Rank <= 3 && !m.CpOnly;
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
@@ -112,6 +140,7 @@ sealed partial class HudScorebug
             _name.Text = m.Name;
             _name.Foreground = m.You ? InkB : Frozen(m.NameColor);
             // the marks after the name: YOU, deaths, the heal figure, the end of a kill's plates
+            _sub.Children.Clear();
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
             _keep.Clear(); _give.Clear();
             FrameworkElement Add(FrameworkElement el) { _nameLine.Children.Add(el); return el; }
@@ -134,6 +163,7 @@ sealed partial class HudScorebug
             if (you != null) _give.Add((you, null));
             // last before the name is cut: the class's emblem (the team stripe and the name's colour still say the class)
             _give.Add((_iconHost, null));
+            _order = _nameLine.Children.Cast<FrameworkElement>().Skip(1).ToList();
             // Combat Power at the plate's end, always (Steven, 2026-11-16: "dont forget the combat power next to ppls names");
             // before any damage the figure itself is the CP
             _cp.Text = m.Cp.Length > 0 ? m.Cp + " " + L.T("CP") : "";
