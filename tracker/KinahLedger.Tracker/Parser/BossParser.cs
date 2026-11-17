@@ -114,6 +114,8 @@ public sealed class BossParser
     string _gameMode = "";
     long _instanceId;
     bool _instanceFromGame;
+    /// <summary>When the player last entered an instance (a map event from before it is another place's).</summary>
+    DateTime _enteredAt = DateTime.MinValue;
     string _zone = "";
     bool _abyss;
     List<GroupMember> _group = new();
@@ -386,8 +388,11 @@ public sealed class BossParser
             case InstanceEntered ie:
             {
                 var kind = ie.Kind != ContentKind.Other ? ie.Kind : _book.KindOf(ie.Name);
-                // an instance the game's messages can't place (no kind, no name): the screen's place names it (ScreenPlace)
+                // an instance the game's messages can't place (no kind, no name, or a mode word for one): its map events'
+                // code (MapEvent) or the screen's place (ScreenPlace) names it
+                if (BossBook.IsModeWord(ie.Name)) ie = ie with { Name = "" };
                 bool unplaced = kind == ContentKind.Other && ie.Name.Trim().Length == 0;
+                _enteredAt = ie.At;
                 // never by the decoder's number for the entry (the tracker's decoder numbers every entry, a reconnect into the
                 // same copy too; a replay's restarts at each connection): by name. The same name again is a reconnect or a new
                 // run of it: after its last boss died, a new run at once; else what comes next decides (Reentry)
@@ -428,7 +433,7 @@ public sealed class BossParser
                 // a new run of the same instance: the group comes again from the game (the one before was the last run's)
                 if (again) _group = _group.Where(m => m.You).ToList();
                 _instanceId = ie.InstanceId;
-                if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: the screen's place names it"); break; }
+                if (unplaced) { _instanceFromGame = false; Log("entered an instance the game's messages don't name: its map events or the screen's place name it"); break; }
                 _kind = kind; _instance = ie.Name.Trim(); _instanceFromGame = Kept(kind);
                 if (Kept(kind)) _farm = null;   // farming is over: an instance's fights are its runs and pulls
                 if (_mode == ParserMode.Run && _run == null && Kept(kind)) OpenRun(ie.At, midway: false);
@@ -508,6 +513,14 @@ public sealed class BossParser
                 if (_mode == ParserMode.Fights && _fight == null) OpenFight(dd.At);
                 FarmAt(dd.At);
                 if (Ours(dd.SourceId, dd.SourceIsYou)) AlwaysFight(dd.At, open: true);
+                // a dungeon's trash (Steven, 2026-11-17: "this needs to track the dps but only LOG the bosses"): the live meter's,
+                // the run's and Every fight's, never a boss pull's (an add hit during a pull included)
+                if (dd.Trash)
+                {
+                    foreach (var e in Records()) if (!ReferenceEquals(e, _cur)) Credit(e, dd, toBoss: false);
+                    if (FarmRecord is { } ft && (dd.SourceIsYou || ft.Roster.Any(x => x.You && x.Id == dd.SourceId && dd.SourceId != 0))) FarmHit(ft, dd.At, dd.Amount);
+                    break;
+                }
                 // damage to a boss just ahead of its pull: kept for it (Engage takes it); out of a dungeon for a world boss's
                 if (_cur == null && dd.TargetId != 0)
                 {
@@ -559,7 +572,7 @@ public sealed class BossParser
                 bool firstOfCast = !hd.NoRow && !hd.Tick && hd.Skill > 0 && _castsLanded.Add((hd.Actor, hd.Cast, hd.Skill));
                 long seq = 0;
                 foreach (var e in Records())
-                    if (Member(e, hd.Source) is { } m)
+                    if (!(hd.Trash && ReferenceEquals(e, _cur)) && Member(e, hd.Source) is { } m)   // trash: never a boss pull's
                     {
                         var a = m.Ability(hd.Skill);
                         StreamHit(a, hd);
@@ -1434,6 +1447,7 @@ public sealed class BossParser
         lock (_gate)
         {
             if (_instanceFromGame) return;
+            if (instance != null && BossBook.IsModeWord(instance)) return;   // "Easy" is a mode, never a place
             var k = Encounter.KindOf(kind);
             if (k == ContentKind.Other && instance != null) k = _book.KindOf(instance);
             var name = instance?.Trim() ?? "";
@@ -1444,6 +1458,37 @@ public sealed class BossParser
             _kind = newKind; _instance = name;
             if (Kept(_kind)) _farm = null;   // the minimap says an instance: whatever was counted as farming is over
             if (_mode == ParserMode.Run && _run == null && Kept(_kind)) OpenRun(DateTime.UtcNow, midway: false);
+            _version++;
+        }
+    }
+
+    /// <summary>
+    /// A map event of the place the player is in, by the game's own code (FierceHornCave_Easy_Mapevent, from the event
+    /// server). When the game's messages entered an instance with no name (Ferocious Horn Den on Easy since 2026-11-16: a map
+    /// the decoder doesn't list), the code names it from the boss list's codes (data/bosses.txt) and the screen's place isn't
+    /// waited for; its mode word (Easy) is the mode when none came, never the name. Any other code (an open-world event) does nothing.
+    /// </summary>
+    public void MapEvent(string code, DateTime at)
+    {
+        lock (_gate)
+        {
+            if (_instanceId == 0 || _instanceFromGame || at < _enteredAt) return;
+            if (_book.FromCode(code) is not { } named) return;
+            var kind = _book.KindOf(named.Instance);
+            if (!Kept(kind)) return;
+            if (!Kept(_kind)) EndAlways(at, $"entered {named.Instance}");
+            bool renamed = _kind != kind || !BossBook.Strip(_instance).Equals(named.Instance, StringComparison.OrdinalIgnoreCase);
+            _kind = kind; _instance = named.Instance; _instanceFromGame = true;
+            _farm = null;
+            // the records the screen's place opened under another name (a minimap misread) take the game's
+            if (renamed) foreach (var e in Records()) if (!e.OpenWorld) { e.Instance = _instance; e.Kind = Encounter.KindName(kind); }
+            if (_gameMode.Length == 0 && named.Mode.Length > 0)
+            {
+                _gameMode = named.Mode;
+                foreach (var e in Records()) if (e.ModeKind != ParserMode.Fights || Kept(_kind)) e.GameMode = _gameMode;
+            }
+            if (_mode == ParserMode.Run && _run == null) OpenRun(at, midway: false);
+            Log($"the instance by the game's map event ({code.Trim()}): {_instance}{(_gameMode.Length > 0 ? $", {_gameMode}" : "")}");
             _version++;
         }
     }

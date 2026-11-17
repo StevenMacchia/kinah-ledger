@@ -78,7 +78,12 @@ public sealed partial class TrackerSession
         // the player's gathering next: a gather is the "gather nearby" its item's rise is checked against
         DrainGathers(p, now);
         // the event the player is in, from its own server: an event run starts and ends from it (InstanceLog.GameSaid)
-        while (p.NextArea() is { } area) Instances.GameSaid(area, Zone);
+        // (and a dungeon's map event names the instance for the Parser when the game entered it with no name)
+        while (p.NextArea() is { } area)
+        {
+            Instances.GameSaid(area, Zone);
+            if (area.What == AreaEvent.Kind.Phase && area.Code.Length > 0) Fights.MapEvent(area.Code, area.At);
+        }
         DrainItems(p, now);
         while (_packetHeld.Count > 0)
         {

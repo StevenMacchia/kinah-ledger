@@ -81,6 +81,20 @@ public static class ParserTests
         using var dec = NativeDecoder.TryOpen()!;
         var screen = ScreenOf(pcapng);   // place.tsv beside the recording: the minimap's run, for instances the game leaves unnamed
         bool events = Environment.GetEnvironmentVariable("KL_REPLAY_EVENTS") == "1";
+        // KL_REPLAY_EVENTS=1 also counts the events of each kind a minute (yours apart for hits), printed at the end
+        var counts = new SortedDictionary<string, int>();
+        void Count(BossEvent b)
+        {
+            string mine = b switch
+            {
+                DamageDealt d => d.SourceIsYou ? " (you)" : d.SourceId == 0 ? " (source 0)" : "",
+                HitDealt h => p.Group.Any(g => g.You && g.Id == h.Source) ? " (you)" : "",
+                HitTaken t => p.Group.Any(g => g.You && g.Id == t.Target) ? " (you)" : "",
+                _ => "",
+            };
+            var key = $"{b.At.ToLocalTime():HH:mm} {b.GetType().Name}{mine}";
+            counts[key] = counts.GetValueOrDefault(key) + 1;
+        }
         bool firstConn = true;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
@@ -98,11 +112,13 @@ public static class ParserTests
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
                     while (dec.NextBossEvent() is { } b)
                     {
-                        if (events && b is InstanceEntered or InstanceLeft or GroupChanged or BossEngaged or BossEnded)
+                        if (events && b is InstanceEntered or InstanceLeft or GroupChanged or BossEngaged or BossEnded or InstanceMode)
                             Console.WriteLine($"event {b.At.ToLocalTime():HH:mm:ss} {(b is GroupChanged g ? "group " + string.Join(", ", g.Members.Select(m => $"{m.Name}#{m.Id}{(m.You ? " (you)" : "")}")) : b.ToString())}");
+                        if (events) Count(b);
                         p.Take(b);
                     }
-                    while (dec.NextHit() is { } h) p.Take(h);
+                    while (dec.NextHit() is { } h) { if (events) Count(h); p.Take(h); }
+                    while (dec.NextAreaEvent() is { } ae) if (ae.What == AreaEvent.Kind.Phase) p.MapEvent(ae.Code, ae.At);
                     screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
@@ -111,6 +127,7 @@ public static class ParserTests
         }
         p.Tick(DateTime.MaxValue.AddDays(-1));
         Sample(DateTime.MaxValue.AddDays(-1));
+        foreach (var kv in counts) Console.WriteLine($"events {kv.Key}: {kv.Value}");
         if (always)
             foreach (var a in stretches)
             {
@@ -235,9 +252,10 @@ public static class ParserTests
     /// <summary>
     /// A recording replayed through this build's decoder into a Bosses-only Parser, as parser-replay does (each piece at its
     /// own capture time, the tick at each): the pulls kept. <paramref name="hits"/> false leaves the hit stream undrained,
-    /// as a decoder before interface version 10 would.
+    /// as a decoder before interface version 10 would. <paramref name="useScreen"/> false leaves place.tsv out (the game's own
+    /// names only); <paramref name="tick"/> sees the parser after each piece (the Always on meter's checks).
     /// </summary>
-    static List<Encounter> Replay(string pcapng, bool hits, int port = 13328)
+    static List<Encounter> Replay(string pcapng, bool hits, int port = 13328, bool useScreen = true, Action<BossParser, DateTime>? tick = null)
     {
         var kept = new List<Encounter>();
         var p = new BossParser { Ended = kept.Add };
@@ -245,7 +263,7 @@ public static class ParserTests
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == port) segs.Add((at, s));
         DateTime last = DateTime.MinValue;
-        var screen = ScreenOf(pcapng);
+        var screen = useScreen ? ScreenOf(pcapng) : null;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
@@ -260,11 +278,12 @@ public static class ParserTests
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
                     while (dec.NextBossEvent() is { } b) p.Take(b);
                     while (dec.NextHit() is { } h) { if (hits) p.Take(h); }
+                    while (dec.NextAreaEvent() is { } ae) if (ae.What == AreaEvent.Kind.Phase) p.MapEvent(ae.Code, ae.At);
                     screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
             };
-            foreach (var (at, s) in conn) { st.Add(s.Seq, s.Payload, at, s.Syn); p.Tick(at); }
+            foreach (var (at, s) in conn) { st.Add(s.Seq, s.Payload, at, s.Syn); p.Tick(at); tick?.Invoke(p, at); }
         }
         p.Tick(DateTime.MaxValue.AddDays(-1));
         return kept;
@@ -1841,6 +1860,41 @@ public static class ParserTests
             }
         }
 
+        // Steven, 2026-11-17 (1.0.1): "expedition right now is not tracking my dps and says waiting for the first pull even though
+        // im clearing trash mobs ... this needs to track the dps but only LOG the bosses". His recording of that run (Ferocious
+        // Horn Den on Easy, entered with no name, trash only: rec-20261117-13) and the Nov 16 Horn Den runs (rec-20261116-14),
+        // replayed with no screen at all (the game's map events name the instance): the Always on meter is live with figures on
+        // every trash pack, each its own; nothing of trash is kept; the boss pulls are kept as before, named and with their mode
+        {
+            var trashRec = Recording("20261117-13"); var hornRec = Recording("20261116-14");
+            if (NativeDecoder.Version < 10 || trashRec == null || hornRec == null)
+                Console.WriteLine($"skip  trash on the live meter, Steven's recordings: decoder interface {NativeDecoder.Version}, rec-20261117-13 {(trashRec != null ? "here" : "missing")}, rec-20261116-14 {(hornRec != null ? "here" : "missing")}");
+            else
+            {
+                // each live tally the meter showed (by its start), as it stood last
+                List<Encounter> Packs(string rec, out List<Encounter> kept)
+                {
+                    var packs = new Dictionary<DateTime, Encounter>();
+                    kept = Replay(rec, hits: true, useScreen: false, tick: (p, at) =>
+                    {
+                        if (p.AlwaysLive is { Mode: "fight" } a && a.You is { Damage: > 0 }) packs[a.Start] = a;
+                    });
+                    return packs.Values.OrderBy(e => e.Start).ToList();
+                }
+                var trash = Packs(trashRec, out var kept13);
+                var dps = trash.Select(e => e.Dps(e.You!, e.LastAt)).ToList();
+                Check(trash.Count >= 3 && trash.All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }) && dps.All(d => d > 1_000) && trash.Sum(e => e.You!.Damage) > 1_500_000 && kept13.Count == 0,
+                    $"trash in a dungeon (Horn Den on Easy, entered unnamed): the Always on meter live with figures on each pack ({trash.Count}: {string.Join(", ", trash.Select((e, i) => $"{e.Start.ToLocalTime():HH:mm:ss} {Ui.Amounts.Short(e.You!.Damage)} at {Ui.Amounts.Short(dps[i])}/s"))}), "
+                    + $"in {trash.FirstOrDefault()?.Instance} ({trash.FirstOrDefault()?.Kind}, {trash.FirstOrDefault()?.GameMode}); none kept ({kept13.Count})");
+                var packs16 = Packs(hornRec, out var kept16).Where(e => e.Kind != "Open world").ToList();   // the dungeon's (the hour has open world too)
+                var pulls = kept16.Where(e => e.Mode == "boss").ToList();
+                Check(pulls.Count == 24 && pulls.All(e => e is { Instance: "Ferocious Horn Den", Kind: "Expedition", GameMode: "Easy" } && e.Boss.Length > 0 && e.Boss != BossParser.UnnamedBoss) && kept16.All(e => e.Mode == "boss")
+                    && packs16.Count >= 10 && packs16.All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }),
+                    $"...the Nov 16 Horn Den runs with no screen: {pulls.Count} boss pulls kept, each named in Ferocious Horn Den, Easy ({string.Join(", ", pulls.Select(e => e.Boss).Distinct())}; {string.Join(", ", pulls.Select(e => $"{e.Instance}/{e.GameMode}").Distinct())}); "
+                    + $"{kept16.Count - pulls.Count} other records kept; {packs16.Count} trash packs live on the meter between them ({string.Join(", ", packs16.Select(e => $"{e.Kind} {e.Instance} {e.GameMode}").Distinct())})");
+            }
+        }
+
         // Combat Power beside every name (the live check, 2026-11-17: Talisra showed none for the Cleric and the Assassin, who
         // were in before Steven, and the Horn Den duo on his alt showed none for either): each member of every pull on these
         // recordings with the CP the game gave for them; the meter's rows say a member's CP only when there is one
@@ -2097,6 +2151,70 @@ public static class ParserTests
             p.Take(new DamageDealt(t.AddSeconds(3), 1, 5000, 1_000, "Swoly", true));
             p.ScreenPlace("Sanctuary", "Chalice of Muspel");
             Check(p.AlwaysLive == null, "...going into a dungeon by the screen's place does");
+        }
+
+        // Steven, 2026-11-17 (1.0.1): "expedition right now is not tracking my dps and says waiting for the first pull even though
+        // im clearing trash mobs. thought i was clear that this needs to track the dps but only LOG the bosses". Ferocious Horn
+        // Den on Easy comes in with no name (a map the decoder doesn't list); its map events' code names it, the mode word never
+        // the name. The decoder sends a dungeon's trash (Trash): the meter's and the run's, never a boss pull's
+        {
+            var real = BossBook.Shared;
+            Check(real.FromCode("FierceHornCave_Easy_BossRoom_Mapevent") == ("Ferocious Horn Den", "Easy") && real.FromCode("FierceHornCave_Normal_Wave_Mapevent") == ("Ferocious Horn Den", "Conquest")
+                && real.FromCode("Fire_Temple_Normal_MapEvent") == ("Fire Temple", "Conquest") && real.FromCode("BakronIsland_Normal_MapEvent") == ("Vakron Sky Island", "Conquest")
+                && real.FromCode("Arkanis_G_06_BossRoom_MapEvent") == ("Shattered Arkanis", "") && real.FromCode("BossChallenge_MapEvent") == null && real.FromCode("SF_Defence_01_L_MapEvent") == null
+                && real.FromCode("Easy_Mapevent") == null && BossBook.IsModeWord("Easy") && !BossBook.IsModeWord("Krao Cave"),
+                $"a map event's code names its instance by the boss list, its mode the next word, never the name: {real.FromCode("FierceHornCave_Easy_BossRoom_Mapevent")}, {real.FromCode("Fire_Temple_Normal_MapEvent")}, {real.FromCode("Arkanis_G_06_BossRoom_MapEvent")}");
+
+            var kept = new List<Encounter>();
+            var p = new BossParser(real) { Ended = kept.Add };
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.Take(new InstanceEntered(t, ContentKind.Other, "", 1));                 // Horn Den on Easy: no kind, no name
+            p.Take(new InstanceMode(t.AddSeconds(5), "Easy"));
+            p.MapEvent("BossChallenge_MapEvent", t.AddSeconds(5));                     // an open-world event's: nothing
+            Check(p.Where.Instance == "" && p.Where.Kind == ContentKind.Other, $"...an open-world event's code names nothing ({p.Where.Kind} '{p.Where.Instance}')");
+            p.MapEvent("FierceHornCave_Easy_Mapevent", t.AddSeconds(5));
+            p.ScreenPlace("Expedition", "Easy");                                      // a mode word read for the place: never a place
+            Check(p.Where == (ContentKind.Expedition, "Ferocious Horn Den"), $"...the instance entered with no name is named by its map event: {p.Where.Kind} '{p.Where.Instance}'");
+
+            // trash: the meter is live with figures from your first hit, each pack its own; never "Waiting for the first pull"
+            p.Take(new DamageDealt(t.AddSeconds(30), 1, 7001, 40_000, "Swoly", true, 12240000, 1, Trash: true));
+            p.Take(new HitDealt(t.AddSeconds(30), 1, 1, 7001, 40_000, 12240000, 1, 1, false, false, 2, 0, 0, 0, Trash: true));
+            p.Take(new DamageDealt(t.AddSeconds(33), 1, 7002, 50_000, "Swoly", true, 12240000, 1, Trash: true));
+            var a1 = p.AlwaysLive;
+            Check(a1 is { Mode: "fight", Live: true, Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" } && a1.You?.Damage == 90_000 && a1.Dps(a1.You!, t.AddSeconds(33)) > 0,
+                $"...trash in the dungeon: the Always on meter live with your figures ({a1?.Mode}, {a1?.Kind} {a1?.Instance} {a1?.GameMode}, you {a1?.You?.Damage:N0}, {(a1?.You is { } y1 ? a1.Dps(y1, t.AddSeconds(33)) : 0):N0}/s)");
+            p.Tick(t.AddSeconds(33 + BossParser.AlwaysIdleSeconds + 1));
+            p.Take(new DamageDealt(t.AddSeconds(60), 1, 7003, 20_000, "Swoly", true, 12240000, 1, Trash: true));
+            Check(p.AlwaysLive is { Mode: "fight" } a2 && a2.You?.Damage == 20_000 && a2.Start == t.AddSeconds(60) && kept.Count == 0,
+                $"...the next pack after {BossParser.AlwaysIdleSeconds:0} s of quiet is a meter of its own ({p.AlwaysLive?.You?.Damage:N0}); no trash kept ({kept.Count})");
+
+            // a boss: its pull is the meter and is kept as ever, named and with its mode; trash hit during it (an add) isn't its
+            p.Take(new BossEngaged(t.AddSeconds(100), "", 2300908));
+            p.Take(new DamageDealt(t.AddSeconds(101), 1, 2300908, 300_000, "Swoly", true, 12240000, 1));
+            p.Take(new HitDealt(t.AddSeconds(101), 1, 1, 2300908, 300_000, 12240000, 2, 1, false, false, 2, 0, 0, 0));
+            p.Take(new DamageDealt(t.AddSeconds(102), 1, 7004, 9_000, "Swoly", true, 12240000, 1, Trash: true));
+            p.Take(new HitDealt(t.AddSeconds(102), 1, 1, 7004, 9_000, 12240000, 3, 1, false, false, 2, 0, 0, 0, Trash: true));
+            Check(p.AlwaysLive is { Mode: "boss" } b && b.You?.Damage == 300_000 && b.You.Abilities.Sum(x => x.StreamHits ?? 0) == 1,
+                $"...a boss pull is the meter, the add's hit not in it ({p.AlwaysLive?.You?.Damage:N0}, {p.AlwaysLive?.You?.Abilities.Sum(x => x.StreamHits ?? 0)} hits)");
+            p.Take(new BossEnded(t.AddSeconds(130), 2300908, BossOutcome.Kill));
+            Check(kept.Count == 1 && kept[0] is { Mode: "boss", Boss: "Watchdog Kwapo", Instance: "Ferocious Horn Den", Kind: "Expedition", GameMode: "Easy", Outcome: "kill" } && kept[0].You?.Damage == 300_000,
+                $"...the pull kept, named by the list in Ferocious Horn Den, Easy: {kept.ElementAtOrDefault(0)?.Boss} in {kept.ElementAtOrDefault(0)?.Instance} ({kept.ElementAtOrDefault(0)?.GameMode}), {kept.ElementAtOrDefault(0)?.You?.Damage:N0}");
+
+            // Full run: trash counts in the run (from entering to leaving, trash included), never in its boss split
+            var keptR = new List<Encounter>();
+            var r = new BossParser(real) { Ended = keptR.Add };
+            r.SetMode(ParserMode.Run, t);
+            r.Take(new GroupChanged(t, new[] { Me }));
+            r.Take(new InstanceEntered(t, ContentKind.Other, "", 1));
+            r.MapEvent("FierceHornCave_Easy_Mapevent", t.AddSeconds(5));
+            r.Take(new DamageDealt(t.AddSeconds(30), 1, 7001, 40_000, "Swoly", true, 12240000, 1, Trash: true));
+            r.Take(new BossEngaged(t.AddSeconds(100), "", 2300908));
+            r.Take(new DamageDealt(t.AddSeconds(101), 1, 2300908, 300_000, "Swoly", true, 12240000, 1));
+            r.Take(new BossEnded(t.AddSeconds(130), 2300908, BossOutcome.Kill));
+            r.Take(new InstanceLeft(t.AddSeconds(200)));
+            var run = keptR.FirstOrDefault(e => e.Mode == "run");
+            Check(run is { Instance: "Ferocious Horn Den" } && run.You?.Damage == 340_000 && run.You.BossDamage == 300_000,
+                $"...Full run: the run has the trash too ({run?.You?.Damage:N0}, {run?.You?.BossDamage:N0} of it the boss's), in {run?.Instance}");
         }
 
         // a misread hit (2026-11-15: Divine Punishment read 261M once in the open world): left out, the record partial

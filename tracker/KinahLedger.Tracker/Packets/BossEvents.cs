@@ -42,9 +42,10 @@ public sealed record GroupChanged(DateTime At, IReadOnlyList<GroupMember> Member
 /// Damage one unit dealt another (SourceId matches a GroupMember's Id; 0 = HP lost with no hit to name a source). SourceName
 /// and SourceIsYou when known. Skill is the ability (0 = none named; negative: a damage over time, minus its effect's id,
 /// Parser/Abilities.cs); Hits the hits in it (0 = not counted). Reason: for SourceId 0, why no one is credited (0 = not
-/// said; see Encounter.UncreditedWhy).
+/// said; see Encounter.UncreditedWhy). Trash: damage to a monster of an instance that is no boss's and no wave's (the live
+/// meter's, the run's and Every fight's; never a boss pull's).
 /// </summary>
-public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long Amount, string SourceName = "", bool SourceIsYou = false, int Skill = 0, int Hits = 0, int Reason = 0) : BossEvent(At);
+public sealed record DamageDealt(DateTime At, long SourceId, long TargetId, long Amount, string SourceName = "", bool SourceIsYou = false, int Skill = 0, int Hits = 0, int Reason = 0, bool Trash = false) : BossEvent(At);
 
 /// <summary>A boss's HP now and its max, after a change while it is fought (the Parser's HP bar); 0 = not known.</summary>
 public sealed record BossHealth(DateTime At, long BossId, long Hp, long Max) : BossEvent(At);
@@ -56,10 +57,10 @@ public sealed record UnitDied(DateTime At, long Id, string Name, bool Boss, long
 /// One hit of a member's (Source: who it counts for, a summon's owner; Actor: who dealt it), its part of the boss's HP fall
 /// (Amount), by Skill (as DamageDealt's). NoRow: a part with no single hit under it (count its damage, not a hit). Tick: a
 /// damage over time's tick. Cast and N tie hits to their cast. Result, Marks and Multi are the hit's kind as it came,
-/// unnamed until they are mapped. Why: for Source 0, the reason no one is credited (as DamageDealt.Reason).
+/// unnamed until they are mapped. Why: for Source 0, the reason no one is credited (as DamageDealt.Reason). Trash: as DamageDealt's.
 /// </summary>
 public sealed record HitDealt(DateTime At, long Source, long Actor, long Target, long Amount, int Skill, int Cast, int N, bool NoRow, bool Tick,
-    int Result, int Marks, int Multi, int Why, uint Ranked = 0) : BossEvent(At);
+    int Result, int Marks, int Multi, int Why, uint Ranked = 0, bool Trash = false) : BossEvent(At);
 
 /// <summary>
 /// A heal by Source (who it counts for: the player or a member; a summon's owner) on Target (a member, or the healer: Self),

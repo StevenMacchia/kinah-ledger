@@ -45,6 +45,8 @@ public sealed class BossBook
             var kind = Encounter.KindOf(p[1]);
             if (inst.Length == 0 || kind == ContentKind.Other) continue;
             b._kindOf.TryAdd(inst, kind);
+            // "Instance|Kind||Code": the game's own code name for the instance (its map events', CODE_Mode_..._MapEvent)
+            if ((p.Length < 3 || p[2].Trim().Length == 0) && p.Length >= 4 && p[3].Trim() is { Length: > 0 } code) b._byCode.TryAdd(code, inst);
             if (p.Length < 3 || p[2].Trim().Length == 0) continue;   // an instance with its kind and no bosses yet
             var list = b._byInstance.TryGetValue(inst, out var l) ? l : b._byInstance[inst] = new();
             var mark = p.Length >= 4 ? p[3].Trim() : "";
@@ -72,6 +74,36 @@ public sealed class BossBook
     public bool AnyNamed(string name) => _byInstance.Values.Any(l => l.Any(b => b.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)));
 
     public int Count => _byInstance.Values.Sum(l => l.Count);
+
+    readonly Dictionary<string, string> _byCode = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The words the game's map events put after an instance's code for its mode (FierceHornCave_Easy_Mapevent).</summary>
+    static readonly HashSet<string> ModeWords = new(StringComparer.OrdinalIgnoreCase) { "Easy", "Normal", "Hard", "Hell" };
+
+    /// <summary>
+    /// True for a word that is a mode of an instance (Easy, Normal, Hard, Hell, and the game's names Conquest and Exploration),
+    /// never an instance's name: a place read as one is no place.
+    /// </summary>
+    public static bool IsModeWord(string word) => ModeWords.Contains(word.Trim()) || word.Trim().Equals("Conquest", StringComparison.OrdinalIgnoreCase) || word.Trim().Equals("Exploration", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The mode word of a map event, as the game names it: Normal is Conquest (Steven, 2026-11-14); another as it is.</summary>
+    public static string ModeName(string word) => word.Equals("Normal", StringComparison.OrdinalIgnoreCase) ? "Conquest" : word;
+
+    /// <summary>
+    /// The instance a map event's code is of, by the list's codes (the longest that starts it: "Fire_Temple" has an underscore
+    /// of its own), and its mode when the next word is one (FierceHornCave_Easy_BossRoom_Mapevent: Ferocious Horn Den, Easy).
+    /// The mode is never the name. Null for a code of no listed instance (an open-world event).
+    /// </summary>
+    public (string Instance, string Mode)? FromCode(string code)
+    {
+        var c = code.Trim();
+        string? stem = null;
+        foreach (var k in _byCode.Keys)
+            if (c.Length > k.Length && c[k.Length] == '_' && c.StartsWith(k, StringComparison.OrdinalIgnoreCase) && (stem == null || k.Length > stem.Length)) stem = k;
+        if (stem == null) return null;
+        var next = c[(stem.Length + 1)..].Split('_')[0];
+        return (_byCode[stem], ModeWords.Contains(next) ? ModeName(next) : "");
+    }
 
     /// <summary>"Shattered Arkanis [Stage 3]" is Shattered Arkanis on the list.</summary>
     public static string Strip(string instance)
