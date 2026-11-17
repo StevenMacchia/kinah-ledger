@@ -152,9 +152,9 @@ static class TerminalRows
             if (m.Heal.Length > 0)
             {
                 // "+1.1K" whole, its "/s" dimmer and smaller, so the rate fits its column
-                bool ps = m.Heal.EndsWith("/s", StringComparison.Ordinal);
-                _heal.Inlines.Add(Rn("+" + (ps ? m.Heal[..^2] : m.Heal), Mint2));
-                if (ps) _heal.Inlines.Add(Rn("/s", Br(MintC2, .6), 8.5));
+                int sl = m.Heal.LastIndexOf('/'); bool ps = sl > 0;   // "/s" in English, "/초" in Korean
+                _heal.Inlines.Add(Rn("+" + (ps ? m.Heal[..sl] : m.Heal), Mint2));
+                if (ps) _heal.Inlines.Add(Rn(m.Heal[sl..], Br(MintC2, .6), 8.5));
             }
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _extra.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " " + m.Crit : "") : "";

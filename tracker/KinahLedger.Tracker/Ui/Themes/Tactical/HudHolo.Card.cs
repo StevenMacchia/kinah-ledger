@@ -37,7 +37,7 @@ sealed partial class HudHolo : IThemeCard
             dc.DrawGeometry(null, Tac.P(Frozen(Tac.A(tone, .35)), 4, round: true), g);
             dc.DrawGeometry(Frozen(Tac.A(Tac.Mix(DeepC, tone, .3), .95)), Tac.P(Frozen(Tac.Mix(tone, Colors.White, .2)), 1.3, round: true), g);
         }));
-        var icon = ClassArt.Icon(c.Class, 18, c.Name); icon.HorizontalAlignment = HorizontalAlignment.Center; icon.VerticalAlignment = VerticalAlignment.Center;
+        var icon = ThemeText.Icon(c.Class, 18, c.Name); icon.HorizontalAlignment = HorizontalAlignment.Center; icon.VerticalAlignment = VerticalAlignment.Center;
         hex.Children.Add(icon);
         head.Children.Add(hex);
         var who = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -57,7 +57,7 @@ sealed partial class HudHolo : IThemeCard
             who.Children.Add(chip);
         }
         Grid.SetColumn(who, 1); head.Children.Add(who);
-        var cls = Tt(c.Class.ToUpperInvariant(), 9.5, Lite, Small, FontWeights.SemiBold); cls.Margin = new Thickness(8, 0, 0, 0);
+        var cls = Tt(c.ClassName.ToUpperInvariant(), 9.5, Lite, Small, FontWeights.SemiBold); cls.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(cls, 2); head.Children.Add(cls);
         cls.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

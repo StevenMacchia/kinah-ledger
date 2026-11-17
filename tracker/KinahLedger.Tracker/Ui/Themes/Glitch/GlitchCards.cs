@@ -150,7 +150,7 @@ static class GlitchCards
         At(tab, 1, new Rectangle { Height = 1, Fill = Dots, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 1, 7, 0) });
         var cls = new StackPanel { Orientation = Orientation.Horizontal };
         cls.Children.Add(new Border { Width = 3, Height = 11, Background = Frozen(cc), Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
-        cls.Children.Add(Txt(Up(c.Class), 10, lit, face));
+        cls.Children.Add(Txt(Up(c.ClassName), 10, lit, face));
         At(tab, 2, cls);
         body.Children.Add(tab);
 
@@ -311,7 +311,7 @@ static class GlitchCards
         foreach (var (bw, b) in new[] { (7.0, mag), (3.0, cyan), (2.0, white), (5.0, Br(LilacC, .5)) })
             tick.Children.Add(new Border { Width = bw, Height = 7, Background = b, Margin = new Thickness(0, 0, 1.5, 0) });
         meta.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { tick, Txt(L.T("MEMBER_DUMP"), 9.5, lilacDim, face) } });
-        var cls = Txt(Low(c.Class), 10.5, Frozen(Color.FromArgb(0xE6, cc.R, cc.G, cc.B)), face);
+        var cls = Txt(Low(c.ClassName), 10.5, Frozen(Color.FromArgb(0xE6, cc.R, cc.G, cc.B)), face);
         At(meta, 2, cls);
         body.Children.Add(meta);
 
@@ -477,7 +477,7 @@ static class GlitchCards
 
         // the command, then the name (gold for you) with its cp beside it, the class on the right
         var cmd = Txt("", 11, phosDim, face, FontWeights.SemiBold);
-        cmd.Inlines.Add(Rn("$ ", phosFaint)); cmd.Inlines.Add(Rn("perf report --sort sym", phosDim));
+        cmd.Inlines.Add(Rn("$ ", phosFaint)); cmd.Inlines.Add(Rn(L.T("perf report --sort sym"), phosDim));
         body.Children.Add(cmd);
         var head = new Grid { Margin = new Thickness(0, 4, 0, 0) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -495,7 +495,7 @@ static class GlitchCards
         var nm = Txt(c.Name, 15, nameFg, face, FontWeights.Bold, trim: true);
         nameRow.Children.Add(nm);
         head.Children.Add(nameRow);
-        var cls = Txt(Low(c.Class), 11, Frozen(cc), face, FontWeights.SemiBold); cls.Margin = new Thickness(10, 2, 0, 0);
+        var cls = Txt(Low(c.ClassName), 11, Frozen(cc), face, FontWeights.SemiBold); cls.Margin = new Thickness(10, 2, 0, 0);
         At(head, 1, cls);
         body.Children.Add(head);
 

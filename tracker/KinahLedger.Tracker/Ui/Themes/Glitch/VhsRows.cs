@@ -52,7 +52,7 @@ static class VhsRows
 
         public FrameworkElement Root => _root;
         /// <summary>Where the level starts on the second line: past the class's code and the CP ("GLA  CP 38.2K").</summary>
-        const double LevelAt = 72;
+        static double LevelAt => L.Code == "en" ? 72 : 92;   // the Korean and Chinese words for the class and the Combat Power are wider
 
         public Row()
         {

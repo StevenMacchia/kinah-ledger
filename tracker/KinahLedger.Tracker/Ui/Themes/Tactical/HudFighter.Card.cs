@@ -31,7 +31,7 @@ sealed partial class HudFighter : IThemeCard
         strip.Children.Add(Tag(L.T("TGT DATA"), Phos, Dark, 9));
         var dash = new TacSketch((dc, s) => dc.DrawLine(Tac.P(PhosFaint, 1, dash: new DashStyle(new double[] { 2, 3 }, 0)), new Point(0, Math.Round(s.Height / 2) + .5), new Point(s.Width, Math.Round(s.Height / 2) + .5))) { Margin = new Thickness(7, 0, 7, 0) };
         Grid.SetColumn(dash, 1); strip.Children.Add(dash);
-        var cls = Tt(c.Class.ToUpperInvariant(), 9.5, PhosDim, Face, FontWeights.Bold);
+        var cls = Tt(c.ClassName.ToUpperInvariant(), 9.5, PhosDim, Face, FontWeights.Bold);
         Grid.SetColumn(cls, 2); strip.Children.Add(cls);
         stack.Children.Add(strip);
 

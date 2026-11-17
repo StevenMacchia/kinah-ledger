@@ -38,8 +38,9 @@ abstract class TacticalLook : HudThemeLook
     {
         if (f.ToBest.Length == 0) return "";
         if (f.Beat) return L.T("NEW");
-        const string tail = " to your best here";
-        return f.ToBest.EndsWith(tail, StringComparison.Ordinal) ? "−" + f.ToBest[..^tail.Length] : f.ToBest;
+        // the figure in "130K to your best here" (or its translation: the figure is not always first)
+        var m = System.Text.RegularExpressions.Regex.Match(f.ToBest, @"\d[\d.,]*[KMBkmb]?");
+        return m.Success ? "−" + m.Value : f.ToBest;
     }
 
     /// <summary>The timer's tone, said once for the three looks.</summary>
