@@ -50,13 +50,21 @@ public static partial class WpfApp
         double fw0 = HudStackLook.FightWidth; bool exp0 = ParserRows.ExpandedPref;
         var cuts = new List<string>();
         var names = WorstNames.Append(live.Title).ToList();
+        // KL_CONCEPT_WIDTH=350,640 and KL_CONCEPT_SCALE=1,1.1: other widths and sizes (their files named -WIDTH-SCALE)
+        static double[] Env(string k, double d) => (Environment.GetEnvironmentVariable(k) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN).Where(double.IsFinite).DefaultIfEmpty(d).ToArray();
+        var widths = Env("KL_CONCEPT_WIDTH", 350); var scales = Env("KL_CONCEPT_SCALE", 1.1);
         try
         {
             Encounter.CritKey = Encounter.CritKeyOf("result3"); Encounter.BackKey = Encounter.BackKeyOf("side1");
-            HudStackLook.FightWidth = 350; ParserRows.ExpandedPref = false;
+            ParserRows.ExpandedPref = false;
             var looks = new[] { ParserPrefs.StandardLook, HudLooks.Auto, HudThemes.Goo, HudThemes.Scorebug, HudThemes.Vhs }.Where(k => only.Length == 0 || only.Contains(k));
+            foreach (var width in widths)
+            foreach (var scale in scales)
             foreach (var look in looks)
             {
+                HudStackLook.FightWidth = width;
+                string size = width == 350 && scale == 1.1 ? "" : $"-{width:0}-{scale * 100:0}";
                 var faces = new List<(string Key, Func<Encounter, FrameworkElement> Make)> { ("current", e => ParserOverlay.PreviewFace(look, e, e.End ?? now, e.ModeKind, true)) };
                 foreach (var c in MeterConcepts.All.Where(c => c.Look == look)) faces.Add((c.Key, e => c.Make(e, e.End ?? now, HudStackLook.FightWidth)));
                 foreach (var (key, make) in faces)
@@ -64,16 +72,16 @@ public static partial class WpfApp
                     {
                         FrameworkElement face;
                         try { face = make(e); }
-                        catch (Exception ex) { cuts.Add($"{look}-{key}-{tag}: failed: {ex.Message}"); continue; }
+                        catch (Exception ex) { cuts.Add($"{look}-{key}-{tag}{size}: failed: {ex.Message}"); continue; }
                         // over the game, at Steven's 110% (a window of its own: laid out and drawn as on screen)
-                        var scaled = new Border { Child = face, LayoutTransform = new ScaleTransform(1.1, 1.1), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+                        var scaled = new Border { Child = face, LayoutTransform = new ScaleTransform(scale, scale), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
                         var stage = new Border { Background = HudKit.GameScene(), Padding = new Thickness(28, 24, 28, 24), Child = scaled };
                         var win = new Window { WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, ShowInTaskbar = false, ShowActivated = false,
                             SizeToContent = SizeToContent.WidthAndHeight, Left = -12000, Top = -12000, WindowStartupLocation = WindowStartupLocation.Manual, Content = stage };
                         TextOptions.SetTextFormattingMode(win, TextFormattingMode.Display);
                         win.Show(); DoEvents();
-                        foreach (var c in CutOffs(face, names)) cuts.Add($"{look}-{key}-{tag}: {c}");
-                        Save(stage, Path.Combine(dir, $"concept-{look}-{key}-{tag}.png"), 0);
+                        foreach (var c in CutOffs(face, names)) cuts.Add($"{look}-{key}-{tag}{size}: {c}");
+                        Save(stage, Path.Combine(dir, $"concept-{look}-{key}-{tag}{size}.png"), 0);
                         win.Close();
                     }
             }
