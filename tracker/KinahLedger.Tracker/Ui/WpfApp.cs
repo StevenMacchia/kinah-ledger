@@ -251,6 +251,16 @@ public static partial class WpfApp
             ww.PickWelcomeLookForTest(HudLooks.Ticker); DoEvents();
             st = ww.WelcomeLookForTest;
             Check(st.Picked == HudLooks.Ticker && st.Outlined == HudLooks.Ticker && st.Staged == HudLooks.Ticker, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
+            // the themes on first run (0.10.136, Steven 2026-11-16): four chips, Classic shown; a theme shows its looks and picks its first
+            var th0 = ww.WelcomeThemeForTest;
+            ww.PickWelcomeThemeForTest(HudThemes.Wacky); DoEvents();
+            var th1 = ww.WelcomeThemeForTest; st = ww.WelcomeLookForTest;
+            var wacky = HudThemes.Looks(HudThemes.Wacky).Select(l => l.Key).ToList();
+            Check(th0.Theme == HudThemes.Classic && th0.Chips.Count == HudThemes.All.Length && th1.Theme == HudThemes.Wacky && st.Buttons.SequenceEqual(wacky) && st.Picked == wacky[0] && st.Staged == wacky[0],
+                $"first run: the themes' chips ({th0.Chips.Count}), Wacky picked shows its looks and picks its first ({string.Join(",", st.Buttons)}; picked {st.Picked}, drawn {st.Staged})");
+            ww.PickWelcomeThemeForTest(HudThemes.Classic); DoEvents();
+            st = ww.WelcomeLookForTest;
+            Check(st.Buttons.Count == MainWindow.WelcomeLooks.Length && st.Picked == HudLooks.Card, $"...back to Classic: its looks, the first picked ({st.Picked})");
             ww.Close();
             Motion.Still = still; Skins.Apply(skinWas); InCard.Layer = cardLayer; HoverTip.Host = tipHost; DoEvents();
         }
@@ -2502,6 +2512,10 @@ public static partial class WpfApp
             // KL_WELCOME_LOOKS=1: each look on the stage too, under the mouse (ui-welcome-look-<key>.png)
             if (Environment.GetEnvironmentVariable("KL_WELCOME_LOOKS") == "1") foreach (var k in MainWindow.WelcomeLooks) { w.HoverWelcomeLookForTest(k); DoEvents(); Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-" + k + ".png"), 784); }
             Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-hover" + tail), (compact ? 640 : 800) - 16);
+            // a theme picked (0.10.136): its looks, its first on the stage (ui-welcome-look-wacky.png)
+            w.PickWelcomeThemeForTest(HudThemes.Wacky); IconCache.Drain(TimeSpan.FromSeconds(4)); DoEvents();
+            Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-wacky" + tail), (compact ? 640 : 800) - 16);
+            w.PickWelcomeThemeForTest(HudThemes.Classic); DoEvents();
         }
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
