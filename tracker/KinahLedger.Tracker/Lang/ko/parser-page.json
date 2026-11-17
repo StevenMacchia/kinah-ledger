@@ -237,5 +237,22 @@
  "skill level {0}": "스킬 레벨 {0}",
  "Specialties picked are lit": "선택한 특화가 밝게 표시돼요",
  "No details for this skill's specializations yet": "이 스킬의 특화 정보가 아직 없어요",
- "Specialties {0}": "특화 {0}"
+ "Specialties {0}": "특화 {0}",
+  "boss HP": "보스 HP",
+  "{0} died": "{0} 사망",
+  "Boss fights  ·  {0}": "보스 전투  ·  {0}",
+  "{0} · group DPS": "{0} · 파티 DPS",
+  "under way": "진행 중",
+  "Combat Power {0:N0}": "전투력 {0:N0}",
+  "Gladiator": "검성",
+  "Templar": "수호성",
+  "Assassin": "살성",
+  "Ranger": "궁성",
+  "Sorcerer": "마도성",
+  "Spiritmaster": "정령성",
+  "Cleric": "치유성",
+  "Chanter": "호법성",
+  "Open world": "필드",
+  "Abyss": "어비스",
+  "back attack": "후방 공격"
 }
