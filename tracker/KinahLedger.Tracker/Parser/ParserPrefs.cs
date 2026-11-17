@@ -74,7 +74,9 @@ public sealed class ParserPrefs
     public string Look { get; set; } = StandardLook;
     public const string StandardLook = "standard";
     /// <summary>A look key the Parser's own window can draw: a fight look's, else the standard panel.</summary>
-    public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" || Ui.HudThemes.Themed(key) ? key! : StandardLook;
+    public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" or PodiumLook or ReactorLook || Ui.HudThemes.Themed(key) ? key! : StandardLook;
+    /// <summary>The Parser panel's other two looks (Ui/ParserPanel.Skins.cs; "standard" is the first, Forge).</summary>
+    public const string PodiumLook = "podium", ReactorLook = "reactor";
     /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
     public bool DpsActive { get; set; }
     /// <summary>

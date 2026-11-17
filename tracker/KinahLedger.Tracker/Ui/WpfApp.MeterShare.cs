@@ -13,8 +13,8 @@ public static partial class WpfApp
 {
     /// <summary>The looks the share picture is checked and rendered in: Classic's standard panel and one look of each theme.</summary>
     static IEnumerable<string> MeterShareLooks(bool all) => all
-        ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).Concat(HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key))
-        : new[] { ParserPrefs.StandardLook }.Concat(HudThemes.All.Where(t => t.Key != HudThemes.Classic).Select(t => HudThemes.Looks(t.Key)[0].Key));
+        ? OptionsWindow.ParserLooksOf(HudThemes.Classic).Concat(HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key))
+        : OptionsWindow.PanelLooks.Concat(HudThemes.All.Where(t => t.Key != HudThemes.Classic).Select(t => HudThemes.Looks(t.Key)[0].Key));
 
     static MeterShare.Look ShareLookOf(string key, ParserMode mode)
     {

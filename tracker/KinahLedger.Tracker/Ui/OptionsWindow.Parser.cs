@@ -35,10 +35,12 @@ public partial class OptionsWindow
 
     /// <summary>The meter window's looks in a theme: Classic's are Standard and the four drawn for fights; another theme's, all of its own.</summary>
     internal static IReadOnlyList<string> ParserLooksOf(string theme) =>
-        theme == HudThemes.Classic ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).ToList() : HudThemes.Looks(theme).Select(l => l.Key).ToList();
+        theme == HudThemes.Classic ? PanelLooks.Concat(HudLooks.FightLooks).ToList() : HudThemes.Looks(theme).Select(l => l.Key).ToList();
+    /// <summary>The Parser panel's own looks: Forge (the "standard" key), Podium, Reactor.</summary>
+    internal static readonly string[] PanelLooks = { ParserPrefs.StandardLook, ParserPrefs.PodiumLook, ParserPrefs.ReactorLook };
 
     /// <summary>The theme a meter look belongs to (Standard: Classic).</summary>
-    static string ParserThemeOf(string look) => look == ParserPrefs.StandardLook ? HudThemes.Classic : HudThemes.Of(look);
+    static string ParserThemeOf(string look) => PanelLooks.Contains(look) ? HudThemes.Classic : HudThemes.Of(look);
     UniformGrid? _parserLookHost;
     /// <summary>The page's lead: what the looks are for (the meter's own window, or inside the Kinah overlay).</summary>
     TextBlock? _parserLookHint;
@@ -483,7 +485,7 @@ public partial class OptionsWindow
         foreach (var key in keys)
         {
             string lookName = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
-            string hint = L.T(key == ParserPrefs.StandardLook ? "The Parser's own panel: the boss, the clock, the group on class-coloured bars." : HudLooks.All.First(x => x.Key == key).Hint);
+            string hint = L.T(MainWindow.PanelLookHint(key) ?? HudLooks.All.First(x => x.Key == key).Hint);
             bool on = key == current;
             var k = key;
             var card = LookTile(key, L.T(lookName), hint, on, () => ParserFace(k, separate), scene, lookName + " overlay look");

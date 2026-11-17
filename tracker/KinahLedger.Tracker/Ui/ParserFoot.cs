@@ -58,7 +58,8 @@ static class ParserFoot
         return top > 0 ? top / (double)PeakSeconds : null;
     }
 
-    public static Grid Line(Encounter e, DateTime now, double size = 12, TextBlock? lead = null)
+    /// <param name="valueInk">The group's figure's ink (a look's accent, the Forge panel's gold); the text's by default.</param>
+    public static Grid Line(Encounter e, DateTime now, double size = 12, TextBlock? lead = null, Brush? valueInk = null)
     {
         var g = new Grid { Tag = "parser-foot" };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -81,7 +82,7 @@ static class ParserFoot
         if (word.Length > 0)
         {
             gt.Inlines.Add(new Run(word + " ") { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
-            gt.Inlines.Add(new Run(value) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
+            gt.Inlines.Add(new Run(value) { Foreground = valueInk ?? HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
             right.Children.Add(gt);
         }
         if (e.Live && !e.Waiting) SawLive(e.Id);
