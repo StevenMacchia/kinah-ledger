@@ -4,8 +4,12 @@ namespace KinahLedger.Packets;
 // here; how it is recognised is the decoder's (klnet.dll, not part of this source). A build without the decoder sends
 // none of these, and the Parser page says so.
 
-/// <summary>The content the parser keeps fights for. Other: any place that isn't one of the three (the open world, a town, an arena).</summary>
-public enum ContentKind { Other = 0, Transcendence = 1, Expedition = 2, Sanctuary = 3 }
+/// <summary>
+/// The content the parser keeps fights for. Other: any place that isn't one of them (the open world, a town, an arena).
+/// Nightmare: the Nightmare instances (the tracker's boss list files them, data/bosses.txt). WorldBoss: never a place, the
+/// kind of a world boss's pull wherever it is fought (Parser/WorldBosses.cs).
+/// </summary>
+public enum ContentKind { Other = 0, Transcendence = 1, Expedition = 2, Sanctuary = 3, Nightmare = 4, WorldBoss = 5 }
 
 /// <summary>How a boss fight ended: the boss died, the group did, or the player left (or the fight was given up with no result).</summary>
 public enum BossOutcome { Kill = 0, Wipe = 1, Left = 2 }

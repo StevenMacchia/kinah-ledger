@@ -454,7 +454,7 @@ public partial class MainWindow
     Encounter? DungeonMeter(DateTime now)
     {
         var (kind, instance) = ParserWhere;
-        if (kind is not (ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary)) return null;
+        if (!Encounter.Dungeon(kind)) return null;
         if (_parserJustEnded is { OpenWorld: false } last && BossBook.Strip(last.Instance).Equals(BossBook.Strip(instance), StringComparison.OrdinalIgnoreCase)) return last;
         if (_parserReady == null || !_parserReady.Instance.Equals(instance, StringComparison.Ordinal)) _parserReady = Encounter.Ready(kind, instance, "", now);
         return WithParty(_parserReady);
@@ -484,8 +484,8 @@ public partial class MainWindow
         if (pf.AlwaysLive is { } live) return live;
         var held = pf.AlwaysEnded;
         var (kind, instance) = ParserWhere;
-        bool dungeon = kind is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
-        static bool Kept(Encounter e) => Encounter.KindOf(e.Kind) is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
+        bool dungeon = Encounter.Dungeon(kind);
+        static bool Kept(Encounter e) => Encounter.Dungeon(Encounter.KindOf(e.Kind));
         if (dungeon)
         {
             if (held != null && Kept(held) && BossBook.Strip(held.Instance).Equals(BossBook.Strip(instance), StringComparison.OrdinalIgnoreCase)) return held;
@@ -524,7 +524,7 @@ public partial class MainWindow
     }
 
     /// <summary>In a Transcendence, an Expedition or a Sanctuary now (the meter replaces the Kinah line there).</summary>
-    bool InDungeon => ParserWhere.Kind is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
+    bool InDungeon => Encounter.Dungeon(ParserWhere.Kind);
 
     /// <summary>Your live DPS in the open-world fight under way ("13.2K"), or "" (none, or no hit of yours yet): the Parser page's readout.</summary>
     string FarmDpsText(DateTime now)
@@ -623,7 +623,7 @@ public partial class MainWindow
         var meters = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (always, label, tip) in new[]
         {
-            (false, "Only boss fights", L.T("The meter shows in boss fights and in Transcendence, Expeditions and Sanctuaries; outside them this page shows your DPS while you fight.")),
+            (false, "Only boss fights", L.T("The meter shows in boss fights and in Transcendence, Expeditions, Sanctuaries and Nightmare; outside them this page shows your DPS while you fight.")),
             (true, "Always on", L.F("The meter is always up, the open world and the Abyss too. It starts from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after {0:0} seconds without fighting.", BossParser.AlwaysIdleSeconds)),
         })
         {
@@ -666,7 +666,7 @@ public partial class MainWindow
         box.Children.Add(g);
         // Always on: what is kept, then the meter's rule (Bosses only's own sentence says the open world never counts: it is still never kept)
         var kept = !_parserPrefs.AlwaysOn ? ModeCounts(ParserModeNow)
-            : ParserModeNow == ParserMode.Bosses ? L.T("Keeps each boss pull in Transcendence, Expeditions and Sanctuaries.") : ModeCounts(ParserModeNow);
+            : ParserModeNow == ParserMode.Bosses ? L.T("Keeps each boss pull in Transcendence, Expeditions, Sanctuaries and Nightmare, and each world boss.") : ModeCounts(ParserModeNow);
         var counts = PT(kept + (_parserPrefs.AlwaysOn ? L.F(" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {0:0} seconds without fighting.", BossParser.AlwaysIdleSeconds) : ""), 12, FontWeights.Medium, "Muted");
         counts.TextWrapping = TextWrapping.Wrap; counts.Margin = new Thickness(2, 7, 0, 0);
         var under = new Grid();
@@ -888,20 +888,20 @@ public partial class MainWindow
     /// <summary>What the Parser is waiting for in its mode, and where you are.</summary>
     (string Head, string Line, string Tone) ParserStatus((ContentKind Kind, string Instance) where)
     {
-        bool kept = where.Kind is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
+        bool kept = Encounter.Dungeon(where.Kind);
         if (!_demo && _watcher.Packets is { } pr && !pr.On)
             return (L.T("The Parser is off"), L.T("It needs a setting turned on: Settings › Game reading."), "Warn");
         switch (ParserModeNow)
         {
             case ParserMode.Run:
                 return kept ? (L.F("In {0}", BossBook.Strip(where.Instance)), L.T("Full run counts from entering to leaving; this run started before the Parser could see it."), "Good")
-                    : (L.T("Waiting for a run"), L.T("Enter a Transcendence, an Expedition or a Sanctuary: the run counts from there to leaving, every boss a split."), "Faint");
+                    : (L.T("Waiting for a run"), L.T("Enter a Transcendence, an Expedition, a Sanctuary or a Nightmare instance: the run counts from there to leaving, every boss a split."), "Faint");
             case ParserMode.Fights:
                 var zone = _demo ? "" : ParserFights?.Zone ?? "";
                 return (L.T("Waiting for a fight"), L.F("Your next kill or hit starts one{0}. It ends {1:0} seconds after the last.", kept ? L.F(" in {0}", BossBook.Strip(where.Instance)) : zone.Length > 0 ? L.F(" in {0}", zone) : "", BossParser.PauseSeconds), "Good");
             default:
-                return kept ? (L.F("Ready in {0}", BossBook.Strip(where.Instance)), L.F("{0}. The next boss you pull starts a fight here; trash and adds never do.", Encounter.KindName(where.Kind)), "Good")
-                    : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions and Sanctuaries only. Enter one and pull a boss."), "Faint");
+                return kept ? (L.F("Ready in {0}", BossBook.Strip(where.Instance)), L.F("{0}. The next boss you pull starts a fight here; trash and adds never do.", PK.KindWord(Encounter.KindName(where.Kind))), "Good")
+                    : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions, Sanctuaries and Nightmare, and for world bosses. Enter one and pull a boss, or fight a world boss."), "Faint");
         }
     }
 
@@ -1030,9 +1030,9 @@ public partial class MainWindow
         {
             var empty = PT(past.Count > 0 ? L.F("No {0} of this kind yet.", Noun(mode, 2)) : mode switch
             {
-                ParserMode.Run => L.T("No runs kept yet. In Full run, each Transcendence, Expedition or Sanctuary run lands here, entering to leaving, with every boss as a split."),
+                ParserMode.Run => L.T("No runs kept yet. In Full run, each Transcendence, Expedition, Sanctuary or Nightmare run lands here, entering to leaving, with every boss as a split."),
                 ParserMode.Fights => L.T("No fights kept yet. In Every fight, each fight anywhere lands here, with your kills and deaths."),
-                _ => L.T("No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition or a Sanctuary lands here, with its group and timings."),
+                _ => L.T("No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and each world boss, lands here, with its group and timings."),
             } + L.T(" They stay on this PC."), 12.5, FontWeights.Normal, "Faint");
             empty.TextWrapping = TextWrapping.Wrap; empty.Margin = new Thickness(0, 4, 0, 6);
             body.Children.Add(empty);
@@ -1095,7 +1095,8 @@ public partial class MainWindow
         {
             ParserMode.Run => $"{(e.GameMode.Length > 0 ? e.GameMode + " · " : "")}{KindLabel(e)} · {L.F("{0} of {1} bosses", e.Splits.Count(x => x.Outcome == "kill"), e.Splits.Select(x => x.Boss).Distinct().Count())}{(e.YourKills > 0 ? L.F(" · {0} kills", e.YourKills) : "")}",
             ParserMode.Fights => $"{(place.Length > 0 && place != e.Kind && place != e.Title ? place + " · " : "")}{KindLabel(e)}{(e.YourDeaths > 0 && e.YourKills > 0 ? L.F(e.YourKills == 1 ? " · {0} kill" : " · {0} kills", e.YourKills) : "")}",
-            _ => $"{e.Place} · {KindLabel(e)}",
+            // a pull: its place and kind ("Nightmare" in Nightmare once, not twice)
+            _ => e.Place.Length == 0 || e.Place.Equals(e.Kind, StringComparison.OrdinalIgnoreCase) ? KindLabel(e) : $"{e.Place} · {KindLabel(e)}",
         };
         mid.Children.Add(PT(sub, 11.5, FontWeights.Medium, "Muted", trim: true));
         Grid.SetColumn(mid, 1); g.Children.Add(mid);

@@ -513,6 +513,94 @@ public static class ParserTests
             Check(!kept[0].HasDamage && kept[0].GroupDps(t) == 0, "...no damage from the game: none shown, none made up");
         }
 
+        // world bosses (Steven, 2026-11-17: "add boss names / bars etc for nightmare dungeons and world bosses etc and add them
+        // to the parser logs"): a pull of a boss the timers know is kept wherever it is fought, under the timers' name, its place
+        // the instance; any other boss out here, and trash, stay the live meter's only
+        {
+            var abyss = new WorldBossBook(null);
+            Check(abyss.Find("Executor Tamasa") is { Zone: "Reshanta's Root" } && abyss.Find("tamasa")?.Name == "Executor Tamasa" && abyss.Find("Kaira") == null && abyss.Find("Plains Wolf") == null && WorldBossBook.None.Find("Executor Tamasa") == null,
+                $"the world boss list: the Abyss's by full or short name, a short name two share matches neither, none by default: {abyss.Find("tamasa")?.Name}, {abyss.Find("Kaira")?.Name ?? "-"}");
+            var world = WorldBossBook.Of(("Soul Ruler Kashapa", "Eastern Altamia Highland"), ("Heretic Layla", "Rock Tomb Hill"));
+            var kept = new List<Encounter>();
+            var p = new BossParser(book) { Ended = kept.Add, World = world };
+            p.Place("Eastern Altamia Highland", false);
+            p.Take(new GroupChanged(t, new[] { Me, Ally }));
+            // trash in the open world: never kept
+            p.Take(new DamageDealt(t.AddSeconds(1), 1, 7001, 5_000, "Swoly", true));
+            p.Take(new UnitDied(t.AddSeconds(2), 7001, "Plains Wolf", false));
+            p.Tick(t.AddSeconds(40));
+            Check(kept.Count == 0 && p.Live == null, $"open-world trash makes no kept fight: {kept.Count} kept");
+            p.Take(new DamageDealt(t.AddSeconds(99), 1, 4400, 10_000, "Swoly", true));   // a hit just ahead of the pull
+            p.Take(new BossEngaged(t.AddSeconds(100), "Kashapa", 4400));
+            var live = p.Live;
+            Check(live is { Boss: "Soul Ruler Kashapa", Kind: "World boss", Instance: "Eastern Altamia Highland", Mode: "boss", WorldBoss: true } && live.Roster.Count == 2 && p.AlwaysLive?.Boss == "Soul Ruler Kashapa",
+                $"a world boss pulled in the open world is a pull, named as the timers name it, its place the instance: {live?.Boss}, {live?.Kind}, {live?.Instance}");
+            p.Take(new BossHealth(t.AddSeconds(101), 4400, 9_000_000, 10_000_000));
+            Check(p.Live?.BossHpLeft is { } hp0 && Math.Abs(hp0 - 0.9) < 1e-9, $"...with its HP bar: {p.Live?.BossHpLeft}");
+            p.Take(new DamageDealt(t.AddSeconds(110), 1, 4400, 40_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(115), 2, 4400, 30_000, "Aerin"));
+            p.Take(new DamageDealt(t.AddSeconds(116), 0, 4400, 5_000_000, Reason: 4));   // the crowd's HP fall: no one's row
+            p.Take(new BossHealth(t.AddSeconds(117), 4400, 3_900_000, 10_000_000));
+            p.Take(new UnitDied(t.AddSeconds(160), 4400, "Soul Ruler Kashapa", true));
+            var k0 = kept.FirstOrDefault();
+            Check(kept.Count == 1 && k0 is { Boss: "Soul Ruler Kashapa", Kind: "World boss", Instance: "Eastern Altamia Highland", Outcome: "kill", Mode: "boss" } && k0.Duration(t).TotalSeconds == 60,
+                $"...kept with its kill: {kept.Count} kept, {k0?.Boss} {k0?.Outcome} in {k0?.Instance} after {k0?.Duration(t).TotalSeconds} s");
+            Check(k0 != null && k0.You?.BossDamage == 50_000 && k0.Roster.First(f => f.Name == "Aerin").BossDamage == 30_000 && k0.Credited == 80_000 && k0.Members.Count() == 2 && k0.Coverage == null && k0.TopsShown,
+                $"...your damage and your group's rows only (the hit ahead of the pull in it), the crowd's HP fall in no row and no coverage figure: you {k0?.You?.BossDamage}, group {k0?.Credited}, coverage {k0?.Coverage?.ToString() ?? "none"}");
+            Check(k0 != null && FightRecords.KeyOf(k0) == "soul ruler kashapa|eastern altamia highland|" && FightRecords.Counts(k0),
+                $"...its personal bests keyed by the boss and its place, never the spawn: {(k0 != null ? FightRecords.KeyOf(k0) : "-")}");
+            // a boss the timers don't know: the live meter's only, as before
+            p.Take(new BossEngaged(t.AddSeconds(300), "Wandering Ogre", 4500));
+            p.Take(new DamageDealt(t.AddSeconds(301), 1, 4500, 1_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(320), 1, 4500, 1_000, "Swoly", true));
+            p.Take(new UnitDied(t.AddSeconds(330), 4500, "Wandering Ogre", true));
+            p.Tick(t.AddSeconds(400));
+            Check(kept.Count == 1 && p.Live == null, $"...a boss the timers don't know isn't kept out here: {kept.Count} kept");
+            // walking off a world boss: left, never a wipe
+            p.Take(new BossEngaged(t.AddSeconds(500), "Heretic Layla", 4600));
+            p.Take(new DamageDealt(t.AddSeconds(505), 1, 4600, 20_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(515), 1, 4600, 20_000, "Swoly", true));
+            p.Tick(t.AddSeconds(515 + BossParser.WipeQuietSeconds));
+            Check(kept.Count == 2 && kept[1] is { Boss: "Heretic Layla", Outcome: "left", Instance: "Rock Tomb Hill" } && kept[1].End == t.AddSeconds(515),
+                $"...a world boss gone quiet is left at your last damage, not a wipe: {kept.ElementAtOrDefault(1)?.Outcome}");
+            // Every fight: the open world's fight is never kept, the world boss's pull still is
+            p.SetMode(ParserMode.Fights, t.AddSeconds(600));
+            p.Take(new BossEngaged(t.AddSeconds(610), "Soul Ruler Kashapa", 4700));
+            p.Take(new DamageDealt(t.AddSeconds(612), 1, 4700, 9_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(640), 1, 4700, 9_000, "Swoly", true));
+            p.Take(new BossEnded(t.AddSeconds(650), 4700, BossOutcome.Wipe));
+            p.Tick(t.AddSeconds(800));
+            Check(kept.Count == 3 && kept[2] is { Mode: "boss", Outcome: "wipe", WorldBoss: true } && !kept.Any(e => e.OpenWorld),
+                $"...in Every fight too the pull is kept, the open world's fight never: {string.Join(", ", kept.Select(e => $"{e.Mode} {e.Kind} {e.Outcome}"))}");
+        }
+
+        // Nightmare: its instances' boss pulls are kept like a dungeon's (their loot stays uncounted, instances.txt "Ignored")
+        {
+            var shared = BossBook.Shared;
+            Check(shared.KindOf("Nightmare") == ContentKind.Nightmare && shared.KindOf("Nightmare Altar") == ContentKind.Nightmare && shared.Find("Nightmare Altar", "Divided Aponos") is { Final: true } && !shared.Knows("Nightmare"),
+                "the boss list files Nightmare and Nightmare Altar (Divided Aponos, its final boss; Nightmare with no bosses listed)");
+            var kept = new List<Encounter>();
+            var p = new BossParser(shared) { Ended = kept.Add };
+            p.Take(new InstanceEntered(t, ContentKind.Other, "Nightmare Altar", 300));
+            p.Take(new GroupChanged(t, new[] { Me, Ally }));
+            Check(p.Where.Kind == ContentKind.Nightmare, $"entering Nightmare Altar is a Nightmare instance: {p.Where.Kind}");
+            p.Take(new BossEngaged(t.AddSeconds(10), "Divided Aponos", 990));
+            p.Take(new DamageDealt(t.AddSeconds(12), 1, 990, 60_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(40), 2, 990, 20_000, "Aerin"));
+            p.Take(new BossEnded(t.AddSeconds(60), 990, BossOutcome.Kill));
+            Check(kept.Count == 1 && kept[0] is { Boss: "Divided Aponos", Kind: "Nightmare", Instance: "Nightmare Altar", Outcome: "kill", FinalBoss: true } && kept[0].You?.BossDamage == 60_000,
+                $"...its boss pull is kept, named, with its kill: {kept.FirstOrDefault()?.Boss} {kept.FirstOrDefault()?.Kind} {kept.FirstOrDefault()?.Outcome}");
+            p.Take(new InstanceEntered(t.AddSeconds(100), ContentKind.Other, "Nightmare", 301));
+            p.Take(new BossEngaged(t.AddSeconds(110), "Unlisted Test Boss", 991));
+            p.Take(new DamageDealt(t.AddSeconds(111), 1, 991, 5_000, "Swoly", true));
+            p.Take(new UnitDied(t.AddSeconds(140), 991, "Unlisted Test Boss", true));
+            Check(kept.Count == 2 && kept[1] is { Boss: "Unlisted Test Boss", Kind: "Nightmare", Instance: "Nightmare", Outcome: "kill" },
+                $"...Nightmare, whose bosses the list doesn't name, keeps the game's name: {kept.ElementAtOrDefault(1)?.Boss} {kept.ElementAtOrDefault(1)?.Kind}");
+            var q = new BossParser(shared);
+            q.ScreenPlace("Ignored", "Nightmare");
+            Check(q.Where.Kind == ContentKind.Nightmare, $"...the screen's place (the loot log's \"Ignored\" kind) is Nightmare too: {q.Where.Kind}");
+        }
+
         // one fight per boss: a new boss ends the fight under way and starts afresh
         {
             var (p, kept) = New();

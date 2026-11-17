@@ -36,6 +36,8 @@ public sealed partial class TrackerSession
     BossParser NewFights()
     {
         var p = new BossParser();
+        // the world bosses whose pulls are kept: the timers' field bosses (as the world map last listed them) and the Abyss's
+        p.World = new WorldBossBook(() => Packets?.Bosses.Named() ?? new List<(string Name, string Place)>());
         p.Ended = e =>
         {
             _toSave.Enqueue(e);
@@ -91,7 +93,9 @@ public sealed partial class TrackerSession
             if (FightFeed != null) for (int i = 0; i < 20_000 && FightFeed.NextBossEvent() is { } ev; i++) p.Take(ev);
             else if (!_parserWired && Packets != null) for (int i = 0; i < 20_000 && Packets.NextBossEvent() is { } ev; i++) p.Take(ev);
             var cur = Instances.Current;
-            p.ScreenPlace(cur?.Kind, cur?.Zone);
+            // a Nightmare instance is never a loot run (its loot isn't counted), so the run log holds none there: the zone names it
+            if (cur == null && Zone is { Length: > 0 } z && BossBook.Shared.KindOf(z) == ContentKind.Nightmare) p.ScreenPlace(null, z);
+            else p.ScreenPlace(cur?.Kind, cur?.Zone);
             p.Place(Zone, Ocr.ZoneLocator.IsAbyss(Zone));
             var now = DateTime.UtcNow;
             p.Tick(now);

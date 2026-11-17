@@ -1,12 +1,17 @@
 # Bosses of the instances the tracker's Parser keeps fights for (Parser/BossBook.cs): "Instance|Kind|Boss|final", in route
 # order, "final" on the instance's last boss (killing it clears the instance), "wave" on a wave stage (Ferocious Horn Den's
 # Totem room: six Mau Totem Shamans and their adds, no single boss): a split of its own in Full run, never a boss pull. Kinds: Expedition, Sanctuary (the game's
-# 10-player raids). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart.
+# 10-player raids), Nightmare (the Nightmare instances; their loot stays uncounted, data/instances.txt "Ignored", but their
+# boss pulls are kept). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart.
+# World bosses are not listed here: the Parser takes their names and places from the boss timers (Parser/WorldBosses.cs).
 # An instance listed here keeps fights with its listed bosses only (trash, elites and adds never make one); an instance not
 # listed keeps fights with what the game itself marks a boss. A line "Instance|Kind" with no boss only files the instance.
 # Source: the per-dungeon pages of https://metabot.gg/en/aion-2/dungeons (2026-11-13); Snowfield of Sorrow from Inven Global
 # (2026-09). Unsure, left out: first-room machines in the Sanctuaries (Central Abyss Fusion Reactor, Muspel Guardian Statue,
 # Surveillance Device, Hydraulic Press); final flags for Deus Research Base and Fire Temple are from route order.
+# Nightmare: https://metabot.gg/en/aion-2/dungeons/nightmare-altar (2026-11-17: Divided Aponos, its only and final boss,
+# "Stage 1: Nightmare Altar (Hell)"); https://metabot.gg/en/aion-2/dungeons/nightmare (2026-11-17) lists no bosses, so
+# Nightmare is filed with none and its pulls keep the game's names.
 Abyssal Horn Den|Expedition|Kapu|
 Abyssal Horn Den|Expedition|Dhakan|
 Abyssal Horn Den|Expedition|Gargaum|final
@@ -68,3 +73,5 @@ Corroded Decontamination Facility|Sanctuary|Black Blood Blatt|
 Corroded Decontamination Facility|Sanctuary|Devouring Klawfly|
 Corroded Decontamination Facility|Sanctuary|Terminator Bargott|final
 Snowfield of Sorrow|Sanctuary|Storm Legion Commander Deltras|final
+Nightmare|Nightmare
+Nightmare Altar|Nightmare|Divided Aponos|final
