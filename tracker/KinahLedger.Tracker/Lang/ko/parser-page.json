@@ -127,7 +127,7 @@
  "Last run": "최근 런",
  "Last fight": "최근 전투",
  "Last pull": "최근 보스 전투",
- "Every record of this character, kept on this PC only: never uploaded. Each is kept in the mode it was counted in.": "이 캐릭터의 모든 기록은 이 PC에만 저장되고 업로드되지 않아요. 각 기록은 집계된 모드에 맞춰 보관돼요.",
+ "Every record of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers. Each is kept in the mode it was counted in.": "이 캐릭터의 모든 기록은 이 PC에 저장돼요. 공유 탭에서 kinahledger.com 프로필에 내 보스 최고 기록 표시를 켜지 않으면 전투 정보는 PC 밖으로 나가지 않아요. 켜면 보스별 내 최고 처치 기록만 프로필로 보내지고, 파티원의 수치는 보내지 않아요. 각 기록은 집계된 모드에 맞춰 보관돼요.",
  "Any instance": "모든 인던",
  "Any boss": "모든 보스",
  "Show one instance's runs": "한 인던의 런만 보기",

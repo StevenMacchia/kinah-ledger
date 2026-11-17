@@ -308,6 +308,16 @@
                 </StackPanel>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
+              <!-- Boss bests on the profile (2026-11-15, Upload/BossBests.cs): off by default; only the player's own figures -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Show my boss bests on my kinahledger.com profile"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Nothing about your fights leaves your PC unless this is on. Then only your own best kill on each boss goes to your signed-in profile, for you alone; your group's numbers stay on this PC."/>
+                </StackPanel>
+                <CheckBox x:Name="BossBestsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show my boss bests on my kinahledger.com profile"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>

@@ -42,6 +42,8 @@ public sealed record OptionsChoice(
     public double WindowScale { get; init; } = 1;
     /// <summary>Options › General › Keep above other windows (0.10.26). Off by default.</summary>
     public bool AlwaysOnTop { get; init; }
+    /// <summary>Options › Sharing › Show my boss bests on my kinahledger.com profile (2026-11-15, Upload/BossBests.cs). Off by default.</summary>
+    public bool BossBests { get; init; }
 }
 
 /// <summary>
@@ -307,7 +309,7 @@ public partial class MainWindow
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
         { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Quests = _prefs.Quests, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts, InventoryDetails = _prefs.InventoryDetails, PacketReading = _prefs.PacketReading, PacketState = _watcher.Packets.State,
-          WindowScale = Math.Round(Math.Clamp(_prefs.WindowScale, MinWindowScale, MaxWindowScale), 2), AlwaysOnTop = _prefs.AlwaysOnTop };
+          WindowScale = Math.Round(Math.Clamp(_prefs.WindowScale, MinWindowScale, MaxWindowScale), 2), AlwaysOnTop = _prefs.AlwaysOnTop, BossBests = _prefs.ShareBossBests };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -370,6 +372,7 @@ public partial class MainWindow
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;
         _prefs.HelpImproveCounting = c.HelpCounting; ApplyCounting();   // with sharing too: off with either
+        if (c.BossBests != was.BossBests) SetBossBests(c.BossBests);   // Ui/MainWindow.BossBests.cs
         ApplyRareDrops(c, was);   // the watch list and the chime (Ui/MainWindow.RareWatch.cs)
         if (c.ShowAccuracy != was.ShowAccuracy) { _prefs.ShowAccuracy = c.ShowAccuracy; _accChipSig = _accSig = ""; FillAccuracyCard(); UpdateHud(); }
         if (c.StartWithWindows != was.StartWithWindows)

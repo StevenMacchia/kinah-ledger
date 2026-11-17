@@ -180,6 +180,7 @@ public partial class MainWindow : Window
         InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
         InitQuests(watch);   // the completed quests and the points, from quests.json (Ui/MainWindow.Quests.cs)
         InitQuestUpload();   // the completed quests ride the upload batch (Ui/MainWindow.QuestsPage.cs)
+        InitBossBests();   // your own boss bests ride it too, when you turned that on (Ui/MainWindow.BossBests.cs)
         InitParser(watch);   // the Parser page, its overlay and its shortcut (Ui/MainWindow.Parser.cs)
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;

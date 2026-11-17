@@ -2376,6 +2376,17 @@ public static partial class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-general-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
+        // Sharing scrolled to the profile group (2026-11-15): Show my boss bests on my kinahledger.com profile, below the fold
+        {
+            var o = new OptionsWindow(w, OptionsWindow.Page.Sharing) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            DoEvents();
+            var at = o.BossBestsChk.TranslatePoint(new Point(0, 0), (UIElement)o.Scroller.Content);
+            o.Scroller.ScrollToVerticalOffset(Math.Max(0, at.Y - 260));
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-sharing-profile{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
         // In game at Rare drops (2026-10-26): a sample watch list, the chime and its volume
         OptionsWindow.ShotRareDrops(w, Path.Combine(dir, $"options-ingame-rare{(skin != null ? "-" + skin : "")}.png"), (e, file) => Save(e, file, 0));
         // Place the panel… (In game): the guide over a dark stand-in for the game, as the approved mock draws it
