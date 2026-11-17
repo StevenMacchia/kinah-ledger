@@ -28,7 +28,14 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserHideNamesChk = null!;
+    /// <summary>The share picture's shortcut as picked here ("Off" for none), its field and the line under it.</summary>
+    string _parserShareKey = ParserPrefs.DefaultHotkey;
+    TextBox? _parserShareKeyBox;
+    TextBlock? _parserShareKeyHint;
+    Button? _parserShareKeyOff;
+    bool _parserShareCapturing;
+    const string ShareKeyHintText = "Copies a picture of the meter, the fight under way or the last one, from anywhere, click-through on too. Off until you pick a key.";
 
     void LoadParser()
     {
@@ -45,6 +52,9 @@ public partial class OptionsWindow
         _parserExpandedChk.IsChecked = p.Expanded;
         _parserCritChk.IsChecked = p.CritNow != "none" || p.BackNow != "none";
         _parserHealBarsChk.IsChecked = p.HealBars;
+        _parserHideNamesChk.IsChecked = p.ShareHideNames;
+        _parserShareKey = Platform.Hotkey.Parse(p.ShareHotkey) is { } sk ? sk.ToString() : ParserPrefs.DefaultHotkey;
+        RefreshShareKey();
         // the slider shows the saved width; opening Settings never moves the meter (it reset the meter to the base width,
         // dropping the expanded meter's extra: Steven, 2026-11-15, "should never revert unless you change it")
         _parserWidthLoading = true;
@@ -62,9 +72,9 @@ public partial class OptionsWindow
     /// </summary>
     string _parserSnap = "";
     string ParserSnap() => _parserLabel == null ? "" : string.Join("|",
-        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk }
+        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
             .Select(c => c.IsChecked == true ? "1" : "0"))
-        + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0);
+        + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0) + "|" + _parserShareKey;
     /// <summary>Something in the Parser group differs from parser.json: Save lights up for it.</summary>
     internal bool ParserDirty => _parserLabel != null && ParserSnap() != _parserSnap;
     double _parserWidthLoaded = double.NaN;
@@ -91,6 +101,8 @@ public partial class OptionsWindow
         p.DpsActive = _parserActiveChk.IsChecked == true;
         p.Expanded = _parserExpandedChk.IsChecked == true;
         p.HealBars = _parserHealBarsChk.IsChecked == true;
+        p.ShareHideNames = _parserHideNamesChk.IsChecked == true;
+        p.ShareHotkey = _parserShareKey;
         // crit and back attacks: the switch picks the kinds the hits carry (crit: result 3, back: side 1); off is the release's default (none)
         CritSwitch(p, _parserCritChk.IsChecked == true);
         // the slider's width only when it was moved here: a width dragged on the overlay since stays
@@ -142,6 +154,10 @@ public partial class OptionsWindow
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
         _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
         _parserSeparateChk.Click += (_, _) => DrawParserLooks();
+        // the meter's share picture (Ui/MeterShare.cs): other members' names hidden on it, and a shortcut of its own
+        _parserHideNamesChk = Row("Hide other names", "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.", "Parser share picture hide other names");
+        stack.Children.Add(Styled(new Border(), "Divider"));
+        stack.Children.Add(BuildShareKeyRow());
         // the overlay's look, first in the group (Steven, 2026-11-14: "idk how to change the style"): the four looks that draw
         // a fight, each drawn in a boss fight; a click picks it, the same choice as The panel › Panel look
         stack.Children.Insert(0, Styled(new Border(), "Divider"));
@@ -211,6 +227,107 @@ public partial class OptionsWindow
         Grid.SetColumn(right, 1); g.Children.Add(right);
         return g;
     }
+
+    /// <summary>
+    /// Share picture shortcut: recorded as the In game shortcuts are (Change, then the keys; Esc cancels), Off by default, never
+    /// the start/stop, That was wrong or overlay key. Saved with the Parser's switches.
+    /// </summary>
+    FrameworkElement BuildShareKeyRow()
+    {
+        var box = new StackPanel { Margin = new Thickness(18, 13, 18, 15) };
+        box.Children.Add(Styled(new TextBlock { Text = L.T("Share picture shortcut") }, "RowTitle"));
+        _parserShareKeyHint = Styled(new TextBlock { Text = L.T(ShareKeyHintText) }, "RowHint");
+        box.Children.Add(_parserShareKeyHint);
+        var row = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        _parserShareKeyBox = new TextBox { Width = 190, IsReadOnly = true, HorizontalContentAlignment = HorizontalAlignment.Center, FontFamily = new FontFamily("Consolas"), FontSize = 14, Cursor = Cursors.Arrow, Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetName(_parserShareKeyBox, "Share picture shortcut");
+        var change = new Button { Content = L.T("Change"), Margin = new Thickness(0, 0, 8, 0) };
+        _parserShareKeyOff = new Button { Content = L.T("Turn off") };
+        AutomationProperties.SetName(_parserShareKeyOff, "Turn off the share picture shortcut");
+        change.Click += (_, _) => StartShareCapture();
+        _parserShareKeyBox.PreviewMouseLeftButtonDown += (_, e) => { if (!_parserShareCapturing) { StartShareCapture(); e.Handled = true; } };
+        _parserShareKeyBox.PreviewKeyDown += (_, e) =>
+        {
+            if (!_parserShareCapturing) return;
+            e.Handled = true;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (key == Key.Escape) { EndShareCapture(); Keyboard.ClearFocus(); return; }
+            if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+            RecordShareKey(Keyboard.Modifiers, key);
+        };
+        _parserShareKeyBox.LostKeyboardFocus += (_, _) => EndShareCapture();
+        _parserShareKeyOff.Click += (_, _) => { _parserShareKey = ParserPrefs.DefaultHotkey; RefreshShareKey(); Refresh(); };
+        row.Children.Add(_parserShareKeyBox); row.Children.Add(change); row.Children.Add(_parserShareKeyOff);
+        box.Children.Add(row);
+        RefreshShareKey();
+        return box;
+    }
+
+    void RefreshShareKey()
+    {
+        if (_parserShareKeyBox == null) return;
+        bool on = Platform.Hotkey.Parse(_parserShareKey) != null;
+        _parserShareKeyBox.Text = _parserShareCapturing ? L.T("Press the keys…") : on ? _parserShareKey : L.T("Off");
+        if (_parserShareKeyOff != null) _parserShareKeyOff.IsEnabled = on;
+    }
+
+    void StartShareCapture()
+    {
+        if (_parserShareKeyBox == null || _parserShareKeyHint == null) return;
+        if (_capturing) EndCapture();   // one field records at a time
+        _parserShareCapturing = true;
+        _host.SuspendHotkey(true);
+        _parserShareKeyHint.Text = L.T("Hold Ctrl and Shift (or Alt and Shift) and press a letter, or Ctrl, Alt or Shift with an F key. Esc cancels.");
+        _parserShareKeyHint.Foreground = (Brush)FindResource("Accent");
+        _parserShareKeyBox.Focus();
+        RefreshShareKey();
+    }
+
+    void EndShareCapture()
+    {
+        if (!_parserShareCapturing) return;
+        _parserShareCapturing = false;
+        _host.SuspendHotkey(false);
+        if (_parserShareKeyHint != null) { _parserShareKeyHint.Text = L.T(ShareKeyHintText); _parserShareKeyHint.Foreground = (Brush)FindResource("Muted"); }
+        RefreshShareKey();
+    }
+
+    /// <summary>A combination pressed while recording the share shortcut: refused with the reason under it, else taken. The reason, or null.</summary>
+    string? RecordShareKey(ModifierKeys mods, Key key)
+    {
+        var text = new Platform.Hotkey(mods, key).ToString();
+        var why = Platform.Hotkey.Refusal(mods, key)
+            ?? (Platform.Hotkey.Same(text, _edit.Hotkey) ? L.T("That's the start/stop shortcut. Pick another key.")
+            : Platform.Hotkey.Same(text, _edit.MarkWrongKey) ? L.T("That's the That was wrong shortcut. Pick another key.")
+            : Platform.Hotkey.Same(text, ParserPrefs.Load().Hotkey) ? L.T("That's the Parser overlay's shortcut. Pick another key.") : null);
+        if (why != null)
+        {
+            _parserShareKeyHint!.Text = why;
+            _parserShareKeyHint.Foreground = (Brush)FindResource("Warn");
+            return why;
+        }
+        _parserShareCapturing = false;
+        _host.SuspendHotkey(false);
+        _parserShareKey = text;
+        RefreshShareKey();
+        Refresh();
+        _parserShareKeyHint!.Text = L.F("{0} it is. Save to start using it.", text);
+        _parserShareKeyHint.Foreground = (Brush)FindResource("Good");
+        Keyboard.ClearFocus();
+        return null;
+    }
+
+    /// <summary>For the options test: a combination recorded in the share shortcut's field; the reason it was refused, or null. And the key picked.</summary>
+    internal string? RecordShareKeyForTest(ModifierKeys mods, Key key)
+    {
+        StartShareCapture();
+        var why = RecordShareKey(mods, key);
+        if (why != null) EndShareCapture();
+        return why;
+    }
+    internal string ShareKeyForTest => _parserShareKey;
+    internal void ReloadParserForTest() => LoadParser();
+    internal CheckBox ParserHideNamesForTest => _parserHideNamesChk;
 
     /// <summary>"100%" at the default width, "194%" at the widest.</summary>
     static string WidthWords(double w) => $"{Math.Round(w / HudStackLook.FightWidthDefault * 100):0}%";
@@ -332,6 +449,6 @@ public partial class OptionsWindow
     internal CheckBox ParserHealBarsForTest => _parserHealBarsChk;
 
     /// <summary>For the options test: every switch's title in the Parser group.</summary>
-    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk }
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }

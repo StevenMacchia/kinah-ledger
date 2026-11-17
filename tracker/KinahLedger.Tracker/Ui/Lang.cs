@@ -66,6 +66,14 @@ public static class L
         _ => local.ToString("ddd MMM d, HH:mm:ss", CultureInfo.InvariantCulture),
     };
 
+    /// <summary>A day as the language writes it: "Nov 13, 2026", "2026년 11월 13일", "2026年11月13日".</summary>
+    public static string Day(DateTime local) => Code switch
+    {
+        "ko" => local.ToString("yyyy년 M월 d일", new CultureInfo("ko-KR")),
+        "zh-TW" => local.ToString("yyyy年M月d日", new CultureInfo("zh-TW")),
+        _ => local.ToString("MMM d, yyyy", CultureInfo.InvariantCulture),
+    };
+
     /// <summary>Where the pick is kept (beside the other per-PC files; the tests' own folder in a test run).</summary>
     static string PickPath => Path.Combine(KinahLedger.Data.DictionaryCache.Dir, "language.txt");
 

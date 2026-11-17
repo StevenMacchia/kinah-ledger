@@ -41,6 +41,7 @@ public static partial class WpfApp
                 Draw("options", () => ShotOptions(settings, d));
                 Draw("parser", () => ShotParser(settings, d, "all", null));
                 Draw("themes", () => ShotParser(settings, d, "themes", null));
+                Draw("meter share", () => ShotParser(settings, d, "share", null));
                 Draw("heals", () => ShotParser(settings, d, "heals", null));
                 Draw("inventory", () => ShotInventory(settings, d, null));
                 Draw("timers page", () => ShotTimersPage(settings, d, null));

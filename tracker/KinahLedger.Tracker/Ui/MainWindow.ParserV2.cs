@@ -112,7 +112,8 @@ public partial class MainWindow
                 extras.Add(why);
             }
         }
-        page.Children.Add(ParserCommand.Hero(v, ctx, live, extras));
+        // Share on the hero's line, before the clock: a picture of the meter (Ui/MeterShare.cs)
+        page.Children.Add(ParserCommand.Hero(v, ctx, live, extras, Shareable(e) ? MeterShareButton(e) : null));
         FrameworkElement body = ctx.Tab switch
         {
             "Compare" => ParserCommand.Compare(v),
