@@ -40,7 +40,9 @@ public static class HudLooks
         new(HudThemes.Neon, L.T("Neon"), L.T("An arcade cabinet's glowing rim; pickups streak up like combo scores"), HudThemes.Wacky),
         new(HudThemes.Goo, L.T("Goo"), L.T("A squishy candy jelly; pickups bounce out as bubbles"), HudThemes.Wacky),
         new(HudThemes.Fighter, L.T("Fighter"), L.T("A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup"), HudThemes.Tactical),
-        new(HudThemes.Scorebug, L.T("Scorebug"), L.T("A tournament broadcast: slanted blocks and a ranked leaderboard"), HudThemes.Tactical),
+        // Arena keeps the Scorebugs key, so a saved Scorebug carries over (Steven, 2026-11-17)
+        new(HudThemes.Scorebug, L.T("Arena"), L.T("A stadiums video board: a black tower, LED bars in class colours, amber figures"), HudThemes.Tactical),
+        new(HudThemes.Studio, L.T("Studio"), L.T("A daytime studio package: white glossy cards, crisp dark type, a thick glossy bar on each card"), HudThemes.Tactical),
         new(HudThemes.Holo, L.T("Holo"), L.T("Projected cyan glass with clipped corners; a scan line sweeps each pickup"), HudThemes.Tactical),
         new(HudThemes.Vhs, L.T("VHS"), L.T("A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup"), HudThemes.Glitch),
         new(HudThemes.Corrupt, L.T("Corrupted"), L.T("A broken signal: torn slices and colour ghosts round steady figures"), HudThemes.Glitch),

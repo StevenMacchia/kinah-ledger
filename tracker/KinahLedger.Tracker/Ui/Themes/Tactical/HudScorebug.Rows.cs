@@ -1,236 +1,290 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using static KinahLedger.Ui.HudKit;
 
 namespace KinahLedger.Ui;
 
 sealed partial class HudScorebug
 {
-    /// <summary>
-    /// One member as a broadcast leaderboard row (Steven, 2026-11-17: "better looks that doesn't crowd everything and
-    /// prioritizes the bar"): a rank tab (gold, silver, bronze for the podium), the class's colour as the team stripe, and the
-    /// name plate as the bar: filled in the class's colour to the member's part of the top, a bright strip along its foot. On it:
-    /// the class emblem, the name and its marks, Combat Power small under the name (and a healer's healing a second). Then the
-    /// stat cells: the DPS big, the share small (the damage and crit when expanded). You: the plate goes light and your DPS cell
-    /// red, the way a broadcast features its player. Short of room a plate goes to its glyph, then YOU, the emblem, then the CP
-    /// (the skills card says them all): never a figure cut. Every shape is drawn in one pass; the text sits on top.
-    /// </summary>
-    sealed class ScoreRow : IThemeRow
+    // ================================================================ the broadcast kit (Arena and Studio)
+
+    static readonly Color RedDeep = Color.FromRgb(0x9E, 0x0F, 0x20), Mint = Color.FromRgb(0x8D, 0xF5, 0xBF), Coral = Color.FromRgb(0xFF, 0x6B, 0x78),
+        Amber = Color.FromRgb(0xFF, 0xC2, 0x3D), Quiet = Color.FromRgb(0x8B, 0x92, 0xA3), BoardLine = Color.FromRgb(0x2A, 0x2F, 0x3B);
+
+    /// <summary>A text in a colour, the look's condensed face (or <paramref name="st"/>), tabular digits.</summary>
+    static TextBlock C(string s, double size, Color c, FontWeight w, FontStretch? st = null) => Tt(s, size, Frozen(c), Face, w, st ?? Tight);
+    static readonly FontStretch Semi = FontStretches.SemiCondensed;
+    static string Up(string s) => s.ToUpper(CultureInfo.CurrentCulture);
+
+    /// <summary>A soft shadow (or a glow in <paramref name="c"/> with no depth).</summary>
+    static DropShadowEffect Glow(double blur, double depth, double opacity, Color? c = null)
     {
-        public const double H = 38, Pitch = 41;
-        const double Sl = H * .1763, Gap = 2.5;
-        static readonly Color PlateC = Color.FromRgb(0x17, 0x1A, 0x23), DpsC = Color.FromRgb(0x0A, 0x0C, 0x11), PctC = Color.FromRgb(0x20, 0x24, 0x2E);
-        readonly Grid _root = new() { Height = H };
-        readonly Grid _text = new();
-        readonly TacSketch _art;
-        readonly TextBlock _rank = T("", 18, InkB), _name = T("", 15.5, White), _dps = T("", 17.5, White), _pct = T("", 13, Grey, FontWeights.SemiBold),
-            _cp = T("", 11, Frozen(Color.FromRgb(0x8A, 0x91, 0xA3)), FontWeights.SemiBold), _dmg = T("", 14, White), _crit = T("", 12.5, Grey, FontWeights.SemiBold);
-        /// <summary>The plate's two lines of words: the name and its marks; under it, Combat Power and a healer's healing.</summary>
-        readonly StackPanel _top = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
-        readonly StackPanel _under = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, -1, 0, 0) };
-        /// <summary>The two lines, centred on the plate above its foot strip.</summary>
-        readonly StackPanel _tiers = new() { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 4) };
-        readonly Border _iconHost = new() { Width = 22, Height = 22, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
-        readonly TextBlock _none = new();
-        string _cls = "\0";
-        readonly List<FrameworkElement> _keep = new(), _keepUnder = new();
-        readonly List<(FrameworkElement, FrameworkElement?)> _give = new(), _giveUnder = new();
-        readonly double _dmgW, _critW;
-        readonly Grid _plate;
-        readonly System.Windows.Media.Effects.Effect _halo;
-        MeterMember? _m;
-        double _bar;
-        bool _expanded;
+        var d = new DropShadowEffect { BlurRadius = blur, ShadowDepth = depth, Direction = 270, Opacity = opacity, Color = c ?? Colors.Black };
+        d.Freeze();
+        return d;
+    }
+
+    /// <summary>A block whose left edge leans by <paramref name="l"/> and right edge by <paramref name="r"/> (its top further right).</summary>
+    static Geometry Slant(Rect r, double l, double rr)
+    {
+        var g = new StreamGeometry();
+        using (var x = g.Open())
+        {
+            x.BeginFigure(new Point(r.Left + l, r.Top), true, true);
+            x.LineTo(new Point(r.Right, r.Top), true, false);
+            x.LineTo(new Point(r.Right - rr, r.Bottom), true, false);
+            x.LineTo(new Point(r.Left, r.Bottom), true, false);
+        }
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>A lit panel: its colour from <paramref name="top"/> to <paramref name="bottom"/>, a sheen over its upper half, a bright top line and a dark foot.</summary>
+    static void Gloss(DrawingContext dc, Geometry g, Color top, Color bottom, double sheen = .2, double edge = .45)
+    {
+        var r = g.Bounds;
+        dc.DrawGeometry(Tac.Grad(true, (top, 0), (bottom, 1)), null, g);
+        dc.PushClip(g);
+        if (sheen > 0) dc.DrawRectangle(Tac.Grad(true, (Tac.A(Colors.White, sheen), 0), (Tac.A(Colors.White, sheen * .25), .5), (Tac.A(Colors.White, 0), .52)), null, r);
+        if (edge > 0) dc.DrawRectangle(Frozen(Tac.A(Colors.White, edge)), null, new Rect(r.Left, r.Top, r.Width, 1));
+        dc.DrawRectangle(Frozen(Tac.A(Colors.Black, .45)), null, new Rect(r.Left, r.Bottom - 1, r.Width, 1));
+        dc.Pop();
+    }
+
+    /// <summary>A cell: <paramref name="draw"/> as its ground, <paramref name="child"/> on it.</summary>
+    static Grid GCell(Action<DrawingContext, Size> draw, FrameworkElement? child, double h, Thickness pad)
+    {
+        var g = new Grid { Height = h };
+        g.Children.Add(new TacSketch(draw));
+        if (child != null) { child.Margin = pad; g.Children.Add(child); }
+        return g;
+    }
+
+    /// <summary>A slanted glossy cell in one colour.</summary>
+    static Grid GBlock(Color c, FrameworkElement? child, double h, Thickness pad, double l = 7, double r = 7, double sheen = .2) =>
+        GCell((dc, s) => Gloss(dc, Slant(new Rect(s), l, r), Tac.Mix(c, Colors.White, .12), Tac.Mix(c, Colors.Black, .22), sheen), child, h, pad);
+
+    /// <summary>A rank's colour: gold, silver, bronze for the podium, slate below it, red for you.</summary>
+    static Color RankColor(MeterMember m) => m.You ? RedC : m.CpOnly ? SlateC : m.Rank switch { 1 => GoldTab, 2 => SilverTab, 3 => BronzeTab, _ => SlateC };
+
+    /// <summary>A row of LED segments in <paramref name="rect"/>, the first <paramref name="lit"/> of them lit in <paramref name="c"/>, the last lit one white-hot.</summary>
+    static void Leds(DrawingContext dc, Rect rect, double lit, Color c, double seg = 4, double gap = 1.6)
+    {
+        if (rect.Width < seg) return;
+        int n = Math.Max(1, (int)Math.Floor((rect.Width + gap) / (seg + gap)));
+        double step = (rect.Width + gap) / n, sw = step - gap;
+        int on = (int)Math.Round(n * Math.Clamp(lit, 0, 1));
+        if (lit > 0 && on == 0) on = 1;
+        var offB = Frozen(Tac.A(c, .13));
+        var onB = Tac.Grad(true, (Tac.Mix(c, Colors.White, .45), 0), (c, .45), (Tac.Mix(c, Colors.Black, .25), 1));
+        var head = Tac.Grad(true, (Tac.Mix(c, Colors.White, .8), 0), (Tac.Mix(c, Colors.White, .4), 1));
+        for (int i = 0; i < n; i++)
+            dc.DrawRoundedRectangle(i < on ? (i == on - 1 ? head : onB) : offB, null, new Rect(rect.X + i * step, rect.Y, sw, rect.Height), 1, 1);
+    }
+
+    /// <summary>
+    /// A line of parts fitted to <paramref name="host"/>'s room: while too wide, each part in <paramref name="give"/> takes its
+    /// short form (or goes, with none) in turn; with <paramref name="name"/>, the name trims first (never a 10-letter name).
+    /// </summary>
+    static void FitLine(FrameworkElement host, TextBlock? name, IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give)
+    {
+        double room = host.ActualWidth;
+        if (room <= 0) return;
+        if (name != null) { Tac.FitName(name, room, keep, give, nameMin: 22, nameFloor: Tac.NameFloor(name)); return; }
+        var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
+        double Wd(FrameworkElement e) { var v = e.Visibility; e.Visibility = Visibility.Visible; e.Measure(inf); double w = e.DesiredSize.Width; e.Visibility = v; return w; }
+        double fixedW = keep.Sum(Wd);
+        for (int level = 0; level <= give.Count; level++)
+        {
+            double w = fixedW;
+            for (int j = 0; j < give.Count; j++) w += j < level ? (give[j].Short is { } s ? Wd(s) : 0) : Wd(give[j].Full);
+            if (w <= room || level == give.Count)
+            {
+                for (int j = 0; j < give.Count; j++)
+                {
+                    give[j].Full.Visibility = j < level ? Visibility.Collapsed : Visibility.Visible;
+                    if (give[j].Short is { } s) s.Visibility = j < level ? Visibility.Visible : Visibility.Collapsed;
+                }
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A leaderboard row of either package: its ground, its words, and the two moments a row plays (a kill's glint crossing it,
+    /// <see cref="Sweep"/>; its entrance wiping in behind a slanted edge, <see cref="Enter"/>, the words on once it is in).
+    /// </summary>
+    abstract class BoardRow : IThemeRow
+    {
+        protected readonly Grid RootG = new();
+        /// <summary>The row's words (faded in after its entrance's wipe, so no figure is ever shown cut).</summary>
+        protected readonly Grid Words = new();
+        readonly TacSketch _fx;
+        protected MeterMember? M;
+        protected double Bar;
+        protected Action? Refit;
         /// <summary>A light crossing the row (a kill's glint over the winner), 0..1; -1 none.</summary>
         public double Sweep = -1;
-        /// <summary>The row's entrance: its plates wipe in behind a slanted edge (0..1), the words come on once they're in.</summary>
+        /// <summary>The row's entrance, 0..1.</summary>
         public double Enter = 1;
 
-        public FrameworkElement Root => _root;
+        public FrameworkElement Root => RootG;
 
-        public ScoreRow()
+        protected BoardRow(double h)
         {
-            _dps.Margin = new Thickness(0, 0, 9, 0); _pct.Margin = new Thickness(0, 1, 9, 0); _dmg.Margin = new Thickness(0, 0, 9, 0); _crit.Margin = new Thickness(0, 1, 9, 0);
-            // the stat cells sized for the widest real figure; the plate (the bar) gets the rest
-            _dmgW = Math.Max(60, Tac.FigCol(_dmg, "888.88M")); _critW = Math.Max(46, Tac.FigCol(_crit, "88%"));
-            var widths = new[] { 30.0, 9, double.NaN, Math.Max(62, Tac.FigCol(_dps, "888.8K")), Tac.FigCol(_pct, "88.8%", "100%", L.T("CP")), 0, 0, Sl };
-            foreach (var w in widths)
-            {
-                _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
-                _text.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
-            }
-            _art = new TacSketch(Draw);
-            Grid.SetColumnSpan(_art, widths.Length);
-            _root.Children.Add(_art);
-            Grid.SetColumnSpan(_text, widths.Length);
-            _root.Children.Add(_text);
-            _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.Margin = new Thickness(Sl - 1, 0, 0, 0);
-            Put(_rank, 0);
-            var plate = new Grid { Margin = new Thickness(Sl + 5, 0, 6, 0) };
-            plate.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); plate.ColumnDefinitions.Add(new ColumnDefinition());
-            plate.Children.Add(_iconHost);
+            RootG.Height = h;
+            _fx = new TacSketch(DrawFx);
+            Panel.SetZIndex(_fx, 10);
+            RootG.Children.Add(Words);
+            RootG.Children.Add(_fx);
+            RootG.SizeChanged += (_, _) => Refit?.Invoke();
+        }
+
+        public abstract void Set(MeterMember m, MeterContext c, bool fresh);
+
+        /// <summary>The moments drawn as far as <see cref="Sweep"/> and <see cref="Enter"/> say.</summary>
+        public void Apply()
+        {
+            if (Enter >= 1) RootG.ClearValue(UIElement.ClipProperty); else RootG.Clip = Wipe(-10, (Math.Max(RootG.ActualWidth, 300) + 20) * Enter, RootG.Height);
+            Words.Opacity = Enter >= 1 ? 1 : Enter > .85 ? (Enter - .85) / .15 : 0;
+            _fx.InvalidateVisual();
+        }
+
+        void DrawFx(DrawingContext dc, Size s)
+        {
+            if (Sweep is not (> 0 and < 1)) return;
+            double x = -60 + (s.Width + 120) * Sweep;
+            dc.DrawGeometry(Tac.Grad(false, (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x9A, 0xFF, 0xF4, 0xC8), .5), (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 1)), null, Tac.Lean(new Rect(x - 30, 0, 60, s.Height), 10));
+        }
+    }
+
+    /// <summary>
+    /// Arena's row, the stadium's video board (Steven picked it, 2026-11-17): a slanted position chip (gold, silver, bronze,
+    /// then dark; yours red), the class's glowing stripe and the name in capitals over its quiet line (Combat Power, deaths,
+    /// the TOP marks), the bar as LED segments in the class's colour glowing on the black board (a healer's healing as a green
+    /// line of segments under it, the heal figure at its end), the DPS big and the share small under it; with Details, the
+    /// damage and crit in a column of their own. Short of room the marks go to their glyphs, then the CP; never a figure cut.
+    /// </summary>
+    sealed class ArenaRow : BoardRow
+    {
+        public const double H = 34, Pitch = 37;
+        const double NameW = 108;
+        readonly Border _ground = new();
+        readonly Grid _rank;
+        readonly TacSketch _rankArt;
+        readonly TextBlock _rankT = C("", 17, Colors.White, FontWeights.Bold);
+        readonly Border _stripe = new() { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 4) };
+        readonly TextBlock _name = C("", 14, Colors.White, FontWeights.Bold, Semi);
+        readonly StackPanel _sub = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, -1, 0, 0) };
+        readonly Border _subHost = new();
+        readonly Grid _barCol = new() { Margin = new Thickness(0, 0, 8, 0) };
+        readonly TacSketch _leds;
+        readonly Border _healBox = new() { Background = Frozen(Tac.A(Colors.Black, .72)), Padding = new Thickness(4, 0, 4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
+        readonly TextBlock _heal = C("", 10.5, Mint, FontWeights.Bold, Semi);
+        readonly TextBlock _dps = C("", 20, Colors.White, FontWeights.Bold), _pct = C("", 10, Quiet, FontWeights.SemiBold, Semi),
+            _dmg = C("", 13.5, Colors.White, FontWeights.Bold), _crit = C("", 10, Quiet, FontWeights.SemiBold, Semi);
+        readonly StackPanel _more;
+        readonly double _moreW;
+        Color _rc;
+        bool _healer, _expanded;
+        double _healBar;
+
+        public ArenaRow() : base(H)
+        {
+            foreach (var w in new[] { 30.0, NameW, double.NaN, Tac.FigCol(_dps, "888.8K", "888,888") + 6, 0 })
+                Words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
+            _moreW = Math.Max(Tac.FigCol(_dmg, "888.88M"), Tac.FigCol(_crit, "88%")) + 10;
+            RootG.Children.Insert(0, _ground);
+            // the position chip
+            _rankArt = new TacSketch((dc, s) => Gloss(dc, Slant(new Rect(s), 0, 5), Tac.Mix(_rc, Colors.White, .12), Tac.Mix(_rc, Colors.Black, .22), .3));
+            _rank = new Grid { Width = 26, Height = 24, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            _rank.Children.Add(_rankArt);
+            _rankT.HorizontalAlignment = HorizontalAlignment.Center; _rankT.Margin = new Thickness(-2, 0, 0, 1);
+            _rank.Children.Add(_rankT);
+            Words.Children.Add(_rank);
+            // the stripe and the name over its quiet line
+            var nameCol = new Grid { Margin = new Thickness(0, 0, 6, 0) };
+            nameCol.Children.Add(_stripe);
+            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
-            _top.Children.Add(_name);
-            _tiers.Children.Add(_top); _tiers.Children.Add(_under);
-            // a soft dark halo under the words: they read on any class's fill
-            _tiers.Effect = _halo = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 4, ShadowDepth = 0, Opacity = .75 };
-            Grid.SetColumn(_tiers, 1); plate.Children.Add(_tiers);
-            Put(plate, 2);
-            _dps.Tag = "row-dps"; _dps.HorizontalAlignment = HorizontalAlignment.Right; Put(_dps, 3);
-            _pct.HorizontalAlignment = HorizontalAlignment.Right; Put(_pct, 4);
-            _dmg.HorizontalAlignment = HorizontalAlignment.Right; Put(_dmg, 5);
-            _crit.HorizontalAlignment = HorizontalAlignment.Right; Put(_crit, 6);
-            _plate = plate;
-            _root.SizeChanged += (_, _) => Fit();
+            stack.Children.Add(_name);
+            _subHost.Child = _sub;
+            stack.Children.Add(_subHost);
+            nameCol.Children.Add(stack);
+            Grid.SetColumn(nameCol, 1); Words.Children.Add(nameCol);
+            // the LED bar (a healer's line under it) and the heal figure at its end
+            _leds = new TacSketch(DrawLeds);
+            _barCol.Children.Add(_leds);
+            _heal.Effect = Glow(4, 0, 1); _heal.Tag = "heal-figures";
+            _healBox.Child = _heal;
+            _barCol.Children.Add(_healBox);
+            Grid.SetColumn(_barCol, 2); Words.Children.Add(_barCol);
+            // the DPS over the share
+            _dps.Tag = "row-dps"; _dps.HorizontalAlignment = HorizontalAlignment.Right;
+            _dps.LineHeight = 20; _dps.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            _pct.HorizontalAlignment = HorizontalAlignment.Right;
+            var fig = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), Children = { _dps, _pct } };
+            Grid.SetColumn(fig, 3); Words.Children.Add(fig);
+            // Details: the damage over the crit
+            _dmg.HorizontalAlignment = HorizontalAlignment.Right; _dmg.LineHeight = 16; _dmg.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            _crit.HorizontalAlignment = HorizontalAlignment.Right;
+            _more = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), Children = { _dmg, _crit } };
+            Grid.SetColumn(_more, 4); Words.Children.Add(_more);
+            Refit = () => FitLine(_subHost, null, _keep, _give);
         }
 
-        /// <summary>The name gives way first (a 10-character name whole), then its marks to their glyphs, YOU, the emblem; under it, the CP.</summary>
-        void Fit()
-        {
-            double room = _root.ColumnDefinitions[2].ActualWidth;
-            if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
-            // the plate's own width as laid out (its emblem off, a hair before its end), else the column's less the plate's margins
-            double plate = (_plate.ActualWidth > 0 ? _plate.ActualWidth : room - _plate.Margin.Left - _plate.Margin.Right + Sl) - 2, floor = Tac.NameFloor(_name);
-            Tac.FitName(_name, plate, _keep, _give, floor, floor);
-            double icon = _iconHost.Visibility == Visibility.Visible ? _iconHost.Width + _iconHost.Margin.Right : 0;
-            Tac.FitName(_none, plate - icon, _keepUnder, _giveUnder, 0, 0);
-        }
+        readonly List<FrameworkElement> _keep = new();
+        readonly List<(FrameworkElement, FrameworkElement?)> _give = new();
 
-        /// <summary>A healer's healing a second ("+1.1K/s").</summary>
-        static TextBlock HealFig(string heal, Color c)
+        public override void Set(MeterMember m, MeterContext c, bool fresh)
         {
-            var h = T("+" + heal, 12, Frozen(c), FontWeights.SemiBold);
-            h.Tag = "heal-figures";
-            return h;
-        }
-
-        void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _text.Children.Add(el); }
-
-        public void Set(MeterMember m, MeterContext c, bool fresh)
-        {
-            _m = m;
-            if (_expanded != c.Expanded)
-            {
-                _expanded = c.Expanded;
-                _root.ColumnDefinitions[5].Width = _text.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _dmgW : 0);
-                _root.ColumnDefinitions[6].Width = _text.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _critW : 0);
-            }
-            bool podium = m.Rank <= 3 && !m.CpOnly;
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
-            _rank.Foreground = podium ? InkB : White;
-            if (_cls != m.Class + "|" + m.Name) { _cls = m.Class + "|" + m.Name; _iconHost.Child = ThemeText.Icon(m.Class, 22, m.Name); }
-            _name.Text = m.Name;
-            // on its own class's fill a light tint of the class reads; on your light plate the dark ink
-            _name.Foreground = m.You ? InkB : Frozen(Tac.Mix(m.NameColor, Colors.White, .45));
-            while (_top.Children.Count > 1) _top.Children.RemoveAt(1);
-            _under.Children.Clear();
-            _keep.Clear(); _give.Clear(); _keepUnder.Clear(); _giveUnder.Clear();
-            FrameworkElement Add(FrameworkElement el) { _top.Children.Add(el); return el; }
-            FrameworkElement Under(FrameworkElement el) { el.Margin = new Thickness(_under.Children.Count > 0 ? 8 : 0, 0, 0, 0); _under.Children.Add(el); return el; }
-            // the name's line: a kill's plates (to their glyph when short of room), deaths, YOU (it goes: the light plate and red
-            // DPS cell say it), then the emblem (the stripe and the name's colour still say the class)
-            if (m.TopDps) _give.Add((Add(Plate(false)), Add(Plate(false, glyph: true))));
-            if (m.TopHeals) _give.Add((Add(Plate(true)), Add(Plate(true, glyph: true))));
-            if (m.Deaths > 0) _keep.Add(Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Color.FromRgb(0x3A, 0x0C, 0x12), Color.FromRgb(0xFF, 0x6B, 0x78))));
-            if (m.You) _give.Add((Add(Mark(L.T("YOU"), RedC, Colors.White)), null));
-            _give.Add((_iconHost, null));
-            // under it, quiet: Combat Power (Steven, 2026-11-16: "dont forget the combat power next to ppls names") once there's
-            // damage (before it, the figure itself is the CP), and a healer's healing
-            _cp.Foreground = Frozen(m.You ? Color.FromRgb(0x4A, 0x4F, 0x58) : Color.FromRgb(0xA4, 0xAA, 0xBA));
-            if (m.Cp.Length > 0) { _cp.Text = m.Cp + " " + L.T("CP"); _giveUnder.Add((Under(_cp), null)); }
-            if (m.Heal.Length > 0) _keepUnder.Add(Under(HealFig(m.Heal, m.You ? Color.FromRgb(0x0E, 0x8A, 0x4C) : GreenC)));
-            // nothing under it (before the first hit): the name in the plate's middle
-            _under.Visibility = _under.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _tiers.Effect = m.You ? null : _halo;
-            _dps.Text = m.Figure;
+            M = m;
+            if (_expanded != c.Expanded) { _expanded = c.Expanded; Words.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? _moreW : 0); }
+            var col = m.ClassColor;
+            _ground.Background = m.You ? Tac.Grad(false, (Tac.A(RedC, .32), 0), (Tac.A(RedC, .08), 1)) : Frozen(Tac.A(Colors.White, .025));
+            _ground.BorderBrush = Frozen(Tac.A(RedC, .8)); _ground.BorderThickness = new Thickness(0, m.You ? 1 : 0, 0, m.You ? 1 : 0);
+            _rc = RankColor(m); if (_rc == SlateC) _rc = Color.FromRgb(0x23, 0x27, 0x2F);
+            _rankArt.InvalidateVisual();
+            _rankT.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rankT.Foreground = Frozen(RankColor(m) == SlateC || m.You ? Colors.White : InkC0);
+            _stripe.Background = Tac.Grad(true, (Tac.Mix(col, Colors.White, .3), 0), (col, 1));
+            _stripe.Effect = Glow(6, 0, .8, col);
+            _name.Text = Up(m.Name);
+            // the quiet line: Combat Power, deaths, the TOP marks (to their glyphs short of room)
+            _sub.Children.Clear(); _keep.Clear(); _give.Clear();
+            TextBlock Small(string s, Color cl, FontWeight fw, string? tag = null) { var t = C(s, 10, cl, fw, Semi); t.Margin = new Thickness(0, 0, 6, 0); t.Tag = tag; _sub.Children.Add(t); return t; }
+            TextBlock? cp = m.Cp.Length > 0 ? Small(m.Cp, Quiet, FontWeights.SemiBold) : null;
+            if (m.Deaths > 0) _keep.Add(Small(m.Deaths > 1 ? "✕" + m.Deaths : "✕", Coral, FontWeights.Bold));
+            if (m.TopDps) { var f = Small("★ " + Up(L.T("TOP DPS")), Amber, FontWeights.Bold, "top-dps"); var s = Small("★", Amber, FontWeights.Bold, "top-dps"); s.ToolTip = L.T("Top DPS"); _give.Add((f, s)); }
+            if (m.TopHeals) { var f = Small("✚ " + Up(L.T("TOP HEALS")), Mint, FontWeights.Bold, "top-heals"); var s = Small("✚", Mint, FontWeights.Bold, "top-heals"); s.ToolTip = L.T("Top heals"); _give.Add((f, s)); }
+            if (cp != null) _give.Add((cp, null));
+            _subHost.Visibility = _sub.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // the bar
+            _healer = m.Heal.Length > 0;
+            double healAll = c.E.Members.Sum(f => (double)f.HealingEffective), healTop = c.E.Members.Select(f => (double)f.HealingEffective).DefaultIfEmpty(0).Max();
+            _healBar = _healer && healTop > 0 && healAll > 0 ? Math.Clamp(m.HealShare / (healTop / healAll), 0, 1) : 0;
+            _heal.Text = _healer ? "+" + m.Heal : "";
+            _healBox.Visibility = _healer ? Visibility.Visible : Visibility.Collapsed;
+            _leds.Effect = Glow(9, 0, .7, col);
+            _dps.Text = m.Figure; _dps.FontSize = m.CpOnly ? 16 : 20;
+            _dps.Foreground = Frozen(m.You ? Color.FromRgb(0xFF, 0xE3, 0xA3) : Colors.White);
+            _dps.Effect = Glow(8, 0, .5, m.You ? Amber : Colors.White);
             _pct.Text = m.ShareText;
-            _pct.Foreground = m.You ? Frozen(Color.FromRgb(0xFF, 0xD6, 0xDB)) : Grey;
-            _dmg.Text = c.Expanded ? m.Damage : "";
-            _crit.Text = c.Expanded ? m.Crit : "";
-            Fit();
-            SlideBar(_art, c, "bar", Tac.BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); });
-            _art.InvalidateVisual();
+            _dmg.Text = c.Expanded ? m.Damage : ""; _crit.Text = c.Expanded ? m.Crit : "";
+            Refit?.Invoke();
+            SlideBar(_leds, c, "bar", Tac.BarOf(m, c), v => { Bar = v; _leds.InvalidateVisual(); });
+            _leds.InvalidateVisual();
         }
 
-        /// <summary>A small slanted mark in the name's line (YOU, a death).</summary>
-        static FrameworkElement Mark(string s, Color bg, Color fg)
+        void DrawLeds(DrawingContext dc, Size s)
         {
-            var b = new Block(bg, Tt(s, 10.5, Frozen(fg), Face, FontWeights.Bold, FontStretches.Normal), 16, new Thickness(7, 0, 7, 0));
-            b.Root.Margin = new Thickness(6, 0, 0, 0); b.Root.VerticalAlignment = VerticalAlignment.Center;
-            return b.Root;
-        }
-
-        /// <summary>The end of a boss kill's plate (TOP DPS gold, TOP HEALS green), slanted as the board's.</summary>
-        static FrameworkElement Plate(bool heals, bool glyph = false)
-        {
-            var b = new Block(heals ? GreenC : YellowC, Tt(glyph ? (heals ? "✚" : "★") : L.T(heals ? "TOP HEALS" : "TOP DPS"), glyph ? 10.5 : 9.5, InkB, Face, FontWeights.Bold, FontStretches.Normal), 16, new Thickness(6, 0, 6, 0));
-            b.Root.Tag = heals ? "top-heals" : "top-dps";
-            if (glyph) b.Root.ToolTip = L.T(heals ? "Top heals" : "Top DPS");
-            b.Root.Margin = new Thickness(6, 0, 0, 0); b.Root.VerticalAlignment = VerticalAlignment.Center;
-            return b.Root;
-        }
-
-        /// <summary>A cell of the row from x0 to x1 at its foot, slanted as the bug's blocks, a seam before the next.</summary>
-        static Geometry Cell(double x0, double x1, double h)
-        {
-            var g = new StreamGeometry();
-            using (var x = g.Open())
-            {
-                x.BeginFigure(new Point(x0 + Sl, 0), true, true);
-                x.LineTo(new Point(x1 + Sl - Gap, 0), true, false);
-                x.LineTo(new Point(x1 - Gap, h), true, false);
-                x.LineTo(new Point(x0, h), true, false);
-            }
-            g.Freeze();
-            return g;
-        }
-
-        void Draw(DrawingContext dc, Size s)
-        {
-            if (_m is not { } m || s.Width < 40) return;
-            var cols = _root.ColumnDefinitions;
-            var xs = new double[cols.Count + 1];
-            for (int i = 0; i < cols.Count; i++) xs[i + 1] = xs[i] + cols[i].ActualWidth;
-            double h = s.Height;
-            bool clipped = Enter < 1;
-            if (clipped) dc.PushClip(Wipe(-10, (s.Width + 20) * Enter, h));
-            // the rank tab: metal for the podium, slate below it
-            Color tone = m.CpOnly ? SlateC : m.Rank == 1 ? GoldTab : m.Rank == 2 ? SilverTab : m.Rank == 3 ? BronzeTab : SlateC;
-            bool podium = m.Rank <= 3 && !m.CpOnly;
-            dc.DrawGeometry(Tac.Grad(true, (Tac.Mix(tone, Colors.White, podium ? .38 : .1), 0), (tone, .5), (Tac.Mix(tone, Colors.Black, .2), 1)), null, Cell(xs[0], xs[1], h));
-            // the team stripe: the class's colour
-            dc.DrawGeometry(Frozen(m.ClassColor), null, Cell(xs[1], xs[2], h));
-            // the name plate is the bar: filled in the class's colour to the member's part of the top, a bright strip along its foot
-            var plate = Cell(xs[2], xs[3], h);
-            dc.DrawGeometry(Frozen(m.You ? LightC : PlateC), null, plate);
-            dc.PushClip(plate);
-            double pw = xs[3] - xs[2] + Sl, fw = pw * Math.Clamp(_bar, 0, 1);
-            if (fw > .5)
-            {
-                dc.DrawGeometry(Tac.Grad(false, (Tac.A(m.ClassColor, m.You ? .42 : .55), 0), (Tac.A(m.ClassColor, m.You ? .26 : .34), 1)), null, Tac.Lean(new Rect(xs[2] - Sl, 0, fw + Sl, h), Sl));
-                dc.DrawGeometry(Frozen(Tac.A(Tac.Mix(m.ClassColor, Colors.White, .5), .85)), null, Tac.Lean(new Rect(xs[2] + fw - 2 - Sl, 0, 2 + Sl, h), Sl));
-            }
-            dc.DrawRectangle(Frozen(Color.FromArgb(m.You ? (byte)0x50 : (byte)0x14, 0xFF, 0xFF, 0xFF)), null, new Rect(xs[2], 0, pw, 1));
-            dc.DrawRectangle(Frozen(Color.FromArgb(0x70, 0, 0, 0)), null, new Rect(xs[2], h - 4, pw, 4));
-            dc.DrawRectangle(Frozen(Tac.Mix(m.ClassColor, Colors.White, .15)), null, new Rect(xs[2], h - 4, Math.Max(0, fw - Sl * .9), 4));
-            dc.Pop();
-            // the stat cells: the DPS on the darkest (red for you), the share on slate; the damage and crit when expanded
-            dc.DrawGeometry(Frozen(m.You ? RedC : DpsC), null, Cell(xs[3], xs[4], h));
-            dc.DrawGeometry(Frozen(m.You ? Color.FromRgb(0xA8, 0x14, 0x26) : PctC), null, Cell(xs[4], xs[5], h));
-            if (_expanded)
-            {
-                dc.DrawGeometry(Frozen(PlateC), null, Cell(xs[5], xs[6], h));
-                dc.DrawGeometry(Frozen(PctC), null, Cell(xs[6], xs[7], h));
-            }
-            if (Sweep is > 0 and < 1)
-            {
-                double x = -60 + (s.Width + 120) * Sweep;
-                dc.DrawGeometry(Tac.Grad(false, (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x9A, 0xFF, 0xF4, 0xC8), .5), (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 1)), null, Tac.Lean(new Rect(x - 30, 0, 60, h), 10));
-            }
-            if (clipped) dc.Pop();
-            _text.Opacity = Enter >= 1 ? 1 : Enter > .85 ? (Enter - .85) / .15 : 0;
+            if (M is not { } m || s.Width < 8) return;
+            double bh = _healer ? 13 : 16, y = _healer ? 5 : Math.Round((s.Height - bh) / 2);
+            Leds(dc, new Rect(0, y, s.Width, bh), Bar, m.ClassColor, 4, 1.6);
+            if (_healer) Leds(dc, new Rect(0, y + bh + 3, s.Width, 4), _healBar, GreenC, 4, 1.6);
         }
     }
 }
