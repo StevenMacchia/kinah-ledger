@@ -10,21 +10,25 @@ using static KinahLedger.Ui.GlitchKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// VHS's meter: the camcorder's on-screen display listing the party. Each member is one OSD line in the camcorder's type:
-/// a boxed two-digit rank, a tick in their class's colour, the name in capitals, a segmented level bar in their class's
-/// colour (a green trace under it for a healer's share), the DPS and the share right-aligned. You: the rank inverted, the
-/// red REC dot before your name, a lit band behind the line. Deaths a red ✕, TOP DPS / TOP HEAL stamped as yellow / green
-/// tags at a kill. The foot: TOTAL and GROUP DPS in the OSD's words, AVG stamped once the fight is held.
+/// VHS's meter: the camcorder's on-screen display listing the party, two OSD lines a member in the camcorder's type. The
+/// first: a boxed two-digit rank, a tick in their class's colour, the name in capitals with its Combat Power small after it,
+/// the marks, and the DPS big at the end. The second is the bar, the row's hero (Steven, 2026-11-17: "figure out better looks
+/// that doesn't crowd everything and prioritizes the bar"): the class's code, then a thick segmented level in their class's
+/// colour across the row, as long as their DPS against the top member's (a green trace under it for a healer's share), an
+/// expanded meter's damage and crit, and the share small at its end. You: the rank inverted, the red REC dot before your
+/// name, a lit band behind the lines. Deaths a red ✕, TOP DPS stamped yellow, the top healer's figure stamped green at a
+/// kill. The foot: TOTAL and GROUP DPS in the OSD's words, AVG stamped once the fight is held.
 /// </summary>
 static class VhsRows
 {
     static readonly FontFamily Face = VhsFace;
     const uint RedC = 0xFF3B30, YellowC = 0xFFD23F, GreenC = 0x45FF86;
     static readonly Brush White = Br(0xFFFFFF), Dim = Br(0xFFFFFF, .62), Faint = Br(0xFFFFFF, .38), Black = Br(0x000000), Red = Br(RedC), Yellow = Br(YellowC), Green = Br(GreenC);
-    static readonly Brush Cells = Segments(Rgb(0x000000, .82), 4, 1.25), CpInk = Br(0xFFFFFF, .74);
+    static readonly Brush Cells = Segments(Rgb(0x000000, .82), 4, 1.25), CpInk = Br(0xFFFFFF, .7);
 
     /// <summary>A row's pitch, its height, the room for the line before you pinned below.</summary>
-    public const double Pitch = 27, Height = 24, GapHeight = 16;
+    public const double Pitch = 33, Height = 30, GapHeight = 16;
+    const double NameLine = 17;
 
     /// <summary>"· · ·  2 MORE  · · ·": the party's members left out between it and you.</summary>
     public static FrameworkElement Gap(int more)
@@ -34,6 +38,11 @@ static class VhsRows
         return t;
     }
 
+    /// <summary>The bar line's fixed parts, so every row's level starts and ends at one place: the code, an expanded row's damage and crit, the share.</summary>
+    static double CodeW => Math.Ceiling(new[] { "gladiator", "templar", "assassin", "ranger", "sorcerer", "spiritmaster", "cleric", "chanter" }.Max(k => TextW(ClassCode(k), Face, 9.5, FontWeights.Bold)) + 6);
+    static double ExtraW => Math.Ceiling(TextW("888.88M 88%", Face, 10, FontWeights.Bold) + 7);
+    static double ShareW => Math.Ceiling(TextW("33.3%", Face, 10, FontWeights.Bold) + 11);   // clear of the crit's own "%"
+
     public sealed class Row : IThemeRow
     {
         readonly Grid _root = new() { Height = VhsRows.Height };
@@ -41,53 +50,54 @@ static class VhsRows
         readonly Border _glint = new() { Background = Br(0xFFFFFF), Opacity = 0, IsHitTestVisible = false, Margin = new Thickness(-4, -1, -4, -1) };
         readonly Border _rankBox = new() { Width = 22, Height = 18, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _rank = Txt("", 10.5, White, Face);
-        readonly Border _tick = new() { Width = 3, Height = 13, Margin = new Thickness(6, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly Border _tick = new() { Width = 3, Margin = new Thickness(6, 2, 6, 2) };
         readonly Ellipse _dot = new() { Width = 6, Height = 6, Fill = Red, Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         readonly TextBlock _name = Txt("", 12, White, Face, trim: true);
+        /// <summary>The Combat Power after the name, small and quiet ("CP 167.5K").</summary>
+        readonly TextBlock _cp = Txt("", 9.5, CpInk, Face);
         readonly StackPanel _tags = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _healText = Txt("", 9.5, Green, Face);
-        /// <summary>A healer's "+12.3K/s" after the name's tags; the top healer's stamped green, the TOP HEAL tag with its figure in it
-        /// (the tag and the figure side by side cut a 10-letter name short at a kill).</summary>
-        readonly Border _healBox = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
-        readonly GlitchLevel _bar = new(5, Br(0xFFFFFF, .11), Cells), _heal = new(2, Br(GreenC, .12));
+        /// <summary>A healer's "+12.3K/s" after the marks; the top healer's stamped green, the TOP HEAL tag with its figure in it.</summary>
+        readonly Border _healBox = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) };
+        readonly GlitchLevel _bar = new(9, Br(0xFFFFFF, .1), Cells), _heal = new(2, Br(GreenC, .12));
         readonly TextBlock _code = Txt("", 9.5, White, Face);
-        readonly TextBlock _extra = Txt("", 10, Dim, Face), _fig = FigCell(13.5, White, Face, Math.Ceiling(TextW("199.9K", Face, 13.5, FontWeights.Bold))), _share = FigCell(10, Dim, Face, 42);
+        readonly Grid _barLine = new();
+        readonly TextBlock _extra = Txt("", 10, Dim, Face), _fig = FigCell(13.5, White, Face, Math.Ceiling(TextW("199.9K", Face, 13.5, FontWeights.Bold))), _share = FigCell(10, Dim, Face, 0);
 
         public FrameworkElement Root => _root;
-        /// <summary>
-        /// Where the level starts on the second line: past the widest class code and a real Combat Power ("GLA CP 167.5K"), in the
-        /// language shown (a fixed 72 px let "167.5K" run under the level: Steven, 2026-11-17, "a lot of numbers ... cut off").
-        /// </summary>
-        static double LevelAt => Math.Ceiling(new[] { "gladiator", "templar", "assassin", "ranger", "sorcerer", "spiritmaster", "cleric", "chanter" }.Max(k => TextW(ClassCode(k), Face, 9.5, FontWeights.Bold))
-            + TextW(" " + L.T("CP") + " ", Face, 8, FontWeights.Bold) + TextW("167.5K", Face, 9.5, FontWeights.Bold) + 6);
 
         public Row()
         {
-            // two lines: the rank, the class's tick, the name and the figures; under the name the level, as long as the line
-            foreach (var w in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto })
+            // the rank and the tick down both lines; the name's line; the bar's line under it, as wide as the row past the tick
+            foreach (var w in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
-            _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(15) });
+            _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(NameLine) });
             _root.RowDefinitions.Add(new RowDefinition());
-            Grid.SetColumnSpan(_band, 7); Grid.SetRowSpan(_band, 2); _root.Children.Add(_band);
+            Grid.SetColumnSpan(_band, 4); Grid.SetRowSpan(_band, 2); _root.Children.Add(_band);
             _rank.HorizontalAlignment = HorizontalAlignment.Center; _rankBox.Child = _rank;
             Grid.SetRowSpan(_rankBox, 2); _root.Children.Add(_rankBox);
-            _tick.Height = 18; Grid.SetColumn(_tick, 1); Grid.SetRowSpan(_tick, 2); _root.Children.Add(_tick);
-            DockPanel.SetDock(_dot, Dock.Left); DockPanel.SetDock(_tags, Dock.Right); DockPanel.SetDock(_healBox, Dock.Right);
+            Grid.SetColumn(_tick, 1); Grid.SetRowSpan(_tick, 2); _root.Children.Add(_tick);
+            // the name's line: the name gives way first (it trims), its CP, the marks and a healer's figure packed after it
+            _cp.Margin = new Thickness(5, 1, 0, 0);
             _healBox.Child = _healText;
-            var name = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center, Children = { _dot, _healBox, _tags, _name } };
+            // short of room (a 10-letter name, two marks and a heal, in Korean's wider words) the CP goes to the hover card before the name is cut
+            var name = new GlitchNameLine { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Text = _name, Yields = _cp,
+                NameMin = Math.Ceiling(TextW("MORDWULFEN", Face, 12, FontWeights.Bold)), Children = { _dot, _name, _cp, _tags, _healBox } };
             Grid.SetColumn(name, 2); _root.Children.Add(name);
-            _extra.Margin = new Thickness(5, 1, 0, 0); Grid.SetColumn(_extra, 4); _root.Children.Add(_extra);
-            _fig.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(_fig, 5); Grid.SetRowSpan(_fig, 2); _root.Children.Add(_fig);
-            _share.Margin = new Thickness(5, 1, 0, 0); Grid.SetColumn(_share, 6); Grid.SetRowSpan(_share, 2); _root.Children.Add(_share);
-            // the level: segmented cells in the class's colour, a healer's green trace under them
-            _code.VerticalAlignment = VerticalAlignment.Top; _code.Margin = new Thickness(0, -1, 0, 0);
-            Grid.SetRow(_code, 1); Grid.SetColumn(_code, 2); _root.Children.Add(_code);
-            // under the name: the class's code and the Combat Power ("GLA  CP 4.8K"), then the level, every row's starting at one place
-            var level = new Grid { Margin = new Thickness(LevelAt, 1, 0, 0), VerticalAlignment = VerticalAlignment.Top, Height = 8 };
+            _fig.Margin = new Thickness(8, 0, 0, 0); Grid.SetColumn(_fig, 3); _root.Children.Add(_fig);
+            // the bar's line: the code, the level (segmented cells, a healer's green trace under them), the damage and crit, the share
+            var bl = _barLine;
+            foreach (var w in new[] { new GridLength(CodeW), new GridLength(1, GridUnitType.Star), new GridLength(0), new GridLength(ShareW) })
+                bl.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
+            _code.VerticalAlignment = VerticalAlignment.Center; bl.Children.Add(_code);
+            var level = new Grid { VerticalAlignment = VerticalAlignment.Center, Height = 12 };
             _bar.Root.VerticalAlignment = VerticalAlignment.Top; level.Children.Add(_bar.Root);
             _heal.Fill.Background = Green; _heal.Root.VerticalAlignment = VerticalAlignment.Bottom; level.Children.Add(_heal.Root);
-            Grid.SetRow(level, 1); Grid.SetColumn(level, 2); Grid.SetColumnSpan(level, 3); _root.Children.Add(level);
-            Grid.SetColumnSpan(_glint, 7); Grid.SetRowSpan(_glint, 2); _root.Children.Add(_glint);
+            Grid.SetColumn(level, 1); bl.Children.Add(level);
+            _extra.HorizontalAlignment = HorizontalAlignment.Right; _extra.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(_extra, 2); bl.Children.Add(_extra);
+            _share.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(_share, 3); bl.Children.Add(_share);
+            Grid.SetRow(bl, 1); Grid.SetColumn(bl, 2); Grid.SetColumnSpan(bl, 2); _root.Children.Add(bl);
+            Grid.SetColumnSpan(_glint, 4); Grid.SetRowSpan(_glint, 2); _root.Children.Add(_glint);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -102,12 +112,13 @@ static class VhsRows
             _dot.Visibility = you ? Visibility.Visible : Visibility.Collapsed;
             var cc = m.ClassColor;
             _tick.Background = Frozen(cc);
-            var codeFg = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 30), (byte)Math.Min(255, cc.G + 30), (byte)Math.Min(255, cc.B + 30)));
-            _code.Inlines.Clear();
-            _code.Inlines.Add(Rn(ClassCode(m.Class), codeFg));
-            if (m.Cp.Length > 0) { _code.Inlines.Add(Rn(" " + L.T("CP") + " ", Faint, 8)); _code.Inlines.Add(Rn(m.Cp, CpInk)); }
+            _code.Text = ClassCode(m.Class);
+            _code.Foreground = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 30), (byte)Math.Min(255, cc.G + 30), (byte)Math.Min(255, cc.B + 30)));
             _name.Text = Caps(m.Name);
             _name.Foreground = you ? Br(0xFFF4C4) : White;
+            _cp.Inlines.Clear();
+            if (m.Cp.Length > 0) { _cp.Inlines.Add(Rn(L.T("CP") + " ", Faint, 8)); _cp.Inlines.Add(Rn(m.Cp, CpInk)); }
+            _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _tags.Children.Clear();
             bool healTag = m.TopHeals && m.Heal.Length > 0;
             _healText.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
@@ -115,23 +126,24 @@ static class VhsRows
             _healBox.Background = healTag ? Green : null;
             _healBox.Padding = healTag ? new Thickness(2, 0, 2, 0) : new Thickness(0, 1, 0, 0);
             _healBox.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            var tm = new Thickness(3, 0, 0, 0);
+            var tm = new Thickness(4, 0, 0, 0);
             if (m.Deaths > 0) _tags.Children.Add(Tag("✕" + (m.Deaths > 1 ? m.Deaths.ToString(CultureInfo.InvariantCulture) : ""), Red, White, Face, 9, tm));
             if (m.TopDps) _tags.Children.Add(Tag(L.T("TOP DPS"), Yellow, Black, Face, 8.5, tm));
             if (m.TopHeals && !healTag) _tags.Children.Add(Tag(L.T("TOP HEAL"), Green, Black, Face, 8.5, tm));
             _bar.Fill.Background = Frozen(Color.FromRgb((byte)Math.Min(255, cc.R + 25), (byte)Math.Min(255, cc.G + 25), (byte)Math.Min(255, cc.B + 25)));
             _bar.Root.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
-            _bar.Slide(c.Key + "|bar", m.Share);
+            _bar.Slide(c.Key + "|bar", BarOf(m, c));
             _heal.Root.Visibility = m.HealShare > 0 ? Visibility.Visible : Visibility.Hidden;
             _heal.Slide(c.Key + "|heal", m.HealShare);
             _extra.Text = c.Expanded && m.Damage.Length > 0 ? m.Damage + (m.Crit.Length > 0 ? " " + m.Crit : "") : "";
             _extra.Visibility = _extra.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _barLine.ColumnDefinitions[2].Width = new GridLength(c.Expanded && c.E.HasDamage ? ExtraW : 0);
             _fig.Text = m.Figure;
             _fig.Foreground = m.CpOnly ? Dim : White;
             _share.Text = m.ShareText;
         }
 
-        /// <summary>A kill's glint on this line: three white flashes, the last fading.</summary>
+        /// <summary>A kill's glint on this member's lines: three white flashes, the last fading.</summary>
         public void Glint(double ms) => Motion.Play(_glint, ms, t =>
         {
             int beat = (int)(t * 8);

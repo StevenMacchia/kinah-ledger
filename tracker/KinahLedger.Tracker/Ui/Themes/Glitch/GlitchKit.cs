@@ -268,6 +268,17 @@ static class GlitchKit
     static double ScreenDip => _screenDip ??= VisualTreeHelper.GetDpi(new DrawingVisual()).PixelsPerDip;
     static double? _screenDip;
 
+    /// <summary>
+    /// A member's bar: their DPS against the top member's, so the top one fills it and the rest read at a glance (Steven,
+    /// 2026-11-17: "prioritizes the bar"); 0 before a hit or with no figure.
+    /// </summary>
+    public static double BarOf(MeterMember m, MeterContext c)
+    {
+        if (m.CpOnly || !double.IsFinite(m.FigureValue) || m.FigureValue <= 0) return 0;
+        double top = c.E.Members.Select(f => c.E.Dps(f, c.Now)).DefaultIfEmpty(0).Max();
+        return top > 0 ? Math.Clamp(m.FigureValue / top, 0, 1) : 0;
+    }
+
     /// <summary>A row's figure column: right-aligned, tabular, never trimmed (a figure that changes never shifts).</summary>
     public static TextBlock FigCell(double size, Brush fg, FontFamily face, double minWidth, FontWeight? w = null)
     {
@@ -422,6 +433,8 @@ sealed class GlitchNameLine : Panel
 
     protected override Size ArrangeOverride(Size f)
     {
+        // a CP put away is not drawn at all (arranged 0 wide it still kept its words' width under a clip)
+        if (Yields is UIElement y) y.Opacity = _drop ? 1 : 0;
         double x = 0;
         foreach (UIElement c in InternalChildren)
         {
