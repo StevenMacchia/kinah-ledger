@@ -29,7 +29,7 @@ sealed class CraftWindow : Window
     public CraftWindow(Window owner)
     {
         Owner = owner;
-        Title = "Recipe";
+        Title = L.T("Recipe");
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -58,9 +58,9 @@ sealed class CraftWindow : Window
         var scroll = new ScrollViewer { Content = card, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, MaxHeight = SystemParameters.WorkArea.Height - 24 };
         _host.Children.Add(scroll);
         var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, card.Margin.Top + 9, card.Margin.Right + 9, 0), ToolTip = "Close (Esc)" };
+            Margin = new Thickness(0, card.Margin.Top + 9, card.Margin.Right + 9, 0), ToolTip = L.T("Close (Esc)") };
         close.SetResourceReference(StyleProperty, "RoundBtn");
-        AutomationPropertiesName(close, "Close the recipe window");
+        AutomationPropertiesName(close, L.T("Close the recipe window"));
         close.Click += (_, _) => Close();
         _host.Children.Add(close);
         if (IsVisible) { Activate(); return; }
