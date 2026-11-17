@@ -167,8 +167,11 @@ static class CorruptRows
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         var r = Txt("", 13.5, White, Face);
-        r.Inlines.Add(Rn(Words(ff.Label) + " ", LilacDim, 11));
-        r.Inlines.Add(Rn(ff.Dps, White));
+        if (ff.Label.Length > 0)
+        {
+            r.Inlines.Add(Rn(Words(ff.Label) + " ", LilacDim, 11));
+            r.Inlines.Add(Rn(ff.Dps, White));
+        }
         right.Children.Add(r);
         if (ff.Held) right.Children.Add(Tag(L.T("AVG"), Mag, White, Face, 9.5, new Thickness(6, 0, 0, 0)));
         Grid.SetColumn(right, 1); g.Children.Add(right);

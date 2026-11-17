@@ -20,8 +20,11 @@ sealed partial class HudHolo
         var tv = Tt(total, 15, White, Face, FontWeights.Bold); tv.Margin = new Thickness(6, 0, 0, 0); left.Children.Add(tv);
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
-        right.Children.Add(Label(word.ToUpperInvariant()));
-        var gv = Tt(group, 15, Pale, Face, FontWeights.Bold); gv.Margin = new Thickness(6, 0, 0, 0); right.Children.Add(gv);
+        if (word.Length > 0)
+        {
+            right.Children.Add(Label(word.ToUpperInvariant()));
+            var gv = Tt(group, 15, Pale, Face, FontWeights.Bold); gv.Margin = new Thickness(6, 0, 0, 0); right.Children.Add(gv);
+        }
         if (held)
         {
             var chip = Chip(L.T(Encounter.AvgBadge).ToUpperInvariant(), GreenC, filled: false);
