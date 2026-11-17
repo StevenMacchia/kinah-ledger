@@ -203,7 +203,8 @@ public static partial class WpfApp
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var kill = ParserDemo.Sample(now, live: true, damage: true).Past.Last(e => e.Outcome == "kill");
         var end = kill.End!.Value;
-        // the overlay's Share: with the pointer over it while it takes clicks; never while clicks go through, nor on a ready card
+        // the overlay's Share: with the pointer over it, clicks taken or going through (with them going through it shows with the
+        // grab handle, the pointer over the overlay; Steven, 2026-11-17: "it needs to be shareable"); never on a ready card
         var po = new ParserOverlay { Left = -12000, Top = -12000, Mode = kill.ModeKind };
         try
         {
@@ -212,15 +213,17 @@ public static partial class WpfApp
             bool away = !po.ShareShownForTest;
             po.HoverForTest(true);
             bool over = po.ShareShownForTest;
-            po.SetClickThrough(true); po.HoverForTest(true);
-            bool through = po.ShareShownForTest;
+            po.SetClickThrough(true); po.HoverForTest(false);
+            bool throughAway = !po.ShareShownForTest;
+            po.ShowGrabForTest();
+            bool through = po.ShareShownForTest && throughAway;
             po.SetClickThrough(false); po.ShareShown = false; po.HoverForTest(true);
             bool ready = po.ShareShownForTest;
             po.ShareShown = true;
             po.Flash(L.T("Picture copied"), good: true);
             bool flashed = po.HintTextForTest == L.T("Picture copied") && !po.ShareShownForTest;
-            check(away && over && !through && !ready && flashed,
-                $"meter share: the overlay's Share shows with the pointer over it ({over}, away {!away}), not while clicks go through ({through}), not on a ready card ({ready}); \"Picture copied\" in the hint's place after ({flashed})");
+            check(away && over && through && !ready && flashed,
+                $"meter share: the overlay's Share shows with the pointer over it ({over}, away {!away}), with clicks going through too once the pointer is over it ({through}), not on a ready card ({ready}); \"Picture copied\" in the hint's place after ({flashed})");
             // Share can be reached: from the meter down to it and over it, every pixel holds the pointer, so the hover never ends on
             // the way (Steven, 2026-11-17: the layered window's clear gap let the pointer through to the game and Share went away).
             // At 100% and at Steven's 110% (hud.json Scale 1.1); the fill is gone away from the pointer and while clicks go through.
