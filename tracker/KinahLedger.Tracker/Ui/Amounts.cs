@@ -26,6 +26,19 @@ public static class Amounts
         return $"{v / 1e9:0.##}B";
     }
 
+    /// <summary>
+    /// The meter's figures, short from a thousand (Steven, 2026-11-16: "shorten the numbers aka like 32.5k"): "940", "4.3K",
+    /// "32.5K", "1.24M". The tooltips and the Parser page's tables keep the whole figure.
+    /// </summary>
+    public static string Meter(double v)
+    {
+        double a = Math.Abs(v);
+        if (a < 1000) return Math.Round(v).ToString("N0");
+        if (a < 999_950) return $"{v / 1e3:0.#}K";
+        if (a < 999_950_000) return $"{v / 1e6:0.##}M";
+        return $"{v / 1e9:0.##}B";
+    }
+
     /// <summary>The whole figure with its thousands marks ("999,600"), for a tooltip that sits over a <see cref="Short"/> one.</summary>
     public static string Full(double v) => Math.Round(v).ToString("N0");
 

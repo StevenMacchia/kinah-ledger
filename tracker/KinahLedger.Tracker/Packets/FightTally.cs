@@ -65,6 +65,10 @@ public sealed class FightTally
             if (e.Flags.HasFlag(FightFlags.VictimMe)) { res.Add(new Outcome(e.At, true, e.KillerName.Length > 0, false, e.KillerName, 0)); continue; }
             bool player = e.Flags.HasFlag(FightFlags.VictimPlayer);
             if (e.Flags.HasFlag(FightFlags.Mine)) { res.Add(new Outcome(e.At, false, player, false, e.VictimName, e.MonsterId)); continue; }
+            // a player's death that names no killer is never counted as yours (Steven, 2026-11-16: the Buddy said 82 PvP he
+            // "definitely" didn't have: 82 such deaths of the same four players near him, each with a rise his own monster
+            // kills paid). A PvP kill counts only when the game names you
+            if (player) continue;
             if (e.Flags.HasFlag(FightFlags.NoKiller) && Rise(e.At, -RiseBefore, RiseAfter) is { } rise)
             {
                 _usedRise.Add(rise);

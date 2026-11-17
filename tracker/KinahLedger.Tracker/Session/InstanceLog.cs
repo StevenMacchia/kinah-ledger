@@ -185,6 +185,15 @@ public sealed class InstanceRun
     public DateTime? Recounted { get; set; }
 
     /// <summary>
+    /// When the re-read of tables with slots not read changed this record (0.10.134, Session/RunRecount.cs Reread): its table
+    /// read again with the reader that lays icons on the slot's real backing, the gold and blue gear it had left unnamed
+    /// named now. Set once.
+    /// </summary>
+    public DateTime? Reread { get; set; }
+    /// <summary>The counts the re-read raised, as they stood before (0 for an item new to the run): the site is sent the difference as a correction that adds.</summary>
+    public Dictionary<long, int> RaisedFrom { get; set; } = new();
+
+    /// <summary>
     /// The game's own item data in place of the reward picture's slots (an event whose rewards the game's data gave, see
     /// <see cref="GameRewardAt"/>): its items and bound items, its Kinah when the game's data counted Kinah then
     /// (<see cref="GameKinahCounted"/>; else the picture's coin stands), and nothing not read but what the game's data itself

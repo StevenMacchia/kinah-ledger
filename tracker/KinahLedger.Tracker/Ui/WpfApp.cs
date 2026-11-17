@@ -241,7 +241,7 @@ public static partial class WpfApp
             DoEvents();
             var st = ww.WelcomeLookForTest;
             Check(!server.StepShown && st.StepShown && st.Picked == HudLooks.Card && st.Staged == HudLooks.Card && st.Outlined == HudLooks.Card
-                && st.Buttons.Count == HudLooks.All.Length && st.Buttons[0] == HudLooks.Card && st.Buttons.Distinct().Count() == HudLooks.All.Length,
+                && st.Buttons.Count == MainWindow.WelcomeLooks.Length && st.Buttons[0] == HudLooks.Card && st.Buttons.Distinct().Count() == MainWindow.WelcomeLooks.Length,
                 $"first run: Continue opens the look step with Buddy picked, first and drawn (shown {st.StepShown}, picked {st.Picked}, drawn {st.Staged}, {st.Buttons.Count} looks, first {st.Buttons.FirstOrDefault()})");
             ww.HoverWelcomeLookForTest(HudLooks.Meter); DoEvents();
             var hov = ww.WelcomeLookForTest.Staged;
@@ -251,6 +251,16 @@ public static partial class WpfApp
             ww.PickWelcomeLookForTest(HudLooks.Ticker); DoEvents();
             st = ww.WelcomeLookForTest;
             Check(st.Picked == HudLooks.Ticker && st.Outlined == HudLooks.Ticker && st.Staged == HudLooks.Ticker, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
+            // the themes on first run (0.10.136, Steven 2026-11-16): four chips, Classic shown; a theme shows its looks and picks its first
+            var th0 = ww.WelcomeThemeForTest;
+            ww.PickWelcomeThemeForTest(HudThemes.Wacky); DoEvents();
+            var th1 = ww.WelcomeThemeForTest; st = ww.WelcomeLookForTest;
+            var wacky = HudThemes.Looks(HudThemes.Wacky).Select(l => l.Key).ToList();
+            Check(th0.Theme == HudThemes.Classic && th0.Chips.Count == HudThemes.All.Length && th1.Theme == HudThemes.Wacky && st.Buttons.SequenceEqual(wacky) && st.Picked == wacky[0] && st.Staged == wacky[0],
+                $"first run: the themes' chips ({th0.Chips.Count}), Wacky picked shows its looks and picks its first ({string.Join(",", st.Buttons)}; picked {st.Picked}, drawn {st.Staged})");
+            ww.PickWelcomeThemeForTest(HudThemes.Classic); DoEvents();
+            st = ww.WelcomeLookForTest;
+            Check(st.Buttons.Count == MainWindow.WelcomeLooks.Length && st.Picked == HudLooks.Card, $"...back to Classic: its looks, the first picked ({st.Picked})");
             ww.Close();
             Motion.Still = still; Skins.Apply(skinWas); InCard.Layer = cardLayer; HoverTip.Host = tipHost; DoEvents();
         }
@@ -259,8 +269,9 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
         Check(w.HudLook == HudLooks.Card && HudLooks.Default == HudLooks.Card && !o.HudFieldHost.IsEnabled, "panel look: Buddy by default (0.10.103, Steven 2026-11-15); the Strip's figure chips greyed for it");
-        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7 && HudLooks.All[0].Key == HudLooks.Auto && HudLooks.All[4].Key == HudLooks.Strip && o.HudLookPreview.Children.Count == 1,
-            $"every look a live thumbnail in Options, the new ones first (Auto, Capsule, Meter, Float, then Badge, Buddy, Pop), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
+        var classic = HudThemes.Looks(HudThemes.Classic);
+        Check(o.HudLookHost.Children.Count == classic.Count && classic.Count == 7 && classic[0].Key == HudLooks.Auto && classic[3].Key == HudLooks.Strip && classic[^1].Key == HudLooks.Capsule && o.HudLookPreview.Children.Count == 1,
+            $"every Classic look a live thumbnail in Options (Auto, Meter, Float, Badge, Buddy, Pop, then the Capsule at the far right), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
         // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
         // and Parser section stay folded, and the look shows the boss, the timer and the hour
         {
@@ -268,7 +279,7 @@ public static partial class WpfApp
             var (_, fight) = KinahLedger.Parser.ParserDemo.Sample(now, live: true, damage: true);
             var due = new List<Session.TimerBoard.Item> { new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" } };
             var said = new List<string>();
-            foreach (var key in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+            foreach (var key in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float }.Concat(HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key)))
             {
                 var hw = new HudWindow(null, key, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
                 hw.Update(w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value));
@@ -290,8 +301,9 @@ public static partial class WpfApp
                 if (!folded) said[^1] += ", the fight stays after it ends";
                 hw.Close();
             }
-            Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
+            Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter, Float and every theme's look draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
+        ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);
@@ -813,6 +825,13 @@ public static partial class WpfApp
         var sizing = w.SizeToContent;
         Check(w.OnSizeMove(MainWindow.WM_ENTERSIZEMOVE) && w.SizeToContent == SizeToContent.Manual, "a drag starting pins the size");
         Check(w.OnSizeMove(MainWindow.WM_EXITSIZEMOVE) && w.SizeToContent == sizing && sizing == SizeToContent.WidthAndHeight, "the drop sizes to content again");
+        // resizing by dragging (0.10.132): the right edge pulled 20% wider draws the window about 20% bigger, the rectangle
+        // held to the scaled content; pulled far past the limit it stops at 150%; the size reached is kept on the drop
+        {
+            var (sz0, wider, widthRatio, capped, kept) = w.DragResizeForTest(1.2, 3);
+            Check(Math.Abs(wider / sz0 - 1.2) < 0.03 && Math.Abs(widthRatio - 1.2) < 0.05 && Math.Abs(capped - MainWindow.MaxWindowScale) < 0.001 && Math.Abs(kept - MainWindow.MaxWindowScale) < 0.001,
+                $"the window resizes by dragging an edge: {sz0:0.00} to {wider:0.00} pulled 20% wider (the window {widthRatio:0.00}x), {capped:0.00} at most, {kept:0.00} kept on the drop");
+        }
 
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
@@ -2504,6 +2523,10 @@ public static partial class WpfApp
             // KL_WELCOME_LOOKS=1: each look on the stage too, under the mouse (ui-welcome-look-<key>.png)
             if (Environment.GetEnvironmentVariable("KL_WELCOME_LOOKS") == "1") foreach (var k in MainWindow.WelcomeLooks) { w.HoverWelcomeLookForTest(k); DoEvents(); Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-" + k + ".png"), 784); }
             Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-hover" + tail), (compact ? 640 : 800) - 16);
+            // a theme picked (0.10.136): its looks, its first on the stage (ui-welcome-look-wacky.png)
+            w.PickWelcomeThemeForTest(HudThemes.Wacky); IconCache.Drain(TimeSpan.FromSeconds(4)); DoEvents();
+            Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-welcome-look-wacky" + tail), (compact ? 640 : 800) - 16);
+            w.PickWelcomeThemeForTest(HudThemes.Classic); DoEvents();
         }
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)

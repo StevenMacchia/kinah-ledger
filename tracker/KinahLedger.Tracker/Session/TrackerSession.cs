@@ -2078,6 +2078,17 @@ public sealed partial class TrackerSession
     // added to the run alone; a slot that names only a family of items, or nothing, is written to reads.log, never guessed.
     DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue, _asideNoteAt = DateTime.MinValue; bool _gridDone;
     public const double GridSureDistance = 70;
+    /// <summary>
+    /// A match past <see cref="GridSureDistance"/> still names its slot when it leads clearly: within this, and every other
+    /// icon at least <see cref="GridClearLead"/> times as far (measured over Steven's 87 tables, 2026-11-16: gold and blue
+    /// gear 70 to 80 with the next icon 1.3 to 1.8 times as far, Corrupted Judicator, Black Claw Earrings, Fera Necklace;
+    /// the wrong ones the reader ever had were 82 and over, and the slots it can't tell lead by a few points).
+    /// </summary>
+    public const double GridClearDistance = 80, GridClearLead = 1.3;
+
+    /// <summary>The slot's closest icon is named: close (<see cref="GridSureDistance"/>), or leading clearly (<see cref="GridClearDistance"/>, <see cref="GridClearLead"/>).</summary>
+    internal static bool CloseEnough(RewardGrid.Slot sl, string key, double d) =>
+        d <= GridSureDistance || (d <= GridClearDistance && sl.Icons.Count > 0 && sl.Icons[0].Key == key && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= d * GridClearLead));
     static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
     Dictionary<string, List<ItemInfo>>? _byIcon;
     // Assumed: counted as one from a line with no count; Settle: the rest of such a count, read again (TableWitness.AddLine)
@@ -2244,7 +2255,7 @@ public sealed partial class TrackerSession
         }
         if (cands.Count == 0) return null;
         var c0 = cands[0];
-        if (c0.Distance > GridSureDistance) return null;
+        if (!CloseEnough(sl, c0.Key, c0.Distance)) return null;
         if (sl.Icons.Count > 0 && c0.Distance > sl.Icons[0].Distance * 1.25) return null;
         var rival = cands.Skip(1).FirstOrDefault(c => !c.Names.SetEquals(c0.Names));
         if (rival.Key != null && rival.Distance < c0.Distance * 1.25)
@@ -2295,7 +2306,7 @@ public sealed partial class TrackerSession
     }
 
     internal static bool SureMatch(RewardGrid.Slot sl, int gradedCount) =>
-        sl.Icons.Count > 0 && sl.Icons[0].Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= sl.Icons[0].Distance * 1.25) && gradedCount > 0;
+        sl.Icons.Count > 0 && CloseEnough(sl, sl.Icons[0].Key, sl.Icons[0].Distance) && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= sl.Icons[0].Distance * 1.25) && gradedCount > 0;
 
     /// <summary>
     /// The item a slot names, the way ApplyGrid takes it (the replay bank scores the reader with it): the gold coin as "Kina",
@@ -2517,7 +2528,9 @@ public sealed partial class TrackerSession
             bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase))
                 || _runPickups.Any(p => (now - p.At).TotalSeconds <= 20 && p.Bound && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
                 || _boundLines.Any(b => (now - b.At).TotalSeconds is >= -2 and <= 20 && names.Contains(b.Name, StringComparer.OrdinalIgnoreCase));
-            var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
+            // of two ids that are one piece of gear (Black Claw Bow 110440046, tradable, and 110440048, not), a reward's is the
+            // one that isn't tradable: run gear is bound to the character (the chat names that one; 2026-11-16, the site saw the two disagree)
+            var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).ThenBy(i => _items.IsGear(i.Id) && i.Tradable).First();
             // every slot ends counted or not read: here a chat line doesn't decide between the names a picture leaves open;
             // the chat's lines of those seconds are judged together once they are all in (TableWitness), one line one piece
             if (names.Count == 1 && !slotGear && places != null && si < places.Count) pictureCounts.Add($"{places[si]}|{gridItem.Id}|{boundSlot}|{count}");
@@ -2538,7 +2551,7 @@ public sealed partial class TrackerSession
                 continue;
             }
             if (names.Count != 1) { unnamed++; NotRead(sl); CrashLog.Note($"{what}: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}: counted as one unknown item"); continue; }
-            var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
+            var item = gridItem;
             Instances.Loot(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
             Feed(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" }, RunWhere());
             fromGrid.Add(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
@@ -5181,6 +5194,7 @@ public sealed partial class TrackerSession
         // it is sent or parked (and on the first pass after a start, the last session's within RunsSendHours)
         RetryUnreadRuns(s);
         await SendCorrectionsAsync(s);
+        await SendQuestsAsync(s);
         if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint) || Instances.UnsharedCount == 0) return false;
         if ((DateTime.UtcNow - _runsSentAt).TotalSeconds < 30) return false;
         _runsSentAt = DateTime.UtcNow;
@@ -5191,12 +5205,35 @@ public sealed partial class TrackerSession
             if (runs.Count > 0) CrashLog.Note($"runs not sent: {string.Join(", ", runs.Select(r => $"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}"))}: in no listed area, or under a second or over {InstanceRunPayload.MaxSeconds / 3600} h");
             return false;
         }
-        bool ok = await Uploader.SendAsync(RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay), s.Upload);
+        var batch = RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay);
+        bool ok = await Uploader.SendAsync(batch, s.Upload);
         if (!ok) Instances.Restore(runs);
-        CrashLog.Note(ok ? $"runs sent on their own: {string.Join(", ", pay.Select(r => r.zone))}" : "runs not sent: the site didn't answer; kept for the next try");
+        else { RunPayload.Took(batch); _questsSentAt = DateTime.UtcNow; }
+        CrashLog.Note(ok ? $"runs sent on their own: {string.Join(", ", pay.Select(r => r.zone))}{(batch.quests is { Count: > 0 } q ? $", with {q.Count} quest(s)" : "")}" : "runs not sent: the site didn't answer; kept for the next try");
         return ok;
     }
     DateTime _runsSentAt = DateTime.MinValue;
+
+    /// <summary>How long completed quests wait for another send to ride with before they go on their own.</summary>
+    public const double QuestsAloneMinutes = 10;
+    DateTime _questsSentAt = DateTime.UtcNow;
+
+    /// <summary>
+    /// The completed quests on their own, when some wait and nothing has carried any for <see cref="QuestsAloneMinutes"/>: a
+    /// runs-only batch with no runs (a day of dungeons sends no farming, 2026-11-13 to 16). 50 a send; the next goes after
+    /// the same wait, so a backlog drains without flooding the site.
+    /// </summary>
+    async Task SendQuestsAsync(Settings s)
+    {
+        if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint)) return;
+        if ((DateTime.UtcNow - _questsSentAt).TotalMinutes < QuestsAloneMinutes) return;
+        if (RunPayload.QuestsPending?.Invoke() is not { Count: > 0 }) return;
+        _questsSentAt = DateTime.UtcNow;
+        var batch = RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, new List<InstanceRunPayload>());
+        bool ok = await Uploader.SendAsync(batch, s.Upload);
+        if (ok) RunPayload.Took(batch);
+        CrashLog.Note(ok ? $"quests sent on their own: {batch.quests?.Count ?? 0}" : $"quests not sent: {Uploader.LastError}; tried again in {QuestsAloneMinutes:0} minutes");
+    }
 
     /// <summary>
     /// Sends the runs the gear repair changed (InstanceLog.RepairGear) once more, each marked as a correction of the copy
@@ -5208,7 +5245,8 @@ public sealed partial class TrackerSession
     {
         if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint)) return;
         if ((DateTime.UtcNow - _correctionsAt).TotalMinutes < 30) return;
-        var todo = Instances.Resends.Take(InstanceRunPayload.MaxRuns).ToList();
+        // a run whose only change is counts the re-read raised waits for a site that takes corrections that add
+        var todo = Instances.Resends.Where(r => r.RepairedFrom.Count > 0 || RunCorrection.AddsTaken).Take(InstanceRunPayload.MaxRuns).ToList();
         if (todo.Count == 0) return;
         _correctionsAt = DateTime.UtcNow;
         var pay = InstanceRunPayload.From(todo, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)))?.Where(p => p.correction != null).ToList();
@@ -5218,8 +5256,9 @@ public sealed partial class TrackerSession
             CrashLog.Note($"corrected runs not sent again: {string.Join(", ", todo.Select(r => $"{r.Label} {r.Start.ToLocalTime():MMM d HH:mm}"))}: in no listed area, or nothing left to correct");
             return;
         }
-        bool ok = await Uploader.SendAsync(RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay), s.Upload);
-        if (ok) foreach (var r in todo) Instances.Resent(r);
+        var fixBatch = RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay);
+        bool ok = await Uploader.SendAsync(fixBatch, s.Upload);
+        if (ok) { foreach (var r in todo) Instances.Resent(r); RunPayload.Took(fixBatch); }
         CrashLog.Note(ok ? $"corrected runs sent again: {string.Join(", ", todo.Select(r => $"{r.Label} {r.Start.ToLocalTime():MMM d HH:mm}"))}" : $"corrected runs not sent: {Uploader.LastError}; tried again in half an hour");
     }
     DateTime _correctionsAt = DateTime.MinValue;
@@ -5367,7 +5406,7 @@ public sealed partial class TrackerSession
         var payload = RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs);
         bool ok = await Uploader.SendAsync(payload, s.Upload);
         if (!ok && s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint)) Instances.Restore(runs);
-        if (ok && payload.quests is { Count: > 0 } sentQuests) RunPayload.QuestsCarried?.Invoke(sentQuests);   // the completed quests the batch carried (phase 2)
+        if (ok) RunPayload.Took(payload);   // the completed quests the batch carried (phase 2)
         // the reading health since the last report goes with the run (numbers, item names as read, the layout)
         try { await AccuracyClient.SendAsync(s.Upload); } catch (Exception ex) { CrashLog.Write("accuracy report", ex); }
         return ok;

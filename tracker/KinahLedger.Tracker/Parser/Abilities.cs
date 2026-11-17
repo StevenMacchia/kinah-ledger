@@ -96,6 +96,30 @@ public static class Abilities
         return b is >= 1_000_000 and < 2_000_000 ? b * 10 : b;
     }
 
+    /// <summary>
+    /// The specialties a skill's id names, as bits 1 to 5 (0: none). A class skill's id is its skill's plus the picks x 10 plus
+    /// a part's number (Steven's Templar: Pummel 12040340 with picks 3 and 4, its part 12040047 with pick 4; the specialty
+    /// icons are named the same way, 12010010 for Vicious Strike's first). The picks are 1 to 5, rising, at most three in one
+    /// id; anything else (a basic attack's 100, a summon's) names none. An effect's id (a tick) is read through its skill's.
+    /// </summary>
+    public static int PicksOf(uint id)
+    {
+        long x = id >= 100_000_000 ? SkillOfEffect((int)Math.Min(id, int.MaxValue)) : id;
+        if (x is < 11_000_000 or >= 20_000_000 || x / 10_000 % 100 == 0) return 0;
+        int d = (int)(x % 10_000 / 10), mask = 0, last = 9;
+        if (d == 0) return 0;
+        for (; d > 0; d /= 10)
+        {
+            int p = d % 10;
+            if (p is < 1 or > 5 || p >= last) return 0;   // read from the right: each pick below the one after it
+            mask |= 1 << p; last = p;
+        }
+        return mask;
+    }
+
+    /// <summary>The picks as players say them, "3·4"; "" for none.</summary>
+    public static string PicksText(int mask) => string.Join("·", Enumerable.Range(1, 5).Where(p => (mask & (1 << p)) != 0));
+
     /// <summary>A class by its skills' family, the id's first two digits (11 Gladiator ... 18 Chanter, 19 Brawler); "" for anything else (damage over time: its skill's).</summary>
     public static string ClassOfFamily(int skill) => skill < 0 ? ClassOfFamily(BaseOf(skill)) : skill is >= 10_000_000 and < 20_000_000 ? (skill / 1_000_000) switch
     {

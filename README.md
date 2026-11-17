@@ -271,7 +271,7 @@ tracker (`c1`, `c2`...) and the name it has in the window, so your signed-in pro
 lost, players and monsters defeated and deaths, overall and per area, for your profile's Abyss section (a run
 outside the Abyss sends none of them). Never the account, level, chat text or screenshots. Sharing is on by default and off with one setting; the live readout works either way.
 
-The Parser's boss fights are kept on this PC and never uploaded, unless you turn on **Show my boss bests on my
+The Parser's boss fights are kept on this PC: nothing about your fights leaves your PC unless you turn on **Show my boss bests on my
 kinahledger.com profile** (Options › Sharing, off by default). Then, for the character playing, each boss's best kill
 of yours goes with the next upload: the boss, instance, game mode and kind, your DPS over the kill (boss damage alone
 when the record kept it apart), the fight's length and date, your class and combat power when known, how many were in

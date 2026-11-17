@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using KinahLedger.Packets;
 
 namespace KinahLedger.Parser;
@@ -69,11 +69,11 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>A reason for uncredited damage in the coverage hover's words (DamageDealt.Reason, 1 to 7).</summary>
     public static string WhyWords(int reason) => reason switch
     {
-        1 or 2 or 3 => "a moment the tracker missed",
-        4 => "someone outside the group",
-        5 => "the boss's surroundings (not a player)",
-        6 or 7 => "an attacker the tracker couldn't place",
-        _ => "another reason",
+        1 or 2 or 3 => Ui.L.T("a moment the tracker missed"),
+        4 => Ui.L.T("someone outside the group"),
+        5 => Ui.L.T("the boss's surroundings (not a player)"),
+        6 or 7 => Ui.L.T("an attacker the tracker couldn't place"),
+        _ => Ui.L.T("another reason"),
     };
     /// <summary>
     /// Each member's damage to the boss is kept apart from their damage to everything (Fighter.BossDamage): records kept
@@ -131,10 +131,13 @@ public sealed class Encounter : IJsonOnDeserialized
     /// What the record is called: a pull its boss, a run its instance, a fight its boss, else the player you fought ("vs
     /// Kaelith"), else "PvP fight" or "Fight".
     /// </summary>
-    [JsonIgnore] public string Title => ModeKind switch
+    /// <summary>The fight's name in English, always (the logs): <see cref="Title"/> is the one shown.</summary>
+    [JsonIgnore] public string TitleWord => TitleIn(english: true);
+    [JsonIgnore] public string Title => TitleIn(english: false);
+    string TitleIn(bool english) => ModeKind switch
     {
-        ParserMode.Run => BossBook.Strip(Instance).Length > 0 ? BossBook.Strip(Instance) : "Run",
-        ParserMode.Fights => Boss.Length > 0 ? Boss : Opponent.Length > 0 ? "vs " + Opponent : PlayerKills > 0 ? "PvP fight" : "Fight",
+        ParserMode.Run => BossBook.Strip(Instance).Length > 0 ? BossBook.Strip(Instance) : english ? "Run" : Ui.L.T("Run"),
+        ParserMode.Fights => Boss.Length > 0 ? Boss : Opponent.Length > 0 ? (english ? "vs " + Opponent : Ui.L.F("vs {0}", Opponent)) : PlayerKills > 0 ? (english ? "PvP fight" : Ui.L.T("PvP fight")) : english ? "Fight" : Ui.L.T("Fight"),
         _ => Boss,
     };
 
@@ -203,6 +206,7 @@ public sealed class Encounter : IJsonOnDeserialized
             Max = g.Max(a => a.Max), Min = g.Min(a => a.Min),
             StreamDamage = g.Any(a => a.StreamDamage != null) ? g.Sum(a => a.StreamDamage ?? 0) : null,
             Kinds = Merge(g.Select(a => a.Kinds), (x, y) => x + y), KindDamage = Merge(g.Select(a => a.KindDamage), (x, y) => x + y), KindMax = Merge(g.Select(a => a.KindMax), Math.Max),
+            Picks = g.Aggregate(0, (p, a) => p | a.Picks),
         })
         .Where(a => Figure(a) > 0).OrderByDescending(Figure).ToList();
 
@@ -285,7 +289,7 @@ public sealed class Encounter : IJsonOnDeserialized
     public double Dps(Fighter f, DateTime now) => DpsOf(f, now) ?? 0;
 
     /// <summary>A member's DPS as the rows say it ("3,851", "12.4K"); "–" when it isn't a figure yet.</summary>
-    public string DpsText(Fighter f, DateTime now) => DpsOf(f, now) is { } d ? Ui.Amounts.Short(d) : "–";
+    public string DpsText(Fighter f, DateTime now) => DpsOf(f, now) is { } d ? Ui.Amounts.Meter(d) : "–";
 
     /// <summary>
     /// The seconds a member was in the group during the record: from the start (or their joining, when they joined late) to
@@ -344,7 +348,7 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The group's damage per second: the credited damage (the rows' sum, as the figures count it) over the fight; null under <see cref="MinDpsSeconds"/>.</summary>
     public double? GroupDpsOf(DateTime now) => HasDamage ? Credited / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
     public double GroupDps(DateTime now) => GroupDpsOf(now) ?? 0;
-    public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Short(d) : "–";
+    public string GroupDpsText(DateTime now) => GroupDpsOf(now) is { } d ? Ui.Amounts.Meter(d) : "–";
 
     // ---- the meter's foot and its marks (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a green badge
     // next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]") ----
@@ -357,8 +361,8 @@ public sealed class Encounter : IJsonOnDeserialized
 
     /// <summary>"Total 10.5M · Group DPS 126.8K" (live) or "Total 10.5M · Group 126.8K · Avg. DPS" (held): the foot's words, as every look draws them.</summary>
     public string FootText(DateTime now) => !HasDamage ? "" : HeldAverage
-        ? $"Total {Ui.Amounts.Short(Credited)} · Group {GroupDpsText(End ?? now)} · {AvgBadge}"
-        : $"Total {Ui.Amounts.Short(Credited)} · Group DPS {GroupDpsText(now)}";
+        ? Ui.L.F("Total {0} · Group {1} · {2}", Ui.Amounts.Meter(Credited), GroupDpsText(End ?? now), Ui.L.T(AvgBadge))
+        : Ui.L.F("Total {0} · Group DPS {1}", Ui.Amounts.Meter(Credited), GroupDpsText(now));
 
     /// <summary>The held figure's badge.</summary>
     public const string AvgBadge = "Avg. DPS";
@@ -379,7 +383,7 @@ public sealed class Encounter : IJsonOnDeserialized
     /// another member (a damage dealer's own self-heals and potions never make them the top healer). Ranked by healing done,
     /// which is exact; the effective part is an estimate (<see cref="Fighter.HealingEstimated"/>).
     /// </summary>
-    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.HealingOthers > 0).OrderByDescending(f => f.Healing).ThenByDescending(f => f.HealingOthers).FirstOrDefault();
+    public Fighter? TopHealer(DateTime now) => !TopsShown ? null : Members.Where(f => f.HealingOthers > 0).OrderByDescending(f => f.HealingEffective).ThenByDescending(f => f.HealingOthers).FirstOrDefault();
 
     // ---- healing (klnet's heals on the hit stream) ----
 
@@ -387,13 +391,14 @@ public sealed class Encounter : IJsonOnDeserialized
     [JsonIgnore] public bool HasHealing => Members.Any(f => f.Healing > 0);
 
     /// <summary>
-    /// A member's healing per second: their healing done (self-heals and potions in) over the same seconds the group's DPS is
-    /// over (the fight's real time, a run's boss pulls; never under <see cref="MinDpsSeconds"/>); null when they healed nothing.
+    /// A member's healing per second, the part that landed (overheal left out; Steven, 2026-11-16: a Cleric's figure was 50 to
+    /// 85% overheal): over the same seconds the group's DPS is over (the fight's real time, a run's boss pulls; never under
+    /// <see cref="MinDpsSeconds"/>); an estimate when <see cref="Fighter.HealingEstimated"/> says so; null when they healed nothing.
     /// </summary>
-    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
 
-    /// <summary>The effective part per second (overheal left out): an estimate when <see cref="Fighter.HealingEstimated"/> says so.</summary>
-    public double? EffectiveHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+    /// <summary>All their healing a second, overheal in (the tooltip's and the replay's).</summary>
+    public double? DoneHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
 
     /// <summary>The group's healing done in the record.</summary>
     [JsonIgnore] public long GroupHealing => Members.Sum(f => f.Healing);
@@ -440,7 +445,7 @@ public sealed class Encounter : IJsonOnDeserialized
     public const int BigHitAfter = 8;
 
     /// <summary>What a ready card says under its name: a dungeon waits for its first pull, the meter anywhere else for a hit.</summary>
-    [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? "Waiting for the first hit" : "Waiting for the first pull";
+    [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? Ui.L.T("Waiting for the first hit") : Ui.L.T("Waiting for the first pull");
 
     /// <summary>
     /// The rows the live card, the overlay and the list show (Steven, 2026-11-14: "don't count [a member] until they have at
@@ -448,6 +453,17 @@ public sealed class Encounter : IJsonOnDeserialized
     /// roster lists every member. Never an "Other" row (Steven, 2026-11-14).
     /// </summary>
     public IEnumerable<Fighter> Shown() => HasDamage ? Ranked().Where(f => f.Damage > 0) : Ranked();
+
+    /// <summary>
+    /// The meter's rows at <paramref name="now"/> (Steven, 2026-11-16: "it should show the people even if not DPSing (you can
+    /// hide if not DPSing for like 15 seconds)"): every member with damage, and one without for their first
+    /// <see cref="QuietShownSeconds"/> in the fight (from its start, or from joining it); one who left and dealt none, never.
+    /// </summary>
+    public IEnumerable<Fighter> Shown(DateTime now) => !HasDamage ? Ranked().Where(f => !f.Gone)
+        : Ranked().Where(f => f.Damage > 0 || (!f.Gone && (now - (f.JoinedAt is { } j && j > Start ? j : Start)).TotalSeconds < QuietShownSeconds));
+
+    /// <summary>How long a member who dealt no damage keeps their row in a fight.</summary>
+    public const double QuietShownSeconds = 15;
 
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
     public IEnumerable<Fighter> Ranked() => HasDamage
@@ -467,7 +483,10 @@ public sealed class Encounter : IJsonOnDeserialized
     public static string OutcomeName(BossOutcome o) => o switch { BossOutcome.Kill => "kill", BossOutcome.Wipe => "wipe", _ => "left" };
 
     /// <summary>"Killed", "Wiped", "Left", "In progress": the outcome as the page says it.</summary>
-    [JsonIgnore] public string OutcomeLabel => Outcome switch
+    /// <summary>The outcome as shown, in the player's language (<see cref="OutcomeWord"/> is the English, for the logs).</summary>
+    [JsonIgnore] public string OutcomeLabel => Outcome == "kill" && ModeKind == ParserMode.Fights && Boss.Length == 0 && YourKills > 1 ? Ui.L.F("{0} kills", YourKills) : Ui.L.T(OutcomeWord);
+    /// <summary>The outcome in English, always: the logs and the tools that read them (log-mine) never change language.</summary>
+    [JsonIgnore] public string OutcomeWord => Outcome switch
     {
         "kill" when ModeKind == ParserMode.Fights && Boss.Length == 0 => YourKills == 1 ? "1 kill" : YourKills > 1 ? $"{YourKills} kills" : "Killed",
         "kill" => "Killed", "wipe" => "Wiped", "left" => "Left", "cleared" => "Cleared", "died" => "Died", "ended" => "Ended", _ => "In progress",
@@ -669,6 +688,8 @@ public sealed class AbilityShare
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public long? StreamDamage { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindDamage { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindMax { get; set; }
+    /// <summary>The specialties the skill's hits named (Abilities.PicksOf, bits 1 to 5): a pick that changes none of its hits isn't seen.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Picks { get; set; }
 }
 
 /// <summary>Healing by one ability: healing done (HP as dealt), its effective part, the heals (ticks for a heal over time), and how many were on the healer.</summary>

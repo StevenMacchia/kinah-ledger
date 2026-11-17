@@ -99,14 +99,24 @@ public sealed record RunPayload(
     /// <summary>A batch the site took, with the quests it carried: the window marks them sent.</summary>
     public static Action<List<QuestDonePayload>>? QuestsCarried { get; set; }
 
-    /// <summary>A send of finished runs alone, with no farming in it (RunSync).</summary>
+    /// <summary>
+    /// A send of finished runs alone, with no farming in it (RunSync), and the completed quests waiting (Steven, 2026-11-16:
+    /// "Quests are completely broken": they rode only with farming, so a day of dungeons sent none; 1,716 waited). With no
+    /// runs it is the quests' own send (TrackerSession.SendQuestsAsync).
+    /// </summary>
     public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs)
     {
         var who = CharacterPayload.Now();
         return new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
-            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: who,
+            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: who, quests: QuestsPending?.Invoke(),
             boss_bests: BossBests.Pending(who?.id ?? "", DateTime.UtcNow));
     }
+
+    /// <summary>The site keeps this many completed quests a batch (quests.maxPerUpload); a batch carries no more, so none is marked sent that wasn't kept.</summary>
+    public const int QuestsMaxPerUpload = 50;
+
+    /// <summary>A batch the site took: the quests it carried are marked sent (every kind of send, not the farming one alone).</summary>
+    public static void Took(RunPayload p) { if (p.quests is { Count: > 0 } q) QuestsCarried?.Invoke(q); }
 
     /// <summary>The gear the runs are shared under: "gs:1400-1599" from the player's gear score (Options), "unknown" until it is set (Data.GearScore).</summary>
     public static string Gear { get; set; } = "unknown";
@@ -353,11 +363,21 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
 /// </summary>
 public sealed record RunCorrection(string ended, Dictionary<string, int> was)
 {
+    /// <summary>
+    /// The site takes corrections that add (the re-read's gear named now, 0.10.134): its config says so ("runs":
+    /// {"correctionsAdd": true}). Off: a run with only raised counts waits, still marked, for a site that takes them.
+    /// </summary>
+    public static bool AddsTaken => Update.RemoteConfig.Current.CorrectionsAdd;
+
     public static RunCorrection? Of(InstanceRun r, Func<long, string> key, Func<long, bool>? off = null)
     {
-        if (!r.Resend || r.RepairedFrom.Count == 0 || r.LastLoot is not DateTime ended) return null;
+        if (!r.Resend || r.LastLoot is not DateTime ended) return null;
+        bool adds = r.RaisedFrom.Count > 0 && AddsTaken;
+        if (r.RepairedFrom.Count == 0 && !adds) return null;
         var was = new Dictionary<string, int>();
         foreach (var (id, n) in r.RepairedFrom) { if (off?.Invoke(id) == true) continue; var k = key(id); was[k] = was.GetValueOrDefault(k) + n; }
+        // what went up: its count before (0 for an item new to the run), so the site adds the difference to the sender's own rows
+        if (adds) foreach (var (id, n) in r.RaisedFrom) { if (off?.Invoke(id) == true) continue; var k = key(id); was[k] = was.GetValueOrDefault(k) + n; }
         return was.Count > 0 ? new RunCorrection(ended.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"), was) : null;
     }
 }

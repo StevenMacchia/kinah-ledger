@@ -43,18 +43,20 @@ public partial class MainWindow
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         ApplyView();   // the run card, the summary and the tables follow the first-run screen
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        if (on) WelcomeHint.Text = HasServer ? "" : "Pick your server to continue.";
+        if (on) WelcomeHint.Text = HasServer ? "" : L.T("Pick your server to continue.");
     }
 
     /// <summary>The welcome card's last line: what to do once Continue is pressed, with the in-game key when one is set.</summary>
     internal static string WelcomeNextLine(string hotkey) =>
-        "Then: open Aion 2, keep the chat on screen, and press Start run" + (hotkey.Length > 0 ? $" (or {hotkey} in the game)." : ".");
+        hotkey.Length > 0 ? L.F("Then: open Aion 2, keep the chat on screen, and press Start run (or {0} in the game).", hotkey)
+                          : L.T("Then: open Aion 2, keep the chat on screen, and press Start run.");
 
     /// <summary>The server step's Continue: on to the look step, once a server is picked.</summary>
     void WelcomeServerDone()
     {
-        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Warn"); return; }
+        if (_wServer == null) { WelcomeHint.Text = L.T("Pick your server to continue."); WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Warn"); return; }
         _wLook = HudLook;   // Buddy on a new install (HudLooks.Default)
+        _wTheme = HudThemes.Of(_wLook);
         WelcomeCard.Visibility = Visibility.Collapsed;
         WelcomeLookCard.Visibility = Visibility.Visible;
         BuildWelcomeLooks();
@@ -74,25 +76,39 @@ public partial class MainWindow
         SetWelcome(false);
         // first run: check the chat, the loot list and the HP bar read, step by step; then place the panel over the game
         OpenCalibration(this).Closed += (_, _) => PlacementGuideOwed();
-        Say($"Server set to {_wServer.Label} · {_wServer.Region.Name}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", "Good");
+        Say(L.F("Server set to {0} · {1}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", _wServer.Label, _wServer.Region.Name), "Good");
     }
 
     /* ---------------- the look step ---------------- */
 
     string _wLook = HudLooks.Default;
+    /// <summary>The theme whose looks the step shows (Ui/Themes/HudThemes.cs): Classic, Wacky, Tactical or Glitch.</summary>
+    string _wTheme = HudThemes.Classic;
+
+    /// <summary>The looks the step offers for a theme: Classic's in the step's own order, a theme's in its picker order.</summary>
+    internal static IReadOnlyList<string> WelcomeLooksOf(string theme) =>
+        theme == HudThemes.Classic ? WelcomeLooks : HudThemes.Looks(theme).Select(l => l.Key).ToList();
 
     /// <summary>The look step's buttons, in their order: Buddy, the default, first; then the fight looks; then the other two older ones.</summary>
     internal static readonly string[] WelcomeLooks = { HudLooks.Card, HudLooks.Auto, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float, HudLooks.Strip, HudLooks.Ticker };
 
-    /// <summary>A dark game scene under the looks, whatever the window's skin (as Options' look picker).</summary>
-    static readonly Brush WelcomeScene = Freeze(new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90));
-    static Brush Freeze(Brush b) { b.Freeze(); return b; }
+    /// <summary>The game under the looks, whatever the window's skin (as Options' look picker: a real farming frame, HudKit.GameScene).</summary>
+    static Brush WelcomeScene => HudKit.GameScene();
 
     /// <summary>A button per look, the picked one outlined; hovering one draws it on the stage, leaving draws the picked one again.</summary>
     void BuildWelcomeLooks()
     {
+        // the themes first: a chip each, the one shown lit; its looks under them
+        WelcomeThemeHost.Children.Clear();
+        foreach (var t in HudThemes.All)
+        {
+            var tk = t.Key;
+            var chip = Chip(L.T(t.Name), tk == _wTheme, () => PickWelcomeTheme(tk), L.T(t.Hint));
+            chip.Tag = "theme:" + tk;
+            WelcomeThemeHost.Children.Add(chip);
+        }
         WelcomeLookHost.Children.Clear();
-        foreach (var key in WelcomeLooks)
+        foreach (var key in WelcomeLooksOf(_wTheme))
         {
             var l = HudLooks.All.First(x => x.Key == key);
             bool on = key == _wLook;
@@ -127,6 +143,16 @@ public partial class MainWindow
         BuildWelcomeLooks();
     }
 
+    /// <summary>A theme picked: its looks shown, its first picked (the look in use kept when it is the theme's).</summary>
+    void PickWelcomeTheme(string theme)
+    {
+        if (theme == _wTheme) return;
+        _wTheme = theme;
+        if (HudThemes.Of(_wLook) != theme) _wLook = WelcomeLooksOf(theme).First();
+        WelcomeLookStage.Tag = null;
+        BuildWelcomeLooks();
+    }
+
     /// <summary>The stage: one look over the dark scene with the sample figures Options draws, as large as the stage holds.</summary>
     void ShowWelcomeLook(string key)
     {
@@ -157,6 +183,8 @@ public partial class MainWindow
     internal void WelcomeServerDoneForTest() => WelcomeServerDone();
     internal void FinishWelcomeForTest() => FinishWelcome();
     internal void PickWelcomeLookForTest(string key) => PickWelcomeLook(key);
+    internal void PickWelcomeThemeForTest(string theme) => PickWelcomeTheme(theme);
+    internal (string Theme, List<string> Chips) WelcomeThemeForTest => (_wTheme, WelcomeThemeHost.Children.OfType<FrameworkElement>().Select(c => c.Tag as string ?? "").ToList());
     internal void HoverWelcomeLookForTest(string? key)
     {
         var b = WelcomeLookHost.Children.OfType<Border>().FirstOrDefault(x => (string)x.Tag == (key ?? _wLook));
@@ -215,7 +243,7 @@ public partial class MainWindow
             ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.Label} · {srv.Region.Name}"; WelcomeHint.Foreground = B("Good"); }));
         }
         WelcomeGo.IsEnabled = _wServer != null;
-        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }
+        if (_wServer == null) { WelcomeHint.Text = L.T("Pick your server to continue."); WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }
     }
 
     /* ---------------- skins ---------------- */

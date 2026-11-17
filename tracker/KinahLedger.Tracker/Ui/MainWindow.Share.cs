@@ -104,9 +104,47 @@ public partial class MainWindow
     {
         SharePicture.Run => LastRunFacts(),
         SharePicture.Week => WeekShareFacts(),
+        // in the Abyss (Steven, 2026-11-16): the Abyss's own picture, its points an hour and its drops only
+        SharePicture.Today when _heroAbyss && TodayEngine is { } day && AbyssShareFacts(day, SharePicture.Today) is { } ta => ta,
         SharePicture.Today => TodayShareFacts(),
+        _ when _heroAbyss && _shareEngine is { } se && AbyssShareFacts(se, SharePicture.Session) is { } sa => sa,
         _ => _shareSession is { Made: > 0 } s ? s : null,
     };
+
+    /// <summary>The count the Session side was last drawn from (FillNumbers), for the Abyss's picture.</summary>
+    SessionEngine? _shareEngine;
+
+    /// <summary>
+    /// A count's time in the Abyss as a picture: only the Abyss's zones (Ocr.ZoneLocator.IsAbyss): their Abyss Points, Rank
+    /// Points, kills (players apart), deaths, time, Kinah and drops. Null when nothing was picked up or fought there.
+    /// </summary>
+    ShareFacts? AbyssShareFacts(SessionEngine e, string scope)
+    {
+        var zones = e.ZoneSnapshot().Where(kv => Ocr.ZoneLocator.IsAbyss(kv.Key)).ToList();
+        if (zones.Count == 0) return null;
+        long points = zones.Sum(z => z.Value.AbyssPoints), rank = zones.Sum(z => z.Value.RankPoints), lost = zones.Sum(z => z.Value.RankLost), kinah = zones.Sum(z => z.Value.Kinah);
+        int pvp = zones.Sum(z => z.Value.PlayerKills), kills = zones.Sum(z => z.Value.Kills), deaths = zones.Sum(z => z.Value.Deaths);
+        double secs = zones.Sum(z => z.Value.Active);
+        if (points <= 0 && rank <= 0 && kills <= 0) return null;
+        var its = new Dictionary<long, (int Sell, int Bound)>();
+        foreach (var (_, z) in zones)
+        {
+            foreach (var (id, n) in z.Items) { var h = its.GetValueOrDefault(id); its[id] = (h.Sell + n, h.Bound); }
+            foreach (var (id, n) in z.ItemsBound) { var h = its.GetValueOrDefault(id); its[id] = (h.Sell, h.Bound + n); }
+        }
+        var drops = its.Where(kv => kv.Value.Sell + kv.Value.Bound > 0).Select(kv =>
+        {
+            var name = _items.NameOf(kv.Key);
+            long worth = kv.Value.Sell > 0 && PriceBook.Price(name) is long p ? (long)Math.Round(p * kv.Value.Sell * PriceBook.SellerKeeps) : 0;
+            return new ShareDrop(name, GatheringCatalog.Find(name)?.Grade ?? _items.Get(kv.Key)?.Grade ?? "", kv.Value.Sell + kv.Value.Bound, worth) { Bound = kv.Value.Bound };
+        }).ToList();
+        var top = zones.OrderByDescending(z => z.Value.AbyssPoints).ThenByDescending(z => z.Value.Active).First().Key;
+        string title = zones.Count == 1 ? top : $"{top} and {zones.Count - 1} more";
+        return new ShareFacts(scope, DateTime.Now, ShareServer(), title, "in the Abyss", secs, kills, "kill", kinah + drops.Sum(d => d.Worth), drops)
+        {
+            Kinah = kinah, Abyss = new ShareAbyss(points, rank, lost, pvp, kills, deaths),
+        };
+    }
 
     /// <summary>Today: the day's farming in every zone, as LOOT's Today side counts it (drops and gathering, Kinah, the zones).</summary>
     ShareFacts? TodayShareFacts()
@@ -203,8 +241,11 @@ public partial class MainWindow
     }
 
     /// <summary>From FillNumbers: this session's picture, the same zone, time and total the card shows.</summary>
-    void SetShareSession(SessionEngine e, TimeSpan elapsed, long totalNow) =>
+    void SetShareSession(SessionEngine e, TimeSpan elapsed, long totalNow)
+    {
+        _shareEngine = e;
         _shareSession = FarmShareFacts(e, SharePicture.Session, elapsed.TotalSeconds, totalNow, DateTime.Now);
+    }
 
     /// <summary>From StopTracking: the run just stopped, for Last run.</summary>
     void KeepShareRun(SessionEngine e)
@@ -637,6 +678,9 @@ public partial class MainWindow
         foreach (var scope in new[] { SharePicture.Today, SharePicture.Session, SharePicture.Run, SharePicture.Week })
             if (ShareFactsFor(scope) is { } f) SavePng(RenderSharePicture(SharePicture.Compose(f, false, null, Fk)), System.IO.Path.Combine(dir, $"ui-share-picture-{scope}.png"));
         if (ShareFactsFor(SharePicture.Today) is { } s) SavePng(RenderSharePicture(SharePicture.Compose(s, true, "Aerin", Fk)), System.IO.Path.Combine(dir, "ui-share-picture-named.png"));
+        // the Abyss's picture (its points an hour, Rank Points, PvP; the sample's drops stand in for the Abyss's own)
+        if (ShareFactsFor(SharePicture.Session) is { } a)
+            SavePng(RenderSharePicture(SharePicture.Compose(a with { Seconds = 3600, Title = "Lower Abyss", Abyss = new ShareAbyss(18_420, 4_210, 380, 3, 96, 2) }, false, null, Fk)), System.IO.Path.Combine(dir, "ui-share-picture-abyss.png"));
     }
 
     /// <summary>Layout renders: the open sheet drawn again on its own, whole, over <paramref name="page"/> (the window stops at the screen's height).</summary>

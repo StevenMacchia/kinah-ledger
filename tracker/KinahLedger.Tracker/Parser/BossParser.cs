@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using KinahLedger.Packets;
 
 namespace KinahLedger.Parser;
@@ -1010,6 +1010,7 @@ public sealed class BossParser
     static void StreamHit(AbilityShare a, HitDealt h)
     {
         if (h.NoRow) return;   // a part with no hit under it: its damage is counted already, it is no hit
+        a.Picks |= Abilities.PicksOf(h.Ranked);
         a.StreamHits = (a.StreamHits ?? 0) + 1;
         long amt = Math.Max(0, h.Amount);
         a.StreamDamage = (a.StreamDamage ?? 0) + amt;
@@ -1045,17 +1046,44 @@ public sealed class BossParser
     static void Heal(Encounter e, HealDone hl)
     {
         if (hl.At < e.Start || (e.End is { } end && hl.At > end) || Member(e, hl.Source) is not { } m) return;
-        m.Healing += hl.Amount;
+        // a heal of another class's skill is that class's member's (Steven, 2026-11-16: a Chanter's Sprint Mantra came named
+        // for each member it healed, as their own self-heal): the group's one member of the skill's class, the heal on others
+        // unless it landed on them; two of that class, or none, and it stays where it came
+        if (!hl.Potion && CasterOf(e, m, hl.Skill) is { } caster) { m = caster; hl = hl with { Source = caster.Id, Self = hl.Target == caster.Id }; Recredited += hl.Amount; }
         long eff = Math.Clamp(hl.Effective, 0, hl.Amount);
-        m.HealingEffective += eff;
-        if (hl.Estimate) m.HealingEstimated += eff;
-        if (hl.Self) { m.HealingSelf += hl.Amount; if (hl.Potion) m.HealingPotions += hl.Amount; }
+        // a potion is in no heal figure (Steven, 2026-11-15: "self heals should count, potions should not"): kept apart, and
+        // listed by ability as a potion; a heal of your own from a skill counts as any heal
+        if (hl.Potion) m.HealingPotions += hl.Amount;
+        else
+        {
+            m.Healing += hl.Amount;
+            m.HealingEffective += eff;
+            if (hl.Estimate) m.HealingEstimated += eff;
+            if (hl.Self) m.HealingSelf += hl.Amount;
+        }
         var list = m.Heals ??= new();
         var a = list.FirstOrDefault(x => x.Skill == hl.Skill);
         if (a == null) list.Add(a = new HealShare { Skill = hl.Skill, Potion = hl.Potion });
         a.Healing += hl.Amount; a.Effective += eff; a.Hits++;
         if (hl.Self) a.Self += hl.Amount;
     }
+
+    /// <summary>
+    /// The member a heal's skill belongs to when it isn't the named healer's class: the group's only member of the skill's class
+    /// (from the skill list, else the id's family); null when the skill is the healer's own class, has no class, or the group
+    /// has no one, or two, of it.
+    /// </summary>
+    internal static Fighter? CasterOf(Encounter e, Fighter named, int skill)
+    {
+        int s = skill >= 100_000_000 ? Abilities.SkillOfEffect(skill) : skill;
+        string cls = Abilities.ClassOf(s);
+        if (cls.Length == 0 || named.Class.Length == 0 || string.Equals(cls, named.Class, StringComparison.OrdinalIgnoreCase)) return null;
+        var of = e.Roster.Where(f => !f.Other && string.Equals(f.Class, cls, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
+        return of.Count == 1 ? of[0] : null;
+    }
+
+    /// <summary>Healing moved to its skill's caster by <see cref="CasterOf"/> (replays print it).</summary>
+    [ThreadStatic] public static long Recredited;
 
     /// <summary>Who dealt a hit taken, in words: the boss's name when it was the boss, a member's when a member, else "".</summary>
     string SourceName(Encounter e, long attacker) => attacker == 0 ? "" : _cur != null && attacker == _cur.BossId ? _cur.Boss : Member(e, attacker)?.Name ?? "";
@@ -1256,7 +1284,7 @@ public sealed class BossParser
         if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
-        Log($"{e.Boss}: {e.OutcomeLabel.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
+        Log($"{e.Boss}: {e.OutcomeWord.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
         // the run and the fight around it heard of it too; a kill is the fight's (its own pause decides its end)
         if (_fight != null && _fight.Boss.Length > 0) _fight.BossResult = e.Outcome;
         foreach (var r in new[] { _run, _fight })
@@ -1284,7 +1312,7 @@ public sealed class BossParser
         r.Boss = "";
         var secs = r.Duration(r.End.Value).TotalSeconds;
         bool worth = r.Splits.Count > 0 || secs >= RunMinSeconds;
-        Log($"run: {r.Instance} {r.OutcomeLabel.ToLowerInvariant()} after {Clock(r.Duration(r.End.Value))}, {r.Splits.Count} bosses{(why != null ? $" ({why})" : "")}{(worth ? "" : ", too short to keep")}");
+        Log($"run: {r.Instance} {r.OutcomeWord.ToLowerInvariant()} after {Clock(r.Duration(r.End.Value))}, {r.Splits.Count} bosses{(why != null ? $" ({why})" : "")}{(worth ? "" : ", too short to keep")}");
         if (worth) done.Add(Copy(r));
     }
 
@@ -1300,7 +1328,7 @@ public sealed class BossParser
         // open world and the Abyss: shown while it lasted, never kept, and the log says no more than that it ended
         if (f.OpenWorld) { Log("fight: an open-world fight ended (shown live only, not kept)"); return; }
         bool worth = f.YourKills > 0 || f.YourDeaths > 0 || f.Boss.Length > 0 || (f.HasDamage && f.Duration(f.End.Value).TotalSeconds >= MinSeconds);
-        Log($"fight: {f.Title} in {f.Instance} {f.OutcomeLabel.ToLowerInvariant()} after {Clock(f.Duration(f.End.Value))}{(why != null ? $" ({why})" : "")}{(worth ? "" : ", nothing to keep")}");
+        Log($"fight: {f.TitleWord} in {f.Instance} {f.OutcomeWord.ToLowerInvariant()} after {Clock(f.Duration(f.End.Value))}{(why != null ? $" ({why})" : "")}{(worth ? "" : ", nothing to keep")}");
         if (worth) done.Add(Copy(f));
     }
 
@@ -1340,8 +1368,10 @@ public sealed class BossParser
                 CloseFight(f.LastAt, done, null);
                 _version++;
             }
-            // Always on, outside the three: a few seconds with nobody of yours fighting, and the next hit starts the meter from 0
-            if (_always is { } al && !Kept(_kind) && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
+            // Always on: a few seconds with nobody of yours fighting, and the next hit starts the meter from 0; in a dungeon too
+            // since 0.10.132 (Steven, 2026-11-16: "in dungeons it should show the DPS meter but restart on the fight (like open
+            // world)"): each trash pack its own meter, a boss pull still its own
+            if (_always is { } al && (now - _alwaysActiveAt).TotalSeconds >= AlwaysIdleSeconds)
             {
                 // held at the group's last hit dealt (Steven, 2026-11-15: "the dps meter can continue to drop for a few seconds
                 // before pausing - if nothing else is hit go back to the dps before it started dropping"): the live figure falls
@@ -1351,7 +1381,7 @@ public sealed class BossParser
                 // a fight of one hit (a mob killed at once) joins the fight before it out here (Steven, 2026-11-15: "yes, merge
                 // them"): held alone it read the hit over a second, the opening spike, never the pace
                 if ((ourLastHit - ourFirstHit).TotalSeconds < Encounter.MinDpsSeconds && _alwaysEnded is { Mode: "fight", End: { } } prev
-                    && !Kept(Encounter.KindOf(prev.Kind)) && prev.Kind == al.Kind)
+                    && prev.Kind == al.Kind && prev.Instance == al.Instance)
                 {
                     _always = null;
                     al.End = Max(Min(ourLastHit, al.LastAt), al.Start);
@@ -1415,7 +1445,7 @@ public sealed class BossParser
                 {
                     MarkPartial(s, "the tracker restarted during it");
                     if (m != ParserMode.Fights) { _kind = Encounter.KindOf(s.Kind); _instance = s.Instance; _instanceId = s.InstanceId; }
-                    Log($"{s.Title}: carries on after the tracker restarted");
+                    Log($"{s.TitleWord}: carries on after the tracker restarted");
                     continue;
                 }
                 MarkPartial(s, "the tracker closed during it");

@@ -134,6 +134,22 @@ public static class RunRecount
 
     // ---- the verdict ----
 
+    /// <summary>
+    /// The re-read (0.10.134): a run whose table left slots not read (53 of Steven's 64 Ferocious Horn Den runs, its gold and
+    /// blue gear), read before the reader laid icons on the slot's real backing (<paramref name="before"/>), read again once.
+    /// </summary>
+    public static string? NotEligibleReread(InstanceRun r, DateTime before)
+    {
+        if (r.Kind is not ("Expedition" or InstanceLog.Transcendence)) return "not an expedition";
+        if (!r.FromPicture || r.RewardsNotRead) return "not counted from a reward table";
+        if (r.Tables != 1 || r.TableAt is not DateTime at) return "not one table";
+        if (at >= before) return "read by the reader that sees the backing";
+        if (r.Reread != null) return "read again already";
+        if (r.SlotsUnread <= 0 && r.UnknownItems <= 0 && r.UnknownGear <= 0) return "every slot named";
+        if (r.Resend) return "a correction waiting to go, kept as it is";
+        return null;
+    }
+
     /// <summary>What a read of the pictures is against the run as it stands: taken or not, why, and the slots and gear before and after.</summary>
     public sealed record Verdict(bool Take, bool Same, string Why, int SlotsBefore, int SlotsAfter, int GearBefore, int GearAfter);
 
@@ -152,25 +168,39 @@ public static class RunRecount
     public static int Gear(InstanceRun r, Func<long, InstanceRun, bool?> gearOf) =>
         r.UnknownGear + r.Items.Concat(r.BoundItems).Where(kv => kv.Value > 0 && gearOf(kv.Key, r) == true).Sum(kv => kv.Value);
 
-    public static Verdict Judge(InstanceRun stored, InstanceRun? read, Func<long, InstanceRun, bool?> gearOf)
+    public static Verdict Judge(InstanceRun stored, InstanceRun? read, Func<long, InstanceRun, bool?> gearOf, Func<long, string>? nameOf = null)
     {
         int sb = Slots(stored, gearOf), gb = Gear(stored, gearOf);
         if (read == null || !read.FromPicture) return new(false, false, "its pictures weren't read as a table", sb, 0, gb, 0);
         int sa = Slots(read, gearOf), ga = Gear(read, gearOf);
+        // the re-read keeps the run's Kinah: a bound coin the run left at 0 is no slot more
+        if (nameOf != null && stored.Kinah == 0 && read.Kinah > 0) sa--;
         Verdict V(bool take, string why, bool same = false) => new(take, same, why, sb, sa, gb, ga);
-        if (read.Kinah != stored.Kinah) return V(false, $"its coin read {read.Kinah:N0}{(read.KinahNotRead ? " (not read)" : "")}, the run has {stored.Kinah:N0}");
+        // the re-read keeps the run's Kinah and only adds: a coin the run left at 0 (an Exploration's bound Kina, set aside) is no other table
+        bool coinOk = read.Kinah == stored.Kinah || (nameOf != null && stored.Kinah == 0);
+        if (!coinOk) return V(false, $"its coin read {read.Kinah:N0}{(read.KinahNotRead ? " (not read)" : "")}, the run has {stored.Kinah:N0}");
         if (sa > sb) return V(false, $"the new read has more slots ({sa}) than the run ({sb})");
         if (SameCounts(stored.Items, read.Items) && SameCounts(stored.BoundItems, read.BoundItems) && stored.UnknownGear == read.UnknownGear && stored.UnknownItems == read.UnknownItems)
             return V(false, "the same rewards", same: true);
         int ub = stored.UnknownGear + stored.UnknownItems, ua = read.UnknownGear + read.UnknownItems;
         if (ua > ub) return V(false, $"the new read leaves more slots unnamed ({ua}) than the run ({ub})");
+        if (nameOf != null && ua >= ub) return V(false, "the new read names no slot the run left unnamed", same: ua == ub);
         // as many slots, so no floor to take away: only slots not read before may be named now. One the run named that the
         // new read names otherwise is a close call two reads made two ways (a run's live read voted ten frames and heard the
         // chat), so the run keeps its own (2026-11-05 15:07 Fire Temple: Earth Staff live, Corrupted Judicator Cloak now)
         if (sa == sb)
         {
-            var was = Combined(stored); var now = Combined(read);
-            if (was.Any(kv => now.GetValueOrDefault(kv.Key) < kv.Value)) return V(false, "as many slots, but an item the run named is named otherwise");
+            if (nameOf != null)
+            {
+                // by name: a piece named by the other id of its name (Black Claw Bow 110440046 / 110440048) is the same piece
+                var wn = ByName(stored, nameOf); var nn = ByName(read, nameOf);
+                if (wn.Any(kv => nn.GetValueOrDefault(kv.Key) < kv.Value)) return V(false, "as many slots, but an item the run named is named otherwise");
+            }
+            else
+            {
+                var was = Combined(stored); var now = Combined(read);
+                if (was.Any(kv => now.GetValueOrDefault(kv.Key) < kv.Value)) return V(false, "as many slots, but an item the run named is named otherwise");
+            }
         }
         return V(true, sa < sb ? $"{sb - sa} slot(s) fewer" : "other items");
     }
@@ -201,8 +231,9 @@ public static class RunRecount
     /// on them. Its Kinah, times, witnesses and everything else stay. The counts that went down are kept in
     /// <see cref="InstanceRun.RepairedFrom"/>, and a run the site has goes again as a correction.
     /// </summary>
-    public static InstanceRun Recounted(InstanceRun stored, InstanceRun read, IReadOnlyList<string> pictures, ItemDictionary items, DateTime now)
+    public static InstanceRun Recounted(InstanceRun stored, InstanceRun read, IReadOnlyList<string> pictures, ItemDictionary items, DateTime now, bool reread = false)
     {
+        if (reread) return Merged(stored, read, pictures, items, now);
         var r = stored.Clone();
         var before = new Dictionary<long, int>();
         foreach (var (id, n) in stored.Items.Concat(stored.BoundItems)) before[id] = before.GetValueOrDefault(id) + n;
@@ -214,10 +245,42 @@ public static class RunRecount
         var after = new Dictionary<long, int>();
         foreach (var (id, n) in r.Items.Concat(r.BoundItems)) after[id] = after.GetValueOrDefault(id) + n;
         foreach (var (id, n) in before) if (after.GetValueOrDefault(id) < n) r.RepairedFrom[id] = n;
+        if (reread) foreach (var (id, n) in after) if (n > before.GetValueOrDefault(id)) r.RaisedFrom[id] = before.GetValueOrDefault(id);
         foreach (var id in after.Keys) if (id < 0 && !r.Names.ContainsKey(id) && items.Get(id)?.Name is { Length: > 0 } nm) r.Names[id] = nm;
         r.Pictures = pictures.ToList();
-        r.Recounted = now;
-        r.Resend = r.RepairedFrom.Count > 0 && InstanceLog.WentToSite(stored);
+        if (reread) r.Reread = now; else r.Recounted = now;
+        r.Resend = (r.RepairedFrom.Count > 0 || r.RaisedFrom.Count > 0) && InstanceLog.WentToSite(stored);
+        return r;
+    }
+
+    /// <summary>
+    /// The re-read's record: the run as it was, every item it named kept under its own id (a re-read never renames: the site
+    /// has those), and only what the new read names beyond it added, by name (the slots the run left unnamed). The new read's
+    /// slots not read replace the run's. What it added is kept in <see cref="InstanceRun.RaisedFrom"/> for the site.
+    /// </summary>
+    static InstanceRun Merged(InstanceRun stored, InstanceRun read, IReadOnlyList<string> pictures, ItemDictionary items, DateTime now)
+    {
+        var r = stored.Clone();
+        string Name(long id) => (items.NameOf(id) is { Length: > 0 } n ? n : r.Names.GetValueOrDefault(id) ?? read.Names.GetValueOrDefault(id) ?? id.ToString()).Replace(" (Bound)", "");
+        var had = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, n) in stored.Items.Concat(stored.BoundItems)) had[Name(id)] = had.GetValueOrDefault(Name(id)) + n;
+        foreach (var (id, n, bound) in read.Items.Select(kv => (kv.Key, kv.Value, false)).Concat(read.BoundItems.Select(kv => (kv.Key, kv.Value, true))))
+        {
+            var nm = Name(id);
+            int more = n - had.GetValueOrDefault(nm);
+            if (more <= 0) { had[nm] = had.GetValueOrDefault(nm) - n; continue; }
+            had[nm] = 0;
+            var into = bound ? r.BoundItems : r.Items;
+            if (!r.RaisedFrom.ContainsKey(id)) r.RaisedFrom[id] = stored.Items.GetValueOrDefault(id) + stored.BoundItems.GetValueOrDefault(id);
+            into[id] = into.GetValueOrDefault(id) + more;
+            if (bound) r.Bound += more;
+            if (id < 0 && !r.Names.ContainsKey(id) && (items.Get(id)?.Name ?? read.Names.GetValueOrDefault(id)) is { Length: > 0 } nn) r.Names[id] = nn;
+        }
+        r.SlotsUnread = read.SlotsUnread; r.UnknownSlots = new(read.UnknownSlots); r.UnknownItems = read.UnknownItems;
+        r.UnknownGear = read.UnknownGear; r.GearNotes = new(read.GearNotes);
+        r.Pictures = pictures.ToList();
+        r.Reread = now;
+        r.Resend = r.RaisedFrom.Count > 0 && InstanceLog.WentToSite(stored);
         return r;
     }
 
@@ -279,7 +342,7 @@ public static class RunRecount
     /// so a start's background pass leaves the game its share of the PC).
     /// </summary>
     public static async Task<Plan> PlanAsync(string dataDir, string shotsDir, Settings settings, ItemDictionary items, DateTime before, Func<string, string> serverOf,
-        Action<string>? say = null, Func<Task>? between = null, CancellationToken ct = default)
+        Action<string>? say = null, Func<Task>? between = null, CancellationToken ct = default, bool reread = false)
     {
         var plan = new Plan();
         var pictures = PicturesIn(shotsDir);
@@ -298,7 +361,7 @@ public static class RunRecount
             foreach (var (line, r) in runs)
             {
                 ct.ThrowIfCancellationRequested();
-                if (NotEligible(r, before) != null) continue;
+                if ((reread ? NotEligibleReread(r, before) : NotEligible(r, before)) != null) continue;
                 plan.Looked++;
                 var pics = PicturesFor(r, pictures);
                 if (pics.Count == 0) { plan.Left.Add(new(file, r, "no table picture kept", null)); continue; }
@@ -311,9 +374,9 @@ public static class RunRecount
                 }
                 catch (Exception ex) { CrashLog.Write("recount: read", ex); plan.Left.Add(new(file, r, "its pictures couldn't be read: " + ex.Message, null)); continue; }
                 if (read != null) KeepBound(r, read);
-                var v = Judge(r, read, gearOf);
+                var v = Judge(r, read, gearOf, reread ? id => items.NameOf(id) : null);
                 var names = pics.Select(p => p.Name).ToList();
-                if (v.Take) plan.Changes.Add(new(file, line, r, Recounted(r, read!, names, items, DateTime.UtcNow), v, names, notes));
+                if (v.Take) plan.Changes.Add(new(file, line, r, Recounted(r, read!, names, items, DateTime.UtcNow, reread), v, names, notes));
                 else if (v.Same) plan.Same++;
                 else plan.Left.Add(new(file, r, v.Why, v, names));
                 say?.Invoke($"{r.Zone} {r.Start.ToLocalTime():MMM d HH:mm}: {(v.Take ? "CHANGE" : v.Same ? "same" : "left")} slots {v.SlotsBefore} -> {v.SlotsAfter}, gear {v.GearBefore} -> {v.GearAfter} ({v.Why})");
@@ -374,6 +437,13 @@ public static class RunRecount
         }
         foreach (var l in plan.Left)
             yield return $"left as it was: {l.Run.Label} {l.Run.Start.ToLocalTime():yyyy-MM-dd HH:mm:ss} ({Path.GetFileName(Path.GetDirectoryName(l.File))}): {l.Why}" + (l.Verdict is { } v ? $" (slots {v.SlotsBefore} -> {v.SlotsAfter})" : "") + (l.Pictures is { Count: > 0 } lp ? $" [{string.Join(", ", lp)}]" : "");
+    }
+
+    static Dictionary<string, int> ByName(InstanceRun r, Func<long, string> nameOf)
+    {
+        var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, n) in r.Items.Concat(r.BoundItems)) { var k = nameOf(id).Replace(" (Bound)", ""); d[k] = d.GetValueOrDefault(k) + n; }
+        return d;
     }
 
     static Dictionary<long, int> Combined(InstanceRun r)

@@ -20,7 +20,11 @@ public partial class MainWindow
     /// <summary>From the window's start, when it watches the game: the re-count, unless it ran already.</summary>
     void InitRecount(bool watch)
     {
-        if (!watch || _demo || Characters.Recounted) return;
+        if (!watch || _demo) return;
+        // the re-read (0.10.134): every table this PC read before this start was read by the reader that lays icons on one
+        // flat colour, so the ones that left slots unnamed are read again, once, after the re-count below if that runs too
+        _rereadBefore = DateTime.UtcNow;
+        if (Characters.Recounted) { if (!Characters.Reread) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () => _ = RereadRunsAsync()); return; }
         // the version that ran before this start (ui.json LastVersion, read before AnnounceUpdated writes this one's): one
         // older than 0.10.54 read every table it kept with the old reader, whenever that was
         if (Update.Updater.ParseVersion(_prefs.LastVersion) is { } was && was < new Version(0, 10, 54)) _recountBefore = DateTime.UtcNow;
@@ -60,6 +64,50 @@ public partial class MainWindow
             }
         }
         catch (Exception ex) { CrashLog.Write("recount", ex); Characters.MarkRecounted(); }
+        finally { _recounting = false; }
+        if (!Characters.Reread) await RereadRunsAsync();
+    }
+
+    DateTime _rereadBefore = DateTime.UtcNow;
+
+    /// <summary>
+    /// The re-read (Steven, 2026-11-16: the profile "is missing all of the gold gear for ferocious den ... HAS to be
+    /// accurate"): the runs whose table left slots unnamed, read again from their pictures with the reader that sees the
+    /// slot's real backing. A run takes the new read only on the re-count's terms (its Kinah the same, no more slots, fewer
+    /// unnamed, nothing it named named otherwise); what it raised goes to the site as a correction that adds. Once per PC.
+    /// </summary>
+    async Task RereadRunsAsync()
+    {
+        if (_recounting) return;
+        _recounting = true;
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(RecountDelaySeconds));
+            if (Characters.Reread || Characters.NeedsPlacing || _placing) return;
+            var dataDir = CrashLog.Dir;
+            var settings = _settings; var items = _items; var before = _rereadBefore;
+            var servers = RunRecount.ServersOf(dataDir, _prefs.Server);
+            var plan = await Task.Run(() => RunRecount.PlanAsync(dataDir, EventShotRecovery.ShotsDir, settings, items, before, servers,
+                between: () => Task.Delay(TimeSpan.FromSeconds(RecountPauseSeconds)), reread: true));
+            int written = 0;
+            if (plan.Changes.Count > 0)
+            {
+                if (_watcher.Chat is { } ch) ch.Instances.Reload(() => written = RunRecount.Apply(plan)); else written = RunRecount.Apply(plan);
+                BestRuns.Reset();
+                Redraw();
+            }
+            Characters.MarkReread();
+            int named = plan.Changes.Sum(c => Math.Max(0, (c.Before.SlotsUnread + c.Before.UnknownItems + c.Before.UnknownGear) - (c.After.SlotsUnread + c.After.UnknownItems + c.After.UnknownGear)));
+            try { File.WriteAllLines(Path.Combine(dataDir, "reread.log"), new[] { $"re-read of tables with slots not read: {plan.Looked} looked at, {written} changed, {named} slot(s) named now", "" }.Concat(RunRecount.Report(plan, items))); }
+            catch (Exception) { }
+            CrashLog.Note($"re-read of tables with slots not read: {plan.Looked} looked at, {written} run(s) written, {named} slot(s) named now; every run in reread.log");
+            if (written > 0)
+            {
+                SayOnLine($"Past expedition rewards read again from their pictures: {named} item(s) named that were left unread, in {written} run(s).", "Faint");
+                _statusHoldUntil = DateTime.UtcNow.AddSeconds(20);
+            }
+        }
+        catch (Exception ex) { CrashLog.Write("reread", ex); Characters.MarkReread(); }
         finally { _recounting = false; }
     }
 }

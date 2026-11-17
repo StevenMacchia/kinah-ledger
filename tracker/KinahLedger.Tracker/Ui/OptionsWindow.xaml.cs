@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -44,14 +44,18 @@ public partial class OptionsWindow : Window
         _host = host;
         _saved = _edit = host.CurrentOptions();
         Icon = Native.AppIconSource();
-        var version = "Version " + Upload.RunPayload.AppVersion;
-        NavVersion.Text = version; AboutVersion.Text = version + " · for Aion 2 (global)";
+        var version = L.F("Version {0}", Upload.RunPayload.AppVersion);
+        NavVersion.Text = version; AboutVersion.Text = version + L.T(" · for Aion 2 (global)");
 
         BuildNav();
-        GameStartBox.ItemsSource = GameStartChoices;
+        GameStartBox.ItemsSource = GameStartChoices.Select(L.T).ToList();
         RegionPick.ItemsSource = Servers.Regions;
         Load(_edit);
         Wire();
+        WireLanguage();
+        L.Apply(this);   // the window's own words in the player's language (Ui/Lang.cs)
+        Title = L.T(Title);
+        foreach (var link in new[] { WhatsSentLink, WhatsReadLink, ReleasesLink, ReleasesDiscordLink }) foreach (var run in link.Inlines.OfType<System.Windows.Documents.Run>()) run.Text = L.T(run.Text);   // links are not TextBlocks, L.Apply skips them
         Go(page);
 
         _live.Tick += (_, _) => RefreshLive();
@@ -61,6 +65,28 @@ public partial class OptionsWindow : Window
         Closed += (_, _) => _live.Stop();
     }
 
+    /// <summary>
+    /// General › Look › Language: English, 한국어 or 繁體中文 (or Windows' own), kept at once on its own (not with Save:
+    /// the windows are built in one language, so it takes effect at the next start, and the hint says so).
+    /// </summary>
+    void WireLanguage()
+    {
+        LanguagePick.ItemsSource = L.Choices.Select(c => c.Code == "auto" ? $"{L.T(c.Name)} ({L.Choices.First(x => x.Code == L.Resolve("auto")).Name})" : c.Name).ToList();
+        string picked = L.Picked;
+        LanguagePick.SelectedIndex = Math.Max(0, Array.FindIndex(L.Choices, c => c.Code == picked));
+        LanguagePick.SelectionChanged += (_, _) =>
+        {
+            if (LanguagePick.SelectedIndex < 0) return;
+            var code = L.Choices[LanguagePick.SelectedIndex].Code;
+            L.Pick(code);
+            LanguageHint.Text = L.Resolve(code) == L.Code ? L.T("The words in the window and the overlays. Skill, boss and item names stay as the game's English data has them. Takes effect the next time Kinah Ledger starts.")
+                : L.T("Saved. Close Kinah Ledger from the tray icon and start it again to switch.");
+        };
+    }
+
+    /// <summary>For the tests: the language picker.</summary>
+    internal System.Windows.Controls.ComboBox LanguagePickForTest => LanguagePick;
+
     /* ---------------- pages ---------------- */
 
     void BuildNav()
@@ -68,7 +94,7 @@ public partial class OptionsWindow : Window
         Nav.Children.Clear();
         foreach (var (p, name) in Pages)
         {
-            var b = new Button { Content = name, Style = (Style)FindResource("NavItem"), Tag = p == _page ? "True" : "False" };
+            var b = new Button { Content = L.T(name), Style = (Style)FindResource("NavItem"), Tag = p == _page ? "True" : "False" };
             var target = p;
             b.Click += (_, _) => Go(target);
             Nav.Children.Add(b);
@@ -101,7 +127,7 @@ public partial class OptionsWindow : Window
         _loading = true;
         StartupChk.IsChecked = c.StartWithWindows;
         StartupChk.IsEnabled = _host.CanStartWithWindows;
-        if (!_host.CanStartWithWindows) StartupHint.Text = "Available in the downloaded KinahLedger.exe.";
+        if (!_host.CanStartWithWindows) StartupHint.Text = L.T("Available in the downloaded KinahLedger.exe.");
         GameStartBox.SelectedIndex = c.OnGameStart == "tray" ? 1 : 0;
         HideOnCloseChk.IsChecked = c.HideWhenGameCloses;
         CloseToTrayChk.IsChecked = c.CloseToTray;
@@ -115,8 +141,8 @@ public partial class OptionsWindow : Window
         ExplainChk.IsChecked = c.ExplainCounts;
         InvDetailsChk.IsChecked = c.InventoryDetails;
         PacketChk.IsChecked = c.PacketReading;
-        PacketStateLbl.Text = c.PacketState.Length > 0 ? "Now: " + c.PacketState : "";
-        GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
+        PacketStateLbl.Text = c.PacketState.Length > 0 ? L.T("Now: ") + c.PacketState : "";
+        GrossHint.Text = L.F("Values and profit show after the Market's {0:P0} fee and tax by default. Turn this on to see what things sell for before it.", Data.PriceBook.FeeRate);
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
         ShareChk.IsChecked = c.Share;
@@ -156,10 +182,10 @@ public partial class OptionsWindow : Window
         foreach (var s in Skins.All)
         {
             var key = s.Key;
-            var chip = _host.Chip(s.Name, current == key, () => Edit(_edit with { Skin = key }, previewSkin: true), s.Blurb);
+            var chip = _host.Chip(L.T(s.Name), current == key, () => Edit(_edit with { Skin = key }, previewSkin: true), L.T(s.Blurb));
             SkinHost.Children.Add(chip);
         }
-        SkinHint.Text = Skins.Get(current).Blurb is var b ? char.ToUpperInvariant(b[0]) + b[1..] + "." : "";
+        SkinHint.Text = L.T(Skins.Get(current).Blurb) is var b ? char.ToUpperInvariant(b[0]) + b[1..] + "." : "";
     }
 
     /// <summary>One chip per figure the panel can show; a click adds or takes it away (the last one stays).</summary>
@@ -170,7 +196,7 @@ public partial class OptionsWindow : Window
         foreach (var f in HudFields.All)
         {
             var key = f.Key;
-            var chip = _host.Chip(f.Name, on.Contains(key), () =>
+            var chip = _host.Chip(L.T(f.Name), on.Contains(key), () =>
             {
                 var now = HudFields.Parse(_edit.HudFields);
                 if (!now.Remove(key)) now.Add(key);
@@ -178,7 +204,7 @@ public partial class OptionsWindow : Window
                 Edit(_edit with { HudFields = HudFields.Join(now) });
                 BuildHudFields(_edit.HudFields);
                 BuildHudLooks(_edit.HudLook);   // the Strip's drawing shows the figures picked
-            }, f.Hint);
+            }, L.T(f.Hint));
             HudFieldHost.Children.Add(chip);
         }
     }
@@ -196,9 +222,8 @@ public partial class OptionsWindow : Window
         HudLookHost.Children.Clear();
         var sample = _host.HudSample();
         var fields = HudFields.Parse(_edit.HudFields);
-        var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);   // a dark game scene, whatever the window's skin
-        scene.Freeze();
-        foreach (var l in HudLooks.All)
+        var scene = HudKit.GameScene();   // a scene from the game, whatever the window's skin (Steven, 2026-11-16: "show them over the game")
+        foreach (var l in HudThemes.Looks(HudThemeShown(current)))   // the theme picked's looks (Ui/OptionsWindow.Themes.cs)
         {
             var key = l.Key;
             bool on = key == current;
@@ -210,8 +235,8 @@ public partial class OptionsWindow : Window
             var stage = new Border { Child = thumb, Background = scene, CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 5, 8, 5), HorizontalAlignment = HorizontalAlignment.Stretch };
             var name = new TextBlock { FontSize = 12, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) };
             name.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-            name.Inlines.Add(new System.Windows.Documents.Run(l.Name));
-            if (on) { var r = new System.Windows.Documents.Run("  ·  in use") { FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Link"); name.Inlines.Add(r); }
+            name.Inlines.Add(new System.Windows.Documents.Run(L.T(l.Name)));
+            if (on) { var r = new System.Windows.Documents.Run(L.T("  ·  in use")) { FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Link"); name.Inlines.Add(r); }
             var card = new Border
             {
                 Width = key == HudLooks.Auto ? 388 : 190, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,   // Auto, the widest, across the row: the other six two by two
@@ -222,7 +247,7 @@ public partial class OptionsWindow : Window
             card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
             // the card itself is the pick (a Button's own style would draw its frame over the card in Daylight): a click, or
             // Enter or Space with the keyboard
-            card.ToolTip = l.Hint; card.Focusable = true; card.Tag = key;
+            card.ToolTip = L.T(l.Hint); card.Focusable = true; card.Tag = key;
             card.FocusVisualStyle = (Style)FindResource("FocusRing");
             System.Windows.Automation.AutomationProperties.SetName(card, l.Name + " panel look" + (on ? ", in use" : ""));
             card.MouseLeftButtonUp += (_, _) => PickHudLook(key);
@@ -236,8 +261,8 @@ public partial class OptionsWindow : Window
             var big = HudWindow.Preview(current, fields, sample);
             big.HorizontalAlignment = HorizontalAlignment.Left;
             var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
-            label.Inlines.Add(new System.Windows.Documents.Run(chosen.Name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
-            label.Inlines.Add(new System.Windows.Documents.Run("  ·  at its real size  ·  " + chosen.Hint) { Foreground = new SolidColorBrush(Color.FromRgb(0xAF, 0xB5, 0xC6)) });
+            label.Inlines.Add(new System.Windows.Documents.Run(L.T(chosen.Name)) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
+            label.Inlines.Add(new System.Windows.Documents.Run(L.T("  ·  at its real size  ·  ") + L.T(chosen.Hint)) { Foreground = new SolidColorBrush(Color.FromRgb(0xAF, 0xB5, 0xC6)) });
             HudLookPreview.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 2, 0, 0), Background = scene,
@@ -250,8 +275,8 @@ public partial class OptionsWindow : Window
         HudFieldHost.Opacity = strip ? 1 : .45;
         HudFieldsNote.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
         HudPositionHint.Text = current == HudLooks.Ticker
-            ? "Back to the left of the target bar, at the top of the game's screen. Pop keeps its own spot."
-            : "Back to the top centre of the game's screen, clear of the minimap and the chat.";
+            ? L.T("Back to the left of the target bar, at the top of the game's screen. Pop keeps its own spot.")
+            : L.T("Back to the top centre of the game's screen, clear of the minimap and the chat.");
     }
 
     /// <summary>For the options self-test: a look's thumbnail clicked.</summary>
@@ -328,12 +353,12 @@ public partial class OptionsWindow : Window
         ShareWeekBtn.Click += (_, _) => _host.ShareWeek();
         CopyCodeBtn.Click += (_, _) =>
         {
-            try { Clipboard.SetText(LinkCodeText.Text); ShowNote("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); }
-            catch (Exception) { ShowNote("Couldn't reach the clipboard; the code is " + LinkCodeText.Text, "Warn"); }
+            try { Clipboard.SetText(LinkCodeText.Text); ShowNote(L.T("Link code copied. Paste it into your profile on the site to see your runs there."), "Good"); }
+            catch (Exception) { ShowNote(L.T("Couldn't reach the clipboard; the code is ") + LinkCodeText.Text, "Warn"); }
         };
         ResetIdBtn.Click += (_, _) =>
         {
-            var r = MessageBox.Show(this, "Replace this PC's install ID?\n\nRuns shared from now on can't be tied to earlier ones, and the link code changes. Your profile keeps the runs already linked.",
+            var r = MessageBox.Show(this, L.T("Replace this PC's install ID?\n\nRuns shared from now on can't be tied to earlier ones, and the link code changes. Your profile keeps the runs already linked."),
                 "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r == MessageBoxResult.Yes) { _host.ResetInstallId(); RefreshLive(); }
         };
@@ -363,7 +388,7 @@ public partial class OptionsWindow : Window
         InGameKeysBtn.Click += (_, _) => Go(Page.Tips);   // In game's pointer to where the two keys now live (2026-11-08)
         // tried on the panel at once, kept on Save, moved back on Cancel, like the rest of the page
         HudPlaceBtn.Click += (_, _) => { if (_host.OpenPlacementGuide() is { } why) ShowNote(why, "Warn"); };
-        HudResetBtn.Click += (_, _) => { _resetSpot = true; _host.PreviewHudSpot(); Refresh(); ShowNote("The panel moves to the top centre of the game's screen. Save keeps it there.", "Good"); };
+        HudResetBtn.Click += (_, _) => { _resetSpot = true; _host.PreviewHudSpot(); Refresh(); ShowNote(L.T("The panel moves to the top centre of the game's screen. Save keeps it there."), "Good"); };
 
         CheckNowBtn.Click += async (_, _) => await Act(CheckNowBtn, () => _host.CheckForUpdate(manual: true));
         RestartUpdateBtn.Click += async (_, _) => await _host.RestartToUpdate();
@@ -397,17 +422,17 @@ public partial class OptionsWindow : Window
     /// <summary>The bits of the page that follow the edited copy, and the footer.</summary>
     void Refresh()
     {
-        HotkeyBox.Text = _capturing && !_capMark ? "Press the keys…" : _edit.Hotkey.Length > 0 ? _edit.Hotkey : "Off";
+        HotkeyBox.Text = _capturing && !_capMark ? L.T("Press the keys…") : _edit.Hotkey.Length > 0 ? _edit.Hotkey : L.T("Off");
         HotkeyOffBtn.IsEnabled = _edit.Hotkey.Length > 0;
-        MarkKeyBox.Text = _capturing && _capMark ? "Press the keys…" : _edit.MarkWrongKey.Length > 0 ? _edit.MarkWrongKey : "Off";
+        MarkKeyBox.Text = _capturing && _capMark ? L.T("Press the keys…") : _edit.MarkWrongKey.Length > 0 ? _edit.MarkWrongKey : L.T("Off");
         MarkKeyOffBtn.IsEnabled = _edit.MarkWrongKey.Length > 0;
         HotkeyResetBtn.IsEnabled = _edit.Hotkey != Hotkey.Default;
         StartupTip.Visibility = _edit.StartWithWindows && !_edit.CloseToTray ? Visibility.Visible : Visibility.Collapsed;
         ServerWarn.Visibility = _edit.Server.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        bool dirty = _edit != _saved || _resetSpot;
+        bool dirty = _edit != _saved || _resetSpot || ParserDirty;   // the Parser group lives in parser.json (Ui/OptionsWindow.Parser.cs)
         SaveBtn.IsEnabled = dirty;
-        if (dirty) Footer("Unsaved changes. Save puts them into effect.", "Muted");
-        else if (FooterNote.Text.StartsWith("Unsaved")) Footer("", "Muted");
+        if (dirty) Footer(L.T("Unsaved changes. Save puts them into effect."), "Muted");
+        else if (FooterNote.Text == L.T("Unsaved changes. Save puts them into effect.")) Footer("", "Muted");
     }
 
     void Save()
@@ -415,7 +440,7 @@ public partial class OptionsWindow : Window
         if (_edit.Server.Length == 0)
         {
             Go(Page.Server);
-            Footer("Pick a server before saving: runs and prices are filed under it.", "Warn");
+            Footer(L.T("Pick a server before saving: runs and prices are filed under it."), "Warn");
             return;
         }
         var problem = _host.ApplyOptions(_edit);
@@ -423,7 +448,7 @@ public partial class OptionsWindow : Window
         if (_resetSpot) { _host.ResetHudPosition(); _resetSpot = false; }   // Reset position, tried until now
         _saved = _edit = _host.CurrentOptions();
         Load(_edit);
-        if (problem != null) { Footer("Saved, but: " + problem, "Warn"); return; }   // stays open so the note can be read
+        if (problem != null) { Footer(L.T("Saved, but: ") + problem, "Warn"); return; }   // stays open so the note can be read
         _closeConfirmed = true;
         Close();
     }
@@ -452,9 +477,9 @@ public partial class OptionsWindow : Window
     {
         EndCapture();
         // a parked window never asks: its question would open on the player's screen
-        if (!_closeConfirmed && !Parked && (_edit != _saved || _resetSpot))
+        if (!_closeConfirmed && !Parked && (_edit != _saved || _resetSpot || ParserDirty))
         {
-            var r = MessageBox.Show(this, "Save your changes to Kinah Ledger's options?", "Kinah Ledger", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            var r = MessageBox.Show(this, L.T("Save your changes to Kinah Ledger's options?"), "Kinah Ledger", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }
             if (r == MessageBoxResult.Yes)
             {
@@ -484,7 +509,7 @@ public partial class OptionsWindow : Window
 
     public void RefreshUpdates()
     {
-        VersionTitle.Text = "Version " + Upload.RunPayload.AppVersion;
+        VersionTitle.Text = L.F("Version {0}", Upload.RunPayload.AppVersion);
         UpdateLine.Text = _host.UpdateStatusText;
         CheckNowBtn.IsEnabled = _host.AppSettings.Update.Check;
         RestartUpdateBtn.Visibility = _host.UpdateReady || Environment.GetEnvironmentVariable("KL_SHOT_UPDATE_READY") == "1" ? Visibility.Visible : Visibility.Collapsed;   // the variable: layout renders only
@@ -544,7 +569,7 @@ public partial class OptionsWindow : Window
         if (_capturing && _capMark != mark) EndCapture();   // one field records at a time
         _capturing = true; _capMark = mark;
         _host.SuspendHotkey(true);   // the current shortcuts would otherwise start a run or mark a line instead of being recorded
-        CaptureHint.Text = "Hold Ctrl and Shift (or Alt and Shift) and press a letter, or Ctrl, Alt or Shift with an F key. Esc cancels.";
+        CaptureHint.Text = L.T("Hold Ctrl and Shift (or Alt and Shift) and press a letter, or Ctrl, Alt or Shift with an F key. Esc cancels.");
         CaptureHint.Foreground = (Brush)FindResource("Accent");
         (mark ? MarkKeyBox : HotkeyBox).Focus();
         Refresh();
@@ -555,7 +580,7 @@ public partial class OptionsWindow : Window
         if (!_capturing) return;
         _capturing = false;
         _host.SuspendHotkey(false);
-        CaptureHint.Text = _capMark ? MarkHintText : HotkeyHintText;
+        CaptureHint.Text = L.T(_capMark ? MarkHintText : HotkeyHintText);
         CaptureHint.Foreground = (Brush)FindResource("Muted");
         ShowKeyNotes();
         Refresh();
@@ -574,8 +599,8 @@ public partial class OptionsWindow : Window
             hint.Text = note ?? plain;
             hint.Foreground = (Brush)FindResource(note != null ? "Warn" : "Muted");
         }
-        Note(HotkeyHint, _host.HotkeyNote, HotkeyHintText);
-        Note(MarkKeyHint, _host.MarkKeyNote, MarkHintText);
+        Note(HotkeyHint, _host.HotkeyNote, L.T(HotkeyHintText));
+        Note(MarkKeyHint, _host.MarkKeyNote, L.T(MarkHintText));
     }
 
     /// <summary>For the options test: the lines under the two shortcuts.</summary>
@@ -600,7 +625,7 @@ public partial class OptionsWindow : Window
         var hint = CaptureHint;
         var why = Hotkey.Refusal(mods, key)   // Ctrl+C, Alt+Tab and the like would be taken from every app on the PC
             ?? (Hotkey.Same(new Hotkey(mods, key).ToString(), _capMark ? _edit.Hotkey : _edit.MarkWrongKey)
-                ? (_capMark ? "That's the start/stop shortcut. Pick another key." : "That's the That was wrong shortcut. Pick another key.") : null);
+                ? (_capMark ? L.T("That's the start/stop shortcut. Pick another key.") : L.T("That's the That was wrong shortcut. Pick another key.")) : null);
         if (why != null)
         {
             hint.Text = why;
@@ -611,7 +636,7 @@ public partial class OptionsWindow : Window
         _capturing = false;
         _host.SuspendHotkey(false);
         Edit(_capMark ? _edit with { MarkWrongKey = text } : _edit with { Hotkey = text });
-        hint.Text = $"{text} it is. Save to start using it.";
+        hint.Text = L.F("{0} it is. Save to start using it.", text);
         hint.Foreground = (Brush)FindResource("Good");
         Keyboard.ClearFocus();
         return null;

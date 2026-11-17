@@ -35,7 +35,7 @@ public partial class MainWindow
     bool _offeringInstall;
     /// <summary>The version the panel and the tray have been told about this start: once per version.</summary>
     Version? _askedAbout;
-    string _updateStatus = "Checks GitHub for a newer release at start and every 10 minutes. Only the app version goes with the request.";
+    string _updateStatus = L.T("Checks GitHub for a newer release at start and every 10 minutes. Only the app version goes with the request.");
 
     /// <summary>The update line for Options › Updates.</summary>
     public string UpdateStatusText => _updateStatus;
@@ -57,7 +57,7 @@ public partial class MainWindow
         if (_settings.Upload.Enabled || _settings.Update.Check) _ = ConfigLoop();
         if (!_settings.Update.Check)
         {
-            SetUpdateStatus("Update checks are off (update.check in settings.json). New versions are on the releases page.");
+            SetUpdateStatus(L.T("Update checks are off (update.check in settings.json). New versions are on the releases page."));
             return;
         }
         _ = UpdateLoop();
@@ -72,8 +72,8 @@ public partial class MainWindow
         _prefs.LastVersion = now; _prefs.Save();
         if (Updater.ParseVersion(was) is { } w && w < Updater.Current)
         {
-            Say($"Updated to {now}. Everything you set is kept.", "Good");
-            SetUpdateStatus($"Updated from {was} to {now}.");
+            Say(L.F("Updated to {0}. Everything you set is kept.", now), "Good");
+            SetUpdateStatus(L.F("Updated from {0} to {1}.", was, now));
         }
     }
 
@@ -109,7 +109,7 @@ public partial class MainWindow
         var (auto, why) = RemoteConfig.Current.AutoInstall(v, Upload.InstallId.Get());
         if (auto) return true;
         CrashLog.Note($"update {Updater.Show(v)} found, not installed yet: {why}");
-        SetUpdateStatus($"Version {Updater.Show(v)} is out and reaches this tracker a little later ({why}). Check now installs it today.");
+        SetUpdateStatus(L.F("Version {0} is out and reaches this tracker a little later ({1}). Check now installs it today.", Updater.Show(v), why));
         return false;
     }
 
@@ -155,7 +155,7 @@ public partial class MainWindow
                     using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) };
                     http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
                     var got = await KinahLedger.Data.DataFiles.UpdateAsync(http);
-                    if (got.Count > 0) SetUpdateStatus($"Game data updated ({string.Join(", ", got)}); in use from the next start.");
+                    if (got.Count > 0) SetUpdateStatus(L.F("Game data updated ({0}); in use from the next start.", string.Join(", ", got)));
                 }
                 catch (Exception ex) { CrashLog.Note("data update: " + ex.Message); }
             }
@@ -182,7 +182,7 @@ public partial class MainWindow
         _askedAbout = r.Version;
         var v = Updater.Show(r.Version);
         bool ready = _staged != null;
-        _updateNotice = ready ? UpdateReadyNotice : $"Kinah Ledger {v} is out · Update on the tracker window";
+        _updateNotice = ready ? UpdateReadyNotice : L.F("Kinah Ledger {0} is out · Update on the tracker window", v);
         _updateNoticeUntil = DateTime.MaxValue;   // its minute starts when the panel is first in view
         UpdateHud();
         // its own sound, three soft rising notes (ready.wav; Steven, 2026-11-04), once per version like the notice, with
@@ -193,16 +193,16 @@ public partial class MainWindow
         if (!hidden || _demo) return;
         try
         {
-            _tray.ShowBalloonTip(8000, $"Kinah Ledger {v} is ready",
-                ready ? "It installs when you close the tracker. To install it now, open the tracker and pick Restart now."
-                      : "Open the tracker and pick Update to install it.",
+            _tray.ShowBalloonTip(8000, L.F("Kinah Ledger {0} is ready", v),
+                ready ? L.T("It installs when you close the tracker. To install it now, open the tracker and pick Restart now.")
+                      : L.T("Open the tracker and pick Update to install it."),
                 System.Windows.Forms.ToolTipIcon.Info);
         }
         catch (Exception ex) { CrashLog.Write("update notice", ex); }
     }
 
     /// <summary>The panel's line for a downloaded update.</summary>
-    const string UpdateReadyNotice = "Update ready · installs when you close the tracker";
+    static string UpdateReadyNotice => L.T("Update ready · installs when you close the tracker");
 
     /// <summary>The automatic-install choice changed in Options: a found version starts downloading at once when it was turned on.</summary>
     void AutoUpdateChanged(bool on)
@@ -215,7 +215,7 @@ public partial class MainWindow
     {
         if (_downloading) return;
         if (!_settings.Update.Check) return;
-        if (manual) SetUpdateStatus("Checking…");
+        if (manual) SetUpdateStatus(L.T("Checking…"));
         if (Installer.Manager is { } um)
         {
             var info = await um.CheckForUpdatesAsync();
@@ -233,7 +233,7 @@ public partial class MainWindow
                     ShowUpdate();
                     return;
                 }
-                if (_release == null) SetUpdateStatus($"You have the newest version ({Updater.Show(Updater.Current)}). Checked at {when}.");
+                if (_release == null) SetUpdateStatus(L.F("You have the newest version ({0}). Checked at {1}.", Updater.Show(Updater.Current), when));
                 return;
             }
             var tv = info.TargetFullRelease.Version;
@@ -246,8 +246,8 @@ public partial class MainWindow
         }
         var r = await Updater.CheckAsync(_settings.Update.Manifest);
         var at = DateTime.Now.ToString("t");
-        if (!r.Ok) { if (_release == null) SetUpdateStatus($"Couldn't check for updates at {at}: {r.Note}. It tries again in an hour."); return; }
-        if (r.Newer == null) { if (_release == null) SetUpdateStatus($"{r.Note} Checked at {at}."); return; }
+        if (!r.Ok) { if (_release == null) SetUpdateStatus(L.F("Couldn't check for updates at {0}: {1}. It tries again in an hour.", at, r.Note)); return; }
+        if (r.Newer == null) { if (_release == null) SetUpdateStatus(L.F("{0} Checked at {1}.", r.Note, at)); return; }
         if (_release == null && !RolloutAllows(r.Newer.Version, manual)) return;
         if (_release != null && r.Newer.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
         _release = r.Newer; _staged = null; _updateError = null; _updateNeedsSite = false;
@@ -295,23 +295,23 @@ public partial class MainWindow
         UpdateBtn.IsEnabled = true;
         if (_downloading)
         {
-            UpdateText.Text = $"Downloading Kinah Ledger {v}… {(int)(_updateProgress * 100)}%";
-            UpdateBtn.Content = "Downloading"; UpdateBtn.IsEnabled = false;
+            UpdateText.Text = L.F("Downloading Kinah Ledger {0}… {1}%", v, (int)(_updateProgress * 100));
+            UpdateBtn.Content = L.T("Downloading"); UpdateBtn.IsEnabled = false;
         }
         else if (_staged != null)
         {
-            UpdateText.Text = $"Kinah Ledger {v} is ready. It installs when you close the tracker, or now with Restart.";
-            UpdateBtn.Content = "Restart now";
+            UpdateText.Text = L.F("Kinah Ledger {0} is ready. It installs when you close the tracker, or now with Restart.", v);
+            UpdateBtn.Content = L.T("Restart now");
         }
         else if (_updateError != null)
         {
-            UpdateText.Text = $"Couldn't update to {v}: {_updateError.TrimEnd('.')}.";
-            UpdateBtn.Content = _updateNeedsSite ? (Installer.IsInstalled ? "Get the installer" : "Download from the site") : "Try again";
+            UpdateText.Text = L.F("Couldn't update to {0}: {1}.", v, _updateError.TrimEnd('.'));
+            UpdateBtn.Content = _updateNeedsSite ? (Installer.IsInstalled ? L.T("Get the installer") : L.T("Download from the site")) : L.T("Try again");
         }
         else
         {
-            UpdateText.Text = $"Kinah Ledger {v} is out (you have {Updater.Show(Updater.Current)}).";
-            UpdateBtn.Content = "Update";
+            UpdateText.Text = L.F("Kinah Ledger {0} is out (you have {1}).", v, Updater.Show(Updater.Current));
+            UpdateBtn.Content = L.T("Update");
         }
         SetUpdateStatus(UpdateText.Text);
     }
@@ -331,7 +331,7 @@ public partial class MainWindow
         _askedAbout = _release?.Version;   // pressed already: the panel and the tray needn't say it again
         if (Farming)
         {
-            var answer = MessageBox.Show(this, "Restart now to install the update?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual.",
+            var answer = MessageBox.Show(this, L.T("Restart now to install the update?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual."),
                 "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer != MessageBoxResult.Yes) return;
             await StopTracking();
@@ -362,7 +362,7 @@ public partial class MainWindow
         {
             CrashLog.Write("update", ex);
             if (_restartForUpdate)
-                MessageBox.Show($"The update couldn't be installed ({ex.Message}). Kinah Ledger starts again as it was; the update is tried again later.",
+                MessageBox.Show(L.F("The update couldn't be installed ({0}). Kinah Ledger starts again as it was; the update is tried again later.", ex.Message),
                     "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         if (!_restartForUpdate) return;
@@ -379,24 +379,24 @@ public partial class MainWindow
         _offeringInstall = true;
         UpdateCard.Visibility = Visibility.Visible;
         UpdateNotesText.Visibility = Visibility.Collapsed;
-        UpdateText.Text = "Install Kinah Ledger: it starts faster, updates in seconds, and gets a desktop shortcut. Your settings and history stay.";
-        UpdateBtn.Content = "Install"; UpdateBtn.IsEnabled = true;
-        SetUpdateStatus("This copy runs as a single file. Installing it makes it start faster and update in seconds.");
+        UpdateText.Text = L.T("Install Kinah Ledger: it starts faster, updates in seconds, and gets a desktop shortcut. Your settings and history stay.");
+        UpdateBtn.Content = L.T("Install"); UpdateBtn.IsEnabled = true;
+        SetUpdateStatus(L.T("This copy runs as a single file. Installing it makes it start faster and update in seconds."));
     }
 
     async Task InstallClicked()
     {
         if (Farming)
         {
-            var answer = MessageBox.Show(this, "Install now?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual. The installed tracker opens by itself.",
+            var answer = MessageBox.Show(this, L.T("Install now?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual. The installed tracker opens by itself."),
                 "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer != MessageBoxResult.Yes) return;
             await StopTracking();
         }
-        UpdateBtn.IsEnabled = false; UpdateBtn.Content = "Downloading";
+        UpdateBtn.IsEnabled = false; UpdateBtn.Content = L.T("Downloading");
         try
         {
-            var progress = new Progress<double>(f => UpdateText.Text = $"Downloading the installer… {(int)(f * 100)}%");
+            var progress = new Progress<double>(f => UpdateText.Text = L.F("Downloading the installer… {0}%", (int)(f * 100)));
             var setup = await Installer.DownloadSetupAsync(progress);
             Installer.StartSetup(setup, _exe);
             _quitting = true;
@@ -405,8 +405,8 @@ public partial class MainWindow
         catch (Exception ex)
         {
             CrashLog.Write("install", ex);
-            UpdateText.Text = $"Couldn't install: {ex.Message.TrimEnd('.')}. The tracker keeps working as it is.";
-            UpdateBtn.Content = "Not now"; UpdateBtn.IsEnabled = true;
+            UpdateText.Text = L.F("Couldn't install: {0}. The tracker keeps working as it is.", ex.Message.TrimEnd('.'));
+            UpdateBtn.Content = L.T("Not now"); UpdateBtn.IsEnabled = true;
             _offeringInstall = false; Installer.NotNow();
             UpdateBtn.Click += (_, _) => UpdateCard.Visibility = Visibility.Collapsed;
         }

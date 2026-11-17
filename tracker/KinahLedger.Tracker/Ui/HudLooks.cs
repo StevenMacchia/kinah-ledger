@@ -19,13 +19,13 @@ public static class HudLooks
     public const string Default = Card;
 
     /// <param name="Key">Kept in hud.json (HudPrefs.Look).</param>
-    public sealed record Look(string Key, string Name, string Hint);
+    /// <param name="Theme">The theme it belongs to (HudThemes, Settings › In game › Theme): Classic for the looks before themes.</param>
+    public sealed record Look(string Key, string Name, string Hint, string Theme = HudThemes.Classic);
 
     public static readonly Look[] All =
     {
         // the design pass's (2026-11-14, Ui/HudStackLooks.cs) first: each draws the timers due and the fight itself; Auto mixes the two favourites
         new(Auto, "Auto", "The pill while you farm; in a boss fight the group's meter opens above it"),
-        new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
         new(Meter, "Meter", "A raid meter: the boss and its HP up top, the group in class colours, your Kinah at the foot"),
         new(Float, "Float", "No panel: crisp figures straight over the game"),
         // the older looks, listed last (Steven, 2026-11-14). The Quest look's names (2026-11-07): Badge is the strip, Buddy the card,
@@ -33,10 +33,22 @@ public static class HudLooks
         new(Strip, "Badge", "One line with the figures you pick, and the ring of your best here"),
         new(Card, "Buddy", "The ring, the hour, your best here and the last three pickups"),
         new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
+        // the Capsule last, at the far right (Steven, 2026-11-16: "put it all the way at the right?")
+        new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
+        // the themes (Steven, 2026-11-16: "let us choose a theme and then let us choose from that theme"), Ui/Themes/
+        new(HudThemes.Sticker, "Sticker", "Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup", HudThemes.Wacky),
+        new(HudThemes.Neon, "Neon", "An arcade cabinet's glowing rim; pickups streak up like combo scores", HudThemes.Wacky),
+        new(HudThemes.Goo, "Goo", "A squishy candy jelly; pickups bounce out as bubbles", HudThemes.Wacky),
+        new(HudThemes.Fighter, "Fighter", "A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup", HudThemes.Tactical),
+        new(HudThemes.Scorebug, "Scorebug", "A tournament broadcast: slanted blocks and a ranked leaderboard", HudThemes.Tactical),
+        new(HudThemes.Holo, "Holo", "Projected cyan glass with clipped corners; a scan line sweeps each pickup", HudThemes.Tactical),
+        new(HudThemes.Vhs, "VHS", "A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup", HudThemes.Glitch),
+        new(HudThemes.Corrupt, "Corrupted", "A broken signal: torn slices and colour ghosts round steady figures", HudThemes.Glitch),
+        new(HudThemes.Terminal, "Terminal", "An old green screen: a prompt, a cursor, each pickup typed in as a line", HudThemes.Glitch),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
-    public static readonly string[] FightLooks = { Auto, Capsule, Meter, Float };
+    public static readonly string[] FightLooks = { Auto, Meter, Float, Capsule };
 
     /// <summary>A saved look, or the default (Buddy) for anything unknown (an edited hud.json).</summary>
     public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Default;
@@ -72,6 +84,48 @@ public interface IHudLook
 /// </summary>
 static class HudKit
 {
+    /// <summary>
+    /// A scene from the game (the site's farming art, Art/game-scene.jpg) to draw the overlay's previews on (Steven,
+    /// 2026-11-16: "for the previews of the overlay looks - show them over the game - you can't tell"): bright rock, sky and
+    /// foliage, where a look has to read. Filled to its box and centred; the dark gradient before it when it can't be read.
+    /// </summary>
+    public static Brush GameScene()
+    {
+        if (_scene != null) return _scene;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit(); bmp.UriSource = new Uri("pack://application:,,,/Art/game-scene.jpg", UriKind.Absolute); bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; bmp.EndInit(); bmp.Freeze();
+            var b = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Center, AlignmentY = AlignmentY.Center };
+            b.Freeze();
+            return _scene = b;
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("the previews' game scene", ex);
+            var g = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90); g.Freeze();
+            return _scene = g;
+        }
+    }
+    static Brush? _scene;
+
+    /// <summary>
+    /// Ticks at a third and two thirds of a boss's HP bar (Steven, 2026-11-16: "little tick markers on every 1/3 health of
+    /// every boss"): a dark notch through the bar, laid over it last so the fill never hides it. <paramref name="height"/>
+    /// NaN: the bar's height; else that tall, at the bar's foot.
+    /// </summary>
+    public static Grid HpTicks(double height = double.NaN)
+    {
+        var g = new Grid { IsHitTestVisible = false, Tag = "hp-ticks", Height = height, VerticalAlignment = double.IsNaN(height) ? VerticalAlignment.Stretch : VerticalAlignment.Bottom };
+        for (int i = 0; i < 3; i++) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < 2; i++)
+        {
+            var t = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, -1, 0), Background = new SolidColorBrush(Color.FromArgb(0xE0, 0x08, 0x0A, 0x10)) };
+            Grid.SetColumn(t, i); g.Children.Add(t);
+        }
+        return g;
+    }
+
     public static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     public static Color Rgb(uint rgb, double alpha = 1) => Color.FromArgb((byte)Math.Round(255 * Math.Clamp(alpha, 0, 1)), (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
     public static SolidColorBrush B(uint rgb, double alpha = 1) => Frozen(Rgb(rgb, alpha));
@@ -176,6 +230,7 @@ static class HudKit
         var list = new List<(string, string, Brush)>();
         if (V("abPvp").Length > 0) list.Add((V("abPvp"), "PvP", Ink));
         else if (V("abKills").Length > 0) list.Add((V("abKills"), V("abKills") == "1" ? "kill" : "kills", Ink));
+        if (V("abRank").Length > 0) list.Add((V("abRank"), "RP", Ink));
         if (V("abDeaths").Length > 0) list.Add((V("abDeaths"), V("abDeaths") == "1" ? "death" : "deaths", Rec));
         if (V("abKinah").Length > 0) list.Add((V("abKinah"), "Kinah", Gold));
         return list;

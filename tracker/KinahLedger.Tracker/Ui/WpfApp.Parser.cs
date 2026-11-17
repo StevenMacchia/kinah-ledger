@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "motion" or "meter" or "heals") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "themes" or "motion" or "meter" or "heals" or "finale") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -41,10 +41,12 @@ public static partial class WpfApp
                     // the meter's pick on the page: KL_PARSER_ALWAYS=1 renders it on Always on (a demo saves nothing)
                     if (Environment.GetEnvironmentVariable("KL_PARSER_ALWAYS") == "1") w.SetParserAlwaysOnForTest(true);
                 }
+                if (st == "themes") { ShotThemes(w, dir); continue; }   // Ui/WpfApp.Themes.cs
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "meter") { ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "heals") { ShotHeals(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
+                if (st == "finale") { ShotFinale(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 w.ShowParserDemo(st);
                 DoEvents();
                 var name = "ui-parser-" + st + (skin != null ? "-" + skin : "");
@@ -75,8 +77,40 @@ public static partial class WpfApp
         return h;
     }
 
+    /// <summary>A ready card with a sample's members in it, as they'd be from the party list (no damage yet).</summary>
+    static Encounter ReadyWithParty(Encounter ready, Encounter from)
+    {
+        foreach (var m in from.Members) ready.Roster.Add(new Fighter { Id = m.Id, Name = m.Name, Class = m.Class, CombatPower = m.CombatPower, You = m.You });
+        return ready;
+    }
+
+    /// <summary>A fight's copy with each skill's crit and back-attack rates and specialties (Settings' crit switch on): the cards' sample.</summary>
+    internal static Encounter WithKindsForTest(Encounter live) => WithKinds(live);
+    static Encounter WithKinds(Encounter live)
+    {
+        var withKinds = BossParser.Copy(live);
+        foreach (var f in withKinds.Roster)
+            foreach (var a in f.Abilities)
+            {
+                int seen = Math.Max(12, a.Hits); uint h = (uint)(a.Skill * 2654435761u ^ (uint)f.Id);
+                double crit = 0.22 + (h % 37) / 100.0, back = (h / 37 % 41) / 100.0;
+                a.StreamHits = seen; a.StreamDamage = a.Damage;
+                a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
+                a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
+                // and the specialties its hits named (a class skill's id: the picks x 10)
+                if (a.Skill is >= 11_000_000 and < 20_000_000) a.Picks = KinahLedger.Parser.Abilities.PicksOf((uint)a.Skill + (uint)((h % 4) switch { 0 => 340, 1 => 120, 2 => 450, _ => 0 }));
+            }
+        return withKinds;
+    }
+
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
+        // the card a specialties chip opens (0.10.133): Judgment with 4 and 5 picked
+        {
+            var card = ParserCommand.SpecCard("Judgment", Specialties.Of(12240000), new[] { 4, 5 });
+            var host = new System.Windows.Controls.Border { Padding = new Thickness(12), Child = card };
+            Save(host, Path.Combine(dir, "ui-parser-spec-card.png"), 0, ShotGround);
+        }
         var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
         var (past, live) = ParserDemo.Sample(now, live: true, damage: true);
         var (pastNd, liveNd) = ParserDemo.Sample(now, live: true, damage: false);
@@ -89,6 +123,18 @@ public static partial class WpfApp
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = BossParser.Copy(past.Last(e => e.Outcome == "wipe")); wipe.Partial = true; wipe.PartialWhy.Add("a moment the tracker missed");
         var held = HeldSample(live!, now);
+        // a row's hover card (the top member's, and yours), each as it opens beside the meter
+        foreach (var (file, who) in new[] { ("ui-parser-card-top.png", live!.Ranked().First(f => !f.Other)), ("ui-parser-card-you.png", live!.Roster.FirstOrDefault(f => f.You) ?? live!.Ranked().First(f => !f.Other)) })
+            if (ParserRows.HoverCard(live!, who, now) is { } card) { card.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = card }, Path.Combine(dir, file), 320, ShotGround); }
+        // the same card with Settings' crit and back-attack switch on: each skill's rates from hits kept one by one
+        {
+            var withKinds = WithKinds(live!);
+            string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+            Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
+            var youK = withKinds.Roster.FirstOrDefault(f => f.You) ?? withKinds.Ranked().First(f => !f.Other);
+            if (ParserRows.HoverCard(withKinds, youK, now) is { } cc) { cc.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = cc }, Path.Combine(dir, "ui-parser-card-crit.png"), 380, ShotGround); }
+            Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+        }
         var shots = new List<(string File, Encounter E, DateTime At)>
         {
             ("ui-parser-overlay-live.png", live!, now),
@@ -102,6 +148,8 @@ public static partial class WpfApp
             ("ui-parser-overlay-ready.png", Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), now),
             ("ui-parser-overlay-ready-anywhere.png", Encounter.ReadyAnywhere("Verteron", now), now),
             ("ui-parser-overlay-held.png", held, held.End!.Value),
+            // a party formed before the first hit: its rows, each with Combat Power (0.10.132)
+            ("ui-parser-overlay-ready-party.png", ReadyWithParty(Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now), live!), now),
         };
         foreach (var (file, e, at) in shots)
         {
@@ -152,6 +200,8 @@ public static partial class WpfApp
         {
             var due = new List<Session.TimerBoard.Item>
             {
+                // the Shugo Festival's entry open (a green badge counting the minutes to enter down), then two timers due
+                new("event:Shugo Festival", "Events", "Shugo Festival", "", Session.TimerBoard.Kind.On, now.AddSeconds(161), "2m 41s", "left to enter") { Short = "Shugo" },
                 new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" },
                 new("boss:Soul Ruler Kashapa", "Verteron", "Soul Ruler Kashapa", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(719), "11m 59s", "") { Short = "Kashapa" },
             };
@@ -278,7 +328,72 @@ public static partial class WpfApp
                 "...its left and right edges take a drag to widen it, the middle moves it");
             HudStackLook.FightWidth = 500; o.ApplyFightWidth(); DoEvents();
             check(Math.Abs(o.FaceWidthForTest - f1 - 150) <= 2, $"...and wider, it draws wider ({o.FaceWidthForTest:0} at 500)");
+            // the overlays' size (Options › In game › Size) on it too: at 110% it is Buddy's 110% width on screen, its edges still found
+            HudStackLook.FightWidth = HudStackLook.FightWidthDefault; o.ApplyFightWidth(); o.SetScale(1.1); DoEvents();
+            double onScreen = o.ActualWidth;
+            check(Math.Abs(onScreen - 360 * 1.1) <= 3 && o.EdgeAt(new Point(onScreen - 2, o.ActualHeight / 2)) == 1 && o.EdgeAt(new Point(2, o.ActualHeight / 2)) == -1,
+                $"...at the overlays' 110% size it is as wide as Buddy at 110% ({onScreen:0}, Buddy {360 * 1.1:0}), its edges where they show");
+            o.SetScale(1); DoEvents();
             HudStackLook.FightWidth = w0;
+        }
+        // a row's hover card: the member's figures and top abilities by damage (at most six), only from what the record has
+        {
+            var at = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+            var top = sample!.Ranked().First(f => !f.Other && sample.Figure(f) > 0);
+            var card = ParserRows.HoverCard(sample, top, at);
+            var texts = card == null ? new List<string>() : FindTexts(card).Select(BlockText).ToList();
+            int abilityRows = FindTexts(card ?? new System.Windows.Controls.Border()).Count(t => t.Text.EndsWith("%") && t.FontSize < 11) ;
+            var biggest = FightView.Of(sample, at, null).Members.First(m => m.F.Id == top.Id).Abilities.OrderByDescending(a => a.Damage).FirstOrDefault()?.Name;
+            check(card != null && texts.Contains(top.Name) && texts.Any(t => t.Contains("DPS")) && abilityRows is >= 1 and <= ParserRows.CardAbilities && biggest != null && texts.Contains(biggest) && !texts.Any(t => t == "Other"),
+                $"Parser: a row's hover card names {top.Name}, their DPS and {abilityRows} abilities, the biggest first ({string.Join(" | ", texts.Take(8))})");
+            check(ParserRows.HoverCard(sample, new KinahLedger.Parser.Fighter { Id = 999 }, at) == null, "...and none for a member with no damage");
+            // alone on the meter the foot says your DPS (Steven, 2026-11-16: "it needs to be my individual one if I'm alone")
+            {
+                var solo = BossParser.Copy(sample);
+                var me = solo.Roster.FirstOrDefault(f => f.You) ?? solo.Roster.First();
+                me.You = true;
+                foreach (var f in solo.Roster.Where(f => f.Id != me.Id)) { f.Damage = 0; f.BossDamage = 0; f.Abilities.Clear(); }
+                string FootOf(Encounter x) => string.Join(" ", FindTexts(ParserFoot.Line(x, at)).Select(BlockText));
+                string group = FootOf(sample), alone = FootOf(solo);
+                check(alone.Contains("Your DPS") && !alone.Contains("Group") && group.Contains("Group DPS") && ParserFoot.SoloYou(solo) && !ParserFoot.SoloYou(sample),
+                    $"Parser: alone on the meter the foot says your DPS, with a group the group's (\"{alone}\" | \"{group}\")");
+            }
+            var bars = card == null ? new List<double>() : ParserRows.CardBarsForTest(card);
+            check(bars.Count == abilityRows && bars.Count > 0 && Math.Abs(bars[0] - 156) < 0.5 && bars.Zip(bars.Skip(1)).All(p => p.First >= p.Second),
+                $"...its ability bars against the top one, the top one full and the rest shorter in order ({string.Join(", ", bars.Select(b => b.ToString("0")))})");
+            // crit and back attacks (Settings' switch): none on the card until a kind is picked; then each skill's rates as their
+            // own columns, the member's in a gold line, only from the hits the record kept one by one
+            {
+                var copy = BossParser.Copy(sample);
+                var who = copy.Roster.First(f => f.Id == top.Id);
+                foreach (var a in who.Abilities)
+                {
+                    a.StreamHits = 20 * (1 + a.Hits / 20); a.StreamDamage = a.Damage;   // a multiple of 20: 2 in 5 and 1 in 4 exact
+                    a.Kinds = new() { ["result:3"] = a.StreamHits.Value * 2 / 5, ["side:1"] = a.StreamHits.Value / 4 };
+                    a.KindDamage = new() { ["result:3"] = a.Damage / 2 }; a.KindMax = new() { ["result:3"] = Math.Max(1, a.Damage / 10) };
+                }
+                string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+                var off = ParserRows.HoverCard(copy, who, at);
+                Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
+                var onCard = ParserRows.HoverCard(copy, who, at);
+                Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+                var (critOff, backOff) = off == null ? (new List<string>(), new List<string>()) : ParserRows.CardRatesForTest(off);
+                var (critOn, backOn) = onCard == null ? (new List<string>(), new List<string>()) : ParserRows.CardRatesForTest(onCard);
+                var onTexts = onCard == null ? new List<string>() : FindTexts(onCard).Select(BlockText).ToList();
+                int rowsOn = onCard == null ? 0 : ParserRows.CardBarsForTest(onCard).Count;
+                check(critOff.Count == 0 && backOff.Count == 0 && !FindTexts(off ?? new System.Windows.Controls.Border()).Any(t => t.Text.Contains("crit")),
+                    "Parser: a row's hover card shows no crit or back attack until Settings' switch picks them");
+                check(rowsOn > 0 && critOn.Count == rowsOn && backOn.Count == rowsOn && critOn.All(x => x == "40%") && backOn.All(x => x == "25%")
+                    && onTexts.Any(t => t.Contains("40% crit") && t.Contains("50% of the damage from crits") && t.Contains("25% from behind")) && onTexts.Contains("crit") && onTexts.Contains("back"),
+                    $"...switched on: each skill's crit and back-attack rate in its own column, the member's in one line ({string.Join(", ", critOn)} | {string.Join(", ", backOn)} | {onTexts.FirstOrDefault(t => t.Contains("crit"))})");
+                if (onCard != null)
+                {
+                    onCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var probe = new ParserPrefs(); OptionsWindow.CritSwitch(probe, true); var json = System.Text.Json.JsonSerializer.Serialize(probe); OptionsWindow.CritSwitch(probe, false); var json0 = System.Text.Json.JsonSerializer.Serialize(probe);
+                    check(onCard.DesiredSize.Width <= 360 && probe.CritNow == "none" && probe.BackNow == "none" && json.Contains("\"result3\"") && json.Contains("\"side1\"") && !json0.Contains("CritSource"),
+                        $"...the card stays narrower than the meter ({onCard.DesiredSize.Width:0}); the switch writes result3 and side1, off leaves the release's default");
+                }
+            }
         }
         o.Close();
         // the modes: Full run's run under way with its splits, Every fight's fights, the list by mode, the overlay's menu
@@ -424,7 +539,31 @@ public static partial class WpfApp
             check(before > after && after > 0, $"...and its fill follows the opacity setting ({before} to {after})");
             // click-through (off by default): a grab handle on the top edge shows with the pointer over it, and moves it
             po.SetClickThrough(true); po.ShowGrabForTest(); DoEvents();
-            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("drag the handle to move"), "Parser: with click-through on, a grab handle on its top edge moves the overlay");
+            check(po.GrabShownForTest && ParserTexts((DependencyObject)po.Content).Texts.Contains("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize"), "Parser: with click-through on, a grab handle on its top edge moves the overlay (and the hint says an edge resizes it)");
+            // the skills card with clicks going through (Steven, 2026-11-16: he couldn't find it): the pointer resting on a name opens
+            // that member's card, a pass over the meter opens nothing, moving off closes it; the window never takes the pointer
+            {
+                ParserRows.PeekNoPopupForTest = true;
+                try
+                {
+                    ParserRows? Find(DependencyObject d) { for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) { var ch = VisualTreeHelper.GetChild(d, i); if (ch is ParserRows pr && pr.IsVisible) return pr; if (Find(ch) is { } x) return x; } return null; }
+                    var rows = Find(po);
+                    var mem = pull1!.Members.First(m => !m.Other && !m.You);
+                    var mid = rows?.RowMiddleForTest(mem.Id);
+                    Point? at = mid is { } m0 ? rows!.TranslatePoint(m0, po) : null;
+                    po.PeekForTest(at); DoEvents();
+                    bool passOpens = rows?.PeekingForTest != 0;
+                    System.Threading.Thread.Sleep(ParserRows.PeekMs + 80);
+                    po.PeekForTest(at); DoEvents();
+                    long peekOpen = rows?.PeekingForTest ?? 0;
+                    bool filled = rows?.PeekCardForTest is FrameworkElement;
+                    po.PeekForTest(null); DoEvents();
+                    long peekAfter = rows?.PeekingForTest ?? -1;
+                    check(at != null && !passOpens && peekOpen == mem.Id && filled && peekAfter == 0,
+                        $"Parser: with click-through on, resting the pointer on {mem.Name}'s row opens their skills card ({peekOpen}, want {mem.Id}), a pass opens nothing ({!passOpens}), moving off closes it ({peekAfter})");
+                }
+                finally { ParserRows.PeekNoPopupForTest = false; }
+            }
             // the shortcut "Off" (the default): the hint and the menu name none; a real one is named
             var off = new ParserOverlay(still: true) { HotkeyText = "Off" }.HintForTest;
             var on = new ParserOverlay(still: true) { HotkeyText = "Ctrl+Shift+P" }.HintForTest;
@@ -471,10 +610,14 @@ public static partial class WpfApp
             var (keys0, on0) = opt.ParserLooksForTest;
             string kinahLook = w.HudLook;
             bool rowShown = opt.ParserLookRowShownForTest == true;
+            bool save0 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest("capsule"); DoEvents();
             var (_, on1) = opt.ParserLooksForTest;
             string stage1 = opt.ParserLookStageForTest ?? "";
+            bool save1 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest(ParserPrefs.StandardLook); DoEvents();
+            // a look picked here alone is a change to save (Steven, 2026-11-16: "i cant save it unless i also change the buddy")
+            check(!save0 && save1 && !opt.SaveBtn.IsEnabled, $"Options › In game › Parser: a look picked for its own window alone lights Save, and picking the saved one again puts it out (before {save0}, picked {save1}, back {opt.SaveBtn.IsEnabled})");
             check(rowShown && keys0.SequenceEqual(new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
                 && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.StandardLook,
                 $"Options › In game › Parser: its own window's look row ({string.Join(", ", keys0)}), Standard by default ({on0}); a pick outlines it and draws it big ({on1}, {stage1}), the Kinah overlay's look left alone");
@@ -518,10 +661,19 @@ public static partial class WpfApp
                 var t1 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
                 po.Draw(pullL!, nowL.AddSeconds(0.5)); DoEvents();
                 var t2 = ParserTexts((DependencyObject)po.Content).Texts.ToList();
+                // the figures are short since 0.10.128 ("4.3K"): 30 seconds on for the fall to show in them
+                var d1 = TaggedShown((DependencyObject)po.Content, "row-dps").OfType<System.Windows.Controls.TextBlock>().Select(x => x.Text).ToList();
+                po.Draw(pullL!, nowL.AddSeconds(30)); DoEvents();
+                var t3 = TaggedShown((DependencyObject)po.Content, "row-dps").OfType<System.Windows.Controls.TextBlock>().Select(x => x.Text).ToList();
                 po.Close();
-                double Top1(List<string> ts) => ts.Select(x => double.TryParse(x.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : -1).Where(v => v >= 1000).DefaultIfEmpty(-1).Max();
-                check(!t1.SequenceEqual(t2) && Top1(t2) < Top1(t1),
-                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(t1):N0} to {Top1(t2):N0} half a second on)");
+                static double Num(string x)
+                {
+                    x = x.Replace(",", "").Trim(); double m = x.EndsWith("K") ? 1e3 : x.EndsWith("M") ? 1e6 : 1;
+                    return double.TryParse(m > 1 ? x[..^1] : x, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v * m : -1;
+                }
+                double Top1(List<string> ts) => ts.Select(Num).Where(v => v >= 1000).DefaultIfEmpty(-1).Max();
+                check(!t1.SequenceEqual(t2) && Top1(t3) < Top1(d1),
+                    $"the live meter redraws within a second, its DPS falling while no hit lands ({Top1(d1):N0} to {Top1(t3):N0} 30 seconds on)");
             }
             // the foot, the held badge and the top plates (Steven, 2026-11-15: "have the bottom be total AND group dps avg ... a
             // green badge next to it that says 'Avg. DPS' ... a gold plate [TOP DPS]"), in every look: a pull under way, an
@@ -724,8 +876,13 @@ public static partial class WpfApp
     }
 
     /// <summary>The member's name on the row a plate sits on (the plate's line holds the name).</summary>
-    static string PlateName(FrameworkElement plate) =>
-        VisualTreeHelper.GetParent(plate) is System.Windows.Controls.StackPanel plates && VisualTreeHelper.GetParent(plates) is System.Windows.Controls.StackPanel line ? line.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault()?.Text ?? "" : "";
+    static string PlateName(FrameworkElement plate)
+    {
+        // up to the name's line: a plate sits in the plates beside the name, the TOP HEALS tab in the heal chip after it
+        for (DependencyObject? d = VisualTreeHelper.GetParent(plate); d != null; d = VisualTreeHelper.GetParent(d))
+            if (d is System.Windows.Controls.StackPanel line && line.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault(t => t.Tag as string != "heal-figures") is { } name) return name.Text;
+        return "";
+    }
 
     /// <summary>Where each shown row's DPS figure ends, across the meter (the column a plate must never push).</summary>
     static List<double> DpsRights(DependencyObject root) => root is Visual v

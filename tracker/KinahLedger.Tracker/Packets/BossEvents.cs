@@ -55,7 +55,7 @@ public sealed record UnitDied(DateTime At, long Id, string Name, bool Boss, long
 /// unnamed until they are mapped. Why: for Source 0, the reason no one is credited (as DamageDealt.Reason).
 /// </summary>
 public sealed record HitDealt(DateTime At, long Source, long Actor, long Target, long Amount, int Skill, int Cast, int N, bool NoRow, bool Tick,
-    int Result, int Marks, int Multi, int Why) : BossEvent(At);
+    int Result, int Marks, int Multi, int Why, uint Ranked = 0) : BossEvent(At);
 
 /// <summary>
 /// A heal by Source (who it counts for: the player or a member; a summon's owner) on Target (a member, or the healer: Self),

@@ -32,6 +32,10 @@ internal static class Program
         Ocr.ScreenReader.UseWindowCapture = settings.Ocr.WindowCapture;
         // a kinahledger:// link from the site opens (or brings up) the window
         if (args.Length > 0 && Platform.Installer.IsLink(args[0])) args = Array.Empty<string>();
+        // the app's language (Ui/Lang.cs): the player's pick for the window; English for a command (tests and renders), unless
+        // KL_LANG names one (a render in Korean)
+        bool window = args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg;
+        Ui.L.Init(window ? null : Environment.GetEnvironmentVariable("KL_LANG") ?? "en");
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
             // double-clicked, started with Windows (in the tray), or restarted by an update: open the window.
@@ -193,6 +197,37 @@ internal static class Program
                 case "report-replay": return ReportReplay(settings, pos);
                 case "bench-replay": return Session.BenchReplay.Run(settings, pos, opts);
                 case "log-mine": return Session.LogMine.Run(settings, pos, opts);
+                case "icon-index-add":
+                {
+                    // adds to the index without fetching every icon again: icon-index-add [index.bin] --url <icon url> ... (comma
+                    // separated) and every line of data/icon-slots.txt whose key and picture the index lacks
+                    var bin = pos.Count > 0 ? pos[0] : Path.Combine("..", "..", "data", "icon-index.bin");
+                    var have = new List<IconIndex.Entry>();
+                    using (var fs = File.OpenRead(bin)) using (var br = new BinaryReader(fs)) { int c = br.ReadInt32(); for (int i = 0; i < c; i++) have.Add(new IconIndex.Entry(br.ReadString(), br.ReadBytes(16 * 16 * 4))); }
+                    var add = new List<IconIndex.Entry>();
+                    var urls = (opts.GetValueOrDefault("url") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                    if (urls.Count > 0)
+                    {
+                        var tmp = Path.Combine(Path.GetTempPath(), "kinah-icon-add.bin");
+                        IconIndex.BuildAsync(urls, Path.Combine(Path.GetTempPath(), "kinah-icons"), tmp).GetAwaiter().GetResult();
+                        using var fs = File.OpenRead(tmp); using var br = new BinaryReader(fs); int c = br.ReadInt32();
+                        for (int i = 0; i < c; i++) { var e = new IconIndex.Entry(br.ReadString(), br.ReadBytes(16 * 16 * 4)); if (!have.Any(h => h.Key == e.Key)) add.Add(e); }
+                    }
+                    var slotsFile = Path.Combine(Path.GetDirectoryName(bin) ?? ".", "icon-slots.txt");
+                    if (File.Exists(slotsFile))
+                        foreach (var line in File.ReadAllLines(slotsFile).Where(l => l.Trim().Length > 0 && !l.StartsWith('#') && !l.StartsWith('\uFEFF')))
+                        {
+                            var parts = line.Split('|'); var xy = parts[2].Split(',').Select(int.Parse).ToArray();
+                            var pic = Path.Combine(Path.GetDirectoryName(slotsFile) ?? ".", parts[1].Trim());
+                            if (!File.Exists(pic)) { Console.Error.WriteLine($"no picture for {parts[0]}: {pic}"); continue; }
+                            using var bmpPic = new System.Drawing.Bitmap(pic);
+                            var e = IconIndex.FromSlot(parts[0].Trim(), bmpPic, new System.Drawing.Rectangle(xy[0], xy[1], xy[2], xy[2]));
+                            if (!have.Any(h => h.Key == e.Key && h.Rgba.SequenceEqual(e.Rgba))) add.Add(e);
+                        }
+                    using (var fs = File.Create(bin)) using (var bw = new BinaryWriter(fs)) { bw.Write(have.Count + add.Count); foreach (var e in have.Concat(add)) { bw.Write(e.Key); bw.Write(e.Rgba); } }
+                    Console.WriteLine($"added {add.Count} ({string.Join(", ", add.Select(e => e.Key))}); {have.Count + add.Count} in {Path.GetFullPath(bin)}");
+                    return 0;
+                }
                 case "icon-index":
                 {
                     // every distinct item icon, fingerprinted for the reward grid: icon-index [tw-items.json] [out.bin] [cache dir]
@@ -354,6 +389,7 @@ internal static class Program
                     }
                     var gitems = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
                     var byIcon = gitems.AllWithIcons().GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(g => g.Key, g => g.ToList());
+                    if (opts.ContainsKey("flat")) RewardGrid.GradientBacking = false;
                     var slots = RewardGrid.ReadAsync(frame, top).GetAwaiter().GetResult();
                     Console.WriteLine($"{slots.Count} slots from y {top} ({IconIndex.All.Count} icons in the index)");
                     foreach (var sl in slots)
@@ -362,6 +398,7 @@ internal static class Program
                         var names = best.Key != null && byIcon.TryGetValue(best.Key, out var its) ? its.Where(i => i.Grade == sl.Grade).Select(i => i.Name).Distinct().Take(3).ToList() : new List<string>();
                         if (names.Count == 0 && best.Key != null && byIcon.TryGetValue(best.Key, out var any)) names = any.Select(i => i.Name + " [" + i.Grade + "]").Distinct().Take(2).ToList();
                         Console.WriteLine($"  {sl.Grade,-8} x{sl.Count,-8} [{sl.CountText,-7}] {best.Key} ({best.Distance:0.0}; next {(sl.Icons.Count > 1 ? sl.Icons[1].Distance : 0):0.0})  {string.Join(" / ", names)}");
+                        if (opts.ContainsKey("verbose")) Console.WriteLine($"           box {sl.Box.X},{sl.Box.Y},{sl.Box.Width}  " + string.Join("  ", sl.Icons.Take(6).Select(x => $"{x.Key} {x.Distance:0.0}")));
                     }
                     return 0;
                 }
@@ -555,9 +592,10 @@ options: --process aion[,other]");
     {
         if (pos.Count < 1 || !Directory.Exists(pos[0])) { Console.Error.WriteLine("usage: recount-runs <data dir> [--dry-run] [--shots folder] [--before utc time] [--report file] [--verbose]"); return 1; }
         var dataDir = Path.GetFullPath(pos[0]);
-        bool dry = o.ContainsKey("dry-run"), verbose = o.ContainsKey("verbose");
+        bool dry = o.ContainsKey("dry-run"), verbose = o.ContainsKey("verbose"), reread = o.ContainsKey("reread");
         var shots = o.GetValueOrDefault("shots") ?? Path.Combine(dataDir, "reward-shots");
-        var before = o.TryGetValue("before", out var bs) ? DateTime.Parse(bs, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal) : RunRecount.FixedReaderAt;
+        // --reread: the runs with slots not read, read again with the reader that sees the slot's backing (0.10.134), tables read before now
+        var before = o.TryGetValue("before", out var bs) ? DateTime.Parse(bs, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal) : reread ? DateTime.UtcNow : RunRecount.FixedReaderAt;
         var keepDir = CrashLog.DirOverride;
         // the reads' own notes and the session they are read in: a folder of their own, never the data folder's
         CrashLog.DirOverride = TestTemp.Path("KinahLedger-recount-runs"); Directory.CreateDirectory(CrashLog.DirOverride); Characters.Reset();
@@ -566,7 +604,7 @@ options: --process aion[,other]");
             var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
             var sw = System.Diagnostics.Stopwatch.StartNew();
             Console.WriteLine($"recount-runs {(dry ? "(dry run) " : "")}on {dataDir}, pictures from {shots}, tables read before {before:yyyy-MM-dd HH:mm:ss}Z");
-            var plan = RunRecount.PlanAsync(dataDir, shots, settings, items, before, RunRecount.ServersOf(dataDir), say: verbose ? Console.WriteLine : null).GetAwaiter().GetResult();
+            var plan = RunRecount.PlanAsync(dataDir, shots, settings, items, before, RunRecount.ServersOf(dataDir), say: verbose ? Console.WriteLine : null, reread: reread).GetAwaiter().GetResult();
             var report = RunRecount.Report(plan, items).ToList();
             if (o.TryGetValue("report", out var rp))
             {
@@ -1790,7 +1828,12 @@ options: --process aion[,other]");
         var wk = SharePicture.Compose(week with { Days = wdays, Kinah = 1_000_000 }, false, null, fk);
         Check("week: the panel", $"{wk.RowsHead} | {wk.RowsSide} | " + string.Join(" / ", wk.Rows.Select(r => $"{r.Name} {r.Fig} {r.Bar:0.00}{(r.Best ? " best" : "")}{(r.Dim ? " dim" : "")}")), "BY DAY | 6 of 7 days farmed | Sun 25 100K 0.14 / Mon 26 200K 0.29 / Tue 27 300K 0.43 / Wed 28 – 0.00 dim / Thu 29 500K 0.71 / Fri 30 600K 0.86 / Today 700K 1.00 best");
         Check("week: its best day and zone at the foot", wk.BestLine, "Best day: Thu 29, 1.2M · most made in Northern Tolbas Forest");
-        var all2 = string.Join("\n", new[] { tp, wk }.Select(SharePicture.Text));
+        // 9. the Abyss (Steven, 2026-11-16): the points an hour and the points lead, Rank Points and PvP under them, the
+        // Abyss's drops (the facts carry only those), no Kinah-and-loot split, no zones line
+        var ab = SharePicture.Compose(session with { Seconds = 3600, Title = "Lower Abyss", Abyss = new ShareAbyss(18_420, 4_210, 380, 3, 96, 2), Kinah = 120_000 }, false, null, fk);
+        Check("the Abyss: its figures and words", $"{ab.Kicker} | {ab.Rate} {ab.RateLabel} | {ab.Made} {ab.MadeLabel} | {string.Join(", ", ab.Stats.Select(x => $"{x.Fig} {x.Label}"))} | {ab.RowsHead} | split {(ab.Split == null ? "none" : "shown")} | zones [{ab.Zones}]",
+            "THIS SESSION · ABYSS | 18,420 Abyss Points an hour | 18,420 Abyss Points in 1h | 18,420 AP an hour, 4,210 Rank Points, 3 PvP kills | ABYSS DROPS | split none | zones []");
+        var all2 = string.Join("\n", new[] { tp, wk, ab }.Select(SharePicture.Text));
         Check("still no accuracy figures", all2.Contains('%') || all2.Contains("accura", StringComparison.OrdinalIgnoreCase) ? "found" : "none", "none");
         return ok;
     }

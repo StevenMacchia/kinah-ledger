@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace KinahLedger.Parser;
 
@@ -59,7 +59,7 @@ public sealed class ParserPrefs
     public string Look { get; set; } = StandardLook;
     public const string StandardLook = "standard";
     /// <summary>A look key the Parser's own window can draw: a fight look's, else the standard panel.</summary>
-    public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" ? key : StandardLook;
+    public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" || Ui.HudThemes.Themed(key) ? key! : StandardLook;
     /// <summary>DPS over each member's active time (first hit to last, pauses over 20 s left out) instead of over the fight's length (the default).</summary>
     public bool DpsActive { get; set; }
     /// <summary>
@@ -93,9 +93,11 @@ public sealed class ParserPrefs
     public string Targets { get; set; } = "boss";
     /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, five rows (a whole party). A click on the meter switches it.</summary>
     public bool Expanded { get; set; }
+    /// <summary>The green heal bar along a healer's row on the overlay's meter (on by default; Settings › Parser › Heal bars).</summary>
+    public bool HealBars { get; set; } = true;
     /// <summary>
     /// Which hit kind the Parser shows as crit ("none", "result3" or "mark08", the two candidates the hits carry), and as a
-    /// back attack ("none" or "side1"). No switch in Settings. Null, as every player has it, means the release's default
+    /// back attack ("none" or "side1"). Settings' "Crit and back-attack rates" switch picks <see cref="CritPick"/> and <see cref="BackPick"/>. Null, as every player has it, means the release's default
     /// (<see cref="CritDefault"/>, <see cref="BackDefault"/>): null is never written, so a release that changes a default
     /// reaches every player, saved settings or not. A value in the file is a choice and stays.
     /// </summary>
@@ -103,6 +105,8 @@ public sealed class ParserPrefs
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] public string? BackSource { get; set; }
     /// <summary>The defaults a release ships: the morning's flip is one of these lines.</summary>
     public const string CritDefault = "none", BackDefault = "none";
+    /// <summary>The kinds the Settings switch picks: result 3 (x1.76, rises from behind in 7 of 7 classes) and side 1.</summary>
+    public const string CritPick = "result3", BackPick = "side1";
     [System.Text.Json.Serialization.JsonIgnore] public string CritNow => CritSource ?? CritDefault;
     [System.Text.Json.Serialization.JsonIgnore] public string BackNow => BackSource ?? BackDefault;
 

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace KinahLedger.Parser;
 
@@ -21,7 +21,24 @@ public sealed class EncounterStore
     string _cacheDir = "";
 
     /// <param name="dir">The folder to keep them in (the character's: Characters.DataDir); asked each time, so a character switch moves with it.</param>
-    public EncounterStore(Func<string> dir) => _dir = dir;
+    public EncounterStore(Func<string> dir) { _dir = dir; Records = new FightRecords(dir, ReadEvery); }
+
+    /// <summary>Your records per fight (Parser/FightRecords.cs): each kill kept goes into its fight's record.</summary>
+    public FightRecords Records { get; }
+
+    /// <summary>Every finished fight in a folder's file, oldest first as written (the records' first build reads them all).</summary>
+    static IEnumerable<Encounter> ReadEvery(string dir)
+    {
+        var p = System.IO.Path.Combine(dir, FileName);
+        if (!File.Exists(p)) yield break;
+        foreach (var line in File.ReadLines(p))
+        {
+            if (line.Length < 2) continue;
+            Encounter? e = null;
+            try { e = JsonSerializer.Deserialize<Encounter>(line, Json); } catch (JsonException) { }
+            if (e is { End: not null, OpenWorld: false }) yield return e;
+        }
+    }
 
     string PathIn(string name) => System.IO.Path.Combine(_dir(), name);
 
@@ -41,6 +58,7 @@ public sealed class EncounterStore
                 File.AppendAllText(System.IO.Path.Combine(dir, FileName), JsonSerializer.Serialize(e, Json) + "\n");
                 if (_cache != null && _cacheDir == dir) { _cache.RemoveAll(x => x.Id == e.Id); _cache.Add(e); }
                 _version++;
+                Records.Note(e);
             }
             catch (Exception ex) { CrashLog.Write("parser: saving a fight", ex); }
         }

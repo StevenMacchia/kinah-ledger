@@ -1,4 +1,4 @@
-using KinahLedger.Parser;
+﻿using KinahLedger.Parser;
 
 namespace KinahLedger.Ui;
 
@@ -49,7 +49,7 @@ public sealed class FightView
             // the ids of one ability as one row (a spirit's attack at each rank), each named for the member's class
             foreach (var a in e.AbilityRows(f))
                 m.Abilities.Add(new AbilityView { Skill = a.Skill, Name = Abilities.Name(a.Skill, f.Class), Damage = e.Figure(a), Hits = e.Hits(a), Avg = e.Average(a), Share = e.Figure(a) / (double)Math.Max(1, e.Figure(f)),
-                    DpsOrNull = e.Figure(a) / Math.Max(secs, Encounter.MinDpsSeconds), Casts = a.Casts, Max = a.Max, Min = a.Min,
+                    DpsOrNull = e.Figure(a) / Math.Max(secs, Encounter.MinDpsSeconds), Casts = a.Casts, Max = a.Max, Min = a.Min, Picks = a.Picks,
                     Crit = Encounter.CritKey is { } ck && a.StreamHits is > 0 and var sh && a.Kinds != null ? Encounter.KindTotals(a, ck).Hits / (double)sh : null,
                     Back = Encounter.BackKey is { } bk && a.StreamHits is > 0 and var sb && a.Kinds != null ? Encounter.KindTotals(a, bk).Hits / (double)sb : null });
             Depth(m, f, e);
@@ -100,8 +100,10 @@ public sealed class FightView
     /// <summary>Your best kill of this boss and your last pull of it before this record (yours only: other members' figures stay on this PC and in this view).</summary>
     public static (PullRef? Best, PullRef? Last) Records(Encounter e, IEnumerable<Encounter> past)
     {
+        // the same fight: the boss in the same instance and mode (FightRecords.KeyOf), never the boss elsewhere
+        string key = FightRecords.KeyOf(e);
         bool Same(Encounter p) => p.Id != e.Id && p.ModeKind == ParserMode.Bosses && p.HasDamage && !p.Live
-            && (e.BossId > 0 && p.BossId > 0 ? p.BossId == e.BossId : string.Equals(p.Boss, e.Boss, StringComparison.OrdinalIgnoreCase))
+            && FightRecords.KeyOf(p) == key
             && p.Start < e.Start && p.You is { Damage: > 0 };
         var list = past.Where(Same).ToList();
         PullRef Ref(Encounter p) { var end = p.End ?? p.LastAt; var you = p.You!; return new PullRef { E = p, Dps = p.Dps(you, end), Seconds = p.Duration(end).TotalSeconds, When = p.Start, Abilities = Abilities.Merged(you.Abilities).ToDictionary(a => a.Skill, a => a.Damage / Math.Max(1, p.DpsSeconds(you, end))) }; }
@@ -145,9 +147,11 @@ public sealed class AbilityView
     public double Average => Avg ?? 0;
     /// <summary>Store v2 figures: null until the record carries them.</summary>
     public int? Casts; public double? Crit, Back; public long? Max, Min; public Dictionary<string, int>? Kinds;
+    /// <summary>The specialties its hits named (bits 1 to 5, Abilities.PicksOf); 0 none seen.</summary>
+    public int Picks;
 }
 
 public sealed class DeathView { public double At; public double? BossHpLeft; public string Killer = ""; public List<(double At, string Source, long Amount, double? HpAfter, bool Crit)> Last = new(); }
 
 /// <summary>A kept pull of the same boss: your DPS in it, how long it took, when, and your DPS by ability.</summary>
-public sealed class PullRef { public Encounter E = null!; public double Dps, Seconds; public DateTime When; public Dictionary<int, double> Abilities = new(); }
+public sealed class PullRef { public Encounter E = null!; public double Dps, Seconds, Hps /* your healing a second (0: none, or not known) */; public DateTime When; public Dictionary<int, double> Abilities = new(); }

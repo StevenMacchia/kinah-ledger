@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -169,9 +169,9 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         /// <summary>The hour's colour: gold for Kinah, ink for Abyss Points.</summary>
         public Brush Tone => Abyss ? Ink : Gold;
         /// <summary>The hour's word: "/h", or "AP/h" for Abyss Points; none while it warms up.</summary>
-        public string Unit => Warm ? "" : Abyss ? "AP/h" : "/h";
+        public string Unit => Warm ? "" : Abyss ? L.T("AP/h") : L.T("/h");
         /// <summary>The session's word: "session", or "AP" for the points so far.</summary>
-        public string TotalWord => Abyss ? "AP" : "session";
+        public string TotalWord => Abyss ? "AP" : L.T("session");
     }
 
     /// <summary>The Abyss's stats as one small line ("9 PvP · 2 deaths · 266.5K Kinah"), figures in their colour, words muted.</summary>
@@ -199,7 +199,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         if (V("paused").Length > 0) { note = V("paused"); tone = Warn; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
         else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; }
-        else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
+        else if (V("flag").Length > 0) { note = V("flag") + L.T(" · fix in tracker"); tone = Gold; }
         else if (_acc.Length > 0) { note = _acc; tone = _accCheck ? Warn : Mint; }
         else { note = ""; tone = Muted; }
         return new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
@@ -216,9 +216,9 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     protected static FrameworkElement MemberName(Fighter f, double size)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-        var nm = Tx(f.Name.Length > 0 ? f.Name : "Unnamed", size, f.Name.Length > 0 ? ClassArt.NameBrush(f.Class) : Muted, FontWeights.SemiBold);
+        var nm = Tx(ParserRows.NameOf(f), size, f.Name.Length > 0 || f.You ? ClassArt.NameBrush(f.Class) : Muted, FontWeights.SemiBold);
         sp.Children.Add(nm);
-        if (f.You) sp.Children.Add(HudGlass.YouChip());
+        if (f.You) { var yc = HudGlass.YouChip(); if (yc.Child is TextBlock yt) yt.Text = L.T(yt.Text); sp.Children.Add(yc); }
         return sp;
     }
 
@@ -231,14 +231,15 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
     // the time to a tenth of a second: a live DPS moves as the meter's clock runs, not once a second (Steven, 2026-11-15)
-    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}:{e.GroupHealing}:{e.Roster.Sum(f => f.HealingEffective)}:{e.Roster.Sum(f => f.HealingEstimated)}";
+    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{ParserRows.HealBarsPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}:{e.GroupHealing}:{e.Roster.Sum(f => f.HealingEffective)}:{e.Roster.Sum(f => f.HealingEstimated)}";
 
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
         var i = items.FirstOrDefault();
-        if (i?.AtPc is not { } at) return null;
-        var left = at - now;
-        return ($"{i.Short} {TimerBoard.Clock(left)}", left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes) ? Gold : Ink);
+        if (i?.AtPc == null) return null;
+        // as the badges say it (Ui/TimerBadge.cs): an event's entry open in green, "Shugo ENTER 2:41"
+        var tone = TimerBadge.Of(i, now).Tone;
+        return (TimerBadge.Text(i, now), tone == TimerBadge.Tone.On ? Mint : tone == TimerBadge.Tone.Soon ? Gold : Ink);
     }
 }
 
@@ -327,9 +328,9 @@ sealed class HudCapsule : HudStackLook
         _meterTimer.Visibility = KinahHidden && tc != null ? Visibility.Visible : Visibility.Collapsed;
         if (tc is { } mt) { _meterTimer.Text = mt.Text; _meterTimer.Foreground = mt.Tone; }
         if (tc is not { } c) { _chip.Visibility = Visibility.Collapsed; return; }
-        bool gold = ReferenceEquals(c.Tone, Gold);
+        bool gold = ReferenceEquals(c.Tone, Gold), on = ReferenceEquals(c.Tone, Mint);
         _chipText.Text = c.Text; _chipText.Foreground = c.Tone;
-        _chip.Background = B(gold ? GoldC : 0xFFFFFF, gold ? .14 : .06); _chip.BorderBrush = B(gold ? GoldC : 0xFFFFFF, gold ? .45 : .14);
+        _chip.Background = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .14 : .06); _chip.BorderBrush = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .45 : .14);
         _chip.Visibility = Visibility.Visible;
     }
 
@@ -352,7 +353,7 @@ sealed class HudCapsule : HudStackLook
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(Tx(e.Title, 13.5, Ink, FontWeights.Bold));
-        var clk = e.Waiting ? Tx("Ready", 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
+        var clk = e.Waiting ? Tx(L.T("Ready"), 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _meterBody.Children.Add(head);
         if (e.Waiting) { var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(0, 6, 0, 2); _meterBody.Children.Add(w); _meter.Visibility = Visibility.Visible; return; }
         if (e.BossHpLeft is { } hp && e.Live)
@@ -362,6 +363,7 @@ sealed class HudCapsule : HudStackLook
             hpRow.ColumnDefinitions.Add(new ColumnDefinition()); hpRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var hb = Bar(hp, hp < .34 ? B(RecC) : Gold, 3, new Thickness(0)); hb.VerticalAlignment = VerticalAlignment.Center; hpRow.Children.Add(hb);
             Motion.HpGhost(hb, _hpPlace, e.Id, hp, now);
+            hb.Children.Add(HudKit.HpTicks());
             if (Hp(e, 11) is { } hpText) { hpText.Margin = new Thickness(8, 0, 0, 0); Grid.SetColumn(hpText, 1); hpRow.Children.Add(hpText); }
             _meterBody.Children.Add(hpRow);
         }
@@ -370,7 +372,7 @@ sealed class HudCapsule : HudStackLook
         ParserRows.Detach(_prows); _meterBody.Children.Add(_prows);
         _prows.Show(e, now);
         var outcome = !e.Live && e.Outcome.Length > 0
-            ? Tx(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over", 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold)
+            ? Tx(L.T(e.Outcome == "kill" ? "Killed" : e.Outcome == "wipe" ? "Wiped" : e.Outcome == "cleared" ? "Cleared" : "Over"), 12.5, e.Outcome is "kill" or "cleared" ? Mint : e.Outcome == "wipe" ? B(RecC) : Muted, FontWeights.Bold)
             : null;
         // the foot: the fight's total and the group's DPS (the outcome before them once it's over); held, the average, badged
         if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12, outcome); foot.Margin = new Thickness(0, 5, 0, 1); _meterBody.Children.Add(foot); }
@@ -394,6 +396,8 @@ sealed class HudMeter : HudStackLook
     readonly Border _ring, _frame;
     readonly StackPanel _body = new();
     readonly Grid _head = new() { Height = 32 };
+    /// <summary>The boss HP's thirds, on the header's HP line (a notch a little taller than the line).</summary>
+    readonly Grid _hpTicks = HudKit.HpTicks(6);
     readonly Border _hpFill = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 }, _hpLine = new() { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
     readonly TextBlock _title = new() { FontSize = 13.5, FontWeight = FontWeights.Bold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     readonly TextBlock _hpPct = new() { FontSize = 12.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
@@ -425,7 +429,7 @@ sealed class HudMeter : HudStackLook
         var hb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         hb.GradientStops.Add(new GradientStop(Color.FromArgb(0x10, 0xF2, 0x6D, 0x6D), 0)); hb.GradientStops.Add(new GradientStop(Color.FromArgb(0x55, 0xF2, 0x6D, 0x6D), 1)); hb.Freeze();
         _hpFill.Background = hb; _hpLine.Background = B(RecC);
-        _head.Children.Add(_hpFill); _head.Children.Add(_hpLine);
+        _head.Children.Add(_hpFill); _head.Children.Add(_hpLine); _head.Children.Add(_hpTicks);
         var hg = new Grid { Margin = new Thickness(10, 0, 10, 0) };
         hg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = new Grid();
@@ -503,9 +507,9 @@ sealed class HudMeter : HudStackLook
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
         if (TimerChip(items, now) is not { } c) { _tab.Visibility = Visibility.Collapsed; PlaceHp(); return; }
-        bool gold = ReferenceEquals(c.Tone, Gold);
+        bool gold = ReferenceEquals(c.Tone, Gold), on = ReferenceEquals(c.Tone, Mint);
         _tabText.Text = c.Text; _tabText.Foreground = c.Tone;
-        _tab.Background = B(gold ? GoldC : 0xFFFFFF, gold ? .16 : .07);
+        _tab.Background = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .16 : .07);
         _tab.Visibility = Visibility.Visible;
         PlaceHp();
     }
@@ -539,7 +543,7 @@ sealed class HudMeter : HudStackLook
         if (e.Waiting)
         {
             // a dungeon before its first pull: its name, Ready, and where the members will be
-            _clock.Text = "Ready"; _clock.Foreground = Muted;
+            _clock.Text = L.T("Ready"); _clock.Foreground = Muted;
             _hpFill.Width = _hpLine.Width = 0; _hpNow = null; PlaceHp();
             var w = Tx(e.ReadyText, 12.5, Faint, FontWeights.SemiBold); w.Margin = new Thickness(10, 7, 10, 8);
             _rows.Children.Add(w);
@@ -551,10 +555,11 @@ sealed class HudMeter : HudStackLook
         _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold : Ink;
         double hp = e.BossHpLeft is { } h && e.Live ? h : 0;
         _hpFill.Width = _hpLine.Width = W * hp;
+        _hpTicks.Visibility = hp > 0 ? Visibility.Visible : Visibility.Collapsed;
         // a big drop: a red chunk in the header from the old HP to the new, shrinking onto the fill
         if (hp > 0) Motion.HpGhost(_head, _hpPlace, e.Id, hp, now, 0, 0.42);
         // "47% · 1.82M left" (Steven, 2026-11-14: the HP left beside the boss's %)
-        _hpNow = hp > 0 ? ($"{Math.Round(hp * 100):0}%", ParserPanel.HpLeft(e), true) : (!e.Live && e.Outcome == "kill" ? "Killed" : !e.Live && e.Outcome == "wipe" ? "Wiped" : "", "", false);
+        _hpNow = hp > 0 ? ($"{Math.Round(hp * 100):0}%", ParserPanel.HpLeft(e), true) : (!e.Live && e.Outcome == "kill" ? L.T("Killed") : !e.Live && e.Outcome == "wipe" ? L.T("Wiped") : "", "", false);
         _hpPct.Tag = !e.Live && e.Outcome == "kill";
         PlaceHp();
         // the rows (Parser v2, Ui/ParserRows.cs): kept between draws, so a change moves
@@ -659,16 +664,8 @@ sealed class HudFloat : HudStackLook
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        _timers.Children.Clear();
-        foreach (var i in items.Take(HudWindow.TimerLineMax))
-        {
-            if (i.AtPc is not { } at) continue;
-            var left = at - now;
-            bool soon = left <= TimeSpan.FromMinutes(TimerPrefs.GoldMinutes);
-            if (_timers.Children.Count > 0) _timers.Children.Add(Tx("   ", 11, Faint));
-            _timers.Children.Add(Tx(i.Short + " ", 11.5, soon ? Gold : Muted, FontWeights.SemiBold));
-            _timers.Children.Add(Tx(TimerBoard.Clock(left), 11.5, soon ? Gold : Ink, FontWeights.Bold));
-        }
+        // badges (Steven, 2026-11-16: not "black boxes w/ yellow text")
+        TimerBadge.Fill(_timers, items.Where(i => i.AtPc != null), now, 11, HudWindow.TimerLineMax);
         _timers.Visibility = _timers.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -688,11 +685,11 @@ sealed class HudFloat : HudStackLook
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(Tx(e.Title, 14, Ink, FontWeights.Bold));
         if (Hp(e, 12) is { } hpText) { hpText.Margin = new Thickness(8, 1, 0, 0); head.Children.Add(hpText); }
-        head.Children.Add(e.Waiting ? Tx("  Ready", 12.5, Muted, FontWeights.SemiBold) : Num("  " + Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold));
+        head.Children.Add(e.Waiting ? Tx(L.T("  Ready"), 12.5, Muted, FontWeights.SemiBold) : Num("  " + Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold));
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
-            head.Children.Add(Tx(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed", 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
+            head.Children.Add(Tx(L.T(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed"), 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);
-        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); }
+        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); bar.Children.Add(HudKit.HpTicks()); }
         else _fight.Children.Add(new Border { Height = 6 });
         var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         if (e.Waiting) rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));

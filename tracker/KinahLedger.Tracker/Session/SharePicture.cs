@@ -28,7 +28,16 @@ public sealed record ShareFacts(string Scope, DateTime Day, string Server, strin
     public long Kinah { get; init; } = -1;
     public IReadOnlyList<ShareZone> Zones { get; init; } = Array.Empty<ShareZone>();
     public IReadOnlyList<ShareDay> Days { get; init; } = Array.Empty<ShareDay>();
+    /// <summary>In the Abyss: its points and fights (the drops and the time are then the Abyss's zones' only).</summary>
+    public ShareAbyss? Abyss { get; init; }
 }
+
+/// <summary>
+/// The Abyss's side of a picture (Steven, 2026-11-16: in the Abyss the picture should be "whats important in the abyss i.e;
+/// abyss per hour and only abyss drops"): the Abyss Points, Rank Points (earned, lost on deaths), PvP kills, all kills and
+/// deaths in the Abyss's zones. With it the picture leads with the points an hour, and its drops are the Abyss's own.
+/// </summary>
+public sealed record ShareAbyss(long Points, long Rank, long RankLost, int Pvp, int Kills, int Deaths);
 
 /// <summary>A small figure under the total: "1.27M" over "Kinah an hour".</summary>
 public sealed record ShareStat(string Fig, string Label);
@@ -181,10 +190,39 @@ public static class SharePicture
             : bestDrop is { } bd ? $"Best drop: {bd.Name} ×{N(bd.Count)}" + (GradeRank(bd.Grade) > 0 ? $" · {bd.Grade}" : "")
             : "";
 
-        return new SharePic(head, f.Title, sub, rate, RateLabel, fk(f.Made), MadeLabel, icons, best, Site)
+        var pic = new SharePic(head, f.Title, sub, rate, RateLabel, fk(f.Made), MadeLabel, icons, best, Site)
         {
             Kicker = kicker.ToUpperInvariant(), Stats = stats, Split = split,
             RowsHead = rowsHead.ToUpperInvariant(), RowsSide = rowsSide, Rows = rows, Zones = zoneLine, BestLine = bestLine,
+        };
+        return f.Abyss is { } a ? AbyssPic(pic, f, a, fk) : pic;
+    }
+
+    public const string AbyssRateLabel = "Abyss Points an hour";
+
+    /// <summary>
+    /// The picture in the Abyss: the Abyss Points an hour and the points as its figures, then Rank Points, PvP kills (or
+    /// every kill) and deaths; the time is the Abyss's; the drops (already the Abyss's own) and the best drop stay; no
+    /// Kinah-and-loot split and no zones line (the Kinah is a stat under it when there is any).
+    /// </summary>
+    static SharePic AbyssPic(SharePic p, ShareFacts f, ShareAbyss a, Func<double, string> fk)
+    {
+        var rate = f.Seconds >= 60 && a.Points > 0 ? fk(a.Points / (f.Seconds / 3600)) : "–";
+        // three figures fit under the total: the hour, Rank Points, PvP kills (else every kill, else the time); the time is
+        // beside the points ("Abyss Points in 1h")
+        var stats = new List<ShareStat> { new(rate, "AP an hour") };
+        if (a.Rank > 0) stats.Add(new ShareStat(fk(a.Rank), "Rank Points"));
+        if (a.Pvp > 0) stats.Add(new ShareStat(N(a.Pvp), a.Pvp == 1 ? "PvP kill" : "PvP kills"));
+        else if (a.Kills > 0) stats.Add(new ShareStat(N(a.Kills), a.Kills == 1 ? "kill" : "kills"));
+        if (stats.Count < 3) stats.Add(new ShareStat(Short(f.Seconds), "in the Abyss"));
+        var side = f.Scope switch { Today => "Today", Run => "Last run", Week => "Last 7 days", _ => "This session" };
+        var sub = $"{Dur(f.Seconds)} in the Abyss" + (a.Pvp > 0 ? $" · {Plural(a.Pvp, "PvP kill")}" : a.Kills > 0 ? $" · {Plural(a.Kills, "kill")}" : "")
+            + (f.Made > 0 ? $" · {fk(f.Made)} Kinah and loot" : "");
+        return p with
+        {
+            Sub = sub, Rate = rate, RateLabel = AbyssRateLabel, Made = fk(a.Points), MadeLabel = $"Abyss Points in {Short(f.Seconds)}",
+            Kicker = $"{side} · Abyss".ToUpperInvariant(), Stats = stats, Split = null, Zones = "",
+            RowsHead = "ABYSS DROPS",
         };
     }
 

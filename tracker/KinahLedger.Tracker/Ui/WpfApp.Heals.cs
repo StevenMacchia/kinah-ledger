@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -99,18 +99,22 @@ public static partial class WpfApp
         return shot;
     }
 
-    /// <summary>A heal line's row: the member's name (the name cell holds the name's line and the figures under it).</summary>
+    /// <summary>A heal chip's row: the member's name (the chip sits on the name's line, after the name).</summary>
+    static bool RowHasPlate(DependencyObject root, string name) =>
+        FindTexts(root).FirstOrDefault(t => t.Text == name) is { } nt && VisualTreeHelper.GetParent(nt) is StackPanel line
+        && line.Children.OfType<StackPanel>().Any(pl => pl.Visibility == Visibility.Visible && pl.Children.Count > 0);
+
     static string HealRowName(FrameworkElement figures) =>
-        VisualTreeHelper.GetParent(figures) is Grid cell && cell.Children.OfType<Border>().FirstOrDefault()?.Child is StackPanel line ? line.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? "" : "";
+        VisualTreeHelper.GetParent(figures) is StackPanel inPill && VisualTreeHelper.GetParent(inPill) is Border pill && VisualTreeHelper.GetParent(pill) is StackPanel line
+            ? line.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? "" : "";
 
     /// <summary>
-    /// options-test: the heal line (Steven, 2026-11-15) in every place, a pull under way, held and killed, compact and expanded:
-    /// only a member who healed another has it (the sample's Cleric, never the Templar's own heals); the figures say the
-    /// healing done exactly, per second over the DPS's seconds, and the part that landed with ≈ when it fits (a narrow meter
-    /// drops that part, never trims a figure); the line's length is the member's share of the group's healing; the figures
-    /// sit under the name, inside the row, clear of the DPS's column; the meter is no taller than without heals; TOP HEALS
-    /// on the kill's top healer, beside TOP DPS; the held result takes a heal of the pull's last moment that came after its
-    /// kill (the saved copy never does).
+    /// options-test: the heal chip (Steven, 2026-11-16: the figures under the name and the foot line "look awful") in every
+    /// place, a pull under way, held and killed, compact and expanded: on every member with healing (self-heals count, potions
+    /// don't), their healing a second (the healing done until there are seconds enough), whole on the name's line (the name
+    /// trims for it), clear of the DPS's column, no line along the row's foot; the meter is no taller than without heals;
+    /// TOP HEALS on the kill's top healer, beside TOP DPS; the held result takes a heal of the pull's last moment that came
+    /// after its kill (the saved copy never does).
     /// </summary>
     static void HealChecks(Action<bool, string> check, MainWindow? w = null)
     {
@@ -126,68 +130,62 @@ public static partial class WpfApp
             foreach (var (name, e, at, best) in HealLooks(now))
                 foreach (var expanded in new[] { false, true })
                     foreach (var place in HealPlaces)
+                    foreach (var bars in new[] { true, false })
                     {
+                        if (!bars && (expanded || place != HealPlaces[0])) continue;   // the switch off: once is enough
+                        ParserRows.HealBarsPref = bars;
                         ParserRows.BestOf = best ?? (_ => null);
                         ParserRows.ExpandedPref = expanded; HudStackLook.FightWidth = expanded ? width0 + 70 : width0;
                         var (root, win) = HealWindow(e, at, place);
                         var figures = TaggedShown(root, "heal-figures").OfType<TextBlock>().ToList();
                         var lines = TaggedShown(root, "heal-line");
-                        var healers = e.Members.Where(f => f.HealingOthers > 0).Select(f => f.Name).OrderBy(x => x).ToList();
+                        var healers = e.Members.Where(f => f.Healing > 0).Select(f => f.Name).OrderBy(x => x).ToList();   // self-heals count (0.10.120)
                         var shown = figures.Select(HealRowName).OrderBy(x => x).ToList();
-                        string tag = $"{name} {place}{(expanded ? " expanded" : "")}";
-                        if (!shown.SequenceEqual(healers) || lines.Count != healers.Count) wrong.Add($"{tag}: heal figures on [{string.Join(",", shown)}], {lines.Count} lines (want [{string.Join(",", healers)}])");
+                        string tag = $"{name} {place}{(expanded ? " expanded" : "")}{(bars ? "" : " bars off")}";
+                        // every healer's chip; one with no room beside the name (a narrow look's expanded meter, a row with a TOP plate)
+                        // gives way, never cut
+                        bool narrow = expanded && place is "capsule" or "float";
+                        var missing = healers.Except(shown).Where(n => !narrow && !RowHasPlate(root, n)).ToList();
+                        // the heal bar (Settings › Parser › Heal bars, on by default): one under every healer's row shown, 4 px, none with it off
+                        int barsWant = bars ? healers.Count(n => NameShown(root, n)) : 0;
+                        bool barsOk = lines.Count == barsWant && lines.All(l => Math.Abs(l.ActualHeight - ParserRows.HealBarPx) < 0.5 && l.ActualWidth >= 4);
+                        if (!shown.All(healers.Contains) || missing.Count > 0 || !barsOk) wrong.Add($"{tag}: heal chips on [{string.Join(",", shown)}], {lines.Count} heal bars {string.Join("/", lines.Select(l => $"{l.ActualWidth:0}x{l.ActualHeight:0}"))} (want [{string.Join(",", healers)}], {barsWant} bars)");
                         var dpsLeft = TaggedShown(root, "row-dps").Select(t => t.TranslatePoint(new Point(0, 0), (UIElement)root).X).DefaultIfEmpty(9999).Min();
                         foreach (var fig in figures)
                         {
                             seen++;
                             var f = e.Members.First(m => m.Name == HealRowName(fig));
                             string want = HealWant(fig, e, f, at);
-                            if (fig.Text != want) wrong.Add($"{tag} {f.Name}: \"{fig.Text}\" (want \"{want}\")");
-                            fig.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                            if (fig.DesiredSize.Width > fig.ActualWidth + 0.5) wrong.Add($"{tag} {f.Name}: the figures trimmed ({fig.DesiredSize.Width:0.#} in {fig.ActualWidth:0.#})");
-                            // under the name, inside the row, clear of the DPS's column
-                            var cell = (FrameworkElement)VisualTreeHelper.GetParent(fig);
-                            var nameT = ((StackPanel)((Border)((Grid)cell).Children[0]).Child).Children.OfType<TextBlock>().First();
-                            double nameTop = nameT.TranslatePoint(new Point(0, 0), cell).Y, figTop = fig.TranslatePoint(new Point(0, 0), cell).Y, figBottom = figTop + fig.ActualHeight;
-                            double figRight = fig.TranslatePoint(new Point(fig.ActualWidth, 0), (UIElement)root).X;
-                            var host = (FrameworkElement)((Grid)cell).Children[0];
-                            var nameLine = (FrameworkElement)((Border)host).Child;
-                            if (nameLine.ActualHeight > host.ActualHeight + 0.5) wrong.Add($"{tag} {f.Name}: the name's line cut ({nameLine.ActualHeight:0.#} in {host.ActualHeight:0.#})");
-                            if (!(figTop > nameTop + 8 && figBottom <= cell.ActualHeight + 0.5 && nameTop >= -0.5 && figRight <= dpsLeft)) wrong.Add($"{tag} {f.Name}: figures at {figTop:0.#}-{figBottom:0.#} in a {cell.ActualHeight:0.#} row (name at {nameTop:0.#}), right {figRight:0.#}, DPS from {dpsLeft:0.#}");
-                        }
-                        // the line's length: the member's share of the group's healing, of the row's width
-                        foreach (var ln in lines)
-                        {
-                            var rowW = ((FrameworkElement)VisualTreeHelper.GetParent(ln)).ActualWidth;
-                            double want = e.GroupHealing > 0 ? (double)figures.Select(HealRowName).Select(n => e.Members.First(m => m.Name == n)).Max(m => m.Healing) / e.GroupHealing : 0;
-                            if (healers.Count == 1 && Math.Abs(ln.ActualWidth - Math.Max(4, rowW * want)) > 1) wrong.Add($"{tag}: the heal line {ln.ActualWidth:0.#} of {rowW:0.#} (want the share {want:P0})");
+                            // short of room the total gives way ("2.4K/s" alone)
+                            if (fig.Text != want && !(want.Contains(" · ") && fig.Text == want[..want.IndexOf(" · ")])) wrong.Add($"{tag} {f.Name}: \"{fig.Text}\" (want \"{want}\")");
+                            // the chip on the name's line, whole (the name trims for it), clear of the DPS's column, inside its row
+                            var pill = (Border)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(fig));
+                            var host = (FrameworkElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(pill));
+                            double pillLeft = pill.TranslatePoint(new Point(0, 0), host).X, pillRight = pill.TranslatePoint(new Point(pill.ActualWidth, 0), (UIElement)root).X;
+                            double pillTop = pill.TranslatePoint(new Point(0, 0), host).Y;
+                            if (pill.ActualWidth <= 0 || pillLeft + pill.ActualWidth > host.ActualWidth + 0.5) wrong.Add($"{tag} {f.Name}: the chip cut ({pillLeft:0.#}+{pill.ActualWidth:0.#} in {host.ActualWidth:0.#})");
+                            if (pillRight > dpsLeft) wrong.Add($"{tag} {f.Name}: the chip under the DPS (right {pillRight:0.#}, DPS from {dpsLeft:0.#})");
+                            if (pillTop < -0.5 || pillTop + pill.ActualHeight > host.ActualHeight + 0.5) wrong.Add($"{tag} {f.Name}: the chip outside its row ({pillTop:0.#}-{pillTop + pill.ActualHeight:0.#} of {host.ActualHeight:0.#})");
                         }
                         win.Close();
                     }
-            check(wrong.Count == 0 && seen > 0, $"the heal line in every place, live, held and killed, compact and expanded: on the healer of others only, the healing done, per second and ≈ the part that landed, under the name and clear of the DPS, the line their share ({seen} drawn){(wrong.Count > 0 ? ": " + string.Join("; ", wrong.Take(8)) : "")}");
+            check(wrong.Count == 0 && seen > 0, $"the heal chip in every place, live, held and killed, compact and expanded: on every healer (self-heals count), their healing a second, whole on the name's line, clear of the DPS, a 4 px heal bar along each healer's row, none with Settings' switch off ({seen} drawn){(wrong.Count > 0 ? ": " + string.Join("; ", wrong.Take(8)) : "")}");
 
-            // a raid healer's figures (millions) on the expanded meter, where the name's room is short: the part that landed gives way,
-            // no figure is trimmed
+            // a raid healer's chip (thousands a second) on the expanded meter at the default width (Buddy's), where the name's room
+            // is shorter: the chip shows whole and the name trims for it
             {
-                // at Buddy's width (the default since 0.10.119) the whole line fits, the part that landed too, nothing trimmed
                 ParserRows.ExpandedPref = true; HudStackLook.FightWidth = HudStackLook.FightWidthDefault + 70; ParserRows.BestOf = _ => null;
                 var (name, big, at, _) = HealLooks(now).First(x => x.Name == "big");
-                {
-                    var (root0, win0) = HealWindow(big, at, "standard");
-                    var fig0 = TaggedShown(root0, "heal-figures").OfType<TextBlock>().FirstOrDefault();
-                    fig0?.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                    check(fig0 != null && fig0.DesiredSize.Width <= fig0.ActualWidth + 0.5, $"...a raid healer's figures on the expanded meter at the default width trim no figure (\"{fig0?.Text}\")");
-                    win0.Close();
-                }
-                // the old, narrower default (330): the name's room is short there
-                HudStackLook.FightWidth = KinahLedger.Parser.ParserPrefs.OldDefaultWidth + 70;
                 var (root, win) = HealWindow(big, at, "standard");
-                var fig = TaggedShown(root, "heal-figures").OfType<TextBlock>().FirstOrDefault();
-                var f = big.Members.First(m => m.HealingOthers > 0);
-                fig?.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                string short2 = $"{Amounts.Short(f.Healing)} · {Amounts.Short(big.HpsOf(f, at) ?? 0)}/s";
-                check(fig != null && fig.Text == short2 && fig.DesiredSize.Width <= fig.ActualWidth + 0.5,
-                    $"...a raid healer's figures on the expanded meter drop the part that landed and trim no figure (\"{fig?.Text}\", want \"{short2}\")");
+                // (the TOP HEALS row's chip gives way to its plate; the other healer's shows)
+                var f = big.Members.Where(m => m.Healing > 0).FirstOrDefault(m => !RowHasPlate(root, m.Name)) ?? big.Members.First(m => m.Healing > 0);
+                var fig = TaggedShown(root, "heal-figures").OfType<TextBlock>().FirstOrDefault(x => HealRowName(x) == f.Name);
+                var pill = fig == null ? null : (Border)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(fig));
+                var hostW = pill == null ? 0 : ((FrameworkElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(pill))).ActualWidth;
+                double pillEnd = pill == null ? 9999 : pill.TranslatePoint(new Point(pill.ActualWidth, 0), (UIElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(pill))).X;
+                string want = fig == null ? "" : HealWant(fig, big, f, at);
+                check(fig != null && (fig.Text == want || want.StartsWith(fig.Text + " · ")) && pillEnd <= hostW + 0.5,
+                    $"...a raid healer's chip on the expanded meter at the default width shows whole (its total gives way when the name would go), the name trims for it (\"{fig?.Text}\", want \"{want}\", ends {pillEnd:0.#} of {hostW:0.#})");
                 win.Close();
                 HudStackLook.FightWidth = width0;
             }
@@ -203,9 +201,10 @@ public static partial class WpfApp
                     ParserRows.ExpandedPref = false;
                     var (r1, w1) = HealWindow(live!, now, place); double h1 = ((FrameworkElement)r1).ActualHeight; int heals1 = TaggedShown(r1, "heal-figures").Count; w1.Close();
                     var (r2, w2) = HealWindow(bare, now, place); double h2 = ((FrameworkElement)r2).ActualHeight; int heals2 = TaggedShown(r2, "heal-figures").Count; w2.Close();
-                    if (Math.Abs(h1 - h2) > 0.5 || heals1 != 1 || heals2 != 0) taller.Add($"{place} {h1:0.#}/{h2:0.#} ({heals1}/{heals2} heal lines)");
+                    // heals1: the Cleric's chip, and a self-healer's since 0.10.120
+                    if (Math.Abs(h1 - h2) > 0.5 || heals1 < 1 || heals2 != 0) taller.Add($"{place} {h1:0.#}/{h2:0.#} ({heals1}/{heals2} heal chips)");
                 }
-                check(taller.Count == 0, $"...the meter is no taller with the heal line, in every place{(taller.Count > 0 ? ": " + string.Join("; ", taller) : "")}");
+                check(taller.Count == 0, $"...the meter is no taller with the heal chips, in every place{(taller.Count > 0 ? ": " + string.Join("; ", taller) : "")}");
             }
 
             // the held result takes a heal of the pull's last moment that came after its kill (the copy saved never does)
@@ -236,28 +235,28 @@ public static partial class WpfApp
                     $"...the held result takes a heal of the pull's last moment that came after its kill ({atEnd:N0} at the kill, {afterLate:N0} after; the copy saved {savedHeal:N0}{(same ? "" : "; not the same pull")})");
             }
         }
-        finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; ParserRows.BestOf = best0; HudStackLook.FightWidth = width0; }
+        finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; ParserRows.BestOf = best0; HudStackLook.FightWidth = width0; ParserRows.HealBarsPref = true; }
     }
 
     /// <summary>
     /// The heal figures a row should say: the whole line (done · per second · the part that landed, ≈ unless confirmed) when it
     /// fits the name's room, else without the part that landed, else the healing done alone.
     /// </summary>
-    static string HealWant(TextBlock fig, Encounter e, Fighter f, DateTime at)
+    /// <summary>A member's row is on the meter (its name drawn).</summary>
+    static bool NameShown(DependencyObject root, string name)
     {
-        string done = Amounts.Short(f.Healing), ps = $"{done} · {Amounts.Short(e.HpsOf(f, at) ?? 0)}/s";
-        string full = $"{ps} · {(f.HealingIsEstimate ? "≈" : "")}{Amounts.Short(f.HealingEffective)} eff";
-        double room = ((FrameworkElement)VisualTreeHelper.GetParent(fig)).ActualWidth;
-        foreach (var text in new[] { full, ps })
+        bool Walk(DependencyObject d)
         {
-            var probe = new TextBlock { Text = text, FontSize = fig.FontSize, FontWeight = fig.FontWeight, FontFamily = fig.FontFamily };
-            System.Windows.Documents.Typography.SetNumeralAlignment(probe, FontNumeralAlignment.Tabular);
-            TextOptions.SetTextFormattingMode(probe, TextOptions.GetTextFormattingMode(fig));
-            probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            if (probe.DesiredSize.Width <= room) return text;
+            if (d is UIElement u && !u.IsVisible) return false;
+            if (d is TextBlock t && t.Text == name) return true;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) if (Walk(VisualTreeHelper.GetChild(d, i))) return true;
+            return false;
         }
-        return done;
+        return Walk(root);
     }
+
+    static string HealWant(TextBlock fig, Encounter e, Fighter f, DateTime at) =>
+        e.HpsOf(f, at) is { } hps ? $"{ParserRows.Compact(hps)}/s" : ParserRows.Compact(f.HealingEffective);
 
     /// <summary>A fight drawn in one place, off-screen and still, for the checks: the meter's root and its window (closed by the caller).</summary>
     static (DependencyObject Root, Window Win) HealWindow(Encounter e, DateTime at, string place)

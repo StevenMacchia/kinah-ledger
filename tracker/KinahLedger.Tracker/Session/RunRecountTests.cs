@@ -81,6 +81,53 @@ public static class RunRecountTests
         stored.Unsent = true; stored.KinahNotRead = true;
         Check("...a run the site never had isn't sent as a correction", RunRecount.Recounted(stored, read, new[] { "a.jpg" }, items, at).Resend.ToString(), "False");
 
+        // ---- a clear lead names a slot past the sure distance (0.10.134) ----
+        {
+            KinahLedger.Ocr.RewardGrid.Slot S(params (string, double)[] icons) => new(new System.Drawing.Rectangle(0, 0, 135, 135), "Legend", "", 1, icons.ToList());
+            string C(KinahLedger.Ocr.RewardGrid.Slot sl) => TrackerSession.CloseEnough(sl, sl.Icons[0].Key, sl.Icons[0].Distance) ? "named" : "not";
+            Check("a slot's match: 62 named; 76.7 with the next at 109.9 named; 86 by 88 not; 82 by 120 not",
+                string.Join(" ", new[] { S(("a", 62), ("b", 70)), S(("a", 76.7), ("b", 109.9)), S(("a", 86), ("b", 88)), S(("a", 82), ("b", 120)) }.Select(C)), "named named not not");
+        }
+
+        // ---- the re-read (0.10.134): runs with slots not read, read again with the reader that sees the slot's backing ----
+        {
+            var now = at.AddDays(5);
+            Check("re-read: a run with a slot not read, read before the new reader", RunRecount.NotEligibleReread(Run(3, 1), now) ?? "yes", "yes");
+            var all = Run(3); var after = Run(3, 1); after.TableAt = now.AddMinutes(1); var done = Run(3, 1); done.Reread = at;
+            Check("...not one with every slot named, read since, or read again already", string.Join(" | ", new[] { all, after, done }.Select(r => RunRecount.NotEligibleReread(r, now))),
+                "every slot named | read by the reader that sees the backing | read again already");
+            string JR(InstanceRun s, InstanceRun? n) { var v = RunRecount.Judge(s, n, gearOf, id => items.NameOf(id)); return v.Take ? "take" : v.Same ? "same" : "left: " + v.Why; }
+            // the run: 3 gear, the material, one slot not read, its bound coin left at 0; the read: the same plus the slot named
+            var st = Run(3, 1, kinah: 0); var rd = Run(4, 0, kinah: 800_000);
+            Check("...the slot named, its bound coin the run left at 0: taken", JR(st, rd), "take");
+            Check("...nothing more named: not taken", JR(Run(3, 1, kinah: 0), Run(3, 1, kinah: 800_000)), "same");
+            // the same piece under the other id of its name (a tradable and a bound copy): the same piece, never a rename
+            var twin = items.AllItems().GroupBy(i => i.Name).FirstOrDefault(g => g.Count() >= 2 && g.All(i => items.IsGear(i.Id)));
+            if (twin != null)
+            {
+                var ids = twin.Select(i => i.Id).ToList();
+                var other = items.AllItems().First(i => items.IsGear(i.Id) && !ids.Contains(i.Id) && items.NameOf(i.Id) != twin.Key).Id;
+                var s2 = Run(0, 1, kinah: 0); s2.Items[ids[0]] = 1;
+                var r2 = Run(0, 0, kinah: 0); r2.Items[ids[1]] = 1; r2.Items[other] = 1;
+                var m2 = RunRecount.Recounted(s2, r2, new[] { "b.jpg" }, items, now, reread: true);
+                Check("...the run's own id kept, only the newly named added", $"{JR(s2, r2)} {m2.Items.GetValueOrDefault(ids[0])} {m2.Items.ContainsKey(ids[1])} {m2.Items.GetValueOrDefault(other)} {m2.RaisedFrom.GetValueOrDefault(other, -1)} {m2.SlotsUnread} {m2.RepairedFrom.Count}",
+                    "take 1 False 1 0 0 0");
+            }
+            var merged = RunRecount.Recounted(st, rd, new[] { "c.jpg" }, items, now, reread: true);
+            Check("...merged: the run's Kinah kept, what it raised kept for the site, sent again", $"{merged.Kinah} {merged.RaisedFrom.Count} {merged.Resend} {merged.Reread != null} {merged.Recounted == null}", "0 1 True True True");
+            // the correction: raised counts go only to a site that takes corrections that add
+            var cfg0 = Update.RemoteConfig.Current;
+            try
+            {
+                Update.RemoteConfig.Current = new Update.RemoteConfig { CorrectionsAdd = false };
+                bool offNone = KinahLedger.Upload.RunCorrection.Of(merged, id => id.ToString()) == null;
+                Update.RemoteConfig.Current = new Update.RemoteConfig { CorrectionsAdd = true };
+                var fix = KinahLedger.Upload.RunCorrection.Of(merged, id => id.ToString());
+                Check("...its correction: none while the site takes no additions; then the counts before (the gear piece it had one of)", $"{offNone} {fix?.was.Count} {fix?.was.Values.FirstOrDefault()}", "True 1 1");
+            }
+            finally { Update.RemoteConfig.Current = cfg0; }
+        }
+
         // ---- the whole pass, on the bank's 17:29 Urugugu table ----
         var pic = TablePicture();
         if (pic == null) { Check("the 17:29 Urugugu table in tracker/tests/replays", "missing", "found"); return ok; }

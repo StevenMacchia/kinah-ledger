@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Documents;
@@ -81,6 +81,8 @@ public partial class MainWindow : Window
         _prefs = watch ? UserPrefs.Load() : UserPrefs.Defaults();
         UseWatchList(player: watch);   // watch.txt the same way (Ui/MainWindow.Alerts.cs)
         InitializeComponent();
+        // the first-run cards, the tagline and the update bar's link in the player's language (Ui/Lang.cs); the rest of the window is English for now
+        foreach (System.Windows.DependencyObject d in new System.Windows.DependencyObject[] { WelcomeCard, WelcomeLookCard, Tagline, UpdateNotesText }) L.Apply(d);
         // the layer the click cards are drawn on, over the window's content and never past its edges (InCard, 2026-11-06)
         var layer = new System.Windows.Controls.Canvas { ClipToBounds = true };
         var host = new System.Windows.Controls.Grid();
@@ -1897,6 +1899,7 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
+        NoMaximize(h);   // resizable by its edges (Ui/MainWindow.Fit.cs), never maximized
         RefitIfNeeded();   // Full view against the screen the window opened on, now that it has one
         // the shortcuts (only the tracker itself registers them: Platform/Hotkey.cs Register); one that's off is a quiet line
         // beside it in Options › Shortcuts, never a notice (Steven, 2026-11-14: test runs and a second copy popped them up)
@@ -1909,7 +1912,8 @@ public partial class MainWindow : Window
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
         else if (msg == Native.WM_HOTKEY && wParam.ToInt32() == Hotkey.MarkWrongId) { MarkLastLineWrong(); handled = true; }   // Ui/MainWindow.MarkWrong.cs
-        else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) Dispatcher.BeginInvoke(RefitIfNeeded);   // dropped on another screen: Full view fitted to it
+        else if (msg == WM_SIZING) { OnSizing(wParam, lParam); handled = true; return new IntPtr(1); }   // an edge dragged: the window's size (Ui/MainWindow.Fit.cs)
+        else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) { EndSizing(); Dispatcher.BeginInvoke(RefitIfNeeded); }   // dropped on another screen: Full view fitted to it
         return IntPtr.Zero;
     }
 
