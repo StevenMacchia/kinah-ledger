@@ -84,6 +84,24 @@ public static partial class WpfApp
         return ready;
     }
 
+    /// <summary>A fight's copy with each skill's crit and back-attack rates and specialties (Settings' crit switch on): the cards' sample.</summary>
+    static Encounter WithKinds(Encounter live)
+    {
+        var withKinds = BossParser.Copy(live);
+        foreach (var f in withKinds.Roster)
+            foreach (var a in f.Abilities)
+            {
+                int seen = Math.Max(12, a.Hits); uint h = (uint)(a.Skill * 2654435761u ^ (uint)f.Id);
+                double crit = 0.22 + (h % 37) / 100.0, back = (h / 37 % 41) / 100.0;
+                a.StreamHits = seen; a.StreamDamage = a.Damage;
+                a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
+                a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
+                // and the specialties its hits named (a class skill's id: the picks x 10)
+                if (a.Skill is >= 11_000_000 and < 20_000_000) a.Picks = KinahLedger.Parser.Abilities.PicksOf((uint)a.Skill + (uint)((h % 4) switch { 0 => 340, 1 => 120, 2 => 450, _ => 0 }));
+            }
+        return withKinds;
+    }
+
     static void ShotParserOverlays(string dir, Dictionary<string, string> kinah)
     {
         // the card a specialties chip opens (0.10.133): Judgment with 4 and 5 picked
@@ -109,18 +127,7 @@ public static partial class WpfApp
             if (ParserRows.HoverCard(live!, who, now) is { } card) { card.Margin = new Thickness(12); Save(new System.Windows.Controls.Border { Child = card }, Path.Combine(dir, file), 320, ShotGround); }
         // the same card with Settings' crit and back-attack switch on: each skill's rates from hits kept one by one
         {
-            var withKinds = BossParser.Copy(live!);
-            foreach (var f in withKinds.Roster)
-                foreach (var a in f.Abilities)
-                {
-                    int seen = Math.Max(12, a.Hits); uint h = (uint)(a.Skill * 2654435761u ^ (uint)f.Id);
-                    double crit = 0.22 + (h % 37) / 100.0, back = (h / 37 % 41) / 100.0;
-                    a.StreamHits = seen; a.StreamDamage = a.Damage;
-                    a.Kinds = new() { ["result:3"] = (int)(seen * crit), ["side:1"] = (int)(seen * back) };
-                    a.KindDamage = new() { ["result:3"] = (long)(a.Damage * Math.Min(0.9, crit * 1.6)) }; a.KindMax = new() { ["result:3"] = a.Damage / Math.Max(1, seen) * 2 };
-                    // and the specialties its hits named (a class skill's id: the picks x 10)
-                    if (a.Skill is >= 11_000_000 and < 20_000_000) a.Picks = KinahLedger.Parser.Abilities.PicksOf((uint)a.Skill + (uint)((h % 4) switch { 0 => 340, 1 => 120, 2 => 450, _ => 0 }));
-                }
+            var withKinds = WithKinds(live!);
             string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
             Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick);
             var youK = withKinds.Roster.FirstOrDefault(f => f.You) ?? withKinds.Ranked().First(f => !f.Other);

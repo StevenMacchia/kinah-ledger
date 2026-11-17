@@ -68,6 +68,10 @@ public sealed class ThemeRows : Grid
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
     }
 
+    /// <summary>The look's skills card for a member (Ui/Themes/MemberCard.cs); null opens the Parser's.</summary>
+    public Func<MemberCard, FrameworkElement>? Card { get; set; }
+    /// <summary>For the tests and renders: the card a member's row opens now (null: none).</summary>
+    internal FrameworkElement? CardForTest(long id) { var t = new ToolTip(); if (!Fill(t, id)) return null; var c = t.Content as FrameworkElement; t.Content = null; return c; }
     /// <summary>Effects play (the look's Moves): a bar slides, a row glides. Off: everything set where it ends.</summary>
     public bool Moves { get; set; }
     /// <summary>The members shown in the last draw, top first.</summary>
@@ -191,7 +195,10 @@ public sealed class ThemeRows : Grid
     {
         var e = _shownE;
         var f = e?.Roster.FirstOrDefault(x => x.Id == fid && !x.Other);
-        if (e == null || f == null || ParserRows.HoverCard(e, f, _shownAt) is not { } content) return false;
+        if (e == null || f == null) return false;
+        // the look's own card (IThemeCard), else the Parser's
+        FrameworkElement? content = Card != null ? (MemberCard.Of(e, f, _shownAt) is { } mc ? Card(mc) : null) : ParserRows.HoverCard(e, f, _shownAt);
+        if (content == null) return false;
         card.Content = content;
         return true;
     }

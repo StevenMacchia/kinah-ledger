@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using KinahLedger.Parser;
 using KinahLedger.Session;
 
@@ -58,6 +60,7 @@ public static partial class WpfApp
     static void ShotThemes(MainWindow w, string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        try { File.Delete(Path.Combine(dir, "spill.txt")); } catch (IOException) { }   // what each frame draws past its edges (SpillNote)
         var looks = HudLooks.All.Where(l => HudThemes.Themed(l.Key) && (only.Length == 0 || only.Contains(l.Key))).Select(l => l.Key).ToList();
         var kinah = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         var sample = w.HudSample();
@@ -137,7 +140,9 @@ public static partial class WpfApp
                     DoEvents();
                     Motion.FrozenAt = frozen0;
                 }
-                Save((FrameworkElement)h.Content, Path.Combine(dir, $"ui-theme-{look}-{tag}{(frame is double ff ? "-" + Math.Round(ff * 100) : "")}.png"), 0, ShotGround);
+                string file = $"ui-theme-{look}-{tag}{(frame is double ff ? "-" + Math.Round(ff * 100) : "")}.png";
+                Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
+                SpillNote(dir, file, (FrameworkElement)h.Content);
                 h.Close();
             }
             try
@@ -155,7 +160,37 @@ public static partial class WpfApp
                     var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = e.ModeKind, Look = look };
                     o.Draw(e, at); o.Show(); DoEvents();
                     Save((FrameworkElement)o.Content, Path.Combine(dir, $"ui-theme-{look}-overlay-{tag}.png"), 0, ShotGround);
+                    SpillNote(dir, $"ui-theme-{look}-overlay-{tag}.png", (FrameworkElement)o.Content);
                     o.Close();
+                }
+                // the members' skills cards (a row hovered): the top member's, yours, a healer's, and yours with crit and back-attack rates
+                {
+                    var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+                    h.Update(kinah);
+                    var withKinds = WithKinds(live!);
+                    string? ck0 = Encounter.CritKey, bk0 = Encounter.BackKey;
+                    foreach (var (tag, e) in new[] { ("", live!), ("-crit", withKinds) })
+                    {
+                        if (tag.Length > 0) { Encounter.CritKey = Encounter.CritKeyOf(ParserPrefs.CritPick); Encounter.BackKey = Encounter.BackKeyOf(ParserPrefs.BackPick); }
+                        h.ShowParser(e, now, e.ModeKind, details: false); h.SetKinahHidden(true);
+                        if (!h.IsVisible) h.Show();
+                        DoEvents();
+                        var rows = ThemeRowsOf(h).FirstOrDefault();
+                        var ranked = e.Ranked().Where(f => !f.Other).ToList();
+                        var picks = tag.Length > 0 ? new[] { ("you", ranked.FirstOrDefault(f => f.You) ?? ranked[0]) }
+                            : new[] { ("top", ranked[0]), ("you", ranked.FirstOrDefault(f => f.You) ?? ranked[0]), ("healer", ranked.FirstOrDefault(f => f.Healing > 0 && !f.You) ?? ranked[^1]) };
+                        foreach (var (who, f) in picks)
+                            if (rows?.CardForTest(f.Id) is { } card)
+                            {
+                                var file = $"ui-theme-{look}-card-{who}{tag}.png";
+                                var host = new System.Windows.Controls.Border { Child = card, Padding = new Thickness(14) };
+                                Save(host, Path.Combine(dir, file), 460, ShotGround);
+                                SpillNote(dir, file, card);
+                            }
+                            else File.AppendAllText(Path.Combine(dir, "spill.txt"), $"ui-theme-{look}-card-{who}{tag}.png: no card (rows {(rows == null ? "missing" : "found")})" + Environment.NewLine);
+                        Encounter.CritKey = ck0; Encounter.BackKey = bk0;
+                    }
+                    h.Close();
                 }
             }
             catch (Exception ex) { Console.WriteLine($"{look}: {ex}"); }
@@ -171,5 +206,59 @@ public static partial class WpfApp
             if (tag is "rare-drop" or "best-passed" or "entry-opened" or "fight-started" or "fight-ended" or "fight-wiped") foreach (var k in c.Keys.Where(k => k.StartsWith("pick")).ToList()) c[k] = "";
             return c;
         }
+    }
+
+    /// <summary>A theme look's meter rows in a window (its own, Ui/Themes/ThemeRows.cs).</summary>
+    static IEnumerable<ThemeRows> ThemeRowsOf(DependencyObject d)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+        {
+            var ch = VisualTreeHelper.GetChild(d, i);
+            if (ch is ThemeRows tr) { yield return tr; continue; }
+            foreach (var x in ThemeRowsOf(ch)) yield return x;
+        }
+    }
+
+    /// <summary>
+    /// What a frame draws past its own edges, in pixels per side (Steven, 2026-11-16: "some animations get cut off"): the
+    /// window over the game is exactly its content's size, so an effect drawn outside it is cut there. Empty when nothing spills.
+    /// Drawn through a brush of the whole visual (its descendants' bounds), so what Save's bitmap crops still shows here.
+    /// </summary>
+    internal static string Spill(FrameworkElement el)
+    {
+        double w = el.ActualWidth, h = el.ActualHeight;
+        var b = VisualTreeHelper.GetDescendantBounds(el);
+        if (b.IsEmpty || w < 1 || h < 1) return "";
+        var all = Rect.Union(b, new Rect(0, 0, w, h));
+        all.Intersect(new Rect(-600, -600, w + 1200, h + 1200));
+        if (all.Left >= 0 && all.Top >= 0 && all.Right <= w + 0.5 && all.Bottom <= h + 0.5) return "";
+        int pw = (int)Math.Ceiling(all.Width), ph = (int)Math.Ceiling(all.Height);
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+            dc.DrawRectangle(new VisualBrush(el) { Stretch = Stretch.None, ViewboxUnits = BrushMappingMode.Absolute, Viewbox = all, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(0, 0, pw, ph));
+        var rtb = new RenderTargetBitmap(pw, ph, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        var px = new byte[pw * ph * 4];
+        rtb.CopyPixels(px, pw * 4, 0);
+        double ox = -all.X, oy = -all.Y;
+        int l = 0, t = 0, r = 0, bt = 0;
+        for (int y = 0; y < ph; y++)
+            for (int x = 0; x < pw; x++)
+            {
+                if (px[(y * pw + x) * 4 + 3] < 20) continue;   // faint glow edges don't count
+                double cx = x + 0.5 - ox, cy = y + 0.5 - oy;
+                if (cx < 0) l = Math.Max(l, (int)Math.Ceiling(-cx));
+                if (cx > w) r = Math.Max(r, (int)Math.Ceiling(cx - w));
+                if (cy < 0) t = Math.Max(t, (int)Math.Ceiling(-cy));
+                if (cy > h) bt = Math.Max(bt, (int)Math.Ceiling(cy - h));
+            }
+        return l + t + r + bt == 0 ? "" : $"cut: left {l} top {t} right {r} bottom {bt} px";
+    }
+
+    static void SpillNote(string dir, string file, FrameworkElement el)
+    {
+        string s;
+        try { s = Spill(el); } catch (Exception ex) { s = "spill check failed: " + ex.Message; }
+        if (s.Length > 0) File.AppendAllText(Path.Combine(dir, "spill.txt"), file + ": " + s + Environment.NewLine);
     }
 }
