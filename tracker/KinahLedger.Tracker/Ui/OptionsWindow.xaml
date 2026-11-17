@@ -1,15 +1,84 @@
 ﻿<Window x:Class="KinahLedger.Ui.OptionsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinah Ledger Options" Width="860" Height="640" MinWidth="760" MinHeight="520" ResizeMode="CanResize"
+        Title="Kinah Ledger Options" Width="920" Height="720" MinWidth="800" MinHeight="560" ResizeMode="CanResize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
         FontFamily="{DynamicResource BodyFont}" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
 
+  <!-- the settings revamp (Steven, 2026-11-17: "a complete setting revamp ... the overlays are the most important thing"):
+       the overlays first on the left bar, every page fits the window without scrolling, rarely used rows folded under
+       Advanced or More, a search over every row. These styles tighten the shared ones for this window only. -->
+  <Window.Resources>
+    <Style x:Key="Row" TargetType="Grid">
+      <Setter Property="Margin" Value="16,9,16,9"/>
+      <Setter Property="MinHeight" Value="32"/>
+    </Style>
+    <Style x:Key="GroupLabel" TargetType="TextBlock" BasedOn="{StaticResource LabelStyle}">
+      <Setter Property="Margin" Value="2,16,0,7"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="PageLead" TargetType="TextBlock" BasedOn="{StaticResource BodyStyle}">
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Margin" Value="0,3,0,0"/>
+    </Style>
+    <Style x:Key="RowHint" TargetType="TextBlock" BasedOn="{StaticResource BodyStyle}">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="LineHeight" Value="16"/>
+      <Setter Property="Margin" Value="0,2,16,0"/>
+    </Style>
+    <!-- a section's name on the left bar (Overlays, Settings) -->
+    <Style x:Key="NavSection" TargetType="TextBlock" BasedOn="{StaticResource LabelStyle}">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="14,12,0,5"/>
+    </Style>
+    <!-- the bar that opens a fold (Advanced, More): the chevron and title on the left, how many rows on the right -->
+    <Style x:Key="FoldHead" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,14,0,0"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="b" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="9" Padding="14,8,14,8">
+              <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource LineStrong}"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- a search result on the left bar: the row's title, its page under it -->
+    <Style x:Key="SearchHit" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="b" Background="Transparent" CornerRadius="8" Padding="12,6,10,6">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource AccentDim}"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
   <Grid Background="{DynamicResource Bg}">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="220"/>
+      <ColumnDefinition Width="214"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
     <Grid.RowDefinitions>
@@ -17,29 +86,186 @@
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <!-- side navigation -->
+    <!-- the left bar: the mark, the search, the overlays, then the rest -->
     <Border Grid.RowSpan="2" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
-      <DockPanel Margin="12,18,12,14">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,18">
-          <Image Source="{StaticResource AppMark}" Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center"/>
+      <DockPanel Margin="12,16,12,12">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,12">
+          <Image Source="{StaticResource AppMark}" Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="Options" FontFamily="{DynamicResource DisplayFont}" FontSize="16" FontWeight="SemiBold"/>
-            <TextBlock Text="Kinah Ledger" Foreground="{DynamicResource Faint}" FontSize="12"/>
+            <TextBlock Text="Options" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="SemiBold"/>
+            <TextBlock Text="Kinah Ledger" Foreground="{DynamicResource Faint}" FontSize="11.5"/>
           </StackPanel>
         </StackPanel>
-        <TextBlock x:Name="NavVersion" DockPanel.Dock="Bottom" Foreground="{DynamicResource Faint}" FontSize="12" Margin="8,0,0,0"/>
-        <StackPanel x:Name="Nav"/>
+        <!-- search every row by its title or hint; Enter jumps to the first, Esc clears -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+          <!-- the box's padding counts twice in the shared template: 15 puts the text at 30, clear of the glass; its own placeholder below -->
+          <TextBox x:Name="SearchBox" Height="32" FontSize="12.5" Padding="15,0,13,0" AutomationProperties.Name="Search settings"/>
+          <TextBlock x:Name="SearchHint" Text="Search settings" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="31,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+          <Path Data="M11.6,7 A4.6,4.6 0 1 1 2.4,7 A4.6,4.6 0 1 1 11.6,7 Z M10.5,10.5 L14,14" Width="16" Height="16" StrokeThickness="1.5" Stroke="{DynamicResource Faint}"
+                StrokeStartLineCap="Round" StrokeEndLineCap="Round" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="9,0,0,0" IsHitTestVisible="False"/>
+          <TextBlock x:Name="SearchClear" Text="×" FontSize="15" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,-2,10,0"
+                     Cursor="Hand" Visibility="Collapsed" ToolTip="Clear the search"/>
+        </Grid>
+        <TextBlock x:Name="NavVersion" DockPanel.Dock="Bottom" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="8,6,0,0"/>
+        <Grid>
+          <StackPanel x:Name="Nav"/>
+          <ScrollViewer x:Name="SearchScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <StackPanel x:Name="SearchResults" Margin="0,6,0,0"/>
+          </ScrollViewer>
+        </Grid>
       </DockPanel>
     </Border>
 
     <!-- pages -->
     <ScrollViewer x:Name="Scroller" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-      <Grid Margin="32,24,32,28">
+      <Grid x:Name="PageHost" Margin="30,18,30,16">
 
-        <!-- General: startup, the window, the look -->
-        <StackPanel x:Name="PageGeneral">
+        <!-- Buddy: the Kinah overlay. Its preview first, then theme, look, size, place; the rest under More -->
+        <StackPanel x:Name="PageInGame" Visibility="Collapsed">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Style="{StaticResource PageTitle}" Text="Buddy"/>
+              <TextBlock Style="{StaticResource PageLead}" Text="Your run and pickups over the game, in borderless or windowed mode."
+                         ToolTip="The panel: a small strip over the game that shows whenever the chat is being read, run or no run. It stays up while the game is open, also when you tab out, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="Show over the game" Foreground="{DynamicResource Muted}" FontSize="12.5" VerticalAlignment="Center" Margin="0,0,10,0"/>
+              <CheckBox x:Name="HudChk" Style="{StaticResource Switch}" AutomationProperties.Name="Show the panel"
+                        ToolTip="An always-on-top panel with your run and pickups, shown while the game is open, also when you tab out."/>
+            </StackPanel>
+          </Grid>
+          <!-- the look in use at its real size over a scene from the game; a look under the mouse is drawn here instead -->
+          <StackPanel x:Name="HudLookPreview" Margin="0,12,0,0"/>
+          <Border Style="{StaticResource Group}" Margin="0,10,0,0">
+            <StackPanel>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Theme" VerticalAlignment="Center"/>
+                <WrapPanel x:Name="HudThemeHost" Grid.Column="1" Margin="0,0,0,-6"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Panel look" VerticalAlignment="Center"
+                           ToolTip="Pick one from its live thumbnail; the one in use is drawn at its real size under them, with sample figures."/>
+                <UniformGrid x:Name="HudLookHost" Grid.Column="1" Rows="1"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- size and opacity side by side: shown on the panel as the sliders move, kept on Save -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition/><ColumnDefinition Width="92"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Panel size" VerticalAlignment="Center" ToolTip="Bigger for a large or high-resolution screen."/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Slider x:Name="HudScale" Width="130" Minimum="0.7" Maximum="2" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel size"/>
+                  <TextBlock x:Name="HudScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Style="{StaticResource RowTitle}" Text="Panel opacity" VerticalAlignment="Center" ToolTip="How solid the panel's background is. The figures stay sharp."/>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Slider x:Name="HudOpacity" Width="130" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel opacity"/>
+                  <TextBlock x:Name="HudOpacityLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                </StackPanel>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Drag it over the game, or snap it to a spot."/>
+                  <TextBlock x:Name="HudPositionHint" Visibility="Collapsed"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="HudPlaceBtn" Content="Place the panel…" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Drag it over the game, or snap it to the top centre, under the minimap or left of the target bar"/>
+                  <Button x:Name="HudResetBtn" Content="Reset position" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- locked: click-through and never focused, like a game overlay; Move the panel in the tray unlocks it for 20 s -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Lock the panel in place"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Clicks go through it to the game."
+                             ToolTip="Clicks go through it to the game. To move it, use Move the panel in the tray menu, or turn this off and drag it."/>
+                </StackPanel>
+                <CheckBox x:Name="HudLockChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Lock the panel in place"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- More: the Strip's figures and the pointer to the two game keys -->
+          <StackPanel x:Name="InGameMore" Tag="More" Visibility="Collapsed">
+            <Border Style="{StaticResource Group}" Margin="0,8,0,0">
+              <StackPanel>
+                <!-- which figures the panel shows: any mix, in a fixed order; the window works them all out the same way -->
+                <StackPanel Margin="16,10,16,12">
+                  <TextBlock Style="{StaticResource RowTitle}" Text="What the panel shows"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Pick any. The figures match the window's."/>
+                  <WrapPanel x:Name="HudFieldHost" Margin="0,8,0,0"/>
+                  <TextBlock x:Name="HudFieldsNote" Style="{StaticResource RowHint}" Margin="0,6,0,0" Visibility="Collapsed" Text="For the Strip. The Card and the Ticker show a set of their own."/>
+                </StackPanel>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- the two keys live on Shortcuts & tips (2026-11-08 audit); a pointer stays -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Start and stop a run, That was wrong"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="The two keys that work in the game are set on Shortcuts &amp; tips."/>
+                  </StackPanel>
+                  <Button x:Name="InGameKeysBtn" Grid.Column="1" Content="Shortcuts &amp; tips" VerticalAlignment="Center"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- the DPS meter's page and the Timers page: built in code (Ui/OptionsWindow.Parser.cs, Ui/OptionsWindow.Timers.cs) -->
+        <StackPanel x:Name="PageMeter" Visibility="Collapsed"/>
+        <StackPanel x:Name="PageTimers" Visibility="Collapsed"/>
+
+        <!-- General: language, the app's theme, the window's size and how it starts -->
+        <StackPanel x:Name="PageGeneral" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="General"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="How Kinah Ledger starts, and what it does when Aion 2 starts and closes."/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The language, the app's look, and how Kinah Ledger starts."/>
+
+          <TextBlock Style="{StaticResource GroupLabel}" Text="LOOK"/>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Language"/>
+                  <TextBlock x:Name="LanguageHint" Style="{StaticResource RowHint}" Text="Takes effect the next time Kinah Ledger starts."
+                             ToolTip="The words in the window and the overlays. Skill, boss and item names stay as the game's English data has them. Takes effect the next time Kinah Ledger starts."/>
+                </StackPanel>
+                <ComboBox x:Name="LanguagePick" Grid.Column="1" Width="240" VerticalAlignment="Center" AutomationProperties.Name="Language"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- six skins since 1.0 (Wacky, Tactical, Glitch): the chips beside the title, wrapping under it on a narrow window -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <StackPanel Width="138" Margin="0,0,10,0">
+                  <TextBlock Style="{StaticResource RowTitle}" Text="App theme"/>
+                  <TextBlock x:Name="SkinHint" Style="{StaticResource RowHint}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <WrapPanel x:Name="SkinHost" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,-8,-8"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- Window size (0.10.11, Ui/MainWindow.Fit.cs): shown on the window as the slider moves, kept on Save -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Window size"/>
+                  <TextBlock x:Name="WindowScaleHint" Style="{StaticResource RowHint}" Text="In the window: Ctrl+= and Ctrl+‑, Ctrl+0 for 100%."
+                             ToolTip="Bigger for a large or high-resolution screen; the screen caps it. In the window: Ctrl+= and Ctrl+‑, Ctrl+0 for 100%."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Slider x:Name="WindowScale" Width="140" Minimum="0.8" Maximum="1.5" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Window size"/>
+                  <TextBlock x:Name="WindowScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="STARTUP"/>
           <Border Style="{StaticResource Group}">
@@ -57,7 +283,8 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="When Aion 2 starts"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="While Kinah Ledger waits in the tray. Reading the chat starts on its own either way."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="While it waits in the tray."
+                             ToolTip="While Kinah Ledger waits in the tray. Reading the chat starts on its own either way."/>
                 </StackPanel>
                 <ComboBox x:Name="GameStartBox" Grid.Column="1" Width="200" VerticalAlignment="Center"/>
               </Grid>
@@ -75,128 +302,100 @@
           <TextBlock x:Name="StartupTip" Style="{StaticResource BodyStyle}" FontSize="12" Foreground="{DynamicResource Warn}" Margin="2,8,0,0" Visibility="Collapsed"
                      Text="Tip: also turn on “Close button keeps it running” below, or closing the window stops it waiting for the game."/>
 
-          <TextBlock Style="{StaticResource GroupLabel}" Text="WINDOW"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel>
-              <!-- Window size (0.10.11, Ui/MainWindow.Fit.cs): shown on the window as the slider moves, kept on Save -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Window size"/>
-                  <TextBlock x:Name="WindowScaleHint" Style="{StaticResource RowHint}" Text="Bigger for a large or high-resolution screen; the screen caps it. In the window: Ctrl+= and Ctrl+‑, Ctrl+0 for 100%."/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Slider x:Name="WindowScale" Width="140" Minimum="0.8" Maximum="1.5" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Window size"/>
-                  <TextBlock x:Name="WindowScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
-                </StackPanel>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Switch pages to what I’m doing"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Farming, Crafting or Events, as you play. A page you click stays until you start something else. It always opens on Farming."/>
-                </StackPanel>
-                <CheckBox x:Name="FollowChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): on by default -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Quests"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Goals set from what you farm, with points when you reach them: three on Next up, the rest on the Quests page. Off: no quests, no points, nothing sent."/>
-                </StackPanel>
-                <CheckBox x:Name="QuestsChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- Compare (0.9.3, Ui/MainWindow.Compare.cs): off by default, so the base app stays light -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Compare zones and runs"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Week gets Zones and Places, ranked, two side by side. The Farming card shows your usual here, a closed run your average there."/>
-                </StackPanel>
-                <CheckBox x:Name="CompareChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show amounts before the Market fee"/>
-                  <TextBlock x:Name="GrossHint" Style="{StaticResource RowHint}"/>
-                </StackPanel>
-                <CheckBox x:Name="GrossChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show a recap when a run ends"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="A card with the run's time, Kinah, loot and best drop when you stop a run or an expedition ends. Never over the game: it waits until you open the window."/>
-                </StackPanel>
-                <CheckBox x:Name="RecapChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Close button keeps it running"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Closing the window sends Kinah Ledger to the tray, so it can open with the game. Quit from the tray icon's menu."/>
-                </StackPanel>
-                <CheckBox x:Name="CloseToTrayChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Minimize to the tray"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Minimizing hides the window by the clock instead of the taskbar. During a run it always does."/>
-                </StackPanel>
-                <CheckBox x:Name="MinToTrayChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- Keep above other windows (0.10.26, Ui/MainWindow.Shell.cs); the ⋯ menu has the same switch -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Keep above other windows"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="The window stays over the game and everything else, for a windowed game on one screen. The panel over the game is on top either way."/>
-                </StackPanel>
-                <CheckBox x:Name="TopmostChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-            </StackPanel>
-          </Border>
-
-          <TextBlock Style="{StaticResource GroupLabel}" Text="LOOK"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel>
-            <Grid Style="{StaticResource Row}">
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <!-- Advanced: the pages' extras and the window's tray and on-top choices -->
+          <StackPanel x:Name="GeneralMore" Tag="Advanced" Visibility="Collapsed">
+            <TextBlock Style="{StaticResource GroupLabel}" Text="PAGES AND FIGURES"/>
+            <Border Style="{StaticResource Group}">
               <StackPanel>
-                <TextBlock Style="{StaticResource RowTitle}" Text="Language"/>
-                <TextBlock x:Name="LanguageHint" Style="{StaticResource RowHint}" Text="The words in the window and the overlays. Skill, boss and item names stay as the game's English data has them. Takes effect the next time Kinah Ledger starts."/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Switch pages to what I’m doing"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Farming, Crafting or Events, as you play. A page you click stays until you start something else. It always opens on Farming."/>
+                  </StackPanel>
+                  <CheckBox x:Name="FollowChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): on by default -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Quests"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Goals set from what you farm, with points when you reach them: three on Next up, the rest on the Quests page. Off: no quests, no points, nothing sent."/>
+                  </StackPanel>
+                  <CheckBox x:Name="QuestsChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- Compare (0.9.3, Ui/MainWindow.Compare.cs): off by default, so the base app stays light -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Compare zones and runs"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Week gets Zones and Places, ranked, two side by side. The Farming card shows your usual here, a closed run your average there."/>
+                  </StackPanel>
+                  <CheckBox x:Name="CompareChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show amounts before the Market fee"/>
+                    <TextBlock x:Name="GrossHint" Style="{StaticResource RowHint}"/>
+                  </StackPanel>
+                  <CheckBox x:Name="GrossChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show a recap when a run ends"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="A card with the run's time, Kinah, loot and best drop when you stop a run or an expedition ends. Never over the game: it waits until you open the window."/>
+                  </StackPanel>
+                  <CheckBox x:Name="RecapChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
               </StackPanel>
-              <ComboBox x:Name="LanguagePick" Grid.Column="1" Width="200" VerticalAlignment="Center" AutomationProperties.Name="Language"/>
-            </Grid>
-            <Border Style="{StaticResource Divider}"/>
-            <!-- six looks since 1.0 (Wacky, Tactical, Glitch): the chips sit under the title, a column beside it squeezed the hint to nothing -->
-            <Grid Style="{StaticResource Row}">
+            </Border>
+            <TextBlock Style="{StaticResource GroupLabel}" Text="WINDOW"/>
+            <Border Style="{StaticResource Group}">
               <StackPanel>
-                <TextBlock Style="{StaticResource RowTitle}" Text="Theme"/>
-                <TextBlock x:Name="SkinHint" Style="{StaticResource RowHint}"/>
-                <WrapPanel x:Name="SkinHost" Margin="0,10,-8,-8"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Close button keeps it running"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Closing the window sends Kinah Ledger to the tray, so it can open with the game. Quit from the tray icon's menu."/>
+                  </StackPanel>
+                  <CheckBox x:Name="CloseToTrayChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Minimize to the tray"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Minimizing hides the window by the clock instead of the taskbar. During a run it always does."/>
+                  </StackPanel>
+                  <CheckBox x:Name="MinToTrayChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- Keep above other windows (0.10.26, Ui/MainWindow.Shell.cs); the ⋯ menu has the same switch -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Keep above other windows"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="The window stays over the game and everything else, for a windowed game on one screen. The panel over the game is on top either way."/>
+                  </StackPanel>
+                  <CheckBox x:Name="TopmostChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
               </StackPanel>
-            </Grid>
-            </StackPanel>
-          </Border>
+            </Border>
+          </StackPanel>
         </StackPanel>
 
-        <!-- Server -->
-        <StackPanel x:Name="PageServer" Visibility="Collapsed">
-          <TextBlock Style="{StaticResource PageTitle}" Text="Server"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="Everything shared is filed under your server: Market prices now, drops and rates on the site."/>
-          <TextBlock Style="{StaticResource GroupLabel}" Text="YOUR SERVER"/>
+        <!-- Account & sharing: the server, what is shared, the profile; the rest under Advanced -->
+        <StackPanel x:Name="PageSharing" Visibility="Collapsed">
+          <TextBlock Style="{StaticResource PageTitle}" Text="Account &amp; sharing"/>
+          <TextBlock Style="{StaticResource PageLead}" Text="Your server, what leaves this PC, and your profile on kinahledger.com."/>
+
+          <TextBlock x:Name="ServerLabel" Style="{StaticResource GroupLabel}" Text="YOUR SERVER"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>
               <Grid Style="{StaticResource Row}">
@@ -216,29 +415,10 @@
                 </StackPanel>
                 <ComboBox x:Name="ServerPick" Grid.Column="1" Width="220" VerticalAlignment="Center"/>
               </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Gear score"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="So the run card compares you with players at your gear. Empty: every player."/>
-                </StackPanel>
-                <TextBox x:Name="GearBox" Grid.Column="1" Width="220" VerticalAlignment="Center" MaxLength="5" AutomationProperties.Name="Gear score"/>
-              </Grid>
             </StackPanel>
           </Border>
           <TextBlock x:Name="ServerWarn" Style="{StaticResource BodyStyle}" FontSize="12" Foreground="{DynamicResource Warn}" Margin="2,8,0,0" Visibility="Collapsed"
                      Text="Pick a server: runs and prices aren't shared without one, and Start run waits for it."/>
-          <TextBlock Style="{StaticResource GroupLabel}" Text="PRICE ALERTS"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel x:Name="AlertsHost" Margin="0,4,0,4"/>
-          </Border>
-        </StackPanel>
-
-        <!-- Sharing and profile -->
-        <StackPanel x:Name="PageSharing" Visibility="Collapsed">
-          <TextBlock Style="{StaticResource PageTitle}" Text="Sharing"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="What leaves this PC, your profile on the site, and the data kept here."/>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="SHARING"/>
           <Border Style="{StaticResource Group}">
@@ -247,8 +427,9 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Share runs and Market prices anonymously"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Totals of finished runs and the Market listings on your screen, for the site's public tables. Never your character, chat text or screenshots."/>
-                  <TextBlock FontSize="12.5" Margin="0,6,0,0"><Hyperlink x:Name="WhatsSentLink" Style="{StaticResource LinkStyle}">What's sent</Hyperlink><Run Text="   "/><Hyperlink x:Name="WhatsReadLink" Style="{StaticResource LinkStyle}">What's read from the Market</Hyperlink></TextBlock>
+                  <TextBlock Style="{StaticResource RowHint}" Text="For the site's public tables. Never your character, chat text or screenshots."
+                             ToolTip="Totals of finished runs and the Market listings on your screen, for the site's public tables. Never your character, chat text or screenshots."/>
+                  <TextBlock FontSize="12.5" Margin="0,4,0,0"><Hyperlink x:Name="WhatsSentLink" Style="{StaticResource LinkStyle}">What's sent</Hyperlink><Run Text="   "/><Hyperlink x:Name="WhatsReadLink" Style="{StaticResource LinkStyle}">What's read from the Market</Hyperlink></TextBlock>
                 </StackPanel>
                 <CheckBox x:Name="ShareChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
@@ -258,7 +439,8 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Help improve counting"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Sends what it read and small pictures of item names and icons, never your chat or names. Off here any time."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Small pictures of item names and icons, never your chat or names."
+                             ToolTip="Sends what it read and small pictures of item names and icons, never your chat or names. Off here any time."/>
                 </StackPanel>
                 <CheckBox x:Name="HelpCountingChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Help improve counting"/>
               </Grid>
@@ -282,110 +464,133 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Link this PC to your profile"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Opens the site with this PC's code. Sign in with Discord and the runs from here show on your profile. Public tables stay anonymous either way."/>
-                </StackPanel>
-                <Button x:Name="LinkBtn" Grid.Column="1" Content="Link to my profile" VerticalAlignment="Center"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Share my week"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Opens your profile with this week's recap card, ready to post on Discord. Sign in with Discord if it asks."/>
-                </StackPanel>
-                <Button x:Name="ShareWeekBtn" Grid.Column="1" Content="Share my week" VerticalAlignment="Center"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Link code"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="The same code, for pasting by hand into Profile › Link your tracker."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Sign in with Discord and the runs from here show on your profile."
+                             ToolTip="Opens the site with this PC's code. Sign in with Discord and the runs from here show on your profile. Public tables stay anonymous either way."/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <TextBlock x:Name="LinkCodeText" FontFamily="Consolas" FontSize="14" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                  <Button x:Name="CopyCodeBtn" Content="Copy" Height="32"/>
+                  <Button x:Name="LinkBtn" Content="Link to my profile" Margin="0,0,8,0"/>
+                  <Button x:Name="ShareWeekBtn" Content="Share my week" ToolTip="Opens your profile with this week's recap card, ready to post on Discord. Sign in with Discord if it asks."/>
                 </StackPanel>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- Boss bests on the profile (2026-11-15, Upload/BossBests.cs): off by default; only the player's own figures -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show my boss bests on my kinahledger.com profile"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Nothing about your fights leaves your PC unless this is on. Then only your own best kill on each boss goes to your signed-in profile, for you alone; your group's numbers stay on this PC."/>
-                </StackPanel>
-                <CheckBox x:Name="BossBestsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show my boss bests on my kinahledger.com profile"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Your score"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Points from the quests in Next up on the Farming page: this session, today, this week. Once your tracker is linked, the score will go to your profile on the site and count on the leaderboards (coming next)."/>
-                </StackPanel>
-                <TextBlock x:Name="ScoreText" Grid.Column="1" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="220" TextAlignment="Right"/>
               </Grid>
             </StackPanel>
           </Border>
 
-          <TextBlock Style="{StaticResource GroupLabel}" Text="ON THIS PC"/>
+          <!-- Advanced: the gear score, the link code, boss bests, the score and what is kept on this PC -->
+          <StackPanel x:Name="SharingMore" Tag="Advanced" Visibility="Collapsed">
+            <TextBlock Style="{StaticResource GroupLabel}" Text="PROFILE AND SCORE"/>
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Gear score"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="So the run card compares you with players at your gear. Empty: every player."/>
+                  </StackPanel>
+                  <TextBox x:Name="GearBox" Grid.Column="1" Width="160" VerticalAlignment="Center" MaxLength="5" AutomationProperties.Name="Gear score"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Link code"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="The same code, for pasting by hand into Profile › Link your tracker."/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="LinkCodeText" FontFamily="Consolas" FontSize="14" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Button x:Name="CopyCodeBtn" Content="Copy" Height="32"/>
+                  </StackPanel>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- Boss bests on the profile (2026-11-15, Upload/BossBests.cs): off by default; only the player's own figures -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show my boss bests on my kinahledger.com profile"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Nothing about your fights leaves your PC unless this is on. Then only your own best kill on each boss goes to your signed-in profile, for you alone; your group's numbers stay on this PC."/>
+                  </StackPanel>
+                  <CheckBox x:Name="BossBestsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show my boss bests on my kinahledger.com profile"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Your score"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Points from the quests in Next up on the Farming page: this session, today, this week. Once your tracker is linked, the score will go to your profile on the site and count on the leaderboards (coming next)."/>
+                  </StackPanel>
+                  <TextBlock x:Name="ScoreText" Grid.Column="1" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="220" TextAlignment="Right"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource GroupLabel}" Text="ON THIS PC"/>
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Install ID"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="A random ID used only to drop duplicate uploads and spam. Replacing it starts fresh; the link code changes with it."/>
+                  </StackPanel>
+                  <Button x:Name="ResetIdBtn" Grid.Column="1" Content="Replace" VerticalAlignment="Center"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Your data"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Run history, settings, the item list and logs, all in one folder under your Windows profile."/>
+                  </StackPanel>
+                  <Button x:Name="DataFolderBtn" Grid.Column="1" Content="Open folder" VerticalAlignment="Center"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Pictures in miscount reports"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Keeps the last minute of the chat and the loot list as pictures, so Report a miscount can save what the screen showed. They can show other players' names. They stay on this PC; nothing is sent."/>
+                  </StackPanel>
+                  <CheckBox x:Name="ReportFramesChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Alerts & sounds: Rare drops (built in Ui/OptionsWindow.RareDrops.cs, added first) and the price alerts -->
+        <StackPanel x:Name="PageAlerts" Visibility="Collapsed">
+          <TextBlock Style="{StaticResource PageTitle}" Text="Alerts &amp; sounds"/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The drops you watch, the chime, and price alerts."/>
+          <StackPanel x:Name="AlertsRare"/>
+          <TextBlock Style="{StaticResource GroupLabel}" Text="PRICE ALERTS"/>
           <Border Style="{StaticResource Group}">
-            <StackPanel>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Install ID"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="A random ID used only to drop duplicate uploads and spam. Replacing it starts fresh; the link code changes with it."/>
-                </StackPanel>
-                <Button x:Name="ResetIdBtn" Grid.Column="1" Content="Replace" VerticalAlignment="Center"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Your data"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Run history, settings, the item list and logs, all in one folder under your Windows profile."/>
-                </StackPanel>
-                <Button x:Name="DataFolderBtn" Grid.Column="1" Content="Open folder" VerticalAlignment="Center"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Pictures in miscount reports"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Keeps the last minute of the chat and the loot list as pictures, so Report a miscount can save what the screen showed. They can show other players' names. They stay on this PC; nothing is sent."/>
-                </StackPanel>
-                <CheckBox x:Name="ReportFramesChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-            </StackPanel>
+            <StackPanel x:Name="AlertsHost" Margin="0,2,0,2"/>
           </Border>
         </StackPanel>
 
-        <!-- Game reading: chat, zone and Market -->
+        <!-- Game reading: chat, zone and the game data; Market and the checking switches under Advanced -->
         <StackPanel x:Name="PageReading" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="Game reading"/>
           <TextBlock Style="{StaticResource PageLead}" Text="Where the chat, the zone and the Market are read from. These buttons act right away."/>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="CHAT AND ZONE"/>
           <Border Style="{StaticResource Group}">
-            <StackPanel Margin="18,14,18,16">
-              <TextBlock x:Name="ChatStatus" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Ink}" FontSize="12.5" LineHeight="18"/>
-              <WrapPanel Margin="0,10,0,0">
+            <StackPanel Margin="16,11,16,12">
+              <TextBlock x:Name="ChatStatus" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Ink}" FontSize="12.5" LineHeight="17"/>
+              <WrapPanel Margin="0,8,0,0">
                 <Button x:Name="CalibrateBtn" Content="Check the setup" Margin="0,0,8,6" ToolTip="A step-by-step check that the chat, the loot list and the HP bar read, with what to change when one doesn't."/>
                 <Button x:Name="DetectBtn" Content="Detect now" Margin="0,0,8,6"/>
                 <Button x:Name="PickChatBtn" Content="Choose the chat" Margin="0,0,8,6"/>
                 <Button x:Name="TestBtn" Content="Test read" Margin="0,0,8,6"/>
                 <Button x:Name="AutoChatBtn" Content="Back to automatic" Margin="0,0,8,6"/>
               </WrapPanel>
-              <Border Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Height="190" ClipToBounds="True" Margin="0,6,0,0">
+              <Border Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Height="140" ClipToBounds="True" Margin="0,4,0,0">
                 <Grid>
                   <TextBlock x:Name="PreviewHint" Text="The game shows here, with the chat, the zone and the Market outlined, once it has been found." Foreground="{DynamicResource Faint}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="24,0"/>
                   <Image x:Name="Preview" Stretch="Uniform" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Grid>
               </Border>
               <!-- the boxes' own colours (TrackerSession.ChatColor, ZoneColor, MarketCapture.MarkColor), whatever the look -->
-              <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
                 <Border Width="10" Height="10" CornerRadius="2" Background="#4CC3F5" VerticalAlignment="Center"/>
                 <TextBlock Text="chat" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
                 <Border Width="10" Height="10" CornerRadius="2" Background="#F1D08C" VerticalAlignment="Center"/>
@@ -393,27 +598,11 @@
                 <Border Width="10" Height="10" CornerRadius="2" Background="#9BE8D3" VerticalAlignment="Center"/>
                 <TextBlock Text="market" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
               </StackPanel>
-              <TextBlock x:Name="ReadingNote" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,10,0,0" Visibility="Collapsed"/>
+              <TextBlock x:Name="ReadingNote" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,8,0,0" Visibility="Collapsed"/>
             </StackPanel>
           </Border>
 
-          <TextBlock Style="{StaticResource GroupLabel}" Text="MARKET PRICES"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel Margin="18,14,18,16">
-              <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="18"
-                         Text="Whenever you open the Market, the listings on your screen are shared as anonymous asks, under the Share switch. Nothing to set up; choose the area by hand only if it isn't found."/>
-              <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Ink}" FontSize="12.5" Margin="0,8,0,0"/>
-              <WrapPanel Margin="0,10,0,0">
-                <Button x:Name="PickMarketBtn" Content="Choose the Market" Margin="0,0,8,0"/>
-                <Button x:Name="AutoMarketBtn" Content="Back to automatic" Margin="0,0,8,0"/>
-                <!-- reads what the Market shows now and sends it at once: the server's current prices on the site -->
-                <Button x:Name="ShareMarketBtn" Content="Share prices now" Margin="0,0,8,0" ToolTip="Reads the Market listings on your screen now and sends them at once. They show as your server's current prices on the site."/>
-              </WrapPanel>
-            </StackPanel>
-          </Border>
-
-          <!-- for checking the tracker (0.8.34, Steven 2026-10-25): accuracy figures are off for players; this shows them -->
-          <!-- packet reading beside the screen (2026-11-13, Packets/PacketReader.cs): on by default, changes no count yet -->
+          <!-- the one place in the app that names where the figures come from (Steven, 2026-11-14): its switch and what it needs -->
           <TextBlock Style="{StaticResource GroupLabel}" Text="GAME TRAFFIC"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>
@@ -421,152 +610,68 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Read the game's network traffic"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Counts Kinah, bound Kinah, Abyss Points, item pickups and crafts from the game server's own messages, exact to the Kinah, instead of reading them off the chat and the crafting panel (those count whenever this can't). Needs Npcap from npcap.com, or the tracker run as administrator. It only listens: nothing is sent and the game isn't touched. What it counted is in packets.log."/>
-                  <TextBlock x:Name="PacketStateLbl" Style="{StaticResource RowHint}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Exact Kinah, Abyss Points, pickups and crafts. Needs Npcap from npcap.com; it only listens."
+                             ToolTip="Counts Kinah, bound Kinah, Abyss Points, item pickups and crafts from the game server's own messages, exact to the Kinah, instead of reading them off the chat and the crafting panel (those count whenever this can't). Needs Npcap from npcap.com, or the tracker run as administrator. It only listens: nothing is sent and the game isn't touched. What it counted is in packets.log."/>
+                  <TextBlock x:Name="PacketStateLbl" Style="{StaticResource RowHint}" Margin="0,4,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
                 <CheckBox x:Name="PacketChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Read the game's network traffic"/>
               </Grid>
             </StackPanel>
           </Border>
-          <TextBlock Style="{StaticResource GroupLabel}" Text="FOR CHECKING THE TRACKER"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show accuracy details"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="What a second source confirmed, and the counts behind it, also on the panel over the game. Off, the tracker shows none of it; Report a miscount still sends what it read."/>
-                </StackPanel>
-                <CheckBox x:Name="ShowAccuracyChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show accuracy details"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- Explain each count (Steven, 2026-11-04: "Explain this should be an option you can turn on, in dev mode or
-                   something"): the why on a counted line's card and a recipe's last tries, off by default -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Explain each count"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Each counted line’s card says why it was counted, in the reads log’s words. For checking the reading."/>
-                </StackPanel>
-                <CheckBox x:Name="ExplainChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Explain each count"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- Inventory details (2026-11-14, Steven: minimal by default): the Inventory window's extra figures and price hovers -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Inventory details"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="The Inventory window also shows what is bound, what has no price yet and the change since you started, and each item’s price on hover."/>
-                </StackPanel>
-                <CheckBox x:Name="InvDetailsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Inventory details"/>
-              </Grid>
-            </StackPanel>
-          </Border>
-        </StackPanel>
 
-        <!-- In game: the shortcut and the panel over the game -->
-        <StackPanel x:Name="PageInGame" Visibility="Collapsed">
-          <TextBlock Style="{StaticResource PageTitle}" Text="In game"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="The panel: a small strip over the game that shows whenever the chat is being read, run or no run. It stays up while the game is open, also when you tab out, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
-
-          <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUTS"/>
-          <!-- the two keys moved to Shortcuts &amp; tips (2026-11-08 audit: they were set here and shown again there); a pointer stays -->
-          <Border Style="{StaticResource Group}">
-            <Grid Style="{StaticResource Row}">
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <!-- Advanced: the Market's area by hand, and the switches for checking the tracker (0.8.34, off for players) -->
+          <StackPanel x:Name="ReadingMore" Tag="Advanced" Visibility="Collapsed">
+            <TextBlock Style="{StaticResource GroupLabel}" Text="MARKET PRICES"/>
+            <Border Style="{StaticResource Group}">
+              <StackPanel Margin="16,11,16,12">
+                <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17"
+                           Text="Whenever you open the Market, the listings on your screen are shared as anonymous asks, under the Share switch. Nothing to set up; choose the area by hand only if it isn't found."/>
+                <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Ink}" FontSize="12.5" Margin="0,8,0,0"/>
+                <WrapPanel Margin="0,10,0,0">
+                  <Button x:Name="PickMarketBtn" Content="Choose the Market" Margin="0,0,8,0"/>
+                  <Button x:Name="AutoMarketBtn" Content="Back to automatic" Margin="0,0,8,0"/>
+                  <!-- reads what the Market shows now and sends it at once: the server's current prices on the site -->
+                  <Button x:Name="ShareMarketBtn" Content="Share prices now" Margin="0,0,8,0" ToolTip="Reads the Market listings on your screen now and sends them at once. They show as your server's current prices on the site."/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock Style="{StaticResource GroupLabel}" Text="FOR CHECKING THE TRACKER"/>
+            <Border Style="{StaticResource Group}">
               <StackPanel>
-                <TextBlock Style="{StaticResource RowTitle}" Text="Start and stop a run, That was wrong"/>
-                <TextBlock Style="{StaticResource RowHint}" Text="The two keys that work in the game are set on Shortcuts &amp; tips."/>
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show accuracy details"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="What a second source confirmed, and the counts behind it, also on the panel over the game. Off, the tracker shows none of it; Report a miscount still sends what it read."/>
+                  </StackPanel>
+                  <CheckBox x:Name="ShowAccuracyChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show accuracy details"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- Explain each count (Steven, 2026-11-04): the why on a counted line's card and a recipe's last tries, off by default -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Explain each count"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Each counted line’s card says why it was counted, in the reads log’s words. For checking the reading."/>
+                  </StackPanel>
+                  <CheckBox x:Name="ExplainChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Explain each count"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <!-- Inventory details (2026-11-14, Steven: minimal by default): the Inventory window's extra figures and price hovers -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Inventory details"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="The Inventory window also shows what is bound, what has no price yet and the change since you started, and each item’s price on hover."/>
+                  </StackPanel>
+                  <CheckBox x:Name="InvDetailsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Inventory details"/>
+                </Grid>
               </StackPanel>
-              <Button x:Name="InGameKeysBtn" Grid.Column="1" Content="Shortcuts &amp; tips" VerticalAlignment="Center"/>
-            </Grid>
-          </Border>
-
-          <TextBlock Style="{StaticResource GroupLabel}" Text="THE PANEL"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top panel with your run and pickups, shown while the game is open, also when you tab out."/>
-                </StackPanel>
-                <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- the panel's look: the Strip, the Card or the Ticker, each drawn below at its real size from sample figures -->
-              <StackPanel Margin="18,13,18,15">
-                <TextBlock Style="{StaticResource RowTitle}" Text="Panel look"/>
-                <TextBlock Style="{StaticResource RowHint}" Text="Pick one from its live thumbnail; the one in use is drawn at its real size under them, with sample figures."/>
-                <WrapPanel x:Name="HudThemeHost" Margin="0,10,0,0"/>
-                <WrapPanel x:Name="HudLookHost" Margin="0,10,0,0"/>
-                <StackPanel x:Name="HudLookPreview" Margin="0,6,0,0"/>
-              </StackPanel>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- locked: click-through and never focused, like a game overlay; Move the panel in the tray unlocks it for 20 s -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Lock the panel in place"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Clicks go through it to the game. To move it, use Move the panel in the tray menu, or turn this off and drag it."/>
-                </StackPanel>
-                <CheckBox x:Name="HudLockChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Lock the panel in place"/>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- which figures the panel shows: any mix, in a fixed order; the window works them all out the same way -->
-              <StackPanel Margin="18,13,18,15">
-                <TextBlock Style="{StaticResource RowTitle}" Text="What the panel shows"/>
-                <TextBlock Style="{StaticResource RowHint}" Text="Pick any. The figures match the window's."/>
-                <WrapPanel x:Name="HudFieldHost" Margin="0,10,0,0"/>
-                <TextBlock x:Name="HudFieldsNote" Style="{StaticResource RowHint}" Margin="0,8,0,0" Visibility="Collapsed" Text="For the Strip. The Card and the Ticker show a set of their own."/>
-              </StackPanel>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- how solid the panel's background is, and its size: shown on the panel as the sliders move, kept on Save -->
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Panel opacity"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="How solid the panel's background is. The figures stay sharp."/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Slider x:Name="HudOpacity" Width="140" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel opacity"/>
-                  <TextBlock x:Name="HudOpacityLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
-                </StackPanel>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Panel size"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Bigger for a large or high-resolution screen."/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Slider x:Name="HudScale" Width="140" Minimum="0.7" Maximum="2" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel size"/>
-                  <TextBlock x:Name="HudScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
-                </StackPanel>
-              </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
-                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Drag it over the game, or snap it to a spot. Reset puts it back at the top centre."/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Button x:Name="HudPlaceBtn" Content="Place the panel…" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Drag it over the game, or snap it to the top centre, under the minimap or left of the target bar"/>
-                  <Button x:Name="HudResetBtn" Content="Reset position" VerticalAlignment="Center"/>
-                </StackPanel>
-              </Grid>
-            </StackPanel>
-          </Border>
+            </Border>
+          </StackPanel>
         </StackPanel>
 
-        <!-- Shortcuts & tips (2026-11-04): the keys, where they work, and things a new player doesn't find on their own; rows built in OptionsWindow.Tips.cs -->
-        <!-- Timers (0.10.85, Ui/OptionsWindow.Timers.cs): the timers overlay, the chime, each timer's picks; built when shown -->
-        <!-- the DPS meter's page: Options.Parser.cs fills it -->
-        <StackPanel x:Name="PageMeter" Visibility="Collapsed"/>
-        <StackPanel x:Name="PageTimers" Visibility="Collapsed"/>
-
+        <!-- Shortcuts & tips (2026-11-04): the keys, where they work; the tips under a fold. Rows built in OptionsWindow.Tips.cs -->
         <StackPanel x:Name="PageTips" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="Shortcuts &amp; tips"/>
           <TextBlock Style="{StaticResource PageLead}" Text="The keys, where they work, and a few things that are easy to miss."/>
@@ -574,10 +679,10 @@
           <TextBlock x:Name="TipsGameLabel" Style="{StaticResource GroupLabel}" Text="IN GAME (ANYWHERE)"/>
           <Border Style="{StaticResource Group}">
             <StackPanel x:Name="TipsGame">
-              <StackPanel Margin="18,13,18,15">
+              <StackPanel Margin="16,10,16,12">
                 <TextBlock Style="{StaticResource RowTitle}" Text="Start and stop a run"/>
                 <TextBlock x:Name="HotkeyHint" Style="{StaticResource RowHint}" Text="Works while the game has focus. Click Change, then press the keys."/>
-                <WrapPanel Margin="0,12,0,0">
+                <WrapPanel Margin="0,8,0,0">
                   <TextBox x:Name="HotkeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"/>
                   <Button x:Name="HotkeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
                   <Button x:Name="HotkeyOffBtn" Content="Turn off" Margin="0,0,8,0"/>
@@ -586,10 +691,10 @@
               </StackPanel>
               <Border Style="{StaticResource Divider}"/>
               <!-- That was wrong (Ui/MainWindow.MarkWrong.cs): off until a key is picked, recorded the same way -->
-              <StackPanel Margin="18,13,18,15">
+              <StackPanel Margin="16,10,16,12">
                 <TextBlock Style="{StaticResource RowTitle}" Text="That was wrong"/>
                 <TextBlock x:Name="MarkKeyHint" Style="{StaticResource RowHint}" Text="Marks the newest counted line as wrong and saves the last minute for a report. Off until you pick a key."/>
-                <WrapPanel Margin="0,12,0,0">
+                <WrapPanel Margin="0,8,0,0">
                   <TextBox x:Name="MarkKeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"
                            AutomationProperties.Name="That was wrong shortcut"/>
                   <Button x:Name="MarkKeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
@@ -601,18 +706,19 @@
 
           <TextBlock x:Name="TipsWindowLabel" Style="{StaticResource GroupLabel}" Text="IN THIS WINDOW"/>
           <Border Style="{StaticResource Group}">
-            <StackPanel x:Name="TipsWindow"/>
+            <WrapPanel x:Name="TipsWindow" Margin="0,4,0,4"/>
           </Border>
 
-          <TextBlock x:Name="TipsKnowLabel" Style="{StaticResource GroupLabel}" Text="DID YOU KNOW"/>
-          <Border Style="{StaticResource Group}">
-            <StackPanel x:Name="TipsKnow"/>
-          </Border>
+          <StackPanel x:Name="TipsMore" Tag="Did you know" Visibility="Collapsed">
+            <Border Style="{StaticResource Group}" Margin="0,8,0,0">
+              <StackPanel x:Name="TipsKnow"/>
+            </Border>
+          </StackPanel>
         </StackPanel>
 
-        <!-- Updates -->
+        <!-- Updates & about -->
         <StackPanel x:Name="PageUpdates" Visibility="Collapsed">
-          <TextBlock Style="{StaticResource PageTitle}" Text="Updates"/>
+          <TextBlock Style="{StaticResource PageTitle}" Text="Updates &amp; about"/>
           <TextBlock Style="{StaticResource PageLead}" Text="New versions come from the GitHub releases and are checked against the checksum in their notes before they're installed."/>
           <TextBlock Style="{StaticResource GroupLabel}" Text="UPDATES"/>
           <Border Style="{StaticResource Group}">
@@ -631,7 +737,7 @@
                 <StackPanel>
                   <TextBlock x:Name="VersionTitle" Style="{StaticResource RowTitle}"/>
                   <TextBlock x:Name="UpdateLine" Style="{StaticResource RowHint}"/>
-                  <TextBlock FontSize="12.5" Margin="0,6,0,0"><Hyperlink x:Name="ReleasesLink" Style="{StaticResource LinkStyle}">All releases and their notes</Hyperlink><Run Text="   "/><Hyperlink x:Name="ReleasesDiscordLink" Style="{StaticResource LinkStyle}">New releases on Discord</Hyperlink></TextBlock>
+                  <TextBlock FontSize="12.5" Margin="0,4,0,0"><Hyperlink x:Name="ReleasesLink" Style="{StaticResource LinkStyle}">All releases and their notes</Hyperlink><Run Text="   "/><Hyperlink x:Name="ReleasesDiscordLink" Style="{StaticResource LinkStyle}">New releases on Discord</Hyperlink></TextBlock>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <!-- shown once an update has downloaded: installs it now, as the banner's Restart now does -->
@@ -641,42 +747,43 @@
               </Grid>
             </StackPanel>
           </Border>
-        </StackPanel>
 
-        <!-- About -->
-        <StackPanel x:Name="PageAbout" Visibility="Collapsed">
-          <StackPanel Orientation="Horizontal">
-            <Image Source="{StaticResource AppMark}" Width="52" Height="52" Margin="0,0,16,0" VerticalAlignment="Center"/>
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource PageTitle}" Text="Kinah Ledger"/>
-              <TextBlock x:Name="AboutVersion" Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,2,0,0"/>
-            </StackPanel>
-          </StackPanel>
-          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,18,0,0"
-                     Text="Kinah per hour, drop rates and Market prices for Aion 2, read from the chat on your screen and shared, anonymously, into tables everyone can use. Made by players for players. Free, with no ads; if it helps you, you can support development on Ko-fi."/>
-          <Border Style="{StaticResource Group}" Margin="0,18,0,0">
-            <StackPanel Margin="18,14,18,16">
-              <TextBlock Style="{StaticResource RowTitle}" Text="Screen reading only"/>
-              <TextBlock Style="{StaticResource RowHint}" Text="The tracker only reads what the game shows on screen. It never reads game memory or files, never captures network traffic, and never sends input to the game."/>
+          <!-- About, under Updates since the revamp -->
+          <TextBlock Style="{StaticResource GroupLabel}" Text="ABOUT"/>
+          <Border x:Name="PageAbout" Style="{StaticResource Group}">
+            <StackPanel Margin="16,12,16,14">
+              <StackPanel Orientation="Horizontal">
+                <Image Source="{StaticResource AppMark}" Width="40" Height="40" Margin="0,0,14,0" VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+                  <TextBlock x:Name="AboutVersion" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,1,0,0"/>
+                </StackPanel>
+              </StackPanel>
+              <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,10,0,0"
+                         Text="Kinah per hour, drop rates and Market prices for Aion 2, shared anonymously into tables everyone can use. Made by players for players. Free, with no ads; if it helps you, you can support development on Ko-fi."/>
+              <TextBlock Style="{StaticResource RowHint}" Margin="0,6,0,0" Text="It never reads game memory or files, and never sends input to the game."/>
+              <WrapPanel Margin="0,10,0,0">
+                <Button x:Name="AboutSupportBtn" Content="♥  Support on Ko-fi" Margin="0,0,8,6" ToolTip="ko-fi.com/swoly: help keep Kinah Ledger free and updated"/>
+                <Button x:Name="AboutSiteBtn" Content="kinahledger.com" Margin="0,0,8,6"/>
+                <Button x:Name="AboutDiscordBtn" Content="Discord" Margin="0,0,8,6" ToolTip="Help in #tracker-help, bugs in #bugs-and-feedback, every new release in #announcements"/>
+                <Button x:Name="AboutSourceBtn" Content="Source code" Margin="0,0,8,6"/>
+                <Button x:Name="AboutSentBtn" Content="What's shared" Margin="0,0,8,6"/>
+                <Button x:Name="AboutLogsBtn" Content="Open logs" Margin="0,0,8,6"/>
+              </WrapPanel>
+              <TextBlock Style="{StaticResource BodyStyle}" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,6,0,0"
+                         Text="Unofficial fan project, free and open source (MIT licence). Not affiliated with or endorsed by NCSOFT. AION is a trademark of NCSOFT Corporation."/>
             </StackPanel>
           </Border>
-          <WrapPanel Margin="0,18,0,0">
-            <Button x:Name="AboutSupportBtn" Content="♥  Support on Ko-fi" Margin="0,0,8,8" ToolTip="ko-fi.com/swoly: help keep Kinah Ledger free and updated"/>
-            <Button x:Name="AboutSiteBtn" Content="kinahledger.com" Margin="0,0,8,8"/>
-            <Button x:Name="AboutDiscordBtn" Content="Discord" Margin="0,0,8,8" ToolTip="Help in #tracker-help, bugs in #bugs-and-feedback, every new release in #announcements"/>
-            <Button x:Name="AboutSourceBtn" Content="Source code" Margin="0,0,8,8"/>
-            <Button x:Name="AboutSentBtn" Content="What's shared" Margin="0,0,8,8"/>
-            <Button x:Name="AboutLogsBtn" Content="Open logs" Margin="0,0,8,8"/>
-          </WrapPanel>
-          <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,16,0,0"
-                     Text="Unofficial fan project, free and open source (MIT licence). Not affiliated with or endorsed by NCSOFT. AION is a trademark of NCSOFT Corporation."/>
         </StackPanel>
+
+        <!-- Server: since the revamp on Account & sharing; kept as an empty page so a link to it still lands there -->
+        <StackPanel x:Name="PageServer" Visibility="Collapsed"/>
 
       </Grid>
     </ScrollViewer>
 
     <!-- footer: notes on the left, Cancel and Save on the right -->
-    <Border Grid.Row="1" Grid.Column="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Background="{DynamicResource Bg}" Padding="32,12,24,14">
+    <Border Grid.Row="1" Grid.Column="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Background="{DynamicResource Bg}" Padding="30,11,22,12">
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBlock x:Name="FooterNote" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,0,16,0"/>

@@ -194,6 +194,7 @@ public static partial class WpfApp
         Check(!o.IsVisible, "Cancel closes the window");
         Check(p.Hud == hudBefore, "Cancel keeps the panel setting as it was");
         Check(Skins.Current == other, "Cancel puts the saved theme back");
+        SettingsRevampChecks(w, Open, Check);   // the settings revamp: the left bar, fit, search, every row reachable (Ui/WpfApp.Settings.cs)
 
         // the overlay themes' skins (1.0): each sets every key Night does, paints the window, and the saved look comes back
         var nightKeys = Skins.KeysOf("night").ToHashSet();
@@ -2358,71 +2359,60 @@ public static partial class WpfApp
         w.Show();
         w.ShowDemo("Market");
         if (skin != null) w.Prefs.Skin = skin;   // what Options opens with (a render; nothing is saved)
-        foreach (var page in Enum.GetValues<OptionsWindow.Page>())
+        // every page as the left bar lists them (the settings revamp, 2026-11-17), folds shut: what a player sees first. fit.txt
+        // says each page's height against the window's: a page that needs scrolling with its folds shut is a fault
+        string Sfx() => skin != null ? "-" + skin : "";
+        var fit = new List<string>();
+        int n = 0;
+        foreach (var (page, _) in OptionsWindow.NavPages)
         {
+            n++;
             var o = new OptionsWindow(w, page) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
             // KL_OPTIONS_H=1400: render the page that tall, to see rows below the fold
             if (double.TryParse(Environment.GetEnvironmentVariable("KL_OPTIONS_H"), out var oh) && oh > 300) { o.MaxHeight = oh; o.Height = oh; }
             o.Show();
+            IconCache.Drain(TimeSpan.FromSeconds(4));
             DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);
+            string name = $"options-{n:00}-{page.ToString().ToLowerInvariant()}";
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"{name}{Sfx()}.png"), 0);
+            fit.Add($"{name}: {o.Scroller.ExtentHeight:0} of {o.Scroller.ViewportHeight:0}{(o.Scroller.ExtentHeight > o.Scroller.ViewportHeight + 1 ? "  SCROLLS" : "")}");
+            // the same page with its folds open, drawn whole (it may scroll then)
+            if (o.FoldsForTest(page).Count > 0)
+            {
+                o.OpenFoldsForTest();
+                DoEvents();
+                double tall = o.Scroller.ExtentHeight + (o.ActualHeight - o.Scroller.ViewportHeight) + 2;
+                o.MaxHeight = o.Height = Math.Max(o.ActualHeight, tall);
+                DoEvents();
+                Save((FrameworkElement)o.Content, Path.Combine(dir, $"{name}-open{Sfx()}.png"), 0);
+            }
             o.Close();
         }
-        // In game at the panel's look: the three looks drawn at their real size, the chosen one ringed
+        File.WriteAllLines(Path.Combine(dir, $"options-fit{Sfx()}.txt"), fit);
+        // a search typed into the left bar: the rows found, the first one jumped to and lit
         {
             var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
-            o.Show();
-            IconCache.Drain(TimeSpan.FromSeconds(8));
+            o.Show(); DoEvents();
+            o.SearchForTest(Environment.GetEnvironmentVariable("KL_OPTIONS_SEARCH") ?? "tray");
             DoEvents();
-            var at = o.HudLookHost.TransformToAncestor(o.Scroller).Transform(new Point(0, 0));
-            o.Scroller.ScrollToVerticalOffset(Math.Max(0, o.Scroller.VerticalOffset + at.Y - 70));
+            o.JumpFirstForTest();
             DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-look{(skin != null ? "-" + skin : "")}.png"), 0);
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-search{Sfx()}.png"), 0);
             o.Close();
         }
-        // In game at the Parser's group (the Parser page's "Look" link lands here): its look row, each look in a boss fight
+        // Buddy with another look under the mouse, and the DPS meter in another theme: the stages draw what is hovered
         {
             var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
-            o.Show();
-            DoEvents();
-            o.ShowParserLook();
-            DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-parser{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Show(); DoEvents();
+            o.HoverHudLookForTest(HudLooks.Meter); DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-buddy-hover{Sfx()}.png"), 0);
+            o.Go(OptionsWindow.Page.Meter);
+            o.PickParserThemeForTest(HudThemes.Tactical); DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-meter-tactical{Sfx()}.png"), 0);
             o.Close();
         }
-        // In game once more, scrolled to the end: the panel's rows below the fold (opacity, size and position)
-        {
-            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
-            o.Show();
-            DoEvents();
-            o.Scroller.ScrollToEnd();
-            DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
-            o.Close();
-        }
-        // General scrolled to the end: the Window group and the theme below the fold (0.8.55 put Switch pages above them)
-        {
-            var o = new OptionsWindow(w, OptionsWindow.Page.General) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
-            o.Show();
-            DoEvents();
-            o.Scroller.ScrollToEnd();
-            DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-general-lower{(skin != null ? "-" + skin : "")}.png"), 0);
-            o.Close();
-        }
-        // Sharing scrolled to the profile group (2026-11-15): Show my boss bests on my kinahledger.com profile, below the fold
-        {
-            var o = new OptionsWindow(w, OptionsWindow.Page.Sharing) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
-            o.Show();
-            DoEvents();
-            var at = o.BossBestsChk.TranslatePoint(new Point(0, 0), (UIElement)o.Scroller.Content);
-            o.Scroller.ScrollToVerticalOffset(Math.Max(0, at.Y - 260));
-            DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-sharing-profile{(skin != null ? "-" + skin : "")}.png"), 0);
-            o.Close();
-        }
-        // In game at Rare drops (2026-10-26): a sample watch list, the chime and its volume
-        OptionsWindow.ShotRareDrops(w, Path.Combine(dir, $"options-ingame-rare{(skin != null ? "-" + skin : "")}.png"), (e, file) => Save(e, file, 0));
+        // Alerts & sounds with a sample watch list
+        OptionsWindow.ShotRareDrops(w, Path.Combine(dir, $"options-alerts-rare{Sfx()}.png"), (e, file) => Save(e, file, 0));
         // Place the panel… (In game): the guide over a dark stand-in for the game, as the approved mock draws it
         if (skin == null) ShotPlacementGuide(w, dir);
         w.Close();

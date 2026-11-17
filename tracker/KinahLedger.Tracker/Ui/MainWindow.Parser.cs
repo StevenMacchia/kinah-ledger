@@ -69,7 +69,8 @@ public partial class MainWindow
         // your row named as your character when nothing else names you (alone in the open world): the character in the world,
         // read when a row is drawn (never written into the record, so a switch to an alt never leaves the old name behind)
         if (watch) ParserRows.YourName = () => Session.Characters.Current?.Name ?? "";
-        _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
+        // KL_PARSER_CLICKTHROUGH=1: a render's meter with click-through on, as Steven plays (2026-11-15)
+        _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs { ClickThrough = Environment.GetEnvironmentVariable("KL_PARSER_CLICKTHROUGH") == "1" };
         ApplyMeterExpanded();
         // a new best on a boss (the overlay's PB moment) is measured against your kills of it kept on this PC
         // your record on this fight (this boss in this instance and mode), kept in records.json: the overlay's record moments and
@@ -131,6 +132,8 @@ public partial class MainWindow
     /// </summary>
     internal bool ParserOverlayOn { get => _parserPrefs.Overlay; set { if (value != _parserPrefs.Overlay) SetParserOverlay(value); } }
     internal bool ParserOverlayClickThrough { get => _parserPrefs.ClickThrough; set { if (value != _parserPrefs.ClickThrough) SetParserClickThrough(value); } }
+    /// <summary>The meter always up (Options › DPS meter › When it shows, as the Parser page's Always on).</summary>
+    internal bool ParserAlwaysOn { get => _parserPrefs.AlwaysOn; set => SetParserAlwaysOn(value); }
     internal void ResetParserOverlayPosition()
     {
         _parserPrefs.Left = null; _parserPrefs.Top = null; _parserPrefs.Bottom = null;
