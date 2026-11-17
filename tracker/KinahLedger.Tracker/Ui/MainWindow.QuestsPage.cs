@@ -66,7 +66,7 @@ public partial class MainWindow
     {
         bool on = IsPinned(q);
         var b = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(8), Margin = new Thickness(6, 0, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = on ? "Pinned to Next up. Click to unpin." : "Pin to Next up: it takes one of the two material rows on the Farming page." };
+            ToolTip = on ? L.T("Pinned to Next up. Click to unpin.") : L.T("Pin to Next up: it takes one of the two material rows on the Farming page.") };
         // a control's state, in the link tone (colour pass, 2026-11-13; gold until then, which read as money)
         var ic = QIcon("Pin", 13, on ? "Link" : "Faint", 2); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center;
         if (on) ic.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Link");   // filled when pinned, so the two states read apart
@@ -75,7 +75,7 @@ public partial class MainWindow
         b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, "HoverTint");
         b.MouseLeave += (_, _) => { if (on) b.SetResourceReference(Border.BackgroundProperty, "GoldTint"); else b.Background = Brushes.Transparent; };
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; TogglePin(q); };
-        AutomationProperties.SetName(b, (on ? "Unpin " : "Pin ") + Quests.Title(q, Fk));
+        AutomationProperties.SetName(b, L.F(on ? "Unpin {0}" : "Pin {0}", QTitle(q, Fk)));
         return b;
     }
 
@@ -117,7 +117,7 @@ public partial class MainWindow
 
         // This session: the full list with trees and pins, the first two on Next up; no card before the first quest
         QuestsActiveHost.Children.Clear();
-        QuestsActiveHost.Children.Add(QHead("Spark", "This session", quests.Count <= Quests.NextUpRows ? "on Next up" : $"the first {Quests.NextUpRows} are on Next up"));
+        QuestsActiveHost.Children.Add(QHead("Spark", L.T("This session"), quests.Count <= Quests.NextUpRows ? L.T("on Next up") : L.F("the first {0} are on Next up", Quests.NextUpRows)));
         int i = 0;
         foreach (var q in quests)
         {
@@ -130,7 +130,7 @@ public partial class MainWindow
 
         // Daily: today's repeatable quests and the streak
         QuestsDailyHost.Children.Clear();
-        QuestsDailyHost.Children.Add(QHead("Timer", "Daily", "the same quests every day, from midnight"));
+        QuestsDailyHost.Children.Add(QHead("Timer", L.T("Daily"), L.T("the same quests every day, from midnight")));
         i = 0;
         var nowLocal = DateTime.Now;
         double toMidnight = (nowLocal.Date.AddDays(1) - nowLocal).TotalSeconds;
@@ -141,34 +141,34 @@ public partial class MainWindow
         {
             int streak = Quests.Streak(_questLog, q.Kind, q.Subject, nowLocal);
             // the pace's "about 47 h" means nothing on a quest that resets at midnight: it says so instead (2026-11-08 review)
-            var eta = q.SecondsToGo is double sec ? (sec <= toMidnight ? " · " + Eta(sec) : " · not today at this pace") : "";
-            var note = $"{Quests.Amount(q, q.Have, Fk)} so far · {Quests.Amount(q, q.ToGo, Fk)} to go{eta}" + (streak > 1 ? $" · {streak} days running" : "");
+            var eta = q.SecondsToGo is double sec ? (sec <= toMidnight ? " · " + Eta(sec) : " · " + L.T("not today at this pace")) : "";
+            var note = L.F("{0} so far · {1} to go", Quests.Amount(q, q.Have, Fk), Quests.Amount(q, q.ToGo, Fk)) + eta + (streak > 1 ? " · " + L.F("{0} days running", streak) : "");
             QuestsDailyHost.Children.Add(QuestRow(q, i > 0, note: note, toggled: RedrawQuestsPage));
             i++;
         }
-        if (daily.Count == 0) QuestsDailyHost.Children.Add(PageNote("Today's quests appear with the first count of the day."));
+        if (daily.Count == 0) QuestsDailyHost.Children.Add(PageNote(L.T("Today's quests appear with the first count of the day.")));
 
         // All time: the long chains from this PC's tally, the nearest to done first; two at rest, the rest behind "N more"
         // (2026-11-08 review: seven "1,000 X · 5 pts" rows read as one)
         QuestsAllTimeHost.Children.Clear();
-        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "tally since quests began", quiet: true));
+        QuestsAllTimeHost.Children.Add(QHead("Globe", L.T("All time"), L.T("tally since quests began"), quiet: true));
         var atRows = allTime.Where(q => !Repeats(q)).OrderByDescending(q => q.Share).ToList();
         bool atOpen = QOpen("quests-alltime");
         int atShow = atOpen || atRows.Count <= AllTimeAtRest + 1 ? atRows.Count : AllTimeAtRest;
         i = 0;
         foreach (var q in atRows.Take(atShow))
         {
-            QuestsAllTimeHost.Children.Add(QuestRow(q, i > 0, note: $"{Quests.Amount(q, q.Have, Fk)} so far · {Quests.Amount(q, q.ToGo, Fk)} to go", toggled: RedrawQuestsPage));
+            QuestsAllTimeHost.Children.Add(QuestRow(q, i > 0, note: L.F("{0} so far · {1} to go", Quests.Amount(q, q.Have, Fk), Quests.Amount(q, q.ToGo, Fk)), toggled: RedrawQuestsPage));
             i++;
         }
         if (atRows.Count > AllTimeAtRest + 1)
-            QuestsAllTimeHost.Children.Add(FoldLink(atOpen ? "Fewer" : $"{atRows.Count - atShow} more  ›", () => { _qOpen["quests-alltime"] = !atOpen; RedrawQuestsPage(); }));
-        if (allTime.Count == 0) QuestsAllTimeHost.Children.Add(PageNote("The all-time chains start counting with your first day of quests."));
+            QuestsAllTimeHost.Children.Add(FoldLink(atOpen ? L.T("Fewer") : L.F("{0} more  ›", atRows.Count - atShow), () => { _qOpen["quests-alltime"] = !atOpen; RedrawQuestsPage(); }));
+        if (allTime.Count == 0) QuestsAllTimeHost.Children.Add(PageNote(L.T("The all-time chains start counting with your first day of quests.")));
         else if (atRows.Count == 0) QuestsAllTimeCard.Visibility = Visibility.Collapsed;
 
         // Your goals: the player's own (the Set a goal sheet lived on Next up until today)
         QuestsGoalsHost.Children.Clear();
-        QuestsGoalsHost.Children.Add(QHead("Flag", "Your goals", _goals.Count > 0 ? $"today · {prog.Count(p => p.Done)} of {_goals.Count} done" : "up to three a day · they take a Next up row"));
+        QuestsGoalsHost.Children.Add(QHead("Flag", L.T("Your goals"), _goals.Count > 0 ? L.F("today · {0} of {1} done", prog.Count(p => p.Done), _goals.Count) : L.T("up to three a day · they take a Next up row")));
         for (int g = 0; g < _goals.Count; g++) QuestsGoalsHost.Children.Add(GoalRow(_goals[g], prog[g], g > 0));
         if (_goals.Count < Goals.Max) QuestsGoalsHost.Children.Add(AddGoalRow(_goals.Count > 0));
 
@@ -176,25 +176,25 @@ public partial class MainWindow
         QuestsDoneHost.Children.Clear();
         var byDay = Quests.DoneByDay(_questLog, nowLocal);
         // the points are on the page's head and each day's label, so the head counts the quests alone
-        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} in the last {Quests.KeepDays} days", quiet: true));
-        if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote("Nothing reached yet. A quest you reach shows on the panel over the game for a few seconds, then lands here."));
+        QuestsDoneHost.Children.Add(QHead("Check", L.T("Done"), _questLog.Done.Count == 0 ? "" : L.F(_questLog.Done.Count == 1 ? "{0} quest in the last {1} days" : "{0} quests in the last {1} days", _questLog.Done.Count, Quests.KeepDays), quiet: true));
+        if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote(L.T("Nothing reached yet. A quest you reach shows on the panel over the game for a few seconds, then lands here.")));
         int days = 0; bool earlierOpen = QOpen("quests-earlier"); int hidden = 0, hiddenPts = 0;
         foreach (var (day, done) in byDay)
         {
             bool recent = days < 2 || earlierOpen;
             if (!recent) { hidden += done.Count; hiddenPts += done.Sum(d => d.Points); days++; continue; }
-            var label = QT(day == nowLocal.Date ? "Today" : day == nowLocal.Date.AddDays(-1) ? "Yesterday" : day.ToString("ddd MMM d", System.Globalization.CultureInfo.InvariantCulture), 12, FontWeights.Bold, "Faint");
+            var label = QT(day == nowLocal.Date ? L.T("Today") : day == nowLocal.Date.AddDays(-1) ? L.T("Yesterday") : QDay(day), 12, FontWeights.Bold, "Faint");
             label.Margin = new Thickness(0, days == 0 ? 6 : 10, 0, 2);
-            var dayPts = QT(Quests.Pts(done.Sum(d => (long)d.Points)), 12, FontWeights.Bold, "Muted"); dayPts.HorizontalAlignment = HorizontalAlignment.Right;
+            var dayPts = QT(QPts(done.Sum(d => (long)d.Points)), 12, FontWeights.Bold, "Muted"); dayPts.HorizontalAlignment = HorizontalAlignment.Right;
             var lg = new Grid(); lg.Children.Add(label); lg.Children.Add(dayPts);
             QuestsDoneHost.Children.Add(lg);
             int k = 0;
             foreach (var d in done.Take(12)) QuestsDoneHost.Children.Add(DoneRow(d, k++ > 0));
-            if (done.Count > 12) QuestsDoneHost.Children.Add(QMore($"and {done.Count - 12} more that day"));
+            if (done.Count > 12) QuestsDoneHost.Children.Add(QMore(L.F("and {0} more that day", done.Count - 12)));
             days++;
         }
         if (hidden > 0 || (earlierOpen && byDay.Count > 2))
-            QuestsDoneHost.Children.Add(FoldLink(earlierOpen ? "Fewer days" : $"{byDay.Count - 2} earlier day{(byDay.Count - 2 == 1 ? "" : "s")} · {hidden} quests · {Quests.Pts(hiddenPts)}  ›", () => { _qOpen["quests-earlier"] = !earlierOpen; RedrawQuestsPage(); }));
+            QuestsDoneHost.Children.Add(FoldLink(earlierOpen ? L.T("Fewer days") : L.F(byDay.Count - 2 == 1 ? "{0} earlier day · {1} quests · {2}  ›" : "{0} earlier days · {1} quests · {2}  ›", byDay.Count - 2, hidden, QPts(hiddenPts)), () => { _qOpen["quests-earlier"] = !earlierOpen; RedrawQuestsPage(); }));
 
         // the first card shown sits under the head without the gap the others keep between them
         bool first = true;
@@ -203,6 +203,14 @@ public partial class MainWindow
 
     /// <summary>All time's rows at rest; a fold of one is not worth its row, so three show as three.</summary>
     const int AllTimeAtRest = 2;
+
+    /// <summary>A day as the language writes it: "Fri Nov 13", "11월 13일 (금)", "11月13日 (週五)".</summary>
+    internal static string QDay(DateTime day) => L.Code switch
+    {
+        "ko" => day.ToString("M월 d일 (ddd)", new System.Globalization.CultureInfo("ko-KR")),
+        "zh-TW" => day.ToString("M月d日 (ddd)", new System.Globalization.CultureInfo("zh-TW")),
+        _ => day.ToString("ddd MMM d", System.Globalization.CultureInfo.InvariantCulture),
+    };
 
     /// <summary>A card's fold at its foot: "5 more  ›" as a link, a click opens or closes it.</summary>
     static TextBlock FoldLink(string text, Action click)
@@ -215,18 +223,18 @@ public partial class MainWindow
 
     /// <summary>The page head's score: "56 pts today · 1,220 all time"; one figure when the two are the same.</summary>
     static string QuestScoreHead(QuestScore s) =>
-        s.Today <= 0 ? Quests.Pts(s.AllTime) + " all time"
-        : s.AllTime > s.Today ? $"{Quests.Pts(s.Today)} today · {s.AllTime.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} all time"
-        : Quests.Pts(s.Today) + " today";
+        s.Today <= 0 ? L.F("{0} all time", QPts(s.AllTime))
+        : s.AllTime > s.Today ? L.F("{0} today · {1} all time", QPts(s.Today), s.AllTime.ToString("N0", System.Globalization.CultureInfo.InvariantCulture))
+        : L.F("{0} today", QPts(s.Today));
 
     /// <summary>A completed quest on the Done list: the mint check, its title, when, "+N pts" in mint.</summary>
     FrameworkElement DoneRow(QuestDone d, bool rule)
     {
         // Kinah's title carries its horizon already ("500K today")
-        var sub = $"{d.DoneAtUtc.ToLocalTime():HH:mm}" + (d.Kind == QuestKind.Kinah ? "" : " · " + Horizon.Word(d.Horizon)) + (d.Points < d.Worth ? $" · worth {Quests.Pts(d.Worth)}, capped" : "");
-        var row = QRow(QIconBox("Check", "Mint", 28, round: true), Quests.Title(d, Fk), sub, Quests.Pts(d.Points, plus: true), "Mint", rule: rule, inline: true);
+        var sub = $"{d.DoneAtUtc.ToLocalTime():HH:mm}" + (d.Kind == QuestKind.Kinah ? "" : " · " + QHorizon(d.Horizon)) + (d.Points < d.Worth ? " · " + L.F("worth {0}, capped", QPts(d.Worth)) : "");
+        var row = QRow(QIconBox("Check", "Mint", 28, round: true), QTitle(d, Fk), sub, QPts(d.Points, plus: true), "Mint", rule: rule, inline: true);
         row.Tag = "done"; row.Cursor = Cursors.Arrow;
-        row.ToolTip = $"{Quests.Title(d, Fk)} reached at {d.DoneAtUtc.ToLocalTime():HH:mm}, {Quests.Pts(d.Points, plus: true)}" + (d.Points < d.Worth ? $" of {Quests.Pts(d.Worth)}: the hour's cap ({Quests.CapPerHour} an hour of play)." : ".") + (d.Sent ? " Sent to your profile." : " Goes to your profile with the next upload.");
+        row.ToolTip = L.F("{0} reached at {1:HH:mm}, {2}", QTitle(d, Fk), d.DoneAtUtc.ToLocalTime(), QPts(d.Points, plus: true)) + (d.Points < d.Worth ? " " + L.F("of {0}: the hour's cap ({1} an hour of play).", QPts(d.Worth), Quests.CapPerHour) : ".") + (d.Sent ? " " + L.T("Sent to your profile.") : " " + L.T("Goes to your profile with the next upload."));
         ToolTipService.SetInitialShowDelay(row, 400);
         return row;
     }

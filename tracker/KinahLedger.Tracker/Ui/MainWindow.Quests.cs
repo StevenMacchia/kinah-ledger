@@ -178,8 +178,8 @@ public partial class MainWindow
         done = done.Where(d => !(d.Kind == QuestKind.Material && d.Horizon == Horizon.Today && newMats.Contains(d.Subject, StringComparer.OrdinalIgnoreCase))).ToList();
         if (!first && done.Count > 0)
         {
-            var line = done.Count == 1 ? $"Quest done · {Quests.Title(done[0], Fk)} · {Quests.Pts(done[0].Points, plus: true)}"
-                : $"Quests done · {string.Join(" · ", done.Select(d => Quests.Title(d, Fk)))} · {Quests.Pts(done.Sum(d => d.Points), plus: true)}";
+            var line = done.Count == 1 ? L.F("Quest done · {0} · {1}", QTitle(done[0], Fk), QPts(done[0].Points, plus: true))
+                : L.F("Quests done · {0} · {1}", string.Join(" · ", done.Select(d => QTitle(d, Fk))), QPts(done.Sum(d => d.Points), plus: true));
             said.Add(line);
             if (HudLook == HudLooks.Strip) _hud?.Alert(line, GoalGold, 6); else FlashHud(line);
             Say(line, "Gold");
@@ -198,9 +198,38 @@ public partial class MainWindow
     public string QuestScoreLine()
     {
         var s = ScoreNow();
-        if (s.AllTime == 0) return "No points yet. Quests appear in Next up on the Farming page once you have farmed for a couple of minutes.";
-        return $"{Quests.Pts(s.Session)} this session · {Quests.Pts(s.Today)} today · {Quests.Pts(s.Week)} this week";
+        if (s.AllTime == 0) return L.T("No points yet. Quests appear in Next up on the Farming page once you have farmed for a couple of minutes.");
+        return L.F("{0} this session · {1} today · {2} this week", QPts(s.Session), QPts(s.Today), QPts(s.Week));
     }
+
+    /* ---------------- the words, in the language (1.0) ---------------- */
+    // Session/Quests.cs writes the English (the tests read it); what is drawn goes through these.
+
+    /// <summary>"12 pts", "+12 pts".</summary>
+    internal static string QPts(long n, bool plus = false) => L.F(plus && n > 0 ? "+{0} pts" : "{0} pts", n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>"this session", "today", "this week", "all time".</summary>
+    internal static string QHorizon(string h) => L.T(Horizon.Word(h));
+
+    /// <summary>The grade's word: common, rare, legend, unique, epic.</summary>
+    internal static string QTier(int tier) => L.T(Quests.TierWord(tier));
+
+    /// <summary>The quest's title as Quests.Title writes it, in the language: the item or place name stays as the game has it and moves with the pattern.</summary>
+    internal static string QTitle(Quest q, Func<double, string> fk)
+    {
+        string N(long n) => n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        return q.Kind switch
+        {
+            QuestKind.Kinah => string.Format(L.T("{0} {1}", "quest kinah"), fk(q.Target), QHorizon(q.Horizon)),
+            QuestKind.Material => $"{N(q.Target)} {q.Subject}",
+            QuestKind.Runs => L.F(q.Target == 1 ? "{0} {1} run" : "{0} {1} runs", N(q.Target), q.Subject),
+            QuestKind.BestRun => L.F("Beat your best run · {0}", q.Subject),
+            QuestKind.Gather => L.F("{0} gathers", N(q.Target)),
+            _ => q.Key,
+        };
+    }
+
+    internal static string QTitle(QuestDone d, Func<double, string> fk) => QTitle(Quests.AsQuest(d), fk);
 
     /* ---------------- rows ---------------- */
 
@@ -231,10 +260,10 @@ public partial class MainWindow
     /// </summary>
     string QuestSub(Quest q)
     {
-        if (q.Kind == QuestKind.BestRun) return $"{Fk(q.Have)} today · best {Fk(q.Target - 1)}";
-        var when = q.Horizon != Horizon.Session && q.Kind != QuestKind.Kinah ? Horizon.Word(q.Horizon) + " · " : "";
+        if (q.Kind == QuestKind.BestRun) return L.F("{0} today · best {1}", Fk(q.Have), Fk(q.Target - 1));
+        var when = q.Horizon != Horizon.Session && q.Kind != QuestKind.Kinah ? QHorizon(q.Horizon) + " · " : "";
         var eta = q.SecondsToGo is double s ? " · " + Eta(s) : "";
-        return $"{when}{Quests.Amount(q, q.Have, Fk)} so far · {Quests.Amount(q, q.ToGo, Fk)} to go{eta}";
+        return $"{when}{L.F("{0} so far · {1} to go", Quests.Amount(q, q.Have, Fk), Quests.Amount(q, q.ToGo, Fk))}{eta}";
     }
 
     /// <summary>A Kinah quest whose "so far" reads as the hero line's Kinah figure on the Farming page.</summary>
@@ -242,7 +271,7 @@ public partial class MainWindow
         && Quests.Amount(q, q.Have, Fk) == Fk(_qKinah);
 
     /// <summary>"367.7K to go · about 24 min": the quest's line without its "so far".</summary>
-    string QuestToGo(Quest q) => $"{Quests.Amount(q, q.ToGo, Fk)} to go" + (q.SecondsToGo is double s ? " · " + Eta(s) : "");
+    string QuestToGo(Quest q) => L.F("{0} to go", Quests.Amount(q, q.ToGo, Fk)) + (q.SecondsToGo is double s ? " · " + Eta(s) : "");
 
     /// <summary>
     /// A quest as a Next up row: its icon, the target, how far with the pace, the points in lilac and the bar; the card on
@@ -254,10 +283,10 @@ public partial class MainWindow
         // every row has its track, so rows keep one height; under 5% the fill would be a sliver, so the track stays empty and
         // the figures say it (2026-11-08 reviews: no sliver bars, then rows jumping in height where the bar was left out)
         double share = q.Share < 0.05 ? 0 : q.Share;
-        var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", share, tone, rule, inline: true, barKey: depth == 0 ? "quest|" + q.Key : null);
+        var row = QRow(QuestIcon(q), QTitle(q, Fk), note ?? QuestSub(q), QPts(q.Points), "Lilac", share, tone, rule, inline: true, barKey: depth == 0 ? "quest|" + q.Key : null);
         if (depth == 0) Motion.Reached(row, "quest|" + q.Key, q.Done, tone == "Gold" ? tone : "Good");   // the draw where it is done washes it once: gold for Kinah, green (a success) for the rest
         row.Tag = depth == 0 ? "quest" : "tree";
-        AutomationProperties.SetName(row, $"Quest: {Quests.Title(q, Fk)}, {Quests.Pts(q.Points)}");
+        AutomationProperties.SetName(row, L.F("Quest: {0}, {1}", QTitle(q, Fk), QPts(q.Points)));
         if (depth > 0)
         {
             row.Margin = new Thickness(-6 + 18 * depth, 0, -6, 0);
@@ -294,8 +323,8 @@ public partial class MainWindow
         if (_questIn == null) return rows;
         var tree = Quests.Tree(q, _questIn);
         Quest prev = q;
-        foreach (var up in tree.Up) { rows.Add(QuestRow(up, rule: false, depth: 1, note: (rows.Count == 0 ? "unlocks next" : "after " + Quests.Amount(prev, prev.Target, Fk)) + " · " + Quests.Amount(up, up.Have, Fk) + " so far")); prev = up; }
-        foreach (var b in tree.Branches) rows.Add(QuestRow(b, rule: false, depth: 1, note: (b.Kind == QuestKind.Kinah ? Horizon.Word(b.Horizon) + " · " : "") + QuestSub(b)));
+        foreach (var up in tree.Up) { rows.Add(QuestRow(up, rule: false, depth: 1, note: (rows.Count == 0 ? L.T("unlocks next") : L.F("after {0}", Quests.Amount(prev, prev.Target, Fk))) + " · " + L.F("{0} so far", Quests.Amount(up, up.Have, Fk)))); prev = up; }
+        foreach (var b in tree.Branches) rows.Add(QuestRow(b, rule: false, depth: 1, note: (b.Kind == QuestKind.Kinah ? QHorizon(b.Horizon) + " · " : "") + QuestSub(b)));
         return rows;
     }
 
@@ -323,22 +352,22 @@ public partial class MainWindow
     internal Border QuestCard(Quest q)
     {
         var (card, body) = CkShell(300);
-        var sub = $"Quest · {Horizon.Word(q.Horizon)}";
-        body.Children.Add(q.Kind == QuestKind.Material ? CkBand(q.Subject, GradeOf(q.Subject), sub) : GoalBand(QuestIcon(q, 64), Quests.Title(q, Fk), sub));
+        var sub = L.F("Quest · {0}", QHorizon(q.Horizon));
+        body.Children.Add(q.Kind == QuestKind.Material ? CkBand(q.Subject, GradeOf(q.Subject), sub) : GoalBand(QuestIcon(q, 64), QTitle(q, Fk), sub));
         body.Children.Add(GoalBar(q.Share));
-        body.Children.Add(CkSection(Horizon.Word(q.Horizon).ToUpperInvariant()));
-        body.Children.Add(CkKv("Have", Quests.Amount(q, q.Have, Fk), CkInk));
-        body.Children.Add(q.Done ? CkKv("Reached", "✓", CkGold) : CkKv("To go", Quests.Amount(q, q.ToGo, Fk), CkInk));
-        if (q.SecondsToGo is double s && !q.Done) body.Children.Add(CkKv("At this pace", Eta(s), CkInk, mono: false));
-        body.Children.Add(CkSection("POINTS"));
-        body.Children.Add(CkKv("Worth", Quests.Pts(q.Points), CkGold));
-        if (q.Kind == QuestKind.Material) body.Children.Add(CkKv("Tier", $"{q.Tier} · {Quests.TierWord(q.Tier)}", CkInk, mono: false));
+        body.Children.Add(CkSection(QHorizon(q.Horizon).ToUpperInvariant()));
+        body.Children.Add(CkKv(L.T("Have"), Quests.Amount(q, q.Have, Fk), CkInk));
+        body.Children.Add(q.Done ? CkKv(L.T("Reached"), "✓", CkGold) : CkKv(L.T("To go"), Quests.Amount(q, q.ToGo, Fk), CkInk));
+        if (q.SecondsToGo is double s && !q.Done) body.Children.Add(CkKv(L.T("At this pace"), Eta(s), CkInk, mono: false));
+        body.Children.Add(CkSection(L.T("POINTS")));
+        body.Children.Add(CkKv(L.T("Worth"), QPts(q.Points), CkGold));
+        if (q.Kind == QuestKind.Material) body.Children.Add(CkKv(L.T("Tier"), $"{q.Tier} · {QTier(q.Tier)}", CkInk, mono: false));
         if (_questIn != null && Quests.Tree(q, _questIn) is { } t && t.Up.Count > 0)
         {
-            var n = CkNote($"Finishing it unlocks {Quests.Title(t.Up[0], Fk)} ({Quests.Pts(t.Up[0].Points)})" + (t.Branches.Count > 0 ? $"; it counts towards {Quests.Title(t.Branches[0], Fk)}." : "."));
+            var n = CkNote(L.F("Finishing it unlocks {0} ({1})", QTitle(t.Up[0], Fk), QPts(t.Up[0].Points)) + (t.Branches.Count > 0 ? L.F("; it counts towards {0}.", QTitle(t.Branches[0], Fk)) : "."));
             n.Margin = new Thickness(20, 8, 20, 0); body.Children.Add(n);
         }
-        var how = CkNote("Click to open its tree"); how.Margin = new Thickness(20, 12, 20, 14);
+        var how = CkNote(L.T("Click to open its tree")); how.Margin = new Thickness(20, 12, 20, 14);
         body.Children.Add(how);
         return card;
     }
@@ -348,15 +377,15 @@ public partial class MainWindow
     {
         var s = ScoreNow();
         var (card, body) = CkShell(300);
-        var title = CkText("Your score", CkGold, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 16, 20, 2);
+        var title = CkText(L.T("Your score"), CkGold, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 16, 20, 2);
         body.Children.Add(title);
-        var lead = CkText("Points from the quests in Next up, at completion.", CkMuted, 12.5); lead.Margin = new Thickness(20, 0, 20, 8);
+        var lead = CkText(L.T("Points from the quests in Next up, at completion."), CkMuted, 12.5); lead.Margin = new Thickness(20, 0, 20, 8);
         body.Children.Add(lead);
-        body.Children.Add(CkKv("This session", Quests.Pts(s.Session), CkInk));
-        body.Children.Add(CkKv("Today", Quests.Pts(s.Today), CkInk));
-        body.Children.Add(CkKv("This week", Quests.Pts(s.Week), CkInk));
-        body.Children.Add(CkKv("All time", Quests.Pts(s.AllTime), CkGold));
-        var n = CkNote($"Capped at {Quests.CapPerHour} points an hour of play; a gold or rarer item counts in full in its first session of the day. Once your tracker is linked, the score will go to your profile on kinahledger.com.");
+        body.Children.Add(CkKv(L.T("This session"), QPts(s.Session), CkInk));
+        body.Children.Add(CkKv(L.T("Today"), QPts(s.Today), CkInk));
+        body.Children.Add(CkKv(L.T("This week"), QPts(s.Week), CkInk));
+        body.Children.Add(CkKv(L.T("All time"), QPts(s.AllTime), CkGold));
+        var n = CkNote(L.F("Capped at {0} points an hour of play; a gold or rarer item counts in full in its first session of the day. Once your tracker is linked, the score will go to your profile on kinahledger.com.", Quests.CapPerHour));
         n.Margin = new Thickness(20, 10, 20, 14); body.Children.Add(n);
         return card;
     }
@@ -372,7 +401,7 @@ public partial class MainWindow
         var rows = QuestRows(pick, rule: false, toggled: redraw);
         if (rows.Count == 0) return null;
         var sp = new StackPanel();
-        sp.Children.Add(QHead("Trophy", "Next up", "at this pace"));
+        sp.Children.Add(QHead("Trophy", L.T("Next up"), L.T("at this pace")));
         foreach (var (el, _) in rows) sp.Children.Add(el);
         var card = new Border { Child = sp, Margin = new Thickness(0, 8, 0, 0), Tag = "quests" };
         card.SetResourceReference(StyleProperty, "QCard");

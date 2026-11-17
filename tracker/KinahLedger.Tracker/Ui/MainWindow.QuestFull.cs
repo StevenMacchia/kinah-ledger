@@ -22,16 +22,16 @@ public partial class MainWindow
         var mobs = _qMobs.Where(m => m.Kinah > 0).OrderByDescending(m => m.Kinah).ToList();
         long named = mobs.Sum(m => m.Kinah);
         // "578.1K came with a name": the Kinah it is out of is the hero line's, beside it (UX pass: it said "of 632.3K" too)
-        host.Children.Add(QHead("Sword", "Who pays", named > 0 && _qKinah > 0 ? $"{Fk(named)} came with a name" : "", quiet: true));
+        host.Children.Add(QHead("Sword", L.T("Who pays"), named > 0 && _qKinah > 0 ? L.F("{0} came with a name", Fk(named)) : "", quiet: true));
         var top = mobs.Take(6).ToList();
         long max = top.Count > 0 ? top[0].Kinah : 0;
         for (int i = 0; i < top.Count; i++)
         {
             var m = top[i];
-            host.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, m.Kills > 0 ? $"{m.Kills:N0} kill{(m.Kills == 1 ? "" : "s")} · {Fk(m.Kinah / (double)m.Kills)} a kill" : "", Fk(m.Kinah), "Ink", max > 0 ? m.Kinah / (double)max : null, "Gold", rule: i > 0));
+            host.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, m.Kills > 0 ? L.F(m.Kills == 1 ? "{0:N0} kill" : "{0:N0} kills", m.Kills) + " · " + L.F("{0} a kill", Fk(m.Kinah / (double)m.Kills)) : "", Fk(m.Kinah), "Ink", max > 0 ? m.Kinah / (double)max : null, "Gold", rule: i > 0));
         }
-        if (top.Count == 0) host.Children.Add(QMore("No enemy named yet: Kinah lines name the enemy once the target bar is read."));
-        else if (_qKinah - named > 0) host.Children.Add(QMore($"{_qKinah - named:N0} came with no enemy named"));
+        if (top.Count == 0) host.Children.Add(QMore(L.T("No enemy named yet: Kinah lines name the enemy once the target bar is read.")));
+        else if (_qKinah - named > 0) host.Children.Add(QMore(L.F("{0:N0} came with no enemy named", _qKinah - named)));
     }
 
     /// <summary>Kills by enemy, as rows: the count on the right, Kinah a kill and the enemy's commonest drop in the small print.</summary>
@@ -40,7 +40,7 @@ public partial class MainWindow
         host.Children.Clear();
         double perMin = _qElapsed.TotalMinutes >= 1 ? _qKills / _qElapsed.TotalMinutes : 0;
         // the kills and the minutes are the hero's (its line and its "Open world · 42 min"); the pace is this card's own
-        host.Children.Add(QHead("Sword", "Kills", perMin > 0 ? $"{perMin:0.0} a minute" : "", quiet: true));
+        host.Children.Add(QHead("Sword", L.T("Kills"), perMin > 0 ? L.F("{0:0.0} a minute", perMin) : "", quiet: true));
         var top = _qMobs.Where(m => m.Kills > 0).OrderByDescending(m => m.Kills).Take(6).ToList();
         int named = 0;
         for (int i = 0; i < top.Count; i++)
@@ -48,8 +48,8 @@ public partial class MainWindow
             var m = top[i]; named += m.Kills;
             host.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, KillsSub(m, id => _items.Get(id)?.Name), m.Kills.ToString("N0"), "Ink", rule: i > 0));
         }
-        if (top.Count == 0) host.Children.Add(QMore("No enemy named yet."));
-        else if (_qKills - named > 0) host.Children.Add(QMore($"{_qKills - named:N0} kills came with no enemy named"));
+        if (top.Count == 0) host.Children.Add(QMore(L.T("No enemy named yet.")));
+        else if (_qKills - named > 0) host.Children.Add(QMore(L.F("{0:N0} kills came with no enemy named", _qKills - named)));
     }
 
     /// <summary>
@@ -60,8 +60,8 @@ public partial class MainWindow
     internal static string KillsSub(SessionEngine.MobStats m, Func<long, string?> nameOf)
     {
         var drop = m.Drops.OrderByDescending(d => d.Value).Select(d => (Name: nameOf(d.Key) ?? "", d.Value)).FirstOrDefault(d => d.Name.Length > 0);
-        var kinah = m.Kills > 0 ? $"{Fk(m.Kinah / (double)m.Kills)} Kinah a kill" : "";
-        return kinah + (drop.Name is { Length: > 0 } && drop.Value > 0 && m.Kills >= drop.Value ? $" · drops {drop.Name} 1 in {Math.Round(m.Kills / (double)drop.Value):0}" : "");
+        var kinah = m.Kills > 0 ? L.F("{0} Kinah a kill", Fk(m.Kinah / (double)m.Kills)) : "";
+        return kinah + (drop.Name is { Length: > 0 } && drop.Value > 0 && m.Kills >= drop.Value ? " · " + L.F("drops {0} 1 in {1}", drop.Name, Math.Round(m.Kills / (double)drop.Value).ToString("0")) : "");
     }
 
     /// <summary>Full view: whether Just dropped and Where to farm sit in the second column; null until the view's first balance.</summary>
@@ -145,7 +145,7 @@ public partial class MainWindow
         {
             QuestOddsHost.Children.Clear();
             // how many kills they come from is the hero line's figure; each badge's hover says it with the drops
-            QuestOddsHost.Children.Add(QHead("Bolt", "Drop odds", "", quiet: true));
+            QuestOddsHost.Children.Add(QHead("Bolt", L.T("Drop odds"), "", quiet: true));
             var g = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             for (int i = 0; i < odds.Count; i++)
             {
@@ -153,7 +153,7 @@ public partial class MainWindow
                 g.ColumnDefinitions.Add(new ColumnDefinition());
                 var r = odds[i].Row;
                 var badge = QBadge(QItemIcon(r.Name, _items.IdOf(r.Name), 30, round: true, grade: r.Grade), r.DropPct, r.Name);
-                badge.ToolTip = $"{r.Name} · {odds[i].N:N0} drop{(odds[i].N == 1 ? "" : "s")} from {kills:N0} kills" + (r.PerHour.Length > 0 ? $" · {r.PerHour} an hour" : "");
+                badge.ToolTip = L.F(odds[i].N == 1 ? "{0} · {1:N0} drop from {2:N0} kills" : "{0} · {1:N0} drops from {2:N0} kills", r.Name, odds[i].N, kills) + (r.PerHour.Length > 0 ? " · " + L.F("{0} an hour", r.PerHour) : "");
                 ToolTipService.SetInitialShowDelay(badge, 300);
                 Grid.SetColumn(badge, i * 2); g.Children.Add(badge);
             }
@@ -166,17 +166,21 @@ public partial class MainWindow
             // "N kinds gathered" the bag's (UX pass, 2026-11-13); the other card spans the row then
             int at = limit.IndexOf(" gathers", StringComparison.Ordinal);
             GatherChip1.Visibility = at > 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (at > 0) QChipFill(GatherChip1, QIconBox("Pick", "Sky"), limit[..at], limit[(at + 1)..], quiet: true);
-            GatherChip1.ToolTip = limit.Length > 0 ? limit + ". The game allows 1,000 gathers a day on a server." : null;
+            // "46 of 1,000 gathers today · resets 00:00 Pacific (16:00 here)" (Session/GatherDay.cs writes it in English), said in the language
+            var gm = System.Text.RegularExpressions.Regex.Match(limit, @"^(?<n>[\d,]+) of (?<l>[\d,]+) gathers today · resets 00:00 Pacific \((?<t>[^ ]+) here\)$");
+            string limFig = gm.Success ? L.F("{0} of {1}", gm.Groups["n"].Value, gm.Groups["l"].Value) : at > 0 ? limit[..at] : limit;
+            string limRest = gm.Success ? L.F("gathers today · resets 00:00 Pacific ({0} here)", gm.Groups["t"].Value) : at > 0 ? limit[(at + 1)..] : "";
+            if (at > 0) QChipFill(GatherChip1, QIconBox("Pick", "Sky"), limFig, limRest, quiet: true);
+            GatherChip1.ToolTip = limit.Length > 0 ? limFig + " " + limRest + ". " + L.T("The game allows 1,000 gathers a day on a server.") : null;
             Grid.SetColumn(GatherChip2, at > 0 ? 2 : 0); Grid.SetColumnSpan(GatherChip2, at > 0 ? 1 : 3);
             // "Mining", not "Mining · ore and gemstones"; the Soul Crystals are the bag's tile beside it
             var parts = (s.Skills ?? new()).Select(k => $"{k.Name.Split(" · ")[0]} {Fk(k.Value)}").ToList();
             // by skill: the first big, the rest under it; the card has room for two under it, the rest is "+N" and the tooltip
             // names them all (2026-11-08 release check: "Cook…" cut)
             var rest = parts.Skip(1).ToList();
-            var shown = rest.Count > 2 ? rest.Take(2).Append($"+{rest.Count - 2} more").ToList() : rest;
-            QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), parts.Count > 0 ? parts[0] : "Gathered", shown.Count > 0 ? string.Join(" · ", shown) : "gathered " + CountWhere(), quiet: true);
-            GatherChip2.ToolTip = parts.Count > 0 ? "Gathered " + CountWhere() + ": " + string.Join(", ", parts) + ". Each skill's value is at the lowest Market price, " + PriceBook.Cut + "."
+            var shown = rest.Count > 2 ? rest.Take(2).Append(L.F("+{0} more", rest.Count - 2)).ToList() : rest;
+            QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), parts.Count > 0 ? parts[0] : L.T("Gathered"), shown.Count > 0 ? string.Join(" · ", shown) : L.F("gathered {0}", CountWhere()), quiet: true);
+            GatherChip2.ToolTip = parts.Count > 0 ? L.F("Gathered {0}: {1}. Each skill's value is at the lowest Market price, {2}.", CountWhere(), string.Join(", ", parts), QCut())
                 // the tries, nodes, upgrades and fails a skill and a kind of node, when the game's messages counted them (0.10.80)
                 + (Shown() is { NodeVisits: > 0 } ge ? GatherHow(ge, s, ge.Totals().Nodes, ge.Upgrades) : "") : null;
         }
