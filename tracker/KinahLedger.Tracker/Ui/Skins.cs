@@ -14,9 +14,9 @@ public static class Skins
 
     public static readonly Skin[] All =
     {
-        new("night", "Night", true, "near-black with Kinah gold: the site's look"),
-        new("abyss", "Abyss", true, "navy and soft gold on near-black"),
-        new("daylight", "Daylight", false, "light, for a bright room"),
+        new("night", L.T("Night"), true, L.T("near-black with Kinah gold: the site's look")),
+        new("abyss", L.T("Abyss"), true, L.T("navy and soft gold on near-black")),
+        new("daylight", L.T("Daylight"), false, L.T("light, for a bright room")),
     };
 
     public const string Default = "night";

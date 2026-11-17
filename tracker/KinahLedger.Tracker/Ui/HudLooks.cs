@@ -25,26 +25,26 @@ public static class HudLooks
     public static readonly Look[] All =
     {
         // the design pass's (2026-11-14, Ui/HudStackLooks.cs) first: each draws the timers due and the fight itself; Auto mixes the two favourites
-        new(Auto, "Auto", "The pill while you farm; in a boss fight the group's meter opens above it"),
-        new(Meter, "Meter", "A raid meter: the boss and its HP up top, the group in class colours, your Kinah at the foot"),
-        new(Float, "Float", "No panel: crisp figures straight over the game"),
+        new(Auto, L.T("Auto"), L.T("The pill while you farm; in a boss fight the group's meter opens above it")),
+        new(Meter, L.T("Meter"), L.T("A raid meter: the boss and its HP up top, the group in class colours, your Kinah at the foot")),
+        new(Float, L.T("Float"), L.T("No panel: crisp figures straight over the game")),
         // the older looks, listed last (Steven, 2026-11-14). The Quest look's names (2026-11-07): Badge is the strip, Buddy the card,
         // Pop the ticker; the keys stay, so hud.json keeps its choice
-        new(Strip, "Badge", "One line with the figures you pick, and the ring of your best here"),
-        new(Card, "Buddy", "The ring, the hour, your best here and the last three pickups"),
-        new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
+        new(Strip, L.T("Badge"), L.T("One line with the figures you pick, and the ring of your best here")),
+        new(Card, L.T("Buddy"), L.T("The ring, the hour, your best here and the last three pickups")),
+        new(Ticker, L.T("Pop"), L.T("Pickups pop in like the game's loot, the top drop pinned")),
         // the Capsule last, at the far right (Steven, 2026-11-16: "put it all the way at the right?")
-        new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
+        new(Capsule, L.T("Capsule"), L.T("Everything on one pill; a fight drops a slim meter under it")),
         // the themes (Steven, 2026-11-16: "let us choose a theme and then let us choose from that theme"), Ui/Themes/
-        new(HudThemes.Sticker, "Sticker", "Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup", HudThemes.Wacky),
-        new(HudThemes.Neon, "Neon", "An arcade cabinet's glowing rim; pickups streak up like combo scores", HudThemes.Wacky),
-        new(HudThemes.Goo, "Goo", "A squishy candy jelly; pickups bounce out as bubbles", HudThemes.Wacky),
-        new(HudThemes.Fighter, "Fighter", "A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup", HudThemes.Tactical),
-        new(HudThemes.Scorebug, "Scorebug", "A tournament broadcast: slanted blocks and a ranked leaderboard", HudThemes.Tactical),
-        new(HudThemes.Holo, "Holo", "Projected cyan glass with clipped corners; a scan line sweeps each pickup", HudThemes.Tactical),
-        new(HudThemes.Vhs, "VHS", "A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup", HudThemes.Glitch),
-        new(HudThemes.Corrupt, "Corrupted", "A broken signal: torn slices and colour ghosts round steady figures", HudThemes.Glitch),
-        new(HudThemes.Terminal, "Terminal", "An old green screen: a prompt, a cursor, each pickup typed in as a line", HudThemes.Glitch),
+        new(HudThemes.Sticker, L.T("Sticker"), L.T("Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup"), HudThemes.Wacky),
+        new(HudThemes.Neon, L.T("Neon"), L.T("An arcade cabinet's glowing rim; pickups streak up like combo scores"), HudThemes.Wacky),
+        new(HudThemes.Goo, L.T("Goo"), L.T("A squishy candy jelly; pickups bounce out as bubbles"), HudThemes.Wacky),
+        new(HudThemes.Fighter, L.T("Fighter"), L.T("A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup"), HudThemes.Tactical),
+        new(HudThemes.Scorebug, L.T("Scorebug"), L.T("A tournament broadcast: slanted blocks and a ranked leaderboard"), HudThemes.Tactical),
+        new(HudThemes.Holo, L.T("Holo"), L.T("Projected cyan glass with clipped corners; a scan line sweeps each pickup"), HudThemes.Tactical),
+        new(HudThemes.Vhs, L.T("VHS"), L.T("A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup"), HudThemes.Glitch),
+        new(HudThemes.Corrupt, L.T("Corrupted"), L.T("A broken signal: torn slices and colour ghosts round steady figures"), HudThemes.Glitch),
+        new(HudThemes.Terminal, L.T("Terminal"), L.T("An old green screen: a prompt, a cursor, each pickup typed in as a line"), HudThemes.Glitch),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
@@ -197,7 +197,7 @@ static class HudKit
         var b = T(big, size >= 40 ? 12.5 : 9.5, Ink, weight: FontWeights.Bold); b.HorizontalAlignment = HorizontalAlignment.Center; b.TextTrimming = TextTrimming.None;
         b.LineHeight = size >= 40 ? 13 : 10; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         text.Children.Add(b);
-        if (small.Length > 0) { var sm = T(small.ToUpperInvariant(), 7, Muted, weight: FontWeights.SemiBold); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.TextTrimming = TextTrimming.None; text.Children.Add(sm); }
+        if (small.Length > 0) { var sm = T(L.T(small).ToUpperInvariant(), 7, Muted, weight: FontWeights.SemiBold); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.TextTrimming = TextTrimming.None; text.Children.Add(sm); }
         g.Children.Add(text);
         return g;
     }
@@ -208,7 +208,7 @@ static class HudKit
         string V(string k) => v.TryGetValue(k, out var s) ? s : "";
         double share = double.TryParse(V("chase"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sh) ? sh : -1;
         var words = V("toBest");
-        return (share, words, words.StartsWith("New", StringComparison.Ordinal));
+        return (share, words, V("toBestNew") == "1" || words.StartsWith("New", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -218,7 +218,7 @@ static class HudKit
     public static bool Abyss(IReadOnlyDictionary<string, string> v) => v.TryGetValue("abyss", out var s) && s == "1";
 
     /// <summary>The line where the hour waits for its first figure, in the Abyss and out of it.</summary>
-    public static string Waiting(bool abyss) => abyss ? "Waiting for Abyss Points" : "Waiting for the first count";
+    public static string Waiting(bool abyss) => abyss ? L.T("Waiting for Abyss Points") : L.T("Waiting for the first count");
 
     /// <summary>
     /// The Abyss's figures after the points, most telling first, only those the count has: the kills (players, once the game
@@ -228,11 +228,11 @@ static class HudKit
     {
         string V(string k) => v.TryGetValue(k, out var s) ? s : "";
         var list = new List<(string, string, Brush)>();
-        if (V("abPvp").Length > 0) list.Add((V("abPvp"), "PvP", Ink));
-        else if (V("abKills").Length > 0) list.Add((V("abKills"), V("abKills") == "1" ? "kill" : "kills", Ink));
-        if (V("abRank").Length > 0) list.Add((V("abRank"), "RP", Ink));
-        if (V("abDeaths").Length > 0) list.Add((V("abDeaths"), V("abDeaths") == "1" ? "death" : "deaths", Rec));
-        if (V("abKinah").Length > 0) list.Add((V("abKinah"), "Kinah", Gold));
+        if (V("abPvp").Length > 0) list.Add((V("abPvp"), L.T("PvP"), Ink));
+        else if (V("abKills").Length > 0) list.Add((V("abKills"), V("abKills") == "1" ? L.T("kill") : L.T("kills"), Ink));
+        if (V("abRank").Length > 0) list.Add((V("abRank"), L.T("RP"), Ink));
+        if (V("abDeaths").Length > 0) list.Add((V("abDeaths"), V("abDeaths") == "1" ? L.T("death") : L.T("deaths"), Rec));
+        if (V("abKinah").Length > 0) list.Add((V("abKinah"), L.T("Kinah"), Gold));
         return list;
     }
 
@@ -251,7 +251,7 @@ static class HudKit
             on = (_, _) => { if (slot.Image == null) return; pic.Source = slot.Image; slot.PropertyChanged -= on; };
             slot.PropertyChanged += on;
         }
-        System.Windows.Automation.AutomationProperties.SetName(pic, "Abyss Points");
+        System.Windows.Automation.AutomationProperties.SetName(pic, L.T("Abyss Points"));
         return pic;
     }
 
@@ -435,6 +435,51 @@ static class HudKit
         return b;
     }
 
+
+    // ---- the panel's free texts in the player's language ----
+    // Their producers (the window's live numbers, notices and alerts) write English; the panel translates what it draws, by
+    // the text itself or by its pattern ("130K to your best here"), so every look and theme says them the same way.
+    static readonly (System.Text.RegularExpressions.Regex Re, string Pattern)[] SayRules =
+    {
+        (new(@"^(.+) to your best here$"), "{0} to your best here"),
+        (new(@"^Run stopped · (.+) this run$"), "Run stopped · {0} this run"),
+        (new(@"^(.+) covers the chat$"), "{0} covers the chat"),
+    };
+    static readonly string[] SayKeys = { "toBest", "feedUnit", "paused", "notice", "flash", "flag", "rareWhere" };
+
+    /// <summary>One free text of the panel in the language in use: the whole text if the table has it, else by its pattern; else as it is.</summary>
+    public static string Say(string s)
+    {
+        if (s.Length == 0 || L.Code == "en") return s;
+        if (L.CurrentTable().ContainsKey(s)) return L.T(s);
+        if (s.StartsWith("Paused: ", StringComparison.Ordinal)) return L.F("Paused: {0}", Say(s[8..]));
+        if (s.StartsWith("on ", StringComparison.Ordinal) && s.Length > 3) return L.F("on {0}", s[3..]);
+        foreach (var (re, pattern) in SayRules)
+        {
+            var m = re.Match(s);
+            if (!m.Success) continue;
+            return L.F(pattern, m.Groups.Cast<System.Text.RegularExpressions.Group>().Skip(1).Select(g => (object)Say(g.Value)).ToArray());
+        }
+        var drop = System.Text.RegularExpressions.Regex.Match(s, @"^(Rare|Watched) drop: (.+) · (?:sells for (.+)|no price yet)$");
+        if (drop.Success)
+        {
+            var price = drop.Groups[3].Success ? L.F("sells for {0}", System.Text.RegularExpressions.Regex.Replace(drop.Groups[3].Value, @"^(.*?) (on .+)$", m => m.Groups[1].Value + " " + Say(m.Groups[2].Value))) : L.T("no price yet");
+            return L.F(drop.Groups[1].Value == "Rare" ? "Rare drop: {0} · {1}" : "Watched drop: {0} · {1}", drop.Groups[2].Value, price);
+        }
+        return L.T(s);
+    }
+
+    /// <summary>The window's values with the panel's free texts translated (the same dictionary in English).</summary>
+    public static IReadOnlyDictionary<string, string> Say(IReadOnlyDictionary<string, string> v)
+    {
+        if (L.Code == "en") return v;
+        var d = new Dictionary<string, string>(v.Count);
+        foreach (var kv in v) d[kv.Key] = kv.Value;
+        if (d.TryGetValue("toBest", out var tb) && tb.StartsWith("New", StringComparison.Ordinal)) d["toBestNew"] = "1";   // "beaten" survives the translation
+        foreach (var k in SayKeys) if (d.TryGetValue(k, out var s) && s.Length > 0) d[k] = Say(s);
+        foreach (var k in new[] { "rate", "feedRate" }) if (d.TryGetValue(k, out var r) && r == "warming up") d[k] = L.T(r);
+        return d;
+    }
 
     /// <summary>"RUN 42:17" during a run: the word and the clock apart. The session clock alone otherwise.</summary>
     public static (bool Run, string Clock) Time(string time) => time.StartsWith("RUN ") ? (true, time[4..]) : (false, time);

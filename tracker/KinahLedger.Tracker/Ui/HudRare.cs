@@ -38,7 +38,7 @@ static partial class HudRare
     /// The overlay's card and the window's moment say it the same way.
     /// </summary>
     public static string LabelOf(string grade, bool watched) =>
-        Glows(grade) ? "RARE DROP · " + grade.ToUpperInvariant() : !watched ? "RARE DROP" : grade is "" or "Common" ? "WATCHED DROP" : "WATCHED DROP · " + grade.ToUpperInvariant();
+        Glows(grade) ? L.F("RARE DROP · {0}", grade.ToUpperInvariant()) : !watched ? L.T("RARE DROP") : grade is "" or "Common" ? L.T("WATCHED DROP") : L.F("WATCHED DROP · {0}", grade.ToUpperInvariant());
 
     /// <summary>What the drop's drawing depends on (the looks' Changed gate).</summary>
     public static string Sig(Drop? d) => d == null ? "" : $"{d.Pick.Id}|{d.Pick.Count}|{d.Pick.Icon}|{d.Label}|{d.Color}|{d.Price}|{d.Where}|{d.Watched}|{d.Chime}|{d.More}";
@@ -90,7 +90,7 @@ static partial class HudRare
         Child = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { new Image { Source = Eye, Width = 11, Height = 11, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }, T("watching", 10.5, Gold, weight: FontWeights.Medium) },
+            Children = { new Image { Source = Eye, Width = 11, Height = 11, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }, T(L.T("watching"), 10.5, Gold, weight: FontWeights.Medium) },
         },
     };
 
@@ -103,7 +103,7 @@ static partial class HudRare
         return t;
     }
 
-    static string MoreText(int more) => more > 0 ? $"  +{more} more" : "";
+    static string MoreText(int more) => more > 0 ? "  " + L.F("+{0} more", more) : "";
 
     static TextBlock NameLine(Drop d, out Run name)
     {
@@ -119,8 +119,8 @@ static partial class HudRare
     {
         var t = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, LineHeight = 15, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
         figure = null;
-        if (d.Price.Length == 0) { t.Inlines.Add(R("no price yet", 12, Faint)); return t; }
-        t.Inlines.Add(R("sells for ", 12, Muted));
+        if (d.Price.Length == 0) { t.Inlines.Add(R(L.T("no price yet"), 12, Faint)); return t; }
+        t.Inlines.Add(R(L.T("sells for "), 12, Muted));
         figure = R(d.Price, 12, Gold, mono: true);
         t.Inlines.Add(figure);
         if (d.Where.Length > 0) t.Inlines.Add(R(" " + d.Where, 12, Muted));
@@ -203,7 +203,7 @@ static partial class HudRare
             _rate.Inlines.Clear();
             if (rate.Length == 0) return;
             _rate.Inlines.Add(R(rate, 13, abyss ? Ink : Gold, mono: true));
-            _rate.Inlines.Add(R(abyss ? " AP/h" : " /h", 12, Faint));
+            _rate.Inlines.Add(R(" " + (abyss ? L.T("AP/h") : L.T("/h")), 12, Faint));
         }
     }
 

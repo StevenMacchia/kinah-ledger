@@ -125,7 +125,7 @@ public static class HudSpots
     public sealed record Spot(string Key, string Name);
 
     /// <summary>The guide's chooser, in its order: the first start's spot, the right edge under the minimap, left of the target bar.</summary>
-    public static readonly Spot[] All = { new(Top, "Top centre"), new(Minimap, "Under minimap"), new(Target, "Left of target") };
+    public static readonly Spot[] All = { new(Top, L.T("Top centre")), new(Minimap, L.T("Under minimap")), new(Target, L.T("Left of target")) };
 
     /// <summary>
     /// The game's target bar (its name and health bar), inside the band the target reader reads (TargetReader.Strip). The

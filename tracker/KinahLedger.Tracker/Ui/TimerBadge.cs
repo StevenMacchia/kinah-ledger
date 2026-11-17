@@ -39,7 +39,7 @@ static class TimerBadge
     }
 
     static string Clock(TimerBoard.Item i, TimeSpan left, Tone tone) =>
-        tone == Tone.On ? (i.AtPc != null ? "ENTER " + TimerBoard.Clock(left) : i.Big.ToUpperInvariant()) : TimerBoard.Clock(left);
+        tone == Tone.On ? (i.AtPc != null ? L.F("ENTER {0}", TimerBoard.Clock(left)) : TimerSay.Text(i.Big).ToUpperInvariant()) : TimerBoard.Clock(left);
 
     /// <summary>One timer's badge, its type <paramref name="size"/> px.</summary>
     public static Border Make(TimerBoard.Item i, DateTime now, double size = 11.5)
@@ -66,5 +66,45 @@ static class TimerBadge
             if (row.Children.Count > 0) b.Margin = new Thickness(5, 0, 0, 0);
             row.Children.Add(b);
         }
+    }
+}
+
+/// <summary>
+/// The timers' words in the player's language. The schedules and the countdowns (Session/TimerBoard, BossTimers, EventTimers)
+/// write English: "Every hour", "Thu and Sat", "Up now", "12 min ago", "19m 59s", "at 07:30". Each is turned here, where a
+/// timer is drawn (the overlay's badges, the page, the pop-out window): by the text itself, else by its pattern. Boss, event and
+/// place names are the game's and stay as they are.
+/// </summary>
+static class TimerSay
+{
+    static readonly System.Text.RegularExpressions.Regex AtRe = new(@"^at (\d{1,2}:\d{2})$"), SpanRe = new(@"^(\d+) (s|min|h|days)(?: (\d+) min)?$"),
+        ClockRe = new(@"^(?:\d+[dhms])(?: \d+[dhms])*$"), PrefixRe = new(@"^(began|spawned|spawn|up|seen) (.+)$"), AgoRe = new(@"^(.+) ago$"),
+        ReadRe = new(@"^Read (.+) ago: open the world map to refresh$");
+
+    /// <summary>A text of the timers: the whole text if the table has it, else its pattern, else as it is (a name, a time).</summary>
+    public static string Text(string s)
+    {
+        if (s.Length == 0 || L.Code == "en") return s;
+        if (L.CurrentTable().ContainsKey(s)) return L.T(s);
+        var m = AtRe.Match(s);
+        if (m.Success) return L.F("at {0}", m.Groups[1].Value);
+        m = ReadRe.Match(s);
+        if (m.Success) return L.F("Read {0} ago: open the world map to refresh", Span(m.Groups[1].Value));
+        m = PrefixRe.Match(s);
+        if (m.Success) return L.F(m.Groups[1].Value + " {0}", Text(m.Groups[2].Value));
+        m = AgoRe.Match(s);
+        if (m.Success) return L.F("{0} ago", Span(m.Groups[1].Value));
+        if (SpanRe.IsMatch(s)) return Span(s);
+        if (ClockRe.IsMatch(s)) return string.Join(" ", s.Split(' ').Select(t => L.F("{0}" + t[^1], t[..^1])));
+        return s;
+    }
+
+    /// <summary>A length as BossTimers.Span writes it ("40 s", "12 min", "2 h 5 min", "3 days"), in the language in use.</summary>
+    public static string Span(string s)
+    {
+        var m = SpanRe.Match(s);
+        if (!m.Success || L.Code == "en") return s;
+        string first = L.F("{0} " + m.Groups[2].Value, m.Groups[1].Value);
+        return m.Groups[3].Success ? first + " " + L.F("{0} min", m.Groups[3].Value) : first;
     }
 }
