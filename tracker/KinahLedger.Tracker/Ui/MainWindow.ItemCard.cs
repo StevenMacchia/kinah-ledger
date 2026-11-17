@@ -157,7 +157,7 @@ public partial class MainWindow
     /// <summary>For layout review: the card for the first drop row, drawn to a PNG.</summary>
     internal void ShotItemCard(string path, string zone)
     {
-        if (Rows.Items.Count == 0 || Rows.Items[0] is not DropRow r) return;
+        if (Rows.Items.Cast<object>().Select(RowOf).FirstOrDefault(x => x is { Header: false, Report.Length: > 0 }) is not { } r) return;
         var b = BuildItemCard(r, zone);
         b.Resources = Resources;
         b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); b.Arrange(new Rect(b.DesiredSize)); b.UpdateLayout();
