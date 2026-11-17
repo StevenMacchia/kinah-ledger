@@ -1334,8 +1334,17 @@ public partial class MainWindow
     internal static string ParserLookName(string? key)
     {
         var k = ParserPrefs.LookOf(key);
-        return k == ParserPrefs.StandardLook ? "Standard" : HudLooks.All.First(l => l.Key == k).Name;
+        return k switch { ParserPrefs.StandardLook => "Forge", ParserPrefs.PodiumLook => "Podium", ParserPrefs.ReactorLook => "Reactor", _ => HudLooks.All.First(l => l.Key == k).Name };
     }
+
+    /// <summary>A Parser panel look's line in Settings (English, through L.T); null for a fight look (its own Hint).</summary>
+    internal static string? PanelLookHint(string? key) => key switch
+    {
+        ParserPrefs.StandardLook => "The Parser's own panel: every member one thick lit bar, the words on it.",
+        ParserPrefs.PodiumLook => "The leader on a lit card; everyone else a name over a long glowing rail.",
+        ParserPrefs.ReactorLook => "An instrument panel: tracks lit cell by cell, the figures in inset readouts.",
+        _ => null,
+    };
 
     /// <summary>The Parser's own window is wanted (the game in front aside): set by the overlay's tick when it has its own window.</summary>
     bool _parserOwnWanted;

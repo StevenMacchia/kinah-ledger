@@ -632,7 +632,7 @@ public static partial class WpfApp
             opt.PickParserLookForTest(ParserPrefs.StandardLook); DoEvents();
             // a look picked here alone is a change to save (Steven, 2026-11-16: "i cant save it unless i also change the buddy")
             check(!save0 && save1 && !opt.SaveBtn.IsEnabled, $"Options › In game › Parser: a look picked for its own window alone lights Save, and picking the saved one again puts it out (before {save0}, picked {save1}, back {opt.SaveBtn.IsEnabled})");
-            check(rowShown && keys0.SequenceEqual(new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
+            check(rowShown && keys0.SequenceEqual(OptionsWindow.ParserLooksOf(HudThemes.Classic)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
                 && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.StandardLook,
                 $"Options › In game › Parser: its own window's look row ({string.Join(", ", keys0)}), Standard by default ({on0}); a pick outlines it and draws it big ({on1}, {stage1}), the Kinah overlay's look left alone");
             // each look in the window itself: the fight drawn, no Kinah figure, the window as wide as the meter or so
@@ -640,7 +640,7 @@ public static partial class WpfApp
             var nowL = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
             var (_, pullL) = ParserDemo.Sample(nowL);
             var bad = new List<string>();
-            foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+            foreach (var lk in OptionsWindow.ParserLooksOf(HudThemes.Classic))
             {
                 var po = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Look = lk };
                 po.Draw(pullL!, nowL); po.Show(); DoEvents();
@@ -652,7 +652,7 @@ public static partial class WpfApp
             // the meter's bottom edge stays put (Steven, 2026-11-15: "the bottom of the DPS meter is always the source of truth -
             // when the window needs to get bigger, it grows UP not down"): the ready card, a pull, the card again, in each look
             var moved = new List<string>();
-            foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+            foreach (var lk in OptionsWindow.ParserLooksOf(HudThemes.Classic))
             {
                 var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000, Look = lk };
                 po.Draw(Encounter.ReadyAnywhere("Verteron", nowL), nowL); po.Show(); DoEvents();
@@ -699,7 +699,7 @@ public static partial class WpfApp
                 var killF = pastF.Last(x => x.Outcome == "kill");
                 var heldF = HeldSample(pullL!, nowL);
                 var wrong = new List<string>();
-                foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+                foreach (var lk in OptionsWindow.ParserLooksOf(HudThemes.Classic))
                     foreach (var (tag, e, at) in new[] { ("live", pullL!, nowL), ("held", heldF, heldF.End!.Value), ("killed", killF, killF.End!.Value) })
                     {
                         var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000, Look = lk, Mode = e.ModeKind };

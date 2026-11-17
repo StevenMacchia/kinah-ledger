@@ -66,10 +66,11 @@ public sealed partial class ParserRows : Grid
     string _bestId = "\0";
     PullRef? _best;
 
-    public ParserRows(Kind kind = Kind.Panel)
+    public ParserRows(Kind kind = Kind.Panel, Skin skin = Skin.Classic)
     {
         _kind = kind;
-        _rowH = 30;
+        _skin = skin;
+        _rowH = PitchOf(skin);
         var line = new Grid();
         line.Children.Add(new Border { Height = 1, Background = HudKit.B(0xFFFFFF, 0.1), VerticalAlignment = VerticalAlignment.Center });
         line.Children.Add(new Border { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Center, Child = _gapText });
@@ -156,6 +157,10 @@ public sealed partial class ParserRows : Grid
         public required StackPanel NameLine, Plates; public required Border NameHost;
         public string PlatesShown = "";
         public int Rank = -1, Deaths; public double Y = double.NaN; public bool You; public string Cls = "";
+        /// <summary>Podium's leader card (Ui/ParserRows.Skins.cs): built taller; a row that gains or loses it is built again.</summary>
+        public bool Hero;
+        /// <summary>A skin's hot edge at the bar's head (Forge): shown only where it ends clear of the DPS.</summary>
+        public FrameworkElement? HotEdge;
         /// <summary>The DPS as it rolls (Motion on), over the figure itself (the truth, laid out, read by the tests).</summary>
         public required Odometer Odo;
         public double LastDps = double.NaN;
@@ -229,9 +234,11 @@ public sealed partial class ParserRows : Grid
             var f = visible[i];
             int rank = all.IndexOf(f) + 1;
             bool pinnedRow = pin && f.You;
-            double y = i * _rowH + (pinnedRow ? _gap.Height : 0);
+            bool hero = HeroAt(e, i);
+            double y = i * _rowH + (pinnedRow ? _gap.Height : 0) + (i > 0 && HeroAt(e, 0) ? HeroExtra : 0);
             bool fresh = !_rows.TryGetValue(f.Id, out var r);
-            if (fresh) { r = Build(f, expanded, dmgCol, crit, back, spark); _rows[f.Id] = r; _host.Children.Add(r.Root); }
+            if (!fresh && r!.Hero != hero) { _host.Children.Remove(r.Root); _rows.Remove(f.Id); fresh = true; }   // the leader's card came or went
+            if (fresh) { r = Build(f, expanded, dmgCol, crit, back, spark, hero); _rows[f.Id] = r; _host.Children.Add(r.Root); }
             var row = r!;
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
@@ -255,7 +262,8 @@ public sealed partial class ParserRows : Grid
             // the bar slides to its new length: the member's share of the group's damage, in proportion to the top member's,
             // whose bar reaches BarTop of the row (Steven, 2026-11-15: "the bars shouldn't be full really and should be percentage
             // based"; 2026-11-17: "prioritizes the bar": a party of six at 15-20% each drew bars no longer than the rank chip)
-            double share = dmg ? BarTop * e.Share(f) / topShare : 0;
+            // (the panel's own looks: the top member's bar its row's whole length)
+            double share = dmg ? (_skin == Skin.Classic ? BarTop : 1) * e.Share(f) / topShare : 0;
             Motion.Slide(row.BarFill, $"parser|ovbar|{e.Id}|{f.Id}|{(int)_kind}", share, v => SetBar(row, v));
             // a move of the bar of a couple of points leaves its ghost: what it lost holds and shrinks away, what it gained flashes
             if (double.IsNaN(row.GhostBase) || fresh) row.GhostBase = share;
@@ -319,8 +327,9 @@ public sealed partial class ParserRows : Grid
             _popSeq = hits[^1].Seq;
         }
         _gap.Visibility = pin ? Visibility.Visible : Visibility.Collapsed;
-        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
-        _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0);
+        double heroAdd = visible.Count > 0 && HeroAt(e, 0) ? HeroExtra : 0;
+        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH + heroAdd, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
+        _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0) + heroAdd - (_skin == Skin.Classic || visible.Count == 0 ? 0 : _rowH - RowHOf(_skin, false));
         // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
         if (_wasLive && !e.Live && dmg) Finale(e.Tone);   // the blade, the punch, the shine down the bars (Ui/ParserRows.Cinema.cs)
         // a record on this fight (this boss, this instance, this mode: FightRecords), DPS or healing, on a kill only
@@ -634,6 +643,7 @@ public sealed partial class ParserRows : Grid
         double w = r.Track.ActualWidth;
         if (w <= 0) { r.Track.Tag = v; return; }
         r.BarFill.Width = v <= 0.001 ? 0 : Math.Max(6, w * Math.Clamp(v, 0, 1));
+        if (r.HotEdge != null) r.HotEdge.Visibility = v >= 0.999 || r.BarFill.Width < DpsLeft(r, w) - 14 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>The name's line rises this much on a healer's row, so the heal figures fit under it (the row keeps its height).</summary>
@@ -705,8 +715,9 @@ public sealed partial class ParserRows : Grid
     /// <summary>The heal chip sits on the name's line: the name gives way to it (FitName), nothing else to fit.</summary>
     static void FitHeal(RowEl r) { }
 
-    RowEl Build(Fighter f, bool expanded, bool dmgCol, bool crit, bool back, bool spark)
+    RowEl Build(Fighter f, bool expanded, bool dmgCol, bool crit, bool back, bool spark, bool hero = false)
     {
+        if (_skin != Skin.Classic) return BuildSkin(f, expanded, dmgCol, crit, back, spark, hero);
         var c = ClassArt.ColorOf(f.Class);
         bool bare = _kind == Kind.Bare;
         var widths = new List<double> { ChipCol, IconCol, -1, DpsCol, ShareCol };
@@ -887,16 +898,16 @@ public sealed partial class ParserRows : Grid
         bool Short() => w - others < keep;
         if (Short() && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
         if (Short() && r.Plates.Visibility == Visibility.Visible) { PlatesWide(r, false); others = Others(); }
-        if (Short() && r.Cp.Visibility == Visibility.Visible) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
+        if (Short() && r.Cp.Visibility == Visibility.Visible && r.Cp.Parent == r.NameLine) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
         if (r.Heal.Text.Length > 0)
         {
-            if (Short() && r.HealShort.Length > 0 && r.HealShort != r.Heal.Text)
+            if (Short() && r.HealShort.Length > 0 && r.HealShort != r.Heal.Text && r.HealPill.Parent == r.NameLine)
             {
                 r.Heal.Text = r.HealShort;
                 r.Heal.InvalidateMeasure(); ((UIElement)r.HealPill.Child).InvalidateMeasure(); r.HealPill.InvalidateMeasure();
                 others = Others();
             }
-            if (Short()) { r.HealPill.Visibility = Visibility.Collapsed; others = Others(); }
+            if (Short() && r.HealPill.Parent == r.NameLine) { r.HealPill.Visibility = Visibility.Collapsed; others = Others(); }
         }
         r.Name.MaxWidth = Math.Max(24, w - others);
     }
