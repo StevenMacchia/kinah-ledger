@@ -273,7 +273,9 @@ sealed class HudCapsule : HudStackLook
         var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { _row, _chip } };
         (_pill, _pillFrame) = Glass(row, new Thickness(6, 5, 12, 5), 19);
         (_meter, _meterFrame) = Glass(new StackPanel { Children = { _meterBody, _meterTimer } }, new Thickness(12, 8, 12, 6), 12);
-        _meter.Margin = new Thickness(10, 4, 0, 0); _meter.Width = FightWidth - 30; _meter.HorizontalAlignment = HorizontalAlignment.Left; _meter.Visibility = Visibility.Collapsed;
+        _meter.Margin = new Thickness(10, 4, 0, 0); _meter.Width = MeterWidth; _meter.HorizontalAlignment = HorizontalAlignment.Left; _meter.Visibility = Visibility.Collapsed;
+        _prows.Margin = new Thickness(-6, 0, -6, 0);   // the bars out into the frame's padding, as on the Parser's own panel: the rows' room is the meter's
+
         _root.Children.Add(_pill); _root.Children.Add(_note); _root.Children.Add(_meter);
     }
 
@@ -339,9 +341,12 @@ sealed class HudCapsule : HudStackLook
 
     public override FrameworkElement? FightFrame => _meter.Visibility == Visibility.Visible ? _meter : null;
 
+    /// <summary>The slim meter under the pill: the meter's width as set (it was 30 px short of it, and the rows' figures ran out of room).</summary>
+    static double MeterWidth => FightWidth;
+
     public override void ApplyWidth()
     {
-        _meter.Width = FightWidth - 30;
+        _meter.Width = MeterWidth;
         _fightSig = ""; ShowFight(_lastFight, _lastNow);
     }
 
@@ -698,9 +703,10 @@ sealed class HudFloat : HudStackLook
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
             head.Children.Add(Tx(L.T(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed"), 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);
-        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 80; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); bar.Children.Add(HudKit.HpTicks()); }
+        if (e.BossHpLeft is { } hp && e.Live) { var bar = Bar(hp, B(RecC), 2, new Thickness(0, 4, 0, 6)); bar.Width = FightWidth - 40; bar.HorizontalAlignment = HorizontalAlignment.Left; _fight.Children.Add(bar); Motion.HpGhost(bar, _hpPlace, e.Id, hp, now); bar.Children.Add(HudKit.HpTicks()); }
         else _fight.Children.Add(new Border { Height = 6 });
-        var rows = _rowsNow = new StackPanel { Width = FightWidth - 50, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
+        // the rows the meter's width as set (they were 50 px short of it: the figures and names ran out of room)
+        var rows = _rowsNow = new StackPanel { Width = FightWidth - 10, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
         if (e.Waiting)
         {
             rows.Children.Add(Tx(e.ReadyText, 12.5, Muted, FontWeights.SemiBold));
