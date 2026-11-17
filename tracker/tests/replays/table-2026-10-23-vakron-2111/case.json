@@ -8,7 +8,7 @@
   "expect": {
     "table": [
       { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
-      { "n": 2, "unlisted": true }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 4000, "name": "Enhance Stone" }, { "n": 600000, "name": "Kina" }, { "n": 1 }, { "n": 1 },
+      { "n": 2, "name": "Balaur's Essence" }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 4000, "name": "Enhance Stone" }, { "n": 600000, "name": "Kina" }, { "n": 1 }, { "n": 1 },
       { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
       { "n": 1 }, { "n": 6, "unlisted": true }, { "n": 4, "name": "Refining Stone" }, { "n": 6, "name": "Soul Codex" }, { "n": 14, "name": "Silentium" }
     ]

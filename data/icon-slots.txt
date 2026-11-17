@@ -1,2 +1,3 @@
 ﻿# Reward slots as the game draws them, for art that differs from its icon file: key|picture beside this list|x,y,size
 Icon_gold|icon-slots/Icon_gold-urugugu.png|0,0,135
+Icon_Item_Craft_Drop_Draconic_Soul_All_A_u_001a|icon-slots/Balaur-Essence-Bound-howling.png|10,10,135

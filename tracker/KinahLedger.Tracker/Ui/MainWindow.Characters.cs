@@ -129,6 +129,7 @@ public partial class MainWindow
         _watcher.Chat?.Instances.Reload();
         CloseWrapped();   // an open Week or Day wrapped is the other character's: it goes (Ui/MainWindow.Wrapped.cs)
         _goals = Goals.Load(); _questLog = Quests.Load(); _questLoaded = true;
+        RefreshQuestPending();   // the next batch carries this character's quests, not the last one's (2026-11-16: none went after a switch)
         BestRuns.Reset();
         ServerRowState(); RedrawGoals(); Redraw();
     }

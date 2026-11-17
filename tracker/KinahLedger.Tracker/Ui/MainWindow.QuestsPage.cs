@@ -261,7 +261,7 @@ public partial class MainWindow
         if (_demo || !QuestsOn || !_questLoaded) { _questPending = null; return; }
         // the tier is the grade, 1 to 5 (0.10.30): the site reads it so for a batch from 0.10.30 on (kinah-ledger-site PR #153, which
         // must be live before this ships: an older site drops a tier above 3, and the batch would still mark it sent)
-        var list = Quests.Unsent(_questLog).Take(200).Select(d => new QuestDonePayload(d.Key, d.Kind, d.Horizon, d.Subject, d.Target, d.Tier, d.Points, d.Worth, d.Have,
+        var list = Quests.Unsent(_questLog).Take(RunPayload.QuestsMaxPerUpload).Select(d => new QuestDonePayload(d.Key, d.Kind, d.Horizon, d.Subject, d.Target, d.Tier, d.Points, d.Worth, d.Have,
             d.DoneAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture), d.Scope)).ToList();
         _questPending = list.Count > 0 ? list : null;
     }

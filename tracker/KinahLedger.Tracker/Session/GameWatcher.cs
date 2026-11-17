@@ -485,7 +485,7 @@ public sealed class GameWatcher
                     break;
                 }
                 lock (_unsent) { if (_unsent.Count > 0 && ReferenceEquals(_unsent[0], next)) _unsent.RemoveAt(0); }
-                if (r.Ok) { Flushed++; sent = true; LastSharedAt = DateTime.Now; ShareFailing = false; FlushNote = _lastChunkNote; }
+                if (r.Ok) { Flushed++; sent = true; LastSharedAt = DateTime.Now; ShareFailing = false; FlushNote = _lastChunkNote; Upload.RunPayload.Took(next); }
                 else CrashLog.Note($"shared chunk refused by the site ({Upload.Uploader.LastError}); dropped");
             }
             // the reading health since the last report goes with what was sent
