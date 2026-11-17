@@ -636,10 +636,11 @@ sealed class HudSticker : WackyLook, IThemeCard
         readonly TranslateTransform _nudge = new();
         readonly Border _die = new() { CornerRadius = new CornerRadius(8), Background = WhiteB, Padding = new Thickness(2) };
         readonly Border _face = new() { BorderBrush = K, BorderThickness = new Thickness(2.5), CornerRadius = new CornerRadius(6), Background = PaperB };
-        // the tape: its own piece across the sticker's foot
-        readonly Grid _tapeHost = new() { Height = 8, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-6, 0, 40, 1) };
-        readonly Grid _tape = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, RenderTransformOrigin = new Point(0, .5), RenderTransform = new RotateTransform(-1.6) };
-        readonly Border _tapeBody = new() { Margin = new Thickness(0, 0, 5, 0) };
+        // the bar: a highlighter swipe in the class's colour across the sticker's face, under the words, its end torn (Steven,
+        // 2026-11-17: "figure out better looks that doesn't crowd everything and prioritizes the bar")
+        readonly Grid _tapeHost = new() { Margin = new Thickness(1) };
+        readonly Grid _tape = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
+        readonly Border _tapeBody = new() { Margin = new Thickness(0, 0, 5, 0), CornerRadius = new CornerRadius(4, 0, 0, 4) };
         readonly Path _tear = new() { Width = 6, HorizontalAlignment = HorizontalAlignment.Right, Stretch = Stretch.Fill, Data = Tear };
         readonly Wk.BarFill _fill;
         readonly Grid _stamp = new() { Width = 25, Height = 25, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 2) };
@@ -682,9 +683,10 @@ sealed class HudSticker : WackyLook, IThemeCard
             TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Ideal);
             _strip.Children.Add(new Border { Background = K, CornerRadius = new CornerRadius(8), RenderTransform = new TranslateTransform(3, 3) });
             _die.Child = _face;
+            _face.Child = _tapeHost;
             _strip.Children.Add(_die);
             var inner = new Grid();
-            var row = new Grid { Margin = new Thickness(16, 0, 4, 6) };
+            var row = new Grid { Margin = new Thickness(16, 0, 4, 0) };
             // the DPS and the share in columns sized for their widest forms ("888.8K", "88.8%"), a gap before each: a figure never
             // runs into the one before it (Steven, 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!")
             foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(FigureW), new GridLength(ShareW) })
@@ -713,13 +715,13 @@ sealed class HudSticker : WackyLook, IThemeCard
             Grid.SetColumn(_share, 7); row.Children.Add(_share);
             inner.Children.Add(row);
             // the words stay level, in the same columns on every row: only the sticker under them turns and shifts
-            var words = new Grid { Margin = new Thickness(14.5, 5.5, 10.5, 7.5), Children = { inner } };
-            // the tape over the sticker's foot (outside the face, so its start runs off the edge)
+            var words = new Grid { Margin = new Thickness(14.5, 5, 10.5, 6), Children = { inner } };
+            // the highlighter: its body, its torn end, a faint lit streak along its top
+            _tear.Width = 5;
             _tape.Children.Add(_tapeBody); _tape.Children.Add(_tear);
-            _tape.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 1.5, 8, 0), Background = Wk.S(0xFFFFFF, .4) });
+            _tape.Children.Add(new Border { Height = 2, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 2, 9, 0), CornerRadius = new CornerRadius(1), Background = Wk.S(0xFFFFFF, .45) });
             _tapeHost.Children.Add(_tape);
-            _fill = new Wk.BarFill(_tapeHost, _tape, 16);
-            _strip.Children.Add(_tapeHost);
+            _fill = new Wk.BarFill(_tapeHost, _tape, 12);
             _stamp.Children.Add(_stampInk);
             _stamp.Children.Add(_rank); _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.Margin = new Thickness(0, 0, 0, 1);
             _stamp.RenderTransformOrigin = new Point(.5, .5); _stamp.RenderTransform = _stampTurn;
@@ -767,12 +769,13 @@ sealed class HudSticker : WackyLook, IThemeCard
             Wk.Detail(_detail, m, c, _critWord);
             if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Heavy, 14.5, FontWeights.Black, Wk.Segoe, 10.5, FontWeights.Bold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
-            // the tape: the class's colour, full and a touch translucent, with a faint lit edge
+            // the highlighter: the class's colour as a light marker ink, so the black words stay crisp on it; against the top
+            // member's damage, so the top row's runs the sticker's width
             uint mc = Wk.Vivid(Wk.Hex(m.ClassColor));
-            var tape = Wk.Lin(0, 0, 0, 1, (Wk.Shade(mc, .25), .9, 0), (mc, .9, .6), (Wk.Shade(mc, -.12), .9, 1));
+            var tape = Wk.Lin(0, 0, 0, 1, (Wk.Shade(mc, .62), 1, 0), (Wk.Shade(mc, .46), 1, .55), (Wk.Shade(mc, .36), 1, 1));
             _tapeBody.Background = tape; _tear.Fill = tape;
             _tapeHost.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
-            _fill.Set(m.CpOnly ? 0 : m.Share, c, "bar", fresh);
+            _fill.Set(Wk.Bar(m, c), c, "bar", fresh);
         }
     }
 }
