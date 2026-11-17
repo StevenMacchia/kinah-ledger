@@ -142,7 +142,7 @@ public sealed partial class HudWindow : Window
         {
             HudLooks.Card => new HudCard { Still = still }, HudLooks.Ticker => new HudTicker { Still = still },
             HudLooks.Auto => new HudAuto { Still = still }, HudLooks.Capsule => new HudCapsule { Still = still }, HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still },
-            _ => null,
+            _ => HudThemes.Make(Look, still),   // a theme's look (Ui/Themes/), or the strip
         };
         if (!still)
         {
@@ -478,6 +478,7 @@ public sealed partial class HudWindow : Window
     {
         if (_look is HudTicker t) t.MotionFrame(values);
         else if (_look is HudCard c) c.MotionFrame(values);
+        else if (_look is IHudMotionFrame m) m.MotionFrame(values);   // a theme's look: its pickup's effect held
         else if (_look == null) BadgeFrame(values);
     }
 
@@ -585,7 +586,15 @@ public sealed partial class HudWindow : Window
         var face = (FrameworkElement)h.Content;
         h.Content = null;
         h.Close();
-        return face;
+        return Cropped(face, h._look);
+    }
+
+    /// <summary>A theme's look without the clear room it keeps round itself for its effects (a thumbnail shows the look, not the room).</summary>
+    internal static FrameworkElement Cropped(FrameworkElement face, IHudLook? look)
+    {
+        if (look is not HudThemeLook || look.Inset is var i && i.Left + i.Top + i.Right + i.Bottom <= 0) return face;
+        face.Margin = new Thickness(-i.Left, -i.Top, -i.Right, -i.Bottom);
+        return new Border { Child = face, ClipToBounds = true };
     }
 
     public static FrameworkElement Preview(string look, IEnumerable<string>? fields, IReadOnlyDictionary<string, string> values, string? accuracy = null)
@@ -596,6 +605,6 @@ public sealed partial class HudWindow : Window
         var face = (FrameworkElement)h.Content;
         h.Content = null;
         h.Close();
-        return face;
+        return Cropped(face, h._look);
     }
 }

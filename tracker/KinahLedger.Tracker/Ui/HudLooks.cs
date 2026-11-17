@@ -19,13 +19,13 @@ public static class HudLooks
     public const string Default = Card;
 
     /// <param name="Key">Kept in hud.json (HudPrefs.Look).</param>
-    public sealed record Look(string Key, string Name, string Hint);
+    /// <param name="Theme">The theme it belongs to (HudThemes, Settings › In game › Theme): Classic for the looks before themes.</param>
+    public sealed record Look(string Key, string Name, string Hint, string Theme = HudThemes.Classic);
 
     public static readonly Look[] All =
     {
         // the design pass's (2026-11-14, Ui/HudStackLooks.cs) first: each draws the timers due and the fight itself; Auto mixes the two favourites
         new(Auto, "Auto", "The pill while you farm; in a boss fight the group's meter opens above it"),
-        new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
         new(Meter, "Meter", "A raid meter: the boss and its HP up top, the group in class colours, your Kinah at the foot"),
         new(Float, "Float", "No panel: crisp figures straight over the game"),
         // the older looks, listed last (Steven, 2026-11-14). The Quest look's names (2026-11-07): Badge is the strip, Buddy the card,
@@ -33,10 +33,22 @@ public static class HudLooks
         new(Strip, "Badge", "One line with the figures you pick, and the ring of your best here"),
         new(Card, "Buddy", "The ring, the hour, your best here and the last three pickups"),
         new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
+        // the Capsule last, at the far right (Steven, 2026-11-16: "put it all the way at the right?")
+        new(Capsule, "Capsule", "Everything on one pill; a fight drops a slim meter under it"),
+        // the themes (Steven, 2026-11-16: "let us choose a theme and then let us choose from that theme"), Ui/Themes/
+        new(HudThemes.Sticker, "Sticker", "Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup", HudThemes.Wacky),
+        new(HudThemes.Neon, "Neon", "An arcade cabinet's glowing rim; pickups streak up like combo scores", HudThemes.Wacky),
+        new(HudThemes.Goo, "Goo", "A squishy candy jelly; pickups bounce out as bubbles", HudThemes.Wacky),
+        new(HudThemes.Fighter, "Fighter", "A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup", HudThemes.Tactical),
+        new(HudThemes.Scorebug, "Scorebug", "A tournament broadcast: slanted blocks and a ranked leaderboard", HudThemes.Tactical),
+        new(HudThemes.Holo, "Holo", "Projected cyan glass with clipped corners; a scan line sweeps each pickup", HudThemes.Tactical),
+        new(HudThemes.Vhs, "VHS", "A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup", HudThemes.Glitch),
+        new(HudThemes.Corrupt, "Corrupted", "A broken signal: torn slices and colour ghosts round steady figures", HudThemes.Glitch),
+        new(HudThemes.Terminal, "Terminal", "An old green screen: a prompt, a cursor, each pickup typed in as a line", HudThemes.Glitch),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
-    public static readonly string[] FightLooks = { Auto, Capsule, Meter, Float };
+    public static readonly string[] FightLooks = { Auto, Meter, Float, Capsule };
 
     /// <summary>A saved look, or the default (Buddy) for anything unknown (an edited hud.json).</summary>
     public static string Parse(string? saved) => All.FirstOrDefault(l => string.Equals(l.Key, saved, StringComparison.OrdinalIgnoreCase))?.Key ?? Default;

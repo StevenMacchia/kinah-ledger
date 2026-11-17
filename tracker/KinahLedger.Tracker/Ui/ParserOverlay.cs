@@ -353,6 +353,17 @@ public sealed class ParserOverlay : Window
     void Peek(Point? at)
     {
         foreach (var rows in RowsIn(this)) rows.Peek(at is { } p && rows.IsVisible ? TranslatePoint(p, rows) : null);
+        foreach (var rows in ThemeRowsIn(this)) rows.Peek(at is { } p && rows.IsVisible ? TranslatePoint(p, rows) : null);   // a theme's own rows (Ui/Themes/ThemeRows.cs)
+    }
+
+    static IEnumerable<ThemeRows> ThemeRowsIn(DependencyObject d)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+        {
+            var ch = VisualTreeHelper.GetChild(d, i);
+            if (ch is ThemeRows tr) { yield return tr; continue; }
+            foreach (var x in ThemeRowsIn(ch)) yield return x;
+        }
     }
 
     static IEnumerable<ParserRows> RowsIn(DependencyObject d)
@@ -412,7 +423,7 @@ public sealed class ParserOverlay : Window
         HudStackLook? l = key switch
         {
             HudLooks.Auto => new HudAuto { Still = still }, HudLooks.Capsule => new HudCapsule { Still = still },
-            HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still }, _ => null,
+            HudLooks.Meter => new HudMeter { Still = still }, HudLooks.Float => new HudFloat { Still = still }, _ => HudThemes.Make(key, still),
         };
         if (l == null) return null;
         l.Update(new Dictionary<string, string>());
@@ -433,7 +444,7 @@ public sealed class ParserOverlay : Window
         if (MakeLook(ParserPrefs.LookOf(look), still: true) is { } l)
         {
             if (l is IHudFightAbove fa) face = fa.FightAbove(e, now) ?? new Border();
-            else { l.ShowFight(e, now); face = l.Root; }
+            else { l.ShowFight(e, now); face = HudWindow.Cropped(l.Root, l); }
         }
         else
         {

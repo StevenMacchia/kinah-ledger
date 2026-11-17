@@ -241,7 +241,7 @@ public static partial class WpfApp
             DoEvents();
             var st = ww.WelcomeLookForTest;
             Check(!server.StepShown && st.StepShown && st.Picked == HudLooks.Card && st.Staged == HudLooks.Card && st.Outlined == HudLooks.Card
-                && st.Buttons.Count == HudLooks.All.Length && st.Buttons[0] == HudLooks.Card && st.Buttons.Distinct().Count() == HudLooks.All.Length,
+                && st.Buttons.Count == MainWindow.WelcomeLooks.Length && st.Buttons[0] == HudLooks.Card && st.Buttons.Distinct().Count() == MainWindow.WelcomeLooks.Length,
                 $"first run: Continue opens the look step with Buddy picked, first and drawn (shown {st.StepShown}, picked {st.Picked}, drawn {st.Staged}, {st.Buttons.Count} looks, first {st.Buttons.FirstOrDefault()})");
             ww.HoverWelcomeLookForTest(HudLooks.Meter); DoEvents();
             var hov = ww.WelcomeLookForTest.Staged;
@@ -259,8 +259,9 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
         Check(w.HudLook == HudLooks.Card && HudLooks.Default == HudLooks.Card && !o.HudFieldHost.IsEnabled, "panel look: Buddy by default (0.10.103, Steven 2026-11-15); the Strip's figure chips greyed for it");
-        Check(o.HudLookHost.Children.Count == HudLooks.All.Length && HudLooks.All.Length == 7 && HudLooks.All[0].Key == HudLooks.Auto && HudLooks.All[4].Key == HudLooks.Strip && o.HudLookPreview.Children.Count == 1,
-            $"every look a live thumbnail in Options, the new ones first (Auto, Capsule, Meter, Float, then Badge, Buddy, Pop), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
+        var classic = HudThemes.Looks(HudThemes.Classic);
+        Check(o.HudLookHost.Children.Count == classic.Count && classic.Count == 7 && classic[0].Key == HudLooks.Auto && classic[3].Key == HudLooks.Strip && classic[^1].Key == HudLooks.Capsule && o.HudLookPreview.Children.Count == 1,
+            $"every Classic look a live thumbnail in Options (Auto, Meter, Float, Badge, Buddy, Pop, then the Capsule at the far right), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");
         // the design pass's looks (Ui/HudStackLooks.cs) draw the timer due and the fight themselves: the window's own timer line
         // and Parser section stay folded, and the look shows the boss, the timer and the hour
         {
@@ -268,7 +269,7 @@ public static partial class WpfApp
             var (_, fight) = KinahLedger.Parser.ParserDemo.Sample(now, live: true, damage: true);
             var due = new List<Session.TimerBoard.Item> { new("event:Dimensional Invasion", "Events", "Dimensional Invasion", "", Session.TimerBoard.Kind.Waiting, now.AddSeconds(279), "4m 39s", "") { Short = "Invasion" } };
             var said = new List<string>();
-            foreach (var key in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
+            foreach (var key in new[] { HudLooks.Capsule, HudLooks.Meter, HudLooks.Float }.Concat(HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key)))
             {
                 var hw = new HudWindow(null, key, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
                 hw.Update(w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value));
@@ -290,8 +291,9 @@ public static partial class WpfApp
                 if (!folded) said[^1] += ", the fight stays after it ends";
                 hw.Close();
             }
-            Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter and Float draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
+            Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter, Float and every theme's look draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
+        ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
         Click(o.SaveBtn);

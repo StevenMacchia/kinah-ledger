@@ -222,7 +222,7 @@ public partial class OptionsWindow : Window
         var sample = _host.HudSample();
         var fields = HudFields.Parse(_edit.HudFields);
         var scene = HudKit.GameScene();   // a scene from the game, whatever the window's skin (Steven, 2026-11-16: "show them over the game")
-        foreach (var l in HudLooks.All)
+        foreach (var l in HudThemes.Looks(HudThemeShown(current)))   // the theme picked's looks (Ui/OptionsWindow.Themes.cs)
         {
             var key = l.Key;
             bool on = key == current;
