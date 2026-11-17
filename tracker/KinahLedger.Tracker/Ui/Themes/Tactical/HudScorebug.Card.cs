@@ -124,7 +124,9 @@ sealed partial class HudScorebug : IThemeCard
                 });
                 bars.Add(bar);
                 row.Children.Add(bar);
-                var an = Tac.AbilityName(a, 14, White, Face, FontWeights.SemiBold, Yellow, 11.5, Tight);
+                // the specialties spaced and in the normal width ("1 · 2"): the condensed dot is lost at this size
+                var an = Tac.AbilityName(a with { Picks = a.Picks.Replace("·", " · ") }, 14, White, Face, FontWeights.SemiBold, Yellow, 11.5, Tight);
+                if (an.Inlines.Count > 1) an.Inlines.LastInline.FontStretch = FontStretches.Normal;
                 an.Margin = new Thickness(7, 0, 8, 1);
                 row.Children.Add(an);
                 TextBlock F(string s, Brush fg, double size, FontWeight? wt = null) { var t = T(s, size, fg, wt); t.HorizontalAlignment = HorizontalAlignment.Right; t.Margin = new Thickness(0, 0, 0, 1); return t; }
@@ -136,7 +138,7 @@ sealed partial class HudScorebug : IThemeCard
             }
             if (c.MoreLine.Length > 0)
             {
-                var more = T("+ " + c.MoreLine, 12, Grey, FontWeights.SemiBold); more.Margin = new Thickness(7, 3, 0, 0);
+                var more = T("+ " + c.MoreLine, 12, Grey, FontWeights.SemiBold); more.Margin = new Thickness(0, 4, 0, 0);
                 board.Children.Add(more);
             }
             var ground = new Border { Margin = new Thickness(0, 3, 0, 0), Background = Frozen(Tac.A(InkC0, .96)), BorderBrush = Red, BorderThickness = new Thickness(0, 2, 0, 0), Child = board };

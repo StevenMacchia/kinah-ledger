@@ -199,6 +199,14 @@ static class Tac
 
     public static double Clamp01(double x) => Math.Clamp(x, 0, 1);
 
+    /// <summary>The room a right-aligned figure leaves free at the left of its column (<paramref name="col"/> wide), less 6 px of air.</summary>
+    public static double FreeLeft(TextBlock fig, double col)
+    {
+        if (col <= 0) return 0;
+        fig.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Max(0, col - fig.DesiredSize.Width - fig.Margin.Right - 6);
+    }
+
     /// <summary>
     /// A meter row's name line fitted to its room (Steven, 2026-11-16: Combat Power beside every name): the name whole when it
     /// fits; else the parts give way in <paramref name="give"/>'s order, each to its short form (a TOP DPS plate to its star,

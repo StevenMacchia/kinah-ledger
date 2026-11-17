@@ -62,7 +62,7 @@ sealed partial class HudScorebug
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
             Grid.SetColumn(_nameLine, 1); plate.Children.Add(_nameLine);
-            _cp.Margin = new Thickness(6, 2, 0, 0); _cpShort.Margin = new Thickness(5, 2, 0, 0);
+            _cp.Margin = new Thickness(5, 2, 0, 0); _cpShort.Margin = new Thickness(5, 2, 0, 0);
             var cpHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _cp, _cpShort } };
             Grid.SetColumn(cpHost, 2); plate.Children.Add(cpHost);
             Put(plate, 2);
@@ -81,13 +81,15 @@ sealed partial class HudScorebug
         {
             double room = _root.ColumnDefinitions[2].ActualWidth;
             if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
-            Tac.FitName(_name, room - _plate.Margin.Left - _plate.Margin.Right - 29 + Sl - 8, _keep, _give);
+            // the plate's own width as laid out (its emblem off, a hair before its end), else the column's less the plate's margins
+            double plate = _plate.ActualWidth > 0 ? _plate.ActualWidth : room - _plate.Margin.Left - _plate.Margin.Right + Sl;
+            Tac.FitName(_name, plate - 2, _keep, _give);
         }
 
         /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
-        static TextBlock HealFig(string heal, Color c, double left = 7, double top = 1)
+        static TextBlock HealFig(string heal, Color c, double left = 7, double top = 1, bool plus = true)
         {
-            var h = T("+" + heal, 12, Frozen(c), FontWeights.SemiBold);
+            var h = T((plus ? "+" : "") + heal, 12, Frozen(c), FontWeights.SemiBold);
             h.Tag = "heal-figures"; h.Margin = new Thickness(left, top, 0, 0);
             return h;
         }
@@ -121,8 +123,8 @@ sealed partial class HudScorebug
             if (m.Heal.Length > 0 && m.TopHeals)
             {
                 var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { HealFig(m.Heal, healC), Plate(true) } };
-                var plateFig = new StackPanel { Orientation = Orientation.Horizontal, Children = { T("✚", 10.5, InkB), HealFig(m.Heal, InkC0, 3, 0) } };
-                var b = new Block(GreenC, plateFig, 16, new Thickness(6, 0, 7, 0));
+                var plateFig = new StackPanel { Orientation = Orientation.Horizontal, Children = { T("✚", 10.5, InkB), HealFig(m.Heal, InkC0, 3, 0, plus: false) } };
+                var b = new Block(GreenC, plateFig, 16, new Thickness(5, 0, 5, 0));
                 b.Root.Tag = "top-heals"; b.Root.ToolTip = L.T("Top heals"); b.Root.Margin = new Thickness(6, 0, 0, 0); b.Root.VerticalAlignment = VerticalAlignment.Center;
                 _give.Add((Add(full), Add(b.Root)));
             }
@@ -130,6 +132,8 @@ sealed partial class HudScorebug
             else if (m.TopHeals) _give.Add((Add(Plate(true)), Add(Plate(true, glyph: true))));
             if (m.TopDps) _give.Insert(0, (Add(Plate(false)), Add(Plate(false, glyph: true))));
             if (you != null) _give.Add((you, null));
+            // last before the name is cut: the class's emblem (the team stripe and the name's colour still say the class)
+            _give.Add((_iconHost, null));
             // Combat Power at the plate's end, always (Steven, 2026-11-16: "dont forget the combat power next to ppls names");
             // before any damage the figure itself is the CP
             _cp.Text = m.Cp.Length > 0 ? m.Cp + " " + L.T("CP") : "";
@@ -137,8 +141,10 @@ sealed partial class HudScorebug
             if (m.Cp.Length > 0) { _cpShort.Inlines.Add(new System.Windows.Documents.Run(m.Cp)); _cpShort.Inlines.Add(new System.Windows.Documents.Run(" " + L.T("CP")) { FontSize = 8 }); }
             // on your light plate a darker ink, so the CP still reads there
             _cp.Foreground = _cpShort.Foreground = Frozen(m.You ? Color.FromRgb(0x4A, 0x4F, 0x58) : Color.FromRgb(0x8A, 0x91, 0xA3));
-            if (m.Cp.Length > 0) _give.Add((_cp, _cpShort));
-            else _cp.Visibility = _cpShort.Visibility = Visibility.Collapsed;
+            // "CP" a fixed slot after the figure, the same on every row: the figures end on one edge
+            _cpShort.Visibility = Visibility.Collapsed;
+            if (m.Cp.Length > 0) { _cp.Visibility = Visibility.Visible; _keep.Add(_cp); }
+            else _cp.Visibility = Visibility.Collapsed;
             _dps.Text = m.Figure;
             _pct.Text = m.ShareText;
             _pct.Foreground = m.You ? Frozen(Color.FromRgb(0xFF, 0xD6, 0xDB)) : Grey;
@@ -160,7 +166,7 @@ sealed partial class HudScorebug
         /// <summary>The end of a boss kill's plate (TOP DPS gold, TOP HEALS green), slanted as the board's.</summary>
         static FrameworkElement Plate(bool heals, bool glyph = false)
         {
-            var b = new Block(heals ? GreenC : YellowC, Tt(glyph ? (heals ? "✚" : "★") : L.T(heals ? "TOP HEALS" : "TOP DPS"), glyph ? 10.5 : 9.5, InkB, Face, FontWeights.Bold, Tight), 16, new Thickness(6, 0, 6, 0));
+            var b = new Block(heals ? GreenC : YellowC, Tt(glyph ? (heals ? "✚" : "★") : L.T(heals ? "TOP HEALS" : "TOP DPS"), glyph ? 10.5 : 9.5, InkB, Face, FontWeights.Bold, FontStretches.Normal), 16, new Thickness(6, 0, 6, 0));
             b.Root.Tag = heals ? "top-heals" : "top-dps";
             if (glyph) b.Root.ToolTip = L.T(heals ? "Top heals" : "Top DPS");
             b.Root.Margin = new Thickness(6, 0, 0, 0); b.Root.VerticalAlignment = VerticalAlignment.Center;

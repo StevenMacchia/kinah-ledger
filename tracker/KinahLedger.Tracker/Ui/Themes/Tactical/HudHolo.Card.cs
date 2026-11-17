@@ -21,7 +21,7 @@ sealed partial class HudHolo : IThemeCard
         var tone = c.ClassColor;
         double grow = 1, scan = -1;
         var bars = new List<TacSketch>();
-        var stack = new StackPanel { Margin = new Thickness(In, 10, In, 10) };
+        var stack = new StackPanel { Margin = new Thickness(In, 13, In, 10) };
 
         // ⬡ Swoly [CP 4.8K]                       GLADIATOR
         var head = new Grid { Margin = new Thickness(0, 0, 0, 7) };
@@ -132,7 +132,7 @@ sealed partial class HudHolo : IThemeCard
                 row.ToolTip = Tac.AbilityTip(a);
                 var bar = new TacSketch((dc, s) =>
                 {
-                    double bw = s.Width - 8, by = s.Height - 5.5;
+                    double bw = s.Width - 8, by = s.Height - 6.5;
                     dc.DrawLine(Tac.P(Frozen(Tac.A(CyanC, .22)), 1, dash: new DashStyle(new double[] { 2, 2 }, 0)), new Point(0, by), new Point(bw, by));
                     double g = Out(Tac.Clamp01(grow * 1.6 - k * .12));
                     double fx = Math.Max(3, bw * a.OfTop) * g;

@@ -63,7 +63,7 @@ sealed partial class HudFighter
         readonly TacSketch _art;
         readonly TextBlock _rank = Tt("", 12, PhosDim, Face, FontWeights.Bold), _name = Tt("", 13, Phos, Face, FontWeights.Bold),
             _dps = Tt("", 14.5, Pale, Face, FontWeights.Bold), _pct = Tt("", 11, PhosDim, Face, FontWeights.SemiBold), _dmg = Tt("", 12.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 11, PhosDim, Face, FontWeights.SemiBold);
-        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(13, 2, 0, 0) };
+        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(15, 2, 0, 0) };
         /// <summary>
         /// Combat Power after the callsign: a small dim "CP" tight on the figure, a step under the name's weight. Always this
         /// compact form (the mono face is wide: every row of the list says it the same way, and the callsign keeps its room).
@@ -91,6 +91,7 @@ sealed partial class HudFighter
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
             Put(_nameLine, 1);
+            Grid.SetColumnSpan(_nameLine, 2);   // the name may run on into the DPS's column, as far as its figure leaves free (Fit)
             foreach (var (t, col) in new[] { (_dps, 2), (_pct, 3), (_dmg, 4), (_crit, 5) })
             {
                 t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Top;
@@ -133,7 +134,7 @@ sealed partial class HudFighter
             if (m.Heal.Length > 0 && m.TopHeals)
             {
                 var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { HealFig(m.Heal), Plate(L.T("TOP HEALS"), mint, "top-heals") } };
-                var framed = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tt("✚", 9, mint, Face, FontWeights.Bold), HealFig(m.Heal, 3) } };
+                var framed = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tt("✚", 9, mint, Face, FontWeights.Bold), HealFig(m.Heal, 3, plus: false) } };
                 var shrt = new Border { BorderBrush = mint, BorderThickness = new Thickness(1), Background = Frozen(Tac.A(InkC0, .6)), Padding = new Thickness(2, 0, 3, 0), Margin = new Thickness(5, 1, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center, Child = framed, Tag = "top-heals", ToolTip = L.T("Top heals") };
                 _give.Add((Add(full), Add(shrt)));
@@ -156,15 +157,15 @@ sealed partial class HudFighter
         {
             double room = _root.ColumnDefinitions[1].ActualWidth;
             if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
-            Tac.FitName(_name, room - _nameLine.Margin.Left - 4, _keep, _give);
+            Tac.FitName(_name, room + Tac.FreeLeft(_dps, _root.ColumnDefinitions[2].ActualWidth) - _nameLine.Margin.Left - 6, _keep, _give);
         }
 
         static readonly Color MintC = Color.FromRgb(0x5E, 0xF0, 0xA0);
 
         /// <summary>A healer's healing a second after the name ("+1.1K/s").</summary>
-        static TextBlock HealFig(string heal, double left = 5)
+        static TextBlock HealFig(string heal, double left = 5, bool plus = true)
         {
-            var h = Tt("+" + heal, 10.5, Frozen(MintC), Face, FontWeights.Bold);
+            var h = Tt((plus ? "+" : "") + heal, 10.5, Frozen(MintC), Face, FontWeights.Bold);
             h.Tag = "heal-figures"; h.Margin = new Thickness(left, 1, 0, 0);
             return h;
         }
@@ -209,7 +210,7 @@ sealed partial class HudFighter
             // the class's diamond before the callsign
             double dy = 3 + 8;
             var dia = new StreamGeometry();
-            using (var x = dia.Open()) { x.BeginFigure(new Point(x0 + 5, dy - 4.5), true, true); x.LineTo(new Point(x0 + 9.5, dy), true, false); x.LineTo(new Point(x0 + 5, dy + 4.5), true, false); x.LineTo(new Point(x0 + .5, dy), true, false); }
+            using (var x = dia.Open()) { x.BeginFigure(new Point(x0 + 7, dy - 4.5), true, true); x.LineTo(new Point(x0 + 11.5, dy), true, false); x.LineTo(new Point(x0 + 7, dy + 4.5), true, false); x.LineTo(new Point(x0 + 2.5, dy), true, false); }
             dia.Freeze();
             dc.DrawGeometry(Frozen(tone), Tac.P(Frozen(Tac.A(Colors.White, .4)), .8), dia);
             // the vector bar: a baseline with a tick each tenth, the fill a fine line in the class's colour, a bright tick at its end
