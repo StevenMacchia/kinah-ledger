@@ -38,7 +38,7 @@ static partial class HudRare
     /// The overlay's card and the window's moment say it the same way.
     /// </summary>
     public static string LabelOf(string grade, bool watched) =>
-        Glows(grade) ? L.F("RARE DROP · {0}", grade.ToUpperInvariant()) : !watched ? L.T("RARE DROP") : grade is "" or "Common" ? L.T("WATCHED DROP") : L.F("WATCHED DROP · {0}", grade.ToUpperInvariant());
+        Glows(grade) ? L.F("RARE DROP · {0}", L.T(grade).ToUpperInvariant()) : !watched ? L.T("RARE DROP") : grade is "" or "Common" ? L.T("WATCHED DROP") : L.F("WATCHED DROP · {0}", L.T(grade).ToUpperInvariant());   // the grade in the game's own word (전승, 傳承)
 
     /// <summary>What the drop's drawing depends on (the looks' Changed gate).</summary>
     public static string Sig(Drop? d) => d == null ? "" : $"{d.Pick.Id}|{d.Pick.Count}|{d.Pick.Icon}|{d.Label}|{d.Color}|{d.Price}|{d.Where}|{d.Watched}|{d.Chime}|{d.More}";

@@ -10,7 +10,7 @@ public static partial class WpfApp
     static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "run", "run-detail", "fight", "fight-history", "inspect", "compare", "timeline", "taken", "full", "inspect-full" };
 
     /// <summary>
-    /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight]: the Parser page from
+    /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight|wacky|tactical|glitch]: the Parser page from
     /// its sample (Parser/ParserDemo.cs, made-up fights through the real rules) as the window shows it (ui-parser-STATE.png)
     /// and the whole page on its own (ui-parser-STATE-page.png); "overlay" draws the fight overlay over a game-like grey in
     /// four states (ui-parser-overlay-*.png). No state given: all of them. Nothing is tracked, saved or sent.

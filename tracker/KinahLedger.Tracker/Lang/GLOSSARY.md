@@ -45,6 +45,7 @@ The tables in `Lang/ko/*.json` and `Lang/zh-TW/*.json` map the English text exac
 | Abyss / Gathering | 어비스 / 채집 | 深淵 / 採集 |
 | loot / drop / pickup | 전리품 / 드롭 / 획득 | 戰利品 / 掉落 / 拾取 |
 | rare drop / watched item | 희귀 드롭 / 관심 아이템 | 稀有掉落 / 關注物品 |
+| item grades: Common, Rare, Legend, Unique, Epic (low to high) | 일반, 희귀, 전승, 유일, 영웅 | 一般, 稀有, 傳承, 獨特, 英雄 |
 | Start run / Stop | 런 시작 / 중지 | 開始一輪 / 停止 |
 | per hour, /h, an hour | 시간당, /시간 | 每小時, /小時 |
 | today / this week / session | 오늘 / 이번 주 / 세션 | 今天 / 本週 / 本次 |
@@ -60,6 +61,6 @@ The tables in `Lang/ko/*.json` and `Lang/zh-TW/*.json` map the English text exac
 | Gladiator, Templar, Assassin, Ranger | 검성, 수호성, 살성, 궁성 | 劍星, 守護星, 殺星, 弓星 |
 | Sorcerer, Spiritmaster, Cleric, Chanter | 마도성, 정령성, 치유성, 호법성 | 魔道星, 精靈星, 治癒星, 護法星 |
 
-Never translate: game names (skills, bosses, instances, zones, modes like Conquest, items; the global servers' client writes them in English and the tracker reads them so; classes and factions are the exception, with the game's official Korean and Taiwanese names above), the app's name, key names (Ctrl, Alt), units the game writes in English, "DPS", "HPS", "PB".
+Never translate: game names (skills, bosses, instances, zones, modes like Conquest, items; the global servers' client writes them in English and the tracker reads them so; classes and factions are the exception, with the game's official Korean and Taiwanese names above). Item grades are the game's own words by tier (the global Legend is the KR/TW 전승/傳承 tier, Unique 유일/獨特, Epic 영웅/英雄; checked 2026-11-17 against the KR and TW clients' item data on gamewith.ai), so a translation is never 전설/傳說, 唯一 or 史詩, the app's name, key names (Ctrl, Alt), units the game writes in English, "DPS", "HPS", "PB".
 
 Same English, two meanings: key the second one with a context, `L.T("Share", "button")` → table key `"Share [button]"`. Since 1.0 the whole window is translated: every text set in code goes through `L.T`/`L.F`, XAML windows through `L.Apply`; options-test fails on English left in a Korean or Chinese render (Ui/LangCheck.cs). Check a page while working on it: `KL_LANG=ko KL_LANG_AUDIT=out.txt ui-shot <dir> …`.

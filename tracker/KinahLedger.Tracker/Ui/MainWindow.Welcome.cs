@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using KinahLedger.Data;
@@ -107,6 +108,7 @@ public partial class MainWindow
             chip.Tag = "theme:" + tk;
             WelcomeThemeHost.Children.Add(chip);
         }
+        if (MatchAppLink(_wTheme, Skins.Current, key => { SetSkin(key); BuildWelcomeLooks(); }) is { } match) WelcomeThemeHost.Children.Add(match);
         WelcomeLookHost.Children.Clear();
         foreach (var key in WelcomeLooksOf(_wTheme))
         {
@@ -194,6 +196,22 @@ public partial class MainWindow
         WelcomeLookCard.Visibility == Visibility.Visible && WelcomeCard.Visibility != Visibility.Visible, _wLook, WelcomeLookStage.Tag as string,
         WelcomeLookHost.Children.OfType<Border>().Select(b => (string)b.Tag).ToList(),
         WelcomeLookHost.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
+
+    /// <summary>
+    /// "Match the app" (1.0): after the overlay's theme row, a one-line offer to paint the window in the theme's skin too.
+    /// Null for Classic, or when the window already wears it. Never applied by itself: <paramref name="pick"/> does it.
+    /// </summary>
+    public FrameworkElement? MatchAppLink(string theme, string skinNow, Action<string> pick)
+    {
+        if (Skins.ForTheme(theme) is not { } skin || skin.Key == skinNow) return null;
+        var link = new Hyperlink(new Run(L.T("Match the app"))) { ToolTip = L.F("Paint this window in the {0} theme too", L.T(skin.Name)) };
+        if (TryFindResource("LinkStyle") is Style ls) link.Style = ls;
+        link.Click += (_, _) => pick(skin.Key);
+        var t = new TextBlock { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 8), Tag = "match:" + skin.Key };
+        t.Inlines.Add(link);
+        System.Windows.Automation.AutomationProperties.SetName(t, L.F("Paint this window in the {0} theme too", L.T(skin.Name)));
+        return t;
+    }
 
     /* ---------------- chips ---------------- */
 
