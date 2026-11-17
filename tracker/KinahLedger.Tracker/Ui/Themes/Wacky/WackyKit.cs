@@ -373,6 +373,17 @@ static class Wk
     }
 
     /// <summary>
+    /// A member's bar, 0 to 1, against the top member's figure (Steven, 2026-11-17: "prioritizes the bar"): the top row's bar
+    /// runs the row's whole width, the others by their damage beside it; none before the first hit.
+    /// </summary>
+    public static double Bar(MeterMember m, MeterContext c)
+    {
+        if (m.CpOnly) return 0;
+        double top = c.E.Members.Select(c.E.Share).DefaultIfEmpty(0).Max();
+        return top > 0 ? Math.Clamp(m.Share / top, 0, 1) : 0;
+    }
+
+    /// <summary>
     /// The expanded row's detail: the damage, then the crit rate with its word as a label in the look's small label style (the
     /// "CP" before the Combat Power's), so the figures keep their size and the line its room ("127.81M · 38% crit").
     /// </summary>
