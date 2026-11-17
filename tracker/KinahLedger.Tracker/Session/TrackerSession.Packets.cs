@@ -24,8 +24,9 @@ namespace KinahLedger.Session;
 ///
 /// Since 0.10.68, item pickups and crafts too, when the build's decoder reads the inventory (Steven, 2026-11-13: loot in the
 /// Abyss "was not being properly tracked before at all"). An item going up counts as a pickup through the same gate as a
-/// currency (a kill, a gather or the screen's own line for it nearby, or an open run; not in a base, with the Market or a
-/// reward screen open, nor a bound item no line named, which is a quest's or a box's), while the chat's and the loot list's
+/// currency (a kill, a gather, a monster's soul, a pickup the traffic counted or the screen's own line for it nearby, or an
+/// open run; not in a base, with the Market or a reward screen open, nor a bound item no line or kill stands beside, or
+/// that came as a box opened or an achievement's reward, which is a quest's or a box's), while the chat's and the loot list's
 /// item pickups are logged and left out. A chat line the traffic didn't count (it never showed it, or only showed a
 /// stack's first sight) is counted from the chat after the agreement check, so nothing is lost. While crafting, updates
 /// are crafts (<see cref="PacketCrafts"/>), never pickups, and the crafting panel's races are logged and left out.
@@ -33,7 +34,13 @@ namespace KinahLedger.Session;
 public sealed partial class TrackerSession
 {
     /// <summary>The watcher's packet reader; null when there is none (a replay, a test).</summary>
-    public PacketReader? Packets { get; init; }
+    public PacketReader? Packets
+    {
+        get => _packets;
+        // the reader names items and maps the game's ids as this session's list does, from its first update on
+        init { _packets = value; if (value != null) { value.NameOf ??= id => _items.NameOf(id); value.FromGame ??= _items.FromGame; } }
+    }
+    readonly PacketReader? _packets;
 
     const long PacketPickupMax = 1_000_000;
 
@@ -225,11 +232,12 @@ public sealed partial class TrackerSession
     void DrainItems(PacketReader p, DateTime now)
     {
         p.NameOf ??= id => _items.NameOf(id);
+        p.FromGame ??= _items.FromGame;
         p.CraftingAt ??= CraftingAt;
         // what the game's data counted when an event's rewards came: its Kinah, and Abyss Points (the picture's count stays without them)
         Instances.GameCounts ??= at => (p.Counting(CurrencyKind.Kinah, at) && p.Counting(CurrencyKind.BoundKinah, at),
             p.Counting(CurrencyKind.AbyssPoints, at) ? Array.Empty<long>() : new[] { _items.IdOf("Abyss Points") });
-        while (p.NextItems() is { } b) _itemHeld.Add(b);
+        while (p.NextItems() is { } b) { SoulKill(b); _itemHeld.Add(b); }
         // an update is taken once the chat had its say on each item that went up (a pickup line, or a box's or a reward's
         // contents), else once PacketHoldSeconds old as before: the chat tells a drop from a box's contents, and lags the
         // game's update by a second or two, so an item counts as fast as its line, not a fixed 3 s later
@@ -250,6 +258,27 @@ public sealed partial class TrackerSession
             _screenLate.Remove(late);
         }
     }
+
+    /// <summary>
+    /// A monster's soul going up (the loot list's "Soul: Swarm (Bound)" row): the player looted a kill. It is a kill's
+    /// evidence for the drops around it as it comes, before the item waits for its lines. In the Abyss the game names the
+    /// player as the killer of only some kills (2026-11-16 16:59: a soul every second or two, no kill of the player's named
+    /// for minutes), so without this an Earth Dagger dropped among them had "no kill around it".
+    /// </summary>
+    void SoulKill(ItemBatch b)
+    {
+        if (b.At > _lastKillAt && b.Net().Any(x => ItemDictionary.IsMonsterSoul(x.ItemId) && (x.Unknown || x.Net > 0))) _lastKillAt = b.At;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="n"/> of <paramref name="id"/> that came at <paramref name="at"/> went again in the next
+    /// update, with nothing else coming in it: the game used it at once (Stigma Shard points, a stack of Soul Crystals
+    /// registered as it lands), so it was never loot. An item that goes into something else (gear dismantled into Enhance
+    /// Stones) is not this: it dropped, and stays a drop.
+    /// </summary>
+    bool UsedAtOnce(long id, long n, DateTime at) =>
+        _itemHeld.Any(h => (h.At - at).TotalSeconds is >= 0 and <= 1.5 && h.Net() is var hn
+            && hn.Any(x => x.ItemId == id && !x.Unknown && x.Net == -n) && !hn.Any(x => x.Unknown || x.Net > 0));
 
     /// <summary>
     /// Whether every item that went up in <paramref name="b"/> has had the chat's say: a chat pickup line for it, or the chat
@@ -315,14 +344,23 @@ public sealed partial class TrackerSession
         GameRewards(p, b);
         if (!p.CountingItems(b.At)) return;
         // something went down with it: a craft's materials, a box opened, a stack moved or something used, never a pickup
-        if (b.Fell) { CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup"); return; }
+        // (a monster's soul taken into the Soul Codex, a moment after it came, is said once a minute: one with every kill)
+        if (b.Fell)
+        {
+            if (b.Rows.All(r => ItemDictionary.IsMonsterSoul(r.ItemId))) CrashLog.NoteBurst("packets: a monster's soul taken into the Soul Codex");
+            else CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup");
+            return;
+        }
         var gather = GatherOf(b);
         foreach (var (id, n0, unknown) in b.Net())
         {
             string name = _items.NameOf(id);
             long n = n0;
             bool find = IsRareFind(name);
-            if (_items.Get(id) == null) { CrashLog.Note($"packets: {name} {(unknown ? "first seen" : $"+{n:N0}")} is not on the item list: the chat's"); continue; }
+            // a monster's soul (the loot list's "Soul: Swarm (Bound)"): a kill's (SoulKill), registered in the Soul Codex the
+            // moment it lands, so no loot (2026-11-17: 690 of these were "not on the item list" in two days)
+            if (ItemDictionary.IsMonsterSoul(id)) { CrashLog.NoteBurst($"packets: a monster's soul ({name}) {(unknown ? "first seen" : $"+{n:N0}")}: a kill's, taken into the Soul Codex at once; not loot"); continue; }
+            if (_items.Get(id) == null) { if (unknown || n > 0) CrashLog.Note($"packets: {name} {(unknown ? "first seen" : $"+{n:N0}")} is not on the item list: the chat's"); continue; }
             if (unknown)
             {
                 // a stack seen for the first time (the reading began mid-connection, after an update): no change known. A
@@ -347,15 +385,30 @@ public sealed partial class TrackerSession
                 if (b.At > _packetPickupAt) _packetPickupAt = b.At;
                 continue;
             }
+            // the chat's or the loot list's line for it, or its bound twin's (the chat reads "(Bound)" off a name it guessed)
             bool screenSaw = p.ScreenNearItem(id, b.At, PacketNearSeconds);
             bool near = (_lastKillAt - b.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - b.At).TotalSeconds >= -PacketNearSeconds
-                || (_gatherRaces.Count > 0 && (_gatherRaces[^1].At - b.At).TotalSeconds >= -PacketNearSeconds);
+                || (_gatherRaces.Count > 0 && (_gatherRaces[^1].At - b.At).TotalSeconds >= -PacketNearSeconds)
+                // a pickup the traffic counted around it (a kill's Kinah, Rank or Abyss Points): still farming, as for the
+                // currencies. In the Abyss the game names the player's own kill for only some kills: on 2026-11-16 from 16:37
+                // to 17:00 three Earth gear pieces, a mace and seven bound drops came among Kinah counted every second, and
+                // none counted
+                || (_packetPickupAt - b.At).TotalSeconds >= -PacketNearSeconds;
             string un = Unbound(name);
+            bool outside = Instances.Current == null && !InRun;
+            // a bound item comes from a quest or a box when one was just turned in or opened (BoundRewardWhy); otherwise, with
+            // a kill around it, it dropped (Steven, 2026-11-17: "tracker also missed a blue refining stone ... and raw
+            // leather", both bound, both among the Abyss Swarm's kills)
+            string? rewardWhy = bound && outside && !screenSaw ? BoundRewardWhy(b.At) : null;
             string? why = InBase && !name.Contains("Odyle", StringComparison.OrdinalIgnoreCase) ? $"in a base ({Zone})"
                 : MarketOpen?.Invoke(b.At) == true ? "with the Market open"
                 : Target.RewardOpen(b.At) ? "with a reward screen open (the reward table reads it)"
                 : _rewardLines.Any(r => Math.Abs((r.At - b.At).TotalSeconds) <= PacketNearSeconds && string.Equals(r.Name, un, StringComparison.OrdinalIgnoreCase)) ? "with the chat calling it a reward"
-                : bound && !screenSaw && Instances.Current == null ? "bound, with no pickup line for it (a quest's or a box's reward)"
+                : outside && b.At <= _achieveUntil ? "with an achievement's reward"
+                : UsedAtOnce(id, n, b.At) ? "used at once (it went again in the next update)"
+                : outside && !IsGatherMaterial(id) && PickupCheck.TooMany((int)Math.Min(n, int.MaxValue)) is { } tooMany ? tooMany
+                : rewardWhy != null ? $"bound, with no pickup line for it, {rewardWhy} (a quest's or a box's reward)"
+                : bound && !screenSaw && !near && Instances.Current == null ? "bound, with no pickup line or kill for it (a quest's or a box's reward)"
                 : !near && !screenSaw && Instances.Current == null ? "with no kill, gather or pickup line around it" : null;
             // ...and the chat's line for it, however late it shows (a window over the chat), is covered by this rise: never a pickup
             if (why != null) { CrashLog.Note($"packets: {name} +{n:N0} {why}: not a pickup; not counted"); p.ItemExcluded(id, b.At, why); continue; }

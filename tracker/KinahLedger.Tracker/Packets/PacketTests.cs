@@ -210,6 +210,70 @@ public static class PacketTests
             Check(e3.RankPoints == 0 && e3.RankPointsLost == 0, "...and out of the Abyss neither counts");
         }
 
+        // bound drops in the Abyss (Steven, 2026-11-17: "tracker also missed a blue refining stone" ... "and raw leather"), from
+        // the live log of 12:41:36 to 12:42:08 and of 2026-11-16 16:59:05 to 16:59:20: each side left the count to the other
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            long stone = items.Find("Artisan's Refining Stone (Bound)") ?? 0, plainStone = items.Find("Artisan's Refining Stone") ?? 0;
+            long leather = items.Find("Raw Leather (Bound)") ?? 0, dagger = items.Find("Earth Dagger") ?? 0, silentium = items.Find("Silentium (Bound)") ?? 0;
+            const long Soul = 534660012, OathCoin = 930100019, Stigma = 531900010;
+            Check(stone != 0 && plainStone != 0 && stone != plainStone && leather != 0 && dagger != 0 && silentium != 0, "bound drops: the item list has the items of the log");
+            var t0 = DateTime.UtcNow.AddMinutes(-5);
+            DateTime T(double s) => t0.AddSeconds(s);
+            int batch = 1000;
+            ItemChange Up(double at, long id, long delta, long total) => new(T(at), id, ItemOp.Changed, id % 97, delta, total, false, ++batch, 1, false);
+            TrackerSession Abyss(out PacketReader r)
+            {
+                r = new PacketReader(); r.ReadingForTest();
+                var x = new TrackerSession(null, settings, items, "Test") { Packets = r };
+                x.Engine.SetZone("Chaotic Lower Reshanta");
+                return x;
+            }
+            int B(TrackerSession x, long id) => x.Engine.ItemsBound.GetValueOrDefault(id);
+            int U(TrackerSession x, long id) => x.Engine.Items.GetValueOrDefault(id);
+
+            // 12:41:36.7 a monster's soul +1 (the kill; the game names no kill of the player's), 12:41:37.0 Artisan's Refining
+            // Stone (Bound) +1, 12:41:40.0 the chat's "CArtisanIS$ Refining Stone (Bound) acquired." guessed as the plain stone
+            var a = Abyss(out var ra);
+            ra.ItemsForTest(Up(0, Soul, 1, 1)); ra.ItemsForTest(new ItemChange(T(0.1), Soul, ItemOp.Changed, 9, -1, 0, false, ++batch, 1, true));
+            ra.ItemsForTest(Up(0.3, stone, 1, 1));
+            a.DrainPacketsForTest();
+            a.CommitForTest(new ItemAcquired(T(3.3), plainStone, 1, true) { Via = "chat · guessed" });
+            a.DrainPacketsForTest(); ra.AgreeItemsForTest(DateTime.UtcNow); a.DrainPacketsForTest();
+            Check(B(a, stone) == 1 && B(a, plainStone) + U(a, plainStone) + U(a, stone) == 0 && ra.Verdicts.LastOrDefault() == "covered",
+                $"...a bound drop right after a kill (a monster's soul) counts once, bound, and the chat's guessed line of its plain twin is that pickup: {B(a, stone)} bound, {B(a, plainStone) + U(a, plainStone)} plain, the line {ra.Verdicts.LastOrDefault()}");
+            Check(a.Engine.Items.Keys.Concat(a.Engine.ItemsBound.Keys).All(k => !ItemDictionary.IsMonsterSoul(k)), "...and the monster's soul, taken into the Soul Codex at once, is no loot");
+
+            // 12:42:03.3 a soul +1, 12:42:04.9 Raw Leather (Bound) +1: the loot list showed it (one witness, never handed on), no chat line
+            var l = Abyss(out var rl);
+            rl.ItemsForTest(Up(0, Soul, 1, 1)); rl.ItemsForTest(Up(1.6, leather, 1, 1));
+            l.DrainPacketsForTest(); rl.AgreeItemsForTest(DateTime.UtcNow); l.DrainPacketsForTest();
+            Check(B(l, leather) == 1, $"...a bound drop no line named, a kill just before it, counts: Raw Leather (Bound) {B(l, leather)}");
+
+            // 2026-11-16 16:59: bound Kinah counted every second or so from the game's data, no kill of the player's named for
+            // 15 s (a Force's kills), then Earth Dagger +1 at 16:59:20 (the loot list showed it): still farming, a drop
+            var d = Abyss(out var rd);
+            d.CommitForTest(new CurrencyGained(T(0), "Swarm Soul Points", 1, "Swarm") { Via = "chat" });
+            rd.AmountForTest(CurrencyKind.BoundKinah, 166_000, T(0.5));
+            long kina = 166_000;
+            foreach (var sec in new[] { 2.0, 6, 10, 14, 18 }) { kina += 20; rd.AmountForTest(CurrencyKind.BoundKinah, kina, T(sec)); d.DrainPacketsForTest(); }
+            rd.ItemsForTest(Up(19, dagger, 1, 1));
+            d.DrainPacketsForTest();
+            Check(U(d, dagger) == 1, $"...a drop among the game's counted Kinah, no kill of the player's named for 19 s, counts: Earth Dagger {U(d, dagger)}");
+
+            // rewards stay out: Oath Coin +1,280 by its game id (09:01:16, a reward screen just closed), Stigma Shard +5 gone in
+            // the next update (08:51:09, bought), Silentium (Bound) +1 with no kill or pickup line around it (09:01:16)
+            var w = Abyss(out var rw);
+            w.CommitForTest(new CurrencyGained(T(0), "Swarm Soul Points", 1, "Swarm") { Via = "chat" });
+            rw.ItemsForTest(Up(1, OathCoin, 1_280, 79_500));
+            rw.ItemsForTest(Up(2, Stigma, 5, 5)); rw.ItemsForTest(new ItemChange(T(2.1), Stigma, ItemOp.Changed, 3, -5, 0, false, ++batch, 1, true));
+            rw.ItemsForTest(Up(40, silentium, 1, 2));
+            w.DrainPacketsForTest();
+            long oath = items.FromGame(OathCoin), stigma = items.FromGame(Stigma);
+            Check(oath != OathCoin && U(w, oath) + B(w, oath) == 0 && U(w, stigma) + B(w, stigma) == 0 && B(w, silentium) == 0,
+                $"...rewards stay out: Oath Coin x1,280 at once {U(w, oath) + B(w, oath)}, Stigma Shard used at once {U(w, stigma) + B(w, stigma)}, Silentium (Bound) with no kill {B(w, silentium)}");
+        }
+
         // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
         // and a line the traffic never showed are the chat's, a rise with nothing around it or with something going down is
         // no pickup, and three chat pickups the traffic never showed hand items back to the screen
@@ -1501,6 +1565,47 @@ public static class PacketTests
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
         ReplayItems(pcapng, batches, settings, gaps);
         return 0;
+    }
+
+    /// <summary>
+    /// What a recording's decoder gives, in order, for replay --pcap (Program.Replay): each currency change, each data
+    /// chunk's item changes, fight, gather and event part, with its time, from every connection to the game's server port.
+    /// The tracker cuts its recording into hours: the files are read as one, so a connection that runs on into the next
+    /// file goes on with what its stacks held. Empty without the decoder.
+    /// </summary>
+    public static List<(DateTime At, object Ev)> Decode(IEnumerable<string> pcapngs, int serverPort = 13328)
+    {
+        var o = new List<(DateTime At, object Ev)>();
+        if (!NativeDecoder.Available) return o;
+        var segs = new List<(DateTime At, TcpSegment S)>();
+        foreach (var pcapng in pcapngs)
+            foreach (var (at, frame, link) in Pcapng.Read(pcapng))
+                if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
+        {
+            using var dec = NativeDecoder.TryOpen()!;
+            var st = new TcpStream
+            {
+                OnData = (d, at) =>
+                {
+                    dec.Feed(d, at);
+                    while (dec.NextBag() is not null) { }
+                    while (dec.Next() is { } c) o.Add((c.At, c));
+                    var rows = new List<ItemChange>();
+                    while (dec.NextItem() is { } it) rows.Add(it);
+                    if (rows.Count > 0) o.Add((rows[0].At, rows));
+                    while (dec.NextBoss() is not null) { }
+                    while (dec.NextAreaEvent() is { } ae) o.Add((ae.At, ae));
+                    while (dec.NextGather() is { } g) o.Add((g.At, g));
+                    while (dec.NextFight() is { } f) o.Add((f.At, f));
+                    while (dec.NextBossEvent() is not null) { }
+                    while (dec.NextHit() is not null) { }
+                },
+                OnGap = () => dec.Gap(),
+            };
+            foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+        }
+        return o;
     }
 
     /// <summary>packet-replay's boss fights: each instance, the group, and each pull with its damage by member (the decoder's, version 4 and later).</summary>

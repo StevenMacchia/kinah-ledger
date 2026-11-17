@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -36,22 +36,22 @@ public partial class OptionsWindow
     {
         // in the game: the two global keys are the page's own rows in the XAML (HotkeyBox, MarkKeyBox), recorded here
         // in this window: what Shortcuts.cs binds, and Undo
+        // two to a line (the settings revamp: the page fits the window), each the key then what it does
         for (int i = 0; i < WindowKeys.Length; i++)
         {
-            if (i > 0) TipsWindow.Children.Add(Styled(new Border(), "Divider"));
-            var g = new Grid { Margin = new Thickness(18, 10, 18, 10) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) }); g.ColumnDefinitions.Add(new ColumnDefinition());
+            var g = new Grid { Margin = new Thickness(16, 5, 4, 5), Width = 282 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(122) }); g.ColumnDefinitions.Add(new ColumnDefinition());
             g.Children.Add(KeyText(WindowKeys[i].Key));
-            var what = Styled(new TextBlock { Text = L.T(WindowKeys[i].What), VerticalAlignment = VerticalAlignment.Center }, "RowTitle");
+            var what = Styled(new TextBlock { Text = L.T(WindowKeys[i].What), VerticalAlignment = VerticalAlignment.Center, FontSize = 12.5 }, "RowTitle");
             Grid.SetColumn(what, 1); g.Children.Add(what);
             TipsWindow.Children.Add(g);
         }
 
         // did you know: one line each, a link where a page has it
-        Tip("Click any counted line to report it. With Explain each count on (Game reading), its card says why it was counted.", "Turn it on in Game reading", () => Go(Page.Reading));
+        Tip("Click any counted line to report it. With Explain each count on (Game reading), its card says why it was counted.", "Turn it on in Game reading", () => GoTo(ExplainChk));
         Tip("Click a recipe row for its last tries.");
         Tip("Set a goal from an item's card: the ring on the Farming page follows it.");
-        Tip("Compare zones and runs side by side; it's off by default.", "Turn it on in General", () => Go(Page.General));
+        Tip("Compare zones and runs side by side; it's off by default.", "Turn it on in General", () => GoTo(CompareChk));
         Tip("Move the panel for 20 s from the tray, or put it exactly where you want it.", "Place the panel…", () => { if (_host.OpenPlacementGuide() is { } why) ShowNote(why, "Warn"); });
         Tip("Right-click a Where to farm row for that zone's page on kinahledger.com.");
         Tip("An event run that was really two runs: Split it from its card.");
@@ -68,7 +68,7 @@ public partial class OptionsWindow
     void Tip(string text, string link = "", Action? go = null)
     {
         if (_tipRows.Count > 0) TipsKnow.Children.Add(Styled(new Border(), "Divider"));
-        var t = Styled(new TextBlock { Margin = new Thickness(18, 10, 18, 10), TextWrapping = TextWrapping.Wrap }, "RowTitle");
+        var t = Styled(new TextBlock { Margin = new Thickness(16, 8, 16, 8), TextWrapping = TextWrapping.Wrap, FontSize = 12.5 }, "RowTitle");
         t.Inlines.Add(new Run(L.T(text)));
         if (link.Length > 0 && go != null)
         {
@@ -90,7 +90,7 @@ public partial class OptionsWindow
     {
         var o = open();
         o.Go(Page.Tips);
-        check(o.PageTips.Visibility == Visibility.Visible && o.TipsGame.Children.Count >= 3 && o.TipsWindow.Children.Count >= 7 && o.TipsKnow.Children.Count > 0,
+        check(o.PageTips.Visibility == Visibility.Visible && o.TipsGame.Children.Count >= 3 && o.TipsWindow.Children.Count >= 7 && o.TipsKnow.Children.Count > 0 && o.TipsKnow.Children.Count > 0,
             "Shortcuts & tips: In game, In this window and Did you know");
         check(o._tipRows.Count >= 8, $"Shortcuts & tips: {o._tipRows.Count} tips (8 or more)");
         var want = w.HotkeyText.Length > 0 ? w.HotkeyText : "Off";

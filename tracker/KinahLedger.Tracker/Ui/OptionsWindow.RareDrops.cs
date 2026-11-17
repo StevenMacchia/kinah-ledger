@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -51,6 +51,7 @@ public partial class OptionsWindow
     void BuildRareDrops()
     {
         _rareLabel = Styled(new TextBlock { Text = L.T("RARE DROPS") }, "GroupLabel");
+        _rareLabel.Margin = new Thickness(2, 14, 0, 7);
         var stack = new StackPanel();
 
         // the watch list: tiles, the empty line, and the box to add one
@@ -104,8 +105,8 @@ public partial class OptionsWindow
         stack.Children.Add(chime);
 
         var group = Styled(new Border { Child = stack }, "Group");
-        PageInGame.Children.Add(_rareLabel);
-        PageInGame.Children.Add(group);
+        AlertsRare.Children.Add(_rareLabel);   // Alerts & sounds' first group since the settings revamp
+        AlertsRare.Children.Add(group);
 
         _chimeChk.Click += (_, _) =>
         {
@@ -321,8 +322,8 @@ public partial class OptionsWindow
         check(!MainWindow.IsWatched(item) && !w.AlertFor(item + " ×1", DateTime.UtcNow), "rare drops: an unwatched Common pickup doesn't alert");
 
         var o = open();
-        o.Go(Page.InGame);
-        check(o._rareLabel != null && o.PageInGame.Children.IndexOf(o._rareLabel) == o.PageInGame.Children.Count - 2, "Rare drops is the In game page's last group");
+        o.Go(Page.Alerts);
+        check(o._rareLabel != null && o.AlertsRare.Children.IndexOf(o._rareLabel) == 0 && o.PageAlerts.Visibility == Visibility.Visible, "Rare drops leads the Alerts & sounds page");
         check(o._chimeChk.IsChecked == chimeBefore && Math.Abs(o._chimeVol.Value - volBefore) < 0.01, "the chime opens as saved");
         check(o._soundPlays.Select(b => b.Content as string).SequenceEqual(new[] { "Drop", "Price alert", "Update ready" })
               && o._soundPlays.Select(b => b.Tag as string).SequenceEqual(new[] { "chime", "alert", "ready" }) && o._soundPlays.All(b => b.Parent == o._soundPlays[0].Parent),
@@ -338,7 +339,7 @@ public partial class OptionsWindow
         check(!MainWindow.IsWatched(item), "Cancel drops the added item");
 
         o = open();
-        o.Go(Page.InGame);
+        o.Go(Page.Alerts);
         check(o._watchHost.Children.Count == tiles, "Options opens with the saved watch list");
         o._watchBox.Text = item;
         o.AddWatchedTop();
@@ -357,7 +358,7 @@ public partial class OptionsWindow
         check(HudRare.Of(held) is { Label: "WATCHED DROP", Watched: true }, "the looks say it as a watched drop");
 
         o = open();
-        o.Go(Page.InGame);
+        o.Go(Page.Alerts);
         Click(o._watchRemove[item]);
         check(o._watchHost.Children.Count == tiles && MainWindow.IsWatched(item), "× takes the tile away and waits for Save");
         o._chimeChk.IsChecked = chimeBefore; Click(o._chimeChk);
@@ -371,7 +372,7 @@ public partial class OptionsWindow
     internal static void ShotRareDrops(MainWindow w, string file, Action<FrameworkElement, string> save)
     {
         w.SampleWatchList();
-        var o = new OptionsWindow(w, Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        var o = new OptionsWindow(w, Page.Alerts) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         o.Show();
         IconCache.Drain(TimeSpan.FromSeconds(8));
         DoEvents();

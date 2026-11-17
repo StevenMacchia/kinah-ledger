@@ -17,14 +17,26 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class OptionsWindow : Window
 {
-    /// <summary>InGame is the Buddy page (the Kinah overlay); Meter the DPS meter's (Steven, 2026-11-17: "Make a buddy settings in options and a DPS meter setting in the options on the left bar to make them easier to find").</summary>
-    public enum Page { General, Server, Sharing, Reading, InGame, Meter, Timers, Tips, Updates, About }
+    /// <summary>
+    /// InGame is the Buddy page (the Kinah overlay); Meter the DPS meter's (Steven, 2026-11-17: "Make a buddy settings in
+    /// options and a DPS meter setting in the options on the left bar to make them easier to find"). Since the settings
+    /// revamp (Steven, 2026-11-17: "the overlays are the most important thing that people want") Server is a part of Sharing
+    /// (Account &amp; sharing) and About a part of Updates; both still open their page.
+    /// </summary>
+    public enum Page { General, Server, Sharing, Reading, InGame, Meter, Timers, Tips, Updates, About, Alerts }
 
-    static readonly (Page Page, string Name)[] Pages =
+    /// <summary>The left bar: the three overlays first, then the rest.</summary>
+    internal static readonly (Page Page, string Name)[] OverlayPages = { (Page.InGame, "Buddy"), (Page.Meter, "DPS meter"), (Page.Timers, "Timers") };
+    internal static readonly (Page Page, string Name)[] SettingsPages =
     {
-        (Page.General, "General"), (Page.Server, "Server"), (Page.Sharing, "Sharing"), (Page.Reading, "Game reading"),
-        (Page.InGame, "Buddy"), (Page.Meter, "DPS meter"), (Page.Timers, "Timers"), (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates"), (Page.About, "About"),
+        (Page.General, "General"), (Page.Sharing, "Account & sharing"), (Page.Alerts, "Alerts & sounds"), (Page.Reading, "Game reading"),
+        (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates & about"),
     };
+    /// <summary>Every page on the left bar, in its order.</summary>
+    internal static IEnumerable<(Page Page, string Name)> NavPages => OverlayPages.Concat(SettingsPages);
+
+    /// <summary>The page a page is shown on (Server on Account &amp; sharing, About on Updates &amp; about).</summary>
+    internal static Page Shown(Page p) => p switch { Page.Server => Page.Sharing, Page.About => Page.Updates, _ => p };
     static readonly string[] GameStartChoices = { "Open the window", "Stay in the tray" };
 
     readonly MainWindow _host;
@@ -55,9 +67,13 @@ public partial class OptionsWindow : Window
         Load(_edit);
         Wire();
         WireLanguage();
+        FillTips();     // built now, so the search finds the keys
+        FillTimers();   // and the timers' rows (built again each time the page shows)
         L.Apply(this);   // the window's own words in the player's language (Ui/Lang.cs)
         Title = L.T(Title);
         foreach (var link in new[] { WhatsSentLink, WhatsReadLink, ReleasesLink, ReleasesDiscordLink }) foreach (var run in link.Inlines.OfType<System.Windows.Documents.Run>()) run.Text = L.T(run.Text);   // links are not TextBlocks, L.Apply skips them
+        foreach (var body in new Panel[] { InGameMore, GeneralMore, SharingMore, ReadingMore, TipsMore }) Fold(body);   // after L.Apply: a fold's head says its title in the language already
+        WireSearch();   // Ui/OptionsWindow.Search.cs
         Go(page);
 
         _live.Tick += (_, _) => RefreshLive();
@@ -81,7 +97,7 @@ public partial class OptionsWindow : Window
             if (LanguagePick.SelectedIndex < 0) return;
             var code = L.Choices[LanguagePick.SelectedIndex].Code;
             L.Pick(code);
-            LanguageHint.Text = L.Resolve(code) == L.Code ? L.T("The words in the window and the overlays. Skill, boss and item names stay as the game's English data has them. Takes effect the next time Kinah Ledger starts.")
+            LanguageHint.Text = L.Resolve(code) == L.Code ? L.T("Takes effect the next time Kinah Ledger starts.")
                 : L.T("Saved. Close Kinah Ledger from the tray icon and start it again to switch.");
         };
     }
@@ -91,32 +107,54 @@ public partial class OptionsWindow : Window
 
     /* ---------------- pages ---------------- */
 
+    readonly Dictionary<Page, Button> _navButtons = new();
+
+    /// <summary>The left bar: OVERLAYS (Buddy, DPS meter, Timers), then SETTINGS (the rest).</summary>
     void BuildNav()
     {
         Nav.Children.Clear();
-        foreach (var (p, name) in Pages)
+        _navButtons.Clear();
+        foreach (var (section, pages) in new[] { ("OVERLAYS", OverlayPages), ("SETTINGS", SettingsPages) })
         {
-            var b = new Button { Content = L.T(name), Style = (Style)FindResource("NavItem"), Tag = p == _page ? "True" : "False" };
-            var target = p;
-            b.Click += (_, _) => Go(target);
-            Nav.Children.Add(b);
+            var label = new TextBlock { Text = L.T(section) };
+            label.SetResourceReference(StyleProperty, "NavSection");
+            if (Nav.Children.Count == 0) label.Margin = new Thickness(14, 6, 0, 5);
+            Nav.Children.Add(label);
+            foreach (var (p, name) in pages)
+            {
+                var b = new Button { Content = L.T(name), Style = (Style)FindResource("NavItem"), Tag = p == _page ? "True" : "False", Height = 34 };
+                var target = p;
+                b.Click += (_, _) => Go(target);
+                _navButtons[p] = b;
+                Nav.Children.Add(b);
+            }
         }
     }
 
+    /// <summary>Each page's panel, as the left bar lists them.</summary>
+    IEnumerable<(Page Page, Panel Panel)> PagePanels => new (Page, Panel)[]
+    {
+        (Page.InGame, PageInGame), (Page.Meter, PageMeter), (Page.Timers, PageTimers), (Page.General, PageGeneral), (Page.Sharing, PageSharing),
+        (Page.Alerts, PageAlerts), (Page.Reading, PageReading), (Page.Tips, PageTips), (Page.Updates, PageUpdates),
+    };
+
     public void Go(Page page)
     {
+        page = Shown(page);
         _page = page;
-        foreach (var (p, el) in new (Page, FrameworkElement)[] { (Page.General, PageGeneral), (Page.Server, PageServer), (Page.Sharing, PageSharing),
-                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Meter, PageMeter), (Page.Timers, PageTimers), (Page.Tips, PageTips), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
-            el.Visibility = p == page ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var (p, el) in PagePanels) el.Visibility = p == page ? Visibility.Visible : Visibility.Collapsed;
         // the style's trigger matches the text "True" (Tag holds an object, so a bool would not match it)
-        for (int i = 0; i < Nav.Children.Count; i++) ((Button)Nav.Children[i]).Tag = Pages[i].Page == page ? "True" : "False";
-        if (page == Page.Tips) FillTips();
-        if (page == Page.Timers) FillTimers();   // the timers overlay, the chime and each timer's picks (Ui/OptionsWindow.Timers.cs)   // the keys as they are now (Ui/OptionsWindow.Tips.cs)
+        foreach (var (p, b) in _navButtons) b.Tag = p == page ? "True" : "False";
+        if (page == Page.Tips) FillTips();   // the keys as they are now (Ui/OptionsWindow.Tips.cs)
+        if (page == Page.Timers) FillTimers();   // the timers overlay, the chime and each timer's picks (Ui/OptionsWindow.Timers.cs)
+        RefreshFoldCounts();
         Scroller.ScrollToTop();
         RefreshLive();
         RefreshPreview();
     }
+
+    /// <summary>For the tests and renders: the page on show.</summary>
+    internal Page PageShownForTest => _page;
 
     /// <summary>True while the Game reading page is on screen: the main window then sends it fresh frames of the game.</summary>
     public bool WantsPreview => IsVisible && _page == Page.Reading;
@@ -212,73 +250,123 @@ public partial class OptionsWindow : Window
     }
 
     /// <summary>
-    /// The panel's look (2026-10-25): a chip for each, and each drawn at its real size from the window's sample figures
-    /// (HudSample, the layout renders' figures), so the three can be compared with the game closed. A click on a drawing
-    /// picks it too. The figure chips are the Strip's: greyed for the Card and the Ticker, which show a set of their own.
+    /// The Buddy page's look picker (the settings revamp, 2026-11-17): the look in use drawn big at the top of the page over
+    /// a scene from the game, at the Size slider's size (scaled down only past the stage); a tile per look of the theme picked
+    /// under it, each with a small live drawing. A tile under the mouse draws its look on the stage; a click picks it. The
+    /// figure chips (under More) are the Strip's: greyed for the others, which show a set of their own.
     /// </summary>
     void BuildHudLooks(string current)
     {
-        // a live thumbnail of each look (2026-11-14), drawn from the window's sample figures and picked with a click; the
-        // one in use is outlined, and drawn again at its real size under them with what it shows
         current = HudLooks.Parse(current);
         HudLookHost.Children.Clear();
         var sample = _host.HudSample();
         var fields = HudFields.Parse(_edit.HudFields);
         var scene = HudKit.GameScene();   // a scene from the game, whatever the window's skin (Steven, 2026-11-16: "show them over the game")
-        foreach (var l in HudThemes.Looks(HudThemeShown(current)))   // the theme picked's looks (Ui/OptionsWindow.Themes.cs)
+        var looks = HudThemes.Looks(HudThemeShown(current));   // the theme picked's looks (Ui/OptionsWindow.Themes.cs)
+        HudLookHost.Columns = Math.Max(3, looks.Count);
+        foreach (var l in looks)
         {
             var key = l.Key;
-            bool on = key == current;
-            FrameworkElement face;
-            try { face = HudWindow.Preview(key, fields, sample); }
-            catch (Exception ex) { CrashLog.Write("panel look thumbnail", ex); continue; }
-            var thumb = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, MaxWidth = key == HudLooks.Auto ? 340 : 150, Height = 54, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            // the look on a small dark game scene, whatever the window's skin; the card and its name in the skin's own tones
-            var stage = new Border { Child = thumb, Background = scene, CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 5, 8, 5), HorizontalAlignment = HorizontalAlignment.Stretch };
-            var name = new TextBlock { FontSize = 12, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) };
-            name.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-            name.Inlines.Add(new System.Windows.Documents.Run(L.T(l.Name)));
-            if (on) { var r = new System.Windows.Documents.Run(L.T("  ·  in use")) { FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Link"); name.Inlines.Add(r); }
-            var card = new Border
-            {
-                Width = key == HudLooks.Auto ? 388 : 190, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,   // Auto, the widest, across the row: the other six two by two
-                BorderThickness = new Thickness(on ? 2 : 1),
-                Child = new StackPanel { Margin = new Thickness(10, 8, 10, 9), Children = { name, stage } },
-            };
-            card.SetResourceReference(Border.BackgroundProperty, "Card2");
-            card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
-            // the card itself is the pick (a Button's own style would draw its frame over the card in Daylight): a click, or
-            // Enter or Space with the keyboard
-            card.ToolTip = L.T(l.Hint); card.Focusable = true; card.Tag = key;
-            card.FocusVisualStyle = (Style)FindResource("FocusRing");
-            System.Windows.Automation.AutomationProperties.SetName(card, l.Name + " panel look" + (on ? ", in use" : ""));
-            card.MouseLeftButtonUp += (_, _) => PickHudLook(key);
-            card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { PickHudLook(key); e.Handled = true; } };
-            HudLookHost.Children.Add(card);
+            FrameworkElement? Face() { try { return HudWindow.Preview(key, fields, sample); } catch (Exception ex) { CrashLog.Write("panel look thumbnail", ex); return null; } }
+            var tile = LookTile(key, L.T(l.Name), L.T(l.Hint), key == current, Face, scene, l.Name + " panel look");
+            tile.MouseLeftButtonUp += (_, _) => PickHudLook(key);
+            tile.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { PickHudLook(key); e.Handled = true; } };
+            tile.MouseEnter += (_, _) => DrawHudStage(key);
+            tile.GotKeyboardFocus += (_, _) => DrawHudStage(key);
+            tile.MouseLeave += (_, _) => DrawHudStage(HudLooks.Parse(_edit.HudLook));
+            HudLookHost.Children.Add(tile);
         }
-        HudLookPreview.Children.Clear();
-        var chosen = HudLooks.All.First(x => x.Key == current);
-        try
-        {
-            var big = HudWindow.Preview(current, fields, sample);
-            big.HorizontalAlignment = HorizontalAlignment.Left;
-            var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
-            label.Inlines.Add(new System.Windows.Documents.Run(L.T(chosen.Name)) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
-            label.Inlines.Add(new System.Windows.Documents.Run(L.T("  ·  at its real size  ·  ") + L.T(chosen.Hint)) { Foreground = new SolidColorBrush(Color.FromRgb(0xAF, 0xB5, 0xC6)) });
-            HudLookPreview.Children.Add(new Border
-            {
-                CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 2, 0, 0), Background = scene,
-                BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromRgb(0x23, 0x27, 0x36)), Child = new StackPanel { Children = { label, big } },
-            });
-        }
-        catch (Exception ex) { CrashLog.Write("panel look preview", ex); }
+        _hudStageKey = null;
+        DrawHudStage(current);
         bool strip = current == HudLooks.Strip;
         HudFieldHost.IsEnabled = strip;
         HudFieldHost.Opacity = strip ? 1 : .45;
         HudFieldsNote.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
-        HudPositionHint.Text = current == HudLooks.Ticker
+        HudResetBtn.ToolTip = HudPositionHint.Text = current == HudLooks.Ticker
             ? L.T("Back to the left of the target bar, at the top of the game's screen. Pop keeps its own spot.")
             : L.T("Back to the top centre of the game's screen, clear of the minimap and the chat.");
+    }
+
+    /// <summary>The look the Buddy page's stage draws now (the one in use, or the one under the mouse).</summary>
+    string? _hudStageKey;
+    double _hudStageScale = double.NaN;
+
+    /// <summary>The stage: one look at its real size (the Size slider's) over the game scene, its name in the corner.</summary>
+    void DrawHudStage(string key)
+    {
+        double scale = _edit.HudScale > 0 ? _edit.HudScale : 1;
+        if (_hudStageKey == key && _hudStageScale == scale && HudLookPreview.Children.Count == 1) return;
+        var look = HudLooks.All.FirstOrDefault(x => x.Key == key);
+        if (look == null) return;
+        FrameworkElement face;
+        try { face = HudWindow.Preview(key, HudFields.Parse(_edit.HudFields), _host.HudSample()); }
+        catch (Exception ex) { CrashLog.Write("panel look preview", ex); return; }
+        _hudStageKey = key; _hudStageScale = scale;
+        face.LayoutTransform = new ScaleTransform(scale, scale);
+        bool inUse = key == HudLooks.Parse(_edit.HudLook);
+        HudLookPreview.Children.Clear();
+        HudLookPreview.Children.Add(Stage(face, L.T(look.Name), inUse ? L.F("in use · {0:P0}", scale) : L.T("hover to compare · click to pick"), 160));
+    }
+
+    /// <summary>
+    /// An overlay page's stage: <paramref name="face"/> centred over a scene from the game, at its own size and scaled down
+    /// only past the stage (a look is never cut), the look's name and a note in the top-left corner.
+    /// </summary>
+    static Border Stage(FrameworkElement face, string name, string note, double height)
+    {
+        face.HorizontalAlignment = HorizontalAlignment.Center;
+        face.VerticalAlignment = VerticalAlignment.Center;
+        var label = new TextBlock { FontSize = 12 };
+        label.Inlines.Add(new System.Windows.Documents.Run(name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
+        label.Inlines.Add(new System.Windows.Documents.Run("  ·  " + note) { Foreground = new SolidColorBrush(Color.FromRgb(0xAF, 0xB5, 0xC6)) });
+        // the name on a dark pill in the corner, readable over any part of the scene
+        var pill = new Border
+        {
+            Child = label, Background = new SolidColorBrush(Color.FromArgb(0xD8, 0x0B, 0x0C, 0x10)), CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 3, 9, 4),
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 8, 0, 0),
+        };
+        var view = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(14, 34, 14, 10), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        return new Border
+        {
+            Height = height, CornerRadius = new CornerRadius(12), Background = HudKit.GameScene(), ClipToBounds = true,
+            BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromRgb(0x23, 0x27, 0x36)),
+            Child = new Grid { Children = { view, pill } },
+        };
+    }
+
+    /// <summary>
+    /// A look's tile on an overlay page: a small live drawing over the game scene and the look's name; the one in use
+    /// outlined (2 px, the Link colour). The card is the pick itself (a click, or Enter or Space).
+    /// </summary>
+    Border LookTile(string key, string name, string hint, bool on, Func<FrameworkElement?> face, Brush scene, string automationName)
+    {
+        var f = face();
+        var thumb = new Border
+        {
+            Background = scene, CornerRadius = new CornerRadius(5), Height = 34, Padding = new Thickness(4, 3, 4, 3), ClipToBounds = true,
+            Child = f == null ? null : new Viewbox { Child = f, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            IsHitTestVisible = false,
+        };
+        var label = new TextBlock { Text = name, FontSize = 12, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 5, 0, 0) };
+        label.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(5, 5, 5, 5), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
+            Child = new StackPanel { Children = { thumb, label } }, ToolTip = hint, Focusable = true, Tag = key,
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "Card2");
+        card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
+        card.FocusVisualStyle = (Style)FindResource("FocusRing");
+        System.Windows.Automation.AutomationProperties.SetName(card, automationName + (on ? ", in use" : ""));
+        return card;
+    }
+
+    /// <summary>For the options self-test: the look the Buddy page's stage draws, and the mouse over a look's tile (null: leaving it).</summary>
+    internal string? HudStageForTest => _hudStageKey;
+    internal void HoverHudLookForTest(string? key)
+    {
+        if (key == null) { DrawHudStage(HudLooks.Parse(_edit.HudLook)); return; }
+        HudLookHost.Children.OfType<Border>().FirstOrDefault(b => (string)b.Tag == key)?.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
     }
 
     /// <summary>For the options self-test: a look's thumbnail clicked.</summary>
@@ -338,6 +426,7 @@ public partial class OptionsWindow : Window
             if (_loading) return;
             Edit(_edit with { HudScale = Math.Round(HudScale.Value, 2) });
             _host.PreviewHud(_edit.HudOpacity, _edit.HudScale);
+            if (_hudStageKey != null) DrawHudStage(_hudStageKey);   // the stage at the new size
         };
         AutoUpdateChk.Click += (_, _) => Edit(_edit with { AutoUpdate = AutoUpdateChk.IsChecked == true });
         // the window's size shows on the window as the slider moves (0.10.11); Save keeps it, Cancel puts the saved one back

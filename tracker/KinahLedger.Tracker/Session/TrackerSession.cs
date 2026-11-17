@@ -1424,6 +1424,7 @@ public sealed partial class TrackerSession
             foreach (var boxLine in lines.Where((l, i) => !playerText[i] && PickupCheck.IsBoxLine(l) && !GatheringCatalog.IsFindLine(l) && NewLine(l, now)))
             {
                 var until = WindowFrom(boxLine, now);
+                if (until > _boxOpenedUntil) _boxOpenedUntil = until;
                 if (until <= _boxUntil) continue;
                 if (now > _boxUntil && until > now) CrashLog.Note($"a box (\"{boxLine}\"): what prints with it is its contents, not drops");
                 _boxUntil = until;
@@ -2829,8 +2830,28 @@ public sealed partial class TrackerSession
         }
         string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
         if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
-        if (ev is RewardReceived || BoxName.IsMatch(name) && GatheringCatalog.Find(name) is not { AnyNode: true }) _boxUntil = now.AddSeconds(RewardWindowSeconds);
+        bool box = BoxName.IsMatch(name) && GatheringCatalog.Find(name) is not { AnyNode: true };
+        if (ev is RewardReceived || box) _boxUntil = now.AddSeconds(RewardWindowSeconds);
+        if (box) _boxOpenedUntil = now.AddSeconds(RewardWindowSeconds);
     }
+
+    /// <summary>
+    /// Until when a box's own line ("Acquired Ascension Binding Chest (Bound) x7.", a box obtained) says what lands is its
+    /// contents. Unlike <see cref="_boxUntil"/>, never opened by a bound Kina "payout" or by a line set aside as a reward:
+    /// the Abyss's misread Kina ("Acquired 6142 Kina (Bound)." for 614) opened that one on 2026-11-16 16:45, and the game's
+    /// data, which says exactly what came, then lost a Spiritstone (Bound) dropped among kills.
+    /// </summary>
+    DateTime _boxOpenedUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// Why a bound item the game's data shows coming, with no pickup line for it, is a quest's or a box's reward, or null:
+    /// an achievement's, a box opened, the inventory at work (storage, the wardrobe). With none of these and a kill around
+    /// it, it dropped (Steven, 2026-11-17: bound drops "counted apart", never lost).
+    /// </summary>
+    string? BoundRewardWhy(DateTime t) =>
+        t <= _achieveUntil ? "an achievement's reward"
+        : t <= _boxOpenedUntil ? "a box opened"
+        : t <= _inventoryUntil ? "the inventory at work" : null;
 
     /// <summary>
     /// The crafting panel's title, read the way the recognizer reads it: "Crafting in Progress", but also "Grafting

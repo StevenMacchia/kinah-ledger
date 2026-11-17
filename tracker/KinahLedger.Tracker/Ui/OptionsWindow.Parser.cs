@@ -9,34 +9,40 @@ using KinahLedger.Parser;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Options › In game › Parser (Steven, 2026-11-14: minimal by default; the extras are switches in Settings): the Parser
-/// page and its overlay show the boss, the clock and each member's DPS; these add the rest. On the page's preview-then-Save
-/// model: read from parser.json when Options opens, written on Save (ParserPrefs.Saved tells the window), dropped on Cancel.
+/// Options › DPS meter (Steven, 2026-11-17: its own page on the left bar; the settings revamp put it second, after Buddy).
+/// Like Buddy's page: the look in use drawn big over the game first, then its theme (apart from Buddy's: "you shouldnt
+/// have to choose the corresponding buddy"), its look, its width and when it shows, its spot and click-through; the
+/// meter's extras (minimal by default, Steven 2026-11-14) folded under More. On the page's preview-then-Save model: read
+/// from parser.json (and the window's meter switches) when Options opens, written on Save (ParserPrefs.Saved tells the
+/// window), dropped on Cancel.
 /// </summary>
 public partial class OptionsWindow
 {
+    /// <summary>The page's title: built once (the page's sentinel).</summary>
     TextBlock? _parserLabel;
-    /// <summary>The Parser's look row (the four looks that draw a fight, each in a boss fight), and its tiles' host.</summary>
-    FrameworkElement? _parserLookRow, _parserLookDivider, _parserAllLooks;
-    /// <summary>The look picked for the Parser's own window (saved with the Parser's switches).</summary>
+    /// <summary>The look row, and the "All looks" link (shown with the meter inside the Kinah overlay).</summary>
+    FrameworkElement? _parserLookRow, _parserAllLooks;
+    /// <summary>The look picked for the meter's own window (saved with the meter's switches).</summary>
     string _parserLookPick = ParserPrefs.StandardLook;
     /// <summary>
-    /// The theme whose looks the Parser's own window offers, apart from the Kinah overlay's theme (Steven, 2026-11-17: "you
+    /// The theme whose looks the meter's own window offers, apart from the Kinah overlay's theme (Steven, 2026-11-17: "you
     /// shouldnt have to choose the corresponding buddy if u dont want to in order to choose the DPS overlay"). Null: the
     /// theme of the look in use.
     /// </summary>
     string? _parserTheme;
     WrapPanel? _parserThemeHost;
+    FrameworkElement? _parserThemeRow;
 
-    /// <summary>The Parser window's looks in a theme: Classic's are Standard and the four drawn for fights; another theme's, all of its own.</summary>
+    /// <summary>The meter window's looks in a theme: Classic's are Standard and the four drawn for fights; another theme's, all of its own.</summary>
     internal static IReadOnlyList<string> ParserLooksOf(string theme) =>
         theme == HudThemes.Classic ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).ToList() : HudThemes.Looks(theme).Select(l => l.Key).ToList();
 
-    /// <summary>The theme a Parser look belongs to (Standard: Classic).</summary>
+    /// <summary>The theme a meter look belongs to (Standard: Classic).</summary>
     static string ParserThemeOf(string look) => look == ParserPrefs.StandardLook ? HudThemes.Classic : HudThemes.Of(look);
     UniformGrid? _parserLookHost;
+    /// <summary>The page's lead: what the looks are for (the meter's own window, or inside the Kinah overlay).</summary>
     TextBlock? _parserLookHint;
-    /// <summary>The big preview under the look buttons (Steven, 2026-11-15: "can't really see the previews... they're so small"):
+    /// <summary>The big preview at the top of the page (Steven, 2026-11-15: "can't really see the previews... they're so small"):
     /// the look under the mouse, else the one picked, drawn at the size it has over the game.</summary>
     Border? _parserLookStage;
     string? _parserLookShown;
@@ -50,6 +56,11 @@ public partial class OptionsWindow
     Button? _parserShareKeyOff;
     bool _parserShareCapturing;
     const string ShareKeyHintText = "Copies a picture of the meter, the fight under way or the last one, from anywhere, click-through on too. Off until you pick a key.";
+    /// <summary>The meter over the game, its click-through and when it shows (parser.json's Overlay, ClickThrough, AlwaysOn): kept on Save.</summary>
+    CheckBox _parserOverlayChk = null!, _parserThroughChk = null!;
+    ComboBox _parserWhenBox = null!;
+    /// <summary>The More fold's group, where later rows (the meter's share picture) go.</summary>
+    StackPanel _parserMoreStack = null!;
 
     void LoadParser()
     {
@@ -69,6 +80,10 @@ public partial class OptionsWindow
         _parserHideNamesChk.IsChecked = p.ShareHideNames;
         _parserShareKey = Platform.Hotkey.Parse(p.ShareHotkey) is { } sk ? sk.ToString() : ParserPrefs.DefaultHotkey;
         RefreshShareKey();
+        // the switches the window's Parser page also has: as the window holds them now
+        _parserOverlayChk.IsChecked = _host.ParserOverlayOn;
+        _parserThroughChk.IsChecked = _host.ParserOverlayClickThrough;
+        _parserWhenBox.SelectedIndex = _host.ParserAlwaysOn ? 1 : 0;
         // the slider shows the saved width; opening Settings never moves the meter (it reset the meter to the base width,
         // dropping the expanded meter's extra: Steven, 2026-11-15, "should never revert unless you change it")
         _parserWidthLoading = true;
@@ -81,15 +96,15 @@ public partial class OptionsWindow
     bool _parserWidthLoading;
 
     /// <summary>
-    /// The Parser group as loaded, to tell an unsaved change: its switches, look and width live in parser.json, not in the
-    /// page's edited copy, so a look picked here alone never lit Save (Steven, 2026-11-16: "i cant save it unless i also change the buddy").
+    /// The meter's choices as loaded, to tell an unsaved change: its switches, look and width live in parser.json, not in
+    /// the page's edited copy, so a look picked here alone never lit Save (Steven, 2026-11-16: "i cant save it unless i also change the buddy").
     /// </summary>
     string _parserSnap = "";
     string ParserSnap() => _parserLabel == null ? "" : string.Join("|",
-        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
+        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk }
             .Select(c => c.IsChecked == true ? "1" : "0"))
-        + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0) + "|" + _parserShareKey;
-    /// <summary>Something in the Parser group differs from parser.json: Save lights up for it.</summary>
+        + "|" + _parserWhenBox.SelectedIndex + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0) + "|" + _parserShareKey;
+    /// <summary>Something on the DPS meter page differs from parser.json: Save lights up for it.</summary>
     internal bool ParserDirty => _parserLabel != null && ParserSnap() != _parserSnap;
     double _parserWidthLoaded = double.NaN;
 
@@ -103,7 +118,14 @@ public partial class OptionsWindow
     void SaveParser()
     {
         if (_parserLabel == null) return;
+        // the window's own switches first (each saves parser.json as the window holds it), then this page's on top
+        _host.ParserOverlayOn = _parserOverlayChk.IsChecked == true;
+        _host.ParserOverlayClickThrough = _parserThroughChk.IsChecked == true;
+        _host.ParserAlwaysOn = _parserWhenBox.SelectedIndex == 1;
         var p = ParserPrefs.Load();
+        p.Overlay = _parserOverlayChk.IsChecked == true;
+        p.ClickThrough = _parserThroughChk.IsChecked == true;
+        p.AlwaysOn = _parserWhenBox.SelectedIndex == 1;
         p.Details = _parserDetailsChk.IsChecked == true;
         p.KillsNear = _parserKillsChk.IsChecked == true;
         p.Deaths = _parserDeathsChk.IsChecked == true;
@@ -135,25 +157,109 @@ public partial class OptionsWindow
         p.BackSource = on ? ParserPrefs.BackPick : ParserPrefs.BackDefault == "none" ? null : "none";
     }
 
+    /// <summary>A row on this window's pages: a title and a hint on the left, <paramref name="right"/> on the right.</summary>
+    Grid SideRow(string title, string hint, FrameworkElement right, string? tip = null)
+    {
+        var g = Styled(new Grid(), "Row");
+        g.ColumnDefinitions.Add(new ColumnDefinition());
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        sp.Children.Add(Styled(new TextBlock { Text = L.T(title) }, "RowTitle"));
+        if (hint.Length > 0) sp.Children.Add(Styled(new TextBlock { Text = L.T(hint), ToolTip = tip == null ? null : L.T(tip) }, "RowHint"));
+        g.Children.Add(sp);
+        right.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(right, 1);
+        g.Children.Add(right);
+        return g;
+    }
+
+    /// <summary>A compact row: a fixed-width title, then the control (the overlay pages' Theme and Look rows).</summary>
+    Grid LabelRow(string title, FrameworkElement control, string? tip = null)
+    {
+        var g = Styled(new Grid(), "Row");
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
+        g.ColumnDefinitions.Add(new ColumnDefinition());
+        g.Children.Add(Styled(new TextBlock { Text = L.T(title), VerticalAlignment = VerticalAlignment.Center, ToolTip = tip == null ? null : L.T(tip) }, "RowTitle"));
+        Grid.SetColumn(control, 1);
+        g.Children.Add(control);
+        return g;
+    }
+
+    /// <summary>An overlay page's header: its title and lead on the left, its "Show over the game" switch on the right.</summary>
+    Grid OverlayHeader(TextBlock title, TextBlock lead, CheckBox show, string showName)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition());
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.Children.Add(new StackPanel { Children = { title, lead } });
+        var said = new TextBlock { Text = L.T("Show over the game"), FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        said.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        AutomationProperties.SetName(show, showName);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { said, show } };
+        Grid.SetColumn(right, 1);
+        g.Children.Add(right);
+        return g;
+    }
+
     void BuildParser()
     {
-        _parserLabel = Styled(new TextBlock { Text = L.T("PARSER") }, "GroupLabel");
+        // the header: the title, what the looks are for, and the meter's on/off
+        _parserLabel = Styled(new TextBlock { Text = L.T("DPS meter") }, "PageTitle");
+        _parserLookHint = Styled(new TextBlock(), "PageLead");
+        _parserOverlayChk = Styled(new CheckBox(), "Switch");
+        _parserOverlayChk.ToolTip = L.T("The meter over the game in boss fights and dungeons, or always (When it shows).");
+        _parserOverlayChk.Click += (_, _) => Refresh();
+        PageMeter.Children.Add(OverlayHeader(_parserLabel, _parserLookHint, _parserOverlayChk, "Show the DPS meter over the game"));
+
+        // the stage: the look in use (or under the mouse) in a boss fight, big, over the game
+        _parserLookStage = new Border { Margin = new Thickness(0, 12, 0, 0) };
+        AutomationProperties.SetName(_parserLookStage, "Overlay look preview");
+        PageMeter.Children.Add(_parserLookStage);
+
         var stack = new StackPanel();
+        // its own theme chips: its looks come from here, whatever the Kinah overlay's theme
+        _parserThemeHost = new WrapPanel { Margin = new Thickness(0, 0, 0, -6) };
+        AutomationProperties.SetName(_parserThemeHost, "Parser overlay theme");
+        _parserThemeRow = LabelRow("Theme", _parserThemeHost);
+        stack.Children.Add(_parserThemeRow);
+        stack.Children.Add(Styled(new Border(), "Divider"));
+        // the look tiles; with the meter inside the Kinah overlay, "All looks" goes to Buddy's picker (the older looks)
+        _parserLookHost = new UniformGrid { Rows = 1 };
+        var lookCol = new StackPanel { Children = { _parserLookHost } };
+        var all = new TextBlock { Text = L.T("All looks  ›"), FontSize = 12, FontWeight = FontWeights.SemiBold, Cursor = Cursors.Hand, Background = Brushes.Transparent, Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        all.SetResourceReference(TextBlock.ForegroundProperty, "Link");
+        all.MouseEnter += (_, _) => all.TextDecorations = TextDecorations.Underline;
+        all.MouseLeave += (_, _) => all.TextDecorations = null;
+        all.MouseLeftButtonUp += (_, _) => Go(Page.InGame);
+        AutomationProperties.SetName(all, "All panel looks");
+        _parserAllLooks = all;
+        lookCol.Children.Add(all);
+        _parserLookRow = LabelRow("Overlay look", lookCol);
+        stack.Children.Add(_parserLookRow);
+        stack.Children.Add(Styled(new Border(), "Divider"));
+        stack.Children.Add(BuildParserWidthRow());
+        stack.Children.Add(Styled(new Border(), "Divider"));
+        // its spot and click-through, on one row
+        var reset = new Button { Content = L.T("Reset position"), Margin = new Thickness(0, 0, 18, 0), ToolTip = L.T("Back to its first spot over the game. Acts at once.") };
+        reset.Click += (_, _) => { _host.ResetParserOverlayPosition(); Footer(L.T("The meter is back at its first spot."), "Good"); };
+        _parserThroughChk = Styled(new CheckBox(), "Switch");
+        AutomationProperties.SetName(_parserThroughChk, "DPS meter click-through");
+        _parserThroughChk.Click += (_, _) => Refresh();
+        var throughSaid = new TextBlock { Text = L.T("Click-through"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0), ToolTip = L.T("On: clicks pass through it to the game. Off: drag it anywhere, and drag its edges to resize it.") };
+        throughSaid.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
+        var place = new StackPanel { Orientation = Orientation.Horizontal, Children = { reset, throughSaid, _parserThroughChk } };
+        stack.Children.Add(SideRow("Meter position", "Drag it anywhere while click-through is off.", place));
+        PageMeter.Children.Add(Styled(new Border { Child = stack, Margin = new Thickness(0, 10, 0, 0) }, "Group"));
+
+        // More: the extras, each off or on as the honest pass left them
+        var more = new StackPanel { Tag = "More" };
+        _parserMoreStack = new StackPanel();
         CheckBox Row(string title, string hint, string name)
         {
-            var g = Styled(new Grid(), "Row");
-            g.ColumnDefinitions.Add(new ColumnDefinition());
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var sp = new StackPanel();
-            sp.Children.Add(Styled(new TextBlock { Text = L.T(title) }, "RowTitle"));
-            sp.Children.Add(Styled(new TextBlock { Text = L.T(hint) }, "RowHint"));
-            g.Children.Add(sp);
             var cb = Styled(new CheckBox(), "Switch");
             AutomationProperties.SetName(cb, title);
-            Grid.SetColumn(cb, 1);
-            g.Children.Add(cb);
-            if (stack.Children.Count > 0) stack.Children.Add(Styled(new Border(), "Divider"));
-            stack.Children.Add(g);
+            if (_parserMoreStack.Children.Count > 0) _parserMoreStack.Children.Add(Styled(new Border(), "Divider"));
+            _parserMoreStack.Children.Add(SideRow(title, hint, cb));
             cb.Click += (_, _) => Refresh();   // the footer says there is something to save
             return cb;
         }
@@ -168,67 +274,35 @@ public partial class OptionsWindow
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
         _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
         _parserSeparateChk.Click += (_, _) => DrawParserLooks();
-        // the meter's share picture (Ui/MeterShare.cs): other members' names hidden on it, and a shortcut of its own
-        _parserHideNamesChk = Row("Hide other names", "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.", "Parser share picture hide other names");
-        stack.Children.Add(Styled(new Border(), "Divider"));
-        stack.Children.Add(BuildShareKeyRow());
-        // the overlay's look, first in the group (Steven, 2026-11-14: "idk how to change the style"): the four looks that draw
-        // a fight, each drawn in a boss fight; a click picks it, the same choice as The panel › Panel look
-        stack.Children.Insert(0, Styled(new Border(), "Divider"));
-        stack.Children.Insert(0, BuildParserWidthRow());
-        stack.Children.Insert(0, _parserLookDivider = Styled(new Border(), "Divider"));
-        stack.Children.Insert(0, BuildParserLookRow());
-        var group = Styled(new Border { Child = stack }, "Group");
-        // the DPS meter's own page on the left bar (Steven, 2026-11-17), apart from the Buddy page
-        PageMeter.Children.Add(_parserLabel); PageMeter.Children.Add(group);
-    }
-
-    FrameworkElement BuildParserLookRow()
-    {
-        var box = new StackPanel { Margin = new Thickness(18, 13, 18, 15) };
-        var top = new Grid();
-        top.ColumnDefinitions.Add(new ColumnDefinition());
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Styled(new TextBlock { Text = L.T("Overlay look") }, "RowTitle"));
-        // the older looks (Badge, Buddy, Pop) and the real-size preview stay with The panel's picker
-        var all = new TextBlock { Text = L.T("All looks  ›"), FontSize = 12, FontWeight = FontWeights.SemiBold, Cursor = Cursors.Hand, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-        all.SetResourceReference(TextBlock.ForegroundProperty, "Link");
-        all.MouseEnter += (_, _) => all.TextDecorations = TextDecorations.Underline;
-        all.MouseLeave += (_, _) => all.TextDecorations = null;
-        all.MouseLeftButtonUp += (_, _) => { Go(Page.InGame); Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => HudLookHost.BringIntoView()); };
-        AutomationProperties.SetName(all, "All panel looks");
-        Grid.SetColumn(all, 1); top.Children.Add(all);
-        _parserAllLooks = all;
-        box.Children.Add(top);
-        _parserLookHint = Styled(new TextBlock(), "RowHint");
-        box.Children.Add(_parserLookHint);
-        // the Parser window's own theme chips: its looks come from here, whatever the Kinah overlay's theme
-        _parserThemeHost = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-        AutomationProperties.SetName(_parserThemeHost, "Parser overlay theme");
-        box.Children.Add(_parserThemeHost);
-        _parserLookHost = new UniformGrid { Columns = 4, Margin = new Thickness(0, 10, 0, 0) };
-        box.Children.Add(_parserLookHost);
-        _parserLookStage = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 8, 0, 0), MinHeight = 200 };
-        AutomationProperties.SetName(_parserLookStage, "Overlay look preview");
-        box.Children.Add(_parserLookStage);
-        _parserLookRow = box;
-        return box;
+        more.Children.Add(Styled(new Border { Child = _parserMoreStack, Margin = new Thickness(0, 8, 0, 0) }, "Group"));
+        // the meter's share picture (Ui/MeterShare.cs, 1.0.2): other members' names hidden on it, and a shortcut of its own
+        var share = new StackPanel();
+        _parserHideNamesChk = Styled(new CheckBox(), "Switch");
+        AutomationProperties.SetName(_parserHideNamesChk, "Hide other names");
+        _parserHideNamesChk.Click += (_, _) => Refresh();
+        share.Children.Add(SideRow("Hide other names", "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.", _parserHideNamesChk));
+        share.Children.Add(Styled(new Border(), "Divider"));
+        share.Children.Add(BuildShareKeyRow());
+        more.Children.Add(Styled(new TextBlock { Text = L.T("SHARE PICTURE") }, "GroupLabel"));
+        more.Children.Add(Styled(new Border { Child = share }, "Group"));
+        PageMeter.Children.Add(more);
+        Fold(more);
     }
 
     /// <summary>
     /// The meter's width (Steven, 2026-11-14: "maybe an option to make it wider?"), apart from the overlay's size: the rows
-    /// and names stretch, the figures stay at the right. Shown on the overlay as it moves; Save keeps it, Cancel puts it back.
+    /// and names stretch, the figures stay at the right. Shown on the overlay as it moves; Save keeps it, Cancel puts it
+    /// back. When it shows shares the row: boss fights and dungeons (the default), or always (parser.json AlwaysOn).
     /// </summary>
     FrameworkElement BuildParserWidthRow()
     {
         var g = Styled(new Grid(), "Row");
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var sp = new StackPanel();
-        sp.Children.Add(Styled(new TextBlock { Text = L.T("Width") }, "RowTitle"));
-        sp.Children.Add(Styled(new TextBlock { Text = L.T("How wide the meter is over the game. You can also drag its left or right edge while the overlay can be moved.") }, "RowHint"));
-        g.Children.Add(sp);
-        _parserWidth = new Slider { Width = 140, Minimum = HudStackLook.FightWidthMin, Maximum = HudStackLook.FightWidthMax, TickFrequency = 10, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center, Value = HudStackLook.FightWidth };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.Children.Add(Styled(new TextBlock { Text = L.T("Width"), VerticalAlignment = VerticalAlignment.Center, ToolTip = L.T("How wide the meter is over the game. You can also drag its left or right edge while the overlay can be moved.") }, "RowTitle"));
+        _parserWidth = new Slider { Width = 116, Minimum = HudStackLook.FightWidthMin, Maximum = HudStackLook.FightWidthMax, TickFrequency = 10, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center, Value = HudStackLook.FightWidth };
         AutomationProperties.SetName(_parserWidth, "Parser overlay width");
         _parserWidthLbl = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), Width = 40 };
         _parserWidthLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
@@ -237,10 +311,20 @@ public partial class OptionsWindow
         _parserWidth.ValueChanged += (_, e) =>
         {
             Label();
-            if (!_parserWidthLoading) { _host.PreviewFightWidth(Math.Round(e.NewValue)); Refresh(); }
+            if (_parserWidthLoading) return;
+            _host.PreviewFightWidth(Math.Round(e.NewValue));
+            if (_parserLookStage != null) { _parserLookStage.Tag = null; DrawParserStage(_parserLookShown); }   // the stage at the new width
+            Refresh();
         };
-        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _parserWidth, _parserWidthLbl } };
-        Grid.SetColumn(right, 1); g.Children.Add(right);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _parserWidth, _parserWidthLbl } };
+        Grid.SetColumn(left, 1); g.Children.Add(left);
+        var when = Styled(new TextBlock { Text = L.T("When it shows"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) }, "RowTitle");
+        Grid.SetColumn(when, 2); g.Children.Add(when);
+        _parserWhenBox = new ComboBox { Width = 222, VerticalAlignment = VerticalAlignment.Center, ItemsSource = new[] { L.T("Boss fights and dungeons"), L.T("Always") } };
+        AutomationProperties.SetName(_parserWhenBox, "When the DPS meter shows");
+        _parserWhenBox.ToolTip = L.F(" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {0:0} seconds without fighting.", BossParser.AlwaysIdleSeconds).Trim();
+        _parserWhenBox.SelectionChanged += (_, _) => Refresh();
+        Grid.SetColumn(_parserWhenBox, 3); g.Children.Add(_parserWhenBox);
         return g;
     }
 
@@ -250,11 +334,11 @@ public partial class OptionsWindow
     /// </summary>
     FrameworkElement BuildShareKeyRow()
     {
-        var box = new StackPanel { Margin = new Thickness(18, 13, 18, 15) };
+        var box = new StackPanel { Margin = new Thickness(16, 10, 16, 12) };
         box.Children.Add(Styled(new TextBlock { Text = L.T("Share picture shortcut") }, "RowTitle"));
         _parserShareKeyHint = Styled(new TextBlock { Text = L.T(ShareKeyHintText) }, "RowHint");
         box.Children.Add(_parserShareKeyHint);
-        var row = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        var row = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         _parserShareKeyBox = new TextBox { Width = 190, IsReadOnly = true, HorizontalContentAlignment = HorizontalAlignment.Center, FontFamily = new FontFamily("Consolas"), FontSize = 14, Cursor = Cursors.Arrow, Margin = new Thickness(0, 0, 8, 0) };
         AutomationProperties.SetName(_parserShareKeyBox, "Share picture shortcut");
         var change = new Button { Content = L.T("Change"), Margin = new Thickness(0, 0, 8, 0) };
@@ -351,7 +435,7 @@ public partial class OptionsWindow
     /// <summary>For the options test: the Width slider.</summary>
     internal Slider? ParserWidthForTest => _parserWidth;
     internal bool? ParserLookRowShownForTest => _parserLookRow?.Visibility == Visibility.Visible;
-    /// <summary>For the options test: a click on a look button (the Parser's own window's look, or inside the Kinah overlay the Kinah overlay's).</summary>
+    /// <summary>For the options test: a click on a look tile (the meter's own window's look, or inside the Kinah overlay the Kinah overlay's).</summary>
     internal void PickParserLookForTest(string key)
     {
         var card = _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => (string)b.Tag == key);
@@ -359,9 +443,9 @@ public partial class OptionsWindow
     }
 
     /// <summary>
-    /// The look buttons, the one in use outlined, the big stage drawing the one hovered or picked. With the Parser in its
-    /// own window (the default) they are that window's looks, apart from the Kinah overlay's: Standard (its own panel) and
-    /// the four drawn for fights, fight alone. Inside the Kinah overlay they are the Kinah overlay's four fight looks.
+    /// The look tiles, the one in use outlined, the stage drawing the one hovered or picked. With the meter in its own window
+    /// (the default) they are that window's looks, apart from the Kinah overlay's: Standard (its own panel) and the four
+    /// drawn for fights, fight alone, or another theme's. Inside the Kinah overlay they are the Kinah overlay's fight looks.
     /// </summary>
     void DrawParserLooks()
     {
@@ -370,15 +454,14 @@ public partial class OptionsWindow
         if (_parserLookStage != null) _parserLookStage.Tag = null;
         bool separate = _parserSeparateChk?.IsChecked != true;
         if (_parserLookRow != null) _parserLookRow.Visibility = Visibility.Visible;
-        if (_parserLookDivider != null) _parserLookDivider.Visibility = Visibility.Visible;
         if (_parserAllLooks != null) _parserAllLooks.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
         var current = separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook);
-        // in its own window the Parser has a theme of its own (its chips); inside the Kinah overlay it is the overlay's theme
+        // in its own window the meter has a theme of its own (its chips); inside the Kinah overlay it is the overlay's theme
         if (separate) _parserTheme ??= ParserThemeOf(current);
         if (_parserThemeHost != null)
         {
             _parserThemeHost.Children.Clear();
-            _parserThemeHost.Visibility = separate ? Visibility.Visible : Visibility.Collapsed;
+            if (_parserThemeRow != null) _parserThemeRow.Visibility = separate ? Visibility.Visible : Visibility.Collapsed;
             if (separate)
                 foreach (var t in HudThemes.All)
                 {
@@ -389,15 +472,12 @@ public partial class OptionsWindow
                 }
         }
         var keys = separate ? ParserLooksOf(_parserTheme!).ToArray() : HudThemes.FightLooks(_hudTheme ?? HudThemes.Of(_edit.HudLook)).ToArray();   // the Kinah overlay's theme (Ui/OptionsWindow.Themes.cs)
-        if (_parserLookHost is UniformGrid ug) ug.Columns = keys.Length;
+        _parserLookHost.Columns = Math.Max(3, keys.Length);
         string inUseName = separate ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
         _parserLookHint.Text = separate
-            ? L.T("How the Parser's own window looks over the game. The Kinah overlay keeps its own look.")
+            ? L.T("Its own look over the game, apart from the Buddy's.")
             : HudLooks.FightLooks.Contains(current) ? L.T("How a boss fight shows over the game, in a dungeon in place of the Kinah line. Picking one here picks the Kinah overlay's look too.")
             : L.F("In use: {0}, the Parser above it. Pick one drawn for fights, or see all looks.", L.T(inUseName));
-        var sample = _host.HudSample();
-        var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
-        var (_, fight) = ParserDemo.Sample(now, live: true);
         var scene = HudKit.GameScene();   // over the game (Steven, 2026-11-16)
         _parserLookShown = keys.Contains(current) ? current : keys[0];
         foreach (var key in keys)
@@ -405,84 +485,72 @@ public partial class OptionsWindow
             string lookName = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
             string hint = L.T(key == ParserPrefs.StandardLook ? "The Parser's own panel: the boss, the clock, the group on class-coloured bars." : HudLooks.All.First(x => x.Key == key).Hint);
             bool on = key == current;
-            // a button per look, the big stage below draws it: four thumbnails side by side came out ~110 px tall, unreadable
-            var name = new TextBlock { Text = L.T(lookName), FontSize = 13, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
-            name.SetResourceReference(TextBlock.ForegroundProperty, on ? "Ink" : "Muted");
-            var card = new Border
-            {
-                CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 7, 8, 7), Cursor = Cursors.Hand, BorderThickness = new Thickness(on ? 2 : 1),
-                Child = name, ToolTip = hint, Focusable = true, Tag = key,
-            };
-            card.SetResourceReference(Border.BackgroundProperty, "Card2");
-            card.SetResourceReference(Border.BorderBrushProperty, on ? "Link" : "LineStrong");
-            card.FocusVisualStyle = (Style)FindResource("FocusRing");
-            AutomationProperties.SetName(card, lookName + " overlay look" + (on ? ", in use" : ""));
-            void Pick() { if (separate) { _parserLookPick = key; DrawParserLooks(); Refresh(); } else PickHudLook(key); }
+            var k = key;
+            var card = LookTile(key, L.T(lookName), hint, on, () => ParserFace(k, separate), scene, lookName + " overlay look");
+            void Pick() { if (separate) { _parserLookPick = k; DrawParserLooks(); Refresh(); } else PickHudLook(k); }
             card.MouseLeftButtonUp += (_, _) => Pick();
             card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Pick(); e.Handled = true; } };
-            card.MouseEnter += (_, _) => ShowParserLook(key, sample, fight!, now, scene);
-            card.GotKeyboardFocus += (_, _) => ShowParserLook(key, sample, fight!, now, scene);
-            card.MouseLeave += (_, _) => ShowParserLook(_parserLookShown, sample, fight!, now, scene);
+            card.MouseEnter += (_, _) => DrawParserStage(k);
+            card.GotKeyboardFocus += (_, _) => DrawParserStage(k);
+            card.MouseLeave += (_, _) => DrawParserStage(_parserLookShown);
             _parserLookHost.Children.Add(card);
         }
-        ShowParserLook(_parserLookShown, sample, fight!, now, scene);
+        DrawParserStage(_parserLookShown);
     }
 
-    /// <summary>The stage: one look in a boss fight at its real size over a dark game scene, scaled down only past the page's width.</summary>
-    void ShowParserLook(string? key, IReadOnlyDictionary<string, string> sample, Encounter fight, DateTime now, Brush scene)
+    /// <summary>One look in a boss fight (the sample pull), as the meter's own window or the Kinah overlay draws it; null when it fails.</summary>
+    FrameworkElement? ParserFace(string key, bool separate)
+    {
+        var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
+        var (_, fight) = ParserDemo.Sample(now, live: true);
+        try { return separate ? ParserOverlay.PreviewFace(key, fight!, now, fight!.ModeKind, false) : HudWindow.PreviewFight(key, _host.HudSample(), fight!, now); }
+        catch (Exception ex) { CrashLog.Write("parser look preview", ex); return null; }
+    }
+
+    /// <summary>The stage: one look in a boss fight at its real size over the game scene, scaled down only past the stage.</summary>
+    void DrawParserStage(string? key)
     {
         if (_parserLookStage == null || key == null) return;
         if (_parserLookStage.Tag as string == key) return;
-        FrameworkElement face;
         bool separate = _parserSeparateChk?.IsChecked != true;
-        try { face = separate ? ParserOverlay.PreviewFace(key, fight, now, fight.ModeKind, false) : HudWindow.PreviewFight(key, sample, fight, now); }
-        catch (Exception ex) { CrashLog.Write("parser look preview", ex); return; }
-        face.HorizontalAlignment = HorizontalAlignment.Center;
-        face.VerticalAlignment = VerticalAlignment.Center;
-        _parserLookStage.Background = scene;
+        if (ParserFace(key, separate) is not { } face) return;
+        bool inUse = key == (separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook));
+        string name = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
+        var stage = Stage(face, L.T(name), inUse ? L.T("in use") : L.T("hover to compare · click to pick"), 196);
         _parserLookStage.Tag = key;
-        _parserLookStage.Child = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _parserLookStage.Child = stage;
     }
 
-    /// <summary>In game, scrolled to the Parser's look row (the Parser page's "Look" link).</summary>
-    public void ShowParserLook()
-    {
-        Go(Page.Meter);
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
-        {
-            if (_parserLabel == null) return;
-            // the group's label at the top of the view, the look row under it
-            var at = _parserLabel.TransformToAncestor(Scroller).Transform(new Point(0, 0));
-            Scroller.ScrollToVerticalOffset(Math.Max(0, Scroller.VerticalOffset + at.Y - 8));
-        });
-    }
+    /// <summary>The DPS meter page (the Parser page's "Look" link).</summary>
+    public void ShowParserLook() => Go(Page.Meter);
 
-    /// <summary>For the options test: the Parser's look tiles (their keys) and which is outlined.</summary>
     /// <summary>For the options test: the look the big preview draws.</summary>
     internal string? ParserLookStageForTest => _parserLookStage?.Tag as string;
 
-    /// <summary>For the options test: the mouse entering a look button (a key), or leaving it (null).</summary>
+    /// <summary>For the options test: the mouse entering a look tile (a key), or leaving it (null).</summary>
     internal void HoverParserLookForTest(string? key)
     {
         var card = _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => key == null ? b.IsMouseOver == false : (string)b.Tag == key);
         card?.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = key == null ? UIElement.MouseLeaveEvent : UIElement.MouseEnterEvent });
     }
 
-    /// <summary>For the options test: the Parser window's own theme, and a click on one of its theme chips.</summary>
+    /// <summary>For the options test: the meter window's own theme, and a click on one of its theme chips.</summary>
     internal string? ParserThemeForTest => _parserTheme;
     internal void PickParserThemeForTest(string theme) { if (theme == _parserTheme) return; _parserTheme = theme; DrawParserLooks(); }
 
+    /// <summary>For the options test: the look tiles (their keys) and which is outlined.</summary>
     internal (List<string> Keys, string? On) ParserLooksForTest => (_parserLookHost?.Children.OfType<Border>().Select(b => (string)b.Tag).ToList() ?? new(),
         _parserLookHost?.Children.OfType<Border>().FirstOrDefault(b => b.BorderThickness.Left > 1)?.Tag as string);
 
-    /// <summary>For the options test: the Parser group's switches.</summary>
+    /// <summary>For the options test: the meter's switches.</summary>
     internal (CheckBox Details, CheckBox Kills, CheckBox Deaths, CheckBox Filters, CheckBox Hovers, CheckBox Separate, CheckBox Active) ParserSwitchesForTest => (_parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk);
 
-    /// <summary>For the options test: the crit and back-attack switch.</summary>
+    /// <summary>For the options test: the crit and back-attack switch, the heal bars, and the header's on/off, click-through and When it shows.</summary>
     internal CheckBox ParserCritForTest => _parserCritChk;
     internal CheckBox ParserHealBarsForTest => _parserHealBarsChk;
+    internal (CheckBox Show, CheckBox Through, ComboBox When) ParserOverlaySwitchesForTest => (_parserOverlayChk, _parserThroughChk, _parserWhenBox);
 
-    /// <summary>For the options test: every switch's title in the Parser group.</summary>
+    /// <summary>For the options test: every switch's title under More.</summary>
     internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }
