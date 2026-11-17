@@ -26,10 +26,10 @@ sealed partial class HudScorebug : IThemeCard
         // the name bar: emblem on the class's colour | GLADIATOR over the name on dark | CP on slate
         var head = new Grid { Height = 42 };
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var emblem = new Block(c.ClassColor, ClassArt.Icon(c.Class, 26, c.Name), 42, new Thickness(10, 0, 12, 0), leanLeft: false);
+        var emblem = new Block(c.ClassColor, ThemeText.Icon(c.Class, 26, c.Name), 42, new Thickness(10, 0, 12, 0), leanLeft: false);
         head.Children.Add(emblem.Root);
         var who = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var cls = Cap(c.Class, Grey, 9.5); cls.Margin = new Thickness(0, 0, 0, -3);
+        var cls = Cap(c.ClassName, Grey, 9.5); cls.Margin = new Thickness(0, 0, 0, -3);
         who.Children.Add(cls);
         var name = T(c.Name, 20, c.You ? Yellow : Frozen(c.NameColor)); name.TextTrimming = TextTrimming.CharacterEllipsis;
         who.Children.Add(name);

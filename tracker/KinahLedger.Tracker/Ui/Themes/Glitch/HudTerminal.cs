@@ -157,7 +157,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
     static Border Beep() => new()
     {
         Background = Br(AmberC), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(10, 0, 0, 0), Visibility = Visibility.Hidden, VerticalAlignment = VerticalAlignment.Center,
-        Child = Txt("BEEP", 11, Br(GroundC), CrtFace),
+        Child = Txt(L.T("BEEP"), 11, Br(GroundC), CrtFace),
     };
 
     /// <summary>The bar's "¦" at a third and two thirds: a broken pale line standing a little out of the bar.</summary>
@@ -195,7 +195,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
     {
         var (run, clock, odd) = RunClock(Values);
         run = run || Values.GetValueOrDefault("run") == "1";
-        _runClock.Text = $"[{(run ? "run " : "")}{(clock.Length > 0 ? clock : "0:00")}]";
+        _runClock.Text = $"[{(run ? L.T("run") + " " : "")}{(clock.Length > 0 ? clock : "0:00")}]";
         _cursor.Opacity = odd ? 1 : .28;
         var p0 = Picks(Values).FirstOrDefault();
         var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{p0?.Id}";
@@ -203,7 +203,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _figSig = sig;
 
         // the prompt: the rate asked for; a new best, the record written
-        _prompt.Text = f.Beat ? "> record --new" : f.Abyss ? "> abyss --rate" : "> kinah --rate";
+        _prompt.Text = f.Beat ? L.T("> record --new") : f.Abyss ? L.T("> abyss --rate") : L.T("> kinah --rate");
         _ok.Visibility = f.Beat ? Visibility.Visible : Visibility.Collapsed;
 
         _figLine.Children.Clear();
@@ -301,7 +301,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _cam.Root.Width = FightWidth;
         var name = e.Title.ToLower(System.Globalization.CultureInfo.CurrentCulture);
         _fightPrompt.Inlines.Clear();
-        _fightPrompt.Inlines.Add(Rn("> fight ", PhosDim));
+        _fightPrompt.Inlines.Add(Rn(L.T("> fight "), PhosDim));
         _fightPrompt.Inlines.Add(Rn(e.Title, Pale, null, FontWeights.Bold));
         _rowsHost.Children.Clear(); _foot.Content = null; _rowsHost.Visibility = Visibility.Collapsed; _foot.Visibility = Visibility.Collapsed;
         if (e.Waiting)
@@ -422,7 +422,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         // the boot lines over the head (the meter stays drawn under them)
         var cover = new Border { CornerRadius = new CornerRadius(7, 7, 0, 0), Background = Br(GroundC), Padding = new Thickness(12, 7, 12, 6), VerticalAlignment = VerticalAlignment.Top, BorderBrush = Br(PhosC, .5), BorderThickness = new Thickness(0, 0, 0, 1) };
         var lines = new StackPanel();
-        var l1 = Txt("> fight start", 12.5, Pale, Face);
+        var l1 = Txt(L.T("> fight start"), 12.5, Pale, Face);
         var l2 = Txt("  " + L.F("attach {0} ... ok", e.Title), 12, Phos, Face, FontWeights.SemiBold, trim: true);
         var l3 = Txt("  " + L.T("[ ok ] meter online"), 12, Phos, Face, FontWeights.SemiBold);
         var cur = new Border { Width = 7.5, Height = 14, Background = Phos, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };

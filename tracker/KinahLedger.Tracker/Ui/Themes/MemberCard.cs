@@ -29,6 +29,8 @@ public sealed record MemberCard(Fighter F, string Name, string Class, Color Clas
     string Dps, string Share, string Damage, string Crit, string CritShare, string Back, bool CritCol, bool BackCol,
     IReadOnlyList<CardAbility> Abilities, string More, string MoreDamage, string Hits, string Biggest, string Healed, int Deaths, string DeathsText, string Cp)
 {
+    /// <summary>The class's name in the language in use (<see cref="Class"/> is the data's, which the icon and the colours go by).</summary>
+    public string ClassName => ThemeText.Class(Class);
     /// <summary>"4.1K DPS  ·  32.0%  ·  1.27M damage": the card's figures line, as the Classic card says it.</summary>
     public string SumsLine => string.Join("  ·  ", new[] { Dps.Length > 0 ? L.F("{0} DPS", Dps) : "", Share, L.F("{0} damage", Damage) }.Where(s => s.Length > 0));
     /// <summary>"34% crit  ·  41% of the damage from crits  ·  12% from behind", empty without rates.</summary>
@@ -64,6 +66,26 @@ public sealed record MemberCard(Fighter F, string Name, string Class, Color Clas
             abilities, more > 0 ? more.ToString(System.Globalization.CultureInfo.InvariantCulture) : "", more > 0 ? Amounts.Short(dealt.Skip(ParserRows.CardAbilities).Sum(x => x.Damage)) : "",
             hits > 0 ? L.F("{0:N0} hits", hits) : "", biggest, healed, f.Deaths, f.Deaths > 0 ? L.F(f.Deaths == 1 ? "{0} death" : "{0} deaths", f.Deaths) : "",
             f.CombatPower > 0 ? Amounts.Meter(f.CombatPower) : "");
+    }
+}
+
+/// <summary>Words every theme says the same way.</summary>
+public static class ThemeText
+{
+    /// <summary>A class's name in the language in use (the game's official names; the data's own text for a class that is none of the eight).</summary>
+    public static string Class(string? cls) => ClassArt.Key(cls) switch
+    {
+        "gladiator" => L.T("Gladiator"), "templar" => L.T("Templar"), "assassin" => L.T("Assassin"), "ranger" => L.T("Ranger"),
+        "sorcerer" => L.T("Sorcerer"), "spiritmaster" => L.T("Spiritmaster"), "cleric" => L.T("Cleric"), "chanter" => L.T("Chanter"),
+        _ => cls ?? "",
+    };
+
+    /// <summary>The class's icon with its name, in the language in use, as its hover text.</summary>
+    public static FrameworkElement Icon(string? cls, double size, string name = "")
+    {
+        var icon = ClassArt.Icon(cls, size, name);
+        if (ClassArt.Key(cls).Length > 0) icon.ToolTip = Class(cls);
+        return icon;
     }
 }
 

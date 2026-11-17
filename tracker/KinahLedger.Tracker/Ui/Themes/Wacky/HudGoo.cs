@@ -598,7 +598,7 @@ sealed class HudGoo : WackyLook, IThemeCard
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var icon = ClassArt.Icon(c.Class, 20, c.Name); icon.Margin = new Thickness(0, 0, 7, 0);
+        var icon = ThemeText.Icon(c.Class, 20, c.Name); icon.Margin = new Thickness(0, 0, 7, 0);
         head.Children.Add(icon);
         TextBlock N(Brush b) { var t = Wk.Words(c.Name, 15, b, Wk.Heavy, FontWeights.Black); t.TextTrimming = TextTrimming.CharacterEllipsis; return t; }
         var dropName = N(NightB); dropName.RenderTransform = new TranslateTransform(0, 2);
@@ -610,7 +610,7 @@ sealed class HudGoo : WackyLook, IThemeCard
         var cp = Candy(cpText, 0xFFFFFF, 0xEBDCFF, 0x8E6CC8, 9, new Thickness(7, 0, 8, 1));
         cp.Margin = new Thickness(8, 0, 0, 0); cp.Visibility = c.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         WkCard.Put(head, WkCard.NameLine(name, cp), 1);
-        var cls = Wk.Words(c.Class, 10.5, lilac, Wk.Segoe, FontWeights.Bold); cls.Margin = new Thickness(10, 1, 0, 0); cls.Opacity = .85;
+        var cls = Wk.Words(c.ClassName, 10.5, lilac, Wk.Segoe, FontWeights.Bold); cls.Margin = new Thickness(10, 1, 0, 0); cls.Opacity = .85;
         WkCard.Put(head, cls, 2);
         stack.Children.Add(head);
         // the figures: three candies
@@ -826,7 +826,7 @@ sealed class HudGoo : WackyLook, IThemeCard
             _twistL.Fill = _twistR.Fill = Wk.S(Wk.Shade(ball, -.1)); _twistL.Stroke = _twistR.Stroke = Wk.S(Wk.Shade(ball, -.55));
             _rank.Text = _rankDrop.Text = m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture);
             _rank.Foreground = m.You ? Wk.S(Grape2) : WhiteB; _rankDrop.Visibility = m.You ? Visibility.Hidden : Visibility.Visible;
-            if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ClassArt.Icon(m.Class, 17, m.Name); }
+            if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ThemeText.Icon(m.Class, 17, m.Name); }
             _name.Text = m.Name;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)

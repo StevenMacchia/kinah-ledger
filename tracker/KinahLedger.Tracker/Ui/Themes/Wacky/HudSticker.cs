@@ -493,7 +493,7 @@ sealed class HudSticker : WackyLook, IThemeCard
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var icon = ClassArt.Icon(c.Class, 20, c.Name); icon.Margin = new Thickness(0, 0, 7, 0);
+        var icon = ThemeText.Icon(c.Class, 20, c.Name); icon.Margin = new Thickness(0, 0, 7, 0);
         head.Children.Add(icon);
         var name = Wk.Words(c.Name, 15, c.You ? Wk.S(0xFFC94A) : new SolidColorBrush(c.NameColor), Wk.Heavy, Black);
         name.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -502,7 +502,7 @@ sealed class HudSticker : WackyLook, IThemeCard
         cp.Inlines.Add(new Run(c.Cp) { FontSize = 11.5, FontWeight = Black, Foreground = Wk.S(Paper, .78) });
         Typography.SetNumeralAlignment(cp, FontNumeralAlignment.Tabular);
         WkCard.Put(head, WkCard.NameLine(name, cp), 1);
-        var cls = Wk.Words(c.Class, 10.5, Wk.S(Paper, .72), Wk.Segoe, FontWeights.Bold); cls.Margin = new Thickness(10, 1, 0, 0);
+        var cls = Wk.Words(c.ClassName, 10.5, Wk.S(Paper, .72), Wk.Segoe, FontWeights.Bold); cls.Margin = new Thickness(10, 1, 0, 0);
         WkCard.Put(head, cls, 2);
         var headTag = Wk.Tilt(Sticker(head, ink, 6, new Thickness(7, 4, 10, 5), 2, 3, PaperB), -1);
         headTag.Margin = new Thickness(0, 0, 3, 0);
@@ -737,7 +737,7 @@ sealed class HudSticker : WackyLook, IThemeCard
             _stampInk.Fill = Wk.S(m.You ? Pink : KC); _stampInk.Stroke = m.You ? K : PaperB;
             _rank.Text = m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture);
             _rank.Foreground = m.You ? WhiteB : m.Rank == 1 ? YelB : PaperB;
-            if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ClassArt.Icon(m.Class, 17, m.Name); }
+            if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ThemeText.Icon(m.Class, 17, m.Name); }
             _name.Text = m.Name;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)

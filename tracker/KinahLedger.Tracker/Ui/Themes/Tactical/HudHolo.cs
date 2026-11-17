@@ -500,9 +500,9 @@ sealed partial class HudHolo : TacticalLook
         // the arc runs from the share before (the beat ring is full: from 0.85 of it)
         double was = _share is > 0 and < 1 ? _share : .82;
         bool beat = _beat;
-        var tag = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-30, 0, -30, -5) };
+        var tag = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-30, 0, -30, L.Code == "en" ? -5 : 0) };   // Korean and Chinese glyphs are taller: lifted so the chip stays inside the window
         tag.Children.Add(new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Tac.A(DeepC, .95)), Tac.P(Green, 1.2), Tac.Cut(new Rect(.5, .5, s.Width - 1, s.Height - 1), 4, all: true))));
-        var tt = Tt(L.T("RECORD"), 10.5, Green, Small, FontWeights.Bold); tt.Margin = new Thickness(7, 1, 7, 1);
+        var tt = Tt(L.T("RECORD"), L.Code == "en" ? 10.5 : 9.5, Green, Small, FontWeights.Bold); tt.Margin = new Thickness(7, 1, 7, 1);
         tag.Children.Add(tt);
         tag.Opacity = 0;
         ring.Children.Add(tag);
