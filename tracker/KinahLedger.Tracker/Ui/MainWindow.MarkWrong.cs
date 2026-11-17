@@ -26,8 +26,10 @@ public partial class MainWindow
     const double MarkWindowMinutes = 2;
     /// <summary>How long Undo stays possible: longer than the bar's 8 s, since the player is in the game when the key is pressed.</summary>
     const double MarkUndoSeconds = 30;
-    const string MarkSaved = "Saved the last minute · Report in tracker", MarkNothing = "Nothing counted in the last 2 minutes",
-        MarkAgain = "Already marked · Report in tracker", MarkFailed = "Couldn't save the report · see the tracker";
+    static string MarkSaved => L.T("Saved the last minute · Report in tracker");
+    static string MarkNothing => L.T("Nothing counted in the last 2 minutes");
+    static string MarkAgain => L.T("Already marked · Report in tracker");
+    static string MarkFailed => L.T("Couldn't save the report · see the tracker");
 
     /// <summary>The lines marked wrong this session (<see cref="MarkKey"/>): drawn with a gold edge and a flag while in a feed.</summary>
     readonly HashSet<string> _marked = new();
@@ -65,17 +67,17 @@ public partial class MainWindow
         var text = _hudPrefs.MarkWrongKey;
         if (Hotkey.Explain(text) is { } why)
         {
-            _markKeyProblem = ($"{text.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another.", "");
+            _markKeyProblem = (L.F("{0} is off: {1} Pick another.", text.Trim(), char.ToLowerInvariant(why[0]) + why[1..]), "");
             return null;
         }
         if (Hotkey.Parse(text) is not { } key) { _markKeyProblem = null; return null; }
         if (Hotkey.Same(text, _prefs.Hotkey))
         {
-            _markKeyProblem = ($"{key} is already the start/stop shortcut, so this one is off. Pick another.", "");
+            _markKeyProblem = (L.F("{0} is already the start/stop shortcut, so this one is off. Pick another.", key), "");
             return null;
         }
         var got = key.Register(h, Hotkey.MarkWrongId);
-        _markKeyProblem = got == Hotkey.Outcome.Taken ? ($"{key} is used by another app here, so it is off. Pick another.", "") : null;
+        _markKeyProblem = got == Hotkey.Outcome.Taken ? (L.F("{0} is used by another app here, so it is off. Pick another.", key), "") : null;
         if (got is Hotkey.Outcome.Taken or Hotkey.Outcome.TakenByTracker) KeyTakenOnce($"That was wrong shortcut {key}: {(got == Hotkey.Outcome.Taken ? "taken by another app" : "held by another Kinah Ledger")}, off");
         return null;
     }
@@ -97,7 +99,7 @@ public partial class MainWindow
         {
             if (NewestCounted() is { } line) { MarkWrong(line); return; }
             ShowMarkNotice(MarkNothing);
-            Say("That was wrong: nothing was counted in the last 2 minutes, so nothing was saved.", "Faint");
+            Say(L.T("That was wrong: nothing was counted in the last 2 minutes, so nothing was saved."), "Faint");
             CrashLog.Note("mark wrong: nothing counted in the last 2 minutes");
         }
         catch (Exception ex) { CrashLog.Write("mark wrong", ex); }
@@ -118,15 +120,15 @@ public partial class MainWindow
             if (saved == null) { ShowMarkNotice(MarkFailed); return; }
         }
         var key = MarkKey(line);
-        var text = $"Marked {line.At.ToLocalTime():HH:mm:ss} {line.Text} as wrong";
-        CrashLog.Note("mark wrong: " + text);
+        var text = L.F("Marked {0:HH:mm:ss} {1} as wrong", line.At.ToLocalTime(), line.Text);
+        CrashLog.Note("mark wrong: " + $"Marked {line.At.ToLocalTime():HH:mm:ss} {line.Text} as wrong");
         _ = Offer("mark", text,
             apply: () => { _marked.Add(key); ShowMarkLine(line, text); Redraw(); },
             undo: () =>
             {
                 _marked.Remove(key); HideMarkLine(); Redraw();
                 if (saved is { } s) try { Directory.Delete(s.Dir, recursive: true); } catch (Exception ex) { CrashLog.Write("mark wrong: undo", ex); }
-                Say("The mark is taken back and its report deleted.", "Good");
+                Say(L.T("The mark is taken back and its report deleted."), "Good");
             },
             commit: () =>
             {
@@ -137,7 +139,7 @@ public partial class MainWindow
             bar: line.Tab == FeedTab.Events,   // the Events card has no line under its feed: the Undo bar says it there
             seconds: MarkUndoSeconds);
         ShowMarkNotice(MarkSaved);
-        SayOnLine(text + ": the last minute is saved in your reports folder.", "Good");
+        SayOnLine(L.F("{0}: the last minute is saved in your reports folder.", text), "Good");
         if (saved is { } sv) Status.ToolTip = sv.Dir;
     }
 
@@ -154,7 +156,7 @@ public partial class MainWindow
         var flag = FlagGlyph(13); flag.Margin = new Thickness(0, 0, 7, 0);
         t.Inlines.Add(new InlineUIContainer(flag) { BaselineAlignment = BaselineAlignment.Center });
         t.Inlines.Add(new Run(text + "  ·  "));
-        var undo = new Hyperlink(new Run("Undo")) { ToolTip = "Takes the mark back and deletes the report it saved (Ctrl+Z)." };
+        var undo = new Hyperlink(new Run(L.T("Undo"))) { ToolTip = L.T("Takes the mark back and deletes the report it saved (Ctrl+Z).") };
         undo.SetResourceReference(TextElement.ForegroundProperty, "Gold");
         undo.Click += (_, _) => UndoPending();
         t.Inlines.Add(undo);
@@ -198,7 +200,7 @@ public partial class MainWindow
             if (FeedWords(l).Small.Length > 0 && what.Inlines.LastInline is { } small) what.Inlines.InsertBefore(small, box);
             else what.Inlines.Add(box);
         }
-        row.ToolTip = "Marked as wrong with the That was wrong key; the report is saved. Click to report it another way.";
+        row.ToolTip = L.T("Marked as wrong with the That was wrong key; the report is saved. Click to report it another way.");
     }
 
     /// <summary>The mock's flag: a pole and a gold pennant, in the look's gold.</summary>

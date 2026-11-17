@@ -15,7 +15,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    public const string SaveLootText = "Save today's loot as CSV…", SaveRunsText = "Save as CSV", SaveWeekText = "Save this week as CSV…";
+    public static string SaveLootText => L.T("Save today's loot as CSV…");
+    public static string SaveRunsText => L.T("Save as CSV");
+    public static string SaveWeekText => L.T("Save this week as CSV…");
 
     /// <summary>Today's loot (every zone, the day the Today strip shows) as CSV text, or null with nothing picked up yet.</summary>
     string? LootCsv()
@@ -28,15 +30,15 @@ public partial class MainWindow
     /// <summary>The ⋯ menu's Save today's loot as CSV…</summary>
     void SaveLootCsv()
     {
-        if (LootCsv() is not { } text) { Say("Nothing picked up today yet: the file would be empty.", "Warn"); return; }
-        SaveCsv(CsvExport.FileName("loot", DateTime.Now), text, "today's loot");
+        if (LootCsv() is not { } text) { Say(L.T("Nothing picked up today yet: the file would be empty."), "Warn"); return; }
+        SaveCsv(CsvExport.FileName("loot", DateTime.Now), text, L.T("today's loot"));
     }
 
     /// <summary>The ALL RUNS box's Save as CSV: the runs it shows, in the order it shows them.</summary>
     void SaveRunsCsv(IReadOnlyList<InstanceRun> runs)
     {
-        if (runs.Count == 0) { Say("No runs to save yet.", "Warn"); return; }
-        SaveCsv(CsvExport.FileName("runs", DateTime.Now), CsvExport.Runs(RunsOrder.Sorted(runs, RunsSortMode, RunValue), _items, RunValue), $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}");
+        if (runs.Count == 0) { Say(L.T("No runs to save yet."), "Warn"); return; }
+        SaveCsv(CsvExport.FileName("runs", DateTime.Now), CsvExport.Runs(RunsOrder.Sorted(runs, RunsSortMode, RunValue), _items, RunValue), L.F(runs.Count == 1 ? "{0} run" : "{0} runs", runs.Count));
     }
 
     /// <summary>The Crafting page's Save as CSV (0.10.26): This session's recipes as the table prices them.</summary>
@@ -51,14 +53,14 @@ public partial class MainWindow
 
     void SaveCraftsCsv()
     {
-        if (CraftsCsv() is not { } text) { Say("Nothing crafted yet: the file would be empty.", "Warn"); return; }
-        SaveCsv(CsvExport.FileName("crafts", DateTime.Now), text, $"{_crafted.Count} recipe{(_crafted.Count == 1 ? "" : "s")}");
+        if (CraftsCsv() is not { } text) { Say(L.T("Nothing crafted yet: the file would be empty."), "Warn"); return; }
+        SaveCsv(CsvExport.FileName("crafts", DateTime.Now), text, L.F(_crafted.Count == 1 ? "{0} recipe" : "{0} recipes", _crafted.Count));
     }
 
     /// <summary>The ⋯ menu's Save this week as CSV… (0.10.26): the Week side's seven days, farming and runs together.</summary>
     string WeekCsv() => CsvExport.Week(DayHistory.Days(7, TodayEngine, _items, WeekRunList(), WeekFile()));
 
-    void SaveWeekCsv() => SaveCsv(CsvExport.FileName("week", DateTime.Now), WeekCsv(), "this week");
+    void SaveWeekCsv() => SaveCsv(CsvExport.FileName("week", DateTime.Now), WeekCsv(), L.T("this week"));
 
     /// <summary>Asks where to put the file (Documents by default), writes it with a UTF-8 mark for Excel, and says so.</summary>
     void SaveCsv(string fileName, string text, string what)
@@ -69,8 +71,8 @@ public partial class MainWindow
         {
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
-                FileName = fileName, DefaultExt = ".csv", Filter = "CSV, comma separated (*.csv)|*.csv", AddExtension = true, OverwritePrompt = true,
-                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Title = "Save as CSV",
+                FileName = fileName, DefaultExt = ".csv", Filter = L.T("CSV, comma separated") + " (*.csv)|*.csv", AddExtension = true, OverwritePrompt = true,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Title = L.T("Save as CSV"),
             };
             path = dlg.ShowDialog(this) == true ? dlg.FileName : null;
         }
@@ -78,19 +80,19 @@ public partial class MainWindow
         try
         {
             File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-            Say($"Saved {what} as {Path.GetFileName(path)}.", "Good");
+            Say(L.F("Saved {0} as {1}.", what, Path.GetFileName(path)), "Good");
         }
         catch (Exception ex)
         {
             CrashLog.Write("save csv", ex);
-            Say($"Couldn't save the file: {ex.Message}", "Warn");
+            Say(L.F("Couldn't save the file: {0}", ex.Message), "Warn");
         }
     }
 
     /// <summary>A small pill with a plain action, the look of the run list's order dropdown without its chevron.</summary>
     Border PillButton(string text, Action click, string tip)
     {
-        var b = new Border { Child = QT(text, 12, FontWeights.SemiBold, "Ink"), Height = 26, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Child = QT(L.T(text), 12, FontWeights.SemiBold, "Ink"), Height = 26, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = L.T(tip), VerticalAlignment = VerticalAlignment.Center };
         b.SetResourceReference(Border.BackgroundProperty, "Card2"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
         ToolTipService.SetInitialShowDelay(b, 400);
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; click(); };

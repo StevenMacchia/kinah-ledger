@@ -17,7 +17,7 @@ public sealed record AccuracyCardView(
     string Chip, string Tone, string Line, string? Hud, string? Discord, string Detail,
     IReadOnlyList<(string Label, int Count, string Sub)> Counts, IReadOnlyList<AccuracyCardView.Row> Rows)
 {
-    public const string Title = "Accuracy";
+    public static string Title => L.T("Accuracy");
 
     /// <summary>One thing to look at as the list shows it: the time, what, and why in one plain sentence.</summary>
     public sealed record Row(int Id, string Time, string Text, string Why, AccuracyScore.Check Check);
@@ -46,23 +46,23 @@ public sealed record AccuracyCardView(
         var rows = s.ToCheck.OrderByDescending(c => c.At)
             .Select(c => new Row(c.Id, c.At.ToLocalTime().ToString("HH:mm:ss"), c.Text, AccuracyScore.Plain(c.Why), c)).ToList();
         int n = rows.Count;
-        string chip = n > 0 ? $"{n} to look at" : s.Contradicted > 0 ? "✓ All looked at" : "✓ Nothing looked wrong";
+        string chip = n > 0 ? L.F("{0} to look at", n) : s.Contradicted > 0 ? L.T("✓ All looked at") : L.T("✓ Nothing looked wrong");
         // nothing a second source could check yet: calm when the list is empty too, plain when it isn't (a count assumed 1)
-        string line = s.Checked == 0 ? (n > 0 ? "Nothing a second source could check yet" : s.NotChecked > 0 ? "Nothing looked wrong" : "Nothing counted yet")
-            : s.Contradicted == 0 ? (s.Checked == 1 ? "Checked by the game: 1 matched" : $"Checked by the game: all {s.Checked:N0} matched")
-            : $"Checked by the game: {s.Matched:N0} of {s.Checked:N0} matched" + (s.ShowsPercent ? $" ({s.MatchPercent}%)" : "");
+        string line = s.Checked == 0 ? L.T(n > 0 ? "Nothing a second source could check yet" : s.NotChecked > 0 ? "Nothing looked wrong" : "Nothing counted yet")
+            : s.Contradicted == 0 ? (s.Checked == 1 ? L.T("Checked by the game: 1 matched") : L.F("Checked by the game: all {0:N0} matched", s.Checked))
+            : L.F("Checked by the game: {0:N0} of {1:N0} matched", s.Matched, s.Checked) + (s.ShowsPercent ? $" ({s.MatchPercent}%)" : "");
         var counts = new List<(string, int, string)>
         {
-            ("Checked", s.Checked, "a second source could check it"),
-            ("Matched", s.Matched, ""),
-            ("To look at", n, ""),
-            ("Not checked", s.NotChecked, "one source saw it, nothing said it was wrong"),
+            (L.T("Checked"), s.Checked, L.T("a second source could check it")),
+            (L.T("Matched"), s.Matched, ""),
+            (L.T("To look at"), n, ""),
+            (L.T("Not checked"), s.NotChecked, L.T("one source saw it, nothing said it was wrong")),
         };
         // the panel over the game: things to look at, or a calm tick once enough was checked; nothing before that
         string? hud = n > 0 || s.EnoughChecked ? chip : null;
         string? discord = !s.EnoughChecked ? null
-            : s.Contradicted == 0 ? $"✓ Checked by the game: all {s.Checked:N0} matched"
-            : $"Checked by the game: {s.Matched:N0} of {s.Checked:N0} matched ({s.MatchPercent}%)";
+            : s.Contradicted == 0 ? "✓ " + L.F("Checked by the game: all {0:N0} matched", s.Checked)
+            : L.F("Checked by the game: {0:N0} of {1:N0} matched", s.Matched, s.Checked) + $" ({s.MatchPercent}%)";
         return new AccuracyCardView(chip, n > 0 ? "warn" : "good", line, hud, discord, Details(s), counts, rows);
     }
 
@@ -70,14 +70,14 @@ public sealed record AccuracyCardView(
     static string Details(AccuracyScore.Summary s)
     {
         var l = new List<string>();
-        if (s.Checked + s.NotChecked > 0) l.Add($"{s.Matched:N0} of {s.Checked:N0} pickups a second source could check matched. {s.NotChecked:N0} only one source saw.");
+        if (s.Checked + s.NotChecked > 0) l.Add(L.F("{0:N0} of {1:N0} pickups a second source could check matched. {2:N0} only one source saw.", s.Matched, s.Checked, s.NotChecked));
         if (s.KinaCounted + s.KinaRefused > 0)
-            l.Add(s.CounterRead ? $"Kinah counter: confirmed {s.KinaConfirmed:N0} Kinah pickups, refused {s.KinaRefused:N0}." : "Kinah counter: not read yet, so Kinah lines count as read.");
-        if (s.Counter is { } r) l.Add($"Kinah counter against the count: {r.Words}.");
-        if (s.RowsConfirmed + s.RowsNoChat > 0) l.Add($"Loot list: {s.RowsConfirmed:N0} rows matched the chat, {s.RowsNoChat:N0} had no chat line.");
-        if (s.RunsFull + s.RunsPartly + s.RunsNotRead > 0) l.Add($"Reward pictures: {s.RunsFull} read in full, {s.RunsPartly} in part ({s.SlotsUnread} slots), {s.RunsNotRead} not read.");
-        if (s.MedianDelaySeconds is double d) l.Add($"A pickup counts about {d:0.0} s after it shows.");
-        if (s.RowsUnsure + s.NotRows > 0) l.Add($"Not counted, not misses: {s.RowsUnsure:N0} loot list rows too faint to read, {s.NotRows:N0} lines that weren't loot.");
+            l.Add(s.CounterRead ? L.F("Kinah counter: confirmed {0:N0} Kinah pickups, refused {1:N0}.", s.KinaConfirmed, s.KinaRefused) : L.T("Kinah counter: not read yet, so Kinah lines count as read."));
+        if (s.Counter is { } r) l.Add(L.F("Kinah counter against the count: {0}.", r.Words));
+        if (s.RowsConfirmed + s.RowsNoChat > 0) l.Add(L.F("Loot list: {0:N0} rows matched the chat, {1:N0} had no chat line.", s.RowsConfirmed, s.RowsNoChat));
+        if (s.RunsFull + s.RunsPartly + s.RunsNotRead > 0) l.Add(L.F("Reward pictures: {0} read in full, {1} in part ({2} slots), {3} not read.", s.RunsFull, s.RunsPartly, s.SlotsUnread, s.RunsNotRead));
+        if (s.MedianDelaySeconds is double d) l.Add(L.F("A pickup counts about {0:0.0} s after it shows.", d));
+        if (s.RowsUnsure + s.NotRows > 0) l.Add(L.F("Not counted, not misses: {0:N0} loot list rows too faint to read, {1:N0} lines that weren't loot.", s.RowsUnsure, s.NotRows));
         return string.Join("\n", l);
     }
 

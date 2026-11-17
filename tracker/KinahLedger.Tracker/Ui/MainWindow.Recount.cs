@@ -59,7 +59,7 @@ public partial class MainWindow
             CrashLog.Note(plan.Summary + $"; {written} run(s) written" + (written > 0 ? $", the files as they were kept as {RunRecount.BackupName} beside them" : "") + "; every run in recount.log");
             if (written > 0)
             {
-                SayOnLine($"Old expedition runs counted again from their reward pictures: {written} changed, {plan.GearRemoved} piece(s) of gear removed that were the floor under the table, not loot.", "Faint");
+                SayOnLine(L.F("Old expedition runs counted again from their reward pictures: {0} changed, {1} piece(s) of gear removed that were the floor under the table, not loot.", written, plan.GearRemoved), "Faint");
                 _statusHoldUntil = DateTime.UtcNow.AddSeconds(20);
             }
         }
@@ -103,7 +103,7 @@ public partial class MainWindow
             CrashLog.Note($"re-read of tables with slots not read: {plan.Looked} looked at, {written} run(s) written, {named} slot(s) named now; every run in reread.log");
             if (written > 0)
             {
-                SayOnLine($"Past expedition rewards read again from their pictures: {named} item(s) named that were left unread, in {written} run(s).", "Faint");
+                SayOnLine(L.F("Past expedition rewards read again from their pictures: {0} item(s) named that were left unread, in {1} run(s).", named, written), "Faint");
                 _statusHoldUntil = DateTime.UtcNow.AddSeconds(20);
             }
         }

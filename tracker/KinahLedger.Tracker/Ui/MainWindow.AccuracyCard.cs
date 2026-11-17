@@ -79,17 +79,17 @@ public partial class MainWindow
         // the four counts as the game's tooltips list stats: the name on the left, the figure on the right
         var counts = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Background = Brushes.Transparent };
         foreach (var (label, count, sub) in v.Counts)
-            counts.Children.Add(CkKv(label, count.ToString("N0"), label == "To look at" && count > 0 ? CkWarn : CkInk, sub));
+            counts.Children.Add(CkKv(label, count.ToString("N0"), label == L.T("To look at") && count > 0 ? CkWarn : CkInk, sub));
         // the quest kill counter against the count, from the old "Accuracy · Kinah counter agrees …" line under the tables,
         // which this card replaces (2026-10-25: two things called Accuracy on one page)
         var detail = v.Detail;
-        if (!_demo && _watcher.Chat is { QuestKillsGame: > 0 } qc) detail += (detail.Length > 0 ? "\n" : "") + $"Quest kills: the quest counter {qc.QuestKillsGame:N0}, counted {qc.QuestKillsCounted:N0}.";
+        if (!_demo && _watcher.Chat is { QuestKillsGame: > 0 } qc) detail += (detail.Length > 0 ? "\n" : "") + L.F("Quest kills: the quest counter {0:N0}, counted {1:N0}.", qc.QuestKillsGame, qc.QuestKillsCounted);
         if (detail.Length > 0 && v.Counts.Count > 0) { counts.ToolTip = detail; ToolTipService.SetInitialShowDelay(counts, 250); }
         if (v.Counts.Count > 0) body.Children.Add(counts);
         if (!v.HasRows) { body.Children.Add(new Border { Height = 14 }); return card; }
 
         // the things to look at, newest first: the time, what, why in one sentence, then Report and Fine
-        body.Children.Add(CkSection("TO LOOK AT"));
+        body.Children.Add(CkSection(L.T("TO LOOK AT")));
         foreach (var r in v.Rows.Take(AccRowsShown))
         {
             var g = new Grid { Margin = new Thickness(20, 4, 20, 4) };
@@ -105,15 +105,15 @@ public partial class MainWindow
             Grid.SetColumn(what, 1); g.Children.Add(what);
             var acts = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 1, 0, 0) };
             var check = r.Check;
-            var report = new Hyperlink(new Run("Report")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "Save what was read around this moment to a folder on this PC, for a bug report." };
+            var report = new Hyperlink(new Run(L.T("Report"))) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = L.T("Save what was read around this moment to a folder on this PC, for a bug report.") };
             report.Click += (_, _) => { if (_card != null) _card.IsOpen = false; ReportCheck(check); };
-            var fine = new Hyperlink(new Run("Fine")) { Foreground = Ck(CkMuted), TextDecorations = null, ToolTip = "It's right: take it off this list for this session." };
+            var fine = new Hyperlink(new Run(L.T("Fine"))) { Foreground = Ck(CkMuted), TextDecorations = null, ToolTip = L.T("It's right: take it off this list for this session.") };
             fine.Click += (_, _) => { if (_demo) _demoScore?.Dismiss(check.Id); else _watcher.Chat?.Score.Dismiss(check.Id); FillAccuracyCard(); UpdateHud(); };
             acts.Inlines.Add(report); acts.Inlines.Add(new Run("   ") { Foreground = Ck(CkFaint) }); acts.Inlines.Add(fine);
             Grid.SetColumn(acts, 2); g.Children.Add(acts);
             body.Children.Add(g);
         }
-        if (v.Rows.Count > AccRowsShown) body.Children.Add(CkNote($"and {v.Rows.Count - AccRowsShown} more"));
+        if (v.Rows.Count > AccRowsShown) body.Children.Add(CkNote(L.F("and {0} more", v.Rows.Count - AccRowsShown)));
         body.Children.Add(new Border { Height = 12 });
         return card;
     }
@@ -123,18 +123,18 @@ public partial class MainWindow
     {
         var p = AccuracyCardView.Prefill(c, _prefs.SendReportFrames && _prefs.Share);
         var chat = _watcher.Chat;
-        if (_demo || chat == null) { Say("Nothing to report yet: reports are saved once the tracker is reading the game.", "Warn"); return; }
+        if (_demo || chat == null) { Say(L.T("Nothing to report yet: reports are saved once the tracker is reading the game."), "Warn"); return; }
         try
         {
             var dir = chat.WriteReport(p.Why, p.Focus);
             Open(dir);
             if (p.SendPictures) _ = SendReportPictures(dir, "Accuracy: " + c.Reason);
-            Say($"Saved what was read around {c.At.ToLocalTime():HH:mm:ss}. Sending the report…", "Faint");
+            Say(L.F("Saved what was read around {0:HH:mm:ss}. Sending the report…", c.At.ToLocalTime()), "Faint");
             Status.ToolTip = dir;
             // sent like Report a miscount (0.9.0), with the flagged check as its line; this row shows only with accuracy details on
             _ = UploadReport(dir, p.Why, $"{c.Text}: {c.Reason}");
         }
-        catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
+        catch (Exception ex) { CrashLog.Write("miscount report", ex); Say(L.F("Couldn't save the report: {0}", ex.Message), "Bad"); }
     }
 
     /// <summary>A sample score for layout renders: a farming hour's pickups, one Kina line the counter refused.</summary>

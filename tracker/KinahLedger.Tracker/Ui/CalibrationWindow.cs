@@ -48,11 +48,13 @@ public sealed class CalibrationWindow : Window
     readonly TargetReader _target = new();
     bool _busy;
     readonly Dictionary<string, (State State, string Sub, List<string> Read, string Size)> _results = new();
+    /// <summary>The steps whose area another window covers now (kept apart from the words, which are translated).</summary>
+    readonly HashSet<string> _covered = new();
 
     public CalibrationWindow(Settings settings, Func<string, bool> knows, Func<DRect?> manualChat, Action pickChat, Func<string>? hotkey = null)
     {
         _settings = settings; _knows = knows; _manualChat = manualChat; _pickChat = pickChat; _hotkey = hotkey ?? (() => "");
-        Title = "Kinah Ledger · Check the setup";
+        Title = L.T("Kinah Ledger · Check the setup");
         // 1340 wide is two columns' worth; a 1080p screen at 150% scaling is 1280 DIP, so the window takes the work area
         // when that is smaller and the content below is scaled down to fit (the Viewbox), never cut off
         Width = Math.Min(DesignWidth, SystemParameters.WorkArea.Width); SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.CanMinimize;
@@ -111,7 +113,8 @@ public sealed class CalibrationWindow : Window
         {
             var game = GameWindow.Find(_settings.ProcessHints);
             var key = Steps[_step].Key;
-            if (game == null) { _results[key] = (State.Waiting, "waiting for the game", new(), ""); _frame.Source = null; Draw(); return; }
+            _covered.Remove(key);
+            if (game == null) { _results[key] = (State.Waiting, L.T("waiting for the game"), new(), ""); _frame.Source = null; Draw(); return; }
             var g = game.Value;
             DRect area;
             List<string> read = new(); string size = ""; State st; string sub;
@@ -121,8 +124,8 @@ public sealed class CalibrationWindow : Window
                 {
                     var r = _manualChat() ?? (await ChatLocator.DetectAsync(g)).region;
                     area = r ?? new DRect(g.Left + (int)(g.Width * 0.02), g.Top + (int)(g.Height * 0.6), (int)(g.Width * 0.17), (int)(g.Height * 0.3));
-                    if (r == null) { st = State.Problem; sub = "no chat text found"; break; }
-                    if (!WindowCapture.Active && GameWindow.Covered(r.Value, _settings.ProcessHints) is { } over) { st = State.Problem; sub = $"another window covers it ({over})"; break; }
+                    if (r == null) { st = State.Problem; sub = L.T("no chat text found"); break; }
+                    if (!WindowCapture.Active && GameWindow.Covered(r.Value, _settings.ProcessHints) is { } over) { st = State.Problem; sub = L.F("another window covers it ({0})", over); _covered.Add(key); break; }
                     // the lines as the tracker reads them, and the text's height from single words (a line box can span two lines)
                     var lines = await new ScreenReader(r.Value, _settings.Ocr.Scale).ReadAsync();
                     read = lines.TakeLast(4).ToList();
@@ -130,31 +133,31 @@ public sealed class CalibrationWindow : Window
                     int px = words.Count == 0 ? 0 : words[words.Count / 2];
                     size = px == 0 ? "" : TextSize(px, g);
                     st = lines.Count > 0 && (px == 0 || px >= 13) ? State.Good : lines.Count > 0 ? State.Problem : State.Waiting;
-                    sub = $"{lines.Count} line{(lines.Count == 1 ? "" : "s")}" + (px > 0 ? $" · text {px} px" : "");
+                    sub = L.F(lines.Count == 1 ? "{0} line" : "{0} lines", lines.Count) + (px > 0 ? " · " + L.F("text {0} px", px) : "");
                     break;
                 }
                 case "loot":
                 {
                     area = LootPopup.Region(g);
-                    if (!WindowCapture.Active && GameWindow.Covered(area, _settings.ProcessHints) is { } overL) { st = State.Problem; sub = $"another window covers it ({overL})"; break; }
+                    if (!WindowCapture.Active && GameWindow.Covered(area, _settings.ProcessHints) is { } overL) { st = State.Problem; sub = L.F("another window covers it ({0})", overL); _covered.Add(key); break; }
                     var lines = await ScreenReader.ReadBoxesAsync(area, 2, boost: true);
                     // as the tracker counts them: Kinah, and items on the item list; anything else in the area isn't loot
                     var rows = LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text))).Where(x => (x.IsKinah && x.Amount >= 10) || (!x.IsKinah && _knows(x.Name))).ToList();
                     var prev = _results.TryGetValue(key, out var p) ? p : default;
-                    if (rows.Count > 0) { read = rows.Select(x => x.IsKinah ? $"{x.Amount:N0} Kina" : $"{x.Name} ×{x.Count}").ToList(); st = State.Good; sub = $"read {rows.Count} row{(rows.Count == 1 ? "" : "s")}"; }
+                    if (rows.Count > 0) { read = rows.Select(x => x.IsKinah ? $"{x.Amount:N0} Kina" : $"{x.Name} ×{x.Count}").ToList(); st = State.Good; sub = L.F(rows.Count == 1 ? "read {0} row" : "read {0} rows", rows.Count); }
                     else if (prev.State == State.Good) { read = prev.Read; st = State.Good; sub = prev.Sub; }   // it reads once; the list then fades
-                    else { st = State.Waiting; sub = "defeat one enemy to check"; }
+                    else { st = State.Waiting; sub = L.T("defeat one enemy to check"); }
                     break;
                 }
                 default:
                 {
                     area = TargetReader.Strip(g);
-                    if (!WindowCapture.Active && GameWindow.Covered(area, _settings.ProcessHints) is { } overH) { st = State.Problem; sub = $"another window covers it ({overH})"; break; }
+                    if (!WindowCapture.Active && GameWindow.Covered(area, _settings.ProcessHints) is { } overH) { st = State.Problem; sub = L.F("another window covers it ({0})", overH); _covered.Add(key); break; }
                     await _target.TickAsync(g);
                     bool fresh = _target.Name != null && (DateTime.UtcNow - _target.NameAt).TotalSeconds < 5;
                     if (fresh) { read = new() { _target.Name! }; st = State.Good; sub = _target.Name!; }
-                    else if (_target.Unlisted.Length > 0 && (DateTime.UtcNow - _target.UnlistedAt).TotalSeconds < 5) { read = new() { _target.Unlisted }; st = State.Waiting; sub = "a name not on the enemy list"; }
-                    else { st = State.Waiting; sub = "target an enemy"; }
+                    else if (_target.Unlisted.Length > 0 && (DateTime.UtcNow - _target.UnlistedAt).TotalSeconds < 5) { read = new() { _target.Unlisted }; st = State.Waiting; sub = L.T("a name not on the enemy list"); }
+                    else { st = State.Waiting; sub = L.T("target an enemy"); }
                     break;
                 }
             }
@@ -169,9 +172,9 @@ public sealed class CalibrationWindow : Window
 
     /// <summary>Whether text of this height reads reliably, in words, with what to change when it doesn't.</summary>
     static string TextSize(int px, DRect game) =>
-        px >= 18 ? $"{px} px tall at {game.Width} × {game.Height}: comfortably readable."
-        : px >= 13 ? $"{px} px tall: readable. A larger UI scale in the game's settings reads even better."
-        : $"{px} px tall: too small to read reliably. Raise the game's UI scale (or the chat text size) in its settings.";
+        px >= 18 ? L.F("{0} px tall at {1} × {2}: comfortably readable.", px, game.Width, game.Height)
+        : px >= 13 ? L.F("{0} px tall: readable. A larger UI scale in the game's settings reads even better.", px)
+        : L.F("{0} px tall: too small to read reliably. Raise the game's UI scale (or the chat text size) in its settings.", px);
 
     /// <summary>The game frame, dimmed except the area, outlined in the state's colour.</summary>
     static BitmapSource Spotlight(DRect game, DRect area, State st)
@@ -201,10 +204,10 @@ public sealed class CalibrationWindow : Window
     {
         var s = Steps[_step];
         if (s.Key == "done") { _cardHost.Child = DoneCard(); return; }
-        var r = _results.TryGetValue(s.Key, out var x) ? x : (State.Waiting, "reading…", new List<string>(), "");
-        var card = Card(r.Item1, s.Icon, s.Name, $"Step {_step + 1} of 3 · {s.Where}", r.Item1 == State.Good ? (s.Key == "loot" ? "Reads" : "Reading") : r.Item1 == State.Waiting ? Hint(s.Key) : "Needs a fix");
+        var r = _results.TryGetValue(s.Key, out var x) ? x : (State.Waiting, L.T("reading…"), new List<string>(), "");
+        var card = Card(r.Item1, s.Icon, L.T(s.Name), L.F("Step {0} of 3", _step + 1) + " · " + L.T(s.Where), L.T(r.Item1 == State.Good ? (s.Key == "loot" ? "Reads" : "Reading") : r.Item1 == State.Waiting ? Hint(s.Key) : "Needs a fix"));
         var body = (StackPanel)((Border)card.Child).Child;
-        body.Children.Add(Section("WHAT IT READS"));
+        body.Children.Add(Section(L.T("WHAT IT READS")));
         var readBox = new TextBlock { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12.5, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xE8, 0xD9, 0xA6))), TextWrapping = TextWrapping.Wrap };
         if (r.Item3.Count == 0) readBox.Text = r.Item2;
         foreach (var l in r.Item3)
@@ -213,15 +216,15 @@ public sealed class CalibrationWindow : Window
             readBox.Inlines.Add(new System.Windows.Documents.Run(l + "\n") { Foreground = loot ? new SolidColorBrush(StateColor(State.Good)) : readBox.Foreground });
         }
         body.Children.Add(Pad(new Border { Background = new SolidColorBrush(Al(Res("Bg", Color.FromRgb(0, 0, 0)), 0xA0)), BorderBrush = new SolidColorBrush(Res("Line", Color.FromArgb(0x20, 255, 255, 255))), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 8, 10, 8), Child = readBox }));
-        if (r.Item4.Length > 0) { body.Children.Add(Section("TEXT SIZE")); body.Children.Add(Pad(Text(r.Item4))); }
-        if (r.Item2.StartsWith("another window")) { body.Children.Add(Section("FIX")); body.Children.Add(Pad(Text("Bring Aion 2 to the front, or move the other window off this area. The tracker reads what is on screen."))); }
-        else if (s.Key == "loot" && r.Item1 != State.Good) { body.Children.Add(Section("HOW")); body.Children.Add(Pad(Text("The list shows for about three seconds after a kill. Defeat anything nearby and this turns green."))); }
-        if (s.Key == "hp" && r.Item1 != State.Good) { body.Children.Add(Section("HOW")); body.Children.Add(Pad(Text("Click an enemy so its name and health bar show at the top of the screen."))); }
+        if (r.Item4.Length > 0) { body.Children.Add(Section(L.T("TEXT SIZE"))); body.Children.Add(Pad(Text(r.Item4))); }
+        if (_covered.Contains(s.Key)) { body.Children.Add(Section(L.T("FIX"))); body.Children.Add(Pad(Text(L.T("Bring Aion 2 to the front, or move the other window off this area. The tracker reads what is on screen.")))); }
+        else if (s.Key == "loot" && r.Item1 != State.Good) { body.Children.Add(Section(L.T("HOW"))); body.Children.Add(Pad(Text(L.T("The list shows for about three seconds after a kill. Defeat anything nearby and this turns green.")))); }
+        if (s.Key == "hp" && r.Item1 != State.Good) { body.Children.Add(Section(L.T("HOW"))); body.Children.Add(Pad(Text(L.T("Click an enemy so its name and health bar show at the top of the screen.")))); }
         var foot = new WrapPanel { Margin = new Thickness(14, 10, 14, 12) };
-        foot.Children.Add(Btn(r.Item1 == State.Good ? "Looks right · Next" : "Next", true, () => Show(_step + 1)));
-        if (s.Key == "chat") foot.Children.Add(Btn("Pick the area myself", false, () => { _pickChat(); _results.Remove("chat"); }));
-        else if (r.Item1 != State.Good) foot.Children.Add(Btn("Skip", false, () => Show(_step + 1)));
-        if (_step > 0) foot.Children.Add(Btn("Back", false, () => Show(_step - 1)));
+        foot.Children.Add(Btn(L.T(r.Item1 == State.Good ? "Looks right · Next" : "Next"), true, () => Show(_step + 1)));
+        if (s.Key == "chat") foot.Children.Add(Btn(L.T("Pick the area myself"), false, () => { _pickChat(); _results.Remove("chat"); }));
+        else if (r.Item1 != State.Good) foot.Children.Add(Btn(L.T("Skip"), false, () => Show(_step + 1)));
+        if (_step > 0) foot.Children.Add(Btn(L.T("Back"), false, () => Show(_step - 1)));
         body.Children.Add(new Border { Background = new SolidColorBrush(Al(Res("Line", Color.FromRgb(0x5A, 0xA6, 0xFF)), 0x40)), BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x28, 0x2B, 0x37))), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 6, 0, 0), Child = foot });
         _cardHost.Child = card;
     }
@@ -231,19 +234,19 @@ public sealed class CalibrationWindow : Window
     UIElement DoneCard()
     {
         int good = new[] { "chat", "loot", "hp" }.Count(k => _results.TryGetValue(k, out var r) && r.State == State.Good);
-        var card = Card(good == 3 ? State.Good : State.Waiting, "✓", good == 3 ? "Everything reads" : $"{good} of 3 read",
-            good == 3 ? "the tracker is ready" : "what didn't read yet checks itself while you play", good == 3 ? "Ready" : "Almost");
+        var card = Card(good == 3 ? State.Good : State.Waiting, "✓", good == 3 ? L.T("Everything reads") : L.F("{0} of 3 read", good),
+            L.T(good == 3 ? "the tracker is ready" : "what didn't read yet checks itself while you play"), L.T(good == 3 ? "Ready" : "Almost"));
         var body = (StackPanel)((Border)card.Child).Child;
-        body.Children.Add(Section("CHECKED"));
+        body.Children.Add(Section(L.T("CHECKED")));
         foreach (var s in Steps.Take(3))
         {
-            var r = _results.TryGetValue(s.Key, out var x) ? x : (State.Waiting, "not checked", new List<string>(), "");
-            body.Children.Add(Pad(Text($"{(r.Item1 == State.Good ? "✓" : "•")}  {s.Name}: {r.Item2}", r.Item1 == State.Good ? "Good" : "Muted")));
+            var r = _results.TryGetValue(s.Key, out var x) ? x : (State.Waiting, L.T("not checked"), new List<string>(), "");
+            body.Children.Add(Pad(Text($"{(r.Item1 == State.Good ? "✓" : "•")}  {L.T(s.Name)}: {r.Item2}", r.Item1 == State.Good ? "Good" : "Muted")));
         }
-        if (_hotkey() is { Length: > 0 } key) { body.Children.Add(Section("SHORTCUT")); body.Children.Add(Pad(Text($"{key} in the game starts or stops a run. Change it in Options."))); }
+        if (_hotkey() is { Length: > 0 } key) { body.Children.Add(Section(L.T("SHORTCUT"))); body.Children.Add(Pad(Text(L.F("{0} in the game starts or stops a run. Change it in Options.", key)))); }
         var foot = new WrapPanel { Margin = new Thickness(14, 10, 14, 12) };
-        foot.Children.Add(Btn("Done", true, Close));
-        foot.Children.Add(Btn("Check again", false, () => { _results.Clear(); Show(0); }));
+        foot.Children.Add(Btn(L.T("Done"), true, Close));
+        foot.Children.Add(Btn(L.T("Check again"), false, () => { _results.Clear(); Show(0); }));
         body.Children.Add(foot);
         return card;
     }

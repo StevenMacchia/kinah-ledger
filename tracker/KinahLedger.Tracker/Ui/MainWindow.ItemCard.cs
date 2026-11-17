@@ -32,10 +32,10 @@ public partial class MainWindow
         // the row's worth is its tradeable copies at the price the table used: how many copies that is, so a new price can value them
         int sell = tradeable ?? (PriceBook.Price(name) is long p00 && p00 > 0 && r.Worth > 0 ? (int)Math.Round(r.Worth / (double)p00) : 0);
         var info = _items.Get(id);
-        bool gathered = r.Sub.StartsWith("Gathering");
+        bool gathered = r.Sub.StartsWith("Gathering") || r.Sub == L.T("Gathering material");
         var (card, body) = CkShell(440);
-        body.Children.Add(CkBand(name, r.Grade, string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (gathered ? "Gathering material" : "Drop"), r.Grade }.Where(x => x.Length > 0))));
-        if (r.Reported) body.Children.Add(CkNote("Reported: kept out of what's sent to the site."));
+        body.Children.Add(CkBand(name, r.Grade, string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (gathered ? L.T("Gathering material") : L.T("Drop")), r.Grade }.Where(x => x.Length > 0))));
+        if (r.Reported) body.Children.Add(CkNote(L.T("Reported: kept out of what's sent to the site.")));
 
         // what is live for the item (direction C): its last pickups, newest first, as the feed counted them
         var mine = (_demo ? _demoFeed : _watcher.Chat?.Live.Recent(FeedTab.Farming, LiveFeed.Keep) ?? new()).Where(l => l.Kind == "item" && string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)).OrderByDescending(l => l.At).Take(3).ToList();
@@ -46,8 +46,8 @@ public partial class MainWindow
             var lv = new StackPanel();
             var cap = new Grid { Margin = new Thickness(12, 6, 12, 2) };
             cap.ColumnDefinitions.Add(new ColumnDefinition()); cap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            cap.Children.Add(CkText("YOUR LAST PICKUPS", CkMuted, 12, FontWeights.SemiBold));
-            var n = CkText($"{r.Drops} this session", CkFaint, 12); Grid.SetColumn(n, 1); cap.Children.Add(n);
+            cap.Children.Add(CkText(L.T("YOUR LAST PICKUPS"), CkMuted, 12, FontWeights.SemiBold));
+            var n = CkText(L.F("{0} this session", r.Drops), CkFaint, 12); Grid.SetColumn(n, 1); cap.Children.Add(n);
             lv.Children.Add(cap);
             for (int i = 0; i < mine.Count; i++)
             {
@@ -70,81 +70,81 @@ public partial class MainWindow
         // the odds and the hour, in one line of figures
         var trio = new TextBlock { Margin = new Thickness(16, 12, 16, 0), FontSize = 12.5, Foreground = Ck(CkFaint) };
         void Fig(string fig, string label) { if (trio.Inlines.Count > 0) trio.Inlines.Add(new System.Windows.Documents.Run("      ")); trio.Inlines.Add(new System.Windows.Documents.Run(fig) { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 15, Foreground = Ck(CkInk) }); trio.Inlines.Add(new System.Windows.Documents.Run("  " + label)); }
-        if (mine.Count == 0) Fig(r.Drops, "picked up");
-        if (r.DropPct is { Length: > 0 } dp) Fig(dp, gathered ? "a try" : dp.EndsWith("a kill") ? "" : "kills");
-        if (r.PerHour.Length > 0) Fig(r.PerHour, "an hour");
+        if (mine.Count == 0) Fig(r.Drops, L.T("picked up"));
+        if (r.DropPct is { Length: > 0 } dp) Fig(dp, gathered ? L.T("a try") : dp.EndsWith("a kill") ? "" : L.T("kills"));
+        if (r.PerHour.Length > 0) Fig(r.PerHour, L.T("an hour"));
         body.Children.Add(trio);
         // the price: where it is from under it, a click to type what the game shows; the board's and the other servers' own lines
         var q = PriceBook.QuoteOf(name);
         bool priced = q != null;
         var server = Server?.Name ?? "";
-        body.Children.Add(CkSection(("PRICE · " + (server.Length > 0 ? server : "YOUR SERVER")).ToUpperInvariant()));
+        body.Children.Add(CkSection(L.F("PRICE · {0}", server.Length > 0 ? server : L.T("YOUR SERVER")).ToUpperInvariant()));
         void Redo() { if (_card is { IsOpen: true }) _card.Child = BuildItemCard(r, zone, sell); }
         body.Children.Add(CkPriceLine(name, "Lowest Market price", Redo, server: server));
         if (CardSourceOnLine && q != null)
         {
             if (q.Mine && PriceBook.BoardOf(name) is { } b)
-                body.Children.Add(CkKv($"{(server.Length > 0 ? server : "Your server")}'s board", b.Price.ToString("N0"), CkMuted, PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))));
+                body.Children.Add(CkKv(L.F("{0}'s board", server.Length > 0 ? server : L.T("Your server")), b.Price.ToString("N0"), CkMuted, PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))));
             if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } rg)
-                body.Children.Add(CkKv($"Other {Server?.Region.Name ?? ""} {Server?.Faction ?? ""} servers".Replace("  ", " "), rg.Price.ToString("N0"), CkMuted, $"middle of {rg.Servers} servers"));
+                body.Children.Add(CkKv(L.F("Other {0} {1} servers", Server?.Region.Name ?? "", Server?.Faction ?? "").Replace("  ", " "), rg.Price.ToString("N0"), CkMuted, L.F("middle of {0} servers", rg.Servers)));
         }
-        if (q != null && sell > 0) body.Children.Add(CkKv("Yours are worth", (q.Price * sell).ToString("N0"), q.Sure ? CkGold : CkWarn, $"{sell} × {q.Price:N0}, before the Market's cut"));
+        if (q != null && sell > 0) body.Children.Add(CkKv(L.T("Yours are worth"), (q.Price * sell).ToString("N0"), q.Sure ? CkGold : CkWarn, L.F("{0} × {1:N0}, before the Market's cut", sell, q.Price)));
         if (q is { Sure: false }) body.Children.Add(CkNote(q.From == PriceBook.From.Region
-            ? "Your server has none listed, so the other servers' middle prices it (≈) until it does. Click it to type what you see."
-            : "A thin price (one listing, or not seen for a day): it counts, marked ~, until more listings back it. Click it to type what you see."));
+            ? L.T("Your server has none listed, so the other servers' middle prices it (≈) until it does. Click it to type what you see.")
+            : L.T("A thin price (one listing, or not seen for a day): it counts, marked ~, until more listings back it. Click it to type what you see.")));
 
         // the site's figures for this zone, last seven days: only when it has them (an empty section is hidden)
         var ze = SiteData.Zone(zone);
         if (ze is { Published: true } && (ze.Drops.TryGetValue(id.ToString(), out var rate) || ze.Drops.TryGetValue(name, out rate)) && rate != null)
         {
-            body.Children.Add(CkSection(("KINAHLEDGER.COM · " + (zone ?? "THIS ZONE")).ToUpperInvariant()));
-            if (rate.PerKill is double k && k > 0) body.Children.Add(CkKv("Odds per kill", OneIn(k), CkGold));
-            if (rate.PerNode is double n && n > 0) body.Children.Add(CkKv("Per try", $"{n:0.##}", CkGold));
-            body.Children.Add(CkKv("An hour", $"{rate.PerHour:0.#}", CkGold, $"seen in {rate.Runs} of {ze.Runs} runs, last 7 days"));
+            body.Children.Add(CkSection(L.F("KINAHLEDGER.COM · {0}", zone ?? L.T("THIS ZONE")).ToUpperInvariant()));
+            if (rate.PerKill is double k && k > 0) body.Children.Add(CkKv(L.T("Odds per kill"), OneIn(k), CkGold));
+            if (rate.PerNode is double n && n > 0) body.Children.Add(CkKv(L.T("Per try"), $"{n:0.##}", CkGold));
+            body.Children.Add(CkKv(L.T("An hour"), $"{rate.PerHour:0.#}", CkGold, L.F("seen in {0} of {1} runs, last 7 days", rate.Runs, ze.Runs)));
         }
 
         // the game's listed chances: enemies here first, else the best elsewhere; hidden when no enemy lists it
         var listed = SiteData.ListedFor(id, name);
         var bookFrom = LootBook.Current.SourcesOf(name);
-        if ((listed?.Sources.Count ?? 0) > 0 || bookFrom.Count > 0) body.Children.Add(CkSection("LISTED DROP CHANCE"));
+        if ((listed?.Sources.Count ?? 0) > 0 || bookFrom.Count > 0) body.Children.Add(CkSection(L.T("LISTED DROP CHANCE")));
         bool Here(SiteData.Source s) => zone != null && (string.Equals(s.Zone, zone, StringComparison.OrdinalIgnoreCase) || string.Equals(s.Map, zone, StringComparison.OrdinalIgnoreCase));
         if (listed != null && listed.Sources.Count > 0)
         {
             var here = listed.Sources.Where(Here).OrderByDescending(s => s.Chance).Take(4).ToList();
-            if (here.Count > 0) foreach (var s in here) body.Children.Add(CkKv(s.Monster, OneIn(s.Chance), CkGold, s.Level > 0 ? $"Lv {s.Level}" : ""));
+            if (here.Count > 0) foreach (var s in here) body.Children.Add(CkKv(s.Monster, OneIn(s.Chance), CkGold, s.Level > 0 ? L.F("Lv {0}", s.Level) : ""));
             else
             {
-                body.Children.Add(CkNote(zone != null ? $"No enemy in {zone} lists it. Best elsewhere:" : "Best listed chances:"));
+                body.Children.Add(CkNote(zone != null ? L.F("No enemy in {0} lists it. Best elsewhere:", zone) : L.T("Best listed chances:")));
                 foreach (var s in listed.Sources.OrderByDescending(s => s.Chance).Take(3)) body.Children.Add(CkKv(s.Monster, OneIn(s.Chance), CkGold, s.Zone.Length > 0 ? s.Zone : s.Map));
             }
-            if (listed.Sources.Count > 4) body.Children.Add(CkNote($"{listed.Sources.Count} enemies list it in all."));
+            if (listed.Sources.Count > 4) body.Children.Add(CkNote(L.F("{0} enemies list it in all.", listed.Sources.Count)));
         }
         else
         {
             // the tables built into the tracker, when the site's list doesn't have the item yet
             var book = LootBook.Current;
             var from = book.SourcesOf(name).Select(m => (m, book.Find(m, name, id)?.Chance)).OrderByDescending(x => x.Chance ?? 0).Take(4).ToList();
-            foreach (var (m, ch) in from) body.Children.Add(CkKv(m, ch is double c2 && c2 > 0 ? OneIn(c2) : "listed", CkGold));
+            foreach (var (m, ch) in from) body.Children.Add(CkKv(m, ch is double c2 && c2 > 0 ? OneIn(c2) : L.T("listed"), CkGold));
         }
 
         // a price alert on this item, on the player's server, as one line (Ui/MainWindow.PriceAlerts.cs)
         if (!gathered || priced) body.Children.Add(CkAlertLine(name, Redo));
 
-        var links = new List<(string, string)> { ("Drops on kinahledger.com", SiteUrl + "/#drops") };
-        if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add(("MetaBot.GG page", mu));
+        var links = new List<(string, string)> { (L.T("Drops on kinahledger.com"), SiteUrl + "/#drops") };
+        if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add((L.T("MetaBot.GG page"), mu));
         var linkLine = CkLinks(links.ToArray());
         // Watch: this item alerts like a rare drop (Ui/MainWindow.Alerts.cs)
-        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop the drop alert" : "Alert me when it drops")) { Foreground = Ck(CkLink), TextDecorations = null };
-        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop the drop alert" : "Alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
+        var watch = new Hyperlink(new Run(IsWatched(name) ? L.T("Stop the drop alert") : L.T("Alert me when it drops"))) { Foreground = Ck(CkLink), TextDecorations = null };
+        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? L.T("Stop the drop alert") : L.T("Alert me when it drops"); Say(on ? L.F("Watching {0}: a chime and the panel light up when it drops.", name) : L.F("Stopped watching {0}.", name), "Faint"); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, watch);
         // Set a goal, beside Watch (0.9): how many of it to pick up today, in the goal sheet (Ui/MainWindow.Goals.cs)
-        var goal = new Hyperlink(new Run("Set a goal")) { Foreground = Ck(CkLink), TextDecorations = null };
+        var goal = new Hyperlink(new Run(L.T("Set a goal"))) { Foreground = Ck(CkLink), TextDecorations = null };
         goal.Click += (_, _) => { if (_card != null) _card.IsOpen = false; OpenGoalSheetLater(null, GoalDraft.ForItem(name), null); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, goal);
         // Looks wrong? (or its Undo) at the end, what a right-click on a LOOT slot used to hide (2026-10-31)
-        var rep = new Hyperlink(new Run(r.Reported ? "Reported · Undo" : "Looks wrong? Report")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
+        var rep = new Hyperlink(new Run(r.Reported ? L.T("Reported · Undo") : L.T("Looks wrong? Report"))) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = L.T("Keeps it out of what this count sends to the site, and saves the last minute of what was read.") };
         rep.Click += (_, _) => { if (_card != null) _card.IsOpen = false; ToggleReport(r); };
         linkLine.Inlines.Add(new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.Add(rep);

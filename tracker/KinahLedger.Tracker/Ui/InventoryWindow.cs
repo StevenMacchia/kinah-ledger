@@ -21,7 +21,7 @@ sealed class InventoryWindow : Window
     public InventoryWindow(Window owner)
     {
         Owner = owner;
-        Title = "Inventory";
+        Title = L.T("Inventory");
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -33,7 +33,7 @@ sealed class InventoryWindow : Window
         _host.Cursor = Cursors.SizeAll;
         _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, MaxHeight = Math.Min(720, SystemParameters.WorkArea.Height - 24) };
         _host.Children.Add(_scroll);
-        var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 19, 19, 0), ToolTip = "Close (Esc)" };
+        var close = new Button { Content = "✕", FontSize = 13, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 19, 19, 0), ToolTip = L.T("Close (Esc)") };
         close.SetResourceReference(StyleProperty, "RoundBtn");
         System.Windows.Automation.AutomationProperties.SetName(close, "Close the inventory");
         close.Click += (_, _) => Close();
