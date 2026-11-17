@@ -345,7 +345,7 @@ public partial class OptionsWindow
         o._chimeChk.IsChecked = !chimeBefore; Click(o._chimeChk);
         o._chimeVol.Value = 0.3;
         check(w.HudChime == chimeBefore && Math.Abs(w.HudChimeVolume - volBefore) < 0.001, "the chime's switch and volume wait for Save");
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         check(MainWindow.IsWatched(item) && w.HudChime == !chimeBefore && Math.Abs(w.HudChimeVolume - 0.3) < 0.001, "watch list and chime saved");
         bool alerted = w.AlertFor(item + " ×1", DateTime.UtcNow);
@@ -362,7 +362,7 @@ public partial class OptionsWindow
         check(o._watchHost.Children.Count == tiles && MainWindow.IsWatched(item), "× takes the tile away and waits for Save");
         o._chimeChk.IsChecked = chimeBefore; Click(o._chimeChk);
         o._chimeVol.Value = volBefore;
-        Click(o.SaveBtn);
+        o.SaveForTest();
         DoEvents();
         check(!MainWindow.IsWatched(item) && w.HudChime == chimeBefore && !w.AlertFor(item + " ×1", DateTime.UtcNow), "saved without it: the item no longer alerts");
     }

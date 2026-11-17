@@ -679,10 +679,10 @@ public partial class MainWindow
         return box;
     }
 
-    /// <summary>Settings › In game, scrolled to the Parser's look row.</summary>
+    /// <summary>Settings › DPS meter, scrolled to the Parser's look row.</summary>
     void OpenParserLook()
     {
-        OpenOptions(OptionsWindow.Page.InGame);
+        OpenOptions(OptionsWindow.Page.Meter);
         _options?.ShowParserLook();
     }
 

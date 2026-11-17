@@ -444,7 +444,7 @@ public sealed class ParserOverlay : Window
         if (MakeLook(ParserPrefs.LookOf(look), still: true) is { } l)
         {
             if (l is IHudFightAbove fa) face = fa.FightAbove(e, now) ?? new Border();
-            else { l.ShowFight(e, now); face = HudWindow.Cropped(l.Root, l); }
+            else { l.ShowFight(e, now); face = Tight(l.Root); }
         }
         else
         {
@@ -459,6 +459,26 @@ public sealed class ParserOverlay : Window
         Typography.SetNumeralAlignment(host, FontNumeralAlignment.Tabular);
         return host;
     }
+    /// <summary>
+    /// A look's face cut to what it draws, a few pixels round. The looks' own insets (HudWindow.Cropped) are for the Kinah
+    /// overlay's window and cut the Tactical looks' fight (Fighter, Holo) at the right in Settings (Steven, 2026-11-17: "fight
+    /// and Holo previews are cut off"): the face is laid out once at its own size, then framed on its drawn bounds.
+    /// </summary>
+    static FrameworkElement Tight(FrameworkElement root)
+    {
+        root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        root.Arrange(new Rect(root.DesiredSize));
+        root.UpdateLayout();
+        var b = VisualTreeHelper.GetDescendantBounds(root);
+        if (b.IsEmpty || b.Width < 1 || b.Height < 1) return root;
+        const double pad = 4;
+        // its size held as laid out, so the frame's width never squeezes it into a narrower layout
+        root.Width = root.ActualWidth; root.Height = root.ActualHeight;
+        root.HorizontalAlignment = HorizontalAlignment.Left; root.VerticalAlignment = VerticalAlignment.Top;
+        root.Margin = new Thickness(pad - b.X, pad - b.Y, 0, 0);
+        return new Border { Child = root, Width = b.Width + 2 * pad, Height = b.Height + 2 * pad, ClipToBounds = true };
+    }
+
     /// <summary>The Kinah overlay's frame (its corner and padding for the figures picked), so the two look alike.</summary>
     public void SetFrame(double radius, Thickness padding) => _panel.SetFrame(radius, padding);
 
@@ -521,6 +541,7 @@ public sealed class ParserOverlay : Window
     /// <summary>A screen read with the overlay out of the way when it sits over the area read (as the panel over the game does).</summary>
     public static async Task HiddenIfOver(System.Drawing.Rectangle area, Func<Task> read)
     {
+        if (Ocr.WindowCapture.Active) { await read(); return; }   // the game's own window is read: the meter is never in it (HudWindow.HiddenIfOver)
         var o = Current;
         bool hide = false;
         if (o != null) { try { hide = await o.Dispatcher.InvokeAsync(() => o.PixelBounds().IntersectsWith(area)); } catch (Exception) { hide = false; } }
