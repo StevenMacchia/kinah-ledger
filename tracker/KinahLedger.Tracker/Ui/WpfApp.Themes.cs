@@ -382,5 +382,9 @@ public static partial class WpfApp
         string s;
         try { s = Spill(el); } catch (Exception ex) { s = "spill check failed: " + ex.Message; }
         if (s.Length > 0) File.AppendAllText(Path.Combine(dir, "spill.txt"), file + ": " + s + Environment.NewLine);
+        // and any figure drawn short of its words (Steven, 2026-11-17: "a lot of numbers in all the meters you can't see"; Ui/WpfApp.CutOff.cs)
+        List<string> cut;
+        try { cut = CutOffs(el); } catch (Exception ex) { cut = new() { "cut-off check failed: " + ex.Message }; }
+        foreach (var c in cut) File.AppendAllText(Path.Combine(dir, "spill.txt"), file + ": text " + c + Environment.NewLine);
     }
 }
