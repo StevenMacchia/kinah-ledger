@@ -118,7 +118,7 @@ public static class ParserTests
                         p.Take(b);
                     }
                     while (dec.NextHit() is { } h) { if (events) Count(h); p.Take(h); }
-                    while (dec.NextAreaEvent() is { } ae) if (ae.What == AreaEvent.Kind.Phase) p.MapEvent(ae.Code, ae.At);
+                    while (dec.NextAreaEvent() is { } ae) if (ae.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Closed) p.MapEvent(ae.Code, ae.At, closed: ae.What == AreaEvent.Kind.Closed);
                     screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
@@ -255,10 +255,11 @@ public static class ParserTests
     /// as a decoder before interface version 10 would. <paramref name="useScreen"/> false leaves place.tsv out (the game's own
     /// names only); <paramref name="tick"/> sees the parser after each piece (the Always on meter's checks).
     /// </summary>
-    static List<Encounter> Replay(string pcapng, bool hits, int port = 13328, bool useScreen = true, Action<BossParser, DateTime>? tick = null)
+    static List<Encounter> Replay(string pcapng, bool hits, int port = 13328, bool useScreen = true, Action<BossParser, DateTime>? tick = null, ParserMode mode = ParserMode.Bosses)
     {
         var kept = new List<Encounter>();
         var p = new BossParser { Ended = kept.Add };
+        if (mode != ParserMode.Bosses) p.SetMode(mode, DateTime.MinValue.AddYears(2000));
         var segs = new List<(DateTime At, TcpSegment S)>();
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == port) segs.Add((at, s));
@@ -278,7 +279,7 @@ public static class ParserTests
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
                     while (dec.NextBossEvent() is { } b) p.Take(b);
                     while (dec.NextHit() is { } h) { if (hits) p.Take(h); }
-                    while (dec.NextAreaEvent() is { } ae) if (ae.What == AreaEvent.Kind.Phase) p.MapEvent(ae.Code, ae.At);
+                    while (dec.NextAreaEvent() is { } ae) if (ae.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Closed) p.MapEvent(ae.Code, ae.At, closed: ae.What == AreaEvent.Kind.Closed);
                     screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
@@ -2215,6 +2216,172 @@ public static class ParserTests
             var run = keptR.FirstOrDefault(e => e.Mode == "run");
             Check(run is { Instance: "Ferocious Horn Den" } && run.You?.Damage == 340_000 && run.You.BossDamage == 300_000,
                 $"...Full run: the run has the trash too ({run?.You?.Damage:N0}, {run?.You?.BossDamage:N0} of it the boss's), in {run?.Instance}");
+        }
+
+        // Steven, 2026-11-17: "it didnt properly log any of my transcendence that i did with Tilly ... it put them in expeditions
+        // ... the deus research base". The game marks a Transcendence with "G" where an expedition's mode word stands (its map
+        // events Arkanis_G_09_*, DeusCenter_G_09_*, and the mode it gives): filed as a Transcendence at its stage, never as the
+        // expedition, and "G" never a mode. A second run in the same copy (no entry between) is a new run, its bosses named
+        {
+            var real = BossBook.Shared;
+            Check(real.GradeOf("Arkanis_G_09_BossRoom_MapEvent") == (true, 4) && real.GradeOf("DeusCenter_G_09_MapEvent") == (true, 4) && real.GradeOf("Arkanis_G_06_MapEvent") == (true, 3)
+                && real.GradeOf("Arkanis_G_12_MapEvent") == (true, 0) && real.GradeOf("FierceHornCave_Easy_Mapevent") == (false, 0) && real.GradeOf("BossChallenge_MapEvent") == (false, 0)
+                && real.FromCode("DeusCenter_G_09_BossRoom_MapEvent") == ("Deus Research Base", "") && real.IsCodePart("Temple") && !real.IsCodePart("Easy") && !real.IsCodePart("G")
+                && BossBook.IsTranscendenceWord("G") && !BossBook.IsModeWord("G") && BossBook.StageIn("Shattered Arkanis [Stage 3]") == 3 && BossBook.StageOfMode("Stage 4") == 4,
+                $"a Transcendence by its code's G, its stage where play proved the number (06: Stage 3, 09: Stage 4): {real.GradeOf("Arkanis_G_09_BossRoom_MapEvent")}, {real.GradeOf("Arkanis_G_06_MapEvent")}, {real.GradeOf("Arkanis_G_12_MapEvent")}; Deus Research Base by its code: {real.FromCode("DeusCenter_G_09_BossRoom_MapEvent")}");
+
+            // Shattered Arkanis as on 2026-11-17 16:31: no name, the mode "G", the map event; three unnamed bosses, the room
+            // closed and opened again after the last (16:56:09 to 16:56:12), three more unnamed bosses with new spawn ids
+            foreach (var mode in new[] { ParserMode.Bosses, ParserMode.Run })
+            {
+                var kept = new List<Encounter>();
+                var p = new BossParser(real) { Ended = kept.Add };
+                p.SetMode(mode, t);
+                p.Take(new GroupChanged(t, new[] { Me, Ally }));
+                p.Take(new InstanceEntered(t, ContentKind.Other, "", 1));
+                p.Take(new InstanceMode(t.AddSeconds(5), "G"));
+                p.MapEvent("Arkanis_G_09_BossRoom_MapEvent", t.AddSeconds(5));
+                p.MapEvent("Arkanis_G_09_MapEvent", t.AddSeconds(25));
+                var where = p.Where;
+                void Pull(int at, long id)
+                {
+                    p.Take(new BossEngaged(t.AddSeconds(at), "", id));
+                    p.Take(new DamageDealt(t.AddSeconds(at + 1), 1, id, 100_000 + id, "Swoly", true, 12240000, 1));
+                    p.Take(new BossEnded(t.AddSeconds(at + 40), id, BossOutcome.Kill));
+                }
+                Pull(100, 19650); Pull(200, 43452); Pull(300, 47491);
+                p.MapEvent("Arkanis_G_09_BossRoom_MapEvent", t.AddSeconds(390), closed: true);
+                p.MapEvent("Arkanis_G_09_BossRoom_MapEvent", t.AddSeconds(393));
+                p.MapEvent("Arkanis_G_09_MapEvent", t.AddSeconds(420));
+                Pull(500, 37227); Pull(600, 21112); Pull(700, 48968);
+                p.Take(new InstanceLeft(t.AddSeconds(800)));
+                var pulls = kept.Where(e => e.Mode == "boss").ToList();
+                var runs = kept.Where(e => e.Mode == "run").ToList();
+                string names = string.Join(", ", pulls.Select(e => e.Boss));
+                if (mode == ParserMode.Bosses)
+                {
+                    Check(where == (ContentKind.Transcendence, "Shattered Arkanis") && pulls.Count == 6
+                        && names == "Talisra of the Void, Siliator of Deceit, Ruthilis of Pain, Talisra of the Void, Siliator of Deceit, Ruthilis of Pain"
+                        && pulls.All(e => e is { Kind: "Transcendence", Instance: "Shattered Arkanis", GameMode: "Stage 4" }) && pulls.Count(e => e.FinalBoss) == 2,
+                        $"...Shattered Arkanis entered unnamed, its mode G: {where.Kind} {where.Instance}; the second run in the same copy named again from the first boss: {names} ({string.Join(", ", pulls.Select(e => $"{e.Kind}/{e.GameMode}").Distinct())})");
+                }
+                else
+                    Check(runs.Count == 2 && runs.All(e => e is { Kind: "Transcendence", GameMode: "Stage 4", Outcome: "cleared" }) && runs[1].Start == t.AddSeconds(393) && runs.All(e => e.Splits.Count(s => s.Outcome == "kill") == 3),
+                        $"...Full run: two runs, the second from the room opening again ({string.Join("; ", runs.Select(e => $"{e.Kind} {e.GameMode} {e.Outcome} from {(e.Start - t).TotalSeconds:0} s, {e.Splits.Count(s => s.Outcome == "kill")} kills"))})");
+            }
+
+            // no map events at all (the game named the place, the mode "G" after it; the chat said the stage): the pull after
+            // the last boss died is a new run, named from the first; the dead last boss engaged again is no new run
+            {
+                var kept = new List<Encounter>();
+                var p = new BossParser(real) { Ended = kept.Add };
+                p.StageSaid(4, t.AddMinutes(-50));
+                p.Take(new GroupChanged(t, new[] { Me, Ally }));
+                p.Take(new InstanceEntered(t, ContentKind.Expedition, "Deus Research Base", 2));
+                p.Take(new InstanceMode(t.AddSeconds(5), "G"));
+                void Pull(int at, long id, BossOutcome o = BossOutcome.Kill)
+                {
+                    p.Take(new BossEngaged(t.AddSeconds(at), "", id));
+                    p.Take(new DamageDealt(t.AddSeconds(at + 1), 1, id, 90_000, "Swoly", true, 12240000, 1));
+                    p.Take(new DamageDealt(t.AddSeconds(at + 30), 1, id, 90_000, "Swoly", true, 12240000, 1));
+                    p.Take(new BossEnded(t.AddSeconds(at + 40), id, o));
+                }
+                Pull(100, 19970); Pull(200, 21211); Pull(300, 40566);
+                p.Take(new BossEngaged(t.AddSeconds(345), "", 40566));   // the dead Nazmun's spawn again: the same copy
+                Pull(500, 19089); Pull(600, 46081, BossOutcome.Wipe); Pull(700, 46081); Pull(800, 39742);
+                var names = string.Join(", ", kept.Where(e => e.Mode == "boss").Select(e => $"{e.Boss} {e.Outcome}"));
+                Check(names == "Atiel kill, Gelcos kill, Nazmun kill, Atiel kill, Gelcos wipe, Gelcos kill, Nazmun kill"
+                    && kept.All(e => e is { Kind: "Transcendence", Instance: "Deus Research Base", GameMode: "Stage 4" }),
+                    $"...Deus Research Base with no map events, the stage from the chat: {names} ({string.Join(", ", kept.Select(e => $"{e.Kind}/{e.GameMode}").Distinct())})");
+            }
+
+            // a piece of the place's own name is never its mode (Fire Temple's fights were kept in the mode "Temple" on 2026-11-16)
+            {
+                var kept = new List<Encounter>();
+                var p = new BossParser(real) { Ended = kept.Add };
+                p.Take(new GroupChanged(t, new[] { Me }));
+                p.Take(new InstanceEntered(t, ContentKind.Expedition, "Fire Temple", 3));
+                p.Take(new InstanceMode(t.AddSeconds(5), "Temple"));
+                p.Take(new BossEngaged(t.AddSeconds(100), "Silver Blade Rotan", 20669));
+                p.Take(new DamageDealt(t.AddSeconds(101), 1, 20669, 90_000, "Swoly", true, 12240000, 1));
+                p.Take(new BossEnded(t.AddSeconds(140), 20669, BossOutcome.Kill));
+                Check(kept.SingleOrDefault() is { Kind: "Expedition", GameMode: "" }, $"...Fire Temple's \"Temple\" is no mode: kept as {kept.SingleOrDefault()?.Kind} '{kept.SingleOrDefault()?.GameMode}'");
+            }
+
+            // the chat's own stage lines, never a player's
+            Check(TrackerSession.StageLine("Set to Stage 4.") == (4, null) && TrackerSession.StageLine("Shattered Arkanis Stage 4 1 achieved.") == (4, "Shattered Arkanis")
+                && TrackerSession.StageLine("Deus Research Base Stage 4/1 achieved.") == (4, "Deus Research Base") && TrackerSession.StageLine("Shattered Arkanis [Stage 3] | Transcendence") == (3, "Shattered Arkanis")
+                && TrackerSession.StageLine("Way of the Transcended I achieved.") == null && TrackerSession.StageLine("[Tyson] last bos stage 3 deus") == null && TrackerSession.StageLine("[MrTyreek] stage 3 deus no death need tank") == null,
+                $"the chat's stage lines: {TrackerSession.StageLine("Shattered Arkanis Stage 4 1 achieved.")}, {TrackerSession.StageLine("Deus Research Base Stage 4/1 achieved.")}; a player's none");
+
+            // records per fight by the boss's name: its id is the spawn's (Talisra came as 19650, 28131 and 45221 on 2026-11-17)
+            Encounter K(long id, string kind, string mode, int ago) => new()
+            {
+                Mode = "boss", Kind = kind, Instance = "Shattered Arkanis", GameMode = mode, Boss = "Talisra of the Void", BossId = id,
+                Start = t.AddMinutes(-ago), End = t.AddMinutes(-ago).AddSeconds(60), LastAt = t.AddMinutes(-ago).AddSeconds(60), Outcome = "kill", HasDamage = true,
+                Roster = { new Fighter { Id = 1, You = true, Name = "Swoly", Damage = 60_000 + id, BossDamage = 60_000 + id } },
+            };
+            var recs = FightRecords.From(new[] { K(19650, "Transcendence", "Stage 4", 90), K(28131, "Transcendence", "Stage 4", 60), K(45221, "Transcendence", "Stage 4", 30), K(5, "Expedition", "Exploration", 20), K(6, "Transcendence", "", 10) });
+            Check(recs.Count == 3 && recs["talisra of the void|shattered arkanis|stage 4"].Kills == 3 && recs.ContainsKey("talisra of the void|shattered arkanis|transcendence")
+                && FightRecords.KeyOf(new Encounter { Boss = BossParser.UnnamedBoss, BossId = 77, Instance = "X" }) == "77|x|",
+                $"...a fight's record is the boss's by name, the spawns of three runs one record ({string.Join(", ", recs.Values.Select(r => $"{r.Key} {r.Kills}"))})");
+
+            // the one-time repair (Session/CategoryRepair.cs): the fights kept before this build put right in place
+            string J(string boss, long id, string kind, string mode, DateTime at, string outcome = "kill") =>
+                $"{{\"Id\":\"{id}\",\"Mode\":\"boss\",\"Kind\":\"{kind}\",\"Instance\":\"Deus Research Base\",\"GameMode\":\"{mode}\",\"Boss\":\"{boss}\",\"BossId\":{id},\"FinalBoss\":false,\"Start\":\"{at:O}\",\"End\":\"{at.AddSeconds(60):O}\",\"Outcome\":\"{outcome}\"}}";
+            var day = new DateTime(2026, 11, 17, 22, 15, 0, DateTimeKind.Utc);
+            var nodes = new[]
+            {
+                J("Atiel", 1, "Expedition", "G", day), J("Gelcos", 2, "Expedition", "G", day.AddMinutes(2)), J("Nazmun", 3, "Expedition", "G", day.AddMinutes(4)),
+                J(BossParser.UnnamedBoss, 4, "Expedition", "G", day.AddMinutes(8)), J(BossParser.UnnamedBoss, 5, "Expedition", "G", day.AddMinutes(10), "wipe"),
+                J(BossParser.UnnamedBoss, 5, "Expedition", "G", day.AddMinutes(11)), J(BossParser.UnnamedBoss, 6, "Expedition", "G", day.AddMinutes(13)),
+                J("Atiel", 7, "Expedition", "G", day.AddDays(-30)), J("Atiel", 8, "Expedition", "Conquest", day.AddMinutes(30)),
+            }.Select(s => System.Text.Json.Nodes.JsonNode.Parse(s)).ToList();
+            var rlog = new List<string>();
+            int fixedN = KinahLedger.Session.CategoryRepair.RepairFights(nodes, real, "c2", rlog);
+            string F(int i) => $"{nodes[i]!["Boss"]}/{nodes[i]!["Kind"]}/{nodes[i]!["GameMode"]}";
+            Check(fixedN == 8 && F(3) == "Atiel/Transcendence/Stage 4" && F(4) == "Gelcos/Transcendence/Stage 4" && F(5) == "Gelcos/Transcendence/Stage 4" && F(6) == "Nazmun/Transcendence/Stage 4"
+                && (bool)nodes[6]!["FinalBoss"]! && F(7) == "Atiel/Transcendence/" && F(8) == "Atiel/Expedition/Conquest",
+                $"the one-time repair: G is a Transcendence (Stage 4 where the logs prove it), the second run's unnamed bosses named in route order, a wipe's spawn keeping its name; {fixedN} changed: {string.Join(", ", Enumerable.Range(0, nodes.Count).Select(F))}");
+            // ...and on Steven's own files as they were on Nov 17 (kinah-bench's backup, read only)
+            var bk = Recording("20261117-16") is { } r16 ? Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(r16)!)!)!, "backup-20261117-categories") : null;
+            if (bk == null || !Directory.Exists(Path.Combine(bk, "characters"))) Console.WriteLine("skip  the one-time repair on Steven's Nov 17 files: kinah-bench/backup-20261117-categories not here");
+            else
+            {
+                var res = KinahLedger.Session.CategoryRepair.Run(bk, dryRun: true, book: real);
+                Check(res.Fights == 25 && res.Runs == 6 && res.Log.Count(l => l.Contains("Unnamed boss ->")) == 6 && res.Log.Count(l => l.Contains(": run ") && l.Contains("-> Transcendence")) == 6,
+                    $"...on Steven's Nov 17 files: {res.Log[0]}");
+            }
+        }
+
+        // Steven's recordings of 2026-11-17 (kinah-bench/packets/rec-20261117-*), with no screen: the Transcendence runs of
+        // Shattered Arkanis (16:31, and 16:47 with its next run in the same copy at 16:56) and Deus Research Base (17:12 and
+        // 17:21, the same copy), each boss named in route order, filed Transcendence, Stage 4; Ferocious Horn Den on Easy and
+        // Krao Cave on Hard (18:00 to 18:28) stay expeditions in their modes
+        {
+            var names = new[] { "20261117-16", "20261117-16-3", "20261117-17", "20261117-18" };
+            var recs = names.Select(n => (n, Path: Recording(n))).ToList();
+            if (NativeDecoder.Version < 10 || recs.Any(x => x.Path == null))
+                Console.WriteLine($"skip  Steven's Transcendence recordings of Nov 17: decoder interface {NativeDecoder.Version}, {recs.Count(x => x.Path != null)} of {names.Length} here (kinah-bench/packets/rec-*)");
+            else
+            {
+                string Of(List<Encounter> xs) => string.Join(", ", xs.Select(e => $"{e.Boss} ({e.Kind}, {e.Instance}, {e.GameMode}, {e.Outcome})"));
+                const string arkanis = "Talisra of the Void, Siliator of Deceit, Ruthilis of Pain", deus = "Atiel, Gelcos, Nazmun";
+                bool Trans(List<Encounter> xs, string inst) => xs.All(e => e is { Kind: "Transcendence", GameMode: "Stage 4" } && e.Instance == inst && e.Boss != BossParser.UnnamedBoss);
+                var a = Replay(recs[0].Path!, hits: false, useScreen: false).Where(e => e.Mode == "boss").ToList();
+                Check(string.Join(", ", a.Select(e => e.Boss)) == arkanis && Trans(a, "Shattered Arkanis"), $"Nov 17 16:31, Shattered Arkanis: {Of(a)}");
+                var b = Replay(recs[1].Path!, hits: false, useScreen: false).Where(e => e.Mode == "boss").ToList();
+                Check(string.Join(", ", b.Select(e => e.Boss)) == arkanis + ", Talisra of the Void" && Trans(b, "Shattered Arkanis"),
+                    $"...16:47, and its next run in the same copy from 16:56 named from the first boss: {Of(b)}");
+                var c = Replay(recs[2].Path!, hits: false, useScreen: false).Where(e => e.Mode == "boss").ToList();
+                Check(string.Join(", ", c.Select(e => e.Boss)) == deus + ", " + deus && Trans(c, "Deus Research Base"), $"...17:12, Deus Research Base and its next run in the same copy: {Of(c)}");
+                var runs = Replay(recs[2].Path!, hits: false, useScreen: false, mode: ParserMode.Run).Where(e => e.Mode == "run" && e.Instance == "Deus Research Base").ToList();
+                Check(runs.Count == 2 && runs.All(e => e is { Kind: "Transcendence", GameMode: "Stage 4", Outcome: "cleared" }),
+                    $"...Full run: two Deus Research Base runs, each cleared ({string.Join("; ", runs.Select(e => $"{e.Start.ToLocalTime():HH:mm:ss} {e.Kind} {e.GameMode} {e.Outcome}"))})");
+                var d = Replay(recs[3].Path!, hits: false, useScreen: false).Where(e => e.Mode == "boss").ToList();
+                Check(d.Count == 8 && d.Take(3).All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }) && d.Skip(3).All(e => e is { Kind: "Expedition", Instance: "Krao Cave", GameMode: "Hard" }),
+                    $"...18:00, Ferocious Horn Den on Easy and Krao Cave on Hard, expeditions in their modes: {Of(d)}");
+            }
         }
 
         // a misread hit (2026-11-15: Divine Punishment read 261M once in the open world): left out, the record partial

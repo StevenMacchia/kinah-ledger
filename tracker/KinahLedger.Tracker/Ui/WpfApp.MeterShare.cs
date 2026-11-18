@@ -256,8 +256,9 @@ public static partial class WpfApp
                 var refuse = o.RecordShareKeyForTest(ModifierKeys.Control, Key.C);
                 var take = o.RecordShareKeyForTest(ModifierKeys.Control | ModifierKeys.Shift, Key.F9);
                 string key1 = o.ShareKeyForTest;
+                // off by default since PR 342 ("Meter share: the members' names shown by default")
                 check(chk.IsChecked == false && key0 == ParserPrefs.DefaultHotkey && refuse != null && take == null && key1 == "Ctrl+Shift+F9" && o.ParserDirty,
-                    $"meter share: Settings › In game › Parser has Hide other names (on: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
+                    $"meter share: Settings › In game › Parser has Hide other names (off by default: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
             }
             finally { o.ReloadParserForTest(); }
         }
