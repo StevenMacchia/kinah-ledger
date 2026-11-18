@@ -190,6 +190,7 @@ public sealed partial class TrackerSession
     void FightToParser(FightTally.Outcome o)
     {
         if (_parserWired && !o.Credited) return;   // the player's own kills and deaths came straight from the kill events
+        if (o.Assist) return;   // an assist is someone else's kill: the Parser's kills stay the player's own (the Abyss count has it)
         try { Fights.Kill(o.At, o.Player, o.Death, o.Name); } catch (Exception ex) { CrashLog.Write("parser", ex); }
     }
 }

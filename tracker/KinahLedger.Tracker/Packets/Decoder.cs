@@ -378,7 +378,9 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     {
         if (_h == 0 || Version < 3) return null;
         KlEvent e;
-        if (NextEventN(_h, &e) != 1 || e.Kind is < 1 or > 2) return null;
+        // kind 3 (version 12): the player's own hits on the other faction's players, for the assists; a kind this build
+        // doesn't know is passed over, so the events after it still come
+        do { if (NextEventN(_h, &e) != 1) return null; } while (e.Kind is < 1 or > 3 || (e.Kind == 3 && Version < 12));
         static string Text(byte* b) { int n = 0; while (n < 32 && b[n] != 0) n++; return System.Text.Encoding.UTF8.GetString(b, n); }
         return new FightEvent(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), (FightKind)e.Kind, (FightFlags)e.Flags, e.VictimId, e.KillerId, e.MonsterId,
             e.Delta, e.Total, Text(e.VictimName), Text(e.KillerName));

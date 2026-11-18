@@ -62,8 +62,10 @@ public sealed partial class SessionEngine
     public int BonusFinds { get; private set; }
     /// <summary>Best available kill count: kill lines, experience lines, or Kinah pickups (one per mob in open-world farming).</summary>
     public int Kills => Math.Max(PlayerKills + MonsterKills, Math.Max(KillsSeen, Math.Max(Math.Max(KillsDefeated, KillsXp), Math.Max(KinahDrops, CurrencyLines))));
-    /// <summary>The player's kills of other players, as the game's own messages tell them (<see cref="FightCounted"/>).</summary>
+    /// <summary>The player's kills of other players, as the game's own messages tell them (<see cref="FightCounted"/>), assists included.</summary>
     public int PlayerKills { get; private set; }
+    /// <summary>Of <see cref="PlayerKills"/>, the assists: enemy players someone else killed in the 30 s after the player hit them.</summary>
+    public int PlayerAssists { get; private set; }
     /// <summary>The player's kills of monsters, as the game's own messages tell them.</summary>
     public int MonsterKills { get; private set; }
     /// <summary>The player's deaths, as the game's own messages tell them; of them, those a player dealt.</summary>
@@ -699,7 +701,7 @@ public sealed partial class SessionEngine
                 {
                     var zf = Z();
                     if (fc.Death) { Deaths++; zf.Deaths++; if (fc.Player) DeathsToPlayers++; }
-                    else if (fc.Player) { PlayerKills++; zf.PlayerKills++; MarkKill(fc.Time); }
+                    else if (fc.Player) { PlayerKills++; zf.PlayerKills++; if (fc.Assist) PlayerAssists++; MarkKill(fc.Time); }
                     else { MonsterKills++; zf.MonsterKills++; MarkKill(fc.Time); }
                     break;
                 }

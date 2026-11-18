@@ -461,11 +461,13 @@ public sealed partial class TrackerSession
         }
         foreach (var o in _fightTally.Take(now))
         {
-            if (!o.Death && (o.At - _lastKillAt).TotalSeconds > 0) _lastKillAt = o.At;
+            // an assist is a death at someone else's hand: no drop of the player's comes with it
+            if (!o.Death && !o.Assist && (o.At - _lastKillAt).TotalSeconds > 0) _lastKillAt = o.At;
             string what = o.Death ? $"died{(o.Name.Length > 0 ? " to " + o.Name : "")}"
+                : o.Assist ? $"an assist on the player {(o.Name.Length > 0 ? o.Name : "(unnamed)")}: killed by {(o.Killer.Length > 0 ? o.Killer : "someone else")}, your last hit {o.HitBefore:0.0} s before"
                 : $"killed {(o.Player ? "the player " + (o.Name.Length > 0 ? o.Name : "(unnamed)") : "a monster")}{(o.Credited ? " (the game named no killer; your Rank Points rose with it)" : "")}";
             CrashLog.Note($"packets: {what}");
-            CommitWith(new FightCounted(o.At, o.Player, o.Death, o.Name) { Via = "packets" }, "counter");
+            CommitWith(new FightCounted(o.At, o.Player, o.Death, o.Name) { Via = "packets", Assist = o.Assist }, "counter");
             FightToParser(o);   // the Parser's runs and fights (TrackerSession.Parser.cs)
         }
     }

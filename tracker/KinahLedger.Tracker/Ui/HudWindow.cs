@@ -570,6 +570,7 @@ public sealed partial class HudWindow : Window
                 _abyssText.Inlines.Add(new System.Windows.Documents.Run(" " + word));
             }
             _abyssCell.Visibility = stats.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _abyssCell.ToolTip = abyss ? HudKit.AbyssTip(values) : null;   // the PvP kills' assists, on the hover
         }
         bool first = true;
         foreach (FrameworkElement c in _row.Children)

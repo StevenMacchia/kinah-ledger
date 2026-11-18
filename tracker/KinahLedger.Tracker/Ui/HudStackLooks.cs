@@ -165,10 +165,10 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
 
     /// <param name="Abyss">In the Abyss (HudKit.Abyss): Rate is the Abyss Points hour and Total the points so far, then Stats (kills, deaths, Kinah) and the points' art (Icon).</param>
     protected sealed record Figures(bool Counted, bool Warm, string Rate, string Total, double Share, string ToBest, bool Beat, string Zone, string Clock, string Note, Brush NoteTone,
-        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon, string Idle = "")
+        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon, string Idle = "", string? StatsTip = null)
     {
         /// <summary>A sign of the figures, for a look's redraw check.</summary>
-        public string Sig => $"{Counted}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{Icon}|{(Counted && Rate.Length > 0 ? "" : Idle)}";
+        public string Sig => $"{Counted}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{StatsTip}|{Icon}|{(Counted && Rate.Length > 0 ? "" : Idle)}";
         /// <summary>The hour's colour: gold for Kinah, ink for Abyss Points.</summary>
         public Brush Tone => Abyss ? Ink : Gold;
         /// <summary>The hour's word: "/h", or "AP/h" for Abyss Points; none while it warms up.</summary>
@@ -181,6 +181,7 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
     protected static TextBlock StatsLine(Figures f, double size)
     {
         var t = Tx("", size, Muted, FontWeights.SemiBold);
+        if (f.StatsTip != null) t.ToolTip = f.StatsTip;   // the PvP kills' assists, on the hover
         foreach (var (fig, word, tone) in f.Stats)
         {
             if (t.Inlines.Count > 0) t.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
@@ -208,7 +209,7 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
         else { note = ""; tone = Muted; }
         _idle = V("idle");
         return _figsNow = new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
-            abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle);
+            abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle, abyss && counted ? AbyssTip(v) : null);
     }
 
     /// <summary>The window's idle line as last read (the "idle" value), for <see cref="Waiting(bool)"/>.</summary>
