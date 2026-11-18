@@ -271,7 +271,10 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         _camBack.Opacity = Math.Min(1, o * 1.15);
     }
 
-    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}";
+    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+
+    /// <summary>The pickup strip in this tape: the tiles a size under the hour, the rule the glass's hairline (Deck's the display's cyan), the star the tape's yellow.</summary>
+    PickStrip.Look Strip => new(24, 5, true, Deck ? Br(VfdC, .4) : Br(0xFFFFFF, .3), Yellow);
 
     string _figSig = "";
 
@@ -286,7 +289,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         _dot.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
         _dot.Opacity = odd ? 1 : .3;
         _tc.Text = "SP " + Timecode(clock);
-        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}";
+        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
         if (sig == _figSig) return;
         _figSig = sig;
 
@@ -306,11 +309,23 @@ sealed class HudVhs : HudThemeLook, IThemeCard
             left.Children.Add(u);
         }
         _figRow.Children.Add(left);
+        StackPanel? best = null;
         if (f.Share >= 0 && !f.Warm && f.Counted && f.Rate.Length > 0)
         {
-            var best = BestLevel(f.Share, f.Beat);
+            best = BestLevel(f.Share, f.Beat);
             best.Margin = new Thickness(16, 0, 0, 0);
             Grid.SetColumn(best, 2); _figRow.Children.Add(best);
+        }
+        // the best drop and the last three in the room beside the hour while farming, against the battery (or the panel's
+        // edge, under the counter): the Abyss, the idle line and a rare drop's freeze-frame keep the row as it was
+        if (!f.Abyss && f.Counted && f.Rate.Length > 0 && Rare(Values) == null)
+        {
+            double room = FightWidth - _deck.Body.Margin.Left - _deck.Body.Margin.Right - Wide(left) - (best != null ? Wide(best) : 0) - 14;
+            if (FitStrip(Values, Strip, room) is { } strip)
+            {
+                strip.HorizontalAlignment = HorizontalAlignment.Right; strip.Margin = new Thickness(14, 0, 0, 0);
+                Grid.SetColumn(strip, 1); _figRow.Children.Add(strip);
+            }
         }
 
         // the session (in the Abyss, the points)

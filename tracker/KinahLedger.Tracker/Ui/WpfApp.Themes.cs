@@ -221,6 +221,9 @@ public static partial class WpfApp
             ("entry-opened", kinah, due, null, now, false), ("fight-started", kinah, null, live, now, true), ("fight-ended", kinah, null, kill, kill.End!.Value, true), ("fight-wiped", kinah, null, wipe, wipe.End!.Value, true),
         };
         double? frozen0 = Motion.FrozenAt;
+        // KL_PICK_ICONS=0: Settings › Buddy › Pickup icons off, for this render only (each look as it was without the strip)
+        bool picks0 = PickStrip.Shown;
+        if (Environment.GetEnvironmentVariable("KL_PICK_ICONS") == "0") PickStrip.Shown = false;
         foreach (var look in looks)
         {
             void Shot(string tag, Dictionary<string, string> v, List<TimerBoard.Item>? t, Encounter? e, DateTime at, bool dungeon, double? frame)
@@ -296,6 +299,7 @@ public static partial class WpfApp
             catch (Exception ex) { Console.WriteLine($"{look}: {ex}"); }
         }
         Motion.FrozenAt = frozen0;
+        PickStrip.Shown = picks0;
 
         // a moment's values with only what makes that moment: no rare drop or best on a plain pickup's frame, and so on
         static Dictionary<string, string> MomentOnly(string tag, Dictionary<string, string> v)

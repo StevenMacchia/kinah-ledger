@@ -45,6 +45,26 @@ static class GlitchKit
         return r;
     }
 
+    /// <summary>An element's width as it would lay out on its own (a figure's, before it joins its row).</summary>
+    public static double Wide(FrameworkElement e)
+    {
+        e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return e.DesiredSize.Width;
+    }
+
+    /// <summary>
+    /// The pickup strip (Ui/HudPickStrip.cs) in <paramref name="room"/> DIPs a look has left beside its figures (Steven,
+    /// 2026-11-18: "too much empty space in some of the buddies"): the best drop and the last three, the last three alone
+    /// when only they fit, none when not even they do, so a figure is never cut and the panel never grows past the meter's
+    /// width. Null too before the first pickup, or with Settings › Buddy › Pickup icons off.
+    /// </summary>
+    public static FrameworkElement? FitStrip(IReadOnlyDictionary<string, string> v, PickStrip.Look look, double room)
+    {
+        if (look.Best && PickStrip.Width(look) <= room) return PickStrip.Of(v, look);
+        var three = look with { Best = false };
+        return PickStrip.Width(three, 3, false) <= room ? PickStrip.Of(v, three) : null;
+    }
+
     /// <summary>
     /// A name in capitals, as a tape's OSD writes it. A word joiner (zero width) between an A and a P, so a name never reads
     /// as the Abyss Points' "AP" ("KASHAPA" stays a name: the overlay's words for the Abyss are its own).
