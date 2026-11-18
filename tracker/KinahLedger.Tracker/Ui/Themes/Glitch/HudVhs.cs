@@ -29,7 +29,7 @@ namespace KinahLedger.Ui;
 /// opening flashes "▶ PLAY" on its timer; a fight starts with a channel switch (a static burst, the channel's OSD); a kill
 /// stamps "■ STOP — KILLED", a wipe loses the tracking on a blue band.
 /// </summary>
-sealed class HudVhs : HudThemeLook, IThemeCard
+sealed partial class HudVhs : HudThemeLook, IThemeCard
 {
     public enum Tape { Viewfinder, Deck }
 
@@ -113,6 +113,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         _ff.HorizontalAlignment = HorizontalAlignment.Right; _ff.Margin = new Thickness(14, 0, 12, 0); _ff.Visibility = Visibility.Hidden;
         Grid.SetColumn(_ff, 1); tape.Children.Add(_ff);
         Grid.SetColumn(_tc, 2); tape.Children.Add(_tc);
+        BuildRun(tape);   // a dungeon run's head and count, in the tape row (Ui/Themes/Glitch/HudVhs.Run.cs)
         _deck.Body.Children.Add(tape);
         _deck.Body.Children.Add(_figRow);
         _sessRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _sessRow.ColumnDefinitions.Add(new ColumnDefinition());
@@ -271,7 +272,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         _camBack.Opacity = Math.Min(1, o * 1.15);
     }
 
-    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}|{RunBuddy.Sig(Values)}";
 
     /// <summary>The pickup strip in this tape: the tiles a size under the hour, the rule the glass's hairline (Deck's the display's cyan), the star the tape's yellow.</summary>
     PickStrip.Look Strip => new(24, 5, true, Deck ? Br(VfdC, .4) : Br(0xFFFFFF, .3), Yellow);
@@ -282,16 +283,24 @@ sealed class HudVhs : HudThemeLook, IThemeCard
     {
         // the tape row moves with the clock (the counter, the dot's blink): the rest only when the figures change
         var (run, clock, odd) = RunClock(Values);
-        // the tape records while the session counts (a run or not); nothing counted yet, it stands by
-        run = run || Values.GetValueOrDefault("run") == "1" || f.Counted;
-        _recWord.Text = run ? L.T("REC") : L.T("STBY");
-        _recWord.Foreground = run ? Red : _label;
-        _dot.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
-        _dot.Opacity = odd ? 1 : .3;
-        _tc.Text = "SP " + Timecode(clock);
-        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+        // in a dungeon run the tape records the run: its state, the dungeon and its count, its clock and splits (Ui/Themes/Glitch/HudVhs.Run.cs)
+        var rs = RunOf(Values, KinahHidden);
+        ShowRun(rs != null);
+        if (rs != null) RunTape(rs);
+        else
+        {
+            // the tape records while the session counts (a run or not); nothing counted yet, it stands by
+            run = run || Values.GetValueOrDefault("run") == "1" || f.Counted;
+            _recWord.Text = run ? L.T("REC") : L.T("STBY");
+            _recWord.Foreground = run ? Red : _label;
+            _dot.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
+            _dot.Opacity = odd ? 1 : .3;
+            _tc.Text = "SP " + Timecode(clock);
+        }
+        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}|{RunBuddy.Sig(Values)}";
         if (sig == _figSig) return;
         _figSig = sig;
+        if (rs != null) { DrawRun(rs); Note(f); return; }
 
         // the hour, big and crisp, and your best
         _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear();
@@ -362,6 +371,12 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         }
         else _rare.Visibility = Visibility.Collapsed;
 
+        Note(f);
+    }
+
+    /// <summary>The note under the line ("! ..."), in its tone.</summary>
+    void Note(Figures f)
+    {
         _note.Text = f.Note.Length > 0 ? "! " + f.Note : "";
         _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
@@ -392,7 +407,9 @@ sealed class HudVhs : HudThemeLook, IThemeCard
         SetTimer(_timer, KinahHidden ? null : next, now, _text);
         SetTimer(_camTimer, KinahHidden ? next : null, now, _text);
         _camTimerCell.Visibility = KinahHidden && next != null ? Visibility.Visible : Visibility.Collapsed;
-        if (Figs is { } f) _sessRow.Visibility = f.Counted && f.Total.Length > 0 || _timer.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // in a run the line under the clock takes the room the timer leaves it
+        if (_runOn && RunOf(Values, KinahHidden) is { } rs) RunSub(rs);
+        else if (Figs is { } f) _sessRow.Visibility = f.Counted && f.Total.Length > 0 || _timer.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static void SetTimer(TextBlock t, TimerBoard.Item? i, DateTime now, Brush plain)
@@ -492,6 +509,7 @@ sealed class HudVhs : HudThemeLook, IThemeCard
     {
         if (KinahHidden) return;
         Band(_deck, 760);
+        RunHeadAside(1900);   // in a run the dungeon's name steps aside for the mark
         _ff.Inlines.Clear();
         _ff.Inlines.Add(Rn("▶▶ ", White));
         _ff.Inlines.Add(Rn(p.Worth.Length > 0 ? p.Worth : Caps(p.Name), Green));

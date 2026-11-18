@@ -21,7 +21,7 @@ namespace KinahLedger.Ui;
 /// timer's block (a datamosh); a fight boots the panel out of corrupted blocks; a kill stamps "TARGET.DELETED", a wipe
 /// "FATAL ERROR" with the frame torn apart.
 /// </summary>
-sealed class HudCorrupt : HudThemeLook, IThemeCard
+sealed partial class HudCorrupt : HudThemeLook, IThemeCard
 {
     static readonly FontFamily Face = CodeFace;
     const uint MagC = 0xFF2B6A, CyanC = 0x2BE6FF, LilacC = 0xC9B8FF, GroundC = 0x0A0A12, GreenC = 0x3DFF8C, GoldC2 = 0xFFD24A, RedC2 = 0xFF3B3B;
@@ -90,6 +90,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         _pickBlock.Children.Add(new Border { Background = Mag, RenderTransform = new TranslateTransform(-2, 1) });
         _pickBlock.Children.Add(new Border { Background = Cyan, RenderTransform = new TranslateTransform(2, -1) });
         _pickBlock.Children.Add(new Border { Background = White, Padding = new Thickness(4, 0, 4, 0), Child = _pickText });
+        BuildRun(meta);   // a dungeon run's count, on the meta line's right (Ui/Themes/Glitch/HudCorrupt.Run.cs)
         Grid.SetColumn(_pickBlock, 1); meta.Children.Add(_pickBlock);
         _deck.Body.Children.Add(meta);
         _deck.Body.Children.Add(_figRow);
@@ -170,7 +171,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         _camGround.Alpha = Math.Min(1, o * 1.03); _camGround.InvalidateVisual();
     }
 
-    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}|{RunBuddy.Sig(Values)}";
 
     /// <summary>The pickup strip in the broken frame: the rule the session's lilac, the star the block's gold.</summary>
     static readonly PickStrip.Look Strip = new(24, 5, true, Br(LilacC, .45), Br(GoldC2));
@@ -181,11 +182,16 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
     {
         var (run, clock, _) = RunClock(Values);
         run = run || Values.GetValueOrDefault("run") == "1";
+        // in a dungeon run the stream carries the run: the dungeon and its count, its clock and splits (Ui/Themes/Glitch/HudCorrupt.Run.cs)
+        var rs = RunOf(Values, KinahHidden);
+        ShowRun(rs != null);
+        if (rs != null) RunMeta(rs);
         // the stream's header: the run's clock, the session's as T+, nothing counted yet NO_SIGNAL
-        _meta.Text = !f.Counted ? L.T("NO_SIGNAL") : (run ? L.T("RUN_") : "T+") + (clock.Length > 0 ? clock : "0:00");
-        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+        else _meta.Text = !f.Counted ? L.T("NO_SIGNAL") : (run ? L.T("RUN_") : "T+") + (clock.Length > 0 ? clock : "0:00");
+        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}|{RunBuddy.Sig(Values)}";
         if (sig == _figSig) return;
         _figSig = sig;
+        if (rs != null) { DrawRun(rs); Note(f); return; }
 
         _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear(); _bestBlock = null;
         _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _figRow.ColumnDefinitions.Add(new ColumnDefinition()); _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -249,6 +255,12 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         }
         else _rare.Visibility = Visibility.Collapsed;
 
+        Note(f);
+    }
+
+    /// <summary>The note under the line ("▲ ..."), in its tone.</summary>
+    void Note(Figures f)
+    {
         _note.Text = f.Note.Length > 0 ? "▲ " + f.Note : "";
         _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
@@ -260,6 +272,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         SetTimer(_timerBlock, _timer, KinahHidden ? null : next, now);
         SetTimer(_camTimerBlock, _camTimer, KinahHidden ? next : null, now);
         _camTimerCell.Visibility = KinahHidden && next != null ? Visibility.Visible : Visibility.Collapsed;
+        if (_runOn && RunOf(Values, KinahHidden) is { } rs) RunSub(rs);   // in a run the splits take the room the timer leaves them
         _sessRow.Visibility = _sess.Inlines.Count > 0 || _timerBlock.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -355,6 +368,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         }
         _pickText.Text = (p.Worth.Length > 0 ? p.Worth + " " : "") + p.Name;
         _pickBlock.Visibility = Visibility.Visible;
+        RunCountAside(1700);   // in a run the count steps aside for the block
         var ghostM = (TranslateTransform)((Border)_pickBlock.Children[0]).RenderTransform;
         var ghostC = (TranslateTransform)((Border)_pickBlock.Children[1]).RenderTransform;
         Motion.Play(_pickBlock, 1700, t =>

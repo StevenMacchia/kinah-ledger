@@ -227,6 +227,73 @@ static class GlitchKit
         return $"{nums[^3]:00}:{nums[^2]:00}:{nums[^1]:00}";
     }
 
+    // ---- the dungeon run (the "run*" values in RunBuddy's words, Ui/HudRunBuddy.cs): what every Glitch look draws it with
+
+    /// <summary>The run's state while it stands in for the Kinah line: none with the line hidden for a fight or a rare drop held.</summary>
+    public static RunBuddy.State? RunOf(IReadOnlyDictionary<string, string> v, bool kinahHidden) => !kinahHidden && Rare(v) == null ? RunBuddy.Of(v) : null;
+
+    /// <summary>The count's forms, fullest first: "Run 3 today · 38 clears", "Run 3 today", "" (its parts go before a name is cut).</summary>
+    public static string[] CountForms(RunBuddy.State s)
+    {
+        var parts = RunBuddy.Count(s).Split(" · ", StringSplitOptions.RemoveEmptyEntries);
+        var forms = new List<string>();
+        for (int n = parts.Length; n >= 1; n--) forms.Add(string.Join(" · ", parts.Take(n)));
+        forms.Add("");
+        return forms.ToArray();
+    }
+
+    /// <summary>"Cleared in {0}" round its clock, in the language's order: the words before it and after it.</summary>
+    public static (string Before, string After) ClearedIn()
+    {
+        var fmt = L.T("Cleared in {0}");
+        int at = fmt.IndexOf("{0}", StringComparison.Ordinal);
+        return at < 0 ? (fmt + " ", "") : (fmt[..at], fmt[(at + 3)..]);
+    }
+
+    /// <summary>Ahead of your fastest run's pace, behind it, or even: its brush.</summary>
+    public static Brush PaceTone(int sign, Brush ahead, Brush behind, Brush even) => sign < 0 ? ahead : sign > 0 ? behind : even;
+
+    /// <summary>
+    /// A figure row's form in <paramref name="cap"/> DIPs, with the pickup strip in the room it leaves: the first of the
+    /// <paramref name="whole"/> forms that keep every figure (they drop words only, "Cleared in") with room for the strip, so
+    /// the strip goes before a figure and no gap stands where it was; else the fullest form that fits, the strip if it still fits.
+    /// </summary>
+    public static (FrameworkElement L, FrameworkElement? R, FrameworkElement? Strip) FigForm(IReadOnlyDictionary<string, string> v, PickStrip.Look look, double cap,
+        IReadOnlyList<(FrameworkElement L, FrameworkElement? R)> forms, int whole)
+    {
+        static double W((FrameworkElement L, FrameworkElement? R) f) => Wide(f.L) + (f.R != null ? Wide(f.R) : 0);
+        for (int i = 0; i < Math.Min(whole, forms.Count); i++)
+            if (W(forms[i]) <= cap + .5 && FitStrip(v, look, cap - W(forms[i]) - 14) is { } st) return (forms[i].L, forms[i].R, st);
+        var f = forms.FirstOrDefault(x => W(x) <= cap + .5, forms[^1]);
+        return (f.L, f.R, FitStrip(v, look, cap - W(f) - 14));
+    }
+
+    public static System.Windows.Documents.Run[] Join(params System.Windows.Documents.Run[][] parts) => parts.SelectMany(p => p).ToArray();
+
+    /// <summary>
+    /// <paramref name="t"/> as the first of <paramref name="forms"/> that fits <paramref name="room"/> (the last when none does):
+    /// a part goes before a figure is cut. Returns the form's index.
+    /// </summary>
+    public static int FitRuns(TextBlock t, double room, params System.Windows.Documents.Run[][] forms)
+    {
+        for (int i = 0; i < forms.Length; i++)
+        {
+            t.Inlines.Clear();
+            foreach (var r in forms[i]) t.Inlines.Add(Copy(r));
+            if (i == forms.Length - 1 || Wide(t) <= room + .5) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>A run's copy with only what it set itself (its size and face otherwise the line's).</summary>
+    static System.Windows.Documents.Run Copy(System.Windows.Documents.Run r)
+    {
+        var c = new System.Windows.Documents.Run(r.Text);
+        foreach (var p in new[] { System.Windows.Documents.TextElement.FontSizeProperty, System.Windows.Documents.TextElement.ForegroundProperty, System.Windows.Documents.TextElement.FontWeightProperty, System.Windows.Documents.TextElement.FontFamilyProperty })
+            if (r.ReadLocalValue(p) is var x && x != DependencyProperty.UnsetValue) c.SetValue(p, x);
+        return c;
+    }
+
     // ---- a course's shapes
 
     /// <summary>A course cut into <paramref name="n"/> steps (a digital glitch moves in jumps, not glides).</summary>
