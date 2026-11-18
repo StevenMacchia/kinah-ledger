@@ -54,7 +54,12 @@ public partial class MainWindow
     }
 
     /// <summary>The menu's switches: one per overlay, its line saying what it shows and where it is set up.</summary>
-    internal List<MenuEntry> OverlayEntries() => _overlays.Where(o => o.Shown).Select(o => new MenuEntry(L.F("{0} overlay", L.T(o.Name)), () => { o.Set(!o.IsOn()); DrawOverlayPills(); }, Sub: o.Tip, On: o.IsOn())).ToList();
+    internal List<MenuEntry> OverlayEntries()
+    {
+        var list = _overlays.Where(o => o.Shown).Select(o => new MenuEntry(L.F("{0} overlay", L.T(o.Name)), () => { o.Set(!o.IsOn()); DrawOverlayPills(); }, Sub: o.Tip, On: o.IsOn())).ToList();
+        AddPopOutEntries(list);   // the pop-out windows' switches (Ui/MainWindow.PopOuts.cs)
+        return list;
+    }
 
     void OpenOverlaysMenu() => ShowMenu(OverlaysBtn, OverlayEntries());
 

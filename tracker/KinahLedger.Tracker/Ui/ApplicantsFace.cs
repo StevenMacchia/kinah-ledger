@@ -24,7 +24,7 @@ static class ApplicantsFace
     public static FrameworkElement Build(string theme, IReadOnlyList<PartyApplicants.Applicant> items, DateTime now, double opacity = 0.94)
     {
         var shown = items.Skip(Math.Max(0, items.Count - MaxRows)).ToList();
-        int older = items.Count - shown.Count;
+        int older = items.Count == 0 ? -1 : items.Count - shown.Count;   // -1: nobody waiting (the pop-out window draws that; the overlay folds away)
         FrameworkElement face = theme switch
         {
             HudThemes.Tactical => Tactical(shown, older, items.Count, now, opacity),
@@ -121,10 +121,10 @@ static class ApplicantsFace
         return g;
     }
 
-    /// <summary>"3 more asked earlier" over the rows when more than <see cref="MaxRows"/> wait.</summary>
-    static TextBlock? Older(int older, RowInk k) => older <= 0 ? null : new TextBlock
+    /// <summary>"3 more asked earlier" over the rows when more than <see cref="MaxRows"/> wait; with nobody waiting (-1), says so (the pop-out window).</summary>
+    static TextBlock? Older(int older, RowInk k) => older == 0 ? null : new TextBlock
     {
-        Text = L.F("{0} more asked earlier", older), FontFamily = k.Face, FontSize = k.Size - 1.5, Foreground = k.Dim, Margin = new Thickness(0, 0, 0, 3),
+        Text = older < 0 ? L.T("Nobody is asking to join right now.") : L.F("{0} more asked earlier", older), FontFamily = k.Face, FontSize = k.Size - (older < 0 ? 0.5 : 1.5), Foreground = k.Dim, Margin = new Thickness(0, 0, 0, 3),
     };
 
     /* ---------------- Classic: the Kinah strip's surface ---------------- */

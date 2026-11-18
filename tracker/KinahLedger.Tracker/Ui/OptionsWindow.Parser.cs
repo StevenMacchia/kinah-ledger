@@ -212,6 +212,7 @@ public partial class OptionsWindow
         _parserOverlayChk.ToolTip = L.T("The meter over the game in boss fights and dungeons, or always (When it shows).");
         _parserOverlayChk.Click += (_, _) => Refresh();
         PageMeter.Children.Add(OverlayHeader(_parserLabel, _parserLookHint, _parserOverlayChk, "Show the DPS meter over the game"));
+        AddPopOutLink(PageMeter, meter: true);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: the look in use (or under the mouse) in a boss fight, big, over the game
         _parserLookStage = new Border { Margin = new Thickness(0, 12, 0, 0) };

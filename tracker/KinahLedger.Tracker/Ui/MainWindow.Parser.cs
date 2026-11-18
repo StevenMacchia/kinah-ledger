@@ -345,6 +345,7 @@ public partial class MainWindow
         if (show is { OpenWorld: true }) show = null;
         // Steven, 2026-11-15: "Always on": the meter is always up, anywhere, and starts from 0 by the parser's rules
         if (_parserPrefs.AlwaysOn) show = AlwaysMeter(now);
+        MeterPopOutTick(show, now);   // the meter's own window, apart from the overlay (Ui/MainWindow.PopOuts.cs)
         // the meter's clock redraws this one between hits (MeterClockTick)
         _meterShown = _parserPrefs.Overlay ? show : null;
         _meterOnOverlay = _meterShown;
@@ -427,6 +428,7 @@ public partial class MainWindow
 
     internal void MeterClockTick(DateTime now)
     {
+        MeterPopOutClock(now);   // the meter's own window (Ui/MainWindow.PopOuts.cs)
         if (_demo || _meterShown is not { Live: true, End: null } e) return;
         long drawStart = System.Diagnostics.Stopwatch.GetTimestamp();
         try
@@ -638,6 +640,7 @@ public partial class MainWindow
             AutomationProperties.SetName(lookLink, $"Overlay look: {look.Name}. Change it");
             lookLink.MouseLeftButtonUp += (_, _) => OpenParserLook();
         }
+        right.Children.Add(MeterPopOutButton());   // the meter in its own window (Ui/MainWindow.PopOuts.cs)
         right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
             L.F("The record under way over the game: the boss or the run, the clock and the group. {0}{1}", _parserPrefs.Separate ? L.T("Its own overlay (Settings › In game › Parser); right-click it to hide it.") : L.T("It opens above the Kinah overlay when a fight starts and folds away after."), Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? L.F(" Shortcut: {0}.", k) : ""), "Fight overlay"));
         // click-through and the drag are the separate overlay's; above the Kinah line it follows the Kinah overlay's own

@@ -546,7 +546,7 @@ public sealed class ParserOverlay : Window
     }
 
     /// <summary>A fight look for the Parser's own window, its Kinah part put away; null for the standard panel.</summary>
-    static HudStackLook? MakeLook(string key, bool still)
+    internal static HudStackLook? MakeLook(string key, bool still)
     {
         HudStackLook? l = key switch
         {

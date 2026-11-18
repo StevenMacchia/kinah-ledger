@@ -26,6 +26,7 @@ public partial class OptionsWindow
             Styled(new TextBlock { Text = L.T("Everyone asking to join the group you lead, not one at a time. Reading only: accept or decline in the game."),
                 TextWrapping = TextWrapping.Wrap }, "PageLead"),
             ApplicantsChk, "Show the applicants over the game"));
+        AddPopOutLink(PageApplicants, meter: false);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: four sample applicants in the theme the overlay is in
         var now = DateTime.UtcNow;
