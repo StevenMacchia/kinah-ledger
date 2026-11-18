@@ -74,6 +74,28 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// and the event the player is in, from the event's own server. Read from any thread.
     /// </summary>
     public EventTimers Timers { get; } = new();
+    /// <summary>
+    /// The people asking to join the group the player leads (the decoder's version 11, Session/PartyApplicants.cs), for the
+    /// Applicants window. Read from any thread; emptied when the game closes.
+    /// </summary>
+    public PartyApplicants Applicants { get; } = new();
+    /// <summary>True while the reader gets the party finder's applications from the game (a decoder of interface version 11).</summary>
+    public bool ReadsApplicants => On && _decoder?.ReadsApplicants == true;
+
+    /// <summary>A party finder event: into the Applicants list, logged.</summary>
+    void TakeApplicant(PartyApplication a)
+    {
+        Applicants.Take(a);
+        Log($"{Local(a.At)}  party: " + a.What switch
+        {
+            PartyApplication.Kind.Applied => $"{a.Name} asked to join ({(a.Class.Length > 0 ? a.Class : "class not known")}, level {a.Level}, item level {a.ItemLevel:N0}, Combat Power {a.CombatPower:N0}{(a.Server.Length > 0 ? ", " + a.Server : "")})",
+            PartyApplication.Kind.Accepted => $"{a.Name} joined the group",
+            PartyApplication.Kind.Removed => $"{a.Name}'s request went away",
+            _ => "every request went away (the recruit closed, or you joined another group)",
+        });
+    }
+    /// <summary>For packet-test: party finder events as the decoder would report them.</summary>
+    internal void ApplicantForTest(PartyApplication a) => TakeApplicant(a);
     /// <summary>Where the decoder comes from: the release build's native one; a test hands in its own.</summary>
     public static Func<IGameDecoder?> Decoders { get; set; } = NativeDecoder.TryOpen;
 
@@ -459,7 +481,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
     void TickCore(IReadOnlyCollection<uint> gamePids)
     {
         if (!Enabled) { StopCapture(); State = "Off in Options"; return; }
-        if (gamePids.Count == 0) { StopCapture(); State = "Waiting for the game"; return; }
+        if (gamePids.Count == 0) { StopCapture(); Applicants.Clear(); State = "Waiting for the game"; return; }
         var game = TcpTable.GameServer(TcpTable.Of(gamePids));
         if (game == null) { StopCapture(); State = "Waiting for the game to connect to its server"; return; }
         // another server (an event, the Abyss, a relog): a new stream; the amounts carry on across it
@@ -509,6 +531,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
                 while (dec.NextBoss() is { } boss) TakeBoss(boss);
                 while (dec.NextAreaEvent() is { } area) TakeArea(area);
                 while (dec.NextGather() is { } gr) TakeGather(gr);
+                while (dec.NextApplicant() is { } ap) TakeApplicant(ap);
                 while (dec.NextFight() is { } f)
                 {
                     // Rank Points are a currency too (0.10.76): counted, checked against the chat and logged like Abyss Points

@@ -149,6 +149,8 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=idle: the overlay's idle line alone (Ui/WpfApp.HudIdle.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "idle") { var iw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; iw.Show(); DoEvents(); HudIdleChecks(iw, Check); iw.Close(); Console.WriteLine(fails == 0 ? "options test (idle line): all passed" : $"options test (idle line): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=applicants: the Applicants window alone (Ui/WpfApp.Applicants.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "applicants") { var aw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; aw.Show(); DoEvents(); ApplicantsChecks(aw, Check); aw.Close(); Console.WriteLine(fails == 0 ? "options test (applicants): all passed" : $"options test (applicants): {fails} failed"); return fails == 0 ? 0 : 1; }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -368,6 +370,7 @@ public static partial class WpfApp
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
+        ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
