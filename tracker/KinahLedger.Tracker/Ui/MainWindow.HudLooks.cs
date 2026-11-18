@@ -41,8 +41,8 @@ public partial class MainWindow
         HudDungeonRunValues();   // in a dungeon run: the run clock, splits and the clear's verdict (Ui/MainWindow.HudRun.cs)
     }
 
-    /// <summary>The Abyss's own values: "abyss" ("1" there), then PvP kills ("" until players and monsters are told apart), all kills, deaths ("" for none), Kinah and the points' icon.</summary>
-    internal static readonly string[] AbyssKeys = { "abyss", "abPvp", "abKills", "abRank", "abDeaths", "abKinah", "abIcon" };
+    /// <summary>The Abyss's own values: "abyss" ("1" there), then PvP kills ("" until players and monsters are told apart; assists in them, "abAssists" how many), all kills, deaths ("" for none), Kinah and the points' icon.</summary>
+    internal static readonly string[] AbyssKeys = { "abyss", "abPvp", "abAssists", "abKills", "abRank", "abDeaths", "abKinah", "abIcon" };
     /// <summary>The game's art for Abyss Points (data/extra-items.json).</summary>
     const string AbyssIcon = ItemDictionary.IconBase + "Icon_abysspoint.png";
 
@@ -63,6 +63,8 @@ public partial class MainWindow
         _hudValues["total"] = ap > 0 ? Fk(ap) : "";
         _hudValues["chase"] = _hudValues["toBest"] = _hudValues["best"] = "";
         _hudValues["abPvp"] = e.PlayerKills + e.MonsterKills > 0 ? e.PlayerKills.ToString("N0") : "";
+        // of them the assists (Steven, 2026-11-18: "assists should count as kills in abyss"): said on the stats' hover
+        _hudValues["abAssists"] = _hudValues["abPvp"].Length > 0 && e.PlayerAssists > 0 ? e.PlayerAssists.ToString("N0") : "";
         _hudValues["abKills"] = kills > 0 ? kills.ToString("N0") : "";
         // the Rank Points earned here (Steven, 2026-11-16: "buddy should show rank points as well in abyss")
         _hudValues["abRank"] = e.RankPoints > 0 ? Fk(e.RankPoints) : "";

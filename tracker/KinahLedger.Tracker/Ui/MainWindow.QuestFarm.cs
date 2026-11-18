@@ -312,11 +312,12 @@ public partial class MainWindow
         var hs = _here;
         // in the Abyss, with the game's own messages telling kills apart (0.10.72): players and monsters, in place of kills
         int pvp = _heroAbyss && !gather && e.PlayerKills + e.MonsterKills > 0 ? e.PlayerKills : -1;
+        int assists = pvp > 0 ? Math.Min(e.PlayerAssists, pvp) : 0;   // of the PvP kills, those someone else finished (1.0.15)
         int deaths = e.Deaths, deathsPvp = e.DeathsToPlayers;
         // Rank Points in the Abyss (0.10.76), beside the Abyss Points: earned, an hour, and what deaths cost on the hover
         long rank = _heroAbyss && !gather ? e.RankPoints : 0, rankLost = _heroAbyss && !gather ? e.RankPointsLost : 0;
         int visits = e.NodeVisits, upgrades = e.Upgrades;
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{visits}|{upgrades}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{pvp}|{deaths}|{hs}|{rank}|{rankLost}|{(int)elapsed.TotalMinutes}";
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{visits}|{upgrades}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}|{pvp}|{assists}|{deaths}|{hs}|{rank}|{rankLost}|{(int)elapsed.TotalMinutes}";
         if (!Changed("chips", sig)) return;
         var at = CountWhere();
         // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
@@ -368,7 +369,10 @@ public partial class MainWindow
             if (pvp >= 0)
             {
                 int monsters = Math.Max(0, kills - pvp);
-                string both = L.F("{0:N0} kills {1} in {2}", kills, at, QDur(elapsed.TotalSeconds)) + ": " + L.F(pvp == 1 ? (monsters == 1 ? "{0:N0} player and {1:N0} monster." : "{0:N0} player and {1:N0} monsters.") : (monsters == 1 ? "{0:N0} players and {1:N0} monster." : "{0:N0} players and {1:N0} monsters."), pvp, monsters) + died;
+                string both = L.F("{0:N0} kills {1} in {2}", kills, at, QDur(elapsed.TotalSeconds)) + ": " + L.F(pvp == 1 ? (monsters == 1 ? "{0:N0} player and {1:N0} monster." : "{0:N0} player and {1:N0} monsters.") : (monsters == 1 ? "{0:N0} players and {1:N0} monster." : "{0:N0} players and {1:N0} monsters."), pvp, monsters)
+                    // assists count as PvP kills (Steven, 2026-11-18: "assists should count as kills in abyss"); the hover says how many
+                    + (assists > 0 ? " " + L.F(assists == 1 ? "{0:N0} of the players is an assist: you hit them in the 30 s before someone else killed them." : "{0:N0} of the players are assists: you hit them in the 30 s before someone else killed them.", assists) : "")
+                    + died;
                 // in Steven's words ("pvp kills vs. mob kills"): short enough for the line beside Abyss Points, Kinah and loot
                 parts.Add(new QStat(pvp.ToString("N0"), L.T("PvP"), both, null, false, "Coral", ("chip-pvp|" + at, pvp, false)));
                 parts.Add(new QStat(monsters.ToString("N0"), L.T(monsters == 1 ? "mob" : "mobs"), both + (FullShown ? "" : " " + L.T("Click for kills by enemy.")),

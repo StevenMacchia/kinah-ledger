@@ -47,6 +47,8 @@ public sealed partial class SessionEngine
         public int PetCrystals { get; set; }
         /// <summary>The player's kills of players and of monsters, and deaths, from the game's own messages (0.10.72).</summary>
         public int PlayerKills { get; set; }
+        /// <summary>Of PlayerKills, the assists (1.0.15).</summary>
+        public int PlayerAssists { get; set; }
         public int MonsterKills { get; set; }
         public int Deaths { get; set; }
         public int DeathsToPlayers { get; set; }
@@ -76,7 +78,7 @@ public sealed partial class SessionEngine
                 Kinah = Kinah, KinahBound = KinahBound, KinahSkipped = KinahSkipped, AbyssPoints = AbyssPoints,
                 KillsSeen = KillsSeen, Defeated = KillsDefeated, Xp = KillsXp, KinahDrops = KinahDrops, CurrencyLines = CurrencyLines,
                 Events = Events, Nodes = Nodes, NodesFailed = NodesFailed, Upgrades = Upgrades, NodeVisits = NodeVisits, Plentiful = Plentiful, Bonus = BonusFinds, Rewards = RewardsSkipped, PetCrystals = PetCrystals,
-                PlayerKills = PlayerKills, MonsterKills = MonsterKills, Deaths = Deaths, DeathsToPlayers = DeathsToPlayers, RankPoints = RankPoints, RankPointsLost = RankPointsLost,
+                PlayerKills = PlayerKills, PlayerAssists = PlayerAssists, MonsterKills = MonsterKills, Deaths = Deaths, DeathsToPlayers = DeathsToPlayers, RankPoints = RankPoints, RankPointsLost = RankPointsLost,
                 Items = new Dictionary<long, int>(Items), ItemsBound = new Dictionary<long, int>(ItemsBound), Pets = new Dictionary<string, int>(Pets),
                 Zones = zones,
                 Mobs = _mobs.Values.Select(m => new MobStats { Name = m.Name, Zone = m.Zone, KinahDrops = m.KinahDrops, CurrencyLines = m.CurrencyLines, Crystals = m.Crystals, Kinah = m.Kinah, Drops = new Dictionary<long, int>(m.Drops) }).ToList(),
@@ -99,7 +101,7 @@ public sealed partial class SessionEngine
             Kinah += c.Kinah; KinahBound += c.KinahBound; KinahSkipped += c.KinahSkipped; AbyssPoints += c.AbyssPoints;
             KillsSeen += c.KillsSeen; KillsDefeated += c.Defeated; KillsXp += c.Xp; KinahDrops += c.KinahDrops; CurrencyLines += c.CurrencyLines;
             Events += c.Events; Nodes += c.Nodes; NodesFailed += c.NodesFailed; Upgrades += c.Upgrades; NodeVisits += c.NodeVisits; Plentiful += c.Plentiful; BonusFinds += c.Bonus; RewardsSkipped += c.Rewards; PetCrystals += c.PetCrystals;
-            PlayerKills += c.PlayerKills; MonsterKills += c.MonsterKills; Deaths += c.Deaths; DeathsToPlayers += c.DeathsToPlayers; RankPoints += c.RankPoints; RankPointsLost += c.RankPointsLost;
+            PlayerKills += c.PlayerKills; PlayerAssists += Math.Min(c.PlayerAssists, c.PlayerKills); MonsterKills += c.MonsterKills; Deaths += c.Deaths; DeathsToPlayers += c.DeathsToPlayers; RankPoints += c.RankPoints; RankPointsLost += c.RankPointsLost;
             foreach (var (id, n) in c.Items) Items[id] = Items.GetValueOrDefault(id) + n;
             foreach (var (id, n) in c.ItemsBound) ItemsBound[id] = ItemsBound.GetValueOrDefault(id) + n;
             foreach (var (k, n) in c.Pets) Pets[k] = Pets.GetValueOrDefault(k) + n;

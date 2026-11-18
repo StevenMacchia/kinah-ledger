@@ -221,6 +221,62 @@ public static class PacketTests
             var z = s.Engine.ZoneSnapshot().GetValueOrDefault("Abyss");
             Check(s.Engine.PlayerKills == 1 && s.Engine.MonsterKills == 2 && s.Engine.Deaths == 1 && s.Engine.DeathsToPlayers == 1 && s.Engine.Kills == 3 && z?.PlayerKills == 1 && z.MonsterKills == 2 && z.Deaths == 1,
                 $"...counted in the Abyss: {s.Engine.PlayerKills} player, {s.Engine.MonsterKills} monsters, {s.Engine.Deaths} death ({s.Engine.DeathsToPlayers} to a player); kills {s.Engine.Kills} (the chat saw 1); zone Abyss {z?.PlayerKills}/{z?.MonsterKills}/{z?.Deaths}");
+
+            // assists (1.0.15; Steven, 2026-11-18: "assists should count as kills in abyss"): an enemy player's death by
+            // someone else's hand counts as a PvP kill when the player hit them in the 30 s before; once each; never an
+            // ally's death, the player's own, a hit too long before, or a monster. Made-up events in the decoder's version 12 shape
+            {
+                const FightFlags Enemy = FightFlags.VictimPlayer | FightFlags.VictimEnemy;
+                FightEvent KP(double sec, FightFlags f, uint victim, string name = "", string killer = "") => new(t0.AddSeconds(sec), FightKind.Kill, f, victim, f.HasFlag(FightFlags.Mine) ? 1u : 9u, f.HasFlag(FightFlags.VictimMonster) ? 7u : 0, 0, 0, name, killer);
+                FightEvent H(double sec, uint victim, string name) => new(t0.AddSeconds(sec), FightKind.Hit, Enemy, victim, 1, 12020000, 4_000, 0, name, "");
+                var evs = new[] {
+                    H(5, 100, "Miquella"), KP(10, FightFlags.Mine | Enemy, 100, "Miquella", "Swoly"),          // my kill
+                    H(20, 101, "Rezzy"), H(23, 101, "Rezzy"), KP(40, FightFlags.OtherKiller | Enemy, 101, "Rezzy", "Streamer"),   // last hit 17 s before: an assist
+                    KP(40.2, FightFlags.OtherKiller | Enemy, 101, "Rezzy", "Streamer"),                           // the same death said again: once
+                    H(0, 102, "Dyskord"), KP(45, FightFlags.OtherKiller | Enemy, 102, "Dyskord", "Faromir"),       // hit 45 s before: not an assist
+                    H(48, 103, "Faromir"), KP(50, FightFlags.OtherKiller | FightFlags.VictimPlayer, 103, "Faromir", "Vitals"),   // an ally: never
+                    KP(52, FightFlags.OtherKiller | Enemy, 104, "awoo", "Kassandra"),                             // an enemy I never hit
+                    KP(55, FightFlags.Mine | FightFlags.VictimMonster, 200),                                      // a monster: not PvP
+                    H(57, 105, "Vitals"), KP(58, FightFlags.VictimMe, 15650, "", "Vitals"),                       // my own death
+                    KP(58.5, FightFlags.OtherKiller | Enemy, 105, "Vitals", "Raid") };                            // and the one I hit, a moment before: an assist
+                var at = new FightTally();
+                foreach (var e in evs) at.Add(e);
+                var got = at.Take(t0.AddSeconds(120));
+                string SayA(FightTally.Outcome o) => o.Death ? "death" : o.Assist ? $"assist:{o.Name}({o.Killer},{o.HitBefore:0}s)" : $"{(o.Player ? "player" : "monster")}{(o.Name.Length > 0 ? ":" + o.Name : "")}";
+                Check(string.Join(" ", got.Select(SayA)) == "player:Miquella assist:Rezzy(Streamer,17s) monster death assist:Vitals(Raid,2s)",
+                    $"assists: my kill, a hit 17 s before someone else's kill, not 45 s before, not an ally, not unhit, a monster apart: {string.Join(" ", got.Select(SayA))}");
+                // a replay adds a whole connection before deciding: a later fight's many hits on the same player never push out the earlier fight's
+                var late = new FightTally();
+                late.Add(H(60, 106, "Rezzy")); late.Add(KP(62, FightFlags.OtherKiller | Enemy, 106, "Rezzy", "Streamer"));
+                for (int i = 0; i < 100; i++) late.Add(H(600 + i * 0.5, 106, "Rezzy"));
+                late.Add(KP(659.5, FightFlags.OtherKiller | Enemy, 106, "Rezzy", "Xidau"));
+                string both = string.Join(" ", late.Flush().Select(SayA));
+                Check(both == "assist:Rezzy(Streamer,2s) assist:Rezzy(Xidau,10s)", $"...both of a player's deaths ten minutes apart, decided at once (a replay): {both}");
+                // version 12's VictimPlayer is a player's own appearance only: a summon named after its player, dying with no killer
+                // named beside a rise of the player's points, is still no kill of theirs (a monster kill with no name still is)
+                var named = new FightTally();
+                foreach (var e in new[] { KP(0, FightFlags.NoKiller, 18479, "MayB"), R(0.2, 13), KP(5, FightFlags.NoKiller, 22001), R(5.2, 9) }) named.Add(e);
+                Check(string.Join(" ", named.Flush().Select(SayA)) == "monster", "...a player's summon dying near you is no kill of yours; an unnamed thing with your rise still is");
+                // a decoder before version 12 sends no hits and no others' kills: the same fights count as before
+                var old = new FightTally();
+                foreach (var e in evs.Where(e => e.Kind != FightKind.Hit && !e.Flags.HasFlag(FightFlags.OtherKiller))) old.Add(e with { Flags = e.Flags & ~FightFlags.VictimEnemy });
+                Check(string.Join(" ", old.Take(t0.AddSeconds(120)).Select(SayA)) == "player:Miquella monster death", "...an older decoder: no assists, the rest as before");
+
+                // through the session: the PvP figure counts both, the split kept, carried over a restart, the overlay's hover
+                var ra = new PacketReader(); ra.ReadingForTest();
+                var sa = new TrackerSession(null, settings, items, "Test") { Packets = ra };
+                sa.ApplyZone("Sulfur Tree Island", t0);
+                foreach (var e in evs) ra.FightsForTest(e);
+                sa.DrainPacketsForTest();
+                var za = sa.Engine.ZoneSnapshot().GetValueOrDefault("Abyss");
+                Check(sa.Engine.PlayerKills == 3 && sa.Engine.PlayerAssists == 2 && sa.Engine.MonsterKills == 1 && sa.Engine.Deaths == 1 && za?.PlayerKills == 3,
+                    $"...counted: {sa.Engine.PlayerKills} PvP ({sa.Engine.PlayerAssists} of them assists), {sa.Engine.MonsterKills} monster, {sa.Engine.Deaths} death; zone Abyss {za?.PlayerKills} PvP");
+                var seeded = new SessionEngine(items); seeded.Seed(sa.Engine.ToCarry("2026-11-18"));
+                Check(seeded.PlayerKills == 3 && seeded.PlayerAssists == 2, $"...kept over a restart: {seeded.PlayerKills} PvP, {seeded.PlayerAssists} assists");
+                string tip = KinahLedger.Ui.HudKit.AbyssTip(new Dictionary<string, string> { ["abPvp"] = "9", ["abAssists"] = "3" }) ?? "";
+                string none = KinahLedger.Ui.HudKit.AbyssTip(new Dictionary<string, string> { ["abPvp"] = "9", ["abAssists"] = "" }) ?? "(none)";
+                Check(tip == "9 PvP kills · 3 of them assists" && none == "(none)", $"...the overlay's hover: \"{tip}\", without assists {none}");
+            }
             // Rank Points (0.10.76): each rise counted from the game's message like Abyss Points, the chat's own line for it left
             // out; a fall is a death's cost (32 at each of the four deaths of 2026-11-13 18:45 to 18:48), counted as lost
             var r2 = new PacketReader(); r2.ReadingForTest();
@@ -1524,13 +1580,18 @@ public static class PacketTests
     /// The decoder over a capture file: every connection from <paramref name="serverPort"/> in turn (an event or the Abyss is
     /// another server), each its own decoder, every currency change, printed. Needs the decoder in the build.
     /// </summary>
-    public static int Replay(string pcapng, int serverPort, Settings? settings = null)
+    /// <summary>
+    /// packet-replay: what the decoder reads from a recording. More files (the tracker cuts its recording into hours) are
+    /// read on as one, so a connection that runs on into the next file keeps what it knew (the player's faction, who is who).
+    /// </summary>
+    public static int Replay(string pcapng, int serverPort, Settings? settings = null, IReadOnlyList<string>? more = null)
     {
         var bossEvents = new List<BossEvent>();
         if (!NativeDecoder.Available) { Console.WriteLine("this build has no decoder (klnet.dll)"); return 1; }
         var segs = new List<(DateTime At, TcpSegment S)>();
-        foreach (var (at, frame, link) in Pcapng.Read(pcapng))
-            if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
+        foreach (var file in new[] { pcapng }.Concat(more ?? Array.Empty<string>()))
+            foreach (var (at, frame, link) in Pcapng.Read(file))
+                if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
         var seen = new List<CurrencyChange>();
         var batches = new List<ItemBatch>();
         var fights = new FightTally(); var fought = new List<FightTally.Outcome>(); bool readsFights = false;
@@ -1717,10 +1778,10 @@ public static class PacketTests
     static void ReplayFights(string pcapng, List<FightTally.Outcome> fought, long rank)
     {
         foreach (var o in fought)
-            Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  {(o.Death ? $"died{(o.Name.Length > 0 ? " to " + o.Name : "")}" : $"killed {(o.Player ? "the player " + o.Name : $"a monster{(o.MonsterId != 0 ? $" ({o.MonsterId})" : "")}")}{(o.Credited ? ", no killer named, Rank Points rose with it" : "")}")}");
+            Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  {(o.Death ? $"died{(o.Name.Length > 0 ? " to " + o.Name : "")}" : o.Assist ? $"an assist on the player {o.Name}: killed by {o.Killer}, your last hit {o.HitBefore:0.0} s before" : $"killed {(o.Player ? "the player " + o.Name : $"a monster{(o.MonsterId != 0 ? $" ({o.MonsterId})" : "")}")}{(o.Credited ? ", no killer named, Rank Points rose with it" : "")}")}");
         var kills = fought.Where(o => !o.Death).ToList();
-        int players = kills.Count(o => o.Player), deaths = fought.Count(o => o.Death);
-        Console.WriteLine($"kills: {kills.Count} ({players} players, {kills.Count - players} monsters; {kills.Count(o => o.Credited)} with no killer named), {deaths} deaths ({fought.Count(o => o.Death && o.Player)} to players), Rank Points +{rank:N0}");
+        int players = kills.Count(o => o.Player), deaths = fought.Count(o => o.Death), assists = kills.Count(o => o.Assist);
+        Console.WriteLine($"kills: {kills.Count} ({players} players, {assists} of them assists, {kills.Count - players} monsters; {kills.Count(o => o.Credited)} with no killer named), {deaths} deaths ({fought.Count(o => o.Death && o.Player)} to players), Rank Points +{rank:N0}");
         var log = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(pcapng)) ?? ".", "chat.log");
         if (!File.Exists(log)) return;
         int rankLines = 0, soulLines = 0, rez = 0;

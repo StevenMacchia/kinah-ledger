@@ -253,6 +253,21 @@ static class HudKit
         return list;
     }
 
+    /// <summary>
+    /// The stats' hover in the Abyss when some PvP kills are assists ("9 PvP kills · 3 of them assists"), else null: the
+    /// figure counts both, the hover keeps the split honest without taking room in any look.
+    /// </summary>
+    public static string? AbyssTip(IReadOnlyDictionary<string, string> v)
+    {
+        string V(string k) => v.TryGetValue(k, out var s) ? s : "";
+        if (V("abPvp").Length == 0 || V("abAssists").Length == 0) return null;
+        int.TryParse(V("abPvp").Replace(",", "").Replace(".", ""), out int pvp);
+        int.TryParse(V("abAssists").Replace(",", "").Replace(".", ""), out int assists);
+        if (assists <= 0) return null;
+        return pvp <= 1 ? L.T("1 PvP kill, an assist: you hit that player in the 30 s before someone else killed them")
+            : L.F(assists == 1 ? "{0:N0} PvP kills · {1:N0} of them an assist" : "{0:N0} PvP kills · {1:N0} of them assists", pvp, assists);
+    }
+
     /// <summary>The stats as one sign, for a look's redraw check.</summary>
     public static string AbyssSig(IReadOnlyDictionary<string, string> v) => Abyss(v) ? "abyss:" + string.Join(",", AbyssStats(v).Select(s => s.Figure + s.Word)) : "";
 

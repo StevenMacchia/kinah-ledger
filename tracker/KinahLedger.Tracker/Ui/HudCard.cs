@@ -198,6 +198,7 @@ public sealed partial class HudCard : IHudLook
                 }
             else if (words.Length > 0 && counted && !warm) _chase.Inlines.Add(R((beat ? "★ " : "⚑ ") + words, 11.5, Gold, weight: FontWeights.Bold));   // gold beaten or not (colour pass, 2026-11-13); the ★ says it is beaten
             _chase.Visibility = _chase.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _chase.ToolTip = abyss && counted ? AbyssTip(values) : null;   // the PvP kills' assists, on the hover
         }
 
         // the notice row: the reader paused (orange, with the sign), else a start or stop's flash, an update waiting, a flagged run

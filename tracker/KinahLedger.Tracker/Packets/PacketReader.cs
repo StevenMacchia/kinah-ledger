@@ -259,12 +259,29 @@ public sealed class PacketReader : IDisposable, IBossFeed
         if (line != null) Log($"{Local(b.At)}  boss parser: {line}");
     }
 
+    int _pvpHits, _pvpOthers;
+    readonly HashSet<uint> _pvpHitTargets = new();
+    DateTime _pvpSince, _pvpLogged;
+
     /// <summary>A kill the player is in, a death or a Rank Points change: queued for the tracker, logged.</summary>
     void TakeFight(FightEvent f)
     {
         _fights.Enqueue(f); Arrived();
         if (FightSink is { } sink) { try { sink(f); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
         if (_fights.Count > 4096) _fights.TryDequeue(out _);
+        // the player's hits on enemy players and others' kills of players (version 12, the assists') come by the dozen: one
+        // summary line a minute at most, never a line each
+        if (f.Kind == FightKind.Hit || f.Flags.HasFlag(FightFlags.OtherKiller))
+        {
+            if (f.Kind == FightKind.Hit) { _pvpHits++; _pvpHitTargets.Add(f.VictimId); } else _pvpOthers++;
+            if (_pvpSince == default) _pvpSince = f.At;
+            if ((f.At - _pvpLogged).TotalSeconds >= 60)
+            {
+                Log($"{Local(f.At)}  since {Local(_pvpSince)}: {_pvpHits} hits of yours on {_pvpHitTargets.Count} enemy players, {_pvpOthers} players' deaths by others' hands");
+                _pvpLogged = f.At; _pvpSince = default; _pvpHits = _pvpOthers = 0; _pvpHitTargets.Clear();
+            }
+            return;
+        }
         Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
             : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
             : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));

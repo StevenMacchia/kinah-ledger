@@ -23,7 +23,11 @@ public sealed record MobKilled(DateTime Time, long MobId) : GameEvent(Time);
 /// </summary>
 /// <summary>Rank Points the player lost (a death in the Abyss costs some), as the game's own messages tell it.</summary>
 public sealed record RankPointsLost(DateTime Time, long Amount) : GameEvent(Time);
-public sealed record FightCounted(DateTime Time, bool Player, bool Death, string Name) : GameEvent(Time);
+public sealed record FightCounted(DateTime Time, bool Player, bool Death, string Name) : GameEvent(Time)
+{
+    /// <summary>A player's death at someone else's hand that the player hit in the 30 s before: a PvP kill, counted as an assist too.</summary>
+    public bool Assist { get; init; }
+}
 /// <summary>Points-type pickups (Soul Points, Abyss Points). Guaranteed per kill, so they mark kills and never count as drops.</summary>
 /// <param name="Enemy">For Soul Points: the kind of enemy the line names, as read ("Obtained 1 Drakan Probe Soul Points."). One line per kill, so it says which enemy died.</param>
 public sealed record CurrencyGained(DateTime Time, string Name, long Amount, string Enemy = "") : GameEvent(Time);
