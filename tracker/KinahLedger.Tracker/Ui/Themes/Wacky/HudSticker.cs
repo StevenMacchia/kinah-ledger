@@ -17,7 +17,7 @@ namespace KinahLedger.Ui;
 /// (green once its entry is open). A fight is a yellow sticker card whose body is dark ink for the rows. Moments slap
 /// burst stickers on: POW for a pickup, a big one in the grade's colour for a rare drop, NEW BEST!, GO!, FIGHT!, K.O.!
 /// </summary>
-sealed class HudSticker : WackyLook, IThemeCard
+sealed partial class HudSticker : WackyLook, IThemeCard
 {
     const uint Yel = 0xFFE14D, KC = 0x111111, Pink = 0xFF3DA6, Cyan = 0x3DF5C8, GoC = 0x6CFF8E, Paper = 0xFFF8E8, CardC = 0x141414, Gold2 = 0xFFC21A, RedC = 0xFF4D4D, Lilac = 0xD9C8FF;
     static readonly Brush K = Wk.S(KC), PaperB = Wk.S(Paper), YelB = Wk.S(Yel), WhiteB = Wk.S(0xFFFFFF);
@@ -64,6 +64,7 @@ sealed class HudSticker : WackyLook, IThemeCard
         _body.Children.Add(_pickHost);
         _body.Children.Add(_noteHost);
         _body.Children.Add(_card);
+        BuildRun();   // the dungeon run's head over the line (Ui/Themes/Wacky/HudSticker.Run.cs)
         Ground(Op);
     }
 
@@ -99,6 +100,9 @@ sealed class HudSticker : WackyLook, IThemeCard
     {
         _figs.Children.Clear(); _stats.Children.Clear();
         _ring = _pill = null;
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Wacky/HudSticker.Run.cs)
+        if (RunOf() is { } rs) { DrawRun(rs, f); return; }
+        EndRun();
         uint paper = f.Abyss ? 0xE6DAFF : Yel;   // the Abyss's points are not Kinah: a lilac sticker, not the gold
         bool waiting = !f.Counted || f.Rate.Length == 0;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
@@ -160,7 +164,14 @@ sealed class HudSticker : WackyLook, IThemeCard
             _pickHost.Child = tag;
         }
         else _pickHost.Child = null;
-        // the note: a small ink tag in its tone
+        DrawNote(f);
+        _figs.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
+        PlaceTag();
+    }
+
+    /// <summary>The note: a small ink tag in its tone.</summary>
+    void DrawNote(Figures f)
+    {
         if (f.Note.Length > 0)
         {
             var nt = Wk.Words(f.Note, 11.5, f.NoteTone, Wk.Segoe, FontWeights.Bold);
@@ -171,8 +182,6 @@ sealed class HudSticker : WackyLook, IThemeCard
         }
         else _noteHost.Child = null;
         _noteHost.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
-        _figs.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
-        PlaceTag();
     }
 
     /// <summary>The ring of your best: a chunky pink ring on black round a paper face with the share in heavy black.</summary>
@@ -209,25 +218,35 @@ sealed class HudSticker : WackyLook, IThemeCard
 
     protected override void DrawTag()
     {
-        if (Due.FirstOrDefault() is not { } i) { _tag.Visibility = Visibility.Collapsed; PlaceTag(); return; }
+        if (Due.FirstOrDefault() is not { } i)
+        {
+            _tag.Visibility = Visibility.Collapsed;
+            if (_runOn && Figs is { } f0 && !KinahHidden) { DrawLine(f0); return; }
+            PlaceTag(); return;
+        }
         var (name, clock, tone) = TagWords(i, DueNow);
         _tagName.Text = name; _tagName.Visibility = name.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         _tagClock.Text = clock;
         _tagFace.Background = Wk.S(tone == TimerBadge.Tone.On ? GoC : tone == TimerBadge.Tone.Soon ? Cyan : Paper, PaperA);
         _tag.Visibility = Visibility.Visible;
+        // in a run the line's forms leave room for the tag, or put it by the head: drawn again for the tag's new width
+        if (_runOn && Figs is { } f && !KinahHidden) { DrawLine(f); return; }
         PlaceTag();
     }
 
-    /// <summary>The tag at the line's end; in a dungeon, inside the fight card's head.</summary>
+    /// <summary>The tag at the line's end; in a dungeon, inside the fight card's head; in a run without room on its line, by the head.</summary>
     void PlaceTag()
     {
         bool inCard = KinahHidden && _card.Visibility == Visibility.Visible;
+        bool inHead = !inCard && _runOn && _tagSpot == TagSpot.Head, inSmalls = !inCard && _runOn && _tagSpot == TagSpot.Smalls;
         // in a dungeon the tag is slapped on the card's top edge, over the head's right side
         if (inCard && _tag.Parent != _card) { Detach(_tag); _card.Children.Add(_tag); Panel.SetZIndex(_tag, 5); }
-        else if (!inCard && _tag.Parent != _line) { Detach(_tag); _line.Children.Add(_tag); }
+        else if (inHead && _tag.Parent != _runRow) { Detach(_tag); _runRow.Children.Add(_tag); }
+        else if (inSmalls && _tag.Parent != _stats) { Detach(_tag); _stats.Children.Add(_tag); }
+        else if (!inCard && !inHead && !inSmalls && _tag.Parent != _line) { Detach(_tag); _line.Children.Add(_tag); }
         _tag.HorizontalAlignment = inCard ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         _tag.VerticalAlignment = inCard ? VerticalAlignment.Top : VerticalAlignment.Center;
-        _tag.Margin = inCard ? new Thickness(0, -15, 92, 0) : new Thickness(KinahHidden ? 2 : 12, KinahHidden ? 2 : 0, 0, KinahHidden ? 6 : 0);
+        _tag.Margin = inCard ? new Thickness(0, -15, 92, 0) : inHead ? new Thickness(10, 0, 0, 0) : inSmalls ? new Thickness(4, 5, 0, 0) : new Thickness(KinahHidden ? 2 : 12, KinahHidden ? 2 : 0, 0, KinahHidden ? 6 : 0);
         _line.Visibility = KinahHidden && (_tag.Parent != _line || _tag.Visibility != Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
         // the pickups are farming's: a fight's card puts them away
         _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _card.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
