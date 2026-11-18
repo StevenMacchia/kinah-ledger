@@ -164,7 +164,7 @@ sealed class HudNeon : WackyLook, IThemeCard
         else if (!waiting && f.Share >= 0 && !f.Warm) { _ring = Ring(f.Share, f.Beat); _line.Children.Add(_ring); }
         if (waiting)
         {
-            var w = Slant(Wk.Words(L.T(Waiting(f.Abyss)), 15, LilacB, Wk.Bahn, FontWeights.SemiBold));
+            var w = Slant(Wk.Words(Waiting(f.Abyss), 15, LilacB, Wk.Bahn, FontWeights.SemiBold));
             w.Margin = new Thickness(2, 4, 4, 4);
             _line.Children.Add(w); _hour = w;
         }
