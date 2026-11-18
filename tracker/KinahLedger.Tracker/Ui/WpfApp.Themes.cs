@@ -159,6 +159,8 @@ public static partial class WpfApp
     static void ShotThemes(MainWindow w, string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // KL_PICK_ICONS=0: the looks as Settings › Buddy › More › Pickup icons off draws them (this render only)
+        if (Environment.GetEnvironmentVariable("KL_PICK_ICONS") == "0") PickStrip.Shown = false;
         try { File.Delete(Path.Combine(dir, "spill.txt")); } catch (IOException) { }   // what each frame draws past its edges (SpillNote)
         var looks = HudLooks.All.Where(l => HudThemes.Themed(l.Key) && (only.Length == 0 || only.Contains(l.Key))).Select(l => l.Key).ToList();
         var kinah = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);

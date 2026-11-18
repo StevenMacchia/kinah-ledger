@@ -126,13 +126,44 @@ sealed partial class HudFighter : TacticalLook
         dc.DrawRectangle(Frozen(Tac.A(PhosC, .12)), null, new Rect(r.Left, r.Bottom - 1, r.Width, 1));
     }
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "");
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook);
+
+    /// <summary>The pickup strip as the HUD wears it: the tiles at the hour's height, the rule a faint phosphor line, the star amber.</summary>
+    static readonly PickStrip.Look StripLook = new(Size: 24, Gap: 4, Rule: PhosFaint, Star: Amber);
+    StackPanel? _topRow;
+
+    /// <summary>
+    /// The pickup strip beside the hour, inside the brackets, out to the line's right edge (the room the session line leaves
+    /// there), so the line grows only by what the tiles need past it and never past the panel's width.
+    /// </summary>
+    void PutStrip(Figures f)
+    {
+        if (_topRow is not { } top || !_figs.Children.Contains(top)) return;
+        _figs.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        _line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        top.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        const double air = 12;
+        // the room: the panel's width less the line as it is, plus what the session line already leaves beside the hour
+        double room = FightWidth - 20 - _line.DesiredSize.Width + (_figs.DesiredSize.Width - _figs.Margin.Left - top.DesiredSize.Width) - air;
+        if (FarmStrip(f, StripLook, room) is not { } strip) return;
+        int at = _figs.Children.IndexOf(top);
+        _figs.Children.RemoveAt(at);
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = air });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.Children.Add(top);
+        strip.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(strip, 2); g.Children.Add(strip);
+        _figs.Children.Insert(at, g);
+    }
 
     // ================================================================ the Kinah line
 
     protected override void DrawLine(Figures f)
     {
         _figs.Children.Clear();
+        _topRow = null;
         _reticle.Visibility = Visibility.Collapsed;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (_lineRow.Children.Count > 2) _lineRow.Children.RemoveAt(0);   // the last Abyss mark
@@ -165,6 +196,7 @@ sealed partial class HudFighter : TacticalLook
             top.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = Halo(f.Unit, 13, PhosDim, FontWeights.Bold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 5); top.Children.Add(u); }
             _figs.Children.Add(top);
+            _topRow = top;
             // SES 894K · BEST −130K (in the Abyss: AP 24.7K)
             var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, -1, 0, 0) };
             if (f.Total.Length > 0) { sub.Children.Add(Label(f.Abyss ? f.TotalWord : L.T("SES"))); sub.Children.Add(Fig(f.Total, Phos, 16)); }
@@ -189,6 +221,7 @@ sealed partial class HudFighter : TacticalLook
             }
             _figs.Children.Add(st);
         }
+        PutStrip(f);
         _lineBrackets.InvalidateVisual();
         DrawContact();
         // the note on its own dark tag, a bar of its tone at its edge (a sentence reads best on a ground)
@@ -388,6 +421,7 @@ sealed partial class HudFighter : TacticalLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
+        StripFollowsFight(e);
         _fightBody.Children.Clear();
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 20;
