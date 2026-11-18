@@ -97,13 +97,64 @@ public sealed class BossBook
     public (string Instance, string Mode)? FromCode(string code)
     {
         var c = code.Trim();
-        string? stem = null;
-        foreach (var k in _byCode.Keys)
-            if (c.Length > k.Length && c[k.Length] == '_' && c.StartsWith(k, StringComparison.OrdinalIgnoreCase) && (stem == null || k.Length > stem.Length)) stem = k;
-        if (stem == null) return null;
+        if (StemOf(c) is not { } stem) return null;
         var next = c[(stem.Length + 1)..].Split('_')[0];
         return (_byCode[stem], ModeWords.Contains(next) ? ModeName(next) : "");
     }
+
+    /// <summary>The longest listed instance code a map event's code starts with ("Fire_Temple" has an underscore of its own), or null.</summary>
+    string? StemOf(string c)
+    {
+        string? stem = null;
+        foreach (var k in _byCode.Keys)
+            if (c.Length > k.Length && c[k.Length] == '_' && c.StartsWith(k, StringComparison.OrdinalIgnoreCase) && (stem == null || k.Length > stem.Length)) stem = k;
+        return stem;
+    }
+
+    /// <summary>
+    /// "G" where an expedition's code has its mode word: the game's own mark of a Transcendence (Arkanis_G_09_BossRoom_MapEvent,
+    /// DeusCenter_G_09_MapEvent on 2026-11-17, Steven's Transcendence runs with Tilly; Arkanis_G_06 on 2026-11-16). Never a
+    /// mode to show, never a place's name (Steven, 2026-11-17: "it put them in expeditions").
+    /// </summary>
+    public static bool IsTranscendenceWord(string word) => word.Trim().Equals("G", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The Transcendence stage a map code's number stands for, only where play proved it: 06 on 2026-11-16 (the room "Set to
+    /// Stage 3." before Shattered Arkanis), 09 on 2026-11-17 (Stage 4: "Set to Stage 4.", and "Shattered Arkanis Stage 4" and
+    /// "Deus Research Base Stage 4" achieved). Any other number: not known (the chat's stage line decides).
+    /// </summary>
+    static readonly Dictionary<string, int> StageCodes = new(StringComparer.Ordinal) { ["06"] = 3, ["09"] = 4 };
+
+    /// <summary>A map event's code of a Transcendence (its "G"), and its stage when the number is a proven one (else 0).</summary>
+    public (bool Transcendence, int Stage) GradeOf(string code)
+    {
+        var c = code.Trim();
+        if (StemOf(c) is not { } stem) return (false, 0);
+        var parts = c[(stem.Length + 1)..].Split('_');
+        if (!IsTranscendenceWord(parts[0])) return (false, 0);
+        return (true, parts.Length > 1 ? StageCodes.GetValueOrDefault(parts[1]) : 0);
+    }
+
+    /// <summary>
+    /// A word that is a piece of a listed instance's own code after its first ("Temple" of Fire_Temple): the game's name of the
+    /// place cut at its underscore, never its mode (Fire Temple's fights were kept under the mode "Temple" on 2026-11-16).
+    /// </summary>
+    public bool IsCodePart(string word)
+    {
+        var w = word.Trim();
+        return w.Length > 0 && _byCode.Keys.Any(k => k.Split('_').Skip(1).Any(p => p.Equals(w, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>The stage in a Transcendence's name as the game writes it ("Shattered Arkanis [Stage 3]"), else 0.</summary>
+    public static int StageIn(string instance) =>
+        System.Text.RegularExpressions.Regex.Match(instance, @"\[\s*stage\s*([1-9])\s*\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m ? m.Groups[1].Value[0] - '0' : 0;
+
+    /// <summary>The mode a Transcendence's records keep: "Stage 3", or "" when the stage isn't known.</summary>
+    public static string StageMode(int stage) => stage > 0 ? $"Stage {stage}" : "";
+
+    /// <summary>The stage in a record's mode ("Stage 3"), else 0.</summary>
+    public static int StageOfMode(string mode) =>
+        System.Text.RegularExpressions.Regex.Match(mode.Trim(), @"^stage\s*([1-9])$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m ? m.Groups[1].Value[0] - '0' : 0;
 
     /// <summary>"Shattered Arkanis [Stage 3]" is Shattered Arkanis on the list.</summary>
     public static string Strip(string instance)

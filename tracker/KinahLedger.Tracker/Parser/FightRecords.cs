@@ -45,8 +45,12 @@ public sealed class FightRecord
 
 public sealed class FightRecords
 {
-    /// <summary>records2.json since 0.10.128 (healing a second is the part that landed): built afresh from the fights, the old file left.</summary>
-    public const string FileName = "records2.json";
+    /// <summary>
+    /// records3.json since 1.0.7: built afresh from the fights, the old files left. records2.json (0.10.128, healing a second)
+    /// was keyed by the boss's id, which is the spawn's (Talisra of the Void came as 19650, 28131 and 45221 on 2026-11-17), so
+    /// each of Steven's 75 records held one kill and none was ever beaten.
+    /// </summary>
+    public const string FileName = "records3.json";
     /// <summary>A fight's Seen list keeps this many ids (enough to never count a fight saved twice).</summary>
     const int SeenKept = 64;
 
@@ -62,11 +66,18 @@ public sealed class FightRecords
     public FightRecords(Func<string> dir, Func<string, IEnumerable<Encounter>> seed) { _dir = dir; _seed = seed; }
 
     /// <summary>
-    /// The fight a record is kept for: the boss (its id, else its name), the instance and the instance's mode. A world boss by
-    /// its name and place always: each spawn of it comes with another id, and its records are the boss's, not the spawn's.
+    /// The fight a record is kept for: the boss by its name (by the game's id only for one with no name: the id is the
+    /// spawn's, every run another), the instance and the instance's mode (a Transcendence's its stage, "transcendence" while
+    /// not known, so it is never the expedition's). A world boss by its name and place too.
     /// </summary>
-    public static string KeyOf(Encounter e) =>
-        $"{(e.BossId > 0 && !e.WorldBoss ?e.BossId.ToString(System.Globalization.CultureInfo.InvariantCulture) : e.Boss.Trim().ToLowerInvariant())}|{BossBook.Strip(e.Instance).Trim().ToLowerInvariant()}|{e.GameMode.Trim().ToLowerInvariant()}";
+    public static string KeyOf(Encounter e)
+    {
+        var name = e.Boss.Trim();
+        var boss = name.Length > 0 && (name != BossParser.UnnamedBoss || e.BossId <= 0) ? name.ToLowerInvariant() : e.BossId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var mode = e.GameMode.Trim().ToLowerInvariant();
+        if (mode.Length == 0 && Encounter.KindOf(e.Kind) == KinahLedger.Packets.ContentKind.Transcendence) mode = "transcendence";
+        return $"{boss}|{BossBook.Strip(e.Instance).Trim().ToLowerInvariant()}|{mode}";
+    }
 
     /// <summary>A fight that counts toward a record: a boss kill with your damage in it.</summary>
     public static bool Counts(Encounter e) => e.ModeKind == ParserMode.Bosses && !e.Live && !e.Wave && e.Outcome == "kill"
@@ -74,6 +85,9 @@ public sealed class FightRecords
 
     /// <summary>The record of this fight (null before your first kill of it).</summary>
     public FightRecord? Of(Encounter e) { lock (_gate) return Load().TryGetValue(KeyOf(e), out var r) ? r : null; }
+
+    /// <summary>Forget the records read (the fights were rewritten): read or built again at the next ask.</summary>
+    public void Reset() { lock (_gate) { _byKey = null; _dirLoaded = ""; } }
 
     /// <summary>Every record, the newest kill first.</summary>
     public List<FightRecord> All() { lock (_gate) return Load().Values.OrderByDescending(r => r.LastKillAt).ToList(); }

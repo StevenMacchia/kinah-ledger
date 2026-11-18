@@ -38,13 +38,21 @@ public static class HudLooks
         // the themes (Steven, 2026-11-16: "let us choose a theme and then let us choose from that theme"), Ui/Themes/
         new(HudThemes.Sticker, L.T("Sticker"), L.T("Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup"), HudThemes.Wacky),
         new(HudThemes.Neon, L.T("Neon"), L.T("An arcade cabinet's glowing rim; pickups streak up like combo scores"), HudThemes.Wacky),
-        new(HudThemes.Goo, L.T("Goo"), L.T("A squishy candy jelly; pickups bounce out as bubbles"), HudThemes.Wacky),
+        new(HudThemes.Goo, L.T("Holo card"), L.T("A holographic trading card; pickups flip out as foil chips"), HudThemes.Wacky),   // "goo" kept: a saved Goo is the Holo card
         new(HudThemes.Fighter, L.T("Fighter"), L.T("A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup"), HudThemes.Tactical),
-        new(HudThemes.Scorebug, L.T("Scorebug"), L.T("A tournament broadcast: slanted blocks and a ranked leaderboard"), HudThemes.Tactical),
+        // Arena keeps the Scorebug's key, so a saved Scorebug carries over (Steven, 2026-11-17)
+        new(HudThemes.Scorebug, L.T("Arena"), L.T("A stadium's video board: a black tower, LED bars in class colours, amber figures"), HudThemes.Tactical),
+        new(HudThemes.Studio, L.T("Studio"), L.T("A daytime studio package: white glossy cards, crisp dark type, a thick glossy bar on each card"), HudThemes.Tactical),
         new(HudThemes.Holo, L.T("Holo"), L.T("Projected cyan glass with clipped corners; a scan line sweeps each pickup"), HudThemes.Tactical),
-        new(HudThemes.Vhs, L.T("VHS"), L.T("A camcorder's viewfinder: REC, the tape's timecode, a tracking band on each pickup"), HudThemes.Glitch),
+        new(HudThemes.Vhs, L.T("Viewfinder"), L.T("A camcorder's viewfinder: REC and the tape's counter round crisp figures, the bar first"), HudThemes.Glitch),
+        new(HudThemes.Deck, L.T("Deck"), L.T("A VCR's front: a glowing display window, each member a bar, the DPS in a counter"), HudThemes.Glitch),
         new(HudThemes.Corrupt, L.T("Corrupted"), L.T("A broken signal: torn slices and colour ghosts round steady figures"), HudThemes.Glitch),
         new(HudThemes.Terminal, L.T("Terminal"), L.T("An old green screen: a prompt, a cursor, each pickup typed in as a line"), HudThemes.Glitch),
+        // Modern (Steven, 2026-11-17): Ui/Themes/Modern/
+        new(HudThemes.ModernGlass, L.T("Glass"), L.T("Frosted glass over the game: lit pills filled to each share, crisp white figures"), HudThemes.Modern),
+        new(HudThemes.ModernMono, L.T("Mono"), L.T("Swiss minimal: near-black, off-white and one accent, flat bars on an exact grid"), HudThemes.Modern),
+        new(HudThemes.ModernLine, L.T("Line"), L.T("Barely there: a hairline frame and slim class-colour bars under each name"), HudThemes.Modern),
+        new(HudThemes.ModernFade, L.T("Fade"), L.T("No panel: each row a soft class-colour wash fading out to the right"), HudThemes.Modern),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
@@ -219,6 +227,12 @@ static class HudKit
 
     /// <summary>The line where the hour waits for its first figure, in the Abyss and out of it.</summary>
     public static string Waiting(bool abyss) => abyss ? L.T("Waiting for Abyss Points") : L.T("Waiting for the first count");
+
+    /// <summary>
+    /// The line where the hour waits, with the window's idle line when it has one (the "idle" value, MainWindow.HudIdleLines:
+    /// Steven, 2026-11-17, "Give something informative" in place of "Waiting for the first count"), else the old words.
+    /// </summary>
+    public static string Waiting(bool abyss, string idle) => idle.Length > 0 ? idle : Waiting(abyss);
 
     /// <summary>
     /// The Abyss's figures after the points, most telling first, only those the count has: the kills (players, once the game

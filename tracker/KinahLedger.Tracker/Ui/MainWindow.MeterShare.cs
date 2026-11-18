@@ -10,7 +10,8 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The meter's share picture (Ui/MeterShare.cs draws it), from three places: Share under the Parser's own overlay with the
-/// pointer over it (while it takes clicks), Share on the Parser page for the fight shown (a kept one too), and a shortcut of
+/// pointer over it (while it takes clicks), Share's ▾ › Meter on the Parser page for the fight shown (a kept one too; its
+/// other pictures are Ui/MainWindow.ParserShare.cs's), and a shortcut of
 /// its own (Settings › In game › Parser › Share picture shortcut, Off by default) that copies the fight on the meter, or the
 /// last one, while clicks go through. Each copies the picture and saves it in Pictures\Kinah Ledger, and says so.
 /// </summary>
@@ -119,30 +120,6 @@ public partial class MainWindow
             _parserPrefs.ShareHotkey = fresh.ShareHotkey;
             RegisterShareHotkey(new WindowInteropHelper(this).Handle);
         });
-    }
-
-    // ---- the Parser page's Share ----
-
-    /// <summary>Share on the Parser page, for the fight shown (the one under way, or a kept one opened).</summary>
-    FrameworkElement MeterShareButton(Encounter e)
-    {
-        var icon = new System.Windows.Shapes.Path
-        {
-            Data = Geometry.Parse("M6,1 L6,8.5 M3,4 L6,1 L9,4 M2.5,6.5 L1.5,6.5 L1.5,11 L10.5,11 L10.5,6.5 L9.5,6.5"), StrokeThickness = 1.4,
-            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center,
-        };
-        icon.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Ink");
-        var text = new TextBlock { Text = L.T("Share", "button"), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var b = new Button
-        {
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { icon, text } }, Height = 26, FontSize = 12, Padding = new Thickness(8, 0, 9, 0),
-            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Tag = "meter-share",
-            ToolTip = Tip(L.T("A picture of this fight to paste in Discord or anywhere. Nothing is uploaded.")), IsEnabled = Shareable(e),
-        };
-        AutomationProperties.SetName(b, "Share a picture of this fight");
-        var fight = e;
-        b.Click += (_, _) => ShareMeter(_parserOpen != null ? fight : ParserLive ?? fight);
-        return b;
     }
 
     // ---- for the options test and renders ----

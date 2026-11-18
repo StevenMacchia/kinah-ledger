@@ -37,6 +37,7 @@ public partial class MainWindow
         foreach (var k in RareKeys) _hudValues[k] = held ? _hudRare.GetValueOrDefault(k, "") : "";
         foreach (var (k, v) in HudTopValues(_topRows)) _hudValues[k] = v;
         _hudValues["streak"] = HudStreakNow();   // the looks' hot streak bar (Ui/HudStreak.cs)
+        (_hudValues["idle"], _hudValues["idleShort"]) = HudIdleLines();   // where the hour waits: where you are and what you made there (Ui/MainWindow.HudIdle.cs)
     }
 
     /// <summary>The Abyss's own values: "abyss" ("1" there), then PvP kills ("" until players and monsters are told apart), all kills, deaths ("" for none), Kinah and the points' icon.</summary>
@@ -217,7 +218,7 @@ public partial class MainWindow
             ["rare"] = "Shade Gloves", ["rareId"] = "sample", ["rareCount"] = "×1", ["rareGrade"] = "Legend",
             ["rareIcon"] = _items.IconUrl(_items.IdOf("Shade Gloves")), ["rareColor"] = "#5AA6FF",
         };
-        var idle = new Dictionary<string, string>(normal) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["zone"] = "", ["last"] = "", ["feedText"] = "", ["feedValue"] = "", ["chase"] = "", ["toBest"] = "" };
+        var idle = new Dictionary<string, string>(normal) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["zone"] = "", ["last"] = "", ["feedText"] = "", ["feedValue"] = "", ["chase"] = "", ["toBest"] = "", ["idle"] = IdleSample(), ["idleShort"] = IdleShortSample() };
         foreach (var k in normal.Keys.Where(k => k.StartsWith("pick") || k.StartsWith("top"))) idle[k] = "";
         var list = new List<(string, string, Dictionary<string, string>)>();
         foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker, HudLooks.Capsule, HudLooks.Meter, HudLooks.Float })
@@ -235,6 +236,12 @@ public partial class MainWindow
             list.Add(($"ui-hud-{look}-abyss-waiting.png", look, abyssWaiting));
         list.Add(("ui-hud-auto-normal.png", HudLooks.Auto, normal));
         list.Add(("ui-hud-strip-normal.png", HudLooks.Strip, normal));
+        // the idle line in each place (Ui/MainWindow.HudIdle.cs): Badge and Auto idle, then a dungeon, a day before and a fresh install
+        list.Add(("ui-hud-strip-idle.png", HudLooks.Strip, idle));
+        list.Add(("ui-hud-auto-idle.png", HudLooks.Auto, idle));
+        foreach (var kind in new[] { "dungeon", "history", "fresh" })
+            foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker, HudLooks.Strip })
+                list.Add(($"ui-hud-{look}-idle-{kind}.png", look, new Dictionary<string, string>(idle) { ["idle"] = IdleLine(IdleSampleFacts(kind)), ["idleShort"] = IdleShortLine(IdleSampleFacts(kind)) }));
         return list;
     }
 

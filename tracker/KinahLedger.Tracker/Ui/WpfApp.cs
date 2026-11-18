@@ -136,6 +136,17 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "share") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterShareOverlayChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (overlay share): all passed" : $"options test (overlay share): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=cutoff: the meter's figures never cut, every look in the worst-case fight (Ui/WpfApp.CutOff.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "cutoff") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); CutOffChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter cut-off): all passed" : $"options test (meter cut-off): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=parsershare: the Parser page's share pictures, Copy as text, the back button and the modes gone, alone
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parsershare")
+        {
+            var pw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            pw.Show(); pw.ShowDemo(); DoEvents();
+            ParserModesGoneChecks(pw, Check); ParserShareChecks(pw, Check);
+            pw.Close();
+            Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
+        }
+        // KL_OPTIONS_ONLY=idle: the overlay's idle line alone (Ui/WpfApp.HudIdle.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "idle") { var iw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; iw.Show(); DoEvents(); HudIdleChecks(iw, Check); iw.Close(); Console.WriteLine(fails == 0 ? "options test (idle line): all passed" : $"options test (idle line): {fails} failed"); return fails == 0 ? 0 : 1; }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -213,6 +224,7 @@ public static partial class WpfApp
         w.ApplySkin(other);
         Check(Skins.Current == other && (w.TryFindResource("Bg") as System.Windows.Media.SolidColorBrush)?.Color.ToString() == ((System.Windows.Media.SolidColorBrush)Skins.Night()["Bg"]).Color.ToString() == (other == "night"), "...and switching back puts the saved skin back");
         Check(Skins.ForTheme(HudThemes.Classic) == null, "Classic has no matching skin to offer");
+        Check(Skins.ForTheme(HudThemes.Modern)?.Key == "night", "Modern offers Night as its matching skin");
         // Settings › In game: a theme picked offers "Match the app"; it previews the skin, never saves it by itself
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -332,10 +344,10 @@ public static partial class WpfApp
                 }
                 var texts = Texts(hw).ToList();
                 bool own = !hw.TimersShown && !hw.ParserShown;
-                bool shows = texts.Any(t => t.Contains(fight.Title)) && texts.Any(t => t.Contains("Invasion")) && texts.Any(t => t.Contains("/h"));
+                bool shows = texts.Any(t => t.Contains(fight.Title, StringComparison.OrdinalIgnoreCase)) && texts.Any(t => t.Contains("Invasion")) && texts.Any(t => t.Contains("/h"));
                 said.Add($"{key}: {(own && shows ? "ok" : $"own {own}, shows {shows}")}");
                 hw.ShowParser(null, now, fight.ModeKind, details: false); DoEvents();
-                bool folded = !Texts(hw).Any(t => t.Contains(fight.Title));
+                bool folded = !Texts(hw).Any(t => t.Contains(fight.Title, StringComparison.OrdinalIgnoreCase));   // (Arena writes it in capitals)
                 if (!folded) said[^1] += ", the fight stays after it ends";
                 hw.Close();
             }
@@ -343,6 +355,7 @@ public static partial class WpfApp
         }
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
+        HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
@@ -1346,6 +1359,7 @@ public static partial class WpfApp
         // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
         ParserChecks(w, Check);
         MeterShareChecks(w, Check);   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
+        ParserShareChecks(w, Check);   // the Parser page's pictures, Copy as text and the back button (Ui/WpfApp.ParserShare.cs)
         MeterMotionChecks(Check);
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs

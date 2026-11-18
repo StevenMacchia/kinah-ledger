@@ -103,7 +103,7 @@ sealed class HudSticker : WackyLook, IThemeCard
         bool lead = _ring != null;
         if (waiting)
         {
-            var w = Wk.Words(L.T(Waiting(f.Abyss)), 14, K, Wk.Heavy, Black);
+            var w = Wk.Words(Waiting(f.Abyss), 14, K, Wk.Heavy, Black);
             _pill = Wk.Tilt(Sticker(w, Wk.S(paper, PaperA), 10, new Thickness(lead ? 18 : 12, 5, 12, 6)), -1.5);
         }
         else

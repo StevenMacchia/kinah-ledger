@@ -13,5 +13,6 @@
   "Off in Options": "已在設定中關閉",
   "Waiting for the game to connect to its server": "等待遊戲連線到伺服器",
   "this build can't read the game's traffic (the downloaded tracker can)": "此版本無法讀取遊戲流量（下載的追蹤器可以）",
-  "install Npcap (npcap.com) to count from the game's traffic": "安裝 Npcap（npcap.com）才能從遊戲流量計算"
+  "install Npcap (npcap.com) to count from the game's traffic": "安裝 Npcap（npcap.com）才能從遊戲流量計算",
+  "Past fights and runs put in their right place: {0} fight(s) and {1} run(s), Transcendence and boss names among them.": "已將過去的戰鬥與副本歸回正確分類：{0} 場戰鬥、{1} 次副本（含 Transcendence 與首領名稱）。"
 }

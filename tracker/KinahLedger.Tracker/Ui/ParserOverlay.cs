@@ -23,8 +23,7 @@ public sealed class ParserOverlay : Window
 
     /// <summary>The player dropped it somewhere (pixels, the window's top-left).</summary>
     public event Action<int, int, int>? Dropped;   // left, top, and the meter's bottom edge (what it keeps)
-    /// <summary>The overlay's own menu (a right-click): a mode picked, hide it, clicks through.</summary>
-    public event Action<ParserMode>? ModePicked;
+    /// <summary>The overlay's own menu (a right-click): hide it, clicks through.</summary>
     public event Action? HideAsked;
     /// <summary>A click (no drag) on the overlay: the window switches the meter compact or expanded.</summary>
     public event Action? Clicked;
@@ -257,21 +256,15 @@ public sealed class ParserOverlay : Window
     string _hotkeyText = "";
 
     /// <summary>For the options test: the drag hint's words and the menu's hide line.</summary>
-    internal (string Hint, string Hide) HintForTest { get { ShowHint(); return (_hint.Text, (string)((System.Windows.Controls.MenuItem)BuildMenu().Items[5]).Header); } }
+    internal (string Hint, string Hide) HintForTest { get { ShowHint(); return (_hint.Text, (string)((System.Windows.Controls.MenuItem)BuildMenu().Items[0]).Header); } }
 
-    /// <summary>The overlay's menu, in its own dark look: the three modes (the one on ticked, what each counts on hover), then hide and clicks through.</summary>
+    /// <summary>
+    /// The overlay's menu, in its own dark look: hide and clicks through. The Parser keeps boss pulls only (Steven, 2026-11-17:
+    /// "get rid of full run and every fight"), so there is no mode to pick here any more.
+    /// </summary>
     internal ContextMenu BuildMenu()
     {
         var menu = new ContextMenu { Background = HudKit.B(HudKit.Panel2C), BorderBrush = HudKit.FrameLine, Foreground = HudKit.Ink, FontFamily = HudKit.Text, FontSize = 12.5, Padding = new Thickness(2, 4, 2, 4) };
-        menu.Items.Add(new MenuItem { Header = L.T("What the Parser keeps"), IsEnabled = false, Foreground = HudKit.Faint, FontSize = 11.5 });
-        foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
-        {
-            var item = new MenuItem { Header = L.T(BossParser.Name(md)), IsCheckable = true, IsChecked = md == Mode, ToolTip = L.T(BossParser.Counts(md)), Foreground = HudKit.Ink };
-            var pick = md;
-            item.Click += (_, _) => ModePicked?.Invoke(pick);
-            menu.Items.Add(item);
-        }
-        menu.Items.Add(new Separator { Background = HudKit.FrameLine });
         var hide = new MenuItem { Header = HotkeyText.Length > 0 ? L.F("Hide the overlay ({0})", HotkeyText) : L.T("Hide the overlay"), Foreground = HudKit.Ink };
         hide.Click += (_, _) => HideAsked?.Invoke();
         menu.Items.Add(hide);
@@ -545,6 +538,7 @@ public sealed class ParserOverlay : Window
             var k = ParserPrefs.LookOf(value);
             if (k == _lookKey) return;
             _lookKey = k;
+            _panel.Skin = ParserPanel.SkinOf(k);   // the panel's own looks: Forge, Podium, Reactor
             _lookFace = MakeLook(k, _still);
             if (_lookFace != null && _opacity >= 0) _lookFace.SetOpacity(_opacity);
             _face.Child = _lookFace == null ? _panelFace : _lookFace is IHudFightAbove ? null : _lookFace.Root;
@@ -582,7 +576,7 @@ public sealed class ParserOverlay : Window
         }
         else
         {
-            var p = new ParserPanel(glass: HudGlass.On) { Mode = mode, ShowDetails = details };
+            var p = new ParserPanel(glass: HudGlass.On) { Skin = ParserPanel.SkinOf(ParserPrefs.LookOf(look)), Mode = mode, ShowDetails = details };
             p.Draw(e, now);
             face = HudGlass.On ? HudGlass.Ring(p) : p;
         }
@@ -614,7 +608,7 @@ public sealed class ParserOverlay : Window
         }
         else
         {
-            var p = new ParserPanel(glass: HudGlass.On) { Mode = mode, ShowDetails = details };
+            var p = new ParserPanel(glass: HudGlass.On) { Skin = ParserPanel.SkinOf(ParserPrefs.LookOf(look)), Mode = mode, ShowDetails = details };
             p.SetFrame(radius, padding);
             p.Draw(e, now);
             face = HudGlass.On ? HudGlass.Ring(p) : p;
@@ -753,10 +747,10 @@ public sealed class ParserOverlay : Window
 /// overlay window (above). The record's head (its art, title, clock), what it is and where, the boss's HP or a run's pull
 /// and splits, a fight's kills, the members who have dealt damage on meter bars in their class's colour, and its foot.
 /// </summary>
-public sealed class ParserPanel : Border
+public sealed partial class ParserPanel : Border
 {
     readonly StackPanel _body = new();
-    readonly ParserRows _prows = new();
+    ParserRows _prows = new(ParserRows.Kind.Panel, ParserRows.Skin.Forge);
     readonly string _hpPlace = Motion.HpPlace();
     string _sig = "";
     /// <summary>The mode the record is counted in, and whether each member's Combat Power and item level show.</summary>
@@ -801,12 +795,14 @@ public sealed class ParserPanel : Border
     /// <summary>The fight: under way (the clock running), or just ended (its result at the foot).</summary>
     public void Draw(Encounter e, DateTime now)
     {
-        var sig = $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{ParserRows.HealBarsPref}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}:{e.GroupHealing}:{e.Roster.Sum(f => f.HealingEffective)}:{e.Roster.Sum(f => f.HealingEstimated)}";
+        var sig = $"{_skin}:{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Count}:{e.Roster.Sum(f => f.Damage)}:{e.Partial}:{e.BossHp}:{string.Join(",", e.Roster.Select(f => f.CombatPower))}:{e.Boss}:{e.Splits.Count}:{e.YourKills}:{e.YourDeaths}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{ParserRows.HealBarsPref}:{Mode}:{ShowDetails}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}:{e.GroupHealing}:{e.Roster.Sum(f => f.HealingEffective)}:{e.Roster.Sum(f => f.HealingEstimated)}";
         Width = HudStackLook.FightWidth + 10;
         sig += $":{Width}";
         if (sig == _sig) return;
         _sig = sig;
         _body.Children.Clear();
+        if (_skin != ParserRows.Skin.Classic) _body.Children.Add(SkinHead(e, now));
+        else {
         // the head: the boss's art, its name, the clock
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -835,6 +831,7 @@ public sealed class ParserPanel : Border
             _body.Children.Add(row);
         }
         else _body.Children.Add(sub);
+        }
         // a dungeon before its first pull (Ui/MainWindow.Parser.cs DungeonMeter): the meter waits here, no rows, no foot
         if (e.Waiting)
         {
@@ -889,7 +886,8 @@ public sealed class ParserPanel : Border
         }
 
         // the boss's HP, when the game gives it
-        if (e.BossHpLeft is { } left && e.Live)
+        if (_skin != ParserRows.Skin.Classic) { if (SkinHp(e, now) is { } shp) _body.Children.Add(shp); }
+        else if (e.BossHpLeft is { } left && e.Live)
         {
             var hp = new Grid { Margin = new Thickness(0, 7, 0, 0) };
             hp.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -912,11 +910,17 @@ public sealed class ParserPanel : Border
         // the group (Parser v2, Ui/ParserRows.cs): the rows are kept between draws, so a change moves
         if (e.Roster.Count > 0)
         {
-            _prows.Margin = new Thickness(-6, 8, -6, 0);
+            _prows.Margin = _skin == ParserRows.Skin.Classic ? new Thickness(-6, 8, -6, 0) : new Thickness(0, _skin == ParserRows.Skin.Reactor ? 9 : 10, 0, 0);
             ParserRows.Detach(_prows); _body.Children.Add(_prows);
             _prows.Show(e, now);
         }
         if (e.Waiting) return;   // the party before a hit: no foot (nothing dealt, nothing ended)
+        if (_skin != ParserRows.Skin.Classic && e.HasDamage)
+        {
+            _body.Children.Add(SkinFoot(e, now));
+            BorderBrush = e.Live ? (_glass ? HudGlass.Edge : HudKit.FrameLine) : e.Tone == "good" ? HudKit.B(HudKit.MintC, 0.55) : e.Tone == "bad" ? HudKit.B(HudKit.RecC, 0.55) : _glass ? HudGlass.Edge : HudKit.FrameLine;
+            return;
+        }
         // the foot: the fight's total and the group's DPS; the result before them once it's over
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -925,7 +929,7 @@ public sealed class ParserPanel : Border
         Grid.SetColumnSpan(sep, 2); foot.Children.Add(sep);
         // the outcome once it's over ("Killed in 2:31"), said before the figures
         TextBlock? outcome = null;
-        if (!e.Live)
+        if (!e.Live && (_skin == ParserRows.Skin.Classic || !e.HasDamage))
         {
             var (text, brush) = OutcomeOf(e, now);
             outcome = T(text, 12, FontWeights.Bold, brush);

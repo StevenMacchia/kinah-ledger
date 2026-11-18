@@ -13,8 +13,8 @@ public static partial class WpfApp
 {
     /// <summary>The looks the share picture is checked and rendered in: Classic's standard panel and one look of each theme.</summary>
     static IEnumerable<string> MeterShareLooks(bool all) => all
-        ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).Concat(HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key))
-        : new[] { ParserPrefs.StandardLook }.Concat(new[] { HudThemes.Wacky, HudThemes.Tactical, HudThemes.Glitch }.Select(t => HudThemes.Looks(t)[0].Key));
+        ? OptionsWindow.ParserLooksOf(HudThemes.Classic).Concat(HudLooks.All.Where(l => HudThemes.Themed(l.Key)).Select(l => l.Key))
+        : OptionsWindow.PanelLooks.Concat(HudThemes.All.Where(t => t.Key != HudThemes.Classic).Select(t => HudThemes.Looks(t.Key)[0].Key));
 
     static MeterShare.Look ShareLookOf(string key, ParserMode mode)
     {
@@ -175,10 +175,10 @@ public static partial class WpfApp
         }
         finally { MainWindow.ShareSinkForTest = null; w.SetMeterOnOverlayForTest(null); w.ShareHideNamesForTest = hide0; }
 
-        // the Parser page's Share, on a kept fight opened
+        // the Parser page's Share, on a kept fight opened (the meter is in its ▾: Ui/WpfApp.ParserShare.cs checks the rest)
         {
             w.ShowParserDemo("detail"); DoEvents();
-            var btn = Find(w.ParserPage, "meter-share") as Button;
+            var btn = Find(w.ParserPage, "parser-share") as Button;
             check(btn is { IsEnabled: true }, "meter share: Share on the Parser page for the fight opened");
         }
 
@@ -245,7 +245,7 @@ public static partial class WpfApp
         finally { po.Close(); }
     }
 
-    /// <summary>options-test: Settings › In game › Parser has Hide other names (on) and the Share picture shortcut (Off, recorded as the others are).</summary>
+    /// <summary>options-test: Settings › In game › Parser has Hide other names (off by default since 4c3c730) and the Share picture shortcut (Off, recorded as the others are).</summary>
     static void MeterShareOptionChecks(OptionsWindow o, Action<bool, string> check)
     {
         {
@@ -256,8 +256,9 @@ public static partial class WpfApp
                 var refuse = o.RecordShareKeyForTest(ModifierKeys.Control, Key.C);
                 var take = o.RecordShareKeyForTest(ModifierKeys.Control | ModifierKeys.Shift, Key.F9);
                 string key1 = o.ShareKeyForTest;
-                check(chk.IsChecked == true && key0 == ParserPrefs.DefaultHotkey && refuse != null && take == null && key1 == "Ctrl+Shift+F9" && o.ParserDirty,
-                    $"meter share: Settings › In game › Parser has Hide other names (on: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
+                // off by default since PR 342 ("Meter share: the members' names shown by default")
+                check(chk.IsChecked == false && key0 == ParserPrefs.DefaultHotkey && refuse != null && take == null && key1 == "Ctrl+Shift+F9" && o.ParserDirty,
+                    $"meter share: Settings › In game › Parser has Hide other names (off by default: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
             }
             finally { o.ReloadParserForTest(); }
         }

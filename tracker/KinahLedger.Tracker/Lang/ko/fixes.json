@@ -13,5 +13,6 @@
   "Off in Options": "설정에서 꺼짐",
   "Waiting for the game to connect to its server": "게임이 서버에 연결되기를 기다리는 중",
   "this build can't read the game's traffic (the downloaded tracker can)": "이 빌드는 게임 트래픽을 읽지 못해요 (다운로드한 트래커는 가능)",
-  "install Npcap (npcap.com) to count from the game's traffic": "게임 트래픽으로 집계하려면 Npcap(npcap.com)을 설치하세요"
+  "install Npcap (npcap.com) to count from the game's traffic": "게임 트래픽으로 집계하려면 Npcap(npcap.com)을 설치하세요",
+  "Past fights and runs put in their right place: {0} fight(s) and {1} run(s), Transcendence and boss names among them.": "지난 전투와 런을 제자리로 옮겼어요: 전투 {0}건, 런 {1}건 (Transcendence와 보스 이름 포함)."
 }

@@ -35,10 +35,12 @@ public partial class OptionsWindow
 
     /// <summary>The meter window's looks in a theme: Classic's are Standard and the four drawn for fights; another theme's, all of its own.</summary>
     internal static IReadOnlyList<string> ParserLooksOf(string theme) =>
-        theme == HudThemes.Classic ? new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks).ToList() : HudThemes.Looks(theme).Select(l => l.Key).ToList();
+        theme == HudThemes.Classic ? PanelLooks.Concat(HudLooks.FightLooks).ToList() : HudThemes.Looks(theme).Select(l => l.Key).ToList();
+    /// <summary>The Parser panel's own looks: Forge (the "standard" key), Podium, Reactor.</summary>
+    internal static readonly string[] PanelLooks = { ParserPrefs.StandardLook, ParserPrefs.PodiumLook, ParserPrefs.ReactorLook };
 
     /// <summary>The theme a meter look belongs to (Standard: Classic).</summary>
-    static string ParserThemeOf(string look) => look == ParserPrefs.StandardLook ? HudThemes.Classic : HudThemes.Of(look);
+    static string ParserThemeOf(string look) => PanelLooks.Contains(look) ? HudThemes.Classic : HudThemes.Of(look);
     UniformGrid? _parserLookHost;
     /// <summary>The page's lead: what the looks are for (the meter's own window, or inside the Kinah overlay).</summary>
     TextBlock? _parserLookHint;
@@ -267,8 +269,8 @@ public partial class OptionsWindow
         _parserHealBarsChk = Row("Heal bars", "A green bar along each healer's row on the overlay's meter: their share of the group's healing. The HEAL chip after the name keeps their healing a second either way.", "Parser heal bars");
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
         _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.", "Parser DPS over active time");
-        _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls and runs: how many in the figures line, each member's in the record's group. Every fight always shows your deaths.", "Parser deaths");
-        _parserKillsChk = Row("Kills near you", "Enemies that died near you during boss pulls and runs. Every fight always shows your kills.", "Parser kills near you");
+        _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls: how many in the figures line, each member's in the pull's group.", "Parser deaths");
+        _parserKillsChk = Row("Kills near you", "Enemies that died near you during boss pulls.", "Parser kills near you");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
         _parserCritChk = Row("Crit and back-attack rates", "Each member's crit rate, their crits' share of the damage and their biggest crit, and how often they hit from behind, with each skill's own rates, on the Parser page and in the overlay's pop-up on a member. New: close but still being checked against the game's Combat Analysis.", "Parser crit and back-attack rates");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
@@ -483,7 +485,7 @@ public partial class OptionsWindow
         foreach (var key in keys)
         {
             string lookName = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
-            string hint = L.T(key == ParserPrefs.StandardLook ? "The Parser's own panel: the boss, the clock, the group on class-coloured bars." : HudLooks.All.First(x => x.Key == key).Hint);
+            string hint = L.T(MainWindow.PanelLookHint(key) ?? HudLooks.All.First(x => x.Key == key).Hint);
             bool on = key == current;
             var k = key;
             var card = LookTile(key, L.T(lookName), hint, on, () => ParserFace(k, separate), scene, lookName + " overlay look");

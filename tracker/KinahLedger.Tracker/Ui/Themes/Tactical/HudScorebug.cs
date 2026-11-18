@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using KinahLedger.Parser;
@@ -8,13 +8,15 @@ using static KinahLedger.Ui.HudKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Scorebug (the Tactical theme): a tournament broadcast's bug. Solid blocks slanted ten degrees, condensed bold type: a red
-/// block with your best's share, a near-black one with the hour huge in white, a light one with the session, a green one
-/// for the next timer. A fight is a broadcast leaderboard: the boss on a red title block, its clock in yellow on dark, the
-/// HP on a notched bar, the rows on a dark ground with gold, silver and bronze tabs beside the top three, a dark total strip.
+/// Arena and Studio (the Tactical theme's broadcast looks; Steven picked both from the Scorebug's concepts, 2026-11-17). Their
+/// Kinah side is a tournament broadcast's bug: solid blocks slanted ten degrees, condensed bold type, a red block with your
+/// best's share, a near-black one with the hour huge in white, a light one with the session, a green one for the next timer.
+/// A fight: Arena draws the stadium's video board (a red title block, the clock in amber digits, one black tower with LED
+/// segment bars glowing in the class's colour); Studio a daytime studio package (white glossy cards on soft shadows, a thick
+/// glossy band as each member's bar, Ui/Themes/Tactical/HudScorebug.Studio.cs). Arena keeps the Scorebug's key (scorebug).
 /// The moments: a pickup wipes a yellow ticker in under the bug; a rare drop runs a lower third with its tile; your best
 /// passed runs a NEW PERSONAL BEST lower third with a light sweep; an entry opening pulses the green block's edge; a
-/// fight's start slides its blocks in one after another; its end puts up a VICTORY or DEFEAT plate.
+/// fight's start slides its parts in one after another; its end puts up a VICTORY or DEFEAT plate.
 /// </summary>
 sealed partial class HudScorebug : TacticalLook
 {
@@ -50,14 +52,31 @@ sealed partial class HudScorebug : TacticalLook
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     double _enter = 1;
 
-    public HudScorebug() : base(bare: false, Face)
+    /// <summary>Studio's fight (white cards) rather than Arena's (the video board).</summary>
+    readonly bool _studio;
+
+    public HudScorebug(bool studio = false) : base(bare: false, Face)
     {
-        // the leaderboard's own rows (Ui/Themes/ThemeRows.cs): rank tab, team stripe, name plate, stat cells
-        UseRows(ScoreRow.Pitch, m => new ScoreRow(), 22, left => GapLine(left));
+        _studio = studio;
+        // the leaderboard's own rows (Ui/Themes/ThemeRows.cs)
+        if (studio) UseRows(StudioRow.Pitch, m => new StudioRow(), 22, StudioGap);
+        else UseRows(ArenaRow.Pitch, m => new ArenaRow(), 18, ArenaGap);
         _timerEdge = new TacSketch(DrawTimerEdge);
         _bugHost.Children.Add(_bug); _bugHost.Children.Add(_bugAnchor);
         var parts = new StackPanel();
-        parts.Children.Add(_titleHost); parts.Children.Add(_hpHost); parts.Children.Add(_rowsHost); parts.Children.Add(_footHost);
+        parts.Children.Add(_titleHost);
+        if (studio) { parts.Children.Add(_hpHost); parts.Children.Add(_rowsHost); parts.Children.Add(_footHost); }
+        else
+        {
+            // Arena's tower: one black board under the title, the HP, the rows and the foot on it
+            var board = new Grid();
+            board.Children.Add(new TacSketch(DrawBoard));
+            var on = new StackPanel();
+            on.Children.Add(_hpHost); on.Children.Add(_rowsHost); on.Children.Add(_footHost);
+            board.Children.Add(on);
+            parts.Children.Add(board);
+            parts.Effect = Glow(14, 3, .6);
+        }
         _fightGrid.Children.Add(parts); _fightGrid.Children.Add(_fightFx);
         _fight.Children.Add(_fightGrid);
         _body.Children.Add(_fight); _body.Children.Add(_bugHost); _body.Children.Add(_under);
@@ -316,7 +335,7 @@ sealed partial class HudScorebug : TacticalLook
         if (_lastFight != null && KinahHidden) Redraw();
     }
 
-    // ================================================================ the leaderboard
+    // ================================================================ the leaderboard (Arena's video board, or Studio's cards)
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
@@ -324,139 +343,136 @@ sealed partial class HudScorebug : TacticalLook
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); return; }
         double w = FightWidth - 10;
         _fightGrid.Width = w;
-        // the title bar: the boss on red, its clock in yellow on dark (in a dungeon the next timer at its end)
-        var title = new Grid { Height = 32 };
-        title.ColumnDefinitions.Add(new ColumnDefinition()); title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var name = T(e.Title, 17, White); name.TextTrimming = TextTrimming.CharacterEllipsis;
-        var nb = new Block(RedC, name, 32, new Thickness(12, 0, 14, 0), leanLeft: false);
-        title.Children.Add(nb.Root);
-        FrameworkElement clockChild;
-        if (e.Waiting) clockChild = T(L.T("Ready"), 14, Grey, FontWeights.SemiBold);
-        else
-        {
-            var outcome = OutcomeText(e);
-            var cs = new StackPanel { Orientation = Orientation.Horizontal };
-            if (outcome.Length > 0) { var ot = Cap(outcome, e.Outcome == "wipe" ? Frozen(Color.FromRgb(0xFF, 0x6B, 0x78)) : Green, 11); ot.FontWeight = FontWeights.Bold; ot.Margin = new Thickness(0, 1, 8, 0); cs.Children.Add(ot); }
-            cs.Children.Add(T(Clock(e.Duration(now)), 18, e.Live ? Yellow : White));
-            clockChild = cs;
-        }
-        var cb = Ink(clockChild, 32, new Thickness(13, 0, 13, 0));
-        cb.Root.Margin = new Thickness(-Lean + 2.5, 0, 0, 0);
-        Grid.SetColumn(cb.Root, 1); title.Children.Add(cb.Root);
-        if (KinahHidden && _timer is { } t)
-        {
-            var tb = TimerPlate(t.Text, t.Tone, 32, "");
-            tb.Root.Margin = new Thickness(-Lean + 2.5, 0, 0, 0);
-            Grid.SetColumn(tb.Root, 2); title.Children.Add(tb.Root);
-        }
-        _titleHost.Child = title;
+        _titleHost.Child = _studio ? StudioTitle(e, now) : ArenaTitle(e, now);
+        if (!e.Waiting && HpOf(e) is { } hp) _hpHost.Child = _studio ? StudioHp(e, hp, now) : ArenaHp(e, hp, now);
+        var rows = new Grid { Margin = _studio ? new Thickness(0, 7, 0, 0) : new Thickness(6, 6, 6, 1) };
         if (e.Waiting)
         {
-            var wt = T(e.ReadyText, 14, Grey, FontWeights.SemiBold);
-            var wb = Ink(wt, 34, new Thickness(14, 0, 14, 0), l: false);
-            wb.Root.Margin = new Thickness(0, 2, 0, 0);
-            if (PartyBeforeHit(e))
-            {
-                // the party under the ready plate, on the leaderboard's dark ground
-                var party = new StackPanel();
-                party.Children.Add(wb.Root);
-                var rowsGrid = new Grid { Margin = new Thickness(0, 2, 0, 0) };
-                rowsGrid.Children.Add(new Border { Background = Frozen(Ink(.96)) });
-                var rowsIn = new Grid { Margin = new Thickness(4, 5, 4, 3) };
-                rowsGrid.Children.Add(rowsIn);
-                PutRows(rowsIn, e, now, w - 8);
-                party.Children.Add(rowsGrid);
-                _rowsHost.Child = party;
-            }
-            else _rowsHost.Child = wb.Root;
+            var panel = new StackPanel();
+            panel.Children.Add(_studio ? StudioReady(e) : ArenaReady(e, PartyBeforeHit(e)));
+            if (PartyBeforeHit(e)) { panel.Children.Add(rows); PutRows(rows, e, now, w - rows.Margin.Left - rows.Margin.Right); }
+            _rowsHost.Child = panel;
         }
         else
         {
-            // the HP: a red bar with notches at the thirds on dark, "47% · 1.82M left" at its end
-            if (HpOf(e) is { } hp)
-            {
-                var g = new Grid { Margin = new Thickness(0, 0, 0, 0) };
-                g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var track = new Grid { Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-                track.Children.Add(new TacSketch((dc, s) =>
-                {
-                    dc.DrawRectangle(Frozen(Color.FromRgb(0x2A, 0x2D, 0x36)), null, new Rect(0, 0, s.Width, s.Height));
-                    dc.DrawRectangle(Tac.Grad(false, (Color.FromRgb(0xB8, 0x14, 0x28), 0), (RedC, 1)), null, new Rect(0, 0, s.Width * hp, s.Height));
-                    dc.DrawRectangle(Frozen(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), null, new Rect(0, 0, s.Width * hp, 2));
-                    // the notches: a third and two thirds, cut through the bar, a tick above and below
-                    for (int k = 1; k <= 2; k++)
-                    {
-                        double x = Math.Round(s.Width * k / 3);
-                        dc.DrawRectangle(Frozen(InkC0), null, new Rect(x - 1.5, -3, 3, s.Height + 6));
-                        dc.DrawRectangle(Frozen(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)), null, new Rect(x - .5, -3, 1, 2.5));
-                    }
-                }));
-                HpGhost(track, e, hp, now, 0);
-                g.Children.Add(track);
-                var words = new StackPanel { Orientation = Orientation.Horizontal };
-                words.Children.Add(T($"{Math.Round(hp * 100):0}%", 15, hp < .34 ? Frozen(Color.FromRgb(0xFF, 0x6B, 0x78)) : White));
-                var left = HpLeftText(e);
-                if (left.Length > 0) { var lt = T("  " + left, 13, Grey, FontWeights.SemiBold); lt.Margin = new Thickness(0, 1, 0, 0); words.Children.Add(lt); }
-                Grid.SetColumn(words, 1); g.Children.Add(words);
-                var hb = Ink(g, 26, new Thickness(12, 0, 12, 0), l: false, r: false);
-                hb.Root.Margin = new Thickness(0, 2, 0, 0);
-                _hpHost.Child = hb.Root;
-            }
-            // the leaderboard: each member a broadcast row (rank tab, team stripe, name plate, stat cells) on a dark ground
-            var rowsGrid = new Grid { Margin = new Thickness(0, 2, 0, 0) };
-            rowsGrid.Children.Add(new Border { Background = Frozen(Ink(.96)) });
-            var rowsIn = new Grid { Margin = new Thickness(4, 5, 4, 3) };
-            rowsGrid.Children.Add(rowsIn);
-            PutRows(rowsIn, e, now, w - 8);
-            _rowsHost.Child = rowsGrid;
-            if (e.HasDamage) _footHost.Child = Foot(e, now, w);
+            PutRows(rows, e, now, w - rows.Margin.Left - rows.Margin.Right);
+            _rowsHost.Child = rows;
+            if (e.HasDamage) _footHost.Child = AsFoot(_studio ? StudioFoot(e, now) : ArenaFoot(e, now), e, now);
         }
         _fight.Visibility = Visibility.Visible;
         ApplyEnter();
     }
 
-    /// <summary>
-    /// The total strip: TOTAL on red and the fight's figure, a dark run, then the group's word on slate and its figure (the
-    /// held fight's average with a green AVG. DPS tab), each a slanted cell as the bug's.
-    /// </summary>
-    FrameworkElement Foot(Encounter e, DateTime now, double w)
+    /// <summary>Arena's board: near-black, a faint LED dot grid, a soft light from above, a fine rim.</summary>
+    static void DrawBoard(DrawingContext dc, Size s)
     {
-        var (total, word, group, held) = FootOf(e, now);
-        var g = new Grid { Margin = new Thickness(0, 2, 0, 0), Height = 28 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        // TOTAL on red, its figure's cell running on to the group's cells (no dead cell between)
-        var tl = new Block(RedC, Cap(L.T("Total"), White, 10.5), 28, new Thickness(12, 0, 11, 0), leanLeft: false);
-        g.Children.Add(tl.Root);
-        var tv = Ink(T(total, 17, White), 28, new Thickness(11, 0, 12, 0));
-        tv.Root.Margin = new Thickness(-Lean + 2.5, 0, 0, 0);
-        Grid.SetColumn(tv.Root, 1); g.Children.Add(tv.Root);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(-Lean + 2.5, 0, 0, 0) };
-        if (word.Length > 0)   // alone with no best and no peak yet: no figure (ParserFoot.Right)
-        {
-            Row(right, new Block(SlateC, Cap(word, Frozen(Color.FromRgb(0xC9, 0xD1, 0xDC)), 10.5), 28, new Thickness(11, 0, 11, 0)));
-            Row(right, Ink(T(group, 17, Yellow), 28, new Thickness(11, 0, held ? 11 : 12, 0), r: held));
-        }
-        if (held)
-        {
-            var badge = new Block(GreenC, Cap(L.T(Encounter.AvgBadge), InkB, 10), 28, new Thickness(10, 0, 10, 0), leanRight: false);
-            badge.Root.Tag = "avg-badge";   // the held average's badge (the Parser's AVG. DPS)
-            Row(right, badge);
-        }
-        Grid.SetColumn(right, 2); g.Children.Add(right);
-        return AsFoot(g, e, now);
+        if (s.Width < 1 || s.Height < 1) return;
+        dc.DrawRectangle(Tac.Grad(true, (Tac.A(Color.FromRgb(0x0D, 0x0F, 0x14), .96), 0), (Tac.A(Color.FromRgb(0x05, 0x06, 0x08), .96), 1)), null, new Rect(s));
+        var dot = Frozen(Tac.A(Colors.White, .035));
+        for (double y = 2; y < s.Height; y += 4) for (double x = 2; x < s.Width; x += 4) dc.DrawRectangle(dot, null, new Rect(x, y, 1, 1));
+        dc.DrawRectangle(Tac.Grad(true, (Tac.A(Colors.White, .06), 0), (Tac.A(Colors.White, 0), 1)), null, new Rect(0, 0, s.Width, Math.Min(60, s.Height)));
+        dc.DrawRectangle(null, Tac.P(Frozen(BoardLine), 1), new Rect(.5, -.5, s.Width - 1, s.Height));
     }
 
-    /// <summary>The line between the party and you pinned below it: "▼ 2 more" on a fine rule.</summary>
-    static FrameworkElement GapLine(int left)
+    /// <summary>Arena's top: the boss in capitals on a red slanted block, the clock in glowing amber digits on black (the outcome glowing before it; in a dungeon the next timer after it).</summary>
+    FrameworkElement ArenaTitle(Encounter e, DateTime now)
     {
-        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        g.Children.Add(new Border { Height = 1, Background = Frozen(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center });
-        var t = Tt(left > 0 ? "▼  " + L.F("{0} more", left) : "▼", 10.5, Frozen(Color.FromRgb(0xA9, 0xAF, 0xBE)), Face, FontWeights.SemiBold, FontStretches.Normal);
-        g.Children.Add(new Border { Background = Frozen(InkC0), Padding = new Thickness(8, 0, 8, 0), HorizontalAlignment = HorizontalAlignment.Center, Child = t });
+        var head = new Grid { Height = 34 };
+        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = C(Up(e.Title), 15, Colors.White, FontWeights.Bold); title.TextTrimming = TextTrimming.CharacterEllipsis; title.Effect = Glow(3, 1, .6);
+        head.Children.Add(GBlock(RedC, title, 34, new Thickness(12, 0, 14, 1), 0, 10, .22));
+        var cl = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (OutcomeText(e) is { Length: > 0 } ow)
+        {
+            var oc = e.Outcome == "wipe" ? Coral : GreenC;
+            var o = C(Up(ow), 11.5, oc, FontWeights.Bold, Semi); o.Margin = new Thickness(0, 1, 9, 0); o.Effect = Glow(8, 0, .8, oc); cl.Children.Add(o);
+        }
+        var ct = e.Waiting ? C(L.T("Ready"), 14, GreyOf, FontWeights.SemiBold) : C(Clock(e.Duration(now)), 21, Amber, FontWeights.Bold);
+        if (!e.Waiting) ct.Effect = Glow(10, 0, .75, Amber);
+        cl.Children.Add(ct);
+        bool timer = KinahHidden && _timer is not null;
+        var cc = GCell((dc, s) => Gloss(dc, Slant(new Rect(s), 10, timer ? 7 : 0), Color.FromRgb(0x16, 0x18, 0x1E), Color.FromRgb(0x05, 0x06, 0x08), .1, .2), cl, 34, new Thickness(18, 0, timer ? 16 : 12, 0));
+        cc.Margin = new Thickness(-8, 0, 0, 0);
+        Grid.SetColumn(cc, 1); head.Children.Add(cc);
+        if (KinahHidden && _timer is { } t)
+        {
+            var tb = TimerPlate(t.Text, t.Tone, 34, "");
+            tb.Root.Margin = new Thickness(-Lean + 2.5, 0, 0, 0);
+            Grid.SetColumn(tb.Root, 2); head.Children.Add(tb.Root);
+        }
+        return head;
+    }
+
+    /// <summary>Arena's HP: red LED segments glowing on the board, ticks at its thirds, "47%" and what's left.</summary>
+    FrameworkElement ArenaHp(Encounter e, double hp, DateTime now)
+    {
+        var g = new Grid { Height = 24, Margin = new Thickness(10, 6, 10, 0) };
+        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var track = new Grid { Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        track.Children.Add(new TacSketch((dc, s) => Leds(dc, new Rect(0, 0, s.Width, s.Height), hp, RedC, 3, 1.4)) { Effect = Glow(8, 0, .7, RedC) });
+        // the thirds: a white tick above and below the segments
+        track.Children.Add(new TacSketch((dc, s) =>
+        {
+            for (int k = 1; k <= 2; k++)
+            {
+                double x = Math.Round(s.Width * k / 3);
+                dc.DrawRectangle(Frozen(Tac.A(Colors.White, .85)), null, new Rect(x - .75, -4, 1.5, 3));
+                dc.DrawRectangle(Frozen(Tac.A(Colors.White, .85)), null, new Rect(x - .75, s.Height + 1, 1.5, 3));
+            }
+        }) { Tag = "hp-ticks" });
+        HpGhost(track, e, hp, now, 0);
+        g.Children.Add(track);
+        var words = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(C($"{Math.Round(hp * 100):0}%", 15, hp < .34 ? Coral : Colors.White, FontWeights.Bold));
+        if (HpLeftText(e) is { Length: > 0 } left) words.Children.Add(C("  " + left, 12.5, GreyOf, FontWeights.SemiBold, Semi));
+        Grid.SetColumn(words, 1); g.Children.Add(words);
         return g;
     }
 
-    /// <summary>The fight's blocks as far into their broadcast entrance as <see cref="_enter"/> says (1: all in).</summary>
+    /// <summary>Arena before the first pull: the ready line in grey capitals on the board.</summary>
+    static FrameworkElement ArenaReady(Encounter e, bool party)
+    {
+        var wt = C(Up(e.ReadyText), 13, GreyOf, FontWeights.SemiBold, Semi);
+        wt.Margin = new Thickness(12, 8, 12, party ? 2 : 10); wt.TextTrimming = TextTrimming.CharacterEllipsis;
+        return wt;
+    }
+
+    /// <summary>Arena's foot on the board: TOTAL and the fight's figure, the group's word and its figure in glowing amber, the AVG. DPS badge.</summary>
+    static FrameworkElement ArenaFoot(Encounter e, DateTime now)
+    {
+        var (total, word, group, held) = FootOf(e, now);
+        var fg = new Grid { Height = 30 };
+        fg.ColumnDefinitions.Add(new ColumnDefinition()); fg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var bg = new TacSketch((dc, s) =>
+        {
+            dc.DrawRectangle(Tac.Grad(true, (Color.FromRgb(0x15, 0x17, 0x1D), 0), (Color.FromRgb(0x0B, 0x0C, 0x10), 1)), null, new Rect(s));
+            dc.DrawRectangle(Frozen(BoardLine), null, new Rect(0, 0, s.Width, 1));
+        });
+        Grid.SetColumnSpan(bg, 2); fg.Children.Add(bg);
+        var tl = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+        tl.Children.Add(C(Up(L.T("Total")), 10.5, GreyOf, FontWeights.Bold, Semi));
+        var tv = C(total, 17, Colors.White, FontWeights.Bold); tv.Margin = new Thickness(8, 0, 0, 0); tl.Children.Add(tv);
+        fg.Children.Add(tl);
+        var rt = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+        if (word.Length > 0) { rt.Children.Add(C(Up(word), 10.5, GreyOf, FontWeights.Bold, Semi)); var gv = C(group, 17, Amber, FontWeights.Bold); gv.Margin = new Thickness(8, 0, 0, 0); gv.Effect = Glow(8, 0, .6, Amber); rt.Children.Add(gv); }
+        if (held)
+            rt.Children.Add(new Border { Background = Frozen(GreenC), Padding = new Thickness(5, 1, 5, 2), Margin = new Thickness(9, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                Tag = "avg-badge", Child = C(Up(L.T(Encounter.AvgBadge)), 10, InkC0, FontWeights.Bold, Semi) });
+        Grid.SetColumn(rt, 1); fg.Children.Add(rt);
+        return fg;
+    }
+
+    /// <summary>Arena's line between the party and you pinned below it: "▼ 1 more" on a fine rule.</summary>
+    static FrameworkElement ArenaGap(int left)
+    {
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new Border { Height = 1, Background = Frozen(BoardLine), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(30, 0, 30, 0) });
+        var t = C(left > 0 ? "▼  " + L.F("{0} more", left) : "▼", 10.5, GreyOf, FontWeights.SemiBold, Semi);
+        g.Children.Add(new Border { Background = Frozen(Color.FromRgb(0x09, 0x0A, 0x0E)), Padding = new Thickness(10, 0, 10, 1), HorizontalAlignment = HorizontalAlignment.Center, Child = t });
+        return g;
+    }
+
+    /// <summary>The fight's parts as far into their broadcast entrance as <see cref="_enter"/> says (1: all in).</summary>
     void ApplyEnter()
     {
         // the title and the HP wipe in behind a slanted edge (short words: fast), the rows and the foot fade up after them,
@@ -464,11 +480,11 @@ sealed partial class HudScorebug : TacticalLook
         double tw = Out(Seg(_enter, 0, .16)), hw = Out(Seg(_enter, .06, .24));
         void W(Border b, double p) { if (p >= 1) b.ClearValue(UIElement.ClipProperty); else b.Clip = Wipe(0, (FightWidth + 30) * p, 60); }
         W(_titleHost, tw); W(_hpHost, hw);
-        // the board's ground fades up, then each row wipes in after the one above it (its words on once its plates are in)
+        // the board's ground fades up, then each row wipes in after the one above it (its words on once it is in)
         _rowsHost.Opacity = Seg(_enter, .2, .3);
         if (Meter is { } m)
             for (int i = 0; i < m.Members.Count; i++)
-                if (m.RowOf(m.Members[i].Id) is ScoreRow r) { r.Enter = Out(Seg(_enter, .2 + i * .08, .44 + i * .08)); r.Root.InvalidateVisual(); foreach (var ch in ((Grid)r.Root).Children) if (ch is UIElement u) u.InvalidateVisual(); }
+                if (m.RowOf(m.Members[i].Id) is BoardRow r) { r.Enter = Out(Seg(_enter, .2 + i * .08, .44 + i * .08)); r.Apply(); }
         _footHost.Clip = _enter >= 1 ? null : Wipe(0, (FightWidth + 30) * Out(Seg(_enter, .55, .8)), 60);
     }
 
@@ -573,10 +589,12 @@ sealed partial class HudScorebug : TacticalLook
         bool wipe = e.Outcome == "wipe";
         // the leaderboard dims under a full-width band, and the plate wipes in across it
         // the winner's row stays in sight above the band, a gold glint crossing it; the band sits over the rest of the board
-        var dim = new Border { Background = Frozen(Tac.A(InkC0, .78)), Opacity = 0, Margin = new Thickness(0, 72, 0, 0) };
-        var band = new Border { Height = 64, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 38), Background = Frozen(Tac.A(InkC0, .9)), BorderBrush = wipe ? Red : Yellow, BorderThickness = new Thickness(0, 2, 0, 2), Opacity = 0 };
-        var plate = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 46) };
-        var winner = !wipe && Meter is { Members.Count: > 0 } mm ? mm.RowOf(mm.Members[0].Id) as ScoreRow : null;
+        // (the winner's row: under the title and the HP, the first row's pitch; the band above the foot)
+        double keepTop = _titleHost.ActualHeight + _hpHost.ActualHeight + 7 + (_studio ? StudioRow.Pitch : ArenaRow.Pitch), footH = _footHost.ActualHeight + 8;
+        var dim = new Border { Background = Frozen(Tac.A(InkC0, .78)), Opacity = 0, Margin = new Thickness(0, keepTop, 0, 0) };
+        var band = new Border { Height = 64, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH), Background = Frozen(Tac.A(InkC0, .9)), BorderBrush = wipe ? Red : Yellow, BorderThickness = new Thickness(0, 2, 0, 2), Opacity = 0 };
+        var plate = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH + 8) };
+        var winner = !wipe && Meter is { Members.Count: > 0 } mm ? mm.RowOf(mm.Members[0].Id) as BoardRow : null;
         var head = new Block(wipe ? SlateC : YellowC, T(wipe ? "✖" : "★", 22, wipe ? Red : InkB), 48, new Thickness(14, 0, 12, 0), leanLeft: true);
         var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), 34, wipe ? White : Yellow), 48, new Thickness(18, 0, 22, 0));
         Row(plate, head); Row(plate, main);
@@ -596,7 +614,7 @@ sealed partial class HudScorebug : TacticalLook
                 plate.RenderTransform = new TranslateTransform(6 * (1 - Out(Seg(t, .06, .2))), 0);
                 band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .08 && t < .2 ? .6 : 0), .9));
             }
-            if (winner != null) { winner.Sweep = Seg(t, .04, .4); foreach (var ch in ((Grid)winner.Root).Children) if (ch is UIElement u) u.InvalidateVisual(); }
-        }, () => { _fightFx.Children.Clear(); if (winner != null) { winner.Sweep = -1; foreach (var ch in ((Grid)winner.Root).Children) if (ch is UIElement u) u.InvalidateVisual(); } });
+            if (winner != null) { winner.Sweep = Seg(t, .04, .4); winner.Apply(); }
+        }, () => { _fightFx.Children.Clear(); if (winner != null) { winner.Sweep = -1; winner.Apply(); } });
     }
 }

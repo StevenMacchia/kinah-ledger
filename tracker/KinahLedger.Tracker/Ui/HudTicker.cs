@@ -114,10 +114,10 @@ public sealed partial class HudTicker : IHudLook
         bool picked = _picks.Next(values, out _) != null;   // only a pickup just made rolls the pill (Ui/HudFreshPicks.cs)
         // in the Abyss (Steven, 2026-11-15) the pill's hour is in Abyss Points, in ink with "AP/h", and its session the points so far
         bool abyss = Abyss(values);
-        if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}|{abyss}"))
+        if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}|{abyss}|{(counted && V("rate").Length > 0 ? "" : V("idle"))}"))
         {
             _rate.Foreground = abyss ? Ink : Gold; _unit.Text = abyss ? L.T("AP/h") : L.T("/h");
-            _idle.Text = Waiting(abyss);
+            _idle.Text = Waiting(abyss, V("idle"));
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;

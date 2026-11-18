@@ -7,7 +7,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "run", "run-detail", "fight", "fight-history", "inspect", "compare", "timeline", "taken", "full", "inspect-full" };
+    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "inspect", "compare", "timeline", "taken", "full", "inspect-full" };
 
     /// <summary>
     /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight|wacky|tactical|glitch]: the Parser page from
@@ -20,8 +20,8 @@ public static partial class WpfApp
         Ensure();
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
-        var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "looks" or "worst" or "concepts") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "overlay", "views" }).ToArray() : new[] { state };
+        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "views" or "looks" or "worst" or "concepts") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -43,6 +43,7 @@ public static partial class WpfApp
                 }
                 if (st == "themes") { ShotThemes(w, dir); continue; }
                 if (st == "share") { ShotMeterShare(dir); continue; }   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
+                if (st == "views") { ShotParserShare(w, dir); continue; }   // the Parser page's share pictures (Ui/WpfApp.ParserShare.cs)
                 if (st == "looks") { ShotSettingsLooks(dir); continue; }
                 if (st == "worst") { ShotWorst(dir); continue; }
                 if (st == "concepts") { ShotConcepts(dir); continue; }   // the reworked looks' concept samples (Ui/MeterConcepts.cs)   // the worst-case fight in every meter look (Ui/WpfApp.CutOff.cs)
@@ -410,24 +411,8 @@ public static partial class WpfApp
             }
         }
         o.Close();
-        // the modes: Full run's run under way with its splits, Every fight's fights, the list by mode, the overlay's menu
-        w.ShowParserDemo("run"); DoEvents();
-        var run = w.ParserLiveForTest;
-        check(w.ParserModeForTest == ParserMode.Run && run is { ModeKind: ParserMode.Run } && run.Splits.Count >= 3 && run.Splits[^1].Outcome == "" && w.ParserPageForTest().Rows >= 2,
-            $"Parser, Full run: the run under way with {run?.Splits.Count} splits (the last under way), the kept runs listed ({w.ParserPageForTest().Rows})");
-        w.ShowParserDemo("fight-history"); DoEvents();
-        check(w.ParserModeForTest == ParserMode.Fights && w.ParserPageForTest().Rows >= 4 && w.ParserPastForTest.All(e => !e.OpenWorld) && w.ParserPastForTest.Any(e => e.ModeKind == ParserMode.Fights),
-            $"Parser, Every fight: the fights kept are the instances' only, none of the open world's or the Abyss's ({w.ParserPageForTest().Rows} rows)");
-        w.ShowParserDemo("live"); DoEvents();
-        w.SetParserModeForTest(ParserMode.Run); DoEvents();
-        check(w.ParserModeForTest == ParserMode.Run && w.ParserLiveForTest?.ModeKind == ParserMode.Run, "Parser: picking Full run switches the page to the run under way");
-        var mo = new ParserOverlay(still: true) { Mode = ParserMode.Run };
-        var menu = mo.BuildMenu();
-        var items = menu.Items.OfType<System.Windows.Controls.MenuItem>().Where(i => i.IsCheckable).ToList();
-        check(items.Count == 3 && items.Count(i => i.IsChecked) == 1 && (string)items.Single(i => i.IsChecked).Header == "Full run" && items.All(i => i.ToolTip is string t && t.Length > 20),
-            "Parser: the overlay's menu has the three modes, the one on ticked, each saying what it counts");
-        mo.Close();
-        w.SetParserModeForTest(ParserMode.Bosses); DoEvents();
+        // the modes are gone (Steven, 2026-11-17: "get rid of full run and every fight"): Bosses only, nothing to pick
+        ParserModesGoneChecks(w, check);   // Ui/WpfApp.ParserShare.cs
         // the classes (Steven, 2026-11-14): the game's emblem for each of the eight, one colour each, far enough apart; a meter bar's share
         var missing = ClassArt.Keys.Where(k => ClassArt.Image(k) == null).ToList();
         check(missing.Count == 0 && ClassArt.Key("Spirit Master") == "spiritmaster" && ClassArt.Image("") == null, $"Parser: the game's class emblem for each of the eight classes{(missing.Count > 0 ? ", missing " + string.Join(", ", missing) : "")}");
@@ -599,7 +584,7 @@ public static partial class WpfApp
         }
         // no word for how the game is read, anywhere on the page or its hovers (only Options names it)
         var banned = new[] { "packet", "traffic", "npcap", "decoder", "recording", "game's message", "game's own message", "from the game itself", "packet reading", "game's clock", "pc's clock" };
-        foreach (var st in new[] { "live-all", "detail-all", "run-all", "fight-history-all", "nogroup-all", "nodamage-all", "empty-all" })
+        foreach (var st in new[] { "live-all", "detail-all", "history-all", "nogroup-all", "nodamage-all", "empty-all" })
         {
             w.ShowParserDemo(st); DoEvents();
             var (texts, tips) = ParserTexts(w.ParserPage);
@@ -632,7 +617,7 @@ public static partial class WpfApp
             opt.PickParserLookForTest(ParserPrefs.StandardLook); DoEvents();
             // a look picked here alone is a change to save (Steven, 2026-11-16: "i cant save it unless i also change the buddy")
             check(!save0 && save1 && !opt.SaveBtn.IsEnabled, $"Options › In game › Parser: a look picked for its own window alone lights Save, and picking the saved one again puts it out (before {save0}, picked {save1}, back {opt.SaveBtn.IsEnabled})");
-            check(rowShown && keys0.SequenceEqual(new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
+            check(rowShown && keys0.SequenceEqual(OptionsWindow.ParserLooksOf(HudThemes.Classic)) && on0 == ParserPrefs.StandardLook && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
                 && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.StandardLook,
                 $"Options › In game › Parser: its own window's look row ({string.Join(", ", keys0)}), Standard by default ({on0}); a pick outlines it and draws it big ({on1}, {stage1}), the Kinah overlay's look left alone");
             // each look in the window itself: the fight drawn, no Kinah figure, the window as wide as the meter or so
@@ -640,7 +625,7 @@ public static partial class WpfApp
             var nowL = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
             var (_, pullL) = ParserDemo.Sample(nowL);
             var bad = new List<string>();
-            foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+            foreach (var lk in OptionsWindow.ParserLooksOf(HudThemes.Classic))
             {
                 var po = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Look = lk };
                 po.Draw(pullL!, nowL); po.Show(); DoEvents();
@@ -652,7 +637,7 @@ public static partial class WpfApp
             // the meter's bottom edge stays put (Steven, 2026-11-15: "the bottom of the DPS meter is always the source of truth -
             // when the window needs to get bigger, it grows UP not down"): the ready card, a pull, the card again, in each look
             var moved = new List<string>();
-            foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+            foreach (var lk in OptionsWindow.ParserLooksOf(HudThemes.Classic))
             {
                 var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000, Look = lk };
                 po.Draw(Encounter.ReadyAnywhere("Verteron", nowL), nowL); po.Show(); DoEvents();
@@ -699,7 +684,7 @@ public static partial class WpfApp
                 var killF = pastF.Last(x => x.Outcome == "kill");
                 var heldF = HeldSample(pullL!, nowL);
                 var wrong = new List<string>();
-                foreach (var lk in new[] { ParserPrefs.StandardLook }.Concat(HudLooks.FightLooks))
+                foreach (var lk in OptionsWindow.ParserLooksOf(HudThemes.Classic))
                     foreach (var (tag, e, at) in new[] { ("live", pullL!, nowL), ("held", heldF, heldF.End!.Value), ("killed", killF, killF.End!.Value) })
                     {
                         var po = new ParserOverlay(still: true) { Left = -12000, Top = -9000, Look = lk, Mode = e.ModeKind };

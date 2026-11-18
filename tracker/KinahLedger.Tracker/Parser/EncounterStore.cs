@@ -120,7 +120,17 @@ public sealed class EncounterStore
     }
 
     /// <summary>Forget the cache (a character switch, a test).</summary>
-    public void Reload() { lock (_gate) { _cache = null; _version++; } }
+    public void Reload() { lock (_gate) { _cache = null; _version++; Records.Reset(); } }
+
+    /// <summary>The files rewritten by <paramref name="whileHeld"/> (a one-time repair) while no fight is added, then read back, the records too.</summary>
+    public void Rewrite(Action whileHeld)
+    {
+        lock (_gate)
+        {
+            try { whileHeld(); }
+            finally { _cache = null; _version++; Records.Reset(); }
+        }
+    }
 
     /// <summary>Keeps the records under way (none: the file goes).</summary>
     public void SaveLive(IReadOnlyCollection<Encounter> live)

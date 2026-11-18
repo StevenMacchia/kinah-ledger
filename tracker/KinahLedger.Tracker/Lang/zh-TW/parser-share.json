@@ -1,0 +1,18 @@
+{
+  "Summary card": "摘要卡",
+  "Group table": "隊伍表格",
+  "Damage taken": "承受傷害",
+  "Everything": "全部",
+  "Class": "職業",
+  "This view": "目前畫面",
+  "Group DPS, your DPS and place, the clock": "隊伍 DPS、你的 DPS 與名次、戰鬥時間",
+  "The meter as it shows over the game": "與遊戲上顯示相同的統計",
+  "{0}, tab-separated: pastes into Discord or a spreadsheet": "{0}，以 Tab 分隔：可貼到 Discord 或試算表",
+  "A picture of this view to paste in Discord or anywhere. Nothing is uploaded.": "目前畫面的圖片，可貼到 Discord 或任何地方。不會上傳任何東西。",
+  "More to share: the summary card, the meter, everything in one picture, the table as text": "更多分享方式：摘要卡、統計、一張圖包含全部、表格轉為文字",
+  "Tab-separated: pastes into Discord or a spreadsheet": "以 Tab 分隔：可貼到 Discord 或試算表",
+  "Back (Backspace, Alt+← or the mouse's back button)": "返回（Backspace、Alt+← 或滑鼠的返回鍵）",
+  "Back to the run": "回到這一輪",
+  "All boss pulls": "所有首領戰",
+  "Every boss pull of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers.": "此角色的所有首領戰都存在這台電腦。除非在「分享」開啟「在我的 kinahledger.com 個人頁面顯示我的首領最佳紀錄」，否則任何戰鬥資料都不會離開你的電腦；開啟後只會把你在每個首領的最佳擊殺傳到個人頁面，不含隊友的數據。"
+}

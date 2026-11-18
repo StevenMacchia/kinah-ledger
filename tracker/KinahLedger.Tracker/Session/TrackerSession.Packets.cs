@@ -89,7 +89,8 @@ public sealed partial class TrackerSession
         while (p.NextArea() is { } area)
         {
             Instances.GameSaid(area, Zone);
-            if (area.What == AreaEvent.Kind.Phase && area.Code.Length > 0) Fights.MapEvent(area.Code, area.At);
+            // its end too: a dungeon's boss room closing and opening again after its last boss is a new run in the same copy
+            if (area.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Closed && area.Code.Length > 0) Fights.MapEvent(area.Code, area.At, closed: area.What == AreaEvent.Kind.Closed);
         }
         DrainItems(p, now);
         while (_packetHeld.Count > 0)

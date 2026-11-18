@@ -2,7 +2,10 @@
 # order, "final" on the instance's last boss (killing it clears the instance), "wave" on a wave stage (Ferocious Horn Den's
 # Totem room: six Mau Totem Shamans and their adds, no single boss): a split of its own in Full run, never a boss pull. Kinds: Expedition, Sanctuary (the game's
 # 10-player raids), Nightmare (the Nightmare instances; their loot stays uncounted, data/instances.txt "Ignored", but their
-# boss pulls are kept). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart.
+# boss pulls are kept). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart:
+# the game's map code marks one with G where the mode word stands (Arkanis_G_09_BossRoom_MapEvent, DeusCenter_G_09_MapEvent),
+# and the Parser files it as a Transcendence at its stage. Season 1's are Shattered Arkanis and Deus Research Base
+# (https://metabot.gg/en/aion-2/transcendence, 2026-11-17: Exploration, and Transcendence Stage 1 to 4).
 # World bosses are not listed here: the Parser takes their names and places from the boss timers (Parser/WorldBosses.cs).
 # An instance listed here keeps fights with its listed bosses only (trash, elites and adds never make one); an instance not
 # listed keeps fights with what the game itself marks a boss. A line "Instance|Kind" with no boss only files the instance.
@@ -20,6 +23,7 @@ Vakron Sky Island|Expedition||BakronIsland
 Fire Temple|Expedition||Fire_Temple
 Krao Cave|Expedition||KraoCave
 Shattered Arkanis|Expedition||Arkanis
+Deus Research Base|Expedition||DeusCenter
 Abyssal Horn Den|Expedition|Kapu|
 Abyssal Horn Den|Expedition|Dhakan|
 Abyssal Horn Den|Expedition|Gargaum|final

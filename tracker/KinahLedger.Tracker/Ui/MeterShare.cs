@@ -49,11 +49,13 @@ public static class MeterShare
     /// The picture around a meter already laid out (<see cref="With{T}"/> makes it): its head, the meter scaled to fill the
     /// frame (600 wide; a meter wider than that keeps its size and the frame grows round it), its foot.
     /// </summary>
-    static Border Frame(Encounter e, DateTime now, FrameworkElement face)
+    /// <param name="view">A Parser page view's face (Ui/ParserShare.cs): one without the boss's name of its own gets the outcome pill beside it, live too.</param>
+    static Border Frame(Encounter e, DateTime now, FrameworkElement face, bool view = false)
     {
         double fw = Math.Max(1, face.DesiredSize.Width);
-        double scale = Math.Clamp((Width - 2 * Side) / fw, 1, 1.6);
-        double width = Math.Max(Width, Math.Ceiling(fw * scale + 2 * Side));
+        // a few pixels spare: the meter sits a pixel or two in from the side once laid out, and a full-width one lost its right edge
+        double scale = Math.Clamp((Width - 2 * Side - 8) / fw, 1, 1.6);
+        double width = Math.Max(Width, Math.Ceiling(fw * scale + 2 * Side + 2));   // + the frame's own 1 px edges, so a face as wide as the room is never cut
         var st = new ScaleTransform(scale, scale); st.Freeze();
         var meter = new Border { Child = face, LayoutTransform = st, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Tag = "share-meter" };
 
@@ -61,7 +63,7 @@ public static class MeterShare
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        page.Children.Add(Head(e, now, face));
+        page.Children.Add(Head(e, now, face, view));
         var mid = new Border { Child = meter, Margin = new Thickness(0, 14, 0, 18) };
         Grid.SetRow(mid, 1); page.Children.Add(mid);
         var foot = Foot();
@@ -100,14 +102,17 @@ public static class MeterShare
     /// the boss's portrait (when the look draws none), the place and mode (when the look doesn't name them) and the day. The
     /// boss's name large and the outcome pill come back only for a look that draws no title or no outcome of its own.
     /// </summary>
-    static FrameworkElement Head(Encounter e, DateTime now, FrameworkElement face)
+    static FrameworkElement Head(Encounter e, DateTime now, FrameworkElement face, bool view = false)
     {
         string said = string.Join(" | ", Texts(face));
         bool Has(string s) => s.Length > 0 && said.Contains(s, StringComparison.OrdinalIgnoreCase);
-        bool title = Has(e.Title);
+        // a page view names the boss as a title of its own only in the hero ("your DPS on Kromede" is not one)
+        bool title = view ? Texts(face).Any(t => t.Trim().Equals(e.Title, StringComparison.OrdinalIgnoreCase)) : Has(e.Title);
         var (outText, ink) = e.Live ? ($"{L.T("Fighting")} {BossParser.Clock(e.Duration(now))}", HudKit.Gold) : ParserPanel.OutcomeOf(e, now);
         string word = L.T(e.Outcome switch { "kill" => "Killed", "wipe" => "Wiped", "cleared" => "Cleared", "ended" => "Ended", "left" => "Left", _ => "Over" });
         bool outcome = e.Live || Has(outText) || Has(word) || Has(L.T("Over"));
+        // a table or the timeline says no outcome of its own ("Over time" and "left" are a column and a tag there, not one)
+        if (view && !title) outcome = false;
         string artKey = e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss";
         bool art = Images(face).Any(s => ReferenceEquals(s, GameArt.Image(artKey)));
         var where = PK.WhereOf(e);
@@ -236,15 +241,39 @@ public static class MeterShare
     public static Border Laid(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v => v);
 
     /// <summary>The PNG: the picture drawn at twice its size (1200 px wide), settled; never a screenshot.</summary>
-    public static BitmapSource Render(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v =>
+    public static BitmapSource Render(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v => Snap(v, "meter share picture"));
+
+    /// <summary>A picture laid out at its size, drawn at twice it (whole pixels), its words checked for the language in use.</summary>
+    internal static BitmapSource Snap(Border v, string what)
     {
         int h = (int)Math.Ceiling(v.ActualHeight) * 2;   // twice the height, whole pixels
         var rtb = new RenderTargetBitmap((int)Math.Round(v.Width * 2), h, 192, 192, PixelFormats.Pbgra32);
-        LangCheck.Scan(v, "meter share picture");
+        LangCheck.Scan(v, what);
         rtb.Render(v);
         rtb.Freeze();
-        return (BitmapSource)rtb;
-    });
+        return rtb;
+    }
+
+    /// <summary>
+    /// The same frame (head, glow, foot) round any face already built at its width: the Parser page's views (Ui/ParserShare.cs).
+    /// Laid out settled, handed to <paramref name="use"/> while it is still at its size.
+    /// </summary>
+    internal static T Framed<T>(Encounter e, DateTime now, Func<FrameworkElement> build, string tag, Func<Border, T> use)
+    {
+        bool still0 = Motion.Still; Motion.Still = true;
+        try
+        {
+            var face = build();
+            LayOut(face);
+            var v = Frame(e, now, face, view: true);
+            v.Tag = tag;
+            LayOut(v, v.Width);
+            IconCache.Drain(TimeSpan.FromSeconds(2));
+            v.UpdateLayout();
+            return use(v);
+        }
+        finally { Motion.Still = still0; }
+    }
 
     /// <summary>The words of every text drawn under <paramref name="root"/> (a part collapsed left out), its runs joined.</summary>
     internal static List<string> Texts(DependencyObject root) => Blocks(root).Select(Plain).Where(s => s.Length > 0).ToList();

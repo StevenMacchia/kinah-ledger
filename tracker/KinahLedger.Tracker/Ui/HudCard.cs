@@ -161,13 +161,13 @@ public sealed partial class HudCard : IHudLook
         // in the Abyss (Steven, 2026-11-15): the hour in Abyss Points, in ink, the points so far on the session's line, and the
         // kills, deaths and Kinah on the chase's line; the points' art where the ring of your best (a Kinah hour) sits elsewhere
         bool abyss = Abyss(values);
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}"))
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}|{(counted && V("rate").Length > 0 ? "" : V("idle"))}"))
         {
             // a pickup: the hour and the session flip to their new figures and the edge lights (Ui/HudCard.Motion.cs)
             bool rose = TotalRose(V("total")) && picked;
             _rateTone = abyss ? Ink : Gold;
             _rate.Inlines.Clear(); _rateRun = _totalRun = null;
-            if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R(Waiting(abyss), 13, Faint));
+            if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R(Waiting(abyss, V("idle")), 13, Faint));
             else if (warm) _rate.Inlines.Add(R(V("rate"), 16, _rateTone, weight: FontWeights.Bold));
             else { _rateRun = R(V("rate"), 22, _rateTone, weight: FontWeights.Bold); _rate.Inlines.Add(_rateRun); _rate.Inlines.Add(R(abyss ? L.T(" AP an hour") : L.T(" an hour"), 12, Muted, weight: FontWeights.SemiBold)); }
             if (_rateRun != null) Roll(_rate, "rate", () => _rateRun, V("rate"), rose, true);
