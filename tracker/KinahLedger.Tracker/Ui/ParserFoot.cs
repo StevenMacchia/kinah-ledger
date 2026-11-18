@@ -22,14 +22,12 @@ static class ParserFoot
     /// <summary>You are the only one on the meter (no member but you with damage): the group's figure is yours.</summary>
     public static bool SoloYou(Encounter e) => e.Members.Any(f => f.You) && e.Members.Where(f => !f.Other && f.Damage > 0).All(f => f.You);
 
-    /// <summary>The seconds a peak is measured over: the best stretch of this many seconds in a row.</summary>
-    public const int PeakSeconds = 5;
-
     /// <summary>
     /// The foot's right-hand figure: its word, the figure, and whether it is the held fight's average (the AVG. DPS badge).
     /// With others on the meter, the group's DPS. Alone, the group's figure is your row's again (Steven, 2026-11-17: "isnt
     /// the avg thing redundant?"), so it says something the row doesn't: your best on this fight before this one ("Best"),
-    /// else your best <see cref="PeakSeconds"/> seconds in a row ("Peak"), else nothing (Word "").
+    /// else your uptime ("Uptime 94%": Steven, 2026-11-18, in place of the best 5 s, "peak dps will always be first hit"),
+    /// else nothing (Word "").
     /// </summary>
     public static (string Word, string Value, bool Held) Right(Encounter e, DateTime now)
     {
@@ -40,22 +38,21 @@ static class ParserFoot
         double best = 0;
         try { best = ParserRows.BestOf?.Invoke(e)?.Dps ?? 0; } catch (Exception) { best = 0; }
         if (best > 0) return (L.T("Best"), Amounts.Meter(best), false);
-        if (PeakDps(e) is { } peak) return (L.T("Peak"), Amounts.Meter(peak), false);
+        if (Uptime(e, held ? e.End ?? now : now) is { } up) return (L.T("Uptime"), up.ToString("P0", System.Globalization.CultureInfo.InvariantCulture).Replace(" ", ""), false);
         return ("", "", false);
     }
 
-    /// <summary>Your damage over your best <see cref="PeakSeconds"/> seconds in a row, a second; null with fewer seconds than that one more.</summary>
-    public static double? PeakDps(Encounter e)
+    /// <summary>
+    /// Your uptime: the share of the fight's seconds so far (from the pull's start to <paramref name="at"/>, the end once it
+    /// is over) in which you dealt damage, 0 to 1; null before you have any.
+    /// </summary>
+    public static double? Uptime(Encounter e, DateTime at)
     {
-        if (e.You?.PerSecond is not { } ps || ps.Count <= PeakSeconds) return null;
-        long sum = 0, top = 0;
-        for (int i = 0; i < ps.Count; i++)
-        {
-            sum += ps[i];
-            if (i >= PeakSeconds) sum -= ps[i - PeakSeconds];
-            if (i >= PeakSeconds - 1 && sum > top) top = sum;
-        }
-        return top > 0 ? top / (double)PeakSeconds : null;
+        if (e.You?.PerSecond is not { } ps || ps.Count == 0) return null;
+        int hit = ps.Count(d => d > 0);
+        if (hit == 0) return null;
+        int seconds = Math.Max(ps.Count, e.SecondOf(e.End is { } end && end < at ? end : at) + 1);
+        return Math.Clamp(hit / (double)seconds, 0, 1);
     }
 
     /// <param name="valueInk">The group's figure's ink (a look's accent, the Forge panel's gold); the text's by default.</param>
