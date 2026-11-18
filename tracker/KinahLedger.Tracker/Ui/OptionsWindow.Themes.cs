@@ -26,7 +26,10 @@ public partial class OptionsWindow
             HudThemeHost.Children.Add(chip);
         }
         // the window's skin to match (1.0): tried on like a theme chip under General, kept by Save, put back by Cancel
-        if (_host.MatchAppLink(_hudTheme, _edit.Skin, skin => { Edit(_edit with { Skin = skin }, previewSkin: true); HudThemeShown(_edit.HudLook); }) is { } match) HudThemeHost.Children.Add(match);
+        // under the row's title, not after the chips: there it took a second line, and the page no longer fit (1.0.8)
+        var match = _host.MatchAppLink(_hudTheme, _edit.Skin, skin => { Edit(_edit with { Skin = skin }, previewSkin: true); HudThemeShown(_edit.HudLook); });
+        if (match is TextBlock mt) { mt.Margin = new Thickness(0, 2, 0, 0); mt.FontSize = 12; mt.TextWrapping = TextWrapping.Wrap; }
+        HudThemeMatchHost.Content = match;
         return _hudTheme;
     }
 
@@ -45,7 +48,7 @@ public partial class OptionsWindow
     /// <summary>For the options self-test: the "Match the app" link after the theme chips, clicked; false when none is shown.</summary>
     internal bool MatchAppForTest()
     {
-        if (HudThemeHost.Children.OfType<TextBlock>().FirstOrDefault(t => t.Tag is string s && s.StartsWith("match:")) is not { } t) return false;
+        if (HudThemeMatchHost.Content is not TextBlock { Tag: string s } t || !s.StartsWith("match:")) return false;
         var link = t.Inlines.OfType<System.Windows.Documents.Hyperlink>().First();
         link.RaiseEvent(new RoutedEventArgs(System.Windows.Documents.Hyperlink.ClickEvent));
         return true;

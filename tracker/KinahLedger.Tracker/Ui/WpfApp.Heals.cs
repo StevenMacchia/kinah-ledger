@@ -82,7 +82,7 @@ public static partial class WpfApp
         Window win;
         if (place.StartsWith("kinah", StringComparison.Ordinal))
         {
-            var h = new HudWindow(null, place == "kinah-auto" ? HudLooks.Auto : null, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            var h = new HudWindow(null, place == "kinah-auto" ? HudLooks.Auto : HudLooks.Card, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Update(kinah); h.ShowParser(e, at, e.ModeKind, details: false); h.SetKinahHidden(true);
             win = h;
         }
@@ -273,7 +273,7 @@ public static partial class WpfApp
         Window win;
         if (place.StartsWith("kinah", StringComparison.Ordinal))
         {
-            var h = new HudWindow(null, place == "kinah-auto" ? HudLooks.Auto : null, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            var h = new HudWindow(null, place == "kinah-auto" ? HudLooks.Auto : HudLooks.Card, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Update(new Dictionary<string, string>()); h.ShowParser(e, at, e.ModeKind, details: false); h.SetKinahHidden(true);
             win = h;
         }

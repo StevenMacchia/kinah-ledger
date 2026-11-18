@@ -610,14 +610,15 @@ public static partial class WpfApp
             string kinahLook = w.HudLook;
             bool rowShown = opt.ParserLookRowShownForTest == true;
             bool save0 = opt.SaveBtn.IsEnabled;
-            opt.PickParserLookForTest("capsule"); DoEvents();
+            string pick1 = keys0.Count > 1 ? keys0[1] : "capsule";   // another of the row shown
+            opt.PickParserLookForTest(pick1); DoEvents();
             var (_, on1) = opt.ParserLooksForTest;
             string stage1 = opt.ParserLookStageForTest ?? "";
             bool save1 = opt.SaveBtn.IsEnabled;
             opt.PickParserLookForTest(on0); DoEvents();
             // a look picked here alone is a change to save (Steven, 2026-11-16: "i cant save it unless i also change the buddy")
             check(!save0 && save1 && !opt.SaveBtn.IsEnabled, $"Options › In game › Parser: a look picked for its own window alone lights Save, and picking the saved one again puts it out (before {save0}, picked {save1}, back {opt.SaveBtn.IsEnabled})");
-            check(rowShown && keys0.SequenceEqual(OptionsWindow.ParserLooksOf(HudThemes.Modern)) && on0 == ParserPrefs.DefaultLook && on0 == HudThemes.ModernGlass && on1 == "capsule" && stage1 == "capsule" && w.HudLook == kinahLook
+            check(rowShown && keys0.SequenceEqual(OptionsWindow.ParserLooksOf(HudThemes.Modern)) && on0 == ParserPrefs.DefaultLook && on0 == HudThemes.ModernGlass && on1 == pick1 && stage1 == pick1 && w.HudLook == kinahLook
                 && ParserPrefs.LookOf("badge") == ParserPrefs.StandardLook && ParserPrefs.FromText("{}").Look == ParserPrefs.DefaultLook
                 && ParserPrefs.FromText("{\"Look\":\"standard\"}").Look == ParserPrefs.DefaultLook
                 && ParserPrefs.FromText("{\"Look\":\"standard\",\"GlassSettled\":true}").Look == ParserPrefs.StandardLook

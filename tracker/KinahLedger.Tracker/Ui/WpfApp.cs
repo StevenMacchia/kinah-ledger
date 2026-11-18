@@ -296,14 +296,15 @@ public static partial class WpfApp
             Check(!server.StepShown && st.StepShown && st.Picked == HudLooks.Default && st.Staged == HudLooks.Default && st.Outlined == HudLooks.Default
                 && st.Buttons.SequenceEqual(firstLooks) && st.Buttons[0] == HudLooks.Default,
                 $"first run: Continue opens the look step with Modern Glass picked, first and drawn (shown {st.StepShown}, picked {st.Picked}, drawn {st.Staged}, {st.Buttons.Count} looks, first {st.Buttons.FirstOrDefault()})");
-            ww.HoverWelcomeLookForTest(HudLooks.Meter); DoEvents();
+            string wOther = firstLooks[1], wThird = firstLooks[2];   // two more of the theme shown
+            ww.HoverWelcomeLookForTest(wOther); DoEvents();
             var hov = ww.WelcomeLookForTest.Staged;
             ww.HoverWelcomeLookForTest(null); DoEvents();
             var back = ww.WelcomeLookForTest.Staged;
-            Check(hov == HudLooks.Meter && back == HudLooks.Default && ww.WelcomeLookForTest.Picked == HudLooks.Default, $"hovering a look draws it, leaving draws the picked one again ({hov}, then {back})");
-            ww.PickWelcomeLookForTest(HudLooks.Ticker); DoEvents();
+            Check(hov == wOther && back == HudLooks.Default && ww.WelcomeLookForTest.Picked == HudLooks.Default, $"hovering a look draws it, leaving draws the picked one again ({hov}, then {back})");
+            ww.PickWelcomeLookForTest(wThird); DoEvents();
             st = ww.WelcomeLookForTest;
-            Check(st.Picked == HudLooks.Ticker && st.Outlined == HudLooks.Ticker && st.Staged == HudLooks.Ticker, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
+            Check(st.Picked == wThird && st.Outlined == wThird && st.Staged == wThird, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
             // the themes on first run (0.10.136, Steven 2026-11-16): four chips, Classic shown; a theme shows its looks and picks its first
             var th0 = ww.WelcomeThemeForTest;
             ww.PickWelcomeThemeForTest(HudThemes.Wacky); DoEvents();
