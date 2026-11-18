@@ -27,6 +27,10 @@ sealed class HudSticker : WackyLook, IThemeCard
     readonly StackPanel _figs = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly WrapPanel _stats = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(46, 2, 0, 0), Visibility = Visibility.Collapsed, MaxWidth = 380 };
     readonly Border _noteHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+    // the pickups: an ink tag of item tiles slapped under the hour sticker
+    readonly Border _pickHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+    static readonly PickStrip.Look Strip = new(26, 4, true, Wk.S(Paper, .5), Wk.S(Yel));
+    protected override PickStrip.Look StripLook => Strip;
     // the timer's tag: kept, so its wiggle lives through the second's redraws
     readonly Grid _tag = new() { VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly Border _tagFace = new() { BorderBrush = K, BorderThickness = new Thickness(2.5), CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 2, 9, 3) };
@@ -57,6 +61,7 @@ sealed class HudSticker : WackyLook, IThemeCard
         _card.Children.Add(_cardFace);
         _body.Children.Add(_line);
         _body.Children.Add(_stats);
+        _body.Children.Add(_pickHost);
         _body.Children.Add(_noteHost);
         _body.Children.Add(_card);
         Ground(Op);
@@ -147,6 +152,14 @@ sealed class HudSticker : WackyLook, IThemeCard
             _stats.Children.Add(t);
         }
         _stats.Visibility = _stats.Children.Count > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+        // the best drop and the last three: an ink tag slapped under the hour sticker, lapping its foot, turned against it
+        if (StripFor(f) is { } strip)
+        {
+            var tag = InkTag(strip, 1.5, new Thickness(6, 5, 7, 5));
+            tag.Margin = new Thickness(_ring != null ? 44 : 6, -3, 0, 0);
+            _pickHost.Child = tag;
+        }
+        else _pickHost.Child = null;
         // the note: a small ink tag in its tone
         if (f.Note.Length > 0)
         {
@@ -216,6 +229,8 @@ sealed class HudSticker : WackyLook, IThemeCard
         _tag.VerticalAlignment = inCard ? VerticalAlignment.Top : VerticalAlignment.Center;
         _tag.Margin = inCard ? new Thickness(0, -15, 92, 0) : new Thickness(KinahHidden ? 2 : 12, KinahHidden ? 2 : 0, 0, KinahHidden ? 6 : 0);
         _line.Visibility = KinahHidden && (_tag.Parent != _line || _tag.Visibility != Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
+        // the pickups are farming's: a fight's card puts them away
+        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _card.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
         _card.Margin = new Thickness(0, _line.Visibility == Visibility.Visible ? 14 : 0, 0, 0);
     }
 
@@ -228,7 +243,7 @@ sealed class HudSticker : WackyLook, IThemeCard
     protected override void KinahShown(bool shown)
     {
         _figs.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
-        if (!shown) { _stats.Visibility = Visibility.Collapsed; _noteHost.Visibility = Visibility.Collapsed; }
+        if (!shown) { _stats.Visibility = Visibility.Collapsed; _noteHost.Visibility = Visibility.Collapsed; _pickHost.Visibility = Visibility.Collapsed; }
         PlaceTag();
     }
 

@@ -74,9 +74,17 @@ sealed class HudHoloCard : WackyLook, IThemeCard
     readonly Card _panel = new(14, new Thickness(0));
     readonly StackPanel _lineStack = new();
     readonly StackPanel _line = new() { Orientation = Orientation.Horizontal };
+    // the ring at the left of the hour's line and the pickups' row under it, centred across both
+    readonly StackPanel _head = new() { Orientation = Orientation.Horizontal };
+    readonly Border _ringHost = new() { VerticalAlignment = VerticalAlignment.Center };
+    readonly StackPanel _col = new() { VerticalAlignment = VerticalAlignment.Center };
     readonly WrapPanel _stats = new() { Orientation = Orientation.Horizontal, Visibility = Visibility.Collapsed, MaxWidth = 380 };
     readonly Border _noteHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
     readonly StackPanel _fightStack = new();
+    // the pickups: a row of item tiles under the hour on the card's face, a foil rule after the best drop
+    readonly Border _pickHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+    static readonly PickStrip.Look Strip = new(24, 4, true, Foil(.95, 30), GoldB);
+    protected override PickStrip.Look StripLook => Strip;
     // the timer's foil tag: kept, so its hop lives through the second's redraws
     readonly Grid _bean = new() { VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly Border _beanLip = new() { CornerRadius = new CornerRadius(7), RenderTransform = new TranslateTransform(0, 2) };
@@ -98,7 +106,9 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         _bean.RenderTransformOrigin = new Point(.5, 1);
         _bean.RenderTransform = new TransformGroup { Children = { _beanSquash, _beanUp } };
         _stats.Margin = new Thickness(0, 5, 0, 0);
-        _lineStack.Children.Add(_line); _lineStack.Children.Add(_stats);
+        _col.Children.Add(_line); _col.Children.Add(_pickHost);
+        _head.Children.Add(_ringHost); _head.Children.Add(_col);
+        _lineStack.Children.Add(_head); _lineStack.Children.Add(_stats);
         _blob.Content.Child = _lineStack;
         TextElement.SetFontFamily(_fightStack, Face);
         _panel.Content.Child = _fightStack;
@@ -145,6 +155,7 @@ sealed class HudHoloCard : WackyLook, IThemeCard
     protected override void DrawLine(Figures f)
     {
         _line.Children.Clear(); _stats.Children.Clear();
+        _ringHost.Child = null;
         _ring = _hour = null;
         bool waiting = !f.Counted || f.Rate.Length == 0;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
@@ -154,9 +165,9 @@ sealed class HudHoloCard : WackyLook, IThemeCard
             m.Children.Add(new Ellipse { Fill = Wk.Rad(.4, .35, .7, (0x26305E, 1, 0), (Deep, 1, 1)), Stroke = Wk.S(Ice, .55), StrokeThickness = 1.2 });
             var a = AbyssMark(f.Icon, 32); ((FrameworkElement)a).HorizontalAlignment = HorizontalAlignment.Center;
             m.Children.Add(a);
-            _line.Children.Add(m); _ring = m;
+            _ringHost.Child = m; _ring = m;
         }
-        else if (!waiting && f.Share >= 0 && !f.Warm) { _ring = Ring(f.Share, f.Beat); _line.Children.Add(_ring); }
+        else if (!waiting && f.Share >= 0 && !f.Warm) { _ring = Ring(f.Share, f.Beat); _ringHost.Child = _ring; }
         if (waiting)
         {
             var w = Dropped(Waiting(f.Abyss), 14.5, WhiteB, Deep, FontWeights.Bold, false);
@@ -201,6 +212,9 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         }
         if (_stats.Children.Count > 0) _stats.Margin = new Thickness(_ring != null ? 54 : 0, 5, 0, 0);
         _stats.Visibility = _stats.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // the best drop and the last three: a second row on the card's face, under the hour
+        _pickHost.Child = StripFor(f);
+        _pickHost.Margin = new Thickness(3, 3, 0, 2);
         if (f.Note.Length > 0)
         {
             var nt = Wk.Words(f.Note, 11.5, f.NoteTone, Face, FontWeights.SemiBold);
@@ -256,7 +270,10 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         bool lineShown = !KinahHidden || (_bean.Parent == _line && _bean.Visibility == Visibility.Visible);
         _blob.Root.Visibility = lineShown ? Visibility.Visible : Visibility.Collapsed;
         foreach (UIElement ch in _line.Children) if (!ReferenceEquals(ch, _bean)) ch.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
+        _ringHost.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
         _panel.Root.Margin = new Thickness(0, lineShown ? 16 : 0, 0, 0);
+        // the pickups are farming's: a fight's card puts them away
+        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _panel.Root.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static void Detach(FrameworkElement el)
@@ -267,7 +284,7 @@ sealed class HudHoloCard : WackyLook, IThemeCard
 
     protected override void KinahShown(bool shown)
     {
-        if (!shown) { _stats.Visibility = Visibility.Collapsed; _noteHost.Visibility = Visibility.Collapsed; }
+        if (!shown) { _stats.Visibility = Visibility.Collapsed; _noteHost.Visibility = Visibility.Collapsed; _pickHost.Visibility = Visibility.Collapsed; }
         PlaceBean();
     }
 

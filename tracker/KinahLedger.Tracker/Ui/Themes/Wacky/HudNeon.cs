@@ -90,9 +90,17 @@ sealed class HudNeon : WackyLook, IThemeCard
     readonly Cabinet _fight = new(Rgb(Cy), Rgb(0x7A5CFF), new Thickness(0, 0, 0, 0));
     readonly StackPanel _lineStack = new();
     readonly StackPanel _line = new() { Orientation = Orientation.Horizontal };
+    // the ring at the left of the hour's line and the pickups' row under it, centred across both
+    readonly StackPanel _head = new() { Orientation = Orientation.Horizontal };
+    readonly Border _ringHost = new() { VerticalAlignment = VerticalAlignment.Center };
+    readonly StackPanel _col = new() { VerticalAlignment = VerticalAlignment.Center };
     readonly StackPanel _stats = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed };
     readonly TextBlock _note = new() { FontFamily = Wk.Bahn, FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 380 };
     readonly StackPanel _fightStack = new();
+    // the pickups: a row of item tiles under the hour, inside the cabinet
+    readonly Border _pickHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+    static readonly PickStrip.Look Strip = new(24, 4, true, Wk.Lin(0, 0, 0, 1, (Mag, 1, 0), (Cy, 1, 1)), Wk.S(Yel));
+    protected override PickStrip.Look StripLook => Strip;
     // the timer's tube: kept, so its flicker lives through the second's redraws
     readonly Grid _tube = new() { VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly Border _tubeGlow = new() { Margin = new Thickness(-3), CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(3) };
@@ -108,7 +116,9 @@ sealed class HudNeon : WackyLook, IThemeCard
         _tubeFace.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _tubeName, _tubeClock } };
         _tube.Children.Add(_tubeGlow); _tube.Children.Add(_tubeFace);
         Slant(_tube, Skew * .7);
-        _lineStack.Children.Add(_line); _lineStack.Children.Add(_stats); _lineStack.Children.Add(_note);
+        _col.Children.Add(_line); _col.Children.Add(_pickHost);
+        _head.Children.Add(_ringHost); _head.Children.Add(_col);
+        _lineStack.Children.Add(_head); _lineStack.Children.Add(_stats); _lineStack.Children.Add(_note);
         _cab.Content.Child = _lineStack;
         _fight.Content.Child = _fightStack;
         _fight.Root.Visibility = Visibility.Collapsed;
@@ -149,6 +159,7 @@ sealed class HudNeon : WackyLook, IThemeCard
     protected override void DrawLine(Figures f)
     {
         _line.Children.Clear(); _stats.Children.Clear();
+        _ringHost.Child = null;
         _ring = _hour = null;
         bool waiting = !f.Counted || f.Rate.Length == 0;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
@@ -159,9 +170,9 @@ sealed class HudNeon : WackyLook, IThemeCard
             m.Children.Add(new Ellipse { Stroke = CyB, StrokeThickness = 2, Margin = new Thickness(2.5) });
             var a = AbyssMark(f.Icon, 30); ((FrameworkElement)a).HorizontalAlignment = HorizontalAlignment.Center;
             m.Children.Add(a);
-            _line.Children.Add(m); _ring = m;
+            _ringHost.Child = m; _ring = m;
         }
-        else if (!waiting && f.Share >= 0 && !f.Warm) { _ring = Ring(f.Share, f.Beat); _line.Children.Add(_ring); }
+        else if (!waiting && f.Share >= 0 && !f.Warm) { _ring = Ring(f.Share, f.Beat); _ringHost.Child = _ring; }
         if (waiting)
         {
             var w = Slant(Wk.Words(Waiting(f.Abyss), 15, LilacB, Wk.Bahn, FontWeights.SemiBold));
@@ -208,6 +219,9 @@ sealed class HudNeon : WackyLook, IThemeCard
         }
         if (_stats.Children.Count > 0) _stats.Margin = new Thickness(_ring != null ? 50 : 0, 4, 0, 0);
         _stats.Visibility = _stats.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // the best drop and the last three: a second row in the cabinet, under the hour
+        _pickHost.Child = StripFor(f);
+        _pickHost.Margin = new Thickness(2, 3, 0, 2);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
         PlaceTube();
@@ -256,7 +270,10 @@ sealed class HudNeon : WackyLook, IThemeCard
         bool lineShown = !KinahHidden || (_tube.Parent == _line && _tube.Visibility == Visibility.Visible);
         _cab.Root.Visibility = lineShown ? Visibility.Visible : Visibility.Collapsed;
         foreach (UIElement ch in _line.Children) if (!ReferenceEquals(ch, _tube)) ch.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
+        _ringHost.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
         _fight.Root.Margin = new Thickness(0, lineShown ? 14 : 0, 0, 0);
+        // the pickups are farming's: a fight's cabinet puts them away
+        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _fight.Root.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static void Detach(FrameworkElement el)
@@ -267,7 +284,7 @@ sealed class HudNeon : WackyLook, IThemeCard
 
     protected override void KinahShown(bool shown)
     {
-        if (!shown) { _stats.Visibility = Visibility.Collapsed; _note.Visibility = Visibility.Collapsed; }
+        if (!shown) { _stats.Visibility = Visibility.Collapsed; _note.Visibility = Visibility.Collapsed; _pickHost.Visibility = Visibility.Collapsed; }
         PlaceTube();
     }
 

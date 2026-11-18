@@ -199,6 +199,21 @@ abstract class WackyLook : HudThemeLook
         return (name, clock, tone);
     }
 
+    // ---- the pickup strip (Ui/HudPickStrip.cs): the best drop and the last three under the hour while farming
+
+    /// <summary>How this look wears the pickup strip.</summary>
+    protected abstract PickStrip.Look StripLook { get; }
+
+    /// <summary>The line is drawn again when the strip's pickups change too.</summary>
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + PickStrip.Sig(Values, StripLook);
+
+    /// <summary>
+    /// The strip for this line, or null: farming only (an hour shown, not the Abyss, the idle or waiting line, nor a dungeon);
+    /// a fight's card puts it away where it is placed (the look's own place call).
+    /// </summary>
+    protected FrameworkElement? StripFor(Figures f) =>
+        !f.Abyss && f.Counted && f.Rate.Length > 0 && !KinahHidden ? PickStrip.Of(Values, StripLook) : null;
+
     // ---- small shared helpers
 
     protected static double Seg(double p, double a, double b) => b <= a ? (p >= b ? 1 : 0) : Math.Clamp((p - a) / (b - a), 0, 1);
