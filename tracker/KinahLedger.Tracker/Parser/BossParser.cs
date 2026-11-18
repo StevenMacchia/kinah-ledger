@@ -384,14 +384,22 @@ public sealed class BossParser
     public void Take(BossEvent ev)
     {
         List<Encounter> done = new();
+        DateTime came;
         lock (_gate)
         {
             _lastEventAt = ev.At;
+            if (ev.At > _newestAt) _newestAt = ev.At;
+            // an estimated heal comes about a second after the heal itself, by design: the window's capture-to-screen time counts
+            // it from when it came (the newest event's time by then), so that line says how fast the tracker draws (2026-11-18:
+            // those heals alone made its 95th percentile read ~1 s in a party with a healer, while every hit was drawn within tens of ms)
+            came = ev is HealDone { Estimate: true } ? _newestAt : ev.At;
             TakeLocked(ev, done);
             _version++;
         }
-        Finish(done, ev.At);
+        Finish(done, came);
     }
+    /// <summary>The newest time any event said so far: when an estimated heal reached the Parser, by the events' own clock.</summary>
+    DateTime _newestAt = DateTime.MinValue;
 
     void TakeLocked(BossEvent ev, List<Encounter> done)
     {

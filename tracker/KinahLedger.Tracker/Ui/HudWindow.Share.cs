@@ -31,6 +31,9 @@ public sealed partial class HudWindow
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
     [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
 
+    /// <summary>For meter-load: the watch's ticks and its time on the window's thread (TimeSpan ticks), every overlay together.</summary>
+    internal static long ShareWatchTicks, ShareWatchTime;
+
     /// <summary>The fight on the overlay now (the Parser's section, or a look's own meter), or null.</summary>
     FrameworkElement? FightElement => ParserShown ? _parserSlot : _look is HudStackLook sl ? sl.FightFrame : null;
 
@@ -62,7 +65,7 @@ public sealed partial class HudWindow
             if (PresentationSource.FromVisual(tab) is HwndSource src) Native.SetClickThrough(src.Handle, false);
         };
         _shareWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
-        _shareWatch.Tick += (_, _) => WatchShare();
+        _shareWatch.Tick += (_, _) => { long t0 = System.Diagnostics.Stopwatch.GetTimestamp(); WatchShare(); ShareWatchTicks++; ShareWatchTime += System.Diagnostics.Stopwatch.GetElapsedTime(t0).Ticks; };
         IsVisibleChanged += (_, _) => { if (IsVisible) _shareWatch.Start(); else { _shareWatch.Stop(); HideShare(); } };
         Closed += (_, _) => { _shareWatch.Stop(); HideShare(); };
     }

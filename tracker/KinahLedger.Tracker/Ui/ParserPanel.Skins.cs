@@ -53,8 +53,25 @@ public sealed partial class ParserPanel
         g.Freeze();
         return g;
     }
-    static DropShadowEffect SGlow(Color c, double blur, double opacity) => new() { Color = c, BlurRadius = blur, ShadowDepth = 0, Opacity = opacity };
-    static DropShadowEffect SLift(double blur = 3, double opacity = 0.7) => new() { Color = Colors.Black, BlurRadius = blur, ShadowDepth = 1, Direction = 270, Opacity = opacity };
+    static DropShadowEffect SGlow(Color c, double blur, double opacity) => Shadow(c, blur, 0, 315, opacity);
+    static DropShadowEffect SLift(double blur = 3, double opacity = 0.7) => Shadow(Colors.Black, blur, 1, 270, opacity);
+    /// <summary>
+    /// One frozen shadow for each colour, blur, depth, direction and opacity, shared by every element that wears it: the head
+    /// and the HP are drawn again up to 20 times a second while a fight runs, and each draw made its effects anew (2026-11-18;
+    /// meter-load measured no CPU difference either way, only fewer objects made).
+    /// </summary>
+    static DropShadowEffect Shadow(Color c, double blur, double depth, double direction, double opacity)
+    {
+        var key = (c, blur, depth, direction, opacity);
+        if (!Shadows.TryGetValue(key, out var fx))
+        {
+            fx = new DropShadowEffect { Color = c, BlurRadius = blur, ShadowDepth = depth, Direction = direction, Opacity = opacity };
+            fx.Freeze();
+            Shadows[key] = fx;
+        }
+        return fx;
+    }
+    static readonly Dictionary<(Color, double, double, double, double), DropShadowEffect> Shadows = new();
     static TextBlock ST(string s, double size, FontWeight w, Color c, double a = 1) { var t = T(s, size, w, SB(c, a)); Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
     static T2 At<T2>(T2 el, int col) where T2 : UIElement { Grid.SetColumn(el, col); return el; }
     static Grid Cols3(bool lead)
@@ -164,7 +181,7 @@ public sealed partial class ParserPanel
             rib.Children.Add(fill);
             if (live) { Motion.HpGhost(rib, _hpPlace, e.Id, left, now, 3); rib.Children.Add(HudKit.HpTicks()); }
             FrameworkElement words = live ? HpText(e, 10.5, SB(SInk), SB(SInk, 0.85)) : ST(OutcomeOf(e, now).Text, 10, FontWeights.Bold, SInk);
-            words.Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 3, ShadowDepth = 1, Direction = 270, Opacity = 0.9 };
+            words.Effect = SLift(3, 0.9);
             words.Margin = new Thickness(7, 0, 7, 0); words.HorizontalAlignment = HorizontalAlignment.Left;
             rib.Children.Add(words);
             return rib;
