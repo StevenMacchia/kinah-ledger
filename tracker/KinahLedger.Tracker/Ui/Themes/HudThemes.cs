@@ -15,8 +15,10 @@ namespace KinahLedger.Ui;
 /// </summary>
 public static class HudThemes
 {
-    public const string Classic = "classic", Wacky = "wacky", Tactical = "tactical", Glitch = "glitch";
+    public const string Classic = "classic", Wacky = "wacky", Tactical = "tactical", Glitch = "glitch", Modern = "modern";
     public const string Sticker = "sticker", Neon = "neon", Goo = "goo", Fighter = "fighter", Scorebug = "scorebug", Holo = "holo", Vhs = "vhs", Corrupt = "corrupt", Terminal = "terminal";
+    /// <summary>The Modern theme's looks (Steven, 2026-11-17, picked from HTML mock-ups): Glass, Mono, Line and Fade (Ui/Themes/Modern/).</summary>
+    public const string ModernGlass = "glass", ModernMono = "mono", ModernLine = "line", ModernFade = "fade";
 
     public sealed record Theme(string Key, string Name, string Hint);
 
@@ -26,6 +28,7 @@ public static class HudThemes
         new(Wacky, "Wacky", "Loud, chunky and playful: stickers, neon, candy"),
         new(Tactical, "Tactical", "A pro's HUD: jet lines, a broadcast scorebug, holo glass"),
         new(Glitch, "Glitch", "A haunted tape: VHS, a broken signal, an old green screen"),
+        new(Modern, "Modern", "Clean and current: frosted glass, Swiss mono, a bare line, a soft wash"),
     };
 
     /// <summary>The theme a look belongs to; Classic for the strip, an unknown key or none.</summary>
@@ -46,6 +49,8 @@ public static class HudThemes
         Sticker => new HudSticker { Still = still }, Neon => new HudNeon { Still = still }, Goo => new HudGoo { Still = still },
         Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Holo => new HudHolo { Still = still },
         Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
+        // Modern: Mono, Line and Fade draw as Glass until their own looks land
+        ModernGlass or ModernMono or ModernLine or ModernFade => new HudModernGlass { Still = still },
         _ => null,
     };
 

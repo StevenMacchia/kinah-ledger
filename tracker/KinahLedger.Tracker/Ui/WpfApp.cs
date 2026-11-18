@@ -213,6 +213,7 @@ public static partial class WpfApp
         w.ApplySkin(other);
         Check(Skins.Current == other && (w.TryFindResource("Bg") as System.Windows.Media.SolidColorBrush)?.Color.ToString() == ((System.Windows.Media.SolidColorBrush)Skins.Night()["Bg"]).Color.ToString() == (other == "night"), "...and switching back puts the saved skin back");
         Check(Skins.ForTheme(HudThemes.Classic) == null, "Classic has no matching skin to offer");
+        Check(Skins.ForTheme(HudThemes.Modern)?.Key == "night", "Modern offers Night as its matching skin");
         // Settings › In game: a theme picked offers "Match the app"; it previews the skin, never saves it by itself
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
