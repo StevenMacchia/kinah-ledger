@@ -192,6 +192,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     protected Figures Read(IReadOnlyDictionary<string, string> v)
     {
+        _values = v;
         string V(string k) => v.TryGetValue(k, out var s) ? s : "";
         var (run, clock) = Time(V("time"));
         bool counted = run || V("total") is not ("" or "0") || Picks(v).Count > 0;
@@ -206,12 +207,77 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         else if (_acc.Length > 0) { note = _acc; tone = _accCheck ? Warn : Mint; }
         else { note = ""; tone = Muted; }
         _idle = V("idle");
-        return new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
+        return _figsNow = new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
             abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle);
     }
 
     /// <summary>The window's idle line as last read (the "idle" value), for <see cref="Waiting(bool)"/>.</summary>
     string _idle = "";
+
+    // ---- the pickup strip (Ui/HudPickStrip.cs)
+
+    /// <summary>The window's values and their figures as last read, for the pickup strip.</summary>
+    protected IReadOnlyDictionary<string, string> _values = new Dictionary<string, string>();
+    protected Figures? _figsNow;
+    string _stripSig = "";
+
+    /// <summary>
+    /// Farming: the hour counting on the Kinah line, outside the Abyss and a dungeon. Only then the pickup strip; the idle
+    /// line, the Abyss and a fight keep what they showed before it.
+    /// </summary>
+    protected bool Farming => _figsNow is { } f && f.Counted && f.Rate.Length > 0 && !f.Abyss && !KinahHidden;
+
+    /// <summary>
+    /// The pickup strip in <paramref name="host"/>, in the room the look has free (<paramref name="room"/>, read with the host
+    /// empty): the best drop and the last three, else the three alone, else nothing (never a figure cut, never the panel
+    /// wider than <see cref="FightWidth"/>). Off (Settings › Buddy › More › Pickup icons) or not <paramref name="on"/>, the
+    /// host is collapsed and takes no room. <paramref name="rule"/>: the look's hairline before the strip.
+    /// </summary>
+    protected void PlaceStrip(Panel host, PickStrip.Look look, bool on, string roomSig, Func<double> room, bool rule = false)
+    {
+        on = on && PickStrip.Shown;
+        var sig = on ? $"{PickStrip.Sig(_values, look)}|{roomSig}|{FightWidth}" : "";
+        if (sig == _stripSig) return;
+        _stripSig = sig;
+        host.Children.Clear();
+        host.Visibility = Visibility.Collapsed;
+        if (!on) return;
+        var hair = rule ? Rule() : null;
+        double free = room() - host.Margin.Left - host.Margin.Right - (hair == null ? 0 : hair.Width + hair.Margin.Left + hair.Margin.Right);
+        var strip = StripIn(_values, look, free);
+        if (strip == null) return;
+        if (hair != null) host.Children.Add(hair);
+        host.Children.Add(strip);
+        host.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>The strip that fits <paramref name="room"/>: the best drop and the three, else the three alone, else null.</summary>
+    static FrameworkElement? StripIn(IReadOnlyDictionary<string, string> v, PickStrip.Look look, double room)
+    {
+        foreach (var l in look.Best ? new[] { look, look with { Best = false } } : new[] { look })
+        {
+            if (PickStrip.Of(v, l) is not { } s) return null;
+            s.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (s.DesiredSize.Width <= room) return s;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// An element's width as it would lay out with all the room it wants, now: every part under it is measured again (a
+    /// part just shown or changed only marks its parents at the next layout pass, so the element's own measure would be stale).
+    /// </summary>
+    protected static double Wants(UIElement e)
+    {
+        Dirty(e);
+        e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return e.DesiredSize.Width;
+        static void Dirty(DependencyObject d)
+        {
+            if (d is UIElement u) u.InvalidateMeasure();
+            for (int i = 0, n = VisualTreeHelper.GetChildrenCount(d); i < n; i++) Dirty(VisualTreeHelper.GetChild(d, i));
+        }
+    }
 
     /// <summary>
     /// The line where the hour waits: the window's idle line (where you are and what you made there, MainWindow.HudIdleLines),
@@ -275,12 +341,18 @@ sealed class HudCapsule : HudStackLook
     readonly StackPanel _meterBody = new();
     readonly Border _chip = new() { CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 2, 9, 3), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed };
     readonly TextBlock _chipText = new() { FontSize = 11.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>
+    /// The pickup strip at the pill's end, after a hairline, before the timer's chip (Ui/HudPickStrip.cs). It never sets the
+    /// pill's height: its tiles reach into the pill's padding (a pill warming up, without the ring, is a pixel lower than them).
+    /// </summary>
+    readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -3, 0, -3), Visibility = Visibility.Collapsed };
+    static readonly PickStrip.Look StripLook = new(24, 5, true, B(0xFFFFFF, .16));
     string _figSig = "", _fightSig = "";
 
     public HudCapsule()
     {
         _chip.Child = _chipText;
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { _row, _chip } };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { _row, _strip, _chip } };
         (_pill, _pillFrame) = Glass(row, new Thickness(6, 5, 12, 5), 19);
         (_meter, _meterFrame) = Glass(new StackPanel { Children = { _meterBody, _meterTimer } }, new Thickness(12, 8, 12, 6), 12);
         _meter.Margin = new Thickness(10, 4, 0, 0); _meter.Width = MeterWidth; _meter.HorizontalAlignment = HorizontalAlignment.Left; _meter.Visibility = Visibility.Collapsed;
@@ -293,7 +365,23 @@ sealed class HudCapsule : HudStackLook
     public override double Corner => 19;
     public override void SetOpacity(double opacity) { _pillFrame.Background = HudGlass.Fill(opacity); _meterFrame.Background = HudGlass.Fill(opacity); }
 
-    public override void Update(IReadOnlyDictionary<string, string> values) => Draw(Read(values));
+    public override void Update(IReadOnlyDictionary<string, string> values) { Draw(Read(values)); PlaceStrip(); }
+
+    /// <summary>Auto's fight above the pill (Auto draws it, not the pill): the pill keeps what it showed before the strip.</summary>
+    internal bool FightAbove { get => _fightAbove; set { _fightAbove = value; PlaceStrip(); } }
+    bool _fightAbove;
+
+    /// <summary>
+    /// The best drop and the last three at the pill's end while farming (Steven, 2026-11-18), in the room the pill has up to
+    /// the meter's width: the three alone when the timer's chip takes some of it, none when it takes the rest.
+    /// </summary>
+    void PlaceStrip()
+    {
+        var f = _figsNow;
+        PlaceStrip(_strip, StripLook, Farming && _lastFight == null && !_fightAbove,
+            $"{_chip.Visibility}|{_chipText.Text.Length}|{f?.Rate.Length}|{f?.Total.Length}|{f?.Share >= 0}|{f?.Warm}",
+            () => FightWidth - Wants(_pill), rule: true);
+    }
 
     void Draw(Figures f)
     {
@@ -334,6 +422,7 @@ sealed class HudCapsule : HudStackLook
         if (on) _note.Visibility = Visibility.Collapsed; else _figSig = "";
         _meter.Margin = new Thickness(on ? 0 : 10, on ? 0 : 4, 0, 0);
         if (_timersNow is { } t) ShowTimers(t.Items, t.Now);
+        PlaceStrip();
     }
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
@@ -342,11 +431,12 @@ sealed class HudCapsule : HudStackLook
         var tc = TimerChip(items, now);
         _meterTimer.Visibility = KinahHidden && tc != null ? Visibility.Visible : Visibility.Collapsed;
         if (tc is { } mt) { _meterTimer.Text = mt.Text; _meterTimer.Foreground = mt.Tone; }
-        if (tc is not { } c) { _chip.Visibility = Visibility.Collapsed; return; }
+        if (tc is not { } c) { _chip.Visibility = Visibility.Collapsed; PlaceStrip(); return; }
         bool gold = ReferenceEquals(c.Tone, Gold), on = ReferenceEquals(c.Tone, Mint);
         _chipText.Text = c.Text; _chipText.Foreground = c.Tone;
         _chip.Background = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .14 : .06); _chip.BorderBrush = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .45 : .14);
         _chip.Visibility = Visibility.Visible;
+        PlaceStrip();
     }
 
     public override FrameworkElement? FightFrame => _meter.Visibility == Visibility.Visible ? _meter : null;
@@ -363,6 +453,7 @@ sealed class HudCapsule : HudStackLook
     public override void ShowFight(Encounter? e, DateTime now)
     {
         _lastFight = e; _lastNow = now;
+        PlaceStrip();
         var sig = FightSig(e, now);
         if (sig == _fightSig) return;
         _fightSig = sig;
@@ -433,6 +524,10 @@ sealed class HudMeter : HudStackLook
     readonly TextBlock _clock = new() { FontSize = 15, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _tab = new() { CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly TextBlock _tabText = new() { FontSize = 10.5, FontWeight = FontWeights.Bold };
+    /// <summary>The pickup strip in the header while farming, between the place and the timer's tab and clock (Ui/HudPickStrip.cs).</summary>
+    readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, -2, 10, 0), Visibility = Visibility.Collapsed };   // a little up: the count badges clear the header's rule
+    static readonly PickStrip.Look StripLook = new(22, 5, true, B(0xFFFFFF, .16));
+    readonly StackPanel _right;
     readonly StackPanel _rows = new() { Visibility = Visibility.Collapsed };
     readonly Grid _foot = new();
     readonly TextBlock _note = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, 0, 10, 7), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -462,7 +557,7 @@ sealed class HudMeter : HudStackLook
         System.Windows.Documents.Typography.SetNumeralAlignment(_clock, FontNumeralAlignment.Tabular); System.Windows.Documents.Typography.SetNumeralAlignment(_hpPct, FontNumeralAlignment.Tabular);
         hg.Children.Add(title);
         _tab.Child = _tabText;
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), Children = { _tab, _clock } };
+        var right = _right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), Children = { _strip, _tab, _clock } };
         Grid.SetColumn(right, 1); hg.Children.Add(right);
         _head.Children.Add(hg);
         body.Children.Add(_head);
@@ -482,6 +577,20 @@ sealed class HudMeter : HudStackLook
 
     public override void Update(IReadOnlyDictionary<string, string> values)
     {
+        DrawFigures(values);
+        PlaceStrip();
+    }
+
+    /// <summary>
+    /// The best drop and the last three in the header while farming (Steven, 2026-11-18: the header's empty middle), right of
+    /// the place and left of the timer's tab and clock; the three alone, or none, when a long place name or the tab takes the room.
+    /// </summary>
+    void PlaceStrip() => PlaceStrip(_strip, StripLook, _withFoot && !_fight && Farming,
+        $"{_title.Text}|{_clock.Text.Length}|{_tab.Visibility}|{_tabText.Text.Length}",
+        () => W - 20 - Wants(_title) - Wants(_right));
+
+    void DrawFigures(IReadOnlyDictionary<string, string> values)
+    {
         var f = Read(values);
         _figs = f;
         var sig = $"{f.Sig}|{f.Zone}|{f.Clock}|{f.ToBest}|{_fight}";
@@ -499,6 +608,7 @@ sealed class HudMeter : HudStackLook
         if (!_withFoot) return;
         _foot.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         if (on) _note.Visibility = Visibility.Collapsed; else _figSig = "";
+        PlaceStrip();
     }
 
     void DrawFoot(Figures f)
@@ -529,12 +639,13 @@ sealed class HudMeter : HudStackLook
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {
-        if (TimerChip(items, now) is not { } c) { _tab.Visibility = Visibility.Collapsed; PlaceHp(); return; }
+        if (TimerChip(items, now) is not { } c) { _tab.Visibility = Visibility.Collapsed; PlaceHp(); PlaceStrip(); return; }
         bool gold = ReferenceEquals(c.Tone, Gold), on = ReferenceEquals(c.Tone, Mint);
         _tabText.Text = c.Text; _tabText.Foreground = c.Tone;
         _tab.Background = B(on ? MintC : gold ? GoldC : 0xFFFFFF, on || gold ? .16 : .07);
         _tab.Visibility = Visibility.Visible;
         PlaceHp();
+        PlaceStrip();
     }
 
     public override FrameworkElement? FightFrame => _fight ? _ring : null;
@@ -546,6 +657,12 @@ sealed class HudMeter : HudStackLook
     }
 
     public override void ShowFight(Encounter? e, DateTime now)
+    {
+        DrawFight(e, now);
+        PlaceStrip();
+    }
+
+    void DrawFight(Encounter? e, DateTime now)
     {
         _lastFight = e; _lastNow = now;
         var sig = FightSig(e, now);
@@ -635,6 +752,9 @@ sealed class HudFloat : HudStackLook
     readonly StackPanel _line = new() { Orientation = Orientation.Horizontal };
     readonly TextBlock _note = new() { FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 380 };
     readonly DropShadowEffect _halo = new() { Color = Colors.Black, BlurRadius = 7, ShadowDepth = 0, Opacity = 0.95, RenderingBias = RenderingBias.Quality };
+    /// <summary>The pickup strip after the figures, straight over the game like them (Ui/HudPickStrip.cs).</summary>
+    readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0), Visibility = Visibility.Collapsed };
+    static readonly PickStrip.Look StripLook = new(24, 5, true, B(0xFFFFFF, .30));
     string _figSig = "", _fightSig = "";
 
     public HudFloat()
@@ -650,7 +770,24 @@ sealed class HudFloat : HudStackLook
 
     public override void Update(IReadOnlyDictionary<string, string> values)
     {
-        var f = Read(values);
+        DrawLine(Read(values));
+        PlaceStrip();
+    }
+
+    /// <summary>
+    /// The best drop and the last three after the figures while farming (Steven, 2026-11-18), in the room up to the meter's
+    /// width; the three alone, or none, when the figures take it.
+    /// </summary>
+    void PlaceStrip()
+    {
+        var f = _figsNow;
+        PlaceStrip(_strip, StripLook, Farming && _lastFight == null,
+            $"{f?.Rate.Length}|{f?.Total.Length}|{f?.ToBest.Length}|{f?.Share >= 0}|{f?.Warm}",
+            () => FightWidth - 10 - Wants(_line));   // the fight's rows' own width (FightWidth - 10, in the halo's padding)
+    }
+
+    void DrawLine(Figures f)
+    {
         var sig = $"{f.Sig}|{f.ToBest}";
         if (sig == _figSig) return;
         _figSig = sig;
@@ -673,6 +810,7 @@ sealed class HudFloat : HudStackLook
         // the Abyss's kills, deaths and Kinah under the points
         if (f.Stats.Count > 0) figs.Children.Add(StatsLine(f, 11.5));
         _line.Children.Add(figs);
+        _line.Children.Add(_strip);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -684,6 +822,7 @@ sealed class HudFloat : HudStackLook
         if (on) _note.Visibility = Visibility.Collapsed; else _figSig = "";
         // the meter's rows end the overlay: no gap left under them for the line
         _fight.Margin = new Thickness(0, 0, 0, on ? -8 : 0);
+        PlaceStrip();
     }
 
     public override void ShowTimers(IReadOnlyList<TimerBoard.Item> items, DateTime now)
@@ -701,6 +840,7 @@ sealed class HudFloat : HudStackLook
     public override void ShowFight(Encounter? e, DateTime now)
     {
         _lastFight = e; _lastNow = now;
+        PlaceStrip();
         var sig = FightSig(e, now);
         if (sig == _fightSig) return;
         _fightSig = sig;
@@ -775,6 +915,7 @@ sealed class HudAuto : HudStackLook, IHudFightAbove
 
     public FrameworkElement? FightAbove(Encounter? e, DateTime now)
     {
+        _pill.FightAbove = e != null;   // under a fight the pill keeps what it showed before the pickup strip
         _meter.ShowFight(e, now);
         return e == null ? null : _meter.Root;
     }
