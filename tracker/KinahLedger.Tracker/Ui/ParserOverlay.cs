@@ -23,8 +23,7 @@ public sealed class ParserOverlay : Window
 
     /// <summary>The player dropped it somewhere (pixels, the window's top-left).</summary>
     public event Action<int, int, int>? Dropped;   // left, top, and the meter's bottom edge (what it keeps)
-    /// <summary>The overlay's own menu (a right-click): a mode picked, hide it, clicks through.</summary>
-    public event Action<ParserMode>? ModePicked;
+    /// <summary>The overlay's own menu (a right-click): hide it, clicks through.</summary>
     public event Action? HideAsked;
     /// <summary>A click (no drag) on the overlay: the window switches the meter compact or expanded.</summary>
     public event Action? Clicked;
@@ -257,21 +256,15 @@ public sealed class ParserOverlay : Window
     string _hotkeyText = "";
 
     /// <summary>For the options test: the drag hint's words and the menu's hide line.</summary>
-    internal (string Hint, string Hide) HintForTest { get { ShowHint(); return (_hint.Text, (string)((System.Windows.Controls.MenuItem)BuildMenu().Items[5]).Header); } }
+    internal (string Hint, string Hide) HintForTest { get { ShowHint(); return (_hint.Text, (string)((System.Windows.Controls.MenuItem)BuildMenu().Items[0]).Header); } }
 
-    /// <summary>The overlay's menu, in its own dark look: the three modes (the one on ticked, what each counts on hover), then hide and clicks through.</summary>
+    /// <summary>
+    /// The overlay's menu, in its own dark look: hide and clicks through. The Parser keeps boss pulls only (Steven, 2026-11-17:
+    /// "get rid of full run and every fight"), so there is no mode to pick here any more.
+    /// </summary>
     internal ContextMenu BuildMenu()
     {
         var menu = new ContextMenu { Background = HudKit.B(HudKit.Panel2C), BorderBrush = HudKit.FrameLine, Foreground = HudKit.Ink, FontFamily = HudKit.Text, FontSize = 12.5, Padding = new Thickness(2, 4, 2, 4) };
-        menu.Items.Add(new MenuItem { Header = L.T("What the Parser keeps"), IsEnabled = false, Foreground = HudKit.Faint, FontSize = 11.5 });
-        foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
-        {
-            var item = new MenuItem { Header = L.T(BossParser.Name(md)), IsCheckable = true, IsChecked = md == Mode, ToolTip = L.T(BossParser.Counts(md)), Foreground = HudKit.Ink };
-            var pick = md;
-            item.Click += (_, _) => ModePicked?.Invoke(pick);
-            menu.Items.Add(item);
-        }
-        menu.Items.Add(new Separator { Background = HudKit.FrameLine });
         var hide = new MenuItem { Header = HotkeyText.Length > 0 ? L.F("Hide the overlay ({0})", HotkeyText) : L.T("Hide the overlay"), Foreground = HudKit.Ink };
         hide.Click += (_, _) => HideAsked?.Invoke();
         menu.Items.Add(hide);

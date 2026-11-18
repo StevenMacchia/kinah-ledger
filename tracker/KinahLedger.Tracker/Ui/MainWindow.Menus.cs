@@ -41,6 +41,19 @@ public partial class MainWindow
         _card.IsOpen = true;
     }
 
+    /// <summary>
+    /// The same menu at the pointer: a right-click on the Parser page's hero or a table (Copy picture, Copy as text). The
+    /// window's own card, not a Windows ContextMenu; every line of it is also in Share's ▾, so nothing hides behind the click.
+    /// </summary>
+    void ShowMenuAtPointer(FrameworkElement at, IList<MenuEntry> entries)
+    {
+        if (_card != null) _card.IsOpen = false;
+        var card = BuildMenu(entries);
+        _card = new InCard { Child = card, StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.MousePoint, PlacementTarget = at, HorizontalOffset = -8, VerticalOffset = -6 };
+        _card.Opened += (_, _) => card.Focus();
+        _card.IsOpen = true;
+    }
+
     /// <summary>The menu's card: a gold rule along the top, then each entry; arrow keys move between the rows, Esc closes.</summary>
     internal Border BuildMenu(IList<MenuEntry> entries)
     {

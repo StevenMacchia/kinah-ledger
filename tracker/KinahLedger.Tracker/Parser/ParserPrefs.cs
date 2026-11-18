@@ -31,7 +31,10 @@ public sealed class ParserPrefs
     /// </summary>
     [System.Text.Json.Serialization.JsonPropertyName("ShareNamesHidden")]
     public bool ShareHideNames { get; set; }
-    /// <summary>What the Parser keeps: "boss" (Bosses only, the default), "run" (Full run), "fight" (Every fight).</summary>
+    /// <summary>
+    /// What the Parser keeps: "boss" (Bosses only), the only mode since Steven, 2026-11-17 ("get rid of full run and every
+    /// fight"). A file from before with "run" (Full run) or "fight" (Every fight) moves to "boss" when read (<see cref="Settle"/>).
+    /// </summary>
     public string Mode { get; set; } = "boss";
     /// <summary>
     /// The meter over the game (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss
@@ -40,7 +43,7 @@ public sealed class ParserPrefs
     /// fighting (Parser/BossParser.cs, AlwaysLive). What is kept stays the mode's either way.
     /// </summary>
     public bool AlwaysOn { get; set; }
-    /// <summary>Which records the list shows ("boss", "run", "fight"); the mode's own when empty.</summary>
+    /// <summary>Which records the list shows: boss pulls only now; an old "run" or "fight" is cleared when read.</summary>
     public string ListMode { get; set; } = "";
     /// <summary>
     /// Minimal by default (Steven, 2026-11-14): the page and the overlay show the boss, the clock and each member's DPS;
@@ -160,6 +163,10 @@ public sealed class ParserPrefs
     internal static bool Settle(ParserPrefs p)
     {
         bool moved = false;
+        // Full run and Every fight are gone (Steven, 2026-11-17): a file that kept either keeps boss pulls from now on. Not a
+        // move that writes the file (reading never writes): the next save of a Parser setting writes "boss".
+        if (p.Mode != "boss") p.Mode = "boss";
+        if (p.ListMode.Length > 0 && p.ListMode != "boss") { p.ListMode = ""; p.KindFilter = ""; p.BossFilter = ""; }
         if (!p.DetailsSettled) { p.Details = true; p.DetailsSettled = true; moved = true; }
         // the old default width, never picked: Buddy's width (a width the player set stays)
         if (!p.WidthPicked && Math.Abs(p.Width - OldDefaultWidth) < 0.5) p.Width = DefaultWidth;

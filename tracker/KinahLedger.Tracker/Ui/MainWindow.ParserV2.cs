@@ -68,19 +68,10 @@ public partial class MainWindow
         var tabs = ParserCommand.Tabs(v);
         if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Group";
         var page = new StackPanel();
-        if (_parserFromRuns)
-        {
-            // opened from a run on the Runs page: back goes there
-            var back = FoldLink(L.T("‹  Back to the run"), BackToRuns);
-            back.Margin = new Thickness(2, 0, 0, 8);
-            page.Children.Add(back);
-        }
-        else if (!live)
-        {
-            var back = FoldLink(L.F("‹  All {0}", Noun(e.ModeKind, 2)), () => OpenFight(null));
-            back.Margin = new Thickness(2, 0, 0, 8);
-            page.Children.Add(back);
-        }
+        // the way back, a real button top left over the hero (Steven, 2026-11-17: "make a back button WAY more obvious");
+        // Backspace, Alt+← and the mouse's back button do the same (Ui/MainWindow.ParserShare.cs)
+        if (_parserFromRuns) page.Children.Add(ParserBackButton(L.T("Back to the run"), BackToRuns));   // opened from a run on the Runs page: back goes there
+        else if (!live) page.Children.Add(ParserBackButton(L.T("All boss pulls"), () => OpenFight(null)));
         var extras = new List<FrameworkElement>();
         if (e.ModeKind == ParserMode.Run)
         {
@@ -112,8 +103,10 @@ public partial class MainWindow
                 extras.Add(why);
             }
         }
-        // Share on the hero's line, before the clock: a picture of the meter (Ui/MeterShare.cs)
-        page.Children.Add(ParserCommand.Hero(v, ctx, live, extras, Shareable(e) ? MeterShareButton(e) : null));
+        // Share on the hero's line, before the clock: a picture of the view shown, its ▾ the rest (Ui/MainWindow.ParserShare.cs)
+        var hero = ParserCommand.Hero(v, ctx, live, extras, Shareable(e) ? ParserShareButton(e, v) : null);
+        if (Shareable(e)) ShareOnRightClick(hero, e, v, ParserShare.Hero);
+        page.Children.Add(hero);
         FrameworkElement body = ctx.Tab switch
         {
             "Compare" => ParserCommand.Compare(v),
@@ -121,6 +114,8 @@ public partial class MainWindow
             "Taken" => ParserCommand.Taken(v),
             _ => (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) ? ParserCommand.Group(v, ctx, live, detail: !live) : new Border(),
         };
+        // a right-click on the view: its picture, and a table's text (tab-separated)
+        if (Shareable(e) && body is not Border { Child: null }) ShareOnRightClick(body, e, v, ParserShare.ViewOfTab(ctx.Tab));
         page.Children.Add(Margin(body, 0, 12, 0, 0));
         // a kept fight: your kills and the kills near you, under the group
         if (!live && ctx.Tab == "Group")
