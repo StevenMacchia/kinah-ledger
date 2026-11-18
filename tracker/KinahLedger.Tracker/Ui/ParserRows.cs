@@ -306,11 +306,16 @@ public sealed partial class ParserRows : Grid
                 // the fight seen ending here: the plate slides in with a glint (drawn first already over, it just sits there)
                 bool slide = _sawLive && _platesSlidFor != e.Id;
                 if (plates.Contains('d')) { var p = ParserFoot.Plate(heals: false); row.Plates.Children.Add(p); if (slide) SlideIn(p); }
-                // the top healer's plate is their heal chip's tab (TOP HEALS beside the figure): one chip, the figure never lost to a plate
-                SetTopHeals(row, plates.Contains('h'));
-                if (plates.Contains('h') && slide) SlideIn(row.HealPill);
+                // the top healer's plate is their heal chip's tab (TOP HEALS beside the figure): one chip, the figure never lost to a plate;
+                // the panel's own looks, whose heal chip sits under the name, put a TOP HEALS plate by the name as TOP DPS
+                if (_skin == Skin.Classic)
+                {
+                    SetTopHeals(row, plates.Contains('h'));
+                    if (plates.Contains('h') && slide) SlideIn(row.HealPill);
+                }
+                else if (plates.Contains('h')) { var p = ParserFoot.Plate(heals: true); row.Plates.Children.Add(p); if (slide) SlideIn(p); }
                 if (plates.Length > 0) platesSlid = true;
-                row.Plates.Visibility = plates.Contains('d') ? Visibility.Visible : Visibility.Collapsed;
+                row.Plates.Visibility = plates.Contains('d') || (_skin != Skin.Classic && plates.Contains('h')) ? Visibility.Visible : Visibility.Collapsed;
                 FitName(row);
             }
             // the heal line: for anyone who healed, their own heals from skills too; potions never (they are in no heal figure)
@@ -935,7 +940,8 @@ public sealed partial class ParserRows : Grid
         {
             var word = p.Child as TextBlock ?? (p.Child as Panel)?.Children.OfType<TextBlock>().FirstOrDefault();
             if (word == null) continue;
-            string text = wide ? L.T("TOP DPS") : "\u2605";
+            bool heals = p.Tag as string == "top-heals";
+            string text = heals ? (wide ? L.T("TOP HEALS") : "✚") : wide ? L.T("TOP DPS") : "\u2605";
             if (word.Text == text) continue;
             word.Text = text;
             word.FontSize = wide ? 8 : 9.5;
