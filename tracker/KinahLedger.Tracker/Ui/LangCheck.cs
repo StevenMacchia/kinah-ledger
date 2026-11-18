@@ -245,6 +245,8 @@ public static class LangCheck
                         Add(f[i]);
                         // an Abyss area as the timers write it: its part after " - " ("Siel's Heart"), Reshanta without "Chaotic"
                         foreach (var piece in f[i].Split(" - ")) { Add(piece); if (piece.StartsWith("Chaotic ")) Add(piece["Chaotic ".Length..]); }
+                        // a boss as the Buddy's run splits shorten it ("Watchdog Kwapo" → "Kwapo")
+                        if (file == "bosses.txt" && i == 2) Add(KinahLedger.Session.RunSplits.Short(f[i]));
                     }
             }
         }
@@ -285,7 +287,7 @@ public static class LangCheck
     {
         "Shugo",
         // the game's modes and instance kinds, written as the game writes them
-        "Conquest", "Expedition", "Transcendence", "Sanctuary", "Conquest · Expedition",
+        "Conquest", "Expedition", "Transcendence", "Sanctuary", "Conquest · Expedition", "Easy",
         // the demo's characters, fights and buffs (sample data in renders and tests)
         "Aerinwyn", "Kaelith", "Thornecrest", "Thornwick", "Lyrandel", "Lysandra", "Brannoc", "Ithrandel", "Selunaire", "Vexmora",
         "Ground Slam", "Tail Sweep", "Horn Charge", "Searing Breath", "Void Fragment", "Invasion",

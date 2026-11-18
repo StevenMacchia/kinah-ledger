@@ -1781,6 +1781,7 @@ options: --process aion[,other]");
         ok &= Session.CharacterTests.Run(items, s);
         ok &= Upload.BossBestTests.Run();
         ok &= Session.CompareTests.Run(items, s);
+        ok &= Session.RunSplitsTests.Run();
         ok &= Session.WrappedTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);
