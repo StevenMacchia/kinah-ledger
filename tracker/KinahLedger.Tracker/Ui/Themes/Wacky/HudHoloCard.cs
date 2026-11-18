@@ -159,7 +159,7 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         else if (!waiting && f.Share >= 0 && !f.Warm) { _ring = Ring(f.Share, f.Beat); _line.Children.Add(_ring); }
         if (waiting)
         {
-            var w = Dropped(L.T(Waiting(f.Abyss)), 14.5, WhiteB, Deep, FontWeights.Bold, false);
+            var w = Dropped(Waiting(f.Abyss), 14.5, WhiteB, Deep, FontWeights.Bold, false);
             w.Margin = new Thickness(4, 4, 4, 4);
             _line.Children.Add(w); _hour = w;
         }
