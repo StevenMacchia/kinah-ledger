@@ -22,6 +22,32 @@ public static partial class WpfApp
         "No boss pull yet. The meter shows here when one starts.", "Nobody is asking to join right now.", "Couldn't copy the picture", "Always on top", "Keep above other windows",
     };
 
+    /// <summary>
+    /// A main window made for a check of its own sets what every window shares as it opens: the layer the cards and hover tips
+    /// are drawn on (InCard.Layer, HoverTip.Host), the meter's record and name lookups (ParserRows), its pick of the meter's
+    /// width and rows, and the DPS basis (Encounter). Taken before such a check and put back after it, so the window the rest of
+    /// the options-test drives keeps its own (1.0.17's full run: cards drawn 0×0 on a closed window, a best from another's demo).
+    /// </summary>
+    sealed class MainStatics : IDisposable
+    {
+        readonly System.Windows.Controls.Canvas? _layer = InCard.Layer;
+        readonly Window? _tipHost = HoverTip.Host;
+        readonly Func<Encounter, PullRef?>? _bestOf = ParserRows.BestOf;
+        readonly Func<string>? _yourName = ParserRows.YourName;
+        readonly bool _expanded = ParserRows.ExpandedPref, _healBars = ParserRows.HealBarsPref, _active = Encounter.ActiveBasis, _bossOnly = Encounter.BossOnly;
+        readonly double _fightWidth = HudStackLook.FightWidth;
+        readonly string? _crit = Encounter.CritKey, _back = Encounter.BackKey;
+
+        public void Dispose()
+        {
+            InCard.Layer = _layer; HoverTip.Host = _tipHost;
+            ParserRows.BestOf = _bestOf; ParserRows.YourName = _yourName;
+            ParserRows.ExpandedPref = _expanded; ParserRows.HealBarsPref = _healBars; Encounter.ActiveBasis = _active; Encounter.BossOnly = _bossOnly;
+            HudStackLook.FightWidth = _fightWidth;
+            Encounter.CritKey = _crit; Encounter.BackKey = _back;
+        }
+    }
+
     /// <summary>A boss pull under way in an Expedition (two members, the boss at 40%), and how to end it with a kill.</summary>
     static (BossParser Parser, Action Kill) PopOutFight()
     {
@@ -56,8 +82,10 @@ public static partial class WpfApp
     {
         static void Click(ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         PopOutWindow.OffscreenForTest = true;
+        bool invisible0 = ApplicantsOverlay.InvisibleForTest;
         ApplicantsOverlay.InvisibleForTest = true;
         bool still0 = Motion.Still; Motion.Still = true;
+        using var statics = new MainStatics();   // the shared layer, hover host and meter lookups put back after (this window sets its own)
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show(); DoEvents();
         var prefs = PopOutPrefs.Defaults();   // never saved (no path)
@@ -235,7 +263,7 @@ public static partial class WpfApp
             MainWindow.ShareSinkForTest = null;
             w.CloseMeterPopOut(); w.CloseApplicantsPopOut();
             w.ApplicantsBoardForTest = null; w.ApplicantPrefsForTest = applicantPrefs0;
-            Motion.Still = still0;
+            Motion.Still = still0; ApplicantsOverlay.InvisibleForTest = invisible0;
             w.Close();
             DoEvents();
         }

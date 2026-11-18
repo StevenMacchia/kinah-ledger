@@ -140,7 +140,7 @@ public partial class MainWindow
     FrameworkElement MeterPopOutButton()
     {
         var b = new Button { Content = L.T("Pop out"), Height = 26, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = L.T("The meter in its own window, for a second screen. Works with the game in fullscreen.") };
+            ToolTip = Tip(L.T("The meter in its own window, for a second screen. Works with the game in fullscreen.")) };   // only with Explanations on hover, as the page's other tips
         AutomationProperties.SetName(b, "Pop out the DPS meter");
         b.Click += (_, _) => OpenMeterPopOut();
         _meterPopOutBtn = b;
@@ -199,6 +199,9 @@ public partial class MainWindow
         int j = list.FindIndex(e => e.Text == L.F("{0} overlay", L.T("Applicants")));
         list.Insert(j >= 0 ? j + 1 : list.Count, apps);
     }
+
+    /// <summary>A pop-out's switch in the Overlays menu (the self-test counts the overlays' own switches apart from them).</summary>
+    internal static bool IsPopOutEntry(MenuEntry e) => e.Text == L.T("Pop out the DPS meter") || e.Text == L.T("Pop out Applicants");
 
     // ---- self-tests and renders ----
 

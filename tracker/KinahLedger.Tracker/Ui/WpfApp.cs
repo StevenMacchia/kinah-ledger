@@ -376,7 +376,7 @@ public static partial class WpfApp
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
         ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
-        NpcapChecks(settings, Check);   // what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
+        using (new MainStatics()) NpcapChecks(settings, Check);   // (its own main windows: the shared layer and lookups put back after, Ui/WpfApp.PopOuts.cs) what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
         PopOutChecks(settings, Check);   // the pop-out windows, on a main window of their own (Ui/WpfApp.PopOuts.cs; KL_OPTIONS_ONLY=popouts alone)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
@@ -1074,11 +1074,11 @@ public static partial class WpfApp
             // flips its overlay and the dot follows
             w.SetParserSeparateForTest(true);
             string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
-            bool defaultTwo = defaultMenu == "Kinah,Applicants,Parser" && w.OverlayEntries().Count == 3;   // Applicants since 1.0.14
+            bool defaultTwo = defaultMenu == "Kinah,Applicants,Parser" && w.OverlayEntries().Count(e => !MainWindow.IsPopOutEntry(e)) == 3;   // Applicants since 1.0.14; the pop-outs' switches apart (1.0.17)
             Check(defaultTwo && !w.TimersSeparate, $"the header's Overlays menu by default: Kinah and the Parser ({defaultMenu}), the timers being a line on top of the Kinah overlay");
             w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
-            var entries = w.OverlayEntries();
+            var entries = w.OverlayEntries().Where(e => !MainWindow.IsPopOutEntry(e)).ToList();   // the overlays' own switches (the pop-outs' are checked in Ui/WpfApp.PopOuts.cs)
             Check(ovs.Count == 4 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Applicants", "Kinah", "Parser", "Timers" }) && entries.Count == 4 && entries.All(e => e.On != null && e.Sub.Length > 0),
                 $"the header's Overlays menu: a switch each for Kinah first, the Parser and Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
             bool kinahWas = ovs[0].On;
