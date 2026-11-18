@@ -332,10 +332,10 @@ public static partial class WpfApp
                 }
                 var texts = Texts(hw).ToList();
                 bool own = !hw.TimersShown && !hw.ParserShown;
-                bool shows = texts.Any(t => t.Contains(fight.Title)) && texts.Any(t => t.Contains("Invasion")) && texts.Any(t => t.Contains("/h"));
+                bool shows = texts.Any(t => t.Contains(fight.Title, StringComparison.OrdinalIgnoreCase)) && texts.Any(t => t.Contains("Invasion")) && texts.Any(t => t.Contains("/h"));
                 said.Add($"{key}: {(own && shows ? "ok" : $"own {own}, shows {shows}")}");
                 hw.ShowParser(null, now, fight.ModeKind, details: false); DoEvents();
-                bool folded = !Texts(hw).Any(t => t.Contains(fight.Title));
+                bool folded = !Texts(hw).Any(t => t.Contains(fight.Title, StringComparison.OrdinalIgnoreCase));   // (Arena writes it in capitals)
                 if (!folded) said[^1] += ", the fight stays after it ends";
                 hw.Close();
             }

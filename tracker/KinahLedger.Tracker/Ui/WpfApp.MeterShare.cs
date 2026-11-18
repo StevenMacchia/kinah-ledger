@@ -245,7 +245,7 @@ public static partial class WpfApp
         finally { po.Close(); }
     }
 
-    /// <summary>options-test: Settings › In game › Parser has Hide other names (on) and the Share picture shortcut (Off, recorded as the others are).</summary>
+    /// <summary>options-test: Settings › In game › Parser has Hide other names (off by default since 4c3c730) and the Share picture shortcut (Off, recorded as the others are).</summary>
     static void MeterShareOptionChecks(OptionsWindow o, Action<bool, string> check)
     {
         {
@@ -256,7 +256,7 @@ public static partial class WpfApp
                 var refuse = o.RecordShareKeyForTest(ModifierKeys.Control, Key.C);
                 var take = o.RecordShareKeyForTest(ModifierKeys.Control | ModifierKeys.Shift, Key.F9);
                 string key1 = o.ShareKeyForTest;
-                check(chk.IsChecked == true && key0 == ParserPrefs.DefaultHotkey && refuse != null && take == null && key1 == "Ctrl+Shift+F9" && o.ParserDirty,
+                check(chk.IsChecked == false && key0 == ParserPrefs.DefaultHotkey && refuse != null && take == null && key1 == "Ctrl+Shift+F9" && o.ParserDirty,
                     $"meter share: Settings › In game › Parser has Hide other names (on: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
             }
             finally { o.ReloadParserForTest(); }
