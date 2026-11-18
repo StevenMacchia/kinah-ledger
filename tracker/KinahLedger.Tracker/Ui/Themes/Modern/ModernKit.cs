@@ -76,6 +76,13 @@ abstract class ModernLook : HudThemeLook
     protected static double StripRoom(double cap, double fixedW, double wordsW, double oldWordsW, double air) =>
         Math.Max(cap - fixedW, oldWordsW) - wordsW - air;
 
+    /// <summary>The dungeon run the Buddy shows in place of the hour (Ui/Themes/Modern/ModernRun.cs), or null: out of a run, Kinah hidden or a rare drop held.</summary>
+    protected RunBuddy.State? RunNow() => !KinahHidden && Rare(Values) == null ? RunBuddy.Of(Values) : null;
+
+    /// <summary>The run line's pickup strips, widest first (the best drop and the last three, then the last three); none with the icons off or no pickup.</summary>
+    protected List<FrameworkElement> RunStrips(PickStrip.Look look) =>
+        PickStrip.Shown && Picks(Values).Any() ? StripFall(look).Select(l => PickStrip.Of(Values, l)).Where(x => x != null).Select(x => x!).ToList() : new List<FrameworkElement>();
+
     /// <summary>A text in Inter (or <paramref name="face"/>), tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontWeight weight, FontFamily? face = null) => Mod.Text(s, size, fg, weight, face);
 }
