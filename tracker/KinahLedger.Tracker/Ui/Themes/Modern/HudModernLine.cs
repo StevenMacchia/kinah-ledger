@@ -14,8 +14,8 @@ namespace KinahLedger.Ui;
 /// Line (the Modern theme; Steven, 2026-11-17, of the mock-up: "fantastic"): barely there. A faint dark wash inside a
 /// hairline white frame with 12 px corners, white Inter with a soft dark shade so every word reads over any scene, and
 /// under each meter row a slim class-coloured bar (4 px, rounded, a soft glow) on a faint track; your row's name is
-/// underlined. Marks are outline chips; the Buddy is a hairline pill: the ring of your best, the hour, the session and
-/// the latest pickup, the next timer as an outline chip at its end.
+/// underlined. Marks are outline chips; the Buddy is a hairline pill: the ring of your best, the hour with the best drop and
+/// the last pickups as tiles beside it, the session, the next timer as an outline chip at its end.
 /// The moments stay as quiet as the look: a pickup brightens the pill's hairline and its words rise in; a rare drop's
 /// pill traces its outline in its grade's colour; your best passed rings out from the ring in mint; an entry opening
 /// pulses the timer chip's outline; a fight's frame draws itself round as the rows come up; a kill stamps its chip and a
@@ -49,6 +49,7 @@ sealed partial class HudModernLine : ModernLook
         BuildPill();
         BuildFight();
         _body.Children.Add(_fightFill);
+        _body.Children.Add(_timerUpHost);
         _body.Children.Add(_pillHost);
         _body.Children.Add(_under);
         _root.Children.Add(_body);
@@ -81,7 +82,7 @@ sealed partial class HudModernLine : ModernLook
     protected override string LineSig(Figures f)
     {
         var p = Picks(Values).FirstOrDefault();
-        return base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (p == null ? "" : p.Id + p.Worth + p.Count) + "|" + Values.GetValueOrDefault("paused", "");
+        return base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (p == null ? "" : p.Id + p.Worth + p.Count) + "|" + Values.GetValueOrDefault("paused", "") + "|" + PickStrip.Sig(Values, Strip);
     }
 
     static Run R(string s, double size, Brush fg, FontWeight? w = null) => new(s) { FontSize = size, Foreground = fg, FontWeight = w ?? FontWeights.SemiBold };
@@ -111,6 +112,14 @@ sealed partial class HudModernLine : ModernLook
     readonly StackPanel _subLine = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
     readonly TranslateTransform _pickShift = new();
     readonly Grid _timerSlot = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 2, 0) };
+    /// <summary>The pickup strip beside the hour (farming), and the timer chip's place over the pill when the strip takes its room.</summary>
+    readonly Border _stripSlot = new() { VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+    readonly Grid _timerUpHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 5), Visibility = Visibility.Collapsed };
+    bool _timerUp;
+    /// <summary>The timer's room the strip was fitted to (-1: no strip time); a chip that changes it draws the line again.</summary>
+    double _stripTimerW = -1;
+    /// <summary>The pickup strip in Line: 24 px tiles beside the hour, the hairline rule, a gold star.</summary>
+    static readonly PickStrip.Look Strip = new(24, 4, true, RuleB, Frozen(GoldC0));
     readonly StackPanel _under = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TextBlock _note = Tt("", 11.5, Warn, FontWeights.SemiBold);
     Border? _rarePill;
@@ -128,7 +137,7 @@ sealed partial class HudModernLine : ModernLook
         _pick.RenderTransform = _pickShift;
         _subLine.Children.Add(_sub); _subLine.Children.Add(_pick);
         _kv.Children.Add(_rate); _kv.Children.Add(_subLine);
-        _pillIn.Children.Add(_ringHost); _pillIn.Children.Add(_kv); _pillIn.Children.Add(_timerSlot);
+        _pillIn.Children.Add(_ringHost); _pillIn.Children.Add(_kv); _pillIn.Children.Add(_stripSlot); _pillIn.Children.Add(_timerSlot);
         _pill.Child = _pillIn;
         _pill.SizeChanged += (_, _) => _pill.CornerRadius = new CornerRadius(_pill.ActualHeight / 2);
         _pillFx = new TacSketch(DrawPillFx);
@@ -226,13 +235,39 @@ sealed partial class HudModernLine : ModernLook
             _pick.Inlines.Add(R(p.Name, 11.5, SoftB));
             if (worth.Length > 0 && !p.Name.Contains(worth.TrimStart('+'), StringComparison.Ordinal)) _pick.Inlines.Add(R(" " + worth, 11.5, p.Kinah ? Frozen(GoldC0) : MintB, FontWeights.Bold));
         }
+        _pick.MaxWidth = 200; _pick.TextTrimming = TextTrimming.CharacterEllipsis;
+
+        // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the latest
+        // pickup's words then left out; with the timer chip at the pill's end and no room left beside it, the chip goes over the pill
+        _stripSlot.Child = null; _timerUp = false; _stripTimerW = -1;
+        if (StripTime(f))
+        {
+            bool pickInWords = !(f.Beat && f.ToBest.Length > 0);
+            double timerW = TimerChipW();
+            double baseW = 2 + _pill.Padding.Left + _pill.Padding.Right + (_ringHost.Visibility == Visibility.Visible ? Mod.W(_ringHost) : 0) + 6;
+            double rateW = Mod.W(_rate), subW = _sub.Inlines.Count > 0 ? Mod.W(_sub) : 0, pickW = _pick.Inlines.Count > 0 ? Mod.W(_pick) : 0;
+            double wordsW = Math.Max(rateW, subW + (pickInWords ? 0 : pickW)), oldW = Math.Max(rateW, subW + pickW);
+            FrameworkElement? strip = null;
+            foreach (var look in StripFall(Strip))
+            {
+                if ((strip = StripIn(StripRoom(FightWidth - 14, baseW + timerW, wordsW, oldW, 16), look)) != null) break;
+                if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 14, baseW, wordsW, oldW + timerW, 16), look)) != null) { _timerUp = true; break; }
+            }
+            if (strip != null)
+            {
+                if (pickInWords) _pick.Inlines.Clear();
+                strip.Margin = new Thickness(10, 0, timerW > 0 && !_timerUp ? 0 : 6, 0);
+                _stripSlot.Child = strip;
+            }
+            _stripTimerW = timerW;
+        }
+        _stripSlot.Visibility = _stripSlot.Child != null ? Visibility.Visible : Visibility.Collapsed;
         _sub.Visibility = _sub.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _pick.Visibility = _pick.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _subLine.Visibility = _sub.Visibility == Visibility.Visible || _pick.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
-        _pick.MaxWidth = 200; _pick.TextTrimming = TextTrimming.CharacterEllipsis;
 
         // paused (the chat can't be read): the pill stays solid but quiet, the reason in orange under it
-        _kv.Opacity = _ringHost.Opacity = _paused ? .5 : 1;
+        _kv.Opacity = _ringHost.Opacity = _stripSlot.Opacity = _paused ? .5 : 1;
         DrawTimerChip();
         DrawUnder(f);
     }
@@ -304,7 +339,9 @@ sealed partial class HudModernLine : ModernLook
     protected override void DrawTimers(IReadOnlyList<TimerBoard.Item> due, DateTime now)
     {
         _timer = due.FirstOrDefault() is { } i ? TimerWords(i, now) : null;
-        DrawTimerChip();
+        // the line's pickup strip was fitted beside the timer chip: a chip that comes, goes or changes its width fits it again
+        if (_stripTimerW >= 0 && Figs is { } f && Math.Abs(TimerChipW() - _stripTimerW) > .5) DrawLine(f);
+        else DrawTimerChip();
         if (_lastFight != null && KinahHidden) DrawFight(_lastFight, _lastNow);
     }
 
@@ -313,14 +350,19 @@ sealed partial class HudModernLine : ModernLook
 
     void DrawTimerChip()
     {
-        _timerSlot.Children.Clear();
+        _timerSlot.Children.Clear(); _timerUpHost.Children.Clear();
         _chip = null; _chipFx = null;
-        if (KinahHidden || _timer is not { } t) { _timerSlot.Visibility = Visibility.Collapsed; return; }
+        if (KinahHidden || _timer is not { } t) { _timerSlot.Visibility = _timerUpHost.Visibility = Visibility.Collapsed; return; }
         var (chip, fx) = TimerChip(t);
         _chip = chip; _chipFx = fx;
-        _timerSlot.Children.Add(chip); _timerSlot.Children.Add(fx);
-        _timerSlot.Visibility = Visibility.Visible;
+        var host = _timerUp ? _timerUpHost : _timerSlot;
+        host.Children.Add(chip); host.Children.Add(fx);
+        _timerSlot.Visibility = _timerUp ? Visibility.Collapsed : Visibility.Visible;
+        _timerUpHost.Visibility = _timerUp ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>The timer chip's room at the pill's end (its slot's margins counted), 0 with none.</summary>
+    double TimerChipW() => !KinahHidden && _timer is { } t ? 10 + Mod.W(TimerChip(t).Chip) : 0;
 
     /// <summary>The next timer as an outline chip: a dot in its tone (mint while the entry is open), its name, its clock bold.</summary>
     (Border Chip, TacSketch Fx) TimerChip((string Text, TimerBadge.Tone Tone) t, double size = 11.5)

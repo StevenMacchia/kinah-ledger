@@ -10,8 +10,8 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// Mono (the Modern theme; Steven, 2026-11-17, picked from the HTML mock-ups): Swiss minimal. A near-black panel with a
 /// hairline edge, off-white Inter with tabular figures, one orange accent (you, the boss's HP, the ring); flat bars on an exact
-/// 4 px grid, hairline rules, 2 px corners, nothing extra. The Buddy is one panel: the ring of your best, the hour big, the
-/// session and the latest pickup under it, the next timer in an outlined box at its right. A fight is the same panel: the
+/// 4 px grid, hairline rules, 2 px corners, nothing extra. The Buddy is one panel: the ring of your best, the hour big with the best drop
+/// and the last pickups as tiles beside it, the session under it, the next timer in an outlined box at its right. A fight is the same panel: the
 /// boss and its clock, a 4 px HP bar cut at its thirds, the rows each over a flat 4 px bar, the foot after a hairline.
 /// The moments stay flat: a pickup runs an accent line along the panel's foot; a rare drop draws a rule in its grade's colour;
 /// your best passed fills the ring; an entry opening inverts the timer's box once; a fight wipes in from the top and its end
@@ -25,6 +25,8 @@ sealed partial class HudModernMono : ModernLook
     static readonly SolidColorBrush Paper = Frozen(PaperC), Grey = Frozen(GreyC), Accent = Frozen(AccentC), Green = Frozen(GreenC), Red = Frozen(RedC),
         Edge = Frozen(EdgeC), RuleB = Frozen(RuleC), TrackB = Frozen(TrackC), Dark = Frozen(BgC), Soft = Frozen(Mod.A(PaperC, .8));
     const double Radius = 4, Corner2 = 2;
+    /// <summary>The pickup strip in Mono: 26 px tiles beside the hour, a faint off-white rule, the orange accent's star.</summary>
+    static readonly PickStrip.Look Strip = new(26, 4, true, Frozen(Mod.A(PaperC, .22)), Accent);
 
     // every part inside the window's edge: the moments draw inside the panels (the spill check stays empty)
     readonly Grid _root = new() { Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left };
@@ -103,7 +105,7 @@ sealed partial class HudModernMono : ModernLook
     /// <summary>A panel: near-black, a hairline edge, 4 px corners.</summary>
     Border Panel(UIElement child) => new() { Child = child, Background = Frozen(Mod.A(BgC, .97)), BorderBrush = Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius) };
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dim;
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dim + "|" + PickStrip.Sig(Values, Strip);
 
     /// <summary>The reader is paused or the window dims (the "show" value): the Buddy's figures go quiet, the note stays bright.</summary>
     bool Dim => Values.TryGetValue("show", out var s) && s == "dim" || Values.TryGetValue("paused", out var p) && p.Length > 0;
@@ -113,11 +115,9 @@ sealed partial class HudModernMono : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _rareRow = null; _rareRule = null;
+        _ringArt = null; _rareRow = null; _rareRule = null; _timerUp = false;
         var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (int i = 0; i < 4; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // ring, hour, strip, timers
         bool dim = Dim;
         var ink = dim ? Grey : Paper;
         if (f.Abyss && f.Counted && f.Icon.Length > 0)
@@ -157,29 +157,34 @@ sealed partial class HudModernMono : ModernLook
             top.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 12, Grey, FontWeights.Medium); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
             kv.Children.Add(top);
-            // the session, then the latest pickup and its worth in green
-            var sub = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = dim ? Grey : Soft, Margin = new Thickness(0, 2, 0, 0) };
-            System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
-            void Sep() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Grey }); }
-            if (f.Total.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run($"{f.Total} {f.TotalWord}"));
-            if (f.Abyss)
-                foreach (var (fig, word, tone) in f.Stats)
-                {
-                    Sep();
-                    sub.Inlines.Add(new System.Windows.Documents.Run(fig) { Foreground = ReferenceEquals(tone, Rec) ? Red : ink, FontWeight = FontWeights.SemiBold });
-                    sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
-                }
-            else if (!KinahHidden && Picks(Values).FirstOrDefault() is { } p)
+            // the session, then the latest pickup and its worth in green. Farming, the pickups as the strip beside the hour
+            // where it fits (the best drop and the last three), the session alone under it; with the timers at the panel's
+            // right and no room left beside them, the timers go up to a small panel of their own over the Buddy
+            var sub = Sub(f, true, dim, ink);
+            if (StripTime(f))
             {
-                Sep();
-                sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 18 ? p.Name[..17].TrimEnd() + "…" : p.Name));
-                var worth = p.Worth.Length > 0 ? p.Worth : p.Count;
-                if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + (p.Worth.Length > 0 && !worth.StartsWith('+') ? "+" : "") + worth) { Foreground = dim ? Grey : Green, FontWeight = FontWeights.SemiBold });
+                var bare = Sub(f, false, dim, ink);
+                double baseW = 2 + 10 + 14 + (row.Children.Count > 0 ? Mod.W((FrameworkElement)row.Children[0]) : 0), timerW = LineTimerW();   // the edges, the body's margins, the ring
+                double wordsW = Math.Max(Mod.W(top), Mod.W(bare)), oldW = Math.Max(Mod.W(top), Mod.W(sub));
+                FrameworkElement? strip = null;
+                foreach (var look in StripFall(Strip))
+                {
+                    if ((strip = StripIn(StripRoom(FightWidth - 8, baseW + timerW, wordsW, oldW, 14), look)) != null) break;
+                    if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 8, baseW, wordsW, oldW + timerW, 14), look)) != null) { _timerUp = true; break; }
+                }
+                if (strip != null)
+                {
+                    sub = bare;
+                    strip.Margin = new Thickness(14, 0, 0, 0);
+                    if (dim) strip.Opacity = .5;
+                    Grid.SetColumn(strip, 2); row.Children.Add(strip);
+                }
             }
             if (sub.Inlines.Count > 0) kv.Children.Add(sub);
         }
+        _stripTimerW = StripTime(f) ? LineTimerW() : -1;
         Grid.SetColumn(kv, 1); row.Children.Add(kv);
-        Grid.SetColumn(_timersBuddy, 2);
+        Grid.SetColumn(_timersBuddy, 3);
         if (_timersBuddy.Parent is Panel old) old.Children.Remove(_timersBuddy);
         row.Children.Add(_timersBuddy);
         _lineBody.Children.Add(row);
@@ -216,6 +221,39 @@ sealed partial class HudModernMono : ModernLook
         _lineBody.Opacity = 1;
         PlaceTimers();
     }
+
+    /// <summary>The line under the hour: the session, the latest pickup and its worth in green (<paramref name="pick"/>); in the Abyss its stats.</summary>
+    TextBlock Sub(Figures f, bool pick, bool dim, Brush ink)
+    {
+        var sub = new TextBlock { FontFamily = Mod.Face, FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = dim ? Grey : Soft, Margin = new Thickness(0, 2, 0, 0) };
+        System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
+        void Sep() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Grey }); }
+        if (f.Total.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run($"{f.Total} {f.TotalWord}"));
+        if (f.Abyss)
+            foreach (var (fig, word, tone) in f.Stats)
+            {
+                Sep();
+                sub.Inlines.Add(new System.Windows.Documents.Run(fig) { Foreground = ReferenceEquals(tone, Rec) ? Red : ink, FontWeight = FontWeights.SemiBold });
+                sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+            }
+        else if (pick && !KinahHidden && Picks(Values).FirstOrDefault() is { } p)
+        {
+            Sep();
+            sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 18 ? p.Name[..17].TrimEnd() + "…" : p.Name));
+            var worth = p.Worth.Length > 0 ? p.Worth : p.Count;
+            if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + (p.Worth.Length > 0 && !worth.StartsWith('+') ? "+" : "") + worth) { Foreground = dim ? Grey : Green, FontWeight = FontWeights.SemiBold });
+        }
+        return sub;
+    }
+
+    /// <summary>The timers' room at the Buddy's right (the next in its box, the rest under it), 0 with none.</summary>
+    double LineTimerW() => _timers.Children.Count > 0 && !KinahHidden ? 14 + Mod.W(_timers) : 0;
+
+    /// <summary>The timers' room the line's strip was fitted to (-1: no strip time); timers that change it draw the line again.</summary>
+    double _stripTimerW = -1;
+
+    /// <summary>The timers sit in their own small panel over the Buddy, to leave the line's room to the pickup strip.</summary>
+    bool _timerUp;
 
     /// <summary>The ring of your best: a 4 px track, the share as a flat accent arc (butt ends) from the top; full once beaten.</summary>
     void Ring(DrawingContext dc, Size s, bool dim)
@@ -294,21 +332,24 @@ sealed partial class HudModernMono : ModernLook
                 _timers.Children.Add(rest);
             }
         }
+        // the line's pickup strip was fitted beside the timers: timers that come, go or change their width fit it again
+        if (_stripTimerW >= 0 && Figs is { } f && Math.Abs(LineTimerW() - _stripTimerW) > .5) DrawLine(f);
         PlaceTimers();
     }
 
     void PlaceTimers()
     {
         bool fight = _fight.Visibility == Visibility.Visible;
-        bool buddy = !KinahHidden && _line.Visibility == Visibility.Visible;
-        // the Buddy holds them while it shows; in a dungeon (no Buddy) the fight's panel; else a small panel of their own
-        var host = buddy ? _timersBuddy : fight ? _timersIn : _timersTopHost;
+        bool buddy = !KinahHidden && _line.Visibility == Visibility.Visible && !_timerUp;
+        // the Buddy holds them while it shows (unless its pickup strip took their room); in a dungeon (no Buddy) the fight's
+        // panel; else a small panel of their own (an open-world fight's panel keeps to the fight)
+        var host = buddy ? _timersBuddy : fight && !_timerUp ? _timersIn : _timersTopHost;
         foreach (var b in new[] { _timersBuddy, _timersIn, _timersTopHost }) if (b != host && b.Child == _timers) b.Child = null;
         if (host.Child != _timers) host.Child = _timers;
         bool any = _timers.Children.Count > 0;
-        _timersBuddy.Visibility = buddy && any ? Visibility.Visible : Visibility.Collapsed;
-        _timersIn.Visibility = !buddy && fight && any ? Visibility.Visible : Visibility.Collapsed;
-        _timersTop.Visibility = !buddy && !fight && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersBuddy.Visibility = host == _timersBuddy && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersIn.Visibility = host == _timersIn && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersTop.Visibility = host == _timersTopHost && any ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ================================================================ the fight

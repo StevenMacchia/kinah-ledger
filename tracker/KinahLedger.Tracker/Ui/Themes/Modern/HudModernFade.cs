@@ -15,7 +15,7 @@ namespace KinahLedger.Ui;
 /// a wide faint halo), so they read over snow and sky as over a cave. You: a thin white bar at your row's left edge. Marks are
 /// small dark-glass chips with a light hairline; the boss's HP a slim line with ticks at the thirds; the foot under a faint
 /// hairline. The Buddy is the same idea: a soft blue wash fading to the right, rounded at its left, the run's ring, the hour
-/// big and the session with the latest pickup under it, the next timer as a dark-glass chip at its end.
+/// big with the best drop and the last pickups as tiles beside it, the session under it, the next timer as a dark-glass chip at its end.
 /// The moments stay quiet: a pickup sends a light across the wash and its worth floats in beside it; a rare drop's wash
 /// blooms in its grade's colour; your best passed runs the ring round in mint; an entry opening lights its chip; a fight
 /// slides in; its end lays a wash with the outcome over the fight's head.
@@ -41,6 +41,10 @@ sealed partial class HudModernFade : ModernLook
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+    /// <summary>The timer chips over the line, when the pickup strip takes their room on it.</summary>
+    readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(4, 0, 0, 5), Visibility = Visibility.Collapsed };
+    /// <summary>The pickup strip in Fade: 24 px tiles beside the hour, a soft white rule, a gold star.</summary>
+    static readonly PickStrip.Look Strip = new(24, 4, true, Frozen(Mod.A(Colors.White, .32)), Frozen(Color.FromRgb(0xFF, 0xCF, 0x6A)));
     bool _dim;
     TacSketch? _ringArt;
     double _share = -1, _complete, _sheen = -1;
@@ -68,7 +72,7 @@ sealed partial class HudModernFade : ModernLook
         _line.Children.Add(_lineWash); _line.Children.Add(_lineFx); _line.Children.Add(Lit(_lineBody)); _line.Children.Add(_lineAnchor);
         _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _fightShift;
-        _body.Children.Add(_fight); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
+        _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
         _root.Children.Add(_body);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
@@ -89,7 +93,7 @@ sealed partial class HudModernFade : ModernLook
     /// <summary>The wash's strength from the opacity setting: 1 at the usual 90%, a little lighter or richer either side.</summary>
     double WashK => .7 + .35 * _opacity;
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dimmed(Values);
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dimmed(Values) + "|" + PickStrip.Sig(Values, Strip);
 
     static bool Dimmed(IReadOnlyDictionary<string, string> v) => (v.TryGetValue("show", out var s) && s == "dim") || (v.TryGetValue("paused", out var p) && p.Length > 0);
 
@@ -142,7 +146,7 @@ sealed partial class HudModernFade : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null;
+        _ringArt = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _line.Opacity = _dim ? .62 : 1;
@@ -174,26 +178,26 @@ sealed partial class HudModernFade : ModernLook
             top.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, Soft, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, 4); top.Children.Add(u); }
             words.Children.Add(top);
-            var sub = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), Margin = new Thickness(1, 1, 0, 0) };
-            System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
-            void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Quiet }); }
-            if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.SemiBold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
-            foreach (var (fig, word, tone) in f.Stats)
+            // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
+            // alone under it; with the timer chips at the line's end and no room left beside them, the chips go over the line
+            var sub = Sub(f, true);
+            FrameworkElement? strip = null;
+            if (StripTime(f))
             {
-                Dot();
-                var c = ReferenceEquals(tone, Rec) ? CoralC : ReferenceEquals(tone, Gold) ? GoldC2 : Colors.White;
-                sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.SemiBold, Foreground = Frozen(c) });
-                sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
-            }
-            if (!f.Abyss && Picks(Values).FirstOrDefault() is { } p)
-            {
-                Dot();
-                sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 22 ? p.Name[..21].TrimEnd() + "…" : p.Name));
-                var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-                if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + worth) { FontWeight = FontWeights.Bold, Foreground = p.Worth.Length > 0 ? Mint2 : Soft });
+                var bare = Sub(f, false);
+                double baseW = 5 + 18 + _lineBody.Children.OfType<FrameworkElement>().Sum(Mod.W), timerW = LineTimerW();
+                double wordsW = Math.Max(Mod.W(top), Mod.W(bare)), oldW = Math.Max(Mod.W(top), Mod.W(sub));
+                foreach (var look in StripFall(Strip))
+                {
+                    if ((strip = StripIn(StripRoom(FightWidth - 10, baseW + timerW, wordsW, oldW, 12), look)) != null) break;
+                    if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 10, baseW, wordsW, oldW + timerW, 12), look)) != null) { _timerUp = true; break; }
+                }
+                if (strip != null) { sub = bare; strip.Margin = new Thickness(12, 0, 0, 0); }
+                _stripTimerW = timerW;
             }
             if (sub.Inlines.Count > 0) words.Children.Add(sub);
             _lineBody.Children.Add(words);
+            if (strip != null) _lineBody.Children.Add(strip);
         }
         _lineBody.Children.Add(_timersInLine);
         PlaceTimers();
@@ -236,6 +240,39 @@ sealed partial class HudModernFade : ModernLook
         }
         else _note.Visibility = Visibility.Collapsed;
     }
+
+    /// <summary>The line under the hour: the session, the latest pickup and its worth (<paramref name="pick"/>); in the Abyss its stats.</summary>
+    TextBlock Sub(Figures f, bool pick)
+    {
+        var sub = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), Margin = new Thickness(1, 1, 0, 0) };
+        System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
+        void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Quiet }); }
+        if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.SemiBold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
+        foreach (var (fig, word, tone) in f.Stats)
+        {
+            Dot();
+            var c = ReferenceEquals(tone, Rec) ? CoralC : ReferenceEquals(tone, Gold) ? GoldC2 : Colors.White;
+            sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.SemiBold, Foreground = Frozen(c) });
+            sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+        }
+        if (pick && !f.Abyss && Picks(Values).FirstOrDefault() is { } p)
+        {
+            Dot();
+            sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 22 ? p.Name[..21].TrimEnd() + "…" : p.Name));
+            var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
+            if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + worth) { FontWeight = FontWeights.Bold, Foreground = p.Worth.Length > 0 ? Mint2 : Soft });
+        }
+        return sub;
+    }
+
+    /// <summary>The timer chips' room at the line's end, 0 with none.</summary>
+    double LineTimerW() => _timers.Children.Count > 0 && !KinahHidden ? 10 + Mod.W(_timers) : 0;
+
+    /// <summary>The timers' room the line's strip was fitted to (-1: no strip time); chips that change it draw the line again.</summary>
+    double _stripTimerW = -1;
+
+    /// <summary>The timer chips sit over the line, to leave its room to the pickup strip.</summary>
+    bool _timerUp;
 
     Color _rareC;
     double _rareBloom = 1, _rareFlash;
@@ -311,24 +348,36 @@ sealed partial class HudModernFade : ModernLook
             if (first) _firstChip = chip;
             _timers.Children.Add(chip);
         }
+        // the line's pickup strip was fitted beside the timer chips: chips that come, go or change their width fit it again
+        if (_stripTimerW >= 0 && Figs is { } f && Math.Abs(LineTimerW() - _stripTimerW) > .5) DrawLine(f);
         PlaceTimers();
     }
 
     void PlaceTimers()
     {
-        bool inside = KinahHidden && _fight.Visibility == Visibility.Visible;
+        bool inside = KinahHidden && _fight.Visibility == Visibility.Visible, up = !inside && _timerUp;
         if (inside)
         {
             if (_timersInLine.Child == _timers) _timersInLine.Child = null;
+            if (_timersUp.Child == _timers) _timersUp.Child = null;
             if (_timersInFight.Child != _timers) _timersInFight.Child = _timers;
+        }
+        else if (up)
+        {
+            if (_timersInLine.Child == _timers) _timersInLine.Child = null;
+            if (_timersInFight.Child == _timers) _timersInFight.Child = null;
+            if (_timersUp.Child != _timers) _timersUp.Child = _timers;
         }
         else
         {
             if (_timersInFight.Child == _timers) _timersInFight.Child = null;
+            if (_timersUp.Child == _timers) _timersUp.Child = null;
             if (_timersInLine.Child != _timers && _timersInLine.Parent != null) _timersInLine.Child = _timers;
         }
-        _timersInFight.Visibility = inside && _timers.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        _timersInLine.Visibility = !inside && _timers.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        bool any = _timers.Children.Count > 0;
+        _timersInFight.Visibility = inside && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersUp.Visibility = up && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersInLine.Visibility = !inside && !up && any ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ================================================================ the fight
