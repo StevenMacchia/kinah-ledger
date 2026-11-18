@@ -127,6 +127,7 @@ public partial class MainWindow : Window
         RegisterKinahOverlay();   // the header's Overlays group: Kinah first, then Timers (Ui/MainWindow.Overlays.cs)
         InitTimers(watch);   // the timers overlay and its chime (Ui/MainWindow.Timers.cs); the Timers page is Ui/MainWindow.TimersPage.cs
         InitApplicants(watch);   // the people asking to join the group you lead (Ui/MainWindow.Applicants.cs)
+        InitMeterBlock(watch);   // what keeps the DPS meter off, Npcap missing first (Ui/MainWindow.MeterBlock.cs)
         // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
         // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
         // never for a build run from its folder (the self-tests, dotnet run), which Windows must not start

@@ -338,6 +338,8 @@
       </Grid>
       <!-- a newer version: downloaded on its own, installed when the window closes or on Restart now -->
       <!-- one line (2026-10-28, the calm Farming page): the ready notice fits beside its two actions -->
+      <!-- AION 2 in exclusive fullscreen (2026-11-18): the overlays can't show over it, so the window says so on every page (Ui/MainWindow.MeterBlock.cs) -->
+      <Border x:Name="FullscreenHost" Visibility="Collapsed"/>
       <Border x:Name="UpdateCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,6,6,6" Visibility="Collapsed">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -411,6 +413,8 @@
           <!-- the overlay's themes (0.10.136, Steven 2026-11-16: "allow people to choose theme on first installs as well"): a theme's chips, its looks under them -->
           <WrapPanel x:Name="WelcomeThemeHost" Margin="0,12,0,0"/>
           <WrapPanel x:Name="WelcomeLookHost" Margin="0,4,0,0"/>
+          <!-- the DPS meter needs Npcap (2026-11-18): its card with Get Npcap when Npcap is what keeps the meter off; Done carries on either way (Ui/MainWindow.MeterBlock.cs) -->
+          <Border x:Name="WelcomeMeterHost" Visibility="Collapsed"/>
           <Grid Margin="0,14,0,0">
             <!-- what to do once Done is pressed (2026-11-08 audit: nothing said it); the key is filled in by InitWelcome -->
             <TextBlock x:Name="WelcomeNext" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,0,180,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource Ink}"

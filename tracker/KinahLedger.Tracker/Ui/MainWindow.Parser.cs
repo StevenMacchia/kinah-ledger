@@ -576,16 +576,22 @@ public partial class MainWindow
         var past = ParserPast();
         var where = ParserWhere;
         var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{live?.Uncredited}|{_parserTab}:{_parserInspect}:{_parserSort}:{_parserPrefs.Details}:{_parserPrefs.KillsNear}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}:{_parserPrefs.AlwaysOn}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
+        sig += $"|{_meterBlock}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear(); _parserFarmNow = null;
+        // what keeps the meter off, first (Npcap missing, Ui/MainWindow.MeterBlock.cs): the waiting card then has nothing to add
+        var block = MeterBlockCard(_meterBlock);
+        _meterCardForTest = block;
+        if (block != null) ParserPage.Children.Add(block);
         ParserPage.Children.Add(ParserHead(past));
         var open = _parserOpen != null ? past.FirstOrDefault(e => e.Id == _parserOpen) : null;
         // a member opened (Parser v2): their inspect view in place of the fight's
         if (InspectBlock(open ?? live, now, past) is { } inspect) { ParserPage.Children.Add(inspect); return; }
         if (open != null) { ParserPage.Children.Add(FightBlock(open, now, past, live: false)); return; }
         _parserOpen = null;
-        ParserPage.Children.Add(live != null ? FightBlock(live, now, past, live: true) : ParserWaitingCard(where, past));
+        if (live != null) ParserPage.Children.Add(FightBlock(live, now, past, live: true));
+        else if (block == null) ParserPage.Children.Add(ParserWaitingCard(where, past));
         ParserPage.Children.Add(ParserHistory(past, now));
     }
 
@@ -871,7 +877,8 @@ public partial class MainWindow
     (string Head, string Line, string Tone) ParserStatus((ContentKind Kind, string Instance) where)
     {
         bool kept = Encounter.Dungeon(where.Kind);
-        if (!_demo && _watcher.Packets is { } pr && !pr.On)
+        // off for a reason of its own ("Off: ..."); before the game runs or connects, the page just waits as it would
+        if (!_demo && _watcher.Packets is { } pr && !pr.On && pr.State.StartsWith("Off", StringComparison.Ordinal))
             return (L.T("The Parser is off"), L.T("It needs a setting turned on: Settings › Game reading."), "Warn");
         return kept ? (L.F("Ready in {0}", BossBook.Strip(where.Instance)), L.F("{0}. The next boss you pull starts a fight here; trash and adds never do.", PK.KindWord(Encounter.KindName(where.Kind))), "Good")
             : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions, Sanctuaries and Nightmare, and for world bosses. Enter one and pull a boss, or fight a world boss."), "Faint");

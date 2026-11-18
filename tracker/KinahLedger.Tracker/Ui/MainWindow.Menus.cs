@@ -18,8 +18,12 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>One line of a menu: an action (Do), a switch (On), a quiet line of information (Info) or a rule. Key: the shortcut, faint at the row's right.</summary>
-    internal sealed record MenuEntry(string Text, Action? Do = null, string Sub = "", object? Tip = null, bool? On = null, bool Info = false, bool Rule = false, string Key = "")
+    /// <summary>
+    /// One line of a menu: an action (Do), a switch (On), a quiet line of information (Info) or a rule. Key: the shortcut,
+    /// faint at the row's right. Warn: a warning line (Text in the warning colour), its action on the Link after it
+    /// ("Needs Npcap · Get it", Ui/MainWindow.MeterBlock.cs); with no Link, a line to read only.
+    /// </summary>
+    internal sealed record MenuEntry(string Text, Action? Do = null, string Sub = "", object? Tip = null, bool? On = null, bool Info = false, bool Rule = false, string Key = "", string Link = "", bool Warn = false)
     {
         public static MenuEntry Line => new("", Rule: true);
     }
@@ -95,7 +99,36 @@ public partial class MainWindow
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var text = CkText(e.Text, live ? CkInk : CkFaint, 13.5);
+        TextBlock text;
+        if (e.Warn || e.Link.Length > 0)
+        {
+            bool acts = e.Do != null && e.Link.Length > 0;
+            // a warning line: the words in the warning colour, " · ", the link that acts (lit gold with the row)
+            var warn = new TextBlock { FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            warn.Inlines.Add(new Run(e.Text) { Foreground = Ck(CkWarn), FontWeight = FontWeights.SemiBold });
+            var link = new Run(e.Link) { Foreground = Ck(CkLink), FontWeight = FontWeights.SemiBold };
+            if (e.Link.Length > 0) { warn.Inlines.Add(new Run("  ·  ") { Foreground = Ck(CkFaint) }); warn.Inlines.Add(link); }
+            words.Children.Add(warn);
+            var lrow = new Border
+            {
+                Child = g, MinHeight = 30, Padding = new Thickness(18, 5, 18, 6), Margin = new Thickness(6, 0, 6, 0), CornerRadius = new CornerRadius(5),
+                Background = Brushes.Transparent, Focusable = acts, FocusVisualStyle = null, Cursor = acts ? Cursors.Hand : null,
+            };
+            g.Children.Add(words);
+            AutomationProperties.SetName(lrow, e.Text + (e.Link.Length > 0 ? " · " + e.Link : ""));
+            if (e.Tip != null) { lrow.ToolTip = e.Tip; ToolTipService.SetInitialShowDelay(lrow, 400); }
+            if (!acts) return lrow;
+            void LitLink(bool lit) { lrow.Background = lit ? Ck(CkGold, 0x16) : Brushes.Transparent; link.Foreground = Ck(lit ? CkGold : CkLink); }
+            lrow.MouseEnter += (_, _) => LitLink(true);
+            lrow.MouseLeave += (_, _) => LitLink(lrow.IsKeyboardFocused);
+            lrow.GotKeyboardFocus += (_, _) => LitLink(true);
+            lrow.LostKeyboardFocus += (_, _) => LitLink(lrow.IsMouseOver);
+            void ActLink() { if (_card != null) _card.IsOpen = false; Dispatcher.BeginInvoke(DispatcherPriority.Background, e.Do!); }
+            lrow.MouseLeftButtonUp += (_, _) => ActLink();
+            lrow.KeyDown += (_, k) => { if (k.Key is Key.Enter or Key.Space) { k.Handled = true; ActLink(); } };
+            return lrow;
+        }
+        text = CkText(e.Text, live ? CkInk : CkFaint, 13.5);
         words.Children.Add(text);
         if (e.Sub.Length > 0) { var s = CkText(e.Sub, CkFaint, 12); s.TextWrapping = TextWrapping.Wrap; s.TextTrimming = TextTrimming.None; s.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(s); }
         g.Children.Add(words);
