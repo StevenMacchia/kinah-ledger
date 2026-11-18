@@ -98,6 +98,61 @@ abstract class TacticalLook : HudThemeLook
         if (Figs is { } f && !KinahHidden) DrawLine(f);
     }
 
+    // ---- a dungeon run (Ui/HudRunBuddy.cs; Steven, 2026-11-18: "Yes, all looks"): what the three looks share
+
+    /// <summary>
+    /// The dungeon run the line shows in place of the hour, or null: out of a run, while a rare drop is held (it keeps its
+    /// place), and with the Kinah line away (a dungeon's meter in this window).
+    /// </summary>
+    protected RunBuddy.State? RunNow => !KinahHidden && Rare(Values) == null ? RunBuddy.Of(Values) : null;
+
+    /// <summary>The run's part of the line's signature (the clock changes it every second).</summary>
+    protected string RunSig => RunBuddy.Sig(Values);
+
+    /// <summary>The first of <paramref name="forms"/> that fits <paramref name="room"/> (the last when none does): a part goes before a figure is cut.</summary>
+    protected static T FitForm<T>(double room, params Func<T>[] forms) where T : FrameworkElement => FitForm(room, out _, forms);
+
+    /// <summary><see cref="FitForm{T}(double, Func{T}[])"/>, saying which form it took (<paramref name="at"/>).</summary>
+    protected static T FitForm<T>(double room, out int at, params Func<T>[] forms) where T : FrameworkElement
+    {
+        T? last = null;
+        at = -1;
+        foreach (var make in forms)
+        {
+            last = make();
+            at++;
+            if (Wants(last) <= room + .5) return last;
+        }
+        return last!;
+    }
+
+    /// <summary>
+    /// The pickup strips a run's line can keep, fullest first: the best drop and the last three, then the last three (none
+    /// with the pickup icons off or before the first pickup). The last three stay before any figure goes.
+    /// </summary>
+    protected List<FrameworkElement> RunStrips(PickStrip.Look look) =>
+        new[] { look, look with { Best = false } }.Select(l => PickStrip.Of(Values, l)).Where(x => x != null).Select(x => x!).ToList();
+
+    /// <summary>"Cleared in {0}" round the clock, in the language's order: the words before it and after it.</summary>
+    protected static (string Before, string After) ClearedWords()
+    {
+        var fmt = L.T("Cleared in {0}");
+        int at = fmt.IndexOf("{0}", StringComparison.Ordinal);
+        return at < 0 ? (fmt, "") : (fmt[..at].Trim(), fmt[(at + 3)..].Trim());
+    }
+
+    /// <summary>"1 run", "2 runs".</summary>
+    protected static string RunsWord(string n) => n == "1" ? L.T("1 run") : L.F("{0} runs", n);
+
+    /// <summary>"1 clear", "38 clears" ("" with none).</summary>
+    protected static string ClearsWord(string n) => n.Length == 0 ? "" : n == "1" ? L.T("1 clear") : L.F("{0} clears", n);
+
+    /// <summary>
+    /// The head's count when the figures already show your fastest (between runs): the clears alone; else the Buddy's
+    /// (RunBuddy.Count: "Run 3 today · 38 clears").
+    /// </summary>
+    protected static string RunCount(RunBuddy.State s, bool fastestShown) => s.Between && fastestShown ? ClearsWord(s.Clears) : RunBuddy.Count(s);
+
     /// <summary>A text in a face, tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontFamily face, FontWeight weight, FontStretch? stretch = null) => Tac.Text(s, size, fg, face, weight, stretch);
 }
