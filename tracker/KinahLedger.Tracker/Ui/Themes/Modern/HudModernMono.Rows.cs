@@ -103,7 +103,7 @@ sealed partial class HudModernMono
     sealed class MonoRow : IThemeRow
     {
         public const double H = 34, Pitch = 40, BarH = 4;
-        const double RankW = 18, IconW = 26, ShareW = 46, DmgW = 58, CritW = 40;
+        const double RankW = 16, IconW = 24, ShareW = 44, DmgW = 56, CritW = 36;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly TacSketch _bar;
         readonly TextBlock _rank = Mod.Text("", 11, Grey, FontWeights.Medium), _name = Mod.Text("", 14, Paper, FontWeights.SemiBold),
@@ -216,8 +216,10 @@ sealed partial class HudModernMono
             double nw = Mod.W(_name), cpw = m.Cp.Length > 0 ? Mod.W(_cp) : 0;
             double marks = _marks.Sum(Mod.W), full = _folds.Sum(x => Mod.W(x.Full)), glyphs = _folds.Sum(x => Mod.W(x.Short));
             double nameMin = Math.Min(nw, Mod.W(Mod.Text(m.Name.Length > 10 ? m.Name[..10] + "…" : m.Name, _name.FontSize, Paper, _name.FontWeight)));
-            // (CP, folded, share): the first that fits, else the last with the name cut
-            var steps = new[] { (true, false, true), (false, false, true), (false, true, true), (false, true, false) };
+            // (CP, folded, share): the first that fits, else the last with the name cut. The share goes only where a healer's
+            // heals take its place: anywhere else its going would move that row's DPS off the column the others line up on
+            var steps = healer ? new[] { (true, false, true), (false, false, true), (false, true, true), (false, true, false) }
+                : new[] { (true, false, true), (false, false, true), (false, true, true) };
             (bool Cp, bool Fold, bool Share) pick = steps[^1];
             double Used((bool Cp, bool Fold, bool Share) s) => (s.Cp ? cpw : 0) + marks + (s.Fold ? glyphs : full) + (s.Share ? ShareW + healW : healer ? Math.Max(ShareW, healW) : 0);
             foreach (var s in steps) if (nw + Used(s) <= room) { pick = s; break; }
