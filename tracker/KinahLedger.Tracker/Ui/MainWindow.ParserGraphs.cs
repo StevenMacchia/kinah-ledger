@@ -75,6 +75,8 @@ public partial class MainWindow
     // ---- renders and the options test (ui-shot --parser graphs, KL_OPTIONS_ONLY=graphs) ----
 
     internal ParserGraphs.GraphsPanel? GraphsForTest => _graphs;
+    /// <summary>For a render or the test: the next fight shown gets a fresh panel (a first look: its draw-in plays).</summary>
+    internal void ResetGraphsForTest() { _graphs?.Stop(); _graphs = null; }
     internal bool CopyGraphForTest(string kind) => _graphs != null && CopyGraph(_graphs.Key.Split('|')[0], kind);
     internal void ParserDrawNowForTest() => ParserDrawNow();
     internal double ParserViewportForTest => LowerScroll.ViewportHeight;

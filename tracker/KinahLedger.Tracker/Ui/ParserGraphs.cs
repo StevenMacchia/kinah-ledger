@@ -54,8 +54,8 @@ static class ParserGraphs
     {
         public long Id; public string Name = ""; public Color Color; public bool You;
         public double[] Raw = Array.Empty<double>(); public double[] S = Array.Empty<double>();
-        /// <summary>Its figure for the fight so far (the label at its end): damage or healing a second over the seconds drawn.</summary>
-        public double Avg;
+        /// <summary>Its figure for the fight so far (the label at its end): damage or healing a second over the seconds drawn; and a second before (live, the label rolls from it).</summary>
+        public double Avg, AvgPrev;
     }
 
     /// <summary>What the graphs are drawn from, worked out once a draw from the fight's view.</summary>
@@ -76,7 +76,7 @@ static class ParserGraphs
         public List<(double At, string Name, long Id)> Deaths = new();
         public List<Line> Healers = new();
         public double[]? Taken;
-        public double TakenAvg;
+        public double TakenAvg, TakenAvgPrev;
         public List<Line> Takers = new();
         /// <summary>The fight's time as the hero says it (a kill's label matches its clock).</summary>
         public string Clock = "";
@@ -161,7 +161,7 @@ static class ParserGraphs
         Line Of(MemberView m, IReadOnlyList<long>? l)
         {
             var raw = Pad(l, n);
-            return new Line { Id = m.F.Id, Name = ParserRows.NameOf(m.F), Color = m.You ? YouColor : ClassArt.ColorOf(m.F.Class), You = m.You, Raw = raw, S = Gauss(raw, Sigma), Avg = raw.Sum() / Math.Max(1, n) };
+            return new Line { Id = m.F.Id, Name = ParserRows.NameOf(m.F), Color = m.You ? YouColor : ClassArt.ColorOf(m.F.Class), You = m.You, Raw = raw, S = Gauss(raw, Sigma), Avg = raw.Sum() / Math.Max(1, n), AvgPrev = raw.Take(n - 1).Sum() / Math.Max(1, n - 1) };
         }
         foreach (var m in dealers.OrderBy(m => m.Rank)) s.Members.Add(Of(m, m.PerSecond));
         if (e.BossHpPerSecond is { Count: > 1 } hps)
@@ -182,7 +182,7 @@ static class ParserGraphs
             var sum = new double[n];
             foreach (var t in s.Takers) for (int i = 0; i < n; i++) sum[i] += t.Raw[i];
             s.Taken = Gauss(sum, Sigma);
-            s.TakenAvg = sum.Sum() / n;
+            s.TakenAvg = sum.Sum() / n; s.TakenAvgPrev = sum.Take(n - 1).Sum() / Math.Max(1, n - 1);
         }
         // the frame: the time from what this boss usually takes, the DPS scale from the best seen on it, each moving only in steps
         s.Extent = ExtentOf(v, n, live);
@@ -237,11 +237,11 @@ static class ParserGraphs
     {
         public readonly string Kind;
         readonly Pal _p;
-        readonly DrawingVisual _hover = new();
+        readonly DrawingVisual _live = new(), _hover = new();
         Set? _set;
         Rect _plot;
         int? _hoverAt; bool _hoverBox;
-        DrawingGroup? _cache;
+        DrawingGroup? _frameCache, _cache;
         (Set? Set, Size Size, double Dpi) _cacheFor;
         /// <summary>The healing's graph under the fight's on the page: the fight's graph writes the times for both.</summary>
         public bool SharedTime;
@@ -251,18 +251,114 @@ static class ParserGraphs
         public Chart(string kind, Pal p)
         {
             Kind = kind; _p = p;
-            AddVisualChild(_hover);
+            AddVisualChild(_live); AddVisualChild(_hover);
             ClipToBounds = true; Cursor = Cursors.Cross; SnapsToDevicePixels = true;
             AutomationProperties.SetName(this, kind == Dps ? "DPS and boss HP graph" : "Healing and damage taken graph");
             MouseMove += (_, ev) => { var at = SecondAt(ev.GetPosition(this).X); Hovered?.Invoke(at); ShowHover(at, true); };
             MouseLeave += (_, _) => { Hovered?.Invoke(null); ShowHover(null, false); };
+            // a live page is laid out anew on every hit, and the panel moves into it: the tick stops while it's out and picks up
+            // where the pen is when it's back (the course runs on the clock, not on the frames)
+            Unloaded += (_, _) => StopTick();
+            Loaded += (_, _) => { if (_revealing || _gliding) StartTick(); };
+            IsVisibleChanged += (_, _) => { if (IsVisible && (_revealing || _gliding)) StartTick(); };
         }
 
-        protected override int VisualChildrenCount => 1;
-        protected override Visual GetVisualChild(int index) => _hover;
+        protected override int VisualChildrenCount => 2;
+        protected override Visual GetVisualChild(int index) => index == 0 ? _live : _hover;
 
         public Set? Data => _set;
-        public void SetData(Set s) { _set = s; InvalidateVisual(); }
+
+        // ---- the pen (Steven, 2026-11-18: "I want to make sure that it DRAWS the lines too, not just refresh") ----
+        // Live, each line's newest second is drawn by a pen gliding to it over the next second: the lines up to the second
+        // before stay in the frozen drawing, only the heads (the last piece of each line, the boss's HP's, the labels and their
+        // hairlines) are drawn again a frame on a light layer of their own. A fight opened when it's over (or just killed) draws
+        // in from left to right once: the frozen drawing shown through a widening window, the boss's HP and the deaths appearing
+        // as the pen passes them. A frame tick runs only while one of these plays, on a shown, unminimized window; a render
+        // (Motion.Still) shows the end, KL_MOTION_AT holds it at that point.
+
+        /// <summary>How long a kept fight's draw-in takes, a live line's head takes to reach its newest second, and the frame tick.</summary>
+        public const double DrawInMs = 800, GlideMs = 1000, FrameMs = 40;
+        /// <summary>For the options test's CPU measure: play the pen though the window sits still (Motion.Still), and the frames drawn.</summary>
+        internal static bool ForceMotionForTest;
+        internal static int Frames;
+        double _reveal = 1, _glide = 1;
+        long _revealStart, _glideStart;
+        bool _revealing, _gliding, _ticking;
+        /// <summary>For the options test: a draw-in or a glide under way.</summary>
+        public bool Revealing => _revealing;
+        public bool Gliding => _gliding;
+
+        /// <summary>
+        /// The data to draw. <paramref name="drawIn"/>: the first look at a kept fight (draws in). <paramref name="glide"/>: a live
+        /// fight's newer second (its heads glide to it).
+        /// </summary>
+        public void SetData(Set s, bool drawIn = false, bool glide = false)
+        {
+            _set = s;
+            double? held = Motion.FrozenAt;
+            bool play = held == null && (ForceMotionForTest || Motion.On);
+            long now = Stopwatch.GetTimestamp();
+            if (drawIn && !s.Live && (play || held != null)) { _reveal = held ?? 0; _revealing = held == null; _revealStart = now; }
+            else if (!_revealing) _reveal = 1;
+            if (!s.Live) { _glide = 1; _gliding = false; }
+            else if (held != null) { _glide = held.Value; _gliding = false; }
+            else if (glide && play) { _glide = 0; _gliding = true; _glideStart = now; }
+            else if (!_gliding) _glide = 1;
+            InvalidateVisual();
+            if (_revealing || _gliding) StartTick();
+        }
+
+        // one clock for every chart that has a pen moving, stopped when none has: a timer, not CompositionTarget.Rendering,
+        // which would have WPF draw the whole window every screen frame while it is hooked
+        static readonly HashSet<Chart> Moving = new();
+        static DispatcherTimer? _clock;
+
+        void StartTick()
+        {
+            if (_ticking) return;
+            _ticking = true;
+            Moving.Add(this);
+            if (_clock == null)
+            {
+                _clock = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(FrameMs) };
+                _clock.Tick += (_, _) => { foreach (var c in Moving.ToList()) c.OnFrame(); if (Moving.Count == 0) _clock!.Stop(); };
+            }
+            if (!_clock.IsEnabled) _clock.Start();
+        }
+
+        void StopTick()
+        {
+            if (!_ticking) return;
+            _ticking = false;
+            Moving.Remove(this);
+        }
+
+        void OnFrame()
+        {
+            // nothing to watch (a hidden page, a minimized window): the tick stops; shown again (or the next second's data), it
+            // picks up where the pen is by then
+            if (!IsVisible || Window.GetWindow(this) is { WindowState: WindowState.Minimized } or null)
+            {
+                if (_revealing && IsVisible) { _revealing = false; _reveal = 1; InvalidateVisual(); }   // minimized mid-draw-in: it is drawn when it's back
+                StopTick();
+                return;
+            }
+            long now = Stopwatch.GetTimestamp();
+            Frames++;
+            if (_revealing)
+            {
+                _reveal = Math.Min(1, Stopwatch.GetElapsedTime(_revealStart, now).TotalMilliseconds / DrawInMs);
+                if (_reveal >= 1) _revealing = false;
+                InvalidateVisual();   // replays the frozen drawing through a wider window: no drawing again
+            }
+            if (_gliding)
+            {
+                _glide = Math.Min(1, Stopwatch.GetElapsedTime(_glideStart, now).TotalMilliseconds / GlideMs);
+                if (_glide >= 1) _gliding = false;
+                DrawHeads();
+            }
+            if (!_revealing && !_gliding) StopTick();
+        }
 
         int? SecondAt(double x)
         {
@@ -275,14 +371,28 @@ static class ParserGraphs
         double YHp(double hp) => _plot.Bottom - Math.Clamp(hp, 0, 1) * _plot.Height;
         double Top => Kind == Dps ? _set!.YMax : _set!.HealMax;
 
-        FormattedText Ft(string s, double size, Brush b, bool bold = false) =>
-            new(s, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? _p.Bold : _p.Semi, size, b, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        // the words and pens drawn a frame on the pen's layer are the same ones over and over (the names, the colours): made once
+        readonly Dictionary<(string, double, Color, bool, double), FormattedText> _texts = new();
+        static readonly Dictionary<(Color, double, bool, double, double), Pen> Pens = new();
+
+        FormattedText Ft(string s, double size, Brush b, bool bold = false)
+        {
+            double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            var key = (s, size, (b as SolidColorBrush)?.Color ?? Colors.Transparent, bold, dpi);
+            if (b is SolidColorBrush && _texts.TryGetValue(key, out var hit)) return hit;
+            var t = new FormattedText(s, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? _p.Bold : _p.Semi, size, b, dpi);
+            if (b is SolidColorBrush) { if (_texts.Count > 400) _texts.Clear(); _texts[key] = t; }
+            return t;
+        }
 
         static Pen P(Brush b, double w, bool dash = false, double on = 2, double off = 3)
         {
+            var key = ((b as SolidColorBrush)?.Color ?? Colors.Transparent, w, dash, on, off);
+            if (b is SolidColorBrush && Pens.TryGetValue(key, out var hit)) return hit;
             var p = new Pen(b, w) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
             if (dash) p.DashStyle = new DashStyle(new[] { on, off }, 0);
             p.Freeze();
+            if (b is SolidColorBrush) { if (Pens.Count > 600) Pens.Clear(); Pens[key] = p; }
             return p;
         }
 
@@ -296,28 +406,110 @@ static class ParserGraphs
             {
                 Draws++;
                 long t0 = Stopwatch.GetTimestamp();
-                var g = new DrawingGroup();
-                using (var gc = g.Open()) Paint(gc, s, size);
-                g.Freeze();
-                (_cache, _cacheFor) = (g, (s, size, dpi));
+                var f = new DrawingGroup(); var g = new DrawingGroup();
+                using (var fc = f.Open())
+                using (var gc = g.Open()) Paint(fc, gc, s, size);
+                f.Freeze(); g.Freeze();
+                (_frameCache, _cache, _cacheFor) = (f, g, (s, size, dpi));
                 DrawMs += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
             }
-            dc.DrawDrawing(_cache);
+            dc.DrawDrawing(_frameCache);
+            if (_reveal < 1)
+            {
+                // the draw-in: the lines seen through a window that widens from the left, as a pen would draw them
+                double q = _reveal * _reveal * (3 - 2 * _reveal);
+                dc.PushClip(new RectangleGeometry(new Rect(0, 0, _plot.Left + q * Math.Max(0, size.Width - _plot.Left), size.Height)));
+                dc.DrawDrawing(_cache);
+                dc.Pop();
+            }
+            else dc.DrawDrawing(_cache);
+            DrawHeads();
             if (_hoverAt != null) ShowHover(_hoverAt, _hoverBox);
         }
 
-        void Paint(DrawingContext dc, Set s, Size size)
+        /// <summary>The frame (axes, grid, times) into <paramref name="fc"/>, everything the pen draws into <paramref name="dc"/>.</summary>
+        void Paint(DrawingContext fc, DrawingContext dc, Set s, Size size)
         {
             if (!s.Has(Kind))
             {
                 var wait = Ft(L.T("The graphs fill in after the first seconds of the fight."), 11.5, _p.Faint);
-                dc.DrawText(wait, new Point((size.Width - wait.Width) / 2, (size.Height - wait.Height) / 2));
+                fc.DrawText(wait, new Point((size.Width - wait.Width) / 2, (size.Height - wait.Height) / 2));
                 return;
             }
             // the healing's graph sits under the fight's on the same time scale: its times are the fight's, not written again
             _plot = new Rect(new Point(46, 8), new Point(Math.Max(120, size.Width - s.Gutter), size.Height - (Kind == Dps || !SharedTime ? 20 : 6)));
-            Frame(dc, s);
+            Frame(fc, s);
             if (Kind == Dps) DrawFight(dc, s); else DrawHeal(dc, s);
+        }
+
+        /// <summary>Live: the lines' frozen part ends a second before their newest point; the rest is the pen's (<see cref="DrawHeads"/>).</summary>
+        int Done(Set s) => s.Live ? s.N - 2 : s.N - 1;
+
+        /// <summary>
+        /// The light layer: live, each line's last piece drawn to where the pen has got (<see cref="_glide"/> of the way from the
+        /// second before to the newest), its head, the boss's HP's, and the names and figures at the ends following them (the
+        /// figures rolling from the second before's). Nothing for a kept fight (its labels are in the frozen drawing).
+        /// </summary>
+        void DrawHeads()
+        {
+            using var dc = _live.RenderOpen();
+            if (_set is not { Live: true, N: >= 2 } s || !s.Has(Kind) || _plot.Width <= 0) return;
+            double g = _glide;
+            Point Tip(IReadOnlyList<double> v, Func<double, double> y) => Lerp(new Point(X(v.Count - 2), y(v[^2])), new Point(X(v.Count - 1), y(v[^1])), g);
+            var ends = new List<(double Y, Point Head, string Name, string Value, Color Color, bool Bold)>();
+            if (Kind == Dps)
+            {
+                if (s.HpLeft is { } hp)
+                {
+                    var a = new Point(X(hp.Length - 2), YHp(hp[^2])); var tip = Tip(hp, YHp);
+                    dc.DrawLine(P(C(_p.Under, 0.8), 4.2), a, tip);
+                    dc.DrawLine(P(C(_p.InkC, 0.9), 2), a, tip);
+                }
+                foreach (var l in s.Members.Where(m => !m.You).Reverse()) Head(dc, l.S, l.Color, false, 1.7, Y);
+                foreach (var l in s.Members.Where(m => m.You)) Head(dc, l.S, l.Color, true, 2.7, Y);
+                if (s.HpLeft is { } h)
+                {
+                    var tip = Tip(h, YHp);
+                    dc.DrawEllipse(C(_p.InkC, 0.18), null, tip, 7, 7);
+                    dc.DrawEllipse(C(_p.InkC), null, tip, 3.4, 3.4);
+                }
+                foreach (var m in s.Members) { var tip = Tip(m.S, Y); ends.Add((tip.Y, tip, m.Name, Fig(m.AvgPrev + (m.Avg - m.AvgPrev) * g), m.Color, m.You)); }
+                if (s.HpLeft is { } h2) { var tip = Tip(h2, YHp); ends.Add((tip.Y, tip, L.T("Boss HP"), Pct(g >= 1 ? s.HpNow ?? h2[^1] : h2[^2] + (h2[^1] - h2[^2]) * g, 0), _p.InkC, true)); }
+            }
+            else
+            {
+                if (s.Taken is { } t) Head(dc, t, Coral, false, 1.3, Y, outline: false);
+                foreach (var l in s.Healers.Where(h => !h.You).Reverse()) Head(dc, l.S, l.Color, false, 1.8, Y);
+                foreach (var l in s.Healers.Where(h => h.You)) Head(dc, l.S, l.Color, true, 2.4, Y);
+                foreach (var h in s.Healers) { var tip = Tip(h.S, Y); ends.Add((tip.Y, tip, h.Name, Fig(h.AvgPrev + (h.Avg - h.AvgPrev) * g), h.Color, h.You)); }
+                if (s.Taken is { } t2) { var tip = Tip(t2, Y); ends.Add((tip.Y, tip, L.T("Damage taken"), Fig(s.TakenAvgPrev + (s.TakenAvg - s.TakenAvgPrev) * g), Coral, false)); }
+            }
+            Ends(dc, s, ends);
+        }
+
+        static Point Lerp(Point a, Point b, double t) => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+
+        /// <summary>
+        /// A line's last piece, from the second before its newest to where the pen is: the same curve the frozen part continues
+        /// (its Bézier cut at the pen's point), with the line's outline and glow, and the head on it.
+        /// </summary>
+        void Head(DrawingContext dc, IReadOnlyList<double> v, Color c, bool you, double thick, Func<double, double> y, bool outline = true)
+        {
+            int n = v.Count;
+            Point P0 = new(X(Math.Max(0, n - 3)), y(v[Math.Max(0, n - 3)])), P1 = new(X(n - 2), y(v[n - 2])), P2 = new(X(n - 1), y(v[n - 1]));
+            var c1 = new Point(P1.X + (P2.X - P0.X) / 6, Math.Clamp(P1.Y + (P2.Y - P0.Y) / 6, _plot.Top - 4, _plot.Bottom));
+            var c2 = new Point(P2.X - (P2.X - P1.X) / 6, Math.Clamp(P2.Y - (P2.Y - P1.Y) / 6, _plot.Top - 4, _plot.Bottom));
+            double t = _glide;
+            Point a = Lerp(P1, c1, t), b = Lerp(c1, c2, t), cc = Lerp(c2, P2, t), d = Lerp(a, b, t), e = Lerp(b, cc, t), tip = Lerp(d, e, t);
+            var g = new StreamGeometry();
+            using (var ctx = g.Open()) { ctx.BeginFigure(P1, false, false); ctx.BezierTo(a, d, tip, true, true); }
+            g.Freeze();
+            if (you) dc.DrawGeometry(null, P(C(c, 0.20), thick + 7), g);
+            if (outline) dc.DrawGeometry(null, P(C(_p.Under, _p.Dark ? 0.75 : 0.9), thick + 2.6), g);
+            dc.DrawGeometry(null, P(C(c, you ? 1 : 0.95), thick), g);
+            if (!outline) return;
+            dc.DrawEllipse(C(_p.Under), null, tip, you ? 4.6 : 3.8, you ? 4.6 : 3.8);
+            dc.DrawEllipse(C(c), null, tip, you ? 3.2 : 2.5, you ? 3.2 : 2.5);
         }
 
         // ---- the frame: time across (a light line every 15 or 30 s), the value scale up the left, quarters
@@ -353,17 +545,19 @@ static class ParserGraphs
         // ---- the series
 
         /// <summary>A smooth line through one value a second (Catmull-Rom as Béziers; straight once the points are close).</summary>
-        StreamGeometry Curve(IReadOnlyList<double> s, Func<double, double> y)
+        /// <param name="upTo">The last point drawn to (live: the second before the newest, the pen draws on from there); -1 all.</param>
+        StreamGeometry Curve(IReadOnlyList<double> s, Func<double, double> y, int upTo = -1)
         {
             var g = new StreamGeometry();
+            int last = upTo < 0 ? s.Count - 1 : Math.Min(upTo, s.Count - 1);
             using (var ctx = g.Open())
             {
                 var pts = new Point[s.Count];
                 for (int i = 0; i < s.Count; i++) pts[i] = new Point(X(i), y(s[i]));
                 ctx.BeginFigure(pts[0], false, false);
-                if (_plot.Width / Math.Max(1, _set!.Extent) < 3) ctx.PolyLineTo(pts.Skip(1).ToList(), true, true);
+                if (_plot.Width / Math.Max(1, _set!.Extent) < 3) ctx.PolyLineTo(pts.Skip(1).Take(last).ToList(), true, true);
                 else
-                    for (int i = 0; i < pts.Length - 1; i++)
+                    for (int i = 0; i < last; i++)
                     {
                         Point p0 = pts[Math.Max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.Min(pts.Length - 1, i + 2)];
                         var c1 = new Point(p1.X + (p2.X - p0.X) / 6, Math.Clamp(p1.Y + (p2.Y - p0.Y) / 6, _plot.Top - 4, _plot.Bottom));
@@ -376,15 +570,16 @@ static class ParserGraphs
         }
 
         /// <summary>The area under a series, down to the floor.</summary>
-        StreamGeometry Area(IReadOnlyList<double> top, Func<double, double> y)
+        StreamGeometry Area(IReadOnlyList<double> top, Func<double, double> y, int upTo)
         {
             var g = new StreamGeometry();
+            int last = Math.Min(upTo, top.Count - 1);
             using (var ctx = g.Open())
             {
                 ctx.BeginFigure(new Point(X(0), _plot.Bottom), true, true);
-                var pts = new List<Point>(top.Count + 1);
-                for (int i = 0; i < top.Count; i++) pts.Add(new Point(X(i), y(top[i])));
-                pts.Add(new Point(X(top.Count - 1), _plot.Bottom));
+                var pts = new List<Point>(last + 2);
+                for (int i = 0; i <= last; i++) pts.Add(new Point(X(i), y(top[i])));
+                pts.Add(new Point(X(last), _plot.Bottom));
                 ctx.PolyLineTo(pts, false, true);
             }
             g.Freeze();
@@ -394,11 +589,10 @@ static class ParserGraphs
         /// <summary>A member's line: an outline of the card's dark under it so lines that cross stay apart; yours glows gold.</summary>
         void Series(DrawingContext dc, Line l, double thick, Func<double, double> y)
         {
-            var g = Curve(l.S, y);
+            var g = Curve(l.S, y, Done(_set!));
             if (l.You) dc.DrawGeometry(null, P(C(l.Color, 0.20), thick + 7), g);
             dc.DrawGeometry(null, P(C(_p.Under, _p.Dark ? 0.75 : 0.9), thick + 2.6), g);
             dc.DrawGeometry(null, P(C(l.Color, l.You ? 1 : 0.95), thick), g);
-            if (_set!.Live) { var head = new Point(X(l.S.Length - 1), y(l.S[^1])); dc.DrawEllipse(C(_p.Under), null, head, l.You ? 4.6 : 3.8, l.You ? 4.6 : 3.8); dc.DrawEllipse(C(l.Color), null, head, l.You ? 3.2 : 2.5, l.You ? 3.2 : 2.5); }
         }
 
         void DrawFight(DrawingContext dc, Set s)
@@ -414,7 +608,7 @@ static class ParserGraphs
                     dc.DrawLine(guide, new Point(_plot.Left, y), new Point(_plot.Right, y));
                 }
                 var fill = new LinearGradientBrush(C(_p.InkC, _p.Dark ? 0.09 : 0.07).Color, C(_p.InkC, 0).Color, 90); fill.Freeze();
-                dc.DrawGeometry(fill, null, Area(hp, YHp));
+                dc.DrawGeometry(fill, null, Area(hp, YHp, Done(s)));
             }
             foreach (var l in s.Members.Where(m => !m.You).Reverse()) Series(dc, l, 1.7, Y);
             foreach (var l in s.Members.Where(m => m.You)) Series(dc, l, 2.7, Y);
@@ -425,7 +619,7 @@ static class ParserGraphs
                 using (var ctx = hpG.Open())
                 {
                     ctx.BeginFigure(new Point(X(0), YHp(h[0])), false, false);
-                    ctx.PolyLineTo(Enumerable.Range(1, h.Length - 1).Select(i => new Point(X(i), YHp(h[i]))).ToList(), true, true);
+                    ctx.PolyLineTo(Enumerable.Range(1, Math.Max(0, Done(s))).Select(i => new Point(X(i), YHp(h[i]))).ToList(), true, true);
                 }
                 hpG.Freeze();
                 dc.DrawGeometry(null, P(C(_p.Under, 0.8), 4.2), hpG);
@@ -433,7 +627,7 @@ static class ParserGraphs
                 foreach (var th in new[] { 2 / 3.0, 1 / 3.0 })
                 {
                     int i = Array.FindIndex(h, x => x <= th);
-                    if (i <= 0 || h[0] <= th) continue;
+                    if (i <= 0 || h[0] <= th || i > Done(s)) continue;
                     var c = new Point(X(i), YHp(th));
                     dc.DrawEllipse(C(_p.Under), P(C(_p.InkC), 1.6), c, 3.8, 3.8);
                     var t = Ft(PK.Clock(i), 10, _p.Muted, bold: true);
@@ -459,13 +653,8 @@ static class ParserGraphs
                 Label(dc, t, new Point(xe - 6 - t.Width, _plot.Top + 14));
                 if (s.HpLeft is { } h2) dc.DrawEllipse(tone, null, new Point(xe, YHp(h2[^1])), 4, 4);
             }
-            else if (s.Live && s.HpLeft is { } h3)
-            {
-                var head = new Point(X(s.N - 1), YHp(h3[^1]));
-                dc.DrawEllipse(C(_p.InkC, 0.18), null, head, 7, 7);
-                dc.DrawEllipse(C(_p.InkC), null, head, 3.4, 3.4);
-            }
-            // the names and figures at the lines' ends, the boss's HP with them
+            // the names and figures at the lines' ends, the boss's HP with them (live: the pen's layer has them, following the heads)
+            if (s.Live) return;
             var ends = s.Members.Select(m => (Y: Y(m.S[^1]), Head: new Point(X(m.S.Length - 1), Y(m.S[^1])), Name: m.Name, Value: Fig(m.Avg), Color: m.Color, Bold: m.You)).ToList();
             if (s.HpLeft is { } h4) ends.Add((YHp(h4[^1]), new Point(X(s.N - 1), YHp(h4[^1])), L.T("Boss HP"), Pct(s.HpNow ?? h4[^1], 0), _p.InkC, true));
             Ends(dc, s, ends);
@@ -534,11 +723,12 @@ static class ParserGraphs
         {
             if (s.Taken is { } taken)
             {
-                dc.DrawGeometry(C(Coral, 0.15), null, Area(taken, Y));
-                dc.DrawGeometry(null, P(C(Coral, 0.8), 1.3), Curve(taken, Y));
+                dc.DrawGeometry(C(Coral, 0.15), null, Area(taken, Y, Done(s)));
+                dc.DrawGeometry(null, P(C(Coral, 0.8), 1.3), Curve(taken, Y, Done(s)));
             }
             foreach (var l in s.Healers.Where(h => !h.You).Reverse()) Series(dc, l, 1.8, Y);
             foreach (var l in s.Healers.Where(h => h.You)) Series(dc, l, 2.4, Y);
+            if (s.Live) return;
             var ends = s.Healers.Select(h => (Y: Y(h.S[^1]), Head: new Point(X(h.S.Length - 1), Y(h.S[^1])), Name: h.Name, Value: Fig(h.Avg), Color: h.Color, Bold: h.You)).ToList();
             if (s.Taken is { } t) ends.Add((Y(t[^1]), new Point(X(t.Length - 1), Y(t[^1])), L.T("Damage taken"), Fig(s.TakenAvg), Coral, false));
             Ends(dc, s, ends);
@@ -736,7 +926,10 @@ static class ParserGraphs
             DataMs += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
             if (_set != null && s.Sig == _set.Sig && s.Live == _set.Live) return;   // nothing moved (a hit's redraw inside the same second)
             Redraws++;
+            var prev = _set;
             _set = s;
+            // the pen: a kept fight's first look draws in; a live fight's newer second, the heads glide to it
+            bool drawIn = prev == null && !live, glide = prev is { Live: true } && live && s.N > prev.N;
             foreach (var kind in Kinds)
             {
                 bool has = kind == Dps || s.Has(kind);
@@ -744,7 +937,7 @@ static class ParserGraphs
                 if (!has) continue;
                 var title = Title(kind, s);
                 if (_titles[kind].Text != title) _titles[kind].Text = title;
-                _charts[kind].SetData(s);
+                _charts[kind].SetData(s, drawIn, glide);
             }
             var sub = L.F("{0} s average", AverageSeconds);
             if (_sub.Text != sub) _sub.Text = sub;

@@ -41,6 +41,17 @@ public static partial class WpfApp
                     g.ChartOf(ParserGraphs.Heal).ShowHover(null, false); g.ChartOf(ParserGraphs.Dps).ShowHover(null, false);
                 }
             }
+            // the pen held (KL_MOTION_AT does it for every state): a kept fight drawing in at 40%, a live fight's heads mid-glide
+            var at0 = Motion.FrozenAt;
+            try
+            {
+                foreach (var (st, at, file) in new[] { ("six", 0.4, "ui-graphs-six-drawin-40.png"), ("wipe", 0.7, "ui-graphs-wipe-drawin-70.png"), ("live70", 0.5, "ui-graphs-live70-glide-50.png") })
+                {
+                    Motion.FrozenAt = at; w.ResetGraphsForTest(); w.ShowGraphsDemo(st); DoEvents(); DoEvents();
+                    Save((FrameworkElement)w.Content, Path.Combine(dir, file), 800 - 16);
+                }
+            }
+            finally { Motion.FrozenAt = at0; w.ResetGraphsForTest(); }
             // each graph's Copy picture (after the renders, so its toast is in none of them): the six-member kill's three, the live pull's DPS
             void Pictures(string st, params string[] kinds)
             {
@@ -68,40 +79,61 @@ public static partial class WpfApp
     /// <summary>This thread's CPU time so far (kernel and user), in ms.</summary>
     static double UiThreadMs() { GetThreadTimes(GetCurrentThread(), out _, out _, out long k, out long u); return (k + u) / 10_000.0; }
 
-    /// <summary>
-    /// A live fight on the Parser page for <paramref name="seconds"/> of wall time: hits every 60 ms (the Parser's shortest
-    /// frame, the most a fight redraws the page), each redrawing it as the window does. The process's CPU time (every thread:
-    /// the window's, WPF's render thread), the window thread's own, the page's redraws and the graphs' own draws.
-    /// </summary>
-    static (double ProcMs, double UiMs, int Frames, int GraphRedraws, double GraphMs) LiveCpu(MainWindow w, string tab, double seconds)
+    /// <summary>Runs the window's dispatcher (input, layout, rendering and the frame tick, as the app would idle) until <paramref name="dueMs"/> on <paramref name="clock"/>.</summary>
+    static void PumpUntil(Stopwatch clock, double dueMs)
     {
-        w.ShowGraphsDemo("live24");
-        w.ParserTabForTest = tab;
-        DoEvents();
-        var proc = Process.GetCurrentProcess();
-        proc.Refresh();
-        double p0 = proc.TotalProcessorTime.TotalMilliseconds, u0 = UiThreadMs();
-        int g0 = w.GraphsForTest?.Redraws ?? 0;
-        double gm0 = ParserGraphs.DataMs + ParserGraphs.DrawMs;
-        var clock = Stopwatch.StartNew();
-        int frames = 0;
-        var panel = w.GraphsForTest;
-        while (clock.Elapsed.TotalSeconds < seconds)
-        {
-            double due = (frames + 1) * 60;
-            w.GraphsLiveStepForTest(0.06);
-            w.ParserDrawNowForTest();
-            frames++;
-            DoEvents();
-            double wait = due - clock.Elapsed.TotalMilliseconds;
-            if (wait > 0) Thread.Sleep((int)wait);
-        }
-        DoEvents();
-        proc.Refresh();
-        int redraws = tab == "Timeline" && w.GraphsForTest is { } g ? (ReferenceEquals(g, panel) ? g.Redraws - g0 : g.Redraws) : 0;
-        return (proc.TotalProcessorTime.TotalMilliseconds - p0, UiThreadMs() - u0, frames, redraws, ParserGraphs.DataMs + ParserGraphs.DrawMs - gm0);
+        double left = dueMs - clock.Elapsed.TotalMilliseconds;
+        if (left <= 1) { DoEvents(); return; }
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Send) { Interval = TimeSpan.FromMilliseconds(left) };
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Start();
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
+    /// <summary>
+    /// A live fight on the Parser page for <paramref name="seconds"/> of wall time: a hit every <paramref name="hitMs"/> (60 ms:
+    /// the Parser's shortest frame, the most a fight redraws the page), each redrawing it as the window does, the dispatcher
+    /// running between them as the app idles. <paramref name="pen"/>: the graphs' pen plays (draw-in, gliding heads). The CPU
+    /// time of the window thread, of WPF's render thread (the process's busiest other thread) and of the whole process; the
+    /// page's redraws, the graphs' own draws and the pen's frames.
+    /// </summary>
+    static (double ProcMs, double UiMs, double RenderMs, int Frames, int GraphRedraws, double GraphMs, int PenFrames) LiveCpu(MainWindow w, string tab, double seconds, bool pen, double hitMs = 60)
+    {
+        ParserGraphs.Chart.ForceMotionForTest = pen;
+        try
+        {
+            w.ResetGraphsForTest();
+            w.ShowGraphsDemo("live24");
+            w.ParserTabForTest = tab;
+            DoEvents();
+            var proc = Process.GetCurrentProcess();
+            uint ui = GetCurrentThreadId();
+            Dictionary<int, double> Threads() { proc.Refresh(); var d = new Dictionary<int, double>(); foreach (ProcessThread th in proc.Threads) { try { d[th.Id] = th.TotalProcessorTime.TotalMilliseconds; } catch (Exception) { } } return d; }
+            var t0 = Threads();
+            double p0 = proc.TotalProcessorTime.TotalMilliseconds, u0 = UiThreadMs();
+            double gm0 = ParserGraphs.DataMs + ParserGraphs.DrawMs;
+            int pf0 = ParserGraphs.Chart.Frames;
+            var clock = Stopwatch.StartNew();
+            int frames = 0;
+            var panel = w.GraphsForTest;
+            int g0 = panel?.Redraws ?? 0;
+            while (clock.Elapsed.TotalSeconds < seconds)
+            {
+                w.GraphsLiveStepForTest(hitMs / 1000);
+                w.ParserDrawNowForTest();
+                frames++;
+                PumpUntil(clock, frames * hitMs);
+            }
+            DoEvents();
+            var t1 = Threads();
+            proc.Refresh();
+            double render = t1.Where(kv => kv.Key != ui && t0.ContainsKey(kv.Key)).Select(kv => kv.Value - t0[kv.Key]).DefaultIfEmpty(0).Max();
+            int redraws = tab == "Timeline" && w.GraphsForTest is { } g ? (ReferenceEquals(g, panel) ? g.Redraws - g0 : g.Redraws) : 0;
+            return (proc.TotalProcessorTime.TotalMilliseconds - p0, UiThreadMs() - u0, render, frames, redraws, ParserGraphs.DataMs + ParserGraphs.DrawMs - gm0, ParserGraphs.Chart.Frames - pf0);
+        }
+        finally { ParserGraphs.Chart.ForceMotionForTest = false; }
+    }
     /// <summary>
     /// options-test (<c>KL_OPTIONS_ONLY=graphs</c> alone): the Parser page's Graphs tab. It is first and the default for a fight
     /// with seconds kept, absent for one without; each state draws the graphs its record has and only those (no empty chart);
@@ -190,15 +222,53 @@ public static partial class WpfApp
             check(ReferenceEquals(w.GraphsForTest, panel) && panel.Shown!.N > n0 + 1 && redraws >= 2 && redraws <= secs * 1000 / ParserGraphs.LiveFrameMs + 1
                 && panel.Shown!.Extent == ext0 && panel.Shown!.YMax == y0,
                 $"graphs, live: the same view kept over {frames} page redraws in {secs:0.0} s; its lines grew from {n0} to {panel.Shown!.N} s in a frame that stood still ({PK.Clock(panel.Shown!.Extent)}, {panel.Shown!.YMax:N0}), its graphs drawn {redraws} times (at most every {ParserGraphs.LiveFrameMs} ms)");
-            // the CPU a live fight costs: the page on the Group tab (as 1.0.12 opened it) against the Graphs tab
-            var before = LiveCpu(w, "Group", 10);
-            var after = LiveCpu(w, "Timeline", 10);
-            Console.WriteLine($"      CPU, 10 s of a live six-member fight, a page redraw every 60 ms:");
-            Console.WriteLine($"      Group tab : {before.ProcMs:0} ms process ({before.ProcMs / 100:0.0}% of a core), {before.UiMs:0} ms window thread, {before.Frames} redraws ({before.UiMs / Math.Max(1, before.Frames):0.00} ms each)");
-            Console.WriteLine($"      Graphs tab: {after.ProcMs:0} ms process ({after.ProcMs / 100:0.0}% of a core), {after.UiMs:0} ms window thread, {after.Frames} redraws ({after.UiMs / Math.Max(1, after.Frames):0.00} ms each), graphs drawn {after.GraphRedraws} times, {after.GraphMs:0} ms of it the graphs' own ({after.GraphMs / Math.Max(1, after.GraphRedraws):0.0} ms a draw)");
-            check(after.UiMs <= before.UiMs * 1.35 + 150, $"graphs: a live fight on the Graphs tab costs the window thread about what the Group tab does ({after.UiMs:0} ms against {before.UiMs:0} ms in 10 s)");
-        }
-        finally { MainWindow.ShareSinkForTest = null; w.Close(); }
+            // the pen: a kept fight's first look draws in (once: a redraw of it doesn't), a live fight's heads glide to a newer
+            // second, and with the window still (renders, Windows's animations off) nothing plays
+            ParserGraphs.Chart.ForceMotionForTest = true;
+            try
+            {
+                w.ResetGraphsForTest(); w.ShowGraphsDemo("six");
+                var fight = w.GraphsForTest!.ChartOf(ParserGraphs.Dps);
+                bool began = fight.Revealing;
+                var wait = Stopwatch.StartNew();
+                while (fight.Revealing && wait.ElapsedMilliseconds < 3000) PumpUntil(wait, wait.ElapsedMilliseconds + 20);
+                double took = wait.ElapsedMilliseconds;
+                w.ShowGraphsDemo("six"); DoEvents();
+                bool again = w.GraphsForTest!.ChartOf(ParserGraphs.Dps).Revealing;
+                w.ResetGraphsForTest(); w.ShowGraphsDemo("live24"); DoEvents();
+                var live = w.GraphsForTest!; var lf = live.ChartOf(ParserGraphs.Dps);
+                Thread.Sleep(ParserGraphs.LiveFrameMs + 30);
+                w.GraphsLiveStepForTest(1.0); w.ParserDrawNowForTest();
+                bool glides = lf.Gliding;
+                wait.Restart();
+                while (lf.Gliding && wait.ElapsedMilliseconds < 3000) PumpUntil(wait, wait.ElapsedMilliseconds + 20);
+                double glideTook = wait.ElapsedMilliseconds;
+                check(began && !fight.Revealing && took >= ParserGraphs.Chart.DrawInMs * 0.8 && took < 2500 && !again && glides && glideTook >= ParserGraphs.Chart.GlideMs * 0.8 && glideTook < 2500,
+                    $"graphs: the pen draws a kept fight in on its first look ({took:0} ms), not on a redraw of it; a live line's head glides to its newest second ({glideTook:0} ms)");
+            }
+            finally { ParserGraphs.Chart.ForceMotionForTest = false; }
+            w.ResetGraphsForTest(); w.ShowGraphsDemo("six");
+            check(!w.GraphsForTest!.ChartOf(ParserGraphs.Dps).Revealing, "graphs: with the window still (a render, Windows's animations off) the graph shows drawn, no pen");
+            // the CPU a live fight costs (10 s each, six members): the page on the Group tab (as 1.0.12 opened it), the Graphs
+            // tab with the pen still, and with the pen drawing; then the pen alone, a quiet page redrawn once a second
+            var group = LiveCpu(w, "Group", 10, pen: false);
+            var still = LiveCpu(w, "Timeline", 10, pen: false);
+            var drawn = LiveCpu(w, "Timeline", 10, pen: true);
+            var quiet0 = LiveCpu(w, "Timeline", 10, pen: false, hitMs: 1000);
+            var quiet1 = LiveCpu(w, "Timeline", 10, pen: true, hitMs: 1000);
+            string Row(string what, (double ProcMs, double UiMs, double RenderMs, int Frames, int GraphRedraws, double GraphMs, int PenFrames) r) =>
+                $"      {what,-34}: window thread {r.UiMs / 100:0.0}% of a core, render thread {r.RenderMs / 100:0.0}%, process {r.ProcMs / 100:0.0}%; {r.Frames} page redraws, graphs drawn {r.GraphRedraws}x ({r.GraphMs:0} ms), pen frames {r.PenFrames}";
+            Console.WriteLine("      CPU, 10 s of a live six-member fight:");
+            Console.WriteLine(Row("Group tab, a hit every 60 ms", group));
+            Console.WriteLine(Row("Graphs, pen still, hit every 60 ms", still));
+            Console.WriteLine(Row("Graphs, pen drawing, hit every 60 ms", drawn));
+            Console.WriteLine(Row("Graphs, pen still, page once a second", quiet0));
+            Console.WriteLine(Row("Graphs, pen drawing, page once a s", quiet1));
+            double penCost = (quiet1.UiMs + quiet1.RenderMs - quiet0.UiMs - quiet0.RenderMs) / 100;
+            Console.WriteLine($"      the pen's own cost (window + render thread, quiet page): {penCost:0.0}% of a core at {1000 / ParserGraphs.Chart.FrameMs:0} frames a second");
+            check(still.UiMs <= group.UiMs * 1.35 + 150 && drawn.PenFrames > 100 && penCost <= 5,
+                $"graphs: a live fight on the Graphs tab costs the window thread about what the Group tab does ({still.UiMs:0} ms against {group.UiMs:0} ms in 10 s); the pen drew {drawn.PenFrames} frames for {penCost:0.0}% of a core");
+        }        finally { MainWindow.ShareSinkForTest = null; w.Close(); }
 
         // every text in Korean and Chinese: the graph states drawn in each, nothing English left, every L.T with an entry
         var dir = Path.Combine(Path.GetTempPath(), "KinahLedger-graphs-lang");
