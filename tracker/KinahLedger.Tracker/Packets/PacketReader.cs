@@ -22,6 +22,20 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public string State { get; private set; } = "Waiting for the game";
     /// <summary>True while a capture runs on the game's connection.</summary>
     public bool On => _testOn || _thread is { IsAlive: true };
+    /// <summary>True while the game watcher sees the game running.</summary>
+    public bool GameRunning => _pids is { Count: > 0 };
+    /// <summary>
+    /// Since when the game has run with no server connection the reader can follow (a ping booster or VPN between the game
+    /// and its server, typically: the connection then goes to this PC itself or through the booster's own port); null while
+    /// it has one, or the game isn't running.
+    /// </summary>
+    public DateTime? NoServerSince { get; private set; }
+    /// <summary>
+    /// Tries the capture again at the next look (a quarter second while the game is connected) instead of after the minute's
+    /// wait: Npcap was just installed (Ui/MainWindow.MeterBlock.cs). Nothing else needs a restart: wpcap.dll is loaded the
+    /// first time a capture opens.
+    /// </summary>
+    public void RetryNow() => _failedAt = DateTime.MinValue;
     bool _testOn;
     /// <summary>For packet-test: reading as if a capture ran, the messages handed in by hand.</summary>
     internal void ReadingForTest() { _testOn = true; _testItems = true; _packetAt = PacketClock.Now; }
@@ -480,10 +494,11 @@ public sealed class PacketReader : IDisposable, IBossFeed
 
     void TickCore(IReadOnlyCollection<uint> gamePids)
     {
-        if (!Enabled) { StopCapture(); State = "Off in Options"; return; }
-        if (gamePids.Count == 0) { StopCapture(); Applicants.Clear(); State = "Waiting for the game"; return; }
+        if (!Enabled) { StopCapture(); NoServerSince = null; State = "Off in Options"; return; }
+        if (gamePids.Count == 0) { StopCapture(); NoServerSince = null; Applicants.Clear(); State = "Waiting for the game"; return; }
         var game = TcpTable.GameServer(TcpTable.Of(gamePids));
-        if (game == null) { StopCapture(); State = "Waiting for the game to connect to its server"; return; }
+        if (game == null) { StopCapture(); NoServerSince ??= DateTime.UtcNow; State = "Waiting for the game to connect to its server"; return; }
+        NoServerSince = null;
         // another server (an event, the Abyss, a relog): a new stream; the amounts carry on across it
         if (_link != null && game != _link)
         {
