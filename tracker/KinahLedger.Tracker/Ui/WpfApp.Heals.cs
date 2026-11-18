@@ -104,9 +104,17 @@ public static partial class WpfApp
         FindTexts(root).FirstOrDefault(t => t.Text == name) is { } nt && VisualTreeHelper.GetParent(nt) is StackPanel line
         && line.Children.OfType<StackPanel>().Any(pl => pl.Visibility == Visibility.Visible && pl.Children.Count > 0);
 
-    static string HealRowName(FrameworkElement figures) =>
-        VisualTreeHelper.GetParent(figures) is StackPanel inPill && VisualTreeHelper.GetParent(inPill) is Border pill && VisualTreeHelper.GetParent(pill) is StackPanel line
-            ? line.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? "" : "";
+    /// <summary>
+    /// The name on a heal chip's row: the first text of the line the chip sits on, or (the Parser panel's own looks: the chip
+    /// under the name, beside the CP) of the name's line above it.
+    /// </summary>
+    static string HealRowName(FrameworkElement figures)
+    {
+        if (VisualTreeHelper.GetParent(figures) is not StackPanel inPill || VisualTreeHelper.GetParent(inPill) is not Border pill || VisualTreeHelper.GetParent(pill) is not StackPanel line) return "";
+        if (line.Children.OfType<TextBlock>().FirstOrDefault() is { } t) return t.Text;
+        return VisualTreeHelper.GetParent(line) is StackPanel two && two.Children.OfType<StackPanel>().FirstOrDefault() is { } nameLine && !ReferenceEquals(nameLine, line)
+            ? nameLine.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? "" : "";
+    }
 
     /// <summary>
     /// options-test: the heal chip (Steven, 2026-11-16: the figures under the name and the foot line "look awful") in every

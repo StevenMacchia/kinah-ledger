@@ -242,7 +242,7 @@ public sealed partial class ParserRows
             cols.Children.Add(chip);
             var icon = ClassArt.Icon(f.Class, 18, f.Name); icon.Margin = new Thickness(9, 0, 6, 0);
             cols.Children.Add(PK.Col(icon, 1));
-            var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, -2, 0, 0), Children = { cpPair } };
+            var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 0), Children = { cpPair } };
             healPill.Margin = new Thickness(7, 0, 0, 0);
             sub.Children.Add(healPill);
             nm.Children.Add(pb); nm.Children.Add(plates);
