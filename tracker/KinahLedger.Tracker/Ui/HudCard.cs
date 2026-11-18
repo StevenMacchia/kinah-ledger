@@ -294,6 +294,11 @@ public sealed partial class HudCard : IHudLook
             if (crafting) _farmBody.Visibility = Visibility.Collapsed;   // Show(null) brings the farming figures back
         }
         if (drop != null && Changed("dropRate", V("rate") + abyss)) _drop.Rate(V("rate"), abyss);
+
+        // Pickup icons off (Settings › Buddy › More): the card fits its words instead of keeping 360 px with an empty right
+        // side (Steven rejects empty space), never wider than 360; a drop held and the crafting line keep the 360 they are drawn for
+        bool fit = !PickStrip.Shown && drop == null && !crafting;
+        if (Changed("fit", fit.ToString())) { _card.Width = fit ? double.NaN : 360; _card.MaxWidth = 360; }
     }
 
     /// <summary>
