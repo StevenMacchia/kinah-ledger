@@ -32,7 +32,7 @@ public partial class MainWindow
     {
         // the redesign's Timers tab replaced the header button (AddTimersButton); the overlay joins the header's Overlays group
         // listed only while the timers have a strip of their own: by default they are a line on top of the Kinah overlay
-        RegisterOverlay("Timers", () => TimersOverlayOn, on => SetTimersOverlay(on), L.T("Events and world bosses you watch, in a strip of their own: hidden until one is near, with a chime."),
+        RegisterOverlay("Timers", () => TimersOverlayOn, on => SetTimersOverlay(on), L.T("Events and world bosses you watch, hidden until one is near. Set up in Settings › Timers."),
             visible: () => TimersSeparate);
         if (!watch) return;
         _timerPrefs = TimerPrefs.Load();

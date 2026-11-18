@@ -10,8 +10,12 @@ public sealed class ParserPrefs
 {
     /// <summary>The fight overlay over the game (shown in boss fights only).</summary>
     public bool Overlay { get; set; } = true;
-    /// <summary>Clicks go through the overlay to the game; off, it can be dragged.</summary>
-    public bool ClickThrough { get; set; }
+    /// <summary>
+    /// Clicks go through the overlay to the game (its handle on the top edge still moves it); off, it can be dragged anywhere.
+    /// On for a new install since 1.0.18 (Steven, 2026-11-18: "Have all settings simplified - defaulted to on"); a file from
+    /// before keeps its own choice, and one without the key reads as the old default, off (<see cref="Read"/>).
+    /// </summary>
+    public bool ClickThrough { get; set; } = true;
     /// <summary>Where the overlay was dropped, in screen pixels; null until it is dragged once.</summary>
     public int? Left { get; set; }
     public int? Top { get; set; }
@@ -40,9 +44,10 @@ public sealed class ParserPrefs
     /// The meter over the game (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss
     /// fights'"): off (Only boss fights, the default) it shows in boss fights and dungeons; on (Always on) it is always up,
     /// starting from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after a few seconds without
-    /// fighting (Parser/BossParser.cs, AlwaysLive). What is kept stays the mode's either way.
+    /// fighting (Parser/BossParser.cs, AlwaysLive). What is kept stays the mode's either way. On for a new install since 1.0.18
+    /// (Steven, 2026-11-18: "defaulted to on"); a saved choice stays.
     /// </summary>
-    public bool AlwaysOn { get; set; }
+    public bool AlwaysOn { get; set; } = true;
     /// <summary>Which records the list shows: boss pulls only now; an old "run" or "fight" is cleared when read.</summary>
     public string ListMode { get; set; } = "";
     /// <summary>
@@ -95,8 +100,8 @@ public sealed class ParserPrefs
     public const double DefaultWidth = 350, OldDefaultWidth = 330;
     /// <summary>The player set the width (an edge dragged, the Settings slider saved): kept as it is from then on; see Settle.</summary>
     public bool WidthPicked { get; set; }
-    /// <summary>Kills near you on boss pulls and runs (off by default: minimal).</summary>
-    public bool KillsNear { get; set; }
+    /// <summary>Kills near you on boss pulls and runs: on for a new install since 1.0.18 (off before, minimal); a saved choice stays.</summary>
+    public bool KillsNear { get; set; } = true;
     /// <summary>
     /// The group's deaths on boss pulls and runs, the list filters and the explanations on hover: on by default since the
     /// parser's honest pass (the spec's serious defaults); a player from before moves to them once (<see cref="HonestSettled"/>).
@@ -112,8 +117,8 @@ public sealed class ParserPrefs
     public bool HonestSettled { get; set; }
     /// <summary>Member figures: "boss" (damage to the boss only, the default) or "all" (every target, adds too). The group card's switch.</summary>
     public string Targets { get; set; } = "boss";
-    /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, five rows (a whole party). A click on the meter switches it.</summary>
-    public bool Expanded { get; set; }
+    /// <summary>The overlay's meter expanded (Parser v2): everyone, with the damage (and crit and the DPS over time once kept); off, five rows (a whole party). A click on the meter switches it. On for a new install since 1.0.18.</summary>
+    public bool Expanded { get; set; } = true;
     /// <summary>The green heal bar along a healer's row on the overlay's meter (on by default; Settings › Parser › Heal bars).</summary>
     public bool HealBars { get; set; } = true;
     /// <summary>
@@ -192,6 +197,13 @@ public sealed class ParserPrefs
         return moved;
     }
 
+    /// <summary>The switches 1.0.18 turned on for a new install; a file without the key reads the old default (off).</summary>
+    static readonly (string Key, Action<ParserPrefs, bool> Set)[] OnSince1018 =
+    {
+        (nameof(ClickThrough), (p, v) => p.ClickThrough = v), (nameof(AlwaysOn), (p, v) => p.AlwaysOn = v),
+        (nameof(Expanded), (p, v) => p.Expanded = v), (nameof(KillsNear), (p, v) => p.KillsNear = v),
+    };
+
     // what a file from before the honest pass said for Filters and Hovers, as written (null: not in it); the properties
     // themselves read the new default when a file lacks them, so Read takes these from the file's text
     [System.Text.Json.Serialization.JsonIgnore] bool? OldFilters { get; set; }
@@ -200,12 +212,13 @@ public sealed class ParserPrefs
     static ParserPrefs Read(string json)
     {
         var p = JsonSerializer.Deserialize<ParserPrefs>(json) ?? new();
-        if (!p.HonestSettled)
-        {
-            using var doc = JsonDocument.Parse(json);
-            bool? B(string name) => doc.RootElement.TryGetProperty(name, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
-            p.OldFilters = B("Filters"); p.OldHovers = B("Hovers");
-        }
+        using var doc = JsonDocument.Parse(json);
+        bool? B(string name) => doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty(name, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
+        if (!p.HonestSettled) { p.OldFilters = B("Filters"); p.OldHovers = B("Hovers"); }
+        // 1.0.18's defaults are for new installs only (Steven, 2026-11-18): a file written before them without one of these keys
+        // (an older version's) reads it as the default it had then, off, so no player's meter changes under them
+        foreach (var (key, set) in OnSince1018)
+            if (B(key) == null) set(p, false);
         return p;
     }
 

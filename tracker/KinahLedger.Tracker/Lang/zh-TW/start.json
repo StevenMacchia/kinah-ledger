@@ -139,7 +139,7 @@
   "Open the game first: the guide goes over it.": "請先開啟遊戲：導引會顯示在遊戲上方。",
   "The game window is mostly off the screen. Move it back, then place the panel.": "遊戲視窗大部分在螢幕外。請先移回來，再擺放浮動視窗。",
   "Panel placed. Place it again any time from the tray menu or Options › In game.": "已擺放浮動視窗。隨時可從系統匣選單或「設定 › 遊戲中」重新擺放。",
-  "Your hour, pickups and best. Its look: Options › In game.": "顯示你這一小時、拾取與最佳紀錄。外觀請到「設定 › 遊戲中」更改。",
+  "Your hour, pickups and best. Set up in Settings › Buddy.": "顯示你這一小時、拾取與最佳紀錄。在「設定 › 夥伴」中設定。",
   "Overlays over the game, each on or off: {0}.": "遊戲上方的浮動視窗，可分別開關：{0}。",
   "On now: {0}.": "目前開啟：{0}。",
   "None on now.": "目前都沒開啟。",

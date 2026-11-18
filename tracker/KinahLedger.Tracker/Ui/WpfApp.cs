@@ -156,6 +156,18 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "popouts") { PopOutChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (pop-outs): all passed" : $"options test (pop-outs): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=applicants: the Applicants window alone (Ui/WpfApp.Applicants.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "applicants") { var aw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; aw.Show(); DoEvents(); ApplicantsChecks(aw, Check); aw.Close(); Console.WriteLine(fails == 0 ? "options test (applicants): all passed" : $"options test (applicants): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=settings: the settings revamp's checks (left bar, every page fits, every row found and jumped to) and the
+        // settings-simplify checks (no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page), alone
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "settings")
+        {
+            var sw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            sw.Show(); sw.ShowDemo(); DoEvents();
+            OptionsWindow OpenS() { var so = new OptionsWindow(sw, OptionsWindow.Page.General) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; so.Show(); DoEvents(); return so; }
+            SettingsRevampChecks(sw, OpenS, Check);
+            SimplifyChecks(settings, Check);   // on a window of its own, with this one still open (as the whole test runs it)
+            sw.Close();
+            Console.WriteLine(fails == 0 ? "options test (settings): all passed" : $"options test (settings): {fails} failed"); return fails == 0 ? 0 : 1;
+        }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -378,6 +390,7 @@ public static partial class WpfApp
         ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
         using (new MainStatics()) NpcapChecks(settings, Check);   // (its own main windows: the shared layer and lookups put back after, Ui/WpfApp.PopOuts.cs) what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
         PopOutChecks(settings, Check);   // the pop-out windows, on a main window of their own (Ui/WpfApp.PopOuts.cs; KL_OPTIONS_ONLY=popouts alone)
+        SimplifyChecks(settings, Check);   // no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page (Ui/WpfApp.SettingsSimplify.cs; KL_OPTIONS_ONLY=settings)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
