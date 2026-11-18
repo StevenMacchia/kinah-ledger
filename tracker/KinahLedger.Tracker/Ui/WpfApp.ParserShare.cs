@@ -184,7 +184,7 @@ public static partial class WpfApp
             CopyButtonChecks(w, check, got, () => text, s => text = s);
             // the picture each tab's Copy picture copies: that view, in the share frame
             var bad = new List<string>();
-            foreach (var (state, view) in new[] { ("detail", ParserShare.Group), ("timeline", ParserShare.Timeline), ("taken", ParserShare.Taken), ("compare", ParserShare.Compare) })
+            foreach (var (state, view) in new[] { ("detail", ParserShare.Group), ("taken", ParserShare.Taken), ("compare", ParserShare.Compare) })   // the timeline tab is Graphs now: each graph its own Copy picture (WpfApp.ParserGraphs.cs)
             {
                 w.ShowParserDemo(state); DoEvents();
                 var e = w.ParserShownForTest;
@@ -355,7 +355,7 @@ public static partial class WpfApp
         // the state, the section's view, the head word its text's first row holds (null: no Copy text)
         var cases = new (string State, string View, string? Head)[]
         {
-            ("detail", ParserShare.Hero, null), ("detail", ParserShare.Group, L.T("DPS")), ("timeline", ParserShare.Timeline, null),
+            ("detail", ParserShare.Hero, null), ("detail", ParserShare.Group, L.T("DPS")),
             ("taken", ParserShare.Taken, L.T("Taken")), ("compare", ParserShare.Compare, L.T("This pull")), ("inspect-full", ParserShare.Abilities, L.T("Ability")),
             ("live", ParserShare.Hero, null), ("live", ParserShare.Group, L.T("DPS")),
         };

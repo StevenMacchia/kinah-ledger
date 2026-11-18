@@ -1067,12 +1067,12 @@ public static partial class WpfApp
             // flips its overlay and the dot follows
             w.SetParserSeparateForTest(true);
             string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
-            bool defaultTwo = defaultMenu == "Kinah,Parser" && w.OverlayEntries().Count == 2;
+            bool defaultTwo = defaultMenu == "Kinah,Applicants,Parser" && w.OverlayEntries().Count == 3;   // Applicants since 1.0.14
             Check(defaultTwo && !w.TimersSeparate, $"the header's Overlays menu by default: Kinah and the Parser ({defaultMenu}), the timers being a line on top of the Kinah overlay");
             w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
             var entries = w.OverlayEntries();
-            Check(ovs.Count == 3 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Kinah", "Parser", "Timers" }) && entries.Count == 3 && entries.All(e => e.On != null && e.Sub.Length > 0),
+            Check(ovs.Count == 4 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Applicants", "Kinah", "Parser", "Timers" }) && entries.Count == 4 && entries.All(e => e.On != null && e.Sub.Length > 0),
                 $"the header's Overlays menu: a switch each for Kinah first, the Parser and Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
             bool kinahWas = ovs[0].On;
             entries[0].Do!(); DoEvents();
