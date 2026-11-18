@@ -32,7 +32,7 @@ abstract partial class HudStackLook
 
     static Bit Sep(double size) => new("  ·  ", size, Faint, FontWeights.SemiBold);
 
-    protected static Brush PaceTone(RunBuddy.State s) => s.PaceSign < 0 ? Mint : s.PaceSign > 0 ? Rec : Ink;
+    protected static Brush RunPaceTone(RunBuddy.State s) => s.PaceSign < 0 ? Mint : s.PaceSign > 0 ? Rec : Ink;
 
     /// <summary>A run line: tabular digits (the clock never shifts as it runs), never trimmed (its forms do the fitting).</summary>
     protected static TextBlock RunText()
@@ -80,8 +80,8 @@ abstract partial class HudStackLook
         var mode = s.Mode.Length > 0 ? new[] { new Bit(" · " + s.Mode, size, Muted, FontWeights.SemiBold) } : Array.Empty<Bit>();
         var count = RunBuddy.Count(s);
         var forms = new List<Bit[]>();
-        if (count.Length > 0) forms.Add(Join(new[] { p }, mode, new[] { Sep(size), new Bit(count, size, Muted, FontWeights.SemiBold) }));
-        forms.Add(Join(new[] { p }, mode));
+        if (count.Length > 0) forms.Add(JoinBits(new[] { p }, mode, new[] { Sep(size), new Bit(count, size, Muted, FontWeights.SemiBold) }));
+        forms.Add(JoinBits(new[] { p }, mode));
         if (mode.Length > 0) forms.Add(new[] { p });
         return forms;
     }
@@ -97,14 +97,14 @@ abstract partial class HudStackLook
         var bold = FontWeights.Bold; var semi = FontWeights.SemiBold;
         if (s.Run)
         {
-            var tone = PaceTone(s);
+            var tone = RunPaceTone(s);
             Bit[] clock = { new(s.Clock, st.Clock, tone, bold) };
             var pace = s.Pace.Length > 0 ? new[] { new Bit("  " + s.Pace, st.Pace, tone, bold) } : Array.Empty<Bit>();
             var best = !withBest ? Array.Empty<Bit>()
                 : s.Best.Length > 0 ? new[] { Sep(st.Word), new Bit(L.T("best") + " ", st.Word, Muted, semi), new Bit(s.Best, st.Word + .5, Ink, bold) }
                 : s.Verdict == "first" ? new[] { Sep(st.Word), new Bit(L.T("First clear here"), st.Word, Muted, semi) } : Array.Empty<Bit>();
-            if (best.Length > 0) forms.Add(Join(clock, pace, best));
-            if (pace.Length > 0) forms.Add(Join(clock, pace));
+            if (best.Length > 0) forms.Add(JoinBits(clock, pace, best));
+            if (pace.Length > 0) forms.Add(JoinBits(clock, pace));
             forms.Add(clock);
         }
         else if (s.Clear)
@@ -114,10 +114,10 @@ abstract partial class HudStackLook
             {
                 Bit[] nb = { new("★ " + L.T("NEW BEST") + "  ", Math.Round(st.Clock * .8, 1), Gold, bold) };
                 var pace = s.Pace.Length > 0 ? new[] { new Bit("  " + s.Pace, st.Pace, Mint, bold) } : Array.Empty<Bit>();
-                if (pace.Length > 0) forms.Add(Join(nb, clock, pace));
-                forms.Add(Join(nb, clock));
-                forms.Add(Join(clock, new[] { new Bit("  ★ " + L.T("NEW BEST"), st.Word, Gold, bold) }));
-                forms.Add(Join(clock, new[] { new Bit("  ★", st.Word, Gold, bold) }));
+                if (pace.Length > 0) forms.Add(JoinBits(nb, clock, pace));
+                forms.Add(JoinBits(nb, clock));
+                forms.Add(JoinBits(clock, new[] { new Bit("  ★ " + L.T("NEW BEST"), st.Word, Gold, bold) }));
+                forms.Add(JoinBits(clock, new[] { new Bit("  ★", st.Word, Gold, bold) }));
             }
             else
             {
@@ -130,8 +130,8 @@ abstract partial class HudStackLook
                 if (at >= 0 && at + 3 < fmt.Length) cleared.Add(new(fmt[(at + 3)..], st.Word, Muted, semi));
                 var verdict = RunBuddy.Verdict(s);
                 var vb = verdict.Length > 0 ? new[] { Sep(st.Word), new Bit(verdict, st.Word + .5, s.Verdict is "rank" or "first" ? Gold : Muted, bold) } : Array.Empty<Bit>();
-                forms.Add(Join(cleared.ToArray(), vb));
-                if (vb.Length > 0) forms.Add(Join(clock, vb));
+                forms.Add(JoinBits(cleared.ToArray(), vb));
+                if (vb.Length > 0) forms.Add(JoinBits(clock, vb));
                 forms.Add(clock);
             }
         }
@@ -147,7 +147,7 @@ abstract partial class HudStackLook
             else if (s.Best.Length > 0)
             {
                 Bit[] best = { new(s.Best, st.Clock, Ink, bold) };
-                forms.Add(Join(best, new[] { new Bit("  " + L.T("fastest"), st.Word, Muted, semi) }));
+                forms.Add(JoinBits(best, new[] { new Bit("  " + L.T("fastest"), st.Word, Muted, semi) }));
                 forms.Add(best);
             }
             else forms.Add(new[] { new Bit(L.T("First clear here"), st.Word + 1, Muted, semi) });
@@ -167,7 +167,7 @@ abstract partial class HudStackLook
         if (s.Clear && s.Kinah.Length > 0)
         {
             Bit[] kin = { new(s.Kinah, size + .5, Gold, bold) };
-            if (s.Avg.Length > 0) forms.Add(Join(kin, new[] { Sep(size), new Bit(L.T("avg") + " ", size, Muted, semi), new Bit(s.Avg, size, Ink, semi) }));
+            if (s.Avg.Length > 0) forms.Add(JoinBits(kin, new[] { Sep(size), new Bit(L.T("avg") + " ", size, Muted, semi), new Bit(s.Avg, size, Ink, semi) }));
             forms.Add(kin);
         }
         else if (s.Run || s.Clear)
@@ -178,7 +178,7 @@ abstract partial class HudStackLook
                 if (x.Delta.Length > 0) parts.Add(new(" " + x.Delta, size, x.Best ? Gold : x.Sign < 0 ? Mint : x.Sign > 0 ? Rec : Muted, bold));
                 return parts.ToArray();
             }
-            if (s.Splits.Count >= 2) forms.Add(Join(One(s.Splits[^2]), new[] { Sep(size) }, One(s.Splits[^1])));
+            if (s.Splits.Count >= 2) forms.Add(JoinBits(One(s.Splits[^2]), new[] { Sep(size) }, One(s.Splits[^1])));
             if (s.Splits.Count >= 1) forms.Add(One(s.Splits[^1]));
         }
         else if (s.TodayRuns.Length > 0)
@@ -196,7 +196,7 @@ abstract partial class HudStackLook
         return forms;
     }
 
-    protected static Bit[] Join(params Bit[][] parts) => parts.SelectMany(p => p).ToArray();
+    protected static Bit[] JoinBits(params Bit[][] parts) => parts.SelectMany(p => p).ToArray();
 
     /// <summary>
     /// <paramref name="n"/> forms (the fullest, ..., the essential; the last repeated where there are fewer), then none: a
@@ -253,7 +253,7 @@ sealed partial class HudCapsule
         string? clears = s.Clears.Length > 0 ? (s.Clears == "1" ? L.T("1 clear") : L.F("{0} clears", s.Clears)) : null;
         if (s.Run)
         {
-            var tone = PaceTone(s);
+            var tone = RunPaceTone(s);
             Bit clock = new(s.Clock, st.Clock, tone, bold);
             if (s.Pace.Length > 0) big.Add(new[] { clock, new Bit("  " + s.Pace, st.Pace, tone, bold) });
             big.Add(new[] { clock });
@@ -263,7 +263,7 @@ sealed partial class HudCapsule
             if (today != null && clears != null) counts.Add(new[] { W(today), Dot(), W(clears) });
             if (today != null) counts.Add(new[] { W(today) });
             else if (clears != null) counts.Add(new[] { W(clears) });
-            foreach (var c in counts) over.Add(lead.Length > 0 ? Join(lead, new[] { Dot() }, c) : c);
+            foreach (var c in counts) over.Add(lead.Length > 0 ? JoinBits(lead, new[] { Dot() }, c) : c);
             if (lead.Length > 0) over.Add(lead);
             under.AddRange(RunSmallForms(s, st.Small));
         }
@@ -276,7 +276,7 @@ sealed partial class HudCapsule
             // over: how it ranks ("★ NEW BEST", "2nd fastest", "Best 4:12"), the run's number today after it where it fits
             var verdict = RunBuddy.Verdict(s);
             var vb = verdict.Length == 0 ? Array.Empty<Bit>() : nb ? new[] { F("★ " + verdict, Gold) } : new[] { F(verdict, s.Verdict is "rank" or "first" ? Gold : Muted) };
-            if (vb.Length > 0 && today != null) over.Add(Join(vb, new[] { Dot(), W(today) }));
+            if (vb.Length > 0 && today != null) over.Add(JoinBits(vb, new[] { Dot(), W(today) }));
             over.Add(vb);
             under.AddRange(RunSmallForms(s, st.Small));
         }
@@ -287,8 +287,8 @@ sealed partial class HudCapsule
             // over: "today here · 2 runs · avg 4:26"; under: "38 clears · fastest 4:12"
             var here = W(L.T("today here"));
             var avg = s.TodayAvg.Length > 0 ? new[] { Dot(), W(L.T("avg") + " "), F(s.TodayAvg) } : Array.Empty<Bit>();
-            if (s.TodayKinah.Length > 0) { over.Add(Join(new[] { here, Dot(), F(runs) }, avg)); over.Add(new[] { here, Dot(), F(runs) }); }
-            else if (avg.Length > 0) over.Add(Join(new[] { here }, avg));
+            if (s.TodayKinah.Length > 0) { over.Add(JoinBits(new[] { here, Dot(), F(runs) }, avg)); over.Add(new[] { here, Dot(), F(runs) }); }
+            else if (avg.Length > 0) over.Add(JoinBits(new[] { here }, avg));
             over.Add(new[] { here });
             var best = s.Best.Length > 0 ? new[] { W(L.T("fastest") + " "), F(s.Best) } : Array.Empty<Bit>();
             if (clears != null && best.Length > 0) under.Add(new[] { W(clears), Dot(), best[0], best[1] });
