@@ -21,6 +21,7 @@ public partial class MainWindow
     void InitRecount(bool watch)
     {
         if (!watch || _demo) return;
+        if (!Characters.CategoriesRepaired) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () => _ = RepairCategoriesAsync());
         // the re-read (0.10.134): every table this PC read before this start was read by the reader that lays icons on one
         // flat colour, so the ones that left slots unnamed are read again, once, after the re-count below if that runs too
         _rereadBefore = DateTime.UtcNow;
@@ -66,6 +67,38 @@ public partial class MainWindow
         catch (Exception ex) { CrashLog.Write("recount", ex); Characters.MarkRecounted(); }
         finally { _recounting = false; }
         if (!Characters.Reread) await RereadRunsAsync();
+    }
+
+    /// <summary>
+    /// The one-time repair of fights and runs kept in the wrong category (Session/CategoryRepair.cs; Steven, 2026-11-17: his
+    /// Transcendence runs were filed as expeditions, their second runs' bosses as "Unnamed boss"). Off the window's thread, the
+    /// files rewritten while the run log and the fight store hold their locks, then read back. Once per PC.
+    /// </summary>
+    async Task RepairCategoriesAsync()
+    {
+        try
+        {
+            if (Characters.CategoriesRepaired || Characters.NeedsPlacing || _placing) return;
+            var dataDir = CrashLog.Dir;
+            CategoryRepair.Result? res = null;
+            await Task.Run(() =>
+            {
+                void Apply() => TrackerSession.FightStore.Rewrite(() => res = CategoryRepair.Run(dataDir));
+                if (_watcher.Chat is { } ch) ch.Instances.Reload(Apply); else Apply();
+            });
+            Characters.MarkCategoriesRepaired();
+            if (res == null) return;
+            try { File.WriteAllLines(Path.Combine(dataDir, CategoryRepair.LogName), res.Log); } catch (Exception) { /* the summary is in reads.log either way */ }
+            CrashLog.Note($"{res.Log[0]}{(res.Files > 0 ? $"; the files as they were kept beside them ({CategoryRepair.BackupSuffix})" : "")}; every change in {CategoryRepair.LogName}");
+            if (res.Fights + res.Runs > 0)
+            {
+                BestRuns.Reset();
+                Redraw();
+                SayOnLine(L.F("Past fights and runs put in their right place: {0} fight(s) and {1} run(s), Transcendence and boss names among them.", res.Fights, res.Runs), "Faint");
+                _statusHoldUntil = DateTime.UtcNow.AddSeconds(20);
+            }
+        }
+        catch (Exception ex) { CrashLog.Write("categories repair", ex); Characters.MarkCategoriesRepaired(); }
     }
 
     DateTime _rereadBefore = DateTime.UtcNow;

@@ -112,6 +112,17 @@ public sealed class BossParser
     string _instance = "";
     /// <summary>The instance's mode as the game named it (InstanceMode), "" until it comes.</summary>
     string _gameMode = "";
+    /// <summary>
+    /// The instance is a Transcendence (the game's map code or mode said "G", or its name a stage), and its stage when known:
+    /// an expedition's own place at a stage, filed as a Transcendence, never as the expedition (Steven, 2026-11-17).
+    /// </summary>
+    bool _transcend; int _stage;
+    /// <summary>The stage the chat said the room was set to ("Set to Stage 4."), and when: a Transcendence's stage when its code doesn't say.</summary>
+    int _stageSaid; DateTime _stageSaidAt = DateTime.MinValue;
+    /// <summary>A chat stage counts for a Transcendence entered this long after it (the room keeps its stage; a new party sets its own).</summary>
+    public const double StageSaidHours = 3;
+    /// <summary>The instance's boss room closed (its map event's end) after its last boss died: its opening again is a new run.</summary>
+    DateTime? _roomClosedAt;
     long _instanceId;
     bool _instanceFromGame;
     /// <summary>When the player last entered an instance (a map event from before it is another place's).</summary>
@@ -396,7 +407,8 @@ public sealed class BossParser
                 // never by the decoder's number for the entry (the tracker's decoder numbers every entry, a reconnect into the
                 // same copy too; a replay's restarts at each connection): by name. The same name again is a reconnect or a new
                 // run of it: after its last boss died, a new run at once; else what comes next decides (Reentry)
-                bool sameName = !unplaced && Kept(kind) && Kept(_kind) && BossBook.Strip(ie.Name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase);
+                // (a Transcendence and its expedition are two places: the same name of another kind is another copy)
+                bool sameName = !unplaced && Kept(kind) && Kept(_kind) && kind == _kind && BossBook.Strip(ie.Name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase);
                 bool again = sameName && (_run is { } r0 && RunEnd(r0) == "cleared" || _book.BossesOf(_instance).Any(b => b.Final && _downHere.Contains(b.Name)));
                 _reentry = null;
                 if (sameName && !again)
@@ -407,7 +419,7 @@ public sealed class BossParser
                 }
                 _gapBefore = null;
                 if (again) Log($"entered {ie.Name.Trim()} again after its last boss died: a new run");
-                bool SameCopy(Encounter e) => !again && (unplaced || (BossBook.Strip(ie.Name).Equals(BossBook.Strip(e.Instance), StringComparison.OrdinalIgnoreCase) && Kept(kind)));
+                bool SameCopy(Encounter e) => !again && (unplaced || (BossBook.Strip(ie.Name).Equals(BossBook.Strip(e.Instance), StringComparison.OrdinalIgnoreCase) && Kept(kind) && Encounter.KindOf(e.Kind) == kind));
                 if (_cur != null)
                 {
                     if (SameCopy(_cur)) Rejoined(_cur, ie);
@@ -429,7 +441,9 @@ public sealed class BossParser
                     if (!sameCopy) EndAlways(ie.At, to ? $"entered {ie.Name.Trim()}" : "left the instance");
                 }
                 // the bosses down and the names given: this copy's, kept through a reconnect into it
-                if (!sameName || again) { _bossNames.Clear(); _downHere.Clear(); _gameMode = ""; }
+                if (!sameName || again) { _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _gameMode = ""; _transcend = false; _stage = 0; _roomClosedAt = null; }
+                // a Transcendence the game names as one ("Shattered Arkanis [Stage 3]", its own kind): its stage from the name
+                if (kind == ContentKind.Transcendence) { _transcend = true; _stage = BossBook.StageIn(ie.Name) is > 0 and var sn ? sn : _stage; _gameMode = BossBook.StageMode(StageNow(ie.At)); }
                 // a new run of the same instance: the group comes again from the game (the one before was the last run's)
                 if (again) _group = _group.Where(m => m.You).ToList();
                 _instanceId = ie.InstanceId;
@@ -447,14 +461,23 @@ public sealed class BossParser
                 if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance", yours: true);
                 _preHits.Clear(); _inferred = null; _recentTaken.Clear(); _pendingDeaths.Clear(); _effectsOn.Clear(); _castsLanded.Clear();
                 if (_run != null) CloseRun(RunEnd(_run), il.At, done, "left the instance");
-                _kind = ContentKind.Other; _instance = ""; _instanceId = 0; _gameMode = "";
+                _kind = ContentKind.Other; _instance = ""; _instanceId = 0; _gameMode = ""; _transcend = false; _stage = 0; _roomClosedAt = null;
                 break;
             case InstanceMode im:
-                _gameMode = im.Mode.Trim();
+            {
+                var m = im.Mode.Trim();
+                // "G": the game's mark of a Transcendence, never a mode to show (2026-11-17: Shattered Arkanis and Deus Research
+                // Base were kept as expeditions in the mode "G")
+                if (BossBook.IsTranscendenceWord(m)) { Transcend(im.At, 0, "the game's mode"); break; }
+                // a piece of the place's own name ("Temple" of Fire_Temple), never its mode
+                if (!BossBook.IsModeWord(m) && _book.IsCodePart(m)) { Log($"{(_instance.Length > 0 ? _instance : "the instance")}: \"{m}\" is a piece of the place's name, not its mode: left out"); break; }
+                if (_transcend) { Log($"{_instance}: \"{m}\" left out, a Transcendence's mode is its stage"); break; }
+                _gameMode = m;
                 foreach (var e in Records())
                     if (e.ModeKind != ParserMode.Fights || Kept(_kind)) e.GameMode = _gameMode;
                 Log($"{(_instance.Length > 0 ? _instance : "the instance")}: {(_gameMode.Length > 0 ? _gameMode : "no mode named")}");
                 break;
+            }
             case BossEngaged be:
                 Engage(be, done);
                 break;
@@ -719,10 +742,74 @@ public sealed class BossParser
             else { r.PartialWhy.Remove(ReconnectedWhy); r.Partial = r.PartialWhy.Count > 0; }
             CloseRun(RunEnd(r), r.LastAt, done, "a new run of the instance");
         }
-        _bossNames.Clear(); _downHere.Clear();
+        _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _roomClosedAt = null;
         _group = _group.Where(m => m.You).ToList();   // the group before was the other run's
         EndAlways(re.At, $"entered {_instance}");
         if (_mode == ParserMode.Run && Kept(_kind)) OpenRun(re.At, midway: false);
+    }
+
+    /// <summary>The copy's last boss on the list died (its final boss is down here).</summary>
+    bool FinalDown() => _book.BossesOf(_instance).Any(b => b.Final && _downHere.Contains(b.Name));
+
+    /// <summary>
+    /// A new run of the instance in the same copy, with no entry between (Steven, 2026-11-17: his second Transcendence of
+    /// Shattered Arkanis and of Deus Research Base came in the copy of the first, and every boss of them was kept as
+    /// "Unnamed boss"): the pull and the run under way end as they stood, the bosses down and the names given are the
+    /// last run's, the group stays (the same party), and a run starts here in Full run.
+    /// </summary>
+    void RunAgain(List<Encounter> done, DateTime at, string why)
+    {
+        Log($"{_instance}: {why}: a new run of it in the same copy");
+        if (_cur is { } c) ClosePull(c, BossOutcome.Left, c.LastAt, done, "a new run of the instance", yours: true);
+        if (_run is { } r) CloseRun(RunEnd(r), r.LastAt, done, "a new run of the instance");
+        _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _roomClosedAt = null;
+        EndAlways(at, $"a new run of {_instance}");
+        if (_mode == ParserMode.Run && Kept(_kind)) OpenRun(at, midway: false);
+    }
+
+    /// <summary>The Transcendence's stage now: its code's or name's, else the chat's stage line within <see cref="StageSaidHours"/>, else 0.</summary>
+    int StageNow(DateTime at) => _stage > 0 ? _stage : _stageSaid > 0 && Math.Abs((at - _stageSaidAt).TotalHours) <= StageSaidHours ? _stageSaid : 0;
+
+    /// <summary>
+    /// The instance is a Transcendence: the place's kind from here on (an expedition's own area at a stage), its stage the
+    /// mode ("Stage 4", or none while not known), and the records under way in it filed so too.
+    /// </summary>
+    void Transcend(DateTime at, int stage, string why)
+    {
+        bool was = _transcend; int stageWas = StageNow(at);
+        _transcend = true;
+        if (stage > 0) _stage = stage;
+        if (_kind == ContentKind.Expedition) _kind = ContentKind.Transcendence;
+        _gameMode = BossBook.StageMode(StageNow(at));
+        if (_kind == ContentKind.Transcendence)
+            foreach (var e in Records())
+                if (!e.OpenWorld && !e.WorldBoss && (e.ModeKind != ParserMode.Fights || Kept(_kind)))
+                {
+                    if (e.Kind == Encounter.KindName(ContentKind.Expedition)) e.Kind = Encounter.KindName(ContentKind.Transcendence);
+                    e.GameMode = _gameMode;
+                }
+        if (!was || StageNow(at) != stageWas) Log($"{(_instance.Length > 0 ? _instance : "the instance")}: a Transcendence ({why}){(_gameMode.Length > 0 ? $", {_gameMode}" : ", its stage not known yet")}");
+        _version++;
+    }
+
+    /// <summary>
+    /// The chat's stage line ("Set to Stage 4.", the room's; "Shattered Arkanis Stage 4 I achieved.", a clear's): the stage of
+    /// a Transcendence entered within <see cref="StageSaidHours"/> whose code doesn't say one, and of the one under way.
+    /// </summary>
+    public void StageSaid(int stage, DateTime at)
+    {
+        if (stage is < 1 or > 9) return;
+        lock (_gate)
+        {
+            _stageSaid = stage; _stageSaidAt = at;
+            if (_transcend && _stage == 0 && Kept(_kind)) Transcend(at, 0, $"the chat's Stage {stage}");
+        }
+    }
+
+    /// <summary>The Transcendence the player is in, by the game's own mark (its instance's name and stage), or null.</summary>
+    public (string Instance, int Stage)? TranscendenceHere
+    {
+        get { lock (_gate) return _transcend && _kind == ContentKind.Transcendence && _instance.Length > 0 ? (BossBook.Strip(_instance), StageNow(DateTime.UtcNow)) : null; }
     }
 
     /// <summary>
@@ -844,6 +931,8 @@ public sealed class BossParser
     /// <summary>The names given to unnamed bosses by spawn (a wipe and a pull again keep it), and the bosses down in this copy of the instance.</summary>
     readonly Dictionary<long, string> _bossNames = new();
     readonly HashSet<string> _downHere = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The spawns killed in this copy (by the game's id): one of them engaged again is the same dead boss, never a new run.</summary>
+    readonly HashSet<long> _downIds = new();
 
     /// <summary>
     /// An unnamed boss's name: the one this spawn had, else the instance's next boss on the boss list in route order that
@@ -871,6 +960,12 @@ public sealed class BossParser
             if (!wb.Name.Equals(name, StringComparison.Ordinal)) Log($"{(name.Length > 0 ? name : "an unnamed boss")}: the world boss {wb.Name} on the timers");
             name = wb.Name;
         }
+        // a boss of the list pulled after the copy's last boss died, with no entry between (a Transcendence's next try in the
+        // same copy: Shattered Arkanis 16:56 and Deus Research Base 17:21 on 2026-11-17, whose bosses were kept as "Unnamed
+        // boss"): a new run of the instance, its bosses named again from the first, whether or not the game said a new entry
+        if (world == null && Kept(_kind) && _reentry == null && FinalDown() && !(be.BossId != 0 && (_downIds.Contains(be.BossId) || _bossNames.ContainsKey(be.BossId)))
+            && (name.Length == 0 || _book.Find(_instance, name) != null))
+            RunAgain(done, be.At, $"{(name.Length > 0 ? name : "a boss")} pulled after its last boss died");
         if (name.Length == 0) name = Kept(_kind) ? NameUnnamed(be.BossId) : UnnamedBoss;   // a pull the decoder couldn't name: still a fight
         if (!Kept(_kind) && world == null)
         {
@@ -1320,7 +1415,7 @@ public sealed class BossParser
         Settle(e);
         if (!e.Wave) _alwaysEnded = Copy(e);
         _endedPull = (e.End.Value, e.Wave || _alwaysEnded == null ? new List<Encounter> { e } : new List<Encounter> { e, _alwaysEnded });
-        if (outcome == BossOutcome.Kill) _downHere.Add(e.Boss);
+        if (outcome == BossOutcome.Kill) { _downHere.Add(e.Boss); if (e.BossId != 0) _downIds.Add(e.BossId); }
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
         Log($"{e.Boss}: {e.OutcomeWord.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
@@ -1450,8 +1545,16 @@ public sealed class BossParser
             if (instance != null && BossBook.IsModeWord(instance)) return;   // "Easy" is a mode, never a place
             var k = Encounter.KindOf(kind);
             if (k == ContentKind.Other && instance != null) k = _book.KindOf(instance);
+            // the game marked this place a Transcendence (its mode "G"): the run log's minimap says only its expedition
+            if (_transcend && k == ContentKind.Expedition) k = ContentKind.Transcendence;
             var name = instance?.Trim() ?? "";
             if (k == _kind && name == _instance) return;
+            // the run log learned the expedition under way is a Transcendence (its stage line): the records in it too
+            if (k == ContentKind.Transcendence && _kind == ContentKind.Expedition && BossBook.Strip(name).Equals(BossBook.Strip(_instance), StringComparison.OrdinalIgnoreCase))
+            {
+                Transcend(DateTime.UtcNow, 0, "the run log's");
+                return;
+            }
             var newKind = instance == null ? ContentKind.Other : k;
             // only into one of the three: a minimap misread mid-dungeon (a name a letter off, a frame with none) never starts the meter again
             if (!Kept(_kind) && Kept(newKind)) EndAlways(DateTime.UtcNow, $"entered {name}");
@@ -1468,29 +1571,55 @@ public sealed class BossParser
     /// the decoder doesn't list), the code names it from the boss list's codes (data/bosses.txt) and the screen's place isn't
     /// waited for; its mode word (Easy) is the mode when none came, never the name. Any other code (an open-world event) does nothing.
     /// </summary>
-    public void MapEvent(string code, DateTime at)
+    public void MapEvent(string code, DateTime at, bool closed = false)
     {
+        List<Encounter> done = new();
         lock (_gate)
         {
-            if (_instanceId == 0 || _instanceFromGame || at < _enteredAt) return;
+            if (_instanceId == 0 || at < _enteredAt) return;
             if (_book.FromCode(code) is not { } named) return;
-            var kind = _book.KindOf(named.Instance);
-            if (!Kept(kind)) return;
-            if (!Kept(_kind)) EndAlways(at, $"entered {named.Instance}");
-            bool renamed = _kind != kind || !BossBook.Strip(_instance).Equals(named.Instance, StringComparison.OrdinalIgnoreCase);
-            _kind = kind; _instance = named.Instance; _instanceFromGame = true;
-            _farm = null;
-            // the records the screen's place opened under another name (a minimap misread) take the game's
-            if (renamed) foreach (var e in Records()) if (!e.OpenWorld) { e.Instance = _instance; e.Kind = Encounter.KindName(kind); }
-            if (_gameMode.Length == 0 && named.Mode.Length > 0)
+            var (transcend, stage) = _book.GradeOf(code);
+            if (_instanceFromGame)
             {
-                _gameMode = named.Mode;
-                foreach (var e in Records()) if (e.ModeKind != ParserMode.Fights || Kept(_kind)) e.GameMode = _gameMode;
+                // the place is named already: its own map events still say a Transcendence, and its boss room opening again
+                // after its last boss died is a new run in the same copy (a Transcendence's next try: the room closed at
+                // 16:56:09 and opened at 16:56:12 on 2026-11-17, no entry between)
+                if (Kept(_kind) && BossBook.Strip(_instance).Equals(named.Instance, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (transcend && (!_transcend || (stage > 0 && stage != _stage))) Transcend(at, stage, $"its map event ({code.Trim()})");
+                    if (closed) { if (FinalDown()) _roomClosedAt = at; }
+                    else if (_roomClosedAt is { } rc && rc <= at && FinalDown()) RunAgain(done, at, "its room opened again after its last boss died");
+                    _version++;
+                }
             }
-            if (_mode == ParserMode.Run && _run == null) OpenRun(at, midway: false);
-            Log($"the instance by the game's map event ({code.Trim()}): {_instance}{(_gameMode.Length > 0 ? $", {_gameMode}" : "")}");
-            _version++;
+            else if (!closed && Kept(_book.KindOf(named.Instance)))
+                NameByCode(named.Instance, named.Mode, transcend, stage, code, at);
         }
+        if (done.Count > 0) Finish(done, at);
+    }
+
+    /// <summary>The instance the game entered with no name, named by its map event's code: its kind (a Transcendence by its "G"), and its mode or stage.</summary>
+    void NameByCode(string instance, string mode, bool transcend, int stage, string code, DateTime at)
+    {
+        var kind = _book.KindOf(instance);
+        if (transcend) { _transcend = true; if (stage > 0) _stage = stage; }
+        if (_transcend && kind == ContentKind.Expedition) kind = ContentKind.Transcendence;
+        if (!Kept(_kind)) EndAlways(at, $"entered {instance}");
+        bool renamed = _kind != kind || !BossBook.Strip(_instance).Equals(instance, StringComparison.OrdinalIgnoreCase);
+        _kind = kind; _instance = instance; _instanceFromGame = true;
+        _farm = null;
+        // the records the screen's place opened under another name (a minimap misread) take the game's
+        if (renamed) foreach (var e in Records()) if (!e.OpenWorld) { e.Instance = _instance; e.Kind = Encounter.KindName(kind); }
+        // a Transcendence's mode is its stage; an expedition's the code's word when no mode came
+        string want = _transcend ? BossBook.StageMode(StageNow(at)) : _gameMode.Length == 0 ? mode : _gameMode;
+        if (want != _gameMode || _transcend)
+        {
+            _gameMode = want;
+            foreach (var e in Records()) if (e.ModeKind != ParserMode.Fights || Kept(_kind)) e.GameMode = _gameMode;
+        }
+        if (_mode == ParserMode.Run && _run == null) OpenRun(at, midway: false);
+        Log($"the instance by the game's map event ({code.Trim()}): {_instance}{(_transcend ? " (Transcendence)" : "")}{(_gameMode.Length > 0 ? $", {_gameMode}" : "")}");
+        _version++;
     }
 
     /// <summary>
@@ -1518,7 +1647,11 @@ public sealed class BossParser
                 {
                     MarkPartial(s, "the tracker restarted during it");
                     // a world boss's pull carries on where the player is, never a place of its own
-                    if (m != ParserMode.Fights && !s.WorldBoss) { _kind = Encounter.KindOf(s.Kind); _instance = s.Instance; _instanceId = s.InstanceId; }
+                    if (m != ParserMode.Fights && !s.WorldBoss)
+                    {
+                        _kind = Encounter.KindOf(s.Kind); _instance = s.Instance; _instanceId = s.InstanceId;
+                        if (_kind == ContentKind.Transcendence) { _transcend = true; _stage = BossBook.StageOfMode(s.GameMode); _gameMode = s.GameMode; }
+                    }
                     Log($"{s.TitleWord}: carries on after the tracker restarted");
                     continue;
                 }

@@ -475,8 +475,9 @@ public sealed class InstanceLog
                 }
                 CloseLocked(reentry && string.Equals(_cur?.Zone, name, StringComparison.OrdinalIgnoreCase) ? "left, then a new entry" : "another run began");
                 _cur = new InstanceRun { Zone = name, Kind = ZoneLocator.KindOf(name) ?? kind, Event = ev, Family = kind == "Event" ? ZoneLocator.FamilyOf(name) : "", Start = now };
-                if (_transcendAt is DateTime ta && (now - ta).TotalMinutes <= 5 && _cur.Kind == "Expedition") { _cur.Kind = Transcendence; CrashLog.Note($"{_cur.Label}: a Transcendence (its stage was set {ta.ToLocalTime():HH:mm:ss})"); }
-                _transcendAt = null;
+                if (_transcendAt is DateTime ta && (now - ta).TotalMinutes <= 5 && _cur.Kind == "Expedition" && (_transcendZone == null || string.Equals(_transcendZone, name, StringComparison.OrdinalIgnoreCase)))
+                { _cur.Kind = Transcendence; CrashLog.Note($"{_cur.Label}: a Transcendence ({(_transcendZone != null ? "the game's own mark" : "its stage was set")} {ta.ToLocalTime():HH:mm:ss})"); }
+                _transcendAt = null; _transcendZone = null;
                 _byMinimap = true;
                 // the chat or the header saw it first: the run starts there (an event's lobby fills before the minimap changes)
                 if (kind == "Event" && _pendingSince is { } since && (now - since).TotalSeconds <= PendingSeconds)
@@ -1183,15 +1184,19 @@ public sealed class InstanceLog
     /// Stage 1"): its own kind from here on. The zone stays the dungeon's, so the reward table and the time for rewards after
     /// leaving work as for any expedition (Steven, 2026-10-23: Transcendence rewards come from the reward picture too).
     /// </summary>
-    public void MarkTranscendence(DateTime t)
+    public void MarkTranscendence(DateTime t, string? zone = null)
     {
         lock (_lock)
         {
             // printed in town as the room is set up ("Set to Stage 1."), before the run opens: the next expedition run is one
-            if (_cur == null) { _transcendAt = t; return; }
+            // (the next one of this place, when the game named it: the Parser's mark comes as the instance is entered)
+            if (_cur == null) { _transcendAt = t; _transcendZone = zone; return; }
             if (_cur.Kind == WorldBoss || _cur.Kind == Transcendence || _cur.Kind == "Event") return;
+            // the game's mark is for one place: a run elsewhere (the minimap behind, a run not closed yet) is not it
+            if (zone != null && !string.Equals(_cur.Zone, zone, StringComparison.OrdinalIgnoreCase)) return;
+            if (_cur.Kind != "Expedition") return;
             _cur.Kind = Transcendence;
-            CrashLog.Note($"{_cur.Label}: a Transcendence ({t.ToLocalTime():HH:mm:ss})");
+            CrashLog.Note($"{_cur.Label}: a Transcendence ({t.ToLocalTime():HH:mm:ss}{(zone != null ? ", the game's own mark" : "")})");
         }
     }
     public const string Transcendence = "Transcendence";
@@ -1214,6 +1219,8 @@ public sealed class InstanceLog
         lock (_lock) return _cur is { Kind: "Event", PaidAt: DateTime p } && (now - p).TotalSeconds <= seconds;
     }
     DateTime? _transcendAt;
+    /// <summary>The place the game itself marked a Transcendence (the Parser's), for the run about to open; null for the chat's stage line.</summary>
+    string? _transcendZone;
 
     /// <summary>
     /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives

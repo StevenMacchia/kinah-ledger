@@ -57,7 +57,7 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "parser-bench" or "packet-replay" or "packet-live" or "packet-record")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "parser-bench" or "packet-replay" or "packet-live" or "packet-record" or "repair-categories")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -141,6 +141,7 @@ internal static class Program
                 case "replay-bank": return ReplayBankCmd(settings, pos, opts);
                 case "replay-event-shots": return ReplayEventShots(settings, opts);
                 case "recount-runs": return RecountRuns(settings, pos, opts);
+                case "repair-categories": return RepairCategories(pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 // packet reading (Packets/): its parts on made-up bytes, and the reader over a saved capture
@@ -581,6 +582,19 @@ options: --process aion[,other]");
         if (r == null) { Console.WriteLine("Cancelled."); return 1; }
         RegionStore.Save(r.Value);
         Console.WriteLine($"Saved chat region {r.Value.X},{r.Value.Y},{r.Value.Width},{r.Value.Height}. Next: `ocr-test` to check it reads, then `watch`.");
+        return 0;
+    }
+
+    /// <summary>
+    /// `repair-categories &lt;data dir&gt; [--dry-run]`: the one-time repair of fights and runs kept in the wrong category
+    /// (Session/CategoryRepair.cs) on the folder given, a copy of the KinahLedger folder; prints every change. Without
+    /// --dry-run the files there are written (each copied beside it first) and characters.json is left as it was.
+    /// </summary>
+    static int RepairCategories(List<string> pos, Dictionary<string, string> o)
+    {
+        if (pos.Count < 1 || !Directory.Exists(pos[0])) { Console.Error.WriteLine("usage: repair-categories <data dir> [--dry-run]"); return 1; }
+        var res = Session.CategoryRepair.Run(Path.GetFullPath(pos[0]), dryRun: o.ContainsKey("dry-run"));
+        foreach (var l in res.Log) Console.WriteLine(l);
         return 0;
     }
 
@@ -4799,6 +4813,27 @@ options: --process aion[,other]");
                 tt.Engine.SetZone("Shattered Floating Temple"); tt.Instances.Zone("Shattered Floating Temple", tt0.AddSeconds(30));
                 Check("a stage set in town makes the next Shattered Arkanis run a Transcendence", $"{tt.Instances.Open}", "Shattered Arkanis");
                 Check("...of its own kind", $"{tt.Instances.CurrentKind}", "Transcendence");
+                // Steven, 2026-11-17: the stage was set at 15:42 and the Transcendence entered at 16:31, so the chat said nothing near
+                // it and the run was filed as an expedition. The game's own mark (the Parser's "G") makes it one, for that place only
+                {
+                    var markS = new TrackerSession(null, new Settings(), items, "Test"); var mark0 = DateTime.UtcNow;
+                    markS.ProcessChat(new List<string> { "[x] a" }, mark0);
+                    markS.Instances.MarkTranscendence(mark0.AddSeconds(5), "Shattered Arkanis");   // entered, no run open yet: the next one of this place
+                    markS.Engine.SetZone("Shattered Floating Temple"); markS.Instances.Zone("Shattered Floating Temple", mark0.AddSeconds(20));
+                    Check("the game's own mark makes the run a Transcendence, no stage line near it", $"{markS.Instances.Open} {markS.Instances.CurrentKind}", "Shattered Arkanis Transcendence");
+                    var markX = new TrackerSession(null, new Settings(), items, "Test");
+                    markX.ProcessChat(new List<string> { "[x] a" }, mark0);
+                    markX.Instances.MarkTranscendence(mark0.AddSeconds(5), "Deus Research Base");   // another place's mark
+                    markX.Engine.SetZone("Shattered Floating Temple"); markX.Instances.Zone("Shattered Floating Temple", mark0.AddSeconds(20));
+                    markX.Instances.MarkTranscendence(mark0.AddSeconds(25), "Deus Research Base");
+                    Check("...never another place's run", $"{markX.Instances.Open} {markX.Instances.CurrentKind}", "Shattered Arkanis Expedition");
+                    // a stage's clear in the chat ("Shattered Arkanis Stage 4 I achieved.", read "Stage 4 1"): the open run is one
+                    var markC = new TrackerSession(null, new Settings(), items, "Test");
+                    markC.ProcessChat(new List<string> { "[x] a" }, mark0);
+                    markC.Engine.SetZone("Shattered Floating Temple"); markC.Instances.Zone("Shattered Floating Temple", mark0.AddSeconds(20));
+                    markC.ProcessChat(new List<string> { "[x] a", "Shattered Arkanis Stage 4 1 achieved." }, mark0.AddSeconds(600));
+                    Check("...a stage's clear in the chat makes the open run one too", $"{markC.Instances.Open} {markC.Instances.CurrentKind}", "Shattered Arkanis Transcendence");
+                }
                 // a table still fading in: two early reads (the wrong icons at 80 to 112, no counts) then two clean ones. Not settled
                 // until the clean pair; only sure reads vote, so the two early ones can't outvote the clean ones
                 var fade = new List<RewardGrid.Slot> { new(box, "Common", "", 0, new() { ("Icon_GM_0072_T05_Helmet", 88) }), new(box, "Rare", "", 0, new() { ("Icon_GM_0044_T06_Cape", 112) }) };

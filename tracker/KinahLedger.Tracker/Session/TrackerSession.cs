@@ -1440,6 +1440,14 @@ public sealed partial class TrackerSession
         }
         // a Transcendence: the dungeon at a stage ("Shattered Arkanis [Stage 1] | Transcendence", "Set to Stage 1")
         if (lines.Any(IsTranscendenceLine)) Instances.MarkTranscendence(now);
+        // the stage the chat says (the room's line, or a stage's clear): the Parser's mode for a Transcendence whose code
+        // doesn't say it; a clear names its place, so the run in it is a Transcendence too
+        foreach (var l in fresh)
+            if (StageLine(l) is { } sl)
+            {
+                Fights.StageSaid(sl.Stage, now.Kind == DateTimeKind.Local ? now.ToUniversalTime() : now);
+                if (sl.Instance != null) Instances.MarkTranscendence(now, sl.Instance);
+            }
         // "[Force Recruitment] WB Bloodfang": a world boss's name, learned for this session
         foreach (var l in lines)
             if (Regex.Match(l, @"\bWB\s+([A-Z][A-Za-z']{3,})") is { Success: true } wb && _learnedBosses.Add(wb.Groups[1].Value))
@@ -2866,6 +2874,26 @@ public sealed partial class TrackerSession
         !PickupCheck.PlayerChat(line)
         && (Regex.IsMatch(line.Trim(), @"^\W*set\s*to\s*stage\s*\d{1,2}\W*$", RegexOptions.IgnoreCase)
             || Regex.IsMatch(line, @"\[\s*stage\s*\d{1,2}\s*\]\s*\W{0,3}\s*transcend", RegexOptions.IgnoreCase));
+
+    /// <summary>
+    /// The stage a Transcendence's own line says, and the instance when it names one, else null: the room's ("Set to Stage
+    /// 4."), its title ("Shattered Arkanis [Stage 1] | Transcendence"), and a stage's clear ("Shattered Arkanis Stage 4 I
+    /// achieved.", read "Stage 4 1" or "Stage 4/1" on 2026-11-17), for an instance on the boss list only. Never a player's
+    /// line ("[Tyson] last bos stage 3 deus").
+    /// </summary>
+    public static (int Stage, string? Instance)? StageLine(string line)
+    {
+        if (PickupCheck.PlayerChat(line)) return null;
+        var t = line.Trim();
+        if (Regex.Match(t, @"^\W*set\s*to\s*stage\s*([1-9])\W*$", RegexOptions.IgnoreCase) is { Success: true } set) return (set.Groups[1].Value[0] - '0', null);
+        if (Regex.Match(t, @"^\W*(.+?)\s*\[\s*stage\s*([1-9])\s*\]\s*\W{0,3}\s*transcend", RegexOptions.IgnoreCase) is { Success: true } title
+            && KinahLedger.Parser.BossBook.Shared.KindOf(title.Groups[1].Value) != KinahLedger.Packets.ContentKind.Other)
+            return (title.Groups[2].Value[0] - '0', KinahLedger.Parser.BossBook.Strip(title.Groups[1].Value.Trim()));
+        if (Regex.Match(t, @"^\W*([A-Z][A-Za-z' :-]{2,40}?)\s+stage\s*([1-9])\b[^A-Za-z]{0,6}achieved\W*$", RegexOptions.IgnoreCase) is { Success: true } clear
+            && KinahLedger.Parser.BossBook.Shared.KindOf(clear.Groups[1].Value) == KinahLedger.Packets.ContentKind.Expedition)
+            return (clear.Groups[2].Value[0] - '0', clear.Groups[1].Value.Trim());
+        return null;
+    }
 
     bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue, _eventScreenAt = DateTime.MinValue;
 
