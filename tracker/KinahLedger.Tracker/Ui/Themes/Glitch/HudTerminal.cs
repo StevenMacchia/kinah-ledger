@@ -38,6 +38,8 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
     readonly Border _ok = new() { Background = Phos, Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(8, 0, 0, 0), Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
     readonly StackPanel _figLine = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
     readonly TextBlock _sess = Txt("", 12.5, PhosDim, Face, FontWeights.SemiBold);
+    /// <summary>The session line: the session, then the best drop and the last three in brackets while farming.</summary>
+    readonly StackPanel _sessLine = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
     readonly TextBlock _stats = Txt("", 11.5, PhosDim, Face, FontWeights.SemiBold);
     readonly Border _timerLine = new() { Visibility = Visibility.Collapsed };
     readonly TextBlock _timer = Txt("", 12, Amber, Face);
@@ -85,8 +87,8 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _promptLine.Child = pl;
         _crt.Body.Children.Add(_promptLine);
         _crt.Body.Children.Add(_figLine);
-        _sess.Margin = new Thickness(0, 2, 0, 0);
-        _crt.Body.Children.Add(_sess);
+        _sessLine.Children.Add(_sess);
+        _crt.Body.Children.Add(_sessLine);
         _stats.Margin = new Thickness(0, 2, 0, 0); _stats.Visibility = Visibility.Collapsed;
         _crt.Body.Children.Add(_stats);
         _timerLine.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _timer, _beep } };
@@ -190,7 +192,10 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _camGround.Background = Br(GroundC, Math.Min(1, o * 1.12));
     }
 
-    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{Picks(Values).FirstOrDefault()?.Id}";
+    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{Picks(Values).FirstOrDefault()?.Id}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+
+    /// <summary>The pickup strip on the screen: the rule a phosphor hairline, the star amber.</summary>
+    static readonly PickStrip.Look Strip = new(22, 5, true, Br(PhosC, .4), Amber);
 
     string _figSig = "";
 
@@ -201,7 +206,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _runClock.Text = $"[{(run ? L.T("run") + " " : "")}{(clock.Length > 0 ? clock : "0:00")}]";
         _cursor.Opacity = odd ? 1 : .28;
         var p0 = Picks(Values).FirstOrDefault();
-        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{p0?.Id}";
+        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{p0?.Id}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
         if (sig == _figSig) return;
         _figSig = sig;
 
@@ -233,6 +238,20 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
             _sess.Inlines.Add(Rn(f.Total, Pale, 14, FontWeights.Bold));
         }
         _sess.Visibility = _sess.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // the best drop and the last three after the session, in the console's brackets ("session 894K  [* # | # # #]"), while
+        // farming: the Abyss, the idle line and a rare drop's "!! RARE" line keep the screen as it was
+        while (_sessLine.Children.Count > 1) _sessLine.Children.RemoveAt(1);
+        if (_sess.Inlines.Count > 0 && !f.Abyss && f.Rate.Length > 0 && Rare(Values) == null)
+        {
+            var open = Txt("[", 14, Phos, Face, FontWeights.SemiBold); open.Margin = new Thickness(12, 0, 5, 0);
+            var close = Txt("]", 14, Phos, Face, FontWeights.SemiBold); close.Margin = new Thickness(5, 0, 0, 0);
+            double room = FightWidth - _crt.Body.Margin.Left - _crt.Body.Margin.Right - Wide(_sess) - Wide(open) - Wide(close);
+            if (FitStrip(Values, Strip, room) is { } strip)
+            {
+                _sessLine.Children.Add(open); _sessLine.Children.Add(strip); _sessLine.Children.Add(close);
+            }
+        }
+        _sessLine.Visibility = _sess.Visibility;
 
         _stats.Inlines.Clear();
         foreach (var (fig, word, tone) in f.Stats)
