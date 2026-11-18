@@ -195,6 +195,7 @@ public partial class OptionsWindow : Window
         ShowAccuracyChk.IsChecked = c.ShowAccuracy;
         HudChk.IsChecked = c.Hud;
         HudLockChk.IsChecked = c.HudLocked;
+        HudPickIconsChk.IsChecked = c.HudPickIcons;
         HudOpacity.Value = c.HudOpacity; HudOpacityLbl.Text = $"{c.HudOpacity:P0}";
         HudScale.Value = c.HudScale; HudScaleLbl.Text = $"{c.HudScale:P0}";
         WindowScale.Value = c.WindowScale; WindowScaleLbl.Text = $"{c.WindowScale:P0}";
@@ -412,6 +413,7 @@ public partial class OptionsWindow : Window
         ShowAccuracyChk.Click += (_, _) => Edit(_edit with { ShowAccuracy = ShowAccuracyChk.IsChecked == true });
         HudChk.Click += (_, _) => Edit(_edit with { Hud = HudChk.IsChecked == true });
         HudLockChk.Click += (_, _) => Edit(_edit with { HudLocked = HudLockChk.IsChecked == true });
+        HudPickIconsChk.Click += (_, _) => Edit(_edit with { HudPickIcons = HudPickIconsChk.IsChecked == true });
         // opacity and size show on the panel as the sliders move; Save keeps them, Cancel puts the saved ones back
         HudOpacity.ValueChanged += (_, _) =>
         {

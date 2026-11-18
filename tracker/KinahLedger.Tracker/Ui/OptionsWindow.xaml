@@ -209,6 +209,16 @@
                   <TextBlock x:Name="HudFieldsNote" Style="{StaticResource RowHint}" Margin="0,6,0,0" Visibility="Collapsed" Text="For the Strip. The Card and the Ticker show a set of their own."/>
                 </StackPanel>
                 <Border Style="{StaticResource Divider}"/>
+                <!-- the best drop and the last pickups as icons (Ui/HudPickStrip.cs); off hides them only, the counting goes on -->
+                <Grid Style="{StaticResource Row}">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Pickup icons"/>
+                    <TextBlock Style="{StaticResource RowHint}" Text="Your best drop and last pickups on the panel. Off hides them; every pickup is still counted."/>
+                  </StackPanel>
+                  <CheckBox x:Name="HudPickIconsChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Pickup icons"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
                 <!-- the two keys live on Shortcuts & tips (2026-11-08 audit); a pointer stays -->
                 <Grid Style="{StaticResource Row}">
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
