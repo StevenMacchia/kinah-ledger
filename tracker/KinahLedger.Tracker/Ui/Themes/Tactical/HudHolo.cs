@@ -95,7 +95,10 @@ sealed partial class HudHolo : TacticalLook
         _lineGlass.InvalidateVisual(); _fightGlass.InvalidateVisual();
     }
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "");
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook);
+
+    /// <summary>The pickup strip on the glass: the rule a cyan hairline, the star amber.</summary>
+    static readonly PickStrip.Look StripLook = new(Size: 24, Gap: 4, Rule: Frozen(Tac.A(CyanC, .5)), Star: Amber);
 
     // ================================================================ the glass
 
@@ -193,6 +196,29 @@ sealed partial class HudHolo : TacticalLook
             }
         }
         _lineBody.Children.Add(row);
+        // the pickups under a hairline, on the glass as the rare drop's row is: the best drop and the last three, then the
+        // newest one's name and worth (as the Buddy's head names it), out to the glass's edge
+        if (FarmStrip(f, StripLook, FightWidth - 10 - _lineBody.Margin.Left - _lineBody.Margin.Right) is { } strip)
+        {
+            _lineBody.Children.Add(Hairline(new Thickness(0, 7, 0, 6)));
+            var loot = new Grid();
+            loot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); loot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            loot.Children.Add(strip);
+            // the words take only what the figures' row leaves beside the tiles: they never widen the glass
+            var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
+            row.Measure(inf); strip.Measure(inf);
+            double room = row.DesiredSize.Width - strip.DesiredSize.Width - 11;
+            if (room >= 56 && Picks(Values).FirstOrDefault() is { } p)
+            {
+                var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), MaxWidth = room };
+                var nm = Tt(p.Name, 12.5, Pale, Face, FontWeights.SemiBold); nm.TextTrimming = TextTrimming.CharacterEllipsis;
+                words.Children.Add(nm);
+                var worth = p.Worth.Length > 0 ? p.Worth : p.Count;
+                if (worth.Length > 0) { var wv = Tt(worth, 12, p.Kinah ? Amber : White, Face, FontWeights.Bold); wv.Margin = new Thickness(0, -2, 0, 0); words.Children.Add(wv); }
+                Grid.SetColumn(words, 1); loot.Children.Add(words);
+            }
+            _lineBody.Children.Add(loot);
+        }
         // the Abyss's kills, Rank Points, deaths and Kinah, under a hairline
         if (f.Stats.Count > 0)
         {
@@ -346,6 +372,7 @@ sealed partial class HudHolo : TacticalLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
+        StripFollowsFight(e);
         _fightBody.Children.Clear();
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 10;

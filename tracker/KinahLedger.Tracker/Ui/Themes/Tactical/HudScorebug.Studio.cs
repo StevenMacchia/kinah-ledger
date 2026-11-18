@@ -17,6 +17,9 @@ sealed partial class HudScorebug
     static readonly Color PaperTop = Colors.White, PaperBot = Color.FromRgb(0xE6, 0xE9, 0xEF), PaperInk = Color.FromRgb(0x12, 0x15, 0x1C), PaperSub = Color.FromRgb(0x5D, 0x64, 0x74),
         PaperGroove = Color.FromRgb(0xC3, 0xC8, 0xD2), PaperGroove2 = Color.FromRgb(0xDC, 0xE0, 0xE7), PaperRed = Color.FromRgb(0xC8, 0x1E, 0x30), PaperGreen = Color.FromRgb(0x14, 0x93, 0x5A);
 
+    /// <summary>Studio's pickup strip under the bug: on a light card, the rule the cards' grey groove, the star the gold.</summary>
+    static readonly PickStrip.Look StudioStrip = new(Size: 24, Gap: 4, Rule: Frozen(PaperGroove));
+
     /// <summary>The title card: the red spine, the boss in dark type, the outcome, the clock on black glass (in a dungeon the next timer after it).</summary>
     FrameworkElement StudioTitle(Encounter e, DateTime now)
     {

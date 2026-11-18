@@ -101,7 +101,25 @@ sealed partial class HudScorebug : TacticalLook
     }
     void Redraw() => DrawFight(_lastFight, _lastNow);
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "");
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook);
+
+    /// <summary>The pickup strip as the bug wears it: Arena's on an ink block, Studio's on a light card (HudScorebug.Studio.cs); the star yellow.</summary>
+    PickStrip.Look StripLook => _studio ? StudioStrip : ArenaStrip;
+    static readonly PickStrip.Look ArenaStrip = new(Size: 24, Gap: 4, Rule: Frozen(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)), Star: Frozen(YellowC));
+
+    FrameworkElement? _lootRow;
+
+    /// <summary>The pickups' row gives way while a ticker or lower third (<paramref name="covered"/>, 0 to 1) is over it, so no tile shows cut under its edge.</summary>
+    void LootUnder(double covered) { if (_lootRow != null) _lootRow.Opacity = 1 - Math.Clamp(covered, 0, 1); }
+
+    /// <summary>The pickups under the bug, a slanted block of the bug's own, as the Abyss's stats strip hangs there.</summary>
+    FrameworkElement LootRow(FrameworkElement strip)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(Lean, 3, 0, 0) };
+        if (_studio) Row(row, new Block(LightC, strip, 34, new Thickness(13, 0, 14, 0)));
+        else Row(row, Ink(strip, 34, new Thickness(13, 0, 14, 0)));
+        return row;
+    }
 
     // ================================================================ blocks
 
@@ -276,6 +294,11 @@ sealed partial class HudScorebug : TacticalLook
         _rareBanner = null;
         if (KinahHidden) return;
         if (Rare(Values) is { } r) { _rareBanner = RareThird(r); _rareBanner.Margin = new Thickness(0, 4, 0, 0); _under.Children.Add(_rareBanner); }
+        var loot = FarmStrip(f, StripLook, FightWidth - 40);
+        _lootRow = loot != null ? LootRow(loot) : null;
+        if (_lootRow != null) _under.Children.Add(_lootRow);
+        // the pickup's ticker and the NEW PERSONAL BEST lower third hang from the bug over the pickups' row, not under it
+        Panel.SetZIndex(_bugHost, loot != null ? 1 : 0);
         if (f.Stats.Count > 0)
         {
             var strip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(Lean, 3, 0, 0) };
@@ -339,6 +362,7 @@ sealed partial class HudScorebug : TacticalLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
+        StripFollowsFight(e);
         _titleHost.Child = _hpHost.Child = _rowsHost.Child = _footHost.Child = null;
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); return; }
         double w = FightWidth - 10;
@@ -508,8 +532,9 @@ sealed partial class HudScorebug : TacticalLook
         {
             double a = Out(Seg(t, 0, .26)), b = Seg(t, .84, 1); b = b * b;
             row.Clip = Wipe(w * b, w * a, 30);
+            LootUnder(Seg(t, 0, .12) * (1 - Seg(t, .9, 1)));
             yb.Sweep = Seg(t, .22, .62); yb.Art.InvalidateVisual();
-        }, () => _bugAnchor.Children.Remove(row));
+        }, () => { _bugAnchor.Children.Remove(row); LootUnder(0); });
     }
 
     /// <summary>A rare drop: its lower third's two blocks wipe in one after the other and a light sweeps across the tile's block.</summary>
@@ -560,9 +585,10 @@ sealed partial class HudScorebug : TacticalLook
         {
             double i = Out(Seg(t, 0, .2)), o = Seg(t, .86, 1); o = o * o;
             row.Clip = Wipe(w * o, w * i, 34);
+            LootUnder(Seg(t, 0, .1) * (1 - Seg(t, .92, 1)));
             words.Sweep = Seg(t, .16, .5); words.Art.InvalidateVisual();
             star.Sweep = Seg(t, .1, .36); star.Art.InvalidateVisual();
-        }, () => _bugAnchor.Children.Remove(row));
+        }, () => { _bugAnchor.Children.Remove(row); LootUnder(0); });
         if (_bestBlock is Grid bg)
         {
             // the red block's own sweep, a beat after the lower third's
