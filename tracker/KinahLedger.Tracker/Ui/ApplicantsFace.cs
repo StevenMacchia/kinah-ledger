@@ -270,10 +270,10 @@ static class ApplicantsFace
     {
         var pool = new (string Name, string Class, long Cp, string Server)[]
         {
-            ("Thornecrestwarde", "Templar", 188_420, "Meslamtaeda"), ("Rezo", "Gladiator", 128_195, "Israphel"), ("mz", "Gladiator", 133_774, "Zikel"),
-            ("RubyDAD", "Sorcerer", 125_846, "Lumiel"), ("Aerinwynne", "Cleric", 151_906, "Siel"), ("Kaelith", "Assassin", 162_340, "Fregion"),
+            ("Thornecrestwarde", "Templar", 188_420, "Meslamtaeda"), ("Varrenthos", "Gladiator", 128_195, "Israphel"), ("Kyralis", "Gladiator", 133_774, "Zikel"),
+            ("Embervale", "Sorcerer", 125_846, "Lumiel"), ("Aerinwynne", "Cleric", 151_906, "Siel"), ("Kaelith", "Assassin", 162_340, "Fregion"),
             ("Seraphimdawnlite", "Chanter", 165_432, "Ereshkigal"), ("Vintzi", "Ranger", 98_410, "Nezekan"), ("Goldlemon", "Spiritmaster", 141_344, "Siel"),
-            ("Bode", "Cleric", 110_552, "Triniel"), ("Avenia", "Ranger", 115_076, "Siel"), ("Jonhiboi", "Chanter", 92_650, "Zikel"),
+            ("Halvric", "Cleric", 110_552, "Triniel"), ("Selwyra", "Ranger", 115_076, "Siel"), ("Dornak", "Chanter", 92_650, "Zikel"),
         };
         var list = new List<PartyApplicants.Applicant>();
         for (int i = 0; i < n; i++)

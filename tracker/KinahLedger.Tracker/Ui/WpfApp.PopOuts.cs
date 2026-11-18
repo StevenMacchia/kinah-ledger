@@ -128,13 +128,13 @@ public static partial class WpfApp
             // the Applicants list's: from the menu, with the overlay off; the overlay theme's face; empty says so
             w.SetApplicantsOverlay(false, save: false);
             var now = DateTime.UtcNow;
-            board.Take(new PartyApplication(now.AddSeconds(-40), PartyApplication.Kind.Applied, "1", "mz", "Gladiator", 45, 2_651, 133_774, "Zikel", null));
-            board.Take(new PartyApplication(now.AddSeconds(-30), PartyApplication.Kind.Applied, "2", "Rezo", "Gladiator", 45, 2_651, 128_195, "Zikel", null));
-            board.Take(new PartyApplication(now.AddSeconds(-20), PartyApplication.Kind.Applied, "3", "RubyDAD", "Sorcerer", 45, 2_651, 125_846, "Zikel", null));
+            board.Take(new PartyApplication(now.AddSeconds(-40), PartyApplication.Kind.Applied, "1", "Kyralis", "Gladiator", 45, 2_651, 133_774, "Zikel", null));
+            board.Take(new PartyApplication(now.AddSeconds(-30), PartyApplication.Kind.Applied, "2", "Varrenthos", "Gladiator", 45, 2_651, 128_195, "Zikel", null));
+            board.Take(new PartyApplication(now.AddSeconds(-20), PartyApplication.Kind.Applied, "3", "Embervale", "Sorcerer", 45, 2_651, 125_846, "Zikel", null));
             w.OverlayEntries().First(e => e.Text == "Pop out Applicants").Do!();
             DoEvents();
             var ap = w.ApplicantsPopOutForTest;
-            bool three = ap?.FaceForTest is { } af && RowCount(af) == 3 && RowNames(af).SequenceEqual(new[] { "mz", "Rezo", "RubyDAD" });
+            bool three = ap?.FaceForTest is { } af && RowCount(af) == 3 && RowNames(af).SequenceEqual(new[] { "Kyralis", "Varrenthos", "Embervale" });
             bool themed = ap?.FaceForTest?.Tag as string == "applicants:" + HudThemes.Of(w.HudLook);
             bool apart = w.ApplicantsOverlayForTest == null && !w.ApplicantsOn;
             board.Take(new PartyApplication(now, PartyApplication.Kind.Cleared, "", "", "", 0, 0, 0, "", null));
@@ -144,7 +144,7 @@ public static partial class WpfApp
                 $"pop-outs: Applicants in its own window with the overlay off ({apart}): three oldest first ({three}) in the overlay's theme ({themed}); nobody waiting, it stays and says so ({empty})");
 
             // the overlay too: both at once
-            board.Take(new PartyApplication(now, PartyApplication.Kind.Applied, "4", "Bode", "Cleric", 45, 2_651, 110_552, "Triniel", null));
+            board.Take(new PartyApplication(now, PartyApplication.Kind.Applied, "4", "Halvric", "Cleric", 45, 2_651, 110_552, "Triniel", null));
             w.SetApplicantsOverlay(true, save: false);
             w.ApplicantsTickForTest(now.AddSeconds(2)); w.ApplicantsPopOutTickForTest(now.AddSeconds(2)); DoEvents();
             bool both = w.ApplicantsOverlayForTest is { IsVisible: true } && w.ApplicantsPopOutForTest?.FaceForTest is { } bf && RowCount(bf) == 1;

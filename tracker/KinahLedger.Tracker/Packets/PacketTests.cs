@@ -39,23 +39,23 @@ public static class PacketTests
             var reader = new PacketReader();
             PartyApplication A(double at, PartyApplication.Kind k, string key, string name = "", string cls = "", long cp = 0) =>
                 new(t.AddSeconds(at), k, key, name, cls, 45, 2_651, cp, "Zikel", t.AddSeconds(at + 17.7));
-            reader.ApplicantForTest(A(0, PartyApplication.Kind.Applied, "1", "mz", "Gladiator", 133_774));
-            reader.ApplicantForTest(A(5, PartyApplication.Kind.Applied, "2", "Rezo", "Gladiator", 128_195));
-            reader.ApplicantForTest(A(7, PartyApplication.Kind.Applied, "3", "RubyDAD", "Sorcerer", 125_846));
+            reader.ApplicantForTest(A(0, PartyApplication.Kind.Applied, "1", "Kyralis", "Gladiator", 133_774));
+            reader.ApplicantForTest(A(5, PartyApplication.Kind.Applied, "2", "Varrenthos", "Gladiator", 128_195));
+            reader.ApplicantForTest(A(7, PartyApplication.Kind.Applied, "3", "Embervale", "Sorcerer", 125_846));
             var three = reader.Applicants.Pending(t.AddSeconds(8));
-            reader.ApplicantForTest(A(9, PartyApplication.Kind.Accepted, "2", "Rezo"));
+            reader.ApplicantForTest(A(9, PartyApplication.Kind.Accepted, "2", "Varrenthos"));
             reader.ApplicantForTest(A(10, PartyApplication.Kind.Removed, "9", "nobody"));   // someone not on the list: nothing
             var two = reader.Applicants.Pending(t.AddSeconds(10));
-            reader.ApplicantForTest(A(11, PartyApplication.Kind.Applied, "1", "mz", "Gladiator", 133_774));   // asked again: newest, at the bottom
+            reader.ApplicantForTest(A(11, PartyApplication.Kind.Applied, "1", "Kyralis", "Gladiator", 133_774));   // asked again: newest, at the bottom
             var again = reader.Applicants.Pending(t.AddSeconds(11));
             int v0 = reader.Applicants.Version;
             var stale = reader.Applicants.Pending(t.AddSeconds(7) + PartyApplicants.StaleAfter);
-            reader.ApplicantForTest(A(30, PartyApplication.Kind.Applied, "4", "Bode", "Cleric", 110_552));
+            reader.ApplicantForTest(A(30, PartyApplication.Kind.Applied, "4", "Halvric", "Cleric", 110_552));
             reader.ApplicantForTest(A(31, PartyApplication.Kind.Cleared, ""));
             var none = reader.Applicants.Pending(t.AddSeconds(31));
-            Check(three.Select(a => a.Name).SequenceEqual(new[] { "mz", "Rezo", "RubyDAD" }) && three[0] is { Class: "Gladiator", Level: 45, CombatPower: 133_774, Server: "Zikel" }
-                && two.Select(a => a.Name).SequenceEqual(new[] { "mz", "RubyDAD" }) && again.Select(a => a.Name).SequenceEqual(new[] { "RubyDAD", "mz" })
-                && stale.Select(a => a.Name).SequenceEqual(new[] { "mz" }) && reader.Applicants.Version > v0 && none.Count == 0,
+            Check(three.Select(a => a.Name).SequenceEqual(new[] { "Kyralis", "Varrenthos", "Embervale" }) && three[0] is { Class: "Gladiator", Level: 45, CombatPower: 133_774, Server: "Zikel" }
+                && two.Select(a => a.Name).SequenceEqual(new[] { "Kyralis", "Embervale" }) && again.Select(a => a.Name).SequenceEqual(new[] { "Embervale", "Kyralis" })
+                && stale.Select(a => a.Name).SequenceEqual(new[] { "Kyralis" }) && reader.Applicants.Version > v0 && none.Count == 0,
                 $"applicants: three asking, oldest first ({string.Join(", ", three.Select(a => a.Name))}); one joined; asked again at the bottom ({string.Join(", ", again.Select(a => a.Name))}); " +
                 $"one with no word for {PartyApplicants.StaleAfter.TotalMinutes:0} minutes dropped ({string.Join(", ", stale.Select(a => a.Name))} left); every request gone at once");
             Check(PartyApplicants.Ago(t, t.AddSeconds(12)) == "12s" && PartyApplicants.Ago(t, t.AddSeconds(185)) == "3m" && PartyApplicants.Ago(t, t.AddHours(2)) == "2h" && PartyApplicants.Ago(t.AddSeconds(5), t) == "0s",
