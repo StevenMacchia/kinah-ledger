@@ -165,10 +165,10 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 
     /// <param name="Abyss">In the Abyss (HudKit.Abyss): Rate is the Abyss Points hour and Total the points so far, then Stats (kills, deaths, Kinah) and the points' art (Icon).</param>
     protected sealed record Figures(bool Counted, bool Warm, string Rate, string Total, double Share, string ToBest, bool Beat, string Zone, string Clock, string Note, Brush NoteTone,
-        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon)
+        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon, string Idle = "")
     {
         /// <summary>A sign of the figures, for a look's redraw check.</summary>
-        public string Sig => $"{Counted}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{Icon}";
+        public string Sig => $"{Counted}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{Icon}|{(Counted && Rate.Length > 0 ? "" : Idle)}";
         /// <summary>The hour's colour: gold for Kinah, ink for Abyss Points.</summary>
         public Brush Tone => Abyss ? Ink : Gold;
         /// <summary>The hour's word: "/h", or "AP/h" for Abyss Points; none while it warms up.</summary>
@@ -205,9 +205,19 @@ abstract class HudStackLook : IHudLook, IHudStackLook
         else if (V("flag").Length > 0) { note = V("flag") + L.T(" · fix in tracker"); tone = Gold; }
         else if (_acc.Length > 0) { note = _acc; tone = _accCheck ? Warn : Mint; }
         else { note = ""; tone = Muted; }
+        _idle = V("idle");
         return new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
-            abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "");
+            abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle);
     }
+
+    /// <summary>The window's idle line as last read (the "idle" value), for <see cref="Waiting(bool)"/>.</summary>
+    string _idle = "";
+
+    /// <summary>
+    /// The line where the hour waits: the window's idle line (where you are and what you made there, MainWindow.HudIdleLine),
+    /// else the old words. Every look of this family and the themes' call this one, ahead of HudKit's.
+    /// </summary>
+    protected string Waiting(bool abyss) => HudKit.Waiting(abyss, _idle);
 
     // ---- a fight
 

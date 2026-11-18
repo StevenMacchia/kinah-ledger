@@ -243,6 +243,8 @@ public sealed class BossParser
 
     /// <summary>Where the player is: the content kind (Other outside the three) and the instance's name.</summary>
     public (ContentKind Kind, string Instance) Where { get { lock (_gate) return (_kind, _instance); } }
+    /// <summary>The instance's mode as the game named it ("Conquest", "Hard"), "" until it comes or outside one: the overlay's idle line.</summary>
+    public string GameMode { get { lock (_gate) return _gameMode; } }
 
     /// <summary>The zone the session reads (the open world, the Abyss), for Every fight's records.</summary>
     public string Zone { get { lock (_gate) return _zone; } }

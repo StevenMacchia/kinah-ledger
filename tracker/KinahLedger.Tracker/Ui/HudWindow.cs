@@ -537,7 +537,7 @@ public sealed partial class HudWindow : Window
             _flagLine!.Visibility = flagged ? Visibility.Visible : Visibility.Collapsed;
             if (((FrameworkElement)_feedLine.Parent).Tag is UIElement dot) dot.Visibility = flagged ? Visibility.Collapsed : Visibility.Visible;
             _flagText!.Text = V("flag");
-            _feedText!.Text = V("feedText").Length > 0 ? V("feedText") : L.T("Waiting for the first count");
+            _feedText!.Text = V("feedText").Length > 0 ? V("feedText") : HudKit.Waiting(false, V("idleShort").Length > 0 ? V("idleShort") : V("idle"));
             _feedValue!.Text = V("feedValue");
             // Kinah in gold, a loot value's plus in mint, a loss in coral: the window's feed and the ticker's roles (colour pass, 2026-11-13)
             _feedValue.Foreground = V("feedTone") switch { "gold" => Gold, "coral" => Coral, _ => Mint };
