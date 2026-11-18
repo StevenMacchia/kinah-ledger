@@ -1,0 +1,480 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using KinahLedger.Parser;
+using KinahLedger.Session;
+using static KinahLedger.Ui.HudKit;
+
+namespace KinahLedger.Ui;
+
+/// <summary>
+/// Mono (the Modern theme; Steven, 2026-11-17, picked from the HTML mock-ups): Swiss minimal. A near-black panel with a
+/// hairline edge, off-white Inter with tabular figures, one orange accent (you, the boss's HP, the ring); flat bars on an exact
+/// 4 px grid, hairline rules, 2 px corners, nothing extra. The Buddy is one panel: the ring of your best, the hour big, the
+/// session and the latest pickup under it, the next timer in an outlined box at its right. A fight is the same panel: the
+/// boss and its clock, a 4 px HP bar cut at its thirds, the rows each over a flat 4 px bar, the foot after a hairline.
+/// The moments stay flat: a pickup runs an accent line along the panel's foot; a rare drop draws a rule in its grade's colour;
+/// your best passed fills the ring; an entry opening inverts the timer's box once; a fight wipes in from the top and its end
+/// lays a band with the outcome across the rows.
+/// </summary>
+sealed partial class HudModernMono : ModernLook
+{
+    static readonly Color BgC = Color.FromRgb(0x0B, 0x0C, 0x0E), EdgeC = Color.FromRgb(0x23, 0x24, 0x28), PaperC = Color.FromRgb(0xF2, 0xF1, 0xEC),
+        GreyC = Color.FromRgb(0x8B, 0x8A, 0x85), RuleC = Color.FromRgb(0x26, 0x27, 0x2B), TrackC = Color.FromRgb(0x1C, 0x1D, 0x21),
+        AccentC = Color.FromRgb(0xFF, 0x4D, 0x2E), GreenC = Color.FromRgb(0x5D, 0xF2, 0xA6), RedC = Color.FromRgb(0xFF, 0x6B, 0x6B);
+    static readonly SolidColorBrush Paper = Frozen(PaperC), Grey = Frozen(GreyC), Accent = Frozen(AccentC), Green = Frozen(GreenC), Red = Frozen(RedC),
+        Edge = Frozen(EdgeC), RuleB = Frozen(RuleC), TrackB = Frozen(TrackC), Dark = Frozen(BgC), Soft = Frozen(Mod.A(PaperC, .8));
+    const double Radius = 4, Corner2 = 2;
+
+    // every part inside the window's edge: the moments draw inside the panels (the spill check stays empty)
+    readonly Grid _root = new() { Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left };
+    readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
+    double _opacity = 0.9;
+
+    // the timers: in the Buddy's panel at its right, inside the fight's panel in a dungeon, or a small panel of their own
+    readonly StackPanel _timers = new() { VerticalAlignment = VerticalAlignment.Center };
+    readonly Border _timersBuddy = new() { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    readonly Border _timersIn = new() { Margin = new Thickness(0, 0, 0, 10), HorizontalAlignment = HorizontalAlignment.Left };
+    readonly Border _timersTop;
+    readonly Border _timersTopHost = new() { HorizontalAlignment = HorizontalAlignment.Left };
+    Border? _chip;
+    TextBlock? _chipText;
+    Border? _chipDot;
+    TimerBadge.Tone _chipTone;
+
+    // the Buddy
+    readonly Border _line;
+    readonly Grid _lineGrid = new();
+    readonly StackPanel _lineBody = new();
+    readonly Grid _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true };
+    TacSketch? _ringArt;
+    double _share = -1, _fill = -1;
+    bool _beat;
+    FrameworkElement? _rareRow;
+    TacSketch? _rareRule;
+    double _rareDraw = 1;
+    Color _rareC;
+    readonly Border _noteHost;
+    readonly TextBlock _note = Mod.Text("", 11.5, Paper, FontWeights.Medium);
+    readonly Border _noteDot = new() { Width = 6, Height = 6, Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+
+    // the fight
+    readonly Border _fight;
+    readonly Grid _fightGrid = new();
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(14, 12, 14, 11) };
+    readonly Grid _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
+    readonly RectangleGeometry _wipe = new(new Rect(0, 0, 4000, 4000));
+
+    public HudModernMono() : base(bare: false)
+    {
+        // the meter: the look's own rows (Ui/Themes/ThemeRows.cs) on the 4 px grid, a muted "2 MORE" between the party and you
+        UseRows(MonoRow.Pitch, m => new MonoRow(), 20, GapLine);
+        _line = Panel(_lineGrid);
+        _lineGrid.Children.Add(_lineBody); _lineGrid.Children.Add(_lineFx);
+        _lineBody.Margin = new Thickness(10, 10, 14, 10);
+        _fight = Panel(_fightGrid);
+        _fight.Visibility = Visibility.Collapsed; _fight.Margin = new Thickness(0, 0, 0, 6); _fight.HorizontalAlignment = HorizontalAlignment.Left;
+        _fightGrid.Children.Add(_fightBody); _fightGrid.Children.Add(_fightFx);
+        _timersTop = Panel(_timersTopHost);
+        _timersTop.HorizontalAlignment = HorizontalAlignment.Left; _timersTop.Margin = new Thickness(0, 0, 0, 6); _timersTopHost.Padding = new Thickness(8, 7, 8, 7);
+        _noteHost = Panel(new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 5, 12, 6), Children = { _noteDot, _note } });
+        _noteHost.HorizontalAlignment = HorizontalAlignment.Left; _noteHost.Margin = new Thickness(0, 4, 0, 0); _noteHost.Visibility = Visibility.Collapsed;
+        _body.Children.Add(_timersTop); _body.Children.Add(_fight); _body.Children.Add(_line); _body.Children.Add(_noteHost);
+        _root.Children.Add(_body);
+        System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
+        TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
+    }
+
+    public override FrameworkElement Root => _root;
+    public override Thickness Inset => _root.Margin;
+    public override double Corner => Radius;
+    public override FrameworkElement? FightFrame => _fight.Visibility == Visibility.Visible ? _fight : null;
+
+    public override void SetOpacity(double opacity)
+    {
+        _opacity = Math.Clamp(opacity, 0.3, 1);
+        var bg = Ground();
+        foreach (var p in new[] { _line, _fight, _timersTop, _noteHost }) p.Background = bg;
+    }
+
+    /// <summary>The panel's near-black at the overlay's opacity (never so thin the off-white loses its ground).</summary>
+    SolidColorBrush Ground() => Frozen(Mod.A(BgC, .72 + .28 * _opacity));
+
+    /// <summary>A panel: near-black, a hairline edge, 4 px corners.</summary>
+    Border Panel(UIElement child) => new() { Child = child, Background = Frozen(Mod.A(BgC, .97)), BorderBrush = Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius) };
+
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dim;
+
+    /// <summary>The reader is paused or the window dims (the "show" value): the Buddy's figures go quiet, the note stays bright.</summary>
+    bool Dim => Values.TryGetValue("show", out var s) && s == "dim" || Values.TryGetValue("paused", out var p) && p.Length > 0;
+
+    // ================================================================ the Buddy
+
+    protected override void DrawLine(Figures f)
+    {
+        _lineBody.Children.Clear();
+        _ringArt = null; _rareRow = null; _rareRule = null;
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bool dim = Dim;
+        var ink = dim ? Grey : Paper;
+        if (f.Abyss && f.Counted && f.Icon.Length > 0)
+        {
+            var m = AbyssMark(f.Icon, 40); m.Margin = new Thickness(0, 0, 12, 0); m.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(m);
+        }
+        else if (HasRing(f))
+        {
+            _share = f.Share; _beat = f.Beat; _fill = -1;
+            var ring = new Grid { Width = 44, Height = 44, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+            var art = new TacSketch((dc, s) => Ring(dc, s, dim), 44, 44);
+            _ringArt = art;
+            ring.Children.Add(art);
+            var pc = Tt(f.Beat ? "★" : Pct(f.Share), 14, ink, FontWeights.Bold);
+            pc.HorizontalAlignment = HorizontalAlignment.Center;
+            ring.Children.Add(pc);
+            row.Children.Add(ring);
+        }
+        else if (HasHour(f))
+        {
+            // no best here yet: the accent square, as the timer's dot, keeps the panel's left edge
+            row.Children.Add(new Border { Width = 8, Height = 8, Background = dim ? Grey : Accent, Margin = new Thickness(4, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center });
+        }
+        var kv = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        if (!HasHour(f))
+        {
+            var w = Tt(Waiting(f.Abyss), 13, Grey, FontWeights.Medium);
+            w.Margin = new Thickness(2, 6, 0, 6);
+            kv.Children.Add(w);
+        }
+        else
+        {
+            var top = new StackPanel { Orientation = Orientation.Horizontal };
+            var rate = Tt(f.Rate, f.Warm ? 15 : 24, f.Warm ? Grey : ink, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
+            if (!f.Warm) rate.Margin = new Thickness(0, -2, 0, -1);
+            top.Children.Add(rate);
+            if (f.Unit.Length > 0) { var u = Tt(f.Unit, 12, Grey, FontWeights.Medium); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
+            kv.Children.Add(top);
+            // the session, then the latest pickup and its worth in green
+            var sub = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = dim ? Grey : Soft, Margin = new Thickness(0, 2, 0, 0) };
+            System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
+            void Sep() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Grey }); }
+            if (f.Total.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run($"{f.Total} {f.TotalWord}"));
+            if (f.Abyss)
+                foreach (var (fig, word, tone) in f.Stats)
+                {
+                    Sep();
+                    sub.Inlines.Add(new System.Windows.Documents.Run(fig) { Foreground = ReferenceEquals(tone, Rec) ? Red : ink, FontWeight = FontWeights.SemiBold });
+                    sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+                }
+            else if (!KinahHidden && Picks(Values).FirstOrDefault() is { } p)
+            {
+                Sep();
+                sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 18 ? p.Name[..17].TrimEnd() + "…" : p.Name));
+                var worth = p.Worth.Length > 0 ? p.Worth : p.Count;
+                if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + (p.Worth.Length > 0 && !worth.StartsWith('+') ? "+" : "") + worth) { Foreground = dim ? Grey : Green, FontWeight = FontWeights.SemiBold });
+            }
+            if (sub.Inlines.Count > 0) kv.Children.Add(sub);
+        }
+        Grid.SetColumn(kv, 1); row.Children.Add(kv);
+        Grid.SetColumn(_timersBuddy, 2);
+        if (_timersBuddy.Parent is Panel old) old.Children.Remove(_timersBuddy);
+        row.Children.Add(_timersBuddy);
+        _lineBody.Children.Add(row);
+
+        // the rare drop the window holds: a rule in its grade's colour, its tile, RARE DROP and its name
+        if (!KinahHidden && Rare(Values) is { } r)
+        {
+            _rareC = ColorOf(r.Color, r.Grade);
+            var box = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            _rareRule = new TacSketch((dc, s) =>
+            {
+                dc.DrawRectangle(RuleB, null, new Rect(0, 0, s.Width, 1));
+                dc.DrawRectangle(Frozen(_rareC), null, new Rect(0, 0, s.Width * Math.Clamp(_rareDraw, 0, 1), 1));
+            }) { Height = 1, Margin = new Thickness(0, 0, 0, 8) };
+            box.Children.Add(_rareRule);
+            var rr = new StackPanel { Orientation = Orientation.Horizontal };
+            rr.Children.Add(FlatTile(r, 26, _rareC));
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            words.Children.Add(Label(L.T("RARE DROP")));
+            var nm = new StackPanel { Orientation = Orientation.Horizontal };
+            nm.Children.Add(Tt(r.Name, 13.5, Frozen(_rareC), FontWeights.SemiBold));
+            if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11.5, Grey, FontWeights.Medium); nm.Children.Add(cn); }
+            words.Children.Add(nm);
+            rr.Children.Add(words);
+            box.Children.Add(rr);
+            _rareRow = box;
+            _lineBody.Children.Add(box);
+        }
+        // the note under the panel: a small square in its tone, the words in off-white
+        _note.Text = f.Note;
+        var noteTone = ReferenceEquals(f.NoteTone, Warn) ? Accent : ReferenceEquals(f.NoteTone, Mint) ? Green : ReferenceEquals(f.NoteTone, Gold) ? Paper : Grey;
+        _noteDot.Background = noteTone;
+        _noteHost.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+        _lineBody.Opacity = 1;
+        PlaceTimers();
+    }
+
+    /// <summary>The ring of your best: a 4 px track, the share as a flat accent arc (butt ends) from the top; full once beaten.</summary>
+    void Ring(DrawingContext dc, Size s, bool dim)
+    {
+        double c = s.Width / 2, r = c - 2;
+        var center = new Point(c, c);
+        dc.DrawEllipse(null, Mod.P(RuleB, 4), center, r, r);
+        double share = _fill >= 0 ? _fill : Math.Clamp(_beat ? 1 : _share, 0, 1);
+        var tone = dim ? Grey : Accent;
+        if (share >= 0.999) { dc.DrawEllipse(null, Mod.P(tone, 4), center, r, r); return; }
+        if (share < 0.004) return;
+        double a = 2 * Math.PI * share;
+        var fig = new PathFigure { StartPoint = new Point(c, c - r) };
+        fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
+        var pg = new PathGeometry(); pg.Figures.Add(fig); pg.Freeze();
+        dc.DrawGeometry(null, Mod.P(tone, 4), pg);
+    }
+
+    /// <summary>An item's tile, flat: its icon in a 2 px-cornered square framed by a hairline in <paramref name="c"/>.</summary>
+    static FrameworkElement FlatTile(Pick p, double size, Color c)
+    {
+        var box = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(Corner2), BorderThickness = new Thickness(1), BorderBrush = Frozen(c), Background = TrackB, VerticalAlignment = VerticalAlignment.Center };
+        var slot = IconCache.Get(p.Icon);
+        var pic = new Image { Source = slot.Image, Stretch = Stretch.UniformToFill, Margin = new Thickness(1) };
+        RenderOptions.SetBitmapScalingMode(pic, BitmapScalingMode.HighQuality);
+        if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
+        {
+            System.ComponentModel.PropertyChangedEventHandler? on = null;
+            on = (_, _) => { if (slot.Image == null) return; pic.Source = slot.Image; slot.PropertyChanged -= on; };
+            slot.PropertyChanged += on;
+        }
+        box.Child = pic;
+        return box;
+    }
+
+    /// <summary>A small uppercase label in grey.</summary>
+    static TextBlock Label(string s) => Mod.Text(s, 9, Grey, FontWeights.SemiBold);
+
+    static FrameworkElement Hairline(Thickness m) => new Border { Height = 1, Background = RuleB, Margin = m, SnapsToDevicePixels = true };
+
+    protected override void KinahShown(bool shown)
+    {
+        _line.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        if (!shown) _noteHost.Visibility = Visibility.Collapsed;
+        _fight.Margin = new Thickness(0, 0, 0, shown ? 6 : 0);
+        PlaceTimers();
+    }
+
+    // ================================================================ the timers
+
+    protected override void DrawTimers(IReadOnlyList<TimerBoard.Item> due, DateTime now)
+    {
+        _timers.Children.Clear();
+        _chip = null; _chipText = null; _chipDot = null;
+        var shown = due.Take(KinahHidden ? 2 : HudWindow.TimerLineMax).ToList();
+        if (shown.Count > 0)
+        {
+            // the next: an outlined box, a square dot in its tone (green while the entry is open), the words in off-white
+            var (text, tone) = TimerWords(shown[0], now);
+            _chipTone = tone;
+            var c = tone == TimerBadge.Tone.On ? Green : tone == TimerBadge.Tone.Soon ? Accent : Grey;
+            var dot = new Border { Width = 7, Height = 7, Background = c, Margin = new Thickness(0, 1, 7, 0), VerticalAlignment = VerticalAlignment.Center };
+            var t = Tt(text, 12, Paper, FontWeights.SemiBold);
+            _chip = new Border
+            {
+                BorderBrush = tone == TimerBadge.Tone.On ? Green : Paper, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Corner2), Padding = new Thickness(9, 4, 10, 5),
+                HorizontalAlignment = HorizontalAlignment.Left, Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { dot, t } },
+            };
+            _chipText = t; _chipDot = dot;
+            _timers.Children.Add(_chip);
+            // the rest: one quiet line under it
+            if (shown.Count > 1)
+            {
+                var rest = Tt(string.Join("  ·  ", shown.Skip(1).Select(i => TimerWords(i, now).Text)), 10.5, Grey, FontWeights.Medium);
+                rest.Margin = new Thickness(1, 5, 0, 0);
+                _timers.Children.Add(rest);
+            }
+        }
+        PlaceTimers();
+    }
+
+    void PlaceTimers()
+    {
+        bool fight = _fight.Visibility == Visibility.Visible;
+        bool buddy = !KinahHidden && _line.Visibility == Visibility.Visible;
+        // the Buddy holds them while it shows; in a dungeon (no Buddy) the fight's panel; else a small panel of their own
+        var host = buddy ? _timersBuddy : fight ? _timersIn : _timersTopHost;
+        foreach (var b in new[] { _timersBuddy, _timersIn, _timersTopHost }) if (b != host && b.Child == _timers) b.Child = null;
+        if (host.Child != _timers) host.Child = _timers;
+        bool any = _timers.Children.Count > 0;
+        _timersBuddy.Visibility = buddy && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersIn.Visibility = !buddy && fight && any ? Visibility.Visible : Visibility.Collapsed;
+        _timersTop.Visibility = !buddy && !fight && any ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ================================================================ the fight
+
+    protected override void DrawFight(Encounter? e, DateTime now)
+    {
+        _fightBody.Children.Clear();
+        if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
+        double w = FightWidth - 8;
+        _fight.Width = w;
+        double inner = w - 2 - _fightBody.Margin.Left - _fightBody.Margin.Right;
+        if (_timersIn.Parent is Panel old) old.Children.Remove(_timersIn);
+        _fightBody.Children.Add(_timersIn);
+
+        // Ferocious Horn Nuakum                [KILLED] 12:47
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = Tt(e.Title, 15, Paper, FontWeights.SemiBold); title.TextTrimming = TextTrimming.CharacterEllipsis;
+        head.Children.Add(title);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
+        if (e.Waiting) right.Children.Add(Mark(L.T("READY"), Paper, filled: false));
+        else
+        {
+            var outcome = OutcomeText(e);
+            if (outcome.Length > 0)
+            {
+                var ot = Mark(outcome.ToUpperInvariant(), e.Outcome == "wipe" ? Accent : Paper, filled: true);
+                ot.Margin = new Thickness(0, 1, 10, 0);
+                right.Children.Add(ot);
+            }
+            right.Children.Add(Tt(Clock(e.Duration(now)), 18, Paper, FontWeights.Bold));
+        }
+        Grid.SetColumn(right, 1); head.Children.Add(right);
+        _fightBody.Children.Add(head);
+
+        if (e.Waiting)
+        {
+            var wt = Tt(e.ReadyText, 12.5, Grey, FontWeights.Medium); wt.Margin = new Thickness(0, 8, 0, 0); wt.TextWrapping = TextWrapping.Wrap;
+            _fightBody.Children.Add(wt);
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(Hairline(new Thickness(0, 10, 0, 8))); PutRows(_fightBody, e, now, inner); }
+        }
+        else
+        {
+            if (HpOf(e) is { } hp)
+            {
+                // a 4 px bar in the accent, cut at its thirds by the panel's own near-black; the figure and what's left under it
+                var track = new Grid { Height = 4, Margin = new Thickness(0, 11, 0, 0) };
+                track.Children.Add(new TacSketch((dc, s) =>
+                {
+                    dc.DrawRectangle(RuleB, null, new Rect(0, 0, s.Width, s.Height));
+                    dc.DrawRectangle(Accent, null, new Rect(0, 0, Math.Round(s.Width * Math.Clamp(hp, 0, 1)), s.Height));
+                }));
+                HpGhost(track, e, hp, now, 0);
+                track.Children.Add(new TacSketch((dc, s) =>
+                {
+                    for (int k = 1; k <= 2; k++) dc.DrawRectangle(Dark, null, new Rect(Math.Round(s.Width * k / 3) - 1, 0, 2, s.Height));
+                }));
+                _fightBody.Children.Add(track);
+                var hpl = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 5, 0, 0) };
+                hpl.Children.Add(Tt($"{Math.Round(hp * 100):0}%", 10.5, Paper, FontWeights.SemiBold));
+                var left = HpLeftText(e);
+                if (left.Length > 0) hpl.Children.Add(Tt("  ·  " + left, 10.5, Grey, FontWeights.Medium));
+                _fightBody.Children.Add(hpl);
+                _fightBody.Children.Add(Hairline(new Thickness(0, 8, 0, 8)));
+            }
+            else _fightBody.Children.Add(Hairline(new Thickness(0, 10, 0, 8)));
+            PutRows(_fightBody, e, now, inner);
+            if (e.HasDamage)
+            {
+                _fightBody.Children.Add(Hairline(new Thickness(0, 4, 0, 8)));
+                _fightBody.Children.Add(Foot(e, now));
+            }
+        }
+        _fight.Visibility = Visibility.Visible;
+        PlaceTimers();
+    }
+
+    // ================================================================ the moments
+
+    /// <summary>A pickup: an accent line runs along the Buddy's foot, left to right, and goes.</summary>
+    protected override void Pickup(Pick p, bool held)
+    {
+        if (KinahHidden || _line.Visibility != Visibility.Visible) return;
+        double run = 0;
+        var line = new TacSketch((dc, s) =>
+        {
+            double a = Out(Seg(run, 0, .55)), b = Out(Seg(run, .35, 1));
+            double x0 = s.Width * b, x1 = s.Width * a;
+            if (x1 - x0 > .5) dc.DrawRectangle(Accent, null, new Rect(x0, s.Height - 2, x1 - x0, 2));
+        });
+        _lineFx.Children.Clear(); _lineFx.Children.Add(line);
+        Motion.Play(line, 900, t => { run = t; line.InvalidateVisual(); }, () => _lineFx.Children.Remove(line));
+    }
+
+    /// <summary>A rare drop: the rule over it draws itself in the grade's colour.</summary>
+    protected override void RareDrop(Pick p, bool held)
+    {
+        if (_rareRule is not { } rule || _rareRow is not { } row) return;
+        Motion.Play(rule, 1200, t =>
+        {
+            _rareDraw = Out(Seg(t, 0, .5));
+            row.Opacity = .35 + .65 * Seg(t, .05, .3);
+            rule.InvalidateVisual();
+        }, () => { _rareDraw = 1; row.Opacity = 1; rule.InvalidateVisual(); });
+    }
+
+    /// <summary>Your best passed: the ring's arc runs on round to full.</summary>
+    protected override void BestPassed(bool held)
+    {
+        if (_ringArt is not { } art) return;
+        double was = _share is > 0 and < 1 ? _share : .8;
+        Motion.Play(art, 1100, t => { _fill = was + (1 - was) * Out(Seg(t, 0, .7)); art.InvalidateVisual(); }, () => { _fill = -1; art.InvalidateVisual(); });
+    }
+
+    /// <summary>An entry opened: the timer's box inverts once (off-white with dark words) and settles back.</summary>
+    protected override void EntryOpened(TimerBoard.Item i, bool held)
+    {
+        if (_chip is not { } chip || _chipText is not { } t) return;
+        var tone = _chipTone == TimerBadge.Tone.On ? GreenC : PaperC;
+        Motion.Play(chip, 1000, p =>
+        {
+            double k = p < .55 ? 1 : 1 - Seg(p, .55, 1);
+            chip.Background = Frozen(Mod.A(tone, k));
+            t.Foreground = k > .5 ? Dark : Paper;
+            if (_chipDot != null) _chipDot.Background = k > .5 ? Dark : (_chipTone == TimerBadge.Tone.On ? Green : _chipTone == TimerBadge.Tone.Soon ? Accent : Grey);
+        }, () =>
+        {
+            chip.Background = null; t.Foreground = Paper;
+            if (_chipDot != null) _chipDot.Background = _chipTone == TimerBadge.Tone.On ? Green : _chipTone == TimerBadge.Tone.Soon ? Accent : Grey;
+        });
+    }
+
+    /// <summary>A fight started: its panel wipes in from the top, its body after.</summary>
+    protected override void FightStarted(Encounter e, bool held)
+    {
+        Motion.Play(_fight, 520, t =>
+        {
+            double h = _fight.ActualHeight > 0 ? _fight.ActualHeight : 400;
+            _wipe.Rect = new Rect(0, 0, 4000, Math.Max(1, h * Out(Seg(t, 0, .8))));
+            _fight.Clip = _wipe;
+        }, () => _fight.ClearValue(UIElement.ClipProperty));
+    }
+
+    /// <summary>A fight ended: a flat band across the rows says KILLED (or WIPED in the accent) and the time, then goes.</summary>
+    protected override void FightEnded(Encounter e, bool held)
+    {
+        if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
+        bool wipe = e.Outcome == "wipe";
+        var band = new Border
+        {
+            Background = Frozen(Mod.A(BgC, .96)), BorderBrush = wipe ? Accent : Paper, BorderThickness = new Thickness(0, 1, 0, 1),
+            VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(0, 10, 0, 11),
+        };
+        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        words.Children.Add(Tt(OutcomeText(e).ToUpperInvariant(), 20, wipe ? Accent : Paper, FontWeights.Bold));
+        var tm = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 20, Grey, FontWeights.SemiBold); tm.Margin = new Thickness(12, 0, 0, 0);
+        words.Children.Add(tm);
+        band.Child = words;
+        var scale = new ScaleTransform(0, 1);
+        band.RenderTransformOrigin = new Point(0, .5); band.RenderTransform = scale;
+        _fightFx.Children.Clear(); _fightFx.Children.Add(band);
+        Motion.Play(_fightFx, 2200, t =>
+        {
+            scale.ScaleX = Out(Seg(t, 0, .14));
+            words.Opacity = Seg(t, .1, .18);
+            band.Opacity = t < .85 ? 1 : 1 - Seg(t, .85, 1);
+        }, () => _fightFx.Children.Clear());
+    }
+}

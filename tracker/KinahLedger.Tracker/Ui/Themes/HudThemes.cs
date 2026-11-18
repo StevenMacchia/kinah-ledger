@@ -50,7 +50,8 @@ public static class HudThemes
         Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Holo => new HudHolo { Still = still },
         Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
         // Modern: Mono, Line and Fade draw as Glass until their own looks land
-        ModernGlass or ModernMono or ModernLine or ModernFade => new HudModernGlass { Still = still },
+        ModernMono => new HudModernMono { Still = still },
+        ModernGlass or ModernLine or ModernFade => new HudModernGlass { Still = still },
         _ => null,
     };
 
