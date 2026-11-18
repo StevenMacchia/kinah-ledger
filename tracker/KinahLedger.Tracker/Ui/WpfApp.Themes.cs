@@ -235,6 +235,7 @@ public static partial class WpfApp
         var moments = new List<(string Tag, Dictionary<string, string> V, List<TimerBoard.Item>? T, Encounter? E, DateTime At, bool Dungeon)>
         {
             ("pickup", kinah, null, null, now, false), ("rare-drop", rare, null, null, now, false), ("best-passed", best, null, null, now, false),
+            ("run-clear", Run("clear"), null, null, now, false), ("run-newbest", Run("newbest"), null, null, now, false),
             ("entry-opened", kinah, due, null, now, false), ("fight-started", kinah, null, live, now, true), ("fight-ended", kinah, null, kill, kill.End!.Value, true), ("fight-wiped", kinah, null, wipe, wipe.End!.Value, true),
         };
         double? frozen0 = Motion.FrozenAt;

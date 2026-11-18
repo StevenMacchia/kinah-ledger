@@ -65,6 +65,7 @@ sealed partial class HudTerminal
         var forms = FigForms(s);
         var line = forms.FirstOrDefault(f => f.Sum(Wide) <= cap + .5, forms[^1]);
         foreach (var e in line) _figLine.Children.Add(e);
+        VerdictDrawn(line.OfType<TextBlock>().FirstOrDefault(t => Equals(t.Tag, TypedTag)));   // a clear's verdict types on (HudTerminal.Type.cs)
         _stats.Inlines.Clear(); _stats.Visibility = Visibility.Collapsed;
         _rareLine.Child = null; _rareTile = null; _rareLine.Visibility = Visibility.Collapsed;
         RunSub(s, cap);
@@ -89,7 +90,7 @@ sealed partial class HudTerminal
             // a new best: the clock lit amber, "[★ NEW BEST]"
             FrameworkElement Clock() => Phosphor(s.Clock, 25, Face, FontWeights.Bold, Amber, Rgb(AmberC), .9, .32);
             FrameworkElement? Pace() => s.Pace.Length > 0 ? Beside(s.Pace, 14, Green, FontWeights.Bold, new Thickness(7, 0, 0, 4)) : null;
-            FrameworkElement Nb() => Bracket("★ " + L.T("NEW BEST"), Amber);
+            FrameworkElement Nb() => Typed(Bracket("★ " + L.T("NEW BEST"), Amber));
             forms.Add(Parts(Clock(), Pace(), Nb())); forms.Add(Parts(Clock(), Nb())); forms.Add(Parts(Clock()));
         }
         else if (s.Clear)
@@ -98,7 +99,7 @@ sealed partial class HudTerminal
             var (before, after) = ClearedIn();
             var verdict = RunBuddy.Verdict(s);
             FrameworkElement Clock() => Phosphor(s.Clock, 25, Face, FontWeights.Bold, Pale, Glow, .9, .32);
-            FrameworkElement? Verdict() => verdict.Length > 0 ? Bracket(verdict, s.Verdict is "rank" or "first" ? Amber : Phos) : null;
+            FrameworkElement? Verdict() => verdict.Length > 0 ? Typed(Bracket(verdict, s.Verdict is "rank" or "first" ? Amber : Phos)) : null;
             FrameworkElement? Before() => before.Trim().Length > 0 ? Beside(before.TrimEnd(), 12.5, PhosDim, FontWeights.SemiBold, new Thickness(0, 0, 7, 5)) : null;
             FrameworkElement? After() => after.Trim().Length > 0 ? Beside(after.TrimStart(), 12.5, PhosDim, FontWeights.SemiBold, new Thickness(7, 0, 0, 5)) : null;
             forms.Add(Parts(Before(), Clock(), After(), Verdict())); forms.Add(Parts(Clock(), Verdict())); forms.Add(Parts(Clock()));
@@ -132,6 +133,9 @@ sealed partial class HudTerminal
         var t = Txt(s, size, fg, Face, w); t.VerticalAlignment = VerticalAlignment.Bottom; t.Margin = margin;
         return t;
     }
+
+    const string TypedTag = "type";
+    static TextBlock Typed(TextBlock t) { t.Tag = TypedTag; return t; }
 
     /// <summary>"[best 4:12]": words in the console's brackets, as the hour's "[91% of best]".</summary>
     static TextBlock Bracket(string s, Brush fg) => Beside("[" + s + "]", 12, fg, FontWeights.SemiBold, new Thickness(10, 0, 0, 5));
