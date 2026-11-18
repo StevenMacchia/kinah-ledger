@@ -27,6 +27,8 @@ sealed class CommandCtx
     public Action<long?> Inspect = _ => { };
     public Action<string> SetSort = _ => { };
     public Func<string, object?> Tip = s => s;
+    /// <summary>Drawn for a share picture (Ui/ParserShare.cs): no tabs, no chevrons or hovers, nothing to click.</summary>
+    public bool Share;
 }
 
 /// <summary>
@@ -140,7 +142,7 @@ static class ParserCommand
         }
         foreach (var x in extras) body.Children.Add(x);
         var tabs = Tabs(v);
-        if (tabs.Count > 1) body.Children.Add(M(TabRow(tabs, ctx), 0, 14, 0, 0));
+        if (tabs.Count > 1 && !ctx.Share) body.Children.Add(M(TabRow(tabs, ctx), 0, 14, 0, 0));
         var glow = live ? Gold : e.Tone == "good" ? Mint : e.Tone == "bad" ? Coral : Gold;
         var hero = Glass(body, new Thickness(16, 13, 16, 13), 14, glow: glow);
         hero.Tag = "parser-hero";
@@ -322,7 +324,8 @@ static class ParserCommand
             if (dmg) g.Children.Add(RankChip(m.Rank, m.F.Class, 22, you: m.You));
             g.Children.Add(Col(ClassArt.Icon(m.F.Class, 30, m.F.Name), 1));
             var nameBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-            var nl = new StackPanel { Orientation = Orientation.Horizontal };
+            // a share picture's names may be longer than the page's ("Member 5" for "Lyra"): its tags wrap rather than end cut
+            Panel nl = ctx.Share ? new WrapPanel() : new StackPanel { Orientation = Orientation.Horizontal };
             var nm = T(ParserRows.NameOf(m.F), 13.5, m.F.Name.Length > 0 || m.F.You ? ClassArt.NameBrush(m.F.Class, Dark) : Muted, FontWeights.SemiBold);
             nl.Children.Add(nm);
             if (m.You) nl.Children.Add(YouTag());
@@ -365,7 +368,7 @@ static class ParserCommand
                 var sp = Spark(Smooth(ps.Select(x => (double)x).ToList()), 72, 26, m.You ? Gold : ClassArt.ColorOf(m.F.Class), smax, m.You ? 1.8 : 1.3, glow: m.You);
                 sp.HorizontalAlignment = HorizontalAlignment.Right; g.Children.Add(Col(sp, cSpark));
             }
-            bool canOpen = dmg && m.Abilities.Count > 0;
+            bool canOpen = dmg && m.Abilities.Count > 0 && !ctx.Share;
             if (canOpen)
             {
                 var chev = new Path { Data = Geometry.Parse("M0,0 L3.5,3.5 L0,7"), StrokeThickness = 1.5, Stroke = Faint, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
@@ -723,7 +726,8 @@ static class ParserCommand
 
     // ================================================================ timeline and damage taken (once the record carries them)
 
-    public static Border Timeline(FightView v)
+    /// <param name="chartWidth">The chart's width: the page's, or a share picture's wider one (Ui/ParserShare.cs).</param>
+    public static Border Timeline(FightView v, double chartWidth = Wd - 4)
     {
         var body = new StackPanel();
         var head = Cols(-1, 0);
@@ -740,7 +744,7 @@ static class ParserCommand
         body.Children.Add(M(head, 0, 0, 0, 8));
         var lines = v.Members.Where(m => m.PerSecond is { Count: > 1 }).Select(m => (M: m, S: Smooth(m.PerSecond!.Select(x => (double)x).ToList(), 3))).ToList();
         double secs = lines.Max(l => l.S.Length);
-        var (cv, ch) = Frame(secs, Wd - 4, 230, lines.Max(l => l.S.Max()) * 1.1, K("Line"), Faint);
+        var (cv, ch) = Frame(secs, chartWidth, 230, lines.Max(l => l.S.Max()) * 1.1, K("Line"), Faint);
         foreach (var (m, s) in lines.Where(l => !l.M.You)) Line(cv, ch, s, ClassArt.ColorOf(m.F.Class), 1.6, false, opacity: 0.85);
         foreach (var (m, s) in lines.Where(l => l.M.You)) Line(cv, ch, s, Gold, 2.6, true);
         foreach (var (m, s) in lines) foreach (var d in m.DeathLog) DeathMark(cv, ch, d.At, s[Math.Clamp((int)d.At, 0, s.Length - 1)], m.F.Name);

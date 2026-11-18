@@ -1,0 +1,18 @@
+{
+  "Summary card": "요약 카드",
+  "Group table": "파티 표",
+  "Damage taken": "받은 피해",
+  "Everything": "전체",
+  "Class": "직업",
+  "This view": "지금 화면",
+  "Group DPS, your DPS and place, the clock": "파티 DPS, 내 DPS와 순위, 전투 시간",
+  "The meter as it shows over the game": "게임 위에 보이는 그대로의 미터",
+  "{0}, tab-separated: pastes into Discord or a spreadsheet": "{0}, 탭으로 구분돼요. Discord나 스프레드시트에 붙여 넣을 수 있어요",
+  "A picture of this view to paste in Discord or anywhere. Nothing is uploaded.": "지금 화면의 이미지예요. Discord 등 어디든 붙여 넣을 수 있고, 업로드되는 건 없어요.",
+  "More to share: the summary card, the meter, everything in one picture, the table as text": "더 공유하기: 요약 카드, 미터, 한 장에 담은 전체, 표를 텍스트로",
+  "Tab-separated: pastes into Discord or a spreadsheet": "탭으로 구분돼요. Discord나 스프레드시트에 붙여 넣을 수 있어요",
+  "Back (Backspace, Alt+← or the mouse's back button)": "뒤로 (Backspace, Alt+← 또는 마우스 뒤로 버튼)",
+  "Back to the run": "런으로 돌아가기",
+  "All boss pulls": "모든 보스 전투",
+  "Every boss pull of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers.": "이 캐릭터의 모든 보스 전투는 이 PC에 저장돼요. 공유 탭에서 kinahledger.com 프로필에 내 보스 최고 기록 표시를 켜지 않으면 전투 정보는 PC 밖으로 나가지 않아요. 켜면 보스별 내 최고 처치 기록만 프로필로 보내지고, 파티원의 수치는 보내지 않아요."
+}

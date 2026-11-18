@@ -134,6 +134,15 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "meter") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterMotionChecks(Check); HealChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter motion): all passed" : $"options test (meter motion): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=share: the Parser overlay's Share alone (shown, and reachable from the meter: Ui/WpfApp.MeterShare.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "share") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterShareOverlayChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (overlay share): all passed" : $"options test (overlay share): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=parsershare: the Parser page's share pictures, Copy as text, the back button and the modes gone, alone
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parsershare")
+        {
+            var pw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            pw.Show(); pw.ShowDemo(); DoEvents();
+            ParserModesGoneChecks(pw, Check); ParserShareChecks(pw, Check);
+            pw.Close();
+            Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
+        }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -1343,6 +1352,7 @@ public static partial class WpfApp
         // the Parser (2026-11-13, Ui/MainWindow.Parser.cs, Ui/WpfApp.Parser.cs)
         ParserChecks(w, Check);
         MeterShareChecks(w, Check);   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
+        ParserShareChecks(w, Check);   // the Parser page's pictures, Copy as text and the back button (Ui/WpfApp.ParserShare.cs)
         MeterMotionChecks(Check);
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs

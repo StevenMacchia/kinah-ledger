@@ -13,14 +13,14 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The Parser page (Steven, 2026-11-13: "It should have its own tab for parser", then "allow users to select just boss
-/// only for parser or full run etc, give options"). Its mode says what is kept (Parser/BossParser.cs): Bosses only (each
-/// boss pull in a Transcendence, an Expedition or a Sanctuary), Full run (each run of those, entering to leaving, every boss
-/// a split) or Every fight (anywhere, the first hit or kill to a pause), each named on the page with what it counts. On
+/// The Parser page (Steven, 2026-11-13: "It should have its own tab for parser"). It keeps boss pulls (Parser/BossParser.cs):
+/// each boss pull in a Transcendence, an Expedition, a Sanctuary or Nightmare, and each world boss. The Full run and Every
+/// fight modes of 2026-11-13 are gone (Steven, 2026-11-17: "get rid of full run and every fight"); records an older version
+/// kept in them stay on the PC, out of the list, and still open. On
 /// top, the record under way with its clock and the group (name, class, Combat Power, item level; damage and DPS only when
 /// the game's messages give them, never made up) or, with none, where you are and what starts one. Under it, the records
 /// kept on this PC for the character playing, by mode, kind and boss or instance; a click opens one. The overlay over the
-/// game (Ui/ParserOverlay.cs) is switched here, with its shortcut, and has the mode on its own menu.
+/// game (Ui/ParserOverlay.cs) is switched here, with its shortcut.
 /// </summary>
 public partial class MainWindow
 {
@@ -86,6 +86,7 @@ public partial class MainWindow
         // an overlay of its own in the menu only once Settings › In game › Parser separates it
         RegisterOverlay("Parser", () => ParserOverlayOn, on => ParserOverlayOn = on, L.T("Boss fights: DPS by member, the boss's HP, the pull timer."), visible: () => _parserPrefs.Separate || !HudWanted);
         InitMeterShare(watch);   // the meter's share picture and its shortcut (Ui/MainWindow.MeterShare.cs)
+        InitParserBack();   // Backspace, Alt+← and the mouse's back button on a pull open (Ui/MainWindow.ParserShare.cs)
         if (!watch) return;
         SourceInitialized += (_, _) =>
         {
@@ -149,26 +150,14 @@ public partial class MainWindow
         RedrawParserPage();
     }
 
-    /// <summary>What the Parser keeps now (parser.json).</summary>
-    ParserMode ParserModeNow => BossParser.ModeOf(_parserPrefs.Mode);
-    /// <summary>Which records the list shows: its own pick, else the mode's.</summary>
-    ParserMode ParserListMode => _parserPrefs.ListMode.Length > 0 ? BossParser.ModeOf(_parserPrefs.ListMode) : ParserModeNow;
-
-    /// <summary>The mode picked (the page or the overlay's menu): remembered, the session's parser switched, the list follows it.</summary>
-    void SetParserMode(ParserMode mode)
-    {
-        if (mode == ParserModeNow && _parserPrefs.ListMode == BossParser.ModeKey(mode)) return;
-        _parserPrefs.Mode = BossParser.ModeKey(mode);
-        _parserPrefs.ListMode = BossParser.ModeKey(mode);
-        _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; _parserAllRows = false; _parserOpen = null;
-        if (!_demo) _parserPrefs.Save();
-        TrackerSession.ParserMode = mode;
-        try { ParserFights?.SetMode(mode, DateTime.UtcNow); } catch (Exception ex) { CrashLog.Write("parser mode", ex); }
-        if (_demo && _parserDemoState.Length > 0) { ShowParserDemo(mode switch { ParserMode.Run => "run", ParserMode.Fights => "fight", _ => "live" }); return; }
-        Say(L.F("Parser: {0}. {1}", ModeName(mode), ModeCounts(mode)), "Faint");
-        ParserOverlayTick();
-        RedrawParserPage();
-    }
+    /// <summary>
+    /// What the Parser keeps: boss pulls, always (Steven, 2026-11-17: "get rid of full run and every fight"). The parser's
+    /// other modes stay inside Parser/BossParser.cs, out of reach: nothing picks them, and parser.json's old "run" or "fight"
+    /// reads as "boss" (ParserPrefs.Settle).
+    /// </summary>
+    ParserMode ParserModeNow => ParserMode.Bosses;
+    /// <summary>Which records the list shows: boss pulls (an old run or fight kept on this PC is left out of it).</summary>
+    ParserMode ParserListMode => ParserMode.Bosses;
 
     /// <summary>
     /// The group card's two switches, one click from the page (the honest pass): DPS over the fight or over each member's
@@ -185,11 +174,8 @@ public partial class MainWindow
 
     static string Noun(ParserMode m, int n = 1) => L.T(m switch { ParserMode.Run => n == 1 ? "run" : "runs", ParserMode.Fights => n == 1 ? "fight" : "fights", _ => n == 1 ? "boss pull" : "boss pulls" });
 
-    /// <summary>The mode's name and what it counts, in the language in use (BossParser.Name / Counts are the English).</summary>
-    static string ModeName(ParserMode m) => L.T(BossParser.Name(m));
-    static string ModeCounts(ParserMode m) => m == ParserMode.Fights
-        ? L.F("Every fight anywhere, the open world and the Abyss too: from the first hit or kill to {0:0} seconds without one. Open-world and Abyss fights show while they last and are never kept.", BossParser.PauseSeconds)
-        : L.T(BossParser.Counts(m));
+    /// <summary>What the Parser counts, in the language in use (BossParser.Counts is the English).</summary>
+    static string ModeCounts(ParserMode m) => L.T(BossParser.Counts(m));
 
     // ---- what the page shows ----
 
@@ -387,7 +373,6 @@ public partial class MainWindow
         {
             _parserOverlay = new ParserOverlay { HotkeyText = _parserPrefs.Hotkey };   // "Off" (the default) says no shortcut
             _parserOverlay.Dropped += (x, y, b) => { _parserPrefs.Left = x; _parserPrefs.Top = y; _parserPrefs.Bottom = b; _parserPrefs.Save(); };
-            _parserOverlay.ModePicked += SetParserMode;
             _parserOverlay.HideAsked += () => SetParserOverlay(false);
             _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
             WireOverlayShare(_parserOverlay);
@@ -605,9 +590,10 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The page's head (the parser polish, 2026-11-14: one line, as the main page has no title of its own): what the Parser
-    /// keeps (Bosses only, Full run, Every fight) on the left; the overlay's look and its switches on the right; under them
-    /// one quiet line on what the mode counts.
+    /// The page's head (the parser polish, 2026-11-14: one line, as the main page has no title of its own): when the meter
+    /// shows (Only boss fights, Always on) on the left; the overlay's look and its switches on the right; under them one quiet
+    /// line on what is kept. The Parser keeps boss pulls only (Steven, 2026-11-17: "get rid of full run and every fight"), so
+    /// there is no mode to pick.
     /// </summary>
     FrameworkElement ParserHead(List<Encounter> past)
     {
@@ -615,19 +601,6 @@ public partial class MainWindow
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var modes = new StackPanel { Orientation = Orientation.Horizontal };
-        var seg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
-        AutomationProperties.SetName(seg, "What the Parser keeps");
-        foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
-        {
-            var b = new Button { Content = ModeName(md), Height = 26, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(modes.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = Tip(ModeCounts(md)) };
-            b.SetResourceReference(StyleProperty, md == ParserModeNow ? "SegOn" : "SegOff");
-            AutomationProperties.SetName(b, "Parser mode: " + BossParser.Name(md));
-            var pick = md;
-            b.Click += (_, _) => SetParserMode(pick);
-            modes.Children.Add(b);
-        }
         // the meter (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss fights'")
         var meters = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (always, label, tip) in new[]
@@ -646,9 +619,8 @@ public partial class MainWindow
         var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         AutomationProperties.SetName(mseg, "When the Parser's meter shows");
-        // the two picks wrap onto a second line when the window is narrow (at ~700 px "Always on" slid under the Overlay switch)
-        seg.Margin = new Thickness(0, 0, 10, 4); mseg.Margin = new Thickness(0, 0, 10, 4);
-        var left = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { seg, mseg } };
+        mseg.Margin = new Thickness(0, 0, 10, 4);
+        var left = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { mseg } };
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         // the overlay's look, one click from here (Steven, 2026-11-14: "idk how to change the style"): its name, a click opens
@@ -667,7 +639,7 @@ public partial class MainWindow
             lookLink.MouseLeftButtonUp += (_, _) => OpenParserLook();
         }
         right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
-            L.F("The record under way over the game: the boss or the run, the clock and the group. {0}{1}", _parserPrefs.Separate ? L.T("Its own overlay (Settings › In game › Parser); right-click it for the mode.") : L.T("It opens above the Kinah overlay when a fight starts and folds away after."), Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? L.F(" Shortcut: {0}.", k) : ""), "Fight overlay"));
+            L.F("The record under way over the game: the boss or the run, the clock and the group. {0}{1}", _parserPrefs.Separate ? L.T("Its own overlay (Settings › In game › Parser); right-click it to hide it.") : L.T("It opens above the Kinah overlay when a fight starts and folds away after."), Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? L.F(" Shortcut: {0}.", k) : ""), "Fight overlay"));
         // click-through and the drag are the separate overlay's; above the Kinah line it follows the Kinah overlay's own
         if (_parserPrefs.Separate)
             right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
@@ -675,9 +647,8 @@ public partial class MainWindow
         Grid.SetColumn(right, 1);
         g.Children.Add(right);
         box.Children.Add(g);
-        // Always on: what is kept, then the meter's rule (Bosses only's own sentence says the open world never counts: it is still never kept)
-        var kept = !_parserPrefs.AlwaysOn ? ModeCounts(ParserModeNow)
-            : ParserModeNow == ParserMode.Bosses ? L.T("Keeps each boss pull in Transcendence, Expeditions, Sanctuaries and Nightmare, and each world boss.") : ModeCounts(ParserModeNow);
+        // Always on: what is kept, then the meter's rule (the boss pulls' own sentence says the open world never counts: it is still never kept)
+        var kept = !_parserPrefs.AlwaysOn ? ModeCounts(ParserModeNow) : L.T("Keeps each boss pull in Transcendence, Expeditions, Sanctuaries and Nightmare, and each world boss.");
         var counts = PT(kept + (_parserPrefs.AlwaysOn ? L.F(" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {0:0} seconds without fighting.", BossParser.AlwaysIdleSeconds) : ""), 12, FontWeights.Medium, "Muted");
         counts.TextWrapping = TextWrapping.Wrap; counts.Margin = new Thickness(2, 7, 0, 0);
         var under = new Grid();
@@ -902,18 +873,8 @@ public partial class MainWindow
         bool kept = Encounter.Dungeon(where.Kind);
         if (!_demo && _watcher.Packets is { } pr && !pr.On)
             return (L.T("The Parser is off"), L.T("It needs a setting turned on: Settings › Game reading."), "Warn");
-        switch (ParserModeNow)
-        {
-            case ParserMode.Run:
-                return kept ? (L.F("In {0}", BossBook.Strip(where.Instance)), L.T("Full run counts from entering to leaving; this run started before the Parser could see it."), "Good")
-                    : (L.T("Waiting for a run"), L.T("Enter a Transcendence, an Expedition, a Sanctuary or a Nightmare instance: the run counts from there to leaving, every boss a split."), "Faint");
-            case ParserMode.Fights:
-                var zone = _demo ? "" : ParserFights?.Zone ?? "";
-                return (L.T("Waiting for a fight"), L.F("Your next kill or hit starts one{0}. It ends {1:0} seconds after the last.", kept ? L.F(" in {0}", BossBook.Strip(where.Instance)) : zone.Length > 0 ? L.F(" in {0}", zone) : "", BossParser.PauseSeconds), "Good");
-            default:
-                return kept ? (L.F("Ready in {0}", BossBook.Strip(where.Instance)), L.F("{0}. The next boss you pull starts a fight here; trash and adds never do.", PK.KindWord(Encounter.KindName(where.Kind))), "Good")
-                    : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions, Sanctuaries and Nightmare, and for world bosses. Enter one and pull a boss, or fight a world boss."), "Faint");
-        }
+        return kept ? (L.F("Ready in {0}", BossBook.Strip(where.Instance)), L.F("{0}. The next boss you pull starts a fight here; trash and adds never do.", PK.KindWord(Encounter.KindName(where.Kind))), "Good")
+            : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions, Sanctuaries and Nightmare, and for world bosses. Enter one and pull a boss, or fight a world boss."), "Faint");
     }
 
     FrameworkElement ParserWaitingCard((ContentKind Kind, string Instance) where, List<Encounter> past)
@@ -924,7 +885,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var art = GameArt.Element(ParserModeNow == ParserMode.Fights ? "medal" : "dungeon", 30); art.Margin = new Thickness(0, 0, 12, 0); art.Opacity = 0.85;
+        var art = GameArt.Element("dungeon", 30); art.Margin = new Thickness(0, 0, 12, 0); art.Opacity = 0.85;
         g.Children.Add(art);
         var (head, line, tone) = ParserStatus(where);
         var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -941,7 +902,7 @@ public partial class MainWindow
         if (past.LastOrDefault(e => e.ModeKind == ParserModeNow) is { } last)
         {
             var lastBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-            var lt = PT(L.T(ParserModeNow == ParserMode.Run ? "Last run" : ParserModeNow == ParserMode.Fights ? "Last fight" : "Last pull"), 11, FontWeights.SemiBold, "Faint"); lt.HorizontalAlignment = HorizontalAlignment.Right;
+            var lt = PT(L.T("Last pull"), 11, FontWeights.SemiBold, "Faint"); lt.HorizontalAlignment = HorizontalAlignment.Right;
             lastBox.Children.Add(lt);
             var lr = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 3, 0, 0) };
             lr.Children.Add(PT(last.Title, 12.5, FontWeights.SemiBold, "Ink", trim: true));
@@ -963,30 +924,24 @@ public partial class MainWindow
         card.SetResourceReference(StyleProperty, "QRefCard");
         var body = new StackPanel();
         var mode = ParserListMode;
+        // boss pulls only: a run or a fight kept by an older version (Full run, Every fight) stays in fights.json, out of the list
         var past = all.Where(e => e.ModeKind == mode).ToList();
-        // the head: which records (boss pulls, runs, fights, with their counts), the boss or instance pick
+        // the head: the boss pulls kept and their count, the boss pick
         var head = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var modes = new StackPanel { Orientation = Orientation.Horizontal };
-        var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = Tip(L.T("Every record of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers. Each is kept in the mode it was counted in.")) };
-        mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
-        foreach (var (md, label) in new[] { (ParserMode.Bosses, "Boss pulls"), (ParserMode.Run, "Runs"), (ParserMode.Fights, "Fights") })
-        {
-            int n = all.Count(e => e.ModeKind == md);
-            var b = new Button { Content = n > 0 ? $"{L.T(label)} {n}" : L.T(label), Height = 24, FontSize = 12, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(modes.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
-            b.SetResourceReference(StyleProperty, md == mode ? "SegOn" : "SegOff");
-            AutomationProperties.SetName(b, $"Show the kept {label.ToLowerInvariant()}");
-            var pick = md;
-            b.Click += (_, _) => { _parserPrefs.ListMode = BossParser.ModeKey(pick); _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; ParserFilterChanged(); };
-            modes.Children.Add(b);
-        }
-        head.Children.Add(mseg);
+        var title = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Tag = "parser-list-head",
+            ToolTip = Tip(L.T("Every boss pull of this character, kept on this PC. Nothing about your fights leaves your PC unless you turn on Show my boss bests on my kinahledger.com profile (Options › Sharing): then only your own best kill on each boss goes to your profile, never your group's numbers.")) };
+        title.Inlines.Add(new System.Windows.Documents.Run(L.T("Boss pulls")) { FontSize = 13, FontWeight = FontWeights.SemiBold });
+        if (past.Count > 0) title.Inlines.Add(new System.Windows.Documents.Run("  " + past.Count.ToString("N0", CultureInfo.InvariantCulture)) { FontSize = 12.5, FontWeight = FontWeights.SemiBold });
+        title.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
+        if (title.Inlines.Count > 1) ((System.Windows.Documents.Run)title.Inlines.LastInline).SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Faint");
+        AutomationProperties.SetName(title, "The kept boss pulls");
+        head.Children.Add(title);
         var inKind = past.Where(e => _parserPrefs.KindFilter.Length == 0 || e.Kind == _parserPrefs.KindFilter).ToList();
-        // a boss (pulls) or an instance (runs) to look at alone; fights are told apart by their kind
-        Func<Encounter, string>? keyOf = mode switch { ParserMode.Bosses => e => e.Boss, ParserMode.Run => e => e.Title, _ => null };
-        string anyLabel = L.T(mode == ParserMode.Run ? "Any instance" : "Any boss");
+        // a boss to look at alone
+        Func<Encounter, string>? keyOf = e => e.Boss;
+        string anyLabel = L.T("Any boss");
         var bossBtn = new Button { Height = 30, FontSize = 12, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         bossBtn.Content = new StackPanel
         {
@@ -999,8 +954,8 @@ public partial class MainWindow
         };
         ((System.Windows.Shapes.Path)((StackPanel)bossBtn.Content).Children[1]).SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Muted");
         ((TextBlock)((StackPanel)bossBtn.Content).Children[0]).MaxWidth = 150;
-        AutomationProperties.SetName(bossBtn, mode == ParserMode.Run ? "Filter by instance" : "Filter by boss");
-        bossBtn.ToolTip = Tip(L.T(mode == ParserMode.Run ? "Show one instance's runs" : "Show one boss's pulls"));
+        AutomationProperties.SetName(bossBtn, "Filter by boss");
+        bossBtn.ToolTip = Tip(L.T("Show one boss's pulls"));
         bossBtn.Click += (_, _) =>
         {
             if (keyOf == null) return;
@@ -1009,7 +964,7 @@ public partial class MainWindow
             {
                 var key = keyOf(g.First());
                 int good = g.Count(e => e.Tone == "good");
-                string sub = mode == ParserMode.Run ? L.F("{0} {1}, {2} cleared", g.Count(), Noun(mode, g.Count()), good) : L.F(good == 1 ? "{0} · {1} {2}, {3} kill" : "{0} · {1} {2}, {3} kills", BossBook.Strip(g.First().Instance), g.Count(), Noun(mode, g.Count()), good);
+                string sub = L.F(good == 1 ? "{0} · {1} {2}, {3} kill" : "{0} · {1} {2}, {3} kills", BossBook.Strip(g.First().Instance), g.Count(), Noun(mode, g.Count()), good);
                 entries.Add(new MenuEntry(key, () => { _parserPrefs.BossFilter = key; ParserFilterChanged(); }, Sub: sub, On: _parserPrefs.BossFilter == key));
             }
             ShowMenu(bossBtn, entries);
@@ -1017,7 +972,7 @@ public partial class MainWindow
         if (inKind.Count == 0 || keyOf == null || !PFilters) bossBtn.Visibility = Visibility.Collapsed;
         Grid.SetColumn(bossBtn, 1); head.Children.Add(bossBtn);
         body.Children.Add(head);
-        // the kinds this mode's records are in (Transcendence, Expedition, Sanctuary; the open world, the Abyss for fights), when more than one
+        // the kinds the pulls are in (Transcendence, Expedition, Sanctuary, Nightmare, world bosses), when more than one
         var kindsHere = past.Select(e => e.Kind).Where(k => k.Length > 0).Distinct().OrderBy(k => k).ToList();
         if (kindsHere.Count > 1 && PFilters)
         {
@@ -1039,25 +994,19 @@ public partial class MainWindow
         var shown = inKind.Where(e => _parserPrefs.BossFilter.Length == 0 || keyOf == null || keyOf(e).Equals(_parserPrefs.BossFilter, StringComparison.OrdinalIgnoreCase)).OrderByDescending(e => e.Start).ToList();
         if (shown.Count == 0)
         {
-            var empty = PT(past.Count > 0 ? L.F("No {0} of this kind yet.", Noun(mode, 2)) : mode switch
-            {
-                ParserMode.Run => L.T("No runs kept yet. In Full run, each Transcendence, Expedition, Sanctuary or Nightmare run lands here, entering to leaving, with every boss as a split."),
-                ParserMode.Fights => L.T("No fights kept yet. In Every fight, each fight anywhere lands here, with your kills and deaths."),
-                _ => L.T("No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and each world boss, lands here, with its group and timings."),
-            } + L.T(" They stay on this PC."), 12.5, FontWeights.Normal, "Faint");
+            var empty = PT((past.Count > 0 ? L.F("No {0} of this kind yet.", Noun(mode, 2))
+                : L.T("No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and each world boss, lands here, with its group and timings.")) + L.T(" They stay on this PC."), 12.5, FontWeights.Normal, "Faint");
             empty.TextWrapping = TextWrapping.Wrap; empty.Margin = new Thickness(0, 4, 0, 6);
             body.Children.Add(empty);
         }
         else
         {
-            // a boss or an instance picked: its record on one line
+            // a boss picked: its record on one line
             if (_parserPrefs.BossFilter.Length > 0 && keyOf != null)
             {
                 var good = shown.Where(e => e.Tone == "good").ToList();
                 var best = good.Count > 0 ? good.Min(e => e.Duration(e.End!.Value)) : (TimeSpan?)null;
-                var rec = PT(mode == ParserMode.Run
-                    ? L.F("{0} {1} · {2} cleared", shown.Count, Noun(mode, shown.Count), good.Count) + (best is { } b ? L.F(" · best clear {0}", BossParser.Clock(b)) : "")
-                    : L.F(good.Count == 1 ? "{0} {1} · {2} kill" : "{0} {1} · {2} kills", shown.Count, Noun(mode, shown.Count), good.Count) + (best is { } b2 ? L.F(" · best kill {0}", BossParser.Clock(b2)) : ""), 12, FontWeights.SemiBold, "Text2");
+                var rec = PT(L.F(good.Count == 1 ? "{0} {1} · {2} kill" : "{0} {1} · {2} kills", shown.Count, Noun(mode, shown.Count), good.Count) + (best is { } b2 ? L.F(" · best kill {0}", BossParser.Clock(b2)) : ""), 12, FontWeights.SemiBold, "Text2");
                 rec.Margin = new Thickness(0, 0, 0, 6);
                 body.Children.Add(rec);
             }
@@ -1101,14 +1050,8 @@ public partial class MainWindow
             nameLine.Children.Add(icons);
         }
         mid.Children.Add(nameLine);
-        var place = BossBook.Strip(e.Instance);
-        string sub = e.ModeKind switch
-        {
-            ParserMode.Run => $"{(e.GameMode.Length > 0 ? e.GameMode + " · " : "")}{KindLabel(e)} · {L.F("{0} of {1} bosses", e.Splits.Count(x => x.Outcome == "kill"), e.Splits.Select(x => x.Boss).Distinct().Count())}{(e.YourKills > 0 ? L.F(" · {0} kills", e.YourKills) : "")}",
-            ParserMode.Fights => $"{(place.Length > 0 && place != e.Kind && place != e.Title ? place + " · " : "")}{KindLabel(e)}{(e.YourDeaths > 0 && e.YourKills > 0 ? L.F(e.YourKills == 1 ? " · {0} kill" : " · {0} kills", e.YourKills) : "")}",
-            // a pull: its place and kind ("Nightmare" in Nightmare once, not twice)
-            _ => e.Place.Length == 0 || e.Place.Equals(e.Kind, StringComparison.OrdinalIgnoreCase) ? KindLabel(e) : $"{e.Place} · {KindLabel(e)}",
-        };
+        // a pull: its place and kind ("Nightmare" in Nightmare once, not twice)
+        string sub = e.Place.Length == 0 || e.Place.Equals(e.Kind, StringComparison.OrdinalIgnoreCase) ? KindLabel(e) : $"{e.Place} · {KindLabel(e)}";
         mid.Children.Add(PT(sub, 11.5, FontWeights.Medium, "Muted", trim: true));
         Grid.SetColumn(mid, 1); g.Children.Add(mid);
         var oc = OutcomeChip(e); oc.HorizontalAlignment = HorizontalAlignment.Left;
@@ -1117,7 +1060,6 @@ public partial class MainWindow
         Grid.SetColumn(dur, 3); g.Children.Add(dur);
         var fig = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         if (e.HasDamage) { fig.Children.Add(Right(PT(e.GroupDpsText(e.End ?? now), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT(L.T("group DPS"), 10.5, FontWeights.Medium, "Faint"))); }
-        else if (e.ModeKind != ParserMode.Bosses) { fig.Children.Add(Right(PT(e.YourKills.ToString("N0", CultureInfo.InvariantCulture), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT(e.PlayerKills > 0 ? L.F("kills · {0} PvP", e.PlayerKills) : L.T("your kills"), 10.5, FontWeights.Medium, "Faint"))); }
         else if (PDetails) { fig.Children.Add(Right(PT(AvgCp(e), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT(L.T("average CP"), 10.5, FontWeights.Medium, "Faint"))); }
         Grid.SetColumn(fig, 4); g.Children.Add(fig);
         var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L3.5,3.5 L0,7"), StrokeThickness = 1.4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
@@ -1127,12 +1069,7 @@ public partial class MainWindow
         b.SetResourceReference(Border.BorderBrushProperty, "CardHair");
         AutomationProperties.SetName(b, $"{e.Title}, {e.OutcomeLabel}, {BossParser.Clock(e.Duration(e.End ?? now))}");
         b.Tag = "parser-row";
-        b.ToolTip = e.ModeKind switch
-        {
-            ParserMode.Run => L.T("Open this run: every boss as a split, the group, the timings, the kills"),
-            ParserMode.Fights => L.T("Open this fight: your kills and deaths, the group, the timings"),
-            _ => L.T("Open this boss pull: the group, the timings, the kills near you"),
-        };
+        b.ToolTip = L.T("Open this boss pull: the group, the timings, the kills near you");
         if (!_parserPrefs.Hovers) b.ToolTip = null;
         b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, "HoverTint");
         b.MouseLeave += (_, _) => b.Background = Brushes.Transparent;
@@ -1198,9 +1135,9 @@ public partial class MainWindow
     string _parserDemoState = "";
 
     /// <summary>
-    /// A layout render's Parser page: Bosses only "live" (a pull under way), "history" (between pulls), "detail" (one kept
-    /// pull open), "nodamage", "nogroup" (damage before any group list), "empty"; Full run "run" (a run under way),
-    /// "run-detail"; Every fight "fight" (a fight under way), "fight-history".
+    /// A layout render's Parser page: "live" (a pull under way), "history" (between pulls), "detail" (one kept pull open),
+    /// "nodamage", "nogroup" (damage before any group list), "empty". The sample keeps a few runs and fights of the old Full
+    /// run and Every fight beside the pulls, as an older version left them: the list leaves them out.
     /// </summary>
     internal void ShowParserDemo(string state)
     {
@@ -1219,9 +1156,9 @@ public partial class MainWindow
         Encounter.BackKey = Encounter.BackKeyOf(Environment.GetEnvironmentVariable("KL_BACK") ?? _parserPrefs.BackNow);
         _parserDemoState = state;
         _parserDemoNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
-        var mode = state.StartsWith("run") ? ParserMode.Run : state.StartsWith("fight") ? ParserMode.Fights : ParserMode.Bosses;
-        bool live = state is "live" or "nodamage" or "nogroup" or "run" or "fight" or "inspect" or "compare" or "timeline" or "taken" or "full" or "inspect-full";
-        // the kept records of every mode, so the list's switch has something in each; the one under way in the mode shown
+        var mode = ParserMode.Bosses;
+        bool live = state is "live" or "nodamage" or "nogroup" or "inspect" or "compare" or "timeline" or "taken" or "full" or "inspect-full";
+        // the kept records of every mode an older version kept (the list shows the boss pulls only); the pull under way
         var all = new List<Encounter>();
         Encounter? now = null;
         if (state != "empty")
@@ -1233,12 +1170,11 @@ public partial class MainWindow
             }
         if (now is { ModeKind: ParserMode.Bosses, HasDamage: true } && mode == ParserMode.Bosses) all.AddRange(ParserDemoEarlier(now, _parserDemoNow));
         _parserDemoPast = all.OrderBy(e => e.Start).ToList(); _parserDemoLive = now;
-        _parserDemoWhere = state == "empty" || state == "fight-history" ? (ContentKind.Other, "") : (ContentKind.Expedition, "Ferocious Horn Den");
+        _parserDemoWhere = state == "empty" ? (ContentKind.Other, "") : (ContentKind.Expedition, "Ferocious Horn Den");
         _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = "";
         _parserOpen = state switch
         {
             "detail" => all.LastOrDefault(e => e.ModeKind == ParserMode.Bosses && e.Kills.Any(k => !k.Boss) && e.Roster.Any(f => f.Deaths > 0))?.Id,
-            "run-detail" => all.LastOrDefault(e => e.ModeKind == ParserMode.Run && e.Outcome == "cleared")?.Id,
             _ => null,
         };
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
@@ -1304,7 +1240,6 @@ public partial class MainWindow
         }
     }
 
-    internal void SetParserModeForTest(ParserMode m) => SetParserMode(m);
     internal ParserMode ParserModeForTest => ParserModeNow;
     internal Encounter? ParserLiveForTest => ParserLive;
 
