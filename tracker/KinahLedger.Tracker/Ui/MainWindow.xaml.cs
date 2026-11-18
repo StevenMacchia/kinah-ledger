@@ -362,7 +362,8 @@ public partial class MainWindow : Window
     void ReportMiscount()
     {
         var c = _watcher.Chat;
-        if (c == null) { Say(L.T("Nothing to report yet: the last minute is kept once the tracker is reading the game."), "Warn"); return; }
+        // not reading the game yet: a diagnostics report instead (Ui/MainWindow.Diagnostics.cs), so the cause can be seen
+        if (c == null) { if (!_demo) ReportDiagnostics(); else Say(L.T("Nothing to report yet: the last minute is kept once the tracker is reading the game."), "Warn"); return; }
         bool asked = false;
         if (!_prefs.ReportFrames)
         {

@@ -1379,6 +1379,13 @@ public static partial class WpfApp
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs
 
+        // Report a miscount before the game is read: a diagnostics report, not a refusal (2026-11-18)
+        {
+            var diag = w.DiagnosticsForTest();
+            Check(diag.Count >= 12 && diag.Any(l => l.StartsWith("npcap installed")) && diag.Any(l => l.StartsWith("game window")) && diag.Any(l => l.Contains("fullscreen state")),
+                $"Report a miscount before the game is read sends diagnostics: version, Npcap, the game's window, fullscreen, overlays ({diag.Count} lines)");
+        }
+
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
         // a fresh install; Got it stores the version; Farming only; six bullets, then "and N more"; the link to the release
         {
