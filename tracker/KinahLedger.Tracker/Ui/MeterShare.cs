@@ -52,7 +52,8 @@ public static class MeterShare
     static Border Frame(Encounter e, DateTime now, FrameworkElement face)
     {
         double fw = Math.Max(1, face.DesiredSize.Width);
-        double scale = Math.Clamp((Width - 2 * Side) / fw, 1, 1.6);
+        // a few pixels spare: the meter sits a pixel or two in from the side once laid out, and a full-width one lost its right edge
+        double scale = Math.Clamp((Width - 2 * Side - 8) / fw, 1, 1.6);
         double width = Math.Max(Width, Math.Ceiling(fw * scale + 2 * Side));
         var st = new ScaleTransform(scale, scale); st.Freeze();
         var meter = new Border { Child = face, LayoutTransform = st, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Tag = "share-meter" };

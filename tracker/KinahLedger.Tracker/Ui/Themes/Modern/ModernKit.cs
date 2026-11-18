@@ -89,6 +89,7 @@ static class Mod
         var v = e.Visibility; e.Visibility = Visibility.Visible;
         e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = e.DesiredSize.Width; e.Visibility = v;
+        e.InvalidateMeasure();   // laid out again in its real room on the next pass (the measure above was unbounded)
         return w;
     }
 
