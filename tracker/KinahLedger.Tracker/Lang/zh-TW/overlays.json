@@ -36,7 +36,7 @@
   "{0} s": "{0} 秒",
   "{0}h": "{0}小時",
   "{0}m": "{0}分",
-  "Events and world bosses you watch, in a strip of their own: hidden until one is near, with a chime.": "你關注的活動與世界首領顯示在專屬橫條上：臨近前會隱藏，並有提示音。",
+  "Events and world bosses you watch, hidden until one is near. Set up in Settings › Timers.": "你關注的活動與世界首領，臨近前會隱藏。在「設定 › 計時器」中設定。",
   "Ring the bell on any timer below to watch it: it shows on the overlay and chimes before it starts.": "點擊下方計時器的鈴鐺即可關注：會顯示在浮動視窗上，並在開始前響起提示音。",
   "Watched": "已關注",
   "World bosses": "世界首領",

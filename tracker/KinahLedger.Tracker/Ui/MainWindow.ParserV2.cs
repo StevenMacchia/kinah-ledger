@@ -44,13 +44,29 @@ public partial class MainWindow
     CommandCtx ParserCtx() => new()
     {
         Tab = _parserTab, Sort = _parserSort, Details = PDetails, Kills = PKills, Deaths = PDeaths,
-        GroupHead = e => e.HasDamage ? ParserBasisSwitches(e) : null, GroupFoot = e => CoverageLine(e),
+        // no switches over the group (Steven, 2026-11-18: "No settings should be from the app outside settings"): what the figures
+        // are, said, beside the copy buttons; DPS over active time and damage to adds are Settings › DPS meter's rows
+        GroupHead = e => e.HasDamage ? GroupBasisLine(e) : null, GroupFoot = e => CoverageLine(e),
         SetTab = t => { _parserTab = t; RedrawParserPage(); },
         OpenFight = id => OpenFight(id),
         Inspect = id => { _parserInspect = id; RedrawParserPage(); LowerScroll.ScrollToTop(); },
         SetSort = k => { _parserSort = k; RedrawParserPage(); },
         Tip = s => Tip(s),
     };
+
+    /// <summary>The group card's line on what its figures are ("DPS over the whole fight · boss damage only"); a click opens Settings › DPS meter, where both are set.</summary>
+    FrameworkElement GroupBasisLine(Encounter e)
+    {
+        var parts = new List<string> { Encounter.ActiveBasis ? L.T("DPS over active time") : L.T("DPS over the whole fight") };
+        if (e.HasAdds) parts.Add(Encounter.BossOnly ? L.T("boss damage only") : L.T("adds included"));
+        var t = PT(string.Join("  ·  ", parts), 11.5, FontWeights.Medium, "Faint");
+        t.VerticalAlignment = VerticalAlignment.Center;
+        t.Cursor = System.Windows.Input.Cursors.Hand;
+        t.ToolTip = Tip(L.T("Set in Settings › DPS meter: DPS over active time, Damage to adds."));
+        t.Tag = "parser-group-basis";
+        t.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Meter);
+        return t;
+    }
 
     FightView ParserViewOf(Encounter e, DateTime now, List<Encounter> past)
     {
@@ -105,8 +121,8 @@ public partial class MainWindow
                 extras.Add(why);
             }
         }
-        // Copy picture on the hero's line, before the clock: its summary card; its ▾ the rest (Ui/MainWindow.ParserShare.cs)
-        var hero = ParserCommand.Hero(v, ctx, live, extras, Shareable(e) ? ParserShareButton(e, v) : null);
+        // the fight's Copy picture is the page head's big one (its ▾ has the summary card); the hero carries none of its own
+        var hero = ParserCommand.Hero(v, ctx, live, extras, null);
         if (Shareable(e)) ShareOnRightClick(hero, e, v, ParserShare.Hero);
         page.Children.Add(hero);
         FrameworkElement body = ctx.Tab switch

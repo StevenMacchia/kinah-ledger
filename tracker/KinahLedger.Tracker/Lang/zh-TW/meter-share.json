@@ -1,6 +1,6 @@
 {
   "Member {0}": "隊員 {0}",
-  "A picture of this fight to paste in Discord or anywhere. Nothing is uploaded.": "這場戰鬥的圖片，可貼到 Discord 或任何地方。不會上傳任何內容。",
+  "Copies a picture of the meter, this fight as it shows now, to paste in Discord or anywhere with Ctrl+V. Nothing is uploaded.": "將統計依目前顯示的這場戰鬥複製成圖片，可用 Ctrl+V 貼到 Discord 或任何地方。不會上傳任何內容。",
   "No fight to share yet. Pull a boss and the picture fills in.": "目前沒有可分享的戰鬥。開打首領後圖片就會出現。",
   "Hide other names": "隱藏其他名字",
   "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.": "分享圖片上，其他隊員會顯示職業和「隊員 2」；你的名字照常顯示，數值也都保留。",

@@ -139,7 +139,7 @@
   "Open the game first: the guide goes over it.": "먼저 게임을 여세요. 안내가 게임 위에 표시돼요.",
   "The game window is mostly off the screen. Move it back, then place the panel.": "게임 창이 대부분 화면 밖에 있어요. 창을 되돌린 뒤 오버레이를 배치하세요.",
   "Panel placed. Place it again any time from the tray menu or Options › In game.": "오버레이를 배치했어요. 트레이 메뉴나 설정 › 게임 내에서 언제든 다시 배치할 수 있어요.",
-  "Your hour, pickups and best. Its look: Options › In game.": "이번 시간, 획득 아이템, 최고 기록을 보여줘요. 스타일은 설정 › 게임 내에서 바꿔요.",
+  "Your hour, pickups and best. Set up in Settings › Buddy.": "이번 시간, 획득 아이템, 최고 기록을 보여줘요. 설정 › 버디에서 바꿔요.",
   "Overlays over the game, each on or off: {0}.": "게임 위 오버레이를 각각 켜고 꺼요: {0}.",
   "On now: {0}.": "켜진 것: {0}.",
   "None on now.": "켜진 게 없어요.",

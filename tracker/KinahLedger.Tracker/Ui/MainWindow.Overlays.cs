@@ -37,7 +37,7 @@ public partial class MainWindow
         if (!on) CloseHud();
         else if (!_demo && _watcher.Chat != null) EnsureHud();
         UpdateHud();
-    }, L.T("Your hour, pickups and best. Its look: Options › In game."));
+    }, L.T("Your hour, pickups and best. Set up in Settings › Buddy."));
 
     /// <summary>
     /// The button follows the overlays' switches: the green dot while any is on, and its tooltip naming those on. Call it

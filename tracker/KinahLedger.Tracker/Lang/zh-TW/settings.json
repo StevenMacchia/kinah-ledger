@@ -234,7 +234,7 @@
   "Group details": "隊伍詳情",
   "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.": "在戰鬥分析器頁面與其浮動視窗，於每位成員的 DPS 旁顯示職業、戰鬥力、物品等級與傷害。",
   "DPS over active time": "以活躍時間計算 DPS",
-  "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.": "關閉時，每位成員的 DPS 是以整場戰鬥的時間（整輪則是其首領戰）計算傷害。開啟時，改以實際造成傷害的時間計算：從第一次攻擊到最後一次，超過 20 秒的空檔會扣除。戰鬥分析器頁面的隊伍卡片也能切換。",
+  "Off, each member's DPS is their damage over the whole fight's length, so the rows add up to the group's DPS and your bests compare. On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out.": "關閉時，每位成員的 DPS 以整場戰鬥的時間計算傷害，各列加總就是隊伍 DPS，也能和你的最佳紀錄比較。開啟時，改以實際造成傷害的時間計算：從第一次攻擊到最後一次，超過 20 秒的空檔會扣除。",
   "Deaths": "死亡",
   "The group's deaths on boss pulls: how many in the figures line, each member's in the pull's group.": "首領戰中的隊伍死亡次數：數字列顯示總數，該場戰鬥的隊伍中顯示每位成員的次數。",
   "Kills near you": "你附近的擊殺",
@@ -292,7 +292,7 @@
   "Chime": "提示音",
   "Verteron's world bosses show here once the game's world map has been opened (Exploration › Field Boss) with packet reading on (Game reading).": "開啟封包讀取（遊戲讀取）後，在遊戲中開啟過世界地圖（Exploration › Field Boss），Verteron 的世界首領就會顯示在這裡。",
   "Clear everything": "全部清除",
-  "Copy the share picture": "複製分享圖片",
+  "Copy the share picture; on the Parser page, the fight as text": "複製分享圖片；在戰鬥分析器頁面則是將戰鬥複製為文字",
   "Undo, while its bar shows (8 s)": "復原（工具列顯示期間，8 秒）",
   "Window size, a step bigger or smaller (Ctrl+wheel too)": "視窗大小放大或縮小一階（Ctrl+滾輪也可以）",
   "Window size back to 100%": "視窗大小回到 100%",
@@ -386,5 +386,8 @@
   "SHARE PICTURE": "分享圖片",
   "Pickup icons": "拾取圖示",
   "Your best drop and last pickups on the panel. Off hides them; every pickup is still counted.": "在面板上顯示最佳掉落與最近拾取的圖示。關閉只會隱藏，所有拾取仍會計入。",
-  "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "追蹤器還沒讀到遊戲。正在傳送診斷報告，以便找出原因…"
+  "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "追蹤器還沒讀到遊戲。正在傳送診斷報告，以便找出原因…",
+  "Damage to adds": "計入小怪傷害",
+  "Off, each member's DPS, share and bar count their damage to the boss alone, as its HP bar does. On, everything they hit, adds included. Only fights with adds differ.": "關閉時，每位成員的 DPS、佔比與長條只計算對首領的傷害，和首領 HP 條一致。開啟時，計算所有命中的目標，包含小怪。只有有小怪的戰鬥會不同。",
+  "Parser page: copy the fight as a picture": "戰鬥分析器頁面：將戰鬥複製成圖片"
 }

@@ -778,7 +778,12 @@
         </Border>
         <TextBlock x:Name="Status" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
         <!-- shown with a reading problem: straight to the page that fixes it -->
-        <TextBlock x:Name="FixText" Grid.Column="2" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock x:Name="FixText" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
+        <!-- a boss just killed: its picture one click away for a little while (Steven, 2026-11-18: "Make copy and pasting EASY and
+             promoted"; Ui/MainWindow.ParserShare.cs KillPromptTick). Never a popup -->
+        <TextBlock x:Name="KillCopyText" FontSize="12" FontWeight="SemiBold" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center" AutomationProperties.Name="Copy a picture of the kill"><Hyperlink x:Name="KillCopyLink" Style="{StaticResource LinkStyle}"><Run x:Name="KillCopyRun">Copy picture</Run></Hyperlink></TextBlock>
+        </StackPanel>
         <!-- the last minute of what was read and counted, saved on this PC (2026-10-23) and, since 0.9.0, sent to the site's
              report table with other players' chat taken out (Ui/MainWindow.xaml.cs ReportMiscount, Upload/ReportClient.cs) -->
         <TextBlock x:Name="MiscountText" Grid.Column="3" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"

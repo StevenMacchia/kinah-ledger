@@ -1613,7 +1613,8 @@ public static class ParserTests
             var steven = ParserPrefs.FromText("{\"Overlay\":true,\"ClickThrough\":false,\"Left\":null,\"Top\":null,\"Hotkey\":\"Off\",\"Mode\":\"boss\",\"ListMode\":\"boss\",\"Details\":true,\"DetailsSettled\":true,\"Separate\":false,\"DpsActive\":false,\"FarmDps\":true,\"Width\":330,\"KillsNear\":false,\"Filters\":false,\"Hovers\":false,\"KindFilter\":\"\",\"BossFilter\":\"\"}");
             var chose = ParserPrefs.FromText("{\"Details\":true,\"DetailsSettled\":true,\"KillsNear\":true,\"Filters\":false,\"Hovers\":true}");
             var later = ParserPrefs.FromText("{\"DetailsSettled\":true,\"HonestSettled\":true,\"Deaths\":false,\"Filters\":false,\"Hovers\":false}");
-            Check(fresh is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, Targets: "boss", DpsActive: false } && steven is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, HonestSettled: true }
+            // (kills near you on for a new install since 1.0.18; a file from before keeps its own, off by its old default)
+            Check(fresh is { Deaths: true, Filters: true, Hovers: true, KillsNear: true, Targets: "boss", DpsActive: false } && steven is { Deaths: true, Filters: true, Hovers: true, KillsNear: false, HonestSettled: true }
                 && chose is { Deaths: true, Filters: false, Hovers: true, KillsNear: true } && later is { Deaths: false, Filters: false, Hovers: false },
                 "7. serious defaults: Deaths, List filters and Explanations on hover on for a new player and once for Steven's parser.json as it was; a player who had chosen keeps their choice; an off after the move stays off");
             // the meter's width (Steven, 2026-11-15: "default width of the parser should be the same as the buddy / tracker and
@@ -2399,9 +2400,15 @@ public static class ParserTests
                 $"a single hit of 261M is a misread: left out, the figure partial; ten hits summing 60M count ({p.AlwaysLive?.You?.Damage:N0}, {string.Join("; ", p.AlwaysLive?.PartialWhy ?? new())})");
         }
 
-        // the Always on pick: off for everyone until picked, and kept
+        // the Always on pick: on for a new install since 1.0.18 (Steven, 2026-11-18: "defaulted to on"); a file from before keeps
+        // its pick, and one without the key reads the old default, off; the same for click-through, the expanded meter and kills near you
         {
-            Check(!new ParserPrefs().AlwaysOn && ParserPrefs.FromText("{\"AlwaysOn\":true}").AlwaysOn, "Always on: off by default (Only boss fights), a pick kept in parser.json");
+            var fresh = new ParserPrefs();
+            var off17 = ParserPrefs.FromText("{\"AlwaysOn\":false,\"ClickThrough\":false,\"Expanded\":false,\"KillsNear\":false}");
+            var older = ParserPrefs.FromText("{\"Overlay\":true}");
+            Check(fresh is { AlwaysOn: true, ClickThrough: true, Expanded: true, KillsNear: true } && ParserPrefs.FromText("{\"AlwaysOn\":true}").AlwaysOn
+                && off17 is { AlwaysOn: false, ClickThrough: false, Expanded: false, KillsNear: false } && older is { AlwaysOn: false, ClickThrough: false, Expanded: false, KillsNear: false },
+                "Always on, click-through, the expanded meter and kills near you: on for a new install; a saved off stays off, and a file without them reads the old default (off)");
         }
 
         // DPS over the real time since the start (Steven, 2026-11-15: "i left and didnt kill anything for a while and it ... didnt

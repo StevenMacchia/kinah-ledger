@@ -24,7 +24,7 @@ public partial class MainWindow
     /// <summary>Once, as the window opens: the Overlays entry; for a watching window the settings and the tick.</summary>
     void InitApplicants(bool watch)
     {
-        RegisterOverlay("Applicants", () => ApplicantsOn, on => SetApplicantsOverlay(on), L.T("The people asking to join your group, while you lead one: shown only while someone is waiting."));
+        RegisterOverlay("Applicants", () => ApplicantsOn, on => SetApplicantsOverlay(on), L.T("People asking to join your group, while someone waits. Set up in Settings › Applicants."));
         if (!watch) return;
         _applicantPrefs = ApplicantPrefs.Load();
         _applicantsTick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => ApplicantsTick(DateTime.UtcNow), Dispatcher);

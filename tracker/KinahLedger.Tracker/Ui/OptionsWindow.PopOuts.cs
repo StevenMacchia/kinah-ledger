@@ -17,10 +17,13 @@ public partial class OptionsWindow
     internal Button? MeterPopOutBtn { get; private set; }
     internal Button? ApplicantsPopOutBtn { get; private set; }
 
-    /// <summary>The link under the switch of the page's head (the last thing added to <paramref name="page"/>, OverlayHeader's grid).</summary>
+    /// <summary>
+    /// The link under the switch of the page's head (OverlayHeader's grid, the page's first grid: the Npcap card added after
+    /// it in 1.0.17 left the link out when it looked for the last thing added).
+    /// </summary>
     void AddPopOutLink(Panel page, bool meter)
     {
-        if (page.Children.Count == 0 || page.Children[page.Children.Count - 1] is not Grid head) return;
+        if (page.Children.OfType<Grid>().FirstOrDefault() is not { } head) return;
         var right = head.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetColumn(c) == 1);
         if (right == null) return;
         var words = new TextBlock { Text = L.T("Open in its own window") + "  ›", FontSize = 12, FontWeight = FontWeights.SemiBold };

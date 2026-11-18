@@ -70,7 +70,9 @@ public partial class MainWindow
         // read when a row is drawn (never written into the record, so a switch to an alt never leaves the old name behind)
         if (watch) ParserRows.YourName = () => Session.Characters.Current?.Name ?? "";
         // KL_PARSER_CLICKTHROUGH=1: a render's meter with click-through on, as Steven plays (2026-11-15)
-        _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs { ClickThrough = Environment.GetEnvironmentVariable("KL_PARSER_CLICKTHROUGH") == "1" };
+        // the options test and renders keep the switches 1.0.18 turned on for new installs as they were (off), so their checks of
+        // each still hold; ParserPrefs' own defaults are parser-test's (Parser/ParserTests.cs)
+        _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs { ClickThrough = Environment.GetEnvironmentVariable("KL_PARSER_CLICKTHROUGH") == "1", AlwaysOn = false, Expanded = false, KillsNear = false };
         ApplyMeterExpanded();
         // a new best on a boss (the overlay's PB moment) is measured against your kills of it kept on this PC
         // your record on this fight (this boss in this instance and mode), kept in records.json: the overlay's record moments and
@@ -84,7 +86,8 @@ public partial class MainWindow
         foreach (var tab in PartTabRow.Children.OfType<Button>()) tab.Padding = new Thickness(8, 0, 8, 0);
         // the header's Overlays menu (Ui/MainWindow.Overlays.cs): the Parser is a section of the Kinah overlay by default, and
         // an overlay of its own in the menu only once Settings › In game › Parser separates it
-        RegisterOverlay("Parser", () => ParserOverlayOn, on => ParserOverlayOn = on, L.T("Boss fights: DPS by member, the boss's HP, the pull timer."), visible: () => _parserPrefs.Separate || !HudWanted);
+        RegisterOverlay("Parser", () => ParserOverlayOn, on => ParserOverlayOn = on, L.T("DPS by member, the boss's HP, the pull timer. Set up in Settings › DPS meter."), visible: () => _parserPrefs.Separate || !HudWanted);
+        InitKillPrompt();   // a kill's Copy picture on the status line (Ui/MainWindow.ParserShare.cs)
         InitMeterShare(watch);   // the meter's share picture and its shortcut (Ui/MainWindow.MeterShare.cs)
         InitParserBack();   // Backspace, Alt+← and the mouse's back button on a pull open (Ui/MainWindow.ParserShare.cs)
         if (!watch) return;
@@ -158,19 +161,6 @@ public partial class MainWindow
     ParserMode ParserModeNow => ParserMode.Bosses;
     /// <summary>Which records the list shows: boss pulls (an old run or fight kept on this PC is left out of it).</summary>
     ParserMode ParserListMode => ParserMode.Bosses;
-
-    /// <summary>
-    /// The group card's two switches, one click from the page (the honest pass): DPS over the fight or over each member's
-    /// active time, and member figures as boss damage or all targets. Kept in parser.json; the overlay follows.
-    /// </summary>
-    void SetParserBasis(bool? active = null, bool? bossOnly = null)
-    {
-        if (active is { } a) { _parserPrefs.DpsActive = a; Encounter.ActiveBasis = a; }
-        if (bossOnly is { } b) { _parserPrefs.Targets = b ? "boss" : "all"; Encounter.BossOnly = b; }
-        if (!_demo) _parserPrefs.Save();
-        ParserOverlayTick();
-        RedrawParserPage();
-    }
 
     static string Noun(ParserMode m, int n = 1) => L.T(m switch { ParserMode.Run => n == 1 ? "run" : "runs", ParserMode.Fights => n == 1 ? "fight" : "fights", _ => n == 1 ? "boss pull" : "boss pulls" });
 
@@ -300,6 +290,7 @@ public partial class MainWindow
             ParserModeSync();
             WatchParser();
             ParserLatencyNote();
+            KillPromptTick();   // a boss just killed: Copy picture on the page and the status line (Ui/MainWindow.ParserShare.cs)
             if (_part == "Parser") FillParserPage();
             ParserOverlayTick();
         }
@@ -375,7 +366,7 @@ public partial class MainWindow
             _parserOverlay = new ParserOverlay { HotkeyText = _parserPrefs.Hotkey };   // "Off" (the default) says no shortcut
             _parserOverlay.Dropped += (x, y, b) => { _parserPrefs.Left = x; _parserPrefs.Top = y; _parserPrefs.Bottom = b; _parserPrefs.Save(); };
             _parserOverlay.HideAsked += () => SetParserOverlay(false);
-            _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
+            _parserOverlay.SettingsAsked += () => { OpenOptions(OptionsWindow.Page.Meter); Activate(); };
             WireOverlayShare(_parserOverlay);
             _parserOverlay.Clicked += ToggleMeterExpanded;
             // an edge dragged on the Parser's own window: its width kept from then on (Steven, 2026-11-15: "let the user drag size/width from the overlay itself")
@@ -598,97 +589,32 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The page's head (the parser polish, 2026-11-14: one line, as the main page has no title of its own): when the meter
-    /// shows (Only boss fights, Always on) on the left; the overlay's look and its switches on the right; under them one quiet
-    /// line on what is kept. The Parser keeps boss pulls only (Steven, 2026-11-17: "get rid of full run and every fight"), so
-    /// there is no mode to pick.
+    /// The page's head: actions only (Steven, 2026-11-18: "No settings should be from the app outside settings. Make copy and
+    /// pasting EASY and promoted"). Left, a big Copy picture and Copy text for the fight shown, with their keys beside them
+    /// (Ui/MainWindow.ParserShare.cs); right, Pop out and a Settings link to Settings › DPS meter, where the meter's switches
+    /// (when it shows, the overlay, click-through, its look) all live now. What the Parser keeps is said by the waiting card
+    /// and the list.
     /// </summary>
     FrameworkElement ParserHead(List<Encounter> past)
     {
-        var box = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-        var g = new Grid();
+        var g = new Grid { Margin = new Thickness(0, 0, 0, 10), Tag = "parser-head" };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        // the meter (Steven, 2026-11-15: "a toggle in the parser table directly for 'Always on' or 'Only boss fights'")
-        var meters = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var (always, label, tip) in new[]
-        {
-            (false, "Only boss fights", L.T("The meter shows in boss fights and in Transcendence, Expeditions, Sanctuaries and Nightmare; outside them this page shows your DPS while you fight.")),
-            (true, "Always on", L.F("The meter is always up, the open world and the Abyss too. It starts from 0 when a boss is pulled, when you enter a dungeon, and outside dungeons after {0:0} seconds without fighting.", BossParser.AlwaysIdleSeconds)),
-        })
-        {
-            var b = new Button { Content = L.T(label), Height = 26, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(meters.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = Tip(tip) };
-            b.SetResourceReference(StyleProperty, always == _parserPrefs.AlwaysOn ? "SegOn" : "SegOff");
-            AutomationProperties.SetName(b, "Parser meter: " + label);
-            var pick = always;
-            b.Click += (_, _) => SetParserAlwaysOn(pick);
-            meters.Children.Add(b);
-        }
-        var mseg = new Border { Padding = new Thickness(3), CornerRadius = Skins.Corner(10), BorderThickness = new Thickness(1), Child = meters, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
-        AutomationProperties.SetName(mseg, "When the Parser's meter shows");
-        mseg.Margin = new Thickness(0, 0, 10, 4);
-        var left = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Children = { mseg } };
-        g.Children.Add(left);
+        g.Children.Add(ParserCopyBar(past));
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-        // the overlay's look, one click from here (Steven, 2026-11-14: "idk how to change the style"): its name, a click opens
-        // Settings › In game at the Parser's look row: its own window's look (Standard, Auto, Capsule, Meter, Float), or
-        // inside the Kinah overlay that overlay's look
-        // (the look's link sits under it, beside what the mode counts: the head's row holds the two picks and the switch)
-        TextBlock? lookLink = null;
-        {
-            string lookName = _parserPrefs.Separate ? ParserLookName(_parserPrefs.Look) : HudLooks.All.First(l => l.Key == HudLook).Name;
-            var look = new { Name = lookName };
-            lookLink = QLinkify(PT(L.F("Overlay look: {0}  ›", L.T(look.Name)), 12, FontWeights.SemiBold, "Link"));
-            lookLink.ToolTip = Tip(_parserPrefs.Separate ? L.T("How the Parser's own window looks over the game: pick another in Settings › In game › Parser.") : L.T("How the Parser draws over the game (the Kinah overlay's look): pick another in Settings › In game."));
-            lookLink.Margin = new Thickness(16, 7, 0, 0);
-            lookLink.VerticalAlignment = VerticalAlignment.Top;
-            AutomationProperties.SetName(lookLink, $"Overlay look: {look.Name}. Change it");
-            lookLink.MouseLeftButtonUp += (_, _) => OpenParserLook();
-        }
-        right.Children.Add(MeterPopOutButton());   // the meter in its own window (Ui/MainWindow.PopOuts.cs)
-        right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
-            L.F("The record under way over the game: the boss or the run, the clock and the group. {0}{1}", _parserPrefs.Separate ? L.T("Its own overlay (Settings › In game › Parser); right-click it to hide it.") : L.T("It opens above the Kinah overlay when a fight starts and folds away after."), Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? L.F(" Shortcut: {0}.", k) : ""), "Fight overlay"));
-        // click-through and the drag are the separate overlay's; above the Kinah line it follows the Kinah overlay's own
-        if (_parserPrefs.Separate)
-            right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
-                L.T("Off (the default): drag the overlay anywhere to move it; it stays there. On: clicks go through it to the game, and a handle on its top edge moves it."), "Overlay click-through"), 14, 0, 0, 0));
+        var pop = (Button)MeterPopOutButton();   // the meter in its own window (Ui/MainWindow.PopOuts.cs): an action, not a setting
+        pop.Height = 32; pop.Margin = new Thickness(0, 0, 12, 0);
+        right.Children.Add(pop);
+        var set = QLinkify(PT(L.T("Settings  ›"), 12.5, FontWeights.SemiBold, "Link"));
+        set.VerticalAlignment = VerticalAlignment.Center;
+        set.ToolTip = L.T("The meter's settings: when it shows, the overlay, click-through, its look and width, what it shows.");
+        set.Tag = "parser-settings";
+        AutomationProperties.SetName(set, "DPS meter settings");
+        set.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Meter);
+        right.Children.Add(set);
         Grid.SetColumn(right, 1);
         g.Children.Add(right);
-        box.Children.Add(g);
-        // Always on: what is kept, then the meter's rule (the boss pulls' own sentence says the open world never counts: it is still never kept)
-        var kept = !_parserPrefs.AlwaysOn ? ModeCounts(ParserModeNow) : L.T("Keeps each boss pull in Transcendence, Expeditions, Sanctuaries and Nightmare, and each world boss.");
-        var counts = PT(kept + (_parserPrefs.AlwaysOn ? L.F(" The meter is always up, the open world too: from 0 at each boss pull, on entering a dungeon, and after {0:0} seconds without fighting.", BossParser.AlwaysIdleSeconds) : ""), 12, FontWeights.Medium, "Muted");
-        counts.TextWrapping = TextWrapping.Wrap; counts.Margin = new Thickness(2, 7, 0, 0);
-        var under = new Grid();
-        under.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        under.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        under.Children.Add(counts);
-        if (lookLink != null) { Grid.SetColumn(lookLink, 1); under.Children.Add(lookLink); }
-        box.Children.Add(under);
-        return box;
-    }
-
-    /// <summary>Settings › DPS meter, scrolled to the Parser's look row.</summary>
-    void OpenParserLook()
-    {
-        OpenOptions(OptionsWindow.Page.Meter);
-        _options?.ShowParserLook();
-    }
-
-    FrameworkElement ParserSwitch(string label, bool on, Action<bool> set, string tip, string name)
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal, ToolTip = Tip(tip) };
-        var t = PT(L.T(label), 12, FontWeights.SemiBold, on ? "Ink" : "Muted");
-        t.Margin = new Thickness(0, 0, 7, 0);
-        var cb = new CheckBox { IsChecked = on, VerticalAlignment = VerticalAlignment.Center };
-        cb.SetResourceReference(StyleProperty, "Switch");
-        AutomationProperties.SetName(cb, name);
-        cb.Click += (_, _) => set(cb.IsChecked == true);
-        t.MouseLeftButtonUp += (_, _) => set(!on);
-        t.Cursor = Cursors.Hand;
-        sp.Children.Add(t); sp.Children.Add(cb);
-        return sp;
+        return g;
     }
 
     // ---- the fight under way ----
@@ -781,40 +707,6 @@ public partial class MainWindow
     {
         var known = e.Roster.Where(f => f.CombatPower > 0).ToList();
         return known.Count == 0 ? "–" : ((int)Math.Round(known.Average(f => f.CombatPower))).ToString("N0", CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// The group card's switches: Boss / All targets (only when the record has damage to adds to tell apart), then Fight /
-    /// Active (DPS over the fight's length or over each member's active time). Small segments, the page's own.
-    /// </summary>
-    FrameworkElement ParserBasisSwitches(Encounter e)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        FrameworkElement Seg(string name, params (string Label, bool On, Action Pick, string Tip)[] opts)
-        {
-            var sp = new StackPanel { Orientation = Orientation.Horizontal };
-            var seg = new Border { Padding = new Thickness(2), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Child = sp, VerticalAlignment = VerticalAlignment.Center };
-            seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
-            AutomationProperties.SetName(seg, name);
-            foreach (var (label, on, pick, tip) in opts)
-            {
-                var b = new Button { Content = L.T(label), Height = 22, FontSize = 11.5, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(sp.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = Tip(tip) };
-                b.SetResourceReference(StyleProperty, on ? "SegOn" : "SegOff");
-                AutomationProperties.SetName(b, $"{name}: {label}");
-                b.Click += (_, _) => { if (!on) pick(); };
-                sp.Children.Add(b);
-            }
-            return seg;
-        }
-        if (e.HasAdds)
-            row.Children.Add(Seg("Damage counted",
-                ("Boss", Encounter.BossOnly, () => SetParserBasis(bossOnly: true), L.T("Each member's damage to the boss only: DPS, shares and the bars.")),
-                ("All targets", !Encounter.BossOnly, () => SetParserBasis(bossOnly: false), L.T("Each member's damage to everything, adds included."))));
-        if (row.Children.Count > 0) row.Children.Add(new Border { Width = 6 });
-        row.Children.Add(Seg("DPS over",
-            ("Fight", !Encounter.ActiveBasis, () => SetParserBasis(active: false), L.T("Each member's DPS over the whole fight's length.")),
-            ("Active", Encounter.ActiveBasis, () => SetParserBasis(active: true), L.F("Each member's DPS over the time they were dealing damage: their first hit to their last, pauses over {0:0} seconds left out.", Fighter.PauseSeconds))));
-        return row;
     }
 
     /// <summary>
@@ -1157,7 +1049,8 @@ public partial class MainWindow
         bool everyOption = state.EndsWith("-all"), none = state.EndsWith("-min");
         if (everyOption || none) state = state[..^4];
         // the defaults since the honest pass: deaths, filters and hovers on; kills near you off
-        _parserPrefs.KillsNear = everyOption;
+        _parserPrefs.KillsNear = !none;   // on for a new install since 1.0.18
+        _killPrompt = null; KillCopyText.Visibility = Visibility.Collapsed;   // a state of its own: no kill just made
         _parserPrefs.Deaths = _parserPrefs.Filters = _parserPrefs.Hovers = !none;
         _parserPrefs.Details = !none;
         _parserPrefs.DpsActive = Encounter.ActiveBasis = false; _parserPrefs.Targets = "boss"; Encounter.BossOnly = true;

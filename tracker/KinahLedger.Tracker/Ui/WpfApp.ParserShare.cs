@@ -182,6 +182,7 @@ public static partial class WpfApp
             // each section's own buttons, top right of its head (Steven, 2026-11-18: "A MORE PROMINENT COPY BUTTON NO ONE KNOWS
             // TO RIGHT CLICK"): Copy picture on every one, Copy text on a table, each copying its own section
             CopyButtonChecks(w, check, got, () => text, s => text = s);
+            HeadCopyChecks(w, check, got, () => text, s => text = s);   // the head's big Copy picture, Ctrl+C, the kill's prompt (Ui/WpfApp.SettingsSimplify.cs)
             // the picture each tab's Copy picture copies: that view, in the share frame
             var bad = new List<string>();
             foreach (var (state, view) in new[] { ("detail", ParserShare.Group), ("taken", ParserShare.Taken), ("compare", ParserShare.Compare) })   // the timeline tab is Graphs now: each graph its own Copy picture (WpfApp.ParserGraphs.cs)
@@ -229,8 +230,8 @@ public static partial class WpfApp
                     "Parser share: the summary card alone (the group's DPS, yours and the clock; no tabs drawn on it)");
                 check(okMeter && files.Count > 2 && files[2] == MeterShare.FileName(e) && got[2].W == MeterShare.PixelWidth, $"Parser share: Meter in the ▾ copies the meter's own picture ({(files.Count > 2 ? files[2] : "none")})");
                 var menu = w.ShareMenuForTest(e).Select(x => x.Text).ToList();
-                check(menu.SequenceEqual(new[] { L.T("This view"), L.T("Meter"), L.T("Everything"), L.T("Copy as text") }),
-                    $"Parser share: the ▾ beside the hero's Copy picture offers This view, Meter, Everything and Copy as text ({string.Join(", ", menu)})");
+                check(menu.SequenceEqual(new[] { L.T("Summary card"), L.T("Meter"), L.T("Everything"), L.T("Copy as text") }),
+                    $"Parser share: the ▾ beside the head's Copy picture offers the summary card, Meter, Everything and Copy as text ({string.Join(", ", menu)})");
             }
 
             // Copy as text: the group's table as tab-separated rows; names hidden with the setting
@@ -355,9 +356,9 @@ public static partial class WpfApp
         // the state, the section's view, the head word its text's first row holds (null: no Copy text)
         var cases = new (string State, string View, string? Head)[]
         {
-            ("detail", ParserShare.Hero, null), ("detail", ParserShare.Group, L.T("DPS")),
+            ("detail", ParserShare.Group, L.T("DPS")),
             ("taken", ParserShare.Taken, L.T("Taken")), ("compare", ParserShare.Compare, L.T("This pull")), ("inspect-full", ParserShare.Abilities, L.T("Ability")),
-            ("live", ParserShare.Hero, null), ("live", ParserShare.Group, L.T("DPS")),
+            ("live", ParserShare.Group, L.T("DPS")),
         };
         var seen = new List<string>();
         foreach (var (state, view, head) in cases)
@@ -370,7 +371,6 @@ public static partial class WpfApp
             var txt = FindTagged(w.ParserPage, "parser-copy-text-" + view) as Button;
             if (e == null || box == null || pic == null) { bad.Add($"{at}: no Copy picture"); continue; }
             if ((txt != null) != (head != null)) { bad.Add($"{at}: Copy text {(txt != null ? "shown" : "missing")}"); continue; }
-            if (view == ParserShare.Hero && FindTagged(box, "parser-share-more") is not Button) bad.Add($"{at}: no ▾ beside Copy picture");
             // the words whole, and the buttons top right of their section
             var words = Words(box);
             if (!words.Contains(L.T("Copy picture")) || (head != null && !words.Contains(L.T("Copy text")))) bad.Add($"{at}: words {string.Join("|", words)}");
@@ -415,9 +415,9 @@ public static partial class WpfApp
             seen.Add(at);
         }
         check(bad.Count == 0 && seen.Count == cases.Length,
-            $"Parser copy buttons: the hero, group, timeline, damage taken, compare and abilities each have Copy picture (and Copy text on a table) top right of their head, words whole; each copies its own section and says \"Copied\" in place ({seen.Count} of {cases.Length})" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+            $"Parser copy buttons: the group, timeline, damage taken, compare and abilities each have Copy picture (and Copy text on a table) top right of their head, words whole; each copies its own section and says \"Copied\" in place ({seen.Count} of {cases.Length})" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
 
-        // "Copied" stays through a redraw (a live fight redraws), then the words come back; the hero's ▾ opens its menu
+        // "Copied" stays through a redraw (a live fight redraws), then the words come back; the head's ▾ opens its menu
         {
             var keep = MainWindow.CopiedFor;
             try
@@ -430,7 +430,7 @@ public static partial class WpfApp
                 var again = FindTagged(w.ParserPage, "parser-copy-picture-group") as Button;
                 bool kept = again != null && again != pic && Words(again).Contains(L.T("Copied"));
                 MainWindow.CopiedFor = TimeSpan.FromMilliseconds(40);
-                var hero = FindTagged(w.ParserPage, "parser-copy-picture-hero") as Button;
+                var hero = FindTagged(w.ParserPage, "parser-copy-now") as Button;
                 bool said = false;
                 if (hero != null) { Click(hero); said = Words(hero).Contains(L.T("Copied")); }
                 System.Threading.Thread.Sleep(150); DoEvents(); DoEvents();
@@ -439,8 +439,8 @@ public static partial class WpfApp
                 if (more != null) { Click(more); DoEvents(); }
                 var menu = w.MenuCardForTest is { } card ? Words(card) : new List<string>();
                 w.CloseMenuForTest();
-                check(kept && said && back && menu.Contains(L.T("This view")) && menu.Contains(L.T("Everything")),
-                    $"Parser copy buttons: \"Copied\" holds through a redraw ({kept}) and the words come back after ({said}, {back}); the ▾ beside the hero's Copy picture opens the rest ({string.Join(", ", menu)})");
+                check(kept && said && back && menu.Contains(L.T("Summary card")) && menu.Contains(L.T("Everything")),
+                    $"Parser copy buttons: \"Copied\" holds through a redraw ({kept}) and the words come back after ({said}, {back}); the ▾ beside the head's Copy picture opens the rest ({string.Join(", ", menu)})");
             }
             finally { MainWindow.CopiedFor = keep; }
         }

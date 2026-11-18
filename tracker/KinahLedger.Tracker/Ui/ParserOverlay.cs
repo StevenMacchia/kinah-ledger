@@ -23,11 +23,12 @@ public sealed class ParserOverlay : Window
 
     /// <summary>The player dropped it somewhere (pixels, the window's top-left).</summary>
     public event Action<int, int, int>? Dropped;   // left, top, and the meter's bottom edge (what it keeps)
-    /// <summary>The overlay's own menu (a right-click): hide it, clicks through.</summary>
+    /// <summary>The overlay's own menu (a right-click): hide it, or its settings.</summary>
     public event Action? HideAsked;
     /// <summary>A click (no drag) on the overlay: the window switches the meter compact or expanded.</summary>
     public event Action? Clicked;
-    public event Action? ClickThroughAsked;
+    /// <summary>The menu's "DPS meter settings": the window opens Settings › DPS meter, where click-through and the rest live.</summary>
+    public event Action? SettingsAsked;
     /// <summary>Each member's Combat Power and item level beside their DPS (Options › In game › Parser › Group details).</summary>
     public bool ShowDetails { get; set; }
     /// <summary>The mode the menu ticks (set by the window).</summary>
@@ -259,8 +260,9 @@ public sealed class ParserOverlay : Window
     internal (string Hint, string Hide) HintForTest { get { ShowHint(); return (_hint.Text, (string)((System.Windows.Controls.MenuItem)BuildMenu().Items[0]).Header); } }
 
     /// <summary>
-    /// The overlay's menu, in its own dark look: hide and clicks through. The Parser keeps boss pulls only (Steven, 2026-11-17:
-    /// "get rid of full run and every fight"), so there is no mode to pick here any more.
+    /// The overlay's menu, in its own dark look: hide it (the Overlays menu's quick switch), and its settings. Click-through and
+    /// the rest live in Settings alone (Steven, 2026-11-18: "No settings should be from the app outside settings"); the
+    /// Parser keeps boss pulls only (2026-11-17), so there is no mode to pick here either.
     /// </summary>
     internal ContextMenu BuildMenu()
     {
@@ -268,9 +270,9 @@ public sealed class ParserOverlay : Window
         var hide = new MenuItem { Header = HotkeyText.Length > 0 ? L.F("Hide the overlay ({0})", HotkeyText) : L.T("Hide the overlay"), Foreground = HudKit.Ink };
         hide.Click += (_, _) => HideAsked?.Invoke();
         menu.Items.Add(hide);
-        var through = new MenuItem { Header = L.T("Let clicks through to the game"), Foreground = HudKit.Ink, ToolTip = L.T("Drag the handle on its top edge to move it then; turn it off again on the Parser tab") };
-        through.Click += (_, _) => ClickThroughAsked?.Invoke();
-        menu.Items.Add(through);
+        var set = new MenuItem { Header = L.T("DPS meter settings…"), Foreground = HudKit.Ink, ToolTip = L.T("Click-through, its look and width, when it shows: Settings › DPS meter") };
+        set.Click += (_, _) => SettingsAsked?.Invoke();
+        menu.Items.Add(set);
         return menu;
     }
 
@@ -300,7 +302,7 @@ public sealed class ParserOverlay : Window
         _hint.Foreground = HudKit.Muted;
         // the edges widen it (either mode): said in the hint, the one place it can be found
         // ...and resting on a name opens its skills (with clicks going through too: ParserRows.Peek), said first: the one most looked for
-        _hint.Text = _clickThrough ? L.T("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the mode  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the mode");
+        _hint.Text = _clickThrough ? L.T("rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize") : HotkeyText.Length > 0 ? L.F("drag to move  ·  an edge to resize  ·  right-click for the menu  ·  {0} hides it", HotkeyText) : L.T("drag to move  ·  an edge to resize  ·  right-click for the menu");
         _hint.Visibility = !_still && (_clickThrough ? _grab.Visibility == Visibility.Visible : PointerOver) ? Visibility.Visible : Visibility.Collapsed;
         // Share with the pointer over the meter, only while the overlay takes clicks (click-through on: the shortcut in Settings)
         // with clicks going through too (Steven, 2026-11-17: "it needs to be shareable"): the pointer over the overlay shows it, and
@@ -326,6 +328,9 @@ public sealed class ParserOverlay : Window
     System.Windows.Threading.DispatcherTimer? _flashTimer;
 
     /// <summary>A small dark pill in the hint's look: the share arrow and "Share".</summary>
+    /// <summary>Share's tooltip, on the overlay and the pop-out: what it copies, and where it goes (Steven, 2026-11-18: copy promoted).</summary>
+    internal static string MeterShareTip => L.T("Copies a picture of the meter, this fight as it shows now, to paste in Discord or anywhere with Ctrl+V. Nothing is uploaded.");
+
     internal static Button ShareButton()
     {
         var icon = new System.Windows.Shapes.Path
@@ -342,7 +347,7 @@ public sealed class ParserOverlay : Window
         var b = new Button
         {
             Content = face, Cursor = System.Windows.Input.Cursors.Hand, Focusable = false, VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed,
-            ToolTip = L.T("A picture of this fight to paste in Discord or anywhere. Nothing is uploaded."),
+            ToolTip = MeterShareTip,
             Template = new ControlTemplate(typeof(Button)) { VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)) },
         };
         b.MouseEnter += (_, _) => face.BorderBrush = HudKit.Gold;
