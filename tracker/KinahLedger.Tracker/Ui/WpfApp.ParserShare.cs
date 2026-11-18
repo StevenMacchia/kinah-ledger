@@ -296,8 +296,8 @@ public static partial class WpfApp
                 }
                 bool clicked = false;
                 if (back != null) { Click(back); DoEvents(); clicked = w.ParserOpenForTest == null; }
-                check(back != null && id != null && words.Contains(L.T("All boss pulls")) && back.ActualHeight >= 30 && above && clicked,
-                    $"Parser: a pull open has a real ← All boss pulls button top left over the hero ({back?.ActualHeight:0} tall, above {above}), and it goes back ({clicked})");
+                check(back != null && id != null && words.Contains(L.T("Back", "button")) && back.ActualHeight >= 30 && above && clicked,
+                    $"Parser: a pull open has a real ← Back button top left over the hero ({back?.ActualHeight:0} tall, above {above}), and it goes back ({clicked})");
                 w.OpenFightForTest(id); DoEvents();
                 bool key = w.ParserBackKey(Key.Back, Key.None, ModifierKeys.None, inText: false) && w.ParserOpenForTest == null;
                 w.OpenFightForTest(id); DoEvents();

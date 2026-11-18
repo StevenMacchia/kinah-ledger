@@ -30,5 +30,6 @@
   "{0} copies it as text": "{0}: 텍스트로 복사",
   "Pull a boss and Copy picture fills in.": "보스와 전투를 시작하면 그림 복사를 쓸 수 있어요.",
   "Then paste it in Discord with Ctrl+V.": "그다음 Discord에 Ctrl+V로 붙여 넣으세요.",
-  "The boss, the clock, the group's DPS and yours": "보스, 전투 시간, 파티 DPS와 내 DPS"
+  "The boss, the clock, the group's DPS and yours": "보스, 전투 시간, 파티 DPS와 내 DPS",
+  "Back [button]": "뒤로"
 }

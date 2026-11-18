@@ -225,5 +225,6 @@
   "DPS over the whole fight": "以整場戰鬥時間計算 DPS",
   "boss damage only": "只計首領傷害",
   "adds included": "包含小怪",
-  "Set in Settings › DPS meter: DPS over active time, Damage to adds.": "在「設定 › DPS 統計」中設定：以活躍時間計算 DPS、計入小怪傷害。"
+  "Set in Settings › DPS meter: DPS over active time, Damage to adds.": "在「設定 › DPS 統計」中設定：以活躍時間計算 DPS、計入小怪傷害。",
+  "the next boss starts a new fight": "下一個首領開始新的戰鬥"
 }

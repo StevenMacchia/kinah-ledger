@@ -44,6 +44,7 @@ public static partial class WpfApp
                 }
             }
             check(found.Count == 0, "Parser page: no switch, meter pick, overlay-look link or DPS-basis segment anywhere on it, in any state" + (found.Count > 0 ? ": " + string.Join("; ", found.Distinct().Take(5)) : ""));
+            HeldFightChecks(w, check);
             // the Timers page: no Overlay switch (the Overlays menu switches it, the gear opens Settings › Timers)
             w.ShowPartForTest("Timers"); DoEvents();
             var tSwitches = OptionsWindow.TreeOf(w.TimersPage).OfType<CheckBox>().Where(c => c.Style == w.TryFindResource("Switch") as Style).ToList();
@@ -97,6 +98,65 @@ public static partial class WpfApp
             finally { o.Close(); }
         }
         finally { w.Close(); }
+    }
+
+    /// <summary>
+    /// options-test: the live view holds the last boss fight until the next one starts (Steven, 2026-11-18: the graphs stay up):
+    /// its hero, tabs and result with one quiet Ready line over it and the list under it, no Back; Copy picture copies it; a
+    /// pull clicked in the list opens with Back, and Back returns to the held fight, or to the live one once a fight is under
+    /// way; a wipe is held as a kill is; with nothing kept, the Ready card as before.
+    /// </summary>
+    static void HeldFightChecks(MainWindow w, Action<bool, string> check)
+    {
+        static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        var got = new List<string>();
+        var sink0 = MainWindow.ShareSinkForTest;
+        MainWindow.ShareSinkForTest = (_, f) => got.Add(f);
+        try
+        {
+            var bad = new List<string>();
+            // just after a kill (and five minutes on: nothing changes with time while no new fight starts)
+            w.ShowParserDemo("history"); DoEvents(); w.UpdateLayout();
+            var bosses = w.ParserPastForTest.Where(e => e.ModeKind == ParserMode.Bosses && e.Roster.Any(f => !f.Other)).ToList();
+            var held = bosses.Last();
+            if (w.ParserHeldForTest != held.Id) bad.Add($"held {w.ParserHeldForTest ?? "none"}, not the newest pull {held.Id}");
+            if (FindTagged(w.ParserPage, "parser-ready-line") == null) bad.Add("no Ready line");
+            if (FindTagged(w.ParserPage, "parser-hero") == null || FindTagged(w.ParserPage, "parser-member") == null) bad.Add("no hero or group for the held fight");
+            if (FindTagged(w.ParserPage, "parser-back") != null) bad.Add("a Back button on the held fight");
+            if (w.ParserPageForTest().Rows < 5) bad.Add($"the list under it has {w.ParserPageForTest().Rows} rows");
+            w.ParserTabForTest = "Timeline"; DoEvents();
+            if (FindTagged(w.ParserPage, "parser-hero") == null) bad.Add("the Graphs tab drops the held fight");
+            w.ParserTabForTest = "Group"; DoEvents();
+            got.Clear();
+            if (FindTagged(w.ParserPage, "parser-copy-now") is Button pic) Click(pic);
+            if (got.Count != 1 || got[0] != ParserShare.FileName(held, ParserShare.Group)) bad.Add($"Copy picture gave {string.Join(",", got)}");
+            // a pull clicked in the list opens with Back; Back returns to the held fight
+            var row = OptionsWindow.TreeOf(w.ParserPage).OfType<Border>().Where(b => b.Tag as string == "parser-row").Skip(2).FirstOrDefault();
+            row?.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+            DoEvents();
+            var opened = w.ParserOpenForTest;
+            var back = FindTagged(w.ParserPage, "parser-back") as Button;
+            if (row == null || opened == null || opened == held.Id || back == null || FindTagged(w.ParserPage, "parser-hero") == null) bad.Add($"a click on an older pull didn't open it with Back ({opened})");
+            w.ParserTabForTest = "Timeline"; DoEvents();
+            if (w.ParserOpenForTest != opened) bad.Add("the Graphs tab closed the opened pull");
+            if (back != null) { Click(back); DoEvents(); }
+            if (w.ParserOpenForTest != null || w.ParserHeldForTest != held.Id || FindTagged(w.ParserPage, "parser-ready-line") == null) bad.Add("Back didn't return to the held fight");
+            // a wipe is held as a kill is
+            w.HoldWipeForTest(); DoEvents();
+            var wipe = w.ParserPastForTest.Last();
+            if (wipe.Outcome != "wipe" || w.ParserHeldForTest != wipe.Id) bad.Add("a wipe isn't held");
+            // a fight under way takes the live view; a pull opened from the list goes Back to it
+            w.ShowParserDemo("live"); DoEvents();
+            if (FindTagged(w.ParserPage, "parser-ready-line") != null || !w.ParserPageForTest().Live) bad.Add("a new fight doesn't take the live view");
+            w.OpenFightForTest(w.ParserPastForTest.First(e => e.ModeKind == ParserMode.Bosses && e.Roster.Any(f => !f.Other)).Id); DoEvents();
+            if (FindTagged(w.ParserPage, "parser-back") is Button b2) { Click(b2); DoEvents(); } else bad.Add("no Back on a pull opened during a fight");
+            if (w.ParserOpenForTest != null || !w.ParserPageForTest().Live) bad.Add("Back didn't return to the fight under way");
+            // nothing kept: the Ready card, as before
+            w.ShowParserDemo("empty"); DoEvents();
+            if (FindTagged(w.ParserPage, "parser-ready-line") != null || FindTagged(w.ParserPage, "parser-hero") != null) bad.Add("empty: something held");
+            check(bad.Count == 0, "Parser: the live view holds the last boss fight (hero, tabs, result, a Ready line over it, the list under it) until the next one starts; Copy picture copies it; a pull clicked in the list opens with Back, back to the held or live fight; a wipe is held too" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        }
+        finally { MainWindow.ShareSinkForTest = sink0; }
     }
 
     /// <summary>
@@ -183,10 +243,15 @@ public static partial class WpfApp
             w.Show();
             w.ShowDemo("Open world", null); DoEvents();
             w.ParserPrefsFreshForTest();   // a new install's meter settings (1.0.18's defaults), on the page and in Settings
-            foreach (var st in new[] { "live", "detail", "empty", "killed" })   // the kill last: its line holds the status line a while
+            // live; 5 minutes after a kill (held, no prompt); a new fight starting (the group, no damage yet); a wipe held; an older
+            // pull opened from the list (Back); nothing kept; just killed last (its line holds the status line a while)
+            foreach (var st in new[] { "live", "after5", "starting", "wipe", "detail", "empty", "killed" })
             {
-                w.ShowParserDemo(st == "killed" ? "history" : st);
+                w.ShowParserDemo(st switch { "killed" or "after5" or "wipe" => "history", "starting" => "nodamage", _ => st });
                 if (st == "killed") w.KillPromptForTest();
+                if (st == "wipe") w.HoldWipeForTest();
+                // the Graphs tab, as Steven keeps it, with the sample's per-second figures (a render's only)
+                if (st is "after5" or "wipe" or "killed") { MainWindow.ParserDepthSampleForRender(true); w.ParserTabForTest = "Timeline"; }
                 DoEvents();
                 Save((FrameworkElement)w.Content, Path.Combine(dir, $"parser-{st}.png"), 800 - 16);
                 if (st == "detail")

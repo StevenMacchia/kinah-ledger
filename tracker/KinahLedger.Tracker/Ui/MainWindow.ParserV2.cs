@@ -76,7 +76,8 @@ public partial class MainWindow
     }
 
     /// <summary>A fight under way (live) or a kept one: its hero, then what its tab shows.</summary>
-    FrameworkElement FightBlock(Encounter e, DateTime now, List<Encounter> past, bool live)
+    /// <param name="held">The last fight, held in the live view until the next boss fight starts: no way back drawn (nothing was opened).</param>
+    FrameworkElement FightBlock(Encounter e, DateTime now, List<Encounter> past, bool live, bool held = false)
     {
         var end = live ? now : e.End ?? e.LastAt;
         var v = ParserViewOf(e, end, past);
@@ -89,7 +90,8 @@ public partial class MainWindow
         // the way back, a real button top left over the hero (Steven, 2026-11-17: "make a back button WAY more obvious");
         // Backspace, Alt+← and the mouse's back button do the same (Ui/MainWindow.ParserShare.cs)
         if (_parserFromRuns) page.Children.Add(ParserBackButton(L.T("Back to the run"), BackToRuns));   // opened from a run on the Runs page: back goes there
-        else if (!live) page.Children.Add(ParserBackButton(L.T("All boss pulls"), () => OpenFight(null)));
+        // a pull opened from the list: Back returns to the live view (the fight under way, or the last one held; the list under it)
+        else if (!live && !held) page.Children.Add(ParserBackButton(L.T("Back", "button"), () => OpenFight(null)));
         var extras = new List<FrameworkElement>();
         if (e.ModeKind == ParserMode.Run)
         {

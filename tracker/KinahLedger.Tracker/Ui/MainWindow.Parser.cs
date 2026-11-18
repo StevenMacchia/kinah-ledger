@@ -579,13 +579,60 @@ public partial class MainWindow
         if (block != null) ParserPage.Children.Add(block);
         ParserPage.Children.Add(ParserHead(past));
         var open = _parserOpen != null ? past.FirstOrDefault(e => e.Id == _parserOpen) : null;
+        // the live view holds the last boss fight until the next one starts (Steven, 2026-11-18: the graphs should stay up),
+        // its graphs, hero and result in place of the Ready card; an open-world tally (Always on) never takes its place
+        var held = ParserHeldFight(past);
+        var pageLive = PageLive(live, held);
         // a member opened (Parser v2): their inspect view in place of the fight's
-        if (InspectBlock(open ?? live, now, past) is { } inspect) { ParserPage.Children.Add(inspect); return; }
+        if (InspectBlock(open ?? pageLive ?? held, now, past) is { } inspect) { ParserPage.Children.Add(inspect); return; }
         if (open != null) { ParserPage.Children.Add(FightBlock(open, now, past, live: false)); return; }
         _parserOpen = null;
-        if (live != null) ParserPage.Children.Add(FightBlock(live, now, past, live: true));
+        if (pageLive != null) ParserPage.Children.Add(FightBlock(pageLive, now, past, live: true));
+        else if (held != null)
+        {
+            if (block == null) ParserPage.Children.Add(ParserReadyLine(where, live, now));
+            ParserPage.Children.Add(FightBlock(held, now, past, live: false, held: true));
+        }
         else if (block == null) ParserPage.Children.Add(ParserWaitingCard(where, past));
         ParserPage.Children.Add(ParserHistory(past, now));
+    }
+
+    /// <summary>The fight the live view holds between boss fights: the newest boss pull kept (this session's or from before a restart) with a group in it.</summary>
+    Encounter? ParserHeldFight(List<Encounter> past) => past.LastOrDefault(e => e.ModeKind == ParserModeNow && e.Roster.Any(f => !f.Other));
+
+    /// <summary>The fight under way the page shows: a boss fight always; an open-world tally only while there is no boss fight to hold.</summary>
+    static Encounter? PageLive(Encounter? live, Encounter? held) => live != null && (!live.OpenWorld || held == null) ? live : null;
+
+    /// <summary>The fight the page shows now: one opened, else the one under way, else the one held.</summary>
+    Encounter? ParserShownFight(List<Encounter> past)
+    {
+        if (_parserOpen != null && past.FirstOrDefault(e => e.Id == _parserOpen) is { } open) return open;
+        var held = ParserHeldFight(past);
+        return PageLive(ParserLive, held) ?? held;
+    }
+
+    /// <summary>
+    /// Over a held fight: the Ready card in one quiet line ("Ready in Ferocious Horn Den · the next boss starts a new fight"),
+    /// and while you fight in the open world, your DPS there rolling at its end (FarmTick).
+    /// </summary>
+    FrameworkElement ParserReadyLine((ContentKind Kind, string Instance) where, Encounter? live, DateTime now)
+    {
+        var (head, line, tone) = ParserStatus(where);
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 0, 0, 8), Tag = "parser-ready-line", ToolTip = Tip(line) };
+        var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        dot.SetResourceReference(Border.BackgroundProperty, tone);
+        sp.Children.Add(dot);
+        sp.Children.Add(PT(head, 12, FontWeights.SemiBold, "Text2", trim: true));
+        sp.Children.Add(PT("  ·  " + L.T("the next boss starts a new fight"), 12, FontWeights.Medium, "Faint", trim: true));
+        if (live is { OpenWorld: true, You.Damage: > 0 } f)
+        {
+            sp.Children.Add(PT("  ·  " + L.T("Your DPS now") + "  ", 12, FontWeights.Medium, "Faint"));
+            _parserFarmNow = PT(FarmDpsText(now) is { Length: > 0 } t0 ? t0 : FarmFigure(f.FarmDps()), 12, FontWeights.Bold, "Ink");
+            System.Windows.Documents.Typography.SetNumeralAlignment(_parserFarmNow, FontNumeralAlignment.Tabular);
+            _parserFarmNow.MinWidth = 40;
+            sp.Children.Add(_parserFarmNow);
+        }
+        return sp;
     }
 
     /// <summary>
@@ -1162,6 +1209,15 @@ public partial class MainWindow
     }
 
     internal void OpenFightForTest(string? id) => OpenFight(id);
+    /// <summary>For a render and the options test: the sample's newest wipe as the last pull (the one the live view holds).</summary>
+    internal void HoldWipeForTest()
+    {
+        if (_parserDemoPast?.LastOrDefault(e => e.ModeKind == ParserMode.Bosses && e.Outcome == "wipe") is not { } wipe) return;
+        _parserDemoPast.Remove(wipe); _parserDemoPast.Add(wipe);
+        RedrawParserPage();
+    }
+    /// <summary>For the options test: the fight the live view holds now (null: none, or one under way shown).</summary>
+    internal string? ParserHeldForTest => _parserOpen == null && ParserHeldFight(ParserPast()) is { } h && PageLive(ParserLive, h) == null ? h.Id : null;
     internal List<Encounter> ParserPastForTest => ParserPast();
     internal string? ParserOpenForTest => _parserOpen;
     internal ParserOverlay? ParserOverlayForTest => _parserOverlay;

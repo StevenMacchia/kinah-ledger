@@ -30,5 +30,6 @@
   "{0} copies it as text": "{0}：複製為文字",
   "Pull a boss and Copy picture fills in.": "開打首領後就能用「複製圖片」。",
   "Then paste it in Discord with Ctrl+V.": "然後在 Discord 按 Ctrl+V 貼上。",
-  "The boss, the clock, the group's DPS and yours": "首領、計時、隊伍 DPS 與你的 DPS"
+  "The boss, the clock, the group's DPS and yours": "首領、計時、隊伍 DPS 與你的 DPS",
+  "Back [button]": "返回"
 }

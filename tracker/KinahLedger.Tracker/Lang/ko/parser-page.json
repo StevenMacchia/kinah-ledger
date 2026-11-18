@@ -225,5 +225,6 @@
   "DPS over the whole fight": "전투 전체 시간 기준 DPS",
   "boss damage only": "보스 피해만",
   "adds included": "쫄 포함",
-  "Set in Settings › DPS meter: DPS over active time, Damage to adds.": "설정 › DPS 미터에서 정해요: 활동 시간 기준 DPS, 쫄 피해 포함."
+  "Set in Settings › DPS meter: DPS over active time, Damage to adds.": "설정 › DPS 미터에서 정해요: 활동 시간 기준 DPS, 쫄 피해 포함.",
+  "the next boss starts a new fight": "다음 보스부터 새 전투가 시작돼요"
 }

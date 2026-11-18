@@ -31,7 +31,7 @@ public partial class MainWindow
     ParserShare.Parts ShareParts(long? member = null) => new(PDetails, PKills, PDeaths, _parserPrefs.ShareHideNames, e => CoverageLine(e), member);
 
     /// <summary>The fight a click on the page means: the kept one open, else the one under way now (its latest figures).</summary>
-    Encounter ShareFightNow(Encounter shown) => _parserOpen != null ? shown : ParserLive ?? shown;
+    Encounter ShareFightNow(Encounter shown) => _parserOpen != null || !shown.Live ? shown : ParserLive is { } l && l.Id == shown.Id ? l : shown;
 
     DateTime ShareNowOf(Encounter e) => e.Live ? ParserNow : e.End ?? e.LastAt;
 
@@ -204,10 +204,8 @@ public partial class MainWindow
     /// <summary>The fight the head's buttons and Ctrl+C copy: the one open, else the one under way, else the newest kept; null when none can be shared.</summary>
     Encounter? CopyFightNow(List<Encounter> past)
     {
-        var open = _parserOpen != null ? past.FirstOrDefault(e => e.Id == _parserOpen) : null;
-        foreach (var e in new[] { open, open == null ? ParserLive : null, past.LastOrDefault() })
-            if (Shareable(e)) return e;
-        return null;
+        var shown = ParserShownFight(past);   // opened, under way, or held until the next boss fight
+        return Shareable(shown) ? shown : null;
     }
 
     /// <summary>
@@ -219,7 +217,7 @@ public partial class MainWindow
     {
         var past = ParserPast();
         if (CopyFightNow(past) is not { } e) { Say(L.T("Nothing to copy yet. Pull a boss and Copy picture fills in."), "Warn"); return false; }
-        bool shown = e.Id == _parserOpen || (_parserOpen == null && e.Id == ParserLive?.Id);
+        bool shown = true;   // CopyFightNow is the fight the page shows: a member open there is this fight's
         long? member = shown ? _parserInspect : null;
         var v = ParserViewOf(e, ShareNowOf(e), past);
         string view = member != null ? ParserShare.Abilities : ShownView(v);
