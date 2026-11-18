@@ -170,7 +170,10 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         _camGround.Alpha = Math.Min(1, o * 1.03); _camGround.InvalidateVisual();
     }
 
-    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}";
+    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+
+    /// <summary>The pickup strip in the broken frame: the rule the session's lilac, the star the block's gold.</summary>
+    static readonly PickStrip.Look Strip = new(24, 5, true, Br(LilacC, .45), Br(GoldC2));
 
     string _figSig = "";
 
@@ -180,7 +183,7 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
         run = run || Values.GetValueOrDefault("run") == "1";
         // the stream's header: the run's clock, the session's as T+, nothing counted yet NO_SIGNAL
         _meta.Text = !f.Counted ? L.T("NO_SIGNAL") : (run ? L.T("RUN_") : "T+") + (clock.Length > 0 ? clock : "0:00");
-        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}";
+        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
         if (sig == _figSig) return;
         _figSig = sig;
 
@@ -203,6 +206,17 @@ sealed class HudCorrupt : HudThemeLook, IThemeCard
             _bestBlock = f.Beat ? GlitchBlock(L.T("★ NEW_BEST.EXE"), Br(0xFFFFFF), Black, 10.5) : GlitchBlock($"{L.T("BEST")} {Math.Round(Math.Clamp(f.Share, 0, 1) * 100):0}%", Br(0xE8E2F5), Black, 10.5);
             _bestBlock.Margin = new Thickness(16, 0, 2, 0); _bestBlock.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(_bestBlock, 2); _figRow.Children.Add(_bestBlock);
+        }
+        // the best drop and the last three in the room beside the hour while farming, against the best block: the Abyss, the
+        // idle line and a rare drop's DATA_FOUND keep the row as it was
+        if (!f.Abyss && f.Counted && f.Rate.Length > 0 && Rare(Values) == null)
+        {
+            double room = FightWidth - _deck.Body.Margin.Left - _deck.Body.Margin.Right - Wide(left) - (_bestBlock != null ? Wide(_bestBlock) : 0) - 14;
+            if (FitStrip(Values, Strip, room) is { } strip)
+            {
+                strip.HorizontalAlignment = HorizontalAlignment.Right; strip.Margin = new Thickness(14, 0, 0, 0);
+                Grid.SetColumn(strip, 1); _figRow.Children.Add(strip);
+            }
         }
 
         _sess.Inlines.Clear();

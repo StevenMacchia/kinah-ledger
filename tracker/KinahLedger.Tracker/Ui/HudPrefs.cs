@@ -22,6 +22,8 @@ public sealed class HudPrefs
     public double? TickerY { get; set; }
     /// <summary>Options › In game › Rare drops: the chime on a rare drop or a watched item (price alerts chime either way).</summary>
     public bool Chime { get; set; } = true;
+    /// <summary>Settings › Buddy › More › Pickup icons: the best drop and the last pickups as icons on the panel (PickStrip.Shown). On by default.</summary>
+    public bool PickIcons { get; set; } = true;
     /// <summary>The chime's volume, 0 to 1.</summary>
     public double ChimeVolume { get; set; } = 0.6;
     /// <summary>

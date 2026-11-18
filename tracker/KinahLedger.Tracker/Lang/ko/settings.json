@@ -383,5 +383,7 @@
   "in use · {0:P0}": "사용 중 · {0:P0}",
   "{0} of {1} watched": "{1}개 중 {0}개 관심",
   "{0} more [rows]": "{0}개 더",
-  "SHARE PICTURE": "공유 이미지"
+  "SHARE PICTURE": "공유 이미지",
+  "Pickup icons": "획득 아이콘",
+  "Your best drop and last pickups on the panel. Off hides them; every pickup is still counted.": "최고 드롭과 최근 획득을 패널에 아이콘으로 표시합니다. 끄면 숨기기만 하고, 획득은 계속 집계됩니다."
 }

@@ -51,6 +51,31 @@ abstract class ModernLook : HudThemeLook
         else apply(share);
     }
 
+    /// <summary>
+    /// Whether the Buddy wears the pickup strip (Ui/HudPickStrip.cs; Steven, 2026-11-18: "best drop + last three") in place
+    /// of the latest pickup's words: farming with an hour counted and a pickup made, out of the Abyss, no rare drop held, the
+    /// switch on (Settings › Buddy › More › Pickup icons). Off, the line is drawn as before.
+    /// </summary>
+    protected bool StripTime(Figures f) => PickStrip.Shown && HasHour(f) && !f.Abyss && !KinahHidden && Rare(Values) == null && Picks(Values).Any();
+
+    /// <summary>
+    /// The strip in <paramref name="room"/> px, or null where it doesn't fit (the line keeps the pickup in words). Measured as
+    /// drawn, so a best drop that is one of the three takes no room.
+    /// </summary>
+    protected FrameworkElement? StripIn(double room, PickStrip.Look look) =>
+        PickStrip.Of(Values, look) is { } s && Mod.W(s) <= room + .5 ? s : null;
+
+    /// <summary>The strips a look tries, widest first: the best drop and the last three, then the last three alone.</summary>
+    protected static PickStrip.Look[] StripFall(PickStrip.Look look) => new[] { look, look with { Best = false } };
+
+    /// <summary>
+    /// The strip's room on a Buddy line: the panel's widest (<paramref name="cap"/>, the meter's panel, or the line as it was
+    /// with the pickup in words if that was wider) less its other parts (<paramref name="fixedW"/>), the words without the
+    /// pickup (<paramref name="wordsW"/>) and the air before the strip. Never wider than the line was, nor than the meter.
+    /// </summary>
+    protected static double StripRoom(double cap, double fixedW, double wordsW, double oldWordsW, double air) =>
+        Math.Max(cap - fixedW, oldWordsW) - wordsW - air;
+
     /// <summary>A text in Inter (or <paramref name="face"/>), tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontWeight weight, FontFamily? face = null) => Mod.Text(s, size, fg, weight, face);
 }

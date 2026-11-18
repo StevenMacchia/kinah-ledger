@@ -11,7 +11,7 @@ namespace KinahLedger.Ui;
 /// Glass (the Modern theme; Steven, 2026-11-17, picked from the mock-ups): frosted acrylic over the game. A panel of dark,
 /// cool glass with a fine grain in it (WPF has no backdrop blur: the scene is darkened and quietened instead), a calm
 /// specular line along its top edge, a hairline rim and a soft drop under it. The Buddy is one pill: the ring of your best
-/// in white, the hour big in white Inter, the session and the latest pickup under it, the next timer as a green glass chip.
+/// in white, the hour big in white Inter with the best drop and the last pickups as tiles beside it, the session under it, the next timer as a green glass chip.
 /// The meter is the same glass: the boss and the clock, a slim HP bar with ticks at the thirds, then each member as a lit
 /// glass pill filled to their share in their class's colour with a bright leading edge; the foot after a hairline.
 /// The moments are light, never motion of a figure: a sheen sweeps the glass on a pickup, a rare drop's tile rings out in
@@ -27,6 +27,8 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Mod.Br(Colors.White, .85), Dim = Mod.Br(Colors.White, .62), Faint = Mod.Br(Colors.White, .45),
         Green = Frozen(GreenC), Mint = Frozen(MintC), Red = Frozen(RedC), Amber = Frozen(AmberC);
     const double Radius = 18, Pad = 14;
+    /// <summary>The pickup strip on the glass: the Buddy's 28 px tiles beside the hour, a faint white rule, the amber star.</summary>
+    static readonly PickStrip.Look Strip = new(28, 4, true, Mod.Br(Colors.White, .22), Amber);
 
     // room round the panels for the drop under them (drawn inside the window: nothing past its edge)
     readonly Grid _root = new() { Margin = new Thickness(10, 8, 10, 16), HorizontalAlignment = HorizontalAlignment.Left };
@@ -92,7 +94,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         foreach (var c in _noteHost.Children.OfType<TacSketch>()) c.InvalidateVisual();
     }
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Values.GetValueOrDefault("show", "");
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Values.GetValueOrDefault("show", "") + "|" + PickStrip.Sig(Values, Strip);
 
     // ================================================================ the glass
 
@@ -185,12 +187,10 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ring = null; _ringArt = null; _rareTile = null; _rareRing = null;
+        _ring = null; _ringArt = null; _rareTile = null; _rareRing = null; _timerUp = false;
         bool dim = Values.GetValueOrDefault("show", "") == "dim";
         var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (int i = 0; i < 4; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // lead, words, strip, timer
         FrameworkElement? lead = null;
         if (f.Abyss && f.Counted && f.Icon.Length > 0) lead = AbyssMark(f.Icon, 44);
         else if (HasRing(f))
@@ -228,45 +228,91 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             top.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 12, Faint, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, 3); top.Children.Add(u); }
             words.Children.Add(top);
-            // the session and the latest pickup ("894K session · Spiritstone +7.5K"); in the Abyss its stats
-            var sub = Tt("", 11.5, Soft, FontWeights.Medium);
-            sub.Margin = new Thickness(0, 3, 0, 0);
-            if (f.Abyss && f.Stats.Count > 0)
+            // the session and the latest pickup ("894K session · Spiritstone +7.5K"); in the Abyss its stats. Farming, the
+            // pickups as the strip beside the hour where it fits (the best drop and the last three), the session alone under it
+            // (with a timer chip at the line's end and no room left beside it, the chip goes up to the timers over the Buddy)
+            var sub = Sub(f, true);
+            if (StripTime(f))
             {
-                if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Bold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
-                foreach (var (fig, word, tone) in f.Stats)
+                var bare = Sub(f, false);
+                double baseW = (lead != null ? 8 + Mod.W(lead) : 14) + 14, timerW = LineTimerW();
+                double wordsW = Math.Max(Mod.W(top), Mod.W(bare)), oldW = Math.Max(Mod.W(top), Mod.W(sub));
+                FrameworkElement? strip = null;
+                foreach (var look in StripFall(Strip))
                 {
-                    if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
-                    sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = ReferenceEquals(tone, Rec) ? Red : ReferenceEquals(tone, Gold) ? Amber : White });
-                    sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+                    if ((strip = StripIn(StripRoom(FightWidth - 8, baseW + timerW, wordsW, oldW, 14), look)) != null) break;
+                    if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 8, baseW, wordsW, oldW + timerW, 14), look)) != null) { _timerUp = true; break; }
                 }
-            }
-            else
-            {
-                if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Bold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
-                if (!f.Abyss && Picks(Values).FirstOrDefault() is { } p)
+                if (strip != null)
                 {
-                    if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
-                    sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 22 ? p.Name[..21].TrimEnd() + "…" : p.Name));
-                    if (p.Worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + p.Worth) { FontWeight = FontWeights.Bold, Foreground = p.Kinah ? Amber : Green });
-                    else if (p.Count.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + p.Count) { Foreground = Dim });
-                }
-                if (!f.Abyss && f.ToBest.Length > 0 && f.Beat)
-                {
-                    if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
-                    sub.Inlines.Add(new System.Windows.Documents.Run(L.T("Best here")) { FontWeight = FontWeights.Bold, Foreground = Green });
+                    sub = bare;
+                    strip.Margin = new Thickness(14, 0, 0, 0);
+                    if (dim) strip.Opacity = .6;
+                    Grid.SetColumn(strip, 2); row.Children.Add(strip);
                 }
             }
             if (sub.Inlines.Count > 0) words.Children.Add(sub);
         }
+        _stripTimerW = StripTime(f) ? LineTimerW() : -1;
         Grid.SetColumn(words, 1); row.Children.Add(words);
         if (dim) { foreach (var el in new UIElement[] { words }) el.Opacity = .6; if (lead != null) lead.Opacity = .6; }
-        Grid.SetColumn(_lineTimer, 2);
+        Grid.SetColumn(_lineTimer, 3);
         if (_lineTimer.Parent is Panel old) old.Children.Remove(_lineTimer);
         row.Children.Add(_lineTimer);
         _lineBody.Children.Add(row);
+        DrawRare();
+        _note.Text = f.Note;
+        _note.Foreground = ReferenceEquals(f.NoteTone, Warn) || ReferenceEquals(f.NoteTone, Gold) ? Amber : ReferenceEquals(f.NoteTone, HudKit.Mint) ? Green : Soft;
+        _noteHost.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+        PlaceTimers();
+    }
 
-        // the rare drop the window holds: its tile ringed in its colour, "Rare drop" and its name
+    /// <summary>The timer chip's room on the Buddy's line (the next timer sits at its end), 0 with none.</summary>
+    double LineTimerW() => _chips.Count > 0 && !KinahHidden ? 12 + Mod.W(_chips[0]) : 0;
+
+    /// <summary>The timer's room the line's strip was fitted to (-1: no strip time); a timer that changes it draws the line again.</summary>
+    double _stripTimerW = -1;
+
+    /// <summary>The next timer's chip sits with the others over the Buddy, to leave the line's room to the pickup strip.</summary>
+    bool _timerUp;
+
+    /// <summary>The line under the hour: the session, the latest pickup (<paramref name="pick"/>), "Best here"; in the Abyss its stats.</summary>
+    TextBlock Sub(Figures f, bool pick)
+    {
+        var sub = Tt("", 11.5, Soft, FontWeights.Medium);
+        sub.Margin = new Thickness(0, 3, 0, 0);
+        if (f.Abyss && f.Stats.Count > 0)
+        {
+            if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Bold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
+            foreach (var (fig, word, tone) in f.Stats)
+            {
+                if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
+                sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = ReferenceEquals(tone, Rec) ? Red : ReferenceEquals(tone, Gold) ? Amber : White });
+                sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
+            }
+        }
+        else
+        {
+            if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Bold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
+            if (pick && !f.Abyss && Picks(Values).FirstOrDefault() is { } p)
+            {
+                if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
+                sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 22 ? p.Name[..21].TrimEnd() + "…" : p.Name));
+                if (p.Worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + p.Worth) { FontWeight = FontWeights.Bold, Foreground = p.Kinah ? Amber : Green });
+                else if (p.Count.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + p.Count) { Foreground = Dim });
+            }
+            if (!f.Abyss && f.ToBest.Length > 0 && f.Beat)
+            {
+                if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Faint });
+                sub.Inlines.Add(new System.Windows.Documents.Run(L.T("Best here")) { FontWeight = FontWeights.Bold, Foreground = Green });
+            }
+        }
+        return sub;
+    }
+
+    /// <summary>The rare drop the window holds: its tile ringed in its colour, "Rare drop" and its name.</summary>
+    void DrawRare()
+    {
         if (!KinahHidden && Rare(Values) is { } r)
         {
             _lineBody.Children.Add(Hairline(new Thickness(0, 8, 0, 7)));
@@ -298,10 +344,6 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             rr.Children.Add(w);
             _lineBody.Children.Add(rr);
         }
-        _note.Text = f.Note;
-        _note.Foreground = ReferenceEquals(f.NoteTone, Warn) || ReferenceEquals(f.NoteTone, Gold) ? Amber : ReferenceEquals(f.NoteTone, HudKit.Mint) ? Green : Soft;
-        _noteHost.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
-        PlaceTimers();
     }
 
     /// <summary>The ring of your best: a faint track, the share in white with round ends; past your best, green and full.</summary>
@@ -353,6 +395,8 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             bool first = _chips.Count == 0;
             _chips.Add(TimerChip(text, tone, first));
         }
+        // the line's pickup strip was fitted beside the timer chip: a chip that comes, goes or changes its width fits it again
+        if (_stripTimerW >= 0 && Figs is { } f && Math.Abs(LineTimerW() - _stripTimerW) > .5) DrawLine(f);
         PlaceTimers();
     }
 
@@ -384,7 +428,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         foreach (var host in new Panel[] { _timersTop, _timersIn }) host.Children.Clear();
         _lineTimer.Child = null;
         bool inFight = KinahHidden && _fight.Visibility == Visibility.Visible;
-        bool inLine = !KinahHidden && _line.Visibility == Visibility.Visible;
+        bool inLine = !KinahHidden && _line.Visibility == Visibility.Visible && !_timerUp;
         for (int i = 0; i < _chips.Count; i++)
         {
             var c = _chips[i];

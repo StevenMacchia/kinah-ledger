@@ -17,6 +17,8 @@ public sealed record OptionsChoice(
     /// <summary>Options › In game › Rare drops (MainWindow.RareWatch.cs): the watch list, one name a line, and the chime.</summary>
     public string RareWatch { get; init; } = "";
     public bool RareChime { get; init; } = true;
+    /// <summary>Settings › Buddy › More › Pickup icons (Ui/HudPickStrip.cs): drawn or not; the pickups are counted either way.</summary>
+    public bool HudPickIcons { get; init; } = true;
     public double RareVolume { get; init; } = 0.6;
     /// <summary>The That was wrong shortcut ("Ctrl+Shift+J"), "" when off (Ui/MainWindow.MarkWrong.cs).</summary>
     public string MarkWrongKey { get; init; } = "";
@@ -308,7 +310,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Quests = _prefs.Quests, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts, InventoryDetails = _prefs.InventoryDetails, PacketReading = _prefs.PacketReading, PacketState = _watcher.Packets.State,
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, HudPickIcons = _hudPrefs.PickIcons, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Quests = _prefs.Quests, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts, InventoryDetails = _prefs.InventoryDetails, PacketReading = _prefs.PacketReading, PacketState = _watcher.Packets.State,
           WindowScale = Math.Round(Math.Clamp(_prefs.WindowScale, MinWindowScale, MaxWindowScale), 2), AlwaysOnTop = _prefs.AlwaysOnTop, BossBests = _prefs.ShareBossBests };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
@@ -335,6 +337,7 @@ public partial class MainWindow
             UpdateHud();
         }
         if (c.HudLocked != was.HudLocked) { _hudPrefs.Locked = c.HudLocked; if (c.HudLocked) MarkPanelPlaced(); UpdateHud(); }
+        if (c.HudPickIcons != was.HudPickIcons) { _hudPrefs.PickIcons = PickStrip.Shown = c.HudPickIcons; UpdateHud(); }
         if (c.HudLook != was.HudLook) ApplyHudLook(c.HudLook);   // the panel is made again in the new look
         _prefs.HudOpacity = c.HudOpacity; _hudPrefs.Scale = c.HudScale;
         PreviewHud(c.HudOpacity, c.HudScale);

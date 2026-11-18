@@ -160,7 +160,11 @@ public static partial class WpfApp
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         try { File.Delete(Path.Combine(dir, "spill.txt")); } catch (IOException) { }   // what each frame draws past its edges (SpillNote)
-        var looks = HudLooks.All.Where(l => HudThemes.Themed(l.Key) && (only.Length == 0 || only.Contains(l.Key))).Select(l => l.Key).ToList();
+        // a classic look (auto, capsule, meter, float, card) only when named: KL_THEME_LOOK=auto,card renders those in the same states
+        var looks = HudLooks.All.Where(l => (HudThemes.Themed(l.Key) || only.Length > 0) && (only.Length == 0 || only.Contains(l.Key))).Select(l => l.Key).ToList();
+        // the pickup icons (Settings › Buddy › More › Pickup icons) on as shipped; KL_PICK_ICONS=0 renders them off. Render-only.
+        bool picksShown0 = PickStrip.Shown;
+        PickStrip.Shown = Environment.GetEnvironmentVariable("KL_PICK_ICONS") != "0";
         var kinah = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         var sample = w.HudSample();
         foreach (var (k, v) in sample) if (k.StartsWith("pick") || k.StartsWith("top")) kinah[k] = v;   // the four pickups, for the pickup's effect
@@ -296,6 +300,7 @@ public static partial class WpfApp
             catch (Exception ex) { Console.WriteLine($"{look}: {ex}"); }
         }
         Motion.FrozenAt = frozen0;
+        PickStrip.Shown = picksShown0;
 
         // a moment's values with only what makes that moment: no rare drop or best on a plain pickup's frame, and so on
         static Dictionary<string, string> MomentOnly(string tag, Dictionary<string, string> v)

@@ -383,5 +383,7 @@
   "in use · {0:P0}": "使用中 · {0:P0}",
   "{0} of {1} watched": "已關注 {0}/{1}",
   "{0} more [rows]": "還有 {0} 項",
-  "SHARE PICTURE": "分享圖片"
+  "SHARE PICTURE": "分享圖片",
+  "Pickup icons": "拾取圖示",
+  "Your best drop and last pickups on the panel. Off hides them; every pickup is still counted.": "在面板上顯示最佳掉落與最近拾取的圖示。關閉只會隱藏，所有拾取仍會計入。"
 }

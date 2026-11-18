@@ -72,6 +72,32 @@ abstract class TacticalLook : HudThemeLook
         else apply(share);
     }
 
+    /// <summary>
+    /// The pickup strip (Ui/HudPickStrip.cs: the best drop and the last three as tiles) for the line while farming, in
+    /// <paramref name="room"/> DIPs at most: the best drop and the three, the three alone when only they fit, else nothing.
+    /// None in the Abyss, before an hour is counted, while a rare drop is held (the look's own rare drop shows then), while a
+    /// fight is up (the fight keeps what it shows), and with Settings › Buddy › More › Pickup icons off.
+    /// </summary>
+    protected FrameworkElement? FarmStrip(Figures f, PickStrip.Look look, double room)
+    {
+        if (KinahHidden || _lastFight != null || f.Abyss || !HasHour(f) || Rare(Values) != null) return null;
+        if (PickStrip.Width(look) <= room) return PickStrip.Of(Values, look);
+        var narrow = look with { Best = false };
+        return PickStrip.Width(narrow, 3, false) <= room ? PickStrip.Of(Values, narrow) : null;
+    }
+
+    /// <summary>The strip's part of the line's signature: the line is drawn again when a pickup lands.</summary>
+    protected string StripSig(PickStrip.Look look) => PickStrip.Sig(Values, look);
+
+    bool _stripFight;
+    /// <summary>A look's DrawFight calls this: a fight coming up or going away draws the line again (the strip off or back).</summary>
+    protected void StripFollowsFight(Encounter? e)
+    {
+        if ((e != null) == _stripFight) return;
+        _stripFight = e != null;
+        if (Figs is { } f && !KinahHidden) DrawLine(f);
+    }
+
     /// <summary>A text in a face, tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontFamily face, FontWeight weight, FontStretch? stretch = null) => Tac.Text(s, size, fg, face, weight, stretch);
 }
