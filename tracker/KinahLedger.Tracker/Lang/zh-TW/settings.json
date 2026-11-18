@@ -385,5 +385,6 @@
   "{0} more [rows]": "還有 {0} 項",
   "SHARE PICTURE": "分享圖片",
   "Pickup icons": "拾取圖示",
-  "Your best drop and last pickups on the panel. Off hides them; every pickup is still counted.": "在面板上顯示最佳掉落與最近拾取的圖示。關閉只會隱藏，所有拾取仍會計入。"
+  "Your best drop and last pickups on the panel. Off hides them; every pickup is still counted.": "在面板上顯示最佳掉落與最近拾取的圖示。關閉只會隱藏，所有拾取仍會計入。",
+  "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "追蹤器還沒讀到遊戲。正在傳送診斷報告，以便找出原因…"
 }
