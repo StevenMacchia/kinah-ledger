@@ -459,7 +459,7 @@ sealed partial class HudModernMono : ModernLook
         bool wipe = e.Outcome == "wipe";
         var band = new Border
         {
-            Background = Frozen(Mod.A(BgC, .96)), BorderBrush = wipe ? Accent : Paper, BorderThickness = new Thickness(0, 1, 0, 1),
+            Background = Dark, BorderBrush = wipe ? Accent : Paper, BorderThickness = new Thickness(0, 1, 0, 1),
             VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(0, 10, 0, 11),
         };
         var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
