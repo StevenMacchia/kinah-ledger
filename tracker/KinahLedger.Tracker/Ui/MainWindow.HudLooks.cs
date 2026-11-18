@@ -38,6 +38,7 @@ public partial class MainWindow
         foreach (var (k, v) in HudTopValues(_topRows)) _hudValues[k] = v;
         _hudValues["streak"] = HudStreakNow();   // the looks' hot streak bar (Ui/HudStreak.cs)
         (_hudValues["idle"], _hudValues["idleShort"]) = HudIdleLines();   // where the hour waits: where you are and what you made there (Ui/MainWindow.HudIdle.cs)
+        HudDungeonRunValues();   // in a dungeon run: the run clock, splits and the clear's verdict (Ui/MainWindow.HudRun.cs)
     }
 
     /// <summary>The Abyss's own values: "abyss" ("1" there), then PvP kills ("" until players and monsters are told apart), all kills, deaths ("" for none), Kinah and the points' icon.</summary>

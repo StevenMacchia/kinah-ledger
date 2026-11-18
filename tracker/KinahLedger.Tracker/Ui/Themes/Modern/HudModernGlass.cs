@@ -94,7 +94,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         foreach (var c in _noteHost.Children.OfType<TacSketch>()) c.InvalidateVisual();
     }
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Values.GetValueOrDefault("show", "") + "|" + PickStrip.Sig(Values, Strip);
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Values.GetValueOrDefault("show", "") + "|" + PickStrip.Sig(Values, Strip) + "|" + RunBuddy.Sig(Values);
 
     // ================================================================ the glass
 
@@ -189,6 +189,13 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         _lineBody.Children.Clear();
         _ring = null; _ringArt = null; _rareTile = null; _rareRing = null; _timerUp = false;
         bool dim = Values.GetValueOrDefault("show", "") == "dim";
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Modern/HudModernGlass.Run.cs)
+        if (!KinahHidden && Rare(Values) == null && RunBuddy.Of(Values) is { } rs)
+        {
+            DrawRun(rs, dim);
+            LineTail(f);
+            return;
+        }
         var row = new Grid();
         for (int i = 0; i < 4; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // lead, words, strip, timer
         FrameworkElement? lead = null;
@@ -260,6 +267,12 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         if (_lineTimer.Parent is Panel old) old.Children.Remove(_lineTimer);
         row.Children.Add(_lineTimer);
         _lineBody.Children.Add(row);
+        LineTail(f);
+    }
+
+    /// <summary>The line's end, the same for every state: the rare drop held, the note under the line, the timers placed.</summary>
+    void LineTail(Figures f)
+    {
         DrawRare();
         _note.Text = f.Note;
         _note.Foreground = ReferenceEquals(f.NoteTone, Warn) || ReferenceEquals(f.NoteTone, Gold) ? Amber : ReferenceEquals(f.NoteTone, HudKit.Mint) ? Green : Soft;

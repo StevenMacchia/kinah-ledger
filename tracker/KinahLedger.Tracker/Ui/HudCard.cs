@@ -81,6 +81,7 @@ public sealed partial class HudCard : IHudLook
         body.Children.Add(_ringHost);
         Grid.SetColumn(figs, 1); body.Children.Add(figs);
         Grid.SetColumn(_tiles, 2); body.Children.Add(_tiles);
+        BuildRun(head, body, figs);   // the dungeon run's clock, splits and verdict, in place of the figures (Ui/HudCard.Run.cs)
 
         _noticeIcon = WarnIcon(); _noticeIcon.Margin = new Thickness(0, 0, 7, 0);
         _noticeText = T("", 13, Warn, weight: FontWeights.Medium);
@@ -143,11 +144,16 @@ public sealed partial class HudCard : IHudLook
         // nothing counted yet (no run, no pickup, a total of 0): no "0:00" in the head and no "0 session" line, only
         // "Waiting for the first count", as on the Ticker (Steven, 2026-10-26)
         bool counted = run || Picks(values).Count > 0 || V("total") is not ("" or "0");
-        if (Changed("head", $"{live}|{run}|{clock}|{V("zone")}|{paused.Length > 0}|{counted}"))
+        // in a dungeon run the run's clock, splits and verdict stand in for the head's words and the figures (Ui/HudCard.Run.cs);
+        // a rare drop held keeps its place over them
+        var rs = HudRare.Of(values) == null ? RunBuddy.Of(values) : null;
+        bool runOn = rs != null;
+        if (Changed("runOn", runOn.ToString())) { ShowRun(runOn); _drawn.Remove("head"); _drawn.Remove("figs"); _drawn.Remove("run"); }
+        if (Changed("head", $"{live}|{run}|{clock}|{V("zone")}|{paused.Length > 0}|{counted}|{runOn}"))
         {
-            SetDot(_dot, live);
-            _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
-            _time.Visibility = counted ? Visibility.Visible : Visibility.Collapsed;
+            if (!runOn) SetDot(_dot, live);
+            _run.Visibility = run && !runOn ? Visibility.Visible : Visibility.Collapsed;
+            _time.Visibility = counted && !runOn ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;
             _time.Margin = new Thickness(run ? 6 : 8, 0, 0, 0);
             _zone.Text = V("zone");
@@ -161,7 +167,7 @@ public sealed partial class HudCard : IHudLook
         // in the Abyss (Steven, 2026-11-15): the hour in Abyss Points, in ink, the points so far on the session's line, and the
         // kills, deaths and Kinah on the chase's line; the points' art where the ring of your best (a Kinah hour) sits elsewhere
         bool abyss = Abyss(values);
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}|{(counted && V("rate").Length > 0 ? "" : V("idle"))}"))
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}|{(counted && V("rate").Length > 0 ? "" : V("idle"))}|{runOn}"))
         {
             // a pickup: the hour and the session flip to their new figures and the edge lights (Ui/HudCard.Motion.cs)
             bool rose = TotalRose(V("total")) && picked;
@@ -182,7 +188,7 @@ public sealed partial class HudCard : IHudLook
             // the ring sweeps to its new share and pulses once when you pass your best (Ui/HudCard.Motion.cs)
             if (ring) DrawRing(share, beat, rose); else { _ringHost.Children.Clear(); Motion.ForgetShare(_key + "ring"); _ringDrawn = false; }
             if (abyss && counted && V("abIcon").Length > 0) _ringHost.Children.Add(AbyssMark(V("abIcon"), 40));
-            _ringHost.Visibility = _ringHost.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _ringHost.Visibility = _ringHost.Children.Count > 0 && !runOn ? Visibility.Visible : Visibility.Collapsed;
             _chase.Inlines.Clear();
             if (abyss && counted)
                 foreach (var (fig, word, figTone) in AbyssStats(values))
@@ -292,8 +298,12 @@ public sealed partial class HudCard : IHudLook
         {
             _drop.Show(drop, Moves);   // a new drop makes its entrance (Ui/HudRare.Motion.cs)
             if (crafting) _farmBody.Visibility = Visibility.Collapsed;   // Show(null) brings the farming figures back
+            if (runOn) ShowRun(true);   // ...and the run's parts stand in for them again
         }
         if (drop != null && Changed("dropRate", V("rate") + abyss)) _drop.Rate(V("rate"), abyss);
+
+        // the run, drawn after the tiles so its lines fit the room they leave (Ui/HudCard.Run.cs)
+        if (rs != null && Changed("run", RunBuddy.Sig(values) + "|" + live + "|" + string.Join(",", shown.Select(t => t.Id)))) DrawRun(rs, live);
 
         // Pickup icons off (Settings › Buddy › More): the card fits its words instead of keeping 360 px with an empty right
         // side (Steven rejects empty space), never wider than 360; a drop held and the crafting line keep the 360 they are drawn for
