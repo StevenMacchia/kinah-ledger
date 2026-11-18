@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 public static class HudThemes
 {
     public const string Classic = "classic", Wacky = "wacky", Tactical = "tactical", Glitch = "glitch", Modern = "modern";
-    public const string Sticker = "sticker", Neon = "neon", Goo = "goo", Fighter = "fighter", Scorebug = "scorebug", Holo = "holo", Vhs = "vhs", Corrupt = "corrupt", Terminal = "terminal";
+    public const string Sticker = "sticker", Neon = "neon", Goo = "goo", Fighter = "fighter", Scorebug = "scorebug", Studio = "studio", Holo = "holo", Vhs = "vhs", Corrupt = "corrupt", Terminal = "terminal";
     /// <summary>The Modern theme's looks (Steven, 2026-11-17, picked from HTML mock-ups): Glass, Mono, Line and Fade (Ui/Themes/Modern/).</summary>
     public const string ModernGlass = "glass", ModernMono = "mono", ModernLine = "line", ModernFade = "fade";
 
@@ -47,7 +47,7 @@ public static class HudThemes
     internal static HudThemeLook? Make(string key, bool still) => key switch
     {
         Sticker => new HudSticker { Still = still }, Neon => new HudNeon { Still = still }, Goo => new HudGoo { Still = still },
-        Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Holo => new HudHolo { Still = still },
+        Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Studio => new HudScorebug(studio: true) { Still = still }, Holo => new HudHolo { Still = still },
         Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
         ModernGlass => new HudModernGlass { Still = still },
         ModernMono => new HudModernMono { Still = still },
