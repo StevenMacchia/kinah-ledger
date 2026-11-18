@@ -96,6 +96,16 @@ public static partial class WpfApp
         var kill = past.Last(e => e.Outcome == "kill");
         var end = kill.End!.Value;
         var you = kill.Roster.First(f => f.You && !f.Other);
+        // Share on the Kinah overlay too (Steven, 2026-11-18: "it should be on the overlay"): with the Parser inside it there was none
+        {
+            var hw = new HudWindow(null, HudLooks.Auto) { Left = -12000, Top = -12000, ShowActivated = false };
+            int asked = 0; hw.ShareAsked += () => asked++;
+            hw.Show(); DoEvents();
+            hw.PressShareForTest(); hw.FlashShare("Picture copied", good: true); DoEvents();
+            bool row = hw.ShareRowShownForTest;
+            hw.Close();
+            check(hw.HasShareForTest && asked == 1 && row, $"meter share: the Kinah overlay has Share under its meter too, and says the picture was copied there (pressed {asked}, said {row})");
+        }
         var others = kill.Roster.Where(f => !f.Other && !f.You && f.Name.Length > 0).Select(f => f.Name).ToList();
         var figure = new Regex(@"^[\d.,]+[KMB]?$");
         var bad = new List<string>();

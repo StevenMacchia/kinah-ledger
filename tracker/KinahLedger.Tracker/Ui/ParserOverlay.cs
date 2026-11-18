@@ -326,7 +326,7 @@ public sealed class ParserOverlay : Window
     System.Windows.Threading.DispatcherTimer? _flashTimer;
 
     /// <summary>A small dark pill in the hint's look: the share arrow and "Share".</summary>
-    static Button ShareButton()
+    internal static Button ShareButton()
     {
         var icon = new System.Windows.Shapes.Path
         {

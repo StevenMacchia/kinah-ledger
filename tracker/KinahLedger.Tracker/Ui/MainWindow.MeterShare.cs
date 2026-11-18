@@ -52,7 +52,7 @@ public partial class MainWindow
         {
             var why = L.T("No fight to share yet. Pull a boss and the picture fills in.");
             Say(why, "Warn");
-            if (fromOverlay) _parserOverlay?.Flash(why, good: false);
+            if (fromOverlay) { _parserOverlay?.Flash(why, good: false); _hud?.FlashShare(why, good: false); }
             return false;
         }
         try
@@ -68,6 +68,7 @@ public partial class MainWindow
             }
             Say(L.T("Picture copied. Paste it in Discord or anywhere with Ctrl+V."), "Good");
             _parserOverlay?.Flash(L.T("Picture copied"), good: true);
+            _hud?.FlashShare(L.T("Picture copied"), good: true);
             return true;
         }
         catch (Exception ex)

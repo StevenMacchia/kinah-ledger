@@ -1889,7 +1889,7 @@ public static class ParserTests
                     + $"in {trash.FirstOrDefault()?.Instance} ({trash.FirstOrDefault()?.Kind}, {trash.FirstOrDefault()?.GameMode}); none kept ({kept13.Count})");
                 var packs16 = Packs(hornRec, out var kept16).Where(e => e.Kind != "Open world").ToList();   // the dungeon's (the hour has open world too)
                 var pulls = kept16.Where(e => e.Mode == "boss").ToList();
-                Check(pulls.Count == 24 && pulls.All(e => e is { Instance: "Ferocious Horn Den", Kind: "Expedition", GameMode: "Easy" } && e.Boss.Length > 0 && e.Boss != BossParser.UnnamedBoss) && kept16.All(e => e.Mode == "boss")
+                Check(pulls.Count == 25 && pulls.All(e => e is { Instance: "Ferocious Horn Den", Kind: "Expedition", GameMode: "Easy" } && e.Boss.Length > 0 && e.Boss != BossParser.UnnamedBoss) && kept16.All(e => e.Mode == "boss")
                     && packs16.Count >= 10 && packs16.All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }),
                     $"...the Nov 16 Horn Den runs with no screen: {pulls.Count} boss pulls kept, each named in Ferocious Horn Den, Easy ({string.Join(", ", pulls.Select(e => e.Boss).Distinct())}; {string.Join(", ", pulls.Select(e => $"{e.Instance}/{e.GameMode}").Distinct())}); "
                     + $"{kept16.Count - pulls.Count} other records kept; {packs16.Count} trash packs live on the meter between them ({string.Join(", ", packs16.Select(e => $"{e.Kind} {e.Instance} {e.GameMode}").Distinct())})");
@@ -2379,7 +2379,7 @@ public static class ParserTests
                 Check(runs.Count == 2 && runs.All(e => e is { Kind: "Transcendence", GameMode: "Stage 4", Outcome: "cleared" }),
                     $"...Full run: two Deus Research Base runs, each cleared ({string.Join("; ", runs.Select(e => $"{e.Start.ToLocalTime():HH:mm:ss} {e.Kind} {e.GameMode} {e.Outcome}"))})");
                 var d = Replay(recs[3].Path!, hits: false, useScreen: false).Where(e => e.Mode == "boss").ToList();
-                Check(d.Count == 8 && d.Take(3).All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }) && d.Skip(3).All(e => e is { Kind: "Expedition", Instance: "Krao Cave", GameMode: "Hard" }),
+                Check(d.Count == 9 && d.Take(4).All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }) && d.Skip(4).All(e => e is { Kind: "Expedition", Instance: "Krao Cave", GameMode: "Hard" }),
                     $"...18:00, Ferocious Horn Den on Easy and Krao Cave on Hard, expeditions in their modes: {Of(d)}");
             }
         }

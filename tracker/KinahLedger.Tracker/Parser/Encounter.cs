@@ -412,6 +412,13 @@ public sealed class Encounter : IJsonOnDeserialized
     public double TopMeasure() => Math.Max(1, Members.Select(Measure).DefaultIfEmpty(1).Max());
 
     /// <summary>
+    /// A member's bar on every meter, 0 to 1 (Steven, 2026-11-18: "the bar for the top dps shouldnt always be full they should
+    /// all equal up to 100%"): their share of the group's damage, so the bars add up to the whole; before any damage, the
+    /// ready card's Combat Power against the strongest member's.
+    /// </summary>
+    public double BarOf(Fighter f) => HasDamage ? Math.Clamp(Share(f), 0, 1) : f.Other ? 0 : Math.Clamp(Measure(f) / TopMeasure(), 0, 1);
+
+    /// <summary>
     /// Not a record: the card the overlay shows in a dungeon before its first pull (Steven, 2026-11-14: "turn into the parser
     /// when you're in a dungeon ... persist throughout the dungeon"). Never kept.
     /// </summary>
