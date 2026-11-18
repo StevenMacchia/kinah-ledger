@@ -214,7 +214,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
     string _idle = "";
 
     /// <summary>
-    /// The line where the hour waits: the window's idle line (where you are and what you made there, MainWindow.HudIdleLine),
+    /// The line where the hour waits: the window's idle line (where you are and what you made there, MainWindow.HudIdleLines),
     /// else the old words. Every look of this family and the themes' call this one, ahead of HudKit's.
     /// </summary>
     protected string Waiting(bool abyss) => HudKit.Waiting(abyss, _idle);

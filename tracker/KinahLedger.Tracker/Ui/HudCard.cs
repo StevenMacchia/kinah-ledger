@@ -161,7 +161,7 @@ public sealed partial class HudCard : IHudLook
         // in the Abyss (Steven, 2026-11-15): the hour in Abyss Points, in ink, the points so far on the session's line, and the
         // kills, deaths and Kinah on the chase's line; the points' art where the ring of your best (a Kinah hour) sits elsewhere
         bool abyss = Abyss(values);
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}|{V("idle")}"))
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}|{AbyssSig(values)}|{V("abIcon")}|{(counted && V("rate").Length > 0 ? "" : V("idle"))}"))
         {
             // a pickup: the hour and the session flip to their new figures and the edge lights (Ui/HudCard.Motion.cs)
             bool rose = TotalRose(V("total")) && picked;

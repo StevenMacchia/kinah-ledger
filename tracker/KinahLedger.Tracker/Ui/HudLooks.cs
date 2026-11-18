@@ -221,7 +221,7 @@ static class HudKit
     public static string Waiting(bool abyss) => abyss ? L.T("Waiting for Abyss Points") : L.T("Waiting for the first count");
 
     /// <summary>
-    /// The line where the hour waits, with the window's idle line when it has one (the "idle" value, MainWindow.HudIdleLine:
+    /// The line where the hour waits, with the window's idle line when it has one (the "idle" value, MainWindow.HudIdleLines:
     /// Steven, 2026-11-17, "Give something informative" in place of "Waiting for the first count"), else the old words.
     /// </summary>
     public static string Waiting(bool abyss, string idle) => idle.Length > 0 ? idle : Waiting(abyss);
