@@ -3476,6 +3476,14 @@ options: --process aion[,other]");
                 "1 True 1 0 True True True");
         }
         {
+            // 2026-11-18 patch names (data/extra-items.json): Sync Stone (Unique) (Bound), from the Nov 11 weekly Transcended Steps
+            // missions, and Creepy Night Cat Wings (Bound), the Nov 11 shop's wings unlock. Each loot line resolves to its own item.
+            var nwParser = new ChatParser(items);
+            string NewName(string n) => $"{items.Knows(n)}:" + string.Join(";", nwParser.Parse($"Acquired {n}.", DateTime.UtcNow).Select(e => Describe(e, items)));
+            Check("Nov 18 patch names: known from the extras, each loot line read as itself",
+                $"{NewName("Sync Stone (Unique) (Bound)")} {NewName("Creepy Night Cat Wings (Bound)")}", "True:reward: Sync Stone (Unique) ×1 (skipped) True:reward: Creepy Night Cat Wings ×1 (skipped)");
+        }
+        {
             // the Daeva Pass window over the chat, its title read only after the chat settled (reads.log 2026-11-11 15:13:05 to
             // 15:13:06.8; Steven: "daeva pass reward counted towards my gathered loot in the bag"): its own words in the chat's
             // place open it, so the settle's Battle Enhance Scroll and Odyle Energy are the pass's
