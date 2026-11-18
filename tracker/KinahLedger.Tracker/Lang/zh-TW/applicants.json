@@ -1,0 +1,14 @@
+{
+  "Applicants": "入隊申請",
+  "Asking to join": "申請入隊",
+  "{0} asking to join": "{0} 人申請中",
+  "{0} more asked earlier": "還有 {0} 人較早申請",
+  "Lv": "Lv",
+  "item level {0:N0}": "物品等級 {0:N0}",
+  "The people asking to join your group, while you lead one: shown only while someone is waiting.": "你當隊長時申請入隊的人：有人在等才會顯示。",
+  "While you lead a group, everyone asking to join, newest at the bottom; it folds away when nobody is waiting.": "你當隊長時所有申請入隊的人，最新的在最下面；沒人在等就收起來。",
+  "Everyone asking to join the group you lead, not one at a time. Reading only: accept or decline in the game.": "一次看到所有申請加入你隊伍的人，不用一個一個看。只顯示：接受或拒絕請在遊戲裡操作。",
+  "a sample: four asking to join": "範例：四人申請",
+  "Back to just under the Kinah overlay.": "回到基納浮動視窗正下方。",
+  "Drag it anywhere, as the Kinah overlay. Its look follows the overlay's theme.": "像基納浮動視窗一樣隨處拖曳。外觀跟著浮動視窗的主題。"
+}

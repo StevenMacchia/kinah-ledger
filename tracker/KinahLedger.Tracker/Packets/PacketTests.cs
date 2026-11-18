@@ -34,6 +34,35 @@ public static class PacketTests
             Check(wg.SequenceEqual(B(0, 10)), "...across the sequence number rolling over");
         }
 
+        // the party finder (the decoder's version 11): the Applicants window's list, through the reader as the decoder hands them
+        {
+            var reader = new PacketReader();
+            PartyApplication A(double at, PartyApplication.Kind k, string key, string name = "", string cls = "", long cp = 0) =>
+                new(t.AddSeconds(at), k, key, name, cls, 45, 2_651, cp, "Zikel", t.AddSeconds(at + 17.7));
+            reader.ApplicantForTest(A(0, PartyApplication.Kind.Applied, "1", "mz", "Gladiator", 133_774));
+            reader.ApplicantForTest(A(5, PartyApplication.Kind.Applied, "2", "Rezo", "Gladiator", 128_195));
+            reader.ApplicantForTest(A(7, PartyApplication.Kind.Applied, "3", "RubyDAD", "Sorcerer", 125_846));
+            var three = reader.Applicants.Pending(t.AddSeconds(8));
+            reader.ApplicantForTest(A(9, PartyApplication.Kind.Accepted, "2", "Rezo"));
+            reader.ApplicantForTest(A(10, PartyApplication.Kind.Removed, "9", "nobody"));   // someone not on the list: nothing
+            var two = reader.Applicants.Pending(t.AddSeconds(10));
+            reader.ApplicantForTest(A(11, PartyApplication.Kind.Applied, "1", "mz", "Gladiator", 133_774));   // asked again: newest, at the bottom
+            var again = reader.Applicants.Pending(t.AddSeconds(11));
+            int v0 = reader.Applicants.Version;
+            var stale = reader.Applicants.Pending(t.AddSeconds(7) + PartyApplicants.StaleAfter);
+            reader.ApplicantForTest(A(30, PartyApplication.Kind.Applied, "4", "Bode", "Cleric", 110_552));
+            reader.ApplicantForTest(A(31, PartyApplication.Kind.Cleared, ""));
+            var none = reader.Applicants.Pending(t.AddSeconds(31));
+            Check(three.Select(a => a.Name).SequenceEqual(new[] { "mz", "Rezo", "RubyDAD" }) && three[0] is { Class: "Gladiator", Level: 45, CombatPower: 133_774, Server: "Zikel" }
+                && two.Select(a => a.Name).SequenceEqual(new[] { "mz", "RubyDAD" }) && again.Select(a => a.Name).SequenceEqual(new[] { "RubyDAD", "mz" })
+                && stale.Select(a => a.Name).SequenceEqual(new[] { "mz" }) && reader.Applicants.Version > v0 && none.Count == 0,
+                $"applicants: three asking, oldest first ({string.Join(", ", three.Select(a => a.Name))}); one joined; asked again at the bottom ({string.Join(", ", again.Select(a => a.Name))}); " +
+                $"one with no word for {PartyApplicants.StaleAfter.TotalMinutes:0} minutes dropped ({string.Join(", ", stale.Select(a => a.Name))} left); every request gone at once");
+            Check(PartyApplicants.Ago(t, t.AddSeconds(12)) == "12s" && PartyApplicants.Ago(t, t.AddSeconds(185)) == "3m" && PartyApplicants.Ago(t, t.AddHours(2)) == "2h" && PartyApplicants.Ago(t.AddSeconds(5), t) == "0s",
+                "applicants: how long ago, short (12s, 3m, 2h; never below 0)");
+            if (NativeDecoder.Version >= 11) Check(NativeDecoder.ApplicantRecordSize == 128, $"applicants: the decoder's record is {NativeDecoder.ApplicantRecordSize} bytes (128)");
+        }
+
         // a frame from the card: Ethernet with a VLAN tag, the TCP header's own length
         var server = IPAddress.Parse("193.202.112.2"); var me = IPAddress.Parse("192.168.1.4");
         var payload = Enumerable.Range(0, 32).Select(i => (byte)(i * 7)).ToArray();
@@ -1509,6 +1538,7 @@ public static class PacketTests
         var bosses = new BossTimers();
         var bossLines = new List<string>();
         var eventLines = new List<string>(); var timers = new EventTimers();
+        var applicants = new List<PartyApplication>();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
@@ -1529,6 +1559,7 @@ public static class PacketTests
                     while (dec.NextBoss() is { } b)
                         if (bosses.Take(b)) bossLines.Add($"{PacketReader.Local(b.At)}  world boss: {(b.Name.Length > 0 ? b.Name : "(not named)")} {b.State}{(b.Time is { } t && b.ServerNow is { } sv ? (b.State == BossSighting.Kind.Dead ? $", spawns in {BossTimers.Countdown(t - sv)}" : $", up {BossTimers.Span(sv - t)}") : "")}");
                     while (dec.NextFight() is { } f) fights.Add(f);
+                    while (dec.NextApplicant() is { } ap) applicants.Add(ap);
                     while (dec.NextBossEvent() is { } b) bossEvents.Add(b);
                     while (dec.NextAreaEvent() is { } ae)
                     {
@@ -1553,6 +1584,7 @@ public static class PacketTests
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
         ReplayBosses(bossEvents);
+        if (NativeDecoder.Version >= 11) ReplayApplicants(applicants);
         if (NativeDecoder.Version >= 7)
         {
             var items0 = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);
@@ -1606,6 +1638,37 @@ public static class PacketTests
             foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
         }
         return o;
+    }
+
+    /// <summary>
+    /// packet-replay's party finder (the decoder's version 11): each request to join the group the player leads, in order, through
+    /// the Applicants window's own list (Session/PartyApplicants.cs), with who is waiting after each, as the window would show them.
+    /// </summary>
+    static void ReplayApplicants(List<PartyApplication> ev)
+    {
+        if (ev.Count == 0) { Console.WriteLine("applicants: none (nobody asked to join a group the player led)"); return; }
+        var board = new PartyApplicants();
+        foreach (var a in ev.OrderBy(a => a.At))
+        {
+            board.Take(a);
+            var waiting = board.Pending(a.At);
+            string what = a.What switch
+            {
+                PartyApplication.Kind.Applied => $"asked to join: {a.Name} ({(a.Class.Length > 0 ? a.Class : "class not known")}, level {a.Level}, item level {a.ItemLevel:N0}, Combat Power {a.CombatPower:N0}{(a.Server.Length > 0 ? ", " + a.Server : "")}{(a.AppliedAt is { } ap ? $", applied {Local(ap)} on the game's clock" : "")})",
+                PartyApplication.Kind.Accepted => $"joined the group: {a.Name}",
+                PartyApplication.Kind.Removed => $"request gone: {a.Name}",
+                _ => "every request gone (the recruit closed, or the player went into another group)",
+            };
+            Console.WriteLine($"{Local(a.At)}  applicants: {what} · waiting {waiting.Count}{(waiting.Count > 0 ? ": " + string.Join(", ", waiting.Select(w => w.Name)) : "")}");
+        }
+        var last = ev.Max(a => a.At);
+        var left = board.Pending(last);
+        if (left.Count > 0)
+        {
+            var gone = left.Min(a => a.At) + PartyApplicants.StaleAfter;
+            Console.WriteLine($"{Local(gone)}  applicants: the window would drop {string.Join(", ", left.Where(a => a.At + PartyApplicants.StaleAfter <= gone).Select(a => a.Name))} by its own clock ({PartyApplicants.StaleAfter.TotalMinutes:0} minutes with no word)");
+        }
+        Console.WriteLine($"applicants: {ev.Count(a => a.What == PartyApplication.Kind.Applied)} requests, {ev.Count(a => a.What == PartyApplication.Kind.Accepted)} joined, {ev.Count(a => a.What == PartyApplication.Kind.Removed)} gone one by one, {ev.Count(a => a.What == PartyApplication.Kind.Cleared)} times every request went at once");
     }
 
     /// <summary>packet-replay's boss fights: each instance, the group, and each pull with its damage by member (the decoder's, version 4 and later).</summary>
