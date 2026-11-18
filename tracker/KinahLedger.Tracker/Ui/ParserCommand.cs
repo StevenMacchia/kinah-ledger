@@ -27,6 +27,11 @@ sealed class CommandCtx
     public Action<long?> Inspect = _ => { };
     public Action<string> SetSort = _ => { };
     public Func<string, object?> Tip = s => s;
+    /// <summary>
+    /// A section's own copy buttons, top right of its head (Copy picture, and Copy text on a table): the window's, for the view
+    /// named (Ui/ParserShare.cs's names). Null in a share picture.
+    /// </summary>
+    public Func<string, FrameworkElement?> Copy = _ => null;
     /// <summary>Drawn for a share picture (Ui/ParserShare.cs): no tabs, no chevrons or hovers, nothing to click.</summary>
     public bool Share;
 }
@@ -77,14 +82,19 @@ static class ParserCommand
         var body = new StackPanel();
         // the line: live dot or result, the boss (or the run, the fight), where, the clock and the outcome
         var top = Cols(-1, 0);
-        var line = new StackPanel { Orientation = Orientation.Horizontal };
+        // the dot, the title, then where (ending in "…" when the line's buttons need its room; all of it on hover)
+        var line = new DockPanel { LastChildFill = true };
         if (live)
-            line.Children.Add(new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), Background = C(Mint), VerticalAlignment = VerticalAlignment.Center, Effect = new DropShadowEffect { Color = Mint, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.8 } });
+        {
+            var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), Background = C(Mint), VerticalAlignment = VerticalAlignment.Center, Effect = new DropShadowEffect { Color = Mint, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.8 } };
+            DockPanel.SetDock(dot, Dock.Left); line.Children.Add(dot);
+        }
         var title = T(e.Title, 17, Ink, FontWeights.Bold); title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         AutomationProperties.SetName(title, $"{(e.ModeKind == ParserMode.Run ? "Run" : e.ModeKind == ParserMode.Fights ? "Fight" : "Boss")} {e.Title}");
-        line.Children.Add(title);
+        DockPanel.SetDock(title, Dock.Left); line.Children.Add(title);
         var where = Where(e);
-        if (where.Length > 0) line.Children.Add(M(T(where, 12.5, Muted), 10, 2, 0, 0));
+        if (where.Length > 0) { var wt = M(T(where, 12.5, Muted), 10, 2, 0, 0); wt.ToolTip = ctx.Tip(where); line.Children.Add(wt); }
+        else line.Children.Add(new Border());
         top.Children.Add(line);
         var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         if (action != null) { action.Margin = new Thickness(8, 0, 12, 0); action.VerticalAlignment = VerticalAlignment.Center; right.Children.Add(action); }
@@ -311,9 +321,33 @@ static class ParserCommand
         if (max) h.Children.Add(Col(Head("Max hit"), cMax = col++));
         if (spark) h.Children.Add(Col(Head("Over time"), cSpark = col++));
         int cChev = col;
-        // what the figures are, one click away (the honest pass): Boss / All targets and Fight / Active
-        if (ctx.GroupHead(e) is { } gh) { gh.HorizontalAlignment = HorizontalAlignment.Right; body.Children.Add(M(gh, 10, 0, 10, 8)); }
-        body.Children.Add(h);
+        // what the figures are, one click away (the honest pass): Boss / All targets and Fight / Active; the table's own copy
+        // buttons top right, after them (on a line of their own above them when the window is too narrow for both)
+        var gh = ctx.GroupHead(e);
+        var copy = ctx.Share ? null : ctx.Copy(ParserShare.Group);
+        var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
+        if (gh != null) { gh.HorizontalAlignment = HorizontalAlignment.Right; gh.Measure(inf); }
+        if (copy != null) { copy.HorizontalAlignment = HorizontalAlignment.Right; copy.Measure(inf); }
+        if (gh != null && copy != null && gh.DesiredSize.Width + copy.DesiredSize.Width + 10 + 20 <= width)
+        {
+            copy.Margin = new Thickness(10, 0, 0, 0);
+            body.Children.Add(M(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { gh, copy } }, 10, 0, 10, 8));
+        }
+        else if (copy != null && (gh != null || dmg))
+        {
+            body.Children.Add(M(copy, 10, 0, 10, gh != null ? 6 : 8));
+            if (gh != null) body.Children.Add(M(gh, 10, 0, 10, 8));
+        }
+        else if (gh != null) body.Children.Add(M(gh, 10, 0, 10, 8));
+        if (copy != null && gh == null && !dmg)
+        {
+            // no switches (no damage seen): the buttons sit on the head row's right, where no column is drawn
+            copy.VerticalAlignment = VerticalAlignment.Center; copy.Margin = new Thickness(0, -6, 0, -6);   // the row no taller for them
+            var hg = new Grid { Margin = h.Margin }; h.Margin = new Thickness(0); h.VerticalAlignment = VerticalAlignment.Center;
+            hg.Children.Add(h); hg.Children.Add(copy);
+            body.Children.Add(hg);
+        }
+        else body.Children.Add(h);
         var rows = (live && dmg ? v.Members.Where(m => m.Damage > 0) : v.Members).ToList();
         double top = Math.Max(1, rows.Max(m => dmg ? (double)m.Damage : m.F.CombatPower));
         double smax = spark ? rows.Max(m => m.PerSecond is { Count: > 0 } p ? Smooth(p.Select(x => (double)x).ToList()).Max() : 0) : 0;
@@ -413,10 +447,17 @@ static class ParserCommand
     {
         var e = v.E;
         var page = new StackPanel();
-        var back = T($"‹  {e.Title}", 12.5, K("Link"), FontWeights.SemiBold); back.Margin = new Thickness(2, 0, 0, 8); back.Cursor = Cursors.Hand;
-        back.MouseLeftButtonUp += (_, _) => ctx.Inspect(null);
-        AutomationProperties.SetName(back, "Back to the group");
-        page.Children.Add(back);
+        if (!ctx.Share)
+        {
+            // the way back to the group, and on its line's right the member's copy buttons (their card and abilities)
+            var back = T($"‹  {e.Title}", 12.5, K("Link"), FontWeights.SemiBold); back.Cursor = Cursors.Hand; back.HorizontalAlignment = HorizontalAlignment.Left;
+            back.MouseLeftButtonUp += (_, _) => ctx.Inspect(null);
+            AutomationProperties.SetName(back, "Back to the group");
+            var top = Cols(-1, 0); top.Margin = new Thickness(2, 0, 0, 8);
+            top.Children.Add(back);
+            if (ctx.Copy(ParserShare.Abilities) is { } copy) { copy.Margin = new Thickness(8, -4, 0, -5); top.Children.Add(Col(copy, 1)); }   // the line no taller for them
+            page.Children.Add(top);
+        }
         var c = ClassArt.ColorOf(m.F.Class);
         // the head: the class's emblem as art, large and faint, behind the member
         var head = new Grid { ClipToBounds = true };
@@ -684,13 +725,14 @@ static class ParserCommand
     /// This pull against your best kill of this boss and your last pull of it (kept on this PC): the three figures, then your DPS
     /// by ability against the best (or the last) pull's. With the per-second record, your pace against your best as a line.
     /// </summary>
-    public static Border Compare(FightView v)
+    /// <param name="copy">The section's copy buttons, top right of its head (none in a share picture).</param>
+    public static Border Compare(FightView v, FrameworkElement? copy = null)
     {
         var you = v.You!;
         var body = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(T(L.T("Compare"), 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T(L.F("your DPS on {0}", v.E.Boss), 12, Muted), 8, 0, 0, 0));
-        body.Children.Add(M(head, 0, 0, 0, 10));
+        body.Children.Add(M(HeadWithCopy(head, copy), 0, 0, 0, 10));
         var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 1 + (v.Best != null ? 1 : 0) + (v.Last != null ? 1 : 0), Margin = new Thickness(-4, 0, -4, 10) };
         Border Tile(string label, string value, string sub, Brush tone, bool lit)
         {
@@ -726,14 +768,31 @@ static class ParserCommand
 
     // ================================================================ timeline and damage taken (once the record carries them)
 
+    /// <summary>A section's head with its copy buttons on the right (they don't make the line taller); the head alone without them.</summary>
+    static FrameworkElement HeadWithCopy(FrameworkElement head, FrameworkElement? copy)
+    {
+        if (copy == null) return head;
+        var g = Cols(-1, 0);
+        head.VerticalAlignment = VerticalAlignment.Center;
+        g.Children.Add(head);
+        copy.Margin = new Thickness(10, -4, 0, -4); copy.VerticalAlignment = VerticalAlignment.Center;
+        g.Children.Add(Col(copy, 1));
+        return g;
+    }
+
     /// <param name="chartWidth">The chart's width: the page's, or a share picture's wider one (Ui/ParserShare.cs).</param>
-    public static Border Timeline(FightView v, double chartWidth = Wd - 4)
+    /// <param name="copy">The section's copy button, top right of its head after the legend (none in a share picture).</param>
+    public static Border Timeline(FightView v, double chartWidth = Wd - 4, FrameworkElement? copy = null)
     {
         var body = new StackPanel();
-        var head = Cols(-1, 0);
+        var head = Cols(-1, 0, 0);
         var hl = new StackPanel { Orientation = Orientation.Horizontal };
-        hl.Children.Add(T(L.T("Timeline"), 13, Ink, FontWeights.SemiBold)); hl.Children.Add(M(T(L.T("DPS over the fight"), 12, Muted), 8, 0, 0, 0));
+        hl.Children.Add(T(L.T("Timeline"), 13, Ink, FontWeights.SemiBold, trim: false));
+        // the words after "Timeline" give way first when the legend and the button need the room (never cut half-way)
+        var sub = M(T(L.T("DPS over the fight"), 12, Muted, trim: false), 8, 0, 0, 0);
+        hl.Children.Add(sub);
         head.Children.Add(hl);
+        if (copy != null) { copy.Margin = new Thickness(12, -4, 0, -4); copy.VerticalAlignment = VerticalAlignment.Center; head.Children.Add(Col(copy, 2)); }
         var legend = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var m in v.Members.Where(m => m.PerSecond != null))
         {
@@ -741,6 +800,12 @@ static class ParserCommand
             legend.Children.Add(T(m.F.Name, 11, m.You ? GoldInk : Muted, FontWeights.SemiBold));
         }
         head.Children.Add(Col(legend, 1));
+        if (copy != null)
+        {
+            var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
+            hl.Measure(inf); legend.Measure(inf); copy.Measure(inf);
+            if (hl.DesiredSize.Width + legend.DesiredSize.Width + copy.DesiredSize.Width > chartWidth) sub.Visibility = Visibility.Collapsed;
+        }
         body.Children.Add(M(head, 0, 0, 0, 8));
         var lines = v.Members.Where(m => m.PerSecond is { Count: > 1 }).Select(m => (M: m, S: Smooth(m.PerSecond!.Select(x => (double)x).ToList(), 3))).ToList();
         double secs = lines.Max(l => l.S.Length);
@@ -752,19 +817,29 @@ static class ParserCommand
         return Glass(body, new Thickness(14, 12, 14, 10), 14);
     }
 
-    public static FrameworkElement Taken(FightView v)
+    /// <param name="copy">The table's copy buttons: on the page, a head names the table with them on its right (none in a share picture).</param>
+    public static FrameworkElement Taken(FightView v, FrameworkElement? copy = null)
     {
         var page = new StackPanel();
         var body = new StackPanel();
+        // on the page, a slim head with the copy buttons; the glass's top, the gaps and the rows a little tighter for it, so
+        // the page is no taller than without it
+        bool head = copy != null;
+        if (head)
+        {
+            var hd = HeadWithCopy(T(L.T("Damage taken"), 13, Ink, FontWeights.SemiBold), copy);
+            copy!.Margin = new Thickness(10, 0, 0, 0);   // the buttons' full height: nothing reaches into the column names under them
+            body.Children.Add(M(hd, 8, -3, 8, 4));
+        }
         Grid Row() => Cols(30, 38, -1, 74, 64, 60);
-        var h = Row(); h.Margin = new Thickness(10, 0, 10, 6);
+        var h = Row(); h.Margin = new Thickness(10, 0, 10, head ? 2 : 6);
         h.Children.Add(Col(Head("Member", right: false), 2)); h.Children.Add(Col(Head("Taken", sorted: true), 3)); h.Children.Add(Col(Head("Per second"), 4)); h.Children.Add(Col(Head("Deaths"), 5));
         body.Children.Add(h);
         var list = v.Members.Where(m => m.Taken != null).OrderByDescending(m => m.Taken).ToList();
         int i = 0;
         foreach (var m in list)
         {
-            var g = Row(); g.MinHeight = 40;
+            var g = Row(); g.MinHeight = head ? 36 : 40;
             g.Children.Add(RankChip(++i, m.F.Class, 22, you: m.You));
             g.Children.Add(Col(ClassArt.Icon(m.F.Class, 28, m.F.Name), 1));
             g.Children.Add(Col(T(m.F.Name, 13.5, ClassArt.NameBrush(m.F.Class, Dark), FontWeights.SemiBold), 2));
@@ -773,7 +848,7 @@ static class ParserCommand
             g.Children.Add(Col(Num(m.Deaths > 0 ? $"✕ {m.Deaths}" : "–", 12.5, m.Deaths > 0 ? C(Coral) : Faint, FontWeights.Bold), 5));
             body.Children.Add(m.You ? M(YouFrame(g, 10, new Thickness(9, 0, 9, 0), 0.7), 0, 2, 0, 2) : new Border { Padding = new Thickness(10, 0, 10, 0), Child = g });
         }
-        page.Children.Add(Glass(body, new Thickness(6, 12, 6, 10), 14));
+        page.Children.Add(Glass(body, new Thickness(6, head ? 7 : 12, 6, 10), 14));
         foreach (var m in v.Members.Where(x => x.DeathLog.Count > 0))
         {
             var d = m.DeathLog[0];
