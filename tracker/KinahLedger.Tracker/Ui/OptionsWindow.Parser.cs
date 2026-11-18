@@ -212,6 +212,8 @@ public partial class OptionsWindow
         _parserOverlayChk.ToolTip = L.T("The meter over the game in boss fights and dungeons, or always (When it shows).");
         _parserOverlayChk.Click += (_, _) => Refresh();
         PageMeter.Children.Add(OverlayHeader(_parserLabel, _parserLookHint, _parserOverlayChk, "Show the DPS meter over the game"));
+        PageMeter.Children.Add(MeterBlockHost(Page.Meter));   // "Needs Npcap · Get it" while something keeps the meter off (Ui/OptionsWindow.MeterBlock.cs)
+        AddPopOutLink(PageMeter, meter: true);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: the look in use (or under the mouse) in a boss fight, big, over the game
         _parserLookStage = new Border { Margin = new Thickness(0, 12, 0, 0) };
@@ -518,7 +520,7 @@ public partial class OptionsWindow
         if (ParserFace(key, separate) is not { } face) return;
         bool inUse = key == (separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook));
         string name = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
-        var stage = Stage(face, L.T(name), inUse ? L.T("in use") : L.T("hover to compare · click to pick"), 196);
+        var stage = Stage(face, L.T(name), inUse ? L.T("in use") : L.T("hover to compare · click to pick"), MeterStageHeight);
         _parserLookStage.Tag = key;
         _parserLookStage.Child = stage;
     }

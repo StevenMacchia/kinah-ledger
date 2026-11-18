@@ -24,7 +24,7 @@ static class ApplicantsFace
     public static FrameworkElement Build(string theme, IReadOnlyList<PartyApplicants.Applicant> items, DateTime now, double opacity = 0.94)
     {
         var shown = items.Skip(Math.Max(0, items.Count - MaxRows)).ToList();
-        int older = items.Count - shown.Count;
+        int older = items.Count == 0 ? -1 : items.Count - shown.Count;   // -1: nobody waiting (the pop-out window draws that; the overlay folds away)
         FrameworkElement face = theme switch
         {
             HudThemes.Tactical => Tactical(shown, older, items.Count, now, opacity),
@@ -121,10 +121,10 @@ static class ApplicantsFace
         return g;
     }
 
-    /// <summary>"3 more asked earlier" over the rows when more than <see cref="MaxRows"/> wait.</summary>
-    static TextBlock? Older(int older, RowInk k) => older <= 0 ? null : new TextBlock
+    /// <summary>"3 more asked earlier" over the rows when more than <see cref="MaxRows"/> wait; with nobody waiting (-1), says so (the pop-out window).</summary>
+    static TextBlock? Older(int older, RowInk k) => older == 0 ? null : new TextBlock
     {
-        Text = L.F("{0} more asked earlier", older), FontFamily = k.Face, FontSize = k.Size - 1.5, Foreground = k.Dim, Margin = new Thickness(0, 0, 0, 3),
+        Text = older < 0 ? L.T("Nobody is asking to join right now.") : L.F("{0} more asked earlier", older), FontFamily = k.Face, FontSize = k.Size - (older < 0 ? 0.5 : 1.5), Foreground = k.Dim, Margin = new Thickness(0, 0, 0, 3),
     };
 
     /* ---------------- Classic: the Kinah strip's surface ---------------- */
@@ -270,10 +270,10 @@ static class ApplicantsFace
     {
         var pool = new (string Name, string Class, long Cp, string Server)[]
         {
-            ("Thornecrestwarde", "Templar", 188_420, "Meslamtaeda"), ("Rezo", "Gladiator", 128_195, "Israphel"), ("mz", "Gladiator", 133_774, "Zikel"),
-            ("RubyDAD", "Sorcerer", 125_846, "Lumiel"), ("Aerinwynne", "Cleric", 151_906, "Siel"), ("Kaelith", "Assassin", 162_340, "Fregion"),
+            ("Thornecrestwarde", "Templar", 188_420, "Meslamtaeda"), ("Varrenthos", "Gladiator", 128_195, "Israphel"), ("Kyralis", "Gladiator", 133_774, "Zikel"),
+            ("Embervale", "Sorcerer", 125_846, "Lumiel"), ("Aerinwynne", "Cleric", 151_906, "Siel"), ("Kaelith", "Assassin", 162_340, "Fregion"),
             ("Seraphimdawnlite", "Chanter", 165_432, "Ereshkigal"), ("Vintzi", "Ranger", 98_410, "Nezekan"), ("Goldlemon", "Spiritmaster", 141_344, "Siel"),
-            ("Bode", "Cleric", 110_552, "Triniel"), ("Avenia", "Ranger", 115_076, "Siel"), ("Jonhiboi", "Chanter", 92_650, "Zikel"),
+            ("Halvric", "Cleric", 110_552, "Triniel"), ("Selwyra", "Ranger", 115_076, "Siel"), ("Dornak", "Chanter", 92_650, "Zikel"),
         };
         var list = new List<PartyApplicants.Applicant>();
         for (int i = 0; i < n; i++)

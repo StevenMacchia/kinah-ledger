@@ -24,6 +24,8 @@ public partial class MainWindow
         void Walk(DependencyObject d)
         {
             if (d is UIElement { Visibility: not Visibility.Visible }) return;
+            // the card that says the meter needs Npcap may name it (Steven, 2026-11-18: "Yes, add the prompt"); never the other words
+            if (d is FrameworkElement { Tag: MeterBlockTag } card) { Npcap(card); return; }
             if (d is TextBlock tb) Text(InlineText(tb), "text");
             if (d is FrameworkElement fe)
             {
@@ -33,6 +35,13 @@ public partial class MainWindow
             if (d is ContentControl { Content: string cs }) Text(cs, "label");
             int n = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetChildrenCount(d) : 0;
             for (int i = 0; i < n; i++) Walk(VisualTreeHelper.GetChild(d, i));
+        }
+        void Npcap(DependencyObject d)
+        {
+            if (d is TextBlock tb && InlineText(tb) is { } s && SourceWords.IsMatch(SourceWords.Replace(s, m => m.Value.Equals("npcap", StringComparison.OrdinalIgnoreCase) ? "" : m.Value)))
+                hits.Add($"Npcap card: {s}");
+            int n = d is Visual ? VisualTreeHelper.GetChildrenCount(d) : 0;
+            for (int i = 0; i < n; i++) Npcap(VisualTreeHelper.GetChild(d, i));
         }
         Walk(root ?? this);
         return hits.Distinct().ToList();

@@ -43,6 +43,7 @@ public partial class MainWindow
         foreach (var fe in new FrameworkElement[] { StatusRow, OptionsBtn, WhoRow, PartTabs, OverlaysBtn })
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         ApplyView();   // the run card, the summary and the tables follow the first-run screen
+        DrawFullscreenCard();   // first run has the exclusive fullscreen card in its own place (Ui/MainWindow.MeterBlock.cs)
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on) WelcomeHint.Text = HasServer ? "" : L.T("Pick your server to continue.");
     }
@@ -61,6 +62,7 @@ public partial class MainWindow
         WelcomeCard.Visibility = Visibility.Collapsed;
         WelcomeLookCard.Visibility = Visibility.Visible;
         BuildWelcomeLooks();
+        DrawWelcomeMeterBlock();   // Npcap missing: its card above Done (Ui/MainWindow.MeterBlock.cs)
         WelcomeLookGo.Focus();
     }
 

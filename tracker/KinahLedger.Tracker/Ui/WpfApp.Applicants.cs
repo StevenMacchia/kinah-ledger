@@ -67,16 +67,16 @@ public static partial class WpfApp
                 new(now.AddSeconds(-ago), k, key, name, cls, 45, 2_651, cp, "Zikel", null);
             w.ApplicantsTickForTest(now); DoEvents();
             bool noneShown = w.ApplicantsOverlayForTest is not { IsVisible: true };
-            board.Take(A(40, PartyApplication.Kind.Applied, "1", "mz", "Gladiator", 133_774));
-            board.Take(A(35, PartyApplication.Kind.Applied, "2", "Rezo", "Gladiator", 128_195));
-            board.Take(A(33, PartyApplication.Kind.Applied, "3", "RubyDAD", "Sorcerer", 125_846));
+            board.Take(A(40, PartyApplication.Kind.Applied, "1", "Kyralis", "Gladiator", 133_774));
+            board.Take(A(35, PartyApplication.Kind.Applied, "2", "Varrenthos", "Gladiator", 128_195));
+            board.Take(A(33, PartyApplication.Kind.Applied, "3", "Embervale", "Sorcerer", 125_846));
             w.ApplicantsTickForTest(now); DoEvents();
             var ov = w.ApplicantsOverlayForTest;
             int RowsShown() => ov?.FaceForTest is { } f ? RowCount(f) : -1;
             bool three = ov is { IsVisible: true } && RowsShown() == 3;
             var names = ov?.FaceForTest is { } f3 ? RowNames(f3) : new List<string>();
-            bool order = names.SequenceEqual(new[] { "mz", "Rezo", "RubyDAD" });
-            board.Take(A(10, PartyApplication.Kind.Accepted, "2", "Rezo"));
+            bool order = names.SequenceEqual(new[] { "Kyralis", "Varrenthos", "Embervale" });
+            board.Take(A(10, PartyApplication.Kind.Accepted, "2", "Varrenthos"));
             w.ApplicantsTickForTest(now); DoEvents();
             bool two = RowsShown() == 2;
             check(noneShown && three && order && two, $"applicants: hidden with nobody waiting ({noneShown}), three shown oldest first ({three}, {order}), a row gone when one joins ({two})");
@@ -110,7 +110,7 @@ public static partial class WpfApp
             check(ov != null && !ov.IsVisible, "applicants: folded away when every request goes");
 
             // the Settings page: the overlays' fourth, its switch turns the window off and on, Reset position is there
-            board.Take(A(5, PartyApplication.Kind.Applied, "4", "Bode", "Cleric", 110_552));
+            board.Take(A(5, PartyApplication.Kind.Applied, "4", "Halvric", "Cleric", 110_552));
             var o = new OptionsWindow(w, OptionsWindow.Page.Applicants) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
             o.Show(); DoEvents();
             bool page = o.PageShownForTest == OptionsWindow.Page.Applicants && OptionsWindow.OverlayPages.Any(p => p.Page == OptionsWindow.Page.Applicants) && o.ApplicantsChk?.IsChecked == true && o.ApplicantsResetBtn != null;
