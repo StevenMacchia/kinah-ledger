@@ -224,20 +224,24 @@ public sealed partial class HudCard : IHudLook
             if (rare != null && !skipped && string.Equals(p.Name, rare.Name, StringComparison.OrdinalIgnoreCase)) { skipped = true; continue; }
             tiles.Add(p);
         }
+        // Settings › Buddy › More › Pickup icons off: no tiles and no room kept for them (the figures take the row); still counted
+        // (the head's newest pickup, in words, stays)
         tiles = tiles.Take(3).ToList();
-        if (Changed("tiles", string.Join("|", tiles.Select(t => $"{t.Id}:{t.Count}:{t.Icon}:{t.Grade}"))))
+        var shown = PickStrip.Shown ? tiles : new List<Pick>();
+        if (Changed("tiles", (PickStrip.Shown ? "" : "off|") + string.Join("|", shown.Select(t => $"{t.Id}:{t.Count}:{t.Icon}:{t.Grade}"))))
         {
+            _tiles.Visibility = PickStrip.Shown ? Visibility.Visible : Visibility.Collapsed;
             _tiles.Children.Clear();
-            for (int i = 0; i < tiles.Count; i++)
+            for (int i = 0; i < shown.Count; i++)
             {
-                var t = Tile(tiles[i], 28);
+                var t = Tile(shown[i], 28);
                 t.Margin = new Thickness(i == 0 ? 0 : 6, 0, 0, 0);
                 t.Opacity = i switch { 0 => 1, 1 => .9, _ => .75 };
-                if (i == 0 && t is Grid g) g.Children.Add(Light(tiles[0]));
+                if (i == 0 && t is Grid g) g.Children.Add(Light(shown[0]));
                 _tiles.Children.Add(t);
             }
             // a new pickup at the front: its tile grows in, the head pops (Ui/HudCard.Motion.cs); not the first draw
-            var front = tiles.FirstOrDefault();
+            var front = shown.FirstOrDefault();
             if (front != null && front.Id != _landedId && _landedId.Length > 0 && Moves && _tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement ft) Arrived(ft, front);
             _landedId = front?.Id ?? "";
         }
