@@ -30,20 +30,15 @@ public static partial class WpfApp
                 SavePart(w.ParserPage, Path.Combine(dir, $"ui-graphs-{st}-page.png"), w.TryFindResource("Bg") as Brush);
                 if (st == "six" && w.GraphsForTest is { } g)
                 {
-                    // a hover: every member's DPS at 1:10 on the DPS graph, the crosshair across the other two
-                    g.ChartOf(ParserGraphs.Dps).ShowHover(70, true);
-                    g.ChartOf(ParserGraphs.Hp).ShowHover(70, false); g.ChartOf(ParserGraphs.Heal).ShowHover(70, false);
+                    // a hover: every member's DPS and the boss's HP at 1:10 on the fight's graph, the crosshair on the healing's
+                    g.ChartOf(ParserGraphs.Dps).ShowHover(70, true); g.ChartOf(ParserGraphs.Heal).ShowHover(70, false);
                     DoEvents();
                     Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-graphs-six-hover-dps.png"), 800 - 16);
-                    g.ChartOf(ParserGraphs.Dps).ShowHover(null, false);
-                    g.ChartOf(ParserGraphs.Hp).ShowHover(70, true); g.ChartOf(ParserGraphs.Heal).ShowHover(70, false);
-                    DoEvents();
-                    Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-graphs-six-hover-hp.png"), 800 - 16);
-                    g.ChartOf(ParserGraphs.Hp).ShowHover(null, false);
+                    g.ChartOf(ParserGraphs.Dps).ShowHover(72, false);
                     g.ChartOf(ParserGraphs.Heal).ShowHover(72, true);
                     DoEvents();
                     Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-graphs-six-hover-heal.png"), 800 - 16);
-                    g.ChartOf(ParserGraphs.Heal).ShowHover(null, false);
+                    g.ChartOf(ParserGraphs.Heal).ShowHover(null, false); g.ChartOf(ParserGraphs.Dps).ShowHover(null, false);
                 }
             }
             // each graph's Copy picture (after the renders, so its toast is in none of them): the six-member kill's three, the live pull's DPS
@@ -62,8 +57,8 @@ public static partial class WpfApp
                 }
             }
             Pictures("six", ParserGraphs.Kinds);
-            Pictures("live", ParserGraphs.Dps, ParserGraphs.Hp);
-            Pictures("solo", ParserGraphs.Hp);
+            Pictures("live120", ParserGraphs.Dps);
+            Pictures("solo", ParserGraphs.Dps);
         }
         finally { MainWindow.ShareSinkForTest = null; }
     }
@@ -80,7 +75,7 @@ public static partial class WpfApp
     /// </summary>
     static (double ProcMs, double UiMs, int Frames, int GraphRedraws, double GraphMs) LiveCpu(MainWindow w, string tab, double seconds)
     {
-        w.ShowGraphsDemo("live");
+        w.ShowGraphsDemo("live24");
         w.ParserTabForTest = tab;
         DoEvents();
         var proc = Process.GetCurrentProcess();
@@ -125,39 +120,46 @@ public static partial class WpfApp
         var got = new List<(BitmapSource Bmp, string File)>();
         try
         {
-            // what each state draws: (DPS lines, the HP card's title, the heal card's title or null, deaths)
-            var want = new Dictionary<string, (int Lines, string Hp, string? Heal, int Deaths)>
+            // what each state draws: (DPS lines, the heal graph's title or null, deaths, the frame's length: live a fixed 3:00,
+            // one step longer past it, a kept fight exactly its length (0))
+            var want = new Dictionary<string, (int Lines, string? Heal, int Deaths, double Extent)>
             {
-                ["live"] = (6, "Boss HP and group DPS", "Healing and damage taken", 0),
-                ["mid"] = (6, "Boss HP and group DPS", "Healing and damage taken", 1),
-                ["killed"] = (4, "Boss HP and group DPS", "Healing", -1),
-                ["wipe"] = (6, "Boss HP and group DPS", "Healing and damage taken", 6),
-                ["solo"] = (1, "Boss HP", null, 0),
-                ["six"] = (6, "Boss HP and group DPS", "Healing and damage taken", 1),
-                ["noheal"] = (4, "Boss HP and group DPS", null, 0),
-                ["real"] = (4, "Boss HP and group DPS", "Healing", -1),
+                ["live24"] = (6, "Healing and damage taken", 0, 180),
+                ["live70"] = (6, "Healing and damage taken", 1, 180),
+                ["live120"] = (6, "Healing and damage taken", 1, 180),
+                ["over"] = (6, "Healing and damage taken", 1, 270),
+                ["killed"] = (4, "Healing", -1, 0),
+                ["wipe"] = (6, "Healing and damage taken", 6, 0),
+                ["solo"] = (1, null, 0, 0),
+                ["six"] = (6, "Healing and damage taken", 1, 0),
+                ["noheal"] = (4, null, 0, 0),
+                ["real"] = (4, "Healing", -1, 180),
             };
+            var liveScales = new List<double>();
             foreach (var st in MainWindow.GraphStates)
             {
                 w.ShowGraphsDemo(st); DoEvents(); DoEvents();
                 var g = w.GraphsForTest;
                 if (g?.Shown is not { } s || !g.IsVisible) { check(false, $"graphs, {st}: the Graphs view shows"); continue; }
-                var (lines, hpTitle, healTitle, deaths) = want[st];
-                bool hpCard = g.CardOf(ParserGraphs.Hp).IsVisible, healCard = g.CardOf(ParserGraphs.Heal).IsVisible;
-                string hpT = ParserGraphs.Title(ParserGraphs.Hp, s), healT = ParserGraphs.Title(ParserGraphs.Heal, s);
-                check(s.Members.Count == lines && s.Members.Count(m => m.You) == 1 && hpCard && hpT == hpTitle && healCard == (healTitle != null) && (healTitle == null || healT == healTitle)
-                    && (deaths < 0 || s.Deaths.Count == deaths),
-                    $"graphs, {st}: {s.Members.Count} DPS lines (yours one), \"{hpT}\"{(healCard ? $", \"{healT}\"" : ", no heal graph")}, {s.Deaths.Count} deaths marked, {s.N} s");
+                var (lines, healTitle, deaths, extent) = want[st];
+                bool healCard = g.CardOf(ParserGraphs.Heal).IsVisible;
+                string fightT = ParserGraphs.Title(ParserGraphs.Dps, s), healT = ParserGraphs.Title(ParserGraphs.Heal, s);
+                bool frame = extent > 0 ? s.Extent == extent : Math.Abs(s.Extent - (s.N - 1)) < 0.01;
+                if (st.StartsWith("live", StringComparison.Ordinal)) liveScales.Add(s.YMax);
+                check(s.Members.Count == lines && s.Members.Count(m => m.You) == 1 && s.HpLeft != null && fightT == "DPS and boss HP" && healCard == (healTitle != null) && (healTitle == null || healT == healTitle)
+                    && (deaths < 0 || s.Deaths.Count == deaths) && frame,
+                    $"graphs, {st}: one graph, \"{fightT}\", {s.Members.Count} DPS lines (yours one) and the boss's HP{(healCard ? $"; \"{healT}\" under it" : "; no heal graph")}; {s.Deaths.Count} deaths marked; {s.N} s of data in a frame of {PK.Clock(s.Extent)}{(s.Live ? " (live, fixed)" : " (kept: start to finish)")}, DPS scale {s.YMax:N0}");
                 // fits: the whole panel inside the window under the hero; nothing cut
                 var bottom = w.GraphsBottomForTest;
                 var cut = MeterShare.Trimmed(g);
-                check(bottom <= w.ParserViewportForTest + 1 && cut.Count == 0 && g.ChartOf(ParserGraphs.Dps).ActualHeight >= 112,
-                    $"graphs, {st}: the panel fits the window ({bottom:0} of {w.ParserViewportForTest:0} px, DPS chart {g.ChartOf(ParserGraphs.Dps).ActualHeight:0} px tall), nothing cut{(cut.Count > 0 ? ": " + string.Join(", ", cut) : "")}");
+                check(bottom <= w.ParserViewportForTest + 1 && cut.Count == 0 && g.ChartOf(ParserGraphs.Dps).ActualHeight >= 140,
+                    $"graphs, {st}: the panel fits the window ({bottom:0} of {w.ParserViewportForTest:0} px, the fight's graph {g.ChartOf(ParserGraphs.Dps).ActualHeight:0} px tall), nothing cut{(cut.Count > 0 ? ": " + string.Join(", ", cut) : "")}");
                 var rows = g.ChartOf(ParserGraphs.Dps).HoverRows(s.N / 2);
-                check(rows.Count(r => r.Value != "–") >= lines && s.Members.All(m => rows.Any(r => r.Name == m.Name)),
-                    $"graphs, {st}: the hover at {PK.Clock(s.N / 2)} reads every member's DPS ({string.Join(", ", rows.Select(r => $"{r.Name} {r.Value}"))})");
+                check(rows.Count(r => r.Value != "–") >= lines + 1 && s.Members.All(m => rows.Any(r => r.Name == m.Name)) && rows.Any(r => r.Name == L.T("Boss HP")),
+                    $"graphs, {st}: the hover at {PK.Clock(s.N / 2)} reads every member's DPS and the boss's HP ({string.Join(", ", rows.Select(r => $"{r.Name} {r.Value}"))})");
             }
-            // a record kept before the seconds were: no Graphs tab, the Group's table as before
+            check(liveScales.Count == 3 && liveScales.Distinct().Count() == 1,
+                $"graphs: a live fight's frame stands still: 0:24, 1:10 and 2:00 in, the same 3:00 and the same DPS scale ({string.Join(", ", liveScales.Select(x => x.ToString("N0")))})");            // a record kept before the seconds were: no Graphs tab, the Group's table as before
             w.ShowGraphsDemo("noheal");
             var old = w.ParserShownForTest!;
             foreach (var f in old.Roster) { f.PerSecond = null; f.BossPerSecond = null; f.HealPerSecond = null; f.TakenPerSecond = null; }
@@ -170,12 +172,13 @@ public static partial class WpfApp
             w.ShowGraphsDemo("six"); DoEvents();
             foreach (var kind in ParserGraphs.Kinds)
                 if (FindTagged(w.GraphsForTest!, "graph-copy-" + kind) is Button b) b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-            check(got.Count == 3 && got.All(x => x.Bmp.PixelWidth == ParserShare.PixelWidth && x.Bmp.PixelHeight > 500) && ParserGraphs.Kinds.All(k => got.Any(x => x.File.EndsWith("-graph-" + k + ".png", StringComparison.Ordinal))),
+            check(got.Count == 2 && got.All(x => x.Bmp.PixelWidth == ParserShare.PixelWidth && x.Bmp.PixelHeight > 500) && ParserGraphs.Kinds.All(k => got.Any(x => x.File.EndsWith("-graph-" + k + ".png", StringComparison.Ordinal))),
                 $"graphs: each card's Copy picture copies that graph in the share frame ({string.Join(", ", got.Select(x => $"{x.File} {x.Bmp.PixelWidth}x{x.Bmp.PixelHeight}"))})");
             // live: the graphs grow a second at a time, drawn at most every 250 ms however often the page redraws
-            w.ShowGraphsDemo("live"); DoEvents();
+            w.ShowGraphsDemo("live24"); DoEvents();
             var panel = w.GraphsForTest!;
             int n0 = panel.Shown!.N, r0 = panel.Redraws, frames = 0;
+            double ext0 = panel.Shown!.Extent, y0 = panel.Shown!.YMax;
             var clock = Stopwatch.StartNew();
             while (clock.Elapsed.TotalSeconds < 3)
             {
@@ -184,8 +187,9 @@ public static partial class WpfApp
             DoEvents();
             double secs = clock.Elapsed.TotalSeconds;
             int redraws = panel.Redraws - r0;
-            check(ReferenceEquals(w.GraphsForTest, panel) && panel.Shown!.N > n0 + 1 && redraws >= 2 && redraws <= secs * 1000 / ParserGraphs.LiveFrameMs + 1,
-                $"graphs, live: the same view kept over {frames} page redraws in {secs:0.0} s; it grew from {n0} to {panel.Shown!.N} s, its graphs drawn {redraws} times (at most every {ParserGraphs.LiveFrameMs} ms)");
+            check(ReferenceEquals(w.GraphsForTest, panel) && panel.Shown!.N > n0 + 1 && redraws >= 2 && redraws <= secs * 1000 / ParserGraphs.LiveFrameMs + 1
+                && panel.Shown!.Extent == ext0 && panel.Shown!.YMax == y0,
+                $"graphs, live: the same view kept over {frames} page redraws in {secs:0.0} s; its lines grew from {n0} to {panel.Shown!.N} s in a frame that stood still ({PK.Clock(panel.Shown!.Extent)}, {panel.Shown!.YMax:N0}), its graphs drawn {redraws} times (at most every {ParserGraphs.LiveFrameMs} ms)");
             // the CPU a live fight costs: the page on the Group tab (as 1.0.12 opened it) against the Graphs tab
             var before = LiveCpu(w, "Group", 10);
             var after = LiveCpu(w, "Timeline", 10);

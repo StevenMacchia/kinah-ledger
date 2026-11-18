@@ -83,10 +83,11 @@ public partial class MainWindow
     internal double ParserScrollableForTest => LowerScroll.ScrollableHeight;
 
     /// <summary>The render states of the Graphs tab: the fight each draws, live or kept.</summary>
-    internal static readonly string[] GraphStates = { "live", "mid", "killed", "wipe", "solo", "six", "noheal", "real" };
+    internal static readonly string[] GraphStates = { "live24", "live70", "live120", "over", "killed", "wipe", "solo", "six", "noheal", "real" };
 
     /// <summary>
-    /// A render's Graphs tab: "live" a six-member pull 24 s in; "mid" the same 1:41 in with a death; "killed" a kept kill of the
+    /// A render's Graphs tab: "live24", "live70", "live120" one six-member pull 0:24, 1:10 and 2:00 in (the same frame, the lines
+    /// grown; a death at 1:02); "over" the same pull at 3:40, past its usual length (the frame one step longer); "killed" a kept kill of the
     /// sample run through the real Parser (its heals as the Parser counted them); "wipe" a kept wipe at 31% with the group dying
     /// at the end; "solo" one player's kill (no group, no heals: the HP alone beside the DPS); "six" a kept six-member kill with
     /// a Cleric and a Chanter healing and the damage taken; "noheal" a kill whose record has no heals or damage taken (the row
@@ -101,8 +102,10 @@ public partial class MainWindow
         switch (state)
         {
             case "real": live = like; break;
-            case "live": live = GraphSample(like, state, t0.AddSeconds(-24), 24, 6, "", live: true); break;
-            case "mid": live = GraphSample(like, state, t0.AddSeconds(-101), 101, 6, "", live: true, death: 62); break;
+            case "live24" or "live70" or "live120" or "over":
+                int secs = state switch { "live24" => 24, "live70" => 70, "live120" => 120, _ => 220 };
+                live = GraphSample(like, state, t0.AddSeconds(-secs), secs, 6, "", live: true, death: 62);
+                break;
             case "killed": kept = _parserDemoPast!.Last(x => x.ModeKind == ParserMode.Bosses && x.Outcome == "kill" && x.HasDamage && x.Roster.Count(f => !f.Other) >= 4); break;
             case "wipe": kept = GraphSample(like, state, t0.AddMinutes(-9), 188, 6, "wipe", wipe: true); break;
             case "solo": kept = GraphSample(like, state, t0.AddMinutes(-6), 96, 1, "kill", heals: false, taken: false); break;
@@ -204,7 +207,7 @@ public partial class MainWindow
                     f.HealingSelf = c.Class == "Templar" ? f.Healing : f.Healing / 20;
                 }
             }
-            foreach (var (id, at) in deaths.Where(d => d.Id == c.Id))
+            foreach (var (id, at) in deaths.Where(d => d.Id == c.Id && d.At <= secs))   // a death still to come (a live render early in the pull) isn't in the record yet
             {
                 (f.DeathLog ??= new()).Add(new DeathRecord { At = at, Killer = "Searing Breath", BossHpLeft = null });
                 f.Deaths++;
@@ -212,7 +215,8 @@ public partial class MainWindow
             e.Roster.Add(f);
         }
         // the boss's HP from the group's damage: gone at a kill's last second, the share left at a wipe, about half way live
-        double max = live ? total * 2.05 : wipe ? total / (1 - 0.31) : total;
+        // live: the HP a kill at about 2:45 would take, the same whatever the second shown (the renders' frames match)
+        double max = live ? cast.Sum(c => c.Dps) * 0.93 * (secs < 200 ? 165 : 290) : wipe ? total / (1 - 0.31) : total;
         e.BossMaxHp = (long)max; e.BossHp = Math.Max(0, (long)(max - total));
         var hp = new List<double>(n);
         double run = 0;

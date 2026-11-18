@@ -13,75 +13,86 @@ using static KinahLedger.Ui.PK;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The Parser page's Graphs (Steven, 2026-11-18: "THE PARSER SHOULD DISPLAY DETAILED GRAPHICS OF THE FIGHT EITHER AS ITS GOING
-/// LIKE THE LINE CHARTS OR W.E WHILE THE FIGHTS GOING ON or AT LEAST AFTER EACH FIGHT"): a fight's default view, live while it
-/// runs and kept with every pull.
+/// The Parser page's Graphs. Steven, 2026-11-18: "have one graph for the entire fight from start to finish it doesnt move just
+/// the line does for every person and make it detailed", and "it's just like the post game one just in real time and very
+/// detailed".
 /// <list type="bullet">
-/// <item>DPS over the fight: one smooth line a member in their class's colour, yours gold and thicker, deaths marked.</item>
-/// <item>Boss HP and group DPS: the members' damage stacked (the group's DPS is its top edge, each band a member's part), the
-/// boss's HP over it on its own axis with the thirds marked where it crossed them, and the kill or the wipe.</item>
-/// <item>Healing and damage taken: each healer's effective healing a second over the group's damage taken a second.</item>
+/// <item>The fight: one detailed graph, start to finish. Every member's DPS a line in their class's colour (yours gold and
+/// thicker), each outlined so six read apart on the dark; the boss's HP on the right-hand scale with the thirds and the moment
+/// it crossed each; deaths marked on the member's line; the kill or the wipe at the end. Each line's name and DPS so far
+/// stand at its right end, in a column of their own, never over each other.</item>
+/// <item>Under it, smaller, healing and damage taken a second when the record has them.</item>
 /// </list>
-/// Each figure comes from the record (store v2's seconds); a graph with nothing behind it is not drawn. A hover shows every
-/// line's value at that second, a crosshair across all three. Each chart is drawn in one pass (<see cref="DrawingContext"/>:
-/// geometry and text, never an element a point); a live fight's are drawn again at most every <see cref="LiveFrameMs"/>, and
-/// only for whole seconds. Each card has its own Copy picture (the share frame, Ui/MeterShare.cs).
+/// The frame stands still: a live fight's time runs from 0 to the length this boss usually takes (your best kill of it, else
+/// your last pull, else 3:00), longer only in big steps when the fight runs past it; the DPS scale starts at the best this
+/// boss has seen and steps up only when a line passes it. Only the lines grow. A kept fight is the same graph, its time exactly
+/// start to finish. Lines are a 2 s average, so bursts and drops show. The hover reads every line and the boss's HP at a
+/// second, a crosshair across both graphs. Each graph is drawn in one pass (<see cref="DrawingContext"/>: geometry and text,
+/// never an element a point) and kept frozen; a live fight's are drawn again at most every <see cref="LiveFrameMs"/>, and only
+/// for whole seconds. Each has its own Copy picture (the share frame, Ui/MeterShare.cs).
 /// </summary>
 static class ParserGraphs
 {
-    public const string Dps = "dps", Hp = "hp", Heal = "heal";
-    public static readonly string[] Kinds = { Dps, Hp, Heal };
-    /// <summary>
-    /// The smoothing the lines are drawn with (<see cref="Gauss"/>'s sigma, in seconds): 2, about a 5 s window, for most fights;
-    /// 3 (7 s) past four minutes and 4 (9 s) past six, so a long fight's line still reads. The hover says the window (2k+1 s).
-    /// </summary>
-    public static int SmoothOf(int seconds) => Math.Clamp((int)Math.Round(seconds / 90.0), 2, 4);
+    public const string Dps = "dps", Heal = "heal";
+    public static readonly string[] Kinds = { Dps, Heal };
+    /// <summary>The lines' smoothing: a Gaussian of this sigma (seconds), about a 2 s window, so bursts and drops show.</summary>
+    public const double Sigma = 0.85;
+    /// <summary>The window the hover names.</summary>
+    public const int AverageSeconds = 2;
+    /// <summary>A live fight's time scale before anything is known of the boss.</summary>
+    public const double DefaultSeconds = 180;
     /// <summary>A live fight's graphs are drawn again at most this often (the data moves a second at a time anyway).</summary>
     public const int LiveFrameMs = 250;
-    /// <summary>For the options test: the charts drawn since the start (each base layer's pass).</summary>
+    /// <summary>For the options test: the charts drawn since the start (each a fresh frozen drawing).</summary>
     internal static int Draws;
     /// <summary>For the options test's CPU measure: the time spent working the graphs out and drawing them, in ms.</summary>
     internal static double DataMs, DrawMs;
 
     // ================================================================ the data
 
-    public sealed class Line { public long Id; public string Name = ""; public Color Color; public bool You; public double[] Raw = Array.Empty<double>(); public double[] S = Array.Empty<double>(); }
+    public sealed class Line
+    {
+        public long Id; public string Name = ""; public Color Color; public bool You;
+        public double[] Raw = Array.Empty<double>(); public double[] S = Array.Empty<double>();
+        /// <summary>Its figure for the fight so far (the label at its end): damage or healing a second over the seconds drawn.</summary>
+        public double Avg;
+    }
 
-    /// <summary>What the three graphs are drawn from, worked out once a draw from the fight's view.</summary>
+    /// <summary>What the graphs are drawn from, worked out once a draw from the fight's view.</summary>
     public sealed class Set
     {
-        /// <summary>The seconds drawn: a live fight's whole seconds (the one under way is still filling), a kept one's all.</summary>
+        /// <summary>The seconds of data: a live fight's whole seconds (the one under way is still filling), a kept one's all.</summary>
         public int N;
         public bool Live;
         public string Outcome = "";
+        /// <summary>The frame: the time axis's length (seconds) and the two value scales' tops. Fixed while a fight runs (see the class).</summary>
+        public double Extent, YMax, HealMax;
+        /// <summary>The right-hand column for the lines' names and figures, wide enough for the widest (DIPs).</summary>
+        public double Gutter = 100;
         public List<Line> Members = new();
         public double[]? HpLeft;
+        /// <summary>Live: the boss's HP now (the ring's figure; the line stops at the last whole second).</summary>
+        public double? HpNow;
         public List<(double At, string Name, long Id)> Deaths = new();
         public List<Line> Healers = new();
         public double[]? Taken;
+        public double TakenAvg;
         public List<Line> Takers = new();
-        public string Sig = "";
-        /// <summary>The smoothing (seconds each side) and, live, the boss's HP now (the ring's figure; the line stops at the last whole second).</summary>
-        public int K = 2;
         /// <summary>The fight's time as the hero says it (a kill's label matches its clock).</summary>
         public string Clock = "";
-        public double? HpNow;
-        public bool HasStack => Members.Count > 1;
-        public bool Has(string kind) => N >= 2 && kind switch { Dps => Members.Count > 0, Hp => HpLeft != null || HasStack, Heal => Healers.Count > 0 || Taken != null, _ => false };
+        public string Sig = "";
+        public bool Has(string kind) => N >= 2 && kind switch { Dps => Members.Count > 0, Heal => Healers.Count > 0 || Taken != null, _ => false };
     }
 
     /// <summary>Your line's gold: the window's on a dark look, a deeper one on Daylight so it keeps its contrast (as GoldInk).</summary>
     static Color YouColor => Dark ? Gold : Color.FromRgb(0xD0, 0x86, 0x00);
 
-    /// <summary>
-    /// A Gaussian rolling average (sigma <paramref name="k"/> seconds, out to three sigma, weighed again at the ends): a skill's
-    /// steady rhythm (a hit every 3 s) smooths flat instead of drawing as a comb, as a plain window of 5 or 7 s would.
-    /// </summary>
-    public static double[] Gauss(IReadOnlyList<double> s, int k)
+    /// <summary>A Gaussian rolling average (sigma <paramref name="sigma"/> seconds, out to three sigma, weighed again at the ends).</summary>
+    public static double[] Gauss(IReadOnlyList<double> s, double sigma)
     {
-        int r = 3 * k;
+        int r = Math.Max(1, (int)Math.Ceiling(3 * sigma));
         var w = new double[r + 1];
-        for (int j = 0; j <= r; j++) w[j] = Math.Exp(-0.5 * j * j / (double)(k * k));
+        for (int j = 0; j <= r; j++) w[j] = Math.Exp(-0.5 * j * j / (sigma * sigma));
         var o = new double[s.Count];
         for (int i = 0; i < s.Count; i++)
         {
@@ -94,6 +105,47 @@ static class ParserGraphs
 
     static double[] Pad(IReadOnlyList<long>? l, int n) { var r = new double[n]; if (l != null) for (int i = 0; i < n && i < l.Count; i++) r[i] = l[i]; return r; }
 
+    /// <summary>The value scales' steps: 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8 of each power of ten. A scale only ever moves up one of these.</summary>
+    static readonly double[] Ladder = Enumerable.Range(2, 6).SelectMany(p => new[] { 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8 }.Select(m => m * Math.Pow(10, p))).ToArray();
+    public static double Step(double v) => Ladder.FirstOrDefault(x => x >= v, Ladder[^1]);
+
+    /// <summary>
+    /// A live fight's time scale: the length this boss usually takes (your best kill of it, else your last pull of it, else
+    /// <see cref="DefaultSeconds"/>) with a little room, in half minutes; half as long again each time the fight runs past it.
+    /// A kept fight's: exactly its length.
+    /// </summary>
+    public static double ExtentOf(FightView v, int n, bool live)
+    {
+        double end = Math.Max(1, n - 1);
+        if (!live) return end;
+        static double Up30(double x) => Math.Ceiling(x / 30) * 30;
+        double ext = Up30(Math.Max(60, (v.Best?.Seconds ?? v.Last?.Seconds ?? DefaultSeconds) * 1.1));
+        while (end > ext) ext = Up30(ext * 1.5);
+        return ext;
+    }
+
+    static readonly Dictionary<string, double> _pastPeak = new();
+    /// <summary>The best a member's line reached in your best and last pulls of this boss (the DPS scale starts there; 0: none).</summary>
+    static double PastPeak(FightView v)
+    {
+        var refs = new[] { v.Best, v.Last }.Where(r => r != null).Select(r => r!.E).ToList();
+        if (refs.Count == 0) return 0;
+        string key = string.Join("|", refs.Select(e => e.Id));
+        if (_pastPeak.TryGetValue(key, out var peak)) return peak;
+        peak = 0;
+        foreach (var e in refs)
+            foreach (var f in e.Members)
+                if ((e.BossView ? f.BossPerSecond : f.PerSecond) is { Count: > 1 } ps) peak = Math.Max(peak, Gauss(ps.Select(x => (double)x).ToList(), Sigma).Max());
+        if (_pastPeak.Count > 200) _pastPeak.Clear();
+        return _pastPeak[key] = peak;
+    }
+
+    static readonly Typeface MeasureFace = new(PK.Face, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    static double Wide(string s, double size) => new FormattedText(s, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, MeasureFace, size, Brushes.Black, 1).WidthIncludingTrailingWhitespace;
+
+    /// <summary>A figure as the end labels write it: whole up to 99,999, then "123K".</summary>
+    public static string Fig(double v) => v < 99_999.5 ? Int(v) : Amounts.Short(v);
+
     public static Set Of(FightView v, bool live)
     {
         var e = v.E;
@@ -104,10 +156,13 @@ static class ParserGraphs
         s.N = Math.Max(0, n);
         if (s.N < 2) { s.Sig = "none"; return s; }
         n = s.N;
-        s.K = SmoothOf(n);
         s.Clock = BossParser.Clock(e.Duration(v.Now));
         if (live) s.HpNow = e.BossHpLeft;
-        Line Of(MemberView m, IReadOnlyList<long>? l) { var raw = Pad(l, n); return new Line { Id = m.F.Id, Name = ParserRows.NameOf(m.F), Color = m.You ? YouColor : ClassArt.ColorOf(m.F.Class), You = m.You, Raw = raw, S = Gauss(raw, s.K) }; }
+        Line Of(MemberView m, IReadOnlyList<long>? l)
+        {
+            var raw = Pad(l, n);
+            return new Line { Id = m.F.Id, Name = ParserRows.NameOf(m.F), Color = m.You ? YouColor : ClassArt.ColorOf(m.F.Class), You = m.You, Raw = raw, S = Gauss(raw, Sigma), Avg = raw.Sum() / Math.Max(1, n) };
+        }
         foreach (var m in dealers.OrderBy(m => m.Rank)) s.Members.Add(Of(m, m.PerSecond));
         if (e.BossHpPerSecond is { Count: > 1 } hps)
         {
@@ -126,9 +181,19 @@ static class ParserGraphs
             foreach (var m in takers) s.Takers.Add(Of(m, m.F.TakenPerSecond));
             var sum = new double[n];
             foreach (var t in s.Takers) for (int i = 0; i < n; i++) sum[i] += t.Raw[i];
-            s.Taken = Gauss(sum, s.K);
+            s.Taken = Gauss(sum, Sigma);
+            s.TakenAvg = sum.Sum() / n;
         }
-        s.Sig = string.Join("|", n, s.Members.Sum(m => m.Raw.Sum()), s.Members.Count, s.HpLeft?[^1] ?? -1, s.Healers.Sum(h => h.Raw.Sum()), s.Taken?.Sum() ?? -1, s.Deaths.Count, s.Outcome);
+        // the frame: the time from what this boss usually takes, the DPS scale from the best seen on it, each moving only in steps
+        s.Extent = ExtentOf(v, n, live);
+        double peak = s.Members.Count > 0 ? s.Members.Max(m => m.S.Max()) : 0, past = PastPeak(v);
+        s.YMax = Step(Math.Max(past > 0 ? past * 1.05 : 5_000, peak * 1.04));
+        s.HealMax = Step(Math.Max(2_000, Math.Max(s.Healers.Select(h => h.S.Max()).DefaultIfEmpty(0).Max(), s.Taken?.Max() ?? 0) * 1.04));
+        // the names' column: the widest name with a figure as wide as it can get
+        double fig = Wide("88,888", 10.5) + 8;
+        var names = s.Members.Select(m => m.Name).Concat(s.Healers.Select(h => h.Name)).Append(L.T("Boss HP")).Append(s.Taken != null ? L.T("Damage taken") : "");
+        s.Gutter = Math.Clamp(names.Max(x => Wide(x, 10.5)) + fig + 22, 96, 170);
+        s.Sig = string.Join("|", n, s.Members.Sum(m => m.Raw.Sum()), s.Members.Count, s.HpLeft?[^1] ?? -1, s.HpNow ?? -1, s.Healers.Sum(h => h.Raw.Sum()), s.Taken?.Sum() ?? -1, s.Deaths.Count, s.Outcome, s.Extent, s.YMax);
         return s;
     }
 
@@ -136,21 +201,26 @@ static class ParserGraphs
 
     public sealed class Pal
     {
-        public Brush Ink = null!, Muted = null!, Faint = null!, Grid = null!, Box = null!, BoxEdge = null!, Back = null!;
-        public Color InkC;
+        public Brush Ink = null!, Muted = null!, Faint = null!, Grid = null!, GridMajor = null!, Box = null!, BoxEdge = null!, Back = null!;
+        public Color InkC, Under;
+        public bool Dark;
         public Typeface Semi = null!, Bold = null!;
         public static Pal Now()
         {
-            bool dark = Dark;
+            bool dark = PK.Dark;
             var ink = K("Ink");
             return new Pal
             {
+                Dark = dark,
                 Ink = ink, Muted = K("Muted"), Faint = K("Faint"),
                 InkC = (ink as SolidColorBrush)?.Color ?? (dark ? White : Black),
-                Grid = C(dark ? White : Black, dark ? 0.08 : 0.09),
+                Grid = C(dark ? White : Black, dark ? 0.055 : 0.07),
+                GridMajor = C(dark ? White : Black, dark ? 0.10 : 0.12),
                 Box = C(dark ? Color.FromRgb(0x10, 0x13, 0x1B) : Color.FromRgb(0xFF, 0xFF, 0xFF), 0.97),
                 BoxEdge = C(dark ? White : Black, dark ? 0.16 : 0.14),
                 Back = C(dark ? Color.FromRgb(0x0C, 0x0E, 0x14) : White, dark ? 0.7 : 0.78),
+                // the outline under each line: the card's own dark (or white on Daylight), so crossing lines stay apart
+                Under = dark ? Color.FromRgb(0x0A, 0x0C, 0x12) : Colors.White,
                 Semi = new Typeface(PK.Face, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
                 Bold = new Typeface(PK.Face, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
             };
@@ -160,8 +230,8 @@ static class ParserGraphs
     // ================================================================ one chart
 
     /// <summary>
-    /// One graph, drawn in one pass: the axes, the series as frozen geometry, the labels as formatted text. The hover is a
-    /// layer of its own over it, so a mouse move never draws the series again.
+    /// One graph, drawn in one pass and kept frozen: WPF renders a chart again whenever the page around it is laid out anew (a
+    /// live fight's page is, on every hit), and that only replays the drawing. The hover is a layer of its own over it.
     /// </summary>
     public sealed class Chart : FrameworkElement
     {
@@ -170,9 +240,12 @@ static class ParserGraphs
         readonly DrawingVisual _hover = new();
         Set? _set;
         Rect _plot;
-        double _yMax, _xSpan;
         int? _hoverAt; bool _hoverBox;
-        /// <summary>The panel's crosshair: a second hovered here (null: none), so the other charts mark it too.</summary>
+        DrawingGroup? _cache;
+        (Set? Set, Size Size, double Dpi) _cacheFor;
+        /// <summary>The healing's graph under the fight's on the page: the fight's graph writes the times for both.</summary>
+        public bool SharedTime;
+        /// <summary>The panel's crosshair: a second hovered here (null: none), so the other chart marks it too.</summary>
         public Action<int?>? Hovered;
 
         public Chart(string kind, Pal p)
@@ -180,7 +253,7 @@ static class ParserGraphs
             Kind = kind; _p = p;
             AddVisualChild(_hover);
             ClipToBounds = true; Cursor = Cursors.Cross; SnapsToDevicePixels = true;
-            AutomationProperties.SetName(this, kind switch { Dps => "DPS over the fight graph", Hp => "Boss HP and group DPS graph", _ => "Healing and damage taken graph" });
+            AutomationProperties.SetName(this, kind == Dps ? "DPS and boss HP graph" : "Healing and damage taken graph");
             MouseMove += (_, ev) => { var at = SecondAt(ev.GetPosition(this).X); Hovered?.Invoke(at); ShowHover(at, true); };
             MouseLeave += (_, _) => { Hovered?.Invoke(null); ShowHover(null, false); };
         }
@@ -193,28 +266,25 @@ static class ParserGraphs
 
         int? SecondAt(double x)
         {
-            if (_set is not { N: >= 2 } s || _plot.Width <= 0) return null;
-            return (int)Math.Clamp(Math.Round((x - _plot.Left) / _plot.Width * _xSpan), 0, s.N - 1);
+            if (_set is not { N: >= 2 } s || _plot.Width <= 0 || x > _plot.Right + 2) return null;
+            return (int)Math.Clamp(Math.Round((x - _plot.Left) / _plot.Width * s.Extent), 0, s.N - 1);
         }
 
-        double X(double t) => _plot.Left + t / _xSpan * _plot.Width;
-        double Y(double v) => _plot.Bottom - Math.Clamp(v / _yMax, 0, 1.04) * _plot.Height;
+        double X(double t) => _plot.Left + t / _set!.Extent * _plot.Width;
+        double Y(double v) => _plot.Bottom - Math.Clamp(v / Top, 0, 1.02) * _plot.Height;
         double YHp(double hp) => _plot.Bottom - Math.Clamp(hp, 0, 1) * _plot.Height;
+        double Top => Kind == Dps ? _set!.YMax : _set!.HealMax;
 
         FormattedText Ft(string s, double size, Brush b, bool bold = false) =>
             new(s, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? _p.Bold : _p.Semi, size, b, VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-        static Pen P(Brush b, double w, bool dash = false)
+        static Pen P(Brush b, double w, bool dash = false, double on = 2, double off = 3)
         {
             var p = new Pen(b, w) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
-            if (dash) p.DashStyle = new DashStyle(new double[] { 2, 3 }, 0);
+            if (dash) p.DashStyle = new DashStyle(new[] { on, off }, 0);
             p.Freeze();
             return p;
         }
-
-        /// <summary>The chart as last drawn (frozen), and what for: WPF renders a chart again whenever the page around it is laid out anew (a live fight's page is, on every hit), and that only replays this.</summary>
-        DrawingGroup? _cache;
-        (Set? Set, Size Size, double Dpi) _cacheFor;
 
         protected override void OnRender(DrawingContext dc)
         {
@@ -244,43 +314,40 @@ static class ParserGraphs
                 dc.DrawText(wait, new Point((size.Width - wait.Width) / 2, (size.Height - wait.Height) / 2));
                 return;
             }
-            _xSpan = Math.Max(1, s.N - 1);
-            bool hpAxis = Kind == Hp && s.HpLeft != null && s.HasStack;
-            _plot = new Rect(new Point(42, 8), new Point(size.Width - (hpAxis ? 40 : 12), size.Height - 20));
-            switch (Kind)
-            {
-                case Dps: DrawDps(dc, s); break;
-                case Hp: DrawHp(dc, s); break;
-                default: DrawHeal(dc, s); break;
-            }
+            // the healing's graph sits under the fight's on the same time scale: its times are the fight's, not written again
+            _plot = new Rect(new Point(46, 8), new Point(Math.Max(120, size.Width - s.Gutter), size.Height - (Kind == Dps || !SharedTime ? 20 : 6)));
+            Frame(dc, s);
+            if (Kind == Dps) DrawFight(dc, s); else DrawHeal(dc, s);
         }
 
-        // ---- the frame: the value grid on the left, the time along the foot
+        // ---- the frame: time across (a light line every 15 or 30 s), the value scale up the left, quarters
 
-        void Grid(DrawingContext dc, double max, Func<double, string>? label = null)
+        void Frame(DrawingContext dc, Set s)
         {
-            _yMax = Nice(Math.Max(1, max * 1.08));
-            var thin = P(_p.Grid, 1, dash: true);
-            for (int k = 0; k <= 2; k++)
+            var minor = P(_p.Grid, 1); var major = P(_p.GridMajor, 1);
+            // the value scale: a line at each quarter, labelled where there's room
+            bool quarters = _plot.Height >= 110;
+            for (int k = 0; k <= 4; k++)
             {
-                double v = _yMax * k / 2, y = Math.Round(Y(v)) + 0.5;
-                dc.DrawLine(k == 0 ? P(_p.Grid, 1) : thin, new Point(_plot.Left, y), new Point(_plot.Right, y));
-                var t = Ft(label?.Invoke(v) ?? Amounts.Short(v), 10, _p.Faint);
+                if (!quarters && k % 2 == 1) continue;
+                double v = Top * k / 4, y = Math.Round(Y(v)) + 0.5;
+                dc.DrawLine(k == 0 ? major : minor, new Point(_plot.Left, y), new Point(_plot.Right, y));
+                var t = Ft(Amounts.Short(v), 10, _p.Faint);
                 dc.DrawText(t, new Point(_plot.Left - 6 - t.Width, y - t.Height / 2));
             }
-            TimeAxis(dc);
-        }
-
-        void TimeAxis(DrawingContext dc)
-        {
-            double perPx = _xSpan / Math.Max(1, _plot.Width);
-            double step = new[] { 5.0, 10, 15, 20, 30, 60, 90, 120, 180, 300, 600 }.FirstOrDefault(st => st / perPx >= 64, 900);
-            for (double t = 0; t <= _xSpan + 0.01; t += step)
+            // time: a light line every 15 s (30 s, a minute on a long frame), labelled where the labels don't crowd
+            double step = s.Extent <= 150 ? 15 : s.Extent <= 330 ? 30 : s.Extent <= 660 ? 60 : 120;
+            double perLabel = Math.Ceiling(46 / (step / s.Extent * _plot.Width));
+            int idx = 0;
+            for (double t = 0; t <= s.Extent + 0.01; t += step, idx++)
             {
-                var ft = Ft(Clock(t), 10, _p.Faint);
-                double x = Math.Clamp(X(t) - ft.Width / 2, 0, RenderSize.Width - ft.Width);
-                dc.DrawText(ft, new Point(x, _plot.Bottom + 4));
+                double x = Math.Round(X(t)) + 0.5;
+                if (t > 0) dc.DrawLine(t % 60 == 0 ? major : minor, new Point(x, _plot.Top), new Point(x, _plot.Bottom));
+                if (idx % perLabel != 0 || (Kind == Heal && SharedTime)) continue;
+                var ft = Ft(PK.Clock(t), 10, _p.Faint);
+                dc.DrawText(ft, new Point(Math.Clamp(x - ft.Width / 2, 0, _plot.Right - ft.Width / 2), _plot.Bottom + 4));
             }
+            dc.DrawLine(major, new Point(_plot.Right + 0.5, _plot.Top), new Point(_plot.Right + 0.5, _plot.Bottom));
         }
 
         // ---- the series
@@ -294,7 +361,7 @@ static class ParserGraphs
                 var pts = new Point[s.Count];
                 for (int i = 0; i < s.Count; i++) pts[i] = new Point(X(i), y(s[i]));
                 ctx.BeginFigure(pts[0], false, false);
-                if (_plot.Width / Math.Max(1, s.Count) < 3) ctx.PolyLineTo(pts.Skip(1).ToList(), true, true);
+                if (_plot.Width / Math.Max(1, _set!.Extent) < 3) ctx.PolyLineTo(pts.Skip(1).ToList(), true, true);
                 else
                     for (int i = 0; i < pts.Length - 1; i++)
                     {
@@ -308,44 +375,112 @@ static class ParserGraphs
             return g;
         }
 
-        /// <summary>The band between two series (a stacked part, or a series and the floor).</summary>
-        StreamGeometry Band(IReadOnlyList<double> top, IReadOnlyList<double>? under, Func<double, double> y)
+        /// <summary>The area under a series, down to the floor.</summary>
+        StreamGeometry Area(IReadOnlyList<double> top, Func<double, double> y)
         {
             var g = new StreamGeometry();
             using (var ctx = g.Open())
             {
-                ctx.BeginFigure(new Point(X(0), y(top[0])), true, true);
-                var pts = new List<Point>(top.Count * 2);
-                for (int i = 1; i < top.Count; i++) pts.Add(new Point(X(i), y(top[i])));
-                for (int i = top.Count - 1; i >= 0; i--) pts.Add(new Point(X(i), under == null ? _plot.Bottom : y(under[i])));
+                ctx.BeginFigure(new Point(X(0), _plot.Bottom), true, true);
+                var pts = new List<Point>(top.Count + 1);
+                for (int i = 0; i < top.Count; i++) pts.Add(new Point(X(i), y(top[i])));
+                pts.Add(new Point(X(top.Count - 1), _plot.Bottom));
                 ctx.PolyLineTo(pts, false, true);
             }
             g.Freeze();
             return g;
         }
 
-        void Series(DrawingContext dc, Line l, double thick)
+        /// <summary>A member's line: an outline of the card's dark under it so lines that cross stay apart; yours glows gold.</summary>
+        void Series(DrawingContext dc, Line l, double thick, Func<double, double> y)
         {
-            var g = Curve(l.S, Y);
-            if (l.You) dc.DrawGeometry(null, P(C(l.Color, 0.22), thick + 5), g);   // yours glows (a wide soft pen under it, no effect)
-            dc.DrawGeometry(null, P(C(l.Color, l.You ? 1 : 0.92), thick), g);
-            if (_set!.Live) dc.DrawEllipse(C(l.Color), null, new Point(X(l.S.Length - 1), Y(l.S[^1])), l.You ? 3.4 : 2.6, l.You ? 3.4 : 2.6);   // the line's head while it grows
+            var g = Curve(l.S, y);
+            if (l.You) dc.DrawGeometry(null, P(C(l.Color, 0.20), thick + 7), g);
+            dc.DrawGeometry(null, P(C(_p.Under, _p.Dark ? 0.75 : 0.9), thick + 2.6), g);
+            dc.DrawGeometry(null, P(C(l.Color, l.You ? 1 : 0.95), thick), g);
+            if (_set!.Live) { var head = new Point(X(l.S.Length - 1), y(l.S[^1])); dc.DrawEllipse(C(_p.Under), null, head, l.You ? 4.6 : 3.8, l.You ? 4.6 : 3.8); dc.DrawEllipse(C(l.Color), null, head, l.You ? 3.2 : 2.5, l.You ? 3.2 : 2.5); }
         }
 
-        void DrawDps(DrawingContext dc, Set s)
+        void DrawFight(DrawingContext dc, Set s)
         {
-            Grid(dc, s.Members.Max(m => m.S.Max()));
-            foreach (var l in s.Members.Where(m => !m.You).Reverse()) Series(dc, l, 1.7);
-            foreach (var l in s.Members.Where(m => m.You)) Series(dc, l, 2.8);
-            // a death: a coral mark on the member's line at its second; one label for deaths close together (the name when
-            // alone, "4 deaths" for a wipe's last seconds: the hover names them)
-            var coral = C(Coral); var ring = P(C(Dark ? Black : White, 0.85), 1.5); var cross = P(Brushes.White, 1.4);
+            // the boss's HP behind the lines: its scale on the right (inside the frame), the thirds, a soft area under it
+            if (s.HpLeft is { } hp)
+            {
+                var guide = P(C(_p.InkC, _p.Dark ? 0.22 : 0.28), 1, dash: true, on: 5, off: 4);
+                // the thirds: a dashed guide across, named at the left (the HP line starts at the top there, the right end is the lines')
+                foreach (var th in new[] { 2 / 3.0, 1 / 3.0 })
+                {
+                    double y = Math.Round(YHp(th)) + 0.5;
+                    dc.DrawLine(guide, new Point(_plot.Left, y), new Point(_plot.Right, y));
+                }
+                var fill = new LinearGradientBrush(C(_p.InkC, _p.Dark ? 0.09 : 0.07).Color, C(_p.InkC, 0).Color, 90); fill.Freeze();
+                dc.DrawGeometry(fill, null, Area(hp, YHp));
+            }
+            foreach (var l in s.Members.Where(m => !m.You).Reverse()) Series(dc, l, 1.7, Y);
+            foreach (var l in s.Members.Where(m => m.You)) Series(dc, l, 2.7, Y);
+            if (s.HpLeft is { } h)
+            {
+                // the HP line over the members' (it is the fight's spine): straight, second to second
+                var hpG = new StreamGeometry();
+                using (var ctx = hpG.Open())
+                {
+                    ctx.BeginFigure(new Point(X(0), YHp(h[0])), false, false);
+                    ctx.PolyLineTo(Enumerable.Range(1, h.Length - 1).Select(i => new Point(X(i), YHp(h[i]))).ToList(), true, true);
+                }
+                hpG.Freeze();
+                dc.DrawGeometry(null, P(C(_p.Under, 0.8), 4.2), hpG);
+                dc.DrawGeometry(null, P(C(_p.InkC, 0.9), 2), hpG);
+                foreach (var th in new[] { 2 / 3.0, 1 / 3.0 })
+                {
+                    int i = Array.FindIndex(h, x => x <= th);
+                    if (i <= 0 || h[0] <= th) continue;
+                    var c = new Point(X(i), YHp(th));
+                    dc.DrawEllipse(C(_p.Under), P(C(_p.InkC), 1.6), c, 3.8, 3.8);
+                    var t = Ft(PK.Clock(i), 10, _p.Muted, bold: true);
+                    Label(dc, t, new Point(Math.Clamp(c.X - t.Width / 2, _plot.Left, _plot.Right - t.Width), Math.Max(_plot.Top, c.Y - 6 - t.Height)));
+                }
+            }
+            // the thirds' names over the lines, at the left
+            if (s.HpLeft != null)
+                foreach (var (th, word) in new[] { (2 / 3.0, "⅔"), (1 / 3.0, "⅓") })
+                {
+                    var t = Ft(L.F("{0} HP", word), 10, _p.Muted, bold: true);
+                    Label(dc, t, new Point(_plot.Left + 5, Math.Round(YHp(th)) - t.Height - 1));
+                }
+            Deaths(dc, s);
+            // the end: the kill (mint) or the wipe and the HP it left (coral)
+            if (s.Outcome is "kill" or "wipe")
+            {
+                bool kill = s.Outcome == "kill";
+                double xe = X(s.N - 1);
+                var tone = C(kill ? (_p.Dark ? Mint : Color.FromRgb(0x12, 0x96, 0x58)) : Coral);
+                dc.DrawLine(P(tone, 1.6), new Point(xe, _plot.Top), new Point(xe, _plot.Bottom));
+                var t = Ft(kill ? L.F("Killed at {0}", s.Clock) : L.F("Wiped · {0} HP left", Pct(s.HpLeft?[^1] ?? 0, 0)), 10.5, tone, bold: true);
+                Label(dc, t, new Point(xe - 6 - t.Width, _plot.Top + 14));
+                if (s.HpLeft is { } h2) dc.DrawEllipse(tone, null, new Point(xe, YHp(h2[^1])), 4, 4);
+            }
+            else if (s.Live && s.HpLeft is { } h3)
+            {
+                var head = new Point(X(s.N - 1), YHp(h3[^1]));
+                dc.DrawEllipse(C(_p.InkC, 0.18), null, head, 7, 7);
+                dc.DrawEllipse(C(_p.InkC), null, head, 3.4, 3.4);
+            }
+            // the names and figures at the lines' ends, the boss's HP with them
+            var ends = s.Members.Select(m => (Y: Y(m.S[^1]), Head: new Point(X(m.S.Length - 1), Y(m.S[^1])), Name: m.Name, Value: Fig(m.Avg), Color: m.Color, Bold: m.You)).ToList();
+            if (s.HpLeft is { } h4) ends.Add((YHp(h4[^1]), new Point(X(s.N - 1), YHp(h4[^1])), L.T("Boss HP"), Pct(s.HpNow ?? h4[^1], 0), _p.InkC, true));
+            Ends(dc, s, ends);
+        }
+
+        /// <summary>A death: a coral mark on the member's line at its second; one label for deaths close together.</summary>
+        void Deaths(DrawingContext dc, Set s)
+        {
+            var coral = C(Coral); var ring = P(C(_p.Under, 0.9), 1.5); var cross = P(Brushes.White, 1.4);
             var marks = new List<(Point C, string Name)>();
-            foreach (var (at, name, id) in s.Deaths.OrderBy(d => d.At))
+            foreach (var (at, name, id) in s.Deaths.Where(d => d.At <= s.N).OrderBy(d => d.At))
             {
                 var l = s.Members.FirstOrDefault(m => m.Id == id);
                 int i = (int)Math.Clamp(Math.Round(at), 0, s.N - 1);
-                var c = new Point(X(Math.Min(at, _xSpan)), l != null ? Y(l.S[i]) : _plot.Bottom - 6);
+                var c = new Point(X(Math.Min(at, s.N - 1)), l != null ? Y(l.S[i]) : _plot.Bottom - 6);
                 dc.DrawEllipse(coral, ring, c, 5.5, 5.5);
                 dc.DrawLine(cross, new Point(c.X - 2.2, c.Y - 2.2), new Point(c.X + 2.2, c.Y + 2.2));
                 dc.DrawLine(cross, new Point(c.X - 2.2, c.Y + 2.2), new Point(c.X + 2.2, c.Y - 2.2));
@@ -359,9 +494,54 @@ static class ParserGraphs
                 var t = Ft(group.Count == 1 ? L.F("{0} died", group[0].Name) : L.F("{0} deaths", group.Count), 10.5, coral, bold: true);
                 double x0 = group[0].C.X, x1 = group[^1].C.X, y = group.Min(g => g.C.Y);
                 double tx = x1 + 9 + t.Width <= _plot.Right ? x1 + 9 : x0 - 9 - t.Width;
-                Label(dc, t, new Point(Math.Max(_plot.Left, tx), Math.Clamp(y - t.Height / 2, _plot.Top - 4, _plot.Bottom - t.Height)));
+                Label(dc, t, new Point(Math.Max(_plot.Left, tx), Math.Clamp(y - t.Height / 2, _plot.Top, _plot.Bottom - t.Height)));
                 a = b + 1;
             }
+        }
+
+        /// <summary>
+        /// The end labels: each line's name and figure in the column right of the frame, at its line's height, pushed apart so none
+        /// sits on another; a hairline from a line's head when the label had to move (or, live, from the head across the time
+        /// still to come).
+        /// </summary>
+        void Ends(DrawingContext dc, Set s, List<(double Y, Point Head, string Name, string Value, Color Color, bool Bold)> ends)
+        {
+            if (ends.Count == 0) return;
+            const double gap = 14;
+            var order = ends.OrderBy(x => x.Y).ToList();
+            var ys = new double[order.Count];
+            double top = _plot.Top + 6, bottom = _plot.Bottom - 4;
+            for (int i = 0; i < order.Count; i++) ys[i] = Math.Max(order[i].Y, i == 0 ? top : ys[i - 1] + gap);
+            if (ys[^1] > bottom) { ys[^1] = bottom; for (int i = order.Count - 2; i >= 0; i--) ys[i] = Math.Min(ys[i], ys[i + 1] - gap); }
+            double lx = _plot.Right + 8;
+            for (int i = 0; i < order.Count; i++)
+            {
+                var (y0, head, name, value, color, bold) = order[i];
+                double y = ys[i];
+                bool moved = Math.Abs(y - y0) > 1.5 || head.X < _plot.Right - 2;
+                if (moved) dc.DrawLine(P(C(color, 0.35), 1, dash: head.X < _plot.Right - 2, on: 1, off: 3), new Point(head.X + 4, y0), new Point(lx - 3, y));
+                dc.DrawRoundedRectangle(C(color), null, new Rect(lx, y - 1.5, 7, 3), 1.5, 1.5);
+                var v = Ft(value, 10.5, bold ? (color == _p.InkC ? _p.Ink : GoldInk) : _p.Ink, bold: true);
+                double vx = _plot.Right + s.Gutter - 4 - v.Width;
+                var n = Ft(name, 10.5, C(color, 0.95), bold: bold);
+                n.MaxTextWidth = Math.Max(10, vx - (lx + 11) - 6); n.Trimming = TextTrimming.CharacterEllipsis; n.MaxLineCount = 1;
+                dc.DrawText(n, new Point(lx + 11, y - n.Height / 2));
+                dc.DrawText(v, new Point(vx, y - v.Height / 2));
+            }
+        }
+
+        void DrawHeal(DrawingContext dc, Set s)
+        {
+            if (s.Taken is { } taken)
+            {
+                dc.DrawGeometry(C(Coral, 0.15), null, Area(taken, Y));
+                dc.DrawGeometry(null, P(C(Coral, 0.8), 1.3), Curve(taken, Y));
+            }
+            foreach (var l in s.Healers.Where(h => !h.You).Reverse()) Series(dc, l, 1.8, Y);
+            foreach (var l in s.Healers.Where(h => h.You)) Series(dc, l, 2.4, Y);
+            var ends = s.Healers.Select(h => (Y: Y(h.S[^1]), Head: new Point(X(h.S.Length - 1), Y(h.S[^1])), Name: h.Name, Value: Fig(h.Avg), Color: h.Color, Bold: h.You)).ToList();
+            if (s.Taken is { } t) ends.Add((Y(t[^1]), new Point(X(t.Length - 1), Y(t[^1])), L.T("Damage taken"), Fig(s.TakenAvg), Coral, false));
+            Ends(dc, s, ends);
         }
 
         /// <summary>Words on the chart over a soft backing, so the lines under them never cross them.</summary>
@@ -371,124 +551,6 @@ static class ParserGraphs
             dc.DrawText(t, at);
         }
 
-        void DrawHp(DrawingContext dc, Set s)
-        {
-            Func<double, double> hpY = YHp;
-            if (s.HasStack)
-            {
-                // the members' damage stacked: the group's DPS is the top edge, each band a member's part (the top dealer at the foot)
-                var cum = new List<double[]>();
-                var run = new double[s.N];
-                foreach (var m in s.Members) { run = run.Zip(m.S, (a, b) => a + b).ToArray(); cum.Add(run); }
-                Grid(dc, cum[^1].Max());
-                for (int k = cum.Count - 1; k >= 0; k--)
-                {
-                    var l = s.Members[k];
-                    dc.DrawGeometry(C(l.Color, l.You ? 0.62 : 0.42), null, Band(cum[k], k > 0 ? cum[k - 1] : null, Y));
-                }
-                dc.DrawGeometry(null, P(C(_p.InkC, 0.55), 1.2), Curve(cum[^1], Y));
-            }
-            else
-            {
-                _yMax = 1;
-                var thin = P(_p.Grid, 1, dash: true);
-                foreach (var v in new[] { 0.0, 0.5, 1.0 })
-                {
-                    double y = Math.Round(YHp(v)) + 0.5;
-                    dc.DrawLine(v == 0 ? P(_p.Grid, 1) : thin, new Point(_plot.Left, y), new Point(_plot.Right, y));
-                    var t = Ft(Pct(v, 0), 10, _p.Faint);
-                    dc.DrawText(t, new Point(_plot.Left - 6 - t.Width, y - t.Height / 2));
-                }
-                TimeAxis(dc);
-            }
-            if (s.HpLeft is not { } hp) return;
-            // the thirds (Steven, 2026-11-16: "little tick markers on every 1/3 health of every boss"): a guide at each, and the
-            // moment the boss crossed it
-            var guide = P(C(_p.InkC, 0.22), 1, dash: true);
-            foreach (var (th, word) in new[] { (2 / 3.0, "⅔"), (1 / 3.0, "⅓") })
-            {
-                double y = Math.Round(YHp(th)) + 0.5;
-                dc.DrawLine(guide, new Point(_plot.Left, y), new Point(_plot.Right, y));
-                if (s.HasStack) { var t = Ft(word, 10.5, _p.Muted, bold: true); dc.DrawText(t, new Point(_plot.Right + 6, y - t.Height / 2)); }
-            }
-            if (s.HasStack)
-                foreach (var (v, word) in new[] { (1.0, "100%"), (0.0, "0%") }) { var t = Ft(word, 10, _p.Faint); dc.DrawText(t, new Point(_plot.Right + 6, YHp(v) - t.Height / 2)); }
-            if (!s.HasStack)
-            {
-                // a solo fight: the HP's area lit under its line
-                var fill = new LinearGradientBrush(C(Gold, 0.30).Color, C(Gold, 0.02).Color, 90); fill.Freeze();
-                dc.DrawGeometry(fill, null, Band(hp, null, hpY));
-            }
-            var hpPen = P(C(s.HasStack ? _p.InkC : Gold), 2.2);
-            var hpG = new StreamGeometry();
-            using (var ctx = hpG.Open())
-            {
-                ctx.BeginFigure(new Point(X(0), YHp(hp[0])), false, false);
-                ctx.PolyLineTo(Enumerable.Range(1, hp.Length - 1).Select(i => new Point(X(i), YHp(hp[i]))).ToList(), true, true);
-            }
-            hpG.Freeze();
-            dc.DrawGeometry(null, hpPen, hpG);
-            foreach (var th in new[] { 2 / 3.0, 1 / 3.0 })
-            {
-                int i = Array.FindIndex(hp, x => x <= th);
-                if (i <= 0 || hp[0] <= th) continue;
-                var c = new Point(X(i), YHp(th));
-                dc.DrawEllipse(K("Card") is SolidColorBrush cb ? cb : Brushes.Black, P(C(_p.InkC), 1.6), c, 3.6, 3.6);
-                var t = Ft(Clock(i), 10, _p.Muted, bold: true);
-                double tx = c.X - t.Width / 2;
-                Label(dc, t, new Point(Math.Clamp(tx, _plot.Left, _plot.Right - t.Width), Math.Max(_plot.Top - 6, c.Y - 6 - t.Height)));
-            }
-            // the end: the kill (mint) or the wipe and the HP it left (coral); live, the HP now at the line's head
-            double xe = X(s.N - 1);
-            if (s.Outcome is "kill" or "wipe")
-            {
-                bool kill = s.Outcome == "kill";
-                var tone = C(kill ? (Dark ? Mint : Color.FromRgb(0x12, 0x96, 0x58)) : Coral);
-                dc.DrawLine(P(tone, 1.6), new Point(xe, _plot.Top), new Point(xe, _plot.Bottom));
-                var t = Ft(kill ? L.F("Killed at {0}", s.Clock) : L.F("Wiped · {0} HP left", Pct(hp[^1], 0)), 10.5, tone, bold: true);
-                Label(dc, t, new Point(xe - 6 - t.Width, _plot.Top));
-                dc.DrawEllipse(tone, null, new Point(xe, YHp(hp[^1])), 4, 4);
-            }
-            else if (s.Live)
-            {
-                var head = new Point(xe, YHp(hp[^1]));
-                dc.DrawEllipse(C(Gold, 0.25), null, head, 7, 7);
-                dc.DrawEllipse(C(Gold), null, head, 3.6, 3.6);
-                var t = Ft(Pct(s.HpNow ?? hp[^1], 0), 11, GoldInk, bold: true);
-                Label(dc, t, new Point(Math.Max(_plot.Left, xe - 8 - t.Width), Math.Max(_plot.Top, head.Y - t.Height - 4)));
-            }
-        }
-
-        void DrawHeal(DrawingContext dc, Set s)
-        {
-            double max = Math.Max(s.Healers.Select(h => h.S.Max()).DefaultIfEmpty(0).Max(), s.Taken?.Max() ?? 0);
-            Grid(dc, max * (Legended ? 1.22 : 1));   // the legend's room at the top
-            if (s.Taken is { } taken)
-            {
-                dc.DrawGeometry(C(Coral, 0.16), null, Band(taken, null, Y));
-                dc.DrawGeometry(null, P(C(Coral, 0.8), 1.4), Curve(taken, Y));
-            }
-            foreach (var l in s.Healers.Where(h => !h.You).Reverse()) Series(dc, l, 2);
-            foreach (var l in s.Healers.Where(h => h.You)) Series(dc, l, 2.6);
-            if (!Legended) return;
-            // who each line is, along the top (the card's head has no room beside its title and Copy picture)
-            double x = _plot.Left + 6;
-            var keys = s.Healers.Select(h => (h.Color, h.Name, Area: false)).ToList();
-            if (s.Taken != null) keys.Add((Coral, L.T("damage taken"), true));
-            foreach (var (c, name, area) in keys)
-            {
-                var t = Ft(name, 10.5, _p.Muted, bold: true);
-                if (x + 16 + t.Width > _plot.Right) break;
-                if (area) dc.DrawRoundedRectangle(C(c, 0.35), P(C(c), 1), new Rect(x, _plot.Top + 2, 10, 7), 1.5, 1.5);
-                else dc.DrawRoundedRectangle(C(c), null, new Rect(x, _plot.Top + 4, 11, 3), 1.5, 1.5);
-                dc.DrawText(t, new Point(x + 15, _plot.Top + 5.5 - t.Height / 2));
-                x += 15 + t.Width + 12;
-            }
-        }
-
-        /// <summary>The heal graph draws its own legend along its top (on the page; a picture has it in the head).</summary>
-        public bool Legended;
-
         // ---- the hover: a crosshair at the second, and on the chart under the mouse every line's value then
 
         public void ShowHover(int? at, bool box)
@@ -497,10 +559,10 @@ static class ParserGraphs
             using var dc = _hover.RenderOpen();
             if (at is not int i || _set is not { } s || !s.Has(Kind) || _plot.Width <= 0) return;
             double x = Math.Round(X(i)) + 0.5;
-            dc.DrawLine(P(C(_p.InkC, 0.35), 1), new Point(x, _plot.Top), new Point(x, _plot.Bottom));
+            dc.DrawLine(P(C(_p.InkC, 0.4), 1), new Point(x, _plot.Top), new Point(x, _plot.Bottom));
             if (!box) return;
             var rows = HoverRows(i);
-            var title = Ft(L.F(Kind == Heal ? "{0} · HP a second, {1} s average" : "{0} · {1} s average", Clock(i), 2 * s.K + 1), 10.5, _p.Muted, bold: true);
+            var title = Ft(L.F(Kind == Heal ? "{0} · HP a second, {1} s average" : "{0} · {1} s average", PK.Clock(i), AverageSeconds), 10.5, _p.Muted, bold: true);
             var cells = rows.Select(r => (r.Dot, Name: Ft(r.Name, 11.5, _p.Ink), Value: Ft(r.Value, 11.5, r.Tone ?? _p.Ink, bold: true))).ToList();
             // as many rows as the chart is tall, then a column more beside them (the box never leaves the chart)
             const double rowH = 16;
@@ -509,7 +571,7 @@ static class ParserGraphs
             double colW = cells.Select(c => (c.Dot != null ? 14 : 0) + c.Name.Width + 14 + c.Value.Width).DefaultIfEmpty(0).Max();
             double w = Math.Max(title.Width, cols * colW + (cols - 1) * 16) + 20;
             double h = 9 + title.Height + 4 + per * rowH + 4;
-            double bx = x + 12 + w > RenderSize.Width ? x - 12 - w : x + 12;
+            double bx = x + 12 + w > _plot.Right ? x - 12 - w : x + 12;
             if (bx < 0) bx = Math.Max(0, RenderSize.Width - w);
             double by = Math.Clamp((IsMouseOver ? Mouse.GetPosition(this).Y : _plot.Top + h / 2) - h / 2, 2, Math.Max(2, RenderSize.Height - h - 2));
             dc.DrawRoundedRectangle(_p.Box, P(_p.BoxEdge, 1), new Rect(bx, by, w, h), 7, 7);
@@ -529,82 +591,49 @@ static class ParserGraphs
         public List<(Brush? Dot, string Name, string Value, Brush? Tone)> HoverRows(int i)
         {
             var rows = new List<(Brush?, string, string, Brush?)>();
-            if (_set is not { } s) return rows;
-            switch (Kind)
+            if (_set is not { } s || i >= s.N) return rows;
+            if (Kind == Dps)
             {
-                case Dps:
-                    foreach (var l in s.Members.OrderByDescending(m => m.S[i])) rows.Add((C(l.Color), l.Name, Int(l.S[i]), l.You ? GoldInk : null));
-                    foreach (var d in s.Deaths.Where(d => Math.Abs(d.At - i) <= 1)) rows.Add((C(Coral), L.F("{0} died", d.Name), Clock(d.At), C(Coral)));
-                    break;
-                case Hp:
-                    if (s.HpLeft != null) rows.Add((C(s.HasStack ? _p.InkC : Gold), L.T("Boss HP"), Pct(s.HpLeft[i], 0), null));
-                    if (s.HasStack)
-                    {
-                        double sum = s.Members.Sum(m => m.S[i]);
-                        rows.Add((null, L.T("Group DPS"), Int(sum), null));
-                        foreach (var l in s.Members.OrderByDescending(m => m.S[i])) rows.Add((C(l.Color), l.Name, sum > 0 ? Pct(l.S[i] / sum, 0) : "–", l.You ? GoldInk : _p.Muted));
-                    }
-                    break;
-                default:
-                    foreach (var l in s.Healers.OrderByDescending(h => h.S[i])) rows.Add((C(l.Color), l.Name, Int(l.S[i]), l.You ? GoldInk : null));
-                    if (s.Taken is { } t)
-                    {
-                        rows.Add((C(Coral), L.T("Damage taken"), Int(t[i]), C(Coral)));
-                        foreach (var l in s.Takers.OrderByDescending(x => x.S[i]).Take(3).Where(x => x.S[i] > 0)) rows.Add((null, "  " + l.Name, Int(l.S[i]), _p.Muted));
-                    }
-                    break;
+                foreach (var l in s.Members.OrderByDescending(m => m.S[i])) rows.Add((C(l.Color), l.Name, Int(l.S[i]), l.You ? GoldInk : null));
+                if (s.HpLeft != null) rows.Add((C(_p.InkC), L.T("Boss HP"), Pct(s.HpLeft[i], 0), null));
+                foreach (var d in s.Deaths.Where(d => Math.Abs(d.At - i) <= 1)) rows.Add((C(Coral), L.F("{0} died", d.Name), PK.Clock(d.At), C(Coral)));
+            }
+            else
+            {
+                foreach (var l in s.Healers.OrderByDescending(h => h.S[i])) rows.Add((C(l.Color), l.Name, Int(l.S[i]), l.You ? GoldInk : null));
+                if (s.Taken is { } t)
+                {
+                    rows.Add((C(Coral), L.T("Damage taken"), Int(t[i]), C(Coral)));
+                    foreach (var l in s.Takers.OrderByDescending(x => x.S[i]).Take(3).Where(x => x.S[i] > 0)) rows.Add((null, "  " + l.Name, Int(l.S[i]), _p.Muted));
+                }
             }
             return rows;
         }
     }
 
-    // ================================================================ the cards
+    // ================================================================ the heads
 
-    /// <summary>A graph's title as its data says it (only the parts it has). <paramref name="page"/>: the page's short DPS title (its legend shares the line).</summary>
-    public static string Title(string kind, Set s, bool page = false) => kind switch
+    /// <summary>A graph's title as its data says it (only the parts it has).</summary>
+    public static string Title(string kind, Set s) => kind switch
     {
-        Dps => page ? "DPS" : L.T("DPS over the fight"),
-        Hp => s.HpLeft != null && s.HasStack ? L.T("Boss HP and group DPS") : s.HpLeft != null ? L.T("Boss HP") : L.T("Group DPS"),
+        Dps => s.HpLeft != null ? L.T("DPS and boss HP") : L.T("DPS over the fight"),
         _ => s.Healers.Count > 0 && s.Taken != null ? L.T("Healing and damage taken") : s.Healers.Count > 0 ? L.T("Healing") : L.T("Damage taken"),
     };
 
-    static Border Swatch(Color c, bool area = false) => new()
-    {
-        Width = area ? 10 : 11, Height = area ? 8 : 3, CornerRadius = new CornerRadius(area ? 2 : 1.5), Background = C(c, area ? 0.5 : 1),
-        BorderBrush = area ? C(c) : null, BorderThickness = new Thickness(area ? 1 : 0), Margin = new Thickness(9, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center,
-    };
-
-    /// <summary>The legend: who each line is (the DPS graph's members; the heal graph's healers and the damage taken).</summary>
-    static FrameworkElement Legend(string kind, Set s)
-    {
-        var wp = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        void Add(Color c, string name, bool lit, bool area = false)
-        {
-            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
-            sp.Children.Add(Swatch(c, area));
-            sp.Children.Add(T(name, 10.5, lit ? GoldInk : K("Muted"), FontWeights.SemiBold, trim: false));
-            wp.Children.Add(sp);
-        }
-        if (kind == Dps) foreach (var l in s.Members) Add(l.Color, l.Name, l.You);
-        if (kind == Heal)
-        {
-            foreach (var l in s.Healers) Add(l.Color, l.Name, l.You);
-            if (s.Taken != null) Add(Coral, L.T("damage taken"), false, area: true);
-        }
-        return wp;
-    }
-
-    /// <summary>A graph's head: the title, the legend, and (on the page) its Copy picture.</summary>
-    static Grid Head(TextBlock title, FrameworkElement? legend, FrameworkElement? copy)
+    /// <summary>A graph's head: the title, a quiet line beside it, and (on the page) its Copy picture.</summary>
+    static Grid Head(TextBlock title, FrameworkElement? sub, FrameworkElement? copy)
     {
         var g = Cols(0, -1, 0);
         g.Children.Add(title);
-        if (legend != null) g.Children.Add(Col(M(legend, 10, 0, copy != null ? 10 : 0, 0), 1));
+        if (sub != null) g.Children.Add(Col(M(sub, 10, 0, 10, 0), 1));
         if (copy != null) g.Children.Add(Col(copy, 2));
         return g;
     }
 
     static TextBlock TitleText(string text, double size = 13) => T(text, size, K("Ink"), FontWeights.SemiBold, trim: false);
+
+    /// <summary>The quiet words beside the title: how the lines are averaged (and, live, how far in).</summary>
+    static TextBlock Sub(string text) => T(text, 11, K("Faint"), FontWeights.Medium, trim: false);
 
     /// <summary>A graph's Copy picture: a real button in its head (a picture of this graph in the share frame).</summary>
     static Button CopyButton(string kind, Action<string> copy)
@@ -630,10 +659,10 @@ static class ParserGraphs
     // ================================================================ the page's view: one card, kept across the page's redraws
 
     /// <summary>
-    /// The Graphs tab's view of one fight, one card: the DPS graph across the top (always shown), the boss's HP and the healing
-    /// side by side under a hairline (each only when the record has it; one alone takes the whole row). Kept by the window while
-    /// the same fight shows, so the page's many redraws a second only lay it out again; its charts are drawn when their data
-    /// moves, a live fight's at most every <see cref="LiveFrameMs"/>.
+    /// The Graphs tab's view of one fight, one card: the fight's graph across the top (always), the healing and damage taken
+    /// under a hairline, smaller, when the record has them. Kept by the window while the same fight shows, so the page's many
+    /// redraws a second only lay it out again; its charts are drawn when their data moves, a live fight's at most every
+    /// <see cref="LiveFrameMs"/>.
     /// </summary>
     public sealed class GraphsPanel : Border
     {
@@ -642,15 +671,13 @@ static class ParserGraphs
         readonly Dictionary<string, Chart> _charts = new();
         readonly Dictionary<string, FrameworkElement> _parts = new();
         readonly Dictionary<string, TextBlock> _titles = new();
-        readonly ContentControl _legend = new() { Focusable = false, IsTabStop = false };
-        string _legendSig = "";
-        readonly Grid _row = Cols(-1, 21, -1);
+        readonly TextBlock _sub = Sub("");
         readonly Border _rule;
         (FightView V, bool Live)? _want;
         long _lastDraw;
         DispatcherTimer? _timer;
         Set? _set;
-        double _dpsH = 168, _smallH = 104, _room = double.NaN;
+        double _fightH = 200, _healH = 80, _room = double.NaN;
         /// <summary>For the options test: the times this panel worked its graphs out again.</summary>
         public int Redraws;
 
@@ -660,23 +687,22 @@ static class ParserGraphs
             var body = new StackPanel();
             foreach (var kind in Kinds)
             {
-                var chart = new Chart(kind, _p) { Height = kind == Dps ? _dpsH : _smallH, Legended = kind == Heal };
+                var chart = new Chart(kind, _p) { Height = kind == Dps ? _fightH : _healH, SharedTime = kind == Heal };
                 chart.Hovered = at => { foreach (var c in _charts.Values) if (c != chart) c.ShowHover(at, false); };
                 _charts[kind] = chart;
                 var title = TitleText("", kind == Dps ? 13 : 12.5); _titles[kind] = title;
                 var part = new StackPanel { Tag = "graph-card-" + kind };
-                part.Children.Add(M(Head(title, kind == Dps ? _legend : null, CopyButton(kind, copy)), 0, 0, 0, 4));
+                part.Children.Add(M(Head(title, kind == Dps ? _sub : null, CopyButton(kind, copy)), 0, 0, 0, 4));
                 part.Children.Add(chart);
                 _parts[kind] = part;
+                body.Children.Add(part);
+                if (kind == Dps)
+                {
+                    _rule = new Border { Height = 1, Margin = new Thickness(0, 8, 0, 7), Background = K("CardHair") };
+                    body.Children.Add(_rule);
+                }
             }
-            body.Children.Add(_parts[Dps]);
-            // the row under it: a hairline across, the two graphs either side of a hairline down
-            _rule = new Border { Height = 1, Margin = new Thickness(0, 9, 0, 8), Background = K("CardHair") };
-            body.Children.Add(_rule);
-            _row.Children.Add(_parts[Hp]);
-            _row.Children.Add(Col(new Border { Width = 1, Background = K("CardHair"), HorizontalAlignment = HorizontalAlignment.Center, Tag = "graph-split" }, 1));
-            _row.Children.Add(Col(_parts[Heal], 2));
-            body.Children.Add(_row);
+            _rule ??= new Border();
             Child = Glass(body, new Thickness(12, 9, 12, 8), 14);
         }
 
@@ -716,41 +742,34 @@ static class ParserGraphs
                 bool has = kind == Dps || s.Has(kind);
                 _parts[kind].Visibility = has ? Visibility.Visible : Visibility.Collapsed;
                 if (!has) continue;
-                var title = Title(kind, s, page: true);
+                var title = Title(kind, s);
                 if (_titles[kind].Text != title) _titles[kind].Text = title;
                 _charts[kind].SetData(s);
             }
-            // the legend again only when who is in it changes
-            string sig = string.Join(",", s.Members.Select(m => m.Id + m.Name));
-            if (sig != _legendSig) { _legendSig = sig; _legend.Content = Legend(Dps, s); }
-            // the second row: both side by side, one alone across it, none: gone
-            bool hp = s.Has(Hp), heal = s.Has(Heal);
-            _row.Visibility = _rule.Visibility = hp || heal ? Visibility.Visible : Visibility.Collapsed;
-            _row.Children[1].Visibility = hp && heal ? Visibility.Visible : Visibility.Collapsed;
-            Grid.SetColumn(_parts[Heal], hp ? 2 : 0);
-            Grid.SetColumnSpan(_parts[Hp], heal ? 1 : 3);
-            Grid.SetColumnSpan(_parts[Heal], hp ? 1 : 3);
+            var sub = L.F("{0} s average", AverageSeconds);
+            if (_sub.Text != sub) _sub.Text = sub;
+            _rule.Visibility = s.Has(Heal) ? Visibility.Visible : Visibility.Collapsed;
             Fit(_room);
         }
 
         /// <summary>
-        /// The charts' heights for the room the window leaves under the hero (Steven: pages fit without scrolling): the DPS chart
-        /// takes most, the row under it the rest, each between a floor that still reads and a ceiling that doesn't sprawl.
+        /// The charts' heights for the room the window leaves under the hero (Steven: pages fit without scrolling): the fight's
+        /// graph takes most, the healing the rest, each between a floor that still reads and a ceiling that doesn't sprawl.
         /// </summary>
         public void Fit(double room)
         {
             _room = room;
-            bool row = _row.Visibility == Visibility.Visible;
-            double dps = 168, small = 104;
+            bool heal = _rule.Visibility == Visibility.Visible;
+            double fight = 220, small = 80;
             if (!double.IsNaN(room))
             {
-                double chrome = 19 + 26 + (row ? 18 + 26 : 0);   // the card's padding and edge, the heads, the hairline's room
+                double chrome = 19 + 26 + (heal ? 16 + 26 : 0);   // the card's padding and edge, the heads, the hairline's room
                 double avail = room - chrome;
-                if (row) { dps = Math.Clamp(avail * 0.58, 112, 270); small = Math.Clamp(avail - dps, 74, 180); }
-                else dps = Math.Clamp(avail, 112, 340);
+                if (heal) { fight = Math.Clamp(avail * 0.7, 140, 360); small = Math.Clamp(avail - fight, 64, 150); }
+                else fight = Math.Clamp(avail, 140, 420);
             }
-            if (Math.Abs(dps - _dpsH) > 1) { _dpsH = dps; _charts[Dps].Height = dps; }
-            if (Math.Abs(small - _smallH) > 1) { _smallH = small; _charts[Hp].Height = small; _charts[Heal].Height = small; }
+            if (Math.Abs(fight - _fightH) > 1) { _fightH = fight; _charts[Dps].Height = fight; }
+            if (Math.Abs(small - _healH) > 1) { _healH = small; _charts[Heal].Height = small; }
         }
 
         public void Stop() => _timer?.Stop();
@@ -764,12 +783,11 @@ static class ParserGraphs
         var p = Pal.Now();
         var s = Of(v, v.E.Live);
         if (!s.Has(kind)) kind = Dps;
-        var chart = new Chart(kind, p) { Height = kind == Dps ? 250 : 190 };
+        var chart = new Chart(kind, p) { Height = kind == Dps ? 320 : 170 };
         chart.SetData(s);
         var body = new StackPanel();
-        var sub = s.Live ? L.F("{0} in", Clock(v.E.Duration(v.Now).TotalSeconds)) : "";
-        var title = TitleText(Title(kind, s));
-        body.Children.Add(M(Head(title, Legend(kind, s), sub.Length > 0 ? T(sub, 11.5, K("Muted"), FontWeights.SemiBold) : null), 0, 0, 0, 8));
+        var sub = s.Live ? L.F("{0} in", PK.Clock(v.E.Duration(v.Now).TotalSeconds)) + "  ·  " + L.F("{0} s average", AverageSeconds) : L.F("{0} s average", AverageSeconds);
+        body.Children.Add(M(Head(TitleText(Title(kind, s)), Sub(sub), null), 0, 0, 0, 8));
         body.Children.Add(chart);
         var card = Glass(body, new Thickness(14, 12, 14, 10), 14);
         card.Width = width;
