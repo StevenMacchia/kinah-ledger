@@ -13,7 +13,7 @@ public sealed class HudPrefs
     /// <summary>The panel's size, 0.7 to 2 (70 to 200%).</summary>
     public double Scale { get; set; } = 1;
     /// <summary>The panel's look (HudLooks' keys). Buddy ("card") for everyone until they pick another.</summary>
-    public string Look { get; set; } = HudLooks.Default;   // Buddy since 0.10.103 (Steven, 2026-11-15); Auto from 0.10.91, the Strip before
+    public string Look { get; set; } = HudLooks.Default;   // Modern Glass since 1.0.8 (Steven, 2026-11-17); Buddy from 0.10.103, Auto from 0.10.91, the Strip before
     /// <summary>
     /// Where the player left the Ticker, kept apart from the strip's and the Card's spot (UserPrefs.HudX/HudY): its toasts
     /// hang down, so its place is left of the target bar, not over it. Null until it is dragged.
@@ -45,6 +45,8 @@ public sealed class HudPrefs
     /// of the default leaves it alone. False in every hud.json before 0.10.103.
     /// </summary>
     public bool LookPicked { get; set; }
+    /// <summary>The 1.0.8 move to Modern Glass is done (see <see cref="FromText"/>), so a later pick of Buddy stays.</summary>
+    public bool GlassSettled { get; set; }
 
     public const double MinScale = 0.7, MaxScale = 2;
 
@@ -100,6 +102,14 @@ public sealed class HudPrefs
         {
             if (!saved.LookPicked && string.Equals(saved.Look, HudLooks.Auto, StringComparison.OrdinalIgnoreCase)) saved.Look = HudLooks.Default;
             saved.BuddySettled = true;
+            moved = true;
+        }
+        // 1.0.8 (Steven, 2026-11-17: "make modern glass the default for ppl"): a player on Buddy, the default before, who never
+        // picked a look by hand moves to Modern Glass once; a picked look stays
+        if (!saved.GlassSettled)
+        {
+            if (!saved.LookPicked && string.Equals(saved.Look, HudLooks.Card, StringComparison.OrdinalIgnoreCase)) saved.Look = HudLooks.Default;
+            saved.GlassSettled = true;
             moved = true;
         }
         return saved;

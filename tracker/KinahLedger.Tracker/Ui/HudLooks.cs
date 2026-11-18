@@ -9,14 +9,17 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// How the panel over the game looks (Options › In game › Panel look, 2026-10-25): the Strip it has always been, the Card
 /// (a game tooltip: run, rate, session and the last three pickups) or the Ticker (a small pill and pickups as toasts, the
-/// way the game shows loot). The Card, named Buddy, is the default since 0.10.103 (Default).
+/// way the game shows loot). The default (Default) is Modern Glass since 1.0.8; the Card, named Buddy, was from 0.10.103.
 /// </summary>
 public static class HudLooks
 {
     public const string Strip = "strip", Card = "card", Ticker = "ticker", Capsule = "capsule", Meter = "meter", Float = "float", Auto = "auto";
 
-    /// <summary>A new install's look, and one never picked by hand (HudPrefs.Load): Buddy since 0.10.103 (Steven, 2026-11-15).</summary>
-    public const string Default = Card;
+    /// <summary>
+    /// A new install's look, and one never picked by hand (HudPrefs.Load): Modern Glass since 1.0.8 (Steven, 2026-11-17:
+    /// "make modern glass the default for ppl"); Buddy from 0.10.103.
+    /// </summary>
+    public const string Default = HudThemes.ModernGlass;
 
     /// <param name="Key">Kept in hud.json (HudPrefs.Look).</param>
     /// <param name="Theme">The theme it belongs to (HudThemes, Settings › In game › Theme): Classic for the looks before themes.</param>

@@ -262,20 +262,22 @@ public static partial class WpfApp
         // Buddy the default (0.10.103, Steven 2026-11-15: "make buddy the default view"): a new install, and once a player who
         // never picked a look (the old defaults, the Strip and Auto); a look picked by hand stays
         {
-            string Moved(string json) { var p = HudPrefs.FromText(json, out bool m); return p == null ? "null" : $"{p.Look}{(m ? " moved" : "")}{(p.LookSettled && p.BuddySettled ? "" : " unsettled")}"; }
+            string Moved(string json) { var p = HudPrefs.FromText(json, out bool m); return p == null ? "null" : $"{p.Look}{(m ? " moved" : "")}{(p.LookSettled && p.BuddySettled && p.GlassSettled ? "" : " unsettled")}"; }
             var said = new[]
             {
-                ("an old file on the Strip, never moved", Moved("{\"Look\":\"strip\"}"), "card moved"),
-                ("Auto, the old default", Moved("{\"Look\":\"auto\",\"LookSettled\":true}"), "card moved"),
+                ("an old file on the Strip, never moved", Moved("{\"Look\":\"strip\"}"), "glass moved"),
+                ("Auto, the old default", Moved("{\"Look\":\"auto\",\"LookSettled\":true}"), "glass moved"),
                 ("the Meter, picked", Moved("{\"Look\":\"meter\",\"LookSettled\":true}"), "meter moved"),
                 ("the Strip, picked after 0.10.91", Moved("{\"Look\":\"strip\",\"LookSettled\":true}"), "strip moved"),
-                ("Auto picked after the move", Moved("{\"Look\":\"auto\",\"LookSettled\":true,\"BuddySettled\":true,\"LookPicked\":true}"), "auto"),
+                ("Auto picked after the move", Moved("{\"Look\":\"auto\",\"LookSettled\":true,\"BuddySettled\":true,\"LookPicked\":true,\"GlassSettled\":true}"), "auto"),
                 ("Auto marked picked before any move", Moved("{\"Look\":\"auto\",\"LookSettled\":true,\"LookPicked\":true}"), "auto moved"),
-                ("Buddy, settled", Moved("{\"Look\":\"card\",\"LookSettled\":true,\"BuddySettled\":true}"), "card"),
+                ("Buddy, the default before 1.0.8, never picked", Moved("{\"Look\":\"card\",\"LookSettled\":true,\"BuddySettled\":true}"), "glass moved"),
+                ("Buddy, picked", Moved("{\"Look\":\"card\",\"LookSettled\":true,\"BuddySettled\":true,\"LookPicked\":true}"), "card moved"),
+                ("Buddy after the Glass move", Moved("{\"Look\":\"card\",\"LookSettled\":true,\"BuddySettled\":true,\"GlassSettled\":true}"), "card"),
             };
             var off = said.Where(x => x.Item2 != x.Item3).Select(x => $"{x.Item1}: {x.Item2}, expected {x.Item3}").ToList();
-            Check(off.Count == 0 && HudPrefs.Defaults().Look == HudLooks.Card && new HudPrefs().Look == HudLooks.Card && HudLooks.Parse("nonsense") == HudLooks.Card,
-                "Buddy for a new install and for anything unknown; Auto and the never-moved Strip move to Buddy once, a picked look stays" + (off.Count > 0 ? ": " + string.Join("; ", off) : ""));
+            Check(off.Count == 0 && HudLooks.Default == HudThemes.ModernGlass && HudPrefs.Defaults().Look == HudLooks.Default && new HudPrefs().Look == HudLooks.Default && HudLooks.Parse("nonsense") == HudLooks.Default,
+                "Modern Glass for a new install and for anything unknown (1.0.8); Buddy, Auto and the never-moved Strip move to it once when never picked, a picked look stays" + (off.Count > 0 ? ": " + string.Join("; ", off) : ""));
         }
         // the first run's look step (0.10.103): after the server, one big live drawing of the look under the mouse or picked,
         // Buddy picked and first, a click picks another
@@ -290,23 +292,25 @@ public static partial class WpfApp
             ww.WelcomeServerDoneForTest();
             DoEvents();
             var st = ww.WelcomeLookForTest;
-            Check(!server.StepShown && st.StepShown && st.Picked == HudLooks.Card && st.Staged == HudLooks.Card && st.Outlined == HudLooks.Card
-                && st.Buttons.Count == MainWindow.WelcomeLooks.Length && st.Buttons[0] == HudLooks.Card && st.Buttons.Distinct().Count() == MainWindow.WelcomeLooks.Length,
-                $"first run: Continue opens the look step with Buddy picked, first and drawn (shown {st.StepShown}, picked {st.Picked}, drawn {st.Staged}, {st.Buttons.Count} looks, first {st.Buttons.FirstOrDefault()})");
-            ww.HoverWelcomeLookForTest(HudLooks.Meter); DoEvents();
+            var firstLooks = MainWindow.WelcomeLooksOf(HudThemes.Of(HudLooks.Default));
+            Check(!server.StepShown && st.StepShown && st.Picked == HudLooks.Default && st.Staged == HudLooks.Default && st.Outlined == HudLooks.Default
+                && st.Buttons.SequenceEqual(firstLooks) && st.Buttons[0] == HudLooks.Default,
+                $"first run: Continue opens the look step with Modern Glass picked, first and drawn (shown {st.StepShown}, picked {st.Picked}, drawn {st.Staged}, {st.Buttons.Count} looks, first {st.Buttons.FirstOrDefault()})");
+            string wOther = firstLooks[1], wThird = firstLooks[2];   // two more of the theme shown
+            ww.HoverWelcomeLookForTest(wOther); DoEvents();
             var hov = ww.WelcomeLookForTest.Staged;
             ww.HoverWelcomeLookForTest(null); DoEvents();
             var back = ww.WelcomeLookForTest.Staged;
-            Check(hov == HudLooks.Meter && back == HudLooks.Card && ww.WelcomeLookForTest.Picked == HudLooks.Card, $"hovering a look draws it, leaving draws the picked one again ({hov}, then {back})");
-            ww.PickWelcomeLookForTest(HudLooks.Ticker); DoEvents();
+            Check(hov == wOther && back == HudLooks.Default && ww.WelcomeLookForTest.Picked == HudLooks.Default, $"hovering a look draws it, leaving draws the picked one again ({hov}, then {back})");
+            ww.PickWelcomeLookForTest(wThird); DoEvents();
             st = ww.WelcomeLookForTest;
-            Check(st.Picked == HudLooks.Ticker && st.Outlined == HudLooks.Ticker && st.Staged == HudLooks.Ticker, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
+            Check(st.Picked == wThird && st.Outlined == wThird && st.Staged == wThird, $"a click picks a look: outlined and drawn ({st.Picked}, {st.Outlined}, {st.Staged})");
             // the themes on first run (0.10.136, Steven 2026-11-16): four chips, Classic shown; a theme shows its looks and picks its first
             var th0 = ww.WelcomeThemeForTest;
             ww.PickWelcomeThemeForTest(HudThemes.Wacky); DoEvents();
             var th1 = ww.WelcomeThemeForTest; st = ww.WelcomeLookForTest;
             var wacky = HudThemes.Looks(HudThemes.Wacky).Select(l => l.Key).ToList();
-            Check(th0.Theme == HudThemes.Classic && th0.Chips.Count == HudThemes.All.Length && th1.Theme == HudThemes.Wacky && st.Buttons.SequenceEqual(wacky) && st.Picked == wacky[0] && st.Staged == wacky[0],
+            Check(th0.Theme == HudThemes.Of(HudLooks.Default) && th0.Chips.Count == HudThemes.All.Length && th1.Theme == HudThemes.Wacky && st.Buttons.SequenceEqual(wacky) && st.Picked == wacky[0] && st.Staged == wacky[0],
                 $"first run: the themes' chips ({th0.Chips.Count}), Wacky picked shows its looks and picks its first ({string.Join(",", st.Buttons)}; picked {st.Picked}, drawn {st.Staged})");
             ww.PickWelcomeThemeForTest(HudThemes.Classic); DoEvents();
             st = ww.WelcomeLookForTest;
@@ -318,7 +322,13 @@ public static partial class WpfApp
         // the panel's look (2026-10-25): the Strip until another is picked; the three drawn in Options; the Strip's figures grey out for the others
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
-        Check(w.HudLook == HudLooks.Card && HudLooks.Default == HudLooks.Card && !o.HudFieldHost.IsEnabled, "panel look: Buddy by default (0.10.103, Steven 2026-11-15); the Strip's figure chips greyed for it");
+        Check(w.HudLook == HudLooks.Default && o.HudThemeForTest == HudThemes.Modern && !o.HudFieldHost.IsEnabled,
+            $"panel look: Modern Glass by default (1.0.8, Steven 2026-11-17), its theme shown ({o.HudThemeForTest}); the Strip's figure chips greyed for it");
+        // the Classic checks below start from Buddy, a look never picked (as a player from before 1.0.8 who picked it would not be)
+        o.Close(); DoEvents();
+        w.HudPrefsForTest.Look = HudLooks.Card;
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
         var classic = HudThemes.Looks(HudThemes.Classic);
         Check(o.HudLookHost.Children.Count == classic.Count && classic.Count == 7 && classic[0].Key == HudLooks.Auto && classic[3].Key == HudLooks.Strip && classic[^1].Key == HudLooks.Capsule && o.HudLookPreview.Children.Count == 1,
             $"every Classic look a live thumbnail in Options (Auto, Meter, Float, Badge, Buddy, Pop, then the Capsule at the far right), the one in use drawn at its real size ({o.HudLookHost.Children.Count} thumbnails, {o.HudLookPreview.Children.Count} drawn)");

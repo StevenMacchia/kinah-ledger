@@ -458,6 +458,7 @@ internal static class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine("error: " + ex.Message);
+            Console.Error.WriteLine(ex.StackTrace);
             return 2;
         }
     }

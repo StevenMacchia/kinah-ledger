@@ -141,7 +141,11 @@
             <StackPanel>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource RowTitle}" Text="Theme" VerticalAlignment="Center"/>
+                <!-- "Match the app" under the title, so the five chips keep one line -->
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Theme"/>
+                  <ContentControl x:Name="HudThemeMatchHost" Focusable="False" IsTabStop="False"/>
+                </StackPanel>
                 <WrapPanel x:Name="HudThemeHost" Grid.Column="1" Margin="0,0,0,-6"/>
               </Grid>
               <Border Style="{StaticResource Divider}"/>

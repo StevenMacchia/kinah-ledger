@@ -71,8 +71,12 @@ public sealed class ParserPrefs
     /// options?"): "standard" (its own glass panel, the default) or one of the looks drawn for fights ("auto", "capsule",
     /// "meter", "float"), fight only, apart from the Kinah overlay's look. Settings › In game › Parser › Overlay look.
     /// </summary>
-    public string Look { get; set; } = StandardLook;
+    public string Look { get; set; } = DefaultLook;
     public const string StandardLook = "standard";
+    /// <summary>A new install's meter look: Modern Glass since 1.0.8 (Steven, 2026-11-17: "make modern glass the default for ppl"); the standard panel before.</summary>
+    public const string DefaultLook = Ui.HudThemes.ModernGlass;
+    /// <summary>The 1.0.8 move from the standard panel to Modern Glass is done (<see cref="Settle"/>), so a later pick of Forge stays.</summary>
+    public bool GlassSettled { get; set; }
     /// <summary>A look key the Parser's own window can draw: a fight look's, else the standard panel.</summary>
     public static string LookOf(string? key) => key is "auto" or "capsule" or "meter" or "float" or PodiumLook or ReactorLook || Ui.HudThemes.Themed(key) ? key! : StandardLook;
     /// <summary>The Parser panel's other two looks (Ui/ParserPanel.Skins.cs; "standard" is the first, Forge).</summary>
@@ -158,7 +162,7 @@ public sealed class ParserPrefs
             }
         }
         catch (Exception) { /* a broken file: the defaults */ }
-        return new() { DetailsSettled = true, HonestSettled = true };
+        return new() { DetailsSettled = true, HonestSettled = true, GlassSettled = true };
     }
 
     /// <summary>The one-time moves of a file from before (Group details on; the honest pass's defaults); true when one was made.</summary>
@@ -170,6 +174,9 @@ public sealed class ParserPrefs
         if (p.Mode != "boss") p.Mode = "boss";
         if (p.ListMode.Length > 0 && p.ListMode != "boss") { p.ListMode = ""; p.KindFilter = ""; p.BossFilter = ""; }
         if (!p.DetailsSettled) { p.Details = true; p.DetailsSettled = true; moved = true; }
+        // 1.0.8 (Steven, 2026-11-17: "make modern glass the default for ppl"): the meter on the standard panel, the default
+        // before (Forge only since 1.0.7, an hour earlier), moves to Modern Glass once; GlassSettled keeps a later pick of Forge
+        if (!p.GlassSettled) { if (p.Look == StandardLook) p.Look = DefaultLook; p.GlassSettled = true; moved = true; }
         // the old default width, never picked: Buddy's width (a width the player set stays)
         if (!p.WidthPicked && Math.Abs(p.Width - OldDefaultWidth) < 0.5) p.Width = DefaultWidth;
         if (!p.HonestSettled)
