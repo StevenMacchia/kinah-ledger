@@ -354,7 +354,7 @@ public static partial class WpfApp
                 $"Parser: a row's hover card names {top.Name}, their DPS and {abilityRows} abilities, the biggest first ({string.Join(" | ", texts.Take(8))})");
             check(ParserRows.HoverCard(sample, new KinahLedger.Parser.Fighter { Id = 999 }, at) == null, "...and none for a member with no damage");
             // alone on the meter the foot no longer repeats your row (Steven, 2026-11-17: "isnt the avg thing redundant?"): your
-            // best on this fight, else your peak 5 s, else nothing; with a group, the group's DPS
+            // best on this fight, else your uptime (Steven, 2026-11-18: in place of the peak 5 s), else nothing; with a group, the group's DPS
             {
                 var solo = BossParser.Copy(sample);
                 var me = solo.Roster.FirstOrDefault(f => f.You) ?? solo.Roster.First();
@@ -362,16 +362,21 @@ public static partial class WpfApp
                 foreach (var f in solo.Roster.Where(f => f.Id != me.Id)) { f.Damage = 0; f.BossDamage = 0; f.Abilities.Clear(); }
                 string FootOf(Encounter x) => string.Join(" ", FindTexts(ParserFoot.Line(x, at)).Select(BlockText));
                 string group = FootOf(sample), alone = FootOf(solo);
-                var peak = ParserFoot.PeakDps(solo);
-                string want = peak is { } pk ? "Peak " + Amounts.Meter(pk) : "";
-                check((want.Length == 0 ? !alone.Contains("DPS") : alone.Contains(want)) && !alone.Contains("Your DPS") && !alone.Contains("Group") && group.Contains("Group DPS") && ParserFoot.SoloYou(solo) && !ParserFoot.SoloYou(sample),
-                    $"Parser: alone on the meter the foot shows your peak or best, not your row again; with a group the group's DPS (\"{alone}\" | \"{group}\")");
+                var up = ParserFoot.Uptime(solo, at);
+                string want = up is { } u ? "Uptime " + u.ToString("P0", System.Globalization.CultureInfo.InvariantCulture).Replace(" ", "") : "";
+                // uptime: the seconds with damage over the fight's seconds so far
+                var u1 = new Encounter { Start = at.AddSeconds(-9) };
+                u1.Roster.Add(new Fighter { Id = 1, Name = "Swoly", You = true, Damage = 6, PerSecond = new List<long> { 1, 0, 1, 1, 0, 1, 0, 1, 1, 0 } });
+                double? upHalf = ParserFoot.Uptime(u1, at), upNone = ParserFoot.Uptime(new Encounter { Start = at }, at);
+                check(upHalf is { } uh && Math.Abs(uh - 0.6) < 1e-9 && upNone == null, $"...uptime: 6 of 10 seconds with damage is 60% ({upHalf}), none before any damage ({upNone})");
+                check(want.Length > 0 && alone.Contains(want) && !alone.Contains("Peak") && !alone.Contains("Your DPS") && !alone.Contains("Group") && group.Contains("Group DPS") && ParserFoot.SoloYou(solo) && !ParserFoot.SoloYou(sample),
+                    $"Parser: alone on the meter the foot shows your uptime or best, not your row again; with a group the group's DPS (\"{alone}\" | \"{group}\")");
                 // a best on this fight comes first
                 var keep = ParserRows.BestOf;
                 ParserRows.BestOf = x => new PullRef { E = x, Dps = 28_100 };
                 string withBest = FootOf(solo);
                 ParserRows.BestOf = keep;
-                check(withBest.Contains("Best " + Amounts.Meter(28_100)) && !withBest.Contains("Peak"), $"...with a best on this fight it shows that (\"{withBest}\")");
+                check(withBest.Contains("Best " + Amounts.Meter(28_100)) && !withBest.Contains("Uptime"), $"...with a best on this fight it shows that (\"{withBest}\")");
             }
             var bars = card == null ? new List<double>() : ParserRows.CardBarsForTest(card);
             check(bars.Count == abilityRows && bars.Count > 0 && Math.Abs(bars[0] - 156) < 0.5 && bars.Zip(bars.Skip(1)).All(p => p.First >= p.Second),
