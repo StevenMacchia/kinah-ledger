@@ -102,9 +102,9 @@ public static partial class WpfApp
             int asked = 0; hw.ShareAsked += () => asked++;
             hw.Show(); DoEvents();
             hw.PressShareForTest(); hw.FlashShare("Picture copied", good: true); DoEvents();
-            bool row = hw.ShareRowShownForTest;
+            bool offscreenShut = !hw.ShareRowShownForTest;   // parked off every screen: the tab never opens (it would be pulled onto it)
             hw.Close();
-            check(hw.HasShareForTest && asked == 1 && row, $"meter share: the Kinah overlay has Share under its meter too, and says the picture was copied there (pressed {asked}, said {row})");
+            check(hw.HasShareForTest && asked == 1 && offscreenShut, $"meter share: the Kinah overlay has Share on its meter too, a tab of its own window that never opens off-screen (pressed {asked}, shut off-screen {offscreenShut})");
         }
         var others = kill.Roster.Where(f => !f.Other && !f.You && f.Name.Length > 0).Select(f => f.Name).ToList();
         var figure = new Regex(@"^[\d.,]+[KMB]?$");

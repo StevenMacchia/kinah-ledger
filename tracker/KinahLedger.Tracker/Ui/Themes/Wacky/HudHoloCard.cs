@@ -20,7 +20,7 @@ namespace KinahLedger.Ui;
 /// into glints; a rare drop is a big chip in the grade's colour carrying the item; your best a NEW BEST! chip; a fight's card
 /// drops in with a light sweeping across its foil; a kill throws foil confetti round a K.O.! chip.
 /// </summary>
-sealed class HudHoloCard : WackyLook, IThemeCard
+sealed partial class HudHoloCard : WackyLook, IThemeCard
 {
     const uint Navy = 0x0A0F22, Navy2 = 0x141C3C, Deep = 0x050814, Ice = 0xDCE6FF, Steel = 0x9AA8D8, Cyan = 0x8FEFFF, GoldC = 0xFFE29A, Mint = 0x7AFFC4, Cherry = 0xFF4D6A, Ink = 0x0A0F22;
     static readonly Brush WhiteB = Wk.S(0xFFFFFF), IceB = Wk.S(Ice), SteelB = Wk.S(Steel), GoldB = Wk.S(GoldC), InkB = Wk.S(Ink);
@@ -116,6 +116,7 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         _body.Children.Add(_blob.Root);
         _body.Children.Add(_noteHost);
         _body.Children.Add(_panel.Root);
+        BuildRun();   // the dungeon run's head and splits on the card's face (Ui/Themes/Wacky/HudHoloCard.Run.cs)
         Ground(Op);
     }
 
@@ -157,6 +158,9 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         _line.Children.Clear(); _stats.Children.Clear();
         _ringHost.Child = null;
         _ring = _hour = null;
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Wacky/HudHoloCard.Run.cs)
+        if (RunOf() is { } rs) { DrawRun(rs, f); return; }
+        EndRun();
         bool waiting = !f.Counted || f.Rate.Length == 0;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (mark)
@@ -215,6 +219,13 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         // the best drop and the last three: a second row on the card's face, under the hour
         _pickHost.Child = StripFor(f);
         _pickHost.Margin = new Thickness(3, 3, 0, 2);
+        DrawNote(f);
+        PlaceBean();
+    }
+
+    /// <summary>The note: a midnight chip in its tone under the card.</summary>
+    void DrawNote(Figures f)
+    {
         if (f.Note.Length > 0)
         {
             var nt = Wk.Words(f.Note, 11.5, f.NoteTone, Face, FontWeights.SemiBold);
@@ -223,7 +234,6 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         }
         else _noteHost.Child = null;
         _noteHost.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
-        PlaceBean();
     }
 
     /// <summary>The ring of your best: a cyan arc round a midnight orb in a foil rim, the share in white (gold with a star once beaten).</summary>
@@ -247,7 +257,12 @@ sealed class HudHoloCard : WackyLook, IThemeCard
 
     protected override void DrawTag()
     {
-        if (Due.FirstOrDefault() is not { } i) { _bean.Visibility = Visibility.Collapsed; PlaceBean(); return; }
+        if (Due.FirstOrDefault() is not { } i)
+        {
+            _bean.Visibility = Visibility.Collapsed;
+            if (_runOn && Figs is { } f0 && !KinahHidden) { DrawLine(f0); return; }
+            PlaceBean(); return;
+        }
         var (name, clock, tone) = TagWords(i, DueNow);
         var (hi, lo, lip) = tone == TimerBadge.Tone.On ? (0xD4FFEAu, 0x5BE3A4u, 0x0E5A3Au) : tone == TimerBadge.Tone.Soon ? (0xFFF4CCu, 0xF2C75Au, 0x6A4A00u) : (0xF6F8FFu, 0xC2CCEEu, 0x2A3460u);
         _beanFace.Background = Wk.Lin(0, 0, 0, 1, (hi, 1, 0), (lo, 1, 1));
@@ -255,18 +270,22 @@ sealed class HudHoloCard : WackyLook, IThemeCard
         _beanName.Text = name; _beanName.Visibility = name.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         _beanClock.Text = clock;
         _bean.Visibility = Visibility.Visible;
+        // in a run the line's forms leave room for the tag, or put it on the card's top edge: drawn again for its new width
+        if (_runOn && Figs is { } f && !KinahHidden) { DrawLine(f); return; }
         PlaceBean();
     }
 
     void PlaceBean()
     {
         bool onPanel = KinahHidden && _panel.Root.Visibility == Visibility.Visible;
-        // in a dungeon the tag sits on the fight card's top edge
+        bool onTop = !onPanel && _runOn && _beanAbove;
+        // in a dungeon the tag sits on the fight card's top edge; in a run without room on its line, on the line card's
         if (onPanel && _bean.Parent != _panel.Root) { Detach(_bean); _panel.Root.Children.Add(_bean); }
-        else if (!onPanel && _bean.Parent != _line) { Detach(_bean); _line.Children.Add(_bean); }
-        _bean.HorizontalAlignment = onPanel ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        _bean.VerticalAlignment = onPanel ? VerticalAlignment.Top : VerticalAlignment.Center;
-        _bean.Margin = onPanel ? new Thickness(0, -15, 72, 0) : new Thickness(12, 0, 0, 0);
+        else if (onTop && _bean.Parent != _blob.Root) { Detach(_bean); _blob.Root.Children.Add(_bean); }
+        else if (!onPanel && !onTop && _bean.Parent != _line) { Detach(_bean); _line.Children.Add(_bean); }
+        _bean.HorizontalAlignment = onPanel || onTop ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        _bean.VerticalAlignment = onPanel || onTop ? VerticalAlignment.Top : VerticalAlignment.Center;
+        _bean.Margin = onPanel ? new Thickness(0, -15, 72, 0) : onTop ? new Thickness(0, -14, 18, 0) : new Thickness(12, 0, 0, 0);
         bool lineShown = !KinahHidden || (_bean.Parent == _line && _bean.Visibility == Visibility.Visible);
         _blob.Root.Visibility = lineShown ? Visibility.Visible : Visibility.Collapsed;
         foreach (UIElement ch in _line.Children) if (!ReferenceEquals(ch, _bean)) ch.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;

@@ -72,7 +72,8 @@ sealed partial class HudModernFade : ModernLook
         _line.Children.Add(_lineWash); _line.Children.Add(_lineFx); _line.Children.Add(Lit(_lineBody)); _line.Children.Add(_lineAnchor);
         _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _fightShift;
-        _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
+        _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
+        _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
         _root.Children.Add(_body);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
@@ -93,7 +94,7 @@ sealed partial class HudModernFade : ModernLook
     /// <summary>The wash's strength from the opacity setting: 1 at the usual 90%, a little lighter or richer either side.</summary>
     double WashK => .7 + .35 * _opacity;
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dimmed(Values) + "|" + PickStrip.Sig(Values, Strip);
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dimmed(Values) + "|" + PickStrip.Sig(Values, Strip) + "|" + RunBuddy.Sig(Values);
 
     static bool Dimmed(IReadOnlyDictionary<string, string> v) => (v.TryGetValue("show", out var s) && s == "dim") || (v.TryGetValue("paused", out var p) && p.Length > 0);
 
@@ -152,7 +153,11 @@ sealed partial class HudModernFade : ModernLook
         _line.Opacity = _dim ? .62 : 1;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (mark) { var m = AbyssMark(f.Icon, 36); m.Margin = new Thickness(2, 0, 9, 0); _lineBody.Children.Add(m); }
-        if (!HasHour(f))
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudModernFade.Run.cs)
+        var rs = RunNow();
+        _runHeadLit.Visibility = Visibility.Collapsed;
+        if (rs != null) DrawRun(rs);
+        else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 9, 7, 0, 7);
             _lineBody.Children.Add(w);

@@ -57,13 +57,14 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "parser-replay" or "parser-bench" or "packet-replay" or "packet-live" or "packet-record" or "repair-categories")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "meter-load" or "copy-load" or "event-age" or "parser-replay" or "parser-bench" or "packet-replay" or "packet-live" or "packet-record" or "repair-categories")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
         // ...and the demo windows count with the item list built into this exe, never the copy the site keeps on the player's PC
         // (2026-11-13: that copy names a category "Conversion Resource" where the built-in list says "Substance Morph Material", so the
         // sample had four plain drops on Steven's PC and three on CI, and two Full view checks failed there only)
+        if (cmd is "meter-load") KinahLedger.Ui.Native.NoHotkeys = true;
         if (cmd is "options-test" or "ui-shot")
         {
             KinahLedger.Data.DictionaryCache.DirOverride = TestTemp.Path("KinahLedger-test-items");
@@ -156,6 +157,11 @@ internal static class Program
                 // the Parser's capture-to-screen time over recordings replayed at their own speed (Ui/WpfApp.Parser.cs)
                 case "parser-latency": if (pos.Count == 0) { Console.WriteLine("parser-latency <capture.pcapng>...|synthetic [--mode boss|run|fight] [--minutes N] [--port 13328]"); return 2; }
                     return Ui.WpfApp.ParserLatencyReplay(settings, pos, opts.GetValueOrDefault("mode") ?? "fight", double.TryParse(opts.GetValueOrDefault("minutes"), out var plm) ? plm : 0, int.TryParse(opts.GetValueOrDefault("port"), out var plp) ? plp : 13328);
+                // the live meter's CPU per thread, a party pull fed at real time (Ui/WpfApp.MeterLoad.cs)
+                case "meter-load": return Ui.WpfApp.MeterLoad(settings, opts);
+                // a 4K frame's copy as the window capture makes it, per thread (Ui/WpfApp.MeterLoad.cs); event-age: the Parser's events' age on arrival
+                case "copy-load": return Ui.WpfApp.CopyLoad(opts);
+                case "event-age": if (pos.Count == 0) { Console.WriteLine("event-age <capture.pcapng> [--port 13328]"); return 2; } return Ui.WpfApp.EventAge(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var eap) ? eap : 13328);
                 case "packet-live": return KinahLedger.Packets.PacketTests.Live(settings.ProcessHints, int.TryParse(opts.GetValueOrDefault("seconds"), out var psec) ? psec : 30);
                 case "packet-replay": if (pos.Count == 0) { Console.WriteLine("packet-replay <capture.pcapng> [--port 13328]"); return 2; } return KinahLedger.Packets.PacketTests.Replay(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var pport) ? pport : 13328, settings);
                 case "packet-record": return KinahLedger.Packets.PacketRecord.Run(settings.ProcessHints, opts);
@@ -1781,6 +1787,7 @@ options: --process aion[,other]");
         ok &= Session.CharacterTests.Run(items, s);
         ok &= Upload.BossBestTests.Run();
         ok &= Session.CompareTests.Run(items, s);
+        ok &= Session.RunSplitsTests.Run();
         ok &= Session.WrappedTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);

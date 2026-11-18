@@ -50,6 +50,7 @@ sealed partial class HudModernLine : ModernLook
         BuildFight();
         _body.Children.Add(_fightFill);
         _body.Children.Add(_timerUpHost);
+        _body.Children.Add(_runHead);
         _body.Children.Add(_pillHost);
         _body.Children.Add(_under);
         _root.Children.Add(_body);
@@ -82,7 +83,7 @@ sealed partial class HudModernLine : ModernLook
     protected override string LineSig(Figures f)
     {
         var p = Picks(Values).FirstOrDefault();
-        return base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (p == null ? "" : p.Id + p.Worth + p.Count) + "|" + Values.GetValueOrDefault("paused", "") + "|" + PickStrip.Sig(Values, Strip);
+        return base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (p == null ? "" : p.Id + p.Worth + p.Count) + "|" + Values.GetValueOrDefault("paused", "") + "|" + PickStrip.Sig(Values, Strip) + "|" + RunBuddy.Sig(Values);
     }
 
     static Run R(string s, double size, Brush fg, FontWeight? w = null) => new(s) { FontSize = size, Foreground = fg, FontWeight = w ?? FontWeights.SemiBold };
@@ -194,6 +195,9 @@ sealed partial class HudModernLine : ModernLook
         _paused = Values.TryGetValue("paused", out var ps) && ps.Length > 0;
         // the ring of your best (in the Abyss the points' mark)
         _ringHost.Children.Clear();
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudModernLine.Run.cs)
+        if (RunNow() is { } rs) { DrawRun(rs, f); return; }
+        _runHead.Visibility = Visibility.Collapsed;
         if (f.Abyss && f.Counted && f.Icon.Length > 0) _ringHost.Children.Add(AbyssMark(f.Icon, 34));
         else if (HasRing(f))
         {

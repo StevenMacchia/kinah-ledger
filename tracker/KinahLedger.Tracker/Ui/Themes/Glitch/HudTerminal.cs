@@ -21,7 +21,7 @@ namespace KinahLedger.Ui;
 /// and the screen flickers once; your best passed runs "> record --new  OK"; an entry opening sounds a "BEEP" mark beside
 /// its timer; a fight starts with its boot lines; a kill or a wipe blooms its exit line ("segfault: party wiped").
 /// </summary>
-sealed class HudTerminal : HudThemeLook, IThemeCard
+sealed partial class HudTerminal : HudThemeLook, IThemeCard
 {
     static readonly FontFamily Face = CrtFace;
     const uint PhosC = 0x5CFF9A, PaleC = 0xD6FFE4, AmberC = 0xFFB641, GroundC = 0x031008, RedC2 = 0xFF6B5E;
@@ -84,6 +84,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         Grid.SetColumn(_ok, 1); pl.Children.Add(_ok);
         _runClock.HorizontalAlignment = HorizontalAlignment.Right; _runClock.Margin = new Thickness(16, 0, 0, 0);
         Grid.SetColumn(_runClock, 2); pl.Children.Add(_runClock);
+        BuildRun(pl);   // a dungeon run's cursor after the prompt (Ui/Themes/Glitch/HudTerminal.Run.cs)
         _promptLine.Child = pl;
         _crt.Body.Children.Add(_promptLine);
         _crt.Body.Children.Add(_figLine);
@@ -192,7 +193,7 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         _camGround.Background = Br(GroundC, Math.Min(1, o * 1.12));
     }
 
-    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{Picks(Values).FirstOrDefault()?.Id}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+    protected override string LineSig(Figures f) => $"{base.LineSig(f)}|{Values.GetValueOrDefault("time")}|{Values.GetValueOrDefault("run")}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{Picks(Values).FirstOrDefault()?.Id}|{PickStrip.Sig(Values, Strip)}|{FightWidth}|{RunBuddy.Sig(Values)}";
 
     /// <summary>The pickup strip on the screen: the rule a phosphor hairline, the star amber.</summary>
     static readonly PickStrip.Look Strip = new(22, 5, true, Br(PhosC, .4), Amber);
@@ -203,12 +204,20 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
     {
         var (run, clock, odd) = RunClock(Values);
         run = run || Values.GetValueOrDefault("run") == "1";
-        _runClock.Text = $"[{(run ? L.T("run") + " " : "")}{(clock.Length > 0 ? clock : "0:00")}]";
-        _cursor.Opacity = odd ? 1 : .28;
+        // in a dungeon run the screen runs the run: the dungeon at the prompt, its count, clock and splits (Ui/Themes/Glitch/HudTerminal.Run.cs)
+        var rs = RunOf(Values, KinahHidden);
+        ShowRun(rs != null);
+        if (rs != null) RunPrompt(rs);
+        else
+        {
+            _runClock.Text = $"[{(run ? L.T("run") + " " : "")}{(clock.Length > 0 ? clock : "0:00")}]";
+            _cursor.Opacity = odd ? 1 : .28;
+        }
         var p0 = Picks(Values).FirstOrDefault();
-        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{p0?.Id}|{PickStrip.Sig(Values, Strip)}|{FightWidth}";
+        var sig = $"{f.Sig}|{f.ToBest}|{KinahHidden}|{Values.GetValueOrDefault("rare")}{Values.GetValueOrDefault("rareId")}|{p0?.Id}|{PickStrip.Sig(Values, Strip)}|{FightWidth}|{RunBuddy.Sig(Values)}";
         if (sig == _figSig) return;
         _figSig = sig;
+        if (rs != null) { DrawRun(rs); Note(f); return; }
 
         // the prompt: the rate asked for; a new best, the record written
         _prompt.Text = f.Beat ? L.T("> record --new") : f.Abyss ? L.T("> abyss --rate") : L.T("> kinah --rate");
@@ -286,6 +295,12 @@ sealed class HudTerminal : HudThemeLook, IThemeCard
         }
         else { _rareLine.Child = null; _rareTile = null; _rareLine.Visibility = Visibility.Collapsed; }
 
+        Note(f);
+    }
+
+    /// <summary>The note under the screen's lines ("  ! ..."), in its tone.</summary>
+    void Note(Figures f)
+    {
         _note.Text = f.Note.Length > 0 ? "  ! " + f.Note : "";
         _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;

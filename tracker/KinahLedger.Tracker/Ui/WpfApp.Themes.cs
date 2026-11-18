@@ -218,6 +218,19 @@ public static partial class WpfApp
             ("killed", kinah, null, kill, kill.End!.Value, true),
             ("wiped", kinah, null, wipe, wipe.End!.Value, true),
         };
+        // the Buddy in a dungeon run (Ui/MainWindow.HudRun.cs): the sample runs through the live values' path, the pickups kept
+        Dictionary<string, string> Run(string kind)
+        {
+            var v = new Dictionary<string, string>(kinah) { ["idle"] = "", ["chase"] = "", ["toBest"] = "" };
+            foreach (var (k, x) in MainWindow.RunBuddyValues(MainWindow.RunBuddySample(kind))) v[k] = x;
+            return v;
+        }
+        foreach (var kind in new[] { "run", "split", "ahead", "behind", "newbest", "clear", "between", "first" })
+            states.Add(("dungeon-" + kind, Run(kind), null, null, now, false));
+        states.Add(("dungeon-timer", Run("ahead"), soon, null, now, false));
+        // KL_THEME_STATE=dungeon: only the states whose names start so, no moments, overlays or cards (fast previews)
+        var stateOnly = Environment.GetEnvironmentVariable("KL_THEME_STATE") ?? "";
+        if (stateOnly.Length > 0) states.RemoveAll(s => !s.Tag.StartsWith(stateOnly, StringComparison.Ordinal));
         // the moments, held at points of their course (Motion.FrozenAt), each from the state it plays in
         var moments = new List<(string Tag, Dictionary<string, string> V, List<TimerBoard.Item>? T, Encounter? E, DateTime At, bool Dungeon)>
         {
@@ -251,6 +264,7 @@ public static partial class WpfApp
             try
             {
                 foreach (var s in states) Shot(s.Tag, s.V, s.T, s.E, s.At, s.Dungeon, null);
+                if (stateOnly.Length > 0) continue;
                 foreach (var m in moments)
                     foreach (var f in new[] { 0.15, 0.4, 0.75 })
                         Shot(m.Tag, MomentOnly(m.Tag, m.V), m.T, m.E, m.At, m.Dungeon, f);

@@ -19,7 +19,7 @@ namespace KinahLedger.Ui;
 /// pickup streaks up in cyan with a light trail as the rim flares; a rare drop cycles the rim's colours and runs a RARE!
 /// marquee across; HIGH SCORE!; the tube flickers on like a sign; READY? FIGHT!; K.O. STAGE CLEAR or GAME OVER.
 /// </summary>
-sealed class HudNeon : WackyLook, IThemeCard
+sealed partial class HudNeon : WackyLook, IThemeCard
 {
     const uint GroundC = 0x140A24, Mag = 0xFF2BD6, Cy = 0x00E5FF, Yel = 0xFFE66B, LilacC = 0xB79CFF, TubeC = 0x39FF88, RedC = 0xFF3355, Ice = 0xE9E4FF;
     static readonly Brush YelB = Wk.S(Yel), MagB = Wk.S(Mag), CyB = Wk.S(Cy), LilacB = Wk.S(LilacC), IceB = Wk.S(Ice), WhiteB = Wk.S(0xFFFFFF), GroundB = Wk.S(GroundC);
@@ -124,6 +124,7 @@ sealed class HudNeon : WackyLook, IThemeCard
         _fight.Root.Visibility = Visibility.Collapsed;
         _body.Children.Add(_cab.Root);
         _body.Children.Add(_fight.Root);
+        BuildRun();   // the dungeon run's head and splits in the cabinet (Ui/Themes/Wacky/HudNeon.Run.cs)
         Ground(Op);
     }
 
@@ -161,6 +162,9 @@ sealed class HudNeon : WackyLook, IThemeCard
         _line.Children.Clear(); _stats.Children.Clear();
         _ringHost.Child = null;
         _ring = _hour = null;
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Wacky/HudNeon.Run.cs)
+        if (RunOf() is { } rs) { DrawRun(rs, f); return; }
+        EndRun();
         bool waiting = !f.Counted || f.Rate.Length == 0;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (mark)
@@ -247,7 +251,12 @@ sealed class HudNeon : WackyLook, IThemeCard
 
     protected override void DrawTag()
     {
-        if (Due.FirstOrDefault() is not { } i) { _tube.Visibility = Visibility.Collapsed; PlaceTube(); return; }
+        if (Due.FirstOrDefault() is not { } i)
+        {
+            _tube.Visibility = Visibility.Collapsed;
+            if (_runOn && Figs is { } f0 && !KinahHidden) { DrawLine(f0); return; }
+            PlaceTube(); return;
+        }
         var (name, clock, tone) = TagWords(i, DueNow);
         uint c = tone == TimerBadge.Tone.On ? TubeC : tone == TimerBadge.Tone.Soon ? Yel : LilacC;
         _tubeName.Text = name; _tubeName.Visibility = name.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -255,18 +264,22 @@ sealed class HudNeon : WackyLook, IThemeCard
         _tubeFace.BorderBrush = Wk.S(c); _tubeFace.Background = Wk.S(Wk.Shade(c, -.86), .92);
         _tubeGlow.BorderBrush = Wk.S(c, .28);
         _tube.Visibility = Visibility.Visible;
+        // in a run the line's forms leave room for the tube, or mount it as the marquee: drawn again for its new width
+        if (_runOn && Figs is { } f && !KinahHidden) { DrawLine(f); return; }
         PlaceTube();
     }
 
     void PlaceTube()
     {
         bool onCab = KinahHidden && _fight.Root.Visibility == Visibility.Visible;
-        // in a dungeon the tube is the fight cabinet's marquee, mounted on its top edge
+        bool onTop = !onCab && _runOn && _tubeUp;
+        // in a dungeon the tube is the fight cabinet's marquee, mounted on its top edge; in a run without room on its line, the line cabinet's
         if (onCab && _tube.Parent != _fight.Root) { Detach(_tube); _fight.Root.Children.Add(_tube); }
-        else if (!onCab && _tube.Parent != _line) { Detach(_tube); _line.Children.Add(_tube); }
-        _tube.HorizontalAlignment = onCab ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        _tube.VerticalAlignment = onCab ? VerticalAlignment.Top : VerticalAlignment.Center;
-        _tube.Margin = onCab ? new Thickness(0, -15, 72, 0) : new Thickness(14, 0, 0, 0);
+        else if (onTop && _tube.Parent != _cab.Root) { Detach(_tube); _cab.Root.Children.Add(_tube); }
+        else if (!onCab && !onTop && _tube.Parent != _line) { Detach(_tube); _line.Children.Add(_tube); }
+        _tube.HorizontalAlignment = onCab || onTop ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        _tube.VerticalAlignment = onCab || onTop ? VerticalAlignment.Top : VerticalAlignment.Center;
+        _tube.Margin = onCab ? new Thickness(0, -15, 72, 0) : onTop ? new Thickness(0, -14, 16, 0) : new Thickness(14, 0, 0, 0);
         bool lineShown = !KinahHidden || (_tube.Parent == _line && _tube.Visibility == Visibility.Visible);
         _cab.Root.Visibility = lineShown ? Visibility.Visible : Visibility.Collapsed;
         foreach (UIElement ch in _line.Children) if (!ReferenceEquals(ch, _tube)) ch.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;

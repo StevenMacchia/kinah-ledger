@@ -105,7 +105,7 @@ sealed partial class HudModernMono : ModernLook
     /// <summary>A panel: near-black, a hairline edge, 4 px corners.</summary>
     Border Panel(UIElement child) => new() { Child = child, Background = Frozen(Mod.A(BgC, .97)), BorderBrush = Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Radius) };
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dim + "|" + PickStrip.Sig(Values, Strip);
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dim + "|" + PickStrip.Sig(Values, Strip) + "|" + RunBuddy.Sig(Values);
 
     /// <summary>The reader is paused or the window dims (the "show" value): the Buddy's figures go quiet, the note stays bright.</summary>
     bool Dim => Values.TryGetValue("show", out var s) && s == "dim" || Values.TryGetValue("paused", out var p) && p.Length > 0;
@@ -116,6 +116,14 @@ sealed partial class HudModernMono : ModernLook
     {
         _lineBody.Children.Clear();
         _ringArt = null; _rareRow = null; _rareRule = null; _timerUp = false;
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudModernMono.Run.cs)
+        if (RunNow() is { } rs)
+        {
+            DrawRun(rs, Dim);
+            DrawNote(f);
+            PlaceTimers();
+            return;
+        }
         var row = new Grid();
         for (int i = 0; i < 4; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // ring, hour, strip, timers
         bool dim = Dim;
@@ -213,13 +221,18 @@ sealed partial class HudModernMono : ModernLook
             _rareRow = box;
             _lineBody.Children.Add(box);
         }
-        // the note under the panel: a small square in its tone, the words in off-white
+        DrawNote(f);
+        PlaceTimers();
+    }
+
+    /// <summary>The note under the panel: a small square in its tone, the words in off-white.</summary>
+    void DrawNote(Figures f)
+    {
         _note.Text = f.Note;
         var noteTone = ReferenceEquals(f.NoteTone, Warn) ? Accent : ReferenceEquals(f.NoteTone, Mint) ? Green : ReferenceEquals(f.NoteTone, Gold) ? Paper : Grey;
         _noteDot.Background = noteTone;
         _noteHost.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
         _lineBody.Opacity = 1;
-        PlaceTimers();
     }
 
     /// <summary>The line under the hour: the session, the latest pickup and its worth in green (<paramref name="pick"/>); in the Abyss its stats.</summary>
