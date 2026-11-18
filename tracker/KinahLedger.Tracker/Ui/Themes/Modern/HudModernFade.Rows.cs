@@ -26,7 +26,7 @@ sealed partial class HudModernFade
     static double FigCol(TextBlock fig, params string[] forms) => forms.Max(f => TextW(fig, f)) + fig.Margin.Left + fig.Margin.Right + 1;
 
     /// <summary>A member's bar, 0 to 1, against the fight's top (by Combat Power before any damage).</summary>
-    static double BarOf(MeterMember m, MeterContext c) { double top = c.E.TopMeasure(); return top > 0 ? Math.Clamp(c.E.Measure(m.F) / top, 0, 1) : 0; }
+    static double BarOf(MeterMember m, MeterContext c) => c.E.BarOf(m.F);   // their share, the bars together the whole (2026-11-18)
 
     /// <summary>The fight's foot under its hairline: "Total 622.4M" at the left, the group's word and figure at the right, the AVG mark on a held average.</summary>
     FrameworkElement Foot(Encounter e, DateTime now)

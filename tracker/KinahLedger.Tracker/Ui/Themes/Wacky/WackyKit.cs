@@ -394,8 +394,7 @@ static class Wk
     public static double Bar(MeterMember m, MeterContext c)
     {
         if (m.CpOnly) return 0;
-        double top = c.E.Members.Select(c.E.Share).DefaultIfEmpty(0).Max();
-        return top > 0 ? Math.Clamp(m.Share / top, 0, 1) : 0;
+        return c.E.BarOf(m.F);   // their share of the group's damage, the bars together the whole (2026-11-18)
     }
 
     /// <summary>

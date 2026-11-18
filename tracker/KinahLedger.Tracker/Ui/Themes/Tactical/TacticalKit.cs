@@ -269,7 +269,7 @@ static class Tac
     /// A member's bar, 0 to 1, against the fight's top (Steven, 2026-11-17: "prioritizes the bar"): the top member's runs the
     /// whole row, the others to their part of it; before any damage, by Combat Power.
     /// </summary>
-    public static double BarOf(MeterMember m, MeterContext c) { double top = c.E.TopMeasure(); return top > 0 ? Clamp01(c.E.Measure(m.F) / top) : 0; }
+    public static double BarOf(MeterMember m, MeterContext c) => c.E.BarOf(m.F);   // their share, the bars together the whole (2026-11-18)
 
     /// <summary>A part's width laid out on its own (shown for the measure, then as it was).</summary>
     static double W(FrameworkElement e)

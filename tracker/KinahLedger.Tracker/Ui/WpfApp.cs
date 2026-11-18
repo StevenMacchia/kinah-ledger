@@ -1186,7 +1186,7 @@ public static partial class WpfApp
                     if (k == 0) { hud.ShowTimers(Array.Empty<Session.TimerBoard.Item>(), tnow); hud.ShowParser(null, tnow, KinahLedger.Parser.ParserMode.Bosses, false); DoEvents(); }
                 }
                 double Y(UIElement e) => hud.Top + e.TransformToAncestor(hud).Transform(new Point(0, 0)).Y;
-                var stackRows = ((System.Windows.Controls.StackPanel)hud.Content).Children.OfType<FrameworkElement>().ToList();
+                var stackRows = ((System.Windows.Controls.StackPanel)hud.Content).Children.OfType<FrameworkElement>().Where(x => !"hud-share".Equals(x.Tag)).ToList();   // Share's row under it all (Ui/HudWindow.Share.cs) aside
                 bool stacked = stackRows.Count == 3 && stackRows[2] == hud.OwnContent && hud.TimersShown && hud.ParserShown && hud.ParserHeight > 100
                     && Y(stackRows[0]) + stackRows[0].ActualHeight <= Y(stackRows[1]) + 0.5 && Math.Abs(Y(stackRows[2]) - anchor0) < 1 && Math.Abs(hud.AnchorTop - anchor0) < 1
                     && Math.Abs(top0 - hud.Top - hud.TimerLineHeight - hud.ParserHeight) < 1;

@@ -144,7 +144,7 @@ sealed partial class HudModernLine
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit(_look._rowW, _look._shareOff);
-            SlideBar(_bar, c, "bar", m.Share, v => { _fill = v; _bar.InvalidateVisual(); });
+            SlideBar(_bar, c, "bar", m.CpOnly ? 0 : c.E.BarOf(m.F), v => { _fill = v; _bar.InvalidateVisual(); });
             _bar.InvalidateVisual();
         }
 

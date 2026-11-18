@@ -231,6 +231,7 @@ public sealed partial class HudWindow : Window
         AddParserSection();   // the Parser's section above the Kinah line (Ui/HudWindow.Parser.cs)
         AddTimerSection();    // the timer line on top of both (Ui/HudWindow.Timers.cs)
         AddWidthDrag();       // the meter's edges widen it (Ui/HudWindow.Width.cs)
+        AddShare();           // Share under the meter, with the pointer over it (Ui/HudWindow.Share.cs)
     }
 
     /// <summary>The frame's corner and padding for these figures: the one-line feed (the default) is the tighter one. The Parser's panel takes the same (Ui/ParserOverlay.cs).</summary>
