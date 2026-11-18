@@ -33,7 +33,7 @@ public interface IHudFightAbove
 /// just make them options for people in the settings"), picked in Options › In game › Panel look. Their shared parts:
 /// the figures from the window's values, the ring of your best, a fight's member rows.
 /// </summary>
-abstract class HudStackLook : IHudLook, IHudStackLook
+abstract partial class HudStackLook : IHudLook, IHudStackLook
 {
     public bool Still { get; set; }
     public abstract FrameworkElement Root { get; }
@@ -330,7 +330,7 @@ abstract class HudStackLook : IHudLook, IHudStackLook
 /// a gold chip at the pill's end. A fight drops a slim meter under the pill: the boss, its clock, its HP as a hairline, and
 /// the members with a meter in their class's colour. A notice sits under the pill in its own small line.
 /// </summary>
-sealed class HudCapsule : HudStackLook
+sealed partial class HudCapsule : HudStackLook
 {
     readonly ParserRows _prows = new();
     readonly StackPanel _root = new() { HorizontalAlignment = HorizontalAlignment.Left };
@@ -365,7 +365,13 @@ sealed class HudCapsule : HudStackLook
     public override double Corner => 19;
     public override void SetOpacity(double opacity) { _pillFrame.Background = HudGlass.Fill(opacity); _meterFrame.Background = HudGlass.Fill(opacity); }
 
-    public override void Update(IReadOnlyDictionary<string, string> values) { Draw(Read(values)); PlaceStrip(); }
+    public override void Update(IReadOnlyDictionary<string, string> values)
+    {
+        var f = Read(values);
+        _runRaw = RunBuddy.Of(values);
+        if (RunStep()) return;   // in a dungeon run: the run's clock, splits and verdict on the pill (Ui/HudStackLooks.Run.cs)
+        Draw(f); PlaceStrip();
+    }
 
     /// <summary>Auto's fight above the pill (Auto draws it, not the pill): the pill keeps what it showed before the strip.</summary>
     internal bool FightAbove { get => _fightAbove; set { _fightAbove = value; PlaceStrip(); } }
@@ -377,6 +383,7 @@ sealed class HudCapsule : HudStackLook
     /// </summary>
     void PlaceStrip()
     {
+        if (RunStep()) return;   // a run places its own strip beside its words
         var f = _figsNow;
         PlaceStrip(_strip, StripLook, Farming && _lastFight == null && !_fightAbove,
             $"{_chip.Visibility}|{_chipText.Text.Length}|{f?.Rate.Length}|{f?.Total.Length}|{f?.Share >= 0}|{f?.Warm}",
@@ -503,7 +510,7 @@ sealed class HudCapsule : HudStackLook
 /// members are rows in their class's colour from the left, ranked. The Kinah line is the foot: the ring, the hour and the
 /// session; in the Abyss the points' hour, the points, and the kills, deaths and Kinah under the hour.
 /// </summary>
-sealed class HudMeter : HudStackLook
+sealed partial class HudMeter : HudStackLook
 {
     readonly ParserRows _prows = new();
     static double W => FightWidth;
@@ -577,6 +584,9 @@ sealed class HudMeter : HudStackLook
 
     public override void Update(IReadOnlyDictionary<string, string> values)
     {
+        _runRaw = _withFoot ? RunBuddy.Of(values) : null;
+        if (_runRaw != null && !KinahHidden) Read(values);
+        if (RunStep()) return;   // in a dungeon run: the dungeon in the header, the run's clock and splits in the foot (Ui/HudStackLooks.Run.cs)
         DrawFigures(values);
         PlaceStrip();
     }
@@ -585,9 +595,13 @@ sealed class HudMeter : HudStackLook
     /// The best drop and the last three in the header while farming (Steven, 2026-11-18: the header's empty middle), right of
     /// the place and left of the timer's tab and clock; the three alone, or none, when a long place name or the tab takes the room.
     /// </summary>
-    void PlaceStrip() => PlaceStrip(_strip, StripLook, _withFoot && !_fight && Farming,
-        $"{_title.Text}|{_clock.Text.Length}|{_tab.Visibility}|{_tabText.Text.Length}",
-        () => W - 20 - Wants(_title) - Wants(_right));
+    void PlaceStrip()
+    {
+        if (RunStep()) return;   // a run places its own strip in the header
+        PlaceStrip(_strip, StripLook, _withFoot && !_fight && Farming,
+            $"{_title.Text}|{_clock.Text.Length}|{_tab.Visibility}|{_tabText.Text.Length}",
+            () => W - 20 - Wants(_title) - Wants(_right));
+    }
 
     void DrawFigures(IReadOnlyDictionary<string, string> values)
     {
@@ -670,6 +684,7 @@ sealed class HudMeter : HudStackLook
         _fightSig = sig;
         bool was = _fight;
         _fight = e != null;
+        if (was != _fight) _runSig = "";   // a run draws its header and foot again as a fight comes or goes
         _rows.Children.Clear();
         if (e == null)
         {
@@ -742,7 +757,7 @@ sealed class HudMeter : HudStackLook
 /// and the session, and the chase under them (in the Abyss the points' hour and the points, then the kills, deaths and
 /// Kinah). The panel's opacity is the halo's.
 /// </summary>
-sealed class HudFloat : HudStackLook
+sealed partial class HudFloat : HudStackLook
 {
     readonly ParserRows _prows = new(ParserRows.Kind.Bare);
     readonly Border _host;
@@ -770,7 +785,10 @@ sealed class HudFloat : HudStackLook
 
     public override void Update(IReadOnlyDictionary<string, string> values)
     {
-        DrawLine(Read(values));
+        var f = Read(values);
+        _runRaw = RunBuddy.Of(values);
+        if (RunStep()) return;   // in a dungeon run: the run's clock, splits and verdict over the game (Ui/HudStackLooks.Run.cs)
+        DrawLine(f);
         PlaceStrip();
     }
 
@@ -780,6 +798,7 @@ sealed class HudFloat : HudStackLook
     /// </summary>
     void PlaceStrip()
     {
+        if (RunStep()) return;   // a run places its own strip after its words
         var f = _figsNow;
         PlaceStrip(_strip, StripLook, Farming && _lastFight == null,
             $"{f?.Rate.Length}|{f?.Total.Length}|{f?.ToBest.Length}|{f?.Share >= 0}|{f?.Warm}",
