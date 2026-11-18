@@ -218,7 +218,7 @@ sealed partial class HudModernLine : ModernLook
                 _sub.Inlines.Add(R(fig, 11.5, ReferenceEquals(tone, Rec) ? RedB : ReferenceEquals(tone, Gold) ? Frozen(GoldC0) : WhiteB, FontWeights.Bold));
                 _sub.Inlines.Add(R(" " + word, 11.5, SoftB));
             }
-        else if (f.Beat && f.ToBest.Length > 0 && HasHour(f)) { _pick.Inlines.Add(R("  ·  ", 11, FaintB)); _pick.Inlines.Add(R("★ " + f.ToBest, 11.5, MintB, FontWeights.Bold)); }
+        else if (f.Beat && f.ToBest.Length > 0 && HasHour(f)) { _pick.Inlines.Add(R("  ·  ", 11, FaintB)); _pick.Inlines.Add(R("★ " + L.T("New best"), 11.5, MintB, FontWeights.Bold)); }
         else if (HasHour(f) && Picks(Values).FirstOrDefault() is { } p)
         {
             if (_sub.Inlines.Count > 0) _pick.Inlines.Add(R("  ·  ", 11, FaintB));
