@@ -139,7 +139,7 @@ public partial class MainWindow
             body = new Rect(0, LowerScroll.TransformToAncestor(root).Transform(new Point(0, 0)).Y, root.ActualWidth, root.ActualHeight);
         }
         _parserFromRuns = true;
-        _parserInspect = null; _parserTab = "Group";
+        _parserInspect = null; _parserTab = "Timeline";   // the pull's Graphs (Group when it has no seconds)
         _parserOpen = fightId;
         ShowPart("Parser", byHand: true);
         RedrawParserPage();

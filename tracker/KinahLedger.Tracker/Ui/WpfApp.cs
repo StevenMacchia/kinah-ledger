@@ -145,6 +145,8 @@ public static partial class WpfApp
             pw.Close();
             Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
         }
+        // KL_OPTIONS_ONLY=graphs: the Parser page's Graphs tab alone (Ui/WpfApp.ParserGraphs.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=idle: the overlay's idle line alone (Ui/WpfApp.HudIdle.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "idle") { var iw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; iw.Show(); DoEvents(); HudIdleChecks(iw, Check); iw.Close(); Console.WriteLine(fails == 0 ? "options test (idle line): all passed" : $"options test (idle line): {fails} failed"); return fails == 0 ? 0 : 1; }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs

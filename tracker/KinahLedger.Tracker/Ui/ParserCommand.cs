@@ -61,8 +61,8 @@ static class ParserCommand
     public static List<string> Tabs(FightView v)
     {
         var t = new List<string> { "Group" };
+        if (v.HasTimeline) t.Insert(0, "Timeline");   // shown as Graphs, first (Ui/ParserGraphs.cs)
         if (v.HasCompare) t.Add("Compare");
-        if (v.HasTimeline) t.Add("Timeline");
         if (v.HasTaken) t.Add("Taken");
         return t;
     }
@@ -255,8 +255,8 @@ static class ParserCommand
             bool lit = t == ctx.Tab;
             var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 4, 12, 5), Margin = new Thickness(0, 0, 4, 0), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, Focusable = true,
                 Background = lit ? K("Card2") : Brushes.Transparent, BorderBrush = lit ? K("LineStrong") : Brushes.Transparent,
-                Child = T(L.T(t), 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold) };
-            AutomationProperties.SetName(b, $"Parser view: {t}");
+                Child = T(L.T(t == "Timeline" ? "Graphs" : t), 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold) };
+            AutomationProperties.SetName(b, $"Parser view: {(t == "Timeline" ? "Graphs" : t)}");
             var pick = t;
             b.MouseLeftButtonUp += (_, _) => ctx.SetTab(pick);
             b.KeyDown += (_, k) => { if (k.Key is Key.Enter or Key.Space) { k.Handled = true; ctx.SetTab(pick); } };

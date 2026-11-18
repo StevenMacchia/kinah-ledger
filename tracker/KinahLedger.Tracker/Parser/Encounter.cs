@@ -112,7 +112,7 @@ public sealed class Encounter : IJsonOnDeserialized
             else l.InsertRange(0, Enumerable.Repeat(fill, -k));
         }
         Move(BossHpPerSecond, shift, 1.0);
-        foreach (var f in Roster) { Move(f.PerSecond, shift, 0L); Move(f.BossPerSecond, shift, 0L); }
+        foreach (var f in Roster) { Move(f.PerSecond, shift, 0L); Move(f.BossPerSecond, shift, 0L); Move(f.HealPerSecond, shift, 0L); Move(f.TakenPerSecond, shift, 0L); }
     }
     /// <summary>Gaps in the game's traffic during it.</summary>
     public int Gaps { get; set; }
@@ -595,6 +595,13 @@ public sealed class Fighter
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<DeathRecord>? DeathLog { get; set; }
     /// <summary>Effects on the member: how long each was on during the record.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<BuffUptime>? Buffs { get; set; }
+    /// <summary>
+    /// The Parser page's graphs (Ui/ParserGraphs.cs): the member's effective healing (overheal and potions left out, as
+    /// <see cref="HealingEffective"/>) and the damage they took, in each second from Encounter.Start. Null in a record kept
+    /// before, or with none: the graph that would show it is not drawn.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? HealPerSecond { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? TakenPerSecond { get; set; }
 
     /// <summary>Adds damage at its second to a per-second list (made on first use); the list.</summary>
     internal static List<long> AddAt(List<long>? list, int second, long amount)
