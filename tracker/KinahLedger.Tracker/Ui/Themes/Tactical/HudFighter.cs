@@ -126,7 +126,7 @@ sealed partial class HudFighter : TacticalLook
         dc.DrawRectangle(Frozen(Tac.A(PhosC, .12)), null, new Rect(r.Left, r.Bottom - 1, r.Width, 1));
     }
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook);
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook) + "|" + RunSig;
 
     /// <summary>The pickup strip as the HUD wears it: the tiles at the hour's height, the rule a faint phosphor line, the star amber.</summary>
     static readonly PickStrip.Look StripLook = new(Size: 24, Gap: 4, Rule: PhosFaint, Star: Amber);
@@ -168,7 +168,9 @@ sealed partial class HudFighter : TacticalLook
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (_lineRow.Children.Count > 2) _lineRow.Children.RemoveAt(0);   // the last Abyss mark
         if (mark) { var m = AbyssMark(f.Icon, 34); m.Margin = new Thickness(2, 0, 2, 0); _lineRow.Children.Insert(0, m); }
-        if (!HasHour(f))
+        // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Tactical/HudFighter.Run.cs)
+        if (RunNow is { } rs) DrawRun(rs);
+        else if (!HasHour(f))
         {
             // nothing counted yet: a standby tag and the line's words
             var row = new StackPanel { Orientation = Orientation.Horizontal };

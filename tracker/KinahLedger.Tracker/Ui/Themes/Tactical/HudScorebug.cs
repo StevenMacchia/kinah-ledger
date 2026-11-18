@@ -79,7 +79,7 @@ sealed partial class HudScorebug : TacticalLook
         }
         _fightGrid.Children.Add(parts); _fightGrid.Children.Add(_fightFx);
         _fight.Children.Add(_fightGrid);
-        _body.Children.Add(_fight); _body.Children.Add(_bugHost); _body.Children.Add(_under);
+        _body.Children.Add(_fight); _body.Children.Add(_runTab); _body.Children.Add(_bugHost); _body.Children.Add(_under);
         _root.Children.Add(_body);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Face);
     }
@@ -101,7 +101,7 @@ sealed partial class HudScorebug : TacticalLook
     }
     void Redraw() => DrawFight(_lastFight, _lastNow);
 
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook);
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + StripSig(StripLook) + "|" + RunSig;
 
     /// <summary>The pickup strip as the bug wears it: Arena's on an ink block, Studio's on a light card (HudScorebug.Studio.cs); the star yellow.</summary>
     PickStrip.Look StripLook => _studio ? StudioStrip : ArenaStrip;
@@ -188,6 +188,9 @@ sealed partial class HudScorebug : TacticalLook
     {
         _bug.Children.Clear();
         _bestBlock = _timerBlock = null;
+        // in a dungeon run: the bug as the run's clock, its tab and splits (Ui/Themes/Tactical/HudScorebug.Run.cs)
+        _runTab.Children.Clear(); _runTab.Visibility = Visibility.Collapsed;
+        if (RunNow is { } rs) { DrawRun(rs, f); return; }
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         // the red block: the share of your best (or the Abyss's mark)
         if (mark)
@@ -311,15 +314,19 @@ sealed partial class HudScorebug : TacticalLook
             }
             _under.Children.Add(strip);
         }
-        if (f.Note.Length > 0)
-        {
-            bool warn = ReferenceEquals(f.NoteTone, Warn) || ReferenceEquals(f.NoteTone, Gold);
-            var nt = T(f.Note, 12.5, InkB, FontWeights.SemiBold);
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(Lean, 3, 0, 0) };
-            Row(row, new Block(warn ? YellowC : GreenC, new Border { Width = 4 }, 22, new Thickness(4, 0, 4, 0)));
-            Row(row, new Block(LightC, nt, 22, new Thickness(11, 0, 12, 0)));
-            _under.Children.Add(row);
-        }
+        if (NoteRow(f) is { } nr) _under.Children.Add(nr);
+    }
+
+    /// <summary>The note under the bug: a bar in its tone, the words on a light block; null with no note.</summary>
+    StackPanel? NoteRow(Figures f)
+    {
+        if (f.Note.Length == 0) return null;
+        bool warn = ReferenceEquals(f.NoteTone, Warn) || ReferenceEquals(f.NoteTone, Gold);
+        var nt = T(f.Note, 12.5, InkB, FontWeights.SemiBold);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(Lean, 3, 0, 0) };
+        Row(row, new Block(warn ? YellowC : GreenC, new Border { Width = 4 }, 22, new Thickness(4, 0, 4, 0)));
+        Row(row, new Block(LightC, nt, 22, new Thickness(11, 0, 12, 0)));
+        return row;
     }
 
     /// <summary>The rare drop's lower third: the tile on a block in its grade's colour, RARE DROP and the name on dark.</summary>
@@ -354,7 +361,9 @@ sealed partial class HudScorebug : TacticalLook
         _timer = due.FirstOrDefault() is { } i ? TimerWords(i, now) : null;
         // the ones after it, small under it: "Invasion 4:39 · Kashapa 11:59"
         _timerMore = string.Join("  ·  ", due.Skip(1).Take(2).Select(x => TimerWords(x, now).Text));
-        DrawTimerBlock();
+        // in a run the bug is fitted again with the timer's block in it (its parts give way in turn)
+        if (RunNow != null && Figs is { } f) DrawLine(f);
+        else DrawTimerBlock();
         if (_lastFight != null && KinahHidden) Redraw();
     }
 
