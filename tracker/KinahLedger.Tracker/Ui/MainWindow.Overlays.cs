@@ -58,10 +58,11 @@ public partial class MainWindow
     {
         var shown = _overlays.Where(o => o.Shown).ToList();
         var list = shown.Select(o => new MenuEntry(L.F("{0} overlay", L.T(o.Name)), () => { o.Set(!o.IsOn()); DrawOverlayPills(); }, Sub: o.Tip, On: o.IsOn())).ToList();
-        // what keeps the meter off ("Needs Npcap · Get it", Ui/MainWindow.MeterBlock.cs): one line under the Parser and Applicants switches
+        AddPopOutEntries(list);   // the pop-out windows' switches (Ui/MainWindow.PopOuts.cs)
+        // what keeps the meter off ("Needs Npcap · Get it", Ui/MainWindow.MeterBlock.cs): one line after the Parser and Applicants switches
         if (MeterBlockMenuEntry() is { } block)
         {
-            int at = shown.FindLastIndex(o => o.Name is "Parser" or "Applicants");
+            int at = list.FindLastIndex(e => e.Text.Contains(L.T("Parser")) || e.Text.Contains(L.T("Applicants")));
             list.Insert(at < 0 ? list.Count : at + 1, block);
         }
         // the game in exclusive fullscreen keeps every overlay from showing: first, above them all

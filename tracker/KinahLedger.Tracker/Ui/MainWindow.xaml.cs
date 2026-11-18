@@ -185,6 +185,7 @@ public partial class MainWindow : Window
         InitQuestUpload();   // the completed quests ride the upload batch (Ui/MainWindow.QuestsPage.cs)
         InitBossBests();   // your own boss bests ride it too, when you turned that on (Ui/MainWindow.BossBests.cs)
         InitParser(watch);   // the Parser page, its overlay and its shortcut (Ui/MainWindow.Parser.cs)
+        InitPopOuts(watch);   // the DPS meter and Applicants in windows of their own, for a second screen (Ui/MainWindow.PopOuts.cs)
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)

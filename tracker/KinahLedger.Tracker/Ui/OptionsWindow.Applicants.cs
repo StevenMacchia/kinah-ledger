@@ -27,6 +27,7 @@ public partial class OptionsWindow
                 TextWrapping = TextWrapping.Wrap }, "PageLead"),
             ApplicantsChk, "Show the applicants over the game"));
         Add(MeterBlockHost(Page.Applicants));   // "Needs Npcap · Get it" while something keeps the meter off (Ui/OptionsWindow.MeterBlock.cs)
+        AddPopOutLink(PageApplicants, meter: false);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: four sample applicants in the theme the overlay is in
         var now = DateTime.UtcNow;

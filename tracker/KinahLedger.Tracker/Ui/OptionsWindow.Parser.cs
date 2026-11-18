@@ -213,6 +213,7 @@ public partial class OptionsWindow
         _parserOverlayChk.Click += (_, _) => Refresh();
         PageMeter.Children.Add(OverlayHeader(_parserLabel, _parserLookHint, _parserOverlayChk, "Show the DPS meter over the game"));
         PageMeter.Children.Add(MeterBlockHost(Page.Meter));   // "Needs Npcap · Get it" while something keeps the meter off (Ui/OptionsWindow.MeterBlock.cs)
+        AddPopOutLink(PageMeter, meter: true);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: the look in use (or under the mouse) in a boss fight, big, over the game
         _parserLookStage = new Border { Margin = new Thickness(0, 12, 0, 0) };
