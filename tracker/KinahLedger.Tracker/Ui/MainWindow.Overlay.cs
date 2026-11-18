@@ -26,7 +26,7 @@ public partial class MainWindow
     string HudPresence()
     {
         if (_guide != null) return "hidden";   // the placement guide draws it in its outline meanwhile
-        if (_demo || HudMoving) return "";   // being moved from the tray: in view wherever the player is
+        if (_demo || HudMoving || HudInViewForTest) return "";   // being moved from the tray: in view wherever the player is
         if (_watcher.GameRect == null) return "hidden";
         var chat = _watcher.Chat;
         return chat == null || chat.Paused.Length > 0 ? "dim" : "";

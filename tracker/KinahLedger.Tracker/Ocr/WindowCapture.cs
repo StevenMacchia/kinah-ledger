@@ -17,6 +17,11 @@ namespace KinahLedger.Ocr;
 /// One capture session runs while the game window is known, keeping only the newest frame; <see cref="TryCapture"/>
 /// crops a screen rectangle out of it. Any failure (an older Windows, no GPU device, the window gone) returns null and
 /// the caller copies the screen as before. On Windows 11 the yellow capture border is switched off; Windows 10 shows it.
+///
+/// The newest frame stays on the graphics card; it is copied into memory only when a read asks for it (2026-11-18). Until then
+/// every frame the game drew was copied as it came: a whole 4K frame, about 20 ms and 33 MB each, up to ~45 times a second,
+/// which was most of the tracker's CPU in a fight (2026-11-18: Steven's "super laggy" meter, 0.7 of a core on it alone)
+/// while the reader used one frame in thirty.
 /// </summary>
 public static class WindowCapture
 {
@@ -45,9 +50,25 @@ public static class WindowCapture
     static Direct3D11CaptureFramePool? _pool;
     static GraphicsCaptureSession? _session;
     static Windows.Graphics.SizeInt32 _size;
+    /// <summary>The newest frame, still on the graphics card, and what frees it (the capture's frame).</summary>
+    static IDirect3DSurface? _frame;
+    static IDisposable? _frameOwner;
+    /// <summary>The newest frame copied into memory, the frame number it is, and when it was copied.</summary>
     static SoftwareBitmap? _last;
+    static long _lastNo = -1;
+    static long _copiedAt;
     static DateTime _lastAt;
     static bool _broken;
+
+    /// <summary>
+    /// A copy this young serves the next read too: a pass's crops come one after another (the chat, the loot list, the
+    /// target...), and each would otherwise wait ~20 ms for a whole frame of its own. A tenth of a second is well under the
+    /// time between two passes (~0.5 s) and the settles that read again (0.3 s apart); before, a crop was up to ~40 ms old.
+    /// </summary>
+    const double ReuseMs = 100;
+
+    /// <summary>Frames copied into memory so far (for measuring: copy-load).</summary>
+    public static long Copies { get; private set; }
 
     /// <summary>
     /// The hook for reading several frames per line (multi-frame voting): counts every frame the game window delivers.
@@ -58,7 +79,7 @@ public static class WindowCapture
     public static event Action<long>? NewFrame;
 
     /// <summary>True when frames are arriving from the game window.</summary>
-    public static bool Active { get { lock (Lock) return _session != null && _last != null && (DateTime.UtcNow - _lastAt).TotalSeconds < 3; } }
+    public static bool Active { get { lock (Lock) return _session != null && (_frame != null || _last != null) && (DateTime.UtcNow - _lastAt).TotalSeconds < 3; } }
 
     /// <summary>Starts (or moves) the capture to this window. Safe to call on every pass; does nothing when unsupported.</summary>
     public static void Track(IntPtr hwnd)
@@ -96,19 +117,26 @@ public static class WindowCapture
         try { _session?.Dispose(); } catch (Exception) { }
         try { if (_pool != null) { _pool.FrameArrived -= OnFrame; _pool.Dispose(); } } catch (Exception) { }
         _session = null; _pool = null; _hwnd = IntPtr.Zero;
-        _last?.Dispose(); _last = null;
+        DropFrameLocked();
+        _last?.Dispose(); _last = null; _lastNo = -1;
     }
 
+    static void DropFrameLocked()
+    {
+        try { _frameOwner?.Dispose(); } catch (Exception) { }
+        _frame = null; _frameOwner = null;
+    }
+
+    /// <summary>A frame came: kept on the graphics card as the newest (the one before it freed); nothing is copied here.</summary>
     static void OnFrame(Direct3D11CaptureFramePool pool, object _)
     {
         try
         {
-            using var frame = pool.TryGetNextFrame();
+            var frame = pool.TryGetNextFrame();
             if (frame == null) return;
-            var bmp = SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
             lock (Lock)
             {
-                _last?.Dispose(); _last = bmp; _lastAt = DateTime.UtcNow; FrameNumber++;
+                Offer(frame.Surface, frame);
                 if (frame.ContentSize.Width != _size.Width || frame.ContentSize.Height != _size.Height)
                 {
                     _size = frame.ContentSize;
@@ -120,18 +148,58 @@ public static class WindowCapture
         try { NewFrame?.Invoke(FrameNumber); } catch (Exception) { /* a handler's error is not the capture's */ }
     }
 
+    /// <summary>The newest frame: <paramref name="surface"/> on the graphics card, <paramref name="owner"/> freeing it (under the lock).</summary>
+    static void Offer(IDirect3DSurface surface, IDisposable owner)
+    {
+        DropFrameLocked();
+        _frame = surface; _frameOwner = owner; _lastAt = DateTime.UtcNow; FrameNumber++;
+    }
+
+    /// <summary>
+    /// The newest frame in memory (under the lock): copied from the graphics card now unless the copy made last is of the
+    /// newest frame or under <see cref="ReuseMs"/> old. Null when there is no frame or the copy failed.
+    /// </summary>
+    static SoftwareBitmap? NewestLocked()
+    {
+        if (_frame == null || _lastNo == FrameNumber) return _last;
+        if (_last != null && System.Diagnostics.Stopwatch.GetElapsedTime(_copiedAt).TotalMilliseconds < ReuseMs) return _last;
+        try
+        {
+            var bmp = SoftwareBitmap.CreateCopyFromSurfaceAsync(_frame, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
+            _last?.Dispose(); _last = bmp; _lastNo = FrameNumber; _copiedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            Copies++;
+        }
+        catch (Exception) { /* the copy made before, if any, serves */ }
+        return _last;
+    }
+
+    /// <summary>For copy-load: frames from a surface of the test's own, as the capture's come, and crops of the newest as reads take them.</summary>
+    internal static void OfferForTest(IDirect3DSurface surface) { lock (Lock) { Offer(surface, NoOwner.Instance); _hwnd = new IntPtr(1); } }
+    internal static Bitmap? CropForTest(Rectangle r)
+    {
+        lock (Lock)
+        {
+            if (NewestLocked() is not { } last) return null;
+            r.Intersect(new Rectangle(0, 0, last.PixelWidth, last.PixelHeight));
+            return r.Width > 0 && r.Height > 0 ? Crop(last, r) : null;
+        }
+    }
+    internal static Bitmap CropOfForTest(SoftwareBitmap src, Rectangle r) => Crop(src, r);
+    internal static void ResetForTest() { lock (Lock) { DropFrameLocked(); _last?.Dispose(); _last = null; _lastNo = -1; _hwnd = IntPtr.Zero; Copies = 0; } }
+    sealed class NoOwner : IDisposable { public static readonly NoOwner Instance = new(); public void Dispose() { } }
+
     /// <summary>The screen rectangle cut from the newest frame of the game window; null when there is none to use.</summary>
     public static Bitmap? TryCapture(Rectangle screen)
     {
         lock (Lock)
         {
-            if (_last == null || _hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3) return null;
+            if (_hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3 || NewestLocked() is not { } last) return null;
             // the frame starts at the window's visible bounds (DWM's extended frame), not at its outer rectangle
             if (DwmGetWindowAttribute(_hwnd, 9, out var wr, Marshal.SizeOf<RECT>()) != 0 && !GetWindowRect(_hwnd, out wr)) return null;
             var local = new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height);
-            var bounds = new Rectangle(0, 0, _last.PixelWidth, _last.PixelHeight);
+            var bounds = new Rectangle(0, 0, last.PixelWidth, last.PixelHeight);
             if (!bounds.Contains(local)) return null;
-            return Crop(_last, local);
+            return Crop(last, local);
         }
     }
 
@@ -144,16 +212,16 @@ public static class WindowCapture
     {
         lock (Lock)
         {
-            if (_last == null || _hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3) return null;
+            if (_hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3 || NewestLocked() is not { } last) return null;
             if (DwmGetWindowAttribute(_hwnd, 9, out var wr, Marshal.SizeOf<RECT>()) != 0 && !GetWindowRect(_hwnd, out wr)) return null;
             var local = new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height);
-            local.Intersect(new Rectangle(0, 0, _last.PixelWidth, _last.PixelHeight));
+            local.Intersect(new Rectangle(0, 0, last.PixelWidth, last.PixelHeight));
             if (local.Width < w || local.Height < h) return null;
             var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
             var data = dst.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
             try
             {
-                using var buf = _last.LockBuffer(BitmapBufferAccessMode.Read);
+                using var buf = last.LockBuffer(BitmapBufferAccessMode.Read);
                 using var reference = buf.CreateReference();
                 var plane = buf.GetPlaneDescription(0);
                 reference.As<IMemoryBufferByteAccess>().GetBuffer(out byte* p, out _);
