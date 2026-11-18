@@ -204,8 +204,61 @@ abstract class WackyLook : HudThemeLook
     /// <summary>How this look wears the pickup strip.</summary>
     protected abstract PickStrip.Look StripLook { get; }
 
-    /// <summary>The line is drawn again when the strip's pickups change too.</summary>
-    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + PickStrip.Sig(Values, StripLook);
+    /// <summary>The line is drawn again when the strip's pickups change too, and with the dungeon run's values (Ui/HudRunBuddy.cs).</summary>
+    protected override string LineSig(Figures f) => base.LineSig(f) + "|" + PickStrip.Sig(Values, StripLook) + "|" + RunBuddy.Sig(Values);
+
+    // ---- the dungeon run (Ui/HudRunBuddy.cs; Steven, 2026-11-18, of the run-mode Buddy: "Yes, all looks")
+
+    /// <summary>The dungeon run drawn in place of the hour, or null: out of a run, and while a fight's panel has the Kinah line put away.</summary>
+    protected RunBuddy.State? RunOf() => KinahHidden ? null : RunBuddy.Of(Values);
+
+    /// <summary>The strip in a run: the best drop and the last three, else the last three when that does not fit <paramref name="room"/>.</summary>
+    protected FrameworkElement? RunStrip(double room)
+    {
+        var full = PickStrip.Of(Values, StripLook);
+        if (full == null || !StripLook.Best || W(full) <= room) return full;
+        return PickStrip.Of(Values, StripLook with { Best = false });
+    }
+
+    /// <summary>An element's width laid out on its own (its render transform, a tilt or a skew, left out).</summary>
+    protected static double W(FrameworkElement e)
+    {
+        e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return e.DesiredSize.Width;
+    }
+
+    /// <summary>
+    /// The width of a part kept between draws (the timer's tag), put in <paramref name="host"/> first when it is out of the
+    /// tree: shown while out of it, it keeps the size it had hidden.
+    /// </summary>
+    protected static double KeptW(FrameworkElement e, Panel host)
+    {
+        if (VisualTreeHelper.GetParent(e) == null) host.Children.Add(e);
+        return W(e);
+    }
+
+    /// <summary>The first of <paramref name="forms"/> that is no wider than <paramref name="room"/>, else the last: a part goes before a figure is cut.</summary>
+    protected static T Fit<T>(double room, params Func<T>[] forms) where T : FrameworkElement
+    {
+        T? last = null;
+        foreach (var make in forms)
+        {
+            last = make();
+            if (W(last) <= room + .5) return last;
+        }
+        return last!;
+    }
+
+    /// <summary>"Cleared in {0}" split round its figure, wherever the language puts it: the words before and after.</summary>
+    protected static (string Before, string After) ClearedWords()
+    {
+        var fmt = L.T("Cleared in {0}");
+        int at = fmt.IndexOf("{0}", StringComparison.Ordinal);
+        return at < 0 ? (fmt, "") : (fmt[..at].TrimEnd(), fmt[(at + 3)..].TrimStart());
+    }
+
+    /// <summary>"2 runs" / "1 run": today's runs here.</summary>
+    protected static string RunsWord(RunBuddy.State s) => s.TodayRuns == "1" ? L.T("1 run") : L.F("{0} runs", s.TodayRuns);
 
     /// <summary>
     /// The strip for this line, or null: farming only (an hour shown, not the Abyss, the idle or waiting line, nor a dungeon);
