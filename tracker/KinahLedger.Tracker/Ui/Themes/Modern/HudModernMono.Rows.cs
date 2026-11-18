@@ -206,6 +206,7 @@ sealed partial class HudModernMono
             if (_m is not { } m) return;
             double total = _root.ActualWidth;
             if (total <= 0) return;
+            Tight(false);
             bool healer = m.Heal.Length > 0;
             // the heals measured where they'd sit (the share's place takes them a size smaller)
             PlaceHeal(false);
@@ -222,13 +223,32 @@ sealed partial class HudModernMono
                 : new[] { (true, false, true), (false, false, true), (false, true, true) };
             (bool Cp, bool Fold, bool Share) pick = steps[^1];
             double Used((bool Cp, bool Fold, bool Share) s) => (s.Cp ? cpw : 0) + marks + (s.Fold ? glyphs : full) + (s.Share ? ShareW + healW : healer ? Math.Max(ShareW, healW) : 0);
-            foreach (var s in steps) if (nw + Used(s) <= room) { pick = s; break; }
+            bool fits = false;
+            foreach (var s in steps) if (nw + Used(s) <= room) { pick = s; fits = true; break; }
+            // still short (a wider face, as Korean and Chinese draw in): the air between the marks and before the DPS narrows
+            // before the name is cut, so every part stays shown
+            if (!fits)
+            {
+                Tight(true);
+                room = total - RankW - IconW - Mod.W(_dps) - (_expanded ? DmgW + CritW : 0) - 4;
+                marks = _marks.Sum(Mod.W); full = _folds.Sum(x => Mod.W(x.Full)); glyphs = _folds.Sum(x => Mod.W(x.Short));
+                foreach (var s in steps) if (nw + Used(s) <= room) { pick = s; break; }
+            }
             _cp.Visibility = pick.Cp && cpw > 0 ? Visibility.Visible : Visibility.Collapsed;
             foreach (var (f, s) in _folds) { f.Visibility = pick.Fold ? Visibility.Collapsed : Visibility.Visible; s.Visibility = pick.Fold ? Visibility.Visible : Visibility.Collapsed; }
             _share.Visibility = pick.Share ? Visibility.Visible : Visibility.Collapsed;
             PlaceHeal(healer && !pick.Share);
             _root.ColumnDefinitions[5].Width = new GridLength(pick.Share ? ShareW : healer ? Math.Max(ShareW, healW) : 0);
             _name.MaxWidth = Math.Max(nameMin, room - Used(pick));
+        }
+
+        /// <summary>The air between the marks (6 px, 3 when tight) and before the DPS figure (8 px, 4 when tight).</summary>
+        void Tight(bool on)
+        {
+            double g = on ? 3 : 6;
+            foreach (var (f, s) in _folds) { f.Margin = new Thickness(g, 0, 0, 0); s.Margin = new Thickness(g, 0, 0, 0); }
+            foreach (var d in _marks) d.Margin = new Thickness(g, 1, 0, 0);
+            _dps.Margin = new Thickness(on ? 4 : 8, 0, 0, 0);
         }
 
         /// <summary>The heals a second after the name (column 3), or in the share's place right of the DPS when the share has gone.</summary>
