@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "run-all", "fight-history-all", "overlay" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "looks") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "looks" or "worst" or "concepts") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -44,6 +44,8 @@ public static partial class WpfApp
                 if (st == "themes") { ShotThemes(w, dir); continue; }
                 if (st == "share") { ShotMeterShare(dir); continue; }   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
                 if (st == "looks") { ShotSettingsLooks(dir); continue; }
+                if (st == "worst") { ShotWorst(dir); continue; }
+                if (st == "concepts") { ShotConcepts(dir); continue; }   // the reworked looks' concept samples (Ui/MeterConcepts.cs)   // the worst-case fight in every meter look (Ui/WpfApp.CutOff.cs)
                 if (st == "mine") { ShotMine(w, dir); continue; }   // Ui/WpfApp.Mine.cs: a player's own hud.json and parser.json   // Ui/WpfApp.Themes.cs
                 if (st == "overlay") { ShotParserOverlays(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }
                 if (st == "motion") { ShotParserV2(w, dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); ShotMeterMotion(dir, w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value)); continue; }

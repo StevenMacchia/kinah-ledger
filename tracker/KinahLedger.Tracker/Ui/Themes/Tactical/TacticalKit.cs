@@ -212,21 +212,21 @@ static class Tac
     /// <paramref name="nameMin"/> at the least: the marks are never cut at the line's end). <paramref name="keep"/>: the parts
     /// that never give way (the CP in a look that always shows it compact, a death, the heal figure).
     /// </summary>
-    public static void FitName(TextBlock name, double room, IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give, double nameMin = 22)
+    /// <param name="nameFloor">The name gives way first, down to this (its marks keep their full form while it can); infinite: the marks first.</param>
+    public static void FitName(TextBlock name, double room, IReadOnlyList<FrameworkElement> keep, IReadOnlyList<(FrameworkElement Full, FrameworkElement? Short)> give, double nameMin = 22, double nameFloor = double.PositiveInfinity)
     {
         var inf = new Size(double.PositiveInfinity, double.PositiveInfinity);
-        static double W(FrameworkElement e, Size inf) { var v = e.Visibility; e.Visibility = Visibility.Visible; e.Measure(inf); double w = e.DesiredSize.Width; e.Visibility = v; return w; }
         name.ClearValue(FrameworkElement.MaxWidthProperty);
         name.Measure(inf);
-        double nw = name.DesiredSize.Width, fixedW = keep.Sum(e => W(e, inf));
-        var full = give.Select(p => W(p.Full, inf)).ToList();
-        var shrt = give.Select(p => p.Short is { } s ? W(s, inf) : 0).ToList();
+        double nw = name.DesiredSize.Width, fixedW = keep.Sum(e => W(e)), least = Math.Min(nw, nameFloor);
+        var full = give.Select(p => W(p.Full)).ToList();
+        var shrt = give.Select(p => p.Short is { } s ? W(s) : 0).ToList();
         int level = give.Count;
         for (int i = 0; i <= give.Count; i++)
         {
             double m = fixedW;
             for (int j = 0; j < give.Count; j++) m += j < i ? shrt[j] : full[j];
-            if (nw + m <= room) { level = i; break; }
+            if (least + m <= room) { level = i; break; }
         }
         double marks = fixedW;
         for (int j = 0; j < give.Count; j++)
@@ -238,6 +238,50 @@ static class Tac
         }
         name.MaxWidth = Math.Max(Math.Min(nameMin, nw), room - marks);
     }
+
+    /// <summary>
+    /// A member's bar, 0 to 1, against the fight's top (Steven, 2026-11-17: "prioritizes the bar"): the top member's runs the
+    /// whole row, the others to their part of it; before any damage, by Combat Power.
+    /// </summary>
+    public static double BarOf(MeterMember m, MeterContext c) { double top = c.E.TopMeasure(); return top > 0 ? Clamp01(c.E.Measure(m.F) / top) : 0; }
+
+    /// <summary>A part's width laid out on its own (shown for the measure, then as it was).</summary>
+    static double W(FrameworkElement e)
+    {
+        var v = e.Visibility; e.Visibility = Visibility.Visible;
+        e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double w = e.DesiredSize.Width; e.Visibility = v;
+        return w;
+    }
+
+    /// <summary>A name of up to this many characters always shows whole; a longer one keeps at least <see cref="NameKeepLong"/> and its "…".</summary>
+    public const int NameKeep = 10, NameKeepLong = 6;
+
+    /// <summary>
+    /// The least room a name keeps: whole up to <see cref="NameKeep"/> characters, else its first <see cref="NameKeepLong"/> and
+    /// "…" (a long name gives way before a mark goes to its glyph).
+    /// </summary>
+    public static double NameFloor(TextBlock name)
+    {
+        name.ClearValue(FrameworkElement.MaxWidthProperty);
+        name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double nw = name.DesiredSize.Width;
+        if (name.Text.Length <= NameKeep) return nw;
+        return Math.Min(nw, TextW(name, name.Text[..NameKeepLong] + "…") + 1);
+    }
+
+    /// <summary>A text's width in a block's own face, size and weight (a figure column sized for its widest form).</summary>
+    public static double TextW(TextBlock like, string s)
+    {
+        var probe = new TextBlock { Text = s, FontFamily = like.FontFamily, FontSize = like.FontSize, FontWeight = like.FontWeight, FontStretch = like.FontStretch, FontStyle = like.FontStyle, Padding = like.Padding };
+        TextOptions.SetTextFormattingMode(probe, TextOptions.GetTextFormattingMode(like));
+        System.Windows.Documents.Typography.SetNumeralAlignment(probe, System.Windows.Documents.Typography.GetNumeralAlignment(like));
+        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Ceiling(probe.DesiredSize.Width);
+    }
+
+    /// <summary>A figure column's width: the widest of <paramref name="forms"/> in the block's face, its margins and a pixel of air.</summary>
+    public static double FigCol(TextBlock fig, params string[] forms) => forms.Max(f => TextW(fig, f)) + fig.Margin.Left + fig.Margin.Right + 1;
 
     /// <summary>A rate column's width on a card (crit, back attacks).</summary>
     public const double CardRate = 36;
