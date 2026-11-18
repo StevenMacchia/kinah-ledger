@@ -49,10 +49,10 @@ public static class HudThemes
         Sticker => new HudSticker { Still = still }, Neon => new HudNeon { Still = still }, Goo => new HudGoo { Still = still },
         Fighter => new HudFighter { Still = still }, Scorebug => new HudScorebug { Still = still }, Holo => new HudHolo { Still = still },
         Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
-        // Modern: Mono, Line and Fade draw as Glass until their own looks land
+        ModernGlass => new HudModernGlass { Still = still },
         ModernMono => new HudModernMono { Still = still },
         ModernLine => new HudModernLine { Still = still },
-        ModernGlass or ModernFade => new HudModernGlass { Still = still },
+        ModernFade => new HudModernFade { Still = still },
         _ => null,
     };
 
