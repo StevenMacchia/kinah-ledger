@@ -43,7 +43,7 @@ public partial class MainWindow
 
     /// <summary>
     /// The same menu at the pointer: a right-click on the Parser page's hero or a table (Copy picture, Copy as text). The
-    /// window's own card, not a Windows ContextMenu; every line of it is also in Share's ▾, so nothing hides behind the click.
+    /// window's own card, not a Windows ContextMenu; every line of it is also a button on the section itself, so nothing hides behind the click.
     /// </summary>
     void ShowMenuAtPointer(FrameworkElement at, IList<MenuEntry> entries)
     {

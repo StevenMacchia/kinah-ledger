@@ -185,11 +185,11 @@ public static partial class WpfApp
         }
         finally { MainWindow.ShareSinkForTest = null; w.SetMeterOnOverlayForTest(null); w.ShareHideNamesForTest = hide0; }
 
-        // the Parser page's Share, on a kept fight opened (the meter is in its ▾: Ui/WpfApp.ParserShare.cs checks the rest)
+        // the Parser page's Copy picture, on a kept fight opened (the meter is in its ▾: Ui/WpfApp.ParserShare.cs checks the rest)
         {
             w.ShowParserDemo("detail"); DoEvents();
-            var btn = Find(w.ParserPage, "parser-share") as Button;
-            check(btn is { IsEnabled: true }, "meter share: Share on the Parser page for the fight opened");
+            var btn = Find(w.ParserPage, "parser-copy-picture-hero") as Button;
+            check(btn is { IsEnabled: true } && Find(w.ParserPage, "parser-share-more") is Button, "meter share: Copy picture and its ▾ on the Parser page for the fight opened");
         }
 
         static FrameworkElement? Find(DependencyObject d, string tag)

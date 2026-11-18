@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     /// <summary>The fight's tab (Damage, Compare, Timeline, Taken), the member opened (their id) and how their abilities are sorted.</summary>
-    string _parserTab = "Group";
+    string _parserTab = "Timeline";   // the Graphs tab first (Steven, 2026-11-18); a record without the seconds falls back to Group
     long? _parserInspect;
     string _parserSort = "Damage";
 
@@ -65,6 +65,8 @@ public partial class MainWindow
         var end = live ? now : e.End ?? e.LastAt;
         var v = ParserViewOf(e, end, past);
         var ctx = ParserCtx();
+        // each section's own copy buttons, top right of its head (Ui/MainWindow.ParserShare.cs)
+        if (Shareable(e)) ctx.Copy = view => CopyButtons(e, v, view);
         var tabs = ParserCommand.Tabs(v);
         if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Group";
         var page = new StackPanel();
@@ -103,15 +105,15 @@ public partial class MainWindow
                 extras.Add(why);
             }
         }
-        // Share on the hero's line, before the clock: a picture of the view shown, its ▾ the rest (Ui/MainWindow.ParserShare.cs)
+        // Copy picture on the hero's line, before the clock: its summary card; its ▾ the rest (Ui/MainWindow.ParserShare.cs)
         var hero = ParserCommand.Hero(v, ctx, live, extras, Shareable(e) ? ParserShareButton(e, v) : null);
         if (Shareable(e)) ShareOnRightClick(hero, e, v, ParserShare.Hero);
         page.Children.Add(hero);
         FrameworkElement body = ctx.Tab switch
         {
-            "Compare" => ParserCommand.Compare(v),
-            "Timeline" => ParserCommand.Timeline(v),
-            "Taken" => ParserCommand.Taken(v),
+            "Compare" => ParserCommand.Compare(v, ctx.Copy(ParserShare.Compare)),
+            "Timeline" => GraphsView(e, v, live),   // the Graphs tab (Ui/MainWindow.ParserGraphs.cs); each graph has its own Copy picture
+            "Taken" => ParserCommand.Taken(v, ctx.Copy(ParserShare.Taken)),
             _ => (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) ? ParserCommand.Group(v, ctx, live, detail: !live) : new Border(),
         };
         // a right-click on the view: its picture, and a table's text (tab-separated)
@@ -144,7 +146,12 @@ public partial class MainWindow
         var v = ParserViewOf(e, end, past);
         var m = v.Members.FirstOrDefault(x => x.F.Id == id);
         if (m == null || m.Abilities.Count == 0) { _parserInspect = null; return null; }
-        return ParserCommand.Inspect(v, m, ParserCtx());
+        var ctx = ParserCtx();
+        // the member's copy buttons on the way back's line: their card and abilities as a picture, the abilities as text
+        if (Shareable(e)) ctx.Copy = view => view == ParserShare.Abilities ? CopyButtons(e, v, view, id) : null;
+        var page = ParserCommand.Inspect(v, m, ctx);
+        if (Shareable(e)) ShareOnRightClick(page, e, v, ParserShare.Abilities, id);
+        return page;
     }
 
     // ---- the demo's extras (layout renders and the options test only)

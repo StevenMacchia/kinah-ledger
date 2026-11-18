@@ -1475,6 +1475,7 @@ options: --process aion[,other]");
         if (o.ContainsKey("timers-page")) { WpfApp.ShotTimersPage(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("bosses") || o.ContainsKey("timers")) { WpfApp.ShotBosses(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("recap")) { WpfApp.ShotRecap(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        if (o.ContainsKey("applicants")) return WpfApp.ShotApplicants(s, dir);   // the Applicants window, every theme, 1/4/10 waiting, three languages (Ui/WpfApp.Applicants.cs)
         // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
         var statesDir = Ui.UiState.FindDir(o.GetValueOrDefault("states-dir"));
         if (o.TryGetValue("sweep", out var sweep))

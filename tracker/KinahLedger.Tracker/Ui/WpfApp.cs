@@ -145,8 +145,12 @@ public static partial class WpfApp
             pw.Close();
             Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
         }
+        // KL_OPTIONS_ONLY=graphs: the Parser page's Graphs tab alone (Ui/WpfApp.ParserGraphs.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=idle: the overlay's idle line alone (Ui/WpfApp.HudIdle.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "idle") { var iw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; iw.Show(); DoEvents(); HudIdleChecks(iw, Check); iw.Close(); Console.WriteLine(fails == 0 ? "options test (idle line): all passed" : $"options test (idle line): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=applicants: the Applicants window alone (Ui/WpfApp.Applicants.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "applicants") { var aw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; aw.Show(); DoEvents(); ApplicantsChecks(aw, Check); aw.Close(); Console.WriteLine(fails == 0 ? "options test (applicants): all passed" : $"options test (applicants): {fails} failed"); return fails == 0 ? 0 : 1; }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -366,6 +370,7 @@ public static partial class WpfApp
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
+        ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
@@ -1062,12 +1067,12 @@ public static partial class WpfApp
             // flips its overlay and the dot follows
             w.SetParserSeparateForTest(true);
             string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
-            bool defaultTwo = defaultMenu == "Kinah,Parser" && w.OverlayEntries().Count == 2;
+            bool defaultTwo = defaultMenu == "Kinah,Applicants,Parser" && w.OverlayEntries().Count == 3;   // Applicants since 1.0.14
             Check(defaultTwo && !w.TimersSeparate, $"the header's Overlays menu by default: Kinah and the Parser ({defaultMenu}), the timers being a line on top of the Kinah overlay");
             w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
             var entries = w.OverlayEntries();
-            Check(ovs.Count == 3 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Kinah", "Parser", "Timers" }) && entries.Count == 3 && entries.All(e => e.On != null && e.Sub.Length > 0),
+            Check(ovs.Count == 4 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Applicants", "Kinah", "Parser", "Timers" }) && entries.Count == 4 && entries.All(e => e.On != null && e.Sub.Length > 0),
                 $"the header's Overlays menu: a switch each for Kinah first, the Parser and Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
             bool kinahWas = ovs[0].On;
             entries[0].Do!(); DoEvents();

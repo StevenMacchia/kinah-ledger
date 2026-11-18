@@ -19,16 +19,19 @@ namespace KinahLedger.Ui;
 /// </summary>
 public static class ParserShare
 {
-    /// <summary>The views a picture can hold: the page's tabs, the hero, and everything stacked.</summary>
-    public const string Hero = "hero", Group = "group", Compare = "compare", Timeline = "timeline", Taken = "taken", All = "all";
+    /// <summary>The views a picture can hold: the page's tabs, the hero, everything stacked, and a member's abilities (their inspect view).</summary>
+    public const string Hero = "hero", Group = "group", Compare = "compare", Timeline = "timeline", Taken = "taken", All = "all", Abilities = "abilities";
 
     /// <summary>The views' width in the picture, in DIPs: the group's every column with room for a name and its tags ("Member 5 joined late left").</summary>
     public const double ContentWidth = 700;
     /// <summary>The PNG's width: the views, the frame's sides and its edges, at twice the size (1564 px).</summary>
     public const int PixelWidth = (int)((ContentWidth + 82) * 2);
 
-    /// <summary>What the window lends the views: its Parser switches and the group's coverage line.</summary>
-    public sealed record Parts(bool Details, bool Kills, bool Deaths, bool HideNames, Func<Encounter, FrameworkElement?> GroupFoot);
+    /// <summary>What the window lends the views: its Parser switches, the group's coverage line, and the member whose abilities are copied (their id).</summary>
+    public sealed record Parts(bool Details, bool Kills, bool Deaths, bool HideNames, Func<Encounter, FrameworkElement?> GroupFoot, long? Member = null);
+
+    /// <summary>The member <see cref="Abilities"/> is about, when they are in the fight and have abilities.</summary>
+    static MemberView? MemberOf(FightView v, Parts p) => p.Member is long id ? v.Members.FirstOrDefault(m => m.F.Id == id && m.Abilities.Count > 0) : null;
 
     /// <summary>The page's tab as a view ("Group" is "group").</summary>
     public static string ViewOfTab(string tab) => tab switch { "Compare" => Compare, "Timeline" => Timeline, "Taken" => Taken, _ => Group };
@@ -40,6 +43,7 @@ public static class ParserShare
         Timeline => v.HasTimeline,
         Taken => v.HasTaken,
         Group => v.Members.Count > 0,
+        Abilities => v.Members.Any(m => m.Abilities.Count > 0),
         _ => true,
     };
 
@@ -57,6 +61,7 @@ public static class ParserShare
         Compare => L.T("Compare"),
         Timeline => L.T("Timeline"),
         Taken => L.T("Damage taken"),
+        Abilities => L.T("Abilities table"),
         _ => L.T("Everything"),
     };
 
@@ -76,6 +81,8 @@ public static class ParserShare
             Compare => ParserCommand.Compare(v),
             Timeline => ParserCommand.Timeline(v, ContentWidth - 34),   // the glass's sides and edges
             Taken => ParserCommand.Taken(v),
+            // the member's card and their abilities, as the page shows them opened (no way back drawn)
+            Abilities when MemberOf(v, p) is { } m => ParserCommand.Inspect(v, m, ctx),
             _ => ParserCommand.Group(v, ctx, live, detail: !live),
         };
         body.Tag = "share-view-" + view;
@@ -121,7 +128,7 @@ public static class ParserShare
     {
         var shown = Shown(e, p);
         var v = ViewOf(shown, now, past, sample);
-        if (view != All && !Has(v, view)) view = Group;
+        if (view == Abilities ? MemberOf(v, p) == null : view != All && !Has(v, view)) view = Group;
         return MeterShare.Framed(shown, now, () => Faces(v, view, e.Live, p), "parser-share-" + view, use);
     }
 
@@ -138,8 +145,8 @@ public static class ParserShare
 
     // ---- as text (right-click › Copy as text on a table, and the Share menu's own line) ----
 
-    /// <summary>A view that copies as text: the group's table, the damage taken, the compare.</summary>
-    public static bool HasText(FightView v, string view) => view is Group or Taken or Compare && Has(v, view);
+    /// <summary>A view that copies as text: the group's table, the damage taken, the compare, a member's abilities.</summary>
+    public static bool HasText(FightView v, string view) => view is Group or Taken or Compare or Abilities && Has(v, view);
 
     /// <summary>
     /// The table as text: a line naming the fight, then a head row and a row a member (or an ability), the cells split by
@@ -151,6 +158,8 @@ public static class ParserShare
         var v = ViewOf(shown, now, past, sample);
         var sb = new StringBuilder();
         var bits = new List<string> { shown.Title };
+        var member = view == Abilities ? MemberOf(v, p) : null;
+        if (member != null) bits.Add(ParserRows.NameOf(member.F));
         if (shown.Live) bits.Add($"{L.T("Fighting")} {BossParser.Clock(shown.Duration(now))}");
         else bits.Add($"{shown.OutcomeLabel} · {BossParser.Clock(shown.Duration(now))}");
         if (PK.WhereOf(shown) is { Length: > 0 } where) bits.Add(where);
@@ -176,6 +185,32 @@ public static class ParserShare
                 var skills = you.Abilities.Select(a => a.Skill).Union(basis.Abilities.Keys).ToList();
                 foreach (var (skill, nowDps, thenDps) in skills.Select(s => (s, you.Abilities.FirstOrDefault(a => a.Skill == s)?.Dps ?? 0, basis.Abilities.TryGetValue(s, out var t) ? t : 0)).OrderByDescending(x => Math.Max(x.Item2, x.Item3)))
                     Row(new[] { Parser.Abilities.Name(skill, you.F.Class), nowDps > 0 ? N(nowDps) : "", thenDps > 0 ? N(thenDps) : "", nowDps > 0 && thenDps > 0 ? PK.Signed(nowDps / thenDps - 1) : nowDps > 0 ? L.T("new") : L.T("not used") });
+                break;
+            }
+            case Abilities when member != null:
+            {
+                // the member's abilities by damage, every column the record has (none made up: a missing figure is an empty cell)
+                var ab = member.Abilities;
+                bool casts = ab.Any(a => a.Casts != null), crit = ab.Any(a => a.Crit != null), max = ab.Any(a => a.Max != null), min = ab.Any(a => a.Min != null);
+                var head = new List<string> { L.T("Ability"), L.T("Damage"), L.T("Share"), L.T("DPS") };
+                if (casts) head.Add(L.T("Casts"));
+                head.Add(L.T("Hits"));
+                if (crit) head.Add(L.T("Crit"));
+                if (max) head.Add(L.T("Max"));
+                if (min) head.Add(L.T("Min"));
+                head.Add(L.T("Average"));
+                Row(head);
+                foreach (var a in ab.OrderByDescending(a => a.Damage))
+                {
+                    var cells = new List<string> { a.Name, a.Damage.ToString(CultureInfo.InvariantCulture), P(a.Share), a.DpsOrNull is { } d ? N(d) : "" };
+                    if (casts) cells.Add(a.Casts?.ToString(CultureInfo.InvariantCulture) ?? "");
+                    cells.Add(a.Hits > 0 ? a.Hits.ToString(CultureInfo.InvariantCulture) : "");
+                    if (crit) cells.Add(a.Crit is { } c ? P(c) : "");
+                    if (max) cells.Add(a.Max is { } x ? x.ToString(CultureInfo.InvariantCulture) : "");
+                    if (min) cells.Add(a.Min is { } y ? y.ToString(CultureInfo.InvariantCulture) : "");
+                    cells.Add(a.Avg is { } g ? N(g) : "");
+                    Row(cells);
+                }
                 break;
             }
             default:

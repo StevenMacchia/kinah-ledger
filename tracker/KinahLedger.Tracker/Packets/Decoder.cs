@@ -71,6 +71,18 @@ public sealed record BagRecord(DateTime At, int Kind, int Count, long ItemId, lo
 }
 
 /// <summary>
+/// The party finder, as the leader of a recruit sees it (the decoder's interface version 11): someone applied to the
+/// player's group (Applied, with what the application shows: name, class, level, item level, Combat Power, home server),
+/// joined it (Accepted), was taken off the list (Removed), or every application went at once (Cleared: the recruit closed,
+/// or the player went into another group; no applicant then). Key: the applicant, the same in every event of theirs
+/// (opaque). AppliedAt: when they applied, on the game server's clock (null when not read); At is when it arrived.
+/// </summary>
+public sealed record PartyApplication(DateTime At, PartyApplication.Kind What, string Key, string Name, string Class, int Level, int ItemLevel, long CombatPower, string Server, DateTime? AppliedAt)
+{
+    public enum Kind { Applied = 1, Accepted = 2, Removed = 3, Cleared = 4 }
+}
+
+/// <summary>
 /// The decoder's boss parser row (klnet.dll version 4) before it becomes a <see cref="BossEvent"/>. Kind: 1 instance entered,
 /// 2 left, 3 boss seen, 4 pull started, 5 pull ended, 6 group member, 7 member left, 8 damage, 9 boss HP, 10 a death, 11 the instance's mode.
 /// </summary>
@@ -158,6 +170,10 @@ public interface IGameDecoder : IDisposable
     bool ReadsGathers => false;
     /// <summary>The next gathering attempt found, or null (always null for a decoder that reads none).</summary>
     GatherResult? NextGather() => null;
+    /// <summary>True when this decoder reads the party finder's applications too (klnet.dll's interface version 11).</summary>
+    bool ReadsApplicants => false;
+    /// <summary>The next party finder event, or null (always null for a decoder that reads none).</summary>
+    PartyApplication? NextApplicant() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
 }
 
@@ -193,6 +209,12 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         public long AtUtcTicks; public int Kind, Encounter; public long Source, Actor, Target, Amount, Raw;
         public uint SkillId; public int Skill; public ushort RowFlags, Marks; public byte Result, Cast, Multi, Why; public int N, Flags; public long Extra;
     }
+    /// <summary>A party finder event (interface version 11): 128 bytes.</summary>
+    [StructLayout(LayoutKind.Sequential)] struct KlApplicant
+    {
+        public long AtUtcTicks, AppliedUtcMs, CombatPower; public uint Listing, CharId; public int Kind, Reason, ClassNo, Level, ItemLevel, Server;
+        public fixed byte Name[32]; public fixed byte Class[16]; public fixed byte ServerName[24];
+    }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -211,6 +233,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_bag")] static extern int NextBagN(nint h, KlBagRow* row);
     [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
     [DllImport("klnet", EntryPoint = "kl_next_hit")] static extern int NextHitN(nint h, KlHit* x);
+    [DllImport("klnet", EntryPoint = "kl_next_applicant")] static extern int NextApplicantN(nint h, KlApplicant* a);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
@@ -384,6 +407,28 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         try { if (NextGatherN(_h, &g) != 1 || g.Result is < 0 or > 2 || g.Count is < 0 or > 1000) return null; }
         catch (EntryPointNotFoundException) { _noGathers = true; return null; }
         return new GatherResult(new DateTime(g.AtUtcTicks, DateTimeKind.Utc), g.NodeId, (g.Flags & 1) != 0 ? g.TemplateId : 0, (GatherEnd)g.Result, g.ItemId, g.Count, (g.Flags & 2) != 0 ? g.Attempt : 0);
+    }
+    // a dll that says 11 or more but was built without the party finder's export (the interface numbers are shared between
+    // branches): asked once, then never again
+    static bool _noApplicants;
+    public bool ReadsApplicants => Version >= 11 && !_noApplicants;
+    /// <summary>The party finder event record's size (128 bytes: a check for the tests).</summary>
+    internal static int ApplicantRecordSize => sizeof(KlApplicant);
+    public PartyApplication? NextApplicant()
+    {
+        if (_h == 0 || !ReadsApplicants) return null;
+        KlApplicant a;
+        while (true)
+        {
+            int got;
+            try { got = NextApplicantN(_h, &a); }
+            catch (EntryPointNotFoundException) { _noApplicants = true; return null; }
+            if (got != 1) return null;
+            if (a.Kind is < 1 or > 4) continue;   // a kind this build doesn't know
+            DateTime? applied = a.AppliedUtcMs > 0 && a.AppliedUtcMs < 4_102_444_800_000 ? DateTime.UnixEpoch.AddMilliseconds(a.AppliedUtcMs) : null;
+            return new PartyApplication(new DateTime(a.AtUtcTicks, DateTimeKind.Utc), (PartyApplication.Kind)a.Kind, a.CharId == 0 ? "" : a.CharId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Text(a.Name, 32), Text(a.Class, 16), a.Level, a.ItemLevel, a.CombatPower, Text(a.ServerName, 24), applied);
+        }
     }
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats
     {

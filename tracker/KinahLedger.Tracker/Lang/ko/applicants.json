@@ -1,0 +1,14 @@
+{
+  "Applicants": "파티 신청",
+  "Asking to join": "파티 신청자",
+  "{0} asking to join": "{0}명 신청 중",
+  "{0} more asked earlier": "이전 신청 {0}명 더",
+  "Lv": "Lv",
+  "item level {0:N0}": "아이템 레벨 {0:N0}",
+  "The people asking to join your group, while you lead one: shown only while someone is waiting.": "내가 파티장일 때 파티 신청자 목록: 기다리는 사람이 있을 때만 보여요.",
+  "While you lead a group, everyone asking to join, newest at the bottom; it folds away when nobody is waiting.": "파티장일 때 신청한 사람 전부, 최신이 맨 아래. 기다리는 사람이 없으면 접혀요.",
+  "Everyone asking to join the group you lead, not one at a time. Reading only: accept or decline in the game.": "내 파티에 신청한 사람을 한 명씩이 아니라 한꺼번에 보여 줘요. 보기만 해요: 수락과 거절은 게임에서.",
+  "a sample: four asking to join": "예시: 신청자 4명",
+  "Back to just under the Kinah overlay.": "키나 오버레이 바로 아래로 돌아가요.",
+  "Drag it anywhere, as the Kinah overlay. Its look follows the overlay's theme.": "키나 오버레이처럼 아무 데나 끌어다 놓으세요. 모양은 오버레이 테마를 따라가요."
+}

@@ -12,8 +12,8 @@ public static partial class WpfApp
 {
     /// <summary>
     /// ui-shot DIR --parser views: the Parser page's share pictures (Ui/ParserShare.cs) for a kept kill with the store-v2
-    /// sample (crits, the timeline, damage taken): the summary card, the group, the timeline, the damage taken, the compare and
-    /// everything (ui-parser-share-VIEW.png); the group with other names hidden; the pull under way; and the group drawn while
+    /// sample (crits, the timeline, damage taken): the summary card, the group, the timeline, the damage taken, the compare,
+    /// a member's abilities and everything (ui-parser-share-VIEW.png); the group with other names hidden; the pull under way; and the group drawn while
     /// the window is in Daylight (the picture stays dark). Example figures, never the player's.
     /// </summary>
     static void ShotParserShare(MainWindow w, string dir)
@@ -57,6 +57,10 @@ public static partial class WpfApp
             w.ShowParserDemo("compare"); DoEvents();
             var cmp = w.ParserShownForTest!;
             if (w.ShareViewForTest(cmp, ParserShare.Compare)) Write("ui-parser-share-compare.png");
+            // a member's card and abilities (the inspect view's Copy picture)
+            w.ShowParserDemo("inspect-full"); DoEvents();
+            var ins = w.ParserShownForTest!;
+            if (w.ShareViewForTest(ins, ParserShare.Abilities, w.ParserInspectForTest)) Write("ui-parser-share-abilities.png");
             // the page itself with the split Share and the back button
             w.ShowParserDemo("detail"); DoEvents();
             SavePart(w.ParserPage, Path.Combine(dir, "ui-parser-share-page.png"), w.TryFindResource("Bg") as Brush);
@@ -175,14 +179,17 @@ public static partial class WpfApp
         try
         {
             w.ShareHideNamesForTest = false;
-            // Share on each tab: a picture of that view
+            // each section's own buttons, top right of its head (Steven, 2026-11-18: "A MORE PROMINENT COPY BUTTON NO ONE KNOWS
+            // TO RIGHT CLICK"): Copy picture on every one, Copy text on a table, each copying its own section
+            CopyButtonChecks(w, check, got, () => text, s => text = s);
+            // the picture each tab's Copy picture copies: that view, in the share frame
             var bad = new List<string>();
-            foreach (var (state, view) in new[] { ("detail", ParserShare.Group), ("timeline", ParserShare.Timeline), ("taken", ParserShare.Taken), ("compare", ParserShare.Compare) })
+            foreach (var (state, view) in new[] { ("detail", ParserShare.Group), ("taken", ParserShare.Taken), ("compare", ParserShare.Compare) })   // the timeline tab is Graphs now: each graph its own Copy picture (WpfApp.ParserGraphs.cs)
             {
                 w.ShowParserDemo(state); DoEvents();
                 var e = w.ParserShownForTest;
-                var btn = FindTagged(w.ParserPage, "parser-share") as Button;
-                if (e == null || btn is not { IsEnabled: true }) { bad.Add($"{state}: no Share"); continue; }
+                var btn = FindTagged(w.ParserPage, "parser-copy-picture-" + view) as Button;
+                if (e == null || btn is not { IsEnabled: true }) { bad.Add($"{state}: no Copy picture"); continue; }
                 got.Clear();
                 Click(btn); DoEvents();
                 if (got.Count != 1) { bad.Add($"{state}: {got.Count} pictures"); continue; }
@@ -198,7 +205,7 @@ public static partial class WpfApp
                 if (MeterShare.Trimmed(laid) is { Count: > 0 } cut) miss.Add($"cut off: \"{cut[0]}\"");
                 if (miss.Count > 0) bad.Add($"{state}: {string.Join(", ", miss)}");
             }
-            check(bad.Count == 0, $"Parser share: Share on the Group, Timeline, Taken and Compare tabs copies a {wantW} px picture of that view in the share frame (the boss, the day, kinahledger.com), nothing cut off" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+            check(bad.Count == 0, $"Parser share: Copy picture on the Group, Timeline, Taken and Compare sections copies a {wantW} px picture of that view in the share frame (the boss, the day, kinahledger.com), nothing cut off" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
 
             // Everything: the hero, the group, the timeline and the damage taken, stacked in that order; the summary card alone; the meter
             {
@@ -222,8 +229,8 @@ public static partial class WpfApp
                     "Parser share: the summary card alone (the group's DPS, yours and the clock; no tabs drawn on it)");
                 check(okMeter && files.Count > 2 && files[2] == MeterShare.FileName(e) && got[2].W == MeterShare.PixelWidth, $"Parser share: Meter in the ▾ copies the meter's own picture ({(files.Count > 2 ? files[2] : "none")})");
                 var menu = w.ShareMenuForTest(e).Select(x => x.Text).ToList();
-                check(menu.SequenceEqual(new[] { L.T("This view"), L.T("Summary card"), L.T("Meter"), L.T("Everything"), L.T("Copy as text") }),
-                    $"Parser share: the ▾ offers This view, Summary card, Meter, Everything and Copy as text ({string.Join(", ", menu)})");
+                check(menu.SequenceEqual(new[] { L.T("This view"), L.T("Meter"), L.T("Everything"), L.T("Copy as text") }),
+                    $"Parser share: the ▾ beside the hero's Copy picture offers This view, Meter, Everything and Copy as text ({string.Join(", ", menu)})");
             }
 
             // Copy as text: the group's table as tab-separated rows; names hidden with the setting
@@ -320,6 +327,122 @@ public static partial class WpfApp
         {
             MainWindow.ShareSinkForTest = null; MainWindow.CopyTextSinkForTest = null; w.ShareHideNamesForTest = hide0;
             w.CloseMenuForTest();
+        }
+    }
+
+    /// <summary>
+    /// options-test: every section of the Parser page has its own copy buttons top right of its head (Steven, 2026-11-18): the
+    /// hero (Copy picture, the summary card, and a ▾ beside it), the group, the timeline, the damage taken, the compare and a
+    /// member's abilities. Each says its words whole, Copy picture copies that section's picture and Copy text (on a table) its
+    /// rows; the button says "Copied" in place, through a redraw too, and its words come back after.
+    /// </summary>
+    static void CopyButtonChecks(MainWindow w, Action<bool, string> check, List<(int W, int H, string File, BitmapSource Bmp)> got, Func<string?> text, Action<string?> setText)
+    {
+        static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        static List<string> Words(DependencyObject d) => FindTexts(d).Select(BlockText).Where(s => s.Length > 0).ToList();
+        // the section a button sits in: the fight's (or the member's) block's own child holding it
+        FrameworkElement? Section(DependencyObject el)
+        {
+            for (DependencyObject cur = el; ;)
+            {
+                var p = VisualTreeHelper.GetParent(cur);
+                if (p == null) return null;
+                if (p is Panel && VisualTreeHelper.GetParent(p) == w.ParserPage) return cur as FrameworkElement;
+                cur = p;
+            }
+        }
+        var bad = new List<string>();
+        // the state, the section's view, the head word its text's first row holds (null: no Copy text)
+        var cases = new (string State, string View, string? Head)[]
+        {
+            ("detail", ParserShare.Hero, null), ("detail", ParserShare.Group, L.T("DPS")),
+            ("taken", ParserShare.Taken, L.T("Taken")), ("compare", ParserShare.Compare, L.T("This pull")), ("inspect-full", ParserShare.Abilities, L.T("Ability")),
+            ("live", ParserShare.Hero, null), ("live", ParserShare.Group, L.T("DPS")),
+        };
+        var seen = new List<string>();
+        foreach (var (state, view, head) in cases)
+        {
+            w.ShowParserDemo(state); DoEvents(); w.UpdateLayout();
+            string at = $"{state}/{view}";
+            var e = w.ParserShownForTest;
+            var box = FindTagged(w.ParserPage, "parser-copy-" + view);
+            var pic = FindTagged(w.ParserPage, "parser-copy-picture-" + view) as Button;
+            var txt = FindTagged(w.ParserPage, "parser-copy-text-" + view) as Button;
+            if (e == null || box == null || pic == null) { bad.Add($"{at}: no Copy picture"); continue; }
+            if ((txt != null) != (head != null)) { bad.Add($"{at}: Copy text {(txt != null ? "shown" : "missing")}"); continue; }
+            if (view == ParserShare.Hero && FindTagged(box, "parser-share-more") is not Button) bad.Add($"{at}: no ▾ beside Copy picture");
+            // the words whole, and the buttons top right of their section
+            var words = Words(box);
+            if (!words.Contains(L.T("Copy picture")) || (head != null && !words.Contains(L.T("Copy text")))) bad.Add($"{at}: words {string.Join("|", words)}");
+            if (MeterShare.Trimmed(box) is { Count: > 0 } cut) bad.Add($"{at}: cut \"{cut[0]}\"");
+            if (Section(box) is { } sec)
+            {
+                var p = box.TransformToAncestor(sec).Transform(new Point(0, 0));
+                double top = p.Y, right = sec.ActualWidth - p.X - box.ActualWidth;
+                // the hero's sit on its top line before the clock and the outcome (as Share did): its right half
+                double room = view == ParserShare.Hero ? sec.ActualWidth / 2 - box.ActualWidth : 30;
+                if (top > 44 || right > room || right < -1) bad.Add($"{at}: not top right of its section ({top:0} from the top, {right:0} from the right)");
+            }
+            else bad.Add($"{at}: no section");
+            // Copy picture: that section's picture, and "Copied" in place
+            long? member = view == ParserShare.Abilities ? w.ParserInspectForTest : null;
+            got.Clear();
+            Click(pic);
+            if (got.Count != 1 || !got[0].File.EndsWith($"-{view}.png", StringComparison.Ordinal)) bad.Add($"{at}: picture {string.Join(",", got.Select(g => g.File))}");
+            if (!Words(pic).Contains(L.T("Copied")) || pic.MinWidth <= 0) bad.Add($"{at}: no \"Copied\" in the button ({string.Join("|", Words(pic))})");
+            // the abilities' picture: the member's card and their abilities, no way back drawn, nothing cut
+            if (view == ParserShare.Abilities && member is long id)
+            {
+                var laid = ParserShare.Laid(e, w.ShareNowForTest(e), w.ParserPastForTest, ParserShare.Abilities, w.SharePartsOfForTest(id), MainWindow.ParserViewSample);
+                var drawn = DrawnTexts(laid);
+                var name = e.Roster.FirstOrDefault(f => f.Id == id)?.Name ?? "?";
+                if (!TagsUnder(laid, "share-view-").SequenceEqual(new[] { "share-view-abilities" }) || !drawn.Contains(name) || drawn.Any(t => t.StartsWith("‹")) || !drawn.Contains(L.T("Ability")))
+                    bad.Add($"{at}: the picture isn't {name}'s card and abilities ({string.Join(",", TagsUnder(laid, "share-view-"))})");
+                if (MeterShare.Trimmed(laid) is { Count: > 0 } lc) bad.Add($"{at}: picture cut \"{lc[0]}\"");
+            }
+            // Copy text: the table's rows, tab-separated, its head row first
+            if (txt != null)
+            {
+                setText(null);
+                Click(txt);
+                var lines = (text() ?? "").Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+                var heads = lines.Length > 1 ? lines[1].Split('\t') : Array.Empty<string>();
+                int rows = view == ParserShare.Abilities ? e.Roster.First(f => f.Id == member).Abilities.Count : -1;
+                if (lines.Length < 3 || !heads.Contains(head) || lines.Skip(2).Any(l => l.Split('\t').Length != heads.Length) || (rows >= 0 && lines.Length != rows + 2))
+                    bad.Add($"{at}: text {lines.Length} lines, head {string.Join("|", heads)}");
+                if (!Words(txt).Contains(L.T("Copied"))) bad.Add($"{at}: no \"Copied\" in Copy text");
+            }
+            seen.Add(at);
+        }
+        check(bad.Count == 0 && seen.Count == cases.Length,
+            $"Parser copy buttons: the hero, group, timeline, damage taken, compare and abilities each have Copy picture (and Copy text on a table) top right of their head, words whole; each copies its own section and says \"Copied\" in place ({seen.Count} of {cases.Length})" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+
+        // "Copied" stays through a redraw (a live fight redraws), then the words come back; the hero's ▾ opens its menu
+        {
+            var keep = MainWindow.CopiedFor;
+            try
+            {
+                w.ShowParserDemo("detail"); DoEvents();
+                var pic = FindTagged(w.ParserPage, "parser-copy-picture-group") as Button;
+                MainWindow.CopiedFor = TimeSpan.FromSeconds(30);
+                if (pic != null) Click(pic);
+                w.ParserTabForTest = "Group"; DoEvents();
+                var again = FindTagged(w.ParserPage, "parser-copy-picture-group") as Button;
+                bool kept = again != null && again != pic && Words(again).Contains(L.T("Copied"));
+                MainWindow.CopiedFor = TimeSpan.FromMilliseconds(40);
+                var hero = FindTagged(w.ParserPage, "parser-copy-picture-hero") as Button;
+                bool said = false;
+                if (hero != null) { Click(hero); said = Words(hero).Contains(L.T("Copied")); }
+                System.Threading.Thread.Sleep(150); DoEvents(); DoEvents();
+                bool back = hero != null && Words(hero).Contains(L.T("Copy picture")) && !Words(hero).Contains(L.T("Copied")) && hero.MinWidth == 0;
+                var more = FindTagged(w.ParserPage, "parser-share-more") as Button;
+                if (more != null) { Click(more); DoEvents(); }
+                var menu = w.MenuCardForTest is { } card ? Words(card) : new List<string>();
+                w.CloseMenuForTest();
+                check(kept && said && back && menu.Contains(L.T("This view")) && menu.Contains(L.T("Everything")),
+                    $"Parser copy buttons: \"Copied\" holds through a redraw ({kept}) and the words come back after ({said}, {back}); the ▾ beside the hero's Copy picture opens the rest ({string.Join(", ", menu)})");
+            }
+            finally { MainWindow.CopiedFor = keep; }
         }
     }
 }

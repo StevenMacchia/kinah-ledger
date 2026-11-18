@@ -1663,6 +1663,8 @@ public static class ParserTests
             Check(death is { At: 5.0, KillerId: 871, KillerSkill: 9000300, Killer: "Talisra of the Void", BossHpLeft: 0.955 } && death.Last.Select(h => h.Amount).SequenceEqual(new long[] { 8_000, 9_000, 12_000 })
                 && aerin.Taken!.Sum(x => x.Damage) == 29_000 && aerin.Taken.All(x => x.Source == "Talisra of the Void"),
                 $"...a death: when, the boss's HP then, the killer and its skill, the last hits taken with the killing blow that came just after ({death.Last.Count}); damage taken by skill and source");
+            Check(aerin.TakenPerSecond is { } tps && tps.Sum() == 29_000 && tps.Count(x => x > 0) == 3 && me.TakenPerSecond == null,
+                $"...damage taken by second for the page's graph, adding up to it ({string.Join(" ", aerin.TakenPerSecond ?? new())}); none for a member who took none");
             Check(aerin.Buffs!.Single() is { Id: 1702000101, Skill: 17020001, Seconds: 4 } b && Math.Abs(b.Share - 4 / e.Duration(e.End.Value).TotalSeconds) < 1e-9,
                 $"...an effect's uptime: {aerin.Buffs.Single().Seconds} s, {Encounter.Pct(aerin.Buffs.Single().Share)} of the pull");
             var back = System.Text.Json.JsonSerializer.Deserialize<Encounter>(System.Text.Json.JsonSerializer.Serialize(e))!;
@@ -1702,6 +1704,8 @@ public static class ParserTests
             Check(ae.Heals!.Single(h => h.Skill == -1709025011) is { Healing: 500, Hits: 1 } && ae.Heals!.Single(h => h.Skill == 17120000) is { Healing: 3_000, Effective: 1_200 }
                 && sw.Heals!.Single(h => h.Potion) is { Skill: -201110111, Self: 420 },
                 "...by ability: a heal over time's ticks under its effect, a potion marked");
+            Check(ae.HealPerSecond?.Sum() == ae.HealingEffective && sw.HealPerSecond?.Sum() == sw.HealingEffective && ae.HealPerSecond.Count(x => x > 0) == 2,
+                $"...effective healing by second for the page's graph, adding up to it, the potion in none ({string.Join(" ", ae.HealPerSecond ?? new())}; {string.Join(" ", sw.HealPerSecond ?? new())})");
             // heals per second over the fight's seconds (as DPS): 4,500 over 9 s
             Check(Math.Abs((live.DoneHpsOf(ae, t.AddSeconds(10)) ?? 0) - 500) < 0.01 && Math.Abs((live.HpsOf(ae, t.AddSeconds(10)) ?? 0) - 1_700 / 9.0) < 0.01
                 && live.HpsOf(new Fighter(), t.AddSeconds(10)) == null,

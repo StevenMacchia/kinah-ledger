@@ -295,5 +295,8 @@ public static class LangCheck
         "Valkyriestrider", "The Forgotten Sanctuary of the Silvermoon",   // the long-names state
         // the demo's world bosses as the timers shorten them ("Chaser Taulo" → "Taulo")
         "Taulo", "Aulla", "Demiros", "Neikel", "Kashapa",
+        // the Applicants sample (Ui/ApplicantsFace.cs Sample): real names from a listing, and their servers
+        "Rezo", "mz", "RubyDAD", "Thornecrestwarde", "Aerinwynne", "Seraphimdawnlite", "Vintzi", "Goldlemon", "Bode", "Avenia", "Jonhiboi",
+        "Israphel", "Zikel", "Lumiel", "Meslamtaeda", "Siel", "Fregion", "Ereshkigal", "Nezekan", "Triniel",
     };
 }

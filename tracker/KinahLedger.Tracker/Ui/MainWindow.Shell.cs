@@ -341,6 +341,7 @@ public partial class MainWindow
         if (c.HudLook != was.HudLook) ApplyHudLook(c.HudLook);   // the panel is made again in the new look
         _prefs.HudOpacity = c.HudOpacity; _hudPrefs.Scale = c.HudScale;
         PreviewHud(c.HudOpacity, c.HudScale);
+        RefreshApplicants();   // the Applicants window in the theme, opacity and size now in use (Ui/MainWindow.Applicants.cs)
         if (c.Skin != Skins.Get(_prefs.Skin).Key) { _prefs.Skin = c.Skin; }
         ApplySkin(_prefs.Skin);
         if (c.AutoUpdate != was.AutoUpdate) AutoUpdateChanged(c.AutoUpdate);
