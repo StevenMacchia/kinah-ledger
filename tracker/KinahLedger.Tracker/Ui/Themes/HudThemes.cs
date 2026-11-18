@@ -51,7 +51,8 @@ public static class HudThemes
         Vhs => new HudVhs { Still = still }, Corrupt => new HudCorrupt { Still = still }, Terminal => new HudTerminal { Still = still },
         // Modern: Mono, Line and Fade draw as Glass until their own looks land
         ModernMono => new HudModernMono { Still = still },
-        ModernGlass or ModernLine or ModernFade => new HudModernGlass { Still = still },
+        ModernLine => new HudModernLine { Still = still },
+        ModernGlass or ModernFade => new HudModernGlass { Still = still },
         _ => null,
     };
 
