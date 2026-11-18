@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     /// <summary>The fight's tab (Damage, Compare, Timeline, Taken), the member opened (their id) and how their abilities are sorted.</summary>
-    string _parserTab = "Group";
+    string _parserTab = "Timeline";   // the Graphs tab first (Steven, 2026-11-18); a record without the seconds falls back to Group
     long? _parserInspect;
     string _parserSort = "Damage";
 
@@ -110,7 +110,7 @@ public partial class MainWindow
         FrameworkElement body = ctx.Tab switch
         {
             "Compare" => ParserCommand.Compare(v),
-            "Timeline" => ParserCommand.Timeline(v),
+            "Timeline" => GraphsView(e, v, live),   // the Graphs tab (Ui/MainWindow.ParserGraphs.cs)
             "Taken" => ParserCommand.Taken(v),
             _ => (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) ? ParserCommand.Group(v, ctx, live, detail: !live) : new Border(),
         };

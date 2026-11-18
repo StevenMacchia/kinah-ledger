@@ -680,7 +680,7 @@ public sealed class BossParser
         foreach (var f in one.Roster)
         {
             var g = into.Roster.FirstOrDefault(x => x.Other == f.Other && ((f.Id != 0 && x.Id == f.Id) || (f.Name.Length > 0 && x.Name.Equals(f.Name, StringComparison.OrdinalIgnoreCase)) || (f.You && x.You)));
-            if (g == null) { f.PerSecond = null; f.BossPerSecond = null; into.Roster.Add(f); continue; }
+            if (g == null) { f.PerSecond = null; f.BossPerSecond = null; f.HealPerSecond = null; f.TakenPerSecond = null; into.Roster.Add(f); continue; }
             g.Damage += f.Damage; g.BossDamage += f.BossDamage; g.Deaths += f.Deaths;
             g.Healing += f.Healing; g.HealingEffective += f.HealingEffective; g.HealingEstimated += f.HealingEstimated; g.HealingSelf += f.HealingSelf; g.HealingPotions += f.HealingPotions;
             foreach (var h in f.Heals ?? new())
@@ -1196,6 +1196,7 @@ public sealed class BossParser
             m.HealingEffective += eff;
             if (hl.Estimate) m.HealingEstimated += eff;
             if (hl.Self) m.HealingSelf += hl.Amount;
+            if (eff > 0) m.HealPerSecond = Fighter.AddAt(m.HealPerSecond, e.SecondOf(hl.At), eff);   // the page's heal graph
         }
         var list = m.Heals ??= new();
         var a = list.FirstOrDefault(x => x.Skill == hl.Skill);
@@ -1234,6 +1235,7 @@ public sealed class BossParser
             var t = list.FirstOrDefault(x => x.Skill == ht.Skill && x.SourceId == ht.Attacker);
             if (t == null) list.Add(t = new TakenShare { Skill = ht.Skill, SourceId = ht.Attacker, Source = SourceName(e, ht.Attacker) });
             t.Damage += Math.Max(0, ht.Amount); t.Hits++;
+            if (ht.Amount > 0) m.TakenPerSecond = Fighter.AddAt(m.TakenPerSecond, e.SecondOf(ht.At), ht.Amount);   // the page's damage-taken graph
         }
         if (!_recentTaken.TryGetValue(ht.Target, out var q)) _recentTaken[ht.Target] = q = new();
         q.Enqueue(ht);

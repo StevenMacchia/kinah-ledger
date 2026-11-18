@@ -1,0 +1,15 @@
+{
+  "Graphs": "圖表",
+  "The graphs fill in after the first seconds of the fight.": "戰鬥開始幾秒後，圖表就會出現。",
+  "Killed at {0}": "{0} 擊殺",
+  "Wiped · {0} HP left": "團滅 · 剩餘 HP {0}",
+  "{0} · {1} s average": "{0} · {1} 秒平均",
+  "{0} · HP a second, {1} s average": "{0} · 每秒 HP，{1} 秒平均",
+  "Boss HP": "首領 HP",
+  "damage taken": "承受傷害",
+  "Boss HP and group DPS": "首領 HP 與隊伍 DPS",
+  "Healing and damage taken": "治療量與承受傷害",
+  "Healing": "治療量",
+  "{0} in": "已進行 {0}",
+  "A picture of this graph to paste in Discord or anywhere. Nothing is uploaded.": "這張圖表的圖片，可以貼到 Discord 或任何地方。不會上傳任何東西。"
+}
