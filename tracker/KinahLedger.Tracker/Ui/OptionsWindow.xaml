@@ -277,6 +277,9 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <Slider x:Name="WindowScale" Width="140" Minimum="0.8" Maximum="1.5" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Window size"/>
                   <TextBlock x:Name="WindowScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                  <!-- Reset size (1.0.18, Ui/MainWindow.Fit.cs ResetWindowSize): 100%, as tall as each page, the designed width; at once, as Ctrl+0 -->
+                  <Button x:Name="WindowSizeResetBtn" Content="Reset size" Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Reset size"
+                          ToolTip="Back to 100%, as tall as each page and the designed width, now. In the window: Ctrl+0."/>
                 </StackPanel>
               </Grid>
             </StackPanel>

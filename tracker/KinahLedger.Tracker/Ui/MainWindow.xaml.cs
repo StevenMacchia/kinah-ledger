@@ -1233,25 +1233,28 @@ public partial class MainWindow : Window
     /// </summary>
     /// <summary>The working area's height on the window's screen (set at start and by FitMaxHeight): the window is never taller.</summary>
     double _screenMax = double.PositiveInfinity;
-    /// <summary>The Farming page's window height, taken when leaving it once it has been laid out, so the Quests page can keep it (0.10.28).</summary>
+    /// <summary>
+    /// The Farming page's height, taken when leaving it once it has been laid out, so the Quests page can keep it (0.10.28). In
+    /// the window's design units since 1.0.18 (before Window size draws it bigger or smaller), so a zoom doesn't leave it stale.
+    /// </summary>
     double _farmHeight;
     /// <summary>The Quests page's scroll area is capped at this before the Farming page has been measured (a demo render).</summary>
     const double QuestsScrollFallback = 720;
-
-    /// <summary>The window's height cap: the screen, or on the Quests page the Farming page's height, so that page scrolls instead of growing the window.</summary>
-    void ApplyMaxHeight() => MaxHeight = _part is "Quests" or "Timers" or "Parser" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
 
     void ShowPart(string part, bool byHand = true)
     {
         var was = _part;
         if (byHand) Motion.PickedByHand();   // the tab's light slides to a page the player picked, not to one the page follow picked
         // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
-        if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
+        if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = FitHost.ActualHeight;
         _part = part is "Crafting" or "Events" or "Timers" or "Parser" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         // the page being left, as a picture for the cross-fade, before the new page's parts show (Ui/MainWindow.PageTurn.cs)
         var leaving = byHand && was != _part ? LeavingPage() : null;
         ApplyView();
+        // another page starts at its top: the page area is one scroll shared by the pages, and the last page's scroll used to
+        // carry over, the new page's top hidden above it under the header (1.0.18, Ui/MainWindow.Fit.cs)
+        if (was != _part) LowerScroll.ScrollToTop();
         FarmTab.Style = (Style)FindResource(_part == "Farming" ? "NavOn" : "SegOff");
         CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "NavOn" : "SegOff");
@@ -1323,14 +1326,16 @@ public partial class MainWindow : Window
         // render), the scroll area is capped instead
         ApplyMaxHeight();
         LowerScroll.MaxHeight = (quests || timers || parser) && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
-        // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
-        System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
+        // rows: 2 (the one that fills, and scrolls) for the left column and the tables, both columns in Full (1.0.18: the left
+        // column scrolls too, in a window shorter than it)
+        LeftScroll.Visibility = LeftCol.Visibility;
+        LeftScroll.Margin = full ? new Thickness(0, 0, -12, 0) : new Thickness(0, 0, -20, 0);   // the bar in the gap between the columns, or the right padding
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
         System.Windows.Controls.Grid.SetColumn(LowerScroll, full ? 1 : 0);
         LowerScroll.Margin = full ? new Thickness(16, 0, -20, 0) : new Thickness(0, 0, -20, 0);
-        // fixed column widths: an Auto column would take half the header's width from the span and leave a gap
-        LeftColDef.Width = new GridLength(662);
-        RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
+        // fixed column widths: an Auto column would take half the header's width from the span and leave a gap; one column
+        // as wide as the player dragged it, two at their designed width (Ui/MainWindow.Fit.cs ApplyColumn)
+        ApplyColumn();
         // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
         // Full view adds the drops and the chips on the right
         // Full view: the bag heads the second column; Just dropped and Where to farm go to whichever column evens the two out (BalanceFull)
@@ -1345,8 +1350,6 @@ public partial class MainWindow : Window
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
         if (!farm) { HeroStats.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
-        HeadStack.Width = full ? 662 * 2 + 16 : 662;
-        StatusBar.Width = 662;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
         ApplyPlayerView(craft, farm, full);

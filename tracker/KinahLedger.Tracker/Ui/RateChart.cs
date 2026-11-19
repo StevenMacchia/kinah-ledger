@@ -66,7 +66,9 @@ sealed class RateChart
     readonly Ellipse _dot;
     readonly Line _best;
     readonly TextBlock _bestLbl;
-    readonly double _w, _h;
+    readonly double _h;
+    /// <summary>The box's width: the window's column, as wide as the player dragged it (1.0.18); the next draw takes a new one.</summary>
+    double _w => _canvas.Width;
     readonly PathFigure _fillFig = new() { IsClosed = true };
     readonly PolyLineSegment _fillSeg = new() { IsStroked = false };
     readonly ScaleTransform _dotScale = new(1, 1);
@@ -97,7 +99,7 @@ sealed class RateChart
     public RateChart(Canvas canvas, Path fill, Polyline line, Ellipse dot, Line best, TextBlock bestLbl)
     {
         (_canvas, _fill, _line, _dot, _best, _bestLbl) = (canvas, fill, line, dot, best, bestLbl);
-        _w = canvas.Width; _h = canvas.Height;
+        _h = canvas.Height;
         _fillFig.Segments.Add(_fillSeg);
         _fill.Data = new PathGeometry(new[] { _fillFig });
         _fill.SetResourceReference(BgProperty, "Bg");

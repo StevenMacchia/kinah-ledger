@@ -57,7 +57,7 @@ public partial class MainWindow
     {
         if (_graphs is not { IsLoaded: true } g || !g.IsDescendantOf(LowerScroll)) return;
         double top = g.TranslatePoint(new Point(0, 0), LowerScroll).Y + LowerScroll.VerticalOffset;
-        g.Fit(LowerScroll.ViewportHeight - top - 14);
+        g.Fit(GraphsRoom() - top - 14);   // the room the window can give the page, not only what it has now (Ui/MainWindow.Fit.cs)
     }
 
     /// <summary>One graph of the fight shown as a picture: copied, saved in Pictures\Kinah Ledger, said in the toast.</summary>

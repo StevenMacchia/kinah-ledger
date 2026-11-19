@@ -441,6 +441,7 @@ public partial class OptionsWindow : Window
             Edit(_edit with { WindowScale = Math.Round(WindowScale.Value, 2) });
             _host.PreviewWindowScale(_edit.WindowScale);
         };
+        WindowSizeResetBtn.Click += (_, _) => { _host.ResetWindowSize(); WindowSizeWasReset(); };   // at once, as Ctrl+0
 
         WhatsSentLink.Click += (_, _) => _host.WhatsSent(this);
         WhatsReadLink.Click += (_, _) => _host.WhatsRead(this);
@@ -562,6 +563,20 @@ public partial class OptionsWindow : Window
     {
         WindowScale.Value = Math.Round(Math.Clamp(scale, MainWindow.MinWindowScale, MainWindow.MaxWindowScale), 2);
         Go(Page.General);
+    }
+
+    /// <summary>
+    /// Reset size ran (the button here, or Ctrl+0 in the window): the size is saved at 100% already, so the slider shows it and
+    /// neither Save nor Cancel has a size left to keep or put back.
+    /// </summary>
+    public void WindowSizeWasReset()
+    {
+        _saved = _saved with { WindowScale = 1 };
+        _loading = true;
+        WindowScale.Value = 1; WindowScaleLbl.Text = $"{1.0:P0}";
+        _loading = false;
+        _edit = _edit with { WindowScale = 1 };
+        Refresh();
     }
 
     /// <summary>The tracker is quitting: close without asking, unsaved edits dropped and a theme being tried put back.</summary>

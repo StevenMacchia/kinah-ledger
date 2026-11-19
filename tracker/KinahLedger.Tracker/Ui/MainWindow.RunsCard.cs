@@ -62,7 +62,7 @@ public partial class MainWindow
 
     /// <summary>The card's width (the window's ledger column).</summary>
 
-    const double PlaceCardWidth = 660;
+    double PlaceCardWidth => _column - 2;   // 660 at the designed width; as wide as the player dragged the window (1.0.18, Ui/MainWindow.Fit.cs)
 
 
 
