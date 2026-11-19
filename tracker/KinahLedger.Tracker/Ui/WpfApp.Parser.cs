@@ -445,8 +445,11 @@ public static partial class WpfApp
         // a class emblem's hover names its class: that stays (the emblem is the class, colour-blind or not)
         // and a row's figure says the damage behind it ("1.2M damage in 2:42"): a figure, not an explanation
         // as are the coverage line's uncredited share and a late joiner's or leaver's time (the honest pass): figures too
+        // and the page head's actions (Copy picture, Copy text, Pop out, Settings) say what they do and their keys whatever the switch
+        w.ShowParserDemo("live-min"); DoEvents();
+        var headTips = FindTagged(w.ParserPage, "parser-head") is { } ph ? ParserTexts(ph).Tips.ToHashSet() : new HashSet<string>();
         var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ") && !t.Contains("HP the boss lost") && !t.Contains("HP the bosses lost")
-            && !t.StartsWith("Joined ") && !t.StartsWith("Left ")).ToList();
+            && !t.StartsWith("Joined ") && !t.StartsWith("Left ") && !headTips.Contains(t)).ToList();
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
         // (the item level steps aside when the row carries its DPS over time: store v2's per-second damage)
         static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP"));
@@ -474,20 +477,23 @@ public static partial class WpfApp
             $"Parser, honest pass: the inspect view's boss / adds / active and idle figures; a late joiner and a leaver marked, the coverage line ({kwapo.Texts.FirstOrDefault(t => t.Contains("credited"))})");
         check(!opened.Texts.Concat(every.Texts).Concat(kwapo.Texts).Any(t => t == "Other" || t.Contains("and more")), "Parser, honest pass: no Other row and no \"and more\" bucket");
         {
+            // the group card says what its figures are (Settings › DPS meter › DPS over active time and Damage to adds set them,
+            // 2026-11-18: no switches on the page): boss damage over the fight by default; with both set, the line and the figures follow
             w.ShowParserDemo("detail"); DoEvents();
-            var boss = FindButton(w.ParserPage, "Boss"); var allT = FindButton(w.ParserPage, "All targets");
-            var fightB = FindButton(w.ParserPage, "Fight"); var activeB = FindButton(w.ParserPage, "Active");
+            string Basis() => FindTagged(w.ParserPage, "parser-group-basis") is System.Windows.Controls.TextBlock t ? BlockText(t) : "";
             var openedE = w.ParserPastForTest.Single(e => e.Id == w.ParserOpenForTest);
             var top = openedE.Ranked().First();
             double bossDps = openedE.Dps(top, openedE.End!.Value);
-            allT?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
-            bool allOn = !Encounter.BossOnly && openedE.Dps(top, openedE.End.Value) > bossDps;
-            activeB = FindButton(w.ParserPage, "Active");
-            activeB?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
-            bool activeOn = Encounter.ActiveBasis;
+            string basis0 = Basis();
+            Encounter.BossOnly = false; Encounter.ActiveBasis = true;
+            w.ParserTabForTest = "Group"; DoEvents();
+            string basis1 = Basis();
+            bool moved = openedE.Dps(top, openedE.End.Value) > bossDps;
             w.ShowParserDemo("detail"); DoEvents();
-            check(boss != null && allT != null && fightB != null && activeB != null && allOn && activeOn && Encounter.BossOnly && !Encounter.ActiveBasis,
-                "Parser: the group card's Boss / All targets and Fight / Active switches, one click each, change the figures (boss damage over the fight by default)");
+            check(FindButton(w.ParserPage, "All targets") == null && FindButton(w.ParserPage, "Active") == null
+                && basis0.Contains(L.T("DPS over the whole fight")) && basis0.Contains(L.T("boss damage only"))
+                && basis1.Contains(L.T("DPS over active time")) && basis1.Contains(L.T("adds included")) && moved && Encounter.BossOnly && !Encounter.ActiveBasis,
+                $"Parser: the group card says what its figures are, no switches (\"{basis0}\", then \"{basis1}\" with active time and adds set; the figures follow)");
         }
         // the header: the instance with the game's mode for it
         w.ShowParserDemo("live"); DoEvents();

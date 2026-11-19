@@ -126,6 +126,10 @@ public static partial class WpfApp
         // watched timer is within 5 minutes, so a run near the hour put "Kinah Ledger timers" on the player's screen (2026-11-17)
         TimersOverlay.InvisibleForTest = true;
         PopOutWindow.OffscreenForTest = true;   // the pop-out windows too (Ui/PopOutWindow.cs), whatever opens them
+        // the meter's settings the checks were written for (1.0.17's defaults: Always on, click-through, the expanded meter and kills
+        // near you off). Options' Save reads parser.json; with no file it read a new install's 1.0.18 defaults, and the expanded
+        // meter's extra 70 then reached the window (the width and "wider" checks). The new defaults are parser-test's and SimplifyChecks'
+        new KinahLedger.Parser.ParserPrefs { AlwaysOn = false, ClickThrough = false, Expanded = false, KillsNear = false, DetailsSettled = true, HonestSettled = true, GlassSettled = true }.Save();
         int fails = 0;
         void Check(bool ok, string what) { Console.WriteLine((ok ? "ok    " : "FAIL  ") + what); if (!ok) fails++; }
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -166,7 +170,7 @@ public static partial class WpfApp
             sw.Show(); sw.ShowDemo(); DoEvents();
             OptionsWindow OpenS() { var so = new OptionsWindow(sw, OptionsWindow.Page.General) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; so.Show(); DoEvents(); return so; }
             SettingsRevampChecks(sw, OpenS, Check);
-            SimplifyChecks(settings, Check);   // on a window of its own, with this one still open (as the whole test runs it)
+            using (new MainStatics()) SimplifyChecks(settings, Check);   // on a window of its own, with this one still open (as the whole test runs it)
             sw.Close();
             Console.WriteLine(fails == 0 ? "options test (settings): all passed" : $"options test (settings): {fails} failed"); return fails == 0 ? 0 : 1;
         }
@@ -393,7 +397,7 @@ public static partial class WpfApp
         ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
         using (new MainStatics()) NpcapChecks(settings, Check);   // (its own main windows: the shared layer and lookups put back after, Ui/WpfApp.PopOuts.cs) what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
         PopOutChecks(settings, Check);   // the pop-out windows, on a main window of their own (Ui/WpfApp.PopOuts.cs; KL_OPTIONS_ONLY=popouts alone)
-        SimplifyChecks(settings, Check);   // no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page (Ui/WpfApp.SettingsSimplify.cs; KL_OPTIONS_ONLY=settings)
+        using (new MainStatics()) SimplifyChecks(settings, Check);   // (its own main window: the shared layer and lookups put back after) no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page (Ui/WpfApp.SettingsSimplify.cs; KL_OPTIONS_ONLY=settings)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");
