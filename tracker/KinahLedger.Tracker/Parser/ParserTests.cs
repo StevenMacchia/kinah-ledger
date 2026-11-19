@@ -1901,6 +1901,40 @@ public static class ParserTests
             }
         }
 
+        // a restart mid-run (Steven, 2026-11-19 15:25: "1.0.23 doesn't seem to be capturing my teammates?"): he updated inside
+        // Vakron Sky Island with a group of five, and the new reader started in the middle of the run, after its start and its
+        // group list had gone by. His recording from the restart on (rec-20261119-15-restart, two trash fights): the Always on meter has
+        // the members as rows from the moment it opens (its first fight, 72 s after the restart), each with their own damage, and
+        // nobody else (strangers hit the same monsters at 15:19)
+        {
+            var rec = Recording("20261119-15-restart");
+            if (NativeDecoder.Version < 10 || rec == null)
+                Console.WriteLine($"skip  a restart mid-run, Steven's recording: decoder interface {NativeDecoder.Version}, rec-20261119-15-restart {(rec != null ? "here" : "missing")}");
+            else
+            {
+                var tallies = new Dictionary<DateTime, Encounter>();
+                DateTime? attach = null, shown = null;
+                Replay(rec, hits: true, tick: (p, at) =>
+                {
+                    attach ??= at;
+                    if (p.AlwaysLive is not { } a) return;
+                    tallies[a.Start] = a;
+                    if (shown == null && a.Roster.Any(f => !f.You && !f.Other && f.Damage > 0 && f.Name.Length > 0)) shown = at;
+                });
+                var t2 = tallies.Values.Where(e => e.You is { Damage: > 0 }).OrderBy(e => e.Start).ToList();
+                List<Fighter> Members(Encounter e) => e.Roster.Where(f => !f.You && !f.Other && f.Damage > 0).ToList();
+                var names = t2.SelectMany(e => Members(e).Select(f => f.Name)).Distinct().ToList();
+                double after = shown is { } s0 && attach is { } a0 ? (s0 - a0).TotalSeconds : -1;
+                double opened = shown is { } s1 && t2.Count > 0 ? (s1.ToUniversalTime() - t2[0].Start.ToUniversalTime()).TotalSeconds : -1;
+                Check(t2.Count == 2 && Members(t2[0]).Count == 3 && Members(t2[1]).Count == 4 && names.Count == 4 && names.All(n => n.Length > 0)
+                    && t2.All(e => e.Roster.Count(f => f.Damage > 0 && !f.Other) <= 5 && e.Roster.Where(f => f.Damage > 0 && !f.Other).Sum(f => f.Damage) > 3 * e.You!.Damage)
+                    && opened is >= 0 and < 2,
+                    $"a restart mid-run: the members are on the Always on meter as it opens ({opened:0.0} s in), {after:0} s after the reader came in ({t2.Count} fights: "
+                    + $"{string.Join("; ", t2.Select(e => $"{e.Start.ToLocalTime():HH:mm:ss} you {Ui.Amounts.Short(e.You!.Damage)}, {Members(e).Count} members {Ui.Amounts.Short(Members(e).Sum(f => f.Damage))}"))}); "
+                    + $"{names.Count} members named, nobody outside the group");
+            }
+        }
+
         // Combat Power beside every name (the live check, 2026-11-17: Talisra showed none for the Cleric and the Assassin, who
         // were in before Steven, and the Horn Den duo on his alt showed none for either): each member of every pull on these
         // recordings with the CP the game gave for them; the meter's rows say a member's CP only when there is one
