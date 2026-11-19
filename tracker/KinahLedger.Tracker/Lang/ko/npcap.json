@@ -23,5 +23,6 @@
   "Restart Kinah Ledger now?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual.": "지금 Kinah Ledger를 다시 시작할까요?\n\n진행 중인 런은 먼저 중지되고 평소처럼 저장돼요 (공유가 켜져 있으면 공유도 돼요).",
   "AION 2 is in exclusive fullscreen": "AION 2가 전체 화면(독점) 모드예요",
   "The overlays can't show over it. In the game's graphics settings, set Display mode to Borderless.": "그 위로는 오버레이가 보이지 않아요. 게임 그래픽 설정에서 화면 모드를 테두리 없는 창으로 바꾸세요.",
-  "AION 2 is in exclusive fullscreen, so the overlays can't show over it. In the game's graphics settings, set Display mode to Borderless.": "AION 2가 전체 화면(독점) 모드라 오버레이가 그 위로 보이지 않아요. 게임 그래픽 설정에서 화면 모드를 테두리 없는 창으로 바꾸세요."
+  "AION 2 is in exclusive fullscreen, so the overlays can't show over it. In the game's graphics settings, set Display mode to Borderless.": "AION 2가 전체 화면(독점) 모드라 오버레이가 그 위로 보이지 않아요. 게임 그래픽 설정에서 화면 모드를 테두리 없는 창으로 바꾸세요.",
+  "DPS meter checks: with the reading checks, whether the DPS meter ran or what kept it off, whether your own hits were recognized and how quickly, how many fights showed your damage, whether the game was in exclusive fullscreen, and how often the screen was read. Counts only, never names, IDs or chat.": "DPS 미터 점검: 읽기 점검과 함께 DPS 미터가 작동했는지 또는 무엇 때문에 꺼져 있었는지, 내 공격이 인식됐는지와 얼마나 빨리 인식됐는지, 내 피해량이 나온 전투 수, 게임이 전체 화면(독점) 모드였는지, 화면을 얼마나 자주 읽었는지를 보내요. 횟수만 보내고 이름, ID, 채팅은 절대 보내지 않아요."
 }

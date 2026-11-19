@@ -82,6 +82,9 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) DecoderStats => _decoder?.Stats ?? default;
     volatile SelfState? _self;
     DateTime _selfAt = DateTime.MinValue;
+    /// <summary>The meter's health numbers: this connection's first data, whether its own id was told yet; the last tick while on.</summary>
+    DateTime _connDataAt = DateTime.MinValue, _onTickAt = DateTime.MinValue;
+    bool _connSelfTold;
     /// <summary>The decoder's last view of the player (interface 13; null before it or while not reading): diagnostics and the self-check.</summary>
     public SelfState? Self => On ? _self : null;
     /// <summary>When the current connection started being read (DateTime.MaxValue when not reading).</summary>
@@ -264,6 +267,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
     /// <summary>A boss parser event: to the Parser at once when it is listening, else queued; instance and pull edges logged.</summary>
     internal void TakeBoss(BossEvent b)
     {
+        // the meter's health numbers (Session/Accuracy.cs, MeterHealth): a hit row with damage, the player's or another's
+        if (b is DamageDealt { SourceId: not 0, Amount: > 0 } dd) MeterHealth.Hit(dd.SourceIsYou);
         if (BossSink is { } sink) { try { sink(b); } catch (Exception ex) { CrashLog.Write("parser", ex); } }
         else
         {
@@ -489,6 +494,10 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public void Tick(IReadOnlyCollection<uint> gamePids, SessionEngine? chat)
     {
         _pids = gamePids;
+        // the meter's health numbers: the seconds the reader was on, tick to tick
+        var tickAt = DateTime.UtcNow;
+        if (On && _onTickAt != DateTime.MinValue) MeterHealth.ReaderOn((tickAt - _onTickAt).TotalSeconds);
+        _onTickAt = On ? tickAt : DateTime.MinValue;
         try { lock (_tickGate) TickCore(gamePids); Agree(); Minute(); }
         catch (Exception ex) { CrashLog.Write("packet reading", ex); State = "Off: " + ex.Message; StopCapture(); }
         _watch ??= new Timer(_ => Watch(), null, WatchMs, WatchMs);
@@ -555,6 +564,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
         var dec = _decoder;
         dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
         _self = null; _selfAt = DateTime.MinValue;
+        _connDataAt = DateTime.MinValue; _connSelfTold = false;
+        MeterHealth.Connection();
         if (dec.ReadsBosses) TakeBoss(new FeedGap(DateTime.UtcNow));   // a new connection: the Parser's pull, if any, doesn't continue
         Bag.Unknown();
         var rows = new List<ItemChange>();
@@ -563,6 +574,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
             OnData = (d, at) =>
             {
                 _dataAt = at;
+                if (_connDataAt == DateTime.MinValue) _connDataAt = at;
                 dec.Feed(d, at);
                 while (dec.NextBag() is { } bg) TakeBag(bg);
                 while (dec.Next() is { } ch) Take(ch);
@@ -582,7 +594,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
                 while (dec.NextBossEvent() is { } b) TakeBoss(b);
                 while (dec.NextHit() is { } h) TakeBoss(h);   // the hit stream: the Parser's depth (never logged line by line)
                 // who the decoder takes the player to be, a snapshot a second (read here, on the thread that feeds it)
-                if ((at - _selfAt).TotalSeconds >= 1 || at < _selfAt) { _self = dec.Self; _selfAt = at; }
+                if ((at - _selfAt).TotalSeconds >= 1 || at < _selfAt) { _self = dec.Self; _selfAt = at; SelfHealth(_self, at); }
             },
             OnGap = () =>
             {
@@ -622,6 +634,23 @@ public sealed class PacketReader : IDisposable, IBossFeed
         }
         finally { try { src.Dispose(); } catch (Exception) { } }
     }
+
+    /// <summary>
+    /// The meter's health numbers from the once-a-second look at the player: the own id known, and on the connection's first
+    /// look that knows it, the wait from the connection's first data (to the decoder's own "since" when it falls in between).
+    /// </summary>
+    internal void SelfHealth(SelfState? s, DateTime at)
+    {
+        if (s is not { Known: true }) return;
+        MeterHealth.SelfSeen();
+        if (_connSelfTold) return;
+        _connSelfTold = true;
+        var first = _connDataAt == DateTime.MinValue ? at : _connDataAt;
+        var known = s.Since is { } since && since >= first && since <= at ? since : at;
+        MeterHealth.SelfFound((known - first).TotalSeconds);
+    }
+    /// <summary>For the self-test: a new connection whose first data came at <paramref name="firstData"/>.</summary>
+    internal void ConnectionForTest(DateTime firstData) { _connDataAt = firstData; _connSelfTold = false; MeterHealth.Connection(); }
 
     void StopCapture()
     {

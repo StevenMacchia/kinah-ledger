@@ -129,7 +129,7 @@ public static class Accuracy
             foreach (var n in names) Names.Remove((n.read, n.item ?? "", n.how));
             var layout = _layoutSent ? null : _layout;
             _layoutSent = true;
-            return new AccuracyReport(health, names, layout);
+            return new AccuracyReport(health, names, layout, MeterHealth.Take());
         }
     }
 
@@ -147,10 +147,11 @@ public static class Accuracy
             foreach (var n in r.Names) { var key = (n.read, n.item ?? "", n.how); Names[key] = Names.GetValueOrDefault(key) + n.n; }
             if (r.Layout != null && r.Layout == _layout) _layoutSent = false;
         }
+        if (r.Meter != null) MeterHealth.Restore(r.Meter);
     }
 
-    /// <summary>For tests: everything back to zero.</summary>
-    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear(); ShadowCounts.Clear(); SnapSeen.Clear(); _readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
+    /// <summary>For tests: everything back to zero (the meter's counts too).</summary>
+    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear(); ShadowCounts.Clear(); SnapSeen.Clear(); _readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } MeterHealth.Reset(); }
 
     /// <summary>A misread looked up again within this long of its last look-up is the same line on screen, not a new one.</summary>
     public const double SameLineSeconds = 10;
@@ -193,21 +194,134 @@ public sealed record LayoutReport(int W, int H, int Ui, double[]? Chat, string C
     public override int GetHashCode() => HashCode.Combine(W, H, Ui, ChatHow, LootOk, CraftOk, Fracs);
 }
 
-public sealed record AccuracyReport(Dictionary<string, long> Health, List<NameReport> Names, LayoutReport? Layout)
+public sealed record AccuracyReport(Dictionary<string, long> Health, List<NameReport> Names, LayoutReport? Layout, MeterPayload? Meter = null)
 {
-    public bool Empty => Health.Count == 0 && Names.Count == 0 && Layout == null;
+    public bool Empty => Health.Count == 0 && Names.Count == 0 && Layout == null && Meter == null;
 }
 
-/// <summary>Exactly what goes to /v1/accuracy: the app version, the install ID, the counters, the names, the layout.</summary>
+/// <summary>Exactly what goes to /v1/accuracy: the app version, the install ID, the counters, the names, the layout, the meter's counts.</summary>
 public sealed record AccuracyPayload(
     string app, string install, Dictionary<string, long> health,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<NameReport>? names,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LayoutPayload? layout)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LayoutPayload? layout,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MeterPayload? meter = null)
 {
     /// <param name="app">The version that took the report (a kept report goes out under the version that read it); this one by default.</param>
     public static AccuracyPayload From(AccuracyReport r, string install, string? app = null) => new(
         app ?? Upload.RunPayload.AppVersion, install, r.Health, r.Names.Count > 0 ? r.Names : null,
-        r.Layout is { } l ? new LayoutPayload(l.W, l.H, l.Ui, l.Chat?.Select(v => Math.Round(v, 4)).ToArray(), l.ChatHow, l.LootOk, l.CraftOk, l.Fracs) : null);
+        r.Layout is { } l ? new LayoutPayload(l.W, l.H, l.Ui, l.Chat?.Select(v => Math.Round(v, 4)).ToArray(), l.ChatHow, l.LootOk, l.CraftOk, l.Fracs) : null,
+        r.Meter);
+}
+
+/// <summary>
+/// The "meter" object of a health report (1.0.22): one session's counts since the last accepted report, by the names the
+/// site reads (backend meter_day). <paramref name="reader"/> is one of <see cref="MeterHealth.ReaderWords"/>; every other
+/// value is a count, 0 to <see cref="MeterHealth.Max"/> (the 0/1 ones say whether it happened at all). Never a name or an id.
+/// </summary>
+public sealed record MeterPayload(string reader, long reader_on_s, long self_known, long self_wait_s, long self_conns, long conns,
+    long own_hits, long other_hits, long fights_own, long fights_none, long self_check_shown, long fullscreen,
+    long passes, long backup_passes, long pass_ms);
+
+/// <summary>
+/// Whether the DPS meter works on this PC (Steven, 2026-11-18: "does it work with everyone? ... that's the biggest problem"):
+/// the game reader's state, whether the player's own fighter was known and how long that took on each connection, the
+/// hit rows of the player and of others, fights with and without the player's damage, the self-check line and exclusive
+/// fullscreen seen, and the screen passes. Each is added from the thread that saw it (the reader's, the session's, the
+/// window's 3-second look), a few additions under a lock (a hit row an Interlocked add); <see cref="Accuracy.Take"/> takes
+/// them with the health counters and <see cref="Accuracy.Restore"/> puts them back, so they start over exactly when health
+/// does, and with sharing off they are let go with it. Counts only: no names, no ids, no chat.
+/// </summary>
+public static class MeterHealth
+{
+    /// <summary>The keys of <see cref="MeterPayload"/>, in order, as the site reads them.</summary>
+    public static readonly string[] Keys =
+    {
+        "reader", "reader_on_s", "self_known", "self_wait_s", "self_conns", "conns", "own_hits", "other_hits",
+        "fights_own", "fights_none", "self_check_shown", "fullscreen", "passes", "backup_passes", "pass_ms",
+    };
+    /// <summary>The game reader's state words (Ui/MainWindow.MeterBlock.cs, MeterBlocks.ReaderWord).</summary>
+    public static readonly string[] ReaderWords = { "on", "off", "no_npcap", "admins_only", "no_server", "failed" };
+    /// <summary>The backend's COUNTER_MAX: no value goes out above it.</summary>
+    public const long Max = 10_000_000;
+
+    static readonly object Lock = new();
+    static string? _reader;
+    static double _readerOnS, _selfWaitS, _passMs;
+    static long _selfConns, _conns, _fightsOwn, _fightsNone, _passes, _backupPasses;
+    static long _ownHits, _otherHits;
+    static bool _selfKnown, _selfCheckShown, _fullscreen;
+
+    /// <summary>
+    /// The reader's state as the window last told it apart (on, off, no_npcap, admins_only, no_server, failed). Null (a
+    /// wait for the game or its server, nothing told yet) keeps the last word: a report goes out with the state last known.
+    /// </summary>
+    public static void Reader(string? word) { if (word != null && Array.IndexOf(ReaderWords, word) >= 0) lock (Lock) _reader = word; }
+    public static string? ReaderNow { get { lock (Lock) return _reader; } }
+
+    /// <summary>Seconds the reader was on, from its few-second tick (a gap over two minutes is a sleep, not reading).</summary>
+    public static void ReaderOn(double seconds) { if (seconds > 0 && seconds <= 120) lock (Lock) _readerOnS += seconds; }
+    /// <summary>A new game server connection the reader follows.</summary>
+    public static void Connection() { lock (Lock) _conns++; }
+    /// <summary>The player's own id is known now (the reader's once-a-second look).</summary>
+    public static void SelfSeen() { lock (Lock) _selfKnown = true; }
+    /// <summary>The player's own id became known on this connection, <paramref name="waitSeconds"/> after its first data.</summary>
+    public static void SelfFound(double waitSeconds)
+    {
+        lock (Lock) { _selfKnown = true; _selfConns++; _selfWaitS += Math.Clamp(double.IsFinite(waitSeconds) ? waitSeconds : 0, 0, 24 * 3600); }
+    }
+    /// <summary>One hit row with damage: the player's own, or another fighter's.</summary>
+    public static void Hit(bool own) { if (own) Interlocked.Increment(ref _ownHits); else Interlocked.Increment(ref _otherHits); }
+    /// <summary>A fight the parser ended (a boss pull, an Always on tally): with the player's damage, or others' only. No damage at all counts nothing.</summary>
+    public static void Fight(bool own, bool others) { if (!own && !others) return; lock (Lock) { if (own) _fightsOwn++; else _fightsNone++; } }
+    /// <summary>The "Your own hits aren't showing yet" line went on screen (the Parser page or the Overlays menu).</summary>
+    public static void SelfCheckShown() { lock (Lock) _selfCheckShown = true; }
+    /// <summary>The game was seen in exclusive fullscreen (the Borderless card).</summary>
+    public static void FullscreenSeen() { lock (Lock) _fullscreen = true; }
+    /// <summary>One screen-read pass of <paramref name="ms"/>, <paramref name="backup"/> while the screen was the game reader's backup.</summary>
+    public static void Pass(double ms, bool backup)
+    {
+        if (!(ms >= 0 && ms < 600_000)) return;
+        lock (Lock) { _passes++; if (backup) _backupPasses++; _passMs += ms; }
+    }
+
+    static long C(double v) => (long)Math.Clamp(Math.Floor(v), 0, Max);
+    static long C(long v) => Math.Clamp(v, 0, Max);
+    static long B(bool v) => v ? 1 : 0;
+
+    /// <summary>
+    /// The counts since the last take, taken out (whole seconds and ms go, the part left over stays), or null when the
+    /// reader's state was never told (no window watched the game): then nothing goes and the counts start over all the same.
+    /// </summary>
+    internal static MeterPayload? Take()
+    {
+        lock (Lock)
+        {
+            long own = Interlocked.Exchange(ref _ownHits, 0), other = Interlocked.Exchange(ref _otherHits, 0);
+            var m = _reader == null ? null : new MeterPayload(_reader, C(_readerOnS), B(_selfKnown), C(_selfWaitS), C(_selfConns), C(_conns),
+                C(own), C(other), C(_fightsOwn), C(_fightsNone), B(_selfCheckShown), B(_fullscreen), C(_passes), C(_backupPasses), C(_passMs));
+            _readerOnS -= Math.Floor(_readerOnS); _selfWaitS -= Math.Floor(_selfWaitS); _passMs -= Math.Floor(_passMs);
+            _selfConns = _conns = _fightsOwn = _fightsNone = _passes = _backupPasses = 0;
+            _selfKnown = _selfCheckShown = _fullscreen = false;
+            return m;
+        }
+    }
+
+    /// <summary>A report that didn't reach the site: its counts go back in (the reader's word stays the one known now).</summary>
+    internal static void Restore(MeterPayload m)
+    {
+        lock (Lock)
+        {
+            _reader ??= m.reader;
+            _readerOnS += m.reader_on_s; _selfWaitS += m.self_wait_s; _passMs += m.pass_ms;
+            _selfConns += m.self_conns; _conns += m.conns; _fightsOwn += m.fights_own; _fightsNone += m.fights_none;
+            _passes += m.passes; _backupPasses += m.backup_passes;
+            Interlocked.Add(ref _ownHits, m.own_hits); Interlocked.Add(ref _otherHits, m.other_hits);
+            _selfKnown |= m.self_known > 0; _selfCheckShown |= m.self_check_shown > 0; _fullscreen |= m.fullscreen > 0;
+        }
+    }
+
+    /// <summary>For tests: everything back to zero, the reader's word unknown.</summary>
+    internal static void Reset() { lock (Lock) { Take(); _reader = null; _readerOnS = _selfWaitS = _passMs = 0; } }
 }
 
 public sealed record LayoutPayload(int w, int h, int ui, double[]? chat, string chat_how, bool loot_ok, bool craft_ok, string fracs);

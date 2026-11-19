@@ -918,7 +918,7 @@ public sealed partial class TrackerSession
                     await Times.Time("list", () => LootGated(listRead, listGate));
                     if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
                     Times.Time("anchors", AnchorsDue);
-                    NotePass((DateTime.UtcNow - p0).TotalMilliseconds);
+                    LivePass((DateTime.UtcNow - p0).TotalMilliseconds, backup);
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
                     // the game is read, but not its chat: chat-not-found time for the health numbers
@@ -959,7 +959,7 @@ public sealed partial class TrackerSession
                     if (!off.Off("nameplates") && Runs("nameplates")) await Times.Time("nameplates", PlatesDue);
                     if (Runs("header")) await Times.Time("header", HeaderDue);
                     Times.Time("anchors", AnchorsDue);
-                    NotePass((DateTime.UtcNow - p0).TotalMilliseconds);
+                    LivePass((DateTime.UtcNow - p0).TotalMilliseconds, backup);
                     // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
@@ -3413,6 +3413,8 @@ public sealed partial class TrackerSession
 
     /// <summary>One pass's time into the audit (the read loop; tests).</summary>
     internal void NotePass(double ms) { _passes++; _passMs += ms; }
+    /// <summary>A pass of the read loop: into the audit, and into the meter's health numbers with whether the screen was the backup.</summary>
+    internal void LivePass(double ms, bool backup) { NotePass(ms); MeterHealth.Pass(ms, backup); }
 
     /// <summary>
     /// The once-a-minute audit line. Written every minute the game was read (2026-10-24: it was written only in minutes

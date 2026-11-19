@@ -106,6 +106,21 @@ public static class MeterBlocks
         return MeterBlock.None;
     }
 
+    /// <summary>
+    /// The reader's state word for the health report's "meter" (Session/Accuracy.cs, MeterHealth): on, off (the player's
+    /// switch), no_npcap, admins_only, no_server, or failed for any other Off (Restart, an error, a build without the
+    /// reader). Null while it only waits for the game or its server: the last word told stays.
+    /// </summary>
+    public static string? ReaderWord(bool on, MeterBlock block, string state) => on ? "on" : block switch
+    {
+        MeterBlock.Off => "off",
+        MeterBlock.Missing => "no_npcap",
+        MeterBlock.AdminsOnly => "admins_only",
+        MeterBlock.NoServer => "no_server",
+        MeterBlock.Restart => "failed",
+        _ => state.StartsWith("Off", StringComparison.Ordinal) ? "failed" : null,
+    };
+
     /// <summary>Npcap's own setting for "Restrict Npcap driver's access to Administrators only" (any user may read it).</summary>
     static bool ReadAdminOnly()
     {
@@ -190,8 +205,12 @@ public partial class MainWindow
             var pr = _watcher.Packets;
             bool installed = MeterBlocks.NpcapInstalled();
             if (!installed) _npcapWasMissing = true;
-            return MeterBlocks.Decide(_prefs.PacketReading, pr.On, installed, MeterBlocks.IsAdmin(), installed && MeterBlocks.AdminOnly(), pr.State,
+            bool on = pr.On; string state = pr.State;
+            var b = MeterBlocks.Decide(_prefs.PacketReading, on, installed, MeterBlocks.IsAdmin(), installed && MeterBlocks.AdminOnly(), state,
                 pr.NoServerSince is { } s ? DateTime.UtcNow - s : null, _npcapWasMissing && installed);
+            // the health report's word for it (a window that watches the game only: a test's or a render's tells nothing)
+            if (_meterWatch && !_demo) Session.MeterHealth.Reader(MeterBlocks.ReaderWord(on, b, state));
+            return b;
         }
         catch (Exception ex) { CrashLog.Write("meter block", ex); return MeterBlock.None; }
     }
@@ -215,6 +234,7 @@ public partial class MainWindow
     internal void CheckMeterBlock()
     {
         var fs = FullscreenNow();
+        if (fs && _meterWatch && !_demo) Session.MeterHealth.FullscreenSeen();   // the health report's "meter"
         if (fs != _fullscreen)
         {
             _fullscreen = fs;
@@ -320,11 +340,20 @@ public partial class MainWindow
     internal static string SelfCheckLink => L.T("Send a report");
 
     /// <summary>The self-check's line in the Overlays menu, or null.</summary>
-    internal MenuEntry? SelfCheckMenuEntry() => SelfCheckDue ? new MenuEntry(SelfCheckText, ReportMiscount, Link: SelfCheckLink, Warn: true) : null;
+    internal MenuEntry? SelfCheckMenuEntry()
+    {
+        if (!SelfCheckDue) return null;
+        SelfCheckShownHealth();
+        return new MenuEntry(SelfCheckText, ReportMiscount, Link: SelfCheckLink, Warn: true);
+    }
+
+    /// <summary>The health report's "meter": the self-check line went on screen (a test's forced line tells nothing).</summary>
+    void SelfCheckShownHealth() { if (_selfCheckForTest == null && _meterWatch && !_demo) Session.MeterHealth.SelfCheckShown(); }
 
     /// <summary>The self-check's line at the top of the Parser page: the sentence, then the report link.</summary>
     internal FrameworkElement SelfCheckLine()
     {
+        SelfCheckShownHealth();
         var sp = new WrapPanel { Margin = new Thickness(4, 0, 0, 10), Tag = "self-check-line" };
         var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         dot.SetResourceReference(Border.BackgroundProperty, "Warn");
