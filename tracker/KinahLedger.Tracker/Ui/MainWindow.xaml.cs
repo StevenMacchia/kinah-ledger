@@ -380,6 +380,7 @@ public partial class MainWindow : Window
         try
         {
             var dir = c.WriteReport("");
+            AppendDiagnostics(dir);   // the overlays' state too, so a meter that doesn't show can be told from the report (Ui/MainWindow.Diagnostics.cs)
             Status.ToolTip = dir;
             _ = SendReportPictures(dir, "Report a miscount");
             Say(L.T("Sending the report…") + (asked ? " " + L.T("Pictures are kept on this PC from now on.") : ""), "Faint");
