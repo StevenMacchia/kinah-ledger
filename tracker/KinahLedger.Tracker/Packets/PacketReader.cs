@@ -74,6 +74,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
             case AreaEvent a: TakeArea(a); break;
         }
     }
+    /// <summary>For replay --live-clock: the connection still sending at <paramref name="at"/>, as a live capture always is between the changes it decodes.</summary>
+    internal void AliveForReplay(DateTime at) { if (at > _packetAt) _packetAt = at; }
     public string Kind { get; private set; } = "";
     public long Packets => Interlocked.Read(ref _packets);
     /// <summary>Messages and bundles the decoder read, its resyncs and its currency messages, for the log.</summary>

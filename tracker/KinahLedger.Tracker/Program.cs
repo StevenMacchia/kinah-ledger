@@ -1069,7 +1069,7 @@ options: --process aion[,other]");
         if (reader != null) KinahLedger.Packets.PacketClock.Fixed = () => clock == DateTime.MinValue ? DateTime.UtcNow : clock;
         // the game's data up to a time, each piece drained as it came (the live loop drains on every arrival), the agreement
         // check every 2 s. Before the cut only the currencies' amounts are kept, as baselines, so the cut counts what is in it
-        int fi = 0; DateTime agreedAt = DateTime.MinValue; bool fedBase = false;
+        int fi = 0; DateTime agreedAt = DateTime.MinValue; bool fedBase = false, liveClock = opts.ContainsKey("live-clock");
         void FeedUntil(DateTime t)
         {
             if (reader == null) return;
@@ -1092,6 +1092,9 @@ options: --process aion[,other]");
                 if ((at - agreedAt).TotalSeconds >= 2) { reader.AgreeForTest(); agreedAt = at; }
             }
             clock = t;
+            // --live-clock: between the changes it decodes, the connection is taken as sending, as it is live (a capture sees
+            // the server's messages every second); without it the game's data counts only within 15 s of a decoded change
+            if (liveClock && feed.Count > 0 && t >= feed[0].At && t <= feed[^1].At) reader.AliveForReplay(t);
             s.DrainPacketsForTest();
         }
         // the live tracker reads the minimap every few seconds (3 s in an instance): the replay repeats the last zone as often
