@@ -389,5 +389,7 @@
   "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "追蹤器還沒讀到遊戲。正在傳送診斷報告，以便找出原因…",
   "Damage to adds": "計入小怪傷害",
   "Off, each member's DPS, share and bar count their damage to the boss alone, as its HP bar does. On, everything they hit, adds included. Only fights with adds differ.": "關閉時，每位成員的 DPS、佔比與長條只計算對首領的傷害，和首領 HP 條一致。開啟時，計算所有命中的目標，包含小怪。只有有小怪的戰鬥會不同。",
-  "Parser page: copy the fight as a picture": "戰鬥分析器頁面：將戰鬥複製成圖片"
+  "Parser page: copy the fight as a picture": "戰鬥分析器頁面：將戰鬥複製成圖片",
+  "Odyle Energy": "奧德能量",
+  "Your character's Odyle Energy, small, after the meter's total: what's left for a run's final reward. It updates whenever it changes, and after each run at least.": "在統計的總計後面小小地顯示角色的奧德能量，也就是領取副本最終獎勵還剩下的量。每次變動時都會更新，至少每打完一輪更新一次。"
 }

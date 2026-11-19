@@ -121,6 +121,31 @@ public sealed class PacketReader : IDisposable, IBossFeed
     }
     /// <summary>For packet-test: party finder events as the decoder would report them.</summary>
     internal void ApplicantForTest(PartyApplication a) => TakeApplicant(a);
+
+    /// <summary>
+    /// Each character's Odyle Energy (the decoder's version 15, Session/OdyleEnergy.cs), for the meter. The tracker's own
+    /// unless a test hands in another.
+    /// </summary>
+    public OdyleEnergy Energy { get => _energy ?? OdyleEnergy.Shared; set => _energy = value; }
+    OdyleEnergy? _energy;
+    /// <summary>The character the tracker counts for now ("" before any was seen): a reading is kept for it.</summary>
+    public Func<string> CharacterNow { get; set; } = () => Characters.Current?.Id ?? "";
+
+    /// <summary>An Odyle Energy reading: kept for the character counted for, logged.</summary>
+    void TakeEnergy(OdyleReading r)
+    {
+        Energy.Take(r, CharacterNow());
+        Log($"{Local(r.At)}  Odyle Energy {r.Total:N0} ({r.Natural:N0} + {r.Extra:N0} charged; {r.Reason switch
+        {
+            OdyleReading.Why.List => "the list at a login or a server move",
+            OdyleReading.Why.Refill => "the timed refill",
+            OdyleReading.Why.Spent => "spent",
+            OdyleReading.Why.Charged => $"charged by {r.ChargedBy:N0}",
+            _ => "changed",
+        }})");
+    }
+    /// <summary>For packet-test: Odyle Energy readings as the decoder would report them.</summary>
+    internal void EnergyForTest(OdyleReading r) => TakeEnergy(r);
     /// <summary>Where the decoder comes from: the release build's native one; a test hands in its own.</summary>
     public static Func<IGameDecoder?> Decoders { get; set; } = NativeDecoder.TryOpen;
 
@@ -585,6 +610,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
                 while (dec.NextAreaEvent() is { } area) TakeArea(area);
                 while (dec.NextGather() is { } gr) TakeGather(gr);
                 while (dec.NextApplicant() is { } ap) TakeApplicant(ap);
+                while (dec.NextEnergy() is { } en) TakeEnergy(en);
                 while (dec.NextFight() is { } f)
                 {
                     // Rank Points are a currency too (0.10.76): counted, checked against the chat and logged like Abyss Points

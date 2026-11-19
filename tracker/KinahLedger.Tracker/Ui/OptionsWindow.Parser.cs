@@ -50,7 +50,7 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserHideNamesChk = null!, _parserAddsChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserOdyleChk = null!, _parserHideNamesChk = null!, _parserAddsChk = null!;
     /// <summary>The share picture's shortcut as picked here ("Off" for none), its field and the line under it.</summary>
     string _parserShareKey = ParserPrefs.DefaultHotkey;
     TextBox? _parserShareKeyBox;
@@ -80,6 +80,7 @@ public partial class OptionsWindow
         _parserExpandedChk.IsChecked = p.Expanded;
         _parserCritChk.IsChecked = p.CritNow != "none" || p.BackNow != "none";
         _parserHealBarsChk.IsChecked = p.HealBars;
+        _parserOdyleChk.IsChecked = p.OdyleEnergy;
         _parserHideNamesChk.IsChecked = p.ShareHideNames;
         _parserShareKey = Platform.Hotkey.Parse(p.ShareHotkey) is { } sk ? sk.ToString() : ParserPrefs.DefaultHotkey;
         RefreshShareKey();
@@ -104,7 +105,7 @@ public partial class OptionsWindow
     /// </summary>
     string _parserSnap = "";
     string ParserSnap() => _parserLabel == null ? "" : string.Join("|",
-        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk, _parserAddsChk }
+        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserOdyleChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk, _parserAddsChk }
             .Select(c => c.IsChecked == true ? "1" : "0"))
         + "|" + _parserWhenBox.SelectedIndex + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0) + "|" + _parserShareKey;
     /// <summary>Something on the DPS meter page differs from parser.json: Save lights up for it.</summary>
@@ -141,6 +142,7 @@ public partial class OptionsWindow
         p.Targets = _parserAddsChk.IsChecked == true ? "all" : "boss";
         p.Expanded = _parserExpandedChk.IsChecked == true;
         p.HealBars = _parserHealBarsChk.IsChecked == true;
+        p.OdyleEnergy = _parserOdyleChk.IsChecked == true;
         p.ShareHideNames = _parserHideNamesChk.IsChecked == true;
         p.ShareHotkey = _parserShareKey;
         // crit and back attacks: the switch picks the kinds the hits carry (crit: result 3, back: side 1); off is the release's default (none)
@@ -271,6 +273,7 @@ public partial class OptionsWindow
         }
         _parserExpandedChk = Row("Expanded meter", "The overlay's meter shows everyone with their damage. Off, the top four, and you always. A click on the meter switches it too.", "Parser expanded meter");
         _parserHealBarsChk = Row("Heal bars", "A green bar along each healer's row on the overlay's meter: their share of the group's healing. The HEAL chip after the name keeps their healing a second either way.", "Parser heal bars");
+        _parserOdyleChk = Row("Odyle Energy", "Your character's Odyle Energy, small, after the meter's total: what's left for a run's final reward. It updates whenever it changes, and after each run at least.", "Parser Odyle Energy");
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
         _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length, so the rows add up to the group's DPS and your bests compare. On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out.", "Parser DPS over active time");
         _parserAddsChk = Row("Damage to adds", "Off, each member's DPS, share and bar count their damage to the boss alone, as its HP bar does. On, everything they hit, adds included. Only fights with adds differ.", "Parser damage to adds");
@@ -557,9 +560,10 @@ public partial class OptionsWindow
     internal CheckBox ParserAddsForTest => _parserAddsChk;
     internal CheckBox ParserExpandedForTest => _parserExpandedChk;
     internal CheckBox ParserHealBarsForTest => _parserHealBarsChk;
+    internal CheckBox ParserOdyleForTest => _parserOdyleChk;
     internal (CheckBox Show, CheckBox Through, ComboBox When) ParserOverlaySwitchesForTest => (_parserOverlayChk, _parserThroughChk, _parserWhenBox);
 
     /// <summary>For the options test: every switch's title under More.</summary>
-    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserAddsChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserAddsChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserOdyleChk, _parserHideNamesChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }

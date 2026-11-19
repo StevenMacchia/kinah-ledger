@@ -99,5 +99,6 @@
   "rest on a name for its skills  ·  drag the handle to move  ·  an edge to resize": "滑鼠停在名字上看技能  ·  拖曳把手移動  ·  拖曳邊緣調整大小",
   "{0:N0} a second landed": "每秒有效治療 {0:N0}",
   " ({0}% overheal)": "（溢補 {0}%）",
-  "Uptime": "攻擊時間"
+  "Uptime": "攻擊時間",
+  "Odyle Energy: what's left for a run's final reward": "奧德能量：領取副本最終獎勵還剩下的量"
 }

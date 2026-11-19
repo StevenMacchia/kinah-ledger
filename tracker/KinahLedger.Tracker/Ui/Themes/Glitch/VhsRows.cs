@@ -311,6 +311,7 @@ static class VhsRows
         var left = Txt("", 14, value, Sans);
         left.Inlines.Add(Rn(L.T("Total ").Trim().ToUpper(CultureInfo.CurrentCulture) + "  ", label, 9.5, FontWeights.SemiBold));
         left.Inlines.Add(Rn(ff.Total, value));
+        EnergyMark.After(left, 12, label, Sans);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (ff.Label.Length > 0)

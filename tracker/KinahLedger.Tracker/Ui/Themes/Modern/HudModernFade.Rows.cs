@@ -42,7 +42,9 @@ sealed partial class HudModernFade
             t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = White, FontSize = 12 });
             return t;
         }
-        g.Children.Add(Pair(L.T("Total"), total));
+        var tp = Pair(L.T("Total"), total);
+        EnergyMark.After(tp, 11, Frozen(Mod.A(Colors.White, .72)));   // Odyle Energy (Ui/EnergyMark.cs)
+        g.Children.Add(tp);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         if (word.Length > 0) right.Children.Add(Pair(word, group));
         if (held)

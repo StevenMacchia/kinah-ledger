@@ -249,6 +249,7 @@ public sealed partial class ParserPanel
             {
                 var row = Cols3(false);
                 var lt = ST(label, 9.5, FontWeights.Bold, SQuiet); lt.TextTrimming = TextTrimming.CharacterEllipsis;
+                if (!right) EnergyMark.After(lt, 11, SB(SQuiet));   // Odyle Energy (Ui/EnergyMark.cs)
                 row.Children.Add(lt);
                 var f = ST(fig, 13.5, FontWeights.Bold, fc); f.HorizontalAlignment = HorizontalAlignment.Right; f.Margin = new Thickness(8, 0, 0, 0);
                 if (right) f.Tag = "foot-right";

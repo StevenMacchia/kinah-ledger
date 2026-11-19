@@ -69,6 +69,8 @@ internal static class Program
         {
             KinahLedger.Data.DictionaryCache.DirOverride = TestTemp.Path("KinahLedger-test-items");
             KinahLedger.Ui.Native.NoHotkeys = true;   // ...and their windows take no shortcut from the player's PC
+            // ...and the meter's Odyle Energy is never the player's own: none, or KL_ODYLE's figure for a render (Ui/EnergyMark.cs)
+            KinahLedger.Ui.EnergyMark.Fixed = int.TryParse(Environment.GetEnvironmentVariable("KL_ODYLE"), out var odyle) && odyle >= 0 ? odyle : -1;
         }
         if (cmd is "parse-test" or "replay" or "replay-bank" or "bench" or "log-mine")
             KinahLedger.Data.DataFiles.DirOverride ??= TestTemp.Path("KinahLedger-test-data");

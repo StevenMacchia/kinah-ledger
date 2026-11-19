@@ -83,6 +83,19 @@ public sealed record PartyApplication(DateTime At, PartyApplication.Kind What, s
 }
 
 /// <summary>
+/// The character's Odyle Energy (the decoder's interface version 15): the pool that refills by itself (Natural: 15 every
+/// three hours, up to the character's cap) and the pool the Odyle Energy items charged (Extra, up to 2,000). The character
+/// has their sum; a run's final reward takes from the natural pool first. Why: List, the whole list at login, a character
+/// switch or a move to another server (each instance's entry and exit); Refill, the timed refill; Spent; Charged, by an
+/// item (ChargedBy how much).
+/// </summary>
+public sealed record OdyleReading(DateTime At, int Natural, int Extra, OdyleReading.Why Reason, int ChargedBy = 0)
+{
+    public enum Why { Other = 0, List = 1, Refill = 2, Spent = 3, Charged = 4 }
+    public int Total => Natural + Extra;
+}
+
+/// <summary>
 /// The decoder's boss parser row (klnet.dll version 4) before it becomes a <see cref="BossEvent"/>. Kind: 1 instance entered,
 /// 2 left, 3 boss seen, 4 pull started, 5 pull ended, 6 group member, 7 member left, 8 damage, 9 boss HP, 10 a death, 11 the instance's mode.
 /// </summary>
@@ -174,6 +187,10 @@ public interface IGameDecoder : IDisposable
     bool ReadsApplicants => false;
     /// <summary>The next party finder event, or null (always null for a decoder that reads none).</summary>
     PartyApplication? NextApplicant() => null;
+    /// <summary>True when this decoder reads the character's Odyle Energy too (klnet.dll's interface version 15).</summary>
+    bool ReadsEnergy => false;
+    /// <summary>The next Odyle Energy reading, or null (always null for a decoder that reads none).</summary>
+    OdyleReading? NextEnergy() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
     /// <summary>Who the decoder takes the player to be and the last minute of hits (klnet.dll's interface version 13), or null.</summary>
     SelfState? Self => null;
@@ -230,6 +247,8 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         public long AtUtcTicks, AppliedUtcMs, CombatPower; public uint Listing, CharId; public int Kind, Reason, ClassNo, Level, ItemLevel, Server;
         public fixed byte Name[32]; public fixed byte Class[16]; public fixed byte ServerName[24];
     }
+    /// <summary>An Odyle Energy reading (interface version 15): 32 bytes.</summary>
+    [StructLayout(LayoutKind.Sequential)] struct KlEnergy { public long AtUtcTicks; public int Natural, Extra, Reason, ChargedBy; public long Reserved; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -256,6 +275,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_next_gather")] static extern int NextGatherN(nint h, KlGather* g);
     [DllImport("klnet", EntryPoint = "kl_next_hit")] static extern int NextHitN(nint h, KlHit* x);
     [DllImport("klnet", EntryPoint = "kl_next_applicant")] static extern int NextApplicantN(nint h, KlApplicant* a);
+    [DllImport("klnet", EntryPoint = "kl_next_energy")] static extern int NextEnergyN(nint h, KlEnergy* e);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
@@ -452,6 +472,27 @@ public sealed unsafe class NativeDecoder : IGameDecoder
             DateTime? applied = a.AppliedUtcMs > 0 && a.AppliedUtcMs < 4_102_444_800_000 ? DateTime.UnixEpoch.AddMilliseconds(a.AppliedUtcMs) : null;
             return new PartyApplication(new DateTime(a.AtUtcTicks, DateTimeKind.Utc), (PartyApplication.Kind)a.Kind, a.CharId == 0 ? "" : a.CharId.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 Text(a.Name, 32), Text(a.Class, 16), a.Level, a.ItemLevel, a.CombatPower, Text(a.ServerName, 24), applied);
+        }
+    }
+    // a dll that says 15 or more but lacks the export (the numbers are shared between branches): asked once, then never again
+    static bool _noEnergy;
+    public bool ReadsEnergy => Version >= 15 && !_noEnergy;
+    /// <summary>The Odyle Energy record's size (32 bytes: a check for the tests).</summary>
+    internal static int EnergyRecordSize => sizeof(KlEnergy);
+    public OdyleReading? NextEnergy()
+    {
+        if (_h == 0 || !ReadsEnergy) return null;
+        KlEnergy e;
+        while (true)
+        {
+            int got;
+            try { got = NextEnergyN(_h, &e); }
+            catch (EntryPointNotFoundException) { _noEnergy = true; return null; }
+            if (got != 1) return null;
+            // a figure no character can hold (the charged pool stops at 2,000) is a reading gone wrong: skipped
+            if (e.Natural is < 0 or > 10_000 || e.Extra is < 0 or > 10_000) continue;
+            var why = e.Reason is >= 0 and <= 4 ? (OdyleReading.Why)e.Reason : OdyleReading.Why.Other;
+            return new OdyleReading(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), e.Natural, e.Extra, why, Math.Max(0, e.ChargedBy));
         }
     }
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats

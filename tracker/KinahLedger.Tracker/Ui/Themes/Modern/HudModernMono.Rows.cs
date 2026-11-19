@@ -19,6 +19,7 @@ sealed partial class HudModernMono
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Tt(L.T("Total"), 11, Grey, FontWeights.Medium));
         var tv = Tt(total, 12, Paper, FontWeights.Bold); tv.Margin = new Thickness(6, 0, 0, 0); left.Children.Add(tv);
+        EnergyMark.After(left, 11, Grey);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (word.Length > 0)

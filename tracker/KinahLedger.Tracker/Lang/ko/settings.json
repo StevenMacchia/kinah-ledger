@@ -389,5 +389,7 @@
   "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "트래커가 아직 게임을 읽지 못하고 있습니다. 원인을 확인할 수 있도록 진단 보고서를 보내는 중…",
   "Damage to adds": "쫄 피해 포함",
   "Off, each member's DPS, share and bar count their damage to the boss alone, as its HP bar does. On, everything they hit, adds included. Only fights with adds differ.": "끄면 각 멤버의 DPS, 비중, 막대는 보스 HP 바처럼 보스에게 준 피해만 계산해요. 켜면 쫄을 포함해 맞힌 모든 대상의 피해를 계산해요. 쫄이 있는 전투에서만 달라져요.",
-  "Parser page: copy the fight as a picture": "전투 분석기 페이지: 전투를 그림으로 복사"
+  "Parser page: copy the fight as a picture": "전투 분석기 페이지: 전투를 그림으로 복사",
+  "Odyle Energy": "오드 에너지",
+  "Your character's Odyle Energy, small, after the meter's total: what's left for a run's final reward. It updates whenever it changes, and after each run at least.": "캐릭터의 오드 에너지를 미터의 총합 뒤에 작게 보여줘요. 던전 마지막 보상을 받는 데 남은 양이에요. 바뀔 때마다, 적어도 런이 끝날 때마다 새로 고쳐져요."
 }

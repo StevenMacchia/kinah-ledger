@@ -70,6 +70,7 @@ static class ParserFoot
         }
         left.Inlines.Add(new Run(L.T("Total ")) { Foreground = HudKit.Muted, FontWeight = FontWeights.SemiBold, FontSize = size - 0.5 });
         left.Inlines.Add(new Run(Amounts.Meter(e.Credited)) { Foreground = HudKit.Ink, FontWeight = FontWeights.Bold, FontSize = size + 1 });
+        EnergyMark.After(left, size - 0.5, HudKit.Muted);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         // the group's DPS (a run's counts its boss pulls only, said so); alone, your best on this fight or your peak (Right)
