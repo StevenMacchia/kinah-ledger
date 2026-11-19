@@ -235,9 +235,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The head's left side: a big gold Copy picture, Copy text beside it, the ▾ for the rest, and the keys said beside them
-    /// (or, for a little while after a boss kill, the kill with its own Copy picture). Always shown; greyed while there is
-    /// nothing to copy yet.
+    /// The head's left side: a big gold Copy picture, Copy text beside it and the ▾ for the rest, their keys on their hovers
+    /// (and beside them where there's room, <see cref="ParserHeadLine"/>). Always shown; greyed while there is nothing to copy yet.
     /// </summary>
     FrameworkElement ParserCopyBar(List<Encounter> past)
     {
@@ -267,34 +266,38 @@ public partial class MainWindow
         };
         foreach (var b in new[] { pic, txt, more }) { b.IsEnabled = any; ToolTipService.SetShowOnDisabled(b, true); }
         if (!any) pic.ToolTip = txt.ToolTip = more.ToolTip = L.T("Nothing to copy yet. Pull a boss and Copy picture fills in.");
-        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Tag = "parser-copy-bar", Children = { pic, txt, more } };
-        // beside them: the keys, or a kill just made
-        FrameworkElement said;
+        return new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Tag = "parser-copy-bar", Children = { pic, txt, more } };
+    }
+
+    /// <summary>
+    /// The head's one line beside the copy buttons (2026-11-18: 1.0.18 had two lines of keys there and a Ready line of its own
+    /// under the head): for a little while after a boss kill, the kill with its own Copy picture; else over a held fight the
+    /// Ready line; then the keys in one quiet line, each left out where there's no room for it (the keys stay on the buttons'
+    /// hovers).
+    /// </summary>
+    FrameworkElement ParserHeadLine(bool any, FrameworkElement? ready)
+    {
+        var line = new FlowRow { Gap = 12, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
         if (_killPrompt is { } k && DateTime.UtcNow < _killPromptUntil)
         {
-            var l1 = PT(L.F("{0} killed in {1}", k.Boss.Length > 0 ? k.Boss : k.Title, BossParser.Clock(k.Duration(k.End ?? k.LastAt))), 12, FontWeights.SemiBold, "Good", trim: true);
-            var l2 = QLinkify(PT(L.T("Copy picture  ›"), 12, FontWeights.Bold, "Gold"));
-            l2.HorizontalAlignment = HorizontalAlignment.Left;
-            l2.ToolTip = L.T("Copies a picture of the kill to paste in Discord or anywhere with Ctrl+V.");
-            AutomationProperties.SetName(l2, "Copy a picture of the kill");
-            l2.Tag = "parser-kill-copy";
-            l2.MouseLeftButtonUp += (_, _) => CopyKillPicture();
-            said = new StackPanel { Children = { l1, l2 }, Tag = "parser-kill-prompt" };
+            var dp = new DockPanel { LastChildFill = true, Tag = "parser-kill-prompt", VerticalAlignment = VerticalAlignment.Center };
+            var link = QLinkify(PT(L.T("Copy picture  ›"), 12, FontWeights.Bold, "Gold"));
+            link.ToolTip = L.T("Copies a picture of the kill to paste in Discord or anywhere with Ctrl+V.");
+            AutomationProperties.SetName(link, "Copy a picture of the kill");
+            link.Tag = "parser-kill-copy";
+            link.Margin = new Thickness(10, 0, 0, 0);
+            link.MouseLeftButtonUp += (_, _) => CopyKillPicture();
+            DockPanel.SetDock(link, Dock.Right); dp.Children.Add(link);
+            dp.Children.Add(PT(L.F("{0} killed in {1}", k.Boss.Length > 0 ? k.Boss : k.Title, BossParser.Clock(k.Duration(k.End ?? k.LastAt))), 12, FontWeights.SemiBold, "Good", trim: true));
+            foreach (var c in dp.Children.OfType<FrameworkElement>()) c.VerticalAlignment = VerticalAlignment.Center;
+            line.Children.Add(dp);
         }
-        else
-        {
-            var l1 = PT(any ? L.F("{0} copies this fight as a picture", ParserCopyKey) : L.T("Pull a boss and Copy picture fills in."), 11.5, FontWeights.Medium, "Muted", trim: true);
-            var l2 = PT(any ? L.F("{0} copies it as text", ParserCopyTextKey) : L.T("Then paste it in Discord with Ctrl+V."), 11.5, FontWeights.Medium, "Faint", trim: true);
-            said = new StackPanel { Children = { l1, l2 }, Tag = "parser-copy-hint" };
-        }
-        said.Margin = new Thickness(12, 0, 0, 0);
-        said.VerticalAlignment = VerticalAlignment.Center;
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.Children.Add(row);
-        Grid.SetColumn(said, 1); g.Children.Add(said);
-        return g;
+        else if (ready != null) line.Children.Add(ready);
+        var hint = PT(any ? L.F("{0} picture  ·  {1} text", ParserCopyKey, ParserCopyTextKey) : L.T("Pull a boss and Copy picture fills in."), 11.5, FontWeights.Medium, "Faint", trim: false);
+        hint.Tag = "parser-copy-hint";
+        hint.VerticalAlignment = VerticalAlignment.Center;
+        line.Children.Add(FlowRow.Drop(hint));
+        return line;
     }
 
     // ---- after a boss kill: "Copy picture" on the page and the status line for a little while, never a popup ----

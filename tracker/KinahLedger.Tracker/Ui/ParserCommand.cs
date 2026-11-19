@@ -159,6 +159,152 @@ static class ParserCommand
         return hero;
     }
 
+    // ================================================================ the strip (the page's fight, 2026-11-18)
+
+    /// <summary>
+    /// The Parser page's fight as one compact strip over its graphs (Steven, 2026-11-18, on 1.0.18's big hero: "like bro this
+    /// is awful"; the graph is the page's hero now). Two lines. The first: the boss, the result with its clock (Live 1:12 and
+    /// the boss's HP, Killed 2:34, Wiped 3:08), where (ending in "…" when short of room; all of it on hover), and the tabs,
+    /// small, on the right. The second: the group's DPS over its damage, your DPS in the gold frame with your place and against
+    /// your best and last pull, and on the right the HP left, deaths, kills near you and Partial, two short lines. What doesn't
+    /// fit goes under it. The share pictures keep <see cref="Hero"/>.
+    /// </summary>
+    /// <param name="when">"Pulled … · Ended …" for a kept fight: the result's hover.</param>
+    public static Border Strip(FightView v, CommandCtx ctx, bool live, IEnumerable<FrameworkElement> extras, string? when = null)
+    {
+        var e = v.E;
+        var body = new StackPanel();
+        // the first line: the boss, the result, where; the tabs on the right
+        var top = Cols(-1, 0);
+        var line = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
+        void Left(FrameworkElement el) { el.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(el, Dock.Left); line.Children.Add(el); }
+        if (live) Left(new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), Background = C(Mint), Effect = new DropShadowEffect { Color = Mint, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.8 } });
+        var title = T(e.Title, 15.5, Ink, FontWeights.Bold); title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
+        AutomationProperties.SetName(title, $"{(e.ModeKind == ParserMode.Run ? "Run" : e.ModeKind == ParserMode.Fights ? "Fight" : "Boss")} {e.Title}");
+        Left(title);
+        Left(M(ResultChip(v, ctx, live, when), 10, 0, 0, 0));
+        var where = Where(e);
+        if (where.Length > 0) { var wt = M(T(where, 12, Muted), 10, 1, 0, 0); wt.TextTrimming = TextTrimming.WordEllipsis; wt.VerticalAlignment = VerticalAlignment.Center; wt.ToolTip = ctx.Tip(where); line.Children.Add(wt); }
+        else line.Children.Add(new Border());
+        top.Children.Add(line);
+        var tabs = Tabs(v);
+        if (tabs.Count > 1 && !ctx.Share) top.Children.Add(Col(M(TabRow(tabs, ctx, small: true), 10, -2, -4, -2), 1));
+        body.Children.Add(top);
+
+        // the second: the group, you; on the right the HP left, deaths, kills near you, Partial
+        var row = new FlowRow { Gap = 16, LineGap = 6, Wrap = true, Margin = new Thickness(0, 7, 0, 0) };
+        if (v.HasDamage)
+        {
+            var grp = new StackPanel { Orientation = Orientation.Horizontal, Tag = "parser-group-dps" };
+            string gtext = v.GroupDpsOrNull is { } g0 ? Int(g0) : "–";   // under 3 s no figure yet
+            var big = T(gtext, 25, Ink, FontWeights.Bold, tab: true, trim: false); big.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
+            big.VerticalAlignment = VerticalAlignment.Center;
+            if (live && v.GroupDpsOrNull is { } g1) Motion.Number(big, $"parser|gdps|{e.Id}", g1, x => Int(x), tintRise: -1);
+            AutomationProperties.SetName(big, $"{gtext} group DPS");
+            grp.Children.Add(big);
+            var gs = new StackPanel { Margin = new Thickness(8, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            gs.Children.Add(T(e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit) ? L.T("Group DPS on boss pulls") : L.T("group DPS"), 11, Muted, FontWeights.SemiBold, trim: false));
+            var dmg = T("", 11, Muted, trim: false); Typography(dmg);
+            dmg.Inlines.Add(R(Amounts.Short(v.Members.Sum(m => m.Damage)), 11, Text2, FontWeights.Bold)); dmg.Inlines.Add(R(" " + L.T("damage"), 11, Muted));
+            gs.Children.Add(dmg);
+            grp.Children.Add(gs);
+            row.Children.Add(grp);
+        }
+        if (v.HasDamage && v.You is { Damage: > 0 } you)
+        {
+            var yb = new StackPanel { Orientation = Orientation.Horizontal };
+            var yd = T(you.DpsOrNull is { } yv ? Int(yv) : "–", 19, GoldInk, FontWeights.Bold, tab: true, trim: false);
+            yd.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
+            yd.VerticalAlignment = VerticalAlignment.Center;
+            yb.Children.Add(yd);
+            var ys = new StackPanel { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            ys.Children.Add(T(L.F("You  ·  {0} of {1}", Rank(you.Rank), v.Members.Count(m => m.Damage > 0)), 11, GoldInk, FontWeights.Bold, trim: false));
+            // against your best kill of this boss and your last pull of it (kept on this PC)
+            var cmp = T("", 11, Muted, trim: false);
+            if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; cmp.Inlines.Add(R(Signed(d), 11, C(d >= 0 ? Mint : Coral), FontWeights.Bold)); cmp.Inlines.Add(R(L.T(" best"), 11, Muted)); }
+            if (v.Last != null) { double d = you.Dps / v.Last.Dps - 1; if (v.Best != null) cmp.Inlines.Add(R("  ·  ", 11, Faint)); cmp.Inlines.Add(R(Signed(d), 11, C(d >= 0 ? Mint : Coral), FontWeights.Bold)); cmp.Inlines.Add(R(L.T(" last"), 11, Muted)); }
+            if (v.Best == null && v.Last == null) cmp.Inlines.Add(R(L.F("{0} of the group's damage", Pct(you.Share)), 11, Muted));
+            if (v.Best != null || v.Last != null) cmp.ToolTip = ctx.Tip(L.F("Against your {0}.", string.Concat(v.Best != null ? L.F("best kill of {0} ({1} DPS, {2:MMM d})", e.Boss, Int(v.Best.Dps), v.Best.When.ToLocalTime()) : "", v.Best != null && v.Last != null ? L.T(" and your ") : "", v.Last != null ? L.F("last pull of it ({0} DPS, {1:MMM d})", Int(v.Last.Dps), v.Last.When.ToLocalTime()) : "")));
+            ys.Children.Add(cmp);
+            yb.Children.Add(ys);
+            var frame = YouFrame(yb, 8, new Thickness(9, 2, 11, 3), glow: 0.5);
+            frame.Tag = "parser-you";
+            row.Children.Add(frame);
+        }
+        // on the right, two short lines: the boss's HP left (live) or what a wipe left it, then deaths and kills near you; Partial
+        var lines = new List<TextBlock>();
+        TextBlock Fig(TextBlock? into, string fig, string word, Brush? tone = null)
+        {
+            var t = into ?? T("", 11.5, Muted, trim: false);
+            if (into == null) { Typography(t); t.HorizontalAlignment = HorizontalAlignment.Right; lines.Add(t); }
+            else t.Inlines.Add(R("  ·  ", 11.5, Faint));
+            t.Inlines.Add(R(fig, 12, tone ?? Ink, FontWeights.Bold)); t.Inlines.Add(R(" " + word, 11.5, Muted));
+            return t;
+        }
+        if (e.ModeKind == ParserMode.Bosses && e.BossHpLeft is { } hp && e.BossMaxHp > 0)
+        {
+            if (live) Fig(null, Amounts.Short(Math.Max(0, e.BossHp)), L.F("of {0} HP left", Amounts.Short(e.BossMaxHp)));
+            else if (e.Outcome == "wipe") Fig(null, $"{Math.Round(hp * 100):0}%", L.T("HP left"), C(Coral));
+        }
+        TextBlock? second = null;
+        if (v.Deaths > 0 && (ctx.Deaths || e.ModeKind == ParserMode.Fights)) second = Fig(second, v.Deaths.ToString(CultureInfo.InvariantCulture), L.T(v.Deaths == 1 ? "death" : "deaths"), C(Coral));
+        int near = e.Kills.Count(k => !k.Boss && !k.Yours);
+        if (ctx.Kills && near > 0 && e.ModeKind != ParserMode.Fights) second = Fig(second, near.ToString(CultureInfo.InvariantCulture), L.T("kills near you"));
+        if (e.ModeKind == ParserMode.Fights && e.YourKills > 0) second = Fig(second, e.YourKills.ToString(CultureInfo.InvariantCulture), L.T(e.PlayerKills > 0 ? L.F(e.PlayerKills == 1 ? "kills, {0} player" : "kills, {0} players", e.PlayerKills) : e.YourKills == 1 ? "kill" : "kills"), C(Mint));
+        if (!v.HasDamage && ctx.Details && e.Members.Any(f => f.CombatPower > 0)) second = Fig(second, ((int)Math.Round(e.Members.Where(f => f.CombatPower > 0).Average(f => f.CombatPower))).ToString("N0", CultureInfo.InvariantCulture), L.T("average CP"));
+        var side = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Tag = "parser-figures" };
+        if (lines.Count > 0)
+        {
+            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            foreach (var t in lines) stack.Children.Add(t);
+            side.Children.Add(stack);
+        }
+        if (e.Partial)
+        {
+            var p = Tag(L.T("Partial"), Color.FromRgb(0xF7, 0xA0, 0x72));
+            p.Margin = new Thickness(lines.Count > 0 ? 10 : 0, 0, 0, 0);
+            p.ToolTip = ctx.Tip(L.F("Some of it wasn't seen: {0}. Its damage and kills may be short.", WhyText(e)));
+            side.Children.Add(p);
+        }
+        if (side.Children.Count > 0) row.Children.Add(FlowRow.Right(side));
+        if (row.Children.Count > 0) body.Children.Add(row);
+        foreach (var x in extras) body.Children.Add(x);
+        var glow = live ? Gold : e.Tone == "good" ? Mint : e.Tone == "bad" ? Coral : Gold;
+        var strip = Glass(body, new Thickness(14, 7, 14, 8), 12, glow: glow);
+        strip.Tag = "parser-hero";
+        return strip;
+    }
+
+    /// <summary>
+    /// The strip's result: "Live 1:12" with the boss's HP left while the pull lasts; "Killed 2:34", "Wiped 3:08"
+    /// in the result's colour after it, when it was on hover.
+    /// </summary>
+    static Border ResultChip(FightView v, CommandCtx ctx, bool live, string? when)
+    {
+        var e = v.E;
+        var c = live ? Gold : e.Tone switch { "good" => Mint, "bad" => Coral, "quiet" => Color.FromRgb(0x86, 0x8D, 0xA1), _ => Gold };
+        var chip = new StackPanel { Orientation = Orientation.Horizontal };
+        var word = T(live ? L.T("Live") : e.OutcomeLabel, 12, C(c), FontWeights.SemiBold, trim: false);
+        word.VerticalAlignment = VerticalAlignment.Center;
+        chip.Children.Add(word);
+        var clockText = BossParser.Clock(e.Duration(v.Now));
+        var clock = T(clockText, 12.5, live ? GoldInk : Ink, FontWeights.Bold, tab: true, trim: false);
+        clock.Margin = new Thickness(6, 0, 0, 0); clock.VerticalAlignment = VerticalAlignment.Center;
+        AutomationProperties.SetName(clock, "Time " + clockText);
+        chip.Children.Add(clock);
+        if (live && e.ModeKind == ParserMode.Bosses && e.BossHpLeft is { } hp)
+        {
+            chip.Children.Add(new Border { Width = 1, Height = 12, Margin = new Thickness(8, 0, 8, 0), Background = C(c, 0.45), VerticalAlignment = VerticalAlignment.Center });
+            var pct = T($"{Math.Round(hp * 100):0}%", 12.5, hp < 0.34 ? C(Coral) : Ink, FontWeights.Bold, tab: true, trim: false);
+            pct.VerticalAlignment = VerticalAlignment.Center;
+            AutomationProperties.SetName(pct, $"Boss HP {Math.Round(hp * 100):0}%, {Amounts.Short(Math.Max(0, e.BossHp))} left of {Amounts.Short(e.BossMaxHp)}");
+            chip.Children.Add(pct);
+        }
+        var box = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 2, 9, 3), Background = C(c, 0.14), BorderBrush = C(c, 0.5), BorderThickness = new Thickness(1), Child = chip, Tag = "parser-result" };
+        if (when != null) box.ToolTip = ctx.Tip(when);
+        return box;
+    }
+
     /// <summary>Why a record is partial, in the language in use: each reason the Parser wrote, translated ("3 moments the tracker missed" by its figure).</summary>
     public static string WhyText(Encounter e) => string.Join("; ", e.PartialWhy.Select(w =>
     {
@@ -257,15 +403,16 @@ static class ParserCommand
         return g;
     }
 
-    static FrameworkElement TabRow(List<string> tabs, CommandCtx ctx)
+    /// <param name="small">The strip's tabs (the page's fight): smaller, flush right on its first line.</param>
+    static FrameworkElement TabRow(List<string> tabs, CommandCtx ctx, bool small = false)
     {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, Tag = "parser-tabs" };
         foreach (var t in tabs)
         {
             bool lit = t == ctx.Tab;
-            var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 4, 12, 5), Margin = new Thickness(0, 0, 4, 0), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, Focusable = true,
+            var b = new Border { CornerRadius = new CornerRadius(small ? 7 : 8), Padding = small ? new Thickness(10, 2, 10, 3) : new Thickness(12, 4, 12, 5), Margin = new Thickness(small ? 2 : 0, 0, small ? 0 : 4, 0), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, Focusable = true,
                 Background = lit ? K("Card2") : Brushes.Transparent, BorderBrush = lit ? K("LineStrong") : Brushes.Transparent,
-                Child = T(L.T(t == "Timeline" ? "Graphs" : t), 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold) };
+                Child = T(L.T(t == "Timeline" ? "Graphs" : t), small ? 12 : 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold, trim: false) };
             AutomationProperties.SetName(b, $"Parser view: {(t == "Timeline" ? "Graphs" : t)}");
             var pick = t;
             b.MouseLeftButtonUp += (_, _) => ctx.SetTab(pick);
