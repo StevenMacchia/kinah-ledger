@@ -496,8 +496,11 @@ static class ParserCommand
         }
         else body.Children.Add(h);
         var rows = (live && dmg ? v.Members.Where(m => m.Damage > 0) : v.Members).ToList();
-        double top = Math.Max(1, rows.Max(m => dmg ? (double)m.Damage : m.F.CombatPower));
-        double smax = spark ? rows.Max(m => m.PerSecond is { Count: > 0 } p ? Smooth(p.Select(x => (double)x).ToList()).Max() : 0) : 0;
+        // a live pull before any member's hit lands (the damage so far is someone else's): the group as it stands, not an empty Max
+        // that threw and left the Parser page blank (crash.log "parser page", 2026-11-18)
+        if (rows.Count == 0) rows = v.Members.ToList();
+        double top = Math.Max(1, rows.Select(m => dmg ? (double)m.Damage : m.F.CombatPower).DefaultIfEmpty(0).Max());
+        double smax = spark ? rows.Select(m => m.PerSecond is { Count: > 0 } p ? Smooth(p.Select(x => (double)x).ToList()).Max() : 0).DefaultIfEmpty(0).Max() : 0;
         for (int i = 0; i < rows.Count; i++)
         {
             var m = rows[i];
@@ -955,8 +958,8 @@ static class ParserCommand
         }
         body.Children.Add(M(head, 0, 0, 0, 8));
         var lines = v.Members.Where(m => m.PerSecond is { Count: > 1 }).Select(m => (M: m, S: Smooth(m.PerSecond!.Select(x => (double)x).ToList(), 3))).ToList();
-        double secs = lines.Max(l => l.S.Length);
-        var (cv, ch) = Frame(secs, chartWidth, 230, lines.Max(l => l.S.Max()) * 1.1, K("Line"), Faint);
+        double secs = lines.Select(l => (double)l.S.Length).DefaultIfEmpty(1).Max();
+        var (cv, ch) = Frame(secs, chartWidth, 230, lines.Select(l => l.S.Max()).DefaultIfEmpty(1).Max() * 1.1, K("Line"), Faint);
         foreach (var (m, s) in lines.Where(l => !l.M.You)) Line(cv, ch, s, ClassArt.ColorOf(m.F.Class), 1.6, false, opacity: 0.85);
         foreach (var (m, s) in lines.Where(l => l.M.You)) Line(cv, ch, s, Gold, 2.6, true);
         foreach (var (m, s) in lines) foreach (var d in m.DeathLog) DeathMark(cv, ch, d.At, s[Math.Clamp((int)d.At, 0, s.Length - 1)], m.F.Name);
