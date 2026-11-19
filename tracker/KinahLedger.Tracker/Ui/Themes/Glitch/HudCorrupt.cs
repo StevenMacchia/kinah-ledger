@@ -193,7 +193,7 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
         _figSig = sig;
         if (rs != null) { DrawRun(rs); Note(f); return; }
 
-        _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear(); _bestBlock = null;
+        _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear(); _figRow.RowDefinitions.Clear(); _bestBlock = null;
         _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _figRow.ColumnDefinitions.Add(new ColumnDefinition()); _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         if (f.Abyss && f.Counted && f.Icon.Length > 0) { var m = AbyssMark(f.Icon, 30); m.Margin = new Thickness(0, 0, 9, 0); left.Children.Add(m); }
@@ -213,16 +213,12 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             _bestBlock.Margin = new Thickness(16, 0, 2, 0); _bestBlock.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(_bestBlock, 2); _figRow.Children.Add(_bestBlock);
         }
-        // the best drop and the last three in the room beside the hour while farming, against the best block: the Abyss, the
-        // idle line and a rare drop's DATA_FOUND keep the row as it was
-        if (!f.Abyss && f.Counted && f.Rate.Length > 0 && Rare(Values) == null)
+        // the best drop and the last three in the room beside the hour, against the best block, else on their own line under it
+        // (always whole, a fight or a rare drop's DATA_FOUND up or not); the Abyss and the idle line keep the row as it was
+        if (!f.Abyss && f.Counted && f.Rate.Length > 0)
         {
             double room = FightWidth - _deck.Body.Margin.Left - _deck.Body.Margin.Right - Wide(left) - (_bestBlock != null ? Wide(_bestBlock) : 0) - 14;
-            if (FitStrip(Values, Strip, room) is { } strip)
-            {
-                strip.HorizontalAlignment = HorizontalAlignment.Right; strip.Margin = new Thickness(14, 0, 0, 0);
-                Grid.SetColumn(strip, 1); _figRow.Children.Add(strip);
-            }
+            StripInRow(_figRow, Values, Strip, room);
         }
 
         _sess.Inlines.Clear();

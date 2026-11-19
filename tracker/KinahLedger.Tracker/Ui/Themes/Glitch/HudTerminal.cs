@@ -40,6 +40,8 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
     readonly TextBlock _sess = Txt("", 12.5, PhosDim, Face, FontWeights.SemiBold);
     /// <summary>The session line: the session, then the best drop and the last three in brackets while farming.</summary>
     readonly StackPanel _sessLine = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+    /// <summary>The strip's own line under the session, in its brackets, when the session line has no room for it (never dropped).</summary>
+    readonly StackPanel _stripLine = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
     readonly TextBlock _stats = Txt("", 11.5, PhosDim, Face, FontWeights.SemiBold);
     readonly Border _timerLine = new() { Visibility = Visibility.Collapsed };
     readonly TextBlock _timer = Txt("", 12, Amber, Face);
@@ -91,6 +93,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         _crt.Body.Children.Add(_figLine);
         _sessLine.Children.Add(_sess);
         _crt.Body.Children.Add(_sessLine);
+        _crt.Body.Children.Add(_stripLine);
         _stats.Margin = new Thickness(0, 2, 0, 0); _stats.Visibility = Visibility.Collapsed;
         _crt.Body.Children.Add(_stats);
         _timerLine.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _timer, _beep } };
@@ -200,6 +203,25 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
     /// <summary>The pickup strip on the screen: the rule a phosphor hairline, the star amber.</summary>
     static readonly PickStrip.Look Strip = new(22, 5, true, Br(PhosC, .4), Amber);
 
+    /// <summary>The console's brackets round the strip ("[" and "]").</summary>
+    static (TextBlock Open, TextBlock Close) Brackets()
+    {
+        var open = Txt("[", 14, Phos, Face, FontWeights.SemiBold); open.Margin = new Thickness(12, 0, 5, 0);
+        var close = Txt("]", 14, Phos, Face, FontWeights.SemiBold); close.Margin = new Thickness(5, 0, 0, 0);
+        return (open, close);
+    }
+
+    /// <summary>The strip in its brackets on its own line under the session (the session line had no room): none before the first pickup.</summary>
+    void StripLine()
+    {
+        _stripLine.Children.Clear();
+        if (PickStrip.Of(Values, Strip) is not { } strip) { _stripLine.Visibility = Visibility.Collapsed; return; }
+        var (open, close) = Brackets();
+        open.Margin = new Thickness(0, 0, 5, 0);
+        _stripLine.Children.Add(open); _stripLine.Children.Add(strip); _stripLine.Children.Add(close);
+        _stripLine.Visibility = Visibility.Visible;
+    }
+
     string _figSig = "";
 
     protected override void DrawLine(Figures f)
@@ -251,18 +273,20 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
             _sess.Inlines.Add(Rn(f.Total, Pale, 14, FontWeights.Bold));
         }
         _sess.Visibility = _sess.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        // the best drop and the last three after the session, in the console's brackets ("session 894K  [* # | # # #]"), while
-        // farming: the Abyss, the idle line and a rare drop's "!! RARE" line keep the screen as it was
+        // the best drop and the last three after the session, in the console's brackets ("session 894K  [* # | # # #]"), else
+        // on a line of their own under it (always whole, a fight or a rare drop's "!! RARE" line up or not); the Abyss and the
+        // idle line keep the screen as it was
         while (_sessLine.Children.Count > 1) _sessLine.Children.RemoveAt(1);
-        if (_sess.Inlines.Count > 0 && !f.Abyss && f.Rate.Length > 0 && Rare(Values) == null)
+        _stripLine.Children.Clear(); _stripLine.Visibility = Visibility.Collapsed;
+        if (_sess.Inlines.Count > 0 && !f.Abyss && f.Rate.Length > 0)
         {
-            var open = Txt("[", 14, Phos, Face, FontWeights.SemiBold); open.Margin = new Thickness(12, 0, 5, 0);
-            var close = Txt("]", 14, Phos, Face, FontWeights.SemiBold); close.Margin = new Thickness(5, 0, 0, 0);
+            var (open, close) = Brackets();
             double room = FightWidth - _crt.Body.Margin.Left - _crt.Body.Margin.Right - Wide(_sess) - Wide(open) - Wide(close);
             if (FitStrip(Values, Strip, room) is { } strip)
             {
                 _sessLine.Children.Add(open); _sessLine.Children.Add(strip); _sessLine.Children.Add(close);
             }
+            else StripLine();
         }
         _sessLine.Visibility = _sess.Visibility;
 

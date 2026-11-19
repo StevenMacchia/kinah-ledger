@@ -239,6 +239,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             // pickups as the strip beside the hour where it fits (the best drop and the last three), the session alone under it
             // (with a timer chip at the line's end and no room left beside it, the chip goes up to the timers over the Buddy)
             var sub = Sub(f, true);
+            FrameworkElement? under = null;
             if (StripTime(f))
             {
                 var bare = Sub(f, false);
@@ -257,8 +258,11 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
                     if (dim) strip.Opacity = .6;
                     Grid.SetColumn(strip, 2); row.Children.Add(strip);
                 }
+                // no room beside the hour: under the session, never dropped (Steven, 2026-11-19)
+                else if ((under = StripUnder(Strip, dim)) != null) sub = bare;
             }
             if (sub.Inlines.Count > 0) words.Children.Add(sub);
+            if (under != null) words.Children.Add(under);
         }
         _stripTimerW = StripTime(f) ? LineTimerW() : -1;
         Grid.SetColumn(words, 1); row.Children.Add(words);

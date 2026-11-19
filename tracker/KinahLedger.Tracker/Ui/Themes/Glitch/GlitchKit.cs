@@ -53,16 +53,38 @@ static class GlitchKit
     }
 
     /// <summary>
-    /// The pickup strip (Ui/HudPickStrip.cs) in <paramref name="room"/> DIPs a look has left beside its figures (Steven,
-    /// 2026-11-18: "too much empty space in some of the buddies"): the best drop and the last three, the last three alone
-    /// when only they fit, none when not even they do, so a figure is never cut and the panel never grows past the meter's
-    /// width. Null too before the first pickup, or with Settings › Buddy › Pickup icons off.
+    /// The pickup strip (Ui/HudPickStrip.cs) when it fits the <paramref name="room"/> DIPs a look has left beside its figures
+    /// (Steven, 2026-11-18: "too much empty space in some of the buddies"): the best drop and the last three, whole, or null
+    /// when they don't fit there (the look then gives them a line of their own: <see cref="StripUnder"/>; Steven, 2026-11-19:
+    /// "it need to show up on ALL buddies"). Null too before the first pickup, or with Settings › Buddy › Pickup icons off.
     /// </summary>
-    public static FrameworkElement? FitStrip(IReadOnlyDictionary<string, string> v, PickStrip.Look look, double room)
+    public static FrameworkElement? FitStrip(IReadOnlyDictionary<string, string> v, PickStrip.Look look, double room) =>
+        PickStrip.Width(look) <= room ? PickStrip.Of(v, look) : null;
+
+    /// <summary>The strip in a figure row (a grid of three columns: the figures, the room, a block at the right) beside the figures, at the room's right.</summary>
+    public static void StripBeside(Grid row, FrameworkElement strip)
     {
-        if (look.Best && PickStrip.Width(look) <= room) return PickStrip.Of(v, look);
-        var three = look with { Best = false };
-        return PickStrip.Width(three, 3, false) <= room ? PickStrip.Of(v, three) : null;
+        strip.HorizontalAlignment = HorizontalAlignment.Right; strip.Margin = new Thickness(14, 0, 0, 0);
+        Grid.SetColumn(strip, 1); row.Children.Add(strip);
+    }
+
+    /// <summary>
+    /// The strip on a line of its own under a figure row's figures, at their left (the row gets a second row for it): where
+    /// the figures leave no room beside them, so the panel never grows past the meter's width and the strip is never dropped.
+    /// The row's caller clears its row definitions with its columns.
+    /// </summary>
+    public static void StripUnder(Grid row, FrameworkElement strip)
+    {
+        if (row.RowDefinitions.Count == 0) { row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); }
+        strip.HorizontalAlignment = HorizontalAlignment.Left; strip.Margin = new Thickness(0, 6, 0, 1);
+        Grid.SetRow(strip, 1); Grid.SetColumnSpan(strip, Math.Max(1, row.ColumnDefinitions.Count)); row.Children.Add(strip);
+    }
+
+    /// <summary>The strip beside a figure row's figures in <paramref name="room"/>, else under them; nothing before the first pickup or with the icons off.</summary>
+    public static void StripInRow(Grid row, IReadOnlyDictionary<string, string> v, PickStrip.Look look, double room)
+    {
+        if (FitStrip(v, look, room) is { } beside) StripBeside(row, beside);
+        else if (PickStrip.Of(v, look) is { } under) StripUnder(row, under);
     }
 
     /// <summary>

@@ -200,7 +200,7 @@ sealed partial class HudHolo : TacticalLook
         _lineBody.Children.Add(row);
         // the pickups under a hairline, on the glass as the rare drop's row is: the best drop and the last three, then the
         // newest one's name and worth (as the Buddy's head names it), out to the glass's edge
-        if (FarmStrip(f, StripLook, FightWidth - 10 - _lineBody.Margin.Left - _lineBody.Margin.Right) is { } strip)
+        if (FarmStrip(f, StripLook) is { } strip)
         {
             _lineBody.Children.Add(Hairline(new Thickness(0, 7, 0, 6)));
             row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

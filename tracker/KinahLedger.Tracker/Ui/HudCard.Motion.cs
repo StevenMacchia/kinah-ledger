@@ -154,7 +154,7 @@ public sealed partial class HudCard
             var tone = Rgb(GoldC);
             Motion.ReplaySlide(_ringHost, _key + "ring", share * 0.7, share, s => { _ringHost.Children.Clear(); _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? L.T("best") : L.T("of best"))); });
         }
-        if (_tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement t0 && Picks(values).FirstOrDefault() is { } fp) Arrived(t0, fp);
+        if (_tiles.Children.Count > _tile0 && _tiles.Children[_tile0] is FrameworkElement t0 && Picks(values).FirstOrDefault() is { } fp) Arrived(t0, fp);
         if (_ring.Visibility == Visibility.Visible) RareBeat();
         if (_drop.Made is { } made) HudRare.Enter(made);
     }

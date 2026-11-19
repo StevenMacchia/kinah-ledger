@@ -212,13 +212,11 @@ abstract class WackyLook : HudThemeLook
     /// <summary>The dungeon run drawn in place of the hour, or null: out of a run, and while a fight's panel has the Kinah line put away.</summary>
     protected RunBuddy.State? RunOf() => KinahHidden ? null : RunBuddy.Of(Values);
 
-    /// <summary>The strip in a run: the best drop and the last three, else the last three when that does not fit <paramref name="room"/>.</summary>
-    protected FrameworkElement? RunStrip(double room)
-    {
-        var full = PickStrip.Of(Values, StripLook);
-        if (full == null || !StripLook.Best || W(full) <= room) return full;
-        return PickStrip.Of(Values, StripLook with { Best = false });
-    }
+    /// <summary>
+    /// The strip in a run: always the best drop and the last three (Steven, 2026-11-19: on ALL buddies), on its own row under
+    /// the run's lines, so it never gives way to them. <paramref name="room"/> is kept for the callers' symmetry with the lines.
+    /// </summary>
+    protected FrameworkElement? RunStrip(double room) => PickStrip.Of(Values, StripLook);
 
     /// <summary>An element's width laid out on its own (its render transform, a tilt or a skew, left out).</summary>
     protected static double W(FrameworkElement e)
@@ -261,8 +259,8 @@ abstract class WackyLook : HudThemeLook
     protected static string RunsWord(RunBuddy.State s) => s.TodayRuns == "1" ? L.T("1 run") : L.F("{0} runs", s.TodayRuns);
 
     /// <summary>
-    /// The strip for this line, or null: farming only (an hour shown, not the Abyss, the idle or waiting line, nor a dungeon);
-    /// a fight's card puts it away where it is placed (the look's own place call).
+    /// The strip for this line, or null: an hour shown (not the Abyss, the idle or waiting line, nor a dungeon's meter); it
+    /// stays beside a fight's card, as the Kinah line does.
     /// </summary>
     protected FrameworkElement? StripFor(Figures f) =>
         !f.Abyss && f.Counted && f.Rate.Length > 0 && !KinahHidden ? PickStrip.Of(Values, StripLook) : null;

@@ -186,7 +186,7 @@ sealed partial class HudModernFade : ModernLook
             // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
             // alone under it; with the timer chips at the line's end and no room left beside them, the chips go over the line
             var sub = Sub(f, true);
-            FrameworkElement? strip = null;
+            FrameworkElement? strip = null, under = null;
             if (StripTime(f))
             {
                 var bare = Sub(f, false);
@@ -198,9 +198,12 @@ sealed partial class HudModernFade : ModernLook
                     if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 10, baseW, wordsW, oldW + timerW, 12), look)) != null) { _timerUp = true; break; }
                 }
                 if (strip != null) { sub = bare; strip.Margin = new Thickness(12, 0, 0, 0); }
+                // no room beside the hour: under the session, never dropped (Steven, 2026-11-19)
+                else if ((under = StripUnder(Strip, false)) != null) sub = bare;
                 _stripTimerW = timerW;
             }
             if (sub.Inlines.Count > 0) words.Children.Add(sub);
+            if (under != null) words.Children.Add(under);
             _lineBody.Children.Add(words);
             if (strip != null) _lineBody.Children.Add(strip);
         }

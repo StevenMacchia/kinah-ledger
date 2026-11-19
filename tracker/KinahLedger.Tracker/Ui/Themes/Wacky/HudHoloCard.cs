@@ -291,8 +291,8 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         foreach (UIElement ch in _line.Children) if (!ReferenceEquals(ch, _bean)) ch.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
         _ringHost.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
         _panel.Root.Margin = new Thickness(0, lineShown ? 16 : 0, 0, 0);
-        // the pickups are farming's: a fight's card puts them away
-        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _panel.Root.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        // the pickups stay with the Kinah line, a fight's card up or not (Steven, 2026-11-19: on ALL buddies)
+        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static void Detach(FrameworkElement el)
