@@ -187,6 +187,8 @@ public static partial class WpfApp
             sw.Close();
             Console.WriteLine(fails == 0 ? "options test (settings): all passed" : $"options test (settings): {fails} failed"); return fails == 0 ? 0 : 1;
         }
+        // KL_OPTIONS_ONLY=picks: the pickup strip on every look, alone (Ui/WpfApp.PickStrip.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "picks") { var pw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; pw.Show(); pw.ShowDemo(); DoEvents(); PickStripChecks(pw, Check); pw.Close(); Console.WriteLine(fails == 0 ? "options test (pickup strip): all passed" : $"options test (pickup strip): {fails} failed"); return fails == 0 ? 0 : 1; }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -404,6 +406,7 @@ public static partial class WpfApp
             Check(said.All(x => x.EndsWith(": ok")), "Capsule, Meter, Float and every theme's look draw the timer due, the boss fight and the hour themselves, and put the fight away after: " + string.Join("; ", said));
         }
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
+        PickStripChecks(w, Check);   // the best drop and the last three on every look (Ui/WpfApp.PickStrip.cs; KL_OPTIONS_ONLY=picks alone)
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
         TypingChecks(w, Check);   // the Terminal types a new pickup out (Ui/WpfApp.Typing.cs; KL_OPTIONS_ONLY=typing alone)

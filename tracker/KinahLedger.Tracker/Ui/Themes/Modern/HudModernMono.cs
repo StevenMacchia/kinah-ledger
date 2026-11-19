@@ -169,6 +169,7 @@ sealed partial class HudModernMono : ModernLook
             // where it fits (the best drop and the last three), the session alone under it; with the timers at the panel's
             // right and no room left beside them, the timers go up to a small panel of their own over the Buddy
             var sub = Sub(f, true, dim, ink);
+            FrameworkElement? under = null;
             if (StripTime(f))
             {
                 var bare = Sub(f, false, dim, ink);
@@ -187,8 +188,11 @@ sealed partial class HudModernMono : ModernLook
                     if (dim) strip.Opacity = .5;
                     Grid.SetColumn(strip, 2); row.Children.Add(strip);
                 }
+                // no room beside the hour: under the session, never dropped (Steven, 2026-11-19)
+                else if ((under = StripUnder(Strip, dim, .5)) != null) sub = bare;
             }
             if (sub.Inlines.Count > 0) kv.Children.Add(sub);
+            if (under != null) kv.Children.Add(under);
         }
         _stripTimerW = StripTime(f) ? LineTimerW() : -1;
         Grid.SetColumn(kv, 1); row.Children.Add(kv);

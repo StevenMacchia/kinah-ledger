@@ -134,18 +134,27 @@ sealed partial class HudFighter : TacticalLook
 
     /// <summary>
     /// The pickup strip beside the hour, inside the brackets, out to the line's right edge (the room the session line leaves
-    /// there), so the line grows only by what the tiles need past it and never past the panel's width.
+    /// there), so the line grows only by what the tiles need past it and never past the panel's width. When the best drop and
+    /// the three don't fit there (a long hour, a narrow meter) they take their own row under the session line, inside the
+    /// brackets still: always whole, a fight up or not (Steven, 2026-11-19).
     /// </summary>
     void PutStrip(Figures f)
     {
         if (_topRow is not { } top || !_figs.Children.Contains(top)) return;
+        if (FarmStrip(f, StripLook) is not { } strip) return;
         _figs.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         _line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         top.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         const double air = 12;
         // the room: the panel's width less the line as it is, plus what the session line already leaves beside the hour
         double room = FightWidth - 20 - _line.DesiredSize.Width + (_figs.DesiredSize.Width - _figs.Margin.Left - top.DesiredSize.Width) - air;
-        if (FarmStrip(f, StripLook, room) is not { } strip) return;
+        if (Wants(strip) > room + .5)
+        {
+            strip.HorizontalAlignment = HorizontalAlignment.Left;
+            strip.Margin = new Thickness(1, 5, 0, 1);
+            _figs.Children.Add(strip);
+            return;
+        }
         int at = _figs.Children.IndexOf(top);
         _figs.Children.RemoveAt(at);
         var g = new Grid();

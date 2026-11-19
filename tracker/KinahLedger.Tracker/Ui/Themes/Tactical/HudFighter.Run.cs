@@ -12,7 +12,7 @@ namespace KinahLedger.Ui;
 /// it the last bosses' splits against your best split for each (amber for a new best split). After the final boss, for a few
 /// seconds: ★ NEW BEST in amber with the clock, or "Cleared in 4:17 · 2ND FASTEST", then the run's worth against your average
 /// run here. Between runs in the dungeon: today here big, its runs and average clear under it, your clears and fastest in the
-/// head. No reticle: the clock is the figure. The pickup strip stays beside the big line (the last three before a figure goes).
+/// head. No reticle: the clock is the figure. The pickup strip stays beside the big line, or on a row of its own under the run's lines where they leave no room (always whole).
 /// </summary>
 sealed partial class HudFighter
 {
@@ -90,7 +90,7 @@ sealed partial class HudFighter
         else forms = new Func<FrameworkElement>[] { () => Halo(L.T("First clear here").ToUpperInvariant(), 13, PhosDim, FontWeights.Bold) };
 
         const double air = 12;
-        var (big, strip) = Beside(cap, air, RunStrips(StripLook), forms);
+        var (big, strip, below) = Beside(cap, air, RunStrips(StripLook), forms);
         if (strip != null)
         {
             var g = new Grid();
@@ -122,6 +122,8 @@ sealed partial class HudFighter
                     () => Line(null, runs.Length > 0 ? runs : avg));
         }
         if (sub != null) { sub.Margin = new Thickness(1, 0, 0, 0); _figs.Children.Add(sub); }
+        // no room beside the big line: the best drop and the three on their own row under it all, inside the brackets
+        if (below != null) { below.HorizontalAlignment = HorizontalAlignment.Left; below.Margin = new Thickness(1, 5, 0, 1); _figs.Children.Add(below); }
     }
 
     /// <summary>The last bosses' splits ("KWAPO 1:02 −0:05 · DUANKA 2:30 −0:11"), the newest kept when both don't fit; null before the first.</summary>
@@ -193,16 +195,16 @@ sealed partial class HudFighter
     }
 
     /// <summary>
-    /// The big line and the strip beside it in <paramref name="cap"/>: the fullest form with the best drop and the three, else
-    /// with the three alone; then the shorter forms beside the three (they stay before a figure goes).
+    /// The big line and the strip in <paramref name="cap"/>: the fullest form with the best drop and the three beside it;
+    /// where they don't fit together, the fullest form that fits alone and the strip on its own row (<c>Below</c>): the
+    /// strip is never dropped and the run's words keep their room (Steven, 2026-11-19).
     /// </summary>
-    static (FrameworkElement Big, FrameworkElement? Strip) Beside(double cap, double air, List<FrameworkElement> strips, Func<FrameworkElement>[] forms)
+    static (FrameworkElement Big, FrameworkElement? Strip, FrameworkElement? Below) Beside(double cap, double air, List<FrameworkElement> strips, Func<FrameworkElement>[] forms)
     {
-        if (strips.Count == 0) return (FitForm(cap, forms), null);
+        if (strips.Count == 0) return (FitForm(cap, forms), null, null);
         var first = forms[0]();
-        double fw = Wants(first);
-        foreach (var st in strips) if (fw + air + Wants(st) <= cap + .5) return (first, st);
-        var three = strips[^1];
-        return (forms.Length > 1 ? FitForm(cap - air - Wants(three), forms[1..]) : first, three);
+        var st = strips[0];
+        if (Wants(first) + air + Wants(st) <= cap + .5) return (first, st, null);
+        return (FitForm(cap, forms), null, st);
     }
 }

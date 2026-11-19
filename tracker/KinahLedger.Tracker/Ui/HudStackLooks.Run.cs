@@ -13,8 +13,8 @@ namespace KinahLedger.Ui;
 /// your fastest run's pace and red behind, the pace and your best; after the final boss the clear and how it ranks, NEW BEST
 /// in gold; between runs today here) and the small line (the last bosses' splits, gold for a new best split; the run's worth
 /// against your average run; today's runs and average clear). Each line takes its fullest form that fits, a part left out
-/// before a figure is cut, never wider than the meter's width. The pickup strip stays where the look shows it: the best drop
-/// and the last three while the words fit whole beside them, else the last three alone.
+/// before a figure is cut, never wider than the meter's width. The pickup strip stays where the look shows it, the best drop
+/// and the last three always whole (2026-11-19): the words give way round it.
 /// </summary>
 abstract partial class HudStackLook
 {
@@ -63,15 +63,12 @@ abstract partial class HudStackLook
     /// <summary>The form at <paramref name="i"/>, or the shortest when there are fewer.</summary>
     protected static Bit[] At(IReadOnlyList<Bit[]> forms, int i) => forms.Count == 0 ? Array.Empty<Bit>() : forms[Math.Min(i, forms.Count - 1)];
 
-    /// <summary>The pickup strips a run may show, fullest first (the best drop and the last three, the three alone); none while off.</summary>
-    protected List<FrameworkElement> RunStrips(PickStrip.Look look)
-    {
-        var list = new List<FrameworkElement>();
-        if (!PickStrip.Shown) return list;
-        foreach (var l in look.Best ? new[] { look, look with { Best = false } } : new[] { look })
-            if (PickStrip.Of(_values, l) is { } s) list.Add(s);
-        return list;
-    }
+    /// <summary>
+    /// The pickup strip a run shows: the best drop and the last three, whole (Steven, 2026-11-19: on ALL buddies, never the
+    /// three alone); the run's words give way round it. None while off or before the first pickup.
+    /// </summary>
+    protected List<FrameworkElement> RunStrips(PickStrip.Look look) =>
+        PickStrip.Shown && PickStrip.Of(_values, look) is { } s ? new List<FrameworkElement> { s } : new List<FrameworkElement>();
 
     /// <summary>The head: "Ferocious Horn Den · Easy · Run 3 today · 38 clears", then without the count, then the dungeon alone.</summary>
     protected static List<Bit[]> RunHeadForms(RunBuddy.State s, double size, Brush? place = null)
@@ -218,7 +215,7 @@ abstract partial class HudStackLook
 /// (the run clock and its pace; the clear's time, gold for a new best; between runs today here), then the pill's hairline and
 /// two small lines stacked: your best and the count over the splits; after a clear how it ranks over the run's worth;
 /// between runs today's runs over your clears and fastest. The strip and the timer's chip at the pill's end as while
-/// farming; under a fight (its own meter, or Auto's above) the strip is away as then.
+/// farming, a fight (its own meter, or Auto's above) up or not.
 /// </summary>
 sealed partial class HudCapsule
 {
@@ -315,8 +312,8 @@ sealed partial class HudCapsule
 
     void DrawRun(RunBuddy.State s)
     {
-        bool stripOn = _lastFight == null && !_fightAbove;
-        var sig = $"{RunBuddy.Sig(_values)}|{(stripOn ? PickStrip.Sig(_values, StripLook) : "-")}|{_chip.Visibility}|{_chipText.Text}|{FightWidth}|{_figsNow?.Note}";
+        // a fight under the pill or above it keeps the strip (2026-11-19)
+        var sig = $"{RunBuddy.Sig(_values)}|{PickStrip.Sig(_values, StripLook)}|{_chip.Visibility}|{_chipText.Text}|{FightWidth}|{_figsNow?.Note}";
         if (sig == _runSig) return;
         _runSig = sig;
         _figSig = "";   // the farming line drawn again on the way out
@@ -331,13 +328,14 @@ sealed partial class HudCapsule
         var rule = Rule(22);
         _row.Children.Add(big); _row.Children.Add(rule); _row.Children.Add(stack);
 
-        // the fullest words with the best drop and the last three; then the three alone; then the words give way, the three kept
-        var strips = stripOn ? RunStrips(StripLook) : new List<FrameworkElement>();
+        // the fullest words with the best drop and the last three; then the words give way, the strip kept whole
+        var strips = RunStrips(StripLook);
         var options = strips.Count > 0 ? strips.Cast<FrameworkElement?>().ToList() : new List<FrameworkElement?> { null };
         bool done = false;
         for (int li = 0; li < CapLevels.Length && !done; li++)
         {
             var (g, o, u) = CapLevels[li];
+            if (g > 0 && strips.Count > 0) break;   // the pace never gives way to the strip: the pill grows instead (below)
             SetBits(big, At(bigs, g)); SetBits(a, At(overs, o)); SetBits(b, At(unders, u));
             bool words = a.Visibility == Visibility.Visible || b.Visibility == Visibility.Visible;
             rule.Visibility = stack.Visibility = words ? Visibility.Visible : Visibility.Collapsed;
@@ -346,6 +344,21 @@ sealed partial class HudCapsule
             {
                 SetStrip(st);
                 if (Wants(_pill) <= FightWidth + .5) { done = true; break; }
+            }
+        }
+        // still too wide with the strip (the timer's chip took the room): the pill grows by the strip, so the run's words keep
+        // the room they would have had without it (the strip is never dropped, 2026-11-19)
+        if (!done && strips.Count > 0)
+        {
+            double cap = FightWidth + Wants(_strip);
+            for (int li = 0; li < CapLevels.Length; li++)
+            {
+                var (g, o, u) = CapLevels[li];
+                SetBits(big, At(bigs, g)); SetBits(a, At(overs, o)); SetBits(b, At(unders, u));
+                bool words = a.Visibility == Visibility.Visible || b.Visibility == Visibility.Visible;
+                rule.Visibility = stack.Visibility = words ? Visibility.Visible : Visibility.Collapsed;
+                rule.Height = a.Visibility == Visibility.Visible && b.Visibility == Visibility.Visible ? 26 : 14;
+                if (Wants(_pill) <= cap + .5) break;
             }
         }
         _note.Text = _figsNow?.Note ?? ""; _note.Foreground = _figsNow?.NoteTone ?? Muted;
@@ -433,17 +446,22 @@ sealed partial class HudMeter
 
     void DrawRun(RunBuddy.State s)
     {
-        bool stripOn = !_fight;
-        var sig = $"{RunBuddy.Sig(_values)}|{(stripOn ? PickStrip.Sig(_values, StripLook) : "-")}|{_fight}|{_tab.Visibility}|{_tabText.Text}|{FightWidth}|{_figsNow?.Note}";
+        var sig = $"{RunBuddy.Sig(_values)}|{PickStrip.Sig(_values, StripLook)}|{_fight}|{_tab.Visibility}|{_tabText.Text}|{FightWidth}|{_figsNow?.Note}";
         if (sig == _runSig) return;
         _runSig = sig;
         _figSig = "";
 
-        // the header (a fight's own while one shows): the dungeon and its mode, the strip at the right
+        // the header (a fight's own while one shows): the dungeon and its mode, the strip at the right; the strip on its own
+        // line under the foot when the header has no room for it or a fight has the header (never dropped, 2026-11-19)
         _clock.Visibility = _fight ? Visibility.Visible : Visibility.Collapsed;
         _runCount.Visibility = Visibility.Collapsed;
+        _footStrip.Children.Clear(); _footStrip.Visibility = Visibility.Collapsed;
         bool countInHead = false;
-        if (_fight) { _strip.Children.Clear(); _strip.Visibility = Visibility.Collapsed; }
+        if (_fight)
+        {
+            _strip.Children.Clear(); _strip.Visibility = Visibility.Collapsed;
+            if (RunStrips(StripLook).FirstOrDefault() is { } fs) { _footStrip.Children.Add(fs); _footStrip.Visibility = Visibility.Visible; }
+        }
         else
         {
             var place = new Bit(s.Place, 13.5, Ink, FontWeights.Bold);
@@ -478,6 +496,13 @@ sealed partial class HudMeter
                     _strip.Visibility = st != null ? Visibility.Visible : Visibility.Collapsed;
                     if (Wants(_title) + Wants(_hpPct) + Wants(_right) <= W - 20 + .5) { done = true; break; }
                 }
+            }
+            // no title beside the strip fits the header: the dungeon whole in it, the strip on its own line under the foot
+            if (!done && strips.Count > 0)
+            {
+                SetBits(_title, titles[0]);
+                _strip.Children.Clear(); _strip.Visibility = Visibility.Collapsed;
+                _footStrip.Children.Add(strips[0]); _footStrip.Visibility = Visibility.Visible;
             }
         }
 
@@ -545,31 +570,31 @@ sealed partial class HudFloat
 
     void DrawRun(RunBuddy.State s)
     {
-        bool stripOn = _lastFight == null;
-        var sig = $"{RunBuddy.Sig(_values)}|{(stripOn ? PickStrip.Sig(_values, StripLook) : "-")}|{FightWidth}|{_figsNow?.Note}";
+        // a fight above keeps the strip (2026-11-19)
+        var sig = $"{RunBuddy.Sig(_values)}|{PickStrip.Sig(_values, StripLook)}|{FightWidth}|{_figsNow?.Note}";
         if (sig == _runSig) return;
         _runSig = sig;
         _figSig = "";
 
         _line.Children.Clear();
+        _stripUnder.Children.Clear(); _stripUnder.Visibility = Visibility.Collapsed;
         var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var a = RunText(); var big = RunText(); var b = RunText();
         figs.Children.Add(a); figs.Children.Add(big); figs.Children.Add(b);
         var heads = RunHeadForms(s, FloatStyle.Head);
         var bigs = RunBigForms(s, FloatStyle);
         var smalls = RunSmallForms(s, FloatStyle.Small);
-        // the fullest lines with the best drop and the last three, else the three alone and the lines in what is left
+        // the fullest lines with the best drop and the last three, else the lines in what the strip leaves
         double full = Math.Max(SetBits(a, heads[0]), Math.Max(SetBits(big, bigs[0]), SetBits(b, smalls[0])));
         double room = FightWidth - 10;
         _strip.Children.Clear(); _strip.Visibility = Visibility.Collapsed;
-        var strips = stripOn ? RunStrips(StripLook) : new List<FrameworkElement>();
-        FrameworkElement? pick = null;
-        foreach (var st in strips)
+        var strips = RunStrips(StripLook);
+        // beside the fullest lines when they fit together, else on its own line under them (the lines keep the whole width)
+        if (strips.FirstOrDefault() is { } pick)
         {
-            pick = st;
-            if (full + Wants(st) + _strip.Margin.Left <= room + .5) break;
+            if (full + Wants(pick) + _strip.Margin.Left <= room + .5) { room -= Wants(pick) + _strip.Margin.Left; _strip.Children.Add(pick); _strip.Visibility = Visibility.Visible; }
+            else { _stripUnder.Children.Add(pick); _stripUnder.Visibility = Visibility.Visible; }
         }
-        if (pick != null) { room -= Wants(pick) + _strip.Margin.Left; _strip.Children.Add(pick); _strip.Visibility = Visibility.Visible; }
         FitBits(a, room, heads); FitBits(big, room, bigs); FitBits(b, room, smalls);
         _line.Children.Add(figs);
         _line.Children.Add(_strip);

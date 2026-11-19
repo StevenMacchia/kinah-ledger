@@ -297,7 +297,7 @@ sealed partial class HudScorebug : TacticalLook
         _rareBanner = null;
         if (KinahHidden) return;
         if (Rare(Values) is { } r) { _rareBanner = RareThird(r); _rareBanner.Margin = new Thickness(0, 4, 0, 0); _under.Children.Add(_rareBanner); }
-        var loot = FarmStrip(f, StripLook, FightWidth - 40);
+        var loot = FarmStrip(f, StripLook);
         _lootRow = loot != null ? LootRow(loot) : null;
         if (_lootRow != null) _under.Children.Add(_lootRow);
         // the pickup's ticker and the NEW PERSONAL BEST lower third hang from the bug over the pickups' row, not under it

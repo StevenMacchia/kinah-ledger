@@ -179,6 +179,7 @@ sealed partial class HudTerminal
             if (s.TodayKinah.Length > 0) forms.Add(more.Take(2).ToArray());
         }
         while (_sessLine.Children.Count > 1) _sessLine.Children.RemoveAt(1);
+        _stripLine.Children.Clear(); _stripLine.Visibility = Visibility.Collapsed;
         _sess.Inlines.Clear();
         bool picks = PickStrip.Shown && Picks(Values).Count > 0;
         if (forms.Count == 0 && picks) forms.Add(new[] { indent });   // nothing under the clock yet: the strip alone in its brackets
@@ -189,8 +190,7 @@ sealed partial class HudTerminal
                 foreach (var form in forms)
                 {
                     FitRuns(_sess, double.PositiveInfinity, form);
-                    var open = Txt("[", 14, Phos, Face, FontWeights.SemiBold); open.Margin = new Thickness(12, 0, 5, 0);
-                    var close = Txt("]", 14, Phos, Face, FontWeights.SemiBold); close.Margin = new Thickness(5, 0, 0, 0);
+                    var (open, close) = Brackets();
                     if (FitStrip(Values, Strip, cap - Wide(_sess) - Wide(open) - Wide(close)) is { } strip)
                     {
                         _sessLine.Children.Add(open); _sessLine.Children.Add(strip); _sessLine.Children.Add(close);
@@ -199,6 +199,7 @@ sealed partial class HudTerminal
                 }
             if (!placed) FitRuns(_sess, cap, forms.ToArray());
             if (!placed && forms[0].Length == 1) _sess.Inlines.Clear();   // the indent alone: no line
+            if (!placed && picks) StripLine();   // the session line full: the best drop and the three on their own line, never dropped
         }
         _sess.Visibility = _sess.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _sessLine.Visibility = _sess.Visibility;

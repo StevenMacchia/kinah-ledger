@@ -438,6 +438,33 @@ public sealed partial class HudWindow : Window
         }
         _abyssCell = AbyssCell();
         _row.Children.Add(_abyssCell);
+        _pickCell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        _pickSig = "-";
+        _row.Children.Add(_pickCell);
+    }
+
+    /// <summary>
+    /// Badge's pickup strip at the line's end, after a hairline (Ui/HudPickStrip.cs; Steven, 2026-11-19: "the list of 3 items
+    /// with the best one ... need to show up on ALL buddies"): the best drop with its star and the last three, whole. None in
+    /// the Abyss, before the first pickup, or with Settings › Buddy › More › Pickup icons off.
+    /// </summary>
+    StackPanel? _pickCell;
+    string _pickSig = "-";
+    static readonly PickStrip.Look BadgeStrip = new(24, 5, true, Frozen(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)));
+
+    void DrawPickCell(IReadOnlyDictionary<string, string> values, bool abyss)
+    {
+        if (_pickCell == null) return;
+        var sig = abyss ? "" : PickStrip.Sig(values, BadgeStrip);
+        if (sig == _pickSig) return;
+        _pickSig = sig;
+        _pickCell.Children.Clear();
+        if (!abyss && PickStrip.Of(values, BadgeStrip) is { } strip)
+        {
+            _pickCell.Children.Add(new Border { Width = 1, Height = 18, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center });
+            _pickCell.Children.Add(strip);
+        }
+        _pickCell.Visibility = _pickCell.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>The rate while it warms up: there, but plainly not the figure yet.</summary>
@@ -572,11 +599,13 @@ public sealed partial class HudWindow : Window
             _abyssCell.Visibility = stats.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             _abyssCell.ToolTip = abyss ? HudKit.AbyssTip(values) : null;   // the PvP kills' assists, on the hover
         }
+        DrawPickCell(values, abyss);
         bool first = true;
         foreach (FrameworkElement c in _row.Children)
         {
             if (c.Visibility != Visibility.Visible) continue;
             if (c == _abyssCell) { c.Margin = new Thickness(10, 0, 0, 0); continue; }   // close after the line
+            if (c == _pickCell) { c.Margin = new Thickness(first ? 0 : 12, 0, 0, 0); continue; }
             c.Margin = new Thickness(first ? 0 : 20, 0, 0, 0); first = false;
         }
         BadgeMoved(values, picked);

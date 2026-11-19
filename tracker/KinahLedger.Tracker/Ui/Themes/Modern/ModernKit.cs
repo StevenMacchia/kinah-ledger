@@ -53,20 +53,34 @@ abstract class ModernLook : HudThemeLook
 
     /// <summary>
     /// Whether the Buddy wears the pickup strip (Ui/HudPickStrip.cs; Steven, 2026-11-18: "best drop + last three") in place
-    /// of the latest pickup's words: farming with an hour counted and a pickup made, out of the Abyss, no rare drop held, the
-    /// switch on (Settings › Buddy › More › Pickup icons). Off, the line is drawn as before.
+    /// of the latest pickup's words: an hour counted and a pickup made, out of the Abyss, the switch on (Settings › Buddy ›
+    /// More › Pickup icons); a fight or a rare drop held keep it (Steven, 2026-11-19: "it need to show up on ALL buddies").
+    /// Off, the line is drawn as before.
     /// </summary>
-    protected bool StripTime(Figures f) => PickStrip.Shown && HasHour(f) && !f.Abyss && !KinahHidden && Rare(Values) == null && Picks(Values).Any();
+    protected bool StripTime(Figures f) => PickStrip.Shown && HasHour(f) && !f.Abyss && !KinahHidden && Picks(Values).Any();
 
     /// <summary>
-    /// The strip in <paramref name="room"/> px, or null where it doesn't fit (the line keeps the pickup in words). Measured as
-    /// drawn, so a best drop that is one of the three takes no room.
+    /// The strip in <paramref name="room"/> px beside the hour, or null where it doesn't fit there (the look then puts it under
+    /// the hour: <see cref="StripUnder"/>). Measured as drawn, so a best drop that is one of the three takes no room.
     /// </summary>
     protected FrameworkElement? StripIn(double room, PickStrip.Look look) =>
         PickStrip.Of(Values, look) is { } s && Mod.W(s) <= room + .5 ? s : null;
 
-    /// <summary>The strips a look tries, widest first: the best drop and the last three, then the last three alone.</summary>
-    protected static PickStrip.Look[] StripFall(PickStrip.Look look) => new[] { look, look with { Best = false } };
+    /// <summary>
+    /// The strip a look tries beside the hour: the best drop and the last three, whole. It never falls back to the three alone
+    /// (2026-11-19): where it doesn't fit beside, it goes under the hour (<see cref="StripUnder"/>).
+    /// </summary>
+    protected static PickStrip.Look[] StripFall(PickStrip.Look look) => new[] { look };
+
+    /// <summary>The strip on its own line under the hour and the session, at their left (the line had no room beside them); null before the first pickup.</summary>
+    protected FrameworkElement? StripUnder(PickStrip.Look look, bool dim, double dimOpacity = .6)
+    {
+        if (PickStrip.Of(Values, look) is not { } s) return null;
+        s.HorizontalAlignment = HorizontalAlignment.Left;
+        s.Margin = new Thickness(0, 6, 0, 1);
+        if (dim) s.Opacity = dimOpacity;
+        return s;
+    }
 
     /// <summary>
     /// The strip's room on a Buddy line: the panel's widest (<paramref name="cap"/>, the meter's panel, or the line as it was
@@ -79,9 +93,9 @@ abstract class ModernLook : HudThemeLook
     /// <summary>The dungeon run the Buddy shows in place of the hour (Ui/Themes/Modern/ModernRun.cs), or null: out of a run, Kinah hidden or a rare drop held.</summary>
     protected RunBuddy.State? RunNow() => !KinahHidden && Rare(Values) == null ? RunBuddy.Of(Values) : null;
 
-    /// <summary>The run line's pickup strips, widest first (the best drop and the last three, then the last three); none with the icons off or no pickup.</summary>
+    /// <summary>The run line's pickup strip: the best drop and the last three, whole (the run's words give way round it); none with the icons off or no pickup.</summary>
     protected List<FrameworkElement> RunStrips(PickStrip.Look look) =>
-        PickStrip.Shown && Picks(Values).Any() ? StripFall(look).Select(l => PickStrip.Of(Values, l)).Where(x => x != null).Select(x => x!).ToList() : new List<FrameworkElement>();
+        PickStrip.Shown && Picks(Values).Any() && PickStrip.Of(Values, look) is { } s ? new List<FrameworkElement> { s } : new List<FrameworkElement>();
 
     /// <summary>A text in Inter (or <paramref name="face"/>), tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontWeight weight, FontFamily? face = null) => Mod.Text(s, size, fg, weight, face);
