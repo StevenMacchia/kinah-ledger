@@ -65,6 +65,12 @@ public partial class MainWindow
             int at = list.FindLastIndex(e => e.Text.Contains(L.T("Parser")) || e.Text.Contains(L.T("Applicants")));
             list.Insert(at < 0 ? list.Count : at + 1, block);
         }
+        // your own hits not coming through (the self-check, Ui/MainWindow.MeterBlock.cs): after the Parser's switch too
+        if (SelfCheckMenuEntry() is { } self)
+        {
+            int at = list.FindLastIndex(e => e.Text.Contains(L.T("Parser")) || e.Text.Contains(L.T("Applicants")) || e.Link.Length > 0);
+            list.Insert(at < 0 ? list.Count : at + 1, self);
+        }
         // the game in exclusive fullscreen keeps every overlay from showing: first, above them all
         if (FullscreenMenuEntry() is { } fs) list.Insert(0, fs);
         return list;

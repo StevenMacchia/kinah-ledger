@@ -569,7 +569,7 @@ public partial class MainWindow
         var past = ParserPast();
         var where = ParserWhere;
         var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{live?.Uncredited}|{_parserTab}:{_parserInspect}:{_parserSort}:{_parserPrefs.Details}:{_parserPrefs.KillsNear}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}:{_parserPrefs.AlwaysOn}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
-        sig += $"|{_meterBlock}";
+        sig += $"|{_meterBlock}|{SelfCheckDue}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear(); _parserFarmNow = null;
@@ -577,6 +577,7 @@ public partial class MainWindow
         var block = MeterBlockCard(_meterBlock);
         _meterCardForTest = block;
         if (block != null) ParserPage.Children.Add(block);
+        else if (SelfCheckDue) ParserPage.Children.Add(SelfCheckLine());
         var open = _parserOpen != null ? past.FirstOrDefault(e => e.Id == _parserOpen) : null;
         // the live view holds the last boss fight until the next one starts (Steven, 2026-11-18: the graphs should stay up),
         // its graphs, strip and result in place of the Ready card; an open-world tally (Always on) never takes its place
