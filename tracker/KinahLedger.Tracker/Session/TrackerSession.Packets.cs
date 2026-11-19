@@ -167,13 +167,17 @@ public sealed partial class TrackerSession
     // (whose rows are only logged and left out then) isn't read, and the rest of the pass runs at a slow pace with a cap on
     // its share of a core: the chat stays the agreement check's witness and the reward and box lines' say, the target bar
     // says the enemy, a reward screen and the crafting window, the crafting panel the recipe and the gathering bar. When
-    // the packets are off, missing or stop counting, the screen reads everything at the usual pace again, at once.
+    // the packets are off, missing or stop counting, and inside an expedition or event or with a reward screen open (their
+    // rewards are the screen's reading), the screen reads everything at the usual pace again, from the next pass.
 
     /// <summary>While the screen is the backup: at least this long from the start of one pass to the start of the next.</summary>
     public const int BackupPassMs = 2500;
     /// <summary>While the screen is the backup: a pass's share of one core at most (the wait after it is at least (1 − share) / share of its time).</summary>
     public const double BackupCoreShare = 0.25;
+    /// <summary>How much later a slow read can date a chat line (a line a busy chat scrolled past waits for reads that show it: UnalignedWatchSeconds).</summary>
+    public const double BackupLagSeconds = UnalignedWatchSeconds;
     bool _screenBackup;
+    DateTime _backupLagUntil = DateTime.MinValue;
 
     /// <summary>Why the screen reads everything now; null while the packets count items and Kinah and the screen is their backup.</summary>
     internal string? FullReadingWhy(DateTime now)
@@ -185,6 +189,9 @@ public sealed partial class TrackerSession
         if (p.ItemsBroken is { } ib) return ib;
         if (p.Broken(CurrencyKind.Kinah) is { } kb) return kb;
         if (!p.CountingItems(now) || !p.Counting(CurrencyKind.Kinah, now)) return "the game reader isn't counting items and Kinah yet";
+        // an expedition's or event's rewards and a reward screen's are the screen's reading (the reward table, their lines)
+        if (Instances.Current != null || ZoneLocator.KindOf(Zone) != null) return "inside an expedition or event";
+        if (Target.RewardOpen(now)) return "a reward screen is open";
         return null;
     }
 
@@ -193,6 +200,9 @@ public sealed partial class TrackerSession
     {
         var why = FullReadingWhy(now);
         bool backup = why == null;
+        // the slow reads date a busy chat's line later: the agreement check allows for it, so it isn't a miss (PacketReader)
+        if (backup) _backupLagUntil = now.AddSeconds(BackupLagSeconds + 15);   // and until the lines read meanwhile are judged
+        if (Packets is { } p) p.ScreenLagSeconds = backup || now < _backupLagUntil ? BackupLagSeconds : 0;
         if (backup != _screenBackup)
         {
             _screenBackup = backup;

@@ -1063,6 +1063,9 @@ public static class PacketTests
             Check(!s.ScreenBackup(DateTime.UtcNow) && s.FullReadingWhy(DateTime.UtcNow) == "the game reader is off", "...switched off in Options: everything again, at once");
             r.Enabled = true;
             Check(s.ScreenBackup(DateTime.UtcNow), "...and back on: the backup again");
+            Check(r.ScreenLagSeconds == TrackerSession.BackupLagSeconds, $"...the agreement check allows the slow reads' later lines: {r.ScreenLagSeconds:0} s");
+            s.Target.MarkReward(DateTime.UtcNow, "Daeva Pass Level Reward");
+            Check(!s.ScreenBackup(DateTime.UtcNow) && s.FullReadingWhy(DateTime.UtcNow) == "a reward screen is open", "...a reward screen open: everything (its rewards are the screen's reading)");
             Check(TrackerSession.PassWait(600, 300, false) == -300 && TrackerSession.PassWait(200, 750, false) == 550, "...reading everything, the pace is the usual one");
             Check(TrackerSession.PassWait(100, 300, true) == 2400, $"...as the backup, a quick pass waits out {TrackerSession.BackupPassMs} ms start to start: {TrackerSession.PassWait(100, 300, true)}");
             Check(TrackerSession.PassWait(920, 300, true) == 2760, $"...a slow one waits {1 / TrackerSession.BackupCoreShare - 1:0} times its own time (at most {TrackerSession.BackupCoreShare:P0} of a core): {TrackerSession.PassWait(920, 300, true)}");
