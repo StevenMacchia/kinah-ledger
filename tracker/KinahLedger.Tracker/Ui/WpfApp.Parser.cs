@@ -286,6 +286,16 @@ public static partial class WpfApp
     /// <summary>options-test's Parser checks (Ui/MainWindow.Parser.cs): the tab, the live fight, the list, a fight opened, the page staying put, the overlay.</summary>
     static void ParserChecks(MainWindow w, Action<bool, string> check)
     {
+        // a live boss pull with damage seen but none of it the group's yet (or no group at all): the table draws, it doesn't throw
+        // (crash.log "parser page", 2026-11-18: an empty Max left the Parser page blank)
+        foreach (var roster in new[] { new List<Fighter>(), new List<Fighter> { new() { Id = 1, Name = "Brightmoor", Class = "Gladiator", You = true } } })
+        {
+            var pull = new Encounter { Mode = "boss", Start = DateTime.UtcNow.AddSeconds(-20), HasDamage = true, BossDamage = 50_000, Roster = roster };
+            System.Windows.Controls.Border? table = null; string err = "";
+            try { table = ParserCommand.Group(FightView.Of(pull, DateTime.UtcNow, null), new CommandCtx(), live: true, detail: false); }
+            catch (Exception ex) { err = ex.GetType().Name; }
+            check(table != null, $"parser: a live pull with damage but none of the group's yet ({roster.Count} in the group) draws its table{(err.Length > 0 ? $" (threw {err})" : "")}");
+        }
         w.ShowPartForTest("Farming"); DoEvents();
         double farmHeight = w.ActualHeight;
         w.ShowParserDemo("live"); DoEvents();
