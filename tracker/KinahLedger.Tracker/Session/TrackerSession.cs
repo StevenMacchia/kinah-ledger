@@ -889,13 +889,15 @@ public sealed partial class TrackerSession
         while (!ct.IsCancellationRequested)
         {
             var t0 = DateTime.UtcNow;
-            bool reading = false;
+            bool reading = false, backup = false;
             Housekeeping.PassStarted();   // the folder's cleaning waits until the pass is over
             try
             {
                 await FollowGameAsync();
                 DrainPackets();   // what the game's own messages said since the last pass (TrackerSession.Packets.cs)
                 DrainFights();    // ...about boss fights, for the Parser (TrackerSession.Parser.cs)
+                // while the packets count items and Kinah the screen is their backup: no loot list, a slow pace (TrackerSession.Packets.cs)
+                backup = ScreenBackup(KinahLedger.Packets.PacketClock.Now);
                 await PartyFrameDue();   // the party list's classes for the Parser, now and then (TrackerSession.Parser.cs)
                 if (Region == null) await FindChatAsync();
                 if (Region == null)
@@ -908,8 +910,8 @@ public sealed partial class TrackerSession
                     // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
                     await ScenePassAsync(p0);
                     var listGate = Verdict("loot_list");
-                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
-                    if (listGate == Gate.Skip) _rows.Reset();
+                    var list = off.Off("loot_list") || listGate == Gate.Skip || backup ? NoListRead() : Times.Time("list", () => LootReadAsync());
+                    if (listGate == Gate.Skip || backup) _rows.Reset();
                     if (!off.Off("target") && Runs("target")) await Times.Time("target", TargetDueAsync);
                     if (!off.Off("craft_panel")) await Times.Time("craft", CraftPanelDue);
                     var listRead = await list;
@@ -939,8 +941,8 @@ public sealed partial class TrackerSession
                     await ScenePassAsync(p0);
                     PacketsDue();   // the game's messages between the readers too (0.10.70): a pass of half a second holds no count
                     var listGate = Verdict("loot_list");
-                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
-                    if (listGate == Gate.Skip) _rows.Reset();
+                    var list = off.Off("loot_list") || listGate == Gate.Skip || backup ? NoListRead() : Times.Time("list", () => LootReadAsync());
+                    if (listGate == Gate.Skip || backup) _rows.Reset();
                     var chatGate = Verdict("chat");
                     if (chatGate != Gate.Skip) await Times.Time("chat", () => ReadOnce(chatGate, () => PeekList(list)));
                     PacketsDue();
@@ -985,8 +987,10 @@ public sealed partial class TrackerSession
             // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
             // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
             int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, Update.RemoteConfig.Current.FightIntervalMs) : _interval;
-            // the wait ends early for the game's messages, which are counted as they come (TrackerSession.Packets.cs)
-            if (spent < every) await WaitWithPacketsAsync(every - spent, ct);
+            // as the packets' backup, a slow pace and a capped share of a core (PassWait). The wait ends early for the game's
+            // messages, which are counted as they come (TrackerSession.Packets.cs)
+            int wait = PassWait(spent, every, backup);
+            if (wait > 0) await WaitWithPacketsAsync(wait, ct);
             else PacketsDue();
             // reading time for the health numbers: the passes the game was read, wait included
             if (reading) Accuracy.AddReading((DateTime.UtcNow - t0).TotalSeconds);
@@ -3433,7 +3437,7 @@ public sealed partial class TrackerSession
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0)
-            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote} · {AccuracyScore.AuditClause(AccuracySummary())}");
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)}{(_screenBackup ? ", the screen as the game reader's backup" : "")} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote} · {AccuracyScore.AuditClause(AccuracySummary())}");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; Times.Reset(); _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
 

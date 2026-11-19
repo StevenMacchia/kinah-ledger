@@ -74,6 +74,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
             case AreaEvent a: TakeArea(a); break;
         }
     }
+    /// <summary>For replay --live-clock: the connection still sending at <paramref name="at"/>, as a live capture always is between the changes it decodes.</summary>
+    internal void AliveForReplay(DateTime at) { if (at > _packetAt) _packetAt = at; }
     public string Kind { get; private set; } = "";
     public long Packets => Interlocked.Read(ref _packets);
     /// <summary>Messages and bundles the decoder read, its resyncs and its currency messages, for the log.</summary>
@@ -641,7 +643,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
             foreach (var s in _screen.Where(s => (now - s.At).TotalSeconds >= 15).ToList())
             {
                 _screen.Remove(s);
-                if (_seen.Any(p => p.K == s.K && Math.Abs((p.At - s.At).TotalSeconds) <= 10)) continue;
+                if (_seen.Any(p => p.K == s.K && (p.At - s.At).TotalSeconds is var d && d <= 10 && d >= -10 - ScreenLagSeconds)) continue;
                 _misses.Add(now);
                 _misses.RemoveAll(m => (now - m).TotalMinutes > 5);
                 if (_misses.Count >= 3 && !_broken.ContainsKey(s.K))
@@ -661,6 +663,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
 
     /// <summary>How near a screen pickup an item rise covers it: the game's update lands about 1.5 s before the chat line (up to 4.5 s), never much after.</summary>
     const double ItemBefore = 8, ItemAfter = 0.5;
+    /// <summary>
+    /// How much later than usual the screen may date a pickup line: while it is the backup (TrackerSession.ScreenBackup) the
+    /// chat is read every few seconds, and a line a busy chat scrolled past one read is counted from the next reads that show
+    /// it, up to 20 s after it came. A change that long before still covers that line (each item rise still covers one line).
+    /// </summary>
+    public double ScreenLagSeconds { get; set; }
     readonly HashSet<(long Id, DateTime At)> _risesTaken = new();
 
     /// <summary>
@@ -765,7 +773,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
             bool crafting = false;
             try { crafting = CraftingAt?.Invoke(s.At) == true; } catch (Exception) { }
             if (crafting) continue;
-            bool Near((long Id, long Delta, bool First, DateTime At) p) => (p.At - s.At).TotalSeconds is >= -ItemBefore and <= ItemAfter;
+            double before = ItemBefore + ScreenLagSeconds;
+            bool Near((long Id, long Delta, bool First, DateTime At) p) => (p.At - s.At).TotalSeconds is var d && d >= -before && d <= ItemAfter;
             // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
             // screen's to count, no miss); another item's rise (the line misread its name)
             var own = _itemSeen.Where(p => Near(p) && !p.First && p.Delta > 0 && Twin(p.Id, s.Id) && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ThenBy(p => p.Id == s.Id ? 0 : 1).ToList();
