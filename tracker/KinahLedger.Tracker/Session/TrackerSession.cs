@@ -889,13 +889,15 @@ public sealed partial class TrackerSession
         while (!ct.IsCancellationRequested)
         {
             var t0 = DateTime.UtcNow;
-            bool reading = false;
+            bool reading = false, backup = false;
             Housekeeping.PassStarted();   // the folder's cleaning waits until the pass is over
             try
             {
                 await FollowGameAsync();
                 DrainPackets();   // what the game's own messages said since the last pass (TrackerSession.Packets.cs)
                 DrainFights();    // ...about boss fights, for the Parser (TrackerSession.Parser.cs)
+                // while the packets count items and Kinah the screen is their backup: no loot list, a slow pace (TrackerSession.Packets.cs)
+                backup = ScreenBackup(KinahLedger.Packets.PacketClock.Now);
                 await PartyFrameDue();   // the party list's classes for the Parser, now and then (TrackerSession.Parser.cs)
                 if (Region == null) await FindChatAsync();
                 if (Region == null)
@@ -908,8 +910,8 @@ public sealed partial class TrackerSession
                     // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
                     await ScenePassAsync(p0);
                     var listGate = Verdict("loot_list");
-                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
-                    if (listGate == Gate.Skip) _rows.Reset();
+                    var list = off.Off("loot_list") || listGate == Gate.Skip || backup ? NoListRead() : Times.Time("list", () => LootReadAsync());
+                    if (listGate == Gate.Skip || backup) _rows.Reset();
                     if (!off.Off("target") && Runs("target")) await Times.Time("target", TargetDueAsync);
                     if (!off.Off("craft_panel")) await Times.Time("craft", CraftPanelDue);
                     var listRead = await list;
@@ -939,8 +941,8 @@ public sealed partial class TrackerSession
                     await ScenePassAsync(p0);
                     PacketsDue();   // the game's messages between the readers too (0.10.70): a pass of half a second holds no count
                     var listGate = Verdict("loot_list");
-                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
-                    if (listGate == Gate.Skip) _rows.Reset();
+                    var list = off.Off("loot_list") || listGate == Gate.Skip || backup ? NoListRead() : Times.Time("list", () => LootReadAsync());
+                    if (listGate == Gate.Skip || backup) _rows.Reset();
                     var chatGate = Verdict("chat");
                     if (chatGate != Gate.Skip) await Times.Time("chat", () => ReadOnce(chatGate, () => PeekList(list)));
                     PacketsDue();
@@ -985,8 +987,10 @@ public sealed partial class TrackerSession
             // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
             // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
             int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, Update.RemoteConfig.Current.FightIntervalMs) : _interval;
-            // the wait ends early for the game's messages, which are counted as they come (TrackerSession.Packets.cs)
-            if (spent < every) await WaitWithPacketsAsync(every - spent, ct);
+            // as the packets' backup, a slow pace and a capped share of a core (PassWait). The wait ends early for the game's
+            // messages, which are counted as they come (TrackerSession.Packets.cs)
+            int wait = PassWait(spent, every, backup);
+            if (wait > 0) await WaitWithPacketsAsync(wait, ct);
             else PacketsDue();
             // reading time for the health numbers: the passes the game was read, wait included
             if (reading) Accuracy.AddReading((DateTime.UtcNow - t0).TotalSeconds);

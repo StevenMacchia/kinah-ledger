@@ -1126,7 +1126,12 @@ options: --process aion[,other]");
                 }
             }
         }
-        int chats = 0, lists = 0; DateTime? first = null, last = null;
+        int chats = 0, lists = 0, backupSkipped = 0; DateTime? first = null, last = null;
+        // --backup [ms]: as the live loop reads while the packets count (1.0.20): no loot list, and a chat read at most every
+        // ms (TrackerSession.BackupPassMs by default), so a replay says what screen reading as the backup leaves out
+        int backupMs = opts.TryGetValue("backup", out var bk) ? (int.TryParse(bk, out var bms) && bms > 0 ? bms : TrackerSession.BackupPassMs) : 0;
+        if (backupMs > 0 && reader == null) { Console.Error.WriteLine("--backup needs --pcap: without the game's data the screen reads everything"); return 1; }
+        DateTime chatTakenAt = DateTime.MinValue;
         foreach (var (t, k, lines) in records)
         {
             if (k is not ("chat" or "list")) continue;
@@ -1143,6 +1148,11 @@ options: --process aion[,other]");
                 FeedUntil(t);
                 clock = t;
                 first ??= t; last = t;
+                if (backupMs > 0)
+                {
+                    if (s.ScreenBackup(t) && (k == "list" || (t - chatTakenAt).TotalMilliseconds < backupMs)) { backupSkipped++; continue; }
+                    if (k == "chat") chatTakenAt = t;
+                }
                 if (k == "chat") { s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++; }
                 else
                 {
@@ -1162,7 +1172,7 @@ options: --process aion[,other]");
         }
         s.Instances.Close();
         var e = s.Engine; var tot = e.Totals();
-        Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}.");
+        Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}." + (backupMs > 0 ? $" As the backup ({backupMs} ms): {backupSkipped} reads left out." : ""));
         Console.WriteLine($"  kills counted        {tot.Kills}   (evidence: {e.KillsSeen} · Kinah pickups {e.KinahDrops} · Soul Points lines {e.CurrencyLines})");
         Console.WriteLine($"  quest counter steps  {s.QuestStepsTotal}   (kills of quest enemies, counted by the game)");
         Console.WriteLine($"  Kinah                {tot.Kinah:N0}");

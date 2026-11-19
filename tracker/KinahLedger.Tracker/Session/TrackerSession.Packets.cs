@@ -161,6 +161,62 @@ public sealed partial class TrackerSession
     /// <summary>Between the screen pass's readers: the packets drained when there is something to drain, so a pass of half a second doesn't hold a count.</summary>
     void PacketsDue() { if (Packets is { } p && (p.Pending || _packetHeld.Count > 0 || _itemHeld.Count > 0)) DrainPackets(); }
 
+    // ---- the game's data first, the screen its backup (1.0.20) ----
+    // A player's 5120x2160 window on 2026-11-18: 560 to 920 ms a pass, about 80 passes a minute back to back, the loot list
+    // alone 450 ms of it, while the packets already counted every pickup. While they count items and Kinah, the loot list
+    // (whose rows are only logged and left out then) isn't read, and the rest of the pass runs at a slow pace with a cap on
+    // its share of a core: the chat stays the agreement check's witness and the reward and box lines' say, the target bar
+    // says the enemy, a reward screen and the crafting window, the crafting panel the recipe and the gathering bar. When
+    // the packets are off, missing or stop counting, the screen reads everything at the usual pace again, at once.
+
+    /// <summary>While the screen is the backup: at least this long from the start of one pass to the start of the next.</summary>
+    public const int BackupPassMs = 2500;
+    /// <summary>While the screen is the backup: a pass's share of one core at most (the wait after it is at least (1 − share) / share of its time).</summary>
+    public const double BackupCoreShare = 0.25;
+    bool _screenBackup;
+
+    /// <summary>Why the screen reads everything now; null while the packets count items and Kinah and the screen is their backup.</summary>
+    internal string? FullReadingWhy(DateTime now)
+    {
+        if (Update.RemoteConfig.Current.Off("packets_first")) return "switched off in the remote settings";
+        if (Packets is not { } p) return "there is no game reader";
+        if (!p.Enabled) return "the game reader is off";
+        if (!p.On) return "the game reader isn't running";
+        if (p.ItemsBroken is { } ib) return ib;
+        if (p.Broken(CurrencyKind.Kinah) is { } kb) return kb;
+        if (!p.CountingItems(now) || !p.Counting(CurrencyKind.Kinah, now)) return "the game reader isn't counting items and Kinah yet";
+        return null;
+    }
+
+    /// <summary>True while the screen is the packets' backup (<see cref="FullReadingWhy"/>); one log line at each switch.</summary>
+    internal bool ScreenBackup(DateTime now)
+    {
+        var why = FullReadingWhy(now);
+        bool backup = why == null;
+        if (backup != _screenBackup)
+        {
+            _screenBackup = backup;
+            CrashLog.Note(backup ? "screen reading: backup only (the game reader counts)" : $"screen reading: full ({why})");
+        }
+        return backup;
+    }
+
+    /// <summary>True while the screen is the backup, as the last pass found it.</summary>
+    public bool ScreenIsBackup => _screenBackup;
+
+    /// <summary>
+    /// The wait after a pass that took <paramref name="spent"/> ms, the usual pace being <paramref name="every"/> ms: as
+    /// usual while the screen reads everything; as the backup, never under <see cref="BackupPassMs"/> start to start, never
+    /// back to back, and long enough that the pass is at most <see cref="BackupCoreShare"/> of the time.
+    /// </summary>
+    internal static int PassWait(int spent, int every, bool backup)
+    {
+        int wait = every - spent;
+        if (!backup) return wait;
+        int share = (int)Math.Ceiling(Math.Max(0, spent) * (1 - BackupCoreShare) / BackupCoreShare);
+        return Math.Max(Math.Max(wait, BackupPassMs - spent), Math.Max(share, 250));
+    }
+
     /// <summary>
     /// True when <paramref name="ev"/> is Kinah, bound Kinah or Abyss Points from the screen (a chat line, the Kinah counter,
     /// the loot list) while the packets count that currency: it is logged, offered to the reader's agreement check, and not
