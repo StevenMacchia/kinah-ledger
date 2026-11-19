@@ -234,7 +234,7 @@
   "Group details": "파티 상세",
   "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.": "전투 분석기 페이지와 오버레이에서 각 멤버의 직업, 전투력, 아이템 레벨, 피해량을 DPS 옆에 보여줘요.",
   "DPS over active time": "활동 시간 기준 DPS",
-  "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.": "끄면 각 멤버의 DPS는 전투 전체 시간 (런이면 보스 전투들) 동안의 피해량으로 계산해요. 켜면 피해를 준 시간, 즉 첫 타격부터 마지막 타격까지로 계산하고 20초 넘는 공백은 빼요. 전투 분석기 페이지의 파티 카드에서도 전환할 수 있어요.",
+  "Off, each member's DPS is their damage over the whole fight's length, so the rows add up to the group's DPS and your bests compare. On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out.": "끄면 각 멤버의 DPS는 전투 전체 시간 동안의 피해량으로 계산해서, 행을 더하면 파티 DPS가 되고 내 최고 기록과 비교할 수 있어요. 켜면 피해를 준 시간, 즉 첫 타격부터 마지막 타격까지로 계산하고 20초 넘는 공백은 빼요.",
   "Deaths": "사망",
   "The group's deaths on boss pulls: how many in the figures line, each member's in the pull's group.": "보스 전투에서의 파티 사망이에요. 수치 줄에 총 횟수가, 전투의 파티에 멤버별 횟수가 나와요.",
   "Kills near you": "내 주변 처치",
@@ -292,7 +292,7 @@
   "Chime": "알림음",
   "Verteron's world bosses show here once the game's world map has been opened (Exploration › Field Boss) with packet reading on (Game reading).": "Verteron의 월드 보스는 패킷 읽기를 켠 상태에서 (게임 읽기) 게임의 월드 맵 (Exploration › Field Boss)을 한 번 열면 여기에 나타나요.",
   "Clear everything": "모두 지우기",
-  "Copy the share picture": "공유 이미지 복사",
+  "Copy the share picture; on the Parser page, the fight as text": "공유 이미지 복사. 전투 분석기 페이지에서는 전투를 텍스트로",
   "Undo, while its bar shows (8 s)": "실행 취소, 바가 보이는 동안 (8초)",
   "Window size, a step bigger or smaller (Ctrl+wheel too)": "창 크기 한 단계 키우기/줄이기 (Ctrl+휠도 가능)",
   "Window size back to 100%": "창 크기를 100%로",
@@ -386,5 +386,8 @@
   "SHARE PICTURE": "공유 이미지",
   "Pickup icons": "획득 아이콘",
   "Your best drop and last pickups on the panel. Off hides them; every pickup is still counted.": "최고 드롭과 최근 획득을 패널에 아이콘으로 표시합니다. 끄면 숨기기만 하고, 획득은 계속 집계됩니다.",
-  "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "트래커가 아직 게임을 읽지 못하고 있습니다. 원인을 확인할 수 있도록 진단 보고서를 보내는 중…"
+  "The tracker isn't reading the game yet. Sending a diagnostics report so we can see why…": "트래커가 아직 게임을 읽지 못하고 있습니다. 원인을 확인할 수 있도록 진단 보고서를 보내는 중…",
+  "Damage to adds": "쫄 피해 포함",
+  "Off, each member's DPS, share and bar count their damage to the boss alone, as its HP bar does. On, everything they hit, adds included. Only fights with adds differ.": "끄면 각 멤버의 DPS, 비중, 막대는 보스 HP 바처럼 보스에게 준 피해만 계산해요. 켜면 쫄을 포함해 맞힌 모든 대상의 피해를 계산해요. 쫄이 있는 전투에서만 달라져요.",
+  "Parser page: copy the fight as a picture": "전투 분석기 페이지: 전투를 그림으로 복사"
 }

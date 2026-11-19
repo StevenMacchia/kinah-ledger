@@ -126,6 +126,10 @@ public static partial class WpfApp
         // watched timer is within 5 minutes, so a run near the hour put "Kinah Ledger timers" on the player's screen (2026-11-17)
         TimersOverlay.InvisibleForTest = true;
         PopOutWindow.OffscreenForTest = true;   // the pop-out windows too (Ui/PopOutWindow.cs), whatever opens them
+        // the meter's settings the checks were written for (1.0.17's defaults: Always on, click-through, the expanded meter and kills
+        // near you off). Options' Save reads parser.json; with no file it read a new install's 1.0.18 defaults, and the expanded
+        // meter's extra 70 then reached the window (the width and "wider" checks). The new defaults are parser-test's and SimplifyChecks'
+        new KinahLedger.Parser.ParserPrefs { AlwaysOn = false, ClickThrough = false, Expanded = false, KillsNear = false, DetailsSettled = true, HonestSettled = true, GlassSettled = true }.Save();
         int fails = 0;
         void Check(bool ok, string what) { Console.WriteLine((ok ? "ok    " : "FAIL  ") + what); if (!ok) fails++; }
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -154,8 +158,22 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "npcap") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); NpcapChecks(settings, Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (npcap): all passed" : $"options test (npcap): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=popouts: the DPS meter and Applicants pop-out windows alone (Ui/WpfApp.PopOuts.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "popouts") { PopOutChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (pop-outs): all passed" : $"options test (pop-outs): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=typing: the Terminal's typed-out pickup line alone (Ui/WpfApp.Typing.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "typing") { var tw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; tw.Show(); DoEvents(); TypingChecks(tw, Check); tw.Close(); Console.WriteLine(fails == 0 ? "options test (terminal typing): all passed" : $"options test (terminal typing): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=applicants: the Applicants window alone (Ui/WpfApp.Applicants.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "applicants") { var aw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; aw.Show(); DoEvents(); ApplicantsChecks(aw, Check); aw.Close(); Console.WriteLine(fails == 0 ? "options test (applicants): all passed" : $"options test (applicants): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=settings: the settings revamp's checks (left bar, every page fits, every row found and jumped to) and the
+        // settings-simplify checks (no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page), alone
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "settings")
+        {
+            var sw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            sw.Show(); sw.ShowDemo(); DoEvents();
+            OptionsWindow OpenS() { var so = new OptionsWindow(sw, OptionsWindow.Page.General) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; so.Show(); DoEvents(); return so; }
+            SettingsRevampChecks(sw, OpenS, Check);
+            using (new MainStatics()) SimplifyChecks(settings, Check);   // on a window of its own, with this one still open (as the whole test runs it)
+            sw.Close();
+            Console.WriteLine(fails == 0 ? "options test (settings): all passed" : $"options test (settings): {fails} failed"); return fails == 0 ? 0 : 1;
+        }
         LangChecks(settings, Check);   // the whole window in Korean and Chinese (Ui/WpfApp.Lang.cs); first, while the application runs
 
 
@@ -375,9 +393,11 @@ public static partial class WpfApp
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
+        TypingChecks(w, Check);   // the Terminal types a new pickup out (Ui/WpfApp.Typing.cs; KL_OPTIONS_ONLY=typing alone)
         ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
         using (new MainStatics()) NpcapChecks(settings, Check);   // (its own main windows: the shared layer and lookups put back after, Ui/WpfApp.PopOuts.cs) what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
         PopOutChecks(settings, Check);   // the pop-out windows, on a main window of their own (Ui/WpfApp.PopOuts.cs; KL_OPTIONS_ONLY=popouts alone)
+        using (new MainStatics()) SimplifyChecks(settings, Check);   // (its own main window: the shared layer and lookups put back after) no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page (Ui/WpfApp.SettingsSimplify.cs; KL_OPTIONS_ONLY=settings)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)
         o.PickHudLookForTest(HudLooks.Ticker);
         Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Card && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible && !w.HudPrefsForTest.LookPicked, "a panel look waits for Save; the Strip's figures grey out");

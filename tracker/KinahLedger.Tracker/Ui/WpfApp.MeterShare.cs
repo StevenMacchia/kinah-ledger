@@ -188,8 +188,8 @@ public static partial class WpfApp
         // the Parser page's Copy picture, on a kept fight opened (the meter is in its ▾: Ui/WpfApp.ParserShare.cs checks the rest)
         {
             w.ShowParserDemo("detail"); DoEvents();
-            var btn = Find(w.ParserPage, "parser-copy-picture-hero") as Button;
-            check(btn is { IsEnabled: true } && Find(w.ParserPage, "parser-share-more") is Button, "meter share: Copy picture and its ▾ on the Parser page for the fight opened");
+            var btn = Find(w.ParserPage, "parser-copy-now") as Button;
+            check(btn is { IsEnabled: true } && Find(w.ParserPage, "parser-share-more") is Button, "meter share: the head's Copy picture and its ▾ on the Parser page for the fight opened");
         }
 
         static FrameworkElement? Find(DependencyObject d, string tag)

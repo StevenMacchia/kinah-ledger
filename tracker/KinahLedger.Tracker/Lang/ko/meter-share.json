@@ -1,6 +1,6 @@
 {
   "Member {0}": "파티원 {0}",
-  "A picture of this fight to paste in Discord or anywhere. Nothing is uploaded.": "이 전투의 이미지예요. Discord 등 어디든 붙여 넣을 수 있고, 업로드되는 건 없어요.",
+  "Copies a picture of the meter, this fight as it shows now, to paste in Discord or anywhere with Ctrl+V. Nothing is uploaded.": "미터를 지금 보이는 이 전투 그대로 그림으로 복사해요. Discord 등 어디든 Ctrl+V로 붙여 넣을 수 있고, 업로드되는 건 없어요.",
   "No fight to share yet. Pull a boss and the picture fills in.": "아직 공유할 전투가 없어요. 보스와 싸우면 이미지가 채워져요.",
   "Hide other names": "다른 이름 숨기기",
   "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.": "공유 이미지에서 다른 파티원은 직업과 \"파티원 2\"처럼 보여요. 내 이름은 그대로고, 수치도 그대로 남아요.",

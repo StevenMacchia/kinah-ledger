@@ -20,7 +20,8 @@ public partial class OptionsWindow
     /// <summary>The window's own keys (MainWindow.Shortcuts.cs and the Undo bar).</summary>
     static readonly (string Key, string What)[] WindowKeys =
     {
-        (MainWindow.OptionsKey, "Options"), (MainWindow.NewSessionKey, MainWindow.ClearAllText), (MainWindow.CopyPictureKey, "Copy the share picture"),
+        (MainWindow.OptionsKey, "Options"), (MainWindow.NewSessionKey, MainWindow.ClearAllText), (MainWindow.CopyPictureKey, "Copy the share picture; on the Parser page, the fight as text"),
+        (MainWindow.ParserCopyKey, "Parser page: copy the fight as a picture"),
         ("Ctrl+Z", "Undo, while its bar shows (8 s)"),
         (MainWindow.WindowBiggerKey + " / " + MainWindow.WindowSmallerKey, "Window size, a step bigger or smaller (Ctrl+wheel too)"), (MainWindow.WindowResetKey, "Window size back to 100%"),
         (MainWindow.PageKeys, "Farm, Craft, Runs, Parser, Timers"),

@@ -31,7 +31,11 @@ public partial class MainWindow
     {
         InputBindings.Add(new KeyBinding(new KeyAct(() => OpenOptions()), Key.OemComma, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new KeyAct(() => _ = ClearAllFromKey()), Key.N, ModifierKeys.Control));
-        InputBindings.Add(new KeyBinding(new KeyAct(() => CopySharePictureNow()), Key.C, ModifierKeys.Control | ModifierKeys.Shift));
+        // on the Parser page (Steven, 2026-11-18: "Make copy and pasting EASY and promoted"): Ctrl+C copies the fight shown as a
+        // picture and Ctrl+Shift+C as text (Ui/MainWindow.ParserShare.cs); elsewhere Ctrl+Shift+C is the share picture's. A text
+        // box takes Ctrl+C itself first, so copying words still works
+        InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!ParserCopyKeyPressed(text: true)) CopySharePictureNow(); }), Key.C, ModifierKeys.Control | ModifierKeys.Shift));
+        InputBindings.Add(new KeyBinding(new KeyAct(() => ParserCopyKeyPressed(text: false)), Key.C, ModifierKeys.Control));
         // window size: Ctrl with = (the + key), - and 0, on the main keys and the keypad; Shift+= (a real +) too
         foreach (var (key, steps) in new[] { (Key.OemPlus, 1), (Key.Add, 1), (Key.OemMinus, -1), (Key.Subtract, -1), (Key.D0, 0), (Key.NumPad0, 0) })
         {

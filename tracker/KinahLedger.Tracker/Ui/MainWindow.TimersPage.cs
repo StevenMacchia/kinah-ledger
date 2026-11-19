@@ -92,16 +92,10 @@ public partial class MainWindow
         title.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         g.Children.Add(title);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var ol = QT(L.T("Overlay"), 12.5, FontWeights.SemiBold, "Muted"); ol.Margin = new Thickness(0, 0, 8, 0);
-        right.Children.Add(ol);
-        var overlay = new CheckBox { IsChecked = TimersOverlayOn, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
-            ToolTip = L.T("The timers over the game: a tiny line on top of the Kinah overlay when a watched timer is near, with a chime.") };
-        overlay.SetResourceReference(StyleProperty, "Switch");
-        overlay.Click += (_, _) => { SetTimersOverlay(overlay.IsChecked == true); DrawOverlayPills(); };
-        right.Children.Add(overlay);
+        // no Overlay switch here (Steven, 2026-11-18: "No settings should be from the app outside settings"): the header's
+        // Overlays menu switches it, Settings › Timers sets it up (the gear)
         _timersPopOutBtn = new Button { Content = L.T("Pop out"), Height = 30, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
             ToolTip = L.T("Opens every timer in a window of its own, to keep beside the game or on a second screen.") };
-        System.Windows.Automation.AutomationProperties.SetName(overlay, "Timers overlay");
         System.Windows.Automation.AutomationProperties.SetName(_timersPopOutBtn, "Pop out the timers");
         _timersPopOutBtn.Click += (_, _) => OpenTimersPopOut();
         right.Children.Add(_timersPopOutBtn);

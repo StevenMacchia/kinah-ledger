@@ -50,7 +50,7 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserHideNamesChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserHideNamesChk = null!, _parserAddsChk = null!;
     /// <summary>The share picture's shortcut as picked here ("Off" for none), its field and the line under it.</summary>
     string _parserShareKey = ParserPrefs.DefaultHotkey;
     TextBox? _parserShareKeyBox;
@@ -76,13 +76,14 @@ public partial class OptionsWindow
         _parserSeparateChk.IsChecked = p.InKinah;
         _parserLookPick = ParserPrefs.LookOf(p.Look);
         _parserActiveChk.IsChecked = p.DpsActive;
+        _parserAddsChk.IsChecked = p.Targets == "all";
         _parserExpandedChk.IsChecked = p.Expanded;
         _parserCritChk.IsChecked = p.CritNow != "none" || p.BackNow != "none";
         _parserHealBarsChk.IsChecked = p.HealBars;
         _parserHideNamesChk.IsChecked = p.ShareHideNames;
         _parserShareKey = Platform.Hotkey.Parse(p.ShareHotkey) is { } sk ? sk.ToString() : ParserPrefs.DefaultHotkey;
         RefreshShareKey();
-        // the switches the window's Parser page also has: as the window holds them now
+        // the meter's on/off, click-through and when it shows: as the window holds them now (the Overlays menu's quick switch may have moved the first)
         _parserOverlayChk.IsChecked = _host.ParserOverlayOn;
         _parserThroughChk.IsChecked = _host.ParserOverlayClickThrough;
         _parserWhenBox.SelectedIndex = _host.ParserAlwaysOn ? 1 : 0;
@@ -103,7 +104,7 @@ public partial class OptionsWindow
     /// </summary>
     string _parserSnap = "";
     string ParserSnap() => _parserLabel == null ? "" : string.Join("|",
-        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk }
+        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk, _parserAddsChk }
             .Select(c => c.IsChecked == true ? "1" : "0"))
         + "|" + _parserWhenBox.SelectedIndex + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0) + "|" + _parserShareKey;
     /// <summary>Something on the DPS meter page differs from parser.json: Save lights up for it.</summary>
@@ -137,6 +138,7 @@ public partial class OptionsWindow
         p.InKinah = _parserSeparateChk.IsChecked == true;
         p.Look = _parserLookPick;
         p.DpsActive = _parserActiveChk.IsChecked == true;
+        p.Targets = _parserAddsChk.IsChecked == true ? "all" : "boss";
         p.Expanded = _parserExpandedChk.IsChecked == true;
         p.HealBars = _parserHealBarsChk.IsChecked == true;
         p.ShareHideNames = _parserHideNamesChk.IsChecked == true;
@@ -270,7 +272,8 @@ public partial class OptionsWindow
         _parserExpandedChk = Row("Expanded meter", "The overlay's meter shows everyone with their damage. Off, the top four, and you always. A click on the meter switches it too.", "Parser expanded meter");
         _parserHealBarsChk = Row("Heal bars", "A green bar along each healer's row on the overlay's meter: their share of the group's healing. The HEAL chip after the name keeps their healing a second either way.", "Parser heal bars");
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
-        _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length (a run's: its boss pulls). On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out. The Parser page's group card switches it too.", "Parser DPS over active time");
+        _parserActiveChk = Row("DPS over active time", "Off, each member's DPS is their damage over the whole fight's length, so the rows add up to the group's DPS and your bests compare. On, over the time they were dealing damage: their first hit to their last, pauses over 20 seconds left out.", "Parser DPS over active time");
+        _parserAddsChk = Row("Damage to adds", "Off, each member's DPS, share and bar count their damage to the boss alone, as its HP bar does. On, everything they hit, adds included. Only fights with adds differ.", "Parser damage to adds");
         _parserDeathsChk = Row("Deaths", "The group's deaths on boss pulls: how many in the figures line, each member's in the pull's group.", "Parser deaths");
         _parserKillsChk = Row("Kills near you", "Enemies that died near you during boss pulls.", "Parser kills near you");
         _parserFiltersChk = Row("List filters", "Pick a kind and a boss or an instance on the Parser's list of past records.", "Parser list filters");
@@ -551,10 +554,12 @@ public partial class OptionsWindow
 
     /// <summary>For the options test: the crit and back-attack switch, the heal bars, and the header's on/off, click-through and When it shows.</summary>
     internal CheckBox ParserCritForTest => _parserCritChk;
+    internal CheckBox ParserAddsForTest => _parserAddsChk;
+    internal CheckBox ParserExpandedForTest => _parserExpandedChk;
     internal CheckBox ParserHealBarsForTest => _parserHealBarsChk;
     internal (CheckBox Show, CheckBox Through, ComboBox When) ParserOverlaySwitchesForTest => (_parserOverlayChk, _parserThroughChk, _parserWhenBox);
 
     /// <summary>For the options test: every switch's title under More.</summary>
-    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserAddsChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserHideNamesChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }

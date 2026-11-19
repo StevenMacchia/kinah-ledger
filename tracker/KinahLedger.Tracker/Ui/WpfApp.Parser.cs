@@ -303,7 +303,8 @@ public static partial class WpfApp
         w.ShowParserDemo("empty"); DoEvents();
         var empty = w.ParserPageForTest();
         check(!empty.Live && empty.Rows == 0, "Parser: no fights yet says what lands there");
-        // the meter's pick on the page's head (Steven, 2026-11-15): two buttons, Only boss fights on as shipped, a click switches it
+        // the page's head: actions only (Steven, 2026-11-18: "No settings should be from the app outside settings"); the meter's
+        // pick (Only boss fights, Always on) went to Settings › DPS meter › When it shows
         w.ShowParserDemo("live"); DoEvents();
         static IEnumerable<System.Windows.Controls.Button> Buttons(DependencyObject d)
         {
@@ -315,12 +316,14 @@ public static partial class WpfApp
             }
         }
         System.Windows.Controls.Button? Meter(string label) => Buttons(w.ParserPage).FirstOrDefault(b => System.Windows.Automation.AutomationProperties.GetName(b) == "Parser meter: " + label);
-        var onlyBoss = Meter("Only boss fights"); var alwaysBtn = Meter("Always on");
-        check(onlyBoss != null && alwaysBtn != null && !w.ParserAlwaysOnForTest, "Parser: the page's head has the meter's pick, Only boss fights and Always on, Only boss fights as shipped");
-        alwaysBtn?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
-        check(w.ParserAlwaysOnForTest && Meter("Always on")?.Style == w.TryFindResource("SegOn") as Style, "...a click on Always on picks it, lit at once");
-        Meter("Only boss fights")?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
-        check(!w.ParserAlwaysOnForTest, "...and Only boss fights puts it back");
+        {
+            var head = FindTagged(w.ParserPage, "parser-head");
+            var named = head == null ? new List<string>() : Buttons(head).Select(b => System.Windows.Automation.AutomationProperties.GetName(b)).ToList();
+            bool switches = head != null && OptionsWindow.TreeOf(head).Any(d => d is System.Windows.Controls.CheckBox or System.Windows.Controls.ComboBox);
+            check(head != null && Meter("Only boss fights") == null && Meter("Always on") == null && !switches
+                && named.Contains("Copy a picture of this fight") && named.Contains("Copy this fight as text") && named.Contains("Pop out the DPS meter") && FindTagged(head, "parser-settings") != null,
+                $"Parser: the page's head has actions only (Copy picture, Copy text, Pop out, a Settings link), no switch or meter pick ({string.Join(", ", named)})");
+        }
         var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000 };
         var (_, sample) = ParserDemo.Sample(new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc));
         o.Draw(sample!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); o.Show(); DoEvents();
@@ -442,8 +445,11 @@ public static partial class WpfApp
         // a class emblem's hover names its class: that stays (the emblem is the class, colour-blind or not)
         // and a row's figure says the damage behind it ("1.2M damage in 2:42"): a figure, not an explanation
         // as are the coverage line's uncredited share and a late joiner's or leaver's time (the honest pass): figures too
+        // and the page head's actions (Copy picture, Copy text, Pop out, Settings) say what they do and their keys whatever the switch
+        w.ShowParserDemo("live-min"); DoEvents();
+        var headTips = FindTagged(w.ParserPage, "parser-head") is { } ph ? ParserTexts(ph).Tips.ToHashSet() : new HashSet<string>();
         var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ") && !t.Contains("HP the boss lost") && !t.Contains("HP the bosses lost")
-            && !t.StartsWith("Joined ") && !t.StartsWith("Left ")).ToList();
+            && !t.StartsWith("Joined ") && !t.StartsWith("Left ") && !headTips.Contains(t)).ToList();
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
         // (the item level steps aside when the row carries its DPS over time: store v2's per-second damage)
         static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP"));
@@ -471,20 +477,23 @@ public static partial class WpfApp
             $"Parser, honest pass: the inspect view's boss / adds / active and idle figures; a late joiner and a leaver marked, the coverage line ({kwapo.Texts.FirstOrDefault(t => t.Contains("credited"))})");
         check(!opened.Texts.Concat(every.Texts).Concat(kwapo.Texts).Any(t => t == "Other" || t.Contains("and more")), "Parser, honest pass: no Other row and no \"and more\" bucket");
         {
+            // the group card says what its figures are (Settings › DPS meter › DPS over active time and Damage to adds set them,
+            // 2026-11-18: no switches on the page): boss damage over the fight by default; with both set, the line and the figures follow
             w.ShowParserDemo("detail"); DoEvents();
-            var boss = FindButton(w.ParserPage, "Boss"); var allT = FindButton(w.ParserPage, "All targets");
-            var fightB = FindButton(w.ParserPage, "Fight"); var activeB = FindButton(w.ParserPage, "Active");
+            string Basis() => FindTagged(w.ParserPage, "parser-group-basis") is System.Windows.Controls.TextBlock t ? BlockText(t) : "";
             var openedE = w.ParserPastForTest.Single(e => e.Id == w.ParserOpenForTest);
             var top = openedE.Ranked().First();
             double bossDps = openedE.Dps(top, openedE.End!.Value);
-            allT?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
-            bool allOn = !Encounter.BossOnly && openedE.Dps(top, openedE.End.Value) > bossDps;
-            activeB = FindButton(w.ParserPage, "Active");
-            activeB?.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
-            bool activeOn = Encounter.ActiveBasis;
+            string basis0 = Basis();
+            Encounter.BossOnly = false; Encounter.ActiveBasis = true;
+            w.ParserTabForTest = "Group"; DoEvents();
+            string basis1 = Basis();
+            bool moved = openedE.Dps(top, openedE.End.Value) > bossDps;
             w.ShowParserDemo("detail"); DoEvents();
-            check(boss != null && allT != null && fightB != null && activeB != null && allOn && activeOn && Encounter.BossOnly && !Encounter.ActiveBasis,
-                "Parser: the group card's Boss / All targets and Fight / Active switches, one click each, change the figures (boss damage over the fight by default)");
+            check(FindButton(w.ParserPage, "All targets") == null && FindButton(w.ParserPage, "Active") == null
+                && basis0.Contains(L.T("DPS over the whole fight")) && basis0.Contains(L.T("boss damage only"))
+                && basis1.Contains(L.T("DPS over active time")) && basis1.Contains(L.T("adds included")) && moved && Encounter.BossOnly && !Encounter.ActiveBasis,
+                $"Parser: the group card says what its figures are, no switches (\"{basis0}\", then \"{basis1}\" with active time and adds set; the figures follow)");
         }
         // the header: the instance with the game's mode for it
         w.ShowParserDemo("live"); DoEvents();
@@ -519,7 +528,7 @@ public static partial class WpfApp
         }
         // the overlay's look, one click from the page (Steven, 2026-11-14: "idk how to change the style"): with the Parser inside the Kinah overlay
         w.SetParserSeparateForTest(false); DoEvents();
-        check(ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")), "Parser: inside the Kinah overlay, the page names the overlay's look, a link to change it");
+        check(!ParserTexts(w.ParserPage).Texts.Any(t => t.StartsWith("Overlay look: ")) && FindTagged(w.ParserPage, "parser-settings") != null, "Parser: the page has no Overlay look link (the look is Settings › DPS meter's), a Settings link in its place");
         // separated (Steven, 2026-11-14: overlays move by a plain drag, no Move button or placement mode; the Kinah overlay's look exactly)
         {
             w.SetParserSeparateForTest(true); DoEvents();
@@ -602,8 +611,9 @@ public static partial class WpfApp
         var opt = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         opt.Show(); DoEvents();
         var sws = opt.ParserSwitchesForTest;
-        check(new[] { sws.Details, sws.Deaths, sws.Filters, sws.Hovers }.All(c => c?.IsChecked == true) && new[] { sws.Kills, sws.Separate, sws.Active }.All(c => c.IsChecked == false),
-            "Options › In game › Parser: Group details, Deaths, List filters and Explanations on hover on by default (the honest pass); DPS over active time, Kills near you, Parser inside the Kinah overlay off");
+        check(new[] { sws.Details, sws.Deaths, sws.Filters, sws.Hovers }.All(c => c?.IsChecked == true) && new[] { sws.Separate, sws.Active }.All(c => c.IsChecked == false)
+            && sws.Kills.IsChecked == ParserPrefs.Load().KillsNear,
+            "Options › DPS meter: Group details, Deaths, List filters and Explanations on hover on by default; DPS over active time and Parser inside the Kinah overlay off; Kills near you as parser.json has it (on for a new install since 1.0.18)");
         // two windows by default (Steven, 2026-11-15: "have them just be 2 separate windows pls i miss the old one"): a new
         // player, and a file from before with the old "Separate": false, both get the Parser's own window
         check(ParserPrefs.FromText("{}").Separate && ParserPrefs.FromText("{\"Separate\":false,\"DetailsSettled\":true,\"HonestSettled\":true}").Separate

@@ -36,7 +36,7 @@
   "{0} s": "{0}초",
   "{0}h": "{0}시간",
   "{0}m": "{0}분",
-  "Events and world bosses you watch, in a strip of their own: hidden until one is near, with a chime.": "지켜보는 이벤트와 월드 보스를 전용 띠에 보여줘요. 가까워질 때까지 숨겨지고 알림음이 울려요.",
+  "Events and world bosses you watch, hidden until one is near. Set up in Settings › Timers.": "지켜보는 이벤트와 월드 보스를 가까워질 때까지 숨겨 둬요. 설정 › 타이머에서 바꿔요.",
   "Ring the bell on any timer below to watch it: it shows on the overlay and chimes before it starts.": "아래 타이머의 종을 누르면 지켜봐요. 오버레이에 표시되고 시작 전에 알림음이 울려요.",
   "Watched": "관심",
   "World bosses": "월드 보스",

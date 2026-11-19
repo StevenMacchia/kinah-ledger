@@ -45,7 +45,7 @@ sealed class MeterPopOut : PopOutWindow
         TextElement.SetFontWeight(_host, FontWeights.Medium);
         TextOptions.SetTextFormattingMode(_host, TextFormattingMode.Display);
         Typography.SetNumeralAlignment(_host, FontNumeralAlignment.Tabular);
-        _share = new Button { Content = L.T("Share", "button"), Height = 26, FontSize = 12, Padding = new Thickness(12, 0, 12, 0), ToolTip = L.T("A picture of this fight to paste in Discord or anywhere. Nothing is uploaded.") };
+        _share = new Button { Content = L.T("Share", "button"), Height = 26, FontSize = 12, Padding = new Thickness(12, 0, 12, 0), ToolTip = ParserOverlay.MeterShareTip };
         _share.SetResourceReference(StyleProperty, "PillBtn");
         _share.Height = 26;
         System.Windows.Automation.AutomationProperties.SetName(_share, "Share a picture of the meter");

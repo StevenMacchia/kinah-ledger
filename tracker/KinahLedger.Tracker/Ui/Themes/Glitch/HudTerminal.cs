@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// [91% of best]", "session 894K", the timer "shugo: ENTER 2:41" in amber, and the last pickup as a log line with a block
 /// cursor (the cursor blinks with the run clock's seconds). The fight: "> fight kashapa" and its clock, the HP as a block
 /// bar [██████¦███░░░¦░░░░░░] with "¦" at the thirds, the rows on the dark ground, "process kashapa exited (0) KILLED", the
-/// foot. Lines appear whole: nothing is typed on.
+/// foot. What is new types out a character at a time (Ui/Themes/Glitch/HudTerminal.Type.cs); the figures that tick never do.
 /// Moments: a pickup's log line blooms on its ground; a rare drop prints "!! RARE: Shade Gloves" in its grade's colour
 /// and the screen flickers once; your best passed runs "> record --new  OK"; an entry opening sounds a "BEEP" mark beside
 /// its timer; a fight starts with its boot lines; a kill or a wipe blooms its exit line ("segfault: party wiped").
@@ -47,6 +47,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
     readonly Border _pickLine = new() { Margin = new Thickness(0, 2, 0, 0) };
     readonly TextBlock _pick = Txt("", 12, PhosDim, Face, FontWeights.SemiBold, trim: true);
     readonly Border _cursor = new() { Width = 7.5, Height = 14, Background = Phos, Margin = new Thickness(3, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    readonly StackPanel _pickRow = new() { Orientation = Orientation.Horizontal };
     readonly Border _rareLine = new() { Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
     FrameworkElement? _rareTile;
     readonly TextBlock _note = Txt("", 11.5, PhosDim, Face, FontWeights.SemiBold, trim: true);
@@ -95,7 +96,8 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         _timerLine.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _timer, _beep } };
         _timerLine.Margin = new Thickness(0, 2, 0, 0);
         _crt.Body.Children.Add(_timerLine);
-        _pickLine.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _pick, _cursor } };
+        _pickRow.Children.Add(_pick); _pickRow.Children.Add(_cursor);
+        _pickLine.Child = _pickRow;
         _crt.Body.Children.Add(_pickLine);
         _crt.Body.Children.Add(_rareLine);
         _note.Margin = new Thickness(0, 3, 0, 0); _note.Visibility = Visibility.Collapsed; _note.MaxWidth = 380; _note.HorizontalAlignment = HorizontalAlignment.Left;
@@ -207,6 +209,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         // in a dungeon run the screen runs the run: the dungeon at the prompt, its count, clock and splits (Ui/Themes/Glitch/HudTerminal.Run.cs)
         var rs = RunOf(Values, KinahHidden);
         ShowRun(rs != null);
+        FreshDraw(rs);   // a pickup or a clear just made types on (Ui/Themes/Glitch/HudTerminal.Type.cs)
         if (rs != null) RunPrompt(rs);
         else
         {
@@ -222,6 +225,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         // the prompt: the rate asked for; a new best, the record written
         _prompt.Text = f.Beat ? L.T("> record --new") : f.Abyss ? L.T("> abyss --rate") : L.T("> kinah --rate");
         _ok.Visibility = f.Beat ? Visibility.Visible : Visibility.Collapsed;
+        PromptDrawn(f.Beat);
 
         _figLine.Children.Clear();
         if (f.Abyss && f.Counted && f.Icon.Length > 0) { var m = AbyssMark(f.Icon, 28); m.Margin = new Thickness(0, 0, 9, 0); _figLine.Children.Add(m); }
@@ -280,6 +284,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
             _pick.Inlines.Add(Rn(p0.Name, Phos));
         }
         _pick.MaxWidth = 330;
+        if (_type.Active(KeyPick)) _type.Rebind(KeyPick, PickSegs());   // drawn again while it types: it goes on in the new runs
 
         // a rare drop: "!! RARE: Shade Gloves" in its grade's colour, its tile
         if (Rare(Values) is { } r)
@@ -293,7 +298,8 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
             _rareLine.Child = sp;
             _rareLine.Visibility = Visibility.Visible;
         }
-        else { _rareLine.Child = null; _rareTile = null; _rareLine.Visibility = Visibility.Collapsed; }
+        else { _type.Cancel(KeyRare); _rareLine.Child = null; _rareTile = null; _rareLine.Visibility = Visibility.Collapsed; }
+        if (_type.Active(KeyRare) && _rareLine.Child is StackPanel rsp) _type.Rebind(KeyRare, RareSegs(rsp));
 
         Note(f);
     }
@@ -430,6 +436,8 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         if (KinahHidden) return;
         Bloom(_pickLine, Glow, 1100);
         Motion.Play(_cursor, 1100, t => _cursor.Opacity = 1);
+        // the log line types out; only a pickup just made (a price refresh or a loaded session writes whole), never in a run
+        if (!_runOn && (held || _freshPick?.Id == p.Id)) TypePick(p, held);
     }
 
     protected override void RareDrop(Pick p, bool held)
@@ -438,6 +446,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         var c = ColorOf(p.Color, p.Grade);
         Flicker(_crt, Glow, 800);
         Bloom(_rareLine, c, 1800, .38);
+        if (!_runOn) TypeRare(held);
         if (_rareTile is { } tile)
         {
             var s = new ScaleTransform(); tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = s;
@@ -449,6 +458,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
     {
         if (KinahHidden) return;
         Bloom(_promptLine, Glow, 1600, .45);
+        if (!_runOn) TypePrompt(held);
         var ok = (TextBlock)_ok.Child;
         Motion.Play(_ok, 1600, t =>
         {

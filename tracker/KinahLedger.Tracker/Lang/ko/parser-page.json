@@ -63,7 +63,7 @@
  "−{0:0.0} s": "−{0:0.0}초",
  "  crit": "  치명타",
  "dead": "사망",
- "Boss fights: DPS by member, the boss's HP, the pull timer.": "보스 전투: 멤버별 DPS, 보스 HP, 전투 시간.",
+ "DPS by member, the boss's HP, the pull timer. Set up in Settings › DPS meter.": "멤버별 DPS, 보스 HP, 전투 시간. 설정 › DPS 미터에서 바꿔요.",
  "Fight overlay on: it shows over the game during boss fights.": "전투 오버레이 켜짐: 보스 전투 중 게임 위에 표시돼요.",
  "Fight overlay off.": "전투 오버레이 꺼짐.",
  "run": "런",
@@ -219,5 +219,12 @@
  "{0} · group DPS": "{0} · 파티 DPS",
  "under way": "진행 중",
  "Combat Power {0:N0}": "전투력 {0:N0}",
- "back attack": "후방 공격"
+ "back attack": "후방 공격",
+  "Settings  ›": "설정  ›",
+  "The meter's settings: when it shows, the overlay, click-through, its look and width, what it shows.": "미터 설정: 표시 시점, 오버레이, 클릭 통과, 스타일과 너비, 표시 항목.",
+  "DPS over the whole fight": "전투 전체 시간 기준 DPS",
+  "boss damage only": "보스 피해만",
+  "adds included": "쫄 포함",
+  "Set in Settings › DPS meter: DPS over active time, Damage to adds.": "설정 › DPS 미터에서 정해요: 활동 시간 기준 DPS, 쫄 피해 포함.",
+  "the next boss starts a new fight": "다음 보스부터 새 전투가 시작돼요"
 }

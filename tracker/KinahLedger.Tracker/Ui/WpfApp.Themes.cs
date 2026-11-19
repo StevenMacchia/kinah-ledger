@@ -235,6 +235,7 @@ public static partial class WpfApp
         var moments = new List<(string Tag, Dictionary<string, string> V, List<TimerBoard.Item>? T, Encounter? E, DateTime At, bool Dungeon)>
         {
             ("pickup", kinah, null, null, now, false), ("rare-drop", rare, null, null, now, false), ("best-passed", best, null, null, now, false),
+            ("run-clear", Run("clear"), null, null, now, false), ("run-newbest", Run("newbest"), null, null, now, false),
             ("entry-opened", kinah, due, null, now, false), ("fight-started", kinah, null, live, now, true), ("fight-ended", kinah, null, kill, kill.End!.Value, true), ("fight-wiped", kinah, null, wipe, wipe.End!.Value, true),
         };
         double? frozen0 = Motion.FrozenAt;
@@ -242,6 +243,9 @@ public static partial class WpfApp
         {
             void Shot(string tag, Dictionary<string, string> v, List<TimerBoard.Item>? t, Encounter? e, DateTime at, bool dungeon, double? frame)
             {
+                // the Terminal look types its lines out: a held frame mid-typing shows a cut word ("> reco", "Shade G") that no
+                // table can match, so its moment frames draw in English only; the whole lines are checked in the state renders
+                if (frame != null && look.Contains("terminal", StringComparison.OrdinalIgnoreCase) && L.Code != "en") return;
                 var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
                 h.Update(v);
                 if (t != null) h.ShowTimers(t, at);
