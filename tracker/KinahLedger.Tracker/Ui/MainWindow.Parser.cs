@@ -569,7 +569,7 @@ public partial class MainWindow
         var past = ParserPast();
         var where = ParserWhere;
         var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}:{_parserPrefs.Separate}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{live?.Uncredited}|{_parserTab}:{_parserInspect}:{_parserSort}:{_parserPrefs.Details}:{_parserPrefs.KillsNear}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}:{_parserPrefs.AlwaysOn}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
-        sig += $"|{_meterBlock}";
+        sig += $"|{_meterBlock}|{SelfCheckDue}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear(); _parserFarmNow = null;
@@ -577,22 +577,22 @@ public partial class MainWindow
         var block = MeterBlockCard(_meterBlock);
         _meterCardForTest = block;
         if (block != null) ParserPage.Children.Add(block);
-        ParserPage.Children.Add(ParserHead(past));
+        else if (SelfCheckDue) ParserPage.Children.Add(SelfCheckLine());
         var open = _parserOpen != null ? past.FirstOrDefault(e => e.Id == _parserOpen) : null;
         // the live view holds the last boss fight until the next one starts (Steven, 2026-11-18: the graphs should stay up),
-        // its graphs, hero and result in place of the Ready card; an open-world tally (Always on) never takes its place
+        // its graphs, strip and result in place of the Ready card; an open-world tally (Always on) never takes its place
         var held = ParserHeldFight(past);
         var pageLive = PageLive(live, held);
         // a member opened (Parser v2): their inspect view in place of the fight's
-        if (InspectBlock(open ?? pageLive ?? held, now, past) is { } inspect) { ParserPage.Children.Add(inspect); return; }
+        var inspect = InspectBlock(open ?? pageLive ?? held, now, past);
+        if (inspect == null && open == null) _parserOpen = null;
+        // over a held fight, the Ready line ("Ready in Ferocious Horn Den") sits in the head, beside the copy buttons
+        bool ready = inspect == null && open == null && pageLive == null && held != null && block == null;
+        ParserPage.Children.Add(ParserHead(past, ready ? ParserReadyLine(where, live, now) : null));
+        if (inspect != null) { ParserPage.Children.Add(inspect); return; }
         if (open != null) { ParserPage.Children.Add(FightBlock(open, now, past, live: false)); return; }
-        _parserOpen = null;
         if (pageLive != null) ParserPage.Children.Add(FightBlock(pageLive, now, past, live: true));
-        else if (held != null)
-        {
-            if (block == null) ParserPage.Children.Add(ParserReadyLine(where, live, now));
-            ParserPage.Children.Add(FightBlock(held, now, past, live: false, held: true));
-        }
+        else if (held != null) ParserPage.Children.Add(FightBlock(held, now, past, live: false, held: true));
         else if (block == null) ParserPage.Children.Add(ParserWaitingCard(where, past));
         ParserPage.Children.Add(ParserHistory(past, now));
     }
@@ -612,43 +612,54 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Over a held fight: the Ready card in one quiet line ("Ready in Ferocious Horn Den · the next boss starts a new fight"),
-    /// and while you fight in the open world, your DPS there rolling at its end (FarmTick).
+    /// Over a held fight, in the head beside the copy buttons: the Ready card in a few words ("Ready in Ferocious Horn Den",
+    /// all of it on hover; "the next boss starts a new fight" after it where there's room), and while you fight in the open
+    /// world, your DPS there rolling at its end (FarmTick).
     /// </summary>
     FrameworkElement ParserReadyLine((ContentKind Kind, string Instance) where, Encounter? live, DateTime now)
     {
         var (head, line, tone) = ParserStatus(where);
-        var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 0, 0, 8), Tag = "parser-ready-line", ToolTip = Tip(line) };
-        var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        var g = new Grid { Tag = "parser-ready-line", ToolTip = Tip(line), VerticalAlignment = VerticalAlignment.Center };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 7, 0), VerticalAlignment = VerticalAlignment.Center };
         dot.SetResourceReference(Border.BackgroundProperty, tone);
-        sp.Children.Add(dot);
-        sp.Children.Add(PT(head, 12, FontWeights.SemiBold, "Text2", trim: true));
-        sp.Children.Add(PT("  ·  " + L.T("the next boss starts a new fight"), 12, FontWeights.Medium, "Faint", trim: true));
+        g.Children.Add(dot);
+        var text = PT(head, 12, FontWeights.SemiBold, "Text2", trim: true);
+        text.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(text, 1); g.Children.Add(text);
         if (live is { OpenWorld: true, You.Damage: > 0 } f)
         {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             sp.Children.Add(PT("  ·  " + L.T("Your DPS now") + "  ", 12, FontWeights.Medium, "Faint"));
             _parserFarmNow = PT(FarmDpsText(now) is { Length: > 0 } t0 ? t0 : FarmFigure(f.FarmDps()), 12, FontWeights.Bold, "Ink");
             System.Windows.Documents.Typography.SetNumeralAlignment(_parserFarmNow, FontNumeralAlignment.Tabular);
             _parserFarmNow.MinWidth = 40;
             sp.Children.Add(_parserFarmNow);
+            Grid.SetColumn(sp, 2); g.Children.Add(sp);
         }
-        return sp;
+        return g;
     }
 
     /// <summary>
-    /// The page's head: actions only (Steven, 2026-11-18: "No settings should be from the app outside settings. Make copy and
-    /// pasting EASY and promoted"). Left, a big Copy picture and Copy text for the fight shown, with their keys beside them
-    /// (Ui/MainWindow.ParserShare.cs); right, Pop out and a Settings link to Settings › DPS meter, where the meter's switches
-    /// (when it shows, the overlay, click-through, its look) all live now. What the Parser keeps is said by the waiting card
-    /// and the list.
+    /// The page's head, one line (Steven, 2026-11-18: "No settings should be from the app outside settings. Make copy and
+    /// pasting EASY and promoted"; then, on 1.0.18's crowded head, "like bro this is awful"). Left, a big Copy picture, Copy
+    /// text and the ▾ for the fight shown (Ui/MainWindow.ParserShare.cs); beside them a kill just made with its own Copy
+    /// picture, or over a held fight the Ready line, or the keys in one quiet line (and on the buttons' hovers), each where
+    /// there's room; right, Pop out and a Settings link to Settings › DPS meter, where the meter's switches (when it shows, the
+    /// overlay, click-through, its look) all live now.
     /// </summary>
-    FrameworkElement ParserHead(List<Encounter> past)
+    FrameworkElement ParserHead(List<Encounter> past, FrameworkElement? ready = null)
     {
-        var g = new Grid { Margin = new Thickness(0, 0, 0, 10), Tag = "parser-head" };
+        var g = new Grid { Margin = new Thickness(0, 0, 0, 8), Tag = "parser-head" };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(ParserCopyBar(past));
-        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+        var middle = ParserHeadLine(CopyFightNow(past) != null, ready);
+        Grid.SetColumn(middle, 1); g.Children.Add(middle);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         var pop = (Button)MeterPopOutButton();   // the meter in its own window (Ui/MainWindow.PopOuts.cs): an action, not a setting
         pop.Height = 32; pop.Margin = new Thickness(0, 0, 12, 0);
         right.Children.Add(pop);
@@ -659,7 +670,7 @@ public partial class MainWindow
         AutomationProperties.SetName(set, "DPS meter settings");
         set.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Meter);
         right.Children.Add(set);
-        Grid.SetColumn(right, 1);
+        Grid.SetColumn(right, 2);
         g.Children.Add(right);
         return g;
     }
@@ -1214,6 +1225,15 @@ public partial class MainWindow
     {
         if (_parserDemoPast?.LastOrDefault(e => e.ModeKind == ParserMode.Bosses && e.Outcome == "wipe") is not { } wipe) return;
         _parserDemoPast.Remove(wipe); _parserDemoPast.Add(wipe);
+        RedrawParserPage();
+    }
+    /// <summary>For a render: the demo's fight <paramref name="id"/> as the last pull, held in the live view (no fight under way), in the instance or out of it.</summary>
+    internal void HoldFightForTest(string id, bool inInstance)
+    {
+        if (_parserDemoPast?.FirstOrDefault(e => e.Id == id) is not { } e) return;
+        _parserDemoPast.Remove(e); _parserDemoPast.Add(e);
+        _parserDemoLive = null; _parserOpen = null;
+        _parserDemoWhere = inInstance ? (ContentKind.Expedition, "Ferocious Horn Den") : (ContentKind.Other, "");
         RedrawParserPage();
     }
     /// <summary>For the options test: the fight the live view holds now (null: none, or one under way shown).</summary>

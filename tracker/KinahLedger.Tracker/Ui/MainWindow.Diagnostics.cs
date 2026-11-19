@@ -40,13 +40,16 @@ public partial class MainWindow
             $"administrator {KinahLedger.Packets.PacketSources.IsAdmin()}",
             $"npcap installed {KinahLedger.Packets.PacketSources.NpcapInstalled}",
             $"game reading on {_prefs.PacketReading} · now: {_watcher.Packets.State}",
+            SelfLine(),
             $"game process seen {Ocr.GameWindow.ProcessSeen} · pids {Ocr.GameWindow.Pids.Count} · running {_watcher.GameRunning}",
             $"game window {(_watcher.GameRect is { } r ? $"{r.X},{r.Y} {r.Width}x{r.Height}" : "not found")} · handle {(Ocr.GameWindow.Handle != IntPtr.Zero)}",
-            $"game in front {Ocr.GameWindow.InFront(_settings.ProcessHints)} · fullscreen state {FullscreenState()}",
+            $"game in front {Ocr.GameWindow.InFront(_settings.ProcessHints)} · fullscreen state {FullscreenState()} · larger than its screen {MeterBlocks.LargerThanItsScreen(_watcher.GameRect)} · fullscreen card {_fullscreen}",
             $"window capture active {Ocr.WindowCapture.Active}",
             $"chat {( _watcher.Chat != null ? "found" : "not found")} · note: {_watcher.ChatNote} · manual chat {_prefs.ManualChat}",
             $"last error: {_watcher.LastError}",
             $"overlay: kinah {_prefs.Hud} · look {HudLook} · locked {_hudPrefs.Locked} · parser overlay {_parserPrefs.Overlay} · always on {_parserPrefs.AlwaysOn} · in kinah {_parserPrefs.InKinah}",
+            $"meter window: made {_parserOverlay != null} · shown {_parserOverlay?.IsVisible == true} · at {(_parserOverlay is { } po ? $"{po.Left:0},{po.Top:0} {po.ActualWidth:0}x{po.ActualHeight:0}" : "-")} · saved spot {_parserPrefs.Left?.ToString("0") ?? "-"},{_parserPrefs.Top?.ToString("0") ?? "-"} · click-through {_parserPrefs.ClickThrough} · a fight on it {_meterOnOverlay != null}",
+            $"kinah overlay window: made {_hud != null} · shown {_hud?.IsVisible == true} · at {(_hud is { } hw ? $"{hw.Left:0},{hw.Top:0} {hw.ActualWidth:0}x{hw.ActualHeight:0}" : "-")}",
         };
         try
         {
@@ -73,6 +76,22 @@ public partial class MainWindow
         return d;
     }
 
+    /// <summary>
+    /// The decoder's view of the player (interface 13): whether it knows who the player is, from what and since when, and the
+    /// last minute of hits, the player's, others' and those on the player (2026-11-18: a friend's meter stayed empty while the
+    /// tracker read his kills and gathering; his report couldn't say whether his own hits came through).
+    /// </summary>
+    string SelfLine()
+    {
+        var p = _watcher.Packets;
+        if (KinahLedger.Packets.NativeDecoder.Version < 13) return $"self: this decoder (interface {KinahLedger.Packets.NativeDecoder.Version}) doesn't say";
+        if (p.Self is not { } s) return $"self: not reading{(p.On ? " (no hits yet)" : "")}";
+        static string At(DateTime? t) => t is { } v ? v.ToLocalTime().ToString("HH:mm:ss") : "-";
+        return $"self: own id {(s.Known ? "known" : "NOT known")} · from {s.FromWord} · since {At(s.Since)} · conflicts {s.Conflicts}"
+            + $" · last minute to {At(s.LastAt)}: my hits {s.Mine}, others' {s.Others}, on me {s.OnMe}, my damage {s.YoursDamage:N0}"
+            + $" · totals mine {s.MineTotal:N0}, others' {s.OthersTotal:N0} · last mine {At(s.LastMine)}, last others' {At(s.LastOthers)}";
+    }
+
     /// <summary>A diagnostics report folder under reports/ (summary.txt, the reads.log tail), sent like any report. True when it went.</summary>
     bool ReportDiagnostics()
     {
@@ -95,6 +114,20 @@ public partial class MainWindow
             return true;
         }
         catch (Exception ex) { CrashLog.Write("diagnostics report", ex); Say(L.F("Couldn't save the report: {0}", ex.Message), "Bad"); return false; }
+    }
+
+    /// <summary>
+    /// Every report carries the same lines at the end of its summary (2026-11-18: a friend's meter didn't show though the
+    /// tracker read the game, and the report couldn't say why): the overlay windows, their places and switches.
+    /// </summary>
+    void AppendDiagnostics(string dir)
+    {
+        try
+        {
+            var p = Path.Combine(dir, "summary.txt");
+            File.AppendAllLines(p, new[] { "" }.Concat(DiagnosticsLines().Skip(1)));
+        }
+        catch (Exception ex) { CrashLog.Write("report diagnostics", ex); }
     }
 
     /// <summary>For the options self-test: the diagnostics lines.</summary>

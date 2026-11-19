@@ -64,6 +64,23 @@ public static class MeterBlocks
     /// <summary>The look at the game (swapped by the self-test): true or false while it is in front, null when that can't be told.</summary>
     internal static Func<IReadOnlyCollection<uint>, bool?> FullscreenProbe = GameExclusiveFullscreen;
 
+    /// <summary>
+    /// The second look, which needs the game in front of nothing (2026-11-18, a friend's 1.0.18: the game's window was
+    /// 5120x2160 on a 2560x1440 monitor, Windows never said "exclusive", and no overlay showed): a game window larger than
+    /// the monitor it is on is exclusive fullscreen at a resolution the monitor doesn't have (a borderless or windowed game
+    /// is never larger than its screen). A few pixels of a window's frame are allowed.
+    /// </summary>
+    internal static bool LargerThanItsScreen(System.Drawing.Rectangle? game)
+    {
+        if (game is not { Width: > 0, Height: > 0 } g) return false;
+        try
+        {
+            var s = System.Windows.Forms.Screen.FromRectangle(g).Bounds;
+            return g.Width > s.Width + 16 || g.Height > s.Height + 16;
+        }
+        catch (Exception) { return false; }
+    }
+
     internal static MeterBlock? FromEnvironment()
     {
         var b = Environment.GetEnvironmentVariable("KL_METER_BLOCK")?.Trim().ToLowerInvariant();
@@ -183,7 +200,11 @@ public partial class MainWindow
     {
         if (MeterBlocks.ForcedFullscreen is { } forced) return forced;
         if ((_demo || !_meterWatch) && !MeterBlockLiveForTest) return false;
-        try { return MeterBlocks.FullscreenProbe(Ocr.GameWindow.Pids) ?? _fullscreen; }
+        try
+        {
+            if (MeterBlocks.LargerThanItsScreen(_watcher.GameRect)) return true;
+            return MeterBlocks.FullscreenProbe(Ocr.GameWindow.Pids) ?? _fullscreen;
+        }
         catch (Exception ex) { CrashLog.Write("fullscreen check", ex); return _fullscreen; }
     }
 
@@ -277,6 +298,46 @@ public partial class MainWindow
             case MeterBlock.Off: OpenOptions(OptionsWindow.Page.Reading); break;
             case MeterBlock.Restart: _ = RestartTracker(admin: false); break;
         }
+    }
+
+    /// <summary>
+    /// The self-check (2026-11-18: a friend's meter stayed empty while the tracker read his kills and gathering): while the
+    /// game is read and other players' hits keep coming (10 or more in the last minute, reading for a minute or more) but the
+    /// tracker doesn't know which fighter is you, your hits can't count. A map change brings it (the game says who you are at
+    /// each one). One quiet line on the Parser page and in the Overlays menu, with a report link; nothing goes out by itself.
+    /// </summary>
+    internal bool SelfCheckDue
+    {
+        get
+        {
+            if (_selfCheckForTest is bool t) return t;
+            var p = _watcher.Packets;
+            return p.On && p.Self is { Known: false, Others: >= 10 } && (DateTime.UtcNow - p.ReadingFrom).TotalSeconds >= 60;
+        }
+    }
+    internal bool? _selfCheckForTest;
+    internal static string SelfCheckText => L.T("Your own hits aren't showing yet. Teleport or change map once and they start.");
+    internal static string SelfCheckLink => L.T("Send a report");
+
+    /// <summary>The self-check's line in the Overlays menu, or null.</summary>
+    internal MenuEntry? SelfCheckMenuEntry() => SelfCheckDue ? new MenuEntry(SelfCheckText, ReportMiscount, Link: SelfCheckLink, Warn: true) : null;
+
+    /// <summary>The self-check's line at the top of the Parser page: the sentence, then the report link.</summary>
+    internal FrameworkElement SelfCheckLine()
+    {
+        var sp = new WrapPanel { Margin = new Thickness(4, 0, 0, 10), Tag = "self-check-line" };
+        var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        dot.SetResourceReference(Border.BackgroundProperty, "Warn");
+        sp.Children.Add(dot);
+        var t = new TextBlock { Text = SelfCheckText, FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        t.SetResourceReference(TextBlock.ForegroundProperty, "Text2");
+        sp.Children.Add(t);
+        var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(SelfCheckLink));
+        link.Click += (_, _) => ReportMiscount();
+        var lt = new TextBlock(link) { FontSize = 12, FontWeight = FontWeights.Bold, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        sp.Children.Add(lt);
+        AutomationProperties.SetName(sp, SelfCheckText);
+        return sp;
     }
 
     /// <summary>The Overlays menu's line under the Parser and Applicants switches, or null when nothing blocks them.</summary>

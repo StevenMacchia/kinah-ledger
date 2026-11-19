@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "overlay", "views", "graphs" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "views" or "looks" or "worst" or "concepts" or "graphs") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "views" or "looks" or "worst" or "concepts" or "graphs" or "layout") && !ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -45,6 +45,7 @@ public static partial class WpfApp
                 if (st == "share") { ShotMeterShare(dir); continue; }   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
                 if (st == "views") { ShotParserShare(w, dir); continue; }   // the Parser page's share pictures (Ui/WpfApp.ParserShare.cs)
                 if (st == "graphs") { ShotGraphs(w, dir); continue; }   // the Graphs tab (Ui/WpfApp.ParserGraphs.cs)
+                if (st == "layout") { ShotParserLayout(w, dir); continue; }   // the page at Steven's window sizes (Ui/WpfApp.ParserLayout.cs)
                 if (st == "looks") { ShotSettingsLooks(dir); continue; }
                 if (st == "worst") { ShotWorst(dir); continue; }
                 if (st == "concepts") { ShotConcepts(dir); continue; }   // the reworked looks' concept samples (Ui/MeterConcepts.cs)   // the worst-case fight in every meter look (Ui/WpfApp.CutOff.cs)

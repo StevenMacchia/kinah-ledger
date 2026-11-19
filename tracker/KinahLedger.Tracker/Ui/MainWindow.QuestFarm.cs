@@ -93,10 +93,11 @@ public partial class MainWindow
         BagStripNote.Text = L.F(kinds == 1 ? "{0} kind" : "{0} kinds", kinds);
         BagStripTotal.Text = ""; BagStripTotal.ToolTip = null;
         QSetChev(BagStripChev, false);
-        var sig = $"{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}";
+        // eleven slots at the designed width, a slot more for each 48 px the player dragged the window wider (1.0.18)
+        int Max = 11 + (int)Math.Max(0, (_column - DesignWidth) / 48);
+        var sig = $"{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}|{Max}";
         if (!Changed("bag-strip", sig)) return;
         BagStripHost.Children.Clear();
-        const int Max = 11;
         var where = CountWhere();
         // a drop that lands grows in, a rare one glows once (Motion.Slot)
         var landHost = "bag-strip|" + where;
@@ -113,7 +114,7 @@ public partial class MainWindow
             slots.Add(s);
         }
         if (crystals > 0) { var c = QSlot(QIconBox("Gem", "Lime", 42), CountBadge(crystals)); Motion.Slot(c, landHost, "soul crystals", crystals); slots.Add(c); }
-        // one row: eleven slots, or ten and the "+N"
+        // one row: eleven slots (more in a wider window), or one fewer and the "+N"
         foreach (var s in slots.Take(slots.Count > Max ? Max - 1 : slots.Count)) BagStripHost.Children.Add(s);
         if (slots.Count > Max)
         {

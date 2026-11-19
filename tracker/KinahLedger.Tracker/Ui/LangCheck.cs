@@ -296,7 +296,7 @@ public static class LangCheck
         // the demo's world bosses as the timers shorten them ("Chaser Taulo" → "Taulo")
         "Taulo", "Aulla", "Demiros", "Neikel", "Kashapa",
         // the Applicants sample (Ui/ApplicantsFace.cs Sample): real names from a listing, and their servers
-        "Varrenthos", "Kyralis", "Embervale", "Thornecrestwarde", "Aerinwynne", "Seraphimdawnlite", "Vintzi", "Goldlemon", "Halvric", "Selwyra", "Dornak",
+        "Varrenthos", "Kyralis", "Embervale", "Thornecrestwarde", "Aerinwynne", "Seraphimdawnlite", "Quillon", "Brightmoor", "Halvric", "Selwyra", "Dornak",
         "Israphel", "Zikel", "Lumiel", "Meslamtaeda", "Siel", "Fregion", "Ereshkigal", "Nezekan", "Triniel",
     };
 }

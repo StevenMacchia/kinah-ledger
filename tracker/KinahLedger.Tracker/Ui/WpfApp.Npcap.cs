@@ -108,6 +108,13 @@ public static partial class WpfApp
             // the cases only their own facts tell
             var two = TimeSpan.FromMinutes(2); var three = MeterBlocks.NoServerAfter;
             const string waiting = "Waiting for the game to connect to its server";
+            {
+                var ps = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+                check(MeterBlocks.LargerThanItsScreen(new System.Drawing.Rectangle(ps.X, ps.Y, ps.Width * 2, ps.Height * 3 / 2))
+                    && !MeterBlocks.LargerThanItsScreen(ps) && !MeterBlocks.LargerThanItsScreen(new System.Drawing.Rectangle(ps.X + 100, ps.Y + 100, ps.Width / 2, ps.Height / 2))
+                    && !MeterBlocks.LargerThanItsScreen(null),
+                    "fullscreen: a game window larger than its monitor (5120x2160 on 2560x1440) is exclusive fullscreen; one that fits, or none, is not");
+            }
             check(MeterBlocks.Decide(true, false, true, false, false, waiting, two, false) == MeterBlock.None
                 && MeterBlocks.Decide(true, false, true, false, false, waiting, three, false) == MeterBlock.NoServer
                 && MeterBlocks.Decide(true, false, true, false, false, "Waiting for the game", null, false) == MeterBlock.None
@@ -135,6 +142,18 @@ public static partial class WpfApp
             w.CheckMeterBlock(); DoEvents();
             check(fsShown && fsKept && !w.FullscreenShownForTest && w.OverlayEntries().FirstOrDefault()?.Warn != true,
                 $"fullscreen: the window's card and the Overlays menu's first line while AION 2 is in exclusive fullscreen ({fsShown}), kept while it is behind ({fsKept}), gone once it is out");
+
+            // the self-check: your own hits not coming through: one warning line with the report link in the Overlays menu,
+            // gone when it isn't due; and the diagnostics carry the decoder's view of the player
+            w._selfCheckForTest = true;
+            var scEntries = w.OverlayEntries();
+            bool scShown = scEntries.Any(e => e.Warn && e.Text == MainWindow.SelfCheckText && e.Link == MainWindow.SelfCheckLink && e.Do != null);
+            w._selfCheckForTest = false;
+            bool scGone = !w.OverlayEntries().Any(e => e.Text == MainWindow.SelfCheckText);
+            w._selfCheckForTest = null;
+            bool scLine = w.DiagnosticsForTest().Any(l => l.StartsWith("self: "));
+            check(scShown && scGone && scLine && !MainWindow.SelfCheckText.Contains("packet", StringComparison.OrdinalIgnoreCase),
+                $"self-check: the Overlays menu's line with Send a report while due ({scShown}), none otherwise ({scGone}); the diagnostics' self line ({scLine})");
 
             // first run: the look step carries the card while Npcap is missing, and Done is still there
             installed = false;

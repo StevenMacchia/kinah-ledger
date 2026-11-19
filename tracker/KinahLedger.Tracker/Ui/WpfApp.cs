@@ -141,6 +141,8 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "share") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterShareOverlayChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (overlay share): all passed" : $"options test (overlay share): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=cutoff: the meter's figures never cut, every look in the worst-case fight (Ui/WpfApp.CutOff.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "cutoff") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); CutOffChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter cut-off): all passed" : $"options test (meter cut-off): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=resize: the main window dragged and zoomed alone (Ui/WpfApp.Resize.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "resize") { var rw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; rw.Show(); rw.ShowDemo(); DoEvents(); ResizeChecks(rw, Check); rw.Close(); Console.WriteLine(fails == 0 ? "options test (window resize): all passed" : $"options test (window resize): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=parsershare: the Parser page's share pictures, Copy as text, the back button and the modes gone, alone
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parsershare")
         {
@@ -152,6 +154,15 @@ public static partial class WpfApp
         }
         // KL_OPTIONS_ONLY=graphs: the Parser page's Graphs tab alone (Ui/WpfApp.ParserGraphs.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=parserpage: the Parser page's own checks alone (Ui/WpfApp.Parser.cs ParserChecks: the strip, the head, the switches' texts)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parserpage")
+        {
+            var pw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            pw.Show(); pw.ShowDemo(); DoEvents();
+            ParserChecks(pw, Check);
+            pw.Close();
+            Console.WriteLine(fails == 0 ? "options test (parser page): all passed" : $"options test (parser page): {fails} failed"); return fails == 0 ? 0 : 1;
+        }
         // KL_OPTIONS_ONLY=idle: the overlay's idle line alone (Ui/WpfApp.HudIdle.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "idle") { var iw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; iw.Show(); DoEvents(); HudIdleChecks(iw, Check); iw.Close(); Console.WriteLine(fails == 0 ? "options test (idle line): all passed" : $"options test (idle line): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=npcap: what keeps the DPS meter off, Npcap missing first, alone (Ui/WpfApp.Npcap.cs)
@@ -920,13 +931,9 @@ public static partial class WpfApp
         var sizing = w.SizeToContent;
         Check(w.OnSizeMove(MainWindow.WM_ENTERSIZEMOVE) && w.SizeToContent == SizeToContent.Manual, "a drag starting pins the size");
         Check(w.OnSizeMove(MainWindow.WM_EXITSIZEMOVE) && w.SizeToContent == sizing && sizing == SizeToContent.WidthAndHeight, "the drop sizes to content again");
-        // resizing by dragging (0.10.132): the right edge pulled 20% wider draws the window about 20% bigger, the rectangle
-        // held to the scaled content; pulled far past the limit it stops at 150%; the size reached is kept on the drop
-        {
-            var (sz0, wider, widthRatio, capped, kept) = w.DragResizeForTest(1.2, 3);
-            Check(Math.Abs(wider / sz0 - 1.2) < 0.03 && Math.Abs(widthRatio - 1.2) < 0.05 && Math.Abs(capped - MainWindow.MaxWindowScale) < 0.001 && Math.Abs(kept - MainWindow.MaxWindowScale) < 0.001,
-                $"the window resizes by dragging an edge: {sz0:0.00} to {wider:0.00} pulled 20% wider (the window {widthRatio:0.00}x), {capped:0.00} at most, {kept:0.00} kept on the drop");
-        }
+        // resizing by dragging (1.0.18, Ui/WpfApp.Resize.cs; KL_OPTIONS_ONLY=resize alone): a drag gives the pages room and
+        // width, never zooms; nothing under the header at any size or zoom; Reset size and Ctrl+0
+        ResizeChecks(w, Check);
 
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
@@ -1373,7 +1380,8 @@ public static partial class WpfApp
             var pg = w.QuestsPageForTest();
             Check(!pg.Off && pg.Active >= 3 && pg.Daily >= 1 && pg.AllTime >= 1 && pg.Done > 0, $"the Quests page: {pg.Active} active, {pg.Daily} daily, {pg.AllTime} all time, {pg.Done} done");
             // 0.10.28 (Steven): the page scrolls inside the window instead of growing it down the screen
-            Check(farmHeight >= 500 && w.MaxHeight <= farmHeight && w.ActualHeight <= farmHeight + 1 && w.LowerScroll.ScrollableHeight > 0,
+            // since 1.0.20 the window's MaxHeight is the screen's and the cap is the page area's (Ui/MainWindow.Fit.cs, the drag resize fix)
+            Check(farmHeight >= 500 && w.ActualHeight <= farmHeight + 1 && w.LowerScroll.ScrollableHeight > 0,
                 $"the Quests page keeps the Farming page's height and scrolls inside it: window {w.ActualHeight:0} (Farming was {farmHeight:0}), {w.LowerScroll.ScrollableHeight:0} to scroll");
             var pinChain = w.QuestsNowForTest[3].Chain;
             w.TogglePinForTest(3); DoEvents();

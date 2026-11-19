@@ -175,6 +175,21 @@ public interface IGameDecoder : IDisposable
     /// <summary>The next party finder event, or null (always null for a decoder that reads none).</summary>
     PartyApplication? NextApplicant() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
+    /// <summary>Who the decoder takes the player to be and the last minute of hits (klnet.dll's interface version 13), or null.</summary>
+    SelfState? Self => null;
+}
+
+/// <summary>
+/// The decoder's view of the player (interface version 13): the player's id on this connection (0 not known yet), where it
+/// came from (1 the stats, 2 the character sheet, 3 a first-person line; 0 none), since when, the times another id was named;
+/// the last minute of hits with damage: the player's own (theirs and their summons'), anyone else's, those on the player, and
+/// the damage that counted as the player's; the totals and the last hit of each. For diagnostics and the self-check.
+/// </summary>
+public sealed record SelfState(uint OwnId, int From, DateTime? Since, int Conflicts, int Mine, int Others, int OnMe, long YoursDamage,
+    DateTime? LastAt, long MineTotal, long OthersTotal, DateTime? LastMine, DateTime? LastOthers)
+{
+    public bool Known => OwnId != 0;
+    public string FromWord => From switch { 1 => "stats", 2 => "character sheet", 3 => "first-person line", _ => "none" };
 }
 
 /// <summary>The release build's decoder, klnet.dll, through its C interface.</summary>
@@ -225,6 +240,13 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_feed")] static extern void FeedN(nint h, byte* data, int len, long atUtcTicks);
     [DllImport("klnet", EntryPoint = "kl_next")] static extern int NextN(nint h, KlChange* change);
     [DllImport("klnet", EntryPoint = "kl_stats")] static extern int StatsN(nint h, KlStats* stats);
+    [StructLayout(LayoutKind.Sequential)]
+    struct KlSelf
+    {
+        public uint OwnId; public int OwnFrom; public long OwnSinceTicks; public int Conflicts; public int Mine; public int Others; public int OnMe;
+        public long YoursDamage; public long LastAtTicks; public long MineTotal; public long OthersTotal; public long LastMineTicks; public long LastOthersTicks;
+    }
+    [DllImport("klnet", EntryPoint = "kl_self")] static extern int SelfN(nint h, KlSelf* s);
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
     [DllImport("klnet", EntryPoint = "kl_next_boss")] static extern int NextBossN(nint h, KlBoss* boss);
     [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
@@ -435,6 +457,22 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats
     {
         get { KlStats s = default; if (_h != 0) StatsN(_h, &s); return (s.Messages, s.Bundles, s.Resyncs, s.CurrencyMessages); }
+    }
+    static bool _noSelf;
+    /// <summary>The decoder's own record's size (80 bytes: a check for the tests).</summary>
+    internal static int SelfRecordSize => sizeof(KlSelf);
+    public SelfState? Self
+    {
+        get
+        {
+            if (_h == 0 || Version < 13 || _noSelf) return null;
+            KlSelf k;
+            try { if (SelfN(_h, &k) != 1) return null; }
+            catch (EntryPointNotFoundException) { _noSelf = true; return null; }
+            static DateTime? T(long ticks) => ticks > 0 && ticks <= DateTime.MaxValue.Ticks ? new DateTime(ticks, DateTimeKind.Utc) : null;
+            return new SelfState(k.OwnId, k.OwnFrom, T(k.OwnSinceTicks), k.Conflicts, k.Mine, k.Others, k.OnMe, k.YoursDamage, T(k.LastAtTicks),
+                k.MineTotal, k.OthersTotal, T(k.LastMineTicks), T(k.LastOthersTicks));
+        }
     }
     public void Dispose() { if (_h != 0) { Close(_h); _h = 0; } }
 }

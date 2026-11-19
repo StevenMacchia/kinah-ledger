@@ -1381,7 +1381,7 @@ public static class ParserTests
                 Check(rows.Select(r => r.Class).SequenceEqual(want) && rows.Count(r => !r.Online) == 1 && !rows[3].Online,
                     $"the party list: eight rows, each class from its icon, the away member's row from the spacing: {string.Join(", ", rows.Select(r => r.Class + (r.Online ? "" : " (away)")))}");
             }
-            Check(Ocr.PartyFrame.CleanName(".ııl SwolyDaBooly") == "SwolyDaBooly" && Ocr.PartyFrame.CleanName("OHaa[ISR]") == "OHaa" && Ocr.PartyFrame.CleanName("... Goldlemon[ISR]") == "Goldlemon",
+            Check(Ocr.PartyFrame.CleanName(".ııl SwolyDaBooly") == "SwolyDaBooly" && Ocr.PartyFrame.CleanName("OHaa[ISR]") == "OHaa" && Ocr.PartyFrame.CleanName("... Brightmoor[ISR]") == "Brightmoor",
                 "a name as the party list prints it: the signal bars before it and the guild's tag after it dropped");
 
             var path = Path.Combine(TestTemp.Path("KinahLedger-parser-test-classes"), "class-numbers.json");

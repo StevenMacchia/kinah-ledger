@@ -57,7 +57,7 @@ public partial class MainWindow
     {
         if (_graphs is not { IsLoaded: true } g || !g.IsDescendantOf(LowerScroll)) return;
         double top = g.TranslatePoint(new Point(0, 0), LowerScroll).Y + LowerScroll.VerticalOffset;
-        g.Fit(LowerScroll.ViewportHeight - top - 14);
+        g.Fit(GraphsRoom() - top - 14);   // the room the window can give the page, not only what it has now (Ui/MainWindow.Fit.cs)
     }
 
     /// <summary>One graph of the fight shown as a picture: copied, saved in Pictures\Kinah Ledger, said in the toast.</summary>
@@ -100,8 +100,13 @@ public partial class MainWindow
     internal bool CopyGraphForTest(string kind) => _graphs != null && CopyGraph(_graphs.Key.Split('|')[0], kind);
     internal void ParserDrawNowForTest() => ParserDrawNow();
     internal double ParserViewportForTest => LowerScroll.ViewportHeight;
-    /// <summary>The Graphs panel's foot in the window's scrolling part, scrolled to the top (above the viewport's height: it fits).</summary>
-    internal double GraphsBottomForTest => _graphs is { IsLoaded: true } g && g.IsDescendantOf(LowerScroll) ? g.TranslatePoint(new Point(0, g.ActualHeight), LowerScroll).Y + LowerScroll.VerticalOffset : double.MaxValue;
+    /// <summary>
+    /// The foot of what the Graphs panel fits to the room, in the window's scrolling part, scrolled to the top (above the
+    /// viewport's height: it fits): the whole panel, or its fight's graph when the healing's sits under it (a short window).
+    /// </summary>
+    internal double GraphsBottomForTest => _graphs is { IsLoaded: true } g && g.IsDescendantOf(LowerScroll) ? g.TranslatePoint(new Point(0, g.FitFoot), LowerScroll).Y + LowerScroll.VerticalOffset : double.MaxValue;
+    /// <summary>The whole Graphs panel's foot, the healing's graph with it (see <see cref="GraphsBottomForTest"/>).</summary>
+    internal double GraphsPanelBottomForTest => _graphs is { IsLoaded: true } g && g.IsDescendantOf(LowerScroll) ? g.TranslatePoint(new Point(0, g.ActualHeight), LowerScroll).Y + LowerScroll.VerticalOffset : double.MaxValue;
     internal double ParserScrollableForTest => LowerScroll.ScrollableHeight;
 
     /// <summary>The render states of the Graphs tab: the fight each draws, live or kept.</summary>
