@@ -137,6 +137,8 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "share") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); MeterShareOverlayChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (overlay share): all passed" : $"options test (overlay share): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=cutoff: the meter's figures never cut, every look in the worst-case fight (Ui/WpfApp.CutOff.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "cutoff") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); CutOffChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (meter cut-off): all passed" : $"options test (meter cut-off): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=resize: the main window dragged and zoomed alone (Ui/WpfApp.Resize.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "resize") { var rw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; rw.Show(); rw.ShowDemo(); DoEvents(); ResizeChecks(rw, Check); rw.Close(); Console.WriteLine(fails == 0 ? "options test (window resize): all passed" : $"options test (window resize): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=parsershare: the Parser page's share pictures, Copy as text, the back button and the modes gone, alone
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parsershare")
         {
@@ -900,13 +902,9 @@ public static partial class WpfApp
         var sizing = w.SizeToContent;
         Check(w.OnSizeMove(MainWindow.WM_ENTERSIZEMOVE) && w.SizeToContent == SizeToContent.Manual, "a drag starting pins the size");
         Check(w.OnSizeMove(MainWindow.WM_EXITSIZEMOVE) && w.SizeToContent == sizing && sizing == SizeToContent.WidthAndHeight, "the drop sizes to content again");
-        // resizing by dragging (0.10.132): the right edge pulled 20% wider draws the window about 20% bigger, the rectangle
-        // held to the scaled content; pulled far past the limit it stops at 150%; the size reached is kept on the drop
-        {
-            var (sz0, wider, widthRatio, capped, kept) = w.DragResizeForTest(1.2, 3);
-            Check(Math.Abs(wider / sz0 - 1.2) < 0.03 && Math.Abs(widthRatio - 1.2) < 0.05 && Math.Abs(capped - MainWindow.MaxWindowScale) < 0.001 && Math.Abs(kept - MainWindow.MaxWindowScale) < 0.001,
-                $"the window resizes by dragging an edge: {sz0:0.00} to {wider:0.00} pulled 20% wider (the window {widthRatio:0.00}x), {capped:0.00} at most, {kept:0.00} kept on the drop");
-        }
+        // resizing by dragging (1.0.18, Ui/WpfApp.Resize.cs; KL_OPTIONS_ONLY=resize alone): a drag gives the pages room and
+        // width, never zooms; nothing under the header at any size or zoom; Reset size and Ctrl+0
+        ResizeChecks(w, Check);
 
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,

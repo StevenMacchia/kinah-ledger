@@ -5612,6 +5612,13 @@ public sealed class UserPrefs
     public bool FullView { get; set; }
     /// <summary>Window size (0.10.11, Options › General, Ctrl+= and Ctrl+-): the window drawn at this scale, 0.8 to 1.5; 1 is its designed size. The screen caps it (Ui/MainWindow.Fit.cs).</summary>
     public double WindowScale { get; set; } = 1;
+    /// <summary>
+    /// The window's size by dragging (1.0.18, Ui/MainWindow.Fit.cs), in its design units (before Window size draws it bigger or
+    /// smaller): the most room its pages get under the header (0: as tall as the page, up to the screen), and the one-column
+    /// pages' width (0: the designed 662). A drag gives the pages room; it never zooms.
+    /// </summary>
+    public double WindowRoom { get; set; }
+    public double WindowWidth { get; set; }
     /// <summary>Keep the window above other windows (0.10.26, Options › General and the ⋯ menu): Topmost, for a windowed game on one screen. Off by default.</summary>
     public bool AlwaysOnTop { get; set; }
     /// <summary>The player's gear score, typed on the first-run screen or in Options; 0 is not set. Runs are compared with players at the same bracket (Data.GearScore).</summary>

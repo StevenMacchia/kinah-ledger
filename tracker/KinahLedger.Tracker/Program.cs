@@ -1477,6 +1477,7 @@ options: --process aion[,other]");
         if (o.ContainsKey("recap")) { WpfApp.ShotRecap(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         if (o.ContainsKey("npcap")) return WpfApp.ShotNpcap(s, dir);   // what keeps the DPS meter off, every case and place (Ui/WpfApp.Npcap.cs); KL_LANG for ko, zh-TW
         if (o.ContainsKey("popouts")) return WpfApp.ShotPopOuts(s, dir);   // the DPS meter and Applicants pop-out windows, sizes, skins, three languages (Ui/WpfApp.PopOuts.cs)
+        if (o.ContainsKey("resize")) return WpfApp.ShotResize(s, dir);   // the main window dragged and zoomed on Farm, Parser and Runs (Ui/WpfApp.Resize.cs)
         if (o.ContainsKey("applicants")) return WpfApp.ShotApplicants(s, dir);   // the Applicants window, every theme, 1/4/10 waiting, three languages (Ui/WpfApp.Applicants.cs)
         // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
         var statesDir = Ui.UiState.FindDir(o.GetValueOrDefault("states-dir"));

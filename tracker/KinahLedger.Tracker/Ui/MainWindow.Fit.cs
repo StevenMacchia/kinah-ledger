@@ -71,17 +71,17 @@ public partial class MainWindow
     double ViewNeed(bool full) => (full ? 662 * 2 + 16 : 662) + Root.Padding.Left + Root.Padding.Right + ChromeWidth();
 
     /// <summary>
-    /// The scale the window is drawn at for a chosen size: the size, unless the screen is too narrow or too short for
-    /// it, then as big as fits. The height cap never goes below 1: a short screen clips the window at full size as it
-    /// always did, it only stops a bigger size from making that worse.
+    /// The scale the window is drawn at for a chosen size: the size, unless the screen is too narrow for it, then as big as
+    /// fits. Since 1.0.18 the screen's height doesn't take the size down: the window stops at the screen and the page scrolls
+    /// in its area under the header (before, the size followed the page's height, so a page taller than the screen showed at
+    /// 100% and the next one at 125%). Only a screen too short for the header and a few rows of a page holds it back.
     /// </summary>
     double DrawScale(bool full, double wanted)
     {
         double byWidth = WorkWidth() / ViewNeed(full);
         double byHeight = double.PositiveInfinity;
-        double content = LedgerCol.ActualHeight;   // in the window's own units, before the transform
-        if (content > 0 && !double.IsPositiveInfinity(WorkHeight()))
-            byHeight = Math.Max(1, WorkHeight() / (content + Root.Padding.Top + Root.Padding.Bottom + ChromeHeight()));
+        if (!double.IsPositiveInfinity(WorkHeight()))
+            byHeight = Math.Max(1, (WorkHeight() - FrameHeight()) / MinRoom);
         double s = Math.Min(wanted, Math.Min(byWidth, byHeight));
         return Math.Abs(s - 1) < 0.005 ? 1 : Math.Round(s, 3);
     }
@@ -114,17 +114,149 @@ public partial class MainWindow
     /// <summary>True while Full view is on screen: chosen, on Farming, and the screen wide enough for it.</summary>
     bool FullOnScreen => FullShown && _part == "Farming" && !_welcome;
 
-    /// <summary>The chosen window size changed (Options, or a key): the window drawn at it now, without a relayout of the pages.</summary>
+    /// <summary>The chosen window size changed (Options, or a key): the window drawn at it now, without a relayout of the pages; the column and the room held to the screen at it.</summary>
     void RefitScale()
     {
         double next = DrawScale(FullOnScreen, WindowScaleWanted);
         if (Math.Abs(next - _fitScale) > 0.001) SetDrawScale(next);
+        ApplyColumn();
+        ApplyMaxHeight();
     }
 
-    // ---- resizing by dragging (0.10.132, Steven, 2026-11-16: "allow users to resize the main kinah ledger app ... by dragging") ----
-    // An edge or a corner dragged sets the window's size the way Options and Ctrl+= do: the whole window drawn bigger or
-    // smaller (its pages are laid out to fit with no scrolling), live as the edge moves, kept on the drop. The window's
-    // rectangle is held to the scaled content, so it never shows a gap or a cut. No maximize: it has no layout for that.
+    // ---- the window's size by dragging (1.0.18, Steven, 2026-11-18: "when you drag to resize it fucks up the size completely
+    // on everything on the app"). 0.10.132 made a drag zoom the whole window (80% to 150%, the aspect locked), so a drag made
+    // every text bigger and, on the pages that keep the Farming page's height, pushed the page past its scroll area. Now a
+    // drag gives the pages room and the text stays its size; the zoom is Window size alone (Options, Ctrl+= and Ctrl+-).
+    //  - Top or bottom: the most room the pages get under the header (WindowRoom). A page shorter than it keeps its own
+    //    height (no empty strip under it), a longer one scrolls in its area, and the Parser's graphs grow into it. The edge
+    //    stops where the page has nothing more to show.
+    //  - A side: the one-column pages stretch, from the designed 662 to MaxColumnWidth (WindowWidth): cards, bars, tables
+    //    and graphs fill it, the Runs cards and the bag's slots with them. Full view's two columns keep their width.
+    //  - Both are kept for the next start, apart from the zoom; Reset size (Options, Ctrl+0) puts all three back.
+    // No maximize: the pages have no layout for a whole screen.
+
+    /// <summary>The designed width of a column (every page is laid out for it), and the widest a one-column page stretches to.</summary>
+    public const double DesignWidth = 662, MaxColumnWidth = 1000;
+    /// <summary>The least room a drag leaves the pages under the header: the header, the status line and a few rows of a page.</summary>
+    public const double MinRoom = 360;
+
+    /// <summary>The one-column pages' width now, in design units: the player's, held to the screen at the zoom drawn.</summary>
+    double _column = DesignWidth;
+    /// <summary>The width the player gave the window (the designed one until a side is dragged).</summary>
+    double ColumnWanted => _prefs.WindowWidth > 0 ? _prefs.WindowWidth : DesignWidth;
+
+    /// <summary>The frame around the column (the window's edges and title bar, the padding), in DIP: what a drag doesn't give the pages.</summary>
+    double FrameWidth() => ChromeWidth() + Root.Padding.Left + Root.Padding.Right + Root.BorderThickness.Left + Root.BorderThickness.Right;
+    double FrameHeight() => ChromeHeight() + Root.Padding.Top + Root.Padding.Bottom + Root.BorderThickness.Top + Root.BorderThickness.Bottom;
+
+    /// <summary>A column of <paramref name="want"/>: never under the designed width, never past the widest, never wider than the screen holds at the zoom drawn.</summary>
+    double ColumnFit(double want)
+    {
+        double max = MaxColumnWidth, ww = WorkWidth();
+        if (!double.IsPositiveInfinity(ww)) max = Math.Min(max, (ww - FrameWidth()) / _fitScale);
+        return Math.Round(Math.Clamp(want, DesignWidth, Math.Max(DesignWidth, max)));
+    }
+
+    /// <summary>The ledger's width as it shows: Full view's two columns, or the one column.</summary>
+    double LedgerWidth() => FullOnScreen ? DesignWidth * 2 + 16 : _column;
+
+    /// <summary>
+    /// The column's width on every part sized to it: the header, the left column, the pages' scroll area, the status line, the
+    /// toast, the Undo bar and the rate chart. Full view and the first-run screen keep the designed width.
+    /// </summary>
+    void ApplyColumn(double? want = null)
+    {
+        bool full = FullOnScreen;
+        double col = full || _welcome ? DesignWidth : ColumnFit(want ?? ColumnWanted);
+        bool changed = Math.Abs(col - _column) > 0.5;
+        _column = col;
+        LeftColDef.Width = new GridLength(col);
+        RightColDef.Width = new GridLength(full ? 16 + DesignWidth : 0);
+        HeadStack.Width = full ? DesignWidth * 2 + 16 : col;
+        LeftCol.Width = col;
+        StatusBar.Width = col;
+        if (LowerScroll.Content is FrameworkElement lower) lower.Width = col;
+        Toast.Width = col;
+        UndoBar.Width = col - 40;
+        RateCanvas.Width = col - 34; BestLinePath.X2 = col - 34;
+        if (changed) ColumnChanged();
+    }
+
+    bool _columnRedrawQueued;
+    /// <summary>The parts drawn for a width (the Runs cards, the bag's slots) drawn again for the new one, once for a burst of changes (a drag).</summary>
+    void ColumnChanged()
+    {
+        if (_columnRedrawQueued || !IsLoaded) return;
+        _columnRedrawQueued = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _columnRedrawQueued = false;
+            if (_welcome) return;
+            if (_part == "Events") ShowInstances();
+            else if (_part == "Farming") FillBagStrip();
+        }, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>The room the screen leaves the pages at the zoom drawn, in design units (none for a render without KL_SCREEN_H).</summary>
+    double ScreenRoom()
+    {
+        double screen = _demo ? WorkHeight() : Math.Min(_screenMax, WorkHeight());
+        return double.IsPositiveInfinity(screen) ? double.PositiveInfinity : Math.Max(MinRoom, (screen - FrameHeight()) / _fitScale);
+    }
+
+    /// <summary>
+    /// The most room the page gets under the header, in design units: the room the player dragged to; else on Quests, Timers
+    /// and Parser the Farming page's height (they keep it, 0.10.28); else the page's own. The screen caps each.
+    /// </summary>
+    double RoomCap()
+    {
+        double room = double.PositiveInfinity;
+        if (!_welcome && _prefs.WindowRoom > 0) room = Math.Max(MinRoom, _prefs.WindowRoom);
+        else if (_part is "Quests" or "Timers" or "Parser" && !_welcome && _farmHeight > 0) room = _farmHeight;
+        return Math.Min(room, ScreenRoom());
+    }
+
+    /// <summary>
+    /// The window's height caps: the window never taller than the screen; the ledger never taller than <see cref="RoomCap"/>,
+    /// in its own units, so a zoom draws the same room bigger (1.0.18: the cap was the window's height in pixels, the Farming
+    /// page's at the zoom it was left at, and a bigger zoom pushed the page past it). Lifted while an edge is dragged.
+    /// </summary>
+    void ApplyMaxHeight()
+    {
+        MaxHeight = _screenMax;
+        double cap = _sizing ? double.PositiveInfinity : RoomCap();
+        if (FitHost.MaxHeight.Equals(cap)) return;
+        FitHost.MaxHeight = cap;
+        Dispatcher.BeginInvoke(FitGraphs, System.Windows.Threading.DispatcherPriority.Loaded);   // the Parser's graphs take the new room
+    }
+
+    /// <summary>
+    /// The height the Parser's graphs fit (Ui/MainWindow.ParserGraphs.cs): the page area the window can give at its cap, not
+    /// only the one it has now (the window sizes to its content, so the graphs would never grow into a taller room); during a
+    /// drag, the area the window has.
+    /// </summary>
+    double GraphsRoom()
+    {
+        double cap = FitHost.MaxHeight;
+        if (_sizing || double.IsPositiveInfinity(cap) || LedgerCol.ActualHeight <= 0 || LowerScroll.ActualHeight <= 0) return LowerScroll.ViewportHeight;
+        double rest = LedgerCol.ActualHeight - LowerScroll.ActualHeight;   // the header over the page's area and the status line under it
+        return Math.Min(LowerScroll.MaxHeight, cap - rest);
+    }
+
+    /// <summary>The Parser's Graphs view on the page: it takes any room it is given.</summary>
+    bool GraphsShown => _graphs is { IsLoaded: true } g && g.IsVisible && g.IsDescendantOf(LowerScroll);
+
+    /// <summary>The most room the page shown can use, in design units: the Graphs view any (up to the screen); another page, the room it has and what it scrolls past.</summary>
+    double TallestRoom()
+    {
+        double screen = ScreenRoom();
+        if (double.IsPositiveInfinity(screen)) screen = 4000;
+        if (_part == "Parser" && GraphsShown) return screen;
+        double extra = 0;
+        foreach (var sv in new[] { LeftScroll, LowerScroll })
+            if (sv.IsVisible) extra = Math.Max(extra, sv.ExtentHeight - sv.ViewportHeight);
+        return Math.Min(screen, FitHost.ActualHeight + extra);
+    }
 
     internal const int WM_SIZING = 0x0214;
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -132,8 +264,8 @@ public partial class MainWindow
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
 
-    bool _sizing;
-    double _sizeBaseW, _sizeBaseH, _sizeChromeW, _sizeChromeH, _sizingScale;
+    bool _sizing, _sizedV, _sizedW;
+    double _sizeFrameW, _sizeFrameH, _sizeTallest, _sizingRoom;
 
     /// <summary>The frame keeps its sizing border, without the maximize button (and a double-click on the title bar does nothing).</summary>
     void NoMaximize(IntPtr hwnd)
@@ -144,8 +276,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// An edge being dragged (WM_SIZING): the window's size from where the edge is (its width for a side or a corner, its
-    /// height for the top or the bottom), 80% to 150%, drawn at once; the rectangle Windows proposes is set to that size.
+    /// An edge being dragged (WM_SIZING): a side sets the column's width (the one-column pages stretch; Full view holds), the
+    /// top or the bottom the pages' room, between <see cref="MinRoom"/> and the most the page can use; the rectangle Windows
+    /// proposes is set to that size, so the window never shows a gap or a cut while the edge moves. The zoom stays as it is.
     /// </summary>
     internal void OnSizing(IntPtr edgeParam, IntPtr rectParam)
     {
@@ -154,69 +287,85 @@ public partial class MainWindow
         if (!_sizing)
         {
             if (FitHost.ActualWidth <= 0 || FitHost.ActualHeight <= 0) return;
-            _sizing = true;
-            _sizeBaseW = FitHost.ActualWidth; _sizeBaseH = FitHost.ActualHeight;
-            _sizeChromeW = Math.Max(0, ActualWidth - _sizeBaseW * _fitScale); _sizeChromeH = Math.Max(0, ActualHeight - _sizeBaseH * _fitScale);
-            _sizingScale = _fitScale;
+            _sizing = true; _sizedV = _sizedW = false;
+            _sizeFrameW = Math.Max(0, ActualWidth - FitHost.ActualWidth * _fitScale);
+            _sizeFrameH = Math.Max(0, ActualHeight - FitHost.ActualHeight * _fitScale);
+            _sizeTallest = TallestRoom();
+            _sizingRoom = FitHost.ActualHeight;
+            FitHost.MaxHeight = double.PositiveInfinity;   // the drag sets the room; the drop keeps it
         }
         var r = System.Runtime.InteropServices.Marshal.PtrToStructure<WinRect>(rectParam);
         int edge = edgeParam.ToInt32();   // 1 left, 2 right, 3 top, 4 top-left, 5 top-right, 6 bottom, 7 bottom-left, 8 bottom-right
-        bool side = edge is 1 or 2 or 4 or 5 or 7 or 8;
+        bool side = edge is 1 or 2 or 4 or 5 or 7 or 8, vertical = edge is 3 or 4 or 5 or 6 or 7 or 8;
         double w = (r.R - r.L) / dx, h = (r.B - r.T) / dy;
-        double s = side ? (w - _sizeChromeW) / _sizeBaseW : (h - _sizeChromeH) / _sizeBaseH;
-        s = Math.Round(Math.Clamp(s, MinWindowScale, MaxWindowScale), 3);
-        int nw = (int)Math.Round((_sizeChromeW + _sizeBaseW * s) * dx), nh = (int)Math.Round((_sizeChromeH + _sizeBaseH * s) * dy);
+        // the width is the player's at once: a page drawn again mid-drag (a tick, the Runs cards for the new width) keeps it
+        if (side && !FullOnScreen && !_welcome) { ApplyColumn((w - _sizeFrameW) / _fitScale); _prefs.WindowWidth = _column; _sizedW = true; }
+        if (vertical) { _sizingRoom = Math.Clamp((h - _sizeFrameH) / _fitScale, MinRoom, Math.Max(MinRoom, _sizeTallest)); _sizedV = true; }
+        int nw = (int)Math.Round((_sizeFrameW + LedgerWidth() * _fitScale) * dx), nh = (int)Math.Round((_sizeFrameH + _sizingRoom * _fitScale) * dy);
         if (edge is 1 or 4 or 7) r.L = r.R - nw; else r.R = r.L + nw;
         if (edge is 3 or 4 or 5) r.T = r.B - nh; else r.B = r.T + nh;
         System.Runtime.InteropServices.Marshal.StructureToPtr(r, rectParam, false);
-        _sizingScale = s;
-        if (Math.Abs(s - _fitScale) > 0.001) SetDrawScale(s);
     }
 
-    /// <summary>The drag let go: the size it reached is the window's size from now on (as if chosen in Options), and the status line says it.</summary>
+    /// <summary>The drag let go: the room and the width it reached are kept (the zoom isn't touched), and the status line says how to undo it.</summary>
     void EndSizing()
     {
         if (!_sizing) return;
         _sizing = false;
-        double kept = Math.Round(Math.Clamp(_sizingScale, MinWindowScale, MaxWindowScale), 2);
-        if (_options != null) _options.SetWindowScale(kept);
-        else if (Math.Abs(kept - _prefs.WindowScale) > 0.001) { _prefs.WindowScale = kept; SavePrefs(); }
-        RefitScale();
-        Say(WindowScaleLine(kept), "Faint");
+        // an edge let go where the page has nothing more to show means "as tall as the page": no room kept, so a page that grows later shows whole
+        if (_sizedV) _prefs.WindowRoom = _sizingRoom >= _sizeTallest - 1 && !(_part == "Parser" && GraphsShown) ? 0 : Math.Round(_sizingRoom);
+        if ((_sizedV || _sizedW) && !_demo) _prefs.Save();
+        ApplyMaxHeight();
+        if (_sizedV || _sizedW) Say(L.F("Size kept · {0} resets it", WindowResetKey), "Faint");
     }
 
     /// <summary>
-    /// For options-test: drags the right edge to <paramref name="factor"/> times the window's width, then to
-    /// <paramref name="far"/> times, and drops it; the scale before, after the first pull, the rectangle's width ratio, after
-    /// the far pull, and the size kept. The saved size is put back after.
+    /// For renders and options-test: an edge dragged by (<paramref name="dx"/>, <paramref name="dy"/>) DIP as Windows runs it:
+    /// the drag starts, WM_SIZING proposes the rectangle, the window takes the one handed back (as Windows would), then
+    /// <paramref name="mid"/> (a render's layout pass, a look during the drag) and the drop. Edge: 1 left, 2 right, 3 top, 6 bottom, 8 bottom-right.
+    /// Returns the rectangle handed back, in DIP.
     /// </summary>
-    internal (double Before, double Wider, double WidthRatio, double Capped, double Kept) DragResizeForTest(double factor, double far)
+    internal (double W, double H) DragEdgeForTest(int edge, double dx, double dy, Action? mid = null)
     {
-        double saved = _prefs.WindowScale, before = _fitScale;
         var dpi = VisualTreeHelper.GetDpi(this);
-        int W0 = (int)Math.Round(ActualWidth * dpi.DpiScaleX), H0 = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+        double sx = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1, sy = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
+        int W0 = (int)Math.Round(ActualWidth * sx), H0 = (int)Math.Round(ActualHeight * sy);
+        var r = new WinRect { L = 0, T = 0, R = W0, B = H0 };
+        if (edge is 1 or 4 or 7) r.L -= (int)Math.Round(dx * sx); else if (edge is 2 or 5 or 8) r.R += (int)Math.Round(dx * sx);
+        if (edge is 3 or 4 or 5) r.T -= (int)Math.Round(dy * sy); else if (edge is 6 or 7 or 8) r.B += (int)Math.Round(dy * sy);
         var p = System.Runtime.InteropServices.Marshal.AllocHGlobal(16);
         try
         {
             OnSizeMove(WM_ENTERSIZEMOVE);
-            System.Runtime.InteropServices.Marshal.StructureToPtr(new WinRect { L = 0, T = 0, R = (int)(W0 * factor), B = H0 }, p, false);
-            OnSizing(new IntPtr(2), p);
-            double wider = _fitScale;
+            System.Runtime.InteropServices.Marshal.StructureToPtr(r, p, false);
+            OnSizing(new IntPtr(edge), p);
             var got = System.Runtime.InteropServices.Marshal.PtrToStructure<WinRect>(p);
-            double ratio = (got.R - got.L) / (double)W0;
-            System.Runtime.InteropServices.Marshal.StructureToPtr(new WinRect { L = 0, T = 0, R = (int)(W0 * far), B = H0 }, p, false);
-            OnSizing(new IntPtr(2), p);
-            double capped = _fitScale;
+            Width = (got.R - got.L) / sx; Height = (got.B - got.T) / sy;
+            mid?.Invoke();
             OnSizeMove(WM_EXITSIZEMOVE);
             EndSizing();
-            double kept = _prefs.WindowScale;
-            return (before, wider, ratio, capped, kept);
+            return ((got.R - got.L) / sx, (got.B - got.T) / sy);
         }
-        finally
-        {
-            System.Runtime.InteropServices.Marshal.FreeHGlobal(p);
-            _prefs.WindowScale = saved; RefitScale();
-        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(p); }
+    }
+
+    /// <summary>
+    /// For renders and options-test: how the page sits in the window now, in the window's own pixels (DIP). Header: the header's
+    /// foot; PageTop: the top of the page's area under it (its scroll area); Offset: that area's scroll; Bottom: the column's foot
+    /// (the status line) against the frame's inner foot; GapBelow and GapRight: empty room between the column and the frame.
+    /// </summary>
+    internal (double Header, double PageTop, double Offset, double Bottom, double Inner, double GapBelow, double GapRight, double Scrollable) LayoutForTest()
+    {
+        UpdateLayout();
+        double Y(FrameworkElement e, double y) => e.TranslatePoint(new Point(0, y), Root).Y;
+        double header = Y(HeadStack, HeadStack.ActualHeight);
+        System.Windows.Controls.ScrollViewer area = LowerScroll.IsVisible ? LowerScroll : LeftScroll;
+        double top = Y(area, 0);
+        double inner = Root.ActualHeight - Root.Padding.Bottom - Root.BorderThickness.Bottom;
+        double colFoot = Y(LedgerCol, LedgerCol.ActualHeight);
+        double right = LedgerCol.TranslatePoint(new Point(LedgerCol.ActualWidth, 0), Root).X;
+        double innerW = Root.ActualWidth - Root.Padding.Right - Root.BorderThickness.Right;
+        return (header, top, area.VerticalOffset, colFoot, inner, Math.Max(0, inner - colFoot), Math.Max(0, innerW - right), area.ScrollableHeight);
     }
 
     /// <summary>Options › General › Window size, being tried: the window shows it now; Save keeps it, Cancel puts the saved one back.</summary>
@@ -233,10 +382,25 @@ public partial class MainWindow
         RefitScale();
     }
 
-    /// <summary>Ctrl+= and Ctrl+- (0.10.11): one step bigger or smaller, kept; Ctrl+0 is back to 100%. The status line says the size, and when the screen holds it back.</summary>
+    /// <summary>
+    /// Reset size (1.0.18, Options › General beside Window size, and Ctrl+0): 100%, the pages' own height and the designed
+    /// width, kept at once. For a player whose size came from a drag that zoomed (0.10.132 to 1.0.17) or who lost track of it.
+    /// </summary>
+    public void ResetWindowSize()
+    {
+        _windowScalePreview = 0;
+        _prefs.WindowScale = 1; _prefs.WindowRoom = 0; _prefs.WindowWidth = 0;
+        if (!_demo) _prefs.Save();
+        RefitScale();
+        _options?.WindowSizeWasReset();   // Options open: its slider at 100%, with nothing left to save
+        Say(L.T("Window size back to 100%, as tall as each page and its designed width"), "Faint");
+    }
+
+    /// <summary>Ctrl+= and Ctrl+- (0.10.11): one step bigger or smaller, kept; Ctrl+0 resets the size (1.0.18: the room and the width too). The status line says the size, and when the screen holds it back.</summary>
     void StepWindowScale(int steps)
     {
-        double next = steps == 0 ? 1 : Math.Round(Math.Clamp(WindowScaleWanted + steps * WindowScaleStep, MinWindowScale, MaxWindowScale), 2);
+        if (steps == 0) { ResetWindowSize(); return; }
+        double next = Math.Round(Math.Clamp(WindowScaleWanted + steps * WindowScaleStep, MinWindowScale, MaxWindowScale), 2);
         if (_options != null) { _options.SetWindowScale(next); return; }   // Options open: the slider there moves, and Save keeps it
         if (Math.Abs(next - _prefs.WindowScale) > 0.001)
         {
@@ -271,25 +435,41 @@ public partial class MainWindow
 
     /// <summary>
     /// The window is never taller than the working area of the screen it is on: set at start, and again when it moves to
-    /// another screen or the scaling changes. Moved up if its bottom would now sit below the screen.
+    /// another screen or the scaling changes. Moved up if its bottom would now sit below the screen, and back in from a side
+    /// a wider column would push it past (1.0.18).
     /// </summary>
     void FitMaxHeight()
     {
         if (_demo) return;
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero) return;
-        double dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
+        double dpi = VisualTreeHelper.GetDpi(this).DpiScaleY, dpiX = VisualTreeHelper.GetDpi(this).DpiScaleX;
         if (dpi <= 0) dpi = 1;
+        if (dpiX <= 0) dpiX = 1;
         var wa = WF.Screen.FromHandle(h).WorkingArea;
         if (wa.Height <= 0) return;
         _screenMax = wa.Height / dpi; ApplyMaxHeight();
-        if (WindowState == WindowState.Normal && ActualHeight > 0 && Top + ActualHeight > wa.Bottom / dpi) Top = Math.Max(wa.Top / dpi, wa.Bottom / dpi - ActualHeight);
+        if (WindowState != WindowState.Normal) return;
+        if (ActualHeight > 0 && Top + ActualHeight > wa.Bottom / dpi) Top = Math.Max(wa.Top / dpi, wa.Bottom / dpi - ActualHeight);
+        if (ActualWidth > 0 && Left + ActualWidth > wa.Right / dpiX) Left = Math.Max(wa.Left / dpiX, wa.Right / dpiX - ActualWidth);
     }
 
     /// <summary>For the options self-test and layout review: the scale the window is drawn at, and whether Full view fell back to Compact.</summary>
     internal (double Scale, bool Compact) FitState => (_fitScale, _fullTooWide);
     /// <summary>For the options self-test: the window size as it shows now (the one being tried, or the saved one).</summary>
     internal double WindowScaleShownForTest => WindowScaleWanted;
+    /// <summary>For the options self-test: the room and the width kept (0: the page's own, the designed), the column as it shows, the ledger's room cap.</summary>
+    internal (double Room, double Width, double Column, double Cap) SizeForTest => (_prefs.WindowRoom, _prefs.WindowWidth, _column, FitHost.MaxHeight);
+    /// <summary>For renders and options-test: the window back to its first size (100%, the page's own height, the designed width, Compact).</summary>
+    internal void ResetSizeForTest()
+    {
+        _windowScalePreview = 0;
+        _prefs.WindowScale = 1; _prefs.FullView = false; _prefs.WindowRoom = 0; _prefs.WindowWidth = 0;
+        SizeToContent = SizeToContent.WidthAndHeight;
+        if (_part == "Farming") ApplyView(); else RefitScale();
+    }
+    /// <summary>For renders and options-test: the window size picked (as Options' Save keeps it).</summary>
+    internal void SetWindowScaleForTest(double scale) { _prefs.WindowScale = scale; RefitScale(); }
     /// <summary>For the options self-test: Ctrl+= (1), Ctrl+- (-1) or Ctrl+0 (0).</summary>
     internal void StepWindowScaleForTest(int steps) => StepWindowScale(steps);
 }
