@@ -152,6 +152,15 @@ public static partial class WpfApp
         }
         // KL_OPTIONS_ONLY=graphs: the Parser page's Graphs tab alone (Ui/WpfApp.ParserGraphs.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=parserpage: the Parser page's own checks alone (Ui/WpfApp.Parser.cs ParserChecks: the strip, the head, the switches' texts)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parserpage")
+        {
+            var pw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            pw.Show(); pw.ShowDemo(); DoEvents();
+            ParserChecks(pw, Check);
+            pw.Close();
+            Console.WriteLine(fails == 0 ? "options test (parser page): all passed" : $"options test (parser page): {fails} failed"); return fails == 0 ? 0 : 1;
+        }
         // KL_OPTIONS_ONLY=idle: the overlay's idle line alone (Ui/WpfApp.HudIdle.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "idle") { var iw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; iw.Show(); DoEvents(); HudIdleChecks(iw, Check); iw.Close(); Console.WriteLine(fails == 0 ? "options test (idle line): all passed" : $"options test (idle line): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=npcap: what keeps the DPS meter off, Npcap missing first, alone (Ui/WpfApp.Npcap.cs)

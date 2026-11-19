@@ -228,11 +228,12 @@ public static partial class WpfApp
                 check(s.Members.Count == lines && s.Members.Count(m => m.You) == 1 && s.HpLeft != null && fightT == "DPS and boss HP" && healCard == (healTitle != null) && (healTitle == null || healT == healTitle)
                     && (deaths < 0 || s.Deaths.Count == deaths) && frame,
                     $"graphs, {st}: one graph, \"{fightT}\", {s.Members.Count} DPS lines (yours one) and the boss's HP{(healCard ? $"; \"{healT}\" under it" : "; no heal graph")}; {s.Deaths.Count} deaths marked; {s.N} s of data in a frame of {PK.Clock(s.Extent)}{(s.Live ? " (live, fixed)" : " (kept: start to finish)")}, DPS scale {s.YMax:N0}");
-                // fits: the whole panel inside the window under the hero; nothing cut
+                // fits: the whole panel inside the window under the strip (or, in a short window, the fight's graph, the healing's
+                // under it a scroll away); nothing cut
                 var bottom = w.GraphsBottomForTest;
                 var cut = MeterShare.Trimmed(g);
                 check(bottom <= w.ParserViewportForTest + 1 && cut.Count == 0 && g.ChartOf(ParserGraphs.Dps).ActualHeight >= 140,
-                    $"graphs, {st}: the panel fits the window ({bottom:0} of {w.ParserViewportForTest:0} px, the fight's graph {g.ChartOf(ParserGraphs.Dps).ActualHeight:0} px tall), nothing cut{(cut.Count > 0 ? ": " + string.Join(", ", cut) : "")}");
+                    $"graphs, {st}: {(g.HealBelow ? "the fight's graph fits the window, the healing's under it" : "the panel fits the window")} ({bottom:0} of {w.ParserViewportForTest:0} px, the fight's graph {g.ChartOf(ParserGraphs.Dps).ActualHeight:0} px tall), nothing cut{(cut.Count > 0 ? ": " + string.Join(", ", cut) : "")}");
                 var rows = g.ChartOf(ParserGraphs.Dps).HoverRows(s.N / 2);
                 check(rows.Count(r => r.Value != "–") >= lines + 1 && s.Members.All(m => rows.Any(r => r.Name == m.Name)) && rows.Any(r => r.Name == L.T("Boss HP")),
                     $"graphs, {st}: the hover at {PK.Clock(s.N / 2)} reads every member's DPS and the boss's HP ({string.Join(", ", rows.Select(r => $"{r.Name} {r.Value}"))})");
@@ -278,6 +279,20 @@ public static partial class WpfApp
             var tabsNow = ParserCommand.Tabs(w.GraphsViewForTest(w.ParserShownForTest!));
             check(rowsUnder.Count == 6 && tabsNow[0] == "Timeline" && !tabsNow.Contains("Group") && w.GraphsBottomForTest <= w.ParserViewportForTest + 1,
                 $"graphs: the group's table is under the graphs ({rowsUnder.Count} rows), no Group tab ({string.Join(", ", tabsNow)}), the graphs still fit the window");
+            // the graph is the page's hero (Steven, 2026-11-18, on 1.0.18's big hero card: "like bro this is awful"): the head one
+            // line, the fight a compact strip, the graphs straight under it and the fight's graph the tallest thing on the page
+            {
+                w.UpdateLayout();
+                var head = FindTagged(w.ParserPage, "parser-head");
+                var strip = FindTagged(w.ParserPage, "parser-hero");
+                var panel6 = w.GraphsForTest;
+                double Top(FrameworkElement el) => el.TranslatePoint(new Point(0, 0), w.ParserPage).Y;
+                double headH = head?.ActualHeight ?? 999, stripH = strip?.ActualHeight ?? 999;
+                double gap = strip != null && panel6 != null ? Top(panel6) - (Top(strip) + stripH) : 999;
+                double dps = panel6?.ChartOf(ParserGraphs.Dps).ActualHeight ?? 0;
+                check(headH <= 34 && stripH <= 92 && gap <= 20 && dps > stripH * 2,
+                    $"graphs: the head is one line ({headH:0} px), the fight a strip ({stripH:0} px), the graphs {gap:0} px under it and the fight's graph the hero ({dps:0} px)");
+            }
             // the pen: a kept fight's first look draws in (once: a redraw of it doesn't), a live fight's heads glide to a newer
             // second, and with the window still (renders, Windows's animations off) nothing plays
             ParserGraphs.Chart.ForceMotionForTest = true;

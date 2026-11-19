@@ -950,24 +950,36 @@ static class ParserGraphs
         }
 
         /// <summary>
-        /// The charts' heights for the room the window leaves under the hero (Steven: pages fit without scrolling): the fight's
-        /// graph takes most, the healing the rest, each between a floor that still reads and a ceiling that doesn't sprawl.
+        /// The charts' heights for the room the window leaves under the strip (Steven: pages fit without scrolling; 2026-11-18:
+        /// the graph is the page's hero): the fight's graph takes most, the healing the rest, each between a floor that still
+        /// reads and a ceiling that doesn't sprawl. Where the room can't give the fight's graph <see cref="FightFirst"/> with the
+        /// healing beside it, the fight's graph takes the whole room and the healing follows under it, with the group, a scroll away.
         /// </summary>
         public void Fit(double room)
         {
             _room = room;
             bool heal = _rule.Visibility == Visibility.Visible;
             double fight = 220, small = 80;
+            HealBelow = false;
             if (!double.IsNaN(room))
             {
-                double chrome = 19 + 26 + (heal ? 16 + 26 : 0);   // the card's padding and edge, the heads, the hairline's room
-                double avail = room - chrome;
-                if (heal) { fight = Math.Clamp(avail * 0.7, 140, 360); small = Math.Clamp(avail - fight, 64, 150); }
-                else fight = Math.Clamp(avail, 140, 420);
+                const double card = 19 + 26, healHead = 16 + 26;   // the card's padding and edge and the fight's head; the hairline and the healing's head
+                double avail = room - card - healHead;
+                double healH = Math.Clamp(avail * 0.25, 72, 150);
+                if (heal && avail - healH >= FightFirst) { small = healH; fight = Math.Min(avail - healH, 400); }
+                else if (heal) { fight = Math.Clamp(room - card, 140, 400); small = 96; HealBelow = true; }
+                else fight = Math.Clamp(room - card, 140, 460);
             }
             if (Math.Abs(fight - _fightH) > 1) { _fightH = fight; _charts[Dps].Height = fight; }
             if (Math.Abs(small - _healH) > 1) { _healH = small; _charts[Heal].Height = small; }
         }
+
+        /// <summary>The fight's graph's least height with the healing graph beside it in the room: under it, the healing goes below.</summary>
+        public const double FightFirst = 230;
+        /// <summary>The healing's graph sits under the room the window gives (its fight's graph took all of it): a scroll away, with the group.</summary>
+        public bool HealBelow { get; private set; }
+        /// <summary>The foot of what fits the room: the whole panel, or the fight's graph when the healing sits under it.</summary>
+        public double FitFoot => HealBelow ? _parts[Dps].TranslatePoint(new Point(0, _parts[Dps].ActualHeight), this).Y : ActualHeight;
 
         public void Stop() => _timer?.Stop();
     }

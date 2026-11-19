@@ -87,11 +87,29 @@ public partial class MainWindow
         var tabs = ParserCommand.Tabs(v);
         if (!tabs.Contains(ctx.Tab)) ctx.Tab = tabs[0];   // Graphs (with the group under them), or Group for a record without seconds
         var page = new StackPanel();
-        // the way back, a real button top left over the hero (Steven, 2026-11-17: "make a back button WAY more obvious");
-        // Backspace, Alt+← and the mouse's back button do the same (Ui/MainWindow.ParserShare.cs)
-        if (_parserFromRuns) page.Children.Add(ParserBackButton(L.T("Back to the run"), BackToRuns));   // opened from a run on the Runs page: back goes there
+        // when it was: a kept fight's start and end, on the result's hover, and beside Back on a pull opened from the list
+        string? when = null;
+        if (!live)
+        {
+            var startWord = e.ModeKind switch { ParserMode.Run => L.T("Entered"), ParserMode.Fights => L.T("Started"), _ => L.T("Pulled") };
+            var endWord = e.ModeKind == ParserMode.Run ? L.T("Left") : L.T("Ended");
+            when = L.F("{0} {1}  ·  {2} {3}", startWord, L.DayTime(e.Start.ToLocalTime()), endWord, end.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+        }
+        // the way back, a real button top left over the fight (Steven, 2026-11-17: "make a back button WAY more obvious"), when
+        // it was beside it; Backspace, Alt+← and the mouse's back button do the same (Ui/MainWindow.ParserShare.cs)
+        FrameworkElement? back = null;
+        if (_parserFromRuns) back = ParserBackButton(L.T("Back to the run"), BackToRuns);   // opened from a run on the Runs page: back goes there
         // a pull opened from the list: Back returns to the live view (the fight under way, or the last one held; the list under it)
-        else if (!live && !held) page.Children.Add(ParserBackButton(L.T("Back", "button"), () => OpenFight(null)));
+        else if (!live && !held) back = ParserBackButton(L.T("Back", "button"), () => OpenFight(null));
+        if (back != null)
+        {
+            back.Margin = new Thickness(0);
+            var backRow = new DockPanel { Margin = new Thickness(0, 0, 0, 8), LastChildFill = true };
+            DockPanel.SetDock(back, Dock.Left); backRow.Children.Add(back);
+            if (when != null) backRow.Children.Add(Margin(PT(when, 12, FontWeights.Medium, "Muted", trim: true), 12, 0, 0, 0));
+            foreach (var c in backRow.Children.OfType<FrameworkElement>()) c.VerticalAlignment = VerticalAlignment.Center;
+            page.Children.Add(backRow);
+        }
         var extras = new List<FrameworkElement>();
         if (e.ModeKind == ParserMode.Run)
         {
@@ -109,22 +127,16 @@ public partial class MainWindow
             extras.Add(Margin(stat, 0, 10, 0, 0));
         }
         if (live && e.OpenWorld) extras.Add(Margin(PT(L.T("Shown while it lasts. Open-world and Abyss fights are never kept."), 11.5, FontWeights.Medium, "Faint"), 0, 8, 0, 0));
-        if (!live)
+        if (!live && e.Partial)
         {
-            // the timings, and why it's partial when it is
-            var local = e.Start.ToLocalTime();
-            var startWord = e.ModeKind switch { ParserMode.Run => L.T("Entered"), ParserMode.Fights => L.T("Started"), _ => L.T("Pulled") };
-            var endWord = e.ModeKind == ParserMode.Run ? L.T("Left") : L.T("Ended");
-            extras.Add(Margin(PT(L.F("{0} {1}  ·  {2} {3}", startWord, L.DayTime(local), endWord, end.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)), 12, FontWeights.Medium, "Muted", trim: true), 0, 10, 0, 0));
-            if (e.Partial)
-            {
-                var why = PT(L.F("Partial: {0}. Still one {1}; its damage and kills may be short.", ParserCommand.WhyText(e), Noun(e.ModeKind)), 12, FontWeights.Medium, "Warn");
-                why.TextWrapping = TextWrapping.Wrap; why.Margin = new Thickness(0, 4, 0, 0);
-                extras.Add(why);
-            }
+            // why it's partial
+            var why = PT(L.F("Partial: {0}. Still one {1}; its damage and kills may be short.", ParserCommand.WhyText(e), Noun(e.ModeKind)), 12, FontWeights.Medium, "Warn");
+            why.TextWrapping = TextWrapping.Wrap; why.Margin = new Thickness(0, 6, 0, 0);
+            extras.Add(why);
         }
-        // the fight's Copy picture is the page head's big one (its ▾ has the summary card); the hero carries none of its own
-        var hero = ParserCommand.Hero(v, ctx, live, extras, null);
+        // the fight as a compact strip over its graphs (Steven, 2026-11-18: the graph is the hero, 1.0.18's big hero card was
+        // "awful"); the fight's Copy picture is the page head's big one (its ▾ has the summary card)
+        var hero = ParserCommand.Strip(v, ctx, live, extras, when);
         if (Shareable(e)) ShareOnRightClick(hero, e, v, ParserShare.Hero);
         page.Children.Add(hero);
         FrameworkElement body = ctx.Tab switch
@@ -136,7 +148,7 @@ public partial class MainWindow
         };
         // a right-click on the view: its picture, and a table's text (tab-separated)
         if (Shareable(e) && body is not Border { Child: null }) ShareOnRightClick(body, e, v, ParserShare.ViewOfTab(ctx.Tab));
-        page.Children.Add(Margin(body, 0, 12, 0, 0));
+        page.Children.Add(Margin(body, 0, 8, 0, 0));
         // a kept fight: your kills and the kills near you, under the group
         if (!live && ctx.Tab is "Group" or "Timeline")
         {
