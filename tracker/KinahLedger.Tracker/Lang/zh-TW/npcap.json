@@ -23,5 +23,6 @@
   "Restart Kinah Ledger now?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual.": "要立即重新啟動 Kinah Ledger 嗎？\n\n進行中的一輪會先停止並照常儲存（若已開啟分享，也會照常分享）。",
   "AION 2 is in exclusive fullscreen": "AION 2 正在獨佔全螢幕模式",
   "The overlays can't show over it. In the game's graphics settings, set Display mode to Borderless.": "浮動視窗無法顯示在它上面。請在遊戲的圖形設定中，把顯示模式改成無邊框視窗。",
-  "AION 2 is in exclusive fullscreen, so the overlays can't show over it. In the game's graphics settings, set Display mode to Borderless.": "AION 2 正在獨佔全螢幕模式，浮動視窗無法顯示在它上面。請在遊戲的圖形設定中，把顯示模式改成無邊框視窗。"
+  "AION 2 is in exclusive fullscreen, so the overlays can't show over it. In the game's graphics settings, set Display mode to Borderless.": "AION 2 正在獨佔全螢幕模式，浮動視窗無法顯示在它上面。請在遊戲的圖形設定中，把顯示模式改成無邊框視窗。",
+  "DPS meter checks: with the reading checks, whether the DPS meter ran or what kept it off, whether your own hits were recognized and how quickly, how many fights showed your damage, whether the game was in exclusive fullscreen, and how often the screen was read. Counts only, never names, IDs or chat.": "DPS 統計檢查：隨讀取檢查一起傳送 DPS 統計是否運作或是什麼讓它關閉、你自己的攻擊是否被辨識以及多快辨識、有多少場戰鬥顯示了你的傷害、遊戲是否處於獨佔全螢幕模式，以及畫面讀取的頻率。只有統計數字，絕不含名稱、ID 或聊天。"
 }

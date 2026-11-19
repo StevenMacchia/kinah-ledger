@@ -57,6 +57,7 @@ public static class AccuracyTests
         Check("a second read's look-ups count nothing", $"{Accuracy.Get("guessed")} {Accuracy.Take().Names.Count}", "0 0");
         var payload = JsonSerializer.Serialize(AccuracyPayload.From(new AccuracyReport(new() { ["pickups"] = 3 }, new(), null), "abc"));
         Check("the payload: version, install, counters, nothing else", Regex(payload, "\"(\\w+)\":"), "app,install,health,pickups");
+        MeterTests(Check);
 
         Console.WriteLine("The parser and the dictionary report what they couldn't read exactly:");
         Accuracy.Reset();
@@ -266,6 +267,30 @@ public static class AccuracyTests
             Accuracy.Add("chat_reads", 2);
             AccuracyClient.SendAsync(off).GetAwaiter().GetResult();
             Check("sharing off: the kept reports are let go", $"{AccuracyClient.QueuedCount()} {File.Exists(Path.Combine(CrashLog.Dir, "accuracy-queue.json"))}", "0 False");
+
+            // ---- the meter's counts (1.0.22) ride the same report and start over the same way ----
+            Console.WriteLine("...and the meter's counts go with it, and start over the same way:");
+            site.Answer = 200; while (site.Bodies.TryDequeue(out _)) { }
+            Accuracy.Reset(); MeterHealth.Reader("on"); MeterHealth.Hit(true); MeterHealth.Hit(false); MeterHealth.Pass(100, true);
+            var ms1 = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            var mb = site.Bodies.Select(b => JsonNode.Parse(b)!).LastOrDefault();
+            Check("the meter goes beside health, its counts in it", $"{ms1} {mb?["meter"]?["reader"]} {mb?["meter"]?["own_hits"]} {mb?["meter"]?["other_hits"]} {mb?["meter"]?["backup_passes"]}", "True on 1 1 1");
+            var after = Accuracy.Take().Meter;
+            Check("...and starts over once the site took it (the reader's word stays)", $"{after?.reader} {after?.own_hits} {after?.other_hits} {after?.passes} {after?.backup_passes}", "on 0 0 0 0");
+            site.Answer = 500; MeterHealth.Hit(true); MeterHealth.Hit(true);
+            AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            Check("a server error: the meter's counts go back in too", $"{Accuracy.Take().Meter?.own_hits}", "2");
+            site.Answer = 404; MeterHealth.Hit(true); MeterHealth.FullscreenSeen();
+            AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            var mq = JsonNode.Parse(File.ReadAllText(Path.Combine(CrashLog.Dir, "accuracy-queue.json")))!.AsArray();
+            Check("a site without the route: the meter waits in the kept report", $"{mq[^1]!["Report"]!["Meter"]?["own_hits"]} {mq[^1]!["Report"]!["Meter"]?["fullscreen"]} {Accuracy.Take().Meter?.own_hits}", "1 1 0");
+            site.Answer = 200; while (site.Bodies.TryDequeue(out _)) { }
+            AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            Check("...and goes when the site has it", $"{site.Bodies.Select(b => JsonNode.Parse(b)!["meter"]?["own_hits"]?.ToString()).FirstOrDefault()} {AccuracyClient.QueuedCount()}", "1 0");
+            int mreq = site.Requests;
+            MeterHealth.Hit(true);
+            AccuracyClient.SendAsync(off).GetAwaiter().GetResult();
+            Check("sharing off: no meter sent, its counts let go", $"{site.Requests - mreq} {Accuracy.Take().Meter?.own_hits}", "0 0");
             Accuracy.Reset();
         }
 
@@ -658,6 +683,77 @@ public static class AccuracyTests
             }
         }
         public void Dispose() { _cts.Cancel(); _l.Stop(); }
+    }
+
+    /// <summary>
+    /// The health report's "meter" (1.0.22, Steven 2026-11-18: "does it work with everyone?"): the reader's word for each
+    /// case the window tells apart, the counts from the reader, the parser and the read loop, the JSON's keys exactly as
+    /// the site reads them, and nothing in it that names anyone.
+    /// </summary>
+    static void MeterTests(Action<string, string, string> Check)
+    {
+        Console.WriteLine("The meter's health numbers (beside health, 1.0.22):");
+        Accuracy.Reset();
+        Check("no window has told the reader's state: no meter in the report", $"{Accuracy.Take().Meter == null}", "True");
+        // the reader's word, from the facts the window decides its card on (Ui/MainWindow.MeterBlock.cs)
+        string W(bool enabled, bool on, bool installed, bool admin, bool adminOnly, string state, TimeSpan? noServer = null, bool installedThisRun = false) =>
+            KinahLedger.Ui.MeterBlocks.ReaderWord(on, KinahLedger.Ui.MeterBlocks.Decide(enabled, on, installed, admin, adminOnly, state, noServer, installedThisRun), state) ?? "null";
+        Check("reader: running", W(true, true, true, false, false, "On (Npcap): counting"), "on");
+        Check("reader: switched off in Settings", W(false, false, true, false, false, "Off in Options"), "off");
+        Check("reader: no Npcap, not administrator", W(true, false, false, false, false, "Off: install Npcap (npcap.com)"), "no_npcap");
+        Check("reader: Npcap for administrators only", W(true, false, true, false, true, "Off: Npcap: access denied"), "admins_only");
+        Check("reader: no server connection for minutes (a ping booster)", W(true, false, true, false, false, "Waiting for the game to connect to its server", TimeSpan.FromMinutes(4)), "no_server");
+        Check("reader: Npcap installed while running (the restart card)", W(true, false, true, false, false, "Off: Npcap: x", installedThisRun: true), "failed");
+        Check("reader: any other Off", W(true, false, true, true, false, "Off: something broke"), "failed");
+        Check("reader: a build without the reader", W(true, false, true, true, false, "Off: this build can't read"), "failed");
+        Check("reader: only waiting for the game: no word (the last one stays)", W(true, false, true, false, false, "Waiting for the game"), "null");
+        Check("reader: waiting for its server under the booster's minutes: no word", W(true, false, true, false, false, "Waiting for the game to connect to its server", TimeSpan.FromMinutes(1)), "null");
+        MeterHealth.Reader("no_npcap"); MeterHealth.Reader(null); MeterHealth.Reader("bogus");
+        Check("a wait keeps the last word; a word the site doesn't know is refused", MeterHealth.ReaderNow ?? "null", "no_npcap");
+        MeterHealth.Reader("on");
+
+        // the reader: two connections, the own id known on the first 7.5 s after its first data, never on the second
+        var pr = new KinahLedger.Packets.PacketReader();
+        var c0 = new DateTime(2026, 11, 18, 20, 0, 0, DateTimeKind.Utc);
+        pr.ConnectionForTest(c0);
+        pr.SelfHealth(new KinahLedger.Packets.SelfState(0, 0, null, 0, 0, 12, 0, 0, null, 0, 12, null, null), c0.AddSeconds(3));
+        var known = new KinahLedger.Packets.SelfState(424242, 2, c0.AddSeconds(7.5), 0, 1, 12, 0, 100, null, 1, 12, null, null);
+        pr.SelfHealth(known, c0.AddSeconds(8));
+        pr.SelfHealth(known, c0.AddSeconds(9));
+        pr.ConnectionForTest(c0.AddMinutes(5));
+        for (int i = 0; i < 3; i++) pr.TakeBoss(new KinahLedger.Packets.DamageDealt(c0, 424242, 9, 500, "Myname", SourceIsYou: true));
+        for (int i = 0; i < 5; i++) pr.TakeBoss(new KinahLedger.Packets.DamageDealt(c0, 77, 9, 300, "Someone"));
+        pr.TakeBoss(new KinahLedger.Packets.DamageDealt(c0, 0, 9, 300, Reason: 2));   // HP lost with no hit to name: no row
+        pr.TakeBoss(new KinahLedger.Packets.DamageDealt(c0, 77, 9, 0, "Someone"));    // no damage: no row
+        MeterHealth.ReaderOn(61.7); MeterHealth.ReaderOn(500);   // the second is a sleep, not reading
+        // the parser: a fight with your damage, one with others' only, one with no damage at all
+        KinahLedger.Parser.Fighter F(bool you, long dmg) => new() { You = you, Damage = dmg, Name = you ? "Myname" : "Someone" };
+        KinahLedger.Parser.BossParser.FightHealth(new KinahLedger.Parser.Encounter { Roster = { F(true, 10), F(false, 5) } });
+        KinahLedger.Parser.BossParser.FightHealth(new KinahLedger.Parser.Encounter { Roster = { F(true, 0), F(false, 5) } });
+        KinahLedger.Parser.BossParser.FightHealth(new KinahLedger.Parser.Encounter { Roster = { F(true, 0) } });
+        MeterHealth.SelfCheckShown(); MeterHealth.FullscreenSeen();
+        MeterHealth.Pass(120, false); MeterHealth.Pass(80.5, true); MeterHealth.Pass(80.5, true); MeterHealth.Pass(-3, true);
+        var rep = Accuracy.Take();
+        var json = JsonSerializer.Serialize(AccuracyPayload.From(rep with { Health = new() { ["reading_s"] = 62 } }, "abc"));
+        Console.WriteLine("    sample: " + json);
+        var meter = JsonNode.Parse(json)!["meter"]!.AsObject();
+        Check("the payload: health, then meter", string.Join(",", JsonNode.Parse(json)!.AsObject().Select(kv => kv.Key)), "app,install,health,meter");
+        Check("meter: exactly the spec's keys, in order", string.Join(",", meter.Select(kv => kv.Key)), string.Join(",", MeterHealth.Keys));
+        Check("meter: the counts", string.Join(" ", meter.Select(kv => kv.Value!.ToString())), "on 61 1 7 1 2 3 5 1 1 1 1 3 2 281");
+        Check("meter: numbers only, beside the reader's word", string.Join(",", meter.Where(kv => kv.Key != "reader").Select(kv => kv.Value!.GetValueKind()).Distinct()), "Number");
+        var mtext = meter.ToJsonString();
+        Check("meter: no names, no ids", $"{mtext.Contains("Myname")} {mtext.Contains("Someone")} {mtext.Contains("424242")} {mtext.Contains("abc")}", "False False False False");
+
+        var next = Accuracy.Take().Meter!;
+        Check("taken means started over (the part of a second stays)", $"{next.reader} {next.reader_on_s} {next.self_known} {next.conns} {next.own_hits} {next.fights_own} {next.fullscreen} {next.passes}", "on 0 0 0 0 0 0 0");
+        Accuracy.Restore(rep);
+        var back = Accuracy.Take().Meter!;
+        Check("a failed send puts the meter's counts back", $"{back.reader_on_s} {back.self_conns} {back.own_hits} {back.other_hits} {back.fights_none} {back.self_check_shown} {back.pass_ms}", "61 1 3 5 1 1 281");
+        MeterHealth.Pass(1e9, false);
+        Accuracy.Restore(new AccuracyReport(new(), new(), null, new MeterPayload("on", 20_000_000, 1, 0, 0, 0, 30_000_000, 0, 0, 0, 0, 0, 0, 0, 0)));
+        var big = Accuracy.Take().Meter!;
+        Check("values held to the site's COUNTER_MAX; a pass of minutes isn't one", $"{big.reader_on_s} {big.own_hits} {big.passes}", "10000000 10000000 0");
+        Accuracy.Reset();
     }
 
     static string Regex(string s, string pattern) => string.Join(",", System.Text.RegularExpressions.Regex.Matches(s, pattern).Select(m => m.Groups[1].Value));

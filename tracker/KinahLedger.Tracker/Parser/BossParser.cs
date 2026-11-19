@@ -668,8 +668,13 @@ public sealed class BossParser
         a.Outcome = a.YourDeaths > 0 ? "died" : a.YourKills > 0 || a.Kills.Any(k => k.Boss) ? "kill" : "ended";
         Settle(a);
         _alwaysEnded = a;
+        FightHealth(a);
         Log($"always on: the meter starts again ({why})");
     }
+
+    /// <summary>The meter's health numbers (Session/Accuracy.cs, MeterHealth): a fight ended with your damage in it, or others' only.</summary>
+    internal static void FightHealth(Encounter e) =>
+        Session.MeterHealth.Fight(e.Roster.Any(f => f.You && f.Damage > 0), e.Roster.Any(f => !f.You && !f.Other && f.Damage > 0));
 
     /// <summary>
     /// A fight of one hit folded into the held fight before it: its damage, abilities, kills and deaths added, and its time,
@@ -1425,7 +1430,7 @@ public sealed class BossParser
         e.LastAt = Max(e.LastAt, e.End.Value);
         e.Outcome = Encounter.OutcomeName(outcome);
         Settle(e);
-        if (!e.Wave) _alwaysEnded = Copy(e);
+        if (!e.Wave) { _alwaysEnded = Copy(e); FightHealth(e); }
         _endedPull = (e.End.Value, e.Wave || _alwaysEnded == null ? new List<Encounter> { e } : new List<Encounter> { e, _alwaysEnded });
         if (outcome == BossOutcome.Kill) { _downHere.Add(e.Boss); if (e.BossId != 0) _downIds.Add(e.BossId); }
         var secs = e.Duration(e.End.Value).TotalSeconds;
