@@ -32,7 +32,7 @@ sealed partial class HudModernLine
         _ringHost.Visibility = Visibility.Collapsed;
         _pill.Padding = new Thickness(13, 5, 7, 5);
         _pick.Inlines.Clear();
-        _stripSlot.Child = null;
+        _stripSlot.Child = null; _stripUnder.Child = null; _stripUnder.Visibility = Visibility.Collapsed;
         double cap = FightWidth - 14 - 2 - _pill.Padding.Left - _pill.Padding.Right - _kv.Margin.Left - _kv.Margin.Right;
         var (fullW, needW) = ModernRun.Widths(_rate, _sub, s, Ink);
         var strips = RunStrips(Strip);

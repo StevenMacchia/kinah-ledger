@@ -116,8 +116,8 @@ static class ModernRun
 
     /// <summary>
     /// What the line keeps beside the words in <paramref name="cap"/> px: the words' fullest forms first with the strip (the
-    /// best drop and the last three, else the last three) and the timer on the line; then each given up in turn, the timer going
-    /// up over the Buddy. Then the same for the words' essentials. With none of those the last three stay and the words take a
+    /// best drop and the last three, whole: <see cref="ModernLook.RunStrips"/>) and the timer on the line; then the timer going
+    /// up over the Buddy. Then the same for the words' essentials. With none of those the strip stays and the words take a
     /// shorter form. Returns the strip kept, whether the timer goes up, and the words' room.
     /// </summary>
     public static (FrameworkElement? Strip, bool Up, double Room) Place(double cap, double fullW, double needW, double timerW, IReadOnlyList<FrameworkElement> strips, double air)

@@ -12,7 +12,8 @@ namespace KinahLedger.Ui;
 /// session, and under it four toasts: the three newest pickups, newest on top, and the session's top drop pinned under
 /// them (Steven, 2026-10-26: "the 3 most recent and the Top Drop"). Pickups stay until a newer one pushes the oldest out,
 /// which then fades; they no longer fade out after 6 s. A notice (the reader paused, an update waiting) is a toast at the
-/// top and takes a pickup's place; a rare drop a taller toast framed in its grade's colour while the window holds it.
+/// top, over the pickups (since 2026-11-19 it no longer takes a pickup's place: the best drop and the last three show on
+/// every look); a rare drop a taller toast framed in its grade's colour while the window holds it.
 /// Until something is counted the pill says so instead of "0:00 | 0". It sits left of the target bar by default
 /// (HudLooks.TickerLeftOfCentre).
 /// </summary>
@@ -137,7 +138,7 @@ public sealed partial class HudTicker : IHudLook
         bool crafting = CraftPill(values);   // while the crafting window is open: the crafts instead of the pickups
 
         // what the stack shows, top down: one notice, the accuracy line, the rare drop, then the newest pickups (crafts while
-        // crafting), and the session's top drop pinned last; four at most, so a notice takes the oldest pickup's place
+        // crafting), and the session's top drop pinned last; the three pickups and the top drop always, the notices over them
         var want = new List<(string Key, string Kind, Func<Border> Make)>();
         string note, clockV = ""; Brush tone; bool sign = false;
         if (paused.Length > 0) { note = paused; tone = Warn; sign = true; }
@@ -151,7 +152,9 @@ public sealed partial class HudTicker : IHudLook
         if (HudRare.Of(values) is { } drop) { want.Add((drop.Pick.Id, "rare", () => HudRare.TickerToast(drop, _alpha))); RareMore(drop); }   // 66 px since 2026-10-26
         var top = crafting ? null : Top(values);
         if (top != null && rare != null && string.Equals(top.Name, rare.Name, StringComparison.OrdinalIgnoreCase)) top = null;   // the drop itself is on show above
-        int room = 4 - want.Count - (top != null ? 1 : 0);
+        // the last three pickups always (Steven, 2026-11-19: the best drop and the last three on ALL buddies): a notice, the
+        // accuracy line or a rare drop goes over them and never takes a pickup's place
+        int above = want.Count, room = 3;
         bool skipped = false, skippedTop = false;
         var now = DateTime.UtcNow;
         foreach (var p in crafting ? CraftKit.Crafts(values) : Picks(values))
@@ -175,7 +178,7 @@ public sealed partial class HudTicker : IHudLook
         _topName = top?.Name ?? "";
         // two feed lines read in the same instant with the same name and amount share a key (2026-10-26 10:05, "Specified
         // Visual is already a child of another Visual"): one toast per key, the first one
-        want = want.GroupBy(w => w.Key).Select(g => g.First()).Take(4).ToList();
+        want = want.GroupBy(w => w.Key).Select(g => g.First()).Take(above + 4).ToList();
         if (!Changed("stack", string.Join("\n", want.Select(w => w.Key)))) return;
 
         // toasts no longer wanted leave (a pickup pushed out fades under the stack); new ones are made once; the rest keep
@@ -208,6 +211,7 @@ public sealed partial class HudTicker : IHudLook
                 }
             }
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);
+            t.Place.Tag = kind == "pick" && !crafting ? "pick-tile" : kind == "top" ? "pick-best" : null;   // the pickup strip's parts, as every look tags them (options-test)
             t.Place.Opacity = kind == "pick" ? PlaceOpacity[i] : 1;
             if (kind == "pick") t.Body.Background = Wash("pick", i == 0);
             if (t.Place.Parent is Panel owner) owner.Children.Remove(t.Place);

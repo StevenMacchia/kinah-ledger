@@ -285,8 +285,8 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         foreach (UIElement ch in _line.Children) if (!ReferenceEquals(ch, _tube)) ch.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
         _ringHost.Visibility = KinahHidden ? Visibility.Collapsed : Visibility.Visible;
         _fight.Root.Margin = new Thickness(0, lineShown ? 14 : 0, 0, 0);
-        // the pickups are farming's: a fight's cabinet puts them away
-        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _fight.Root.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        // the pickups stay with the Kinah line, a fight's cabinet up or not (Steven, 2026-11-19: on ALL buddies)
+        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static void Detach(FrameworkElement el)

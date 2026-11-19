@@ -67,19 +67,16 @@ sealed partial class HudVhs
     /// <summary>The run's figures and the line under them.</summary>
     void DrawRun(RunBuddy.State s)
     {
-        _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear();
+        _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear(); _figRow.RowDefinitions.Clear();
         _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _figRow.ColumnDefinitions.Add(new ColumnDefinition()); _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         double cap = FightWidth - _deck.Body.Margin.Left - _deck.Body.Margin.Right - 1;   // a pixel kept for the frame's rim and rounding
         var (forms, whole) = FigForms(s);
-        // the best drop and the last three in the room the figures leave, the last three alone before any figure goes
+        // the best drop and the last three in the room the figures leave, else on their own line under them (always whole)
         var (left, right, strip) = FigForm(Values, Strip, cap, forms, whole);
         _figRow.Children.Add(left);
         if (right != null) { Grid.SetColumn(right, 2); _figRow.Children.Add(right); }
-        if (strip != null)
-        {
-            strip.HorizontalAlignment = HorizontalAlignment.Right; strip.Margin = new Thickness(14, 0, 0, 0);
-            Grid.SetColumn(strip, 1); _figRow.Children.Add(strip);
-        }
+        if (strip != null) StripBeside(_figRow, strip);
+        else if (PickStrip.Of(Values, Strip) is { } under) StripUnder(_figRow, under);
         _stats.Inlines.Clear(); _stats.Visibility = Visibility.Collapsed;
         _rare.Visibility = Visibility.Collapsed;
         RunSub(s);

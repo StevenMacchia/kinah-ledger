@@ -223,18 +223,20 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
     string _stripSig = "";
 
     /// <summary>
-    /// Farming: the hour counting on the Kinah line, outside the Abyss and a dungeon. Only then the pickup strip; the idle
-    /// line, the Abyss and a fight keep what they showed before it.
+    /// The Kinah line shows an hour: counting, outside the Abyss and a dungeon's meter (a fight beside the line or not). Only
+    /// then the pickup strip; the idle line and the Abyss keep what they showed before it.
     /// </summary>
     protected bool Farming => _figsNow is { } f && f.Counted && f.Rate.Length > 0 && !f.Abyss && !KinahHidden;
 
     /// <summary>
-    /// The pickup strip in <paramref name="host"/>, in the room the look has free (<paramref name="room"/>, read with the host
-    /// empty): the best drop and the last three, else the three alone, else nothing (never a figure cut, never the panel
-    /// wider than <see cref="FightWidth"/>). Off (Settings › Buddy › More › Pickup icons) or not <paramref name="on"/>, the
-    /// host is collapsed and takes no room. <paramref name="rule"/>: the look's hairline before the strip.
+    /// The pickup strip, the best drop and the last three always whole (Steven, 2026-11-19: "it need to show up on ALL
+    /// buddies"): in <paramref name="host"/> when it fits the room the look has free there (<paramref name="room"/>, read with
+    /// the hosts empty), else in <paramref name="under"/>, the look's own line for it under the figures; with no
+    /// <paramref name="under"/>, in <paramref name="host"/> all the same (the look grows by the tiles). Off (Settings › Buddy ›
+    /// More › Pickup icons) or not <paramref name="on"/>, both are collapsed and take no room. <paramref name="rule"/>: the
+    /// look's hairline before the strip beside the figures.
     /// </summary>
-    protected void PlaceStrip(Panel host, PickStrip.Look look, bool on, string roomSig, Func<double> room, bool rule = false)
+    protected void PlaceStrip(Panel host, PickStrip.Look look, bool on, string roomSig, Func<double> room, bool rule = false, Panel? under = null)
     {
         on = on && PickStrip.Shown;
         var sig = on ? $"{PickStrip.Sig(_values, look)}|{roomSig}|{FightWidth}" : "";
@@ -242,26 +244,19 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
         _stripSig = sig;
         host.Children.Clear();
         host.Visibility = Visibility.Collapsed;
-        if (!on) return;
+        if (under != null) { under.Children.Clear(); under.Visibility = Visibility.Collapsed; }
+        if (!on || PickStrip.Of(_values, look) is not { } strip) return;
         var hair = rule ? Rule() : null;
         double free = room() - host.Margin.Left - host.Margin.Right - (hair == null ? 0 : hair.Width + hair.Margin.Left + hair.Margin.Right);
-        var strip = StripIn(_values, look, free);
-        if (strip == null) return;
+        if (under != null && Wants(strip) > free + .5)
+        {
+            under.Children.Add(strip);
+            under.Visibility = Visibility.Visible;
+            return;
+        }
         if (hair != null) host.Children.Add(hair);
         host.Children.Add(strip);
         host.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>The strip that fits <paramref name="room"/>: the best drop and the three, else the three alone, else null.</summary>
-    static FrameworkElement? StripIn(IReadOnlyDictionary<string, string> v, PickStrip.Look look, double room)
-    {
-        foreach (var l in look.Best ? new[] { look, look with { Best = false } } : new[] { look })
-        {
-            if (PickStrip.Of(v, l) is not { } s) return null;
-            s.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            if (s.DesiredSize.Width <= room) return s;
-        }
-        return null;
     }
 
     /// <summary>
@@ -379,14 +374,15 @@ sealed partial class HudCapsule : HudStackLook
     bool _fightAbove;
 
     /// <summary>
-    /// The best drop and the last three at the pill's end while farming (Steven, 2026-11-18), in the room the pill has up to
-    /// the meter's width: the three alone when the timer's chip takes some of it, none when it takes the rest.
+    /// The best drop and the last three at the pill's end (Steven, 2026-11-18), whole, with the hour, a fight under the pill
+    /// or above it or not (2026-11-19: "it need to show up on ALL buddies"): everything stays on the one pill, so where the
+    /// timer's chip takes the room the pill grows by the tiles.
     /// </summary>
     void PlaceStrip()
     {
         if (RunStep()) return;   // a run places its own strip beside its words
         var f = _figsNow;
-        PlaceStrip(_strip, StripLook, Farming && _lastFight == null && !_fightAbove,
+        PlaceStrip(_strip, StripLook, Farming,
             $"{_chip.Visibility}|{_chipText.Text.Length}|{f?.Rate.Length}|{f?.Total.Length}|{f?.Share >= 0}|{f?.Warm}",
             () => FightWidth - Wants(_pill), rule: true);
     }
@@ -535,6 +531,11 @@ sealed partial class HudMeter : HudStackLook
     /// <summary>The pickup strip in the header while farming, between the place and the timer's tab and clock (Ui/HudPickStrip.cs).</summary>
     readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, -2, 10, 0), Visibility = Visibility.Collapsed };   // a little up: the count badges clear the header's rule
     static readonly PickStrip.Look StripLook = new(22, 5, true, B(0xFFFFFF, .16));
+    /// <summary>
+    /// The strip's own line under the Kinah foot, where the header has no room for it (a long place, the timer's tab) or a
+    /// fight has the header: the best drop and the last three are never dropped (Steven, 2026-11-19).
+    /// </summary>
+    readonly StackPanel _footStrip = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(10, -2, 10, 9), Visibility = Visibility.Collapsed };
     readonly StackPanel _right;
     readonly StackPanel _rows = new() { Visibility = Visibility.Collapsed };
     readonly Grid _foot = new();
@@ -574,6 +575,7 @@ sealed partial class HudMeter : HudStackLook
         body.Children.Add(_hpBelow);
         body.Children.Add(_rows);
         body.Children.Add(_foot);
+        body.Children.Add(_footStrip);
         body.Children.Add(_note);
         _frame = new Border { Child = body, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), BorderBrush = GlassEdge, Background = HudGlass.Fill(0.94), ClipToBounds = true };
         _ring = HudGlass.Ring(_frame, new CornerRadius(8));
@@ -594,14 +596,15 @@ sealed partial class HudMeter : HudStackLook
 
     /// <summary>
     /// The best drop and the last three in the header while farming (Steven, 2026-11-18: the header's empty middle), right of
-    /// the place and left of the timer's tab and clock; the three alone, or none, when a long place name or the tab takes the room.
+    /// the place and left of the timer's tab and clock; on their own line under the foot when a long place name or the tab
+    /// takes the header's room, or a fight has the header (2026-11-19: always whole, on ALL buddies).
     /// </summary>
     void PlaceStrip()
     {
         if (RunStep()) return;   // a run places its own strip in the header
-        PlaceStrip(_strip, StripLook, _withFoot && !_fight && Farming,
-            $"{_title.Text}|{_clock.Text.Length}|{_tab.Visibility}|{_tabText.Text.Length}",
-            () => W - 20 - Wants(_title) - Wants(_right));
+        PlaceStrip(_strip, StripLook, _withFoot && Farming,
+            $"{_title.Text}|{_clock.Text.Length}|{_tab.Visibility}|{_tabText.Text.Length}|{_fight}",
+            () => _fight ? -1 : W - 20 - Wants(_title) - Wants(_right), under: _footStrip);
     }
 
     void DrawFigures(IReadOnlyDictionary<string, string> values)
@@ -771,11 +774,13 @@ sealed partial class HudFloat : HudStackLook
     /// <summary>The pickup strip after the figures, straight over the game like them (Ui/HudPickStrip.cs).</summary>
     readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0), Visibility = Visibility.Collapsed };
     static readonly PickStrip.Look StripLook = new(24, 5, true, B(0xFFFFFF, .30));
+    /// <summary>The strip's own line under the figures, where the meter's width leaves no room beside them (never dropped, 2026-11-19).</summary>
+    readonly StackPanel _stripUnder = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
     string _figSig = "", _fightSig = "";
 
     public HudFloat()
     {
-        _body.Children.Add(_timers); _body.Children.Add(_fight); _body.Children.Add(_line); _body.Children.Add(_note);
+        _body.Children.Add(_timers); _body.Children.Add(_fight); _body.Children.Add(_line); _body.Children.Add(_stripUnder); _body.Children.Add(_note);
         _host = new Border { Child = _body, Padding = new Thickness(10), Effect = _halo, Background = Brushes.Transparent };
     }
 
@@ -794,16 +799,16 @@ sealed partial class HudFloat : HudStackLook
     }
 
     /// <summary>
-    /// The best drop and the last three after the figures while farming (Steven, 2026-11-18), in the room up to the meter's
-    /// width; the three alone, or none, when the figures take it.
+    /// The best drop and the last three after the figures (Steven, 2026-11-18), in the room up to the meter's width; on
+    /// their own line under the figures when the figures take it (2026-11-19: always whole, a fight up or not).
     /// </summary>
     void PlaceStrip()
     {
         if (RunStep()) return;   // a run places its own strip after its words
         var f = _figsNow;
-        PlaceStrip(_strip, StripLook, Farming && _lastFight == null,
+        PlaceStrip(_strip, StripLook, Farming,
             $"{f?.Rate.Length}|{f?.Total.Length}|{f?.ToBest.Length}|{f?.Share >= 0}|{f?.Warm}",
-            () => FightWidth - 10 - Wants(_line));   // the fight's rows' own width (FightWidth - 10, in the halo's padding)
+            () => FightWidth - 10 - Wants(_line), under: _stripUnder);   // the fight's rows' own width (FightWidth - 10, in the halo's padding)
     }
 
     void DrawLine(Figures f)

@@ -35,6 +35,22 @@ public sealed partial class HudCard : IHudLook
     /// <summary>The rare drop, upgraded (2026-10-26): its head and body stand in for the zone, the newest pickup and the figures while it is held.</summary>
     readonly HudRare.CardParts _drop = new();
     readonly StackPanel _tiles = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
+    /// <summary>The newest pickup's tile's place in <see cref="_tiles"/>: 2 behind the best drop and its rule, else 0.</summary>
+    int _tile0;
+    /// <summary>A tile's side on the card: 28 for the three alone, 26 with the best drop before them (the figures keep their room).</summary>
+    const double TileSize = 28, BestSize = 26;
+
+    /// <summary>The session's best drop as the card's first tile: its gold star on the top-left corner (as the strip's, Ui/HudPickStrip.cs), its name and worth on hover.</summary>
+    static FrameworkElement BestTile(Pick top, double size)
+    {
+        var g = new Grid { Tag = "pick-best", ToolTip = L.T("Best drop") + ": " + top.Name + (top.Count.Length > 0 ? " " + top.Count : "") + (top.Worth.Length > 0 ? " · " + top.Worth : "") };
+        g.Children.Add(Tile(top, size));
+        var star = new TextBlock { Text = "★", FontSize = Math.Max(9, size * .38), FontWeight = FontWeights.Bold, Foreground = Gold, IsHitTestVisible = false,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 3, ShadowDepth = 0, Opacity = .9 } };
+        Canvas.SetLeft(star, -3); Canvas.SetTop(star, -5);
+        g.Children.Add(new Canvas { Width = size, Height = size, IsHitTestVisible = false, Children = { star } });
+        return g;
+    }
     readonly Dictionary<string, string> _drawn = new();
     double _alpha = 1;
     string _newestId = "";
@@ -235,21 +251,35 @@ public sealed partial class HudCard : IHudLook
         // (the head's newest pickup, in words, stays)
         tiles = tiles.Take(3).ToList();
         var shown = PickStrip.Shown ? tiles : new List<Pick>();
-        if (Changed("tiles", (PickStrip.Shown ? "" : "off|") + string.Join("|", shown.Select(t => $"{t.Id}:{t.Count}:{t.Icon}:{t.Grade}"))))
+        // the session's best drop first with its gold star, as every look shows it (Steven, 2026-11-19: "the list of 3 items
+        // with the best one ... need to show up on ALL buddies"); once only when it is one of the tiles
+        var best = PickStrip.Shown && shown.Count > 0 && V("craft") != "1" ? Top(values) : null;
+        if (best != null && shown.Any(t => string.Equals(t.Name, best.Name, StringComparison.OrdinalIgnoreCase))) best = null;
+        if (Changed("tiles", (PickStrip.Shown ? "" : "off|") + string.Join("|", shown.Select(t => $"{t.Id}:{t.Count}:{t.Icon}:{t.Grade}")) + "|" + best?.Id + best?.Icon))
         {
             _tiles.Visibility = PickStrip.Shown ? Visibility.Visible : Visibility.Collapsed;
             _tiles.Children.Clear();
+            _tile0 = 0;
+            if (best != null)
+            {
+                _tiles.Children.Add(BestTile(best, BestSize));
+                _tiles.Children.Add(new Border { Width = 1, Height = BestSize * .62, Margin = new Thickness(5, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center, Background = B(0xFFFFFF, .16) });
+                _tile0 = 2;
+            }
+            // with the best drop the four tiles a little smaller, so the figures keep the room they had beside three
+            double size = best != null ? BestSize : TileSize;
             for (int i = 0; i < shown.Count; i++)
             {
-                var t = Tile(shown[i], 28);
-                t.Margin = new Thickness(i == 0 ? 0 : 6, 0, 0, 0);
+                var t = Tile(shown[i], size);
+                t.Margin = new Thickness(i == 0 ? 0 : best != null ? 5 : 6, 0, 0, 0);
                 t.Opacity = i switch { 0 => 1, 1 => .9, _ => .75 };
+                t.Tag = "pick-tile";
                 if (i == 0 && t is Grid g) g.Children.Add(Light(shown[0]));
                 _tiles.Children.Add(t);
             }
             // a new pickup at the front: its tile grows in, the head pops (Ui/HudCard.Motion.cs); not the first draw
             var front = shown.FirstOrDefault();
-            if (front != null && front.Id != _landedId && _landedId.Length > 0 && Moves && _tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement ft) Arrived(ft, front);
+            if (front != null && front.Id != _landedId && _landedId.Length > 0 && Moves && _tiles.Children.Count > _tile0 && _tiles.Children[_tile0] is FrameworkElement ft) Arrived(ft, front);
             _landedId = front?.Id ?? "";
         }
         var first = tiles.FirstOrDefault();

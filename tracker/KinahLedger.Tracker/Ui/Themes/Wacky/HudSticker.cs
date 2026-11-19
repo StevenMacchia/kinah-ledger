@@ -248,8 +248,8 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         _tag.VerticalAlignment = inCard ? VerticalAlignment.Top : VerticalAlignment.Center;
         _tag.Margin = inCard ? new Thickness(0, -15, 92, 0) : inHead ? new Thickness(10, 0, 0, 0) : inSmalls ? new Thickness(4, 5, 0, 0) : new Thickness(KinahHidden ? 2 : 12, KinahHidden ? 2 : 0, 0, KinahHidden ? 6 : 0);
         _line.Visibility = KinahHidden && (_tag.Parent != _line || _tag.Visibility != Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
-        // the pickups are farming's: a fight's card puts them away
-        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden && _card.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        // the pickups stay with the Kinah line, a fight's card up or not (Steven, 2026-11-19: on ALL buddies)
+        _pickHost.Visibility = _pickHost.Child != null && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
         _card.Margin = new Thickness(0, _line.Visibility == Visibility.Visible ? 14 : 0, 0, 0);
     }
 

@@ -115,6 +115,8 @@ sealed partial class HudModernLine : ModernLook
     readonly Grid _timerSlot = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 2, 0) };
     /// <summary>The pickup strip beside the hour (farming), and the timer chip's place over the pill when the strip takes its room.</summary>
     readonly Border _stripSlot = new() { VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+    /// <summary>The strip under the session inside the pill, where the pill has no room beside the hour (never dropped, 2026-11-19).</summary>
+    readonly Border _stripUnder = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
     readonly Grid _timerUpHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 5), Visibility = Visibility.Collapsed };
     bool _timerUp;
     /// <summary>The timer's room the strip was fitted to (-1: no strip time); a chip that changes it draws the line again.</summary>
@@ -137,7 +139,7 @@ sealed partial class HudModernLine : ModernLook
         _rate.TextTrimming = TextTrimming.None;
         _pick.RenderTransform = _pickShift;
         _subLine.Children.Add(_sub); _subLine.Children.Add(_pick);
-        _kv.Children.Add(_rate); _kv.Children.Add(_subLine);
+        _kv.Children.Add(_rate); _kv.Children.Add(_subLine); _kv.Children.Add(_stripUnder);
         _pillIn.Children.Add(_ringHost); _pillIn.Children.Add(_kv); _pillIn.Children.Add(_stripSlot); _pillIn.Children.Add(_timerSlot);
         _pill.Child = _pillIn;
         _pill.SizeChanged += (_, _) => _pill.CornerRadius = new CornerRadius(_pill.ActualHeight / 2);
@@ -243,7 +245,7 @@ sealed partial class HudModernLine : ModernLook
 
         // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the latest
         // pickup's words then left out; with the timer chip at the pill's end and no room left beside it, the chip goes over the pill
-        _stripSlot.Child = null; _timerUp = false; _stripTimerW = -1;
+        _stripSlot.Child = null; _stripUnder.Child = null; _timerUp = false; _stripTimerW = -1;
         if (StripTime(f))
         {
             bool pickInWords = !(f.Beat && f.ToBest.Length > 0);
@@ -263,9 +265,16 @@ sealed partial class HudModernLine : ModernLook
                 strip.Margin = new Thickness(10, 0, timerW > 0 && !_timerUp ? 0 : 6, 0);
                 _stripSlot.Child = strip;
             }
+            // no room beside the hour: under the session inside the pill, never dropped (Steven, 2026-11-19)
+            else if (StripUnder(Strip, false) is { } under)
+            {
+                if (pickInWords) _pick.Inlines.Clear();
+                _stripUnder.Child = under;
+            }
             _stripTimerW = timerW;
         }
         _stripSlot.Visibility = _stripSlot.Child != null ? Visibility.Visible : Visibility.Collapsed;
+        _stripUnder.Visibility = _stripUnder.Child != null ? Visibility.Visible : Visibility.Collapsed;
         _sub.Visibility = _sub.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _pick.Visibility = _pick.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _subLine.Visibility = _sub.Visibility == Visibility.Visible || _pick.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;

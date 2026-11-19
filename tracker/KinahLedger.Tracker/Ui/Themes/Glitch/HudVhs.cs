@@ -303,7 +303,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         if (rs != null) { DrawRun(rs); Note(f); return; }
 
         // the hour, big and crisp, and your best
-        _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear();
+        _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear(); _figRow.RowDefinitions.Clear();
         _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _figRow.ColumnDefinitions.Add(new ColumnDefinition()); _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         if (f.Abyss && f.Counted && f.Icon.Length > 0) { var m = AbyssMark(f.Icon, 30); m.Margin = new Thickness(0, 0, 9, 0); left.Children.Add(m); }
@@ -325,16 +325,13 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             best.Margin = new Thickness(16, 0, 0, 0);
             Grid.SetColumn(best, 2); _figRow.Children.Add(best);
         }
-        // the best drop and the last three in the room beside the hour while farming, against the battery (or the panel's
-        // edge, under the counter): the Abyss, the idle line and a rare drop's freeze-frame keep the row as it was
-        if (!f.Abyss && f.Counted && f.Rate.Length > 0 && Rare(Values) == null)
+        // the best drop and the last three in the room beside the hour, against the battery (or the panel's edge, under the
+        // counter), else on their own line under it (always whole, a fight or a rare drop's freeze-frame up or not); the Abyss
+        // and the idle line keep the row as it was
+        if (!f.Abyss && f.Counted && f.Rate.Length > 0)
         {
             double room = FightWidth - _deck.Body.Margin.Left - _deck.Body.Margin.Right - Wide(left) - (best != null ? Wide(best) : 0) - 14;
-            if (FitStrip(Values, Strip, room) is { } strip)
-            {
-                strip.HorizontalAlignment = HorizontalAlignment.Right; strip.Margin = new Thickness(14, 0, 0, 0);
-                Grid.SetColumn(strip, 1); _figRow.Children.Add(strip);
-            }
+            StripInRow(_figRow, Values, Strip, room);
         }
 
         // the session (in the Abyss, the points)

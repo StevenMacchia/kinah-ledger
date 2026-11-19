@@ -73,17 +73,16 @@ abstract class TacticalLook : HudThemeLook
     }
 
     /// <summary>
-    /// The pickup strip (Ui/HudPickStrip.cs: the best drop and the last three as tiles) for the line while farming, in
-    /// <paramref name="room"/> DIPs at most: the best drop and the three, the three alone when only they fit, else nothing.
-    /// None in the Abyss, before an hour is counted, while a rare drop is held (the look's own rare drop shows then), while a
-    /// fight is up (the fight keeps what it shows), and with Settings › Buddy › More › Pickup icons off.
+    /// The pickup strip (Ui/HudPickStrip.cs: the best drop and the last three as tiles) for the Kinah line, always whole
+    /// (Steven, 2026-11-19: "it need to show up on ALL buddies"): the look makes room for it (its own row when it doesn't fit
+    /// beside the figures). Wherever the line shows an hour: beside a fight and a rare drop too. None in the Abyss (no
+    /// pickups there), before an hour is counted, with the line put away for a dungeon's meter, and with Settings › Buddy ›
+    /// More › Pickup icons off.
     /// </summary>
-    protected FrameworkElement? FarmStrip(Figures f, PickStrip.Look look, double room)
+    protected FrameworkElement? FarmStrip(Figures f, PickStrip.Look look)
     {
-        if (KinahHidden || _lastFight != null || f.Abyss || !HasHour(f) || Rare(Values) != null) return null;
-        if (PickStrip.Width(look) <= room) return PickStrip.Of(Values, look);
-        var narrow = look with { Best = false };
-        return PickStrip.Width(narrow, 3, false) <= room ? PickStrip.Of(Values, narrow) : null;
+        if (KinahHidden || f.Abyss || !HasHour(f)) return null;
+        return PickStrip.Of(Values, look);
     }
 
     /// <summary>The strip's part of the line's signature: the line is drawn again when a pickup lands.</summary>
@@ -127,11 +126,11 @@ abstract class TacticalLook : HudThemeLook
     }
 
     /// <summary>
-    /// The pickup strips a run's line can keep, fullest first: the best drop and the last three, then the last three (none
-    /// with the pickup icons off or before the first pickup). The last three stay before any figure goes.
+    /// The pickup strip a run's line keeps: the best drop and the last three, whole (none with the pickup icons off or before
+    /// the first pickup). The run's words give way round it; it never gives way to them (Steven, 2026-11-19).
     /// </summary>
     protected List<FrameworkElement> RunStrips(PickStrip.Look look) =>
-        new[] { look, look with { Best = false } }.Select(l => PickStrip.Of(Values, l)).Where(x => x != null).Select(x => x!).ToList();
+        PickStrip.Of(Values, look) is { } s ? new List<FrameworkElement> { s } : new List<FrameworkElement>();
 
     /// <summary>"Cleared in {0}" round the clock, in the language's order: the words before it and after it.</summary>
     protected static (string Before, string After) ClearedWords()
