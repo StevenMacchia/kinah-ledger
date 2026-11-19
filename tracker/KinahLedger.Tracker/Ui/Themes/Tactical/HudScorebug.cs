@@ -485,6 +485,7 @@ sealed partial class HudScorebug : TacticalLook
         var tl = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         tl.Children.Add(C(Up(L.T("Total")), 10.5, GreyOf, FontWeights.Bold, Semi));
         var tv = C(total, 17, Colors.White, FontWeights.Bold); tv.Margin = new Thickness(8, 0, 0, 0); tl.Children.Add(tv);
+        EnergyMark.After(tl, 12.5, Frozen(GreyOf));   // Odyle Energy (Ui/EnergyMark.cs)
         fg.Children.Add(tl);
         var rt = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         if (word.Length > 0) { rt.Children.Add(C(Up(word), 10.5, GreyOf, FontWeights.Bold, Semi)); var gv = C(group, 17, Amber, FontWeights.Bold); gv.Margin = new Thickness(8, 0, 0, 0); gv.Effect = Glow(8, 0, .6, Amber); rt.Children.Add(gv); }

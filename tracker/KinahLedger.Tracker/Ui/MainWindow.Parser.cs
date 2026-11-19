@@ -60,7 +60,7 @@ public partial class MainWindow
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
-            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; ApplyMeterExpanded();
+            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; _parserPrefs.OdyleEnergy = fresh.OdyleEnergy; ApplyMeterExpanded();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }

@@ -171,6 +171,8 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "popouts") { PopOutChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (pop-outs): all passed" : $"options test (pop-outs): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=typing: the Terminal's typed-out pickup line alone (Ui/WpfApp.Typing.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "typing") { var tw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; tw.Show(); DoEvents(); TypingChecks(tw, Check); tw.Close(); Console.WriteLine(fails == 0 ? "options test (terminal typing): all passed" : $"options test (terminal typing): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=odyle: the meter's Odyle Energy alone (Ui/WpfApp.Odyle.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "odyle") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); OdyleChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (odyle energy): all passed" : $"options test (odyle energy): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=applicants: the Applicants window alone (Ui/WpfApp.Applicants.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "applicants") { var aw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; aw.Show(); DoEvents(); ApplicantsChecks(aw, Check); aw.Close(); Console.WriteLine(fails == 0 ? "options test (applicants): all passed" : $"options test (applicants): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=settings: the settings revamp's checks (left bar, every page fits, every row found and jumped to) and the
@@ -410,6 +412,7 @@ public static partial class WpfApp
         TypingChecks(w, Check);   // the Terminal types a new pickup out (Ui/WpfApp.Typing.cs; KL_OPTIONS_ONLY=typing alone)
         ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
         using (new MainStatics()) NpcapChecks(settings, Check);   // (its own main windows: the shared layer and lookups put back after, Ui/WpfApp.PopOuts.cs) what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
+        OdyleChecks(Check);   // the meter's Odyle Energy (Ui/WpfApp.Odyle.cs; KL_OPTIONS_ONLY=odyle alone)
         PopOutChecks(settings, Check);   // the pop-out windows, on a main window of their own (Ui/WpfApp.PopOuts.cs; KL_OPTIONS_ONLY=popouts alone)
         using (new MainStatics()) SimplifyChecks(settings, Check);   // (its own main window: the shared layer and lookups put back after) no setting outside Settings, the meter's defaults, Ctrl+C on the Parser page (Ui/WpfApp.SettingsSimplify.cs; KL_OPTIONS_ONLY=settings)
         MeterShareOptionChecks(o, Check);   // the meter's share picture's two rows (Ui/WpfApp.MeterShare.cs)

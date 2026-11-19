@@ -210,6 +210,7 @@ static class TerminalRows
         var left = Txt("", 13, Pale, Face);
         left.Inlines.Add(Rn(L.T("Total ").Trim().ToLower(CultureInfo.CurrentCulture) + " ", PhosDim, 11.5, FontWeights.SemiBold));
         left.Inlines.Add(Rn(ff.Total, Pale));
+        EnergyMark.After(left, 12, PhosDim, Face);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var r = Txt("", 13, Pale, Face);
         if (ff.Label.Length > 0)

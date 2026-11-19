@@ -121,6 +121,8 @@ public sealed class ParserPrefs
     public bool Expanded { get; set; } = true;
     /// <summary>The green heal bar along a healer's row on the overlay's meter (on by default; Settings › Parser › Heal bars).</summary>
     public bool HealBars { get; set; } = true;
+    /// <summary>The character's Odyle Energy, small, in the meter's foot (on by default; Settings › DPS meter › More › Odyle Energy; Ui/EnergyMark.cs).</summary>
+    public bool OdyleEnergy { get; set; } = true;
     /// <summary>
     /// Which hit kind the Parser shows as crit ("none", "result3" or "mark08", the two candidates the hits carry), and as a
     /// back attack ("none" or "side1"). Settings' "Crit and back-attack rates" switch picks <see cref="CritPick"/> and <see cref="BackPick"/>. Null, as every player has it, means the release's default

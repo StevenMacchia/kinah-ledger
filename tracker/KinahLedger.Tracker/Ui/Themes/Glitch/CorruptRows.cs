@@ -181,6 +181,7 @@ static class CorruptRows
         var left = Txt("", 13.5, White, Face);
         left.Inlines.Add(Rn(Words(L.T("Total ").Trim()) + " ", LilacDim, 11));
         left.Inlines.Add(Rn(ff.Total, White));
+        EnergyMark.After(left, 12, LilacDim, Face);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         var r = Txt("", 13.5, White, Face);

@@ -18,6 +18,7 @@ sealed partial class HudModernGlass
         var left = Tt("", 12, Soft, FontWeights.Medium);
         left.Inlines.Add(new System.Windows.Documents.Run(L.T("Total") + " "));
         left.Inlines.Add(new System.Windows.Documents.Run(total) { FontWeight = FontWeights.Bold, Foreground = White });
+        EnergyMark.After(left, 11.5, Soft);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (word.Length > 0)

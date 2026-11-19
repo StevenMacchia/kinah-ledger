@@ -21,6 +21,7 @@ sealed partial class HudFighter
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Tt(L.T("TOTAL"), 10.5, PhosDim, Face, FontWeights.Bold));
         var tv = Tt(total, 14, Pale, Face, FontWeights.Bold); tv.Margin = new Thickness(6, 0, 0, 0); left.Children.Add(tv);
+        EnergyMark.After(left, 11.5, PhosDim, Face);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var lead = new TacSketch((dc, s) =>
         {
@@ -40,6 +41,7 @@ sealed partial class HudFighter
             right.Children.Add(badge);
         }
         Grid.SetColumn(right, 2); g.Children.Add(right);
+        EnergyMark.DropIfWide(left, g, FightWidth - 40 - 12);   // a run's long "GROUP DPS (BOSS PULLS)" keeps its figure whole
         return AsFoot(g, e, now);
     }
 

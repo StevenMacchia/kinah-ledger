@@ -28,6 +28,7 @@ The tables in `Lang/ko/*.json` and `Lang/zh-TW/*.json` map the English text exac
 | the Parser (page and overlay) | 전투 분석기 | 戰鬥分析器 |
 | meter | 미터 | 統計 |
 | overlay | 오버레이 | 浮動視窗 |
+| Odyle Energy (a run's final reward costs it) | 오드 에너지 | 奧德能量 |
 | click-through | 클릭 통과 | 點擊穿透 |
 | compact / expanded | 간단히 / 자세히 | 精簡 / 詳細 |
 | Settings, Options | 설정 | 設定 |

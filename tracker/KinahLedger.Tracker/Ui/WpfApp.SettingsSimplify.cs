@@ -82,7 +82,7 @@ public static partial class WpfApp
             {
                 o.Show(); DoEvents();
                 var rows = o.SearchForTestAll();
-                var titles = new[] { "Expanded meter", "Heal bars", "Group details", "DPS over active time", "Damage to adds", "Deaths", "Kills near you", "List filters", "Crit and back-attack rates", "Explanations on hover", "Parser inside the Kinah overlay", "Hide other names", "Share picture shortcut", "Meter position", "Width" };
+                var titles = new[] { "Expanded meter", "Heal bars", "Odyle Energy", "Group details", "DPS over active time", "Damage to adds", "Deaths", "Kills near you", "List filters", "Crit and back-attack rates", "Explanations on hover", "Parser inside the Kinah overlay", "Hide other names", "Share picture shortcut", "Meter position", "Width" };
                 var off = titles.Select(t => (t, rows.Where(r => r.Title == L.T(t)).ToList())).Where(x => x.Item2.Count != 1 || x.Item2[0].Page != OptionsWindow.Page.Meter).Select(x => $"{x.t} ×{x.Item2.Count}").ToList();
                 check(off.Count == 0, "Settings: each of the meter's settings is one row, on the DPS meter page" + (off.Count > 0 ? ": " + string.Join(", ", off) : ""));
                 // Damage to adds: waits for Save, then counts adds on the meter, and back

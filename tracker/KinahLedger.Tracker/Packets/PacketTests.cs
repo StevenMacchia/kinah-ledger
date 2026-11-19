@@ -63,6 +63,53 @@ public static class PacketTests
             if (NativeDecoder.Version >= 11) Check(NativeDecoder.ApplicantRecordSize == 128, $"applicants: the decoder's record is {NativeDecoder.ApplicantRecordSize} bytes (128)");
         }
 
+        // Odyle Energy (the decoder's version 15, Session/OdyleEnergy.cs): kept per character, kept across a restart, moved
+        // with a character switch the screen sees late, never shown before it was read, topped up by the refills since
+        {
+            var file = TestTemp.Path("KinahLedger-odyle-test.json");
+            try { File.Delete(file); } catch (IOException) { }
+            var book = new OdyleEnergy(file);
+            string who = "c1";
+            var reader = new PacketReader { Energy = book, CharacterNow = () => who };
+            OdyleReading R(double minutes, int natural, int extra, OdyleReading.Why why, int by = 0) => new(t.AddMinutes(minutes), natural, extra, why, by);
+            bool unknown = book.Now("c1", t) == null && book.Now("", t) == null;
+            reader.EnergyForTest(R(0, 280, 105, OdyleReading.Why.List));
+            reader.EnergyForTest(R(15, 200, 105, OdyleReading.Why.Spent));
+            reader.EnergyForTest(R(20, 200, 265, OdyleReading.Why.Charged, 160));
+            bool kept = book.Now("c1", t.AddMinutes(20)) == 465 && book.Now("c2", t.AddMinutes(20)) == null;
+            // c2 logs in: its list comes, then the screen sees the class icon 40 s later
+            reader.EnergyForTest(R(30, 40, 1_975, OdyleReading.Why.List));
+            bool before = book.Now("c1", t.AddMinutes(30)) == 2_015;
+            book.Switched("c1", "c2", t.AddMinutes(30).AddSeconds(40)); who = "c2";
+            bool moved = book.Now("c2", t.AddMinutes(31)) == 2_015 && book.Now("c1", t.AddMinutes(31)) == 465;
+            reader.EnergyForTest(R(40, 0, 1_935, OdyleReading.Why.Spent));
+            // back to c1 an hour later with no list since: nothing moves (the reading isn't a fresh list)
+            book.Switched("c2", "c1", t.AddMinutes(100)); who = "c1";
+            bool stays = book.Now("c2", t.AddMinutes(100)) == 1_935 && book.Now("c1", t.AddMinutes(100)) == 465;
+            // a restart: the same file, each character's last reading
+            var again = new OdyleEnergy(file);
+            bool restored = again.Now("c1", t.AddMinutes(100)) == 465 && again.Now("c2", t.AddMinutes(100)) == 1_935 && again.Of("c1") is { Natural: 200, Extra: 265 };
+            Check(unknown && kept && before && moved && stays && restored,
+                $"Odyle Energy: none before it is read (unknown {unknown}); kept for the character counted for (kept {kept}); a login's list read before the screen saw the switch moves to the new character and the old one gets its own back (before {before}, moved {moved}); an old reading stays put (stays {stays}); a restart keeps both (restored {restored})");
+            // the refills: 15 at 01:00, 04:00 ... 22:00 UTC to the natural pool, offline too, up to 560 (840 once seen above it)
+            var r0 = new DateTime(2026, 11, 19, 15, 30, 0, DateTimeKind.Utc);
+            var tops = new OdyleEnergy(null);
+            tops.Take(new OdyleReading(r0, 100, 50, OdyleReading.Why.List), "a");
+            tops.Take(new OdyleReading(r0, 550, 0, OdyleReading.Why.List), "b");
+            tops.Take(new OdyleReading(r0, 600, 0, OdyleReading.Why.List), "m");
+            int at1559 = tops.Now("a", r0.AddMinutes(29))!.Value, at1602 = tops.Now("a", r0.AddMinutes(32))!.Value, nextDay = tops.Now("a", r0.AddHours(24))!.Value;
+            Check(at1559 == 150 && at1602 == 165 && nextDay == 150 + 8 * 15 && tops.Now("b", r0.AddHours(24)) == 560 && tops.Now("m", r0.AddHours(24)) == 720
+                && OdyleEnergy.RefillsBetween(r0, r0.AddHours(3)) == 1 && OdyleEnergy.RefillsBetween(r0.AddHours(3), r0) == 0,
+                $"Odyle Energy: a reading topped up by the refills since: {at1559} at 15:59, {at1602} at 16:02, {nextDay} a day later; 550 stops at 560, a member's 600 climbs to 840 ({tops.Now("m", r0.AddHours(24))} after 8 refills)");
+            // before any character was seen, the readings are the first one's
+            var first = new OdyleEnergy(null);
+            first.Take(new OdyleReading(t, 10, 20, OdyleReading.Why.Spent), "");
+            first.Switched("", "c1", t.AddHours(5));
+            Check(first.Now("c1", t) == 30 && first.Now("", t) == null, "Odyle Energy: what was read before any character was seen goes to the first one");
+            if (NativeDecoder.Version >= 15) Check(NativeDecoder.EnergyRecordSize == 32, $"Odyle Energy: the decoder's record is {NativeDecoder.EnergyRecordSize} bytes (32)");
+            try { File.Delete(file); } catch (IOException) { }
+        }
+
         // a frame from the card: Ethernet with a VLAN tag, the TCP header's own length
         var server = IPAddress.Parse("193.202.112.2"); var me = IPAddress.Parse("192.168.1.4");
         var payload = Enumerable.Range(0, 32).Select(i => (byte)(i * 7)).ToArray();
@@ -1626,6 +1673,7 @@ public static class PacketTests
         var bossLines = new List<string>();
         var eventLines = new List<string>(); var timers = new EventTimers();
         var applicants = new List<PartyApplication>();
+        var energy = new List<OdyleReading>();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
@@ -1647,6 +1695,7 @@ public static class PacketTests
                         if (bosses.Take(b)) bossLines.Add($"{PacketReader.Local(b.At)}  world boss: {(b.Name.Length > 0 ? b.Name : "(not named)")} {b.State}{(b.Time is { } t && b.ServerNow is { } sv ? (b.State == BossSighting.Kind.Dead ? $", spawns in {BossTimers.Countdown(t - sv)}" : $", up {BossTimers.Span(sv - t)}") : "")}");
                     while (dec.NextFight() is { } f) fights.Add(f);
                     while (dec.NextApplicant() is { } ap) applicants.Add(ap);
+                    while (dec.NextEnergy() is { } en) energy.Add(en);
                     while (dec.NextBossEvent() is { } b) bossEvents.Add(b);
                     while (dec.NextAreaEvent() is { } ae)
                     {
@@ -1672,6 +1721,10 @@ public static class PacketTests
         if (readsFights) ReplayFights(pcapng, fought, fights.RankPoints);
         ReplayBosses(bossEvents);
         if (NativeDecoder.Version >= 11) ReplayApplicants(applicants);
+        // Odyle Energy (version 15): each reading, as the tracker's log says it
+        foreach (var en in energy.OrderBy(x => x.At))
+            Console.WriteLine($"{Local(en.At)}  Odyle Energy {en.Total:N0} ({en.Natural:N0} + {en.Extra:N0} charged; {en.Reason}{(en.ChargedBy > 0 ? $" by {en.ChargedBy:N0}" : "")})");
+        if (NativeDecoder.Version >= 15) Console.WriteLine($"Odyle Energy: {energy.Count} readings");
         if (NativeDecoder.Version >= 7)
         {
             var items0 = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);

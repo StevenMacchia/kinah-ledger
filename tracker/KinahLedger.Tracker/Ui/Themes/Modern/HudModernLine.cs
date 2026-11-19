@@ -554,6 +554,7 @@ sealed partial class HudModernLine : ModernLook
         line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var lt = Tt("", 11, SoftB, FontWeights.Medium);
         lt.Inlines.Add(R(L.T("Total") + " ", 11, SoftB, FontWeights.Medium)); lt.Inlines.Add(R(total, 12, WhiteB, FontWeights.Bold));
+        EnergyMark.After(lt, 11, SoftB);   // Odyle Energy (Ui/EnergyMark.cs)
         line.Children.Add(lt);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (word.Length > 0)

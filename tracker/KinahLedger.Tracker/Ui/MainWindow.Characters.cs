@@ -83,6 +83,7 @@ public partial class MainWindow
             var first = v.Character ?? Characters.Add(v.Print, server);
             SaveCharacterState();
             if (_watcher.Chat is { } ch) ch.Instances.Reload(() => Characters.Adopt(first)); else Characters.Adopt(first);
+            _watcher.Packets.Energy.Switched("", first.Id, DateTime.UtcNow);   // the Odyle Energy read so far was this character's
             BestRuns.Reset();
             ServerRowState(); Redraw();
             Say(L.F("Counting for {0} from now on. Each character keeps its own numbers; click the name at the top to name it.", Characters.Label(first)), "Good");
@@ -158,7 +159,10 @@ public partial class MainWindow
             CrashLog.Note($"character: counting for {Characters.Label(c)} now (was {(Characters.Current is { } was ? Characters.Label(was) : "nobody")})");
             await StartFresh(why == "A new character" ? L.T("Another character") : L.F("{0} is in the world", why));
             SaveCharacterState();
+            string from = Characters.Current?.Id ?? "";
             Characters.SetCurrent(c);
+            // the Odyle Energy the game sent at this character's login was kept for the one before (Session/OdyleEnergy.cs)
+            _watcher.Packets.Energy.Switched(from, c.Id, DateTime.UtcNow);
             ReloadCharacterState();
             Say(why == "A new character"
                 ? L.F("A character not seen before: counting for {0}, with numbers of its own. Click its name at the top to name it.", Characters.Label(c))

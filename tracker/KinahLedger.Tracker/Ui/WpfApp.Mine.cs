@@ -27,6 +27,7 @@ public static partial class WpfApp
         double fw0 = HudStackLook.FightWidth; bool exp0 = ParserRows.ExpandedPref, heal0 = ParserRows.HealBarsPref;
         HudStackLook.FightWidth = pp.Width + (pp.Expanded ? 70 : 0);
         ParserRows.ExpandedPref = pp.Expanded; ParserRows.HealBarsPref = pp.HealBars;
+        bool odyle0 = EnergyMark.Pref; EnergyMark.Pref = pp.OdyleEnergy;
         try
         {
             var now = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
@@ -83,7 +84,7 @@ public static partial class WpfApp
                 h.Close();
             }
         }
-        finally { HudStackLook.FightWidth = fw0; ParserRows.ExpandedPref = exp0; ParserRows.HealBarsPref = heal0; }
+        finally { HudStackLook.FightWidth = fw0; ParserRows.ExpandedPref = exp0; ParserRows.HealBarsPref = heal0; EnergyMark.Pref = odyle0; }
         // the window's own root: its size is the scaled content's (the content's own is the size before the Size's scale)
         static FrameworkElement Scaled(Window win) => System.Windows.Media.VisualTreeHelper.GetChildrenCount(win) > 0 && System.Windows.Media.VisualTreeHelper.GetChild(win, 0) is FrameworkElement r ? r : (FrameworkElement)win.Content;
         var spill = Path.Combine(dir, "spill.txt");

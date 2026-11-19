@@ -108,6 +108,7 @@ sealed partial class HudScorebug
         var tl = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         tl.Children.Add(C(Up(L.T("Total")), 11, GreyOf, FontWeights.Bold, Semi));
         var tv = C(total, 17, Colors.White, FontWeights.Bold); tv.Margin = new Thickness(8, 0, 0, 0); tl.Children.Add(tv);
+        EnergyMark.After(tl, 12.5, Frozen(GreyOf));   // Odyle Energy (Ui/EnergyMark.cs)
         fg.Children.Add(tl);
         var rt = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         if (word.Length > 0) { rt.Children.Add(C(Up(word), 11, GreyOf, FontWeights.Bold, Semi)); var gv = C(group, 17, YellowC, FontWeights.Bold); gv.Margin = new Thickness(8, 0, 0, 0); rt.Children.Add(gv); }

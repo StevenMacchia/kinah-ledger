@@ -18,6 +18,7 @@ sealed partial class HudHolo
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Label(L.T("TOTAL")));
         var tv = Tt(total, 15, White, Face, FontWeights.Bold); tv.Margin = new Thickness(6, 0, 0, 0); left.Children.Add(tv);
+        EnergyMark.After(left, 12, LiteDim, Face);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         if (word.Length > 0)
