@@ -366,17 +366,9 @@ public partial class MainWindow : Window
         var c = _watcher.Chat;
         // not reading the game yet: a diagnostics report instead (Ui/MainWindow.Diagnostics.cs), so the cause can be seen
         if (c == null) { if (!_demo) ReportDiagnostics(); else Say(L.T("Nothing to report yet: the last minute is kept once the tracker is reading the game."), "Warn"); return; }
-        bool asked = false;
-        if (!_prefs.ReportFrames)
-        {
-            var answer = MessageBox.Show(this,
-                L.T("Sends this report to Kinah Ledger (no chat from other players).") + "\n\n" +
-                L.T("Also keep the last minute of the chat and the loot list as pictures on this PC, for the next reports? " +
-                "Pictures show exactly what the screen said, which is what finds a misread. They can show other players' names " +
-                "and messages, so they are never sent with a report. Options › Sharing turns them off again."),
-                "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (answer == MessageBoxResult.Yes) { _prefs.ReportFrames = ReportBuffer.KeepFrames = true; SavePrefs(); asked = true; }
-        }
+        // no question box (2026-11-18: a friend's game crashed as he sent a report): a modal box takes the focus from a
+        // fullscreen game. Pictures stay as Options › Sharing has them; the report goes at once.
+        const bool asked = false;
         try
         {
             var dir = c.WriteReport("");

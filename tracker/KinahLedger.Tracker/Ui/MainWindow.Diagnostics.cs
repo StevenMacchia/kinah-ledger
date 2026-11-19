@@ -42,7 +42,7 @@ public partial class MainWindow
             $"game reading on {_prefs.PacketReading} · now: {_watcher.Packets.State}",
             $"game process seen {Ocr.GameWindow.ProcessSeen} · pids {Ocr.GameWindow.Pids.Count} · running {_watcher.GameRunning}",
             $"game window {(_watcher.GameRect is { } r ? $"{r.X},{r.Y} {r.Width}x{r.Height}" : "not found")} · handle {(Ocr.GameWindow.Handle != IntPtr.Zero)}",
-            $"game in front {Ocr.GameWindow.InFront(_settings.ProcessHints)} · fullscreen state {FullscreenState()}",
+            $"game in front {Ocr.GameWindow.InFront(_settings.ProcessHints)} · fullscreen state {FullscreenState()} · larger than its screen {MeterBlocks.LargerThanItsScreen(_watcher.GameRect)} · fullscreen card {_fullscreen}",
             $"window capture active {Ocr.WindowCapture.Active}",
             $"chat {( _watcher.Chat != null ? "found" : "not found")} · note: {_watcher.ChatNote} · manual chat {_prefs.ManualChat}",
             $"last error: {_watcher.LastError}",

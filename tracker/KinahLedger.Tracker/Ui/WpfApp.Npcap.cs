@@ -108,6 +108,13 @@ public static partial class WpfApp
             // the cases only their own facts tell
             var two = TimeSpan.FromMinutes(2); var three = MeterBlocks.NoServerAfter;
             const string waiting = "Waiting for the game to connect to its server";
+            {
+                var ps = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+                check(MeterBlocks.LargerThanItsScreen(new System.Drawing.Rectangle(ps.X, ps.Y, ps.Width * 2, ps.Height * 3 / 2))
+                    && !MeterBlocks.LargerThanItsScreen(ps) && !MeterBlocks.LargerThanItsScreen(new System.Drawing.Rectangle(ps.X + 100, ps.Y + 100, ps.Width / 2, ps.Height / 2))
+                    && !MeterBlocks.LargerThanItsScreen(null),
+                    "fullscreen: a game window larger than its monitor (5120x2160 on 2560x1440) is exclusive fullscreen; one that fits, or none, is not");
+            }
             check(MeterBlocks.Decide(true, false, true, false, false, waiting, two, false) == MeterBlock.None
                 && MeterBlocks.Decide(true, false, true, false, false, waiting, three, false) == MeterBlock.NoServer
                 && MeterBlocks.Decide(true, false, true, false, false, "Waiting for the game", null, false) == MeterBlock.None

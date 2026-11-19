@@ -64,6 +64,23 @@ public static class MeterBlocks
     /// <summary>The look at the game (swapped by the self-test): true or false while it is in front, null when that can't be told.</summary>
     internal static Func<IReadOnlyCollection<uint>, bool?> FullscreenProbe = GameExclusiveFullscreen;
 
+    /// <summary>
+    /// The second look, which needs the game in front of nothing (2026-11-18, a friend's 1.0.18: the game's window was
+    /// 5120x2160 on a 2560x1440 monitor, Windows never said "exclusive", and no overlay showed): a game window larger than
+    /// the monitor it is on is exclusive fullscreen at a resolution the monitor doesn't have (a borderless or windowed game
+    /// is never larger than its screen). A few pixels of a window's frame are allowed.
+    /// </summary>
+    internal static bool LargerThanItsScreen(System.Drawing.Rectangle? game)
+    {
+        if (game is not { Width: > 0, Height: > 0 } g) return false;
+        try
+        {
+            var s = System.Windows.Forms.Screen.FromRectangle(g).Bounds;
+            return g.Width > s.Width + 16 || g.Height > s.Height + 16;
+        }
+        catch (Exception) { return false; }
+    }
+
     internal static MeterBlock? FromEnvironment()
     {
         var b = Environment.GetEnvironmentVariable("KL_METER_BLOCK")?.Trim().ToLowerInvariant();
@@ -183,7 +200,11 @@ public partial class MainWindow
     {
         if (MeterBlocks.ForcedFullscreen is { } forced) return forced;
         if ((_demo || !_meterWatch) && !MeterBlockLiveForTest) return false;
-        try { return MeterBlocks.FullscreenProbe(Ocr.GameWindow.Pids) ?? _fullscreen; }
+        try
+        {
+            if (MeterBlocks.LargerThanItsScreen(_watcher.GameRect)) return true;
+            return MeterBlocks.FullscreenProbe(Ocr.GameWindow.Pids) ?? _fullscreen;
+        }
         catch (Exception ex) { CrashLog.Write("fullscreen check", ex); return _fullscreen; }
     }
 
