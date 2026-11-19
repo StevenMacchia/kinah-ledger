@@ -272,7 +272,7 @@ static class ApplicantsFace
         {
             ("Thornecrestwarde", "Templar", 188_420, "Meslamtaeda"), ("Varrenthos", "Gladiator", 128_195, "Israphel"), ("Kyralis", "Gladiator", 133_774, "Zikel"),
             ("Embervale", "Sorcerer", 125_846, "Lumiel"), ("Aerinwynne", "Cleric", 151_906, "Siel"), ("Kaelith", "Assassin", 162_340, "Fregion"),
-            ("Seraphimdawnlite", "Chanter", 165_432, "Ereshkigal"), ("Vintzi", "Ranger", 98_410, "Nezekan"), ("Goldlemon", "Spiritmaster", 141_344, "Siel"),
+            ("Seraphimdawnlite", "Chanter", 165_432, "Ereshkigal"), ("Quillon", "Ranger", 98_410, "Nezekan"), ("Brightmoor", "Spiritmaster", 141_344, "Siel"),
             ("Halvric", "Cleric", 110_552, "Triniel"), ("Selwyra", "Ranger", 115_076, "Siel"), ("Dornak", "Chanter", 92_650, "Zikel"),
         };
         var list = new List<PartyApplicants.Applicant>();
