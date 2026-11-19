@@ -65,8 +65,8 @@ static class ParserCommand
     /// <summary>The tabs the record has something for: Damage always; Compare with a kept pull of this boss; Timeline and Taken once the record carries them.</summary>
     public static List<string> Tabs(FightView v)
     {
-        var t = new List<string> { "Group" };
-        if (v.HasTimeline) t.Insert(0, "Timeline");   // shown as Graphs, first (Ui/ParserGraphs.cs)
+        // Graphs first, the group's table under them (Steven, 2026-11-18: "group should just be under the graphs"); Group alone without the seconds
+        var t = new List<string> { v.HasTimeline ? "Timeline" : "Group" };
         if (v.HasCompare) t.Add("Compare");
         if (v.HasTaken) t.Add("Taken");
         return t;

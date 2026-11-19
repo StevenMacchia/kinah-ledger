@@ -1,4 +1,8 @@
 {
+  "{0} (you)": "{0} (나)",
+  "{0} HP": "HP {0}",
+  "DPS and boss HP": "DPS와 보스 HP",
+  "{0} s average": "{0}초 평균",
   "Graphs": "그래프",
   "The graphs fill in after the first seconds of the fight.": "전투가 몇 초 지나면 그래프가 채워져요.",
   "Killed at {0}": "{0} 만에 처치",
@@ -6,8 +10,6 @@
   "{0} · {1} s average": "{0} · {1}초 평균",
   "{0} · HP a second, {1} s average": "{0} · 초당 HP, {1}초 평균",
   "Boss HP": "보스 HP",
-  "damage taken": "받은 피해",
-  "Boss HP and group DPS": "보스 HP와 파티 DPS",
   "Healing and damage taken": "치유량과 받은 피해",
   "Healing": "치유량",
   "{0} in": "{0} 경과",

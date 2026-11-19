@@ -449,7 +449,8 @@ public static partial class WpfApp
         w.ShowParserDemo("live-min"); DoEvents();
         var headTips = FindTagged(w.ParserPage, "parser-head") is { } ph ? ParserTexts(ph).Tips.ToHashSet() : new HashSet<string>();
         var plainTips = plain.Tips.Where(t => ClassArt.Key(t).Length == 0 && !t.Contains(" damage in ") && !t.Contains("HP the boss lost") && !t.Contains("HP the bosses lost")
-            && !t.StartsWith("Joined ") && !t.StartsWith("Left ") && !headTips.Contains(t)).ToList();
+            && !t.StartsWith("Joined ") && !t.StartsWith("Left ") && !headTips.Contains(t)
+            && t != L.T("A picture of this graph to paste in Discord or anywhere. Nothing is uploaded.")).ToList();   // a graph's Copy picture says what it does, like the head's
         // with Group details each member's class, Combat Power and item level sit under their name ("Sorcerer · 4,730 CP · 5,620 item level")
         // (the item level steps aside when the row carries its DPS over time: store v2's per-second damage)
         static bool Gear(HashSet<string> texts) => texts.Any(t => t.Contains(" CP"));
