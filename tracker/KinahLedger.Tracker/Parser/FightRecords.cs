@@ -68,7 +68,8 @@ public sealed class FightRecords
     /// <summary>
     /// The fight a record is kept for: the boss by its name (by the game's id only for one with no name: the id is the
     /// spawn's, every run another), the instance and the instance's mode (a Transcendence's its stage, "transcendence" while
-    /// not known, so it is never the expedition's). A world boss by its name and place too.
+    /// not known, so it is never the expedition's; a Nightmare boss's its stage; an Ascension Trial's its difficulty, else the
+    /// tier its map code gave, "#04"). A world boss by its name and place too.
     /// </summary>
     public static string KeyOf(Encounter e)
     {
@@ -76,12 +77,25 @@ public sealed class FightRecords
         var boss = name.Length > 0 && (name != BossParser.UnnamedBoss || e.BossId <= 0) ? name.ToLowerInvariant() : e.BossId.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var mode = e.GameMode.Trim().ToLowerInvariant();
         if (mode.Length == 0 && Encounter.KindOf(e.Kind) == KinahLedger.Packets.ContentKind.Transcendence) mode = "transcendence";
+        if (mode.Length == 0 && e.ModeCode is { Length: > 0 } code) mode = "#" + code.Trim().ToLowerInvariant();
         return $"{boss}|{BossBook.Strip(e.Instance).Trim().ToLowerInvariant()}|{mode}";
     }
 
-    /// <summary>A fight that counts toward a record: a boss kill with your damage in it.</summary>
+    /// <summary>
+    /// A fight that counts toward a record: a boss kill with your damage in it. A Nightmare boss's only at a known stage, an
+    /// Ascension Trial's only at a known difficulty or tier (Steven, 2026-11-19: "each nightmare boss and tier"): Stage 4 and
+    /// Stage 6 of one boss are two records, and a kill whose stage isn't known is never measured against either.
+    /// </summary>
     public static bool Counts(Encounter e) => e.ModeKind == ParserMode.Bosses && !e.Live && !e.Wave && e.Outcome == "kill"
-        && (e.Boss.Length > 0 || e.BossId > 0) && e.You is { Damage: > 0 };
+        && (e.Boss.Length > 0 || e.BossId > 0) && e.You is { Damage: > 0 } && TierKnown(e);
+
+    /// <summary>A Nightmare pull's stage ("Stage 4") or an Ascension Trial's difficulty or tier is known; any other kind needs none.</summary>
+    public static bool TierKnown(Encounter e) => Encounter.KindOf(e.Kind) switch
+    {
+        KinahLedger.Packets.ContentKind.Nightmare => BossBook.StageOfMode(e.GameMode) > 0 || e.GameMode.Trim().Equals("Stage 10", StringComparison.OrdinalIgnoreCase),
+        KinahLedger.Packets.ContentKind.AscensionTrial => e.GameMode.Trim().Length > 0 || e.ModeCode is { Length: > 0 },
+        _ => true,
+    };
 
     /// <summary>The record of this fight (null before your first kill of it).</summary>
     public FightRecord? Of(Encounter e) { lock (_gate) return Load().TryGetValue(KeyOf(e), out var r) ? r : null; }

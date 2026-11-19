@@ -90,7 +90,8 @@ public sealed partial class TrackerSession
         {
             Instances.GameSaid(area, Zone);
             // its end too: a dungeon's boss room closing and opening again after its last boss is a new run in the same copy
-            if (area.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Closed && area.Code.Length > 0) Fights.MapEvent(area.Code, area.At, closed: area.What == AreaEvent.Kind.Closed);
+            if (area.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Over or AreaEvent.Kind.Closed && area.Code.Length > 0)
+                Fights.MapEvent(area.Code, area.At, closed: area.What == AreaEvent.Kind.Closed, over: area.What == AreaEvent.Kind.Over);
         }
         DrainItems(p, now);
         while (_packetHeld.Count > 0)

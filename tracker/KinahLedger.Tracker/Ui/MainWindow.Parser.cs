@@ -834,7 +834,7 @@ public partial class MainWindow
         if (!_demo && _watcher.Packets is { } pr && !pr.On && pr.State.StartsWith("Off", StringComparison.Ordinal))
             return (L.T("The Parser is off"), L.T("It needs a setting turned on: Settings › Game reading."), "Warn");
         return kept ? (L.F("Ready in {0}", BossBook.Strip(where.Instance)), L.F("{0}. The next boss you pull starts a fight here; trash and adds never do.", PK.KindWord(Encounter.KindName(where.Kind))), "Good")
-            : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions, Sanctuaries and Nightmare, and for world bosses. Enter one and pull a boss, or fight a world boss."), "Faint");
+            : (L.T("Waiting for a boss"), L.T("Boss pulls are kept in Transcendence, Expeditions, Sanctuaries, Nightmare and Ascension Trials, and for world bosses. Enter one and pull a boss, or fight a world boss."), "Faint");
     }
 
     FrameworkElement ParserWaitingCard((ContentKind Kind, string Instance) where, List<Encounter> past)
@@ -955,7 +955,7 @@ public partial class MainWindow
         if (shown.Count == 0)
         {
             var empty = PT((past.Count > 0 ? L.F("No {0} of this kind yet.", Noun(mode, 2))
-                : L.T("No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and each world boss, lands here, with its group and timings.")) + L.T(" They stay on this PC."), 12.5, FontWeights.Normal, "Faint");
+                : L.T("No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition, a Sanctuary, a Nightmare instance or an Ascension Trial, and each world boss, lands here, with its group and timings.")) + L.T(" They stay on this PC."), 12.5, FontWeights.Normal, "Faint");
             empty.TextWrapping = TextWrapping.Wrap; empty.Margin = new Thickness(0, 4, 0, 6);
             body.Children.Add(empty);
         }

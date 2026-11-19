@@ -81,6 +81,7 @@ public static class ParserTests
         using var dec = NativeDecoder.TryOpen()!;
         var screen = ScreenOf(pcapng);   // place.tsv beside the recording: the minimap's run, for instances the game leaves unnamed
         bool events = Environment.GetEnvironmentVariable("KL_REPLAY_EVENTS") == "1";
+        // KL_REPLAY_EVENTS=1 prints the places' map events too; KL_REPLAY_HITS=1 every damage row, death and boss HP
         // KL_REPLAY_EVENTS=1 also counts the events of each kind a minute (yours apart for hits), printed at the end
         var counts = new SortedDictionary<string, int>();
         void Count(BossEvent b)
@@ -115,10 +116,15 @@ public static class ParserTests
                         if (events && b is InstanceEntered or InstanceLeft or GroupChanged or BossEngaged or BossEnded or InstanceMode)
                             Console.WriteLine($"event {b.At.ToLocalTime():HH:mm:ss} {(b is GroupChanged g ? "group " + string.Join(", ", g.Members.Select(m => $"{m.Name}#{m.Id}{(m.You ? " (you)" : "")}")) : b.ToString())}");
                         if (events) Count(b);
+                        if (Environment.GetEnvironmentVariable("KL_REPLAY_HITS") == "1" && b is DamageDealt or UnitDied or BossHealth) Console.WriteLine($"hit {b.At.ToLocalTime():HH:mm:ss.f} {b}");
                         p.Take(b);
                     }
                     while (dec.NextHit() is { } h) { if (events) Count(h); p.Take(h); }
-                    while (dec.NextAreaEvent() is { } ae) if (ae.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Closed) p.MapEvent(ae.Code, ae.At, closed: ae.What == AreaEvent.Kind.Closed);
+                    while (dec.NextAreaEvent() is { } ae)
+                    {
+                        if (events) Console.WriteLine($"area {ae.At.ToLocalTime():HH:mm:ss} {ae.What} {ae.Phase} {ae.Family} \"{ae.Name}\" {ae.Code}");
+                        if (ae.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Over or AreaEvent.Kind.Closed) p.MapEvent(ae.Code, ae.At, closed: ae.What == AreaEvent.Kind.Closed, over: ae.What == AreaEvent.Kind.Over);
+                    }
                     screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
@@ -279,7 +285,7 @@ public static class ParserTests
                     while (dec.NextFight() is { } f) TrackerSession.RawFight(p, f);
                     while (dec.NextBossEvent() is { } b) p.Take(b);
                     while (dec.NextHit() is { } h) { if (hits) p.Take(h); }
-                    while (dec.NextAreaEvent() is { } ae) if (ae.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Closed) p.MapEvent(ae.Code, ae.At, closed: ae.What == AreaEvent.Kind.Closed);
+                    while (dec.NextAreaEvent() is { } ae) if (ae.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Over or AreaEvent.Kind.Closed) p.MapEvent(ae.Code, ae.At, closed: ae.What == AreaEvent.Kind.Closed, over: ae.What == AreaEvent.Kind.Over);
                     screen?.Invoke(p, at);
                 },
                 OnGap = () => { dec.Gap(); p.Take(new FeedGap(last)); },
@@ -594,21 +600,22 @@ public static class ParserTests
                 $"...in Every fight too the pull is kept, the open world's fight never: {string.Join(", ", kept.Select(e => $"{e.Mode} {e.Kind} {e.Outcome}"))}");
         }
 
-        // Nightmare: its instances' boss pulls are kept like a dungeon's (their loot stays uncounted, instances.txt "Ignored")
+        // Nightmare and the Ascension Trial: their instances' boss pulls are kept like a dungeon's (their loot stays uncounted,
+        // instances.txt "Ignored"); Nightmare Altar is the Ascension Trial's since 1.0.24
         {
             var shared = BossBook.Shared;
-            Check(shared.KindOf("Nightmare") == ContentKind.Nightmare && shared.KindOf("Nightmare Altar") == ContentKind.Nightmare && shared.Find("Nightmare Altar", "Divided Aponos") is { Final: true } && !shared.Knows("Nightmare"),
+            Check(shared.KindOf("Nightmare") == ContentKind.Nightmare && shared.KindOf("Nightmare Altar") == ContentKind.AscensionTrial && shared.Find("Nightmare Altar", "Divided Aponos") is { Final: true } && !shared.Knows("Nightmare"),
                 "the boss list files Nightmare and Nightmare Altar (Divided Aponos, its final boss; Nightmare with no bosses listed)");
             var kept = new List<Encounter>();
             var p = new BossParser(shared) { Ended = kept.Add };
             p.Take(new InstanceEntered(t, ContentKind.Other, "Nightmare Altar", 300));
             p.Take(new GroupChanged(t, new[] { Me, Ally }));
-            Check(p.Where.Kind == ContentKind.Nightmare, $"entering Nightmare Altar is a Nightmare instance: {p.Where.Kind}");
+            Check(p.Where.Kind == ContentKind.AscensionTrial, $"entering Nightmare Altar is the Ascension Trial: {p.Where.Kind}");
             p.Take(new BossEngaged(t.AddSeconds(10), "Divided Aponos", 990));
             p.Take(new DamageDealt(t.AddSeconds(12), 1, 990, 60_000, "Swoly", true));
             p.Take(new DamageDealt(t.AddSeconds(40), 2, 990, 20_000, "Aerin"));
             p.Take(new BossEnded(t.AddSeconds(60), 990, BossOutcome.Kill));
-            Check(kept.Count == 1 && kept[0] is { Boss: "Divided Aponos", Kind: "Nightmare", Instance: "Nightmare Altar", Outcome: "kill", FinalBoss: true } && kept[0].You?.BossDamage == 60_000,
+            Check(kept.Count == 1 && kept[0] is { Boss: "Divided Aponos", Kind: "Ascension Trial", Instance: "Nightmare Altar", Outcome: "kill", FinalBoss: true } && kept[0].You?.BossDamage == 60_000,
                 $"...its boss pull is kept, named, with its kill: {kept.FirstOrDefault()?.Boss} {kept.FirstOrDefault()?.Kind} {kept.FirstOrDefault()?.Outcome}");
             p.Take(new InstanceEntered(t.AddSeconds(100), ContentKind.Other, "Nightmare", 301));
             p.Take(new BossEngaged(t.AddSeconds(110), "Unlisted Test Boss", 991));
@@ -619,6 +626,119 @@ public static class ParserTests
             var q = new BossParser(shared);
             q.ScreenPlace("Ignored", "Nightmare");
             Check(q.Where.Kind == ContentKind.Nightmare, $"...the screen's place (the loot log's \"Ignored\" kind) is Nightmare too: {q.Where.Kind}");
+        }
+
+        // the Ascension Trial (1.0.24, Steven 2026-11-19: "add for the parser instanced boss fights like the ones at end of
+        // ascension trial"): Nightmare Altar and Sanctum of Loathing, a kind of their own
+        {
+            var shared = BossBook.Shared;
+            Check(shared.KindOf("Nightmare Altar") == ContentKind.AscensionTrial && shared.KindOf("Sanctum of Loathing") == ContentKind.AscensionTrial
+                  && shared.Find("Nightmare Altar", "Divided Aponos") is { Final: true } && shared.Find("Sanctum of Loathing", "Featherstorm Duduri") is { With: true, Final: false }
+                  && shared.Find("Sanctum of Loathing", "Watchful Raptor Dodori") is { Final: true }
+                  && BossBook.JointName(shared.Together("Sanctum of Loathing", "Watchful Raptor Dodori")) == "Featherstorm Duduri & Watchful Raptor Dodori"
+                  && shared.Together("Nightmare Altar", "Divided Aponos").Count == 0,
+                "the boss list files the Ascension Trial: Nightmare Altar (Divided Aponos), Sanctum of Loathing (Duduri with Dodori, one pull)");
+            Check(shared.FromCode("Dungeon_Awaken_001_04_MapEvent")?.Instance == "Nightmare Altar" && shared.TierOf("Dungeon_Awaken_001_04_Sub_MapEvent") == "04"
+                  && shared.TierOf("FierceHornCave_Easy_Mapevent") == null && Encounter.KindName(ContentKind.AscensionTrial) == "Ascension Trial",
+                "...Nightmare Altar by its map code, the code's tier kept (04), never a mode word's");
+
+            // Nightmare Altar as the game plays it (Steven's runs of 2026-11-19): no entry, no boss named, no boss HP; its map
+            // events place it, the enemy taking far more damage than any other is the boss, the run's end is its kill
+            var kept = new List<Encounter>();
+            var p = new BossParser(shared) { Ended = kept.Add };
+            var a0 = t.AddHours(2);
+            p.MapEvent("Dungeon_Awaken_001_04_Sub_MapEvent", a0);
+            p.MapEvent("Dungeon_Awaken_001_04_MapEvent", a0.AddSeconds(8));
+            Check(p.Where.Kind == ContentKind.AscensionTrial && p.Where.Instance == "Nightmare Altar", $"its map event places the trial with no entry said: {p.Where.Kind} {p.Where.Instance}");
+            long mob = 7000;
+            for (int room = 0; room < 3; room++)
+                for (int m = 0; m < 4; m++)
+                {
+                    var at = a0.AddSeconds(15 + room * 20 + m * 4);
+                    mob++;
+                    p.Take(new DamageDealt(at, 1, mob, 120_000, "Swoly", true));
+                    p.Take(new DamageDealt(at.AddSeconds(1), 1, mob, 90_000, "Swoly", true));
+                    p.Take(new UnitDied(at.AddSeconds(1.5), mob, "", false));
+                }
+            Check(p.Live == null && kept.Count == 0, "...the rooms' enemies (0.2M each, killed) are never the boss");
+            var b0 = a0.AddSeconds(90);
+            for (int i = 0; i < 20; i++) p.Take(new DamageDealt(b0.AddSeconds(i), 1, 8800, 90_000, "Swoly", true));
+            var live = p.Live;
+            Check(live is { Boss: "Divided Aponos", Kind: "Ascension Trial", Instance: "Nightmare Altar", ModeCode: "04", FinalBoss: true } && live.Start == b0,
+                $"...the enemy taking 3x what any killed one took is the boss, its pull open from its first hit: {live?.Boss} from {(live != null ? (live.Start - b0).TotalSeconds : -1):0} s");
+            p.MapEvent("Dungeon_Awaken_001_04_MapEvent", b0.AddSeconds(19.5), over: true);
+            p.MapEvent("Dungeon_Awaken_001_04_Sub_MapEvent", b0.AddSeconds(19.5), over: true);
+            Check(kept.Count == 1 && kept[0] is { Boss: "Divided Aponos", Outcome: "kill", Kind: "Ascension Trial" } && kept[0].You?.BossDamage == 1_800_000
+                  && kept[0].End == b0.AddSeconds(19) && kept[0].Coverage == 1,
+                $"...the run's end is its kill, at its last hit, every hit the boss's: {kept.FirstOrDefault()?.Outcome} {kept.FirstOrDefault()?.You?.BossDamage} in {kept.FirstOrDefault()?.Duration(kept[0].End ?? b0).TotalSeconds:0} s");
+            Check(FightRecords.KeyOf(kept[0]) == "divided aponos|nightmare altar|#04" && FightRecords.Counts(kept[0]),
+                $"...its record keyed by its tier: {FightRecords.KeyOf(kept[0])}");
+            p.MapEvent("Dungeon_Awaken_001_04_MapEvent", b0.AddSeconds(30), closed: true);
+            Check(p.Where.Kind == ContentKind.Other, $"...and its closing leaves it: {p.Where.Kind}");
+            // the next run: placed again, a new copy; this time the run ends with the boss not hit for a while: a wipe
+            var c0 = b0.AddSeconds(40);
+            p.MapEvent("Dungeon_Awaken_001_04_MapEvent", c0);
+            for (int i = 0; i < 10; i++) p.Take(new DamageDealt(c0.AddSeconds(10 + i), 1, 8900, 70_000, "Swoly", true));
+            Check(p.Live is { Boss: "Divided Aponos" }, $"a new run of it: its boss again (no killed enemy yet: {BossParser.TrialBossMin:N0} at least): {p.Live?.Boss}");
+            p.MapEvent("Dungeon_Awaken_001_04_MapEvent", c0.AddSeconds(50), over: true);
+            Check(kept.Count == 2 && kept[1] is { Outcome: "wipe" } && !FightRecords.Counts(kept[1]), $"...the run over with the boss not hit for 30 s: a wipe, no record: {kept.ElementAtOrDefault(1)?.Outcome}");
+            // a place whose game messages name the boss never works one out
+            var q = new BossParser(shared) { Ended = new List<Encounter>().Add };
+            q.Take(new InstanceEntered(t, ContentKind.Other, "Nightmare Altar", 300));
+            q.Take(new BossEngaged(t.AddSeconds(10), "Divided Aponos", 990));
+            q.Take(new DamageDealt(t.AddSeconds(12), 1, 991, 2_000_000, "Swoly", true));
+            Check(q.Live is { BossId: 990 }, $"...nor when the game named the boss itself: {q.Live?.BossId}");
+        }
+
+        // bosses fought together (Sanctum of Loathing's end: Featherstorm Duduri and Watchful Raptor Dodori at once): one pull,
+        // the damage to either the boss's, their HP added up, a kill when the last of them died
+        {
+            var kept = new List<Encounter>();
+            var p = new BossParser(BossBook.Shared) { Ended = kept.Add };
+            p.Take(new InstanceEntered(t, ContentKind.Other, "Sanctum of Loathing", 320));
+            p.Take(new GroupChanged(t, new[] { Me }));
+            p.Take(new BossEngaged(t.AddSeconds(10), "Featherstorm Duduri", 501));
+            p.Take(new BossEngaged(t.AddSeconds(10.4), "Watchful Raptor Dodori", 502));
+            p.Take(new DamageDealt(t.AddSeconds(12), 1, 501, 400_000, "Swoly", true));
+            p.Take(new DamageDealt(t.AddSeconds(13), 1, 502, 300_000, "Swoly", true));
+            p.Take(new BossHealth(t.AddSeconds(13), 501, 600_000, 1_000_000));
+            p.Take(new BossHealth(t.AddSeconds(13.2), 502, 700_000, 1_000_000));
+            var live = p.Live;
+            Check(kept.Count == 0 && live is { Boss: "Featherstorm Duduri & Watchful Raptor Dodori", BossId: 501, FinalBoss: true, BossHp: 1_300_000, BossMaxHp: 2_000_000 } && live.WithIds?.SingleOrDefault() == 502,
+                $"both pulled: one pull under both names, their HP added: {live?.Boss}, {live?.BossHp:N0} of {live?.BossMaxHp:N0}, kept {kept.Count}");
+            p.Take(new DamageDealt(t.AddSeconds(30), 1, 501, 600_000, "Swoly", true));
+            p.Take(new UnitDied(t.AddSeconds(31), 501, "Featherstorm Duduri", true));
+            Check(kept.Count == 0 && p.Live?.Kills.Any(k => k.Boss && k.Name == "Featherstorm Duduri") == true, "...the first one down: a kill in it, the pull goes on");
+            p.Take(new DamageDealt(t.AddSeconds(40), 1, 502, 700_000, "Swoly", true));
+            p.Take(new UnitDied(t.AddSeconds(41), 502, "Watchful Raptor Dodori", true));
+            Check(kept.Count == 1 && kept[0] is { Outcome: "kill", Kind: "Ascension Trial" } && kept[0].You?.BossDamage == 2_000_000 && kept[0].Coverage == 1,
+                $"...the last one down: one kill, all 2M to the two the boss's: {kept.FirstOrDefault()?.Outcome} {kept.FirstOrDefault()?.You?.BossDamage:N0}");
+            p.Take(new BossEngaged(t.AddSeconds(60), "Watchful Raptor Dodori", 503));
+            Check(p.Live is { Boss: "Featherstorm Duduri & Watchful Raptor Dodori", BossId: 503 } && kept.Count == 1, "...pulled again (a new spawn): a new pull of the two");
+
+            // the same fight where the game names no boss (worked out from the damage, as Nightmare Altar's): both join one pull
+            var k2 = new List<Encounter>();
+            var s = new BossParser(BossBook.Shared) { Ended = k2.Add };
+            s.ScreenPlace("Expedition", "Sanctum of Loathing");   // the run log files it as an expedition (data/instances.txt)
+            Check(s.Where.Kind == ContentKind.AscensionTrial, $"the screen's place: Sanctum of Loathing is the Ascension Trial, whatever the run log calls it: {s.Where.Kind}");
+            for (int m = 0; m < 3; m++) { s.Take(new DamageDealt(t.AddSeconds(m * 5), 1, 600 + m, 200_000, "Swoly", true)); s.Take(new UnitDied(t.AddSeconds(m * 5 + 1), 600 + m, "", false)); }
+            for (int i = 0; i < 14; i++)
+            {
+                s.Take(new DamageDealt(t.AddSeconds(30 + i), 1, 701, 60_000, "Swoly", true));
+                s.Take(new DamageDealt(t.AddSeconds(30.5 + i), 1, 702, 55_000, "Swoly", true));
+            }
+            var sl = s.Live;
+            Check(sl is { Boss: "Featherstorm Duduri & Watchful Raptor Dodori" } && sl.WithIds?.Count == 1 && sl.You?.BossDamage == 14 * 115_000,
+                $"...with no boss named by the game, the two big enemies make one pull: {sl?.Boss}, {sl?.WithIds?.Count} joined, {sl?.You?.BossDamage:N0} to the bosses");
+        }
+
+        // Nightmare's records per boss and stage (Steven, 2026-11-19: "each nightmare boss and tier"): Stage 4 and Stage 6 of one
+        // boss are two records; a kill whose stage isn't known counts toward none
+        {
+            Encounter K(string mode) => new() { Mode = "boss", Kind = "Nightmare", Instance = "Nightmare", Boss = "Unlisted Test Boss", GameMode = mode, Outcome = "kill", End = t.AddMinutes(1), Start = t, Roster = { new Fighter { You = true, Damage = 10, Name = "Swoly" } } };
+            Check(FightRecords.KeyOf(K("Stage 4")) != FightRecords.KeyOf(K("Stage 6")) && FightRecords.Counts(K("Stage 4")) && FightRecords.Counts(K("Stage 10"))
+                  && !FightRecords.Counts(K("")) && !FightRecords.Counts(K("Hell")),
+                $"Nightmare: one record per boss and stage ({FightRecords.KeyOf(K("Stage 4"))}), none without a stage");
         }
 
         // one fight per boss: a new boss ends the fight under way and starts afresh
@@ -2037,6 +2157,24 @@ public static class ParserTests
                 "back attacks: each hit's side kept when the row says one (2 behind, 1 front; 1 with none not counted), apart from the other marks");
             Check(!off.HasBack && off.Members.Single().Back == null && on.HasBack && on.Members.Single().Back == 0.5 && on.Members.Single().Abilities.Single().Back == 0.5 && Encounter.BackKeyOf("junk") == null,
                 $"...nothing shown by default; BackSource side1: {Encounter.Pct(on.Members.Single().Back ?? 0)} of the hits from behind, per member and per ability");
+        }
+
+        // the Ascension Trial on Steven's recording (2026-11-19 13:38 to 14:00, Nightmare Altar, five runs cleared in it, the
+        // sixth into the next hour): each run's Divided Aponos one pull, a kill, with every hit the boss took (1.75M each run,
+        // the rooms' enemies 0.2M to 0.3M). Only where the decoder and the recording are on this PC
+        {
+            var rec = Recording("20261119-13-nightmare-aponos");
+            if (NativeDecoder.Version < 10 || rec == null) Console.WriteLine($"skip  the Ascension Trial on Steven's recording: decoder interface {NativeDecoder.Version}, {(rec == null ? "no" : "the")} recording here");
+            else
+            {
+                var pulls = Replay(rec, hits: true);
+                var secs = pulls.Select(e => e.Duration(e.End ?? e.LastAt).TotalSeconds).ToList();
+                Check(pulls.Count == 5 && pulls.All(e => e is { Boss: "Divided Aponos", Kind: "Ascension Trial", Instance: "Nightmare Altar", Outcome: "kill", ModeCode: "04", FinalBoss: true })
+                      && pulls.All(e => e.You is { BossDamage: > 1_700_000 and < 1_800_000 } && e.Coverage == 1) && secs.All(s => s is > 10 and < 25),
+                    $"the Ascension Trial, Steven's 13:38 recording: {pulls.Count} pulls ({string.Join(", ", pulls.Select(e => $"{e.Boss} {e.Outcome} {e.You?.BossDamage:N0} in {e.Duration(e.End ?? e.LastAt).TotalSeconds:0} s"))})");
+                Check(pulls.All(e => e.You!.Abilities.Sum(a => a.StreamHits ?? 0) >= 80) && pulls.Select(FightRecords.KeyOf).Distinct().Count() == 1 && pulls.All(FightRecords.Counts),
+                    $"...each with its abilities from the first hit, one record for the five ({FightRecords.KeyOf(pulls.FirstOrDefault() ?? new Encounter())})");
+            }
         }
 
         // both crit candidates on Steven's recordings (20261114-14, ABI 10 decoder): kept for every member and skill, within what
