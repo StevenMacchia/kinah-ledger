@@ -68,7 +68,7 @@ public partial class MainWindow
         // each section's own copy buttons, top right of its head (Ui/MainWindow.ParserShare.cs)
         if (Shareable(e)) ctx.Copy = view => CopyButtons(e, v, view);
         var tabs = ParserCommand.Tabs(v);
-        if (!tabs.Contains(ctx.Tab)) ctx.Tab = "Group";
+        if (!tabs.Contains(ctx.Tab)) ctx.Tab = tabs[0];   // Graphs (with the group under them), or Group for a record without seconds
         var page = new StackPanel();
         // the way back, a real button top left over the hero (Steven, 2026-11-17: "make a back button WAY more obvious");
         // Backspace, Alt+← and the mouse's back button do the same (Ui/MainWindow.ParserShare.cs)
@@ -112,7 +112,7 @@ public partial class MainWindow
         FrameworkElement body = ctx.Tab switch
         {
             "Compare" => ParserCommand.Compare(v, ctx.Copy(ParserShare.Compare)),
-            "Timeline" => GraphsView(e, v, live),   // the Graphs tab (Ui/MainWindow.ParserGraphs.cs); each graph has its own Copy picture
+            "Timeline" => GraphsView(e, v, live, ctx),   // the Graphs tab, the group's table under it (Ui/MainWindow.ParserGraphs.cs)
             "Taken" => ParserCommand.Taken(v, ctx.Copy(ParserShare.Taken)),
             _ => (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) ? ParserCommand.Group(v, ctx, live, detail: !live) : new Border(),
         };
@@ -120,7 +120,7 @@ public partial class MainWindow
         if (Shareable(e) && body is not Border { Child: null }) ShareOnRightClick(body, e, v, ParserShare.ViewOfTab(ctx.Tab));
         page.Children.Add(Margin(body, 0, 12, 0, 0));
         // a kept fight: your kills and the kills near you, under the group
-        if (!live && ctx.Tab == "Group")
+        if (!live && ctx.Tab is "Group" or "Timeline")
         {
             void KillChips(string head, IEnumerable<KillNear> kills)
             {

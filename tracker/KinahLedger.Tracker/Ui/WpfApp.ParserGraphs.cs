@@ -68,7 +68,16 @@ public static partial class WpfApp
                 }
             }
             Pictures("six", ParserGraphs.Kinds);
-            Pictures("live120", ParserGraphs.Dps);
+            Pictures("live120", ParserGraphs.Kinds);
+            Pictures("wipe", ParserGraphs.Kinds);
+            // the Timeline share picture (Share's menu) of the six-member kill
+            {
+                w.ShowGraphsDemo("six"); DoEvents();
+                var e = w.ParserShownForTest!;
+                var bmp = ParserShare.Render(e, w.ShareNowForTest(e), w.ParserPastForTest, ParserShare.Timeline, w.SharePartsForTest);
+                var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp));
+                using var fs = File.Create(Path.Combine(dir, "ui-graphs-picture-six-timeline-share.png")); enc.Save(fs);
+            }
             Pictures("solo", ParserGraphs.Dps);
         }
         finally { MainWindow.ShareSinkForTest = null; }
@@ -133,6 +142,44 @@ public static partial class WpfApp
             return (proc.TotalProcessorTime.TotalMilliseconds - p0, UiThreadMs() - u0, render, frames, redraws, ParserGraphs.DataMs + ParserGraphs.DrawMs - gm0, ParserGraphs.Chart.Frames - pf0);
         }
         finally { ParserGraphs.Chart.ForceMotionForTest = false; }
+    }
+    /// <summary>
+    /// Every graph picture says who is which colour (Steven, 2026-11-18: "when u copy the pictures that arent the main DPS graph
+    /// it doesnt show which color is who"): each graph's Copy picture, and the Timeline share picture, laid out for the fights the
+    /// renders draw, must carry every member's name (the healers' on the healing's, with the damage taken), nothing cut.
+    /// </summary>
+    static void GraphPictureChecks(MainWindow w, Action<bool, string> check, string lang)
+    {
+        var bad = new List<string>(); int seen = 0;
+        foreach (var st in new[] { "six", "live120", "wipe", "solo", "killed" })
+        {
+            w.ShowGraphsDemo(st); DoEvents();
+            var e = w.ParserShownForTest!;
+            var now = w.ShareNowForTest(e);
+            var v = w.GraphsViewForTest(e);
+            var s = ParserGraphs.Of(v, e.Live);
+            foreach (var kind in ParserGraphs.Kinds.Where(s.Has))
+            {
+                var laid = ParserGraphs.Laid(e, now, v, kind);
+                var texts = MeterShare.Texts(laid);
+                var names = kind == ParserGraphs.Dps ? s.Members.Select(m => m.Name).Append(L.T("Boss HP")) : s.Healers.Select(h => h.Name).Concat(s.Taken != null ? new[] { L.T("Damage taken") } : Array.Empty<string>());
+                var missing = names.Where(n => !texts.Any(x => x.Contains(n, StringComparison.Ordinal))).ToList();
+                var cut = MeterShare.Trimmed(laid);
+                bool you = kind != ParserGraphs.Dps || texts.Any(x => x == L.F("{0} (you)", s.Members.First(m => m.You).Name));
+                seen++;
+                if (missing.Count > 0 || cut.Count > 0 || !you) bad.Add($"{st} {kind}: missing {string.Join(", ", missing)}{(cut.Count > 0 ? "; cut " + string.Join(", ", cut) : "")}{(you ? "" : "; yours not marked")}");
+            }
+            if (st == "six")
+            {
+                var share = ParserShare.Laid(e, now, w.ParserPastForTest, ParserShare.Timeline, w.SharePartsForTest);
+                var texts = MeterShare.Texts(share);
+                var missing = s.Members.Select(m => m.Name).Where(n => !texts.Any(x => x.Contains(n, StringComparison.Ordinal))).ToList();
+                var cut = MeterShare.Trimmed(share);
+                seen++;
+                if (missing.Count > 0 || cut.Count > 0) bad.Add($"{st} timeline share: missing {string.Join(", ", missing)}{(cut.Count > 0 ? "; cut " + string.Join(", ", cut) : "")}");
+            }
+        }
+        check(bad.Count == 0 && seen >= 9, $"graphs, {lang}: each copied graph picture (and the Timeline share) names every line by its colour, yours \"(you)\", nothing cut ({seen} pictures){(bad.Count > 0 ? ": " + string.Join(" | ", bad) : "")}");
     }
     /// <summary>
     /// options-test (<c>KL_OPTIONS_ONLY=graphs</c> alone): the Parser page's Graphs tab. It is first and the default for a fight
@@ -222,6 +269,15 @@ public static partial class WpfApp
             check(ReferenceEquals(w.GraphsForTest, panel) && panel.Shown!.N > n0 + 1 && redraws >= 2 && redraws <= secs * 1000 / ParserGraphs.LiveFrameMs + 1
                 && panel.Shown!.Extent == ext0 && panel.Shown!.YMax == y0,
                 $"graphs, live: the same view kept over {frames} page redraws in {secs:0.0} s; its lines grew from {n0} to {panel.Shown!.N} s in a frame that stood still ({PK.Clock(panel.Shown!.Extent)}, {panel.Shown!.YMax:N0}), its graphs drawn {redraws} times (at most every {ParserGraphs.LiveFrameMs} ms)");
+            GraphPictureChecks(w, check, "en");
+            // the group's table straight under the graphs (Steven, 2026-11-18: "group should just be under the graphs"), no Group tab
+            w.ShowGraphsDemo("six"); DoEvents(); DoEvents();
+            var rowsUnder = new List<FrameworkElement>();
+            void Rows(DependencyObject d) { if (d is FrameworkElement fe && Equals(fe.Tag, "parser-member")) rowsUnder.Add(fe); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Rows(ch); }
+            if (FindTagged(w.ParserPage, "parser-graphs-view") is { } gv) Rows(gv);
+            var tabsNow = ParserCommand.Tabs(w.GraphsViewForTest(w.ParserShownForTest!));
+            check(rowsUnder.Count == 6 && tabsNow[0] == "Timeline" && !tabsNow.Contains("Group") && w.GraphsBottomForTest <= w.ParserViewportForTest + 1,
+                $"graphs: the group's table is under the graphs ({rowsUnder.Count} rows), no Group tab ({string.Join(", ", tabsNow)}), the graphs still fit the window");
             // the pen: a kept fight's first look draws in (once: a redraw of it doesn't), a live fight's heads glide to a newer
             // second, and with the window still (renders, Windows's animations off) nothing plays
             ParserGraphs.Chart.ForceMotionForTest = true;
@@ -233,7 +289,7 @@ public static partial class WpfApp
                 var wait = Stopwatch.StartNew();
                 while (fight.Revealing && wait.ElapsedMilliseconds < 3000) PumpUntil(wait, wait.ElapsedMilliseconds + 20);
                 double took = wait.ElapsedMilliseconds;
-                w.ShowGraphsDemo("six"); DoEvents();
+                w.ParserTabForTest = "Timeline"; DoEvents();   // the same fight's page drawn again
                 bool again = w.GraphsForTest!.ChartOf(ParserGraphs.Dps).Revealing;
                 w.ResetGraphsForTest(); w.ShowGraphsDemo("live24"); DoEvents();
                 var live = w.GraphsForTest!; var lf = live.ChartOf(ParserGraphs.Dps);
@@ -265,9 +321,9 @@ public static partial class WpfApp
             Console.WriteLine(Row("Graphs, pen still, page once a second", quiet0));
             Console.WriteLine(Row("Graphs, pen drawing, page once a s", quiet1));
             double penCost = (quiet1.UiMs + quiet1.RenderMs - quiet0.UiMs - quiet0.RenderMs) / 100;
-            Console.WriteLine($"      the pen's own cost (window + render thread, quiet page): {penCost:0.0}% of a core at {1000 / ParserGraphs.Chart.FrameMs:0} frames a second");
+            Console.WriteLine($"      the pen's own cost (window + render thread, quiet page): {penCost:0.0}% of a core at {1000 / ParserGraphs.Chart.FrameMs:0} frames a second; drawing its layer took {ParserGraphs.Chart.PenMs:0} ms over every run ({ParserGraphs.Chart.PenMs / Math.Max(1, ParserGraphs.Chart.Frames):0.00} ms a frame)");
             check(still.UiMs <= group.UiMs * 1.35 + 150 && drawn.PenFrames > 100 && penCost <= 5,
-                $"graphs: a live fight on the Graphs tab costs the window thread about what the Group tab does ({still.UiMs:0} ms against {group.UiMs:0} ms in 10 s); the pen drew {drawn.PenFrames} frames for {penCost:0.0}% of a core");
+                $"graphs: a live fight on the Graphs tab (the graphs and the group's table under them) costs the window thread about what the Group tab did ({still.UiMs:0} ms against {group.UiMs:0} ms in 10 s); the pen drew {drawn.PenFrames} frames for {penCost:0.0}% of a core");
         }        finally { MainWindow.ShareSinkForTest = null; w.Close(); }
 
         // every text in Korean and Chinese: the graph states drawn in each, nothing English left, every L.T with an entry
@@ -281,7 +337,11 @@ public static partial class WpfApp
                 LangCheck.Begin();
                 Directory.CreateDirectory(Path.Combine(dir, code));
                 int rc = ShotParser(settings, Path.Combine(dir, code), "graphs", null);
-                var (onScreen, noEntry) = LangCheck.End();
+                {
+                    var lw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+                    lw.Show(); lw.ShowDemo(); DoEvents();
+                    try { GraphPictureChecks(lw, check, code); } finally { lw.Close(); }
+                }                var (onScreen, noEntry) = LangCheck.End();
                 check(rc == 0 && onScreen.Count == 0 && noEntry.Count == 0,
                     $"graphs, {code}: drawn whole, no English left ({string.Join("; ", onScreen.Take(8))}), every text with an entry ({string.Join("; ", noEntry.Take(8))})");
             }

@@ -347,7 +347,8 @@ public static partial class WpfApp
             {
                 var p = VisualTreeHelper.GetParent(cur);
                 if (p == null) return null;
-                if (p is Panel && VisualTreeHelper.GetParent(p) == w.ParserPage) return cur as FrameworkElement;
+                // a section: a part of the page, or of the Graphs view (the graphs, the group's table under them)
+                if ((p is Panel && VisualTreeHelper.GetParent(p) == w.ParserPage) || p is FrameworkElement { Tag: "parser-graphs-view" }) return cur as FrameworkElement;
                 cur = p;
             }
         }

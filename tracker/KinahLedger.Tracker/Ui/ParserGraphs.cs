@@ -277,10 +277,12 @@ static class ParserGraphs
         // (Motion.Still) shows the end, KL_MOTION_AT holds it at that point.
 
         /// <summary>How long a kept fight's draw-in takes, a live line's head takes to reach its newest second, and the frame tick.</summary>
-        public const double DrawInMs = 800, GlideMs = 1000, FrameMs = 40;
+        public const double DrawInMs = 800, GlideMs = 700, FrameMs = 66;   // 15 a second: a head moves a few pixels a second on the fixed frame, so this reads smooth
         /// <summary>For the options test's CPU measure: play the pen though the window sits still (Motion.Still), and the frames drawn.</summary>
         internal static bool ForceMotionForTest;
         internal static int Frames;
+        /// <summary>For the options test's CPU measure: the time the pen's frames took to draw (the heads' layer), in ms.</summary>
+        internal static double PenMs;
         double _reveal = 1, _glide = 1;
         long _revealStart, _glideStart;
         bool _revealing, _gliding, _ticking;
@@ -353,9 +355,11 @@ static class ParserGraphs
             }
             if (_gliding)
             {
-                _glide = Math.Min(1, Stopwatch.GetElapsedTime(_glideStart, now).TotalMilliseconds / GlideMs);
+                _glide = Motion.Out(Math.Min(1, Stopwatch.GetElapsedTime(_glideStart, now).TotalMilliseconds / GlideMs));   // the pen settles into its point
                 if (_glide >= 1) _gliding = false;
+                long p0 = Stopwatch.GetTimestamp();
                 DrawHeads();
+                PenMs += Stopwatch.GetElapsedTime(p0).TotalMilliseconds;
             }
             if (!_revealing && !_gliding) StopTick();
         }
@@ -980,7 +984,10 @@ static class ParserGraphs
         chart.SetData(s);
         var body = new StackPanel();
         var sub = s.Live ? L.F("{0} in", PK.Clock(v.E.Duration(v.Now).TotalSeconds)) + "  ·  " + L.F("{0} s average", AverageSeconds) : L.F("{0} s average", AverageSeconds);
-        body.Children.Add(M(Head(TitleText(Title(kind, s)), Sub(sub), null), 0, 0, 0, 8));
+        body.Children.Add(M(Head(TitleText(Title(kind, s)), Sub(sub), null), 0, 0, 0, 4));
+        // who is which colour, said in words under the title (Steven, 2026-11-18: "when u copy the pictures that arent the main
+        // DPS graph it doesnt show which color is who"): a picture travels without the page around it
+        body.Children.Add(M(Legend(kind, s), 0, 0, 0, 8));
         body.Children.Add(chart);
         var card = Glass(body, new Thickness(14, 12, 14, 10), 14);
         card.Width = width;
@@ -998,6 +1005,39 @@ static class ParserGraphs
         finally { if (swap) Skins.Apply(was); }
     }
 
+    /// <summary>
+    /// A picture's legend: each line's colour and name (yours gold, "(you)"), the boss's HP, the damage taken; wrapping to a
+    /// second line rather than cutting a name.
+    /// </summary>
+    public static FrameworkElement Legend(string kind, Set s)
+    {
+        var wp = new WrapPanel { Tag = "graph-legend" };
+        void Add(Color c, string name, bool you, bool area = false)
+        {
+            var sw = new Border
+            {
+                Width = area ? 11 : 14, Height = area ? 9 : 3.5, CornerRadius = new CornerRadius(area ? 2 : 1.75), Background = C(c, area ? 0.45 : 1),
+                BorderBrush = area ? C(c) : null, BorderThickness = new Thickness(area ? 1 : 0), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center,
+            };
+            var tb = T(you ? L.F("{0} (you)", name) : name, 12, you ? GoldInk : K("Text2"), you ? FontWeights.Bold : FontWeights.SemiBold, trim: false);
+            wp.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 16, 2), Children = { sw, tb } });
+        }
+        if (kind == Dps)
+        {
+            foreach (var l in s.Members) Add(l.Color, l.Name, l.You);
+            if (s.HpLeft != null) Add((K("Ink") as SolidColorBrush)?.Color ?? White, L.T("Boss HP"), false);
+        }
+        else
+        {
+            foreach (var l in s.Healers) Add(l.Color, l.Name, l.You);
+            if (s.Taken != null) Add(Coral, L.T("Damage taken"), false, area: true);
+        }
+        return wp;
+    }
+
+    /// <summary>For the options test: a graph's picture laid out at its size in the share frame (its words readable), not drawn.</summary>
+    public static Border Laid(Encounter e, DateTime now, FightView v, string kind) =>
+        MeterShare.Framed(e, now, () => Face(v, kind, ParserShare.ContentWidth), "parser-graph-" + kind, b => b);
     /// <summary>The PNG of one graph in the share frame (Ui/MeterShare.cs), at twice its size, in the dark look.</summary>
     public static BitmapSource Picture(Encounter e, DateTime now, FightView v, string kind) =>
         InDark(() => MeterShare.Framed(e, now, () => Face(v, kind, ParserShare.ContentWidth), "parser-graph-" + kind, b => MeterShare.Snap(b, "parser graph picture")));

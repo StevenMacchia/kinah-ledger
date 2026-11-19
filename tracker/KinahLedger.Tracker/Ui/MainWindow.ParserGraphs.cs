@@ -15,7 +15,25 @@ public partial class MainWindow
     ParserGraphs.GraphsPanel? _graphs;
     bool _graphsFitHooked;
 
-    /// <summary>The Graphs view of <paramref name="e"/>: the kept panel when it is the same fight, else a new one.</summary>
+    /// <summary>
+    /// The Graphs tab: the graphs, then the group's table straight under them (Steven, 2026-11-18: "group should just be under
+    /// the graphs if you wanna click u shouldnt have to click on group"), the same table the Group tab drew, its rows opening a
+    /// member, its own Copy picture and Copy text. The graphs keep the size the window gives them; the page scrolls to the table.
+    /// </summary>
+    FrameworkElement GraphsView(Encounter e, FightView v, bool live, CommandCtx ctx)
+    {
+        var view = new StackPanel { Tag = "parser-graphs-view" };
+        view.Children.Add(GraphsView(e, v, live));
+        if (v.Members.Count > 0 || e.ModeKind == ParserMode.Bosses)
+        {
+            var group = ParserCommand.Group(v, ctx, live, detail: !live);
+            if (Shareable(e)) ShareOnRightClick(group, e, v, ParserShare.Group);   // its own right-click, before the graphs' (handled here)
+            view.Children.Add(Margin(group, 0, 12, 0, 0));
+        }
+        return view;
+    }
+
+    /// <summary>The graphs of <paramref name="e"/>: the kept panel when it is the same fight, else a new one.</summary>
     FrameworkElement GraphsView(Encounter e, FightView v, bool live)
     {
         string key = $"{e.Id}|{Skins.Current}|{live}|{L.Code}";
@@ -75,6 +93,8 @@ public partial class MainWindow
     // ---- renders and the options test (ui-shot --parser graphs, KL_OPTIONS_ONLY=graphs) ----
 
     internal ParserGraphs.GraphsPanel? GraphsForTest => _graphs;
+    /// <summary>For the options test: the fight shown as its Copy picture sees it (its moment, the kept pulls before it).</summary>
+    internal FightView GraphsViewForTest(Encounter e) => ParserViewOf(e, ShareNowOf(e), ParserPast());
     /// <summary>For a render or the test: the next fight shown gets a fresh panel (a first look: its draw-in plays).</summary>
     internal void ResetGraphsForTest() { _graphs?.Stop(); _graphs = null; }
     internal bool CopyGraphForTest(string kind) => _graphs != null && CopyGraph(_graphs.Key.Split('|')[0], kind);
