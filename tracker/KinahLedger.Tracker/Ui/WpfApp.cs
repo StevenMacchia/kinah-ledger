@@ -1380,7 +1380,8 @@ public static partial class WpfApp
             var pg = w.QuestsPageForTest();
             Check(!pg.Off && pg.Active >= 3 && pg.Daily >= 1 && pg.AllTime >= 1 && pg.Done > 0, $"the Quests page: {pg.Active} active, {pg.Daily} daily, {pg.AllTime} all time, {pg.Done} done");
             // 0.10.28 (Steven): the page scrolls inside the window instead of growing it down the screen
-            Check(farmHeight >= 500 && w.MaxHeight <= farmHeight && w.ActualHeight <= farmHeight + 1 && w.LowerScroll.ScrollableHeight > 0,
+            // since 1.0.20 the window's MaxHeight is the screen's and the cap is the page area's (Ui/MainWindow.Fit.cs, the drag resize fix)
+            Check(farmHeight >= 500 && w.ActualHeight <= farmHeight + 1 && w.LowerScroll.ScrollableHeight > 0,
                 $"the Quests page keeps the Farming page's height and scrolls inside it: window {w.ActualHeight:0} (Farming was {farmHeight:0}), {w.LowerScroll.ScrollableHeight:0} to scroll");
             var pinChain = w.QuestsNowForTest[3].Chain;
             w.TogglePinForTest(3); DoEvents();
