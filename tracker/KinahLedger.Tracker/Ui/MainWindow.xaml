@@ -308,7 +308,7 @@
               <TextBlock Text="Runs" VerticalAlignment="Center"/>
             </Button>
             <!-- Parser (2026-11-13, Ui/MainWindow.Parser.cs; after Runs since 0.10.93, Steven: "move the parser button next to the craft and runs"): boss fights in Transcendence, Expeditions and Sanctuaries -->
-            <Button x:Name="ParserTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Parser: boss fights in Transcendence, Expeditions, Sanctuaries and Nightmare, and world bosses, one per boss, with your group, the clock and the fights kept on this PC.">
+            <Button x:Name="ParserTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Parser: boss fights in Transcendence, Expeditions, Sanctuaries, Nightmare and Ascension Trials, and world bosses, one per boss, with your group, the clock and the fights kept on this PC.">
               <TextBlock Text="Parser" VerticalAlignment="Center"/>
             </Button>
             <!-- Timers (Ui/MainWindow.TimersPage.cs): events and world bosses; the next watched one's countdown rides on the tab -->

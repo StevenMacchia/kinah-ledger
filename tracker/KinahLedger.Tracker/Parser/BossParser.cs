@@ -6,7 +6,7 @@ namespace KinahLedger.Parser;
 /// <summary>What the Parser keeps (Steven, 2026-11-13: "allow users to select just boss only for parser or full run etc").</summary>
 public enum ParserMode
 {
-    /// <summary>One record per boss pull in a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and per world boss pull (the default).</summary>
+    /// <summary>One record per boss pull in a Transcendence, an Expedition, a Sanctuary, a Nightmare instance or an Ascension Trial, and per world boss pull (the default).</summary>
     Bosses = 0,
     /// <summary>One record per instance run of those dungeons, entering to leaving, trash included, each boss a split.</summary>
     Run = 1,
@@ -20,7 +20,7 @@ public enum ParserMode
 /// parser or full run etc". The rules:
 /// <list type="bullet">
 /// <item>Boss pulls are followed whatever the mode (a run's splits and a fight's name come from them). A pull exists
-///   inside a Transcendence, an Expedition, a Sanctuary or a Nightmare instance, and for a world boss the timers know
+///   inside a Transcendence, an Expedition, a Sanctuary, a Nightmare instance or an Ascension Trial, and for a world boss the timers know
 ///   wherever it is fought (<see cref="World"/>; Steven, 2026-11-17: "add boss names / bars etc for nightmare dungeons and
 ///   world bosses etc and add them to the parser logs"). The decoder says a pull only for the bosses on its own
 ///   list; the tracker's list (Parser/BossBook.cs) gives the kind (a Sanctuary), the final boss and the name as players
@@ -371,9 +371,9 @@ public sealed class BossParser
     /// <summary>What the mode counts, in one sentence (the Parser page's head, the overlay's menu).</summary>
     public static string Counts(ParserMode m) => m switch
     {
-        ParserMode.Run => "Each Transcendence, Expedition, Sanctuary or Nightmare run, from entering to leaving, trash included, with every boss as a split.",
+        ParserMode.Run => "Each Transcendence, Expedition, Sanctuary, Nightmare or Ascension Trial run, from entering to leaving, trash included, with every boss as a split.",
         ParserMode.Fights => $"Every fight anywhere, the open world and the Abyss too: from the first hit or kill to {PauseSeconds:0} seconds without one. Open-world and Abyss fights show while they last and are never kept.",
-        _ => "Each boss pull in Transcendence, Expeditions, Sanctuaries and Nightmare, and each world boss; trash and the rest of the open world never count.",
+        _ => "Each boss pull in Transcendence, Expeditions, Sanctuaries, Nightmare and Ascension Trials, and each world boss; trash and the rest of the open world never count.",
     };
 
     public static string ModeKey(ParserMode m) => m switch { ParserMode.Run => "run", ParserMode.Fights => "fight", _ => "boss" };
@@ -451,7 +451,8 @@ public sealed class BossParser
                     if (!sameCopy) EndAlways(ie.At, to ? $"entered {ie.Name.Trim()}" : "left the instance");
                 }
                 // the bosses down and the names given: this copy's, kept through a reconnect into it
-                if (!sameName || again) { _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _gameMode = ""; _transcend = false; _stage = 0; _roomClosedAt = null; }
+                if (!sameName || again) { _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _gameMode = ""; _modeCode = null; _transcend = false; _stage = 0; _roomClosedAt = null; }
+                _bossFromGame = false; _trialByCode = false; TrialReset();
                 // a Transcendence the game names as one ("Shattered Arkanis [Stage 3]", its own kind): its stage from the name
                 if (kind == ContentKind.Transcendence) { _transcend = true; _stage = BossBook.StageIn(ie.Name) is > 0 and var sn ? sn : _stage; _gameMode = BossBook.StageMode(StageNow(ie.At)); }
                 // a new run of the same instance: the group comes again from the game (the one before was the last run's)
@@ -466,12 +467,7 @@ public sealed class BossParser
                 break;
             }
             case InstanceLeft il:
-                _reentry = null; _gapBefore = null;
-                if (Kept(_kind)) EndAlways(il.At, "left the instance");
-                if (_cur != null) ClosePull(_cur, BossOutcome.Left, il.At, done, "left the instance", yours: true);
-                _preHits.Clear(); _inferred = null; _recentTaken.Clear(); _pendingDeaths.Clear(); _effectsOn.Clear(); _castsLanded.Clear();
-                if (_run != null) CloseRun(RunEnd(_run), il.At, done, "left the instance");
-                _kind = ContentKind.Other; _instance = ""; _instanceId = 0; _gameMode = ""; _transcend = false; _stage = 0; _roomClosedAt = null;
+                LeftPlace(il.At, done);
                 break;
             case InstanceMode im:
             {
@@ -489,16 +485,27 @@ public sealed class BossParser
                 break;
             }
             case BossEngaged be:
+                _bossFromGame = true;   // the game marks this place's bosses: no trial boss is worked out from the damage (TrialHit)
                 Engage(be, done);
                 break;
             case BossEnded end:
-                if (_cur != null && (end.BossId == 0 || end.BossId == _cur.BossId)) ClosePull(_cur, end.Outcome, end.At, done, null);
+                // one of bosses fought together died: the pull goes on until the last of them
+                if (_cur != null && end.Outcome == BossOutcome.Kill && end.BossId != 0 && _cur.WithIds != null && _cur.IsBoss(end.BossId) && !JointDown(end.BossId, end.At)) break;
+                if (_cur != null && (end.BossId == 0 || _cur.IsBoss(end.BossId))) ClosePull(_cur, end.Outcome, end.At, done, null);
                 break;
             case UnitDied ud:
             {
                 // your death comes twice (this row and the kill tally's): counted once
                 bool youCounted = ud.Id != 0 && Records().Any(r => r.You?.Id == ud.Id) && SameDeathOfYours(ud.At);
-                bool bossDied = _cur != null && ((ud.Id != 0 && ud.Id == _cur.BossId) || (ud.Boss && ud.Name.Trim().Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase) && (ud.Id == 0 || _cur.BossId == 0)));
+                if (_trialTaken.TryGetValue(ud.Id, out var tt) && !tt.Dead) { tt.Dead = true; _trialDeadMax = Math.Max(_trialDeadMax, tt.Damage); }
+                bool bossDied = _cur != null && ((ud.Id != 0 && _cur.IsBoss(ud.Id)) || (ud.Boss && ud.Name.Trim().Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase) && (ud.Id == 0 || _cur.BossId == 0)));
+                // one of bosses fought together: a kill of it, and the pull goes on until the last of them died
+                if (bossDied && ud.Id != 0 && _cur!.WithIds != null && !JointDown(ud.Id, ud.At))
+                {
+                    _cur.LastAt = Max(_cur.LastAt, ud.At);
+                    _cur.Kills.Add(new KillNear { At = ud.At, Name = _pullBossNames.GetValueOrDefault(ud.Id, _cur.Boss), Boss = true });
+                    break;
+                }
                 foreach (var e in Records())
                 {
                     if (ReferenceEquals(e, _cur) && bossDied) continue;
@@ -546,6 +553,7 @@ public sealed class BossParser
                 if (_mode == ParserMode.Fights && _fight == null) OpenFight(dd.At);
                 FarmAt(dd.At);
                 if (Ours(dd.SourceId, dd.SourceIsYou)) AlwaysFight(dd.At, open: true);
+                TrialHit(dd, done);
                 // a dungeon's trash (Steven, 2026-11-17: "this needs to track the dps but only LOG the bosses"): the live meter's,
                 // the run's and Every fight's, never a boss pull's (an add hit during a pull included)
                 if (dd.Trash)
@@ -566,14 +574,15 @@ public sealed class BossParser
                     Log($"{c0.Boss}: the first damage {(dd.At - c0.Start).TotalSeconds:0.0} s after the pull, which starts there");
                     c0.MoveStart(dd.At);
                 }
-                bool toBoss = _cur != null && (_cur.Wave || (dd.TargetId != 0 && dd.TargetId == _cur.BossId));
+                bool toBoss = _cur != null && (_cur.Wave || _cur.IsBoss(dd.TargetId));
                 foreach (var e in Records()) Credit(e, dd, toBoss);
                 // your hit while farming: the live readout's (FarmDpsNow)
                 if (FarmRecord is { } fr && (dd.SourceIsYou || fr.Roster.Any(x => x.You && x.Id == dd.SourceId && dd.SourceId != 0))) FarmHit(fr, dd.At, dd.Amount);
                 break;
             }
-            case BossHealth bh:
-                if (_cur == null || (bh.BossId != 0 && _cur.BossId != 0 && bh.BossId != _cur.BossId)) break;
+            case BossHealth bh0:
+                if (_cur == null || (bh0.BossId != 0 && _cur.BossId != 0 && !_cur.IsBoss(bh0.BossId))) break;
+                var bh = JointHealth(bh0);
                 _cur.LastAt = Max(_cur.LastAt, bh.At);
                 // back to full after falling, with no damage for a while: the boss reset, the group wiped though no end came
                 if (bh.Max > 0 && bh.Hp >= bh.Max && _cur.LastHpFallAt != null && _cur.BossHp < bh.Max
@@ -600,6 +609,7 @@ public sealed class BossParser
             case HitDealt hd:
             {
                 if (hd.Source == 0 || hd.Amount >= ImpossibleHit) break;   // a misread hit (DamageDealt says so once): in no figure
+                if (_trialTaken.TryGetValue(hd.Target, out var th) && !th.Dead && th.Hits.Count < TrialRowsKept) th.Hits.Add(hd);
                 // a cast counts once, with its first hit that lands here (a cast whose hits all went elsewhere, or missed, isn't
                 // this fight's): so an ability's casts are never more than its hits
                 bool firstOfCast = !hd.NoRow && !hd.Tick && hd.Skill > 0 && _castsLanded.Add((hd.Actor, hd.Cast, hd.Skill));
@@ -1001,6 +1011,9 @@ public sealed class BossParser
         }
         BossBook.Boss? listed = world == null ? _book.Find(_instance, name) : null;
         if (world == null && _book.Knows(_instance) && listed == null && name != UnnamedBoss) Log($"{name}: not on data/bosses.txt for {_instance}; kept under the game's name");
+        // bosses fought together (bosses.txt "with": Sanctum of Loathing's two): one pull under all their names
+        var together = listed != null ? _book.Together(_instance, listed.Name) : Array.Empty<BossBook.Boss>();
+        string pullName = together.Count > 0 ? BossBook.JointName(together) : listed?.Name ?? name;
         // back into an instance of the same name (Reentry): a boss already down here pulled again is a new run of it; any
         // other boss, the same copy
         if (_reentry != null && world == null)
@@ -1010,8 +1023,14 @@ public sealed class BossParser
         }
         if (_cur != null)
         {
-            bool same = be.BossId != 0 && _cur.BossId != 0 ? be.BossId == _cur.BossId : name.Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase);
+            bool same = be.BossId != 0 && _cur.BossId != 0 ? _cur.IsBoss(be.BossId) : name.Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase) || pullName.Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase);
             if (same) { _cur.LastAt = Max(_cur.LastAt, be.At); return; }
+            // another of the bosses fought together with the pull's, none of its name in it yet: the same pull, one boss more
+            if (together.Count > 0 && be.BossId != 0 && pullName.Equals(_cur.Boss, StringComparison.OrdinalIgnoreCase) && !_pullBossNames.ContainsValue(listed!.Name))
+            {
+                Join(_cur, be.BossId, listed.Name, be.At);
+                return;
+            }
             // a new boss (or a new spawn of this one): the pull under way is over, and this one starts afresh
             ClosePull(_cur, BossOutcome.Left, Max(_cur.LastAt, _cur.Start), done, $"{name} was pulled");
         }
@@ -1024,10 +1043,13 @@ public sealed class BossParser
             }
             : new Encounter
             {
-                Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
-                Boss = listed?.Name ?? name, BossId = be.BossId, FinalBoss = listed?.Final == true, Wave = listed?.Wave == true,
+                Mode = "boss", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode, ModeCode = _modeCode,
+                Boss = pullName, BossId = be.BossId, FinalBoss = together.Count > 0 ? together.Any(b => b.Final) : listed?.Final == true, Wave = listed?.Wave == true,
                 Start = be.At, LastAt = be.At, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
             };
+        _pullBossNames.Clear(); _jointDown.Clear(); _jointHp.Clear();
+        _pullTogether = together.Count;
+        if (be.BossId != 0) _pullBossNames[be.BossId] = listed?.Name ?? name;
         MergeGroup(_cur, _group, null);
         ApplyClasses(_cur);
         _inferred = null;
@@ -1064,7 +1086,7 @@ public sealed class BossParser
     {
         _run = new Encounter
         {
-            Mode = "run", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode,
+            Mode = "run", Kind = Encounter.KindName(_kind), Instance = _instance, InstanceId = _instanceId, GameMode = _gameMode, ModeCode = _modeCode,
             Start = at, LastAt = at, App = Upload.RunPayload.AppVersion, TargetsSplit = true,
         };
         if (midway) MarkPartial(_run, "counted from partway through the run");
@@ -1432,7 +1454,13 @@ public sealed class BossParser
         Settle(e);
         if (!e.Wave) { _alwaysEnded = Copy(e); FightHealth(e); }
         _endedPull = (e.End.Value, e.Wave || _alwaysEnded == null ? new List<Encounter> { e } : new List<Encounter> { e, _alwaysEnded });
-        if (outcome == BossOutcome.Kill) { _downHere.Add(e.Boss); if (e.BossId != 0) _downIds.Add(e.BossId); }
+        if (outcome == BossOutcome.Kill)
+        {
+            _downHere.Add(e.Boss); if (e.BossId != 0) _downIds.Add(e.BossId);
+            // bosses fought together: each of them is down (the list's final one among them clears the instance)
+            foreach (var (id, n) in _pullBossNames) { _downHere.Add(n); _downIds.Add(id); }
+            foreach (var b in _book.Together(e.Instance, _pullBossNames.Values.FirstOrDefault() ?? "")) _downHere.Add(b.Name);
+        }
         var secs = e.Duration(e.End.Value).TotalSeconds;
         bool worth = outcome == BossOutcome.Kill || secs >= MinSeconds;
         Log($"{e.Boss}: {e.OutcomeWord.ToLowerInvariant()} after {Clock(e.Duration(e.End.Value))}{(why != null ? $" ({why})" : "")}{(e.Partial ? $", partial: {string.Join(", ", e.PartialWhy)}" : "")}{(worth ? "" : ", too short to keep")}");
@@ -1562,6 +1590,8 @@ public sealed class BossParser
             if (instance != null && BossBook.IsModeWord(instance)) return;   // "Easy" is a mode, never a place
             var k = Encounter.KindOf(kind);
             if (k == ContentKind.Other && instance != null) k = _book.KindOf(instance);
+            // the run log files the Ascension Trial's instances as expeditions (data/instances.txt): the Parser's list says what they are
+            if (instance != null && _book.KindOf(instance) == ContentKind.AscensionTrial) k = ContentKind.AscensionTrial;
             // the game marked this place a Transcendence (its mode "G"): the run log's minimap says only its expedition
             if (_transcend && k == ContentKind.Expedition) k = ContentKind.Transcendence;
             var name = instance?.Trim() ?? "";
@@ -1588,12 +1618,19 @@ public sealed class BossParser
     /// the decoder doesn't list), the code names it from the boss list's codes (data/bosses.txt) and the screen's place isn't
     /// waited for; its mode word (Easy) is the mode when none came, never the name. Any other code (an open-world event) does nothing.
     /// </summary>
-    public void MapEvent(string code, DateTime at, bool closed = false)
+    public void MapEvent(string code, DateTime at, bool closed = false, bool over = false)
     {
         List<Encounter> done = new();
         lock (_gate)
         {
-            if (_instanceId == 0 || at < _enteredAt) return;
+            // an Ascension Trial: the game enters it with no word of its own, so its map events place it, end its boss and leave it
+            if (_book.FromCode(code) is { } trial && _book.KindOf(trial.Instance) == ContentKind.AscensionTrial && (_instanceId == 0 || _trialByCode))
+            {
+                TrialEvent(trial.Instance, code, at, closed, over, done);
+                _version++;
+                goto ended;
+            }
+            if (over || _instanceId == 0 || at < _enteredAt) return;
             if (_book.FromCode(code) is not { } named) return;
             var (transcend, stage) = _book.GradeOf(code);
             if (_instanceFromGame)
@@ -1612,7 +1649,211 @@ public sealed class BossParser
             else if (!closed && Kept(_book.KindOf(named.Instance)))
                 NameByCode(named.Instance, named.Mode, transcend, stage, code, at);
         }
+        ended:
         if (done.Count > 0) Finish(done, at);
+    }
+
+    // ---- the Ascension Trial (1.0.24) ----
+    // Steven, 2026-11-19: "add for the parser instanced boss fights like the ones at end of ascension trial". In the trial
+    // (Nightmare Altar, six runs recorded on 2026-11-19) the game says nothing of entering it, of its boss or of the boss's HP;
+    // only its map events say when a run is under way, over and closed, and its boss is the one enemy that takes far more
+    // damage than any other and never dies before the run is over (Divided Aponos: 1.75M each run, the rooms' enemies 0.2M
+    // to 0.3M each). So the boss is worked out from the damage: an enemy taking TrialBossTimes as much as the most any enemy
+    // killed this run took (and TrialBossMin at least) is the boss, and its pull starts at its first hit; at the run's end,
+    // a boss hit until then died (a kill at its last hit). A place whose game messages name its boss never does this.
+
+    /// <summary>The trial was placed by its map event, not by the game's entry (its closing leaves it).</summary>
+    bool _trialByCode;
+    /// <summary>The game named a boss in this place (BossEngaged): its pulls are the game's own.</summary>
+    bool _bossFromGame;
+    /// <summary>The tier the place's map code gave (Encounter.ModeCode), null when none.</summary>
+    string? _modeCode;
+    /// <summary>A trial's runs get ids of their own (below 0): each run of it is another copy.</summary>
+    long _codeEntries;
+
+    /// <summary>An enemy hit in this trial run: the damage it took from anyone, when, dead or not, and its rows (kept for the boss's pull).</summary>
+    sealed class TrialTarget
+    {
+        public long Damage;
+        public DateTime First, Last;
+        public bool Dead;
+        public List<DamageDealt> Rows { get; } = new();
+        public List<HitDealt> Hits { get; } = new();
+    }
+    readonly Dictionary<long, TrialTarget> _trialTaken = new();
+    /// <summary>The most damage any enemy killed in this trial run took.</summary>
+    long _trialDeadMax;
+    /// <summary>An enemy taking this many times the most any killed enemy took is the trial's boss, and at least <see cref="TrialBossMin"/>.</summary>
+    public const double TrialBossTimes = 3;
+    public const long TrialBossMin = 600_000;
+    /// <summary>At the run's end, its boss: hit within this long before it (a kill), else a wipe.</summary>
+    public const double TrialEndSeconds = 5;
+    /// <summary>At the run's end with no pull open, the boss is the enemy hit up to it that took this many times what any killed one took.</summary>
+    const double TrialEndTimes = 2;
+    /// <summary>Rows kept per enemy of a trial run (a boss's pull until it shows fits).</summary>
+    const int TrialRowsKept = 6000;
+    /// <summary>The pull's bosses by the game's id (each boss's own name), the ones of bosses fought together that died, and their HP.</summary>
+    readonly Dictionary<long, string> _pullBossNames = new();
+    readonly HashSet<long> _jointDown = new();
+    readonly Dictionary<long, (long Hp, long Max)> _jointHp = new();
+    /// <summary>How many bosses the pull's are fought together with it included (0: one boss alone).</summary>
+    int _pullTogether;
+
+    bool TrialInfers => _kind == ContentKind.AscensionTrial && !_bossFromGame;
+
+    void TrialReset() { _trialTaken.Clear(); _trialDeadMax = 0; }
+
+    /// <summary>The player left the instance (the game said so, or a trial's run closed).</summary>
+    void LeftPlace(DateTime at, List<Encounter> done, string why = "left the instance")
+    {
+        _reentry = null; _gapBefore = null;
+        if (Kept(_kind)) EndAlways(at, why);
+        if (_cur != null) ClosePull(_cur, BossOutcome.Left, at, done, why, yours: true);
+        _preHits.Clear(); _inferred = null; _recentTaken.Clear(); _pendingDeaths.Clear(); _effectsOn.Clear(); _castsLanded.Clear();
+        if (_run != null) CloseRun(RunEnd(_run), at, done, why);
+        _kind = ContentKind.Other; _instance = ""; _instanceId = 0; _gameMode = ""; _modeCode = null; _transcend = false; _stage = 0; _roomClosedAt = null;
+        if (_trialByCode) _instanceFromGame = false;
+        _trialByCode = false; _bossFromGame = false; TrialReset();
+    }
+
+    /// <summary>A trial's map event: under way places it (a new run of it), over ends its boss's pull, closed leaves it.</summary>
+    void TrialEvent(string instance, string code, DateTime at, bool closed, bool over, List<Encounter> done)
+    {
+        bool here = _trialByCode && Kept(_kind) && BossBook.Strip(_instance).Equals(instance, StringComparison.OrdinalIgnoreCase);
+        if (over) { if (here) TrialOver(at, done); return; }
+        if (closed) { if (here) { Log($"{_instance}: the run is over (its map event)"); LeftPlace(at, done, "the trial's run closed"); } return; }
+        if (here) return;   // the same run's other map event
+        if (_trialByCode) LeftPlace(at, done, "another trial run");
+        _enteredAt = at;
+        _instanceId = --_codeEntries;
+        _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _gameMode = ""; _transcend = false; _stage = 0; _roomClosedAt = null;
+        _bossFromGame = false; TrialReset();
+        _trialByCode = true;
+        _modeCode = _book.TierOf(code);
+        NameByCode(instance, "", false, 0, code, at);
+        foreach (var e in Records()) if (e.ModeKind != ParserMode.Fights || Kept(_kind)) e.ModeCode = _modeCode;
+    }
+
+    /// <summary>A hit in a trial whose boss the game doesn't name: counted per enemy, and the boss's pull opened once it shows.</summary>
+    void TrialHit(DamageDealt dd, List<Encounter> done)
+    {
+        if (!TrialInfers || dd.TargetId == 0 || dd.Amount <= 0) return;
+        if (_cur != null && _cur.IsBoss(dd.TargetId)) return;
+        if (!_trialTaken.TryGetValue(dd.TargetId, out var t)) _trialTaken[dd.TargetId] = t = new TrialTarget { First = dd.At };
+        if (t.Dead) return;
+        t.Damage += dd.Amount;
+        t.Last = dd.At;
+        bool boss = t.Damage >= Math.Max(TrialBossMin, TrialBossTimes * _trialDeadMax);
+        // a second boss fought together with the pull's (Sanctum of Loathing's two): it joins the pull
+        if (boss && _cur != null && _pullTogether > _pullBossNames.Count && _pullBossNames.Count > 0
+            && _book.Together(_instance, _pullBossNames.Values.First()).FirstOrDefault(b => !_pullBossNames.ContainsValue(b.Name)) is { } next)
+        {
+            _trialTaken.Remove(dd.TargetId);
+            Join(_cur, dd.TargetId, next.Name, dd.At, t);
+            return;
+        }
+        if (boss && _cur == null) { TrialBoss(dd.TargetId, t, done, "it took far more damage than any other enemy"); return; }
+        if (t.Rows.Count < TrialRowsKept) t.Rows.Add(dd);
+    }
+
+    /// <summary>The trial's boss found: its pull opens at its first hit, with every hit it took so far.</summary>
+    void TrialBoss(long id, TrialTarget t, List<Encounter> done, string why)
+    {
+        _trialTaken.Remove(id);
+        // all its hits so far are the pull's (not only the last seconds a pull's start takes)
+        if (_preHits.Any(h => h.TargetId == id))
+        {
+            var keep = _preHits.Where(h => h.TargetId != id).ToList();
+            _preHits.Clear();
+            foreach (var h in keep) _preHits.Enqueue(h);
+        }
+        Engage(new BossEngaged(t.First, "", id), done);
+        if (_cur is not { } c || c.BossId != id) return;
+        Log($"{c.Boss}: the trial's boss ({why}), from its first hit");
+        foreach (var h in t.Rows)
+        {
+            Credit(c, h, toBoss: true);
+            foreach (var r in new[] { _run, _fight }) if (r != null) Promote(r, h);
+        }
+        ReplayHits(c, t.Hits);
+        c.LastAt = Max(c.LastAt, t.Last);
+    }
+
+    /// <summary>A boss's hit rows from before its pull opened, into the pull's abilities (each cast once).</summary>
+    void ReplayHits(Encounter c, List<HitDealt> hits)
+    {
+        var casts = new HashSet<(long, int, int)>();
+        long seq = 0;
+        foreach (var hd in hits)
+            if (Member(c, hd.Source) is { } m)
+            {
+                var a = m.Ability(hd.Skill);
+                StreamHit(a, hd);
+                if (!hd.NoRow && !hd.Tick && hd.Skill > 0 && casts.Add((hd.Actor, hd.Cast, hd.Skill))) a.Casts = (a.Casts ?? 0) + 1;
+                BigHitOf(c, m, hd, ref seq);
+            }
+    }
+
+    /// <summary>
+    /// The trial's run is over (cleared, or failed): a boss hit until then died, its pull a kill at its last hit; one not hit
+    /// for longer is a wipe. With no pull open, the boss is the enemy hit up to the end that took twice what any killed one took.
+    /// </summary>
+    void TrialOver(DateTime at, List<Encounter> done)
+    {
+        if (!TrialInfers) return;
+        if (_cur == null)
+        {
+            var last = _trialTaken.Where(kv => !kv.Value.Dead && (at - kv.Value.Last).TotalSeconds <= TrialEndSeconds && kv.Value.Damage >= TrialEndTimes * _trialDeadMax)
+                                  .OrderByDescending(kv => kv.Value.Damage).Select(kv => (Id: kv.Key, T: kv.Value)).FirstOrDefault();
+            if (last.T != null) TrialBoss(last.Id, last.T, done, "the enemy hit up to the run's end");
+        }
+        if (_cur is { } c)
+        {
+            var hit = c.LastDamageAt ?? c.LastAt;
+            if ((at - hit).TotalSeconds <= TrialEndSeconds)
+            {
+                foreach (var id in _pullBossNames.Keys) _jointDown.Add(id);
+                c.Kills.Add(new KillNear { At = hit, Name = c.Boss, Boss = true });
+                ClosePull(c, BossOutcome.Kill, Max(hit, c.Start), done, "the trial's run was cleared");
+            }
+            else ClosePull(c, BossOutcome.Wipe, at, done, "the trial's run ended with the boss up");
+        }
+        TrialReset();
+    }
+
+    /// <summary>Another of the bosses fought together joins the pull: its damage is the boss's from now, its hits so far too.</summary>
+    void Join(Encounter e, long id, string name, DateTime at, TrialTarget? t = null)
+    {
+        (e.WithIds ??= new()).Add(id);
+        _pullBossNames[id] = name;
+        e.LastAt = Max(e.LastAt, at);
+        var pre = t?.Rows ?? _preHits.Where(h => h.TargetId == id && h.At >= at.AddSeconds(-PreSeconds)).ToList();
+        foreach (var h in pre)
+        {
+            Credit(e, h, toBoss: true);
+            foreach (var r in new[] { _run, _fight }) if (r != null) Promote(r, h);
+        }
+        if (t != null) ReplayHits(e, t.Hits);
+        if (pre.Count > 0 && pre.Min(h => h.At) is var first && first < e.Start) e.MoveStart(first);
+        Log($"{name} joins the pull: {e.Boss}, fought together");
+    }
+
+    /// <summary>One of the bosses fought together died: true when it was the last of them (the pull is a kill then).</summary>
+    bool JointDown(long id, DateTime at)
+    {
+        _jointDown.Add(id);
+        bool all = _pullBossNames.Count >= Math.Max(2, _pullTogether) && _pullBossNames.Keys.All(_jointDown.Contains);
+        if (!all) Log($"{_pullBossNames.GetValueOrDefault(id, "a boss")} died at {at:HH:mm:ss}; {_cur?.Boss} goes on until the last of them");
+        return all;
+    }
+
+    /// <summary>A boss's HP: of bosses fought together, all of theirs added up (each as last heard).</summary>
+    BossHealth JointHealth(BossHealth bh)
+    {
+        if (_cur == null || bh.BossId == 0) return bh;
+        _jointHp[bh.BossId] = (bh.Hp, bh.Max);
+        if (_cur.WithIds is not { Count: > 0 }) return bh;
+        return bh with { Hp = _jointHp.Values.Sum(v => Math.Max(0, v.Hp)), Max = _jointHp.Values.Sum(v => v.Max) };
     }
 
     /// <summary>The instance the game entered with no name, named by its map event's code: its kind (a Transcendence by its "G"), and its mode or stage.</summary>
@@ -1697,5 +1938,10 @@ public sealed class BossParser
 
     public static string Clock(TimeSpan d) => d.TotalHours >= 1 ? $"{(int)d.TotalHours}:{d.Minutes:00}:{d.Seconds:00}" : $"{(int)d.TotalMinutes}:{d.Seconds:00}";
 
-    static void Log(string text) => CrashLog.Note("parser: " + text);
+    /// <summary>
+    /// A parser that writes nothing to reads.log: the Parser page's and the Options' sample (ParserDemo), whose made-up fights
+    /// wrote "entered Fire Temple" and "a new pull" lines into the player's own log each time the sample was drawn (2026-11-19).
+    /// </summary>
+    public bool Quiet { get; init; }
+    void Log(string text) { if (!Quiet) CrashLog.Note("parser: " + text); }
 }

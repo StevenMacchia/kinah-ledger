@@ -94,7 +94,7 @@ public sealed partial class TrackerSession
             else if (!_parserWired && Packets != null) for (int i = 0; i < 20_000 && Packets.NextBossEvent() is { } ev; i++) p.Take(ev);
             var cur = Instances.Current;
             // a Nightmare instance is never a loot run (its loot isn't counted), so the run log holds none there: the zone names it
-            if (cur == null && Zone is { Length: > 0 } z && BossBook.Shared.KindOf(z) == ContentKind.Nightmare) p.ScreenPlace(null, z);
+            if (cur == null && Zone is { Length: > 0 } z && BossBook.Shared.KindOf(z) is ContentKind.Nightmare or ContentKind.AscensionTrial) p.ScreenPlace(null, z);
             else p.ScreenPlace(cur?.Kind, cur?.Zone);
             // a Transcendence the game itself marks (its map code's "G"): the run in it is one, whatever the chat showed (Steven,
             // 2026-11-17: his Transcendence runs with Tilly were filed as expeditions, the stage set an hour before)

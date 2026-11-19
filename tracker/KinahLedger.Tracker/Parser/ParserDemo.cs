@@ -37,7 +37,7 @@ public static class ParserDemo
     public static (List<Encounter> Past, Encounter? Live) Sample(DateTime now, bool live = true, bool damage = true, bool group = true, ParserMode mode = ParserMode.Bosses)
     {
         var past = new List<Encounter>();
-        var p = new BossParser(BossBook.Shared) { Ended = past.Add };
+        var p = new BossParser(BossBook.Shared) { Ended = past.Add, Quiet = true };   // made-up fights: never in the player's reads.log
         var rnd = new Random(7);
         var t = now.AddHours(-3);
         p.SetMode(mode, t);

@@ -17,18 +17,30 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>"boss", "run" or "fight" (BossParser.ModeKey); a record kept before the modes is a boss pull.</summary>
     public string Mode { get; set; } = "boss";
     [JsonIgnore] public ParserMode ModeKind => BossParser.ModeOf(Mode);
-    /// <summary>"Transcendence", "Expedition", "Sanctuary", "Nightmare" or "World boss" (a fight's: "Open world", "Abyss").</summary>
+    /// <summary>"Transcendence", "Expedition", "Sanctuary", "Nightmare", "Ascension Trial" or "World boss" (a fight's: "Open world", "Abyss").</summary>
     public string Kind { get; set; } = "";
     /// <summary>The instance's name ("Shattered Arkanis").</summary>
     public string Instance { get; set; } = "";
     /// <summary>The instance's mode as the game names it ("Conquest"), "" when not known: the header says "Ferocious Horn Den · Conquest".</summary>
     public string GameMode { get; set; } = "";
+    /// <summary>
+    /// The tier the game's map code gives the place when no mode name is known for it (an Ascension Trial's code ends in its
+    /// tier, "Dungeon_Awaken_001_04": "04"), null otherwise. Never shown; it keeps the records of two tiers apart (FightRecords).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ModeCode { get; set; }
     /// <summary>The game's id for this copy of the instance (0 = unknown): a re-entry after a disconnect is the same copy.</summary>
     public long InstanceId { get; set; }
     public string Boss { get; set; } = "";
     public long BossId { get; set; }
     /// <summary>The instance's last boss on the boss list: killing it clears the instance.</summary>
     public bool FinalBoss { get; set; }
+    /// <summary>
+    /// The other bosses of a pull of bosses fought together (bosses.txt "with": Sanctum of Loathing's Featherstorm Duduri and
+    /// Watchful Raptor Dodori), by the game's id: their damage is the boss's, their HP adds to its, the pull ends when all died.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? WithIds { get; set; }
+    /// <summary>One of the pull's bosses, by the game's id (<see cref="BossId"/> or one of <see cref="WithIds"/>).</summary>
+    public bool IsBoss(long id) => id != 0 && (id == BossId || (WithIds?.Contains(id) ?? false));
     /// <summary>A wave stage (bosses.txt "wave": Ferocious Horn Den's Totem room), not a boss: a split in Full run, never a boss pull of its own.</summary>
     public bool Wave { get; set; }
     public DateTime Start { get; set; }
@@ -482,23 +494,25 @@ public sealed class Encounter : IJsonOnDeserialized
     public static string KindName(ContentKind k) => k switch
     {
         ContentKind.Transcendence => "Transcendence", ContentKind.Expedition => "Expedition", ContentKind.Sanctuary => "Sanctuary",
-        ContentKind.Nightmare => NightmareKind, ContentKind.WorldBoss => WorldBossKind, _ => "",
+        ContentKind.Nightmare => NightmareKind, ContentKind.WorldBoss => WorldBossKind, ContentKind.AscensionTrial => AscensionTrialKind, _ => "",
     };
 
     public static ContentKind KindOf(string? name) => name?.Trim().ToLowerInvariant() switch
     {
         "transcendence" => ContentKind.Transcendence, "expedition" => ContentKind.Expedition, "sanctuary" => ContentKind.Sanctuary,
-        "nightmare" => ContentKind.Nightmare, "world boss" => ContentKind.WorldBoss, _ => ContentKind.Other,
+        "nightmare" => ContentKind.Nightmare, "world boss" => ContentKind.WorldBoss, "ascension trial" => ContentKind.AscensionTrial, _ => ContentKind.Other,
     };
 
     /// <summary>The kinds' names as records keep them (English, like the others; the UI shows them in the player's language).</summary>
     public const string NightmareKind = "Nightmare", WorldBossKind = "World boss";
+    /// <summary>The weekly solo trial (Nightmare Altar, Sanctum of Loathing): the game's own name, shown as it is, like Transcendence.</summary>
+    public const string AscensionTrialKind = "Ascension Trial";
 
     /// <summary>
-    /// A dungeon the Parser keeps fights for: a Transcendence, an Expedition, a Sanctuary or a Nightmare instance (its pulls,
-    /// its runs in Full run, its fights in Every fight). A world boss is not a place: <see cref="KeptKind"/>.
+    /// A dungeon the Parser keeps fights for: a Transcendence, an Expedition, a Sanctuary, a Nightmare instance or an Ascension
+    /// Trial (its pulls, its runs in Full run, its fights in Every fight). A world boss is not a place: <see cref="KeptKind"/>.
     /// </summary>
-    public static bool Dungeon(ContentKind k) => k is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary or ContentKind.Nightmare;
+    public static bool Dungeon(ContentKind k) => k is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary or ContentKind.Nightmare or ContentKind.AscensionTrial;
 
     /// <summary>A kind whose boss pulls are kept: a dungeon's, or a world boss's wherever it is fought.</summary>
     public static bool KeptKind(ContentKind k) => Dungeon(k) || k == ContentKind.WorldBoss;

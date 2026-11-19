@@ -7,9 +7,10 @@ namespace KinahLedger.Packets;
 /// <summary>
 /// The content the parser keeps fights for. Other: any place that isn't one of them (the open world, a town, an arena).
 /// Nightmare: the Nightmare instances (the tracker's boss list files them, data/bosses.txt). WorldBoss: never a place, the
-/// kind of a world boss's pull wherever it is fought (Parser/WorldBosses.cs).
+/// kind of a world boss's pull wherever it is fought (Parser/WorldBosses.cs). AscensionTrial: the weekly solo trial's instances
+/// (Nightmare Altar, Sanctum of Loathing), filed by the boss list too; the game's messages never name either kind.
 /// </summary>
-public enum ContentKind { Other = 0, Transcendence = 1, Expedition = 2, Sanctuary = 3, Nightmare = 4, WorldBoss = 5 }
+public enum ContentKind { Other = 0, Transcendence = 1, Expedition = 2, Sanctuary = 3, Nightmare = 4, WorldBoss = 5, AscensionTrial = 6 }
 
 /// <summary>How a boss fight ended: the boss died, the group did, or the player left (or the fight was given up with no result).</summary>
 public enum BossOutcome { Kill = 0, Wipe = 1, Left = 2 }

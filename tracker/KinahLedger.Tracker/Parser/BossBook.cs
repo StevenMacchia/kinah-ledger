@@ -10,8 +10,11 @@ namespace KinahLedger.Parser;
 /// </summary>
 public sealed class BossBook
 {
-    /// <summary>A boss of an instance, in route order; Wave: a wave stage (a split in Full run, never a boss pull).</summary>
-    public sealed record Boss(string Instance, ContentKind Kind, string Name, bool Final, bool Wave = false);
+    /// <summary>
+    /// A boss of an instance, in route order; Wave: a wave stage (a split in Full run, never a boss pull); With: fought together
+    /// with the next boss listed, in one pull ("with").
+    /// </summary>
+    public sealed record Boss(string Instance, ContentKind Kind, string Name, bool Final, bool Wave = false, bool With = false);
 
     readonly Dictionary<string, List<Boss>> _byInstance = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ContentKind> _kindOf = new(StringComparer.OrdinalIgnoreCase);
@@ -50,7 +53,8 @@ public sealed class BossBook
             if (p.Length < 3 || p[2].Trim().Length == 0) continue;   // an instance with its kind and no bosses yet
             var list = b._byInstance.TryGetValue(inst, out var l) ? l : b._byInstance[inst] = new();
             var mark = p.Length >= 4 ? p[3].Trim() : "";
-            list.Add(new Boss(inst, kind, p[2].Trim(), mark.Equals("final", StringComparison.OrdinalIgnoreCase), mark.Equals("wave", StringComparison.OrdinalIgnoreCase)));
+            list.Add(new Boss(inst, kind, p[2].Trim(), mark.Equals("final", StringComparison.OrdinalIgnoreCase), mark.Equals("wave", StringComparison.OrdinalIgnoreCase),
+                mark.Equals("with", StringComparison.OrdinalIgnoreCase)));
         }
         return b;
     }
@@ -69,6 +73,25 @@ public sealed class BossBook
         var n = name.Trim();
         return BossesOf(instance).FirstOrDefault(b => b.Name.Equals(n, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// The bosses fought together with this one in one pull (it included, in list order: a run of "with" bosses and the one
+    /// after them), or an empty list for a boss fought alone.
+    /// </summary>
+    public IReadOnlyList<Boss> Together(string instance, string name)
+    {
+        var l = BossesOf(instance);
+        int i = -1;
+        for (int k = 0; k < l.Count; k++) if (l[k].Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)) { i = k; break; }
+        if (i < 0) return Array.Empty<Boss>();
+        int from = i, to = i;
+        while (from > 0 && l[from - 1].With) from--;
+        while (to < l.Count - 1 && l[to].With) to++;
+        return to > from ? l.Skip(from).Take(to - from + 1).ToList() : Array.Empty<Boss>();
+    }
+
+    /// <summary>A pull of bosses fought together goes by all their names: "Featherstorm Duduri & Watchful Raptor Dodori".</summary>
+    public static string JointName(IEnumerable<Boss> bosses) => string.Join(" & ", bosses.Select(b => b.Name));
 
     /// <summary>Every boss name on the list, any instance (a boss met in an instance whose name wasn't heard).</summary>
     public bool AnyNamed(string name) => _byInstance.Values.Any(l => l.Any(b => b.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)));
@@ -109,6 +132,19 @@ public sealed class BossBook
         foreach (var k in _byCode.Keys)
             if (c.Length > k.Length && c[k.Length] == '_' && c.StartsWith(k, StringComparison.OrdinalIgnoreCase) && (stem == null || k.Length > stem.Length)) stem = k;
         return stem;
+    }
+
+    /// <summary>
+    /// The tier a map event's code gives after the instance's own code when it is a number and no mode word
+    /// (Dungeon_Awaken_001_04_MapEvent: "04"), else null. What each number is called in the game isn't known yet: it is kept,
+    /// never shown.
+    /// </summary>
+    public string? TierOf(string code)
+    {
+        var c = code.Trim();
+        if (StemOf(c) is not { } stem) return null;
+        var next = c[(stem.Length + 1)..].Split('_')[0];
+        return next.Length is > 0 and <= 3 && next.All(char.IsAsciiDigit) ? next : null;
     }
 
     /// <summary>

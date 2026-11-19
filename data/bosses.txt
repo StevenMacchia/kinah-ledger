@@ -2,7 +2,7 @@
 # order, "final" on the instance's last boss (killing it clears the instance), "wave" on a wave stage (Ferocious Horn Den's
 # Totem room: six Mau Totem Shamans and their adds, no single boss): a split of its own in Full run, never a boss pull. Kinds: Expedition, Sanctuary (the game's
 # 10-player raids), Nightmare (the Nightmare instances; their loot stays uncounted, data/instances.txt "Ignored", but their
-# boss pulls are kept). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart:
+# boss pulls are kept), Ascension Trial (the weekly solo trial: Nightmare Altar one week, Sanctum of Loathing the next). A Transcendence is an expedition at a stage (Stage 1 to 4) with the same bosses, so it isn't listed apart:
 # the game's map code marks one with G where the mode word stands (Arkanis_G_09_BossRoom_MapEvent, DeusCenter_G_09_MapEvent),
 # and the Parser files it as a Transcendence at its stage. Season 1's are Shattered Arkanis and Deus Research Base
 # (https://metabot.gg/en/aion-2/transcendence, 2026-11-17: Exploration, and Transcendence Stage 1 to 4).
@@ -12,9 +12,13 @@
 # Source: the per-dungeon pages of https://metabot.gg/en/aion-2/dungeons (2026-11-13); Snowfield of Sorrow from Inven Global
 # (2026-09). Unsure, left out: first-room machines in the Sanctuaries (Central Abyss Fusion Reactor, Muspel Guardian Statue,
 # Surveillance Device, Hydraulic Press); final flags for Deus Research Base and Fire Temple are from route order.
-# Nightmare: https://metabot.gg/en/aion-2/dungeons/nightmare-altar (2026-11-17: Divided Aponos, its only and final boss,
-# "Stage 1: Nightmare Altar (Hell)"); https://metabot.gg/en/aion-2/dungeons/nightmare (2026-11-17) lists no bosses, so
-# Nightmare is filed with none and its pulls keep the game's names.
+# Nightmare: https://metabot.gg/en/aion-2/dungeons/nightmare (2026-11-17) lists no bosses, so Nightmare is filed with none and
+# its pulls keep the game's names.
+# Ascension Trial: Nightmare Altar, https://metabot.gg/en/aion-2/dungeons/nightmare-altar (2026-11-17: Divided Aponos, its only
+# and final boss); Sanctum of Loathing, https://metabot.gg/en/aion-2/dungeons and the site's data/guides/sanctum-of-loathing.json
+# (2026-10-23: Featherstorm Duduri and Watchful Raptor Dodori, fought together at the end). "with" marks a boss fought together
+# with the next one listed: one pull for both. Nightmare Altar's code is from the tracker's recording of 2026-11-19 (six runs);
+# Sanctum of Loathing's isn't known yet (no recording of it).
 # The game's own code names ("Instance|Kind||Code"): its map events are CODE_Mode_..._MapEvent (FierceHornCave_Easy_Mapevent), and
 # when the game enters an instance with no name (Ferocious Horn Den on Easy since 2026-11-16) the code names it; the word
 # after the code is the mode (Easy, Normal = Conquest), never the name. From the tracker's packets.log, 2026-11-14 to 11-17.
@@ -86,4 +90,7 @@ Corroded Decontamination Facility|Sanctuary|Devouring Klawfly|
 Corroded Decontamination Facility|Sanctuary|Terminator Bargott|final
 Snowfield of Sorrow|Sanctuary|Storm Legion Commander Deltras|final
 Nightmare|Nightmare
-Nightmare Altar|Nightmare|Divided Aponos|final
+Nightmare Altar|Ascension Trial||Dungeon_Awaken_001
+Nightmare Altar|Ascension Trial|Divided Aponos|final
+Sanctum of Loathing|Ascension Trial|Featherstorm Duduri|with
+Sanctum of Loathing|Ascension Trial|Watchful Raptor Dodori|final
