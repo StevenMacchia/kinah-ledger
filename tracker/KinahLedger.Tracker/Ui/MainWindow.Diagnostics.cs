@@ -40,6 +40,7 @@ public partial class MainWindow
             $"administrator {KinahLedger.Packets.PacketSources.IsAdmin()}",
             $"npcap installed {KinahLedger.Packets.PacketSources.NpcapInstalled}",
             $"game reading on {_prefs.PacketReading} · now: {_watcher.Packets.State}",
+            SelfLine(),
             $"game process seen {Ocr.GameWindow.ProcessSeen} · pids {Ocr.GameWindow.Pids.Count} · running {_watcher.GameRunning}",
             $"game window {(_watcher.GameRect is { } r ? $"{r.X},{r.Y} {r.Width}x{r.Height}" : "not found")} · handle {(Ocr.GameWindow.Handle != IntPtr.Zero)}",
             $"game in front {Ocr.GameWindow.InFront(_settings.ProcessHints)} · fullscreen state {FullscreenState()} · larger than its screen {MeterBlocks.LargerThanItsScreen(_watcher.GameRect)} · fullscreen card {_fullscreen}",
@@ -73,6 +74,22 @@ public partial class MainWindow
         }
         catch (Exception) { }
         return d;
+    }
+
+    /// <summary>
+    /// The decoder's view of the player (interface 13): whether it knows who the player is, from what and since when, and the
+    /// last minute of hits, the player's, others' and those on the player (2026-11-18: a friend's meter stayed empty while the
+    /// tracker read his kills and gathering; his report couldn't say whether his own hits came through).
+    /// </summary>
+    string SelfLine()
+    {
+        var p = _watcher.Packets;
+        if (KinahLedger.Packets.NativeDecoder.Version < 13) return $"self: this decoder (interface {KinahLedger.Packets.NativeDecoder.Version}) doesn't say";
+        if (p.Self is not { } s) return $"self: not reading{(p.On ? " (no hits yet)" : "")}";
+        static string At(DateTime? t) => t is { } v ? v.ToLocalTime().ToString("HH:mm:ss") : "-";
+        return $"self: own id {(s.Known ? "known" : "NOT known")} · from {s.FromWord} · since {At(s.Since)} · conflicts {s.Conflicts}"
+            + $" · last minute to {At(s.LastAt)}: my hits {s.Mine}, others' {s.Others}, on me {s.OnMe}, my damage {s.YoursDamage:N0}"
+            + $" · totals mine {s.MineTotal:N0}, others' {s.OthersTotal:N0} · last mine {At(s.LastMine)}, last others' {At(s.LastOthers)}";
     }
 
     /// <summary>A diagnostics report folder under reports/ (summary.txt, the reads.log tail), sent like any report. True when it went.</summary>

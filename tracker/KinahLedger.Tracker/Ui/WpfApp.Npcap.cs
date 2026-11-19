@@ -143,6 +143,18 @@ public static partial class WpfApp
             check(fsShown && fsKept && !w.FullscreenShownForTest && w.OverlayEntries().FirstOrDefault()?.Warn != true,
                 $"fullscreen: the window's card and the Overlays menu's first line while AION 2 is in exclusive fullscreen ({fsShown}), kept while it is behind ({fsKept}), gone once it is out");
 
+            // the self-check: your own hits not coming through: one warning line with the report link in the Overlays menu,
+            // gone when it isn't due; and the diagnostics carry the decoder's view of the player
+            w._selfCheckForTest = true;
+            var scEntries = w.OverlayEntries();
+            bool scShown = scEntries.Any(e => e.Warn && e.Text == MainWindow.SelfCheckText && e.Link == MainWindow.SelfCheckLink && e.Do != null);
+            w._selfCheckForTest = false;
+            bool scGone = !w.OverlayEntries().Any(e => e.Text == MainWindow.SelfCheckText);
+            w._selfCheckForTest = null;
+            bool scLine = w.DiagnosticsForTest().Any(l => l.StartsWith("self: "));
+            check(scShown && scGone && scLine && !MainWindow.SelfCheckText.Contains("packet", StringComparison.OrdinalIgnoreCase),
+                $"self-check: the Overlays menu's line with Send a report while due ({scShown}), none otherwise ({scGone}); the diagnostics' self line ({scLine})");
+
             // first run: the look step carries the card while Npcap is missing, and Done is still there
             installed = false;
             w.CheckMeterBlock(); DoEvents();

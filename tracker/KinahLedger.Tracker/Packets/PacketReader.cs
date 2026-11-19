@@ -78,6 +78,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
     public long Packets => Interlocked.Read(ref _packets);
     /// <summary>Messages and bundles the decoder read, its resyncs and its currency messages, for the log.</summary>
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) DecoderStats => _decoder?.Stats ?? default;
+    volatile SelfState? _self;
+    DateTime _selfAt = DateTime.MinValue;
+    /// <summary>The decoder's last view of the player (interface 13; null before it or while not reading): diagnostics and the self-check.</summary>
+    public SelfState? Self => On ? _self : null;
+    /// <summary>When the current connection started being read (DateTime.MaxValue when not reading).</summary>
+    public DateTime ReadingFrom { get { lock (_gate) return _readingSince; } }
     /// <summary>
     /// World boss timers from the game's world map (the decoder's version 5, Session/BossTimers.cs): filled while the map is
     /// open, saved, counted down in between. Read from any thread.
@@ -546,6 +552,7 @@ public sealed class PacketReader : IDisposable, IBossFeed
         // a new connection starts from a fresh amount: the chat counted while nothing was read, so the first message is a baseline
         var dec = _decoder;
         dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
+        _self = null; _selfAt = DateTime.MinValue;
         if (dec.ReadsBosses) TakeBoss(new FeedGap(DateTime.UtcNow));   // a new connection: the Parser's pull, if any, doesn't continue
         Bag.Unknown();
         var rows = new List<ItemChange>();
@@ -572,6 +579,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
                 }
                 while (dec.NextBossEvent() is { } b) TakeBoss(b);
                 while (dec.NextHit() is { } h) TakeBoss(h);   // the hit stream: the Parser's depth (never logged line by line)
+                // who the decoder takes the player to be, a snapshot a second (read here, on the thread that feeds it)
+                if ((at - _selfAt).TotalSeconds >= 1 || at < _selfAt) { _self = dec.Self; _selfAt = at; }
             },
             OnGap = () =>
             {
