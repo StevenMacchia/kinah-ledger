@@ -1069,7 +1069,7 @@ options: --process aion[,other]");
         if (reader != null) KinahLedger.Packets.PacketClock.Fixed = () => clock == DateTime.MinValue ? DateTime.UtcNow : clock;
         // the game's data up to a time, each piece drained as it came (the live loop drains on every arrival), the agreement
         // check every 2 s. Before the cut only the currencies' amounts are kept, as baselines, so the cut counts what is in it
-        int fi = 0; DateTime agreedAt = DateTime.MinValue; bool fedBase = false;
+        int fi = 0; DateTime agreedAt = DateTime.MinValue; bool fedBase = false, liveClock = opts.ContainsKey("live-clock");
         void FeedUntil(DateTime t)
         {
             if (reader == null) return;
@@ -1092,6 +1092,9 @@ options: --process aion[,other]");
                 if ((at - agreedAt).TotalSeconds >= 2) { reader.AgreeForTest(); agreedAt = at; }
             }
             clock = t;
+            // --live-clock: between the changes it decodes, the connection is taken as sending, as it is live (a capture sees
+            // the server's messages every second); without it the game's data counts only within 15 s of a decoded change
+            if (liveClock && feed.Count > 0 && t >= feed[0].At && t <= feed[^1].At) reader.AliveForReplay(t);
             s.DrainPacketsForTest();
         }
         // the live tracker reads the minimap every few seconds (3 s in an instance): the replay repeats the last zone as often
@@ -1126,7 +1129,12 @@ options: --process aion[,other]");
                 }
             }
         }
-        int chats = 0, lists = 0; DateTime? first = null, last = null;
+        int chats = 0, lists = 0, backupSkipped = 0; DateTime? first = null, last = null;
+        // --backup [ms]: as the live loop reads while the packets count (1.0.20): no loot list, and a chat read at most every
+        // ms (TrackerSession.BackupPassMs by default), so a replay says what screen reading as the backup leaves out
+        int backupMs = opts.TryGetValue("backup", out var bk) ? (int.TryParse(bk, out var bms) && bms > 0 ? bms : TrackerSession.BackupPassMs) : 0;
+        if (backupMs > 0 && reader == null) { Console.Error.WriteLine("--backup needs --pcap: without the game's data the screen reads everything"); return 1; }
+        DateTime chatTakenAt = DateTime.MinValue;
         foreach (var (t, k, lines) in records)
         {
             if (k is not ("chat" or "list")) continue;
@@ -1143,6 +1151,11 @@ options: --process aion[,other]");
                 FeedUntil(t);
                 clock = t;
                 first ??= t; last = t;
+                if (backupMs > 0)
+                {
+                    if (s.ScreenBackup(t) && (k == "list" || (t - chatTakenAt).TotalMilliseconds < backupMs)) { backupSkipped++; continue; }
+                    if (k == "chat") chatTakenAt = t;
+                }
                 if (k == "chat") { s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++; }
                 else
                 {
@@ -1162,7 +1175,7 @@ options: --process aion[,other]");
         }
         s.Instances.Close();
         var e = s.Engine; var tot = e.Totals();
-        Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}.");
+        Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}." + (backupMs > 0 ? $" As the backup ({backupMs} ms): {backupSkipped} reads left out." : ""));
         Console.WriteLine($"  kills counted        {tot.Kills}   (evidence: {e.KillsSeen} · Kinah pickups {e.KinahDrops} · Soul Points lines {e.CurrencyLines})");
         Console.WriteLine($"  quest counter steps  {s.QuestStepsTotal}   (kills of quest enemies, counted by the game)");
         Console.WriteLine($"  Kinah                {tot.Kinah:N0}");

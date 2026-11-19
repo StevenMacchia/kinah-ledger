@@ -1046,6 +1046,32 @@ public static class PacketTests
         TimerBoardChecks();
         EventTimerChecks(settings);
 
+        // packets first (1.0.20): the screen is the backup only while the game's data counts items and Kinah, and then
+        // reads at a slow pace with a capped share of a core; off, stopped or not counting yet, everything as before
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var none = new TrackerSession(null, settings, items, "Test");
+            Check(!none.ScreenBackup(DateTime.UtcNow) && none.FullReadingWhy(DateTime.UtcNow) == "there is no game reader", "packets first: no game reader, the screen reads everything");
+            var r = new PacketReader();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = r };
+            Check(!s.ScreenBackup(DateTime.UtcNow), $"...a reader with no capture running: everything ({s.FullReadingWhy(DateTime.UtcNow)})");
+            r.ReadingForTest();
+            Check(!s.ScreenBackup(DateTime.UtcNow), $"...reading, but no Kinah baseline yet: everything ({s.FullReadingWhy(DateTime.UtcNow)})");
+            r.AmountForTest(CurrencyKind.Kinah, 1_000_000, DateTime.UtcNow.AddSeconds(-10));
+            Check(s.ScreenBackup(DateTime.UtcNow) && s.ScreenIsBackup, "...counting items and Kinah: the screen is the backup");
+            r.Enabled = false;
+            Check(!s.ScreenBackup(DateTime.UtcNow) && s.FullReadingWhy(DateTime.UtcNow) == "the game reader is off", "...switched off in Options: everything again, at once");
+            r.Enabled = true;
+            Check(s.ScreenBackup(DateTime.UtcNow), "...and back on: the backup again");
+            Check(r.ScreenLagSeconds == TrackerSession.BackupLagSeconds, $"...the agreement check allows the slow reads' later lines: {r.ScreenLagSeconds:0} s");
+            s.Target.MarkReward(DateTime.UtcNow, "Daeva Pass Level Reward");
+            Check(!s.ScreenBackup(DateTime.UtcNow) && s.FullReadingWhy(DateTime.UtcNow) == "a reward screen is open", "...a reward screen open: everything (its rewards are the screen's reading)");
+            Check(TrackerSession.PassWait(600, 300, false) == -300 && TrackerSession.PassWait(200, 750, false) == 550, "...reading everything, the pace is the usual one");
+            Check(TrackerSession.PassWait(100, 300, true) == 2400, $"...as the backup, a quick pass waits out {TrackerSession.BackupPassMs} ms start to start: {TrackerSession.PassWait(100, 300, true)}");
+            Check(TrackerSession.PassWait(920, 300, true) == 2760, $"...a slow one waits {1 / TrackerSession.BackupCoreShare - 1:0} times its own time (at most {TrackerSession.BackupCoreShare:P0} of a core): {TrackerSession.PassWait(920, 300, true)}");
+            Check(TrackerSession.PassWait(4000, 300, true) >= 4000 * 3, "...and never back to back");
+        }
+
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }
