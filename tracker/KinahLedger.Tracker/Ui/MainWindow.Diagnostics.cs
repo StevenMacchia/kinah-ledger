@@ -47,6 +47,8 @@ public partial class MainWindow
             $"chat {( _watcher.Chat != null ? "found" : "not found")} · note: {_watcher.ChatNote} · manual chat {_prefs.ManualChat}",
             $"last error: {_watcher.LastError}",
             $"overlay: kinah {_prefs.Hud} · look {HudLook} · locked {_hudPrefs.Locked} · parser overlay {_parserPrefs.Overlay} · always on {_parserPrefs.AlwaysOn} · in kinah {_parserPrefs.InKinah}",
+            $"meter window: made {_parserOverlay != null} · shown {_parserOverlay?.IsVisible == true} · at {(_parserOverlay is { } po ? $"{po.Left:0},{po.Top:0} {po.ActualWidth:0}x{po.ActualHeight:0}" : "-")} · saved spot {_parserPrefs.Left?.ToString("0") ?? "-"},{_parserPrefs.Top?.ToString("0") ?? "-"} · click-through {_parserPrefs.ClickThrough} · a fight on it {_meterOnOverlay != null}",
+            $"kinah overlay window: made {_hud != null} · shown {_hud?.IsVisible == true} · at {(_hud is { } hw ? $"{hw.Left:0},{hw.Top:0} {hw.ActualWidth:0}x{hw.ActualHeight:0}" : "-")}",
         };
         try
         {
@@ -95,6 +97,20 @@ public partial class MainWindow
             return true;
         }
         catch (Exception ex) { CrashLog.Write("diagnostics report", ex); Say(L.F("Couldn't save the report: {0}", ex.Message), "Bad"); return false; }
+    }
+
+    /// <summary>
+    /// Every report carries the same lines at the end of its summary (2026-11-18: a friend's meter didn't show though the
+    /// tracker read the game, and the report couldn't say why): the overlay windows, their places and switches.
+    /// </summary>
+    void AppendDiagnostics(string dir)
+    {
+        try
+        {
+            var p = Path.Combine(dir, "summary.txt");
+            File.AppendAllLines(p, new[] { "" }.Concat(DiagnosticsLines().Skip(1)));
+        }
+        catch (Exception ex) { CrashLog.Write("report diagnostics", ex); }
     }
 
     /// <summary>For the options self-test: the diagnostics lines.</summary>
