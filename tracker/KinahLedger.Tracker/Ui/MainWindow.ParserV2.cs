@@ -17,6 +17,10 @@ public partial class MainWindow
     string _parserTab = "Timeline";   // the Graphs tab first (Steven, 2026-11-18); a record without the seconds falls back to Group
     long? _parserInspect;
     string _parserSort = "Damage";
+    /// <summary>The Compare tab's picks (Parser/PullCompare.cs): the pull against (null: your best kill of the fight), whose abilities (null: yours), all of them shown. Reset when another fight opens.</summary>
+    string? _parserCompareWith, _parserCompareMember;
+    bool _parserCompareAll;
+    string? _parserCompareFor;
 
     /// <summary>For a render: fills the store-v2 figures of a view with a sample (ui-shot only; the app never sets it).</summary>
     internal static Action<FightView>? ParserViewSample;
@@ -53,6 +57,10 @@ public partial class MainWindow
         Inspect = id => { _parserInspect = id; RedrawParserPage(); LowerScroll.ScrollToTop(); },
         SetSort = k => { _parserSort = k; RedrawParserPage(); },
         Tip = s => Tip(s),
+        CompareWith = _parserCompareWith, CompareMember = _parserCompareMember, CompareAll = _parserCompareAll,
+        SetCompare = id => { _parserCompareWith = id; RedrawParserPage(); },
+        SetCompareMember = name => { _parserCompareMember = name; _parserCompareAll = false; RedrawParserPage(); },
+        ToggleCompareAll = () => { _parserCompareAll = !_parserCompareAll; RedrawParserPage(); },
     };
 
     /// <summary>The group card's line on what its figures are ("DPS over the whole fight · boss damage only"); a click opens Settings › DPS meter, where both are set.</summary>
@@ -71,7 +79,9 @@ public partial class MainWindow
 
     FightView ParserViewOf(Encounter e, DateTime now, List<Encounter> past)
     {
-        var v = FightView.Of(e, now, past);
+        // the Compare tab's picks belong to the fight they were made on
+        if (_parserCompareFor != e.Id) { _parserCompareFor = e.Id; _parserCompareWith = null; _parserCompareMember = null; _parserCompareAll = false; }
+        var v = FightView.Of(e, now, past, _parserCompareWith);
         ParserViewSample?.Invoke(v);
         return v;
     }
@@ -142,7 +152,7 @@ public partial class MainWindow
         page.Children.Add(hero);
         FrameworkElement body = ctx.Tab switch
         {
-            "Compare" => ParserCommand.Compare(v, ctx.Copy(ParserShare.Compare)),
+            "Compare" => ParserCommand.Compare(v, ctx.Copy(ParserShare.Compare), ctx),
             "Timeline" => GraphsView(e, v, live, ctx),   // the Graphs tab, the group's table under it (Ui/MainWindow.ParserGraphs.cs)
             "Taken" => ParserCommand.Taken(v, ctx.Copy(ParserShare.Taken)),
             _ => (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) ? ParserCommand.Group(v, ctx, live, detail: !live) : new Border(),
@@ -209,6 +219,33 @@ public partial class MainWindow
         }
         yield return Pull(now.AddDays(-2).AddMinutes(-20), 151, "kill", 1.0438, 0);
         yield return Pull(now.AddDays(-1).AddMinutes(-35), 171, "wipe", 0.9606, 0.22);
+    }
+
+    /// <summary>
+    /// The compare render's casts and hit kinds (crit once KL_CRIT picks one), on the record itself so both pulls of a compare
+    /// carry them: steady from one render to the next (by the pull's start, the member and the skill), a kill pull's casts a
+    /// little different from the others. Render states only; the app never sets it.
+    /// </summary>
+    static void ParserDemoCasts(Encounter e)
+    {
+        static double N(long a, long b, long c) { unchecked { uint h = (uint)(a * 73856093) ^ (uint)(b * 19349663) ^ (uint)(c * 83492791); h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15; return (h % 10000) / 10000.0; } }
+        long salt = e.Start.Ticks / TimeSpan.TicksPerMinute;
+        foreach (var f in e.Roster)
+            foreach (var a in f.Abilities)
+            {
+                int hits = Math.Max(1, a.Hits);
+                a.StreamHits = hits;
+                a.Casts = Math.Max(1, (int)Math.Round(hits / (1 + (Math.Abs(a.Skill) / 10000 % 3) * 0.5) * (0.9 + N(a.Skill, f.Id, salt) * 0.2)));
+                a.Kinds = new Dictionary<string, int> { ["result:3"] = (int)Math.Round(hits * (0.2 + N(a.Skill, f.Id, salt + 1) * 0.14)) };
+                // your kept pulls' abilities apart from the one under way, each its own way (the demo's copies scale them all alike)
+                if (f.You && !e.Live)
+                {
+                    double k = 0.84 + N(a.Skill, salt, 5) * 0.34;
+                    long d0 = a.Damage, b0 = a.BossDamage;
+                    a.Damage = (long)(a.Damage * k); a.BossDamage = (long)(a.BossDamage * k);
+                    f.Damage += a.Damage - d0; f.BossDamage += a.BossDamage - b0;
+                }
+            }
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -28,7 +28,7 @@ public partial class MainWindow
     /// <summary>Set by the options test: a table's text goes here instead of the clipboard.</summary>
     internal static Action<string>? CopyTextSinkForTest;
 
-    ParserShare.Parts ShareParts(long? member = null) => new(PDetails, PKills, PDeaths, _parserPrefs.ShareHideNames, e => CoverageLine(e), member);
+    ParserShare.Parts ShareParts(long? member = null) => new(PDetails, PKills, PDeaths, _parserPrefs.ShareHideNames, e => CoverageLine(e), member, _parserCompareWith, _parserCompareMember);
 
     /// <summary>The fight a click on the page means: the kept one open, else the one under way now (its latest figures).</summary>
     Encounter ShareFightNow(Encounter shown) => _parserOpen != null || !shown.Live ? shown : ParserLive is { } l && l.Id == shown.Id ? l : shown;

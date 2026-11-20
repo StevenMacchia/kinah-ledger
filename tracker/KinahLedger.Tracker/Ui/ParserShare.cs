@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -28,7 +28,8 @@ public static class ParserShare
     public const int PixelWidth = (int)((ContentWidth + 82) * 2);
 
     /// <summary>What the window lends the views: its Parser switches, the group's coverage line, and the member whose abilities are copied (their id).</summary>
-    public sealed record Parts(bool Details, bool Kills, bool Deaths, bool HideNames, Func<Encounter, FrameworkElement?> GroupFoot, long? Member = null);
+    public sealed record Parts(bool Details, bool Kills, bool Deaths, bool HideNames, Func<Encounter, FrameworkElement?> GroupFoot, long? Member = null,
+        string? CompareWith = null, string? CompareMember = null);
 
     /// <summary>The member <see cref="Abilities"/> is about, when they are in the fight and have abilities.</summary>
     static MemberView? MemberOf(FightView v, Parts p) => p.Member is long id ? v.Members.FirstOrDefault(m => m.F.Id == id && m.Abilities.Count > 0) : null;
@@ -67,7 +68,7 @@ public static class ParserShare
 
     static CommandCtx Ctx(Parts p) => new()
     {
-        Share = true, Details = p.Details, Kills = p.Kills, Deaths = p.Deaths,
+        Share = true, Details = p.Details, Kills = p.Kills, Deaths = p.Deaths, CompareWith = p.CompareWith, CompareMember = p.CompareMember,
         GroupHead = _ => null, GroupFoot = p.GroupFoot, Tip = _ => null,
     };
 
@@ -78,7 +79,7 @@ public static class ParserShare
         FrameworkElement body = view switch
         {
             Hero => ParserCommand.Hero(v, ctx, live, Array.Empty<FrameworkElement>()),
-            Compare => ParserCommand.Compare(v),
+            Compare => ParserCommand.Compare(v, null, ctx),
             Timeline => ParserCommand.Timeline(v, ContentWidth - 34),   // the glass's sides and edges
             Taken => ParserCommand.Taken(v),
             // the member's card and their abilities, as the page shows them opened (no way back drawn)
@@ -117,9 +118,9 @@ public static class ParserShare
         finally { if (swap) Skins.Apply(was); }
     }
 
-    static FightView ViewOf(Encounter e, DateTime now, List<Encounter> past, Action<FightView>? sample)
+    static FightView ViewOf(Encounter e, DateTime now, List<Encounter> past, Action<FightView>? sample, string? against = null)
     {
-        var v = FightView.Of(e, now, past);
+        var v = FightView.Of(e, now, past, against);
         sample?.Invoke(v);
         return v;
     }
@@ -127,7 +128,7 @@ public static class ParserShare
     static T With<T>(Encounter e, DateTime now, List<Encounter> past, string view, Parts p, Action<FightView>? sample, Func<Border, T> use)
     {
         var shown = Shown(e, p);
-        var v = ViewOf(shown, now, past, sample);
+        var v = ViewOf(shown, now, past, sample, p.CompareWith);
         if (view == Abilities ? MemberOf(v, p) == null : view != All && !Has(v, view)) view = Group;
         return MeterShare.Framed(shown, now, () => Faces(v, view, e.Live, p), "parser-share-" + view, use);
     }
@@ -155,7 +156,7 @@ public static class ParserShare
     public static string Text(Encounter e, DateTime now, List<Encounter> past, string view, Parts p, Action<FightView>? sample = null)
     {
         var shown = Shown(e, p);
-        var v = ViewOf(shown, now, past, sample);
+        var v = ViewOf(shown, now, past, sample, p.CompareWith);
         var sb = new StringBuilder();
         var bits = new List<string> { shown.Title };
         var member = view == Abilities ? MemberOf(v, p) : null;
@@ -179,12 +180,34 @@ public static class ParserShare
                     Row(new[] { (++i).ToString(CultureInfo.InvariantCulture), ParserRows.NameOf(m.F), Cls(m.F), N(m.Taken ?? 0), N((m.Taken ?? 0) / Math.Max(1, v.Seconds)), m.Deaths.ToString(CultureInfo.InvariantCulture) });
                 break;
             }
-            case Compare when v.You is { } you && (v.Best ?? v.Last) is { } basis:
+            case Compare when v.Diff is { You: { } you0 } diff:
             {
-                Row(new[] { L.T("Ability"), L.T("This pull"), L.T(v.Best != null ? "Best" : "Last"), L.T("Change") });
-                var skills = you.Abilities.Select(a => a.Skill).Union(basis.Abilities.Keys).ToList();
-                foreach (var (skill, nowDps, thenDps) in skills.Select(s => (s, you.Abilities.FirstOrDefault(a => a.Skill == s)?.Dps ?? 0, basis.Abilities.TryGetValue(s, out var t) ? t : 0)).OrderByDescending(x => Math.Max(x.Item2, x.Item3)))
-                    Row(new[] { Parser.Abilities.Name(skill, you.F.Class), nowDps > 0 ? N(nowDps) : "", thenDps > 0 ? N(thenDps) : "", nowDps > 0 && thenDps > 0 ? PK.Signed(nowDps / thenDps - 1) : nowDps > 0 ? L.T("new") : L.T("not used") });
+                // the member picked on the tab (else you), against the pull picked (else your best kill): both pulls' figures, whole
+                var cm = (p.CompareMember is { } who ? diff.Members.FirstOrDefault(x => !x.You && x.A.Name.Equals(who, StringComparison.OrdinalIgnoreCase)) : null) ?? you0;
+                string cls = cm.A.Class.Length > 0 ? cm.A.Class : cm.B.Class;
+                // one table: DPS this pull and the other (its day and length in the head), the change, then damage, casts, crit
+                // and share in both; the member's total first, then each ability
+                bool casts = cm.HasCasts, crit = cm.HasCrit;
+                static string Other(string col) => L.F("{0}, other pull", L.T(col));
+                var head = new List<string> { L.T("Ability"), L.T("This pull"), L.F("vs {0}", $"{L.DayTime(diff.B.Start.ToLocalTime())} · {BossParser.Clock(TimeSpan.FromSeconds(diff.BLength))}"), L.T("DPS change"), L.T("Damage"), Other("Damage") };
+                if (casts) { head.Add(L.T("Casts")); head.Add(Other("Casts")); }
+                if (crit) { head.Add(L.T("Crit")); head.Add(Other("Crit")); }
+                head.Add(L.T("Share")); head.Add(Other("Share"));
+                Row(head);
+                var total = new List<string> { cm.You ? ParserRows.NameOf(cm.A) : cm.A.Name, N(cm.DpsA), N(cm.DpsB), cm.DpsChange is { } dc ? PK.Signed(dc) : "", N(cm.DamageA), N(cm.DamageB) };
+                if (casts) { total.Add(cm.Skills.Sum(x => x.CastsA ?? 0).ToString(CultureInfo.InvariantCulture)); total.Add(cm.Skills.Sum(x => x.CastsB ?? 0).ToString(CultureInfo.InvariantCulture)); }
+                if (crit) { total.Add(""); total.Add(""); }
+                total.Add(P(cm.ShareA)); total.Add(P(cm.ShareB));
+                Row(total);
+                foreach (var x in cm.Skills)
+                {
+                    var cells = new List<string> { Parser.Abilities.Name(x.Skill, cls), x.UsedA ? N(x.DpsA) : "", x.UsedB ? N(x.DpsB) : "",
+                        x.UsedA && x.UsedB && x.DpsChange is { } c ? PK.Signed(c) : x.UsedA ? L.T("new") : L.T("not used"), x.UsedA ? N(x.DamageA) : "", x.UsedB ? N(x.DamageB) : "" };
+                    if (casts) { cells.Add(x.CastsA?.ToString(CultureInfo.InvariantCulture) ?? ""); cells.Add(x.CastsB?.ToString(CultureInfo.InvariantCulture) ?? ""); }
+                    if (crit) { cells.Add(x.CritA is { } a1 && x.UsedA ? P(a1) : ""); cells.Add(x.CritB is { } b1 && x.UsedB ? P(b1) : ""); }
+                    cells.Add(x.UsedA ? P(x.ShareA) : ""); cells.Add(x.UsedB ? P(x.ShareB) : "");
+                    Row(cells);
+                }
                 break;
             }
             case Abilities when member != null:

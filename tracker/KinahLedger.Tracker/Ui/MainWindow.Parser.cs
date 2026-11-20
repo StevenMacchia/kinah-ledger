@@ -1173,6 +1173,8 @@ public partial class MainWindow
                 if (md == mode) now = l;
             }
         if (now is { ModeKind: ParserMode.Bosses, HasDamage: true } && mode == ParserMode.Bosses) all.AddRange(ParserDemoEarlier(now, _parserDemoNow));
+        // the compare's render: casts and hit kinds on every pull, so its Casts and Crit columns can be seen (render states only)
+        if (state == "compare") foreach (var x in all.Append(now)) if (x != null) ParserDemoCasts(x);
         _parserDemoPast = all.OrderBy(e => e.Start).ToList(); _parserDemoLive = now;
         _parserDemoWhere = state == "empty" ? (ContentKind.Other, "") : (ContentKind.Expedition, "Ferocious Horn Den");
         _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = "";

@@ -2720,6 +2720,9 @@ public static class ParserTests
         // the PvP panel (Parser/PvpKills.cs)
         PvpKillsTests.Run(Check, t);
 
+        // pull against pull, the Compare tab (Parser/PullCompare.cs): made-up pulls, then Steven's recorded boss fights
+        PullCompareTests.Run(Check, t, Recording, path => Replay(path, hits: true));
+
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }
