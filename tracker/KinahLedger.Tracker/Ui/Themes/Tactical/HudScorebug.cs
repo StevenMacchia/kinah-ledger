@@ -633,18 +633,20 @@ sealed partial class HudScorebug : TacticalLook
         double plateH = 48;
         if (_studio)
         {
-            // Studio (art review, 2026-11-20): a band one row tall over the line between the second row and the third, the
-            // foot at full (only the rows under the winner dim)
-            plateH = 32;
-            double bandH = StudioRow.Pitch + 4, rowsEnd = _titleHost.ActualHeight + _hpHost.ActualHeight + _rowsHost.ActualHeight;
-            double mid = Math.Max(keepTop + bandH / 2, Math.Min(keepTop + StudioRow.Pitch - 2, rowsEnd - bandH / 2));
-            dim.Margin = new Thickness(0, keepTop, 0, _footHost.ActualHeight);
-            band.Height = bandH; band.VerticalAlignment = VerticalAlignment.Top; band.Margin = new Thickness(0, mid - bandH / 2, 0, 0);
+            // Studio (art review, 2026-11-20): the band seated exactly on the second row (the first, alone), so no row shows
+            // half covered; nothing else dims, the winner, the rows after it and the foot read at full
+            plateH = 28;
+            double rowTop = keepTop;
+            if (Meter is { Members.Count: > 0 } ms && ms.RowOf(ms.Members[Math.Min(1, ms.Members.Count - 1)].Id)?.Root is FrameworkElement r2 && r2.IsDescendantOf(_fightGrid))
+                rowTop = r2.TranslatePoint(new Point(0, 0), _fightGrid).Y;
+            double bandH = StudioRow.H + 2, mid = rowTop - 1 + bandH / 2;
+            dim.Visibility = Visibility.Collapsed;
+            band.Height = bandH; band.VerticalAlignment = VerticalAlignment.Top; band.Margin = new Thickness(0, rowTop - 1, 0, 0);
             plate.VerticalAlignment = VerticalAlignment.Top; plate.Margin = new Thickness(0, mid - plateH / 2, 0, 0);
         }
         var winner = !wipe && Meter is { Members.Count: > 0 } mm ? mm.RowOf(mm.Members[0].Id) as BoardRow : null;
         var head = new Block(wipe ? SlateC : YellowC, T(wipe ? "✖" : "★", _studio ? 16 : 22, wipe ? Red : InkB), plateH, _studio ? new Thickness(11, 0, 9, 0) : new Thickness(14, 0, 12, 0), leanLeft: true);
-        var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), _studio ? 23 : 34, wipe ? White : Yellow), plateH, _studio ? new Thickness(14, 0, 17, 0) : new Thickness(18, 0, 22, 0));
+        var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), _studio ? 21 : 34, wipe ? White : Yellow), plateH, _studio ? new Thickness(14, 0, 17, 0) : new Thickness(18, 0, 22, 0));
         Row(plate, head); Row(plate, main);
         plate.Clip = Geometry.Empty;
         _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band); _fightFx.Children.Add(plate);
