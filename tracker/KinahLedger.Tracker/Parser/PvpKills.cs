@@ -34,8 +34,8 @@ public sealed record PvpKill(long Seq, DateTime At, uint VictimId, string Name, 
 /// </summary>
 public sealed class PvpKills
 {
-    /// <summary>The kills the panel lists.</summary>
-    public const int Kept = 3;
+    /// <summary>The kills the panel lists (3 in 1.0.33; Steven, 2026-11-20: "have the last 5 kills in the next patch").</summary>
+    public const int Kept = 5;
     /// <summary>Hits on one player with gaps of up to this are one fight with them.</summary>
     public const double FightGapSeconds = FightTally.AssistSeconds;
     /// <summary>The same player's death again within this long is the same death (as the kill tally's).</summary>

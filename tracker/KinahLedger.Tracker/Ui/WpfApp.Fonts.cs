@@ -25,7 +25,9 @@ public static partial class WpfApp
         check(before != null, "the streams held on the exe's font resources can be counted" + (before == null ? " (WPF's package parts were not found)" : ""));
         var families = new[] { HudKit.Text, AppFonts.Text, AppFonts.Display };
         var weights = new[] { FontWeights.Normal, FontWeights.Medium, FontWeights.SemiBold, FontWeights.Bold };
-        for (int i = 0; i < 200; i++)
+        // KL_FONT_ROUNDS: a long run of the same drawing, to watch the process's memory from outside (200 as the check runs)
+        int rounds = int.TryParse(Environment.GetEnvironmentVariable("KL_FONT_ROUNDS"), out var r) && r > 0 ? r : 200;
+        for (int i = 0; i < rounds; i++)
         {
             var panel = new StackPanel { Background = Brushes.Black };
             foreach (var f in families)
@@ -44,7 +46,7 @@ public static partial class WpfApp
         }
         int? after = HeldFontStreams();
         check(after != null && before != null && after - before <= 4,
-            $"drawing text 200 times holds no more font streams (held {before} before, {after} after)");
+            $"drawing text {rounds} times holds no more font streams (held {before} before, {after} after)");
         var face = new Typeface(AppFonts.Text, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
         check(face.TryGetGlyphTypeface(out var g) && g.FamilyNames.Values.Any(n => n.Contains("Inter")),
             "the window's face is still Inter" + (g != null ? $" ({string.Join("/", g.FamilyNames.Values)})" : " (no glyph typeface)"));
