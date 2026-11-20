@@ -1009,12 +1009,16 @@ public sealed partial class ParserRows : Grid
         bool lift = passed && !down;
         // the rise grows from the DPS's right edge, so the figure stays exactly where it is while the row lifts
         if (lift && r.Root.ActualWidth > 0) r.Root.RenderTransformOrigin = new Point(Math.Clamp(DpsRightIn(r) / r.Root.ActualWidth, 0, 1), 0.5);
+        // Podium's one-line rows cross in one lane: the one going down is dimmed to a third at once and stays so until they have
+        // passed (the figures never read over each other), then comes back
+        bool podium = _skin == Skin.Podium;
+        static double Dim(double p) => p < 0.06 ? p / 0.06 : p < 0.6 ? 1 : Math.Max(0, (1 - p) / 0.4);
         var shadow = lift ? r.LiftShadow ??= new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 0, Opacity = 0, Direction = 270 } : null;
         if (shadow != null) { shadow.BlurRadius = shadow.ShadowDepth = shadow.Opacity = 0; r.Root.Effect = shadow; }
         Motion.Play(r.Root, GlideMs, p =>
         {
             tt.Y = offset * (1 - Motion.Out(p));
-            if (down) r.Root.Opacity = 1 - 0.65 * Math.Sin(Math.PI * Math.Clamp(p, 0, 1));
+            if (down) r.Root.Opacity = 1 - 0.65 * (podium ? Dim(p) : Math.Sin(Math.PI * Math.Clamp(p, 0, 1)));
             if (shadow != null)
             {
                 double k = Math.Sin(Math.PI * Math.Clamp(p, 0, 1));
@@ -1050,8 +1054,17 @@ public sealed partial class ParserRows : Grid
         Rest();
         var glow = gained ? own ?? (r.ChipGlow ??= new DropShadowEffect { Color = r.You ? PK.Gold : ClassArt.ColorOf(r.Cls), ShadowDepth = 0, BlurRadius = 0, Opacity = 0 }) : null;
         if (glow != null && own == null) { glow.BlurRadius = glow.Opacity = 0; r.Chip.Effect = glow; }
+        // Podium: the new number at once, the chip unfolding with the row's glide (it lands with the row, not after it)
+        bool land = _skin == Skin.Podium;
+        if (land) { r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); r.RankInk?.Invoke(); }
         Motion.Play(r.Chip, FlipMs, p =>
         {
+            if (land)
+            {
+                sc.ScaleY = 0.25 + 0.75 * Motion.Out(Math.Min(1, p / 0.35));
+                if (glow != null) { double g = p < 0.2 ? 0 : Math.Sin(Math.PI * Math.Min(1, (p - 0.2) / 0.8)); glow.BlurRadius = ownBlur + 14 * g; glow.Opacity = ownOpacity + (0.95 - ownOpacity) * g; }
+                return;
+            }
             double q = Math.Min(1, p / 0.76);
             sc.ScaleY = Math.Max(0.04, Math.Abs(Math.Cos(Math.PI * q))); r.ChipText.Text = (q < 0.5 ? was : now).ToString(CultureInfo.InvariantCulture); r.RankInk?.Invoke();
             if (glow != null) { double k = p < 0.45 ? 0 : Math.Sin(Math.PI * (p - 0.45) / 0.55); glow.BlurRadius = ownBlur + 14 * k; glow.Opacity = ownOpacity + (0.95 - ownOpacity) * k; }
