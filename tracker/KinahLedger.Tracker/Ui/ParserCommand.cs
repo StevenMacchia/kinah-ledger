@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -32,6 +32,14 @@ sealed class CommandCtx
     /// named (Ui/ParserShare.cs's names). Null in a share picture.
     /// </summary>
     public Func<string, FrameworkElement?> Copy = _ => null;
+    /// <summary>
+    /// The Compare tab's picks: the pull it is against (its id; null: your best kill of the fight), the member whose abilities it
+    /// shows (their name; null: you), every ability or the first few; and what a click on each does.
+    /// </summary>
+    public string? CompareWith, CompareMember;
+    public bool CompareAll;
+    public Action<string?> SetCompare = _ => { }, SetCompareMember = _ => { };
+    public Action ToggleCompareAll = () => { };
     /// <summary>Drawn for a share picture (Ui/ParserShare.cs): no tabs, no chevrons or hovers, nothing to click.</summary>
     public bool Share;
 }
@@ -872,48 +880,308 @@ static class ParserCommand
     // ================================================================ compare
 
     /// <summary>
-    /// This pull against your best kill of this boss and your last pull of it (kept on this PC): the three figures, then your DPS
-    /// by ability against the best (or the last) pull's. With the per-second record, your pace against your best as a line.
+    /// Pull against pull (Parser/PullCompare.cs, FightView.Diff): this pull beside another pull of the same fight, your best kill
+    /// of it by default or the one picked. Your DPS (or a member's) and the fights' lengths, the abilities that lost the most in
+    /// plain words, then every ability side by side: damage, DPS and its change, casts, crit and share, this pull on top and the
+    /// other under it. What changed, never why; a figure a pull doesn't carry is not drawn. Fits the page: the abilities fold
+    /// to the first <see cref="CompareRows"/> until Show all.
     /// </summary>
     /// <param name="copy">The section's copy buttons, top right of its head (none in a share picture).</param>
-    public static Border Compare(FightView v, FrameworkElement? copy = null)
+    /// <param name="ctx">The window's picks (the pull against, the member, Show all) and clicks; null in a share picture.</param>
+    public static Border Compare(FightView v, FrameworkElement? copy = null, CommandCtx? ctx = null)
     {
-        var you = v.You!;
+        var d = v.Diff!;
+        bool share = ctx == null || ctx.Share;
+        var m = (ctx?.CompareMember is { } who ? d.Members.FirstOrDefault(x => !x.You && x.A.Name.Equals(who, StringComparison.OrdinalIgnoreCase)) : null) ?? d.You!;
+        string cls = m.A.Class.Length > 0 ? m.A.Class : m.B.Class;
         var body = new StackPanel();
-        var head = new StackPanel { Orientation = Orientation.Horizontal };
-        head.Children.Add(T(L.T("Compare"), 13, Ink, FontWeights.SemiBold)); head.Children.Add(M(T(L.F("your DPS on {0}", v.E.Boss), 12, Muted), 8, 0, 0, 0));
-        body.Children.Add(M(HeadWithCopy(head, copy), 0, 0, 0, 10));
-        var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 1 + (v.Best != null ? 1 : 0) + (v.Last != null ? 1 : 0), Margin = new Thickness(-4, 0, -4, 10) };
-        Border Tile(string label, string value, string sub, Brush tone, bool lit)
+        // the head: the title and what it is against; on the right the pull picker (a click picks another) and the copy buttons
+        var head = Cols(-1, 0);
+        var title = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        title.Children.Add(T(L.T("Compare"), 13, Ink, FontWeights.SemiBold));
+        title.Children.Add(M(T(L.F("against {0}", AgainstWord(v, d.B)), 12, Muted), 8, 0, 0, 0));
+        head.Children.Add(title);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (!share && v.CompareChoices.Count > 1) right.Children.Add(PullPicker(v, d.B, ctx!));
+        if (copy != null) { copy.Margin = new Thickness(10, -4, 0, -4); copy.VerticalAlignment = VerticalAlignment.Center; right.Children.Add(copy); }
+        head.Children.Add(Col(right, 1));
+        body.Children.Add(M(head, 0, 0, 0, 10));
+
+        // the figures: this pull, the other, the change (the member's DPS; the fights' lengths)
+        var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(-4, 0, -4, 10) };
+        Border Tile(string label, FrameworkElement value, string sub, bool lit)
         {
-            var sp = Stat(L.T(label), T(value, 24, tone, FontWeights.Bold, tab: true), sub, Muted, Faint);
-            return lit ? M(YouFrame(sp, 10, new Thickness(12, 8, 12, 9), 0.6), 4, 0, 4, 0)
-                : M(new Border { CornerRadius = Skins.Corner(10), Padding = new Thickness(12, 8, 12, 9), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1), Child = sp }, 4, 0, 4, 0);
+            var sp = Stat(label, value, sub, Muted, Faint);
+            return lit ? M(YouFrame(sp, 10, new Thickness(12, 7, 12, 8), 0.6), 4, 0, 4, 0)
+                : M(new Border { CornerRadius = Skins.Corner(10), Padding = new Thickness(12, 7, 12, 8), Background = K("CardQuiet"), BorderBrush = Hair, BorderThickness = new Thickness(1), Child = sp }, 4, 0, 4, 0);
         }
-        tiles.Children.Add(Tile("This pull", Int(you.Dps), L.F("{0} · {1} in the group", BossParser.Clock(v.E.Duration(v.Now)), Rank(you.Rank)), GoldInk, true));
-        if (v.Best != null) { double d = you.Dps / v.Best.Dps - 1; tiles.Children.Add(Tile("Your best kill", Int(v.Best.Dps), L.F("{0:MMM d} · you're {1}", v.Best.When.ToLocalTime(), Signed(d)), Ink, false)); }
-        if (v.Last != null) { double d = you.Dps / v.Last.Dps - 1; tiles.Children.Add(Tile("Last pull", Int(v.Last.Dps), L.F("{0:MMM d} · you're {1}", v.Last.When.ToLocalTime(), Signed(d)), Text2, false)); }
+        string whose = m.You ? "" : "  ·  " + m.A.Name;
+        tiles.Children.Add(Tile(L.T("This pull") + whose, T(Int(m.DpsA), 22, m.You ? GoldInk : Ink, FontWeights.Bold, tab: true),
+            $"{Clock(d.ALength)} · {d.A.OutcomeLabel}", m.You));
+        tiles.Children.Add(Tile(AgainstTitle(v, d.B), T(Int(m.DpsB), 22, Text2, FontWeights.Bold, tab: true),
+            $"{When(d.B.Start)} · {Clock(d.BLength)} · {d.B.OutcomeLabel}", false));
+        var change = T("", 22, Ink, FontWeights.Bold, tab: true, trim: false);
+        var tone = C(m.DpsDelta >= 0 ? Mint : Coral);
+        change.Inlines.Add(R(m.DpsChange is { } pc ? Signed(pc) : SignedInt(m.DpsDelta), 22, tone, FontWeights.Bold));
+        if (m.DpsChange != null) change.Inlines.Add(R("  " + SignedInt(m.DpsDelta), 12.5, tone, FontWeights.SemiBold));
+        tiles.Children.Add(Tile(L.T("Change in DPS"), change, LengthWords(d.ALength - d.BLength), false));
         body.Children.Add(tiles);
-        var basis = v.Best ?? v.Last!;
-        string basisName = v.Best != null ? "Best" : "Last";
-        var h = Cols(38, -1, 74, 74, 74); h.Margin = new Thickness(0, 4, 0, 4);
-        h.Children.Add(Col(Head("Ability", right: false), 1)); h.Children.Add(Col(Head("This pull"), 2)); h.Children.Add(Col(Head(basisName), 3)); h.Children.Add(Col(Head("Change", sorted: true), 4));
-        body.Children.Add(h);
-        var skills = you.Abilities.Select(a => a.Skill).Union(basis.Abilities.Keys).ToList();
-        var rows = skills.Select(s => (Skill: s, Now: you.Abilities.FirstOrDefault(a => a.Skill == s)?.Dps ?? 0, Then: basis.Abilities.TryGetValue(s, out var t) ? t : 0))
-            .OrderByDescending(x => Math.Max(x.Now, x.Then)).Take(12).ToList();
-        foreach (var x in rows)
+
+        // the abilities that lost the most, said plainly (what changed, not why); the biggest gain under them when there's room
+        var losses = m.Losses(3);
+        var said = new StackPanel { Margin = new Thickness(2, 0, 0, 10) };
+        said.Children.Add(M(T(L.T("Biggest losses"), 11, Faint, FontWeights.SemiBold), 0, 0, 0, 3));
+        if (losses.Count == 0) said.Children.Add(Said(L.T("No ability lost DPS against that pull."), Mint, "parser-compare-noloss"));
+        foreach (var s in losses) said.Children.Add(Said(LossWords(s, cls), Coral, "parser-compare-loss"));
+        if (losses.Count < 3 && m.Gains(1).FirstOrDefault() is { } g) said.Children.Add(Said(L.F("Biggest gain: {0}", GainWords(g, cls)), Mint, "parser-compare-gain"));
+        body.Children.Add(said);
+
+        // whose abilities: you, or a member whose damage both pulls have (a chip each, their DPS change on it); on the page only,
+        // never in a picture (other players' figures stay on this PC)
+        if (d.Members.Count > 1 && !share)
         {
-            var r = Cols(38, -1, 74, 74, 74); r.MinHeight = 34;
-            r.Children.Add(SkillArt.Icon(x.Skill, you.F.Class, 26));
-            r.Children.Add(Col(T(Parser.Abilities.Name(x.Skill, you.F.Class), 13, Ink, FontWeights.SemiBold), 1));
-            r.Children.Add(Col(Num(x.Now > 0 ? Int(x.Now) : "–", 12.5, Ink, FontWeights.Bold), 2));
-            r.Children.Add(Col(Num(x.Then > 0 ? Int(x.Then) : "–", 12.5, Text2), 3));
-            if (x.Now > 0 && x.Then > 0) { double d = x.Now / x.Then - 1; r.Children.Add(Col(Num(Signed(d), 12.5, C(d >= 0 ? Mint : Coral), FontWeights.Bold), 4)); }
-            else r.Children.Add(Col(Num(x.Now > 0 ? L.T("new") : L.T("not used"), 11.5, Faint), 4));
-            body.Children.Add(r);
+            var wp = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+            foreach (var x in d.Members)
+            {
+                bool on = x == m;
+                var chip = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 2, 8, 3), Margin = new Thickness(0, 0, 6, 4), Tag = "parser-compare-member",
+                    Background = on ? C(Gold, 0.16) : K("CardQuiet"), BorderBrush = on ? C(Gold, 0.7) : Hair, BorderThickness = new Thickness(1) };
+                var t = T("", 11.5, on ? Ink : Text2, FontWeights.SemiBold, trim: false);
+                string nm = x.You ? ParserRows.NameOf(x.A) : x.A.Name;
+                t.Inlines.Add(R(nm, 11.5, on ? Ink : Text2, FontWeights.SemiBold));
+                if (x.DpsChange is { } xc) t.Inlines.Add(R("  " + Signed(xc), 11, C(xc >= 0 ? Mint : Coral), FontWeights.Bold));
+                chip.Child = t;
+                if (!share)
+                {
+                    chip.Cursor = Cursors.Hand;
+                    string? pick = x.You ? null : x.A.Name;
+                    chip.MouseLeftButtonUp += (_, _) => ctx!.SetCompareMember(pick);
+                    AutomationProperties.SetName(chip, L.F("Compare {0}", nm));
+                }
+                wp.Children.Add(chip);
+            }
+            body.Children.Add(wp);
         }
-        return Glass(body, new Thickness(14, 12, 14, 10), 14);
+
+        // every ability side by side: this pull's figure on top, the other's under it
+        body.Children.Add(Fit(w => CompareTable(v, m, cls, ctx, w)));
+        // what the figures are when it isn't plain: both over every target (one of the pulls kept no boss damage apart), partial pulls
+        var notes = new List<string>();
+        if (!d.BossOnly && (d.A.BossView || d.B.BossView)) notes.Add(L.T("Damage to every target in both: one of these pulls kept no boss damage apart."));
+        if (d.A.Partial || d.B.Partial) notes.Add(L.T("Part of one of these pulls wasn't seen: its figures may be short."));
+        foreach (var n in notes) { var nt = T(n, 11, K("Warn"), FontWeights.Medium, trim: false); nt.TextWrapping = TextWrapping.Wrap; body.Children.Add(M(nt, 2, 6, 0, 0)); }
+        var glass = Glass(body, new Thickness(14, 12, 14, 10), 14);
+        glass.Tag = "parser-compare";
+        return glass;
+    }
+
+    /// <summary>The abilities a compare shows before Show all; in a picture, the first <see cref="CompareShareRows"/>.</summary>
+    public const int CompareRows = 7, CompareShareRows = 10;
+
+    /// <summary>The compare's abilities at a width: the columns that fit it (Share, Crit, Casts, Damage go first).</summary>
+    static StackPanel CompareTable(FightView v, MemberCompare m, string cls, CommandCtx? ctx, double width)
+    {
+        bool share = ctx == null || ctx.Share;
+        var body = new StackPanel();
+        var cols = new List<string> { "Damage", "DPS", "DPS change" };
+        if (m.HasCasts) cols.Add("Casts");
+        if (m.HasCrit) cols.Add("Crit");
+        cols.Add("Share");
+        static double W(string k) => k switch { "Damage" => 62, "DPS" => 60, "DPS change" => 66, "Casts" => 60, "Crit" => 80, _ => 76 };
+        foreach (var k in new[] { "Share", "Crit", "Casts", "Damage" })
+        {
+            if (34 + 150 + cols.Sum(W) <= width) break;
+            cols.Remove(k);
+        }
+        Grid Row() => Cols(new[] { 34.0, -1 }.Concat(cols.Select(W)).ToArray());
+        var h = Row(); h.Margin = new Thickness(0, 0, 0, 2);
+        h.Children.Add(Col(Head("Ability", right: false), 1));
+        for (int i = 0; i < cols.Count; i++) h.Children.Add(Col(Head(cols[i], sorted: cols[i] == "DPS"), i + 2));
+        body.Children.Add(h);
+        body.Children.Add(M(T(L.F("top: this pull · under: {0}", AgainstWord(v, v.Diff!.B)), 10.5, Faint, FontWeights.Medium), 34, 0, 0, 4));
+        int max = share ? CompareShareRows : ctx!.CompareAll ? int.MaxValue : CompareRows;
+        var list = m.Skills.Take(max).ToList();
+        foreach (var s in list)
+        {
+            var r = Row(); r.MinHeight = 38; r.Tag = "parser-compare-row";
+            r.Children.Add(SkillArt.Icon(s.Skill, cls, 26));
+            var nm = T(Parser.Abilities.Name(s.Skill, cls), 12.5, s.Skill == 0 ? Muted : Ink, FontWeights.SemiBold);
+            nm.TextTrimming = TextTrimming.CharacterEllipsis; nm.Margin = new Thickness(0, 0, 8, 0); nm.VerticalAlignment = VerticalAlignment.Center;
+            r.Children.Add(Col(nm, 1));
+            for (int i = 0; i < cols.Count; i++)
+            {
+                FrameworkElement cell = cols[i] switch
+                {
+                    "Damage" => Pair(s.UsedA ? Amounts.Short(s.DamageA) : "–", s.UsedB ? Amounts.Short(s.DamageB) : "–"),
+                    "DPS" => Pair(s.UsedA ? Int(s.DpsA) : "–", s.UsedB ? Int(s.DpsB) : "–", bold: true),
+                    "DPS change" => ChangeCell(s),
+                    "Casts" => Pair(s.CastsA?.ToString(CultureInfo.InvariantCulture) ?? "–", s.CastsB?.ToString(CultureInfo.InvariantCulture) ?? "–",
+                        s.CastsDelta is { } cd && cd != 0 ? (cd > 0 ? "+" : "−") + Math.Abs(cd).ToString(CultureInfo.InvariantCulture) : null),
+                    "Crit" => Pair(s.CritA is { } ca && s.UsedA ? Pct(ca) : "–", s.CritB is { } cb && s.UsedB ? Pct(cb) : "–",
+                        s.UsedA && s.UsedB && s.CritDelta is { } dc && Math.Abs(dc) >= 0.0005 ? Points(dc) : null),
+                    _ => Pair(s.UsedA ? Pct(s.ShareA) : "–", s.UsedB ? Pct(s.ShareB) : "–", s.UsedA && s.UsedB && Math.Abs(s.ShareA - s.ShareB) >= 0.0005 ? Points(s.ShareA - s.ShareB) : null),
+                };
+                cell.Margin = new Thickness(6, 0, 0, 0);
+                r.Children.Add(Col(cell, i + 2));
+            }
+            body.Children.Add(r);
+            if (s != list[^1]) body.Children.Add(new Border { Height = 1, Background = Hair });
+        }
+        // the fold: Show all N abilities, or fewer again
+        if (!share && m.Skills.Count > CompareRows)
+        {
+            var more = T(ctx!.CompareAll ? L.T("Show fewer") + "  ▴" : L.F("Show all {0} abilities", m.Skills.Count) + "  ▾", 11.5, K("Link"), FontWeights.SemiBold);
+            more.Cursor = Cursors.Hand; more.Margin = new Thickness(34, 6, 0, 0); more.HorizontalAlignment = HorizontalAlignment.Left; more.Tag = "parser-compare-more";
+            more.MouseLeftButtonUp += (_, _) => ctx.ToggleCompareAll();
+            body.Children.Add(more);
+        }
+        return body;
+    }
+
+    /// <summary>A cell of two figures, this pull's on top (its change beside it, faint) and the other's under it.</summary>
+    static StackPanel Pair(string a, string b, string? delta = null, bool bold = false)
+    {
+        var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var top = Num(a, 12.5, Ink, bold ? FontWeights.Bold : FontWeights.SemiBold);
+        if (delta != null) top.Inlines.Add(R(" " + delta, 10, Faint, FontWeights.SemiBold));
+        sp.Children.Add(top);
+        sp.Children.Add(Num(b, 11.5, Faint, FontWeights.Medium));
+        return sp;
+    }
+
+    /// <summary>An ability's change in DPS: the share on top (green up, red down), the DPS under it; "new" or "not used" when one pull didn't use it.</summary>
+    static StackPanel ChangeCell(SkillCompare s)
+    {
+        var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        if (!s.UsedB || !s.UsedA)
+        {
+            var tone0 = !s.UsedB ? Mint : Coral;
+            sp.Children.Add(Num(!s.UsedB ? L.T("new") : L.T("not used"), 11.5, C(tone0), FontWeights.Bold));
+            sp.Children.Add(Num(SignedInt(s.DpsDelta), 11, C(tone0, 0.8), FontWeights.Medium));
+            return sp;
+        }
+        var tone = s.DpsDelta >= 0 ? Mint : Coral;
+        sp.Children.Add(Num(s.DpsChange is { } c ? Signed(c) : "–", 12.5, C(tone), FontWeights.Bold));
+        sp.Children.Add(Num(SignedInt(s.DpsDelta), 11, C(tone, 0.8), FontWeights.Medium));
+        return sp;
+    }
+
+    /// <summary>A whole figure with its sign: "+1,240", "−360", "0".</summary>
+    static string SignedInt(double v) => Math.Round(v) == 0 ? "0" : (v > 0 ? "+" : "−") + Int(Math.Abs(v));
+    /// <summary>A change of a rate, in points: "+2.4 pt", "−0.8 pt".</summary>
+    static string Points(double v) => (v >= 0 ? "+" : "−") + (Math.Abs(v) * 100).ToString("0.0", CultureInfo.InvariantCulture);
+    /// <summary>When a pull was, short: "Nov 11 16:10", "11월 11일 16:10", "11月11日 16:10".</summary>
+    static string When(DateTime utc)
+    {
+        var t = utc.ToLocalTime();
+        return L.Code switch
+        {
+            "ko" => t.ToString("M월 d일 HH:mm", CultureInfo.InvariantCulture),
+            "zh-TW" => t.ToString("M月d日 HH:mm", CultureInfo.InvariantCulture),
+            _ => t.ToString("MMM d HH:mm", CultureInfo.InvariantCulture),
+        };
+    }
+
+    /// <summary>One line of the losses (or the gain): a dot in the tone, then the words.</summary>
+    static FrameworkElement Said(string text, Color tone, string tag)
+    {
+        var t = T("", 12, Ink, FontWeights.Medium, trim: false);
+        t.Inlines.Add(R("●  ", 8, C(tone), FontWeights.Bold));
+        t.Inlines.Add(R(text, 12, Ink, FontWeights.Medium));
+        t.TextWrapping = TextWrapping.Wrap; t.Tag = tag; t.Margin = new Thickness(0, 1, 0, 1);
+        return t;
+    }
+
+    /// <summary>What the other pull is, in words: your best kill (or best pull) of the fight, else the pull picked.</summary>
+    static string AgainstWord(FightView v, Encounter b) => b == v.CompareBest ? (FightRecords.Counts(b) ? L.T("your best kill") : L.T("your best pull")) : L.T("the pull picked");
+    /// <summary>The same as a tile's label: "Your best kill", "Your best pull", "Pull picked".</summary>
+    static string AgainstTitle(FightView v, Encounter b) => b == v.CompareBest ? (FightRecords.Counts(b) ? L.T("Your best kill") : L.T("Your best pull")) : L.T("Pull picked");
+
+    /// <summary>The fights' lengths, said: "0:12 shorter", "0:08 longer", "same length".</summary>
+    static string LengthWords(double delta) => Math.Abs(delta) < 0.5 ? L.T("same length") : delta < 0 ? L.F("{0} shorter", Clock(-delta)) : L.F("{0} longer", Clock(delta));
+
+    /// <summary>
+    /// A loss in plain words, only what the figures say ("say what changed, not why"): "Ruinous Strike: 14.2% less DPS (−2,340),
+    /// 3 fewer casts, crit 31.0% → 24.5%", or "Ruinous Strike: not used this pull (2,340 DPS in that one)".
+    /// </summary>
+    public static string LossWords(SkillCompare s, string cls)
+    {
+        var name = Parser.Abilities.Name(s.Skill, cls);
+        if (!s.UsedA) return name + ": " + L.F("not used this pull ({0} DPS in that one)", Int(s.DpsB));
+        var bits = new List<string> { L.F("{0} less DPS ({1})", s.DpsChange is { } c ? Pct(-c) : "–", SignedInt(s.DpsDelta)) };
+        bits.AddRange(Facts(s));
+        return name + ": " + string.Join(", ", bits);
+    }
+
+    /// <summary>A gain in the same words: "Lightning Strike: 9.8% more DPS (+1,120), 2 more casts", or "new this pull (1,120 DPS)".</summary>
+    public static string GainWords(SkillCompare s, string cls)
+    {
+        var name = Parser.Abilities.Name(s.Skill, cls);
+        if (!s.UsedB) return name + ": " + L.F("new this pull ({0} DPS)", Int(s.DpsA));
+        var bits = new List<string> { L.F("{0} more DPS ({1})", s.DpsChange is { } c ? Pct(c) : "–", SignedInt(s.DpsDelta)) };
+        bits.AddRange(Facts(s));
+        return name + ": " + string.Join(", ", bits);
+    }
+
+    /// <summary>The casts and crit that changed with it, when both pulls carry them.</summary>
+    static IEnumerable<string> Facts(SkillCompare s)
+    {
+        if (s.CastsDelta is { } cd && cd != 0)
+            yield return cd < 0 ? (cd == -1 ? L.T("1 fewer cast") : L.F("{0} fewer casts", -cd)) : (cd == 1 ? L.T("1 more cast") : L.F("{0} more casts", cd));
+        if (s.CritA is { } ca && s.CritB is { } cb && Math.Abs(ca - cb) >= 0.01) yield return L.F("crit {0} → {1}", Pct(cb), Pct(ca));
+    }
+
+    /// <summary>The pull a compare is against, as a button: a click opens your other pulls of the fight, newest first, to pick one.</summary>
+    static Border PullPicker(FightView v, Encounter against, CommandCtx ctx)
+    {
+        var label = T(L.F("vs {0}", When(against.Start)) + "  ▾", 11.5, GoldInk, FontWeights.SemiBold, trim: false);
+        var btn = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 3, 9, 4), Background = C(Gold, 0.10), BorderBrush = C(Gold, 0.5), BorderThickness = new Thickness(1),
+            Cursor = Cursors.Hand, Child = label, Tag = "parser-compare-pick", VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(btn, L.T("Pick the pull to compare against"));
+        btn.ToolTip = ctx.Tip(L.F("{0} other pulls of this fight", v.CompareChoices.Count));
+        btn.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            var pop = new System.Windows.Controls.Primitives.Popup
+            {
+                PlacementTarget = btn, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, VerticalOffset = 4, StaysOpen = false,
+                AllowsTransparency = true, PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade, Child = PickerCard(v, against, id => ctx.SetCompare(id)),
+            };
+            foreach (var it in Choices(pop.Child)) it.MouseLeftButtonUp += (_, _) => pop.IsOpen = false;
+            pop.IsOpen = true;
+        };
+        return btn;
+    }
+
+    static IEnumerable<Border> Choices(UIElement card) => ((StackPanel)((ScrollViewer)((Border)card).Child).Content).Children.OfType<Border>();
+
+    /// <summary>The picker's card: each other pull of the fight, newest first (when, how it ended, how long, your DPS), the best marked, the one in use lit.</summary>
+    internal static Border PickerCard(FightView v, Encounter against, Action<string?> pick)
+    {
+        var list = new StackPanel();
+        foreach (var p in v.CompareChoices)
+        {
+            bool on = p == against, best = p == v.CompareBest;
+            var row = Cols(-1, 0);
+            var t = T("", 12, Ink, FontWeights.SemiBold, trim: false);
+            t.Inlines.Add(R(When(p.Start), 12, on ? GoldInk : Ink, FontWeights.SemiBold));
+            t.Inlines.Add(R($"  ·  {p.OutcomeLabel}  ·  {Clock(p.Duration(p.End ?? p.LastAt).TotalSeconds)}", 11.5, Muted, FontWeights.Medium));
+            if (best) t.Inlines.Add(R("  " + (FightRecords.Counts(p) ? L.T("best kill") : L.T("best pull")), 11, GoldInk, FontWeights.Bold));
+            row.Children.Add(t);
+            row.Children.Add(Col(M(Num(L.F("{0} DPS", Int(PullCompare.YourDps(p))), 12, on ? GoldInk : Text2, FontWeights.Bold), 16, 0, 0, 0), 1));
+            var item = new Border { Padding = new Thickness(10, 5, 10, 6), CornerRadius = new CornerRadius(6), Background = on ? C(Gold, 0.10) : Brushes.Transparent, Cursor = Cursors.Hand, Child = row, Tag = "parser-compare-choice" };
+            item.MouseEnter += (_, _) => { if (!on) item.Background = K("CardQuiet"); };
+            item.MouseLeave += (_, _) => { if (!on) item.Background = Brushes.Transparent; };
+            string? id = best ? null : p.Id;
+            item.MouseLeftButtonUp += (_, _) => pick(id);
+            list.Children.Add(item);
+        }
+        return new Border
+        {
+            CornerRadius = new CornerRadius(10), Padding = new Thickness(6), Background = K("Card"), BorderBrush = Hair, BorderThickness = new Thickness(1), MinWidth = 360,
+            Child = new ScrollViewer { MaxHeight = 360, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = list },
+            Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 3, Opacity = 0.35 }, Tag = "parser-compare-picker",
+        };
     }
 
     // ================================================================ timeline and damage taken (once the record carries them)

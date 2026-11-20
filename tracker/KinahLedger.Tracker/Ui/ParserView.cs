@@ -35,10 +35,19 @@ public sealed class FightView
     public bool HasTaken => Members.Any(m => m.Taken != null);
     public bool HasDeathLog => Members.Any(m => m.DeathLog.Count > 0);
     public bool HasBuffs => Members.Any(m => m.Buffs is { Count: > 0 });
-    public bool HasCompare => You is { Damage: > 0 } && (Best != null || Last != null);
+    /// <summary>
+    /// Pull against pull (the Compare tab, Parser/PullCompare.cs): this pull beside another pull of the same fight, your best
+    /// kill of it unless another was picked; null with no other pull of it kept. The other pulls it can be measured against, newest first.
+    /// </summary>
+    public PullCompare? Diff;
+    public List<Encounter> CompareChoices = new();
+    /// <summary>The pull measured against by default (your best kill of the fight, else your best pull of it).</summary>
+    public Encounter? CompareBest;
+    public bool HasCompare => Diff?.You != null;
     public int Deaths => Members.Sum(m => m.Deaths);
 
-    public static FightView Of(Encounter e, DateTime now, IEnumerable<Encounter>? past)
+    /// <param name="against">The pull to compare against (its id), picked on the Compare tab; null or gone: your best kill of the fight.</param>
+    public static FightView Of(Encounter e, DateTime now, IEnumerable<Encounter>? past, string? against = null)
     {
         var v = new FightView { E = e, Now = now };
         var shown = e.HasDamage ? e.Ranked().Where(f => !f.Other).ToList() : e.Ranked().Where(f => !f.Other).ToList();
@@ -58,7 +67,15 @@ public sealed class FightView
             Depth(m, f, e);
             v.Members.Add(m);
         }
-        if (past != null && e.ModeKind == ParserMode.Bosses && e.Boss.Length > 0) (v.Best, v.Last) = Records(e, past);
+        if (past != null && e.ModeKind == ParserMode.Bosses && e.Boss.Length > 0)
+        {
+            var list = past as IReadOnlyList<Encounter> ?? past.ToList();
+            (v.Best, v.Last) = Records(e, list);
+            v.CompareChoices = PullCompare.Others(e, list);
+            v.CompareBest = PullCompare.Best(v.CompareChoices);
+            var other = (against != null ? v.CompareChoices.FirstOrDefault(p => p.Id == against) : null) ?? v.CompareBest;
+            if (other != null) v.Diff = PullCompare.Of(e, other, now);
+        }
         return v;
     }
 
