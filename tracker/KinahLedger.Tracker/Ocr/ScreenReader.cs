@@ -21,7 +21,10 @@ public sealed record OcrLineBox(string Text, Rectangle Box, IReadOnlyList<OcrWor
 public sealed class ScreenReader
 {
     static OcrEngine? _shared;
-    static OcrEngine NewEngine() => OcrEngine.TryCreateFromLanguage(new Language("en-US")) ?? OcrEngine.TryCreateFromUserProfileLanguages() ?? Engine;
+    static OcrEngine NewEngine() { _extra++; return OcrEngine.TryCreateFromLanguage(new Language("en-US")) ?? OcrEngine.TryCreateFromUserProfileLanguages() ?? Engine; }
+    static int _extra;
+    /// <summary>Recognizers made so far (copy-load --ocr --threads).</summary>
+    public static int Engines => (_shared != null ? 1 : 0) + _extra;
     static OcrEngine Engine => _shared ??= OcrEngine.TryCreateFromLanguage(new Language("en-US"))
         ?? OcrEngine.TryCreateFromUserProfileLanguages()
         ?? throw new InvalidOperationException("Windows text recognition isn't available. In Settings > Time & language > Language, add English (United States) with the optional features.");

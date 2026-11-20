@@ -154,7 +154,7 @@ public static partial class WpfApp
     /// capture, per thread, on a texture of the given size delivered --fps times a second while a reader takes a pass's six
     /// crops (--gap ms apart) --passes times a second. Without --lazy, each frame is copied as it comes (a GPU surface into a
     /// SoftwareBitmap, CreateCopyFromSurfaceAsync), as Ocr/WindowCapture.cs did until 2026-11-18; with --lazy, through
-    /// WindowCapture itself, which copies only for a read. --ocr instead recognizes a chat-sized picture back to back, as the
+    /// WindowCapture itself, which crops on the graphics card for a read (1.0.31; whole frames only if the card can't). --ocr instead recognizes a chat-sized picture back to back, as the
     /// reader's passes do, to tell its threads apart. Needs no screen: runs under tests\hidden-run.ps1. (Windows Graphics Capture
     /// itself delivers no frames on hidden-run's desktop, nor for a window off every screen, so the capture is stood in for.)
     /// </summary>
@@ -178,7 +178,14 @@ public static partial class WpfApp
                 g.Clear(System.Drawing.Color.FromArgb(20, 20, 24));
                 for (int i = 0; i < 18; i++) g.DrawString($"[Party] Member{i}: You have acquired [Silver Blade Rotan's Box] x{i + 1}", new System.Drawing.Font("Segoe UI", 11), System.Drawing.Brushes.White, 4, 4 + i * 26);
             }
-            work = () => { KinahLedger.Ocr.ScreenReader.ReadBitmapAsync(pic, boost: false, scale: 2).GetAwaiter().GetResult(); };
+            // --threads N: N reads at once, as a fight's passes overlap (each takes a recognizer of its own, up to the reader's 3)
+            int threads = Math.Clamp(int.Parse(Opt("threads", "1")), 1, 8);
+            var pics = Enumerable.Range(0, threads).Select(_ => (System.Drawing.Bitmap)pic.Clone()).ToArray();   // GDI+ pictures are one thread's at a time
+            work = () =>
+            {
+                if (threads == 1) { KinahLedger.Ocr.ScreenReader.ReadBitmapAsync(pic, boost: false, scale: 2).GetAwaiter().GetResult(); return; }
+                Task.WaitAll(pics.Select(q => Task.Run(() => KinahLedger.Ocr.ScreenReader.ReadBitmapAsync(q, boost: false, scale: 2))).ToArray());
+            };
         }
         else
         {
@@ -215,7 +222,7 @@ public static partial class WpfApp
         uint me = GetCurrentThreadId();
         // the reader's passes (--passes a second): its crops one after another, as a pass takes them (the chat, the loot list,
         // the target, the balance, the grid, the scene), each --gap ms apart
-        int crops = 0; bool stop = false; uint readerTid = 0;
+        int crops = 0; bool stop = false; uint readerTid = 0; double cropMs = 0, cropMax = 0;
         var reader = new Thread(() =>
         {
             readerTid = GetCurrentThreadId();
@@ -224,7 +231,7 @@ public static partial class WpfApp
             var rsw = Stopwatch.StartNew();
             for (int k = 1; !stop; k++)
             {
-                foreach (var r in rs) { using var b = crop?.Invoke(r); if (b != null) Interlocked.Increment(ref crops); Thread.Sleep(gap); }
+                foreach (var r in rs) { long c0 = Stopwatch.GetTimestamp(); using var b = crop?.Invoke(r); double cm = Stopwatch.GetElapsedTime(c0).TotalMilliseconds; cropMs += cm; cropMax = Math.Max(cropMax, cm); if (b != null) Interlocked.Increment(ref crops); Thread.Sleep(gap); }
                 while (!stop && rsw.Elapsed.TotalMilliseconds < k * 1000 / passes) Thread.Sleep(5);
             }
         }) { IsBackground = true, Name = "copy-load reader" };
@@ -245,9 +252,11 @@ public static partial class WpfApp
         stop = true;
         var rows = after.Select(kv => (Label: kv.Key == me ? "frame arrivals (OnFrame's thread)" : kv.Key == readerTid ? "the reader's crops" : kv.Value.Label, Ms: kv.Value.Ms - (before.TryGetValue(kv.Key, out var b) ? b.Ms : 0)))
             .GroupBy(r => r.Label).Select(g => (Label: g.Key, Cores: g.Sum(r => r.Ms) / 1000 / span)).OrderByDescending(r => r.Cores).ToList();
-        Console.WriteLine(ocr ? $"copy-load --ocr: {n / span:0.0} recognitions a second, {busy / n:0.0} ms each"
+        Console.WriteLine(ocr ? $"copy-load --ocr: {n / span:0.0} recognitions a second, {busy / n:0.0} ms each, {KinahLedger.Ocr.ScreenReader.Engines} recognizers, private bytes {Process.GetCurrentProcess().PrivateMemorySize64 / 1e6:0} MB"
             : $"copy-load{(lazy ? " --lazy" : "")}: a {wpx}x{hpx} frame {n / span:0.0} times a second ({busy / n:0.0} ms each on arrival), {crops / span:0.0} crops a second ({passes:0.#} passes), " +
-              (lazy ? $"{(KinahLedger.Ocr.WindowCapture.Copies - copies0) / span:0.0} frames copied a second" : "every frame copied"));
+              (lazy ? $"{(KinahLedger.Ocr.WindowCapture.Copies - copies0) / span:0.0} whole frames copied a second, " +
+                      $"{KinahLedger.Ocr.WindowCapture.CardBytes / 1024.0 / Math.Max(1, KinahLedger.Ocr.WindowCapture.CardReads):0} KB read back per crop on the card" : "every frame copied"));
+        if (!ocr) Console.WriteLine($"  a crop takes {cropMs / Math.Max(1, crops):0.0} ms (longest {cropMax:0.0} ms); private bytes {Process.GetCurrentProcess().PrivateMemorySize64 / 1e6:0} MB");
         Console.WriteLine($"  process {rows.Sum(r => r.Cores):0.000} cores, working set {Process.GetCurrentProcess().WorkingSet64 / 1e6:0} MB");
         foreach (var r in rows.Where(r => r.Cores >= 0.002)) Console.WriteLine($"  {r.Cores,6:0.000}  {r.Label}");
         return 0;
