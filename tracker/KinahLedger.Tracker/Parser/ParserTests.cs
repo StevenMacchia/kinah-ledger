@@ -2025,7 +2025,8 @@ public static class ParserTests
         // Vakron Sky Island with a group of five, and the new reader started in the middle of the run, after its start and its
         // group list had gone by. His recording from the restart on (rec-20261119-15-restart, two trash fights): the Always on meter has
         // the members as rows from the moment it opens (its first fight, 72 s after the restart), each with their own damage, and
-        // nobody else (strangers hit the same monsters at 15:19)
+        // nobody else (strangers hit the same monsters at 15:19). Since 1.0.28 the reader knows the instance within its first seconds, so the two fights are what they were: Thamon killed and a Vakron wipe, kept as boss pulls of the
+        // Expedition with every member (before, they were open-world fights and no pull was kept until the next loading screen)
         {
             var rec = Recording("20261119-15-restart");
             if (NativeDecoder.Version < 10 || rec == null)
@@ -2034,7 +2035,7 @@ public static class ParserTests
             {
                 var tallies = new Dictionary<DateTime, Encounter>();
                 DateTime? attach = null, shown = null;
-                Replay(rec, hits: true, tick: (p, at) =>
+                var pulls = Replay(rec, hits: true, tick: (p, at) =>
                 {
                     attach ??= at;
                     if (p.AlwaysLive is not { } a) return;
@@ -2052,6 +2053,12 @@ public static class ParserTests
                     $"a restart mid-run: the members are on the Always on meter as it opens ({opened:0.0} s in), {after:0} s after the reader came in ({t2.Count} fights: "
                     + $"{string.Join("; ", t2.Select(e => $"{e.Start.ToLocalTime():HH:mm:ss} you {Ui.Amounts.Short(e.You!.Damage)}, {Members(e).Count} members {Ui.Amounts.Short(Members(e).Sum(f => f.Damage))}"))}); "
                     + $"{names.Count} members named, nobody outside the group");
+                var thamon = pulls.FirstOrDefault(e => e.Boss == "Thamon");
+                var vakron = pulls.FirstOrDefault(e => e.Boss == "Vakron");
+                bool placed = pulls.Count == 2 && thamon is { Outcome: "kill" } && vakron is { Outcome: "wipe" } && pulls.All(e => e.Instance == "Vakron Sky Island");
+                int members0 = thamon?.Roster.Count(f => !f.You && !f.Other && f.Damage > 0) ?? 0, members1 = vakron?.Roster.Count(f => !f.You && !f.Other && f.Damage > 0) ?? 0;
+                Check(placed && members0 == 3 && members1 == 4,
+                    $"...and the run is known at once: the boss pulls kept as they were ({string.Join("; ", pulls.Select(e => $"{e.Boss} {e.Outcome} in {e.Instance}"))}), with 3 and 4 members ({members0}, {members1})");
             }
         }
 
@@ -2556,7 +2563,9 @@ public static class ParserTests
                 Check(runs.Count == 2 && runs.All(e => e is { Kind: "Transcendence", GameMode: "Stage 4", Outcome: "cleared" }),
                     $"...Full run: two Deus Research Base runs, each cleared ({string.Join("; ", runs.Select(e => $"{e.Start.ToLocalTime():HH:mm:ss} {e.Kind} {e.GameMode} {e.Outcome}"))})");
                 var d = Replay(recs[3].Path!, hits: false, useScreen: false).Where(e => e.Mode == "boss").ToList();
-                Check(d.Count == 9 && d.Take(4).All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }) && d.Skip(4).All(e => e is { Kind: "Expedition", Instance: "Krao Cave", GameMode: "Hard" }),
+                // 10 since 1.0.28, as truth.json has them: the first Duanka was fought before the map load of the run the recording came into
+                // partway (18:02); since 1.0.28 the reader knows that run from its first seconds
+                Check(d.Count == 10 && d.Take(5).All(e => e is { Kind: "Expedition", Instance: "Ferocious Horn Den", GameMode: "Easy" }) && d.Skip(5).All(e => e is { Kind: "Expedition", Instance: "Krao Cave", GameMode: "Hard" }),
                     $"...18:00, Ferocious Horn Den on Easy and Krao Cave on Hard, expeditions in their modes: {Of(d)}");
             }
         }

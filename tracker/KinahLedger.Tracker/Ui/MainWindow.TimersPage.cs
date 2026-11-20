@@ -28,6 +28,14 @@ public partial class MainWindow
     /// <summary>The maps whose folded bosses the player opened on the page (this session only).</summary>
     readonly HashSet<string> _timerGroupsOpen = new(StringComparer.Ordinal);
     Button? _timersPopOutBtn;
+    /// <summary>
+    /// What the page drawn last shows apart from its countdowns (each timer's place, state, colour and bell, the open maps, the
+    /// event you're in): the second's tick redraws the page only when this changes, and otherwise sets the countdowns' text in
+    /// place (it rebuilt every row each second until 1.0.28, which kept a core busy while the page showed).
+    /// </summary>
+    string? _timersShape;
+    /// <summary>The countdowns on the page drawn last, by timer key ("live" for the event you're in, "fold:" + map for a folded map's line).</summary>
+    readonly Dictionary<string, (TextBlock Big, TextBlock? Small)> _timerTexts = new(StringComparer.Ordinal);
 
     /// <summary>Starts the second's tick that keeps the tab's countdown, and the page while it shows, up to date.</summary>
     void StartTimersTick()
@@ -39,7 +47,7 @@ public partial class MainWindow
             List<TimerBoard.Item> items;
             try { items = TimerItems(now); } catch (Exception ex) { CrashLog.Write("timers page", ex); return; }
             FillTimersTab(items, now);
-            if (_part == "Timers") FillTimersPage(items, now);
+            if (_part == "Timers" && !_welcome && !(TimersShape(items, now) == _timersShape && RefreshTimerTexts(items, now))) FillTimersPage(items, now);
         }, Dispatcher);
         _timersPageTick.Start();
     }
@@ -47,7 +55,7 @@ public partial class MainWindow
     /// <summary>The page, drawn only while it shows (and cleared when it doesn't).</summary>
     void FillTimersPage()
     {
-        if (_part != "Timers" || _welcome) { if (TimersPage.Children.Count > 0) TimersPage.Children.Clear(); return; }
+        if (_part != "Timers" || _welcome) { if (TimersPage.Children.Count > 0) TimersPage.Children.Clear(); _timersShape = null; _timerTexts.Clear(); return; }
         StartTimersTick();
         var now = DateTime.UtcNow;
         List<TimerBoard.Item> items;
@@ -59,13 +67,16 @@ public partial class MainWindow
     void FillTimersPage(List<TimerBoard.Item> items, DateTime now)
     {
         double scroll = LowerScroll.VerticalOffset;
+        _timersShape = TimersShape(items, now);
+        _timerTexts.Clear();
+        TimersPageDrawsForTest++;
         TimersPage.Children.Clear();
         TimersPage.Children.Add(TimersHead());
         if (EventClock.Current(now) is { LeftAt: null } live)
         {
             var stage = EventTimers.StageText(live);
             TimersPage.Children.Add(TimersCard(null, TimerLine(live.Label, live.Name.Length > 0 && live.Family.Length > 0 ? live.Family : "", stage,
-                live.StartedPc is { } st ? $"began {BossTimers.Ago(now - st)}" : "", live.Stage == Packets.AreaEvent.Stage.UnderWay ? "Good" : "Gold", null)));
+                LiveSmall(live, now), live.Stage == Packets.AreaEvent.Stage.UnderWay ? "Good" : "Gold", null, textKey: "live")));
         }
         var watched = items.Where(i => IsTimerWatched(i.Key)).ToList();
         var rest = items.Where(i => !IsTimerWatched(i.Key)).ToList();
@@ -175,11 +186,11 @@ public partial class MainWindow
     {
         bool open = _timerGroupsOpen.Contains(group);
         var sp = new StackPanel();
-        var soonest = items.Where(i => i.State == TimerBoard.Kind.Waiting).OrderBy(i => i.AtPc).FirstOrDefault();
-        string note = string.Format(L.T("{0} more", "timers"), items.Count) + (!open && soonest != null ? L.F(" · next {0} in {1}", soonest.Short, TimerSay.Text(soonest.Big)) : "");
+        string note = FoldNote(group, items);
         var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse(open ? "M0,4 L4,0 L8,4" : "M0,0 L4,4 L8,0"), StrokeThickness = 1.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 2, 0) };
         chev.SetResourceReference(Shape.StrokeProperty, "Muted");
         var head = TimersHeading(L.F("{0} world bosses", group), note, chev);
+        if (head.Children[0] is StackPanel hs && hs.Children.Count > 1 && hs.Children[1] is TextBlock nt) _timerTexts["fold:" + group] = (nt, null);
         head.Background = Brushes.Transparent; head.Cursor = Cursors.Hand;
         if (!open) head.Margin = new Thickness(0, 0, 0, 4);
         head.MouseLeftButtonUp += (_, e) => { if (!_timerGroupsOpen.Remove(group)) _timerGroupsOpen.Add(group); FillTimersPage(); e.Handled = true; };
@@ -196,7 +207,7 @@ public partial class MainWindow
         return TimerLine(i.Name, i.Sub, i.Big, i.Small, tone, i.Key);
     }
 
-    FrameworkElement TimerLine(string name, string sub, string big, string small, string tone, string? key)
+    FrameworkElement TimerLine(string name, string sub, string big, string small, string tone, string? key, string? textKey = null)
     {
         var g = new Grid { MinHeight = 42, Margin = new Thickness(0, 4, 14, 5) };
         g.ColumnDefinitions.Add(new ColumnDefinition());
@@ -213,7 +224,9 @@ public partial class MainWindow
         var b = QT(big, 13, FontWeights.SemiBold, tone); b.HorizontalAlignment = HorizontalAlignment.Right;
         System.Windows.Documents.Typography.SetNumeralAlignment(b, FontNumeralAlignment.Tabular);   // the seconds tick without the line shifting
         right.Children.Add(b);
-        if (small.Length > 0) { var s = QT(small, 11, FontWeights.Medium, "Faint"); s.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(s); }
+        TextBlock? s = null;
+        if (small.Length > 0) { s = QT(small, 11, FontWeights.Medium, "Faint"); s.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(s); }
+        if ((key ?? textKey) is { } tk) _timerTexts[tk] = (b, s);
         Grid.SetColumn(right, 1); g.Children.Add(right);
         if (key != null) { var bell = BellButton(key, name); Grid.SetColumn(bell, 2); g.Children.Add(bell); }
         var rule = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Margin = new Thickness(0, 0, 14, 0) };
@@ -238,6 +251,77 @@ public partial class MainWindow
         b.MouseLeftButtonUp += (_, e) => { Flip(); e.Handled = true; };
         b.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Flip(); e.Handled = true; } };
         return b;
+    }
+
+    /// <summary>A folded map's line: how many, and the soonest while it is folded.</summary>
+    string FoldNote(string group, List<TimerBoard.Item> items)
+    {
+        var soonest = items.Where(i => i.State == TimerBoard.Kind.Waiting).OrderBy(i => i.AtPc).FirstOrDefault();
+        return string.Format(L.T("{0} more", "timers"), items.Count) + (!_timerGroupsOpen.Contains(group) && soonest != null ? L.F(" · next {0} in {1}", soonest.Short, TimerSay.Text(soonest.Big)) : "");
+    }
+
+    static string LiveSmall(EventTimers.Live live, DateTime now) => live.StartedPc is { } st ? $"began {BossTimers.Ago(now - st)}" : "";
+
+    static bool IsMapTimer(TimerBoard.Item i) => !i.Key.StartsWith("event:", StringComparison.Ordinal);
+
+    /// <summary>Everything the page shows but its countdowns (<see cref="_timersShape"/>).</summary>
+    string TimersShape(List<TimerBoard.Item> items, DateTime now)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(Skins.Current).Append('|').Append(L.T("Timers")).Append('|').Append(string.Join(",", _timerGroupsOpen.OrderBy(g => g, StringComparer.Ordinal))).Append(';');
+        if (EventClock.Current(now) is { LeftAt: null } live)
+            sb.Append("live|").Append(live.Label).Append('|').Append(live.Name).Append('|').Append(live.Family).Append('|').Append(live.Stage).Append('|').Append(LiveSmall(live, now).Length > 0).Append(';');
+        foreach (var i in items)
+        {
+            bool soon = i.State == TimerBoard.Kind.Waiting && i.AtPc is { } at && at - DateTime.UtcNow <= TimerSoon;
+            sb.Append(i.Key).Append('|').Append(i.Group).Append('|').Append(i.Name).Append('|').Append(i.Sub).Append('|').Append(i.State).Append('|')
+              .Append(IsTimerWatched(i.Key)).Append('|').Append(soon).Append('|').Append(i.Small.Length > 0).Append(';');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>The second's tick on an unchanged page: each countdown's text set in place. False when one isn't on the page (redraw it).</summary>
+    bool RefreshTimerTexts(List<TimerBoard.Item> items, DateTime now)
+    {
+        if (TimersPage.Children.Count == 0) return false;
+        static void Set(TextBlock t, string v) { if (t.Text != v) t.Text = v; }
+        if (EventClock.Current(now) is { LeftAt: null } live)
+        {
+            if (!_timerTexts.TryGetValue("live", out var lt)) return false;
+            Set(lt.Big, TimerSay.Text(EventTimers.StageText(live)));
+            if (lt.Small != null) Set(lt.Small, TimerSay.Text(LiveSmall(live, now)));
+        }
+        var rest = items.Where(i => !IsTimerWatched(i.Key)).ToList();
+        foreach (var i in items.Where(i => IsTimerWatched(i.Key)).Concat(rest.Where(i => !IsMapTimer(i))))
+        {
+            if (!_timerTexts.TryGetValue(i.Key, out var t)) return false;
+            Set(t.Big, TimerSay.Text(i.Big));
+            if (t.Small != null) Set(t.Small, TimerSay.Text(i.Small));
+        }
+        foreach (var map in rest.Where(IsMapTimer).GroupBy(i => i.Group))
+        {
+            if (!_timerTexts.TryGetValue("fold:" + map.Key, out var f)) return false;
+            Set(f.Big, FoldNote(map.Key, map.ToList()));
+            if (!_timerGroupsOpen.Contains(map.Key)) continue;
+            foreach (var i in map)
+            {
+                if (!_timerTexts.TryGetValue(i.Key, out var t)) return false;
+                Set(t.Big, TimerSay.Text(i.Big));
+                if (t.Small != null) Set(t.Small, TimerSay.Text(i.Small));
+            }
+        }
+        return true;
+    }
+
+    /// <summary>For the options self-test: how many times the page was drawn whole (the second's tick only redraws a changed page).</summary>
+    internal int TimersPageDrawsForTest { get; private set; }
+    /// <summary>For the options self-test: every text on the page, in order.</summary>
+    internal string TimersPageTextForTest() => string.Join("|", Descendants<TextBlock>(TimersPage).Select(t => t.Text));
+    /// <summary>For the options self-test: one second's tick of the page, as its timer runs it.</summary>
+    internal void TickTimersPageForTest(DateTime now)
+    {
+        var items = TimerItems(now);
+        if (!(TimersShape(items, now) == _timersShape && RefreshTimerTexts(items, now))) FillTimersPage(items, now);
     }
 
     /// <summary>The Timers tab's countdown: the soonest watched timer when it is under <see cref="TabCountdownFrom"/>, else nothing.</summary>
