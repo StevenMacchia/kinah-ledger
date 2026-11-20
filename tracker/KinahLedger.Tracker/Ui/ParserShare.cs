@@ -40,7 +40,7 @@ public static class ParserShare
     public static bool Has(FightView v, string view) => view switch
     {
         Compare => v.HasCompare,
-        Timeline => v.HasTimeline,
+        Timeline => v.HasTimeline && v.IsBossPull,
         Taken => v.HasTaken,
         Group => v.Members.Count > 0,
         Abilities => v.Members.Any(m => m.Abilities.Count > 0),

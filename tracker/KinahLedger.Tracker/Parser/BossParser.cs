@@ -878,6 +878,8 @@ public sealed class BossParser
     // ---- the party list's classes (Ocr/PartyFrame.cs, Steven 2026-11-14: "it's literally an icon in the top left") ----
     readonly Dictionary<string, string> _screenClass = new(StringComparer.OrdinalIgnoreCase);
     string _youClass = "";
+    /// <summary>The party list's rows as last read, the player's left out: the names <see cref="NameFromScreen"/> may give.</summary>
+    List<(string Name, string Class)> _screenNow = new();
     /// <summary>Your class as the party list showed it ("" until it did): your row on a PvP fight's skills card (Parser/PvpKills.cs).</summary>
     public string YouClass { get { lock (_gate) return _youClass; } }
 
@@ -896,6 +898,7 @@ public sealed class BossParser
                 if (you) _youClass = cls;
                 if (name.Length > 0) _screenClass[name] = cls;
             }
+            _screenNow = rows.Where(r => !r.You && r.Name.Length > 0 && r.Class.Length > 0).Select(r => (r.Name, r.Class)).ToList();
             foreach (var e in Records()) ApplyClasses(e);
             _version++;
         }
@@ -929,7 +932,39 @@ public sealed class BossParser
         return sb.ToString();
     }
 
-    void ApplyClasses(Encounter e) { foreach (var f in e.Roster) if (!f.Other) ApplyClass(f); }
+    void ApplyClasses(Encounter e) { foreach (var f in e.Roster) if (!f.Other) ApplyClass(f); NameFromScreen(e); }
+
+    /// <summary>
+    /// A member the game never named (Steven, 2026-11-20: "the last fight didn't pick up one of the party members": a Chanter
+    /// already in the instance before him sent no name, so her row had none): the one name of its class on the party list as
+    /// it shows now that no other row has. Its class is the decoder's, else its skills' (<see cref="Abilities.ClassOfFamily"/>);
+    /// two such names, or none, and the row stays nameless.
+    /// </summary>
+    void NameFromScreen(Encounter e)
+    {
+        if (_screenNow.Count == 0) return;
+        foreach (var f in e.Roster)
+        {
+            if (f.Other || f.You || f.Name.Length > 0) continue;
+            string cls = f.Class.Length > 0 ? f.Class : ClassBySkills(f);
+            if (cls.Length == 0) continue;
+            var free = _screenNow.Where(s => s.Class.Equals(cls, StringComparison.OrdinalIgnoreCase)
+                && !e.Roster.Any(r => !r.Other && r.Name.Length > 0 && NameKey(r.Name) == NameKey(s.Name))).Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (free.Count != 1) continue;
+            f.Name = free[0];
+            if (f.Class.Length == 0) f.SetClass(cls);
+            Log($"a member the game never named ({cls}, its hits only): {f.Name}, the party list's only {cls} not on the meter");
+        }
+    }
+
+    /// <summary>The class most of a fighter's damage comes from by its skills' family, "" when none or under 75% of it.</summary>
+    static string ClassBySkills(Fighter f)
+    {
+        var by = f.Abilities.GroupBy(a => Abilities.ClassOfFamily(a.Skill)).Where(g => g.Key.Length > 0).Select(g => (Cls: g.Key, Dmg: g.Sum(a => a.Damage))).ToList();
+        if (by.Count == 0) return "";
+        var top = by.MaxBy(x => x.Dmg);
+        return top.Dmg * 4 >= by.Sum(x => x.Dmg) * 3 ? top.Cls : "";
+    }
 
     void ApplyClass(Fighter f)
     {

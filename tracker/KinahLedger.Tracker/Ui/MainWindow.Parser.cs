@@ -1155,8 +1155,9 @@ public partial class MainWindow
         Encounter.BackKey = Encounter.BackKeyOf(Environment.GetEnvironmentVariable("KL_BACK") ?? _parserPrefs.BackNow);
         _parserDemoState = state;
         _parserDemoNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
-        var mode = ParserMode.Bosses;
-        bool live = state is "live" or "nodamage" or "nogroup" or "inspect" or "compare" or "timeline" or "taken" or "full" or "inspect-full";
+        // "fight": an Every fight record under way on the Graphs tab, which a fight that isn't a boss pull doesn't have (its group's table instead)
+        var mode = state == "fight" ? ParserMode.Fights : ParserMode.Bosses;
+        bool live = state is "fight" or "live" or "nodamage" or "nogroup" or "inspect" or "compare" or "timeline" or "taken" or "full" or "inspect-full";
         // the kept records of every mode an older version kept (the list shows the boss pulls only); the pull under way
         var all = new List<Encounter>();
         Encounter? now = null;
@@ -1179,7 +1180,7 @@ public partial class MainWindow
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
         // Parser v2's views: the tab, the member opened, and for the renders of what the record will carry (the timeline, damage
         // taken, crits), a sample of those figures (ParserViewSample: render states only, the app never sets it)
-        _parserTab = state switch { "compare" => "Compare", "timeline" => "Timeline", "taken" => "Taken", _ => "Group" };
+        _parserTab = state switch { "compare" => "Compare", "timeline" or "fight" => "Timeline", "taken" => "Taken", _ => "Group" };
         _parserSort = "Damage";
         var shownNow = _parserOpen != null ? all.FirstOrDefault(e => e.Id == _parserOpen) : now;
         _parserInspect = state is "inspect" or "inspect-full" ? shownNow?.Ranked().FirstOrDefault(f => f.You && f.Abilities.Count > 0)?.Id : null;

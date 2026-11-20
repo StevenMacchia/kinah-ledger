@@ -542,6 +542,34 @@ public static class ParserTests
         // world bosses (Steven, 2026-11-17: "add boss names / bars etc for nightmare dungeons and world bosses etc and add them
         // to the parser logs"): a pull of a boss the timers know is kept wherever it is fought, under the timers' name, its place
         // the instance; any other boss out here, and trash, stay the live meter's only
+        // a member the game never named (Steven, 2026-11-20 Krao Cave: "the last fight didn't pick up one of the party members"):
+        // her hits only, a Chanter's skills; the party list as it shows now has one Chanter no row has, so the row is hers. Two
+        // such names, or the list's old ones only, and the row stays nameless
+        {
+            var world = WorldBossBook.Of(("Soul Ruler Kashapa", "Eastern Altamia Highland"));
+            BossParser Pull(DateTime at)
+            {
+                var p = new BossParser(book) { World = world, Quiet = true };
+                p.Place("Eastern Altamia Highland", false);
+                p.Take(new GroupChanged(at, new[] { Me, Ally }));
+                p.Take(new BossEngaged(at.AddSeconds(1), "Kashapa", 4400));
+                p.Take(new DamageDealt(at.AddSeconds(2), 1, 4400, 10_000, "Swoly", true, 11_010_000, 1));
+                p.Take(new DamageDealt(at.AddSeconds(2), 2, 4400, 8_000, "Aerin", false, 17_010_000, 1));
+                p.Take(new DamageDealt(at.AddSeconds(3), 8525, 4400, 9_000, "", false, 18_030_000, 3));
+                p.Take(new DamageDealt(at.AddSeconds(4), 8525, 4400, 6_000, "", false, 18_040_000, 2));
+                return p;
+            }
+            var a = Pull(t.AddHours(5));
+            a.ScreenParty(new List<(string, string, bool)> { ("", "Gladiator", true), ("Aerin", "Cleric", false), ("Perolita", "Chanter", false), ("ScarletApple", "Cleric", false) });
+            var her = a.Live?.Roster.FirstOrDefault(f => f.Id == 8525);
+            Check(her is { Name: "Perolita", Class: "Chanter", BossDamage: 15_000 }, $"a member the game never named: the party list's only Chanter not on the meter ({her?.Name ?? "-"}, {her?.Class}, {her?.BossDamage:N0})");
+            var b = Pull(t.AddHours(6));
+            b.ScreenParty(new List<(string, string, bool)> { ("", "Gladiator", true), ("Perolita", "Chanter", false), ("HopeZ", "Chanter", false) });
+            var c = Pull(t.AddHours(7));
+            c.ScreenParty(new List<(string, string, bool)> { ("", "Gladiator", true), ("Aerin", "Cleric", false) });
+            Check(b.Live?.Roster.First(f => f.Id == 8525).Name == "" && c.Live?.Roster.First(f => f.Id == 8525).Name == "",
+                "...two Chanters free, or none on the list: the row stays nameless");
+        }
         {
             var abyss = new WorldBossBook(null);
             Check(abyss.Find("Executor Tamasa") is { Zone: "Reshanta's Root" } && abyss.Find("tamasa")?.Name == "Executor Tamasa" && abyss.Find("Kaira") == null && abyss.Find("Plains Wolf") == null && WorldBossBook.None.Find("Executor Tamasa") == null,
@@ -2064,6 +2092,24 @@ public static class ParserTests
                 int members0 = thamon?.Roster.Count(f => !f.You && !f.Other && f.Damage > 0) ?? 0, members1 = vakron?.Roster.Count(f => !f.You && !f.Other && f.Damage > 0) ?? 0;
                 Check(placed && members0 == 3 && members1 == 4,
                     $"...and the run is known at once: the boss pulls kept as they were ({string.Join("; ", pulls.Select(e => $"{e.Boss} {e.Outcome} in {e.Instance}"))}), with 3 and 4 members ({members0}, {members1})");
+            }
+        }
+        // a member the game never named nor sent a record of (Steven, 2026-11-20 15:01-15:05, Krao Cave Hard: "the last fight didn't
+        // pick up one of the party members"): Perolita's hits are hers on each of the three pulls, five rows each, nothing left to
+        // nobody (the decoder adopts her, kinah-ledger-packets PR 29); the party list on the screen names her live (NameFromScreen,
+        // checked above), this replay has no screen
+        {
+            var rec = Recording("20261120-missed-party");
+            if (NativeDecoder.Version < 10 || rec == null)
+                Console.WriteLine($"skip  a member with no name nor record, Steven's recording: decoder interface {NativeDecoder.Version}, rec-20261120-missed-party {(rec != null ? "here" : "missing")}");
+            else
+            {
+                var pulls = Replay(rec, hits: true).Where(e => e.Instance == "Krao Cave").ToList();
+                var her = pulls.Select(e => e.Roster.FirstOrDefault(f => f.Id == 8525 && !f.Other)).ToList();
+                string say = string.Join("; ", pulls.Select((e, i) => $"{e.Boss} {e.Outcome}: {e.Roster.Count(f => !f.Other && f.BossDamage > 0)} rows, hers {Ui.Amounts.Short(her[i]?.BossDamage ?? 0)}, nobody's {Ui.Amounts.Short(e.UncreditedBoss)}"));
+                Check(pulls.Count == 3 && pulls.All(e => e.Outcome == "kill" && e.Roster.Count(f => !f.Other && f.BossDamage > 0) == 5)
+                    && her.All(f => f is { BossDamage: > 500_000 }) && her[2] is { BossDamage: > 5_000_000 } && pulls.Skip(1).All(e => e.UncreditedBoss < e.BossDamage / 50),
+                    $"a member the game never named: her damage on every pull ({say})");
             }
         }
 

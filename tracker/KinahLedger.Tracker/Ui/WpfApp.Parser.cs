@@ -7,7 +7,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "inspect", "compare", "timeline", "taken", "full", "inspect-full" };
+    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "inspect", "compare", "timeline", "fight", "taken", "full", "inspect-full" };
 
     /// <summary>
     /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight|wacky|tactical|glitch]: the Parser page from

@@ -279,6 +279,19 @@ public static partial class WpfApp
             var tabsNow = ParserCommand.Tabs(w.GraphsViewForTest(w.ParserShownForTest!));
             check(rowsUnder.Count == 6 && tabsNow[0] == "Timeline" && !tabsNow.Contains("Group") && w.GraphsBottomForTest <= w.ParserViewportForTest + 1,
                 $"graphs: the group's table is under the graphs ({rowsUnder.Count} rows), no Group tab ({string.Join(", ", tabsNow)}), the graphs still fit the window");
+            // a fight that isn't a boss pull: no graphs (Steven, 2026-11-20: "the parser line chart should only display on bosses"),
+            // the group's table in their place, no gap
+            {
+                w.ShowParserDemo("fight"); DoEvents(); DoEvents();
+                var shownF = w.ParserShownForTest;
+                var tabsF = shownF != null ? ParserCommand.Tabs(w.GraphsViewForTest(shownF)) : new List<string>();
+                var rowsF = new List<FrameworkElement>();
+                void RowsF(DependencyObject d) { if (d is FrameworkElement fe && Equals(fe.Tag, "parser-member")) rowsF.Add(fe); foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) RowsF(ch); }
+                RowsF(w.ParserPage);
+                check(shownF is { ModeKind: KinahLedger.Parser.ParserMode.Fights } && tabsF.Count > 0 && tabsF[0] == "Group" && !tabsF.Contains("Timeline") && FindTagged(w.ParserPage, "parser-graphs-view") == null && rowsF.Count > 0,
+                    $"graphs: a fight that isn't a boss pull has none, its group's table instead ({shownF?.ModeKind}, tabs {string.Join(", ", tabsF)}, {rowsF.Count} rows)");
+                w.ShowGraphsDemo("six"); DoEvents(); DoEvents();
+            }
             // the graph is the page's hero (Steven, 2026-11-18, on 1.0.18's big hero card: "like bro this is awful"): the head one
             // line, the fight a compact strip, the graphs straight under it and the fight's graph the tallest thing on the page
             {

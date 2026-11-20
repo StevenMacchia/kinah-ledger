@@ -29,6 +29,9 @@ public sealed class FightView
     public bool HasMax => Members.Any(m => m.MaxHit != null);
     public bool HasCasts => Members.Any(m => m.Abilities.Any(a => a.Casts != null));
     public bool HasTimeline => Members.Any(m => m.PerSecond is { Count: > 1 });
+    /// <summary>A boss pull (Bosses mode, a boss named): the only fights the Parser page draws its graphs for (Steven, 2026-11-20:
+    /// "the parser line chart should only display on bosses"); trash, Every fight, runs and the open world show the group's table.</summary>
+    public bool IsBossPull => E.ModeKind == ParserMode.Bosses && E.Boss.Length > 0;
     public bool HasTaken => Members.Any(m => m.Taken != null);
     public bool HasDeathLog => Members.Any(m => m.DeathLog.Count > 0);
     public bool HasBuffs => Members.Any(m => m.Buffs is { Count: > 0 });
