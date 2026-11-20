@@ -58,7 +58,10 @@ internal static class Program
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
                 or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "parser-test" or "parser-latency" or "meter-load" or "copy-load" or "event-age" or "parser-replay" or "parser-bench" or "packet-replay" or "packet-live" or "packet-record" or "repair-categories")
+        {
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
+            KinahLedger.Ui.AppFonts.DirOverride = TestTemp.Path("KinahLedger-test-fonts");   // the Inter copy too (Ui/AppFonts.cs)
+        }
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
         // ...and the demo windows count with the item list built into this exe, never the copy the site keeps on the player's PC
