@@ -151,8 +151,11 @@ static class HudKit
         Rec = B(RecC), DotOff = B(0x4A5066), Slot = B(SlotC), FrameLine = B(LineC), BadgeLine = B(BadgeLineC), White = B(0xFFFFFF),
         SlotFrame = B(CommonC, .28), Sep = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
 
-    /// <summary>Inter (the window's face since the v2 look); figures in the same face, a weight heavier than the text.</summary>
-    public static readonly FontFamily Text = new("pack://application:,,,/Fonts/#Inter, Segoe UI Variable Text, Segoe UI");
+    /// <summary>The overlays' face; figures in the same face, a weight heavier than the text. Segoe UI Variable: the overlays
+    /// named Inter as "pack://application:,,,/Fonts/#Inter, ..." with no base, which WPF never resolved, so every overlay and
+    /// meter look was drawn, sized and checked in Segoe UI Variable (2026-11-20, found when Inter, 11% wider, cut the meter's
+    /// figures). Named outright now: the same look, and no font resource opened (Ui/AppFonts.cs).</summary>
+    public static readonly FontFamily Text = new("Segoe UI Variable Text, Segoe UI");
     public static readonly FontFamily Mono = Text;
     public static readonly FontWeight MonoWeight = FontWeights.SemiBold;
 

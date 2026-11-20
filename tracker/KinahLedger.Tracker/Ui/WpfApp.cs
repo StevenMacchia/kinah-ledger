@@ -155,6 +155,7 @@ public static partial class WpfApp
             Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
         }
         // KL_OPTIONS_ONLY=graphs: the Parser page's Graphs tab alone (Ui/WpfApp.ParserGraphs.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "fonts") { FontStreamChecks(Check); Console.WriteLine(fails == 0 ? "options test (font streams): all passed" : $"options test (font streams): {fails} failed"); return fails == 0 ? 0 : 1; }
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=parserpage: the Parser page's own checks alone (Ui/WpfApp.Parser.cs ParserChecks: the strip, the head, the switches' texts)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "parserpage")
@@ -409,6 +410,7 @@ public static partial class WpfApp
         }
         ThemeChecks(o, w, Check);   // the Theme row and the themes' looks (Ui/WpfApp.Themes.cs)
         PickStripChecks(w, Check);   // the best drop and the last three on every look (Ui/WpfApp.PickStrip.cs; KL_OPTIONS_ONLY=picks alone)
+        FontStreamChecks(Check);   // drawing text holds no more of the font (Ui/WpfApp.Fonts.cs; KL_OPTIONS_ONLY=fonts alone)
         CutOffChecks(Check);   // the worst-case fight in every meter look, nothing cut (Ui/WpfApp.CutOff.cs; KL_OPTIONS_ONLY=cutoff alone)
         PvpChecks(w, Check);   // the PvP panel in every meter look, its card, when it shows (Ui/WpfApp.Pvp.cs; KL_OPTIONS_ONLY=pvp alone)
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
