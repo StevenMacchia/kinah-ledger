@@ -116,7 +116,7 @@ public sealed partial class ParserRows : Grid
     /// <summary>The DPS's column: "888.8K" at 16 bold (the party's Combat Power before a hit, "888,888", may reach into the name's room).</summary>
     static double DpsCol => Math.Max(60, Widest(16, FontWeights.Bold, "888.8K", "8.88M") + 4);
     /// <summary>The share's column: "88.8%" (or "CP" before a hit) at 12, and its gap from the DPS.</summary>
-    static double ShareCol => Math.Max(46, Widest(12, FontWeights.SemiBold, new[] { "88.8%", L.T("CP") }.Concat(Encounter.PvpWords).ToArray()) + 8);
+    static double ShareCol => Math.Max(46, Widest(12, FontWeights.SemiBold, "88.8%", L.T("CP")) + 8);
     /// <summary>The damage's column, expanded: "888.88M" at 11.</summary>
     static double DamageCol => Math.Max(52, Widest(11, FontWeights.SemiBold, "888.88M") + 8);
 

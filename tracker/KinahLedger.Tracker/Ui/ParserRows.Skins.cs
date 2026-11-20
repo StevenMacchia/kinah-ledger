@@ -138,7 +138,7 @@ public sealed partial class ParserRows
         void Extras() { if (expanded) { if (dmgCol) widths.Add(DamageCol); if (crit) widths.Add(RateCol); if (back) widths.Add(RateCol); if (spark) widths.Add(SparkCol); } }
         void AddExtras(Grid g, int k) { if (expanded) { if (dmgCol) g.Children.Add(PK.Col(damage, k++)); if (crit) g.Children.Add(PK.Col(critT, k++)); if (back) g.Children.Add(PK.Col(backT, k++)); if (spark) g.Children.Add(PK.Col(sparkG, k++)); } }
         double dpsCol = Math.Max(DpsCol, Widest(dpsSize, FontWeights.Bold, "888.8K", "8.88M") + 4);
-        double shareCol = Math.Max(reactor ? 30 : 38, Widest(reactor ? 8.5 : 10.5, FontWeights.SemiBold, new[] { "88.8%", L.T("CP") }.Concat(Encounter.PvpWords).ToArray()) + 6);
+        double shareCol = Math.Max(reactor ? 30 : 38, Widest(reactor ? 8.5 : 10.5, FontWeights.SemiBold, "88.8%", L.T("CP")) + 6);
 
         Action? rankInk = null;
         Grid cols, inner;

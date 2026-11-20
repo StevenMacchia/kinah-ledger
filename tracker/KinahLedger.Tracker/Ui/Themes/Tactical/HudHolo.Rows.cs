@@ -109,7 +109,7 @@ sealed partial class HudHolo
         readonly TextBlock _none = new();
         readonly List<FrameworkElement> _keep = new(), _keepUnder = new();
         readonly List<(FrameworkElement, FrameworkElement?)> _give = new(), _giveUnder = new();
-        readonly double _dmgW, _critW;
+        readonly double _dmgW, _critW, _pctW;
         MeterMember? _m;
         double _bar;
         bool _expanded, _hasCp, _two;
@@ -125,7 +125,7 @@ sealed partial class HudHolo
             foreach (var t in new[] { _dps, _pct, _dmg, _crit }) { t.Margin = new Thickness(0, 0, t == _dps ? 9 : t == _pct ? 7 : 3, 0); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; }
             // the figure columns sized for the widest real figure; the bar gets the rest
             _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
-            foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, new[] { "88.8%", "100%", L.T("CP") }.Concat(Encounter.PvpWords).ToArray()), 0, 0 })
+            foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), (_pctW = Tac.FigCol(_pct, "88.8%", "100%", L.T("CP"))), 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
@@ -195,6 +195,8 @@ sealed partial class HudHolo
             _top.Margin = new Thickness(TextIn, under ? 1 : 0, 0, 0);
             _dps.Text = m.Figure;
             _pct.Text = m.ShareText;
+            // the PvP panel's Kill or Assist: its column as wide as the longer word, on its own rows only
+            _root.ColumnDefinitions[3].Width = new GridLength(m.Pvp ? Math.Max(_pctW, Tac.FigCol(_pct, Encounter.PvpWords)) : _pctW);
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
