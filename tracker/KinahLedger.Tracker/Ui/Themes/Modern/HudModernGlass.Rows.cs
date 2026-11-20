@@ -41,7 +41,7 @@ sealed partial class HudModernGlass
     /// <summary>The line between the party and you pinned below it: "2 MORE", quiet and centred.</summary>
     static FrameworkElement GapLine(int left)
     {
-        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "···", 10, Faint, FontWeights.SemiBold);
+        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "···", 9, Faint, FontWeights.SemiBold);
         t.HorizontalAlignment = HorizontalAlignment.Center;
         System.Windows.Documents.Typography.SetCapitals(t, FontCapitals.Normal);
         return t;
@@ -78,8 +78,8 @@ sealed partial class HudModernGlass
     /// </summary>
     sealed class GlassRow : IThemeRow
     {
-        public const double H = 32, Pitch = 38;
-        const double PadX = 10, RankW = 14, Gap1 = 4, IconW = 20, Gap2 = 7, ShareW = 37, DmgW = 54, CritW = 36;
+        public const double H = 26, Pitch = 29;
+        const double PadX = 8, RankW = 14, Gap1 = 4, IconW = 20, Gap2 = 6, ShareW = 33, DmgW = 54, CritW = 36;
         readonly GlassFit _fit;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
@@ -111,10 +111,10 @@ sealed partial class HudModernGlass
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
             Put(_nameLine, 5);
-            _heal.Margin = new Thickness(6, 0, 0, 0); _heal.Tag = "heal-figures"; Put(_heal, 6);
-            _dps.Margin = new Thickness(6, 0, 0, 0); _dps.HorizontalAlignment = HorizontalAlignment.Right; _dps.Tag = "row-dps"; Put(_dps, 7);
+            _heal.Margin = new Thickness(5, 0, 0, 0); _heal.Tag = "heal-figures"; Put(_heal, 6);
+            _dps.Margin = new Thickness(5, 0, 0, 0); _dps.HorizontalAlignment = HorizontalAlignment.Right; _dps.Tag = "row-dps"; Put(_dps, 7);
             foreach (var (t, col) in new[] { (_share, 8), (_dmg, 9), (_crit, 10) }) { t.HorizontalAlignment = HorizontalAlignment.Right; Put(t, col); }
-            _cp.Margin = new Thickness(6, 1, 0, 0);
+            _cp.Margin = new Thickness(5, 1, 0, 0);
             _root.SizeChanged += (_, _) => Fit();
         }
 
@@ -141,7 +141,7 @@ sealed partial class HudModernGlass
             _keep.Clear(); _give.Clear();
             _cp.Text = m.Cp;
             if (m.Cp.Length > 0) _nameLine.Children.Add(_cp);
-            FrameworkElement Add(FrameworkElement el) { el.Margin = new Thickness(6, 0, 0, 0); _nameLine.Children.Add(el); return el; }
+            FrameworkElement Add(FrameworkElement el) { el.Margin = new Thickness(4, 0, 0, 0); _nameLine.Children.Add(el); return el; }
             if (m.TopDps) _give.Add((Add(Mark("★ " + L.T("DPS"), false)), Add(Mark("★", false, L.T("Top DPS")))));
             if (m.TopHeals) _give.Add((Add(Mark("✚ " + L.T("Heal"), true)), Add(Mark("✚", true, L.T("Top heals")))));
             if (m.You) { var y = Chip(L.T("You"), White, Frozen(YouInkC), 9.5); y.Tag = "you"; _keep.Add(Add(y)); }
@@ -234,7 +234,7 @@ sealed partial class HudModernGlass
             if (_m is not { } m || s.Width < 40) return;
             double h = s.Height;
             var r = new Rect(.5, .5, s.Width - 1, h - 1);
-            var pill = Mod.Pill(r, 11);
+            var pill = Mod.Pill(r, 9);
             var tone = m.ClassColor;
             // the glass ground: faint white, a touch lighter at the top
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.White, .085), 0), (Mod.A(Colors.White, .045), 1)), null, pill);

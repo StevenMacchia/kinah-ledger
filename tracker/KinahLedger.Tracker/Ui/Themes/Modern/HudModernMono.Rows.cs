@@ -42,7 +42,7 @@ sealed partial class HudModernMono
     {
         var t = Mod.Text(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "", 9.5, Grey, FontWeights.SemiBold);
         t.HorizontalAlignment = HorizontalAlignment.Center;
-        t.Margin = new Thickness(0, 0, 0, 4);
+        t.Margin = new Thickness(0, 0, 0, 3);
         return t;
     }
 
@@ -103,7 +103,7 @@ sealed partial class HudModernMono
     /// </summary>
     sealed class MonoRow : IThemeRow
     {
-        public const double H = 34, Pitch = 40, BarH = 4;
+        public const double H = 27, Pitch = 31, BarH = 4;
         const double RankW = 16, IconW = 24, ShareW = 44, DmgW = 56, CritW = 36;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly TacSketch _bar;
@@ -127,7 +127,7 @@ sealed partial class HudModernMono
             // rank | emblem | name, CP, marks | heals | DPS | share | (damage | crit)
             foreach (var w in new[] { RankW, IconW, double.NaN, -1, -1, ShareW, 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w < 0 ? GridLength.Auto : new GridLength(w) });
-            _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(H - BarH - 4) });
+            _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(H - BarH - 2) });
             _root.RowDefinitions.Add(new RowDefinition());
             _bar = new TacSketch(DrawBar) { Height = BarH, VerticalAlignment = VerticalAlignment.Bottom };
             Grid.SetRow(_bar, 1); Grid.SetColumnSpan(_bar, 8);

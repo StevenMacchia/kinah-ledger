@@ -63,14 +63,14 @@ sealed partial class HudModernMono : ModernLook
     // the fight
     readonly Border _fight;
     readonly Grid _fightGrid = new();
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(14, 12, 14, 11) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(12, 9, 12, 8) };
     readonly Grid _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly RectangleGeometry _wipe = new(new Rect(0, 0, 4000, 4000));
 
     public HudModernMono() : base(bare: false)
     {
         // the meter: the look's own rows (Ui/Themes/ThemeRows.cs) on the 4 px grid, a muted "2 MORE" between the party and you
-        UseRows(MonoRow.Pitch, m => new MonoRow(), 20, GapLine);
+        UseRows(MonoRow.Pitch, m => new MonoRow(), 14, GapLine);
         _line = Panel(_lineGrid);
         _lineGrid.Children.Add(_lineBody); _lineGrid.Children.Add(_lineFx);
         _lineBody.Margin = new Thickness(10, 10, 14, 10);
@@ -406,14 +406,16 @@ sealed partial class HudModernMono : ModernLook
         {
             var wt = Tt(e.ReadyText, 12.5, Grey, FontWeights.Medium); wt.Margin = new Thickness(0, 8, 0, 0); wt.TextWrapping = TextWrapping.Wrap;
             _fightBody.Children.Add(wt);
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(Hairline(new Thickness(0, 10, 0, 8))); PutRows(_fightBody, e, now, inner); }
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(Hairline(new Thickness(0, 8, 0, 6))); PutRows(_fightBody, e, now, inner); }
         }
         else
         {
             if (HpOf(e) is { } hp)
             {
-                // a 4 px bar in the accent, cut at its thirds by the panel's own near-black; the figure and what's left under it
-                var track = new Grid { Height = 4, Margin = new Thickness(0, 11, 0, 0) };
+                // a 4 px bar in the accent, cut at its thirds by the panel's own near-black; the figure and what's left at its right
+                var hpLine = new Grid { Margin = new Thickness(0, 7, 0, 0) };
+                hpLine.ColumnDefinitions.Add(new ColumnDefinition()); hpLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var track = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Center };
                 track.Children.Add(new TacSketch((dc, s) =>
                 {
                     dc.DrawRectangle(RuleB, null, new Rect(0, 0, s.Width, s.Height));
@@ -424,19 +426,20 @@ sealed partial class HudModernMono : ModernLook
                 {
                     for (int k = 1; k <= 2; k++) dc.DrawRectangle(Dark, null, new Rect(Math.Round(s.Width * k / 3) - 1, 0, 2, s.Height));
                 }));
-                _fightBody.Children.Add(track);
-                var hpl = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 5, 0, 0) };
+                hpLine.Children.Add(track);
+                var hpl = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
                 hpl.Children.Add(Tt($"{Math.Round(hp * 100):0}%", 10.5, Paper, FontWeights.SemiBold));
                 var left = HpLeftText(e);
                 if (left.Length > 0) hpl.Children.Add(Tt("  ·  " + left, 10.5, Grey, FontWeights.Medium));
-                _fightBody.Children.Add(hpl);
-                _fightBody.Children.Add(Hairline(new Thickness(0, 8, 0, 8)));
+                Grid.SetColumn(hpl, 1); hpLine.Children.Add(hpl);
+                _fightBody.Children.Add(hpLine);
+                _fightBody.Children.Add(Hairline(new Thickness(0, 7, 0, 6)));
             }
-            else _fightBody.Children.Add(Hairline(new Thickness(0, 10, 0, 8)));
+            else _fightBody.Children.Add(Hairline(new Thickness(0, 8, 0, 6)));
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 4, 0, 8)));
+                _fightBody.Children.Add(Hairline(new Thickness(0, 2, 0, 6)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }

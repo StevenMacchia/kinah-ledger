@@ -26,7 +26,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         HpAC = Color.FromRgb(0xFF, 0x5A, 0x6E), HpBC = Color.FromRgb(0xFF, 0x8A, 0x5C), AmberC = Color.FromRgb(0xFF, 0xC8, 0x5A), YouInkC = Color.FromRgb(0x0B, 0x12, 0x20);
     static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Mod.Br(Colors.White, .85), Dim = Mod.Br(Colors.White, .62), Faint = Mod.Br(Colors.White, .45),
         Green = Frozen(GreenC), Mint = Frozen(MintC), Red = Frozen(RedC), Amber = Frozen(AmberC);
-    const double Radius = 18, Pad = 14;
+    const double Radius = 18, Pad = 11;
     /// <summary>The pickup strip on the glass: the Buddy's 28 px tiles beside the hour, a faint white rule, the amber star.</summary>
     static readonly PickStrip.Look Strip = new(28, 4, true, Mod.Br(Colors.White, .22), Amber);
 
@@ -60,7 +60,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     // the meter
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
     readonly TacSketch _fightGlass;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 12, Pad, 11) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 9, Pad, 8) };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _settle = new();
 
@@ -68,7 +68,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     {
         // the meter's own rows (Ui/Themes/ThemeRows.cs), a fit shared by the rows so the share column holds or goes for all
         var fit = new GlassFit();
-        UseRows(GlassRow.Pitch, m => new GlassRow(fit), 22, GapLine);
+        UseRows(GlassRow.Pitch, m => new GlassRow(fit), 15, GapLine);
         _lineGlass = new TacSketch((dc, s) => GlassPanel(dc, s, Radius, _opacity, _sheen));
         _line.Children.Add(_lineGlass); _line.Children.Add(_lineBody); _line.Children.Add(_lineFx);
         _fightGlass = new TacSketch((dc, s) => GlassPanel(dc, s, Radius, _opacity, -1));
@@ -486,7 +486,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
                 oc.CornerRadius = new CornerRadius(99); oc.Margin = new Thickness(0, 1, 8, 0); oc.Tag = "glass-outcome";
                 right.Children.Add(oc);
             }
-            var clock = Tt(Clock(e.Duration(now)), 20, White, FontWeights.Bold);
+            var clock = Tt(Clock(e.Duration(now)), 18, White, FontWeights.Bold);
             right.Children.Add(clock);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
@@ -495,13 +495,16 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         {
             var wt = Tt(e.ReadyText, 13, Soft, FontWeights.Medium); wt.Margin = new Thickness(0, 6, 0, 0); wt.TextWrapping = TextWrapping.Wrap;
             _fightBody.Children.Add(wt);
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 10 }); PutRows(_fightBody, e, now, inner); }
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 7 }); PutRows(_fightBody, e, now, inner); }
         }
         else
         {
             if (HpOf(e) is { } hp)
             {
-                var track = new Grid { Height = 6, Margin = new Thickness(0, 10, 0, 4) };
+                // the bar and its words on one line: the bar, then "47%  ·  12.84M left" at its right
+                var hpLine = new Grid { Margin = new Thickness(0, 7, 0, 0) };
+                hpLine.ColumnDefinitions.Add(new ColumnDefinition()); hpLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var track = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Center };
                 track.Children.Add(new TacSketch((dc, s) =>
                 {
                     var r = new Rect(0, 0, s.Width, s.Height);
@@ -515,20 +518,21 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
                     dc.Pop();
                 }));
                 HpGhost(track, e, hp, now, 3);
-                _fightBody.Children.Add(track);
+                hpLine.Children.Add(track);
                 var words = Tt("", 11, Soft, FontWeights.Medium);
-                words.HorizontalAlignment = HorizontalAlignment.Right;
+                words.Margin = new Thickness(10, 0, 0, 0);
                 words.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(hp * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = hp < .34 ? Frozen(HpBC) : White });
                 var left = HpLeftText(e);
                 if (left.Length > 0) words.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left));
-                _fightBody.Children.Add(words);
-                _fightBody.Children.Add(new Border { Height = 8 });
+                Grid.SetColumn(words, 1); hpLine.Children.Add(words);
+                _fightBody.Children.Add(hpLine);
+                _fightBody.Children.Add(new Border { Height = 7 });
             }
-            else _fightBody.Children.Add(new Border { Height = 10 });
+            else _fightBody.Children.Add(new Border { Height = 7 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 9, 0, 7)));
+                _fightBody.Children.Add(Hairline(new Thickness(0, 5, 0, 5)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }
