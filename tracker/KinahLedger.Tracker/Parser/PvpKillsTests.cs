@@ -3,7 +3,7 @@ using KinahLedger.Packets;
 namespace KinahLedger.Parser;
 
 /// <summary>
-/// parser-test's part for the PvP panel (Parser/PvpKills.cs), on made-up fight events: the last three kills newest first,
+/// parser-test's part for the PvP panel (Parser/PvpKills.cs), on made-up fight events: the last five kills newest first,
 /// Kill or Assist (and who landed an assist's kill), your damage on each from your hits in that fight only, the breakdown
 /// (damage, hits, biggest hit by skill) matching the hits, and the panel's record the meter's looks draw.
 /// </summary>
@@ -19,7 +19,7 @@ static class PvpKillsTests
     {
         // four fights: Aster killed (two skills, a rank of one), Bram assisted (Tilly's kill, your hits 6 s before), Cyra killed
         // with no hit of yours seen (another faction's player you can't hit is never one of these: a kill all the same, no
-        // damage), Dace killed after an earlier fight with them 40 s before (left out). The panel keeps the last three.
+        // damage), Dace killed after an earlier fight with them 40 s before (left out), then Eske and Fion. The panel keeps the last five.
         var p = new PvpKills { Self = () => ("", "Templar"), Place = "Abyss" };
         int changed = 0; p.Changed += () => changed++;
         p.Take(Hit(t, 101, "Aster", 12090000, 10_000));
@@ -51,9 +51,15 @@ static class PvpKillsTests
         p.Take(Hit(t.AddSeconds(85), 104, "Dace", 12100000, 13_000));
         p.Take(Mine(t.AddSeconds(86), 104, "Dace"));
         var names = p.Last.Select(k => k.Name).ToList();
-        check(names.SequenceEqual(new[] { "Dace", "Cyra", "Bram" }), $"...a fourth kill: the last three, newest first ({string.Join(", ", names)})");
+        check(names.SequenceEqual(new[] { "Dace", "Cyra", "Bram", "Aster" }), $"...a fourth kill: four rows, newest first ({string.Join(", ", names)})");
         check(p.Last[0] is { Damage: 25_000, Hits: 2 } d0 && d0.Fight.Start == t.AddSeconds(80),
             $"...Dace's damage is the fight that killed them: an earlier fight more than {PvpKills.FightGapSeconds:0} s before is left out ({p.Last[0].Damage:N0})");
+        p.Take(Hit(t.AddSeconds(100), 105, "Eske", 12010000, 8_000));
+        p.Take(Mine(t.AddSeconds(101), 105, "Eske"));
+        p.Take(Hit(t.AddSeconds(120), 106, "Fion", 12040000, 6_000));
+        p.Take(Others(t.AddSeconds(125), 106, "Fion", "Tilly"));
+        names = p.Last.Select(k => k.Name).ToList();
+        check(PvpKills.Kept == 5 && names.SequenceEqual(new[] { "Fion", "Eske", "Dace", "Cyra", "Bram" }), $"...a sixth kill: the last five, newest first, the oldest gone ({string.Join(", ", names)})");
 
         // what is never one: the same death twice, your own death, a monster, an ally's death, a death by others with no hit of yours
         var q = new PvpKills();
@@ -77,11 +83,11 @@ static class PvpKillsTests
         var b = p.Board(t.AddSeconds(90));
         check(b.Pvp != null && b.Shown(t).Select(f => f.Name).SequenceEqual(names) && b.Ranked().Select(f => f.Name).SequenceEqual(names),
             "the panel's record: one row per kill, newest first (never ranked by damage)");
-        var first = b.Roster[0];
-        check(b.DpsOf(first, t.AddSeconds(90)) == 25_000 && Encounter.PvpWord(b.PvpOf(first)!) == "Kill" && Encounter.PvpBy(b.PvpOf(b.Roster[2])!) == "by Tilly",
+        var first = b.Roster.First(f => f.Name == "Dace");
+        check(b.DpsOf(first, t.AddSeconds(90)) == 25_000 && Encounter.PvpWord(b.PvpOf(first)!) == "Kill" && Encounter.PvpWord(b.PvpOf(b.Roster[0])!) == "Assist" && Encounter.PvpBy(b.PvpOf(b.Roster[0])!) == "by Tilly",
             "...its figure is your damage on them; the share column Kill or Assist; an assist says who landed the kill");
         var (ce, cf) = b.CardOf(first);
-        check(ReferenceEquals(ce, p.Last[0].Fight) && cf.You && cf.Damage == 25_000 && ce.DpsOf(cf, t)! > 0,
+        check(ReferenceEquals(ce, p.Last.First(k => k.Name == "Dace").Fight) && cf.You && cf.Damage == 25_000 && ce.DpsOf(cf, t)! > 0,
             "...a row's skills card is your fight with that player: your row, its own time");
         check(b.Title == "Last PvP kills" && b.ClockText(t) == "" && !b.HeldAverage && !b.Live && b.Kind == "Abyss", "...titled, no clock, no fight's average badge, where it is");
         var empty = PvpKills.BoardOf(Array.Empty<PvpKill>(), "Abyss", t);
