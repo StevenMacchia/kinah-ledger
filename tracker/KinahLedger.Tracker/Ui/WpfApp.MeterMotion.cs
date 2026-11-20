@@ -92,10 +92,13 @@ public static partial class WpfApp
         string sub = Path.Combine(dir, "meter");
         Directory.CreateDirectory(sub);
         double[] frames = frozen0 is double at0 ? new[] { at0 } : new[] { 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0 };
+        // KL_METER_PLACES=podium,standard narrows (or widens: the panel's other looks) the places; KL_METER_CHANGES=start,finish the motions
+        var places = Environment.GetEnvironmentVariable("KL_METER_PLACES") is { Length: > 0 } mp ? mp.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) : MeterPlaces;
+        var names = (Environment.GetEnvironmentVariable("KL_METER_CHANGES") ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         try
         {
-            foreach (var c in MeterChanges(now))
-                foreach (var place in MeterPlaces)
+            foreach (var c in MeterChanges(now).Concat(MeterShotExtras(now)).Where(c => names.Length == 0 || names.Contains(c.Name)))
+                foreach (var place in places)
                 {
                     bool state = c.Name.StartsWith("heat", StringComparison.Ordinal);
                     foreach (var t in state ? new[] { 1.0 } : frames)
@@ -104,6 +107,22 @@ public static partial class WpfApp
                 }
         }
         finally { Motion.FrozenAt = frozen0; Motion.Still = still0; ParserRows.BestOf = best0; }
+    }
+
+    /// <summary>
+    /// The renders' own motions (ui-shot --parser meter only; options-test checks the others): a fight starting (the waiting
+    /// meter, then the first hits: the rows come in, the bars slide out), a wipe, and a death (the coral tick lands on a row).
+    /// </summary>
+    static IEnumerable<MeterChange> MeterShotExtras(DateTime now)
+    {
+        var (_, live) = ParserDemo.Sample(now, live: true);
+        var a = live!;
+        var ready = Encounter.Ready(KinahLedger.Packets.ContentKind.Expedition, "Ferocious Horn Den", "", now.AddSeconds(-30));
+        yield return new("start", ready, a, now.AddSeconds(-30), now);
+        var wipe = BossParser.Copy(a); wipe.End = now; wipe.Outcome = "wipe";
+        yield return new("wipe", a, wipe, now, now);
+        var died = BossParser.Copy(a); died.Roster.First(f => f.Id == a.Shown().Where(f => !f.You).Skip(2).First().Id).Deaths++;
+        yield return new("death", a, died, now, now);
     }
 
     /// <summary>

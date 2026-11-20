@@ -26,7 +26,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         HpAC = Color.FromRgb(0xFF, 0x5A, 0x6E), HpBC = Color.FromRgb(0xFF, 0x8A, 0x5C), AmberC = Color.FromRgb(0xFF, 0xC8, 0x5A), YouInkC = Color.FromRgb(0x0B, 0x12, 0x20);
     static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Mod.Br(Colors.White, .85), Dim = Mod.Br(Colors.White, .62), Faint = Mod.Br(Colors.White, .45),
         Green = Frozen(GreenC), Mint = Frozen(MintC), Red = Frozen(RedC), Amber = Frozen(AmberC);
-    const double Radius = 18, Pad = 14;
+    const double Radius = 18, Pad = 11;
     /// <summary>The pickup strip on the glass: the Buddy's 28 px tiles beside the hour, a faint white rule, the amber star.</summary>
     static readonly PickStrip.Look Strip = new(28, 4, true, Mod.Br(Colors.White, .22), Amber);
 
@@ -60,15 +60,16 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     // the meter
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
     readonly TacSketch _fightGlass;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 12, Pad, 11) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 9, Pad, 8) };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _settle = new();
+    Grid? _head;
 
     public HudModernGlass()
     {
         // the meter's own rows (Ui/Themes/ThemeRows.cs), a fit shared by the rows so the share column holds or goes for all
         var fit = new GlassFit();
-        UseRows(GlassRow.Pitch, m => new GlassRow(fit), 22, GapLine);
+        UseRows(GlassRow.Pitch, m => new GlassRow(fit), 15, GapLine);
         _lineGlass = new TacSketch((dc, s) => GlassPanel(dc, s, Radius, _opacity, _sheen));
         _line.Children.Add(_lineGlass); _line.Children.Add(_lineBody); _line.Children.Add(_lineFx);
         _fightGlass = new TacSketch((dc, s) => GlassPanel(dc, s, Radius, _opacity, -1));
@@ -470,6 +471,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         _fightBody.Children.Add(_timersIn);
         // the boss and the clock (the outcome as a green or red chip before it)
         var head = new Grid();
+        _head = head;
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = Tt(e.Title, 15, White, FontWeights.Bold);
         title.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -486,7 +488,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
                 oc.CornerRadius = new CornerRadius(99); oc.Margin = new Thickness(0, 1, 8, 0); oc.Tag = "glass-outcome";
                 right.Children.Add(oc);
             }
-            var clock = Tt(Clock(e.Duration(now)), 20, White, FontWeights.Bold);
+            var clock = Tt(Clock(e.Duration(now)), 18, White, FontWeights.Bold);
             right.Children.Add(clock);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
@@ -495,13 +497,16 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         {
             var wt = Tt(e.ReadyText, 13, Soft, FontWeights.Medium); wt.Margin = new Thickness(0, 6, 0, 0); wt.TextWrapping = TextWrapping.Wrap;
             _fightBody.Children.Add(wt);
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 10 }); PutRows(_fightBody, e, now, inner); }
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 7 }); PutRows(_fightBody, e, now, inner); }
         }
         else
         {
             if (HpOf(e) is { } hp)
             {
-                var track = new Grid { Height = 6, Margin = new Thickness(0, 10, 0, 4) };
+                // the bar and its words on one line: the bar, then "47%  ·  12.84M left" at its right
+                var hpLine = new Grid { Margin = new Thickness(0, 7, 0, 0) };
+                hpLine.ColumnDefinitions.Add(new ColumnDefinition()); hpLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var track = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Center };
                 track.Children.Add(new TacSketch((dc, s) =>
                 {
                     var r = new Rect(0, 0, s.Width, s.Height);
@@ -515,20 +520,21 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
                     dc.Pop();
                 }));
                 HpGhost(track, e, hp, now, 3);
-                _fightBody.Children.Add(track);
+                hpLine.Children.Add(track);
                 var words = Tt("", 11, Soft, FontWeights.Medium);
-                words.HorizontalAlignment = HorizontalAlignment.Right;
+                words.Margin = new Thickness(10, 0, 0, 0);
                 words.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(hp * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = hp < .34 ? Frozen(HpBC) : White });
                 var left = HpLeftText(e);
                 if (left.Length > 0) words.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left));
-                _fightBody.Children.Add(words);
-                _fightBody.Children.Add(new Border { Height = 8 });
+                Grid.SetColumn(words, 1); hpLine.Children.Add(words);
+                _fightBody.Children.Add(hpLine);
+                _fightBody.Children.Add(new Border { Height = 7 });
             }
-            else _fightBody.Children.Add(new Border { Height = 10 });
+            else _fightBody.Children.Add(new Border { Height = 7 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 9, 0, 7)));
+                _fightBody.Children.Add(Hairline(new Thickness(0, 5, 0, 5)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }
@@ -582,32 +588,51 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         Motion.Play(_fight, 420, t => { double k = Out(t); _settle.Y = 6 * (1 - k); _fight.Opacity = .2 + .8 * k; }, () => { _settle.Y = 0; _fight.Opacity = 1; });
     }
 
-    /// <summary>A fight ended: a frosted plate saying how ("Killed 12:47", "Wiped") shows over the meter for a moment.</summary>
+    /// <summary>
+    /// A fight ended: a frosted pill saying how ("Killed 12:47", "Wiped") settles over the header line for a moment, lit in
+    /// its colour, and fades. It sits on the boss and the clock (which say the same) and never over the rows.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
         var c = wipe ? RedC : GreenC;
-        var plate = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var plate = new Grid { VerticalAlignment = VerticalAlignment.Top };
         plate.Children.Add(new TacSketch((dc, s) =>
         {
-            GlassPanel(dc, s, 16, 1, -1, shadow: false);
-            dc.DrawGeometry(null, Mod.P(Mod.Br(c, .55), 1.2), Mod.Pill(new Rect(.5, .5, s.Width - 1, s.Height - 1), 16));
+            if (s.Width < 4 || s.Height < 4) return;
+            var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
+            // a deep ground first, so the header under it doesn't show through the glass, then the glass, a breath of its colour and its rim
+            dc.DrawGeometry(Mod.Br(DeepC, .92), null, Mod.Pill(r, r.Height / 2));
+            GlassPanel(dc, s, s.Height / 2, 1, -1, shadow: false);
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .16), .5), (Mod.A(c, 0), 1)), null, Mod.Pill(r, r.Height / 2));
+            dc.DrawGeometry(null, Mod.P(Mod.Br(c, .55), 1.2), Mod.Pill(r, r.Height / 2));
         }));
-        var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 9, 18, 10) };
-        words.Children.Add(Tt(OutcomeText(e), 20, wipe ? Frozen(Mod.Mix(RedC, Colors.White, .3)) : Mint, FontWeights.Bold));
-        words.Children.Add(Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, White, FontWeights.SemiBold));
+        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(Tt(OutcomeText(e), 16, wipe ? Frozen(Mod.Mix(RedC, Colors.White, .3)) : Mint, FontWeights.Bold));
+        words.Children.Add(Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, White, FontWeights.SemiBold));
         plate.Children.Add(words);
-        var dim = new Border { Background = Mod.Br(DeepC, .6), CornerRadius = new CornerRadius(Radius), Opacity = 0 };
         var sc = new ScaleTransform(1, 1);
         plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = sc;
-        _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(plate);
+        _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
+        // over the header as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
+        void Seat()
+        {
+            double y = _fightBody.Margin.Top, h = 22;
+            if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight))
+            {
+                y = hd.TranslatePoint(new Point(0, 0), _fight).Y; h = hd.ActualHeight;
+            }
+            plate.Margin = new Thickness(Pad - 4, Math.Max(2, y - 4), Pad - 4, 0);
+            plate.Height = h + 8;
+        }
+        Seat();
         Motion.Play(_fightFx, 2400, t =>
         {
-            double i = Out(Seg(t, 0, .15)), o = Seg(t, .82, 1);
-            dim.Opacity = i * (1 - o);
+            Seat();
+            double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, 1);
             plate.Opacity = i * (1 - o);
-            sc.ScaleX = sc.ScaleY = .94 + .06 * i;
+            sc.ScaleX = sc.ScaleY = .96 + .04 * i;
         }, () => _fightFx.Children.Clear());
     }
 }

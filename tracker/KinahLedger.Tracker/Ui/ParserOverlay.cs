@@ -916,7 +916,7 @@ public sealed partial class ParserPanel : Border
         // the group (Parser v2, Ui/ParserRows.cs): the rows are kept between draws, so a change moves
         if (e.Roster.Count > 0)
         {
-            _prows.Margin = _skin == ParserRows.Skin.Classic ? new Thickness(-6, 8, -6, 0) : new Thickness(0, _skin == ParserRows.Skin.Reactor ? 9 : 10, 0, 0);
+            _prows.Margin = _skin == ParserRows.Skin.Classic ? new Thickness(-6, 8, -6, 0) : new Thickness(0, _skin == ParserRows.Skin.Reactor ? 9 : _skin == ParserRows.Skin.Podium ? 8 : 10, 0, 0);
             ParserRows.Detach(_prows); _body.Children.Add(_prows);
             _prows.Show(e, now);
         }

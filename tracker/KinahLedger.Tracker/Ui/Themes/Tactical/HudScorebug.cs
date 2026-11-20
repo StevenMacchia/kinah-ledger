@@ -59,7 +59,7 @@ sealed partial class HudScorebug : TacticalLook
     {
         _studio = studio;
         // the leaderboard's own rows (Ui/Themes/ThemeRows.cs)
-        if (studio) UseRows(StudioRow.Pitch, m => new StudioRow(), 22, StudioGap);
+        if (studio) UseRows(StudioRow.Pitch, m => new StudioRow(), 16, StudioGap);
         else UseRows(ArenaRow.Pitch, m => new ArenaRow(), 18, ArenaGap);
         _timerEdge = new TacSketch(DrawTimerEdge);
         _bugHost.Children.Add(_bug); _bugHost.Children.Add(_bugAnchor);
@@ -378,7 +378,7 @@ sealed partial class HudScorebug : TacticalLook
         _fightGrid.Width = w;
         _titleHost.Child = _studio ? StudioTitle(e, now) : ArenaTitle(e, now);
         if (!e.Waiting && HpOf(e) is { } hp) _hpHost.Child = _studio ? StudioHp(e, hp, now) : ArenaHp(e, hp, now);
-        var rows = new Grid { Margin = _studio ? new Thickness(0, 7, 0, 0) : new Thickness(6, 6, 6, 1) };
+        var rows = new Grid { Margin = _studio ? new Thickness(0, 5, 0, 0) : new Thickness(6, 6, 6, 1) };
         if (e.Waiting)
         {
             var panel = new StackPanel();
@@ -626,13 +626,28 @@ sealed partial class HudScorebug : TacticalLook
         // the leaderboard dims under a full-width band, and the plate wipes in across it
         // the winner's row stays in sight above the band, a gold glint crossing it; the band sits over the rest of the board
         // (the winner's row: under the title and the HP, the first row's pitch; the band above the foot)
-        double keepTop = _titleHost.ActualHeight + _hpHost.ActualHeight + 7 + (_studio ? StudioRow.Pitch : ArenaRow.Pitch), footH = _footHost.ActualHeight + 8;
+        double keepTop = _titleHost.ActualHeight + _hpHost.ActualHeight + (_studio ? 5 : 7) + (_studio ? StudioRow.Pitch : ArenaRow.Pitch), footH = _footHost.ActualHeight + 8;
         var dim = new Border { Background = Frozen(Tac.A(InkC0, .78)), Opacity = 0, Margin = new Thickness(0, keepTop, 0, 0) };
         var band = new Border { Height = 64, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH), Background = Frozen(Tac.A(InkC0, .9)), BorderBrush = wipe ? Red : Yellow, BorderThickness = new Thickness(0, 2, 0, 2), Opacity = 0 };
         var plate = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH + 8) };
+        double plateH = 48;
+        if (_studio)
+        {
+            // Studio (art review, 2026-11-20): the band and the plate seated on the second row's card (the first, alone), a 2 px
+            // bleed each side and the band opaque, so nothing of that row shows; nothing else dims, the winner, the rows after
+            // it and the foot read at full
+            plateH = StudioRow.H + 4;
+            double rowTop = keepTop;
+            if (Meter is { Members.Count: > 0 } ms && ms.RowOf(ms.Members[Math.Min(1, ms.Members.Count - 1)].Id)?.Root is FrameworkElement r2 && r2.IsDescendantOf(_fightGrid))
+                rowTop = r2.TranslatePoint(new Point(0, 0), _fightGrid).Y;
+            double bandH = StudioRow.H + 4, mid = rowTop - 2 + bandH / 2;
+            dim.Visibility = Visibility.Collapsed;
+            band.Height = bandH; band.VerticalAlignment = VerticalAlignment.Top; band.Margin = new Thickness(0, rowTop - 2, 0, 0); band.Background = Frozen(InkC0);
+            plate.VerticalAlignment = VerticalAlignment.Top; plate.Margin = new Thickness(0, mid - plateH / 2, 0, 0);
+        }
         var winner = !wipe && Meter is { Members.Count: > 0 } mm ? mm.RowOf(mm.Members[0].Id) as BoardRow : null;
-        var head = new Block(wipe ? SlateC : YellowC, T(wipe ? "✖" : "★", 22, wipe ? Red : InkB), 48, new Thickness(14, 0, 12, 0), leanLeft: true);
-        var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), 34, wipe ? White : Yellow), 48, new Thickness(18, 0, 22, 0));
+        var head = new Block(wipe ? SlateC : YellowC, T(wipe ? "✖" : "★", _studio ? 16 : 22, wipe ? Red : InkB), plateH, _studio ? new Thickness(11, 0, 9, 0) : new Thickness(14, 0, 12, 0), leanLeft: true);
+        var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), _studio ? 21 : 34, wipe ? White : Yellow), plateH, _studio ? new Thickness(14, 0, 17, 0) : new Thickness(18, 0, 22, 0));
         Row(plate, head); Row(plate, main);
         plate.Clip = Geometry.Empty;
         _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band); _fightFx.Children.Add(plate);
@@ -641,14 +656,14 @@ sealed partial class HudScorebug : TacticalLook
         Motion.Play(_fightFx, 2600, t =>
         {
             double i = Out(Seg(t, .06, .22)), o = Seg(t, .84, 1); o = o * o;
-            plate.Clip = Wipe(w * o, w * i, 52);
+            plate.Clip = Wipe(w * o, w * i, plateH + 4);
             dim.Opacity = band.Opacity = t < .84 ? Out(Seg(t, 0, .1)) : 1 - Seg(t, .84, 1);
             // a win glints; a loss slams in with a red flash and no shine
             if (!wipe) { main.Sweep = Seg(t, .24, .6); main.Art.InvalidateVisual(); }
             else
             {
                 plate.RenderTransform = new TranslateTransform(6 * (1 - Out(Seg(t, .06, .2))), 0);
-                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .08 && t < .2 ? .6 : 0), .9));
+                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .08 && t < .2 ? .6 : 0), _studio ? 1 : .9));
             }
             if (winner != null) { winner.Sweep = Seg(t, .04, .4); winner.Apply(); }
         }, () => { _fightFx.Children.Clear(); if (winner != null) { winner.Sweep = -1; winner.Apply(); } });
