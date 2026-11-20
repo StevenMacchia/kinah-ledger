@@ -15,8 +15,8 @@ namespace KinahLedger.Ui;
 /// <item>Forge (the default, the "standard" key): every row one thick bar lit from above (a bevel's highlight along its top,
 /// its colour deepening down, a hot edge at its head where it ends clear of the DPS); on it the rank, the class's mark, the name
 /// over its Combat Power (and a healer's healing), the DPS large at the right; the share small after the bar.</item>
-/// <item>Podium: the leader on a card lit in their class's colour (their DPS large, their rail thicker); every other row a
-/// name line over a long glowing rail the row's width, Combat Power quiet at the rail's end.</item>
+/// <item>Podium: every row one line (the name, its Combat Power quiet after it, the figures) over a long glowing rail the
+/// row's width; the leader on a card lit in their class's colour, their rank in gold, as tall as any row.</item>
 /// <item>Reactor: an instrument panel. The rank on a solid chip in the class's colour, a recessed track lit cell by cell,
 /// brightest at its head, the name over its Combat Power on a dark scrim; the DPS in an inset readout with the share under it.</item>
 /// </list>
@@ -29,10 +29,12 @@ public sealed partial class ParserRows
     public Skin RowSkin => _skin;
 
     /// <summary>A row's pitch (its height and the space under it), and its height.</summary>
-    static double PitchOf(Skin s) => s switch { Skin.Forge => 38, Skin.Podium => 41, Skin.Reactor => 36, _ => 30 };
-    static double RowHOf(Skin s, bool hero) => s switch { Skin.Forge => 34, Skin.Podium => hero ? HeroH : 36, Skin.Reactor => 32, _ => 28 };
-    /// <summary>Podium's leader card: its height, and how much further down it puts the rows after it.</summary>
-    const double HeroH = 62, HeroExtra = 29;
+    /// <summary>
+    /// (Podium, 2026-11-20, "bulky as f***": one line over a rail a few px under it, the leader's card as tall as any row; was 41 / 36,
+    /// the card 62 tall)
+    /// </summary>
+    static double PitchOf(Skin s) => s switch { Skin.Forge => 38, Skin.Podium => 35, Skin.Reactor => 36, _ => 30 };
+    static double RowHOf(Skin s, bool hero) => s switch { Skin.Forge => 34, Skin.Podium => 33, Skin.Reactor => 32, _ => 28 };
     /// <summary>Whether row <paramref name="i"/> stands on Podium's leader card (the top row, once there is damage).</summary>
     bool HeroAt(Encounter e, int i) => _skin == Skin.Podium && i == 0 && e.HasDamage;
 
@@ -84,7 +86,7 @@ public sealed partial class ParserRows
         var nm = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         nm.Children.Add(tick);
         nm.Children.Add(name);
-        // Combat Power: under the name (Forge, Reactor), at the rail's end (Podium); "CP" small before it, there only with it
+        // Combat Power: under the name (Forge, Reactor), after it (Podium); "CP" small before it, there only with it
         var cp = new TextBlock { FontSize = podium ? 10 : 9.5, FontWeight = FontWeights.SemiBold, Foreground = PK.C(podium ? Color.FromRgb(0x9A, 0xA0, 0xB4) : Ink, podium ? 1 : 0.72), VerticalAlignment = VerticalAlignment.Center, Tag = "cp", Visibility = Visibility.Collapsed, Margin = new Thickness(3, 0, 0, 0) };
         System.Windows.Documents.Typography.SetNumeralAlignment(cp, FontNumeralAlignment.Tabular);
         var cpWord = new TextBlock { Text = L.T("CP"), FontSize = podium ? 8 : 8, FontWeight = FontWeights.Bold, Foreground = PK.C(podium ? Color.FromRgb(0x6A, 0x70, 0x84) : Ink, podium ? 1 : 0.5), VerticalAlignment = VerticalAlignment.Center };
@@ -105,7 +107,7 @@ public sealed partial class ParserRows
             Child = new TextBlock { FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = HudKit.B(0x1D1300) } };
         var plates = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         TextBlock Fig(double size, Brush b, FontWeight w) { var t = new TextBlock { FontSize = size, Foreground = b, FontWeight = w, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular); return t; }
-        double dpsSize = forge ? 17 : podium ? (hero ? 21 : 15) : 15;
+        double dpsSize = forge ? 17 : 15;
         var dps = Fig(dpsSize, PK.C(Ink), FontWeights.Bold); dps.Tag = "row-dps";
         if (forge) dps.Effect = Lift(4, 0.95);
         var share = Fig(reactor ? 8.5 : forge ? 10.5 : 10, PK.C(Ink, reactor ? 0.55 : 0.6), FontWeights.SemiBold);
@@ -177,7 +179,10 @@ public sealed partial class ParserRows
         }
         else if (podium)
         {
-            double railH = hero ? 10 : 7;
+            // one line (rank, mark, the name, its Combat Power and marks, the DPS, the share), the rail under it; a framed row (the
+            // leader's card, yours) is 2 px shorter inside, its rail 1 px higher
+            bool framed = hero || f.You;
+            double railH = 6, lineH = 20, railTop = framed ? lineH : lineH + 1;
             track = new Border { CornerRadius = new CornerRadius(railH / 2), Background = Down((Color.FromArgb(0x90, 0, 0, 0), 0), (A(c, 0.14), 1)) };
             var rail = new Grid();
             rail.Children.Add(new Border { CornerRadius = new CornerRadius(railH / 2), Background = Down((Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0.5), (Color.FromArgb(0x40, 0, 0, 0), 1)) });
@@ -186,12 +191,16 @@ public sealed partial class ParserRows
             // the name line: rank, mark, the name and its marks, the DPS, the share
             widths.AddRange(new[] { 14.0, 23, -1, dpsCol, shareCol }); Extras();
             cols = PK.Cols(widths.ToArray());
-            cols.Height = hero ? 27 : 20; cols.VerticalAlignment = VerticalAlignment.Top;
-            chipText.FontSize = 10.5; chipText.Foreground = PK.C(f.You ? PK.Gold : Ink, f.You ? 1 : 0.5); chipText.HorizontalAlignment = HorizontalAlignment.Left;
+            cols.Height = lineH; cols.VerticalAlignment = VerticalAlignment.Top;
+            // the leader's rank in gold (the top step), as yours
+            chipText.FontSize = 10.5; chipText.Foreground = PK.C(f.You || hero ? PK.Gold : Ink, f.You || hero ? 1 : 0.5); chipText.HorizontalAlignment = HorizontalAlignment.Left;
             chip.Width = 13; chip.Height = 16;
             cols.Children.Add(chip);
-            var icon = ClassArt.Icon(f.Class, hero ? 19 : 17, f.Name); icon.Margin = new Thickness(0, 0, 6, 0);
+            var icon = ClassArt.Icon(f.Class, hero ? 18 : 17, f.Name); icon.Margin = new Thickness(0, 0, 6, 0);
             cols.Children.Add(PK.Col(icon, 1));
+            // Combat Power quiet after the name (it gives way first when the line is short: FitName)
+            cpPair.Margin = new Thickness(6, 1, 0, 0);
+            nm.Children.Add(cpPair);
             healPill.Margin = new Thickness(7, 1, 0, 0);
             if (you != null) nm.Children.Add(you);
             nm.Children.Add(healPill); nm.Children.Add(pb); nm.Children.Add(plates);
@@ -200,18 +209,11 @@ public sealed partial class ParserRows
             cols.Children.Add(PK.Col(dpsHost, 2, 2)); cols.Children.Add(PK.Col(shareHost, 4));
             shareHost.Margin = new Thickness(0, 1, 0, 0);
             AddExtras(cols, 5);
-            // the rail its row's width (less Combat Power's place at its end), the heal bar under it
-            var railRow = new Grid { Height = railH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, cols.Height + 3, 0, 0) };
-            railRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            railRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(shareCol + 46) });
-            var barArea = new Grid();
+            // the rail the row's whole width, right under the line; the heal bar at the row's foot under it
+            var barArea = new Grid { Height = railH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, railTop, 0, 0) };
             foreach (var el in new UIElement[] { track, fill, ghost, edge }) barArea.Children.Add(el);
-            railRow.Children.Add(barArea);
-            cpPair.HorizontalAlignment = HorizontalAlignment.Right; cpPair.Margin = new Thickness(0, -3, 0, -3);
-            railRow.Children.Add(PK.Col(cpPair, 1));
-            underTrack.Margin = under.Margin = new Thickness(0, 0, shareCol + 46, 0);
-            inner = new Grid { Height = rowH - (hero ? 16 : 0) - (f.You && !hero ? 2 : 0) };
-            foreach (var el in new UIElement[] { heat, railRow, underTrack, under, cols }) inner.Children.Add(el);
+            inner = new Grid { Height = rowH - (framed ? 2 : 0) };
+            foreach (var el in new UIElement[] { heat, barArea, underTrack, under, cols }) inner.Children.Add(el);
         }
         else
         {
@@ -269,10 +271,10 @@ public sealed partial class ParserRows
         Border frame;
         if (podium && hero)
         {
-            // the leader's card: lit from the left in the class's colour (gold-rimmed when it's you)
+            // the leader's card: lit from the left in the class's colour (gold-rimmed when it's you), as tall as any row
             frame = new Border
             {
-                Child = inner, Margin = new Thickness(-7, 0, -7, 0), Padding = new Thickness(7, 6, 7, 8), CornerRadius = new CornerRadius(8),
+                Child = inner, Margin = new Thickness(-7, 0, -7, 0), Padding = new Thickness(6, 0, 6, 0), CornerRadius = new CornerRadius(7),
                 Background = Across((A(c, 0.22), 0), (A(c, 0.05), 0.7), (Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), 1)),
                 BorderBrush = f.You ? PK.C(PK.Gold, 0.6) : Down((Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), 0), (A(c, 0.25), 1)), BorderThickness = new Thickness(1),
             };

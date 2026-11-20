@@ -157,7 +157,7 @@ public sealed partial class ParserRows : Grid
         public required StackPanel NameLine, Plates; public required Border NameHost;
         public string PlatesShown = "";
         public int Rank = -1, Deaths; public double Y = double.NaN; public bool You; public string Cls = "";
-        /// <summary>Podium's leader card (Ui/ParserRows.Skins.cs): built taller; a row that gains or loses it is built again.</summary>
+        /// <summary>Podium's leader card (Ui/ParserRows.Skins.cs): built lit; a row that gains or loses it is built again.</summary>
         public bool Hero;
         /// <summary>A skin's hot edge at the bar's head (Forge): shown only where it ends clear of the DPS.</summary>
         public FrameworkElement? HotEdge;
@@ -235,7 +235,7 @@ public sealed partial class ParserRows : Grid
             int rank = all.IndexOf(f) + 1;
             bool pinnedRow = pin && f.You;
             bool hero = HeroAt(e, i);
-            double y = i * _rowH + (pinnedRow ? _gap.Height : 0) + (i > 0 && HeroAt(e, 0) ? HeroExtra : 0);
+            double y = i * _rowH + (pinnedRow ? _gap.Height : 0);
             bool fresh = !_rows.TryGetValue(f.Id, out var r);
             if (!fresh && r!.Hero != hero) { _host.Children.Remove(r.Root); _rows.Remove(f.Id); fresh = true; }   // the leader's card came or went
             if (fresh) { r = Build(f, expanded, dmgCol, crit, back, spark, hero); _rows[f.Id] = r; _host.Children.Add(r.Root); }
@@ -333,9 +333,8 @@ public sealed partial class ParserRows : Grid
             _popSeq = hits[^1].Seq;
         }
         _gap.Visibility = pin ? Visibility.Visible : Visibility.Collapsed;
-        double heroAdd = visible.Count > 0 && HeroAt(e, 0) ? HeroExtra : 0;
-        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH + heroAdd, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
-        _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0) + heroAdd - (_skin == Skin.Classic || visible.Count == 0 ? 0 : _rowH - RowHOf(_skin, false));
+        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
+        _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0) - (_skin == Skin.Classic || visible.Count == 0 ? 0 : _rowH - RowHOf(_skin, false));
         // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
         if (_wasLive && !e.Live && dmg) Finale(e.Tone);   // the blade, the punch, the shine down the bars (Ui/ParserRows.Cinema.cs)
         // a record on this fight (this boss, this instance, this mode: FightRecords), DPS or healing, on a kill only
@@ -904,7 +903,7 @@ public sealed partial class ParserRows : Grid
         bool Short() => w - others < keep;
         if (Short() && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
         if (Short() && r.Plates.Visibility == Visibility.Visible) { PlatesWide(r, false); others = Others(); }
-        if (Short() && r.Cp.Visibility == Visibility.Visible && r.Cp.Parent == r.NameLine) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
+        if (Short() && r.Cp.Visibility == Visibility.Visible && (r.Cp.Parent == r.NameLine || (r.Cp.Parent as FrameworkElement)?.Parent == r.NameLine)) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
         if (r.Heal.Text.Length > 0)
         {
             if (Short() && r.HealShort.Length > 0 && r.HealShort != r.Heal.Text && r.HealPill.Parent == r.NameLine)
