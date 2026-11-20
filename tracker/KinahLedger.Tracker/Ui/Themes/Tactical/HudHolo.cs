@@ -61,13 +61,16 @@ sealed partial class HudHolo : TacticalLook
     readonly StackPanel _fightBody = new() { Margin = new Thickness(11, 7, 11, 7) };
     readonly Border _timersIn = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
+    /// <summary>The hairline over the fight's foot (the end's band keeps the foot at full).</summary>
+    FrameworkElement? _footRule;
     readonly ScaleTransform _project = new(1, 1);
     double _projectLine = 0;
 
     public HudHolo() : base(bare: false, Face)
     {
         // the holographic list: the look's own rows (Ui/Themes/ThemeRows.cs)
-        UseRows(HoloRow.Pitch, m => new HoloRow(), 15, GapLine);
+        var cpTable = new CpTable();   // CP on every row or none (HudHolo.Rows.cs)
+        UseRows(HoloRow.Pitch, m => new HoloRow(cpTable), 15, GapLine);
         _lineGlass = new TacSketch((dc, s) => Glass(dc, s, 1));
         _line.Children.Add(_lineGlass); _line.Children.Add(_lineBody); _line.Children.Add(_lineFx); _line.Children.Add(_lineAnchor);
         _fightGlass = new TacSketch((dc, s) => { Glass(dc, s, 1.06); if (_projectLine > 0) ProjectLine(dc, s); });
@@ -393,10 +396,12 @@ sealed partial class HudHolo : TacticalLook
     {
         StripFollowsFight(e);
         _fightBody.Children.Clear();
+        _footRule = null;
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 10;
         _fight.Width = w;
-        // one line a row; two when expanded (the damage and crit take the words' room: CP and the healing go under the name)
+        // one line a row; two when expanded (the damage and crit leave one line too little room: a 10-letter name, the top
+        // healer's chip and its deaths overlap the DPS at 350, in Korean most of all)
         if (Meter is { } rows) rows.Pitch = ParserRows.ExpandedPref ? HoloRow.Pitch2 : HoloRow.Pitch;
         _fightBody.Children.Add(_timersIn);
         var head = new Grid();
@@ -452,7 +457,7 @@ sealed partial class HudHolo : TacticalLook
             PutRows(_fightBody, e, now, w - 22);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 4, 0, 4)));
+                _fightBody.Children.Add(_footRule = Hairline(new Thickness(0, 4, 0, 4)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }
@@ -607,8 +612,17 @@ sealed partial class HudHolo : TacticalLook
         var small = Tt(wipe ? L.T("RECONNECTING") : "◇ " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 10, Frozen(Tac.A(c, .85)), Small, FontWeights.SemiBold); small.HorizontalAlignment = HorizontalAlignment.Center;
         words.Children.Add(big); words.Children.Add(small);
         band.Children.Add(words);
+        // only the rows under the winner dim, the band over them (art review, 2026-11-20): the title, the first row and the
+        // foot stay at full; the zone is never shorter than the band
+        double top = 0, bottom = 0;
+        if (Meter is FrameworkElement rowsEl && rowsEl.IsDescendantOf(_fight)) top = rowsEl.TranslatePoint(new Point(0, 0), _fight).Y + HoloRow.Pitch - 2;
+        if (_footRule is { } fr && fr.IsDescendantOf(_fight)) bottom = Math.Max(0, _fight.ActualHeight - fr.TranslatePoint(new Point(0, 0), _fight).Y);
+        double zoneH = _fight.ActualHeight - top - bottom, least = 60;
+        if (zoneH < least) { double more = least - zoneH; top = Math.Max(0, top - more / 2); bottom = Math.Max(0, bottom - more / 2); }
+        var zone = new Grid { Margin = new Thickness(0, top, 0, bottom) };
         var dim = new Border { Background = Frozen(Tac.A(DeepC, .78)), Opacity = 0 };
-        _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band);
+        zone.Children.Add(dim); zone.Children.Add(band);
+        _fightFx.Children.Clear(); _fightFx.Children.Add(zone);
         Motion.Play(_fightFx, 2600, t =>
         {
             scale.ScaleY = Math.Max(.03, Out(Seg(t, .04, .2)));

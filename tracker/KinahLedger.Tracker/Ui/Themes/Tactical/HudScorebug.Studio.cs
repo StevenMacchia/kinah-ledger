@@ -190,6 +190,8 @@ sealed partial class HudScorebug
             Refit = () => FitLine(_lineHost, _name, _keep, _give);
         }
 
+        protected override bool EnterWhole => true;
+
         static FrameworkElement Tag(string s, Color bg, Color fg, string? tag = null) => new Border
         {
             Background = Tac.Grad(true, (Tac.Mix(bg, Colors.White, .2), 0), (bg, 1)), CornerRadius = new CornerRadius(2.5), Padding = new Thickness(4, 0, 4, 1), Margin = new Thickness(6, 1, 0, 0),

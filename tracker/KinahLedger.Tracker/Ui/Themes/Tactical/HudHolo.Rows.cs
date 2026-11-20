@@ -61,45 +61,68 @@ sealed partial class HudHolo
     }
 
     /// <summary>
+    /// The meter's Combat Power, one call for the whole table (art review, 2026-11-20: a CP on some rows and not others reads
+    /// ragged): when any row shown has no room for its CP (its marks at their glyphs), every row drops it.
+    /// </summary>
+    sealed class CpTable
+    {
+        readonly Dictionary<HoloRow, bool> _short = new();
+        public bool Drop { get; private set; }
+
+        public void Report(HoloRow row, bool shortOfRoom)
+        {
+            _short[row] = shortOfRoom;
+            foreach (var gone in _short.Keys.Where(r => !r.Shown).ToList()) _short.Remove(gone);
+            bool drop = _short.Values.Any(v => v);
+            if (drop == Drop) return;
+            Drop = drop;
+            foreach (var r in _short.Keys.ToList()) if (r != row) r.Refit();
+        }
+    }
+
+    /// <summary>
     /// One member as a bar of glass (Steven, 2026-11-17: "better looks that doesn't crowd everything and prioritizes the bar"):
     /// the rank in a hex in the class's colour (the podium's hex glows), then the bar, a cut-cornered pane the row's height from
-    /// the hex to the DPS's end, lit in the class's colour to the member's part of the top with a bright head and a dashed
-    /// track along its foot. On it, one line (2026-11-20, compact): the name, Combat Power quiet beside it, a healer's healing a
-    /// second (the kill's top healer's in the green TOP HEALS chip when short of room), the marks; the DPS big at its right end;
-    /// the share small after it. Expanded (the damage and crit take room from the words) the pane is two lines, Combat Power and
-    /// the healing under the name. You: the row lit as cyan glass with a bright edge at its left. Short of room the CP goes
-    /// first, then a chip goes to its glyph, then YOU (the skills card says them all), and only then does the name trim (never a
-    /// 10-letter name): never a figure cut.
+    /// the hex to the DPS's end, lit in the class's colour to the member's part of the top (its end soft, never a hard edge
+    /// through a letter, and short of the figure's room so it never runs through a digit), a dashed track along its foot. On it,
+    /// one line (2026-11-20, compact): the name, Combat Power quiet beside it (on every row or none, <see cref="CpTable"/>), a
+    /// healer's healing a second (the kill's top healer's in the green TOP HEALS chip when short of room), the marks; the DPS big
+    /// at its right end; the share small after it; expanded, the damage and crit after the share. You: the row lit as cyan glass
+    /// with a bright edge at its left. Short of room a chip goes to its glyph, then YOU (the skills card says them all), and only
+    /// then does the name trim (never a 10-letter name): never a figure cut.
     /// </summary>
     sealed class HoloRow : IThemeRow
     {
-        /// <summary>The row's height and pitch: one line; two lines (expanded).</summary>
-        public const double H = 28, Pitch = 31, H2 = 37, Pitch2 = 40;
+        /// <summary>The row's height and pitch: one line; expanded, two (the damage and crit leave the words too little room for one).</summary>
+        public const double H = 28, Pitch = 31, H2 = 34, Pitch2 = 37;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
+        readonly CpTable _table;
         readonly TextBlock _rank = Tt("", 11.5, White, Face, FontWeights.Bold), _name = Tt("", 14.5, White, Face, FontWeights.SemiBold),
-            _dps = Tt("", 16, White, Face, FontWeights.Bold), _pct = Tt("", 12, Lite, Face, FontWeights.SemiBold), _dmg = Tt("", 13.5, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 12, Lite, Face, FontWeights.SemiBold);
-        /// <summary>The bar's line of words: the name, Combat Power, a healer's healing, the marks; expanded, the second line under it.</summary>
+            _dps = Tt("", 16, White, Face, FontWeights.Bold), _pct = Tt("", 12, Lite, Face, FontWeights.SemiBold), _dmg = Tt("", 13, Pale, Face, FontWeights.SemiBold), _crit = Tt("", 12, Lite, Face, FontWeights.SemiBold);
+        /// <summary>The bar's line of words: the name, Combat Power, a healer's healing, the marks.</summary>
         readonly StackPanel _top = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(TextIn, 0, 0, 0) };
-        readonly StackPanel _under = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(TextIn, 0, 0, 3) };
-        /// <summary>Combat Power beside (or under) the name: "CP" in the small mono, the figure light cyan, quiet beside the DPS.</summary>
-        readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        /// <summary>Combat Power beside the name: "CP" in the small mono, the figure light cyan, quiet beside the DPS.</summary>
+        readonly StackPanel _cp = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 1, 0, 0) };
         readonly TextBlock _cpFig = Tt("", 11.5, Frozen(Tac.A(LiteC, .9)), Face, FontWeights.SemiBold);
+        readonly StackPanel _under = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(TextIn, 0, 0, 2) };
         readonly TextBlock _none = new();
         readonly List<FrameworkElement> _keep = new(), _keepUnder = new();
         readonly List<(FrameworkElement, FrameworkElement?)> _give = new(), _giveUnder = new();
         readonly double _dmgW, _critW;
         MeterMember? _m;
         double _bar;
-        bool _expanded;
+        bool _expanded, _hasCp, _two;
         /// <summary>Where the words start on the pane.</summary>
         const double TextIn = 10;
 
         public FrameworkElement Root => _root;
+        public bool Shown => _root.Parent != null;
 
-        public HoloRow()
+        public HoloRow(CpTable table)
         {
-            foreach (var t in new[] { _dps, _pct, _dmg, _crit }) { t.Margin = new Thickness(0, 0, t == _dps ? 9 : 7, 0); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; }
+            _table = table;
+            foreach (var t in new[] { _dps, _pct, _dmg, _crit }) { t.Margin = new Thickness(0, 0, t == _dps ? 9 : t == _pct ? 7 : 3, 0); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; }
             // the figure columns sized for the widest real figure; the bar gets the rest
             _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
             foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, "88.8%", "100%", L.T("CP")), 0, 0 })
@@ -132,50 +155,43 @@ sealed partial class HudHolo
                 _root.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            bool two = c.Expanded;
-            _root.Height = two ? H2 : H;
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
             _name.Text = m.Name;
             // the name in a light tint of its class: it reads on its own class's light
             _name.Foreground = Frozen(Tac.Mix(m.NameColor, Colors.White, .4));
+            _two = c.Expanded;
+            _root.Height = _two ? H2 : H;
             while (_top.Children.Count > 1) _top.Children.RemoveAt(1);
             _under.Children.Clear();
             _keep.Clear(); _give.Clear(); _keepUnder.Clear(); _giveUnder.Clear();
             FrameworkElement Add(FrameworkElement el) { _top.Children.Add(el); return el; }
             FrameworkElement Under(FrameworkElement el) { el.Margin = new Thickness(_under.Children.Count > 0 ? 8 : 0, 0, 0, 0); _under.Children.Add(el); return el; }
             FrameworkElement Top(string s, Color c, string tag, string? tip = null) { var p = Chip(s, c, filled: false); p.Tag = tag; p.ToolTip = tip; p.Margin = new Thickness(6, 0, 0, 0); return p; }
-            // quiet: Combat Power once there's damage (before it, the figure itself is the CP), a healer's healing; beside the
-            // name, or under it when expanded
-            FrameworkElement? cp = null;
-            if (m.Cp.Length > 0)
-            {
-                _cpFig.Text = m.Cp;
-                if (two) _giveUnder.Add((Under(_cp), null));
-                else { _cp.Margin = new Thickness(7, 1, 0, 0); cp = Add(_cp); }
-            }
-            // the kill's top healer on one line: the figure and TOP HEALS, short of room the figure in the green chip (it says TOP HEALS)
+            // quiet beside the name: Combat Power once there's damage (before it, the figure itself is the CP), a healer's healing
+            _hasCp = m.Cp.Length > 0;
+            if (_hasCp && _two) { _cpFig.Text = m.Cp; _giveUnder.Add((Under(_cp), null)); }
+            else if (_hasCp) { _cpFig.Text = m.Cp; _cp.Margin = new Thickness(7, 1, 0, 0); Add(_cp); }
+            // the kill's top healer: the figure and TOP HEALS, short of room the figure in the green chip (it says TOP HEALS)
             (FrameworkElement, FrameworkElement?)? topHeal = null;
-            if (m.Heal.Length > 0 && two) _keepUnder.Add(Under(HealFig(m.Heal)));
+            if (m.Heal.Length > 0 && _two) _keepUnder.Add(Under(HealFig(m.Heal)));
             else if (m.Heal.Length > 0 && m.TopHeals)
             {
                 var full = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
                 full.Children.Add(HealFig(m.Heal)); full.Children.Add(Top(L.T("TOP HEALS"), GreenC, "top-heals"));
-                var chip = HealChip(m.Heal); chip.ToolTip = L.T("Top heals"); chip.Margin = new Thickness(7, 0, 0, 0);
+                var chip = HealChip(m.Heal); chip.ToolTip = L.T("Top heals"); chip.Margin = new Thickness(6, 0, 0, 0);
                 topHeal = (Add(full), Add(chip));
             }
             else if (m.Heal.Length > 0) { var h = HealFig(m.Heal); h.Margin = new Thickness(7, 0, 0, 0); _keep.Add(Add(h)); }
             // the marks: deaths, a kill's chips (to their glyph when short of room), YOU (it goes: the lit glass says it)
-            if (m.Deaths > 0) { var d = Tt(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", 11, Coral, Face, FontWeights.Bold); d.Margin = new Thickness(6, 0, 0, 0); _keep.Add(Add(d)); }
+            if (m.Deaths > 0) { var d = Tt(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", 11, Coral, Face, FontWeights.Bold); d.Margin = new Thickness(5, 0, 0, 0); _keep.Add(Add(d)); }
             if (m.TopDps) _give.Add((Add(Top(L.T("TOP DPS"), AmberC, "top-dps")), Add(Top("★", AmberC, "top-dps", L.T("Top DPS")))));
             if (topHeal is { } th) _give.Add(th);
             else if (m.TopHeals) _give.Add((Add(Top(L.T("TOP HEALS"), GreenC, "top-heals")), Add(Top("✚", GreenC, "top-heals", L.T("Top heals")))));
             if (m.You) { var y = Chip(L.T("YOU"), CyanC, filled: true); y.Margin = new Thickness(7, 0, 0, 0); _give.Add((Add(y), null)); }
-            if (cp != null) _give.Insert(0, (cp, null));   // short of room the CP goes first
-            // nothing under it (one line, or before the first hit): the name in the pane's middle
             bool under = _under.Children.Count > 0;
             _under.Visibility = under ? Visibility.Visible : Visibility.Collapsed;
             _top.VerticalAlignment = under ? VerticalAlignment.Top : VerticalAlignment.Center;
-            _top.Margin = new Thickness(TextIn, under ? 2 : 0, 0, 0);
+            _top.Margin = new Thickness(TextIn, under ? 1 : 0, 0, 0);
             _dps.Text = m.Figure;
             _pct.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
@@ -185,18 +201,38 @@ sealed partial class HudHolo
             _art.InvalidateVisual();
         }
 
+        /// <summary>Fitted again (the table's call on the CP changed).</summary>
+        public void Refit() => Fit();
+
         void Fit()
         {
             var cols = _root.ColumnDefinitions;
             double room = cols[1].ActualWidth;
-            if (room <= 0) { Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
+            if (room <= 0) { _cp.Visibility = _hasCp && (_two || !_table.Drop) ? Visibility.Visible : Visibility.Collapsed; Tac.FitName(_name, double.PositiveInfinity, _keep, _give); return; }
             // the words run on into the DPS's column as far as its figure leaves free
             _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double free = Math.Min(cols[2].ActualWidth, cols[2].ActualWidth - _dps.DesiredSize.Width) - 6;
-            double w = room + free - TextIn - 4, floor = Tac.NameFloor(_name);
+            double free = Math.Min(cols[2].ActualWidth, cols[2].ActualWidth - _dps.DesiredSize.Width) - 5;
+            double w = room + free - TextIn - 2, floor = Tac.NameFloor(_name);
+            // the CP: does this row hold it whole, the name whole and its marks at their glyphs? The table decides for every row
+            // (a row with no CP says so too, so a row that once was short no longer holds the table's CP off)
+            // (two lines: the CP has its own line, never short of room)
+            if (_two) { _table.Report(this, false); Tac.FitName(_name, w, _keep, _give, floor); Tac.FitName(_none, w, _keepUnder, _giveUnder, 0, 0); return; }
+            double need = _hasCp ? Wd(_name) + Wd(_cp) + _keep.Sum(Wd) + _give.Sum(g => g.Item2 is { } s ? Wd(s) : 0) : 0;
+            _table.Report(this, _hasCp && need > w);
+            bool cp = _hasCp && !_table.Drop;
+            _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
+            var keep = cp ? _keep.Append(_cp).ToList() : _keep;
             // the marks give way before the name trims (to its floor at the least: a 10-letter name whole)
-            Tac.FitName(_name, w, _keep, _give, floor);
-            if (_under.Children.Count > 0) Tac.FitName(_none, w, _keepUnder, _giveUnder, 0, 0);
+            Tac.FitName(_name, w, keep, _give, floor);
+        }
+
+        static double Wd(FrameworkElement e)
+        {
+            var v = e.Visibility; e.Visibility = Visibility.Visible;
+            e.ClearValue(FrameworkElement.MaxWidthProperty);
+            e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double w = e.DesiredSize.Width; e.Visibility = v;
+            return w;
         }
 
         /// <summary>A healer's healing a second ("+1.1K/s").</summary>
@@ -213,7 +249,7 @@ sealed partial class HudHolo
             var g = Chip("", GreenC, filled: false);
             g.Tag = "top-heals";
             g.Children.RemoveAt(1);
-            var h = HealFig(heal); h.Margin = new Thickness(5, 0, 5, 0);
+            var h = HealFig(heal); h.Margin = new Thickness(4, 0, 4, 0);
             g.Children.Add(h);
             return g;
         }
@@ -245,15 +281,26 @@ sealed partial class HudHolo
             double bx = x0 + 2, by = m.You ? 3.5 : 2, bw = cols[1].ActualWidth + cols[2].ActualWidth - 2, bh = h - 2 * by;
             var pane = Tac.Cut(new Rect(bx + .5, by + .5, bw - 1, bh - 1), 5);
             dc.DrawGeometry(Frozen(Tac.A(DeepC, .55)), Tac.P(Frozen(Tac.A(CyanC, .26)), 1), pane);
-            double fx = bw * Math.Clamp(_bar, 0, 1);
+            // the light runs to 8 px short of the figure's room (the DPS column, or a wider figure: "167,548" before a hit), the
+            // same for every row, so a full bar ends clear of the digits; its last 6 px fade out, never a hard edge through a letter
+            _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double figRoom = Math.Max(cols[2].ActualWidth, _dps.DesiredSize.Width + _dps.Margin.Right) + 8;
+            double fx = Math.Max(0, bw - figRoom) * Math.Clamp(_bar, 0, 1);
             if (fx > .5)
             {
+                const double Soft = 6;
                 dc.PushClip(pane);
+                var mask = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(bx + fx - Soft, 0), EndPoint = new Point(bx + fx, 0),
+                    GradientStops = { new GradientStop(Colors.Black, 0), new GradientStop(Colors.Transparent, 1) } };
+                mask.Freeze();
+                dc.PushOpacityMask(mask);
                 dc.DrawRectangle(Tac.Grad(false, (Tac.A(tone, .50), 0), (Tac.A(tone, .30), 1)), null, new Rect(bx, by, fx, bh));
                 dc.DrawRectangle(Frozen(Tac.A(Tac.Mix(tone, Colors.White, .45), .9)), null, new Rect(bx, by, fx, 1.5));
                 dc.DrawRectangle(Tac.Grad(false, (Tac.A(Colors.White, 0), 0), (Tac.A(Colors.White, .16), 1)), null, new Rect(Math.Max(bx, bx + fx - 26), by, Math.Min(26, fx), bh));
+                dc.Pop();
+                // the head: a short tick at the light's end, on the foot (clear of the words)
                 var end = Frozen(Tac.Mix(tone, Colors.White, .6));
-                dc.DrawRectangle(end, null, new Rect(bx + fx - 1.5, by, 1.5, 5)); dc.DrawRectangle(end, null, new Rect(bx + fx - 1.5, by + bh - 5, 1.5, 5));
+                dc.DrawRectangle(end, null, new Rect(bx + fx - 1.5, by + bh - 3, 1.5, 3));
                 dc.Pop();
             }
             dc.DrawLine(Tac.P(Frozen(Tac.A(CyanC, .3)), 1, dash: new DashStyle(new double[] { 2, 2 }, 0)), new Point(bx + 6, by + bh - 2.5), new Point(bx + bw - 6, by + bh - 2.5));

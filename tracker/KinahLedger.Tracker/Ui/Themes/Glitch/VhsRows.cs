@@ -52,6 +52,8 @@ static class VhsRows
 
     /// <summary>A row's pitch, and the room for the line before you pinned below: Viewfinder's and Deck's.</summary>
     public const double ViewPitch = 32, DeckPitch = 30, ViewGap = 14, DeckGap = 16;
+    /// <summary>Viewfinder's pitch before the first hit: one line a row (the CP after the figure, no bar).</summary>
+    public const double ViewReadyPitch = 24;
 
     /// <summary>"· · ·  2 MORE  · · ·": the party's members left out between it and you.</summary>
     public static FrameworkElement Gap(int more)
@@ -227,8 +229,15 @@ static class VhsRows
             _rankBox.BorderBrush = you ? White : Br(0xFFFFFF, .4);
             _rank.Foreground = you ? Black : White;
             _band.Visibility = you ? Visibility.Visible : Visibility.Collapsed;
-            _fig.Text = m.Figure;
-            _fig.Foreground = m.CpOnly ? Dim : White;
+            // before any damage the figure is the CP: one line, "CP" small after it, the bar's line folded away
+            bool cpOnly = m.CpOnly;
+            _fig.Inlines.Clear();
+            _fig.Inlines.Add(Rn(m.Figure, cpOnly ? Dim : White));
+            if (cpOnly) _fig.Inlines.Add(Rn(" " + L.T("CP"), Br(0xFFFFFF, .48), 9.5, FontWeights.SemiBold));
+            Box.RowDefinitions[1].Height = new GridLength(cpOnly ? 0 : 2);
+            Box.RowDefinitions[2].Height = new GridLength(cpOnly ? 0 : BarH);
+            Box.Height = cpOnly ? Line1 : Line1 + 2 + BarH;
+            Small.Visibility = cpOnly ? Visibility.Collapsed : Visibility.Visible;
         }
     }
 

@@ -91,7 +91,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _deck = new GlitchPanel(Deck ? new Thickness(16, 12, 16, 13) : new Thickness(14, 10, 14, 11));
         _cam = new GlitchPanel(Deck ? new Thickness(12, 10, 12, 10) : new Thickness(14, 9, 14, 9));
         _title = Txt("", Deck ? 15 : 15.5, _text, Sans, trim: true);
-        _clock = Txt("", Deck ? 19 : 18, Yellow, Sans);
+        _clock = Txt("", 19, Yellow, Sans);
         // the meter's rows: the tape's own (Ui/Themes/Glitch/VhsRows.cs)
         if (Deck) UseRows(VhsRows.DeckPitch, _ => new VhsRows.DeckRow(), VhsRows.DeckGap, VhsRows.Gap);
         else UseRows(VhsRows.ViewPitch, _ => new VhsRows.ViewRow(), VhsRows.ViewGap, VhsRows.Gap);
@@ -458,6 +458,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _title.Text = e.Title;
         SetState(e);
         _rowsHost.Children.Clear(); _foot.Content = null; _rowsHost.Visibility = Visibility.Collapsed; _foot.Visibility = Visibility.Collapsed;
+        // Viewfinder before the first hit: each row one line (the CP after its figure, no bar under it), so a shorter pitch
+        if (!Deck && Meter is { } rows) rows.Pitch = e.Waiting ? VhsRows.ViewReadyPitch : VhsRows.ViewPitch;
         if (e.Waiting)
         {
             _clock.Text = L.T("READY").ToUpper(System.Globalization.CultureInfo.CurrentCulture); _clock.Foreground = _label; _clock.FontSize = 13;

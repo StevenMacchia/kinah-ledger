@@ -630,9 +630,21 @@ sealed partial class HudScorebug : TacticalLook
         var dim = new Border { Background = Frozen(Tac.A(InkC0, .78)), Opacity = 0, Margin = new Thickness(0, keepTop, 0, 0) };
         var band = new Border { Height = 64, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH), Background = Frozen(Tac.A(InkC0, .9)), BorderBrush = wipe ? Red : Yellow, BorderThickness = new Thickness(0, 2, 0, 2), Opacity = 0 };
         var plate = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH + 8) };
+        double plateH = 48;
+        if (_studio)
+        {
+            // Studio (art review, 2026-11-20): a band one row tall over the line between the second row and the third, the
+            // foot at full (only the rows under the winner dim)
+            plateH = 32;
+            double bandH = StudioRow.Pitch + 4, rowsEnd = _titleHost.ActualHeight + _hpHost.ActualHeight + _rowsHost.ActualHeight;
+            double mid = Math.Max(keepTop + bandH / 2, Math.Min(keepTop + StudioRow.Pitch - 2, rowsEnd - bandH / 2));
+            dim.Margin = new Thickness(0, keepTop, 0, _footHost.ActualHeight);
+            band.Height = bandH; band.VerticalAlignment = VerticalAlignment.Top; band.Margin = new Thickness(0, mid - bandH / 2, 0, 0);
+            plate.VerticalAlignment = VerticalAlignment.Top; plate.Margin = new Thickness(0, mid - plateH / 2, 0, 0);
+        }
         var winner = !wipe && Meter is { Members.Count: > 0 } mm ? mm.RowOf(mm.Members[0].Id) as BoardRow : null;
-        var head = new Block(wipe ? SlateC : YellowC, T(wipe ? "✖" : "★", 22, wipe ? Red : InkB), 48, new Thickness(14, 0, 12, 0), leanLeft: true);
-        var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), 34, wipe ? White : Yellow), 48, new Thickness(18, 0, 22, 0));
+        var head = new Block(wipe ? SlateC : YellowC, T(wipe ? "✖" : "★", _studio ? 16 : 22, wipe ? Red : InkB), plateH, _studio ? new Thickness(11, 0, 9, 0) : new Thickness(14, 0, 12, 0), leanLeft: true);
+        var main = new Block(wipe ? RedC : InkC0, T(L.T(wipe ? "DEFEAT" : "VICTORY"), _studio ? 23 : 34, wipe ? White : Yellow), plateH, _studio ? new Thickness(14, 0, 17, 0) : new Thickness(18, 0, 22, 0));
         Row(plate, head); Row(plate, main);
         plate.Clip = Geometry.Empty;
         _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band); _fightFx.Children.Add(plate);
@@ -641,7 +653,7 @@ sealed partial class HudScorebug : TacticalLook
         Motion.Play(_fightFx, 2600, t =>
         {
             double i = Out(Seg(t, .06, .22)), o = Seg(t, .84, 1); o = o * o;
-            plate.Clip = Wipe(w * o, w * i, 52);
+            plate.Clip = Wipe(w * o, w * i, plateH + 4);
             dim.Opacity = band.Opacity = t < .84 ? Out(Seg(t, 0, .1)) : 1 - Seg(t, .84, 1);
             // a win glints; a loss slams in with a red flash and no shine
             if (!wipe) { main.Sweep = Seg(t, .24, .6); main.Art.InvalidateVisual(); }
