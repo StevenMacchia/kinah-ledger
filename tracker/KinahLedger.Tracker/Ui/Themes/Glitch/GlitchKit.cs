@@ -384,7 +384,7 @@ static class GlitchKit
     public static double BarOf(MeterMember m, MeterContext c)
     {
         if (m.CpOnly || !double.IsFinite(m.FigureValue) || m.FigureValue <= 0) return 0;
-        return c.E.BarOf(m.F);   // their share of the group's damage, the bars together the whole (2026-11-18)
+        return c.E.BarOf(m.F);   // against the top member's: the top bar full, the rest in proportion (2026-11-20)
     }
 
     /// <summary>A row's figure column: right-aligned, tabular, never trimmed (a figure that changes never shifts).</summary>

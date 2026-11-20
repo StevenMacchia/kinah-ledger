@@ -269,7 +269,7 @@ public sealed partial class ParserRows : Grid
             // whose bar reaches BarTop of the row (Steven, 2026-11-15: "the bars shouldn't be full really and should be percentage
             // based"; 2026-11-17: "prioritizes the bar": a party of six at 15-20% each drew bars no longer than the rank chip)
             // (the panel's own looks: the top member's bar its row's whole length)
-            // (2026-11-18: no longer against the top member: every bar its own share, together the whole; Encounter.BarOf)
+            // (2026-11-18 to 1.0.29 every bar its own share; 2026-11-20 against the top member again, the top bar full: Encounter.BarOf)
             double share = dmg ? e.BarOf(f) : 0;
             Motion.Slide(row.BarFill, $"parser|ovbar|{e.Id}|{f.Id}|{(int)_kind}", share, v => SetBar(row, v));
             // a move of the bar of a couple of points leaves its ghost: what it lost holds and shrinks away, what it gained flashes

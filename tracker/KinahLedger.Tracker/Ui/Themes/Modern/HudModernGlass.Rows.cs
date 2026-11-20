@@ -155,7 +155,7 @@ sealed partial class HudModernGlass
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
             // filled to the share against the top member's (the mock-up's pills: the leader's is full)
-            // (2026-11-18: each member's own share of the group's damage, the bars together the whole: Encounter.BarOf)
+            // (against the top member: the top bar full, the rest in proportion, 2026-11-20: Encounter.BarOf)
             SlideBar(_art, c, "bar", m.CpOnly ? 0 : c.E.BarOf(m.F), v => { _bar = v; _art.InvalidateVisual(); });
             _art.InvalidateVisual();
         }

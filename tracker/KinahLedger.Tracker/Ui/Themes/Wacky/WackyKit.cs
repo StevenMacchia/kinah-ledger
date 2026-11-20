@@ -445,7 +445,7 @@ static class Wk
     public static double Bar(MeterMember m, MeterContext c)
     {
         if (m.CpOnly) return 0;
-        return c.E.BarOf(m.F);   // their share of the group's damage, the bars together the whole (2026-11-18)
+        return c.E.BarOf(m.F);   // against the top member's: the top bar full, the rest in proportion (2026-11-20)
     }
 
     /// <summary>

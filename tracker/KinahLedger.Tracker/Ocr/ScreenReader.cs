@@ -175,14 +175,15 @@ public sealed class ScreenReader
     static readonly SemaphoreSlim Gate = new(3, 3);
     static readonly System.Collections.Concurrent.ConcurrentBag<OcrEngine> Pool = new();
 
+    /// <summary>
+    /// The recognizer's picture, its pixels copied straight in (WindowCapture.ToSoftware). Until 2026-11-20 each read
+    /// saved the bitmap as a BMP into a MemoryStream and decoded it back through a WinRT stream: every read pinned that
+    /// stream's array (megabytes at 2-4x upscale) under handles Windows never let go of, so the arrays could be neither
+    /// freed nor moved and the tracker grew past 1 GB within minutes on a 5120x2160 screen (Steven's "700 MB of RAM").
+    /// </summary>
     static async Task<OcrResult> Recognize(Bitmap bmp)
     {
-        using var ms = new MemoryStream();
-        bmp.Save(ms, ImageFormat.Bmp);
-        ms.Position = 0;
-        using var ras = ms.AsRandomAccessStream();
-        var decoder = await BitmapDecoder.CreateAsync(ras);
-        using var soft = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+        using var soft = WindowCapture.ToSoftware(bmp);
         await Gate.WaitAsync();
         var eng = Pool.TryTake(out var free) ? free : _shared == null ? Engine : NewEngine();
         try { return await eng.RecognizeAsync(soft); }

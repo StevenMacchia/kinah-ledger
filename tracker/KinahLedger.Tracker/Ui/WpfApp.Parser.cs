@@ -768,6 +768,21 @@ public static partial class WpfApp
             check(ws != null && ws.Minimum == 300 && ws.Maximum == 640 && HudStackLook.FightWidth == 500, $"Options › In game › Parser: a Width slider, 300 to 640, that widens the meter as it moves ({HudStackLook.FightWidth:0})");
             if (ws != null) { ws.Value = wBefore; DoEvents(); }
             check(HudStackLook.FightWidth == wBefore, $"...and moved back puts the meter back ({HudStackLook.FightWidth:0}, was {wBefore:0})");
+            // every look stays on offer inside the Kinah overlay too (Steven, 2026-11-20: "you should not have to choose the buddy
+            // theme to choose the dps meter theme ... the styles should always all be available"): another theme's chip shows its
+            // looks, and picking one gives the Parser its own window in it with the Kinah overlay's look untouched
+            {
+                string kinahLook0 = opt.HudLookEditForTest;
+                string other = HudThemes.All.Select(t => t.Key).First(t => t != HudThemes.Of(kinahLook0) && t != HudThemes.Classic);
+                opt.PickParserThemeForTest(other); DoEvents();
+                var (otherKeys, otherOn) = opt.ParserLooksForTest;
+                string otherPick = otherKeys.LastOrDefault() ?? "";
+                opt.PickParserLookForTest(otherPick); DoEvents();
+                check(otherKeys.SequenceEqual(OptionsWindow.ParserLooksOf(other)) && otherOn == null && sws.Separate.IsChecked == false && opt.ParserLooksForTest.On == otherPick && opt.HudLookEditForTest == kinahLook0,
+                    $"Options › DPS meter: inside the Kinah overlay every theme's looks are on offer ({other}: {string.Join(", ", otherKeys)}); picking {otherPick} gives the Parser its own window in it (inside the overlay now {sws.Separate.IsChecked}, outlined {opt.ParserLooksForTest.On ?? "none"}) and the Kinah overlay keeps {kinahLook0} ({opt.HudLookEditForTest})");
+                sws.Separate.IsChecked = true; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+                check(opt.ParserLooksForTest.Keys.SequenceEqual(HudThemes.FightLooks(HudThemes.Of(kinahLook0))), $"...and Parser inside the Kinah overlay on again offers the overlay's own fight looks first ({string.Join(", ", opt.ParserLooksForTest.Keys)})");
+            }
             sws.Separate.IsChecked = false; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
         }
         // the Kinah overlay's small DPS went (Steven, 2026-11-15: "get rid of the dps meter on the kinah tracker overlay only since
