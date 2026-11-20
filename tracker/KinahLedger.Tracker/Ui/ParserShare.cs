@@ -185,20 +185,24 @@ public static class ParserShare
                 // the member picked on the tab (else you), against the pull picked (else your best kill): both pulls' figures, whole
                 var cm = (p.CompareMember is { } who ? diff.Members.FirstOrDefault(x => !x.You && x.A.Name.Equals(who, StringComparison.OrdinalIgnoreCase)) : null) ?? you0;
                 string cls = cm.A.Class.Length > 0 ? cm.A.Class : cm.B.Class;
-                Row(new[] { cm.You ? ParserRows.NameOf(cm.A) : cm.A.Name, L.T("This pull"), L.F("vs {0}", L.DayTime(diff.B.Start.ToLocalTime())), L.T("DPS change") });
-                Row(new[] { L.T("DPS"), N(cm.DpsA), N(cm.DpsB), cm.DpsChange is { } dc ? PK.Signed(dc) : "" });
-                Row(new[] { L.T("Length"), BossParser.Clock(TimeSpan.FromSeconds(diff.ALength)), BossParser.Clock(TimeSpan.FromSeconds(diff.BLength)), "" });
+                // one table: DPS this pull and the other (its day and length in the head), the change, then damage, casts, crit
+                // and share in both; the member's total first, then each ability
                 bool casts = cm.HasCasts, crit = cm.HasCrit;
                 static string Other(string col) => L.F("{0}, other pull", L.T(col));
-                var head = new List<string> { L.T("Ability"), L.T("Damage"), Other("Damage"), L.T("DPS"), Other("DPS"), L.T("DPS change") };
+                var head = new List<string> { L.T("Ability"), L.T("This pull"), L.F("vs {0}", $"{L.DayTime(diff.B.Start.ToLocalTime())} · {BossParser.Clock(TimeSpan.FromSeconds(diff.BLength))}"), L.T("DPS change"), L.T("Damage"), Other("Damage") };
                 if (casts) { head.Add(L.T("Casts")); head.Add(Other("Casts")); }
                 if (crit) { head.Add(L.T("Crit")); head.Add(Other("Crit")); }
                 head.Add(L.T("Share")); head.Add(Other("Share"));
                 Row(head);
+                var total = new List<string> { cm.You ? ParserRows.NameOf(cm.A) : cm.A.Name, N(cm.DpsA), N(cm.DpsB), cm.DpsChange is { } dc ? PK.Signed(dc) : "", N(cm.DamageA), N(cm.DamageB) };
+                if (casts) { total.Add(cm.Skills.Sum(x => x.CastsA ?? 0).ToString(CultureInfo.InvariantCulture)); total.Add(cm.Skills.Sum(x => x.CastsB ?? 0).ToString(CultureInfo.InvariantCulture)); }
+                if (crit) { total.Add(""); total.Add(""); }
+                total.Add(P(cm.ShareA)); total.Add(P(cm.ShareB));
+                Row(total);
                 foreach (var x in cm.Skills)
                 {
-                    var cells = new List<string> { Parser.Abilities.Name(x.Skill, cls), x.UsedA ? N(x.DamageA) : "", x.UsedB ? N(x.DamageB) : "", x.UsedA ? N(x.DpsA) : "", x.UsedB ? N(x.DpsB) : "",
-                        x.UsedA && x.UsedB && x.DpsChange is { } c ? PK.Signed(c) : x.UsedA ? L.T("new") : L.T("not used") };
+                    var cells = new List<string> { Parser.Abilities.Name(x.Skill, cls), x.UsedA ? N(x.DpsA) : "", x.UsedB ? N(x.DpsB) : "",
+                        x.UsedA && x.UsedB && x.DpsChange is { } c ? PK.Signed(c) : x.UsedA ? L.T("new") : L.T("not used"), x.UsedA ? N(x.DamageA) : "", x.UsedB ? N(x.DamageB) : "" };
                     if (casts) { cells.Add(x.CastsA?.ToString(CultureInfo.InvariantCulture) ?? ""); cells.Add(x.CastsB?.ToString(CultureInfo.InvariantCulture) ?? ""); }
                     if (crit) { cells.Add(x.CritA is { } a1 && x.UsedA ? P(a1) : ""); cells.Add(x.CritB is { } b1 && x.UsedB ? P(b1) : ""); }
                     cells.Add(x.UsedA ? P(x.ShareA) : ""); cells.Add(x.UsedB ? P(x.ShareB) : "");

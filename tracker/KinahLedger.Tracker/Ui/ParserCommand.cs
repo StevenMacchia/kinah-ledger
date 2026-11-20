@@ -930,7 +930,7 @@ static class ParserCommand
         // the abilities that lost the most, said plainly (what changed, not why); the biggest gain under them when there's room
         var losses = m.Losses(3);
         var said = new StackPanel { Margin = new Thickness(2, 0, 0, 10) };
-        said.Children.Add(M(T(L.T("Biggest losses"), 11, Faint, FontWeights.SemiBold), 0, 0, 0, 3));
+        said.Children.Add(M(T(L.T("Biggest losses"), 11.5, Muted, FontWeights.SemiBold), 0, 0, 0, 3));
         if (losses.Count == 0) said.Children.Add(Said(L.T("No ability lost DPS against that pull."), Mint, "parser-compare-noloss"));
         foreach (var s in losses) said.Children.Add(Said(LossWords(s, cls), Coral, "parser-compare-loss"));
         if (losses.Count < 3 && m.Gains(1).FirstOrDefault() is { } g) said.Children.Add(Said(L.F("Biggest gain: {0}", GainWords(g, cls)), Mint, "parser-compare-gain"));
@@ -987,7 +987,7 @@ static class ParserCommand
         if (m.HasCasts) cols.Add("Casts");
         if (m.HasCrit) cols.Add("Crit");
         cols.Add("Share");
-        static double W(string k) => k switch { "Damage" => 62, "DPS" => 60, "DPS change" => 66, "Casts" => 60, "Crit" => 80, _ => 76 };
+        static double W(string k) => k switch { "Damage" => 60, "DPS" => 54, "DPS change" => 76, "Casts" => 58, "Crit" => 82, _ => 74 };
         foreach (var k in new[] { "Share", "Crit", "Casts", "Damage" })
         {
             if (34 + 150 + cols.Sum(W) <= width) break;
@@ -998,7 +998,7 @@ static class ParserCommand
         h.Children.Add(Col(Head("Ability", right: false), 1));
         for (int i = 0; i < cols.Count; i++) h.Children.Add(Col(Head(cols[i], sorted: cols[i] == "DPS"), i + 2));
         body.Children.Add(h);
-        body.Children.Add(M(T(L.F("top: this pull · under: {0}", AgainstWord(v, v.Diff!.B)), 10.5, Faint, FontWeights.Medium), 34, 0, 0, 4));
+        body.Children.Add(M(T(L.F("top: this pull · under: {0}", AgainstWord(v, v.Diff!.B)), 11, Muted, FontWeights.Medium), 34, 0, 0, 4));
         int max = share ? CompareShareRows : ctx!.CompareAll ? int.MaxValue : CompareRows;
         var list = m.Skills.Take(max).ToList();
         foreach (var s in list)
@@ -1043,9 +1043,9 @@ static class ParserCommand
     {
         var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var top = Num(a, 12.5, Ink, bold ? FontWeights.Bold : FontWeights.SemiBold);
-        if (delta != null) top.Inlines.Add(R(" " + delta, 10, Faint, FontWeights.SemiBold));
+        if (delta != null) top.Inlines.Add(R(" " + delta, 10.5, Muted, FontWeights.SemiBold));
         sp.Children.Add(top);
-        sp.Children.Add(Num(b, 11.5, Faint, FontWeights.Medium));
+        sp.Children.Add(Num(b, 11.5, Text2, FontWeights.Medium));
         return sp;
     }
 
