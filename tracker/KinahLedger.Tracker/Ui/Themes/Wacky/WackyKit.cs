@@ -578,6 +578,39 @@ static class WkCard
         return g;
     }
 
+    /// <summary>
+    /// A meter row's line made to fit its <paramref name="room"/> in Steven's order: the Combat Power goes first, then the
+    /// share, and only then is the name cut (2026-11-20 review: names were cut while their CP still showed). The line is
+    /// measured at its natural width (its star columns then size to their content), margins included.
+    /// </summary>
+    /// <param name="share">Shows (true) or drops (false) the share, its column with it.</param>
+    /// <param name="detail">An expanded row's damage and crit on the same line: dropped last, still before the name is cut.</param>
+    public static void Crowd(FrameworkElement line, double room, UIElement? cp, bool cpWanted, Action<bool> share, UIElement? detail = null)
+    {
+        if (cp != null) cp.Visibility = cpWanted ? Visibility.Visible : Visibility.Collapsed;
+        share(true);
+        bool detailWanted = detail != null && detail.Visibility == Visibility.Visible;
+        if (room <= 0) return;
+        bool Fits()
+        {
+            // every part of the line measured again (a measure of the line alone keeps its children's last sizes)
+            void Dirty(DependencyObject d) { if (d is UIElement u) u.InvalidateMeasure(); for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Dirty(VisualTreeHelper.GetChild(d, i)); }
+            Dirty(line);
+            line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return line.DesiredSize.Width <= room + .5;
+        }
+        if (!Fits())
+        {
+            if (cp != null && cpWanted) cp.Visibility = Visibility.Collapsed;
+            if (cp == null || !cpWanted || !Fits())
+            {
+                share(false);
+                if (detailWanted && !Fits()) detail!.Visibility = Visibility.Collapsed;
+            }
+        }
+        line.InvalidateMeasure();
+    }
+
     public static int CritAt => 3;
     public static int BackAt(MemberCard c) => c.CritCol ? 4 : 3;
 

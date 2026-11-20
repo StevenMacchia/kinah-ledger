@@ -341,7 +341,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         }
         else
         {
-            var rows = new StackPanel { Margin = new Thickness(7, 10, 7, 6) };
+            var rows = new StackPanel { Margin = new Thickness(7, 8, 7, 6) };
             PlaceRows(rows, e, now);
             if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(5, 2, 5, 0); rows.Children.Add(foot); }
             _fightStack.Children.Add(rows);
@@ -440,7 +440,9 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
     }
 
     /// <summary>A chip that flips up out of the card (a turn on its edge as it rises), hovers, then bursts into glints.</summary>
-    void Float(Grid bubble, uint c, Point from, double rise, string slot, double ms, double popAt, int drops, double dropSize)
+    /// <param name="flips">False: it grows in whole from 0.7 as it fades in instead of turning from its edge (GO!: a sliver of
+    /// squeezed letters at its start read as a glitch, 2026-11-20 review).</param>
+    void Float(Grid bubble, uint c, Point from, double rise, string slot, double ms, double popAt, int drops, double dropSize, bool flips = true)
     {
         // whole inside the window at its biggest (about 0.82 of its width and 0.75 of its height either side of its middle),
         // and it rises only as high as the room over it lets it
@@ -466,9 +468,10 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             double pop = Seg(q, popAt, popAt + .06);
             // a card's flip: its width turns from its edge (0) through a slight overshoot to face on
             double face = Math.Abs(Math.Cos((1 - flip) * Math.PI * 1.5)) * Back(flip, 1.4);
-            bs.ScaleX = Math.Max(.02, face) * (1 + .25 * pop); bs.ScaleY = Back(Seg(q, 0, .16), 1.4) * (1 + .25 * pop);
+            double grow = Lerp(.7, 1, Back(Seg(q, 0, .2), 1.6));
+            bs.ScaleX = (flips ? Math.Max(.02, face) : grow) * (1 + .25 * pop); bs.ScaleY = (flips ? Back(Seg(q, 0, .16), 1.4) : grow) * (1 + .25 * pop);
             bt.Y = -rise * up - 5 * Seg(q, .22, popAt) + 2 * hover;
-            bubble.Opacity = Seg(q, 0, .05) * (1 - pop);
+            bubble.Opacity = (flips ? Seg(q, 0, .05) : Out(Seg(q, 0, .14))) * (1 - pop);
             bits.Host.RenderTransform = new TranslateTransform(0, bt.Y);
             Pop(bits, Seg(q, popAt, 1), bubble.Width * .55, 3, from.Y + bt.Y - pad - dropSize * 1.3);
             s.Set(1, 1, 0, 0, 0, 1);
@@ -557,7 +560,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         // and a cyan GO! chip flips up off its top edge (the family's fight call)
         var go = Say(L.T("GO!"), 20, 0x063A4A);
         var top = At(_panel.Root, .5, 0);
-        Float(Bubble(80, 40, 0x35C8E8, go), 0x8FEFFF, new Point(top.X, top.Y - 6), 14, "fight-go", 1500, .62, 10, 6);
+        Float(Bubble(80, 40, 0x35C8E8, go), 0x8FEFFF, new Point(top.X, top.Y - 6), 14, "fight-go", 1500, .62, 10, 6, flips: false);
     }
 
     protected override void FightEnded(Encounter e, bool held)
@@ -793,14 +796,15 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
     /// A member as an attack line on the card: an energy orb of the class's colour with the rank, the icon, the name, quiet
     /// Combat Power and deaths; the DPS big at the right as the attack's damage, the share small after it; all of it over a
     /// bar of the class's colour washed in holographic foil, running the line's height behind it, lit along its foot and white
-    /// at its head. A healer's heal and TOP DPS / TOP HEALS are foil stamps hung as tabs on the bar's top edge over the
-    /// figures; you a gold name and a gold-ruled bar. Expanded, the damage and crit sit under the name (the row grows by
-    /// <see cref="Extra"/>). (2026-11-20, Steven: "some are just bulky": one line a row, 24 on a 29 pitch where it was a name
-    /// line over a bar, 40 on 49.)
+    /// at its head. A healer's heal and TOP DPS / TOP HEALS are foil stamps on the line before the DPS (hung as tabs between
+    /// rows they read as the row above's); a crowded line drops the Combat Power, then the share, before the name is cut
+    /// (WkCard.Crowd). You a gold name and a gold-ruled bar. Expanded, the damage and crit sit under the name (the row grows
+    /// by <see cref="Extra"/>). (2026-11-20, Steven: "some are just bulky": one line a row, 24 on a 27 pitch where it was a
+    /// name line over a bar, 40 on 49.)
     /// </summary>
     sealed class HoloRow : IThemeRow
     {
-        public const double H = 24, Pitch = H + 5, Extra = 11;
+        public const double H = 24, Pitch = H + 3, Extra = 11;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly Grid _line = new() { Margin = new Thickness(3, 0, 6, 0) };
         readonly Grid _orb = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center };
@@ -815,6 +819,8 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         readonly Inked _detail = new(9.5, FontWeights.Medium, Wk.S(Ice, .88));
         readonly Inked _fig = new(17.5, FontWeights.Bold, WhiteB, figure: true), _share = new(10, FontWeights.SemiBold, Wk.S(0xA8B4E0), figure: true);
         readonly ColumnDefinition _figCol = new(), _shareCol = new();
+        GridLength _shareW;
+        bool _cpWanted;
         readonly Border _groove = new() { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1) };
         readonly Grid _track = new() { Margin = new Thickness(1.5) };
         readonly Grid _fill = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, IsHitTestVisible = false };
@@ -830,18 +836,18 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
 
         static Border Stamp(out TextBlock t)
         {
-            t = new TextBlock { FontFamily = Face, FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = InkB, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, LineHeight = 11 };
+            t = new TextBlock { FontFamily = Face, FontSize = 8, FontWeight = FontWeights.Bold, Foreground = InkB, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, LineHeight = 10.5 };
             Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
             var g = new Grid { IsHitTestVisible = false };
             g.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Wk.S(0xFFFFFF) });
             g.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Foil(.5, 22) });
-            g.Children.Add(new Border { CornerRadius = new CornerRadius(2), BorderBrush = Wk.S(Ink, .9), BorderThickness = new Thickness(1), Padding = new Thickness(4, 0, 4, 0), Child = t });
+            g.Children.Add(new Border { CornerRadius = new CornerRadius(2), BorderBrush = Wk.S(Ink, .9), BorderThickness = new Thickness(1), Padding = new Thickness(3, 0, 3, 0), Child = t });
             return new Border { Child = g, VerticalAlignment = VerticalAlignment.Center };
         }
 
         public HoloRow()
         {
-            foreach (var cd in new[] { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, _figCol, _shareCol })
+            foreach (var cd in new[] { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, new ColumnDefinition { Width = GridLength.Auto }, _figCol, _shareCol })
                 _line.ColumnDefinitions.Add(cd);
             _orb.Children.Add(new Ellipse { Fill = Wk.S(0xFFFFFF, .3), Margin = new Thickness(-1.5) });
             _orb.Children.Add(_orbFill);
@@ -858,14 +864,14 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             cpT.Inlines.Add(new Run(L.T("CP") + " ") { FontSize = 7.5, FontWeight = FontWeights.Bold, Foreground = Wk.S(Steel, .9) });
             cpT.Inlines.Add(_cp);
             _cpBox = new Border { Child = cpT, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-            _dead = new Border { CornerRadius = new CornerRadius(3), Background = Wk.S(0xE8344E), BorderBrush = Wk.S(0x5A0A14), BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 5, .5), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Child = _deadT };
+            _dead = new Border { CornerRadius = new CornerRadius(3), Background = Wk.S(0xE8344E), BorderBrush = Wk.S(0x5A0A14), BorderThickness = new Thickness(1), Padding = new Thickness(4, 0, 4, .5), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0), Child = _deadT };
             var nameLine = WkCard.NameLine(_name.Root, _you, _cpBox, _dead);
             // expanded: the damage and crit under the name
             _detail.Root.HorizontalAlignment = HorizontalAlignment.Left; _detail.Root.Margin = new Thickness(1, 2.5, 0, 0);
             var nameCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { nameLine, _detail.Root } };
             Grid.SetColumn(nameCol, 2); _line.Children.Add(nameCol);
-            _fig.Align = HorizontalAlignment.Right; Grid.SetColumn(_fig.Root, 3); _line.Children.Add(_fig.Root);
-            _share.Align = HorizontalAlignment.Right; _share.Root.Margin = new Thickness(0, 3, 0, 0); Grid.SetColumn(_share.Root, 4); _line.Children.Add(_share.Root);
+            _fig.Align = HorizontalAlignment.Right; Grid.SetColumn(_fig.Root, 4); _line.Children.Add(_fig.Root);
+            _share.Align = HorizontalAlignment.Right; _share.Root.Margin = new Thickness(0, 3, 0, 0); Grid.SetColumn(_share.Root, 5); _line.Children.Add(_share.Root);
             // the bar behind the line: a groove the row's size, the class's colour (deep, so the white words read on it) washed
             // in foil, lit on top, its foot a bright line of the class's colour, white at its head
             var bar = new Grid();
@@ -880,13 +886,15 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             _bar = new Wk.BarFill(_track, _fill, 8);
             _root.Children.Add(bar);
             _root.Children.Add(_line);
-            // the heal and TOP stamps: tabs hung on the bar's top edge over the figures (lifted by their transform: a negative
-            // margin would clip them at the row's top), in the room between this row and the one over it
-            _heal = Stamp(out _healT); _heal.Margin = new Thickness(0, 0, 3, 0);
+            // the heal and TOP stamps: on the row's own line, before the DPS
+            _heal = Stamp(out _healT); _heal.Margin = new Thickness(0, 0, 2, 0);
             _top = Stamp(out _topT);
-            _root.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 6, 0),
-                RenderTransform = new TranslateTransform(0, -8), IsHitTestVisible = false, Children = { _heal, _top } });
+            var marks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), IsHitTestVisible = false, Children = { _heal, _top } };
+            Grid.SetColumn(marks, 3); _line.Children.Add(marks);
+            _root.SizeChanged += (_, _) => Crowd();
         }
+
+        void Crowd() => WkCard.Crowd(_line, _root.ActualWidth, _cpBox, _cpWanted, on => { _share.Root.Visibility = on ? Visibility.Visible : Visibility.Collapsed; _shareCol.Width = on ? _shareW : new GridLength(0); });
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -899,7 +907,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             if (_cls != m.Class) { _cls = m.Class; _icon.Child = ThemeText.Icon(m.Class, 15, m.Name); }
             _name.Text = m.Name; _name.Fg = m.You ? GoldB : WhiteB;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
-            _cp.Text = m.Cp; _cpBox.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
+            _cp.Text = m.Cp; _cpWanted = m.Cp.Length > 0 && !m.CpOnly;
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             _deadT.Text = "✖ " + m.Deaths.ToString(CultureInfo.InvariantCulture);
             if (c.Expanded && m.Damage.Length > 0) { _detail.Text = m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : ""); _detail.Root.Visibility = Visibility.Visible; }
@@ -908,7 +916,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             {
                 _cpOnly = m.CpOnly;
                 _figCol.Width = new GridLength(Wk.Room(Face, 17.5, FontWeights.Bold, m.CpOnly ? new[] { "888,888" } : Wk.DpsForms, 8));
-                _shareCol.Width = new GridLength(Wk.Room(Face, 10, FontWeights.SemiBold, m.CpOnly ? new[] { L.T("CP") } : Wk.ShareForms, 6));
+                _shareCol.Width = _shareW = new GridLength(Wk.Room(Face, 10, FontWeights.SemiBold, m.CpOnly ? new[] { L.T("CP") } : Wk.ShareForms, 6));
             }
             _fig.Text = m.Figure; _share.Text = m.ShareText;
             _groove.Background = Wk.Lin(0, 0, 0, 1, (0x03050C, .95, 0), (0x101632, .95, 1));
@@ -917,10 +925,10 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             _lit.Background = Wk.Lin(0, 0, 1, 0, (Wk.Shade(v, -.1), 1, 0), (Wk.Shade(v, .25), 1, 1));
             _healT.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
-            Panel.SetZIndex(_root, m.TopDps || m.TopHeals || m.Heal.Length > 0 ? 2 : 0);   // its tabs over the row above, never under
             _topT.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
             _fill.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
             _bar.Set(Wk.Bar(m, c), c, "bar", fresh);
+            Crowd();
         }
     }
 }

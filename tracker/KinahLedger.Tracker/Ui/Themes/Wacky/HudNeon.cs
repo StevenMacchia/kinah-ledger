@@ -197,7 +197,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
                 if (f.Unit.Length > 0)
                 {
                     var u = Slant(Wk.Words(f.Unit, 15, MagB, Wk.Bahn, FontWeights.Bold));
-                    u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(4, 0, 0, 7);
+                    u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(7, 0, 0, 7);   // 7: the figure's slant leans into it
                     hour.Children.Add(u);
                 }
             }
@@ -827,29 +827,15 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _topSign = new Border { Child = _top, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), IsHitTestVisible = false };
             Slant(_topSign);
             Grid.SetColumn(_topSign, 3); row.Children.Add(_topSign);
-            _healCell = healCell; _nameLine = nameLine;
             _root.SizeChanged += (_, _) => Crowd();
         }
 
-        readonly FrameworkElement _healCell, _nameLine;
         bool _cpWanted;
 
-        /// <summary>The Combat Power shown when the name, its marks and the row's other parts fit the line without cutting the name; else it goes.</summary>
-        void Crowd()
-        {
-            _cp.Visibility = _cpWanted ? Visibility.Visible : Visibility.Collapsed;
-            double w = _root.ActualWidth;
-            if (!_cpWanted || w <= 0) return;
-            static double Need(FrameworkElement e)
-            {
-                if (e.Visibility == Visibility.Collapsed) return 0;
-                e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                return e.DesiredSize.Width;
-            }
-            var cols = _row.ColumnDefinitions;
-            double used = _row.Margin.Left + _row.Margin.Right + cols[0].Width.Value + cols[6].Width.Value + cols[7].Width.Value + Need(_healCell) + Need(_topSign) + Need(_detail);
-            if (used + Need(_nameLine) > w - .5) _cp.Visibility = Visibility.Collapsed;
-        }
+        GridLength _shareW;
+
+        /// <summary>A crowded line drops the Combat Power, then the share, before the name is cut (WkCard.Crowd).</summary>
+        void Crowd() => WkCard.Crowd(_row, _root.ActualWidth, _cp, _cpWanted, on => { _share.Visibility = on ? Visibility.Visible : Visibility.Collapsed; _row.ColumnDefinitions[7].Width = on ? _shareW : new GridLength(0); }, _detail);
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -877,7 +863,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS"); _topText.Foreground = Wk.S(tc);
             _top.BorderBrush = Wk.S(tc); _top.Background = Wk.S(tc, .14);
             Wk.Detail(_detail, m, c, _critWord);
-            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Bahn, 15, FontWeights.Bold, Wk.Bahn, 11, FontWeights.SemiBold); }
+            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Bahn, 15, FontWeights.Bold, Wk.Bahn, 11, FontWeights.SemiBold); _shareW = _row.ColumnDefinitions[7].Width; }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             _figure.Foreground = m.Rank == 1 && !m.CpOnly ? YelB : WhiteB;
             // the bar: the class's neon round a glass tinted in it (deeper at its start), its glow a wider faint ring; against the
