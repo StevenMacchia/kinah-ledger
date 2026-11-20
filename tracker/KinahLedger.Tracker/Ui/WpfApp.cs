@@ -1159,6 +1159,17 @@ public static partial class WpfApp
             tw.OpenTimerGroupForTest("Verteron"); DoEvents();   // unwatched, Gartua went into its map's folded list
             tw.ClickTimerBellForTest(gartua); DoEvents();
             Check(off && tw.TimerPrefsForTest.Watched(gartua), $"...a bell's click stops watching Gartua ({off}); it moves into Verteron's list, where its bell watches it again");
+            // the second's tick (1.0.28): an unchanged page keeps its rows and only its countdowns' text moves
+            {
+                var t0 = DateTime.UtcNow;
+                tw.TickTimersPageForTest(t0); DoEvents();
+                int draws = tw.TimersPageDrawsForTest;
+                string pageText0 = tw.TimersPageTextForTest();
+                for (int k = 1; k <= 3; k++) { tw.TickTimersPageForTest(t0.AddSeconds(k)); DoEvents(); }
+                string pageText1 = tw.TimersPageTextForTest();
+                int redrawn = tw.TimersPageDrawsForTest - draws;
+                Check(redrawn == 0 && pageText0 != pageText1, $"...the page's tick sets the countdowns in place: {redrawn} redraws in 3 seconds (0 wanted), the text moved ({pageText0 != pageText1})");
+            }
             tw.TimersSampleForShot("off");
             tw.ShowPartForTest("Farming"); DoEvents();
             tw.TimerPrefsForTest.Separate = true;   // the menu lists Timers only while it is a strip of its own
