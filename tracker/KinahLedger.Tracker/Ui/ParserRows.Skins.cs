@@ -26,6 +26,10 @@ public sealed partial class ParserRows
     /// <summary>The rows' look: Classic (every fight look's rows) or one of the Parser panel's own three.</summary>
     public enum Skin { Classic, Forge, Podium, Reactor }
     readonly Skin _skin;
+    /// <summary>Whether the rows rank by damage now (Podium's medal ranks only then; before a hit they rank by Combat Power).</summary>
+    bool _medals;
+    /// <summary>Podium's top three: the rank in gold, silver and bronze (the podium the look is named for).</summary>
+    static readonly Color Medal1 = Color.FromRgb(0xFF, 0xD3, 0x5C), Medal2 = Color.FromRgb(0xD6, 0xDD, 0xEA), Medal3 = Color.FromRgb(0xE3, 0x9B, 0x62);
     public Skin RowSkin => _skin;
 
     /// <summary>A row's pitch (its height and the space under it), and its height.</summary>
@@ -135,6 +139,7 @@ public sealed partial class ParserRows
         double dpsCol = Math.Max(DpsCol, Widest(dpsSize, FontWeights.Bold, "888.8K", "8.88M") + 4);
         double shareCol = Math.Max(reactor ? 30 : 38, Widest(reactor ? 8.5 : 10.5, FontWeights.SemiBold, "88.8%", L.T("CP")) + 6);
 
+        Action? rankInk = null;
         Grid cols, inner;
         Border track, fill;
         FrameworkElement nameHostChild;
@@ -195,11 +200,25 @@ public sealed partial class ParserRows
             // the leader's rank in gold (the top step), as yours
             chipText.FontSize = 10.5; chipText.Foreground = PK.C(f.You || hero ? PK.Gold : Ink, f.You || hero ? 1 : 0.5); chipText.HorizontalAlignment = HorizontalAlignment.Left;
             chip.Width = 13; chip.Height = 16;
+            // the top three's ranks larger, in gold, silver and bronze, the leader's lit (their colour follows the number as it flips)
+            int inked = -1;
+            void Ink3()
+            {
+                int n = _medals && int.TryParse(chipText.Text, out var k) && k is >= 1 and <= 3 ? k : 0;
+                if (n == inked) return;
+                inked = n;
+                chipText.FontSize = n > 0 ? 12.5 : 10.5;
+                chipText.FontWeight = n == 1 ? FontWeights.ExtraBold : FontWeights.Bold;
+                chipText.Foreground = n switch { 1 => PK.C(Medal1), 2 => PK.C(Medal2), 3 => PK.C(Medal3), _ => PK.C(f.You || hero ? PK.Gold : Ink, f.You || hero ? 1 : 0.5) };
+                chipText.Effect = n == 1 ? new DropShadowEffect { Color = PK.Gold, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.75 } : n > 0 ? Lift(2, 0.8) : null;
+            }
+            rankInk = Ink3;
             cols.Children.Add(chip);
             var icon = ClassArt.Icon(f.Class, hero ? 18 : 17, f.Name); icon.Margin = new Thickness(0, 0, 6, 0);
             cols.Children.Add(PK.Col(icon, 1));
             // Combat Power quiet after the name (it gives way first when the line is short: FitName)
             cpPair.Margin = new Thickness(6, 1, 0, 0);
+            cpPair.SetBinding(VisibilityProperty, new Binding(nameof(Visibility)) { Source = cp });   // gone with it, its margin too
             nm.Children.Add(cpPair);
             healPill.Margin = new Thickness(7, 1, 0, 0);
             if (you != null) nm.Children.Add(you);
@@ -290,7 +309,7 @@ public sealed partial class ParserRows
         root.Children.Add(frame);
         if (f.You) Panel.SetZIndex(root, 2);
         var r = new RowEl { Root = root, Cols = cols, Chip = chip, ChipText = chipText, Name = name, Dps = dps, Share = share, Damage = damage, Crit = critT, Back = backT, Spark = sparkG, BarFill = fill, Track = track, Edge = edge, Tick = tick, Pb = pb, Frame = frame, You = f.You, Cls = f.Class, NameLine = nm, Plates = plates, NameHost = nameHost,
-            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, UnderTrack = underTrack, Cp = cp, Heal = heal, HealPill = healPill, HealCross = cross, Hero = hero, HotEdge = hot };
+            Odo = odo, Lift = lift, Rise = rise, Ghost = ghost, Heat = heat, Under = under, UnderTrack = underTrack, Cp = cp, Heal = heal, HealPill = healPill, HealCross = cross, Hero = hero, HotEdge = hot, RankInk = rankInk };
         r.ChipOwn = chip.Effect as DropShadowEffect; r.ChipBlur0 = r.ChipOwn?.BlurRadius ?? 0; r.ChipOpacity0 = r.ChipOwn?.Opacity ?? 0;
         r.FrameGlow = frame.Effect as DropShadowEffect; r.FrameBlur0 = r.FrameGlow?.BlurRadius ?? 0; r.FrameOpacity0 = r.FrameGlow?.Opacity ?? 0;
         var card = new ToolTip { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HasDropShadow = false, Placement = System.Windows.Controls.Primitives.PlacementMode.Right, HorizontalOffset = 6 };
