@@ -22,6 +22,12 @@ namespace KinahLedger.Ocr;
 /// every frame the game drew was copied as it came: a whole 4K frame, about 20 ms and 33 MB each, up to ~45 times a second,
 /// which was most of the tracker's CPU in a fight (2026-11-18: Steven's "super laggy" meter, 0.7 of a core on it alone)
 /// while the reader used one frame in thirty.
+///
+/// Since 1.0.31 a read never brings the whole frame into memory: the graphics card copies just the rectangle asked for
+/// into a small texture of the tracker's own, and only that comes back (<see cref="ReadOnCard"/>). The whole-frame copy
+/// held two 44 MB pictures at 5120x2160 (ours and the driver's own copy behind CreateCopyFromSurfaceAsync) and made
+/// another 44 MB of garbage each time (Steven 2026-11-20: "700 MB of RAM"). It stays as the fallback if the card's way
+/// fails.
 /// </summary>
 public static class WindowCapture
 {
@@ -59,6 +65,8 @@ public static class WindowCapture
     static long _copiedAt;
     static DateTime _lastAt;
     static bool _broken;
+    /// <summary>Set when cropping on the graphics card failed once: reads copy the whole frame from then on, as before 1.0.31.</summary>
+    static bool _cardBroken;
 
     /// <summary>
     /// A copy this young serves the next read too: a pass's crops come one after another (the chat, the loot list, the
@@ -67,8 +75,11 @@ public static class WindowCapture
     /// </summary>
     const double ReuseMs = 100;
 
-    /// <summary>Frames copied into memory so far (for measuring: copy-load).</summary>
+    /// <summary>Whole frames copied into memory so far (for measuring: copy-load). Zero while the card crops.</summary>
     public static long Copies { get; private set; }
+    /// <summary>Reads the graphics card cropped, and the bytes they brought back (copy-load, accuracy-test).</summary>
+    public static long CardReads { get; private set; }
+    public static long CardBytes { get; private set; }
 
     /// <summary>
     /// The hook for reading several frames per line (multi-frame voting): counts every frame the game window delivers.
@@ -119,6 +130,7 @@ public static class WindowCapture
         _session = null; _pool = null; _hwnd = IntPtr.Zero;
         DropFrameLocked();
         _last?.Dispose(); _last = null; _lastNo = -1;
+        CropStage.Release(); RowStage.Release();
     }
 
     static void DropFrameLocked()
@@ -182,13 +194,50 @@ public static class WindowCapture
     {
         lock (Lock)
         {
-            if (NewestLocked() is not { } last) return null;
-            r.Intersect(new Rectangle(0, 0, last.PixelWidth, last.PixelHeight));
-            return r.Width > 0 && r.Height > 0 ? Crop(last, r) : null;
+            if (FrameSizeLocked() is not { } size) return null;
+            r.Intersect(new Rectangle(Point.Empty, size));
+            return r.Width > 0 && r.Height > 0 ? CropLocked(r) : null;
         }
     }
+    internal static Bitmap? ThumbForTest(Rectangle r, int w, int h) { lock (Lock) return ThumbLocked(r, w, h); }
     internal static Bitmap CropOfForTest(SoftwareBitmap src, Rectangle r) => Crop(src, r);
-    internal static void ResetForTest() { lock (Lock) { DropFrameLocked(); _last?.Dispose(); _last = null; _lastNo = -1; _hwnd = IntPtr.Zero; Copies = 0; } }
+    /// <summary>accuracy-test: true makes reads take the whole-frame way, as when the card's way fails.</summary>
+    internal static bool NoCardForTest { get; set; }
+    internal static void ResetForTest() { lock (Lock) { DropFrameLocked(); _last?.Dispose(); _last = null; _lastNo = -1; _hwnd = IntPtr.Zero; Copies = 0; CardReads = 0; CardBytes = 0; CropStage.Release(); RowStage.Release(); } }
+
+    /// <summary>A picture as a frame on a graphics card of the test's own (accuracy-test); null when there is no Direct3D device.</summary>
+    internal static unsafe IDirect3DSurface? SurfaceForTest(Bitmap pixels)
+    {
+        if (D3D11CreateDevice(IntPtr.Zero, 1, IntPtr.Zero, 0x20, IntPtr.Zero, 0, 7, out var dev, out _, out var ctx) < 0) return null;
+        var data = pixels.LockBits(new Rectangle(0, 0, pixels.Width, pixels.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            Protect(dev);
+            var desc = new TexDesc { Width = (uint)pixels.Width, Height = (uint)pixels.Height, MipLevels = 1, ArraySize = 1, Format = 87, SampleCount = 1, BindFlags = 0x8 /* shader resource */ };
+            // D3D11_SUBRESOURCE_DATA: the pixels, the row pitch, the slice pitch
+            var init = stackalloc IntPtr[2];
+            init[0] = data.Scan0; *(uint*)(init + 1) = (uint)data.Stride;
+            IntPtr tex;
+            if (((delegate* unmanaged[Stdcall]<IntPtr, TexDesc*, IntPtr*, IntPtr*, int>)Slot(dev, 5))(dev, &desc, init, &tex) < 0) return null;
+            try
+            {
+                var sid = new Guid("cafcb56c-6ac3-4889-bf47-9e23bbd260ec");   // IDXGISurface
+                Marshal.ThrowExceptionForHR(Marshal.QueryInterface(tex, ref sid, out var dxgi));
+                try
+                {
+                    Marshal.ThrowExceptionForHR(CreateDirect3D11SurfaceFromDXGISurface(dxgi, out var insp));
+                    var surface = MarshalInterface<IDirect3DSurface>.FromAbi(insp);
+                    Marshal.Release(insp);
+                    return surface;
+                }
+                finally { Marshal.Release(dxgi); }
+            }
+            finally { Marshal.Release(tex); }
+        }
+        finally { pixels.UnlockBits(data); Marshal.Release(dev); if (ctx != IntPtr.Zero) Marshal.Release(ctx); }
+    }
+    [DllImport("d3d11.dll", ExactSpelling = true)]
+    static extern int CreateDirect3D11SurfaceFromDXGISurface(IntPtr dxgiSurface, out IntPtr graphicsSurface);
     sealed class NoOwner : IDisposable { public static readonly NoOwner Instance = new(); public void Dispose() { } }
 
     /// <summary>The screen rectangle cut from the newest frame of the game window; null when there is none to use.</summary>
@@ -196,13 +245,10 @@ public static class WindowCapture
     {
         lock (Lock)
         {
-            if (_hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3 || NewestLocked() is not { } last) return null;
+            if (_hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3 || (_frame == null && _last == null)) return null;
             // the frame starts at the window's visible bounds (DWM's extended frame), not at its outer rectangle
             if (DwmGetWindowAttribute(_hwnd, 9, out var wr, Marshal.SizeOf<RECT>()) != 0 && !GetWindowRect(_hwnd, out wr)) return null;
-            var local = new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height);
-            var bounds = new Rectangle(0, 0, last.PixelWidth, last.PixelHeight);
-            if (!bounds.Contains(local)) return null;
-            return Crop(last, local);
+            return CropLocked(new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height));
         }
     }
 
@@ -211,29 +257,255 @@ public static class WindowCapture
     /// newest frame, four samples per pixel, never copied at full size (FrameThumb, the scene classifier). Null when there
     /// is no frame to use.
     /// </summary>
-    public static unsafe Bitmap? TryThumb(Rectangle screen, int w, int h)
+    public static Bitmap? TryThumb(Rectangle screen, int w, int h)
     {
         lock (Lock)
         {
-            if (_hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3 || NewestLocked() is not { } last) return null;
+            if (_hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3 || (_frame == null && _last == null)) return null;
             if (DwmGetWindowAttribute(_hwnd, 9, out var wr, Marshal.SizeOf<RECT>()) != 0 && !GetWindowRect(_hwnd, out wr)) return null;
-            var local = new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height);
-            local.Intersect(new Rectangle(0, 0, last.PixelWidth, last.PixelHeight));
-            if (local.Width < w || local.Height < h) return null;
-            var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
-            var data = dst.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-            try
-            {
-                using var buf = last.LockBuffer(BitmapBufferAccessMode.Read);
-                using var reference = buf.CreateReference();
-                var plane = buf.GetPlaneDescription(0);
-                reference.As<IMemoryBufferByteAccess>().GetBuffer(out byte* p, out _);
-                FrameThumb.Sample(p + plane.StartIndex, plane.Stride, local, (byte*)data.Scan0, data.Stride, w, h);
-            }
-            catch (Exception) { dst.UnlockBits(data); dst.Dispose(); return null; }
-            dst.UnlockBits(data);
-            return dst;
+            return ThumbLocked(new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height), w, h);
         }
+    }
+
+    static bool UseCard => !_cardBroken && !NoCardForTest;
+
+    /// <summary>The newest frame's size (under the lock), from the card or the copy in memory; null with no frame.</summary>
+    static Size? FrameSizeLocked()
+    {
+        if (UseCard && _frame != null)
+        {
+            var tex = TextureOf(_frame, out var d);
+            if (tex != IntPtr.Zero) { Marshal.Release(tex); return new Size((int)d.Width, (int)d.Height); }
+        }
+        return NewestLocked() is { } last ? new Size(last.PixelWidth, last.PixelHeight) : null;
+    }
+
+    /// <summary>Frame pixels <paramref name="local"/> of the newest frame (under the lock): null when outside it or there is none.</summary>
+    static unsafe Bitmap? CropLocked(Rectangle local)
+    {
+        if (UseCard && _frame != null)
+        {
+            var tex = TextureOf(_frame, out var d);
+            if (tex != IntPtr.Zero)
+            {
+                try
+                {
+                    if (!new Rectangle(0, 0, (int)d.Width, (int)d.Height).Contains(local)) return null;
+                    var dst = new Bitmap(local.Width, local.Height, PixelFormat.Format32bppArgb);
+                    var data = dst.LockBits(new Rectangle(0, 0, local.Width, local.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                    bool ok;
+                    try
+                    {
+                        int rows = local.Height, rowBytes = local.Width * 4, stride = data.Stride; byte* to = (byte*)data.Scan0;
+                        ok = ReadOnCard(tex, d, CropStage, local, null, (p, pitch) =>
+                        {
+                            for (int y = 0; y < rows; y++) Buffer.MemoryCopy(p + (long)y * pitch, to + (long)y * stride, stride, rowBytes);
+                        });
+                    }
+                    finally { dst.UnlockBits(data); }
+                    if (ok) return dst;
+                    dst.Dispose();
+                }
+                finally { Marshal.Release(tex); }
+            }
+            CardFailed();
+        }
+        if (NewestLocked() is not { } last || !new Rectangle(0, 0, last.PixelWidth, last.PixelHeight).Contains(local)) return null;
+        return Crop(last, local);
+    }
+
+    /// <summary>The thumbnail of frame pixels <paramref name="local"/> (under the lock); null when too small or there is no frame.</summary>
+    static unsafe Bitmap? ThumbLocked(Rectangle local, int w, int h)
+    {
+        if (UseCard && _frame != null)
+        {
+            var tex = TextureOf(_frame, out var d);
+            if (tex != IntPtr.Zero)
+            {
+                try
+                {
+                    local.Intersect(new Rectangle(0, 0, (int)d.Width, (int)d.Height));
+                    if (local.Width < w || local.Height < h) return null;
+                    // only the two rows each thumbnail row samples come back: 2h rows of the window's width, not the whole frame
+                    var rows = new int[2 * h];
+                    for (int y = 0; y < h; y++) { var (y0, y1) = FrameThumb.RowsOf(y, local.Height, h); rows[2 * y] = local.Y + y0; rows[2 * y + 1] = local.Y + y1; }
+                    var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+                    var data = dst.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                    bool ok;
+                    try
+                    {
+                        byte* to = (byte*)data.Scan0; int stride = data.Stride, width = local.Width;
+                        ok = ReadOnCard(tex, d, RowStage, local, rows, (p, pitch) =>
+                        {
+                            for (int y = 0; y < h; y++) FrameThumb.SampleRow(p + (long)(2 * y) * pitch, p + (long)(2 * y + 1) * pitch, 0, width, to + (long)y * stride, w);
+                        });
+                    }
+                    finally { dst.UnlockBits(data); }
+                    if (ok) return dst;
+                    dst.Dispose();
+                }
+                finally { Marshal.Release(tex); }
+            }
+            CardFailed();
+        }
+        if (NewestLocked() is not { } last) return null;
+        local.Intersect(new Rectangle(0, 0, last.PixelWidth, last.PixelHeight));
+        if (local.Width < w || local.Height < h) return null;
+        var full = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+        var fd = full.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            using var buf = last.LockBuffer(BitmapBufferAccessMode.Read);
+            using var reference = buf.CreateReference();
+            var plane = buf.GetPlaneDescription(0);
+            reference.As<IMemoryBufferByteAccess>().GetBuffer(out byte* p, out _);
+            FrameThumb.Sample(p + plane.StartIndex, plane.Stride, local, (byte*)fd.Scan0, fd.Stride, w, h);
+        }
+        catch (Exception) { full.UnlockBits(fd); full.Dispose(); return null; }
+        full.UnlockBits(fd);
+        return full;
+    }
+
+    static void CardFailed()
+    {
+        if (_cardBroken || NoCardForTest) return;
+        _cardBroken = true;
+        CrashLog.Note("window capture: the graphics card can't crop, copying whole frames instead");
+    }
+
+    // ---- cropping on the graphics card (1.0.31): Direct3D 11 through the interfaces' vtables, no wrapper library ----
+
+    [StructLayout(LayoutKind.Sequential)] struct TexDesc { public uint Width, Height, MipLevels, ArraySize, Format, SampleCount, SampleQuality, Usage, BindFlags, CpuAccess, Misc; }
+    [StructLayout(LayoutKind.Sequential)] struct Box { public uint Left, Top, Front, Right, Bottom, Back; }
+    [StructLayout(LayoutKind.Sequential)] struct MappedRes { public IntPtr Data; public uint RowPitch, DepthPitch; }
+    unsafe delegate void RowsReader(byte* data, int pitch);
+
+    static readonly Guid DxgiAccessIid = new("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1");   // IDirect3DDxgiInterfaceAccess
+    static readonly Guid Texture2DIid = new("6F15AAF2-D208-4E89-9AB4-489535D34F9C");    // ID3D11Texture2D
+    static readonly Guid MultithreadIid = new("9B7E4E00-342C-4106-A19F-4F2704F689F0");  // ID3D10Multithread
+
+    static unsafe IntPtr Slot(IntPtr o, int i) => (*(IntPtr**)o)[i];
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateWaitableTimerExW(IntPtr sa, string? name, uint flags, uint access);
+    [DllImport("kernel32.dll")] static extern bool SetWaitableTimer(IntPtr timer, ref long due, int period, IntPtr completion, IntPtr arg, bool resume);
+    [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
+    [ThreadStatic] static IntPtr _napTimer;
+
+    /// <summary>
+    /// Half a millisecond's sleep on a high-resolution timer (Windows 10 1803+), for waiting on the card: Thread.Sleep(1)
+    /// sleeps a whole timer tick (up to 15.6 ms: 32 ms a crop) and a blocking map spins the driver's thread (0.11 of a core
+    /// at 20 crops a second). copy-load at 5120x2160 with this: ~10 ms a crop, 0.02 of a core. Falls back to Sleep(1)
+    /// where there is no such timer.
+    /// </summary>
+    static void Nap()
+    {
+        if (_napTimer == IntPtr.Zero) _napTimer = CreateWaitableTimerExW(IntPtr.Zero, null, 0x2 /* HIGH_RESOLUTION */, 0x1F0003);
+        long due = -5000;   // 0.5 ms, relative, in 100 ns
+        if (_napTimer == IntPtr.Zero || !SetWaitableTimer(_napTimer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false)) { Thread.Sleep(1); return; }
+        WaitForSingleObject(_napTimer, 50);
+    }
+
+    /// <summary>
+    /// A staging texture of the tracker's own that a crop is copied into and read back from: kept between reads (made
+    /// again only when a bigger crop or another device comes), released when the capture stops. One for crops, one for the
+    /// thumbnail's rows, so neither grows to the other's shape.
+    /// </summary>
+    sealed class Stage
+    {
+        public IntPtr Tex, Dev; public int W, H; public uint Format;
+        public void Release() { if (Tex != IntPtr.Zero) Marshal.Release(Tex); Tex = IntPtr.Zero; Dev = IntPtr.Zero; W = H = 0; }
+    }
+    static readonly Stage CropStage = new(), RowStage = new();
+
+    /// <summary>The Direct3D texture behind a capture surface (a reference the caller releases), and its description; zero when there is none.</summary>
+    static unsafe IntPtr TextureOf(IDirect3DSurface surface, out TexDesc desc)
+    {
+        desc = default;
+        if (surface is not IWinRTObject w) return IntPtr.Zero;
+        var iid = DxgiAccessIid;
+        if (Marshal.QueryInterface(w.NativeObject.ThisPtr, ref iid, out var access) != 0) return IntPtr.Zero;
+        try
+        {
+            var tiid = Texture2DIid; IntPtr tex;
+            if (((delegate* unmanaged[Stdcall]<IntPtr, Guid*, IntPtr*, int>)Slot(access, 3))(access, &tiid, &tex) < 0 || tex == IntPtr.Zero) return IntPtr.Zero;
+            TexDesc d;
+            ((delegate* unmanaged[Stdcall]<IntPtr, TexDesc*, void>)Slot(tex, 10))(tex, &d);   // ID3D11Texture2D::GetDesc
+            desc = d;
+            return tex;
+        }
+        catch (Exception) { return IntPtr.Zero; }
+        finally { Marshal.Release(access); }
+    }
+
+    /// <summary>
+    /// Copies <paramref name="area"/> of the frame texture (or, with <paramref name="rows"/>, just those rows of it, one
+    /// under another) into <paramref name="stage"/> on the card, maps it and hands the rows to <paramref name="read"/>.
+    /// False when the card refused any step (the caller copies the whole frame instead).
+    /// </summary>
+    static unsafe bool ReadOnCard(IntPtr tex, in TexDesc d, Stage stage, Rectangle area, int[]? rows, RowsReader read)
+    {
+        int w = area.Width, h = rows?.Length ?? area.Height;
+        IntPtr dev = IntPtr.Zero, ctx = IntPtr.Zero;
+        try
+        {
+            ((delegate* unmanaged[Stdcall]<IntPtr, IntPtr*, void>)Slot(tex, 3))(tex, &dev);     // ID3D11DeviceChild::GetDevice
+            if (dev == IntPtr.Zero) return false;
+            ((delegate* unmanaged[Stdcall]<IntPtr, IntPtr*, void>)Slot(dev, 40))(dev, &ctx);    // ID3D11Device::GetImmediateContext
+            if (ctx == IntPtr.Zero || !EnsureStage(stage, dev, d.Format, w, h)) return false;
+            var copy = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, uint, uint, uint, uint, IntPtr, uint, Box*, void>)Slot(ctx, 46);   // CopySubresourceRegion
+            if (rows == null)
+            {
+                var b = new Box { Left = (uint)area.X, Top = (uint)area.Y, Right = (uint)area.Right, Bottom = (uint)area.Bottom, Back = 1 };
+                copy(ctx, stage.Tex, 0, 0, 0, 0, tex, 0, &b);
+            }
+            else
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    var b = new Box { Left = (uint)area.X, Top = (uint)rows[i], Right = (uint)area.Right, Bottom = (uint)rows[i] + 1, Back = 1 };
+                    copy(ctx, stage.Tex, 0, 0, (uint)i, 0, tex, 0, &b);
+                }
+            // sent now, then asked for without blocking until the card has done it: a blocking map spins the driver's thread
+            ((delegate* unmanaged[Stdcall]<IntPtr, void>)Slot(ctx, 111))(ctx);   // Flush
+            var map = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, uint, int, uint, MappedRes*, int>)Slot(ctx, 14);
+            MappedRes m;
+            int hr;
+            var waited = System.Diagnostics.Stopwatch.StartNew();
+            while ((hr = map(ctx, stage.Tex, 0, 1 /* READ */, 0x100000 /* DO_NOT_WAIT */, &m)) == unchecked((int)0x887A000A) /* still drawing */ && waited.ElapsedMilliseconds < 500)
+                Nap();
+            if (hr < 0 || m.Data == IntPtr.Zero) return false;
+            try { read((byte*)m.Data, (int)m.RowPitch); }
+            finally { ((delegate* unmanaged[Stdcall]<IntPtr, IntPtr, uint, void>)Slot(ctx, 15))(ctx, stage.Tex, 0); }   // Unmap
+            CardReads++; CardBytes += (long)w * h * 4;
+            return true;
+        }
+        catch (Exception) { return false; }
+        finally { if (ctx != IntPtr.Zero) Marshal.Release(ctx); if (dev != IntPtr.Zero) Marshal.Release(dev); }
+    }
+
+    /// <summary>The stage at least w by h on this device in this format, made (bigger) when it isn't.</summary>
+    static unsafe bool EnsureStage(Stage s, IntPtr dev, uint format, int w, int h)
+    {
+        if (s.Tex != IntPtr.Zero && s.Dev == dev && s.Format == format && s.W >= w && s.H >= h) return true;
+        bool same = s.Tex != IntPtr.Zero && s.Dev == dev && s.Format == format;
+        int nw = same ? Math.Max(w, s.W) : w, nh = same ? Math.Max(h, s.H) : h;
+        s.Release();
+        var desc = new TexDesc { Width = (uint)nw, Height = (uint)nh, MipLevels = 1, ArraySize = 1, Format = format, SampleCount = 1, Usage = 3 /* STAGING */, CpuAccess = 0x20000 /* READ */ };
+        IntPtr tex;
+        if (((delegate* unmanaged[Stdcall]<IntPtr, TexDesc*, IntPtr, IntPtr*, int>)Slot(dev, 5))(dev, &desc, IntPtr.Zero, &tex) < 0 || tex == IntPtr.Zero) return false;   // CreateTexture2D
+        s.Tex = tex; s.Dev = dev; s.W = nw; s.H = nh; s.Format = format;
+        return true;
+    }
+
+    /// <summary>
+    /// Lets the capture's own threads and the reader share the device's one context (ID3D10Multithread): the reader's
+    /// copies run on it while Windows delivers frames on its threads.
+    /// </summary>
+    static unsafe void Protect(IntPtr d3d)
+    {
+        var iid = MultithreadIid;
+        if (Marshal.QueryInterface(d3d, ref iid, out var mt) != 0) return;
+        try { ((delegate* unmanaged[Stdcall]<IntPtr, int, int>)Slot(mt, 5))(mt, 1); }   // SetMultithreadProtected(TRUE)
+        finally { Marshal.Release(mt); }
     }
 
     static unsafe Bitmap Crop(SoftwareBitmap src, Rectangle r)
@@ -289,6 +561,7 @@ public static class WindowCapture
         if (hr < 0) throw new COMException("no Direct3D device", hr);
         try
         {
+            Protect(d3d);
             var iid = DxgiDeviceIid;
             Marshal.ThrowExceptionForHR(Marshal.QueryInterface(d3d, ref iid, out var dxgi));
             try

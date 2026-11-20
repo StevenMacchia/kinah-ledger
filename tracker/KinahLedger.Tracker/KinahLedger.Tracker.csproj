@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>1.0.30</Version>
+    <Version>1.0.31</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -37,6 +37,12 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- the heap compacts its large objects when over half of their space is free gaps (2026-11-20: 80 MB of large objects,
+         58% gaps, in Steven's 1.0.30); checked by accuracy-test -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- the two UI frameworks share many type names; each file imports what it needs instead -->

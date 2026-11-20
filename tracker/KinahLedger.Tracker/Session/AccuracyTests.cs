@@ -58,6 +58,7 @@ public static class AccuracyTests
         var payload = JsonSerializer.Serialize(AccuracyPayload.From(new AccuracyReport(new() { ["pickups"] = 3 }, new(), null), "abc"));
         Check("the payload: version, install, counters, nothing else", Regex(payload, "\"(\\w+)\":"), "app,install,health,pickups");
         OcrMemoryTests(Check);
+        CaptureCardTests(Check);
         MeterTests(Check);
 
         Console.WriteLine("The parser and the dictionary report what they couldn't read exactly:");
@@ -718,6 +719,61 @@ public static class AccuracyTests
         long loh = info.GenerationInfo[3].SizeAfterBytes;
         Check("40 reads at 3x: large objects left after a collection", loh < 16_000_000 ? "under 16 MB" : $"{loh / 1_000_000} MB", "under 16 MB");
         Check("40 reads at 3x: pinned objects left", info.PinnedObjectsCount < 10 ? "under 10" : $"{info.PinnedObjectsCount}", "under 10");
+        Check("the heap compacts gappy large objects (System.GC.ConserveMemory in the csproj)", $"{GC.GetConfigurationVariables().GetValueOrDefault("GCConserveMem")}", "5");
+    }
+
+    /// <summary>
+    /// The game window's frames are cropped on the graphics card (1.0.31): a read brings back only its rectangle, never
+    /// the whole frame (44 MB at 5120x2160, two of them held at once before), with the same pixels the whole-frame way gave.
+    /// </summary>
+    static unsafe void CaptureCardTests(Action<string, string, string> Check)
+    {
+        Console.WriteLine("Reading the game window copies only what is read:");
+        const int W = 2560, H = 1080;
+        using var frame = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var fd = frame.LockBits(new System.Drawing.Rectangle(0, 0, W, H), System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        for (int y = 0; y < H; y++)
+        {
+            uint* row = (uint*)((byte*)fd.Scan0 + (long)y * fd.Stride);
+            for (int x = 0; x < W; x++) row[x] = 0xFF000000u | (uint)((x * 7 + y * 3) & 255) << 16 | (uint)((x ^ y) & 255) << 8 | (uint)((x * y) >> 4 & 255);
+        }
+        frame.UnlockBits(fd);
+        var surface = Ocr.WindowCapture.SurfaceForTest(frame);
+        if (surface == null) { Console.WriteLine("  (no Direct3D device on this PC: skipped)"); return; }
+        string Same(System.Drawing.Bitmap? got, System.Drawing.Bitmap want)
+        {
+            if (got == null) return "nothing";
+            if (got.Size != want.Size) return $"{got.Width}x{got.Height}";
+            var a = got.LockBits(new System.Drawing.Rectangle(System.Drawing.Point.Empty, got.Size), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            var b = want.LockBits(new System.Drawing.Rectangle(System.Drawing.Point.Empty, want.Size), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            int bad = 0;
+            for (int y = 0; y < got.Height; y++)
+                if (!new ReadOnlySpan<byte>((byte*)a.Scan0 + (long)y * a.Stride, got.Width * 4).SequenceEqual(new ReadOnlySpan<byte>((byte*)b.Scan0 + (long)y * b.Stride, got.Width * 4))) bad++;
+            got.UnlockBits(a); want.UnlockBits(b);
+            return bad == 0 ? "same pixels" : $"{bad} rows differ";
+        }
+        var r = new System.Drawing.Rectangle(693, 514, 864, 479);
+        try
+        {
+            Ocr.WindowCapture.ResetForTest();
+            Ocr.WindowCapture.OfferForTest(surface);
+            using var want = frame.Clone(r, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var got = Ocr.WindowCapture.CropForTest(r)) Check("a chat-sized crop from the card", Same(got, want), "same pixels");
+            using (var got = Ocr.WindowCapture.CropForTest(new System.Drawing.Rectangle(2400, 1000, 600, 300))) Check("...a crop past the frame's edge is cut to it", got == null ? "nothing" : $"{got.Width}x{got.Height}", "160x80");
+            using var thumbWant = Ocr.FrameThumb.Shrink(frame);
+            using (var got = Ocr.WindowCapture.ThumbForTest(new System.Drawing.Rectangle(0, 0, W, H), thumbWant.Width, thumbWant.Height)) Check("the scene thumbnail from the card's rows", Same(got, thumbWant), "same pixels");
+            Check("...no whole frame came into memory", $"{Ocr.WindowCapture.Copies} whole, {Ocr.WindowCapture.CardReads} card reads", "0 whole, 3 card reads");
+            long thumbBytes = 2L * thumbWant.Height * W * 4;
+            Check("...and only the crops' bytes came back", $"{Ocr.WindowCapture.CardBytes}", $"{(long)r.Width * r.Height * 4 + 160 * 80 * 4 + thumbBytes}");
+            // the way it was, kept for a card that can't crop: the same pixels, one whole frame copied
+            Ocr.WindowCapture.ResetForTest();
+            Ocr.WindowCapture.NoCardForTest = true;
+            Ocr.WindowCapture.OfferForTest(surface);
+            using (var got = Ocr.WindowCapture.CropForTest(r)) Check("the whole-frame way gives the same crop", Same(got, want), "same pixels");
+            using (var got = Ocr.WindowCapture.ThumbForTest(new System.Drawing.Rectangle(0, 0, W, H), thumbWant.Width, thumbWant.Height)) Check("...and the same thumbnail", Same(got, thumbWant), "same pixels");
+            Check("...from one whole frame", $"{Ocr.WindowCapture.Copies} whole, {Ocr.WindowCapture.CardReads} card reads", "1 whole, 0 card reads");
+        }
+        finally { Ocr.WindowCapture.NoCardForTest = false; Ocr.WindowCapture.ResetForTest(); }
     }
 
     static void MeterTests(Action<string, string, string> Check)
