@@ -63,6 +63,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 9, Pad, 8) };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _settle = new();
+    Grid? _head;
 
     public HudModernGlass()
     {
@@ -470,6 +471,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         _fightBody.Children.Add(_timersIn);
         // the boss and the clock (the outcome as a green or red chip before it)
         var head = new Grid();
+        _head = head;
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = Tt(e.Title, 15, White, FontWeights.Bold);
         title.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -586,32 +588,51 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         Motion.Play(_fight, 420, t => { double k = Out(t); _settle.Y = 6 * (1 - k); _fight.Opacity = .2 + .8 * k; }, () => { _settle.Y = 0; _fight.Opacity = 1; });
     }
 
-    /// <summary>A fight ended: a frosted plate saying how ("Killed 12:47", "Wiped") shows over the meter for a moment.</summary>
+    /// <summary>
+    /// A fight ended: a frosted pill saying how ("Killed 12:47", "Wiped") settles over the header line for a moment, lit in
+    /// its colour, and fades. It sits on the boss and the clock (which say the same) and never over the rows.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
         var c = wipe ? RedC : GreenC;
-        var plate = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var plate = new Grid { VerticalAlignment = VerticalAlignment.Top };
         plate.Children.Add(new TacSketch((dc, s) =>
         {
-            GlassPanel(dc, s, 16, 1, -1, shadow: false);
-            dc.DrawGeometry(null, Mod.P(Mod.Br(c, .55), 1.2), Mod.Pill(new Rect(.5, .5, s.Width - 1, s.Height - 1), 16));
+            if (s.Width < 4 || s.Height < 4) return;
+            var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
+            // a deep ground first, so the header under it doesn't show through the glass, then the glass, a breath of its colour and its rim
+            dc.DrawGeometry(Mod.Br(DeepC, .92), null, Mod.Pill(r, r.Height / 2));
+            GlassPanel(dc, s, s.Height / 2, 1, -1, shadow: false);
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .16), .5), (Mod.A(c, 0), 1)), null, Mod.Pill(r, r.Height / 2));
+            dc.DrawGeometry(null, Mod.P(Mod.Br(c, .55), 1.2), Mod.Pill(r, r.Height / 2));
         }));
-        var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 9, 18, 10) };
-        words.Children.Add(Tt(OutcomeText(e), 20, wipe ? Frozen(Mod.Mix(RedC, Colors.White, .3)) : Mint, FontWeights.Bold));
-        words.Children.Add(Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, White, FontWeights.SemiBold));
+        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(Tt(OutcomeText(e), 16, wipe ? Frozen(Mod.Mix(RedC, Colors.White, .3)) : Mint, FontWeights.Bold));
+        words.Children.Add(Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, White, FontWeights.SemiBold));
         plate.Children.Add(words);
-        var dim = new Border { Background = Mod.Br(DeepC, .6), CornerRadius = new CornerRadius(Radius), Opacity = 0 };
         var sc = new ScaleTransform(1, 1);
         plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = sc;
-        _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(plate);
+        _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
+        // over the header as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
+        void Seat()
+        {
+            double y = _fightBody.Margin.Top, h = 22;
+            if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight))
+            {
+                y = hd.TranslatePoint(new Point(0, 0), _fight).Y; h = hd.ActualHeight;
+            }
+            plate.Margin = new Thickness(Pad - 4, Math.Max(2, y - 4), Pad - 4, 0);
+            plate.Height = h + 8;
+        }
+        Seat();
         Motion.Play(_fightFx, 2400, t =>
         {
-            double i = Out(Seg(t, 0, .15)), o = Seg(t, .82, 1);
-            dim.Opacity = i * (1 - o);
+            Seat();
+            double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, 1);
             plate.Opacity = i * (1 - o);
-            sc.ScaleX = sc.ScaleY = .94 + .06 * i;
+            sc.ScaleX = sc.ScaleY = .96 + .04 * i;
         }, () => _fightFx.Children.Clear());
     }
 }

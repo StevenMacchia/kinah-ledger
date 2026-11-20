@@ -65,7 +65,7 @@ sealed partial class HudModernMono : ModernLook
     readonly Grid _fightGrid = new();
     readonly StackPanel _fightBody = new() { Margin = new Thickness(12, 9, 12, 8) };
     readonly Grid _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
-    readonly RectangleGeometry _wipe = new(new Rect(0, 0, 4000, 4000));
+    Grid? _head;
 
     public HudModernMono() : base(bare: false)
     {
@@ -383,6 +383,7 @@ sealed partial class HudModernMono : ModernLook
 
         // Ferocious Horn Nuakum                [KILLED] 12:47
         var head = new Grid();
+        _head = head;
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = Tt(e.Title, 15, Paper, FontWeights.SemiBold); title.TextTrimming = TextTrimming.CharacterEllipsis;
         head.Children.Add(title);
@@ -502,18 +503,28 @@ sealed partial class HudModernMono : ModernLook
         });
     }
 
-    /// <summary>A fight started: its panel wipes in from the top, its body after.</summary>
+    /// <summary>
+    /// A fight started: its panel wipes in from the top, its body after. The wipe is a mask with a short soft edge running
+    /// down (not a clip), so nothing in the panel is ever cut, only not yet lit.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
+        var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        var lit = new GradientStop(Colors.Black, 0); var dark = new GradientStop(Colors.Transparent, 0);
+        mask.GradientStops.Add(lit); mask.GradientStops.Add(dark);
         Motion.Play(_fight, 520, t =>
         {
-            double h = _fight.ActualHeight > 0 ? _fight.ActualHeight : 400;
-            _wipe.Rect = new Rect(0, 0, 4000, Math.Max(1, h * Out(Seg(t, 0, .8))));
-            _fight.Clip = _wipe;
-        }, () => _fight.ClearValue(UIElement.ClipProperty));
+            // the lit part's foot, from the top to past the bottom, with a soft edge of about a tenth of the panel under it
+            double k = Out(Seg(t, 0, .8)) * 1.1;
+            lit.Offset = Math.Max(0, k - .1); dark.Offset = Math.Max(.001, k);
+            _fight.OpacityMask = mask;
+        }, () => _fight.ClearValue(UIElement.OpacityMaskProperty));
     }
 
-    /// <summary>A fight ended: a flat band across the rows says KILLED (or WIPED in the accent) and the time, then goes.</summary>
+    /// <summary>
+    /// A fight ended: a flat band over the header line says KILLED (or WIPED in the accent) and the time, then goes. It sits
+    /// on the header (the boss and the clock, which say the same) and never over the rows, as Glass's plate does.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
@@ -521,18 +532,31 @@ sealed partial class HudModernMono : ModernLook
         var band = new Border
         {
             Background = Dark, BorderBrush = wipe ? Accent : Paper, BorderThickness = new Thickness(0, 1, 0, 1),
-            VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(0, 10, 0, 11),
+            VerticalAlignment = VerticalAlignment.Top,
         };
-        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        words.Children.Add(Tt(OutcomeText(e).ToUpperInvariant(), 20, wipe ? Accent : Paper, FontWeights.Bold));
-        var tm = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 20, Grey, FontWeights.SemiBold); tm.Margin = new Thickness(12, 0, 0, 0);
+        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(Tt(OutcomeText(e).ToUpperInvariant(), 16, wipe ? Accent : Paper, FontWeights.Bold));
+        var tm = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, Grey, FontWeights.SemiBold); tm.Margin = new Thickness(10, 0, 0, 0);
         words.Children.Add(tm);
         band.Child = words;
         var scale = new ScaleTransform(0, 1);
         band.RenderTransformOrigin = new Point(0, .5); band.RenderTransform = scale;
         _fightFx.Children.Clear(); _fightFx.Children.Add(band);
+        // over the header as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
+        void Seat()
+        {
+            double y = _fightBody.Margin.Top, h = 22;
+            if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fightGrid))
+            {
+                y = hd.TranslatePoint(new Point(0, 0), _fightGrid).Y; h = hd.ActualHeight;
+            }
+            band.Margin = new Thickness(0, Math.Max(0, y - 5), 0, 0);
+            band.Height = h + 9;
+        }
+        Seat();
         Motion.Play(_fightFx, 2200, t =>
         {
+            Seat();
             scale.ScaleX = Out(Seg(t, 0, .14));
             words.Opacity = Seg(t, .1, .18);
             band.Opacity = t < .85 ? 1 : 1 - Seg(t, .85, 1);

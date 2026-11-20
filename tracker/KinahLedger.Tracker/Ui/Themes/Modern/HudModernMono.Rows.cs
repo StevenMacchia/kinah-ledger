@@ -104,7 +104,7 @@ sealed partial class HudModernMono
     sealed class MonoRow : IThemeRow
     {
         public const double H = 27, Pitch = 31, BarH = 4;
-        const double RankW = 16, IconW = 24, ShareW = 44, DmgW = 56, CritW = 36;
+        const double RankW = 14, IconW = 22, ShareW = 38, DmgW = 56, CritW = 36;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly TacSketch _bar;
         readonly TextBlock _rank = Mod.Text("", 11, Grey, FontWeights.Medium), _name = Mod.Text("", 14, Paper, FontWeights.SemiBold),
@@ -197,8 +197,8 @@ sealed partial class HudModernMono
 
         /// <summary>
         /// The crowding rule over the row's room (Mod.Fit's order, kept so the DPS column stays one column): the CP goes first;
-        /// then the marks fold to their glyphs (★, ✚, ●; their words on hover); then the share, a healer's heals moving into the
-        /// share's place; only then is the name cut, never below ten characters. Figures are never cut.
+        /// then the marks fold to their glyphs (★, ✚, ●; their words on hover); then the air narrows; a healer's heals stay left of the
+        /// DPS, taking the share's place only as a last resort; only then is the name cut, never below ten characters. Figures are never cut.
         /// </summary>
         void Fit()
         {
@@ -216,10 +216,10 @@ sealed partial class HudModernMono
             double nw = Mod.W(_name), cpw = m.Cp.Length > 0 ? Mod.W(_cp) : 0;
             double marks = _marks.Sum(Mod.W), full = _folds.Sum(x => Mod.W(x.Full)), glyphs = _folds.Sum(x => Mod.W(x.Short));
             double nameMin = Math.Min(nw, Mod.W(Mod.Text(m.Name.Length > 10 ? m.Name[..10] + "…" : m.Name, _name.FontSize, Paper, _name.FontWeight)));
-            // (CP, folded, share): the first that fits, else the last with the name cut. The share goes only where a healer's
-            // heals take its place: anywhere else its going would move that row's DPS off the column the others line up on
-            var steps = healer ? new[] { (true, false, true), (false, false, true), (false, true, true), (false, true, false) }
-                : new[] { (true, false, true), (false, false, true), (false, true, true) };
+            // (CP, folded, share): the first that fits, else the last with the name cut. A healer's heals stay left of the DPS
+            // like every other figure on the row; only as a last resort (a wider face) do they take the share's place, the share's
+            // going anywhere else would move that row's DPS off the column the others line up on
+            var steps = new[] { (true, false, true), (false, false, true), (false, true, true) };
             (bool Cp, bool Fold, bool Share) pick = steps[^1];
             double Used((bool Cp, bool Fold, bool Share) s) => (s.Cp ? cpw : 0) + marks + (s.Fold ? glyphs : full) + (s.Share ? ShareW + healW : healer ? Math.Max(ShareW, healW) : 0);
             bool fits = false;
@@ -231,7 +231,9 @@ sealed partial class HudModernMono
                 Tight(true);
                 room = total - RankW - IconW - Mod.W(_dps) - (_expanded ? DmgW + CritW : 0) - 4;
                 marks = _marks.Sum(Mod.W); full = _folds.Sum(x => Mod.W(x.Full)); glyphs = _folds.Sum(x => Mod.W(x.Short));
-                foreach (var s in steps) if (nw + Used(s) <= room) { pick = s; break; }
+                healW = healer ? Mod.W(_heal) : 0;
+                foreach (var s in steps) if (nw + Used(s) <= room) { pick = s; fits = true; break; }
+                if (!fits && healer) pick = (false, true, false);
             }
             _cp.Visibility = pick.Cp && cpw > 0 ? Visibility.Visible : Visibility.Collapsed;
             foreach (var (f, s) in _folds) { f.Visibility = pick.Fold ? Visibility.Collapsed : Visibility.Visible; s.Visibility = pick.Fold ? Visibility.Visible : Visibility.Collapsed; }
@@ -248,14 +250,18 @@ sealed partial class HudModernMono
             foreach (var (f, s) in _folds) { f.Margin = new Thickness(g, 0, 0, 0); s.Margin = new Thickness(g, 0, 0, 0); }
             foreach (var d in _marks) d.Margin = new Thickness(g, 1, 0, 0);
             _dps.Margin = new Thickness(on ? 4 : 8, 0, 0, 0);
+            _tight = on;
+            if (Grid.GetColumn(_heal) == 3) _heal.Margin = new Thickness(on ? 4 : 6, 1, 0, 0);
         }
+
+        bool _tight;
 
         /// <summary>The heals a second after the name (column 3), or in the share's place right of the DPS when the share has gone.</summary>
         void PlaceHeal(bool inShare)
         {
             Grid.SetColumn(_heal, inShare ? 5 : 3);
             _heal.HorizontalAlignment = inShare ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-            _heal.Margin = inShare ? new Thickness(0, 2, 0, 0) : new Thickness(8, 1, 0, 0);
+            _heal.Margin = inShare ? new Thickness(0, 2, 0, 0) : new Thickness(_tight ? 4 : 6, 1, 0, 0);
             _heal.FontSize = inShare ? 10.5 : 11;
         }
 
