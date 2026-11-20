@@ -43,6 +43,7 @@ public partial class MainWindow
             ToolTip = L.T("Share this pull: copies a picture of its meter to paste in Discord or anywhere with Ctrl+V. Nothing is uploaded."),
         };
         b.SetResourceReference(StyleProperty, "RoundBtn");
+        if (!_parserPrefs.Hovers) b.ToolTip = null;   // Explanations on hover off: no hover here either (its name stays for screen readers)
         AutomationProperties.SetName(b, $"Share a picture of {e.Title}");
         string key = $"{e.Id}|pull-share";
         void Look(bool done)

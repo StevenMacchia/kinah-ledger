@@ -156,7 +156,10 @@ public static partial class WpfApp
                 var named = DrawnTexts(MeterShare.Laid(kill, end, lk, hideNames: false));
                 var figsHidden = texts.Where(t => figure.IsMatch(t.Trim())).OrderBy(x => x).ToList();
                 var figsNamed = named.Where(t => figure.IsMatch(t.Trim())).OrderBy(x => x).ToList();
-                if (!figsHidden.SequenceEqual(figsNamed) || figsHidden.Count < 3) miss.Add($"figures differ with names hidden ({figsHidden.Count} vs {figsNamed.Count})");
+                // every figure the named picture shows, the hidden one shows too (class names may be shorter than real ones, so a crowded
+                // look keeps a CP it drops beside a long name: Podium's Cleric vs Aerinwyn); hiding names never loses one
+                var lost = figsNamed.GroupBy(x => x).Where(g => figsHidden.Count(x => x == g.Key) < g.Count()).Select(g => g.Key).ToList();
+                if (lost.Count > 0 || figsHidden.Count < 3) miss.Add($"figures lost with names hidden ({figsHidden.Count} vs {figsNamed.Count}: {string.Join(", ", lost)})");
                 if (others.Count > 0 && !others.All(n => string.Join(" ", named).Contains(n, StringComparison.OrdinalIgnoreCase))) miss.Add("names not shown with the switch off");
                 if (miss.Count > 0) bad.Add($"{look}: {string.Join(", ", miss)}");
             }
