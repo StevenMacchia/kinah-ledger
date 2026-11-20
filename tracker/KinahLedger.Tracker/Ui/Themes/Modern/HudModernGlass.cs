@@ -488,7 +488,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
                 oc.CornerRadius = new CornerRadius(99); oc.Margin = new Thickness(0, 1, 8, 0); oc.Tag = "glass-outcome";
                 right.Children.Add(oc);
             }
-            var clock = Tt(Clock(e.Duration(now)), 18, White, FontWeights.Bold);
+            var clock = Tt(Clock(e, now), 18, White, FontWeights.Bold);
             right.Children.Add(clock);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);

@@ -322,7 +322,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             o.Margin = new Thickness(8, 1, 10, 0);
             Grid.SetColumn(o, 1); head.Children.Add(o);
         }
-        FrameworkElement clk = e.Waiting ? Slant(Wk.Words(L.T("Ready"), 14, Wk.S(TubeC), Wk.Bahn, FontWeights.Bold)) : Slant(Figure(Clock(e.Duration(now)), 18, e.Live ? YelB : WhiteB, Wk.Bahn, FontWeights.Bold));
+        FrameworkElement clk = e.Waiting ? Slant(Wk.Words(L.T("Ready"), 14, Wk.S(TubeC), Wk.Bahn, FontWeights.Bold)) : Slant(Figure(Clock(e, now), 18, e.Live ? YelB : WhiteB, Wk.Bahn, FontWeights.Bold));
         Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _fightStack.Children.Add(head);
         if (!e.Waiting && HpOf(e) is double hp) _fightStack.Children.Add(HpRow(e, hp, now));
@@ -855,6 +855,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _youTag.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
             _cpValue.Text = m.Cp; _cpWanted = m.Cp.Length > 0 && !m.CpOnly;
+            if (_cp.Inlines.FirstInline is Run cpw && !ReferenceEquals(cpw, _cpValue)) cpw.Text = m.Pvp ? "" : L.T("CP") + " ";   // the PvP panel's line is who killed
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _healHost.Visibility = m.Heal.Length > 0 && m.HealShare > 0 ? Visibility.Visible : Visibility.Collapsed;
             _topSign.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;

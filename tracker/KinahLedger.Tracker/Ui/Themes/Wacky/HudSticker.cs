@@ -284,10 +284,10 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             ot.Margin = new Thickness(6, 0, 8, 0);
             Grid.SetColumn(ot, 2); head.Children.Add(ot);
         }
-        TextBlock clk = e.Waiting ? Wk.Words(L.T("Ready"), 13, PaperB, Wk.Heavy, Black) : Figure(Clock(e.Duration(now)), 15, e.Live ? YelB : PaperB, Wk.Heavy, Black);
+        TextBlock clk = e.Waiting ? Wk.Words(L.T("Ready"), 13, PaperB, Wk.Heavy, Black) : Figure(Clock(e, now), 15, e.Live ? YelB : PaperB, Wk.Heavy, Black);
         var ct = InkTag(clk, 2, new Thickness(8, 0, 8, 1));
         ct.Margin = new Thickness(4, 0, 0, 0);
-        Grid.SetColumn(ct, 3); head.Children.Add(ct);
+        if (clk.Text.Length > 0) { Grid.SetColumn(ct, 3); head.Children.Add(ct); }   // the PvP panel has no clock
         _cardStack.Children.Add(head);
         if (!e.Waiting && HpOf(e) is double hp) _cardStack.Children.Add(HpRow(e, hp, now));
         var body = new Border { Background = Wk.S(CardC, InkA), CornerRadius = new CornerRadius(7), Margin = new Thickness(4, 0, 4, 4), Padding = new Thickness(4, 5, 4, 4) };
@@ -823,6 +823,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
             _cpValue.Text = m.Cp; _cpWanted = m.Cp.Length > 0 && !m.CpOnly;
+            if (_cp.Inlines.FirstInline is Run cpw && !ReferenceEquals(cpw, _cpValue)) cpw.Text = m.Pvp ? "" : L.T("CP") + " ";   // the PvP panel's line is who killed
             _heal.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _healTag.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");

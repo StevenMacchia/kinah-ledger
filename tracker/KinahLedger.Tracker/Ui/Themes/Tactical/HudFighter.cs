@@ -452,7 +452,7 @@ sealed partial class HudFighter : TacticalLook
         {
             var outcome = OutcomeText(e);
             if (outcome.Length > 0) { var ot = Tag(outcome.ToUpperInvariant(), e.Outcome == "wipe" ? Red : Phos, Dark, 10.5); ot.Margin = new Thickness(0, 0, 8, 0); right.Children.Add(ot); }
-            right.Children.Add(Halo("T+" + Pad(Clock(e.Duration(now))), 15, e.Live ? Amber : Phos, FontWeights.Bold));
+            right.Children.Add(Halo(Clock(e, now) is { Length: > 0 } tc ? "T+" + Pad(tc) : "", 15, e.Live ? Amber : Phos, FontWeights.Bold));
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         // a long title gives way to the outcome and the clock: cut with "…", its brackets kept round it (it ran under them)

@@ -79,7 +79,7 @@ sealed partial class HudFighter
         readonly TextBlock _none = new();
         readonly List<FrameworkElement> _keep = new(), _keepUnder = new();
         readonly List<(FrameworkElement, FrameworkElement?)> _give = new(), _giveUnder = new();
-        readonly double _dmgW, _critW;
+        readonly double _dmgW, _critW, _pctW;
         MeterMember? _m;
         double _bar;
         bool _expanded;
@@ -93,7 +93,7 @@ sealed partial class HudFighter
             foreach (var t in new[] { _dps, _pct, _dmg, _crit }) { t.Margin = new Thickness(0, 0, t == _pct ? 6 : 7, 0); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; }
             // the figure columns sized for the widest real figure (a 54 px column cut the 1 off "199.9K"); the bar gets the rest
             _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
-            foreach (var w in new[] { 32.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, "88.8%", "100%", L.T("CP")), 0, 0 })
+            foreach (var w in new[] { 32.0, double.NaN, Tac.FigCol(_dps, "888.8K"), (_pctW = Tac.FigCol(_pct, "88.8%", "100%", L.T("CP"))), 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
@@ -141,6 +141,7 @@ sealed partial class HudFighter
             if (m.Deaths > 0) _keep.Add(Add(Mark(m.Deaths > 1 ? $"✖{m.Deaths}" : "✖", Red, Red, solid: false)));
             if (m.You) _give.Add((Add(Mark(L.T("YOU"), Amber, Dark, solid: true)), null));
             // under it, quiet: Combat Power once there's damage (before it, the figure itself is the CP), a healer's healing
+            _cp.Children[0].Visibility = m.Pvp ? Visibility.Collapsed : Visibility.Visible;   // the PvP panel's line is who killed, not CP
             if (m.Cp.Length > 0) { _cpFig.Text = m.Cp; _giveUnder.Add((Under(_cp), null)); }
             if (m.Heal.Length > 0) _keepUnder.Add(Under(HealFig(m.Heal)));
             // nothing under it (before the first hit): the callsign in the bar's middle
@@ -150,6 +151,8 @@ sealed partial class HudFighter
             _dps.Text = m.Figure;
             _dps.Foreground = m.You ? Amber : Pale;
             _pct.Text = m.ShareText;
+            // the PvP panel's Kill or Assist: its column as wide as the longer word, on its own rows only
+            _root.ColumnDefinitions[3].Width = new GridLength(m.Pvp ? Math.Max(_pctW, Tac.FigCol(_pct, Encounter.PvpWords)) : _pctW);
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();

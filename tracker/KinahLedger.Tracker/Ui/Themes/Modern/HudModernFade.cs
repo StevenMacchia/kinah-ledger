@@ -413,7 +413,7 @@ sealed partial class HudModernFade : ModernLook
                 var st = Tt(outcome, 10, wipe ? Frozen(Color.FromRgb(0xFF, 0x9A, 0x9A)) : MarkMint, FontWeights.Bold);
                 right.Children.Add(new Border { Child = st, CornerRadius = new CornerRadius(99), Padding = new Thickness(7, 1, 7, 2), Background = Frozen(Mod.A(DeepC, .42)), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "outcome" });
             }
-            var clock = Tt(Clock(e.Duration(now)), 18, White, FontWeights.Bold); clock.Tag = "fight-clock";
+            var clock = Tt(Clock(e, now), 18, White, FontWeights.Bold); clock.Tag = "fight-clock";
             right.Children.Add(clock);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);

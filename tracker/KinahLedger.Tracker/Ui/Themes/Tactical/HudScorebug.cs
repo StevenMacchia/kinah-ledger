@@ -420,13 +420,13 @@ sealed partial class HudScorebug : TacticalLook
             var oc = e.Outcome == "wipe" ? Coral : GreenC;
             var o = C(Up(ow), 11.5, oc, FontWeights.Bold, Semi); o.Margin = new Thickness(0, 1, 9, 0); o.Effect = Glow(8, 0, .8, oc); cl.Children.Add(o);
         }
-        var ct = e.Waiting ? C(L.T("Ready"), 14, GreyOf, FontWeights.SemiBold) : C(Clock(e.Duration(now)), 21, Amber, FontWeights.Bold);
+        var ct = e.Waiting ? C(L.T("Ready"), 14, GreyOf, FontWeights.SemiBold) : C(Clock(e, now), 21, Amber, FontWeights.Bold);
         if (!e.Waiting) ct.Effect = Glow(10, 0, .75, Amber);
         cl.Children.Add(ct);
         bool timer = KinahHidden && _timer is not null;
         var cc = GCell((dc, s) => Gloss(dc, Slant(new Rect(s), 10, timer ? 7 : 0), Color.FromRgb(0x16, 0x18, 0x1E), Color.FromRgb(0x05, 0x06, 0x08), .1, .2), cl, 34, new Thickness(18, 0, timer ? 16 : 12, 0));
         cc.Margin = new Thickness(-8, 0, 0, 0);
-        Grid.SetColumn(cc, 1); head.Children.Add(cc);
+        if (ct.Text.Length > 0 || cl.Children.Count > 1) { Grid.SetColumn(cc, 1); head.Children.Add(cc); }   // the PvP panel has no clock
         if (KinahHidden && _timer is { } t)
         {
             var tb = TimerPlate(t.Text, t.Tone, 34, "");
