@@ -57,6 +57,7 @@ public static class AccuracyTests
         Check("a second read's look-ups count nothing", $"{Accuracy.Get("guessed")} {Accuracy.Take().Names.Count}", "0 0");
         var payload = JsonSerializer.Serialize(AccuracyPayload.From(new AccuracyReport(new() { ["pickups"] = 3 }, new(), null), "abc"));
         Check("the payload: version, install, counters, nothing else", Regex(payload, "\"(\\w+)\":"), "app,install,health,pickups");
+        OcrMemoryTests(Check);
         MeterTests(Check);
 
         Console.WriteLine("The parser and the dictionary report what they couldn't read exactly:");
@@ -690,6 +691,35 @@ public static class AccuracyTests
     /// case the window tells apart, the counts from the reader, the parser and the read loop, the JSON's keys exactly as
     /// the site reads them, and nothing in it that names anyone.
     /// </summary>
+    /// <summary>
+    /// 2026-11-20 (Steven: "it's using 700 MB of RAM"): a read handed the recognizer its picture through a BMP in a
+    /// MemoryStream, and Windows kept every such stream's array pinned, so a tracker on a 5120x2160 screen passed 1 GB in
+    /// minutes. Many large reads must leave nothing behind once collected.
+    /// </summary>
+    static void OcrMemoryTests(Action<string, string, string> Check)
+    {
+        Console.WriteLine("Reading the screen keeps no memory:");
+        if (!ReplayBank.OcrAvailable()) { Console.WriteLine("  (no text recognition on this PC: skipped)"); return; }
+        using var raw = new System.Drawing.Bitmap(1400, 420);
+        using (var g = System.Drawing.Graphics.FromImage(raw))
+        using (var font = new System.Drawing.Font("Segoe UI", 22))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(20, 22, 28));
+            g.DrawString("You have acquired Orichalcum Ore x2", font, System.Drawing.Brushes.White, 20, 40);
+        }
+        // the first read loads the recognizer; then 40 reads at 3x (4200x1260, ~21 MB each)
+        string first = string.Join(" ", Ocr.ScreenReader.ReadBitmapAsync(raw, true, 3).GetAwaiter().GetResult());
+        Check("a read still reads", first.Contains("Orichalcum") ? "Orichalcum" : first, "Orichalcum");
+        for (int i = 0; i < 40; i++) Ocr.ScreenReader.ReadBitmapAsync(raw, true, 3).GetAwaiter().GetResult();
+        // one collection and no finalizers, as the live tracker sees it: the old path's arrays stayed pinned until Windows'
+        // decoder objects were finalized, which a running tracker reached only after full collections it rarely makes
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        var info = GC.GetGCMemoryInfo(GCKind.FullBlocking);
+        long loh = info.GenerationInfo[3].SizeAfterBytes;
+        Check("40 reads at 3x: large objects left after a collection", loh < 16_000_000 ? "under 16 MB" : $"{loh / 1_000_000} MB", "under 16 MB");
+        Check("40 reads at 3x: pinned objects left", info.PinnedObjectsCount < 10 ? "under 10" : $"{info.PinnedObjectsCount}", "under 10");
+    }
+
     static void MeterTests(Action<string, string, string> Check)
     {
         Console.WriteLine("The meter's health numbers (beside health, 1.0.22):");

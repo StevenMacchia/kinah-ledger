@@ -163,13 +163,16 @@ public static class WindowCapture
     {
         if (_frame == null || _lastNo == FrameNumber) return _last;
         if (_last != null && System.Diagnostics.Stopwatch.GetElapsedTime(_copiedAt).TotalMilliseconds < ReuseMs) return _last;
+        // the old copy goes first, so a whole frame (44 MB at 5120x2160) is held once, not twice during the copy (2026-11-20);
+        // a failed copy then leaves none and the read copies the screen instead
+        _last?.Dispose(); _last = null; _lastNo = -1;
         try
         {
-            var bmp = SoftwareBitmap.CreateCopyFromSurfaceAsync(_frame, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
-            _last?.Dispose(); _last = bmp; _lastNo = FrameNumber; _copiedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            _last = SoftwareBitmap.CreateCopyFromSurfaceAsync(_frame, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
+            _lastNo = FrameNumber; _copiedAt = System.Diagnostics.Stopwatch.GetTimestamp();
             Copies++;
         }
-        catch (Exception) { /* the copy made before, if any, serves */ }
+        catch (Exception) { /* no frame in memory: the caller copies the screen */ }
         return _last;
     }
 
@@ -251,6 +254,29 @@ public static class WindowCapture
         }
         finally { dst.UnlockBits(data); }
         return dst;
+    }
+
+    /// <summary>
+    /// A bitmap as a Bgra8 SoftwareBitmap for the recognizer, its rows copied straight into the SoftwareBitmap's own
+    /// memory: no managed buffer, no stream, nothing pinned (ScreenReader.Recognize).
+    /// </summary>
+    public static unsafe SoftwareBitmap ToSoftware(Bitmap src)
+    {
+        int w = src.Width, h = src.Height;
+        var soft = new SoftwareBitmap(BitmapPixelFormat.Bgra8, w, h, BitmapAlphaMode.Premultiplied);
+        var data = src.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            using var buf = soft.LockBuffer(BitmapBufferAccessMode.Write);
+            using var reference = buf.CreateReference();
+            var plane = buf.GetPlaneDescription(0);
+            reference.As<IMemoryBufferByteAccess>().GetBuffer(out byte* p, out _);
+            for (int y = 0; y < h; y++)
+                Buffer.MemoryCopy((byte*)data.Scan0 + y * data.Stride, p + plane.StartIndex + y * plane.Stride, plane.Stride, w * 4);
+        }
+        catch { soft.Dispose(); throw; }
+        finally { src.UnlockBits(data); }
+        return soft;
     }
 
     [ComImport, Guid("5B0D3235-4DBA-4D44-865E-8F1D0E4FD04D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
