@@ -66,7 +66,7 @@ static class ParserCommand
     public static List<string> Tabs(FightView v)
     {
         // Graphs first, the group's table under them (Steven, 2026-11-18: "group should just be under the graphs"); Group alone without the seconds
-        var t = new List<string> { v.HasTimeline ? "Timeline" : "Group" };
+        var t = new List<string> { v.HasTimeline && v.IsBossPull ? "Timeline" : "Group" };   // the graphs on boss pulls only (FightView.IsBossPull)
         if (v.HasCompare) t.Add("Compare");
         if (v.HasTaken) t.Add("Taken");
         return t;
