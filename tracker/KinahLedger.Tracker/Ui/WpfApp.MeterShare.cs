@@ -143,7 +143,7 @@ public static partial class WpfApp
                 // no repeats: the boss's name drawn once as a text of its own (the look's title, or the frame's for a look without one)
                 int titles = texts.Count(t => t.Trim().Trim('[', ']', ' ').EndsWith(kill.Title, StringComparison.OrdinalIgnoreCase));
                 if (titles > 1) miss.Add($"the boss's name drawn {titles} times");
-                foreach (var want in new[] { kill.Title, L.Day(kill.Start.ToLocalTime()), "Kinah Ledger", "kinahledger.com", L.F("Member {0}", 2) })
+                foreach (var want in new[] { kill.Title, L.Day(kill.Start.ToLocalTime()), "Kinah Ledger", "kinahledger.com" }.Concat(kill.Members.Where(f => !f.You).Select(f => MeterShare.ClassLabel(f.Class)).Where(c => c.Length > 0).Distinct()))
                     if (!all.Contains(want, StringComparison.OrdinalIgnoreCase)) miss.Add($"no \"{want}\"");   // a look may write names in capitals (VHS)
                 var leaked = others.Where(n => all.Contains(n, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (leaked.Count > 0) miss.Add("names shown: " + string.Join(", ", leaked));
@@ -180,10 +180,28 @@ public static partial class WpfApp
                     }
             check(cut.Count == 0, $"meter share picture: nothing cut off in any look (no text ends in \"…\" or is trimmed)" + (cut.Count > 0 ? ": " + string.Join("; ", cut.Distinct().Take(12)) : ""));
         }
-        // names shown by default (Steven, 2026-11-17: "it should say the members names"), under a key the old default's "on" can't set
-        var oldSaved = System.Text.Json.JsonSerializer.Deserialize<ParserPrefs>("{\"ShareHideNames\": true}")!;
-        check(!new ParserPrefs().ShareHideNames && !oldSaved.ShareHideNames && new ParserPrefs().ShareHotkey == ParserPrefs.DefaultHotkey && Platform.Hotkey.Parse(new ParserPrefs().ShareHotkey) == null,
-            "meter share: other names shown by default, an old saved \"hidden\" left behind, its shortcut Off by default");
+        // other names hidden by default since 1.0.36 (their class instead), under a key the 1.0.7-1.0.35 files' "shown" can't set
+        var oldSaved = System.Text.Json.JsonSerializer.Deserialize<ParserPrefs>("{\"ShareNamesHidden\": false, \"ShareHideNames\": false}")!;
+        var chose = System.Text.Json.JsonSerializer.Deserialize<ParserPrefs>("{\"ShareNamesShown\": true}")!;
+        check(new ParserPrefs().ShareHideNames && oldSaved.ShareHideNames && !chose.ShareHideNames && new ParserPrefs().ShareHotkey == ParserPrefs.DefaultHotkey && Platform.Hotkey.Parse(new ParserPrefs().ShareHotkey) == null,
+            "meter share: other names hidden by default (their class shown), an old saved \"shown\" left behind, Show party names kept when picked, its shortcut Off by default");
+        // the others called by their class, a second of a class numbered, yours kept
+        {
+            var h = MeterShare.Hidden(kill);
+            var rest = h.Members.Where(f => !f.You).ToList();
+            var want = new List<string>();
+            var count = new Dictionary<string, int>();
+            foreach (var f in h.Ranked().Concat(h.Roster).Distinct().Where(f => !f.Other && !f.You))
+            {
+                var c = MeterShare.ClassLabel(f.Class);
+                if (c.Length == 0) continue;
+                int k = count[c] = count.GetValueOrDefault(c) + 1;
+                want.Add(k == 1 ? c : $"{c} {k}");
+            }
+            var named = h.Ranked().Concat(h.Roster).Distinct().Where(f => !f.Other && !f.You && MeterShare.ClassLabel(f.Class).Length > 0).Select(f => f.Name).ToList();
+            check(rest.Count > 0 && named.SequenceEqual(want) && h.You?.Name == kill.You?.Name && kill.Members.Where(f => !f.You).All(f => !h.Members.Any(x => x.Name == f.Name)),
+                $"meter share: with names hidden the others are called by their class ({string.Join(", ", named)}), yours kept, no other's name left");
+        }
         check(MeterShare.FileName(kill) is var fn && fn.StartsWith("kinah-ledger-") && fn.EndsWith(".png") && fn.IndexOfAny(Path.GetInvalidFileNameChars()) < 0, $"meter share: a file name safe to save ({MeterShare.FileName(kill)})");
 
         MeterShareOverlayChecks(check);   // the overlay's Share (KL_OPTIONS_ONLY=share runs it alone)
@@ -273,7 +291,7 @@ public static partial class WpfApp
         finally { po.Close(); }
     }
 
-    /// <summary>options-test: Settings › In game › Parser has Hide other names (off by default since 4c3c730) and the Share picture shortcut (Off, recorded as the others are).</summary>
+    /// <summary>options-test: Settings › In game › Parser has Show party names (off by default since 1.0.36) and the Share picture shortcut (Off, recorded as the others are).</summary>
     static void MeterShareOptionChecks(OptionsWindow o, Action<bool, string> check)
     {
         {
@@ -284,9 +302,9 @@ public static partial class WpfApp
                 var refuse = o.RecordShareKeyForTest(ModifierKeys.Control, Key.C);
                 var take = o.RecordShareKeyForTest(ModifierKeys.Control | ModifierKeys.Shift, Key.F9);
                 string key1 = o.ShareKeyForTest;
-                // off by default since PR 342 ("Meter share: the members' names shown by default")
+                // Show party names: off by default since 1.0.36 (names hidden, the class shown)
                 check(chk.IsChecked == false && key0 == ParserPrefs.DefaultHotkey && refuse != null && take == null && key1 == "Ctrl+Shift+F9" && o.ParserDirty,
-                    $"meter share: Settings › In game › Parser has Hide other names (off by default: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
+                    $"meter share: Settings › In game › Parser has Show party names (off by default: {chk.IsChecked}) and the Share picture shortcut (Off: {key0}; Ctrl+C refused: {refuse != null}; Ctrl+Shift+F9 taken: {key1}, Save lights up)");
             }
             finally { o.ReloadParserForTest(); }
         }

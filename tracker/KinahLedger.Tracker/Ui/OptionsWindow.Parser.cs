@@ -82,7 +82,7 @@ public partial class OptionsWindow
         _parserHealBarsChk.IsChecked = p.HealBars;
         _parserPvpChk.IsChecked = p.PvpPanel;
         _parserOdyleChk.IsChecked = p.OdyleEnergy;
-        _parserHideNamesChk.IsChecked = p.ShareHideNames;
+        _parserHideNamesChk.IsChecked = p.ShareShowNames;
         _parserShareKey = Platform.Hotkey.Parse(p.ShareHotkey) is { } sk ? sk.ToString() : ParserPrefs.DefaultHotkey;
         RefreshShareKey();
         // the meter's on/off, click-through and when it shows: as the window holds them now (the Overlays menu's quick switch may have moved the first)
@@ -145,7 +145,7 @@ public partial class OptionsWindow
         p.HealBars = _parserHealBarsChk.IsChecked == true;
         p.PvpPanel = _parserPvpChk.IsChecked == true;
         p.OdyleEnergy = _parserOdyleChk.IsChecked == true;
-        p.ShareHideNames = _parserHideNamesChk.IsChecked == true;
+        p.ShareShowNames = _parserHideNamesChk.IsChecked == true;
         p.ShareHotkey = _parserShareKey;
         // crit and back attacks: the switch picks the kinds the hits carry (crit: result 3, back: side 1); off is the release's default (none)
         CritSwitch(p, _parserCritChk.IsChecked == true);
@@ -288,12 +288,12 @@ public partial class OptionsWindow
         _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
         _parserSeparateChk.Click += (_, _) => { _parserTheme = null; DrawParserLooks(); };
         more.Children.Add(Styled(new Border { Child = _parserMoreStack, Margin = new Thickness(0, 8, 0, 0) }, "Group"));
-        // the meter's share picture (Ui/MeterShare.cs, 1.0.2): other members' names hidden on it, and a shortcut of its own
+        // the share pictures (Ui/MeterShare.cs, 1.0.2): other members' names shown on them (off: their class), and a shortcut of its own
         var share = new StackPanel();
         _parserHideNamesChk = Styled(new CheckBox(), "Switch");
-        AutomationProperties.SetName(_parserHideNamesChk, "Hide other names");
+        AutomationProperties.SetName(_parserHideNamesChk, "Show party names");
         _parserHideNamesChk.Click += (_, _) => Refresh();
-        share.Children.Add(SideRow("Hide other names", "On the share picture, other members show as their class and \"Member 2\"; you keep your name. Their figures stay.", _parserHideNamesChk));
+        share.Children.Add(SideRow("Show party names", "Off (the default), share pictures name only you: the others show as their class, \"Chanter\", with their figures. On, their names show too.", _parserHideNamesChk));
         share.Children.Add(Styled(new Border(), "Divider"));
         share.Children.Add(BuildShareKeyRow());
         more.Children.Add(Styled(new TextBlock { Text = L.T("SHARE PICTURE") }, "GroupLabel"));

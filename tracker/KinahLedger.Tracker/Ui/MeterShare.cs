@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// dark frame: a slim line on top with only what the look doesn't say (the portrait, the place and mode, the day), the Kinah
 /// Ledger mark and kinahledger.com at the foot. 1200 px wide (drawn at twice its size,
 /// never a screenshot), at least 630 tall, so Discord, Reddit and X show it sharp. Other members' names are hidden by default
-/// (Settings › In game › Parser › Hide other names): their class icon and figures stay, each called "Member 2" and on;
+/// (Settings › In game › Parser › Show party names, off since 1.0.36): their class icon and figures stay, each called by their class ("Chanter");
 /// you keep yours. Copied to the clipboard and saved in Pictures\Kinah Ledger, as the Farming share picture. Nothing is uploaded.
 /// </summary>
 public static class MeterShare
@@ -34,15 +34,33 @@ public static class MeterShare
     static readonly Color Bg0 = Color.FromRgb(0x1C, 0x1F, 0x29), Bg1 = Color.FromRgb(0x0D, 0x0E, 0x13), Line = Color.FromRgb(0x2A, 0x2E, 0x3D);
 
     /// <summary>
-    /// The record with the other members' names hidden: each named by their place on the meter ("Member 2" beside the rank
-    /// chip 2), their class, Combat Power and figures as they were. Yours stays. A copy: the record itself is never touched.
+    /// The record with the other members' names hidden (the default since 1.0.36: a picture one player posts names only them):
+    /// each called by their class in the language in use ("Chanter"; a second of a class "Chanter 2", in meter order), one whose
+    /// class isn't known by their place ("Member 3"). Their class icon, Combat Power and figures stay as they were. Yours stays.
+    /// A copy: the record itself is never touched.
     /// </summary>
     public static Encounter Hidden(Encounter e)
     {
         var c = BossParser.Copy(e);
         var order = c.Ranked().Concat(c.Roster).Distinct().Where(f => !f.Other).ToList();
-        for (int i = 0; i < order.Count; i++) if (!order[i].You) order[i].Name = L.F("Member {0}", i + 1);
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < order.Count; i++)
+        {
+            if (order[i].You) continue;
+            var cls = ClassLabel(order[i].Class);
+            if (cls.Length == 0) { order[i].Name = L.F("Member {0}", i + 1); continue; }
+            int n = seen[cls] = seen.GetValueOrDefault(cls) + 1;
+            order[i].Name = n == 1 ? cls : $"{cls} {n}";
+        }
         return c;
+    }
+
+    /// <summary>A class as the share picture names a member by it ("chanter" is "Chanter", 호법성 in Korean); "" when not known.</summary>
+    public static string ClassLabel(string cls)
+    {
+        var t = (cls ?? "").Trim();
+        if (t.Length == 0) return "";
+        return L.T(char.ToUpperInvariant(t[0]) + t[1..].ToLowerInvariant());
     }
 
     /// <summary>

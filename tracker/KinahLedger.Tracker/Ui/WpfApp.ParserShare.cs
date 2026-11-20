@@ -254,8 +254,9 @@ public static partial class WpfApp
                 w.CopyViewTextForTest(e, ParserShare.Group);
                 var hidden = text ?? "";
                 w.ShareHideNamesForTest = false;
-                check(others.Count > 0 && !others.Any(n => hidden.Contains(n)) && Enumerable.Range(1, 6).Count(i => hidden.Contains(L.F("Member {0}", i))) == others.Count && (you == null || hidden.Contains(ParserRows.NameOf(you))),
-                    "Parser share: with Hide other names on, the text names each of the others by their place (\"Member 1\", \"Member 3\"), yours kept");
+                var classes = e.Members.Where(f => !f.You && f.Name.Length > 0).Select(f => MeterShare.ClassLabel(f.Class)).Where(c => c.Length > 0).Distinct().ToList();
+                check(others.Count > 0 && !others.Any(n => hidden.Contains(n)) && classes.All(c => hidden.Contains(c)) && (you == null || hidden.Contains(ParserRows.NameOf(you))),
+                    "Parser share: with party names off (the default), the text names each of the others by their class (\"Chanter\"), yours kept");
                 // the damage taken copies too
                 w.ShowParserDemo("taken"); DoEvents();
                 var et = w.ParserShownForTest!;

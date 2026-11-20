@@ -66,7 +66,7 @@ public static partial class WpfApp
             // the meter's defaults for a new install (1.0.18): on, apart from the ones that are worse on or a choice between two
             var n = new ParserPrefs();
             bool onOk = n.AlwaysOn && n.Overlay && n.ClickThrough && n.Details && n.Deaths && n.Filters && n.Hovers && n.HealBars && n.Expanded && n.KillsNear;
-            bool offOk = !n.DpsActive && !n.InKinah && !n.ShareHideNames && n.CritNow == "none" && n.Targets == "boss" && Platform.Hotkey.Parse(n.ShareHotkey) == null;
+            bool offOk = !n.DpsActive && !n.InKinah && !n.ShareShowNames && n.CritNow == "none" && n.Targets == "boss" && Platform.Hotkey.Parse(n.ShareHotkey) == null;
             // a file from before keeps its choices: a 1.0.17 file has every key written (off stays off), an older one without
             // the keys reads the old default (off), a choice of on stays on
             var v17 = ParserPrefs.FromText("{\"Overlay\":true,\"ClickThrough\":false,\"AlwaysOn\":false,\"Expanded\":false,\"KillsNear\":false,\"DetailsSettled\":true,\"HonestSettled\":true,\"GlassSettled\":true}");
@@ -74,7 +74,7 @@ public static partial class WpfApp
             var chose = ParserPrefs.FromText("{\"ClickThrough\":true,\"AlwaysOn\":true,\"Expanded\":true,\"KillsNear\":true,\"DetailsSettled\":true,\"HonestSettled\":true}");
             bool kept = !v17.ClickThrough && !v17.AlwaysOn && !v17.Expanded && !v17.KillsNear && !older.ClickThrough && !older.AlwaysOn && !older.Expanded && !older.KillsNear
                 && chose.ClickThrough && chose.AlwaysOn && chose.Expanded && chose.KillsNear;
-            check(onOk && offOk && kept, $"DPS meter defaults: Always on, the overlay, click-through, group details, deaths, kills near you, filters, hovers, heal bars and the expanded meter on for a new install; DPS over active time, inside the Kinah overlay, hidden names, crit and adds off; a saved file keeps its own (on {onOk}, off {offOk}, kept {kept})");
+            check(onOk && offOk && kept, $"DPS meter defaults: Always on, the overlay, click-through, group details, deaths, kills near you, filters, hovers, heal bars and the expanded meter on for a new install; DPS over active time, inside the Kinah overlay, party names on share pictures, crit and adds off; a saved file keeps its own (on {onOk}, off {offOk}, kept {kept})");
 
             // Settings: each of the meter's settings one row, on the DPS meter page
             var o = new OptionsWindow(w, OptionsWindow.Page.Meter) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
@@ -82,7 +82,7 @@ public static partial class WpfApp
             {
                 o.Show(); DoEvents();
                 var rows = o.SearchForTestAll();
-                var titles = new[] { "Expanded meter", "Heal bars", "Odyle Energy", "Group details", "DPS over active time", "Damage to adds", "Deaths", "Kills near you", "List filters", "Crit and back-attack rates", "Explanations on hover", "Parser inside the Kinah overlay", "Hide other names", "Share picture shortcut", "Meter position", "Width" };
+                var titles = new[] { "Expanded meter", "Heal bars", "Odyle Energy", "Group details", "DPS over active time", "Damage to adds", "Deaths", "Kills near you", "List filters", "Crit and back-attack rates", "Explanations on hover", "Parser inside the Kinah overlay", "Show party names", "Share picture shortcut", "Meter position", "Width" };
                 var off = titles.Select(t => (t, rows.Where(r => r.Title == L.T(t)).ToList())).Where(x => x.Item2.Count != 1 || x.Item2[0].Page != OptionsWindow.Page.Meter).Select(x => $"{x.t} ×{x.Item2.Count}").ToList();
                 check(off.Count == 0, "Settings: each of the meter's settings is one row, on the DPS meter page" + (off.Count > 0 ? ": " + string.Join(", ", off) : ""));
                 // Damage to adds: waits for Save, then counts adds on the meter, and back
