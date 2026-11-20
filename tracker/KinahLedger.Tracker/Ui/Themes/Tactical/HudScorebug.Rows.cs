@@ -148,10 +148,28 @@ sealed partial class HudScorebug
         /// <summary>The moments drawn as far as <see cref="Sweep"/> and <see cref="Enter"/> say.</summary>
         public void Apply()
         {
-            if (Enter >= 1) RootG.ClearValue(UIElement.ClipProperty); else RootG.Clip = Wipe(-10, (Math.Max(RootG.ActualWidth, 300) + 20) * Enter, RootG.Height);
-            Words.Opacity = Enter >= 1 ? 1 : Enter > .85 ? (Enter - .85) / .15 : 0;
+            if (EnterWhole)
+            {
+                // the row as one piece: its plate, bar and words fade in together, settling down a few pixels (no wipe: no plate
+                // shown bare, no figure cut by a slanted edge)
+                double k = Math.Clamp(Enter, 0, 1);
+                RootG.ClearValue(UIElement.ClipProperty);
+                RootG.Opacity = k;
+                _drop.Y = -6 * (1 - k);
+                foreach (UIElement ch in RootG.Children) if (ch != _fx && ch.RenderTransform != _drop) ch.RenderTransform = _drop;
+                Words.Opacity = 1;
+            }
+            else
+            {
+                if (Enter >= 1) RootG.ClearValue(UIElement.ClipProperty); else RootG.Clip = Wipe(-10, (Math.Max(RootG.ActualWidth, 300) + 20) * Enter, RootG.Height);
+                Words.Opacity = Enter >= 1 ? 1 : Enter > .85 ? (Enter - .85) / .15 : 0;
+            }
             _fx.InvalidateVisual();
         }
+
+        /// <summary>The row enters as one piece (Studio) rather than wiping in behind a slanted edge, its words after (Arena).</summary>
+        protected virtual bool EnterWhole => false;
+        readonly TranslateTransform _drop = new();
 
         void DrawFx(DrawingContext dc, Size s)
         {

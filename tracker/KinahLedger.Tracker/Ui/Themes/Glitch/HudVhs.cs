@@ -89,7 +89,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _text = Deck ? Br(0xE6FDFF) : White;
         _label = Deck ? Br(VfdC, .66) : Dim;
         _deck = new GlitchPanel(Deck ? new Thickness(16, 12, 16, 13) : new Thickness(14, 10, 14, 11));
-        _cam = new GlitchPanel(Deck ? new Thickness(12, 10, 12, 10) : new Thickness(15, 11, 15, 11));
+        _cam = new GlitchPanel(Deck ? new Thickness(12, 10, 12, 10) : new Thickness(14, 9, 14, 9));
         _title = Txt("", Deck ? 15 : 15.5, _text, Sans, trim: true);
         _clock = Txt("", 19, Yellow, Sans);
         // the meter's rows: the tape's own (Ui/Themes/Glitch/VhsRows.cs)
@@ -137,7 +137,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _cam.Body.Children.Add(_hpRow);
         _ready.Margin = new Thickness(0, 8, 0, 1); _ready.Visibility = Visibility.Collapsed;
         _cam.Body.Children.Add(_ready);
-        _rowsHost.Margin = new Thickness(0, Deck ? 10 : 12, 0, 0);
+        _rowsHost.Margin = new Thickness(0, Deck ? 10 : 8, 0, 0);
+        if (!Deck) _hpRow.Margin = new Thickness(0, 6, 0, 0);
         _cam.Body.Children.Add(_rowsHost);
         _cam.Body.Children.Add(_foot);
 
@@ -206,7 +207,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _chText.Foreground = Deck ? Br(VfdC, .6) : Dim;
         Grid.SetColumn(_chText, 1); osd.Children.Add(_chText);
         sp.Children.Add(osd);
-        var title = new Grid { Margin = new Thickness(0, Deck ? 3 : 5, 0, 0) };
+        var title = new Grid { Margin = new Thickness(0, Deck ? 3 : 1, 0, 0) };
         title.ColumnDefinitions.Add(new ColumnDefinition()); title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         title.Children.Add(_title);
         _clock.Margin = new Thickness(12, 0, 0, 0);
@@ -457,6 +458,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _title.Text = e.Title;
         SetState(e);
         _rowsHost.Children.Clear(); _foot.Content = null; _rowsHost.Visibility = Visibility.Collapsed; _foot.Visibility = Visibility.Collapsed;
+        // Viewfinder before the first hit: each row one line (the CP after its figure, no bar under it), so a shorter pitch
+        if (!Deck && Meter is { } rows) rows.Pitch = e.Waiting ? VhsRows.ViewReadyPitch : VhsRows.ViewPitch;
         if (e.Waiting)
         {
             _clock.Text = L.T("READY").ToUpper(System.Globalization.CultureInfo.CurrentCulture); _clock.Foreground = _label; _clock.FontSize = 13;

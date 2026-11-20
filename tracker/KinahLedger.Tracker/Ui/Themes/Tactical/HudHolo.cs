@@ -27,8 +27,10 @@ sealed partial class HudHolo : TacticalLook
     static readonly FontFamily Face = HudThemes.Bahn, Small = HudThemes.Mono;
     const double Cut = 11;
 
-    // 98 at the right: the pickup's chip (8 out, 88 at most) hangs beside the line there, never cut
-    readonly Grid _root = new() { Margin = new Thickness(6, 6, 98, 8), HorizontalAlignment = HorizontalAlignment.Left };
+    // 98 at the right: the pickup's chip (8 out, 88 at most) hangs beside the line there, never cut; with the line away (the
+    // meter in its place, or the Parser's own window) no pickup shows, and the room is the glow's 8 (KinahShown)
+    static readonly Thickness RoomLine = new(6, 6, 98, 8), RoomFight = new(6, 6, 8, 8);
+    readonly Grid _root = new() { Margin = RoomLine, HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
@@ -56,7 +58,7 @@ sealed partial class HudHolo : TacticalLook
     // the fight's glass
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 6) };
     readonly TacSketch _fightGlass;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(12, 9, 12, 9) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(11, 7, 11, 7) };
     readonly Border _timersIn = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly ScaleTransform _project = new(1, 1);
@@ -65,7 +67,8 @@ sealed partial class HudHolo : TacticalLook
     public HudHolo() : base(bare: false, Face)
     {
         // the holographic list: the look's own rows (Ui/Themes/ThemeRows.cs)
-        UseRows(HoloRow.Pitch, m => new HoloRow(), 20, GapLine);
+        var cpTable = new CpTable();   // CP on every row or none (HudHolo.Rows.cs)
+        UseRows(HoloRow.Pitch, m => new HoloRow(cpTable), 15, GapLine);
         _lineGlass = new TacSketch((dc, s) => Glass(dc, s, 1));
         _line.Children.Add(_lineGlass); _line.Children.Add(_lineBody); _line.Children.Add(_lineFx); _line.Children.Add(_lineAnchor);
         _fightGlass = new TacSketch((dc, s) => { Glass(dc, s, 1.06); if (_projectLine > 0) ProjectLine(dc, s); });
@@ -335,6 +338,7 @@ sealed partial class HudHolo : TacticalLook
         _line.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         if (!shown) _noteHost.Visibility = Visibility.Collapsed;
         _fight.Margin = new Thickness(0, 0, 0, shown ? 6 : 0);
+        _root.Margin = shown ? RoomLine : RoomFight;
         PlaceTimers();
     }
 
@@ -393,6 +397,9 @@ sealed partial class HudHolo : TacticalLook
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 10;
         _fight.Width = w;
+        // one line a row; two when expanded (the damage and crit leave one line too little room: a 10-letter name, the top
+        // healer's chip and its deaths overlap the DPS at 350, in Korean most of all)
+        if (Meter is { } rows) rows.Pitch = ParserRows.ExpandedPref ? HoloRow.Pitch2 : HoloRow.Pitch;
         _fightBody.Children.Add(_timersIn);
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -414,13 +421,13 @@ sealed partial class HudHolo : TacticalLook
         {
             var wt = Tt(e.ReadyText, 13.5, Pale, Face, FontWeights.SemiBold); wt.Margin = new Thickness(0, 7, 0, 1);
             _fightBody.Children.Add(wt);
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, w - 24); }
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 5 }); PutRows(_fightBody, e, now, w - 22); }
         }
         else
         {
             if (HpOf(e) is { } hp)
             {
-                var hpRow = new Grid { Margin = new Thickness(0, 6, 0, 7) };
+                var hpRow = new Grid { Margin = new Thickness(0, 4, 0, 5) };
                 hpRow.ColumnDefinitions.Add(new ColumnDefinition()); hpRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var track = new Grid { Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
                 track.Children.Add(new TacSketch((dc, s) =>
@@ -443,11 +450,11 @@ sealed partial class HudHolo : TacticalLook
                 Grid.SetColumn(words, 1); hpRow.Children.Add(words);
                 _fightBody.Children.Add(hpRow);
             }
-            else _fightBody.Children.Add(new Border { Height = 6 });
-            PutRows(_fightBody, e, now, w - 24);
+            else _fightBody.Children.Add(new Border { Height = 5 });
+            PutRows(_fightBody, e, now, w - 22);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 6, 0, 5)));
+                _fightBody.Children.Add(Hairline(new Thickness(0, 4, 0, 4)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }
@@ -602,8 +609,25 @@ sealed partial class HudHolo : TacticalLook
         var small = Tt(wipe ? L.T("RECONNECTING") : "◇ " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 10, Frozen(Tac.A(c, .85)), Small, FontWeights.SemiBold); small.HorizontalAlignment = HorizontalAlignment.Center;
         words.Children.Add(big); words.Children.Add(small);
         band.Children.Add(words);
+        // the box seated on whole rows (art review, 2026-11-20): the second and third (the second alone in a group of two), so
+        // the title, the winner's row, the rows after it and the foot stay at full and no row shows half covered; the box is
+        // never shorter than its words
+        words.Margin = new Thickness(0); words.VerticalAlignment = VerticalAlignment.Center;
+        band.VerticalAlignment = VerticalAlignment.Stretch;
+        words.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double least = words.DesiredSize.Height + 8, top = 0, height = least;
+        if (Meter is { Members.Count: > 0 } mm)
+        {
+            double RowTop(int i) => mm.RowOf(mm.Members[i].Id)?.Root is FrameworkElement r && r.IsDescendantOf(_fight) ? r.TranslatePoint(new Point(0, 0), _fight).Y : double.NaN;
+            int first = mm.Members.Count > 1 ? 1 : 0, last = Math.Min(first + 1, mm.Members.Count - 1);
+            double y0 = RowTop(first), y1 = RowTop(last);
+            if (!double.IsNaN(y0) && !double.IsNaN(y1)) { top = y0 - 1; height = y1 + HoloRow.H + 1 - top; }
+        }
+        if (height < least) { top -= (least - height) / 2; height = least; }
+        var zone = new Grid { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Max(0, top), 0, 0), Height = height };
         var dim = new Border { Background = Frozen(Tac.A(DeepC, .78)), Opacity = 0 };
-        _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band);
+        zone.Children.Add(dim); zone.Children.Add(band);
+        _fightFx.Children.Clear(); _fightFx.Children.Add(zone);
         Motion.Play(_fightFx, 2600, t =>
         {
             scale.ScaleY = Math.Max(.03, Out(Seg(t, .04, .2)));
