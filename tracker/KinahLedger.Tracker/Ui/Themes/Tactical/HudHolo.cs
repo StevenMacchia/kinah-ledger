@@ -413,7 +413,7 @@ sealed partial class HudHolo : TacticalLook
         {
             var outcome = OutcomeText(e);
             if (outcome.Length > 0) { var ot = Tt(outcome.ToUpperInvariant(), 10.5, e.Outcome == "wipe" ? Coral : Green, Small, FontWeights.Bold); ot.Margin = new Thickness(0, 1, 8, 0); right.Children.Add(ot); }
-            right.Children.Add(Tt(Clock(e.Duration(now)), 17, e.Live ? Amber : Pale, Face, FontWeights.Bold));
+            right.Children.Add(Tt(Clock(e, now), 17, e.Live ? Amber : Pale, Face, FontWeights.Bold));
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         _fightBody.Children.Add(head);

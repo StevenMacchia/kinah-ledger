@@ -470,7 +470,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             return;
         }
         _ready.Visibility = Visibility.Collapsed;
-        _clock.Text = Clock(e.Duration(now)); _clock.FontSize = Deck ? 20 : 19;
+        _clock.Text = Clock(e, now); _clock.FontSize = Deck ? 20 : 19;
         _clock.Foreground = Deck ? Br(VfdC) : e.Live ? Yellow : White;
         if (HpOf(e) is double hp)
         {

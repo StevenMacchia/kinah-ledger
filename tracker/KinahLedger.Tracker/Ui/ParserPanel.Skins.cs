@@ -86,10 +86,11 @@ public sealed partial class ParserPanel
 
     /// <summary>The fight's tone once over: mint for a kill (or a run cleared), coral for a wipe or a death, grey otherwise.</summary>
     static Color ToneOf(Encounter e) => e.Tone switch { "good" => SMint, "bad" => SCoral, _ => SSoft };
-    string Clock(Encounter e, DateTime now) => e.Waiting ? L.T("Ready") : BossParser.Clock(e.Duration(now));
+    string Clock(Encounter e, DateTime now) => e.Waiting ? L.T("Ready") : e.ClockText(now);
     /// <summary>The mode and where (Forge says it only for a partial record; Reactor's sub line).</summary>
     static string ModeWhere(Encounter e)
     {
+        if (e.Pvp != null) return PK.WhereOf(e);   // the PvP panel is no fight of a mode: where it is
         var where = PK.WhereOf(e);
         var mode = e.Always ? L.T("Always on") : L.T(BossParser.Name(e.ModeKind));
         return where.Length > 0 ? $"{mode} · {where}" : mode;
@@ -132,7 +133,7 @@ public sealed partial class ParserPanel
                     Background = SB(tone, 0.14), BorderBrush = SB(tone, 0.45), BorderThickness = new Thickness(1), Tag = "outcome",
                 });
             }
-            right.Children.Add(new Border
+            if (clock.Text.Length > 0) right.Children.Add(new Border   // the PvP panel has no clock
             {
                 CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 1, 10, 2), VerticalAlignment = VerticalAlignment.Center, Child = clock,
                 Background = run ? SDown((SGoldHi, 0), (SGold, 0.6), (Color.FromRgb(0xC8, 0x8A, 0x1E), 1)) : SB(Colors.White, 0.07),
@@ -147,7 +148,7 @@ public sealed partial class ParserPanel
             var art = GameArt.Element(artKey, 22); art.Margin = new Thickness(0, 0, 8, 0);
             g.Children.Add(art);
             var title = ST(e.Title, 14, FontWeights.Bold, SInk); title.TextTrimming = TextTrimming.CharacterEllipsis;
-            bool held = !e.Live && !e.Waiting;
+            bool held = !e.Live && !e.Waiting && e.Pvp == null;
             var sub = ST(held ? OutcomeOf(e, now).Text : ModeWhere(e), 10, FontWeights.SemiBold, held ? ToneOf(e) : SQuiet); sub.TextTrimming = TextTrimming.CharacterEllipsis;
             if (e.Partial) { sub.Inlines.Add(new Run(L.T("  ·  partial")) { Foreground = HudKit.Warn }); sub.ToolTip = ParserCommand.WhyText(e); }
             g.Children.Add(At(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { title, sub } }, 1));
@@ -156,7 +157,7 @@ public sealed partial class ParserPanel
             clock.HorizontalAlignment = HorizontalAlignment.Center;
             if (run) clock.Effect = SGlow(SGold, 10, 0.6);
             var ro = Readout(clock, run ? SGold : Colors.White, run ? 0.45 : 0.15); ro.Margin = new Thickness(8, 0, 0, 0); ro.MinWidth = 76;
-            g.Children.Add(At(ro, 2));
+            if (clock.Text.Length > 0) g.Children.Add(At(ro, 2));   // the PvP panel has no clock
             st.Children.Add(g);
         }
         else
@@ -182,7 +183,7 @@ public sealed partial class ParserPanel
     FrameworkElement? SkinHp(Encounter e, DateTime now)
     {
         if (e.Waiting) return null;
-        bool live = e.Live && e.BossHpLeft != null, held = !e.Live;
+        bool live = e.Live && e.BossHpLeft != null, held = !e.Live && e.Pvp == null;
         if (!live && !(held && _skin != ParserRows.Skin.Reactor)) return null;
         double left = live ? e.BossHpLeft!.Value : e.BossHpLeft is { } l && e.Outcome != "kill" && e.Outcome != "cleared" ? l : 1;
         var c = held ? ToneOf(e) : left < 0.34 ? SCoral : SGold;

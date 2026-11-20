@@ -146,7 +146,7 @@ public sealed class Encounter : IJsonOnDeserialized
     /// <summary>The fight's name in English, always (the logs): <see cref="Title"/> is the one shown.</summary>
     [JsonIgnore] public string TitleWord => TitleIn(english: true);
     [JsonIgnore] public string Title => TitleIn(english: false);
-    string TitleIn(bool english) => ModeKind switch
+    string TitleIn(bool english) => Pvp != null ? (english ? "Last PvP kills" : Ui.L.T("Last PvP kills")) : ModeKind switch
     {
         ParserMode.Run => BossBook.Strip(Instance).Length > 0 ? BossBook.Strip(Instance) : english ? "Run" : Ui.L.T("Run"),
         ParserMode.Fights => Boss.Length > 0 ? Boss : Opponent.Length > 0 ? (english ? "vs " + Opponent : Ui.L.F("vs {0}", Opponent)) : PlayerKills > 0 ? (english ? "PvP fight" : Ui.L.T("PvP fight")) : english ? "Fight" : Ui.L.T("Fight"),
@@ -295,6 +295,7 @@ public sealed class Encounter : IJsonOnDeserialized
     public double? DpsOf(Fighter f, DateTime now)
     {
         if (!HasDamage) return null;
+        if (Pvp != null) return Figure(f);   // the PvP panel's figure is the damage itself
         return Figure(f) / Math.Max(DpsSeconds(f, now), MinDpsSeconds);
     }
 
@@ -370,12 +371,57 @@ public sealed class Encounter : IJsonOnDeserialized
     /// The meter holds a finished fight (an open-world fight held after 5 s without fighting, a pull's kill or wipe): its
     /// figures are the whole fight's average, not live, and the foot's group DPS carries the "Avg. DPS" badge.
     /// </summary>
-    [JsonIgnore] public bool HeldAverage => !Live && HasDamage && !Waiting;
+    [JsonIgnore] public bool HeldAverage => !Live && HasDamage && !Waiting && Pvp == null;
 
     /// <summary>"Total 10.5M · Group DPS 126.8K" (live) or "Total 10.5M · Group 126.8K · Avg. DPS" (held): the foot's words, as every look draws them.</summary>
-    public string FootText(DateTime now) => !HasDamage ? "" : HeldAverage
+    public string FootText(DateTime now) => Pvp != null ? PvpFoot : !HasDamage ? "" : HeldAverage
         ? Ui.L.F("Total {0} · Group {1} · {2}", Ui.Amounts.Meter(Credited), GroupDpsText(End ?? now), Ui.L.T(AvgBadge))
         : Ui.L.F("Total {0} · Group DPS {1}", Ui.Amounts.Meter(Credited), GroupDpsText(now));
+
+    // ---- the PvP panel (Parser/PvpKills.cs): a record that is no fight, its rows the last kills ----
+
+    /// <summary>
+    /// The PvP panel's kills, newest first, when this record is the panel (PvpKills.BoardOf): each row (a <see cref="Fighter"/>
+    /// whose Id is the kill's Seq) is a player you killed or helped kill, its figure your damage on them. Null for any fight.
+    /// </summary>
+    [JsonIgnore] public IReadOnlyList<PvpKill>? Pvp { get; set; }
+
+    /// <summary>The clock the meter's head shows: the fight's length ("4:12"); none on the PvP panel, which is no fight.</summary>
+    public string ClockText(DateTime now) => Pvp != null ? "" : BossParser.Clock(Duration(now));
+
+    /// <summary>The kill a row of the PvP panel stands for (null: not the panel, or no such row).</summary>
+    public PvpKill? PvpOf(Fighter f) => Pvp?.FirstOrDefault(k => k.Seq == f.Id);
+
+    /// <summary>
+    /// The record and member a row's skills card is of: a fight's own, or for a row of the PvP panel that kill's fight and you
+    /// in it (your damage on that player by skill, over that fight's time).
+    /// </summary>
+    public (Encounter E, Fighter F) CardOf(Fighter f) => PvpOf(f) is { Fight: var pf } && pf.You is { } y ? (pf, y) : (this, f);
+
+    /// <summary>The PvP panel's share-column words, in the language in use: a look's share column is as wide as the widest.</summary>
+    public static string[] PvpWords => new[] { Ui.L.T("Kill"), Ui.L.T("Assist") };
+
+    /// <summary>A PvP panel row's share column: "Kill" or "Assist".</summary>
+    public static string PvpWord(PvpKill k) => k.Assist ? Ui.L.T("Assist") : Ui.L.T("Kill");
+    /// <summary>A PvP panel row's line beside the name: who landed the kill you assisted ("by Tilly"), else empty.</summary>
+    public static string PvpBy(PvpKill k) => k.Assist && k.Killer.Length > 0 ? Ui.L.F("by {0}", k.Killer) : "";
+    /// <summary>The panel's figure for a kill: your damage on them ("412.3K"), "–" when no hit of yours on them was seen.</summary>
+    public static string PvpFigure(PvpKill k) => k.Damage > 0 ? Ui.Amounts.Meter(k.Damage) : "–";
+
+    /// <summary>The panel's foot: "2 kills · 1 assist · hover a row for its skills".</summary>
+    [JsonIgnore] public string PvpFoot
+    {
+        get
+        {
+            if (Pvp is not { Count: > 0 } k) return "";
+            int kills = k.Count(x => !x.Assist), assists = k.Count - kills;
+            var bits = new List<string>();
+            if (kills > 0) bits.Add(kills == 1 ? Ui.L.T("1 kill") : Ui.L.F("{0} kills", kills));
+            if (assists > 0) bits.Add(assists == 1 ? Ui.L.T("1 assist") : Ui.L.F("{0} assists", assists));
+            bits.Add(Ui.L.F("{0} dealt", Ui.Amounts.Meter(k.Sum(x => x.Damage))));
+            return string.Join(" · ", bits);
+        }
+    }
 
     /// <summary>The held figure's badge.</summary>
     public const string AvgBadge = "Avg. DPS";
@@ -468,28 +514,28 @@ public sealed class Encounter : IJsonOnDeserialized
     public const int BigHitAfter = 8;
 
     /// <summary>What a ready card says under its name: a dungeon waits for its first pull, the meter anywhere else for a hit.</summary>
-    [JsonIgnore] public string ReadyText => ModeKind == ParserMode.Fights ? Ui.L.T("Waiting for the first hit") : Ui.L.T("Waiting for the first pull");
+    [JsonIgnore] public string ReadyText => Pvp != null ? Ui.L.T("No PvP kills yet") : ModeKind == ParserMode.Fights ? Ui.L.T("Waiting for the first hit") : Ui.L.T("Waiting for the first pull");
 
     /// <summary>
     /// The rows the live card, the overlay and the list show (Steven, 2026-11-14: "don't count [a member] until they have at
     /// least 1 [damage]"): with damage counted, only members who have dealt some; before any damage, everyone. The detail's
     /// roster lists every member. Never an "Other" row (Steven, 2026-11-14).
     /// </summary>
-    public IEnumerable<Fighter> Shown() => HasDamage ? Ranked().Where(f => f.Damage > 0) : Ranked();
+    public IEnumerable<Fighter> Shown() => Pvp != null ? Members : HasDamage ? Ranked().Where(f => f.Damage > 0) : Ranked();
 
     /// <summary>
     /// The meter's rows at <paramref name="now"/> (Steven, 2026-11-16: "it should show the people even if not DPSing (you can
     /// hide if not DPSing for like 15 seconds)"): every member with damage, and one without for their first
     /// <see cref="QuietShownSeconds"/> in the fight (from its start, or from joining it); one who left and dealt none, never.
     /// </summary>
-    public IEnumerable<Fighter> Shown(DateTime now) => !HasDamage ? Ranked().Where(f => !f.Gone)
+    public IEnumerable<Fighter> Shown(DateTime now) => Pvp != null ? Members : !HasDamage ? Ranked().Where(f => !f.Gone)
         : Ranked().Where(f => f.Damage > 0 || (!f.Gone && (now - (f.JoinedAt is { } j && j > Start ? j : Start)).TotalSeconds < QuietShownSeconds));
 
     /// <summary>How long a member who dealt no damage keeps their row in a fight.</summary>
     public const double QuietShownSeconds = 15;
 
     /// <summary>The members by damage when known, else you first and then by Combat Power.</summary>
-    public IEnumerable<Fighter> Ranked() => HasDamage
+    public IEnumerable<Fighter> Ranked() => Pvp != null ? Members : HasDamage
         ? Members.OrderByDescending(Figure).ThenByDescending(f => f.Damage).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
         : Members.OrderByDescending(f => f.You).ThenByDescending(f => f.CombatPower).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
 

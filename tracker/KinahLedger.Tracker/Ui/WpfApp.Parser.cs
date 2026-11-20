@@ -21,7 +21,7 @@ public static partial class WpfApp
         Directory.CreateDirectory(dir);
         // the default renders, then the PR's second set with every Parser option on ("-all")
         var states = state is "true" or "all" or "" ? ParserStates.Concat(new[] { "live-all", "detail-all", "overlay", "views", "graphs" }).ToArray() : new[] { state };
-        if (states.Any(st => st is not ("overlay" or "mine" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "views" or "looks" or "worst" or "concepts" or "graphs" or "layout" or "picks") &&!ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
+        if (states.Any(st => st is not ("overlay" or "mine" or "pvp" or "themes" or "motion" or "meter" or "heals" or "finale" or "share" or "views" or "looks" or "worst" or "concepts" or "graphs" or "layout" or "picks") &&!ParserStates.Contains(st.EndsWith("-all") || st.EndsWith("-min") ? st[..^4] : st))) { Console.WriteLine($"--parser takes {string.Join(", ", ParserStates)} or overlay"); return 2; }
         // one window for every state (a second MainWindow in one process trips the Farming page's own drawing)
         MainWindow? w = null;
         try
@@ -42,6 +42,7 @@ public static partial class WpfApp
                     if (Environment.GetEnvironmentVariable("KL_PARSER_ALWAYS") == "1") w.SetParserAlwaysOnForTest(true);
                 }
                 if (st == "themes") { ShotThemes(w, dir); continue; }
+                if (st == "pvp") { ShotPvp(dir); continue; }   // the PvP panel in every look (Ui/WpfApp.Pvp.cs)
                 if (st == "picks") { ShotPickStrips(w, dir); continue; }   // the pickup strip on every look (Ui/WpfApp.PickStrip.cs)
                 if (st == "share") { ShotMeterShare(dir); continue; }   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
                 if (st == "views") { ShotParserShare(w, dir); continue; }   // the Parser page's share pictures (Ui/WpfApp.ParserShare.cs)
@@ -791,6 +792,7 @@ public static partial class WpfApp
         var parserTitles = opt.ParserSwitchTitlesForTest;
         check(!parserTitles.Any(t => t.Contains("DPS on the Kinah", StringComparison.OrdinalIgnoreCase) || t.Contains("Open-world DPS", StringComparison.OrdinalIgnoreCase)) && parserTitles.Contains("Parser inside the Kinah overlay"),
             "Options › In game › Parser: no Open-world DPS on the Kinah line switch; Parser inside the Kinah overlay stays (" + string.Join(", ", parserTitles) + ")");
+        check(parserTitles.Contains("PvP kills in PvP") && opt.ParserPvpForTest.IsChecked == true, "Settings › DPS meter › More: PvP kills in PvP, on by default");
         check(!typeof(KinahLedger.Parser.ParserPrefs).GetProperties().Any(p => p.Name == "FarmDps"), "the Parser's settings keep no Kinah-line DPS choice");
         foreach (var look in HudLooks.All.Select(l => l.Key))
         {

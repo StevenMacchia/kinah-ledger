@@ -24,7 +24,7 @@ public static class ClassArt
     }
 
     /// <summary>The class's colour, the game's own (its party list's): Gladiator light blue, Templar blue, Assassin green, Ranger teal, Sorcerer purple, Spiritmaster magenta, Cleric gold, Chanter orange.</summary>
-    public static Color ColorOf(string? cls) => Key(cls) switch
+    public static Color ColorOf(string? cls) => cls == PvpKill ? Color.FromRgb(0xE8, 0x6A, 0x5E) : cls == PvpAssist ? Color.FromRgb(0xE0, 0xA8, 0x4E) : Key(cls) switch
     {
         // the glyph colours of the game's own party list (Ocr/PartyFrame.Refs), so the Parser's colours are the game's
         "gladiator" => Color.FromRgb(0x7A, 0xC5, 0xD9),     // light blue
@@ -37,6 +37,12 @@ public static class ClassArt
         "chanter" => Color.FromRgb(0xCC, 0x99, 0x5C),       // orange
         _ => Color.FromRgb(0x86, 0x8D, 0xA1),               // unknown: the quiet grey
     };
+
+    /// <summary>
+    /// The PvP panel's rows (Parser/PvpKills.cs) are players whose class isn't known: their row is tinted by what it was, a
+    /// kill coral, an assist amber, under these keys (no class: the disc carries the name's initial, no class name is shown).
+    /// </summary>
+    public const string PvpKill = "pvp:kill", PvpAssist = "pvp:assist";
 
     /// <summary>The class's colour at <paramref name="alpha"/> (0 to 1), frozen: a meter bar behind text is the colour at about a third.</summary>
     public static SolidColorBrush Brush(string? cls, double alpha = 1)

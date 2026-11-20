@@ -30,7 +30,7 @@ public partial class MainWindow
     }
 
     /// <summary>A record with something to share: members on the meter, not a dungeon's ready card.</summary>
-    static bool Shareable(Encounter? e) => e is { Waiting: false } && e.Roster.Any(f => !f.Other);
+    static bool Shareable(Encounter? e) => e is { Waiting: false, Pvp: null } && e.Roster.Any(f => !f.Other);
 
     /// <summary>The shortcut's fight: the one on the meter now, else the last one that ended (this session's, else the newest kept).</summary>
     Encounter? MeterShareFight()

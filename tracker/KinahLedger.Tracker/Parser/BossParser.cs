@@ -878,6 +878,8 @@ public sealed class BossParser
     // ---- the party list's classes (Ocr/PartyFrame.cs, Steven 2026-11-14: "it's literally an icon in the top left") ----
     readonly Dictionary<string, string> _screenClass = new(StringComparer.OrdinalIgnoreCase);
     string _youClass = "";
+    /// <summary>Your class as the party list showed it ("" until it did): your row on a PvP fight's skills card (Parser/PvpKills.cs).</summary>
+    public string YouClass { get { lock (_gate) return _youClass; } }
 
     /// <summary>
     /// The party list as the screen shows it: each member's name (when read) and class, the player first. A member of a record

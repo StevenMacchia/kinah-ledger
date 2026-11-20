@@ -31,6 +31,7 @@ static class ParserFoot
     /// </summary>
     public static (string Word, string Value, bool Held) Right(Encounter e, DateTime now)
     {
+        if (e.Pvp != null) return ("", "", false);   // the PvP panel: its total alone (your damage on those players)
         bool held = e.HeldAverage;
         bool pulls = e.ModeKind == ParserMode.Run && (e.BossView || !e.TargetsSplit);
         if (!SoloYou(e))

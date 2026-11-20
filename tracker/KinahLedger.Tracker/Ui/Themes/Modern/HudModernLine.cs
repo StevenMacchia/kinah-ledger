@@ -488,7 +488,7 @@ sealed partial class HudModernLine : ModernLook
                 _outcome.Margin = new Thickness(8, 0, 0, 0);
                 Grid.SetColumn(_outcome, 2); head.Children.Add(_outcome);
             }
-            var ck = Tt(Clock(e.Duration(now)), 17, WhiteB, FontWeights.Bold); ck.Margin = new Thickness(8, -1, 0, 0);
+            var ck = Tt(Clock(e, now), 17, WhiteB, FontWeights.Bold); ck.Margin = new Thickness(8, -1, 0, 0);
             Grid.SetColumn(ck, 3); head.Children.Add(ck);
         }
         _fightIn.Children.Add(head);

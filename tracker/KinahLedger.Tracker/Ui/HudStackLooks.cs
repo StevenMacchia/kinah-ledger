@@ -284,6 +284,8 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
     // ---- a fight
 
     protected static string Clock(TimeSpan t) => BossParser.Clock(t);
+    /// <summary>The meter head's clock for a record (none on the PvP panel: Encounter.ClockText).</summary>
+    protected static string Clock(Encounter e, DateTime now) => e.ClockText(now);
 
     protected static double Top(Encounter e) => e.TopMeasure();
 
@@ -466,7 +468,7 @@ sealed partial class HudCapsule : HudStackLook
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(Tx(e.Title, 13.5, Ink, FontWeights.Bold));
-        var clk = e.Waiting ? Tx(L.T("Ready"), 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
+        var clk = e.Waiting ? Tx(L.T("Ready"), 12.5, Muted, FontWeights.SemiBold) : Num(Clock(e, now), 14.5, e.Live ? Gold : Ink, FontWeights.Bold); clk.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _meterBody.Children.Add(head);
         if (e.Waiting)
         {
@@ -712,7 +714,7 @@ sealed partial class HudMeter : HudStackLook
             if (_figs is { } fw && !was) { DrawFoot(fw); _figSig = ""; }
             return;
         }
-        _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold : Ink;
+        _clock.Text = Clock(e, now); _clock.Foreground = e.Live ? Gold : Ink;
         double hp = e.BossHpLeft is { } h && e.Live ? h : 0;
         _hpFill.Width = _hpLine.Width = W * hp;
         _hpTicks.Visibility = hp > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -874,7 +876,7 @@ sealed partial class HudFloat : HudStackLook
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(Tx(e.Title, 14, Ink, FontWeights.Bold));
         if (Hp(e, 12) is { } hpText) { hpText.Margin = new Thickness(8, 1, 0, 0); head.Children.Add(hpText); }
-        head.Children.Add(e.Waiting ? Tx(L.T("  Ready"), 12.5, Muted, FontWeights.SemiBold) : Num("  " + Clock(e.Duration(now)), 14.5, e.Live ? Gold : Ink, FontWeights.Bold));
+        head.Children.Add(e.Waiting ? Tx(L.T("  Ready"), 12.5, Muted, FontWeights.SemiBold) : Num("  " + Clock(e, now), 14.5, e.Live ? Gold : Ink, FontWeights.Bold));
         if (!e.Live && e.Outcome is "kill" or "wipe" or "cleared")
             head.Children.Add(Tx(L.T(e.Outcome == "wipe" ? "  Wiped" : e.Outcome == "cleared" ? "  Cleared" : "  Killed"), 12, e.Outcome == "wipe" ? B(RecC) : Mint, FontWeights.Bold));
         _fight.Children.Add(head);

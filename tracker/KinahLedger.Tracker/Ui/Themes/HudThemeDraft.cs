@@ -47,7 +47,7 @@ abstract class HudThemeDraft : HudThemeLook
     {
         _fight.Children.Clear();
         if (e == null) { _fight.Visibility = Visibility.Collapsed; return; }
-        _fight.Children.Add(new TextBlock { Text = $"{e.Title}  {(e.Waiting ? L.T("Ready") : Clock(e.Duration(now)))}  {OutcomeText(e)}", Foreground = Ink, FontWeight = FontWeights.Bold });
+        _fight.Children.Add(new TextBlock { Text = $"{e.Title}  {(e.Waiting ? L.T("Ready") : Clock(e, now))}  {OutcomeText(e)}", Foreground = Ink, FontWeight = FontWeights.Bold });
         if (e.Waiting) _fight.Children.Add(new TextBlock { Text = e.ReadyText, Foreground = Muted });
         else { PutRows(_fight, e, now, FightWidth - 40); if (e.HasDamage) _fight.Children.Add(ParserFoot.Line(e, now, 12)); }
         _fight.Visibility = Visibility.Visible;

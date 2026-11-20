@@ -22,6 +22,16 @@ public sealed partial class TrackerSession
     public BossParser Fights => _fights ??= NewFights();
     BossParser? _fights;
 
+    /// <summary>
+    /// The PvP panel's last kills and assists (Parser/PvpKills.cs), fed the game's fight events as they are decoded: what the
+    /// meter shows instead of the DPS in the Abyss and the arenas (<see cref="InPvp"/>).
+    /// </summary>
+    public PvpKills Pvp => _pvp ??= new PvpKills { Self = () => ("", _fights?.YouClass ?? "") };
+    PvpKills? _pvp;
+
+    /// <summary>Where the meter is the PvP panel: the Abyss, or an arena (instances.txt kind Arena).</summary>
+    public bool InPvp => Ocr.ZoneLocator.IsAbyss(Zone) || Instances.Current is { Kind: "Arena", Leaving: false };
+
     /// <summary>The kept records of the character playing.</summary>
     public static EncounterStore FightStore { get; } = new(() => Characters.DataDir);
 
@@ -68,7 +78,8 @@ public sealed partial class TrackerSession
         // what queued before the session was up first, in order
         while (r.NextBossEvent() is { } old) p.Take(old);
         r.BossSink = ev => { _onReaderThread = true; try { p.Take(ev); } finally { _onReaderThread = false; } };
-        r.FightSink = f => { _onReaderThread = true; try { RawFight(p, f); } finally { _onReaderThread = false; } };
+        var pvp = Pvp;
+        r.FightSink = f => { _onReaderThread = true; try { RawFight(p, f); pvp.Take(f); } finally { _onReaderThread = false; } };
         while (r.NextBossEvent() is { } late) p.Take(late);
     }
 
@@ -100,6 +111,8 @@ public sealed partial class TrackerSession
             // 2026-11-17: his Transcendence runs with Tilly were filed as expeditions, the stage set an hour before)
             if (p.TranscendenceHere is { } th) Instances.MarkTranscendence(DateTime.UtcNow, th.Instance);
             p.Place(Zone, Ocr.ZoneLocator.IsAbyss(Zone));
+            // the PvP panel's fights are the Abyss's, or the arena's by name
+            Pvp.Place = Instances.Current is { Kind: "Arena" } ar && ar.Zone is { Length: > 0 } az ? az : "Abyss";
             var now = DateTime.UtcNow;
             p.Tick(now);
             SaveEnded();

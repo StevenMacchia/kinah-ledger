@@ -63,7 +63,8 @@ static class TerminalRows
     static TextBlock At(Grid g, int col, TextBlock t) { Grid.SetColumn(t, col); g.Children.Add(t); return t; }
 
     /// <summary>The table's head, inverted as `top` draws it.</summary>
-    public static FrameworkElement Header(bool expanded)
+    /// <param name="damage">The PvP panel: the figure column is the damage dealt ("DMG"), not DPS.</param>
+    public static FrameworkElement Header(bool expanded, bool damage = false)
     {
         var g = Columns(15);
         var bar = new Border { Background = Br(PhosC, .85) };
@@ -71,7 +72,7 @@ static class TerminalRows
         var rank = At(g, 0, Txt("#", 10, Ground, Face)); rank.HorizontalAlignment = HorizontalAlignment.Right;
         At(g, 1, Txt(L.T("NAME"), 10, Ground, Face)).Margin = new Thickness(4, 0, 0, 0);
         At(g, 2, Txt(L.T("LOAD"), 10, Ground, Face)).Margin = new Thickness(2, 0, 0, 0);
-        var dps = At(g, 3, Txt(L.T("DPS"), 10, Ground, Face)); dps.HorizontalAlignment = HorizontalAlignment.Right; dps.Margin = new Thickness(0, 0, 2, 0);
+        var dps = At(g, 3, Txt(damage ? L.T("DMG") : L.T("DPS"), 10, Ground, Face)); dps.HorizontalAlignment = HorizontalAlignment.Right; dps.Margin = new Thickness(0, 0, 2, 0);
         g.Margin = new Thickness(0, 6, 0, 4);
         return g;
     }
@@ -165,7 +166,7 @@ static class TerminalRows
             _cls.Text = ClassCode(m.Class);
             _cls.Foreground = Frozen(cc);
             _cp.Inlines.Clear();
-            if (m.Cp.Length > 0) { _cp.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 9.5)); _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim)); }
+            if (m.Cp.Length > 0) { if (!m.Pvp) _cp.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 9.5)); _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim)); }
             _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _death.Child = m.Deaths > 0 ? Txt("†" + m.Deaths.ToString(CultureInfo.InvariantCulture), 11, Red, Face) : null;
             _death.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
