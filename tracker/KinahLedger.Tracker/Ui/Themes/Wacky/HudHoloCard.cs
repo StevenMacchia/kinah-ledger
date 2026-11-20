@@ -819,7 +819,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         readonly Inked _detail = new(9.5, FontWeights.Medium, Wk.S(Ice, .88));
         readonly Inked _fig = new(17.5, FontWeights.Bold, WhiteB, figure: true), _share = new(10, FontWeights.SemiBold, Wk.S(0xA8B4E0), figure: true);
         readonly ColumnDefinition _figCol = new(), _shareCol = new();
-        GridLength _shareW;
+        StackPanel _marks = null!;
         bool _cpWanted;
         readonly Border _groove = new() { CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1) };
         readonly Grid _track = new() { Margin = new Thickness(1.5) };
@@ -889,12 +889,25 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             // the heal and TOP stamps: on the row's own line, before the DPS
             _heal = Stamp(out _healT); _heal.Margin = new Thickness(0, 0, 2, 0);
             _top = Stamp(out _topT);
-            var marks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), IsHitTestVisible = false, Children = { _heal, _top } };
+            var marks = _marks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), IsHitTestVisible = false, Children = { _heal, _top } };
             Grid.SetColumn(marks, 3); _line.Children.Add(marks);
             _root.SizeChanged += (_, _) => Crowd();
         }
 
-        void Crowd() => WkCard.Crowd(_line, _root.ActualWidth, _cpBox, _cpWanted, on => { _share.Root.Visibility = on ? Visibility.Visible : Visibility.Collapsed; _shareCol.Width = on ? _shareW : new GridLength(0); });
+        void Crowd() => WkCard.Crowd(_line, _root.ActualWidth, _cpBox, _cpWanted, on => _share.Root.Visibility = on ? Visibility.Visible : Visibility.Hidden, null, Stack);
+
+        /// <summary>The heal stamp over the TOP stamp, right-aligned against the DPS (a crowded line's first give), or side by side.</summary>
+        void Stack(bool on)
+        {
+            on &= _heal.Visibility == Visibility.Visible && _top.Visibility == Visibility.Visible;   // one alone gains nothing
+            _marks.Orientation = on ? Orientation.Vertical : Orientation.Horizontal;
+            foreach (var (b, t) in new[] { (_heal, _healT), (_top, _topT) })
+            {
+                b.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+                t.FontSize = on ? 7.5 : 8; t.LineHeight = on ? 9.5 : 10.5;
+            }
+            _heal.Margin = on ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 2, 0);
+        }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -916,7 +929,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             {
                 _cpOnly = m.CpOnly;
                 _figCol.Width = new GridLength(Wk.Room(Face, 17.5, FontWeights.Bold, m.CpOnly ? new[] { "888,888" } : Wk.DpsForms, 8));
-                _shareCol.Width = _shareW = new GridLength(Wk.Room(Face, 10, FontWeights.SemiBold, m.CpOnly ? new[] { L.T("CP") } : Wk.ShareForms, 6));
+                _shareCol.Width = new GridLength(Wk.Room(Face, 10, FontWeights.SemiBold, m.CpOnly ? new[] { L.T("CP") } : Wk.ShareForms, 6));
             }
             _fig.Text = m.Figure; _share.Text = m.ShareText;
             _groove.Background = Wk.Lin(0, 0, 0, 1, (0x03050C, .95, 0), (0x101632, .95, 1));

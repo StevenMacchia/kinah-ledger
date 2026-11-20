@@ -787,8 +787,24 @@ sealed partial class HudSticker : WackyLook, IThemeCard
 
         Grid _words = null!;
         bool _cpWanted;
-        GridLength _shareW;
-        void Crowd() => WkCard.Crowd(_words, _root.ActualWidth, _cp, _cpWanted, on => { _share.Visibility = on ? Visibility.Visible : Visibility.Collapsed; _row.ColumnDefinitions[7].Width = on ? _shareW : new GridLength(0); }, _detail);
+        void Crowd() => WkCard.Crowd(_words, _root.ActualWidth, _cp, _cpWanted, on => _share.Visibility = on ? Visibility.Visible : Visibility.Hidden, _detail, Stack);
+
+        /// <summary>
+        /// The heal's tag over the TOP sticker in one column before the DPS, each lapping an edge of its own strip and a size
+        /// smaller (a crowded line's first give), or side by side.
+        /// </summary>
+        void Stack(bool on)
+        {
+            on &= _healTag.Visibility == Visibility.Visible && _top.Visibility == Visibility.Visible;   // one alone gains nothing
+            Grid.SetColumn(_top, on ? 2 : 3);
+            _healTag.VerticalAlignment = on ? VerticalAlignment.Top : VerticalAlignment.Center;
+            _top.VerticalAlignment = on ? VerticalAlignment.Bottom : VerticalAlignment.Center;
+            _healTag.HorizontalAlignment = _top.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
+            _healTag.Margin = on ? new Thickness(5, -3.5, 0, 0) : new Thickness(5, 0, 0, 0);
+            _top.Margin = on ? new Thickness(5, 0, 0, -3) : new Thickness(4, 0, 0, 0);
+            _heal.FontSize = on ? 9 : 10.5; _heal.LineHeight = on ? 10 : 12;
+            _topText.FontSize = on ? 7.5 : 8.5; _topText.LineHeight = on ? 8.5 : 10;
+        }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -815,7 +831,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             _deadText.Text = "✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Wk.Detail(_detail, m, c, _critWord);
-            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Heavy, 14.5, FontWeights.Black, Wk.Segoe, 10.5, FontWeights.Bold); _shareW = _row.ColumnDefinitions[7].Width; }
+            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Heavy, 14.5, FontWeights.Black, Wk.Segoe, 10.5, FontWeights.Bold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             // the highlighter: the class's colour as a light marker ink, so the black words stay crisp on it; against the top
             // member's damage, so the top row's runs the sticker's width

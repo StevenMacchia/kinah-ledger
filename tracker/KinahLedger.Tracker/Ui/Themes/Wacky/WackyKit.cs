@@ -579,34 +579,36 @@ static class WkCard
     }
 
     /// <summary>
-    /// A meter row's line made to fit its <paramref name="room"/> in Steven's order: the Combat Power goes first, then the
-    /// share, and only then is the name cut (2026-11-20 review: names were cut while their CP still showed). The line is
-    /// measured at its natural width (its star columns then size to their content), margins included.
+    /// A meter row's line made to fit its <paramref name="room"/> in Steven's order: its heal and TOP marks stacked first (no
+    /// loss), then the Combat Power goes, then the share (its slot kept empty, so the DPS never leaves its column), then an
+    /// expanded row's damage and crit, and only then is the name cut (2026-11-20 review: names were cut while their CP still
+    /// showed). The line is measured at its natural width (its star columns then size to their content), margins included.
     /// </summary>
-    /// <param name="share">Shows (true) or drops (false) the share, its column with it.</param>
-    /// <param name="detail">An expanded row's damage and crit on the same line: dropped last, still before the name is cut.</param>
-    public static void Crowd(FrameworkElement line, double room, UIElement? cp, bool cpWanted, Action<bool> share, UIElement? detail = null)
+    /// <param name="share">Shows (true) or hides (false) the share; its column stays.</param>
+    /// <param name="detail">An expanded row's damage and crit on the same line.</param>
+    /// <param name="stack">Puts the heal and TOP marks one over the other (true) or side by side (false).</param>
+    public static void Crowd(FrameworkElement line, double room, UIElement? cp, bool cpWanted, Action<bool> share, UIElement? detail = null, Action<bool>? stack = null)
     {
+        stack?.Invoke(false);
         if (cp != null) cp.Visibility = cpWanted ? Visibility.Visible : Visibility.Collapsed;
         share(true);
         bool detailWanted = detail != null && detail.Visibility == Visibility.Visible;
-        if (room <= 0) return;
-        bool Fits()
+        if (room > 0)
         {
-            // every part of the line measured again (a measure of the line alone keeps its children's last sizes)
-            void Dirty(DependencyObject d) { if (d is UIElement u) u.InvalidateMeasure(); for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Dirty(VisualTreeHelper.GetChild(d, i)); }
-            Dirty(line);
-            line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return line.DesiredSize.Width <= room + .5;
-        }
-        if (!Fits())
-        {
-            if (cp != null && cpWanted) cp.Visibility = Visibility.Collapsed;
-            if (cp == null || !cpWanted || !Fits())
+            bool Fits()
             {
-                share(false);
-                if (detailWanted && !Fits()) detail!.Visibility = Visibility.Collapsed;
+                // every part of the line measured again (a measure of the line alone keeps its children's last sizes)
+                void Dirty(DependencyObject d) { if (d is UIElement u) u.InvalidateMeasure(); for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Dirty(VisualTreeHelper.GetChild(d, i)); }
+                Dirty(line);
+                line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                return line.DesiredSize.Width <= room + .5;
             }
+            var steps = new List<Action>();
+            if (stack != null) steps.Add(() => stack(true));
+            if (cp != null && cpWanted) steps.Add(() => cp.Visibility = Visibility.Collapsed);
+            steps.Add(() => share(false));
+            if (detailWanted) steps.Add(() => detail!.Visibility = Visibility.Collapsed);
+            foreach (var step in steps) { if (Fits()) break; step(); }
         }
         line.InvalidateMeasure();
     }

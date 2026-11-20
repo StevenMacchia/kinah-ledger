@@ -832,10 +832,9 @@ sealed partial class HudNeon : WackyLook, IThemeCard
 
         bool _cpWanted;
 
-        GridLength _shareW;
 
         /// <summary>A crowded line drops the Combat Power, then the share, before the name is cut (WkCard.Crowd).</summary>
-        void Crowd() => WkCard.Crowd(_row, _root.ActualWidth, _cp, _cpWanted, on => { _share.Visibility = on ? Visibility.Visible : Visibility.Collapsed; _row.ColumnDefinitions[7].Width = on ? _shareW : new GridLength(0); }, _detail);
+        void Crowd() => WkCard.Crowd(_row, _root.ActualWidth, _cp, _cpWanted, on => _share.Visibility = on ? Visibility.Visible : Visibility.Hidden, _detail);
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -863,7 +862,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS"); _topText.Foreground = Wk.S(tc);
             _top.BorderBrush = Wk.S(tc); _top.Background = Wk.S(tc, .14);
             Wk.Detail(_detail, m, c, _critWord);
-            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Bahn, 15, FontWeights.Bold, Wk.Bahn, 11, FontWeights.SemiBold); _shareW = _row.ColumnDefinitions[7].Width; }
+            if (_cpOnly != m.CpOnly) { _cpOnly = m.CpOnly; Wk.FigureCols(_row.ColumnDefinitions[6], _row.ColumnDefinitions[7], m.CpOnly, Wk.Bahn, 15, FontWeights.Bold, Wk.Bahn, 11, FontWeights.SemiBold); }
             _figure.Text = m.Figure; _share.Text = m.ShareText;
             _figure.Foreground = m.Rank == 1 && !m.CpOnly ? YelB : WhiteB;
             // the bar: the class's neon round a glass tinted in it (deeper at its start), its glow a wider faint ring; against the
