@@ -283,7 +283,7 @@ public partial class OptionsWindow
         _parserCritChk = Row("Crit and back-attack rates", "Each member's crit rate, their crits' share of the damage and their biggest crit, and how often they hit from behind, with each skill's own rates, on the Parser page and in the overlay's pop-up on a member. New: close but still being checked against the game's Combat Analysis.", "Parser crit and back-attack rates");
         _parserHoversChk = Row("Explanations on hover", "What a figure, a row or a switch means, when the pointer rests on it.", "Parser explanations on hover");
         _parserSeparateChk = Row("Parser inside the Kinah overlay", "Off (the default), the Parser has its own overlay you can drag anywhere, and the Kinah overlay stays as it is. On, it opens above the Kinah overlay when a fight starts, takes its place in a dungeon, and takes the overlay's look.", "Parser inside the Kinah overlay");
-        _parserSeparateChk.Click += (_, _) => DrawParserLooks();
+        _parserSeparateChk.Click += (_, _) => { _parserTheme = null; DrawParserLooks(); };
         more.Children.Add(Styled(new Border { Child = _parserMoreStack, Margin = new Thickness(0, 8, 0, 0) }, "Group"));
         // the meter's share picture (Ui/MeterShare.cs, 1.0.2): other members' names hidden on it, and a shortcut of its own
         var share = new StackPanel();
@@ -462,42 +462,53 @@ public partial class OptionsWindow
         if (_parserLookHost == null || _parserLookHint == null) return;
         _parserLookHost.Children.Clear();
         if (_parserLookStage != null) _parserLookStage.Tag = null;
-        bool separate = _parserSeparateChk?.IsChecked != true;
+        bool inKinah = _parserSeparateChk?.IsChecked == true;
+        string kinahTheme = _hudTheme ?? HudThemes.Of(_edit.HudLook);   // the Kinah overlay's theme (Ui/OptionsWindow.Themes.cs)
         if (_parserLookRow != null) _parserLookRow.Visibility = Visibility.Visible;
-        if (_parserAllLooks != null) _parserAllLooks.Visibility = separate ? Visibility.Collapsed : Visibility.Visible;
-        var current = separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook);
-        // in its own window the meter has a theme of its own (its chips); inside the Kinah overlay it is the overlay's theme
-        if (separate) _parserTheme ??= ParserThemeOf(current);
+        if (_parserAllLooks != null) _parserAllLooks.Visibility = inKinah ? Visibility.Visible : Visibility.Collapsed;
+        // every theme's looks are on offer either way (Steven, 2026-11-20: "you should not have to choose the buddy theme to
+        // choose the dps meter theme ... the styles should always all be available"): in its own window the meter's theme
+        // starts at its look's, inside the Kinah overlay at the overlay's
+        _parserTheme ??= inKinah ? kinahTheme : ParserThemeOf(_parserLookPick);
+        // the overlay's own fight looks draw inside it; any other look is the meter's own window's (OwnLook)
+        bool own = OwnLooksShown;
+        var current = own ? _parserLookPick : HudLooks.Parse(_edit.HudLook);
         if (_parserThemeHost != null)
         {
             _parserThemeHost.Children.Clear();
-            if (_parserThemeRow != null) _parserThemeRow.Visibility = separate ? Visibility.Visible : Visibility.Collapsed;
-            if (separate)
-                foreach (var t in HudThemes.All)
-                {
-                    var tk = t.Key;
-                    var chip = _host.Chip(L.T(t.Name), tk == _parserTheme, () => { if (tk == _parserTheme) return; _parserTheme = tk; DrawParserLooks(); }, L.T(t.Hint));
-                    chip.Tag = "parser-theme:" + tk;
-                    _parserThemeHost.Children.Add(chip);
-                }
+            if (_parserThemeRow != null) _parserThemeRow.Visibility = Visibility.Visible;
+            foreach (var t in HudThemes.All)
+            {
+                var tk = t.Key;
+                var chip = _host.Chip(L.T(t.Name), tk == _parserTheme, () => { if (tk == _parserTheme) return; _parserTheme = tk; DrawParserLooks(); }, L.T(t.Hint));
+                chip.Tag = "parser-theme:" + tk;
+                _parserThemeHost.Children.Add(chip);
+            }
         }
-        var keys = separate ? ParserLooksOf(_parserTheme!).ToArray() : HudThemes.FightLooks(_hudTheme ?? HudThemes.Of(_edit.HudLook)).ToArray();   // the Kinah overlay's theme (Ui/OptionsWindow.Themes.cs)
+        var keys = own ? ParserLooksOf(_parserTheme!).ToArray() : HudThemes.FightLooks(kinahTheme).ToArray();
         _parserLookHost.Columns = Math.Max(3, keys.Length);
-        string inUseName = separate ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
-        _parserLookHint.Text = separate
+        string inUseName = own ? MainWindow.ParserLookName(current) : HudLooks.All.First(l => l.Key == current).Name;
+        _parserLookHint.Text = !inKinah
             ? L.T("Its own look over the game, apart from the Buddy's.")
+            : own ? L.T("Picking one of these gives the Parser its own overlay in that look. The Kinah overlay keeps its look.")
             : HudLooks.FightLooks.Contains(current) ? L.T("How a boss fight shows over the game, in a dungeon in place of the Kinah line. Picking one here picks the Kinah overlay's look too.")
             : L.F("In use: {0}, the Parser above it. Pick one drawn for fights, or see all looks.", L.T(inUseName));
         var scene = HudKit.GameScene();   // over the game (Steven, 2026-11-16)
         _parserLookShown = keys.Contains(current) ? current : keys[0];
         foreach (var key in keys)
         {
-            string lookName = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
+            string lookName = own ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
             string hint = L.T(MainWindow.PanelLookHint(key) ?? HudLooks.All.First(x => x.Key == key).Hint);
-            bool on = key == current;
+            bool on = key == current && (!own || !inKinah);
             var k = key;
-            var card = LookTile(key, L.T(lookName), hint, on, () => ParserFace(k, separate), scene, lookName + " overlay look");
-            void Pick() { if (separate) { _parserLookPick = k; DrawParserLooks(); Refresh(); } else PickHudLook(k); }
+            var card = LookTile(key, L.T(lookName), hint, on, () => ParserFace(k, own), scene, lookName + " overlay look");
+            void Pick()
+            {
+                if (!own) { PickHudLook(k); return; }
+                // a look from another theme than the Kinah overlay's: the Parser takes its own window in it, the overlay stays
+                if (inKinah) _parserSeparateChk.IsChecked = false;
+                _parserLookPick = k; DrawParserLooks(); Refresh();
+            }
             card.MouseLeftButtonUp += (_, _) => Pick();
             card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Pick(); e.Handled = true; } };
             card.MouseEnter += (_, _) => DrawParserStage(k);
@@ -507,6 +518,12 @@ public partial class OptionsWindow
         }
         DrawParserStage(_parserLookShown);
     }
+
+    /// <summary>
+    /// True when the look tiles are the meter's own window's: always with the meter in its own window, and inside the Kinah
+    /// overlay when the theme picked is not the overlay's (picking one then gives the meter its own window).
+    /// </summary>
+    bool OwnLooksShown => _parserSeparateChk?.IsChecked != true || (_parserTheme != null && _parserTheme != (_hudTheme ?? HudThemes.Of(_edit.HudLook)));
 
     /// <summary>One look in a boss fight (the sample pull), as the meter's own window or the Kinah overlay draws it; null when it fails.</summary>
     FrameworkElement? ParserFace(string key, bool separate)
@@ -522,9 +539,9 @@ public partial class OptionsWindow
     {
         if (_parserLookStage == null || key == null) return;
         if (_parserLookStage.Tag as string == key) return;
-        bool separate = _parserSeparateChk?.IsChecked != true;
+        bool separate = OwnLooksShown;
         if (ParserFace(key, separate) is not { } face) return;
-        bool inUse = key == (separate ? _parserLookPick : HudLooks.Parse(_edit.HudLook));
+        bool inUse = separate ? key == _parserLookPick && _parserSeparateChk?.IsChecked != true : key == HudLooks.Parse(_edit.HudLook);
         string name = separate ? MainWindow.ParserLookName(key) : HudLooks.All.First(x => x.Key == key).Name;
         var stage = Stage(face, L.T(name), inUse ? L.T("in use") : L.T("hover to compare · click to pick"), MeterStageHeight);
         _parserLookStage.Tag = key;
@@ -546,6 +563,8 @@ public partial class OptionsWindow
 
     /// <summary>For the options test: the meter window's own theme, and a click on one of its theme chips.</summary>
     internal string? ParserThemeForTest => _parserTheme;
+    /// <summary>For the options test: the Kinah overlay's look as edited (not yet saved).</summary>
+    internal string HudLookEditForTest => _edit.HudLook;
     internal void PickParserThemeForTest(string theme) { if (theme == _parserTheme) return; _parserTheme = theme; DrawParserLooks(); }
 
     /// <summary>For the options test: the look tiles (their keys) and which is outlined.</summary>

@@ -832,6 +832,11 @@ public static class ParserTests
                 $"...the group card's coverage: {Encounter.Pct(l.Coverage.Value)} of the boss's HP credited");
             Check(Math.Abs(l.Members.Sum(f => l.Share(f)) - 1) < 1e-9 && Math.Abs(l.Share(l.You!) - 30.0 / 59) < 1e-9,
                 $"...the shares are of the credited damage and add up to 100% ({string.Join(", ", l.Members.Select(f => Encounter.Pct(l.Share(f))))})");
+            // the bars (Steven, 2026-11-20: "top should be full or almost full always and the others should be relevant to their dps"):
+            // the top member's runs full, each other's is their figure against the top's, not their share of the whole
+            var topF = l.Ranked().First(f => !f.Other);
+            Check(l.BarOf(topF) == 1 && l.Members.All(f => Math.Abs(l.BarOf(f) - (double)l.Figure(f) / l.Figure(topF)) < 1e-9) && l.Members.Sum(f => l.BarOf(f)) > 1.2,
+                $"...the bars: the top member's full, the others against it ({string.Join(", ", l.Ranked().Select(f => $"{f.Name} {l.BarOf(f):0.00}"))})");
             var ready = Encounter.Ready(ContentKind.Expedition, "Vakron Sky Island", "", t);
             Check(ready is { Waiting: true, Live: false, Title: "Vakron Sky Island", Kind: "Expedition" } && ready.Duration(t.AddMinutes(3)) == TimeSpan.Zero && !ready.Shown().Any(),
                 "a dungeon's ready card (the overlay before its first pull): its name, no clock, no rows");

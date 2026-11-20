@@ -190,7 +190,7 @@ sealed partial class HudModernMono
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
             // the bar: the member's DPS against the top's (the mock-up's lengths), none before any damage
-            double len = m.CpOnly ? 0 : c.E.BarOf(m.F);   // their share of the group's damage, the bars together the whole (2026-11-18)
+            double len = m.CpOnly ? 0 : c.E.BarOf(m.F);   // against the top member's: the top bar full, the rest in proportion (2026-11-20)
             SlideBar(_bar, c, "bar", len, v => { _len = v; _bar.InvalidateVisual(); });
             _bar.InvalidateVisual();
         }
