@@ -633,15 +633,16 @@ sealed partial class HudScorebug : TacticalLook
         double plateH = 48;
         if (_studio)
         {
-            // Studio (art review, 2026-11-20): the band seated exactly on the second row (the first, alone), so no row shows
-            // half covered; nothing else dims, the winner, the rows after it and the foot read at full
-            plateH = 28;
+            // Studio (art review, 2026-11-20): the band and the plate seated on the second row's card (the first, alone), a 2 px
+            // bleed each side and the band opaque, so nothing of that row shows; nothing else dims, the winner, the rows after
+            // it and the foot read at full
+            plateH = StudioRow.H + 4;
             double rowTop = keepTop;
             if (Meter is { Members.Count: > 0 } ms && ms.RowOf(ms.Members[Math.Min(1, ms.Members.Count - 1)].Id)?.Root is FrameworkElement r2 && r2.IsDescendantOf(_fightGrid))
                 rowTop = r2.TranslatePoint(new Point(0, 0), _fightGrid).Y;
-            double bandH = StudioRow.H + 2, mid = rowTop - 1 + bandH / 2;
+            double bandH = StudioRow.H + 4, mid = rowTop - 2 + bandH / 2;
             dim.Visibility = Visibility.Collapsed;
-            band.Height = bandH; band.VerticalAlignment = VerticalAlignment.Top; band.Margin = new Thickness(0, rowTop - 1, 0, 0);
+            band.Height = bandH; band.VerticalAlignment = VerticalAlignment.Top; band.Margin = new Thickness(0, rowTop - 2, 0, 0); band.Background = Frozen(InkC0);
             plate.VerticalAlignment = VerticalAlignment.Top; plate.Margin = new Thickness(0, mid - plateH / 2, 0, 0);
         }
         var winner = !wipe && Meter is { Members.Count: > 0 } mm ? mm.RowOf(mm.Members[0].Id) as BoardRow : null;
@@ -662,7 +663,7 @@ sealed partial class HudScorebug : TacticalLook
             else
             {
                 plate.RenderTransform = new TranslateTransform(6 * (1 - Out(Seg(t, .06, .2))), 0);
-                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .08 && t < .2 ? .6 : 0), .9));
+                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .08 && t < .2 ? .6 : 0), _studio ? 1 : .9));
             }
             if (winner != null) { winner.Sweep = Seg(t, .04, .4); winner.Apply(); }
         }, () => { _fightFx.Children.Clear(); if (winner != null) { winner.Sweep = -1; winner.Apply(); } });
