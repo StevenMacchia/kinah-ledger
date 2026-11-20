@@ -396,7 +396,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
             return;
         }
         _ready.Visibility = Visibility.Collapsed;
-        _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Amber : Pale; _clock.FontSize = 15;
+        _clock.Text = Clock(e, now); _clock.Foreground = e.Live ? Amber : Pale; _clock.FontSize = 15;
         if (HpOf(e) is double hp)
         {
             _hpShare = hp; Share(_hpTrack, _hpFill, hp);
@@ -408,7 +408,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
             _hpRow.Visibility = Visibility.Visible;
         }
         else _hpRow.Visibility = Visibility.Collapsed;
-        _rowsHost.Children.Add(TerminalRows.Header(ParserRows.ExpandedPref));
+        _rowsHost.Children.Add(TerminalRows.Header(ParserRows.ExpandedPref, damage: e.Pvp != null));
         PutRows(_rowsHost, e, now, FightWidth - 2 * Side());
         _rowsHost.Visibility = Visibility.Visible;
         // over: the process's exit line, a kill in mint, a wipe a segfault in red

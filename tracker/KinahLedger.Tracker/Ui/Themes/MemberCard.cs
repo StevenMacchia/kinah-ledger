@@ -43,6 +43,7 @@ public sealed record MemberCard(Fighter F, string Name, string Class, Color Clas
     /// <summary>The card's figures for a member, or null when there's nothing to show (no damage yet).</summary>
     public static MemberCard? Of(Encounter e, Fighter f, DateTime now)
     {
+        (e, f) = e.CardOf(f);   // a PvP panel row: your fight with that player
         if (!e.HasDamage || e.Figure(f) <= 0) return null;
         var v = FightView.Of(e, now, null);
         if (v.Members.FirstOrDefault(m => m.F.Id == f.Id) is not { } m) return null;
@@ -77,7 +78,7 @@ public static class ThemeText
     {
         "gladiator" => L.T("Gladiator"), "templar" => L.T("Templar"), "assassin" => L.T("Assassin"), "ranger" => L.T("Ranger"),
         "sorcerer" => L.T("Sorcerer"), "spiritmaster" => L.T("Spiritmaster"), "cleric" => L.T("Cleric"), "chanter" => L.T("Chanter"),
-        _ => cls ?? "",
+        _ => cls is ClassArt.PvpKill or ClassArt.PvpAssist ? "" : cls ?? "",
     };
 
     /// <summary>The class's icon with its name, in the language in use, as its hover text.</summary>

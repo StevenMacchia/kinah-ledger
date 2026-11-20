@@ -121,6 +121,11 @@ public sealed class ParserPrefs
     public bool Expanded { get; set; } = true;
     /// <summary>The green heal bar along a healer's row on the overlay's meter (on by default; Settings › Parser › Heal bars).</summary>
     public bool HealBars { get; set; } = true;
+    /// <summary>
+    /// The PvP panel in place of the DPS meter in the Abyss and the arenas (Steven, 2026-11-20: "instead of having the DPS meter
+    /// in PVP ... a panel which shows your last 3 kills"; Parser/PvpKills.cs). On by default; Settings › DPS meter › More.
+    /// </summary>
+    public bool PvpPanel { get; set; } = true;
     /// <summary>The character's Odyle Energy, small, in the meter's foot (on by default; Settings › DPS meter › More › Odyle Energy; Ui/EnergyMark.cs).</summary>
     public bool OdyleEnergy { get; set; } = true;
     /// <summary>

@@ -418,7 +418,9 @@ static class Wk
     };
 
     /// <summary>The widest a meter row's DPS is written ("999.9K", "9.99M": Amounts.Meter), and its share ("99.9%", "100%").</summary>
-    public static readonly string[] DpsForms = { "888.8K", "8.88M" }, ShareForms = { "88.8%", "100%" };
+    public static readonly string[] DpsForms = { "888.8K", "8.88M" };
+    /// <summary>The share column's widest forms: a share, or the PvP panel's Kill and Assist (in the language in use).</summary>
+    public static string[] ShareForms => new[] { "88.8%", "100%" }.Concat(Encounter.PvpWords).ToArray();
 
     /// <summary>
     /// The room a figure column needs (Steven, 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!"): the

@@ -43,6 +43,7 @@ public static partial class WpfApp
                 Draw("themes", () => ShotParser(settings, d, "themes", null));
                 Draw("meter share", () => ShotParser(settings, d, "share", null));
                 Draw("heals", () => ShotParser(settings, d, "heals", null));
+                Draw("pvp", () => ShotParser(settings, d, "pvp", null));
                 Draw("inventory", () => ShotInventory(settings, d, null));
                 Draw("timers page", () => ShotTimersPage(settings, d, null));
                 Draw("timers", () => ShotBosses(settings, d, null));

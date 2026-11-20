@@ -116,7 +116,7 @@ public sealed partial class ParserRows : Grid
     /// <summary>The DPS's column: "888.8K" at 16 bold (the party's Combat Power before a hit, "888,888", may reach into the name's room).</summary>
     static double DpsCol => Math.Max(60, Widest(16, FontWeights.Bold, "888.8K", "8.88M") + 4);
     /// <summary>The share's column: "88.8%" (or "CP" before a hit) at 12, and its gap from the DPS.</summary>
-    static double ShareCol => Math.Max(46, Widest(12, FontWeights.SemiBold, "88.8%", L.T("CP")) + 8);
+    static double ShareCol => Math.Max(46, Widest(12, FontWeights.SemiBold, new[] { "88.8%", L.T("CP") }.Concat(Encounter.PvpWords).ToArray()) + 8);
     /// <summary>The damage's column, expanded: "888.88M" at 11.</summary>
     static double DamageCol => Math.Max(52, Widest(11, FontWeights.SemiBold, "888.88M") + 8);
 
@@ -247,7 +247,14 @@ public sealed partial class ParserRows : Grid
             if (was != null) { r!.Y = was.Y; r.Root.Margin = was.Root.Margin; r.Rank = was.Rank; r.ChipText.Text = was.ChipText.Text; }
             var row = r!;
             // the figures: the DPS rolls to its new value, the share and the damage follow
-            if (dmg)
+            if (e.PvpOf(f) is { } pk)
+            {
+                // the PvP panel (Parser/PvpKills.cs): your damage on that player, Kill or Assist, who landed an assist's kill
+                SetDps(row, Encounter.PvpFigure(pk), pk.Damage);
+                row.Share.Text = Encounter.PvpWord(pk);
+                row.Damage.Text = "";
+            }
+            else if (dmg)
             {
                 // the DPS, plain, in its right-aligned column
                 if (e.DpsOf(f, now) is { } dps) SetDps(row, Amounts.Meter(dps), dps);
@@ -263,7 +270,7 @@ public sealed partial class ParserRows : Grid
             }
             else { SetDps(row, f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "", f.CombatPower); row.Share.Text = f.CombatPower > 0 ? L.T("CP") : ""; }
             // Combat Power beside the name once there is damage (before it, the figure's column says it whole)
-            string cpText = dmg && f.CombatPower > 0 ? Amounts.Meter(f.CombatPower) : "";
+            string cpText = e.PvpOf(f) is { } pb ? Encounter.PvpBy(pb) : dmg && f.CombatPower > 0 ? Amounts.Meter(f.CombatPower) : "";
             if (row.Cp.Text != cpText) { row.Cp.Text = cpText; row.Cp.ToolTip = f.CombatPower > 0 ? L.F("Combat Power {0:N0}", f.CombatPower) : null; FitName(row); }
             // the bar slides to its new length: the member's share of the group's damage, in proportion to the top member's,
             // whose bar reaches BarTop of the row (Steven, 2026-11-15: "the bars shouldn't be full really and should be percentage
@@ -552,6 +559,7 @@ public sealed partial class ParserRows : Grid
     /// </summary>
     internal static FrameworkElement? HoverCard(Encounter e, Fighter f, DateTime now)
     {
+        (e, f) = e.CardOf(f);   // a PvP panel row: your fight with that player
         if (!e.HasDamage || e.Figure(f) <= 0) return null;
         var v = FightView.Of(e, now, null);
         if (v.Members.FirstOrDefault(m => m.F.Id == f.Id) is not { } m) return null;

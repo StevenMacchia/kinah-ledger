@@ -326,7 +326,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             o.Margin = new Thickness(8, 0, 8, 0);
             Grid.SetColumn(o, 1); head.Children.Add(o);
         }
-        var clk = e.Waiting ? Dropped(L.T("Ready"), 14, Wk.S(Mint), Deep, FontWeights.Bold, false) : Dropped(Clock(e.Duration(now)), 18, e.Live ? Wk.S(Cyan) : WhiteB, Deep, FontWeights.Bold, true);
+        var clk = e.Waiting ? Dropped(L.T("Ready"), 14, Wk.S(Mint), Deep, FontWeights.Bold, false) : Dropped(Clock(e, now), 18, e.Live ? Wk.S(Cyan) : WhiteB, Deep, FontWeights.Bold, true);
         if (OutcomeText(e).Length == 0) clk.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(clk, 2); head.Children.Add(clk);
         _fightStack.Children.Add(head);
@@ -921,6 +921,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             _name.Text = m.Name; _name.Fg = m.You ? GoldB : WhiteB;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             _cp.Text = m.Cp; _cpWanted = m.Cp.Length > 0 && !m.CpOnly;
+            if (_cpBox.Child is TextBlock { Inlines.FirstInline: Run cpw } && !ReferenceEquals(cpw, _cp)) cpw.Text = m.Pvp ? "" : L.T("CP") + " ";   // the PvP panel's line is who killed
             _dead.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             _deadT.Text = "✖ " + m.Deaths.ToString(CultureInfo.InvariantCulture);
             if (c.Expanded && m.Damage.Length > 0) { _detail.Text = m.Damage + (m.Crit.Length > 0 ? " · " + m.Crit + " " + L.T("crit") : ""); _detail.Root.Visibility = Visibility.Visible; }

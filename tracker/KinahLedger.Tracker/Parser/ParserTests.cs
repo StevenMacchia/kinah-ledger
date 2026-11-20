@@ -2671,6 +2671,9 @@ public static class ParserTests
             Check(Math.Abs(e.FarmDps() - 69_900) < 1, $"farming DPS: a 209.7K mob killed in a second reads {e.FarmDps():N0}, over 3 s, not 209.7K");
         }
 
+        // the PvP panel (Parser/PvpKills.cs)
+        PvpKillsTests.Run(Check, t);
+
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }

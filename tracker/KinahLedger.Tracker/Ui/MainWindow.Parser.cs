@@ -60,7 +60,7 @@ public partial class MainWindow
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
-            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; _parserPrefs.OdyleEnergy = fresh.OdyleEnergy; ApplyMeterExpanded();
+            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; _parserPrefs.PvpPanel = fresh.PvpPanel; _parserPrefs.OdyleEnergy = fresh.OdyleEnergy; ApplyMeterExpanded();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
@@ -196,10 +196,44 @@ public partial class MainWindow
     internal BossParser? ParserSourceForTest { get; set; }
     internal bool ParserOverlayForceForTest { get; set; }
 
+    // ---- the PvP panel (Parser/PvpKills.cs) ----
+
+    /// <summary>For the tests and renders: the PvP kills and whether the player is in PvP, in place of the session's.</summary>
+    internal (PvpKills Kills, bool InPvp)? PvpSourceForTest { get; set; }
+    PvpKills? PvpSource => PvpSourceForTest?.Kills ?? _watcher.Chat?.Pvp;
+    internal bool PvpPanelForTest { get => _parserPrefs.PvpPanel; set => _parserPrefs.PvpPanel = value; }
+    bool InPvpNow => PvpSourceForTest?.InPvp ?? _watcher.Chat?.InPvp ?? false;
+    Encounter? _pvpBoard;
+    int _pvpBoardVersion = -1;
+
+    /// <summary>
+    /// The PvP panel when the meter shows it: in the Abyss or an arena with the switch on (Settings › DPS meter › More), unless a
+    /// boss fight is what the meter holds (an Abyss boss's pull, a run). Before the first kill only where the meter would show
+    /// anyway (Always on): the open world's fights never opened it.
+    /// </summary>
+    internal Encounter? PvpBoard(Encounter? show, DateTime now)
+    {
+        if (!_parserPrefs.PvpPanel || !InPvpNow || PvpSource is not { } pvp) return null;
+        if (show is { OpenWorld: false, Waiting: false } && (show.Boss.Length > 0 || show.ModeKind == ParserMode.Run)) return null;
+        int v = pvp.Version;
+        if (v == 0 && show == null) return null;
+        if (_pvpBoard == null || v != _pvpBoardVersion) { _pvpBoard = pvp.Board(now); _pvpBoardVersion = v; }
+        return _pvpBoard;
+    }
+
+    PvpKills? _pvpWatched;
+
     /// <summary>Listens to the Parser of the session playing (a new session's when it changes).</summary>
     internal void WatchParser()
     {
         var f = ParserFights;
+        // a PvP kill redraws the meter as a hit does
+        if (!ReferenceEquals(PvpSource, _pvpWatched))
+        {
+            if (_pvpWatched != null) _pvpWatched.Changed -= OnPvpChanged;
+            _pvpWatched = PvpSource;
+            if (_pvpWatched != null) _pvpWatched.Changed += OnPvpChanged;
+        }
         if (ReferenceEquals(f, _parserWatched)) return;
         if (_parserWatched != null) _parserWatched.Changed -= OnParserChanged;
         _parserWatched = f;
@@ -211,6 +245,7 @@ public partial class MainWindow
     internal static int ParserChangesSeen, ParserDraws, ParserDrawsShown;
     /// <summary>For parser-latency: the replay's own Kinah overlay (hidden, off-screen), so the meter in it is drawn as live.</summary>
     internal void AttachHudForTest(HudWindow h) => _hud = h;
+    void OnPvpChanged() => OnParserChanged(null);
     void OnParserChanged(DateTime? at)
     {
         Interlocked.Increment(ref ParserChangesSeen);
@@ -336,6 +371,9 @@ public partial class MainWindow
         if (show is { OpenWorld: true }) show = null;
         // Steven, 2026-11-15: "Always on": the meter is always up, anywhere, and starts from 0 by the parser's rules
         if (_parserPrefs.AlwaysOn) show = AlwaysMeter(now);
+        // Steven, 2026-11-20: "instead of having the DPS meter in PVP ... a panel which shows your last 3 kills": in the Abyss
+        // and the arenas the meter is the PvP panel (a boss pull there keeps the DPS meter)
+        if (PvpBoard(show, now) is { } board) show = board;
         MeterPopOutTick(show, now);   // the meter's own window, apart from the overlay (Ui/MainWindow.PopOuts.cs)
         // the meter's clock redraws this one between hits (MeterClockTick)
         _meterShown = _parserPrefs.Overlay ? show : null;

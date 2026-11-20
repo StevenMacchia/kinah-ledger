@@ -130,7 +130,7 @@ static class VhsRows
             Name.Text = Caps(m.Name);
             Name.Foreground = m.You ? Br(0xFFF1C2) : White;
             Cp.Inlines.Clear();
-            if (m.Cp.Length > 0) { Cp.Inlines.Add(Rn(L.T("CP") + " ", Br(0xFFFFFF, .48), 8.5)); Cp.Inlines.Add(Rn(m.Cp, Cp.Foreground)); }
+            if (m.Cp.Length > 0) { if (!m.Pvp) Cp.Inlines.Add(Rn(L.T("CP") + " ", Br(0xFFFFFF, .48), 8.5)); Cp.Inlines.Add(Rn(m.Cp, Cp.Foreground)); }
             Cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             // the top healer's figure in the green tag (TOP HEAL said by it); any other healer's green after the marks
             bool healTag = m.TopHeals && m.Heal.Length > 0;

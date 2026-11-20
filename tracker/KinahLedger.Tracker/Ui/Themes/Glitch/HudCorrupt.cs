@@ -309,7 +309,7 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             return;
         }
         _ready.Visibility = Visibility.Collapsed;
-        _clock.Text = Clock(e.Duration(now)); _clock.Foreground = e.Live ? Gold2 : White; _clock.FontSize = 15;
+        _clock.Text = Clock(e, now); _clock.Foreground = e.Live ? Gold2 : White; _clock.FontSize = 15;
         if (HpOf(e) is double hp)
         {
             _hpShare = hp; Share(_hpTrack, _hpFill, hp);

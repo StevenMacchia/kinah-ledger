@@ -108,7 +108,7 @@ public static class MeterShare
         bool Has(string s) => s.Length > 0 && said.Contains(s, StringComparison.OrdinalIgnoreCase);
         // a page view names the boss as a title of its own only in the hero ("your DPS on Kromede" is not one)
         bool title = view ? Texts(face).Any(t => t.Trim().Equals(e.Title, StringComparison.OrdinalIgnoreCase)) : Has(e.Title);
-        var (outText, ink) = e.Live ? ($"{L.T("Fighting")} {BossParser.Clock(e.Duration(now))}", HudKit.Gold) : ParserPanel.OutcomeOf(e, now);
+        var (outText, ink) = e.Live ? ($"{L.T("Fighting")} {e.ClockText(now)}", HudKit.Gold) : ParserPanel.OutcomeOf(e, now);
         string word = L.T(e.Outcome switch { "kill" => "Killed", "wipe" => "Wiped", "cleared" => "Cleared", "ended" => "Ended", "left" => "Left", _ => "Over" });
         bool outcome = e.Live || Has(outText) || Has(word) || Has(L.T("Over"));
         // a table or the timeline says no outcome of its own ("Over time" and "left" are a column and a tag there, not one)

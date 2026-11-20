@@ -125,7 +125,7 @@ sealed partial class HudHolo
             foreach (var t in new[] { _dps, _pct, _dmg, _crit }) { t.Margin = new Thickness(0, 0, t == _dps ? 9 : t == _pct ? 7 : 3, 0); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; }
             // the figure columns sized for the widest real figure; the bar gets the rest
             _dmgW = Tac.FigCol(_dmg, "888.88M"); _critW = Tac.FigCol(_crit, "88%");
-            foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, "88.8%", "100%", L.T("CP")), 0, 0 })
+            foreach (var w in new[] { 30.0, double.NaN, Tac.FigCol(_dps, "888.8K"), Tac.FigCol(_pct, new[] { "88.8%", "100%", L.T("CP") }.Concat(Encounter.PvpWords).ToArray()), 0, 0 })
                 _root.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
             _art = new TacSketch(Draw);
             Grid.SetColumnSpan(_art, 6);
@@ -169,6 +169,7 @@ sealed partial class HudHolo
             FrameworkElement Top(string s, Color c, string tag, string? tip = null) { var p = Chip(s, c, filled: false); p.Tag = tag; p.ToolTip = tip; p.Margin = new Thickness(6, 0, 0, 0); return p; }
             // quiet beside the name: Combat Power once there's damage (before it, the figure itself is the CP), a healer's healing
             _hasCp = m.Cp.Length > 0;
+            _cp.Children[0].Visibility = m.Pvp ? Visibility.Collapsed : Visibility.Visible;   // the PvP panel's line is who killed, not CP
             if (_hasCp && _two) { _cpFig.Text = m.Cp; _giveUnder.Add((Under(_cp), null)); }
             else if (_hasCp) { _cpFig.Text = m.Cp; _cp.Margin = new Thickness(7, 1, 0, 0); Add(_cp); }
             // the kill's top healer: the figure and TOP HEALS, short of room the figure in the green chip (it says TOP HEALS)

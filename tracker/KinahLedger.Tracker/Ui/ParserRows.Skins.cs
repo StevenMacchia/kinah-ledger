@@ -95,6 +95,7 @@ public sealed partial class ParserRows
         System.Windows.Documents.Typography.SetNumeralAlignment(cp, FontNumeralAlignment.Tabular);
         var cpWord = new TextBlock { Text = L.T("CP"), FontSize = podium ? 8 : 8, FontWeight = FontWeights.Bold, Foreground = PK.C(podium ? Color.FromRgb(0x6A, 0x70, 0x84) : Ink, podium ? 1 : 0.5), VerticalAlignment = VerticalAlignment.Center };
         cpWord.SetBinding(VisibilityProperty, new Binding(nameof(Visibility)) { Source = cp });
+        if (f.Class is ClassArt.PvpKill or ClassArt.PvpAssist) cpWord.Text = "";   // the PvP panel's line is who killed, not CP
         var cpPair = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { cpWord, cp } };
         if (!podium) { cp.Effect = Lift(2, 0.8); cpWord.Effect = Lift(2, 0.8); }
         Border? you = null;
@@ -137,7 +138,7 @@ public sealed partial class ParserRows
         void Extras() { if (expanded) { if (dmgCol) widths.Add(DamageCol); if (crit) widths.Add(RateCol); if (back) widths.Add(RateCol); if (spark) widths.Add(SparkCol); } }
         void AddExtras(Grid g, int k) { if (expanded) { if (dmgCol) g.Children.Add(PK.Col(damage, k++)); if (crit) g.Children.Add(PK.Col(critT, k++)); if (back) g.Children.Add(PK.Col(backT, k++)); if (spark) g.Children.Add(PK.Col(sparkG, k++)); } }
         double dpsCol = Math.Max(DpsCol, Widest(dpsSize, FontWeights.Bold, "888.8K", "8.88M") + 4);
-        double shareCol = Math.Max(reactor ? 30 : 38, Widest(reactor ? 8.5 : 10.5, FontWeights.SemiBold, "88.8%", L.T("CP")) + 6);
+        double shareCol = Math.Max(reactor ? 30 : 38, Widest(reactor ? 8.5 : 10.5, FontWeights.SemiBold, new[] { "88.8%", L.T("CP") }.Concat(Encounter.PvpWords).ToArray()) + 6);
 
         Action? rankInk = null;
         Grid cols, inner;

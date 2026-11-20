@@ -818,7 +818,7 @@ public sealed partial class ParserPanel : Border
         head.Children.Add(art);
         var name = T(e.Title, _glass ? 14 : 13.5, FontWeights.Bold, HudKit.Ink); name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(name, 1); head.Children.Add(name);
-        var clock = e.Waiting ? T(L.T("Ready"), 13, FontWeights.SemiBold, HudKit.Muted) : Num(BossParser.Clock(e.Duration(now)), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
+        var clock = e.Waiting ? T(L.T("Ready"), 13, FontWeights.SemiBold, HudKit.Muted) : Num(e.ClockText(now), _glass ? 18 : 16, FontWeights.Bold, e.Live ? HudKit.Gold : HudKit.Ink); clock.VerticalAlignment = VerticalAlignment.Center;
         clock.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(clock, 2); head.Children.Add(clock);
         _body.Children.Add(head);
@@ -935,7 +935,7 @@ public sealed partial class ParserPanel : Border
         Grid.SetColumnSpan(sep, 2); foot.Children.Add(sep);
         // the outcome once it's over ("Killed in 2:31"), said before the figures
         TextBlock? outcome = null;
-        if (!e.Live && (_skin == ParserRows.Skin.Classic || !e.HasDamage))
+        if (!e.Live && e.Pvp == null && (_skin == ParserRows.Skin.Classic || !e.HasDamage))
         {
             var (text, brush) = OutcomeOf(e, now);
             outcome = T(text, 12, FontWeights.Bold, brush);
@@ -962,7 +962,7 @@ public sealed partial class ParserPanel : Border
     /// <summary>A record that ended, said with its time ("Killed in 2:31", "Wiped after 1:12") in its tone's colour (the meter's foot and the share picture's head).</summary>
     public static (string Text, SolidColorBrush Ink) OutcomeOf(Encounter e, DateTime now)
     {
-        var took = BossParser.Clock(e.Duration(now));
+        var took = e.ClockText(now);
         return e.Outcome switch
         {
             "kill" when e.ModeKind == ParserMode.Fights => (L.F("{0} in {1}", e.OutcomeLabel, took), HudKit.Mint),

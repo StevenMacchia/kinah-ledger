@@ -398,7 +398,7 @@ sealed partial class HudModernMono : ModernLook
                 ot.Margin = new Thickness(0, 1, 10, 0);
                 right.Children.Add(ot);
             }
-            right.Children.Add(Tt(Clock(e.Duration(now)), 18, Paper, FontWeights.Bold));
+            right.Children.Add(Tt(Clock(e, now), 18, Paper, FontWeights.Bold));
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         _fightBody.Children.Add(head);

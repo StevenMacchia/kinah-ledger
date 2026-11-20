@@ -1,0 +1,12 @@
+{
+  "Kill": "처치",
+  "Assist": "어시스트",
+  "Last PvP kills": "최근 PvP 처치",
+  "No PvP kills yet": "아직 PvP 처치 없음",
+  "1 assist": "1 어시스트",
+  "{0} assists": "{0} 어시스트",
+  "by {0}": "막타 {0}",
+  "{0} dealt": "{0} 피해",
+  "PvP kills in PvP": "PvP 지역에서 PvP 처치",
+  "In the Abyss and the arenas the meter shows your last 3 player kills instead of the DPS: your damage on each, Kill or Assist, and your skills on them when the pointer rests on a row. A boss fight there keeps the DPS meter.": "어비스와 투기장에서는 미터가 DPS 대신 최근 플레이어 처치 3건을 보여줍니다: 각 대상에게 준 피해, 처치 또는 어시스트, 그리고 행에 포인터를 올리면 그 대상에게 쓴 스킬. 그곳의 보스 전투는 DPS 미터를 유지합니다."
+}

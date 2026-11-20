@@ -23,6 +23,8 @@ public sealed record MeterMember(Fighter F, int Rank, bool You, bool Pinned, str
     string Heal, double HealShare, string Damage, string Crit, string Back, bool CpOnly)
 {
     public long Id => F.Id;
+    /// <summary>A row of the PvP panel (Parser/PvpKills.cs): <see cref="Cp"/> says who landed an assist's kill, never Combat Power.</summary>
+    public bool Pvp => Class is ClassArt.PvpKill or ClassArt.PvpAssist;
 }
 
 /// <summary>What a row is drawn in: the fight, its moment, whether effects play, the meter's mode and the key for its motion.</summary>
@@ -100,6 +102,13 @@ public sealed class ThemeRows : Grid
         var list = new List<MeterMember>();
         foreach (var f in visible)
         {
+            // the PvP panel (Parser/PvpKills.cs): your damage on that player, Kill or Assist, who landed an assist's kill
+            if (e.PvpOf(f) is { } pk)
+            {
+                list.Add(new MeterMember(f, all.IndexOf(f) + 1, false, false, ParserRows.NameOf(f), f.Class, ClassArt.ColorOf(f.Class), ClassArt.NameColor(f.Class),
+                    Encounter.PvpFigure(pk), pk.Damage, e.BarOf(f), Encounter.PvpWord(pk), Encounter.PvpBy(pk), 0, false, false, "", 0, "", "", "", false));
+                continue;
+            }
             string figure; double value; string shareText;
             if (dmg)
             {
