@@ -36,11 +36,11 @@ public static partial class WpfApp
         var kill = past.Last(e => e.Outcome == "kill");
         var wipe = past.Last(e => e.Outcome == "wipe");
         var run = runPast.LastOrDefault(e => e.ModeKind == ParserMode.Run);
-        void Shot(string file, Encounter e, DateTime at, string look, bool hide)
+        void Shot(string file, Encounter e, DateTime at, string look, bool hide, PullRef? before = null)
         {
             try
             {
-                var bmp = MeterShare.Render(e, at, ShareLookOf(look, e.ModeKind), hide);
+                var bmp = MeterShare.Render(e, at, ShareLookOf(look, e.ModeKind), hide, before);
                 var enc = new PngBitmapEncoder();
                 enc.Frames.Add(BitmapFrame.Create(bmp));
                 using var fs = File.Create(Path.Combine(dir, file));
@@ -50,6 +50,24 @@ public static partial class WpfApp
         }
         foreach (var look in MeterShareLooks(all: true).Where(k => only.Length == 0 || only.Contains(k)))
             Shot($"ui-meter-share-{look}.png", kill, kill.End!.Value, look, true);
+        // Share this pull (1.0.36): the kill beat your best on that fight by 8%, and the healing alone, in the default look and
+        // the standard panel (ui-meter-share-pb-LOOK.png, ui-meter-share-pb-heal.png); the meter's own PB chip on your row too
+        var best0 = ParserRows.BestOf;
+        try
+        {
+            var end = kill.End!.Value;
+            var dpsPb = new PullRef { E = kill, Dps = kill.Dps(kill.You!, end) / 1.08 };
+            ParserRows.BestOf = x => x.Id == kill.Id ? dpsPb : null;
+            foreach (var look in new[] { ParserPrefs.DefaultLook, ParserPrefs.StandardLook }.Distinct().Where(k => only.Length == 0 || only.Contains(k)))
+                Shot($"ui-meter-share-pb-{look}.png", kill, end, look, true, dpsPb);
+            if (kill.HpsOf(kill.You!, end) is { } hps && hps > 0)
+            {
+                var healPb = new PullRef { E = kill, Dps = kill.Dps(kill.You!, end) * 1.2, Hps = hps / 1.15 };
+                ParserRows.BestOf = x => x.Id == kill.Id ? healPb : null;
+                if (only.Length == 0) Shot("ui-meter-share-pb-heal.png", kill, end, ParserPrefs.DefaultLook, true, healPb);
+            }
+        }
+        finally { ParserRows.BestOf = best0; }
         if (only.Length > 0) return;
         Shot("ui-meter-share-standard-names.png", kill, kill.End!.Value, ParserPrefs.StandardLook, false);
         Shot("ui-meter-share-standard-wipe.png", wipe, wipe.End!.Value, ParserPrefs.StandardLook, true);

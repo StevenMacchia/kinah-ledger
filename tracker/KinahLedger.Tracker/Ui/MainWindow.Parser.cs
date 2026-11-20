@@ -1028,6 +1028,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(78) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PullShareCol) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
         var local = e.Start.ToLocalTime();
         var today = (_demo ? _parserDemoNow : DateTime.UtcNow).ToLocalTime().Date;
@@ -1062,15 +1063,18 @@ public partial class MainWindow
         Grid.SetColumn(fig, 4); g.Children.Add(fig);
         var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L3.5,3.5 L0,7"), StrokeThickness = 1.4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
         chev.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Faint");
-        Grid.SetColumn(chev, 5); g.Children.Add(chev);
+        Grid.SetColumn(chev, 6); g.Children.Add(chev);
         var b = new Border { Child = g, Padding = new Thickness(6, 6, 6, 6), Margin = new Thickness(-6, 0, -6, 0), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand, Focusable = true };
         b.SetResourceReference(Border.BorderBrushProperty, "CardHair");
         AutomationProperties.SetName(b, $"{e.Title}, {e.OutcomeLabel}, {BossParser.Clock(e.Duration(e.End ?? now))}");
         b.Tag = "parser-row";
         b.ToolTip = L.T("Open this boss pull: the group, the timings, the kills near you");
         if (!_parserPrefs.Hovers) b.ToolTip = null;
-        b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, "HoverTint");
-        b.MouseLeave += (_, _) => b.Background = Brushes.Transparent;
+        // Share this pull: a small picture mark on a finished boss pull (Ui/MainWindow.PullShare.cs), brighter while the row is pointed at
+        var share = PullShareButton(e);
+        if (share != null) { Grid.SetColumn(share, 5); g.Children.Add(share); }
+        b.MouseEnter += (_, _) => { b.SetResourceReference(Border.BackgroundProperty, "HoverTint"); if (share != null) share.Opacity = 1; };
+        b.MouseLeave += (_, _) => { b.Background = Brushes.Transparent; if (share != null) share.Opacity = PullShareRest; };
         b.MouseLeftButtonUp += (_, _) => OpenFight(e.Id);
         b.KeyDown += (_, k) => { if (k.Key is Key.Enter or Key.Space) { k.Handled = true; OpenFight(e.Id); } };
         return b;

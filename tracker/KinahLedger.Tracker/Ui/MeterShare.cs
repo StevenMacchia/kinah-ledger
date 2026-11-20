@@ -50,7 +50,8 @@ public static class MeterShare
     /// frame (600 wide; a meter wider than that keeps its size and the frame grows round it), its foot.
     /// </summary>
     /// <param name="view">A Parser page view's face (Ui/ParserShare.cs): one without the boss's name of its own gets the outcome pill beside it, live too.</param>
-    static Border Frame(Encounter e, DateTime now, FrameworkElement face, bool view = false)
+    /// <param name="pb">A personal best this pull set (<see cref="PbOf"/>): the gold badge in the head, the frame's glow gold.</param>
+    static Border Frame(Encounter e, DateTime now, FrameworkElement face, bool view = false, Pb? pb = null)
     {
         double fw = Math.Max(1, face.DesiredSize.Width);
         // a few pixels spare: the meter sits a pixel or two in from the side once laid out, and a full-width one lost its right edge
@@ -63,14 +64,14 @@ public static class MeterShare
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        page.Children.Add(Head(e, now, face, view));
+        page.Children.Add(Head(e, now, face, view, pb));
         var mid = new Border { Child = meter, Margin = new Thickness(0, 14, 0, 18) };
         Grid.SetRow(mid, 1); page.Children.Add(mid);
         var foot = Foot();
         Grid.SetRow(foot, 2); page.Children.Add(foot);
 
         // the frame: a dark gradient, the outcome's colour glowing softly behind the meter
-        var tone = e.Live ? HudKit.Rgb(HudKit.GoldC) : e.Tone == "good" ? HudKit.Rgb(HudKit.MintC) : e.Tone == "bad" ? HudKit.Rgb(HudKit.RecC) : HudKit.Rgb(HudKit.GoldC);
+        var tone = e.Live || pb != null ? HudKit.Rgb(HudKit.GoldC) : e.Tone == "good" ? HudKit.Rgb(HudKit.MintC) : e.Tone == "bad" ? HudKit.Rgb(HudKit.RecC) : HudKit.Rgb(HudKit.GoldC);
         var bg = new LinearGradientBrush { StartPoint = new Point(0.3, 0), EndPoint = new Point(0.7, 1) };
         bg.GradientStops.Add(new GradientStop(Bg0, 0));
         bg.GradientStops.Add(new GradientStop(Bg1, 0.62));
@@ -102,7 +103,7 @@ public static class MeterShare
     /// the boss's portrait (when the look draws none), the place and mode (when the look doesn't name them) and the day. The
     /// boss's name large and the outcome pill come back only for a look that draws no title or no outcome of its own.
     /// </summary>
-    static FrameworkElement Head(Encounter e, DateTime now, FrameworkElement face, bool view = false)
+    static FrameworkElement Head(Encounter e, DateTime now, FrameworkElement face, bool view = false, Pb? pb = null)
     {
         string said = string.Join(" | ", Texts(face));
         bool Has(string s) => s.Length > 0 && said.Contains(s, StringComparison.OrdinalIgnoreCase);
@@ -116,7 +117,8 @@ public static class MeterShare
         string artKey = e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss";
         bool art = Images(face).Any(s => ReferenceEquals(s, GameArt.Image(artKey)));
         var where = PK.WhereOf(e);
-        var day = L.Day(e.Start.ToLocalTime());
+        // the day and the clock the pull started ("Nov 13, 2026 · 21:30")
+        var day = L.Day(e.Start.ToLocalTime()) + "  ·  " + e.Start.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
 
         var box = new StackPanel { Tag = "share-head" };
         if (!title)
@@ -129,28 +131,36 @@ public static class MeterShare
             if (!art) { var a = GameArt.Element(artKey, 30); a.Margin = new Thickness(0, 0, 12, 0); a.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(a); }
             var big = new TextBlock { Text = e.Title, FontSize = 22, FontWeight = FontWeights.Bold, Foreground = HudKit.Ink, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Tag = "share-title" };
             Grid.SetColumn(big, 1); top.Children.Add(big);
-            if (!outcome) { var pill = Pill(outText, ink); Grid.SetColumn(pill, 2); top.Children.Add(pill); }
+            var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (!outcome) right.Children.Add(Pill(outText, ink));
+            if (pb != null) right.Children.Add(Badge(pb, Has));
+            Grid.SetColumn(right, 2); top.Children.Add(right);
             box.Children.Add(top);
-            box.Children.Add(Slim(Has(where) ? "" : where, day, null, !art ? 42 : 0));
+            box.Children.Add(Slim(Has(where) ? "" : where, day, null, !art ? 42 : 0, pb != null));
             return box;
         }
         // the slim line: the portrait, the place and mode the look doesn't say, the day; the outcome only if the look has none
         var line = new Grid();
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        line.Children.Add(Slim(Has(where) ? "" : where, day, art ? null : GameArt.Element(artKey, 20), 0));
-        if (!outcome) { var pill = Pill(outText, ink); Grid.SetColumn(pill, 1); line.Children.Add(pill); }
+        line.Children.Add(Slim(Has(where) ? "" : where, day, art ? null : GameArt.Element(artKey, 20), 0, pb != null));
+        var side = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (!outcome) side.Children.Add(Pill(outText, ink));
+        if (pb != null) side.Children.Add(Badge(pb, Has));
+        Grid.SetColumn(side, 1); line.Children.Add(side);
         box.Children.Add(line);
         return box;
     }
 
     /// <summary>"[portrait] Ferocious Horn Den · Conquest · Expedition · Nov 13, 2026", small and muted, wrapping rather than cut.</summary>
-    static FrameworkElement Slim(string where, string day, FrameworkElement? art, double indent)
+    /// <param name="split">The place on one line and the day under it (the PB badge beside them takes the room a single line needs).</param>
+    static FrameworkElement Slim(string where, string day, FrameworkElement? art, double indent, bool split = false)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(indent, art == null && indent > 0 ? 2 : 0, 0, 0), Tag = "share-sub" };
-        if (art != null) { art.Margin = new Thickness(0, 0, 9, 0); art.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(art); }
+        // a dock, not a row: the words get the room left beside the outcome and the PB badge, and wrap in it rather than run under them
+        var row = new DockPanel { LastChildFill = true, Margin = new Thickness(indent, art == null && indent > 0 ? 2 : 0, 0, 0), Tag = "share-sub" };
+        if (art != null) { art.Margin = new Thickness(0, 0, 9, 0); art.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(art, Dock.Left); row.Children.Add(art); }
         var t = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.Medium, Foreground = HudKit.Muted, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = Width - 2 * Side - 60 };
-        if (where.Length > 0) { t.Inlines.Add(new Run(where)); t.Inlines.Add(new Run("  ·  ") { Foreground = HudKit.Faint }); }
+        if (where.Length > 0) { t.Inlines.Add(new Run(where)); t.Inlines.Add(split ? new LineBreak() : new Run("  ·  ") { Foreground = HudKit.Faint }); }
         t.Inlines.Add(new Run(day) { Foreground = HudKit.Faint });
         row.Children.Add(t);
         return row;
@@ -168,6 +178,69 @@ public static class MeterShare
         };
         Typography.SetNumeralAlignment(pill, FontNumeralAlignment.Tabular);
         return pill;
+    }
+
+    // ---- the personal best (Share this pull, 1.0.36) ----
+
+    /// <summary>A personal best a pull set: how far past your best before it, DPS and healing a second (null: not beaten).</summary>
+    public sealed record Pb(double? Dps, double? Hps);
+
+    /// <summary>
+    /// The record this pull beat, measured as the meter's own PB chip is (Ui/ParserRows.cs): a kill, your figures against your
+    /// best before this pull on the same fight (<paramref name="before"/>: FightRecords, the boss in that instance and mode).
+    /// Null when nothing was beaten, or there was no best before it (a first kill is no record).
+    /// </summary>
+    public static Pb? PbOf(Encounter e, PullRef? before)
+    {
+        if (e.Live || e.Outcome != "kill" || e.You is not { } you || before is null) return null;
+        var end = e.End ?? e.LastAt;
+        double? d = before.Dps > 0 && e.Dps(you, end) / before.Dps - 1 is > 0 and var dd ? dd : null;
+        double? h = before.Hps > 0 && e.HpsOf(you, end) is { } hps && hps / before.Hps - 1 is > 0 and var hh ? hh : null;
+        return d == null && h == null ? null : new Pb(d, h);
+    }
+
+    /// <summary>A crown, drawn 16 × 13: three points on a band, a bar under it.</summary>
+    const string CrownMark = "M1,9.5 L2,2.5 L5.6,5.9 L8,0.8 L10.4,5.9 L14,2.5 L15,9.5 Z M1.5,11.6 L14.5,11.6 L14.5,12.6 L1.5,12.6 Z";
+
+    /// <summary>
+    /// The head's gold badge: a crown and "NEW PERSONAL BEST" (healing alone: "NEW HEALING BEST") on a gold gradient with a soft
+    /// glow, and how far past the best ("+8.0%") when the meter doesn't say it on your row already ("PB +8.0%"): said once.
+    /// </summary>
+    /// <param name="said">Whether the meter's face already says a text.</param>
+    static Border Badge(Pb pb, Func<string, bool> said)
+    {
+        var ink = new SolidColorBrush(Color.FromRgb(0x2B, 0x1D, 0x04));
+        var crown = new Path
+        {
+            Data = Geometry.Parse(CrownMark), Width = 16, Height = 13, Stretch = Stretch.None, Fill = ink,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0),
+        };
+        var words = new TextBlock
+        {
+            Text = pb.Dps != null ? L.T("NEW PERSONAL BEST") : L.T("NEW HEALING BEST"), FontSize = 12, FontWeight = FontWeights.Black, Foreground = ink,
+            VerticalAlignment = VerticalAlignment.Center, Tag = "share-pb-text",
+        };
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Children = { crown, words } };
+        // the figure: DPS when that's the record (the healing beside it when both), else the healing
+        string figure = pb.Dps is { } d ? PK.Signed(d) + (pb.Hps is { } h0 ? "  ·  " + L.F("HEAL {0}", PK.Signed(h0)) : "") : PK.Signed(pb.Hps ?? 0);
+        if (!said(ParserRows.PbText(pb.Dps, pb.Hps)))
+        {
+            line.Children.Add(new Border { Width = 1, Margin = new Thickness(9, 2, 9, 2), Background = new SolidColorBrush(Color.FromArgb(0x55, 0x2B, 0x1D, 0x04)) });
+            var fig = new TextBlock { Text = figure, FontSize = 12.5, FontWeight = FontWeights.Black, Foreground = ink, VerticalAlignment = VerticalAlignment.Center, Tag = "share-pb-figure" };
+            Typography.SetNumeralAlignment(fig, FontNumeralAlignment.Tabular);
+            line.Children.Add(fig);
+        }
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+        fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0xE6, 0x9A), 0));
+        fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF5, 0xC2, 0x4C), 0.48));
+        fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xD9, 0x95, 0x22), 1));
+        return new Border
+        {
+            CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 4, 12, 5), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Background = fill, BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xEF, 0xBF)), BorderThickness = new Thickness(1),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Color.FromRgb(0xF5, 0xC2, 0x4C), BlurRadius = 16, ShadowDepth = 0, Opacity = 0.55 },
+            Child = line, Tag = "share-pb",
+        };
     }
 
     /// <summary>The foot: a hairline, the mark and Kinah Ledger on the left, kinahledger.com on the right.</summary>
@@ -213,7 +286,7 @@ public static class MeterShare
     /// player's width, and a step wider each time until nothing on it ends cut off ("Member 4" with a heal chip in Neon), up
     /// to the widest meter; only past the frame's room does the frame grow.
     /// </summary>
-    static T With<T>(Encounter e, DateTime now, Look look, bool hideNames, Func<Border, T> use)
+    static T With<T>(Encounter e, DateTime now, Look look, bool hideNames, Func<Border, T> use, PullRef? before = null)
     {
         bool still0 = Motion.Still; Motion.Still = true;
         double w0 = HudStackLook.FightWidth;
@@ -228,7 +301,7 @@ public static class MeterShare
                 LayOut(face);
                 if (Trimmed(face).Count == 0 || HudStackLook.FightWidth >= HudStackLook.FightWidthMax) break;
             }
-            var v = Frame(e, now, face);
+            var v = Frame(e, now, face, pb: PbOf(e, before));
             LayOut(v, v.Width);
             IconCache.Drain(TimeSpan.FromSeconds(2));
             v.UpdateLayout();
@@ -238,10 +311,11 @@ public static class MeterShare
     }
 
     /// <summary>The picture laid out at its size (600 wide or more, as tall as it needs, 315 at least), settled.</summary>
-    public static Border Laid(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v => v);
+    /// <param name="before">Your best on this fight before this pull (the records kept): a beaten one puts the PB badge in the head.</param>
+    public static Border Laid(Encounter e, DateTime now, Look look, bool hideNames, PullRef? before = null) => With(e, now, look, hideNames, v => v, before);
 
     /// <summary>The PNG: the picture drawn at twice its size (1200 px wide), settled; never a screenshot.</summary>
-    public static BitmapSource Render(Encounter e, DateTime now, Look look, bool hideNames) => With(e, now, look, hideNames, v => Snap(v, "meter share picture"));
+    public static BitmapSource Render(Encounter e, DateTime now, Look look, bool hideNames, PullRef? before = null) => With(e, now, look, hideNames, v => Snap(v, "meter share picture"), before);
 
     /// <summary>A picture laid out at its size, drawn at twice it (whole pixels), its words checked for the language in use.</summary>
     internal static BitmapSource Snap(Border v, string what)
