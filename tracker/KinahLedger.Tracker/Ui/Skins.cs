@@ -268,8 +268,9 @@ public static class Skins
         _ => new CornerRadius(r),
     };
 
-    static readonly FontFamily Inter = new(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Text, Segoe UI");
-    static readonly FontFamily InterDisplay = new(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Display, Segoe UI");
+    // Inter from files on disk, not the exe's resources, which held a stream for each read of the font (Ui/AppFonts.cs)
+    static FontFamily Inter => AppFonts.Text;
+    static FontFamily InterDisplay => AppFonts.Display;
 
     static Color Hex(string hex) => (Color)ColorConverter.ConvertFromString(hex)!;
 
