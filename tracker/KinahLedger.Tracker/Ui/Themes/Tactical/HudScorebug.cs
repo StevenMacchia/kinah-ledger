@@ -59,7 +59,7 @@ sealed partial class HudScorebug : TacticalLook
     {
         _studio = studio;
         // the leaderboard's own rows (Ui/Themes/ThemeRows.cs)
-        if (studio) UseRows(StudioRow.Pitch, m => new StudioRow(), 22, StudioGap);
+        if (studio) UseRows(StudioRow.Pitch, m => new StudioRow(), 16, StudioGap);
         else UseRows(ArenaRow.Pitch, m => new ArenaRow(), 18, ArenaGap);
         _timerEdge = new TacSketch(DrawTimerEdge);
         _bugHost.Children.Add(_bug); _bugHost.Children.Add(_bugAnchor);
@@ -378,7 +378,7 @@ sealed partial class HudScorebug : TacticalLook
         _fightGrid.Width = w;
         _titleHost.Child = _studio ? StudioTitle(e, now) : ArenaTitle(e, now);
         if (!e.Waiting && HpOf(e) is { } hp) _hpHost.Child = _studio ? StudioHp(e, hp, now) : ArenaHp(e, hp, now);
-        var rows = new Grid { Margin = _studio ? new Thickness(0, 7, 0, 0) : new Thickness(6, 6, 6, 1) };
+        var rows = new Grid { Margin = _studio ? new Thickness(0, 5, 0, 0) : new Thickness(6, 6, 6, 1) };
         if (e.Waiting)
         {
             var panel = new StackPanel();
@@ -626,7 +626,7 @@ sealed partial class HudScorebug : TacticalLook
         // the leaderboard dims under a full-width band, and the plate wipes in across it
         // the winner's row stays in sight above the band, a gold glint crossing it; the band sits over the rest of the board
         // (the winner's row: under the title and the HP, the first row's pitch; the band above the foot)
-        double keepTop = _titleHost.ActualHeight + _hpHost.ActualHeight + 7 + (_studio ? StudioRow.Pitch : ArenaRow.Pitch), footH = _footHost.ActualHeight + 8;
+        double keepTop = _titleHost.ActualHeight + _hpHost.ActualHeight + (_studio ? 5 : 7) + (_studio ? StudioRow.Pitch : ArenaRow.Pitch), footH = _footHost.ActualHeight + 8;
         var dim = new Border { Background = Frozen(Tac.A(InkC0, .78)), Opacity = 0, Margin = new Thickness(0, keepTop, 0, 0) };
         var band = new Border { Height = 64, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH), Background = Frozen(Tac.A(InkC0, .9)), BorderBrush = wipe ? Red : Yellow, BorderThickness = new Thickness(0, 2, 0, 2), Opacity = 0 };
         var plate = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, footH + 8) };

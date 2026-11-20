@@ -51,7 +51,7 @@ static class VhsRows
     }
 
     /// <summary>A row's pitch, and the room for the line before you pinned below: Viewfinder's and Deck's.</summary>
-    public const double ViewPitch = 41, DeckPitch = 30, ViewGap = 18, DeckGap = 16;
+    public const double ViewPitch = 32, DeckPitch = 30, ViewGap = 14, DeckGap = 16;
 
     /// <summary>"· · ·  2 MORE  · · ·": the party's members left out between it and you.</summary>
     public static FrameworkElement Gap(int more)
@@ -163,11 +163,11 @@ static class VhsRows
         }, () => GlintLayer.Opacity = 0);
     }
 
-    /// <summary>Viewfinder's row: the name line with the DPS big at its end, the bar under it the row's whole width.</summary>
+    /// <summary>Viewfinder's row: the name line with the DPS big at its end, the bar under it the row's whole width (2026-11-20: slimmer, 29 of a 32 pitch).</summary>
     public sealed class ViewRow : TapeRow
     {
-        const double Line1 = 19, BarH = 12;
-        readonly Border _band = new() { Margin = new Thickness(-7, -4, -7, -4), Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(2),
+        const double Line1 = 18, BarH = 9;
+        readonly Border _band = new() { Margin = new Thickness(-7, -3, -7, -3), Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(2),
             Background = Horizontal((Rgb(0xFFFFFF, .13), 0), (Rgb(0xFFFFFF, .04), 1)) };
         readonly Border _rankBox = new() { MinWidth = 21, Height = 15, Padding = new Thickness(2, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0),
             CornerRadius = new CornerRadius(1.5), BorderThickness = new Thickness(1) };
@@ -188,7 +188,8 @@ static class VhsRows
             Box.Children.Add(_rankBox);
             var line = NameLine();
             Grid.SetColumn(line, 1); Box.Children.Add(line);
-            _fig.Margin = new Thickness(10, 0, 0, 0); _fig.VerticalAlignment = VerticalAlignment.Center;
+            // the figure's line box overhangs the name's line a little (never laid out cut)
+            _fig.Margin = new Thickness(10, -3, 0, -3); _fig.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(_fig, 2); Box.Children.Add(_fig);
             // the bar's line: the bar (a fine scan over it, a healer's green trace under it) and the small figure at its end
             var bl = new Grid();
@@ -197,7 +198,7 @@ static class VhsRows
             Level.Track.Background = Br(0xFFFFFF, .09); Level.Track.CornerRadius = new CornerRadius(1);
             level.Children.Add(Level.Root);
             level.Children.Add(new Rectangle { Fill = Lines(Rgb(0x000000, .16), 3, 1), IsHitTestVisible = false });
-            HealLevel.Root.VerticalAlignment = VerticalAlignment.Bottom; HealLevel.Root.Margin = new Thickness(0, 0, 0, -4);
+            HealLevel.Root.VerticalAlignment = VerticalAlignment.Bottom; HealLevel.Root.Margin = new Thickness(0, 0, 0, -3);
             level.Children.Add(HealLevel.Root);
             bl.Children.Add(level);
             Small.Margin = new Thickness(8, 0, 0, 0);
@@ -304,8 +305,8 @@ static class VhsRows
     {
         Brush label = deck ? Br(VfdC, .7) : Faint, value = White, tag = deck ? Br(VfdC) : Yellow, rule = Br(0xFFFFFF, deck ? .14 : .22);
         var ff = FootOf(e, now);
-        var sp = new StackPanel { Margin = new Thickness(0, 9, 0, 0) };
-        sp.Children.Add(new Rectangle { Height = 1, Fill = rule, Margin = new Thickness(0, 0, 0, 7) });
+        var sp = new StackPanel { Margin = new Thickness(0, deck ? 9 : 6, 0, 0) };
+        sp.Children.Add(new Rectangle { Height = 1, Fill = rule, Margin = new Thickness(0, 0, 0, deck ? 7 : 5) });
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = Txt("", 14, value, Sans);
