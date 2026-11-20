@@ -157,10 +157,12 @@ public sealed partial class ParserRows : Grid
         public required StackPanel NameLine, Plates; public required Border NameHost;
         public string PlatesShown = "";
         public int Rank = -1, Deaths; public double Y = double.NaN; public bool You; public string Cls = "";
-        /// <summary>Podium's leader card (Ui/ParserRows.Skins.cs): built taller; a row that gains or loses it is built again.</summary>
+        /// <summary>Podium's leader card (Ui/ParserRows.Skins.cs): built lit; a row that gains or loses it is built again.</summary>
         public bool Hero;
         /// <summary>A skin's hot edge at the bar's head (Forge): shown only where it ends clear of the DPS.</summary>
         public FrameworkElement? HotEdge;
+        /// <summary>A skin's ink for its rank (Podium's gold, silver and bronze): run each time the rank's number is set.</summary>
+        public Action? RankInk;
         /// <summary>The DPS as it rolls (Motion on), over the figure itself (the truth, laid out, read by the tests).</summary>
         public required Odometer Odo;
         public double LastDps = double.NaN;
@@ -218,6 +220,7 @@ public sealed partial class ParserRows : Grid
         }
         if (e.Live) _sawLive = true;
         bool dmg = e.HasDamage;
+        _medals = dmg;
         var all = e.Shown(now).Where(f => !f.Other).ToList();
         int max = expanded ? ExpandedRows : CompactRows;
         var visible = all.Take(max).ToList();
@@ -235,10 +238,13 @@ public sealed partial class ParserRows : Grid
             int rank = all.IndexOf(f) + 1;
             bool pinnedRow = pin && f.You;
             bool hero = HeroAt(e, i);
-            double y = i * _rowH + (pinnedRow ? _gap.Height : 0) + (i > 0 && HeroAt(e, 0) ? HeroExtra : 0);
+            double y = i * _rowH + (pinnedRow ? _gap.Height : 0);
             bool fresh = !_rows.TryGetValue(f.Id, out var r);
-            if (!fresh && r!.Hero != hero) { _host.Children.Remove(r.Root); _rows.Remove(f.Id); fresh = true; }   // the leader's card came or went
+            RowEl? was = null;
+            if (!fresh && r!.Hero != hero) { was = r; _host.Children.Remove(r.Root); _rows.Remove(f.Id); fresh = true; }   // the leader's card came or went
             if (fresh) { r = Build(f, expanded, dmgCol, crit, back, spark, hero); _rows[f.Id] = r; _host.Children.Add(r.Root); }
+            // built again for the card (as tall as any row): it starts where the old one stood, with its rank, so it glides and flips there
+            if (was != null) { r!.Y = was.Y; r.Root.Margin = was.Root.Margin; r.Rank = was.Rank; r.ChipText.Text = was.ChipText.Text; }
             var row = r!;
             // the figures: the DPS rolls to its new value, the share and the damage follow
             if (dmg)
@@ -274,9 +280,10 @@ public sealed partial class ParserRows : Grid
             if (row.Rank != rank)
             {
                 row.Rank = rank;
-                if (rankWas > 0 && !fresh) Flip(row, rankWas, rank); else row.ChipText.Text = rank.ToString(CultureInfo.InvariantCulture);
+                if (rankWas > 0 && (!fresh || was != null)) Flip(row, rankWas, rank); else row.ChipText.Text = rank.ToString(CultureInfo.InvariantCulture);
             }
-            if (double.IsNaN(row.Y) || fresh) { row.Y = y; row.Root.Margin = new Thickness(0, y, 0, 0); }
+            row.RankInk?.Invoke();
+            if (double.IsNaN(row.Y) || (fresh && was == null)) { row.Y = y; row.Root.Margin = new Thickness(0, y, 0, 0); }
             else if (Math.Abs(row.Y - y) > 0.5) Glide(row, y, passed: rankWas > 0 && rank < rankWas);
             foreach (var lp in row.Live) Canvas.SetTop(lp.Band, row.Y);   // its pop-ups go with a row that moved
             // your heat: your pace against your best on this boss, warmer as it nears it, gold once you beat it
@@ -333,9 +340,8 @@ public sealed partial class ParserRows : Grid
             _popSeq = hits[^1].Seq;
         }
         _gap.Visibility = pin ? Visibility.Visible : Visibility.Collapsed;
-        double heroAdd = visible.Count > 0 && HeroAt(e, 0) ? HeroExtra : 0;
-        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH + heroAdd, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
-        _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0) + heroAdd - (_skin == Skin.Classic || visible.Count == 0 ? 0 : _rowH - RowHOf(_skin, false));
+        if (pin) { _gap.Margin = new Thickness(10, (visible.Count - 1) * _rowH, 10, 0); _gapText.Text = L.F("{0} more", all.Count - visible.Count); _gapText.Background = _kind == Kind.Bare ? Brushes.Transparent : HudKit.B(0x111319); }
+        _host.Height = visible.Count * _rowH + (pin ? _gap.Height : 0) - (_skin == Skin.Classic || visible.Count == 0 ? 0 : _rowH - RowHOf(_skin, false));
         // the moments: the fight's end (a kill or a wipe, the open world's fight held) sweeps a light across; a personal best
         if (_wasLive && !e.Live && dmg) Finale(e.Tone);   // the blade, the punch, the shine down the bars (Ui/ParserRows.Cinema.cs)
         // a record on this fight (this boss, this instance, this mode: FightRecords), DPS or healing, on a kill only
@@ -902,6 +908,8 @@ public sealed partial class ParserRows : Grid
         double keep = NameKeep(r);
         double others = Others();
         bool Short() => w - others < keep;
+        // Combat Power in its "CP" pair on the name's line (Podium) goes first, before YOU and the plates (Steven: "CP drops first")
+        if (Short() && r.Cp.Visibility == Visibility.Visible && (r.Cp.Parent as FrameworkElement)?.Parent == r.NameLine) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
         if (Short() && you is { Visibility: Visibility.Visible }) { you.Visibility = Visibility.Collapsed; others = Others(); }
         if (Short() && r.Plates.Visibility == Visibility.Visible) { PlatesWide(r, false); others = Others(); }
         if (Short() && r.Cp.Visibility == Visibility.Visible && r.Cp.Parent == r.NameLine) { r.Cp.Visibility = Visibility.Collapsed; others = Others(); }
@@ -1001,12 +1009,16 @@ public sealed partial class ParserRows : Grid
         bool lift = passed && !down;
         // the rise grows from the DPS's right edge, so the figure stays exactly where it is while the row lifts
         if (lift && r.Root.ActualWidth > 0) r.Root.RenderTransformOrigin = new Point(Math.Clamp(DpsRightIn(r) / r.Root.ActualWidth, 0, 1), 0.5);
+        // Podium's one-line rows cross in one lane: the one going down is dimmed to a third at once and stays so until they have
+        // passed (the figures never read over each other), then comes back
+        bool podium = _skin == Skin.Podium;
+        static double Dim(double p) => p < 0.06 ? p / 0.06 : p < 0.6 ? 1 : Math.Max(0, (1 - p) / 0.4);
         var shadow = lift ? r.LiftShadow ??= new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 0, Opacity = 0, Direction = 270 } : null;
         if (shadow != null) { shadow.BlurRadius = shadow.ShadowDepth = shadow.Opacity = 0; r.Root.Effect = shadow; }
         Motion.Play(r.Root, GlideMs, p =>
         {
             tt.Y = offset * (1 - Motion.Out(p));
-            if (down) r.Root.Opacity = 1 - 0.65 * Math.Sin(Math.PI * Math.Clamp(p, 0, 1));
+            if (down) r.Root.Opacity = 1 - 0.65 * (podium ? Dim(p) : Math.Sin(Math.PI * Math.Clamp(p, 0, 1)));
             if (shadow != null)
             {
                 double k = Math.Sin(Math.PI * Math.Clamp(p, 0, 1));
@@ -1033,7 +1045,7 @@ public sealed partial class ParserRows : Grid
     void Flip(RowEl r, int was, int now)
     {
         var sc = (ScaleTransform)((TransformGroup)r.Chip.RenderTransform).Children[1];
-        if (!Motion.On) { r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); sc.ScaleY = 1; return; }
+        if (!Motion.On) { r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); r.RankInk?.Invoke(); sc.ScaleY = 1; return; }
         bool gained = now < was;
         // the chip's own look back first (a glow a flip under way left), then the gain's glow from there
         var own = r.ChipOwn;
@@ -1042,15 +1054,24 @@ public sealed partial class ParserRows : Grid
         Rest();
         var glow = gained ? own ?? (r.ChipGlow ??= new DropShadowEffect { Color = r.You ? PK.Gold : ClassArt.ColorOf(r.Cls), ShadowDepth = 0, BlurRadius = 0, Opacity = 0 }) : null;
         if (glow != null && own == null) { glow.BlurRadius = glow.Opacity = 0; r.Chip.Effect = glow; }
+        // Podium: the new number at once, the chip unfolding with the row's glide (it lands with the row, not after it)
+        bool land = _skin == Skin.Podium;
+        if (land) { r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); r.RankInk?.Invoke(); }
         Motion.Play(r.Chip, FlipMs, p =>
         {
+            if (land)
+            {
+                sc.ScaleY = 0.25 + 0.75 * Motion.Out(Math.Min(1, p / 0.35));
+                if (glow != null) { double g = p < 0.2 ? 0 : Math.Sin(Math.PI * Math.Min(1, (p - 0.2) / 0.8)); glow.BlurRadius = ownBlur + 14 * g; glow.Opacity = ownOpacity + (0.95 - ownOpacity) * g; }
+                return;
+            }
             double q = Math.Min(1, p / 0.76);
-            sc.ScaleY = Math.Max(0.04, Math.Abs(Math.Cos(Math.PI * q))); r.ChipText.Text = (q < 0.5 ? was : now).ToString(CultureInfo.InvariantCulture);
+            sc.ScaleY = Math.Max(0.04, Math.Abs(Math.Cos(Math.PI * q))); r.ChipText.Text = (q < 0.5 ? was : now).ToString(CultureInfo.InvariantCulture); r.RankInk?.Invoke();
             if (glow != null) { double k = p < 0.45 ? 0 : Math.Sin(Math.PI * (p - 0.45) / 0.55); glow.BlurRadius = ownBlur + 14 * k; glow.Opacity = ownOpacity + (0.95 - ownOpacity) * k; }
         },
             () =>
             {
-                sc.ScaleY = 1; r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture);
+                sc.ScaleY = 1; r.ChipText.Text = now.ToString(CultureInfo.InvariantCulture); r.RankInk?.Invoke();
                 Rest();
             });
     }

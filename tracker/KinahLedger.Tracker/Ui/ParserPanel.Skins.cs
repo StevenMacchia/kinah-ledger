@@ -13,7 +13,8 @@ namespace KinahLedger.Ui;
 /// <list type="bullet">
 /// <item>Forge (key "standard", the default): the boss's art lit gold, the boss, the clock large (gold while it runs); the HP a
 /// lit rail notched at its thirds, its result once over; a gold hairline over the foot.</item>
-/// <item>Podium: the boss over the place, the clock in a lit gold capsule; the HP a ribbon with its words inside.</item>
+/// <item>Podium: the boss over the place, the clock in a lit gold capsule (once over, its result a badge before it); the HP a
+/// ribbon with its words inside.</item>
 /// <item>Reactor: an instrument panel; the clock in an inset readout, the HP a track lit cell by cell; the foot two gauges.</item>
 /// </list>
 /// </summary>
@@ -116,14 +117,28 @@ public sealed partial class ParserPanel
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { title } };
             if (place.Text.Length > 0) words.Children.Add(place);
             g.Children.Add(words);
-            bool run = e.Live && !e.Waiting;
+            bool run = e.Live && !e.Waiting, held = !e.Live && !e.Waiting;
             var clock = ST(Clock(e, now), e.Waiting ? 13 : 17, FontWeights.Bold, run ? Color.FromRgb(0x1C, 0x13, 0x02) : e.Waiting ? SSoft : SInk);
-            g.Children.Add(At(new Border
+            var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            // once over, its result a small badge in its tone before the clock (2026-11-20: the full-width "Killed in 12:47" strip
+            // under the head said again what the head and its clock say)
+            if (held && e.Outcome.Length > 0)
             {
-                CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 1, 10, 2), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = clock,
+                var tone = ToneOf(e);
+                var word = ST(e.OutcomeLabel, 10.5, FontWeights.Bold, tone);
+                right.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 1, 7, 2), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, Child = word,
+                    Background = SB(tone, 0.14), BorderBrush = SB(tone, 0.45), BorderThickness = new Thickness(1), Tag = "outcome",
+                });
+            }
+            right.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 1, 10, 2), VerticalAlignment = VerticalAlignment.Center, Child = clock,
                 Background = run ? SDown((SGoldHi, 0), (SGold, 0.6), (Color.FromRgb(0xC8, 0x8A, 0x1E), 1)) : SB(Colors.White, 0.07),
                 BorderBrush = SB(Colors.White, run ? 0.35 : 0.12), BorderThickness = new Thickness(0, 1, 0, 0), Effect = run ? SGlow(SGold, 14, 0.5) : null,
-            }, 1));
+            });
+            g.Children.Add(At(right, 1));
             st.Children.Add(g);
         }
         else if (_skin == ParserRows.Skin.Reactor)
@@ -173,14 +188,16 @@ public sealed partial class ParserPanel
         var c = held ? ToneOf(e) : left < 0.34 ? SCoral : SGold;
         if (_skin == ParserRows.Skin.Podium)
         {
-            // the ribbon: its fill, its words inside it
-            var rib = new Grid { Margin = new Thickness(0, 9, 0, 0), Height = 16 };
+            // the ribbon: its fill, its words inside it; once over, only for a boss left standing (its HP where it stood: the
+            // result is the head's badge, a kill's full ribbon said nothing more)
+            if (held && (e.Outcome is "kill" or "cleared" || e.BossHpLeft == null)) return null;
+            var rib = new Grid { Margin = new Thickness(0, 7, 0, 0), Height = 15 };
             rib.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = SB(Colors.Black, 0.45), BorderBrush = SB(Colors.White, 0.06), BorderThickness = new Thickness(1) });
             var fill = new Border { CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Background = SDown((SA(SLit(c), 0.85), 0), (SA(c, 0.55), 0.5), (SA(SDeep(c), 0.6), 1)) };
             rib.SizeChanged += (_, _) => fill.Width = Math.Max(4, rib.ActualWidth * left);
             rib.Children.Add(fill);
             if (live) { Motion.HpGhost(rib, _hpPlace, e.Id, left, now, 3); rib.Children.Add(HudKit.HpTicks()); }
-            FrameworkElement words = live ? HpText(e, 10.5, SB(SInk), SB(SInk, 0.85)) : ST(OutcomeOf(e, now).Text, 10, FontWeights.Bold, SInk);
+            FrameworkElement words = HpText(e, 10.5, SB(SInk), SB(SInk, 0.85));
             words.Effect = SLift(3, 0.9);
             words.Margin = new Thickness(7, 0, 7, 0); words.HorizontalAlignment = HorizontalAlignment.Left;
             rib.Children.Add(words);
@@ -268,11 +285,11 @@ public sealed partial class ParserPanel
         var st = new StackPanel();
         st.Children.Add(new Border
         {
-            Height = 1, Margin = new Thickness(0, _skin == ParserRows.Skin.Podium ? 4 : 6, 0, 0),
+            Height = 1, Margin = new Thickness(0, _skin == ParserRows.Skin.Podium ? 3 : 6, 0, 0),
             Background = _skin == ParserRows.Skin.Podium ? SB(Colors.White, 0.08) : SAcross((SA(SGold, 0), 0), (SA(SGold, 0.28), 0.5), (SA(SGold, 0), 1)),
         });
         var line = ParserFoot.Line(e, now, 12, null, SB(SGold));
-        line.Margin = new Thickness(2, 8, 2, 0);
+        line.Margin = new Thickness(2, _skin == ParserRows.Skin.Podium ? 6 : 8, 2, 0);
         st.Children.Add(line);
         return st;
     }
