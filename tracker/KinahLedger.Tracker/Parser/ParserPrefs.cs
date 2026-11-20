@@ -123,7 +123,7 @@ public sealed class ParserPrefs
     public bool HealBars { get; set; } = true;
     /// <summary>
     /// The PvP panel in place of the DPS meter in the Abyss and the arenas (Steven, 2026-11-20: "instead of having the DPS meter
-    /// in PVP ... a panel which shows your last 3 kills"; Parser/PvpKills.cs). On by default; Settings › DPS meter › More.
+    /// in PVP ... a panel which shows your last 3 kills", 5 since 1.0.34; Parser/PvpKills.cs). On by default; Settings › DPS meter › More.
     /// </summary>
     public bool PvpPanel { get; set; } = true;
     /// <summary>The character's Odyle Energy, small, in the meter's foot (on by default; Settings › DPS meter › More › Odyle Energy; Ui/EnergyMark.cs).</summary>

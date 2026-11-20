@@ -15,8 +15,9 @@ namespace KinahLedger.Ui;
 public static partial class WpfApp
 {
     /// <summary>
-    /// Three kills through the real rules, newest first: a kill of Kaelith (your hits over 14 s), an assist on Veyra that Tilly
-    /// landed (your hits 6 s before), a kill of Morrigan (a longer fight). Your class is a Templar's, so the skills are named.
+    /// Five kills through the real rules, newest first: a kill of Kaelith (your hits over 14 s), an assist on Veyra that Tilly
+    /// landed (your hits 6 s before), a kill of Morrigan (a longer fight), an assist on Doran that Brakk landed, a kill of
+    /// Seraphine. Your class is a Templar's, so the skills are named.
     /// </summary>
     internal static PvpKills PvpSample(DateTime now)
     {
@@ -32,6 +33,10 @@ public static partial class WpfApp
                     p.Take(new FightEvent(end.AddSeconds(-seconds + s + k * 0.3), FightKind.Hit, FightFlags.VictimPlayer | FightFlags.VictimEnemy, victim, 1, (uint)sk, rnd.Next(lo, hi), 0, name, ""));
                 }
         }
+        var t5 = now.AddMinutes(-14); Fight(3005, "Seraphine", t5, 22, 2, 9_000, 21_000);
+        p.Take(new FightEvent(t5, FightKind.Kill, FightFlags.Mine | FightFlags.VictimPlayer | FightFlags.VictimEnemy, 3005, 1, 0, 0, 0, "Seraphine", ""));
+        var t4 = now.AddMinutes(-9); Fight(3004, "Doran", t4.AddSeconds(-3), 9, 1, 7_000, 15_000);
+        p.Take(new FightEvent(t4, FightKind.Kill, FightFlags.OtherKiller | FightFlags.VictimPlayer | FightFlags.VictimEnemy, 3004, 4005, 0, 0, 0, "Doran", "Brakk"));
         var t3 = now.AddMinutes(-6); Fight(3003, "Morrigan", t3, 38, 2, 9_000, 26_000);
         p.Take(new FightEvent(t3, FightKind.Kill, FightFlags.Mine | FightFlags.VictimPlayer | FightFlags.VictimEnemy, 3003, 1, 0, 0, 0, "Morrigan", ""));
         var t2 = now.AddMinutes(-2); Fight(3002, "Veyra", t2.AddSeconds(-6), 7, 1, 8_000, 19_000);
@@ -83,7 +88,7 @@ public static partial class WpfApp
     }
 
     /// <summary>
-    /// options-test (KL_OPTIONS_ONLY=pvp alone): the PvP panel in every meter look, compact and expanded: three rows newest
+    /// options-test (KL_OPTIONS_ONLY=pvp alone): the PvP panel in every meter look, compact and expanded: five rows newest
     /// first, each with its name, its damage, Kill or Assist (an assist's "by Tilly", never as Combat Power), no group DPS
     /// and no clock, nothing spilled or cut; a row's skills card is your fight with that player; and when the window shows it
     /// (in PvP with the switch on, not over a boss pull, before a kill only where the meter shows anyway).
@@ -94,8 +99,8 @@ public static partial class WpfApp
         var kills = PvpSample(now);
         var board = kills.Board(now);
         var last = kills.Last;
-        check(last.Select(k => k.Name).SequenceEqual(new[] { "Kaelith", "Veyra", "Morrigan" }) && last[1] is { Assist: true, Killer: "Tilly" } && last.All(k => k.Damage > 0),
-            $"PvP panel sample: Kaelith, Veyra (assist, Tilly's kill), Morrigan, each with damage ({string.Join(", ", last.Select(k => $"{k.Name} {k.Damage:N0}"))})");
+        check(last.Select(k => k.Name).SequenceEqual(new[] { "Kaelith", "Veyra", "Morrigan", "Doran", "Seraphine" }) && last[1] is { Assist: true, Killer: "Tilly" } && last[3] is { Assist: true, Killer: "Brakk" } && last.All(k => k.Damage > 0),
+            $"PvP panel sample: the last five, Kaelith, Veyra (assist, Tilly's kill), Morrigan, Doran (Brakk's), Seraphine, each with damage ({string.Join(", ", last.Select(k => $"{k.Name} {k.Damage:N0}"))})");
         bool still0 = Motion.Still, exp0 = ParserRows.ExpandedPref;
         double width0 = HudStackLook.FightWidth;
         var wrong = new List<string>();
@@ -117,7 +122,7 @@ public static partial class WpfApp
                     void Walk(DependencyObject d)
                     {
                         if (d is UIElement u && !u.IsVisible) return;
-                        if (d is System.Windows.Controls.TextBlock t && BlockText(t).Trim() is { Length: > 0 } s && t.ActualWidth > 0) texts.Add((s, t.TranslatePoint(new Point(0, 0), root).Y));
+                        if (d is System.Windows.Controls.TextBlock t && System.Text.RegularExpressions.Regex.Replace(BlockText(t), @"\p{Cf}", "").Trim() is { Length: > 0 } s && t.ActualWidth > 0) texts.Add((s, t.TranslatePoint(new Point(0, 0), root).Y));
                         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
                     }
                     Walk(root);
@@ -133,7 +138,7 @@ public static partial class WpfApp
                     if (!Has("Kill")) miss.Add("Kill");
                     if (!Has("Assist")) miss.Add("Assist");
                     if (!Has("by Tilly")) miss.Add("by Tilly");
-                    if (!(YOf("Kaelith") < YOf("Veyra") && YOf("Veyra") < YOf("Morrigan"))) miss.Add("newest first");
+                    for (int i = 1; i < last.Count; i++) if (!(YOf(last[i - 1].Name) < YOf(last[i].Name))) { miss.Add("newest first"); break; }
                     if (texts.Any(x => x.S.Contains("Group DPS", StringComparison.OrdinalIgnoreCase) || x.S.Contains("Uptime", StringComparison.OrdinalIgnoreCase))) miss.Add("no group DPS");
                     if (texts.Any(x => x.S.Contains("CP by", StringComparison.OrdinalIgnoreCase) || x.S.Equals("CP", StringComparison.OrdinalIgnoreCase))) miss.Add("no CP word");
                     if (texts.Any(x => System.Text.RegularExpressions.Regex.IsMatch(x.S, @"(^|\s|T\+)\d{1,2}:\d\d(\s|$)"))) miss.Add("no clock");
@@ -166,7 +171,7 @@ public static partial class WpfApp
         {
             w.PvpPanelForTest = true;
             w.PvpSourceForTest = (kills, true);
-            check(w.PvpBoard(null, now) is { Pvp.Count: 3 }, "PvP panel: in PvP with the switch on the meter is the panel");
+            check(w.PvpBoard(null, now) is { Pvp.Count: 5 }, "PvP panel: in PvP with the switch on the meter is the panel, the last five");
             var pull = new Encounter { Mode = "boss", Boss = "Abyss Guardian", Kind = "World boss", Start = now, LastAt = now, HasDamage = true };
             check(w.PvpBoard(pull, now) == null, "...a boss pull there keeps the DPS meter");
             var world = new Encounter { Mode = "fight", Kind = "Abyss", Start = now, LastAt = now, HasDamage = true };
