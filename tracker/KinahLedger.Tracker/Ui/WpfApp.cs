@@ -150,10 +150,12 @@ public static partial class WpfApp
         {
             var pw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
             pw.Show(); pw.ShowDemo(); DoEvents();
-            ParserModesGoneChecks(pw, Check); ParserShareChecks(pw, Check);
+            ParserModesGoneChecks(pw, Check); ParserShareChecks(pw, Check); PullShareChecks(pw, Check);
             pw.Close();
             Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
         }
+        // KL_OPTIONS_ONLY=pullshare: Share this pull alone (Ui/WpfApp.PullShare.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "pullshare") { var sw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; sw.Show(); sw.ShowDemo(); DoEvents(); if (Environment.GetEnvironmentVariable("KL_PULLSHARE_METER") == "1") MeterShareChecks(sw, Check); PullShareChecks(sw, Check); sw.Close(); Console.WriteLine(fails == 0 ? "options test (pull share): all passed" : $"options test (pull share): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=graphs: the Parser page's Graphs tab alone (Ui/WpfApp.ParserGraphs.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "fonts") { FontStreamChecks(Check); Console.WriteLine(fails == 0 ? "options test (font streams): all passed" : $"options test (font streams): {fails} failed"); return fails == 0 ? 0 : 1; }
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "graphs") { GraphsChecks(settings, Check); Console.WriteLine(fails == 0 ? "options test (parser graphs): all passed" : $"options test (parser graphs): {fails} failed"); return fails == 0 ? 0 : 1; }
@@ -1432,6 +1434,7 @@ public static partial class WpfApp
         ParserChecks(w, Check);
         MeterShareChecks(w, Check);   // the meter's share picture (Ui/WpfApp.MeterShare.cs)
         ParserShareChecks(w, Check);   // the Parser page's pictures, Copy as text and the back button (Ui/WpfApp.ParserShare.cs)
+        PullShareChecks(w, Check);   // Share this pull: the list's share mark and the PB badge (Ui/WpfApp.PullShare.cs)
         MeterMotionChecks(Check);
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs

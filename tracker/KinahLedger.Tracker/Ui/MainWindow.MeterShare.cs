@@ -58,7 +58,7 @@ public partial class MainWindow
         try
         {
             var now = e!.Live ? (_demo ? ParserNow : DateTime.UtcNow) : e.End ?? e.LastAt;
-            var bmp = MeterShare.Render(e, now, MeterShareLook(), _parserPrefs.ShareHideNames);
+            var bmp = MeterShare.Render(e, now, MeterShareLook(), _parserPrefs.ShareHideNames, BestBefore(e));
             if (ShareSinkForTest is { } sink) sink(bmp, MeterShare.FileName(e));   // a test: never the clipboard or Pictures
             else
             {
@@ -80,6 +80,12 @@ public partial class MainWindow
         }
     }
     string _meterShareSaved = "";
+
+    /// <summary>Your best on this pull's fight before it (the records kept, as the meter's PB chip reads them); null when none or unreadable.</summary>
+    static PullRef? BestBefore(Encounter e)
+    {
+        try { return ParserRows.BestOf?.Invoke(e); } catch (Exception) { return null; }
+    }
 
     /// <summary>The overlay's Share and the page's: wired once the overlay is made.</summary>
     void WireOverlayShare(ParserOverlay o) => o.ShareAsked += () => ShareMeter(_meterOnOverlay, fromOverlay: true);

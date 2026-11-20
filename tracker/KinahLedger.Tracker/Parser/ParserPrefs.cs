@@ -30,11 +30,16 @@ public sealed class ParserPrefs
     /// </summary>
     public string ShareHotkey { get; set; } = DefaultHotkey;
     /// <summary>
-    /// Other members' names hidden on the share picture: off by default (Steven, 2026-11-17: "it should say the members names not
-    /// member 1"). Saved under a new key, so the 1.0.2–1.0.6 default of on (ShareHideNames) is left behind.
+    /// Other members' names shown on the share pictures: off by default since 1.0.36 (the coordinator, 2026-11-20: the site says
+    /// nothing is ranked there, and its guide sides with NCSOFT's May 26 stance against publishing other players' DPS, so a
+    /// picture one player posts names only them; the others show as their class, "Chanter", with their figures). Saved under a
+    /// new key, so the 1.0.7–1.0.35 "ShareNamesHidden": false that every file wrote is left behind.
     /// </summary>
-    [System.Text.Json.Serialization.JsonPropertyName("ShareNamesHidden")]
-    public bool ShareHideNames { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("ShareNamesShown")]
+    public bool ShareShowNames { get; set; }
+    /// <summary>Other members named by their class on the share pictures (the default): <see cref="ShareShowNames"/> turned round.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ShareHideNames { get => !ShareShowNames; set => ShareShowNames = !value; }
     /// <summary>
     /// What the Parser keeps: "boss" (Bosses only), the only mode since Steven, 2026-11-17 ("get rid of full run and every
     /// fight"). A file from before with "run" (Full run) or "fight" (Every fight) moves to "boss" when read (<see cref="Settle"/>).
