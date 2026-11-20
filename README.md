@@ -14,6 +14,11 @@ This is a side project, separate from the author's professional work.
 [crafting profit](https://kinahledger.com/guides/aion-2-crafting-profit) and [guides](https://kinahledger.com/guides/).
 No download needed for any of it; the tracker below is how the measured drop rates get there.
 
+**The tracker is also a free Aion 2 DPS meter.** Its boss parser shows your group's DPS and healing live in every boss
+fight, keeps each pull against your best kill, and lists every ability and a death recap after the pull:
+[kinahledger.com/tracker/dps-meter](https://kinahledger.com/tracker/dps-meter) (also a [heal meter](https://kinahledger.com/tracker/heal-meter);
+[meter not working?](https://kinahledger.com/tracker/dps-meter-not-working)).
+
 ## Download
 
 [**KinahLedger-Setup.exe, the latest installer**](https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/KinahLedger-Setup.exe):
