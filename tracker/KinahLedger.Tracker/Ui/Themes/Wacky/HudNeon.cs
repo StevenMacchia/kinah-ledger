@@ -108,9 +108,9 @@ sealed partial class HudNeon : WackyLook, IThemeCard
     readonly TextBlock _tubeName = Wk.Words("", 11, IceB, Wk.Bahn, FontWeights.SemiBold), _tubeClock;
     FrameworkElement? _ring, _hour;
 
-    public HudNeon() : base(new Thickness(12, 56, 30, 12), Wk.Bahn)
+    public HudNeon() : base(new Thickness(12, 56, 12, 8), Wk.Bahn)
     {
-        UseRows(30, _ => new NeonRow(), 16, NeonGap);
+        UseRows(NeonRow.Pitch, _ => new NeonRow(), 10, NeonGap);
         _tubeClock = Figure("", 13, Wk.S(TubeC), Wk.Bahn, FontWeights.Bold);
         _tubeClock.Margin = new Thickness(6, 0, 0, 0);
         _tubeFace.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _tubeName, _tubeClock } };
@@ -309,7 +309,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         if (e == null) { _fight.Root.Visibility = Visibility.Collapsed; PlaceTube(); return; }
         _fight.Root.Width = FightWidth;
         bool tubeOn = KinahHidden && _tube.Visibility == Visibility.Visible;
-        var head = new Grid { Margin = new Thickness(12, tubeOn ? 12 : 8, 12, 4) };
+        var head = new Grid { Margin = new Thickness(12, tubeOn ? 12 : 6, 12, 3) };
         for (int i = 0; i < 3; i++) head.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
         var tg = new Grid();
         var t0 = Wk.Words(e.Title, 17, Wk.S(Mag, .8), Wk.Bahn, FontWeights.Bold); t0.RenderTransform = new TranslateTransform(1.5, 1.5); t0.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -335,9 +335,9 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         }
         else
         {
-            var rows = new StackPanel { Margin = new Thickness(5, 0, 5, 7) };
+            var rows = new StackPanel { Margin = new Thickness(5, 0, 5, 5) };
             PutRows(rows, e, now);
-            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(7, 6, 7, 0); rows.Children.Add(foot); }
+            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(7, 3, 7, 0); rows.Children.Add(foot); }
             _fightStack.Children.Add(rows);
         }
         _fight.Root.Visibility = Visibility.Visible;
@@ -347,7 +347,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
     /// <summary>The boss's HP: a lit tube, magenta to red, notched at the thirds, and "47% · 1.82M left".</summary>
     FrameworkElement HpRow(Encounter e, double hp, DateTime now)
     {
-        var row = new Grid { Margin = new Thickness(12, 2, 12, 8) };
+        var row = new Grid { Margin = new Thickness(12, 1, 12, 6) };
         row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var tube = new Grid { Height = 12, VerticalAlignment = VerticalAlignment.Center };
         tube.Children.Add(new Border { Background = Wk.S(0x2A1745), BorderBrush = Wk.S(0x5A3590), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6) });
@@ -737,14 +737,16 @@ sealed partial class HudNeon : WackyLook, IThemeCard
     /// </summary>
     sealed class NeonRow : IThemeRow
     {
-        const double H = 27;
+        // 2026-11-20 (Steven: "some are just bulky"): 21 on a 24 pitch, the words and the tube the row's height, where the row
+        // was 27 on a 30 pitch with 6 of it empty under the words
+        public const double H = 21, Pitch = H + 3;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly Border _band = new() { CornerRadius = new CornerRadius(3) };
         readonly Border _edge = new() { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(1.5), Margin = new Thickness(0, 2, 0, 2) };
         // the bar: a lit neon panel the row's height from the rank on, the name and figures over it (Steven, 2026-11-17: "figure
         // out better looks that doesn't crowd everything and prioritizes the bar"): a tube of the class's colour round a tinted
         // glass, its glow a wider faint ring, open at its end (no line crosses a figure there)
-        readonly Grid _tubeHost = new() { Margin = new Thickness(36, 1, 3, 7) };
+        readonly Grid _tubeHost = new() { Margin = new Thickness(36, 1, 3, 1) };
         readonly Grid _tube = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
         readonly Border _tubeGlow = new() { Margin = new Thickness(-2, -2, 0, -2), CornerRadius = new CornerRadius(5, 0, 0, 5), BorderThickness = new Thickness(2.2, 2.2, 0, 2.2) };
         readonly Border _tubeLine = new() { CornerRadius = new CornerRadius(3.5, 0, 0, 3.5), BorderThickness = new Thickness(1.4, 1.4, 0, 1.4) };
@@ -783,7 +785,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _root.Children.Add(_tubeHost);
             _healHost.Children.Add(_healTube);
             _healFill = new Wk.BarFill(_healHost, _healTube, 8);
-            var row = new Grid { Margin = new Thickness(6, 0, 6, 6) };
+            var row = new Grid { Margin = new Thickness(6, 0, 6, 1) };
             // the DPS and the share in columns sized for their widest forms ("888.8K", "88.8%"), a gap before each (Steven,
             // 2026-11-17: "a lot of numbers in all the meters you can't see, it's cut off!")
             foreach (var w in new[] { new GridLength(34), new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(FigureW), new GridLength(ShareW) })
@@ -818,14 +820,35 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _share = Figure("", 11, Wk.S(0xB9A6F0), Wk.Bahn, FontWeights.SemiBold); _share.HorizontalAlignment = HorizontalAlignment.Right; _share.Margin = new Thickness(0, 1, 0, 0);
             Grid.SetColumn(Slant(_share), 7); row.Children.Add(_share);
             _root.Children.Add(row);
-            // TOP DPS and TOP HEALS: a lit sign hung on the row's top edge over the DPS, on the table's dark ground, off the name's
-            // line (beside the name, the heal and the deaths it left a ten-letter name two letters)
+            // TOP DPS and TOP HEALS: a lit sign on the row's own line before the DPS (2026-11-20: hung over the row's top edge it
+            // needed 6 empty pixels under every row; on a tight pitch it sat on the figures). When the line is crowded the Combat
+            // Power goes first, so the name keeps its letters (Crowd)
             _top.Child = _topText; _top.Margin = new Thickness(0);
-            _topSign = new Border { Background = GroundB, CornerRadius = new CornerRadius(7), Child = _top, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 0, 6 + ShareW, 0), IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5),
-                RenderTransform = new TransformGroup { Children = { new SkewTransform(Skew, 0), new TranslateTransform(0, -11.5) } } };
-            TextOptions.SetTextFormattingMode(_topSign, TextFormattingMode.Ideal);
-            _root.Children.Add(_topSign);
+            _topSign = new Border { Child = _top, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), IsHitTestVisible = false };
+            Slant(_topSign);
+            Grid.SetColumn(_topSign, 3); row.Children.Add(_topSign);
+            _healCell = healCell; _nameLine = nameLine;
+            _root.SizeChanged += (_, _) => Crowd();
+        }
+
+        readonly FrameworkElement _healCell, _nameLine;
+        bool _cpWanted;
+
+        /// <summary>The Combat Power shown when the name, its marks and the row's other parts fit the line without cutting the name; else it goes.</summary>
+        void Crowd()
+        {
+            _cp.Visibility = _cpWanted ? Visibility.Visible : Visibility.Collapsed;
+            double w = _root.ActualWidth;
+            if (!_cpWanted || w <= 0) return;
+            static double Need(FrameworkElement e)
+            {
+                if (e.Visibility == Visibility.Collapsed) return 0;
+                e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                return e.DesiredSize.Width;
+            }
+            var cols = _row.ColumnDefinitions;
+            double used = _row.Margin.Left + _row.Margin.Right + cols[0].Width.Value + cols[6].Width.Value + cols[7].Width.Value + Need(_healCell) + Need(_topSign) + Need(_detail);
+            if (used + Need(_nameLine) > w - .5) _cp.Visibility = Visibility.Collapsed;
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -846,11 +869,10 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             foreach (var g in _glows) { g.Text = m.Name; g.Foreground = Wk.S(neon, .38); }
             _youTag.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;
             // Combat Power beside the name once there is damage (before it, the figure is the Combat Power: said once)
-            _cpValue.Text = m.Cp; _cp.Visibility = m.Cp.Length > 0 && !m.CpOnly ? Visibility.Visible : Visibility.Collapsed;
+            _cpValue.Text = m.Cp; _cpWanted = m.Cp.Length > 0 && !m.CpOnly;
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _healHost.Visibility = m.Heal.Length > 0 && m.HealShare > 0 ? Visibility.Visible : Visibility.Collapsed;
             _topSign.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
-            Panel.SetZIndex(_root, m.TopDps || m.TopHeals ? 2 : 0);   // its sign over the row above, never under
             uint tc = m.TopDps ? Yel : TubeC;
             _topText.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS"); _topText.Foreground = Wk.S(tc);
             _top.BorderBrush = Wk.S(tc); _top.Background = Wk.S(tc, .14);
@@ -866,6 +888,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             _tubeHost.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
             _fill.Set(Wk.Bar(m, c), c, "bar", fresh);
             _healFill.Set(m.HealShare, c, "heal", fresh);
+            Crowd();
         }
     }
 }

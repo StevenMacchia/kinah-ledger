@@ -71,7 +71,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
     }
 
     readonly Card _blob = new(16, new Thickness(9, 6, 13, 7));
-    readonly Card _panel = new(14, new Thickness(0));
+    readonly Card _panel = new(12, new Thickness(0), 3);   // a slimmer frame than the line's: the fight's card is the tall one
     readonly StackPanel _lineStack = new();
     readonly StackPanel _line = new() { Orientation = Orientation.Horizontal };
     // the ring at the left of the hour's line and the pickups' row under it, centred across both
@@ -94,9 +94,9 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
     readonly ScaleTransform _beanSquash = new();
     FrameworkElement? _ring, _hour;
 
-    public HudHoloCard() : base(new Thickness(12, 66, 36, 44), HudKit.Text)
+    public HudHoloCard() : base(new Thickness(12, 66, 14, 14), HudKit.Text)
     {
-        UseRows(HoloRow.Pitch, _ => new HoloRow(), 18, HoloGap);
+        UseRows(HoloRow.Pitch, _ => new HoloRow(), 15, HoloGap);
         _beanClock = Figure("", 13, InkB, Face, FontWeights.Bold);
         _beanClock.Margin = new Thickness(5, 0, 0, 0);
         _beanFace.Child = new Grid { Children = { new Border { CornerRadius = new CornerRadius(6), Margin = new Thickness(-10, -3, -11, -4), Background = Foil(.35, 30) }, new StackPanel { Orientation = Orientation.Horizontal, Children = { _beanName, _beanClock } } } };
@@ -315,7 +315,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         if (e == null) { _panel.Root.Visibility = Visibility.Collapsed; PlaceBean(); return; }
         _panel.Root.Width = FightWidth;
         bool beanOn = KinahHidden && _bean.Visibility == Visibility.Visible;
-        var head = new Grid { Margin = new Thickness(13, beanOn ? 13 : 9, 12, 7) };
+        var head = new Grid { Margin = new Thickness(12, beanOn ? 12 : 7, 11, 5) };
         for (int i = 0; i < 3; i++) head.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
         var title = Dropped(e.Title, 15.5, WhiteB, Deep, FontWeights.Bold, false);
         foreach (var t in title.Children.OfType<TextBlock>()) t.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -337,13 +337,13 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         {
             var w = Wk.Words(e.ReadyText, 12, Wk.S(Ice, .85), Face, FontWeights.Medium); w.Margin = new Thickness(13, 9, 12, 10); w.TextWrapping = TextWrapping.Wrap;
             _fightStack.Children.Add(w);
-            if (PartyBeforeHit(e)) { var party = new StackPanel { Margin = new Thickness(9, 2, 9, 9) }; PlaceRows(party, e, now); _fightStack.Children.Add(party); }
+            if (PartyBeforeHit(e)) { var party = new StackPanel { Margin = new Thickness(7, 2, 7, 6) }; PlaceRows(party, e, now); _fightStack.Children.Add(party); }
         }
         else
         {
-            var rows = new StackPanel { Margin = new Thickness(9, 11, 9, 9) };
+            var rows = new StackPanel { Margin = new Thickness(7, 10, 7, 6) };
             PlaceRows(rows, e, now);
-            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(5, 7, 5, 0); rows.Children.Add(foot); }
+            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(5, 2, 5, 0); rows.Children.Add(foot); }
             _fightStack.Children.Add(rows);
         }
         _panel.Root.Visibility = Visibility.Visible;
@@ -360,7 +360,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
     /// <summary>The boss's HP: a rose-to-amber bar in a midnight groove, notched at the thirds, and "47% · 12.84M left".</summary>
     FrameworkElement HpRow(Encounter e, double hp, DateTime now)
     {
-        var row = new Grid { Margin = new Thickness(13, 10, 12, 0) };
+        var row = new Grid { Margin = new Thickness(12, 7, 11, 0) };
         row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var bar = new Grid { Height = 12, VerticalAlignment = VerticalAlignment.Center };
         bar.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = Wk.Lin(0, 0, 0, 1, (0x03050C, 1, 0), (0x101632, 1, 1)), BorderBrush = Wk.S(0xFFFFFF, .18), BorderThickness = new Thickness(1) });
@@ -791,16 +791,18 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
 
     /// <summary>
     /// A member as an attack line on the card: an energy orb of the class's colour with the rank, the icon, the name, quiet
-    /// Combat Power and deaths; the DPS big at the right as the attack's damage, the share small after it; under them a
-    /// full-width bar of the class's colour washed in holographic foil, white at its head. A healer's heal and TOP DPS / TOP
-    /// HEALS are foil stamps at the bar's right end; you a gold name and a gold-ruled bar. Expanded, the damage and crit sit
-    /// under the name (the row grows by <see cref="Extra"/>).
+    /// Combat Power and deaths; the DPS big at the right as the attack's damage, the share small after it; all of it over a
+    /// bar of the class's colour washed in holographic foil, running the line's height behind it, lit along its foot and white
+    /// at its head. A healer's heal and TOP DPS / TOP HEALS are foil stamps hung as tabs on the bar's top edge over the
+    /// figures; you a gold name and a gold-ruled bar. Expanded, the damage and crit sit under the name (the row grows by
+    /// <see cref="Extra"/>). (2026-11-20, Steven: "some are just bulky": one line a row, 24 on a 29 pitch where it was a name
+    /// line over a bar, 40 on 49.)
     /// </summary>
     sealed class HoloRow : IThemeRow
     {
-        public const double Line = 21, BarH = 16, H = Line + 3 + BarH, Pitch = H + 9, Extra = 11;
+        public const double H = 24, Pitch = H + 5, Extra = 11;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
-        readonly Grid _line = new() { Height = Line, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(1, 0, 3, 0) };
+        readonly Grid _line = new() { Margin = new Thickness(3, 0, 6, 0) };
         readonly Grid _orb = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center };
         readonly Ellipse _orbFill = new() { StrokeThickness = 1 };
         readonly Inked _rank = new(10, FontWeights.Bold, WhiteB, figure: true, dy: .8);
@@ -817,6 +819,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         readonly Grid _track = new() { Margin = new Thickness(1.5) };
         readonly Grid _fill = new() { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, IsHitTestVisible = false };
         readonly Border _body = new() { CornerRadius = new CornerRadius(2) };
+        readonly Border _lit = new() { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(0, 0, 2, 2) };
         readonly Wk.BarFill _bar;
         readonly Border _top, _heal;
         readonly TextBlock _topT, _healT;
@@ -863,27 +866,32 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             Grid.SetColumn(nameCol, 2); _line.Children.Add(nameCol);
             _fig.Align = HorizontalAlignment.Right; Grid.SetColumn(_fig.Root, 3); _line.Children.Add(_fig.Root);
             _share.Align = HorizontalAlignment.Right; _share.Root.Margin = new Thickness(0, 3, 0, 0); Grid.SetColumn(_share.Root, 4); _line.Children.Add(_share.Root);
-            _root.Children.Add(_line);
-            // the bar: a groove the full width, the class's colour washed in foil, lit on top, white at its head
-            var bar = new Grid { Height = BarH, VerticalAlignment = VerticalAlignment.Bottom };
+            // the bar behind the line: a groove the row's size, the class's colour (deep, so the white words read on it) washed
+            // in foil, lit on top, its foot a bright line of the class's colour, white at its head
+            var bar = new Grid();
             bar.Children.Add(_groove);
             _fill.Children.Add(_body);
             _fill.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Foil(.16, 40) });
-            _fill.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Wk.Lin(0, 0, 0, 1, (0xFFFFFF, .4, 0), (0xFFFFFF, 0, .45), (0x000000, .3, 1)) });
+            _fill.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = Wk.Lin(0, 0, 0, 1, (0xFFFFFF, .22, 0), (0xFFFFFF, 0, .4), (0x000000, .2, 1)) });
+            _fill.Children.Add(_lit);
             _fill.Children.Add(new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Right, Background = Wk.S(0xFFFFFF, .9) });
             _track.Children.Add(_fill);
             bar.Children.Add(_track);
             _bar = new Wk.BarFill(_track, _fill, 8);
+            _root.Children.Add(bar);
+            _root.Children.Add(_line);
+            // the heal and TOP stamps: tabs hung on the bar's top edge over the figures (lifted by their transform: a negative
+            // margin would clip them at the row's top), in the room between this row and the one over it
             _heal = Stamp(out _healT); _heal.Margin = new Thickness(0, 0, 3, 0);
             _top = Stamp(out _topT);
-            bar.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 3, 0), Children = { _heal, _top } });
-            _root.Children.Add(bar);
+            _root.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 6, 0),
+                RenderTransform = new TranslateTransform(0, -8), IsHitTestVisible = false, Children = { _heal, _top } });
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
             double extra = c.Expanded ? Extra : 0;
-            _root.Height = H + extra; _line.Height = Line + extra;
+            _root.Height = H + extra;
             uint v = Wk.Vivid(Wk.Hex(m.ClassColor));
             _orbFill.Fill = Wk.Rad(.4, .32, .75, (Wk.Shade(v, .5), 1, 0), (v, 1, .5), (Wk.Shade(v, -.5), 1, 1));
             _orbFill.Stroke = Wk.S(Wk.Shade(v, -.6));
@@ -905,9 +913,11 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             _fig.Text = m.Figure; _share.Text = m.ShareText;
             _groove.Background = Wk.Lin(0, 0, 0, 1, (0x03050C, .95, 0), (0x101632, .95, 1));
             _groove.BorderBrush = m.You ? Wk.Lin(0, 0, 0, 1, (0xFFF0B0, 1, 0), (0xE8B53A, 1, 1)) : Wk.S(0xFFFFFF, .14);
-            _body.Background = Wk.Lin(0, 0, 1, 0, (Wk.Shade(v, -.35), 1, 0), (Wk.Shade(v, -.05), 1, .7), (Wk.Shade(v, .1), 1, 1));
+            _body.Background = Wk.Lin(0, 0, 1, 0, (Wk.Shade(v, -.62), 1, 0), (Wk.Shade(v, -.4), 1, .7), (Wk.Shade(v, -.25), 1, 1));
+            _lit.Background = Wk.Lin(0, 0, 1, 0, (Wk.Shade(v, -.1), 1, 0), (Wk.Shade(v, .25), 1, 1));
             _healT.Text = m.Heal.Length > 0 ? "✚ " + m.Heal : ""; _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _top.Visibility = m.TopDps || m.TopHeals ? Visibility.Visible : Visibility.Collapsed;
+            Panel.SetZIndex(_root, m.TopDps || m.TopHeals || m.Heal.Length > 0 ? 2 : 0);   // its tabs over the row above, never under
             _topT.Text = m.TopDps ? L.T("TOP DPS") : L.T("TOP HEALS");
             _fill.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
             _bar.Set(Wk.Bar(m, c), c, "bar", fresh);

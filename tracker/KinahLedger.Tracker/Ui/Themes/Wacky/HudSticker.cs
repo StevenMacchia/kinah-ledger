@@ -43,9 +43,9 @@ sealed partial class HudSticker : WackyLook, IThemeCard
     readonly StackPanel _cardStack = new();
     FrameworkElement? _ring, _pill;
 
-    public HudSticker() : base(new Thickness(12, 68, 56, 16), Wk.Segoe)
+    public HudSticker() : base(new Thickness(12, 68, 16, 8), Wk.Segoe)
     {
-        UseRows(34, _ => new StickerRow(), 16, StickerGap);   // 36 tall on a 34 pitch: each sticker laps the one under it
+        UseRows(StickerRow.H, _ => new StickerRow(), 15, StickerGap);   // 15: "N more" in Korean and Chinese   // 29 tall on a 27 pitch: each sticker laps the one under it
         _tagClock = Figure("", 13, K, Wk.Heavy, FontWeights.Black);
         _tagClock.Margin = new Thickness(5, 0, 0, 0);
         _tagFace.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _tagName, _tagClock } };
@@ -274,7 +274,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         if (e == null) { _card.Visibility = Visibility.Collapsed; PlaceTag(); return; }
         _card.Width = FightWidth;
         _cardFace.Background = Wk.S(Yel, PaperA);
-        var head = new Grid { Margin = new Thickness(11, KinahHidden && _tag.Visibility == Visibility.Visible ? 10 : 6, 8, 6) };
+        var head = new Grid { Margin = new Thickness(10, KinahHidden && _tag.Visibility == Visibility.Visible ? 10 : 4, 8, 3) };
         for (int i = 0; i < 4; i++) head.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
         var title = Wk.Words(e.Title, 16, K, Wk.Heavy, Black); title.TextTrimming = TextTrimming.CharacterEllipsis;
         head.Children.Add(title);
@@ -290,7 +290,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         Grid.SetColumn(ct, 3); head.Children.Add(ct);
         _cardStack.Children.Add(head);
         if (!e.Waiting && HpOf(e) is double hp) _cardStack.Children.Add(HpRow(e, hp, now));
-        var body = new Border { Background = Wk.S(CardC, InkA), CornerRadius = new CornerRadius(7), Margin = new Thickness(4, 0, 4, 4), Padding = new Thickness(4, 5, 4, 6) };
+        var body = new Border { Background = Wk.S(CardC, InkA), CornerRadius = new CornerRadius(7), Margin = new Thickness(4, 0, 4, 4), Padding = new Thickness(4, 5, 4, 4) };
         var bs = new StackPanel();
         body.Child = bs;
         if (e.Waiting)
@@ -302,7 +302,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         else
         {
             PutRows(bs, e, now);
-            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(6, 6, 6, 0); bs.Children.Add(foot); }
+            if (e.HasDamage) { var foot = ParserFoot.Line(e, now, 12); foot.Margin = new Thickness(6, 3, 6, 0); bs.Children.Add(foot); }
         }
         _cardStack.Children.Add(body);
         _card.Visibility = Visibility.Visible;
@@ -312,9 +312,9 @@ sealed partial class HudSticker : WackyLook, IThemeCard
     /// <summary>The boss's HP: a thick bar with a black outline, notched at the thirds, and "47% · 1.82M left".</summary>
     FrameworkElement HpRow(Encounter e, double hp, DateTime now)
     {
-        var row = new Grid { Margin = new Thickness(10, 0, 10, 8) };
+        var row = new Grid { Margin = new Thickness(10, 0, 10, 4) };
         row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var outer = new Border { Background = K, CornerRadius = new CornerRadius(8), Padding = new Thickness(2.5), Height = 18, VerticalAlignment = VerticalAlignment.Center };
+        var outer = new Border { Background = K, CornerRadius = new CornerRadius(8), Padding = new Thickness(2.5), Height = 16, VerticalAlignment = VerticalAlignment.Center };
         var track = new Grid();
         track.Children.Add(new Border { Background = Wk.S(0x3A3340), CornerRadius = new CornerRadius(5.5) });
         bool low = hp < .34;
@@ -635,6 +635,9 @@ sealed partial class HudSticker : WackyLook, IThemeCard
 
     // ---- the meter's rows: a sticker strip per member
 
+    /// <summary><paramref name="t"/> laid out on a line <paramref name="lh"/> tall, whatever its face's own line.</summary>
+    static TextBlock Tight(TextBlock t, double lh) { t.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; t.LineHeight = lh; return t; }
+
     /// <summary>"2 more": a dashed paper line with a small ink tag, between the party and you pinned below it.</summary>
     static FrameworkElement StickerGap(int n)
     {
@@ -644,7 +647,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             g.Children.Add(new Border
             {
                 Background = Wk.S(KC), BorderBrush = Wk.S(Paper, .7), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 0, 6, 1), HorizontalAlignment = HorizontalAlignment.Center,
-                Child = Wk.Words(L.F("{0} more", n), 10, PaperB, Wk.Heavy, FontWeights.Black),
+                Child = Tight(Wk.Words(L.F("{0} more", n), 10, PaperB, Wk.Heavy, FontWeights.Black), 12),
             });
         return g;
     }
@@ -659,12 +662,13 @@ sealed partial class HudSticker : WackyLook, IThemeCard
     /// </summary>
     sealed class StickerRow : IThemeRow
     {
-        // the row is its pitch tall (34) and the sticker in it 36, run 2 past its foot: a row taller than its room would be
-        // clipped to its own box (the last row's foot and a TOP sticker lifted over its top edge)
-        const double H = 34;
+        // the row is its pitch tall (27) and the sticker in it 29, run 2 past its foot: a row taller than its room would be
+        // clipped to its own box (the last row's foot and a TOP sticker lifted over its top edge). 2026-11-20 (Steven: "some
+        // are just bulky"): 27 where it was 34, the strip's words 3.5 and 4.5 in from its edges where they were 5 and 6
+        public const double H = 27;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly Grid _all = new() { Margin = new Thickness(0, 0, 0, -2) };
-        readonly Grid _strip = new() { RenderTransformOrigin = new Point(.5, .5), Margin = new Thickness(10, 1, 6, 3) };
+        readonly Grid _strip = new() { RenderTransformOrigin = new Point(.5, .5), Margin = new Thickness(10, 1, 6, 2) };
         readonly TransformGroup _place = new();
         readonly RotateTransform _turn = new();
         readonly TranslateTransform _nudge = new();
@@ -701,7 +705,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         readonly Run _critWord = new() { FontFamily = Wk.Heavy, FontSize = 7.5, FontWeight = FontWeights.Black, Foreground = Wk.S(KC, .45) };
 
         double _lean = 1;
-        void Turn() => _turn.Angle = _lean * Math.Min(1.1, 360 / Math.Max(200, _root.ActualWidth) * 1.1);
+        void Turn() => _turn.Angle = _lean * Math.Min(.6, 360 / Math.Max(200, _root.ActualWidth) * .6);
 
         /// <summary>The tape's torn end: a ragged edge.</summary>
         static readonly Geometry Tear = Geometry.Parse("M0,0 L5,0 L3,2 L6,4 L2.5,6 L5.5,8 L3,9 L0,9 Z");
@@ -711,7 +715,8 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         public StickerRow()
         {
             _place.Children.Add(_turn); _place.Children.Add(_nudge);
-            // the turn keeps the strip's ends within about 3 px of level however wide the meter is dragged
+            // the turn keeps the strip's ends within about 2 px of level however wide the meter is dragged (on the 27 pitch a
+            // steeper one ran the strip's edge into its own figures)
             _root.SizeChanged += (_, _) => Turn();
             _strip.RenderTransform = _place;
             TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Ideal);
@@ -749,7 +754,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             Grid.SetColumn(_share, 7); row.Children.Add(_share);
             inner.Children.Add(row);
             // the words stay level, in the same columns on every row: only the sticker under them turns and shifts
-            var words = new Grid { Margin = new Thickness(14.5, 5, 10.5, 6), Children = { inner } };
+            var words = new Grid { Margin = new Thickness(14.5, 3.5, 10.5, 4.5), Children = { inner } };
             // the highlighter: its body, its torn end, a faint lit streak along its top
             _tear.Width = 5;
             _tape.Children.Add(_tapeBody); _tape.Children.Add(_tear);
@@ -766,12 +771,16 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             // tag before it (lifted by their transform: a negative margin would clip them at the row's top)
             _top.Margin = new Thickness(5, 0, 0, 0); _top.VerticalAlignment = VerticalAlignment.Center;
             Wk.Tilt(_top, 4);
-            var tags = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 64, 0),
-                RenderTransform = new TranslateTransform(0, -7.5), Children = { _healTag, _top } };
+            // (on the 27 pitch they end where the figures' columns start: between the rows they would sit on the big figures)
+            // every line on a box as tall as its letters (a Korean or Chinese face's own box is far taller), so a tag fits the band
+            // between one row's words and the next's
+            foreach (var (t, lh) in new[] { (_heal, 12.0), (_topText, 10.0), (_deadText, 11.0), (_name, 15.0), (_cp, 13.0), (_figure, 17.0), (_share, 13.0), (_detail, 12.0) }) Tight(t, lh);
+            var tags = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14.5 + FigureW + ShareW, 0),
+                RenderTransform = new TranslateTransform(0, -7), Children = { _healTag, _top } };
             TextOptions.SetTextFormattingMode(tags, TextFormattingMode.Ideal);
             _all.Children.Add(tags);
             Wk.Tilt(_dead, -5);
-            _dead.RenderTransform = new TransformGroup { Children = { new RotateTransform(-5), new TranslateTransform(0, -7) } };
+            _dead.RenderTransform = new TransformGroup { Children = { new RotateTransform(-5), new TranslateTransform(0, -6.5) } };
             _all.Children.Add(_dead);
             _root.Children.Add(_all);
         }
