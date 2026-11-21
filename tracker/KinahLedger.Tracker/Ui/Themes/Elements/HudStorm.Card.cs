@@ -167,7 +167,7 @@ sealed partial class HudStorm
 
         // the ground: storm-cloud glass (its own drop drawn round it)
         var card = new Grid { Margin = new Thickness(6, 4, 10, 12) };
-        card.Children.Add(new TacSketch((dc, s) => StormPanel(dc, s, 1, 12, 3, drop: false, crest: LineCrest)));
+        card.Children.Add(new TacSketch((dc, s) => StormPanel(dc, s, 1, 12, 3, drop: false, crest: LineCrest)) { Margin = new Thickness(1) });   // a pixel in from the card's edge: no stroke reaches past it
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);
