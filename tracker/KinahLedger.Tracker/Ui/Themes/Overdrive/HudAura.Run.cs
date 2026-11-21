@@ -6,18 +6,18 @@ using static KinahLedger.Ui.HudKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Fade's Buddy in a dungeon run (the "run*" values, MainWindow.HudRun.cs; Steven, 2026-11-18: "Yes, all looks"): a
-/// speedrun timer on the same blue wash. Over the wash, small and lit straight on the game, the dungeon and its mode with
+/// Aura's Buddy in a dungeon run (the "run*" values, MainWindow.HudRun.cs; Steven, 2026-11-18: "Yes, all looks"): a
+/// speedrun timer on the same core plate. Over the plate, small and lit straight on the game, the dungeon and its mode with
 /// "Run 3 today · 38 clears"; on it the run clock big in white, mint ahead of your fastest run's pace and coral behind, the
 /// pace and your best beside it, the last bosses' splits under it (a new best split in gold). After the final boss NEW BEST
 /// in mint or "Cleared in 4:17 · 2nd fastest", and the run's worth in gold against your average; between runs today here.
-/// The words are ModernRun's; the pickup strip and the timer chips sit at the wash's end as on the farming line.
+/// The words are ModernRun's; the pickup strip and the timer chips sit at the plate's end as on the farming line.
 /// </summary>
 sealed partial class HudAura
 {
     static readonly RunInk Ink = new(White, Soft, Quiet, Quiet, Mint2, Coral, Frozen(GoldC2), Frozen(GoldC2), 22, 10.5);
 
-    /// <summary>The run's head over the wash, lined up with the words on it (collapsed out of a run).</summary>
+    /// <summary>The run's head over the plate, lined up with the words on it (collapsed out of a run).</summary>
     readonly TextBlock _runHead = RunHead();
     readonly Border _runHeadLit;
 
@@ -28,10 +28,10 @@ sealed partial class HudAura
         return t;
     }
 
-    /// <summary>The run on the wash: the figures in the hour's place, the strip after them (the timer chips follow); the head over it.</summary>
+    /// <summary>The run on the plate: the figures in the hour's place, the strip after them (the timer chips follow); the head over it.</summary>
     void DrawRun(RunBuddy.State s)
     {
-        var lead = new Border { Width = 8 };
+        var lead = new Border { Width = 2 };
         _lineBody.Children.Add(lead);
         double cap = FightWidth - 10 - _lineBody.Margin.Left - _lineBody.Margin.Right - lead.Width;
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 0, 1) };
