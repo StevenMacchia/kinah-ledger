@@ -23,8 +23,8 @@ public static partial class WpfApp
     static void ThemeChecks(OptionsWindow o, MainWindow w, Action<bool, string> check)
     {
         var themes = HudThemes.All.Select(t => t.Key).ToList();
-        check(o.HudThemeForTest == HudThemes.Of(w.HudLook) && o.HudThemeHost.Children.Count == themes.Count && themes.SequenceEqual(new[] { HudThemes.Classic, HudThemes.Wacky, HudThemes.Tactical, HudThemes.Glitch, HudThemes.Modern }),
-            $"Options › In game: a Theme row (Classic, Wacky, Tactical, Glitch, Modern) over the thumbnails, the look in use's theme shown ({o.HudThemeForTest}, {o.HudThemeHost.Children.Count} chips)");
+        check(o.HudThemeForTest == HudThemes.Of(w.HudLook) && o.HudThemeHost.Children.Count == themes.Count && themes.SequenceEqual(new[] { HudThemes.Classic, HudThemes.Wacky, HudThemes.Tactical, HudThemes.Glitch, HudThemes.Modern, HudThemes.Atreia }),
+            $"Options › In game: a Theme row (Classic, Wacky, Tactical, Glitch, Modern, Atreia) over the thumbnails, the look in use's theme shown ({o.HudThemeForTest}, {o.HudThemeHost.Children.Count} chips)");
         var said = new List<string>();
         foreach (var t in themes.Where(t => t != HudThemes.Classic))
         {
