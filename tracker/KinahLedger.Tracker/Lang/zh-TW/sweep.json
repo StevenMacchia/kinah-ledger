@@ -5,6 +5,7 @@
   "Sharing: last sent {0}": "分享：上次傳送 {0}",
   "Sharing: nothing sent yet": "分享：尚未傳送",
   "The Market isn't open on screen. Open it in the game, then press Share again.": "畫面上沒有開啟交易所。請在遊戲中開啟後，再按一次分享。",
+  "This is the World Market. Its prices are every server's, so only your own server's Market is shared.": "這是世界交易所。它的價格來自所有伺服器，所以只分享你自己伺服器的交易所。",
   "the site answered {0}": "網站回應 {0}",
   "no connection: {0}": "無法連線：{0}",
   "the site didn't answer within 15 s": "網站在 15 秒內沒有回應",

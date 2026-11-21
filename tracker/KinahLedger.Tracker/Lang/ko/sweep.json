@@ -5,6 +5,7 @@
   "Sharing: last sent {0}": "공유: 마지막 전송 {0}",
   "Sharing: nothing sent yet": "공유: 아직 보낸 게 없어요",
   "The Market isn't open on screen. Open it in the game, then press Share again.": "화면에 거래소가 열려 있지 않아요. 게임에서 거래소를 연 다음 공유를 다시 눌러주세요.",
+  "This is the World Market. Its prices are every server's, so only your own server's Market is shared.": "월드 거래소예요. 모든 서버의 가격이라서 내 서버 거래소만 공유해요.",
   "the site answered {0}": "사이트가 {0} 응답을 보냈어요",
   "no connection: {0}": "연결되지 않았어요: {0}",
   "the site didn't answer within 15 s": "사이트가 15초 안에 응답하지 않았어요",

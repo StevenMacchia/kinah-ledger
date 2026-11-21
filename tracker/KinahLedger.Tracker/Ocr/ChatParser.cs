@@ -58,28 +58,32 @@ public sealed partial class ChatParser
     const string Price = @"(?<price>[0-9][0-9OoIl,\. ]*?)\s*kinah?\b";
 
     /// <summary>"Your Spiritstone x10 sold for 75,200 Kina." / "Spiritstone x10 has been sold for 75,200 Kina."</summary>
-    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+been\s+|have\s+been\s+|was\s+|were\s+)?sold\b(?:\s+(?:on|at|in|through)\s+the\s+market)?(?:\s+for)?[^0-9]*?" + Price, RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+been\s+|have\s+been\s+|was\s+|were\s+)?sold\b(?:\s+(?:on|at|in|through)\s+the\s+(?:world\s+|server\s+)?market)?(?:\s+for)?[^0-9]*?" + Price, RegexOptions.IgnoreCase)]
     private static partial Regex SoldItemFirst();
 
     /// <summary>"Sold Spiritstone x10 for 75,200 Kina." / "The Market sold your Spiritstone x10 for 75,200 Kina."</summary>
-    [GeneratedRegex(@"^(?:the\s+market\s+)?sold\s+(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+for\s+" + Price, RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:the\s+(?:world\s+|server\s+)?market\s+)?sold\s+(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+for\s+" + Price, RegexOptions.IgnoreCase)]
     private static partial Regex SoldVerbFirst();
 
     /// <summary>"Registered Spiritstone x10 on the Market for 75,200 Kina." / "You listed ..."</summary>
-    [GeneratedRegex(@"^(?:you\s+(?:have\s+)?)?(?:registered|listed)\s+(?<item>[^\[\]]+?)" + Stack + @"\s+(?:on|to|in)\s+the\s+market(?:\s+for\s+" + Price + ")?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:you\s+(?:have\s+)?)?(?:registered|listed)\s+(?<item>[^\[\]]+?)" + Stack + @"\s+(?:on|to|in)\s+the\s+(?:world\s+|server\s+)?market(?:\s+for\s+" + Price + ")?", RegexOptions.IgnoreCase)]
     private static partial Regex ListedVerbFirst();
 
     /// <summary>"Spiritstone x10 has been registered on the Market for 75,200 Kina."</summary>
-    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+been\s+|was\s+)?(?:registered|listed)\b(?<market>\s+(?:on|to|in)\s+the\s+market)?(?:\s+for\s+" + Price + ")?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+been\s+|was\s+)?(?:registered|listed)\b(?<market>\s+(?:on|to|in)\s+the\s+(?:world\s+|server\s+)?market)?(?:\s+for\s+" + Price + ")?", RegexOptions.IgnoreCase)]
     private static partial Regex ListedItemFirst();
 
     /// <summary>"Listing for Spiritstone x10 has expired." / "Registration period for Spiritstone has expired."</summary>
-    [GeneratedRegex(@"^(?:the\s+)?(?:market\s+)?(?:listing|registration)(?:\s+period)?\s+(?:for|of)\s+(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+)?expired", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:the\s+)?(?:(?:world\s+|server\s+)?market\s+)?(?:listing|registration)(?:\s+period)?\s+(?:for|of)\s+(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+)?expired", RegexOptions.IgnoreCase)]
     private static partial Regex ExpiredListingFirst();
 
     /// <summary>"Your Spiritstone x10 listing has expired." / "Spiritstone x10 has expired on the Market."</summary>
-    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:(?:market\s+)?(?:listing|registration)\s+(?:has\s+)?expired|(?:has\s+)?expired\b.*\bmarket)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:(?:(?:world\s+|server\s+)?market\s+)?(?:listing|registration)\s+(?:has\s+)?expired|(?:has\s+)?expired\b.*\bmarket)", RegexOptions.IgnoreCase)]
     private static partial Regex ExpiredItemFirst();
+
+    /// <summary>A Market line that names the World Market or World Exchange (from 2026-11-25): not this server's Market.</summary>
+    [GeneratedRegex(@"\bworld\s+(?:market|exchange)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex WorldWord();
 
     /// <summary>"Successfully crafted Orichalcum Ingot." (seen in game), with a possible "Great success!" in front or a stack after.</summary>
     [GeneratedRegex(@"^(?:(?:great|critical)\s+success[!.:]?\s*)?(?:you\s+(?:have\s+)?)?successfully\s+crafted\s+(?<item>[^\[\]]+?)" + Stack + @"\s*[.!]?$", RegexOptions.IgnoreCase)]
@@ -115,19 +119,19 @@ public sealed partial class ChatParser
         if ((m = SoldVerbFirst().Match(line)).Success || (m = SoldItemFirst().Match(line)).Success)
         {
             var item = CleanName(m.Groups["item"].Value); long total = Digits(m.Groups["price"].Value);
-            if (item.Length >= 2 && total > 0) yield return new MarketSold(time, item, Count(m), total);
+            if (item.Length >= 2 && total > 0) yield return new MarketSold(time, item, Count(m), total, WorldWord().IsMatch(line));
             yield break;
         }
         if ((m = ListedVerbFirst().Match(line)).Success || ((m = ListedItemFirst().Match(line)).Success && (m.Groups["market"].Success || m.Groups["price"].Success)))
         {
             var item = CleanName(m.Groups["item"].Value);
-            if (item.Length >= 2) yield return new MarketListed(time, item, Count(m), m.Groups["price"].Success ? Digits(m.Groups["price"].Value) : 0);
+            if (item.Length >= 2) yield return new MarketListed(time, item, Count(m), m.Groups["price"].Success ? Digits(m.Groups["price"].Value) : 0, WorldWord().IsMatch(line));
             yield break;
         }
         if ((m = ExpiredListingFirst().Match(line)).Success || (m = ExpiredItemFirst().Match(line)).Success)
         {
             var item = CleanName(m.Groups["item"].Value);
-            if (item.Length >= 2) yield return new MarketExpired(time, item, Count(m));
+            if (item.Length >= 2) yield return new MarketExpired(time, item, Count(m), WorldWord().IsMatch(line));
             yield break;
         }
         if ((m = Crafted().Match(line)).Success)
