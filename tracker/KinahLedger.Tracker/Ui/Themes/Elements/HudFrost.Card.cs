@@ -19,7 +19,8 @@ sealed partial class HudFrost : IThemeCard
         const double In = 12;
         double w = 270 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
-        var stack = new StackPanel { Margin = new Thickness(In, 11, In, 11) };
+        // room round the slab for its crystal crest and its icicles (drawn inside the card: nothing past its edge)
+        var stack = new StackPanel { Margin = new Thickness(In + 22, 11 + 34, In + 14, 11 + 16) };
 
         // the head on the member's bar of ice: art, name, CP, YOU ... class
         var head = new Grid { Height = 32, Margin = new Thickness(-5, 0, -5, 8) };
@@ -124,9 +125,9 @@ sealed partial class HudFrost : IThemeCard
                     var sh = Shard(r, 4, 1);
                     dc.DrawGeometry(Mod.Br(DeepC, .55), null, sh);
                     dc.PushClip(sh);
-                    // the bar's reach ends before the rate columns, so its icy edge never cuts through their figures
+                    // the bar ends before the rate columns, its edge soft (no icy line through the figures)
                     double reach = Math.Max(20, r.Width - rateW - 4);
-                    IceBar(dc, r, reach * Math.Clamp(of, 0, 1), tone, top, 0, .85);
+                    IceBar(dc, r, reach * Math.Clamp(of, 0, 1), tone, top, 0, .85, tip: false, edge: false);
                     dc.Pop();
                 });
                 row.Children.Add(art);
@@ -152,9 +153,9 @@ sealed partial class HudFrost : IThemeCard
         }
 
         // the ground: a slab of glacial ice, its own drop inside the card's room
-        var art2 = new IceArt(12, 4, 37);
+        var art2 = new IceArt(12, 8, 37, crest: .6, icicles: .7);
         // (no drop of its own: the pop-up's edge is the card's, nothing drawn past it)
-        var ice = new TacSketch((dc, s) => IcePanel(dc, s, art2, 1, shadow: false));
+        var ice = new TacSketch((dc, s) => IcePanel(dc, s, art2, 1, shadow: false)) { Margin = new Thickness(22, 34, 14, 16) };
         stack.Effect = Shade();   // one shade for every word on the card (not one per row)
         var card = new Grid { Margin = new Thickness(4, 4, 5, 4) };
         card.Children.Add(ice); card.Children.Add(stack);

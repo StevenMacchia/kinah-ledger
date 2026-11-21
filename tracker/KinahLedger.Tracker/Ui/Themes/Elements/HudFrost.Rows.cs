@@ -96,8 +96,8 @@ sealed partial class HudFrost
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art, _rime;
         readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad, 0) };
-        readonly Grid _rankHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-        readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Quiet, FontWeights.SemiBold),
+        readonly Grid _rankHost = new() { Width = 19, Height = 19, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .74)), FontWeights.SemiBold),
             _heal = Tt("", 11, Mint2, FontWeights.Bold), _dps = Tt("", 16.5, White, FontWeights.Bold), _share = Tt("", 10.5, Soft, FontWeights.SemiBold),
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Quiet, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -112,8 +112,10 @@ sealed partial class HudFrost
 
         // the crown, in parts its moment grows one after another (painted once: HudFrost.Ice.cs)
         readonly Grid _crown = new() { Visibility = Visibility.Collapsed, IsHitTestVisible = false };
-        readonly Border _flakeGlow = Piece(FlakeGlow, 27, 27, .4), _arms = Piece(FlakeArms, 19, 19), _branches = Piece(FlakeBranches, 19, 19), _ring = Piece(FrostRing, 30, 30, 0), _tip = Piece(SparkleBrush, 10, 10, 0);
-        readonly ScaleTransform _armsK = new(1, 1), _branchesK = new(1, 1), _ringK = new(1, 1);
+        readonly Border _flakeGlow = Piece(FlakeGlow, 29, 29, .4), _arms = Piece(FlakeArms, 21, 21), _branches = Piece(FlakeBranches, 21, 21), _ring = Piece(FrostRing, 32, 32, 0), _tip = Piece(SparkleBrush, 10, 10, 0),
+            _bloom = Piece(FlakeBloom, 66, 66, 0), _bloomHot = Piece(FlakeBloomHot, 66, 66, 0);
+        readonly ScaleTransform _armsK = new(1, 1), _branchesK = new(1, 1), _ringK = new(1, 1), _bloomK = new(1, 1);
+        readonly RotateTransform _bloomTurn = new();
         readonly RotateTransform _turn = new();
 
         // the frost creeping along the bar, made on its first course: the rime's reveal, the veil at its front, the glint, two motes
@@ -139,7 +141,7 @@ sealed partial class HudFrost
             // the columns: rank, the class art, the name's line (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
             _dpsW = FigCol(_dps, "888.8K") + 4; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
             _dmgW = FigCol(_dmg, "888.88M") + 8; _critW = FigCol(_crit, "88%") + 8;
-            foreach (var w in new[] { 19.0, 25, double.NaN, 0, _dpsW, _shareW, 0, 0 })
+            foreach (var w in new[] { 21.0, 25, double.NaN, 0, _dpsW, _shareW, 0, 0 })
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
             _art = new TacSketch(Draw);
@@ -147,12 +149,14 @@ sealed partial class HudFrost
             _rimeClip.Transform = _rimeK;
             _root.Children.Add(_art); _root.Children.Add(_rime);
             // the crown's parts overhang the 17 px cell (negative margins: never cut by its layout)
-            foreach (var (p, w) in new[] { (_flakeGlow, 27.0), (_ring, 30), (_arms, 19), (_branches, 19) }) p.Margin = new Thickness(-(w - 17) / 2);
+            foreach (var (p, w) in new[] { (_flakeGlow, 29.0), (_ring, 32), (_arms, 21), (_branches, 21), (_bloom, 66), (_bloomHot, 66) }) p.Margin = new Thickness(-(w - 19) / 2);
             _arms.RenderTransform = _armsK; _branches.RenderTransform = _branchesK; _ring.RenderTransform = _ringK;
-            _ring.Visibility = Visibility.Hidden; _tip.Visibility = Visibility.Hidden;
+            _bloom.RenderTransform = new TransformGroup { Children = { _bloomK, _bloomTurn } };
+            _bloomHot.RenderTransform = _bloom.RenderTransform; _bloomHot.Visibility = Visibility.Hidden;
+            _ring.Visibility = Visibility.Hidden; _tip.Visibility = Visibility.Hidden; _bloom.Visibility = Visibility.Hidden;
             _tip.VerticalAlignment = VerticalAlignment.Top; _tip.Margin = new Thickness(0, -6, 0, 0);
             var flake = new Grid { RenderTransform = _turn, RenderTransformOrigin = new Point(.5, .5), Children = { _arms, _branches } };
-            _crown.Children.Add(_flakeGlow); _crown.Children.Add(_ring); _crown.Children.Add(flake); _crown.Children.Add(_tip);
+            _crown.Children.Add(_bloom); _crown.Children.Add(_bloomHot); _crown.Children.Add(_flakeGlow); _crown.Children.Add(_ring); _crown.Children.Add(flake); _crown.Children.Add(_tip);
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
             _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crown);
             Put(_rankHost, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
@@ -243,6 +247,30 @@ sealed partial class HudFrost
         static double Out(double p) => Motion.Out(p);
         static Rect Slab(Size s) => new(.5, .5, Math.Max(1, s.Width - 1), Math.Max(1, s.Height - 1));
 
+        /// <summary>
+        /// The bar's full length: to just past the DPS figure, so the share (and the expanded columns) always sit on the dark
+        /// slab, clear of the bar's bright icy edge.
+        /// </summary>
+        double Track(Rect r) => Math.Max(20, r.Width - 2);
+
+        /// <summary>
+        /// Whether the bar's bright icy end can be drawn at <paramref name="x"/>: never under a word or figure (4 px of air
+        /// round each); there, the bar ends soft instead.
+        /// </summary>
+        bool EdgeClear(double x)
+        {
+            foreach (var el in new FrameworkElement[] { _rankHost, _iconHost, _line, _heal, _dps, _share, _dmg, _crit })
+            {
+                if (el.Visibility != Visibility.Visible || el.ActualWidth <= 0 || !el.IsDescendantOf(_root)) continue;
+                double l = el.TranslatePoint(new Point(0, 0), _root).X;
+                if (x > l - 6 && x < l + el.ActualWidth + 6) return false;
+            }
+            return true;
+        }
+
+        /// <summary>For the PB ghost (Ui/GhostMarks.cs, IThemeBarSpan): the element the bar is drawn in and the rect a full bar fills.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(.5, .5, Track(Slab(_art.RenderSize)), Math.Max(1, _art.ActualHeight - 1)));
+
         // ---- the ice (drawn on a change only)
 
         void Draw(DrawingContext dc, Size s)
@@ -254,9 +282,9 @@ sealed partial class HudFrost
             // the slab of dark ice the bar lies in (the dark ground the words read on)
             if (lead) dc.DrawGeometry(null, LeadHalo, slab);
             dc.DrawGeometry(SlabFill, null, slab);
-            double fx = r.Width * Math.Clamp(_bar, 0, 1);
+            double fx = Track(r) * Math.Clamp(_bar, 0, 1);
             dc.PushClip(slab);
-            IceBar(dc, r, fx, m.ClassColor, lead, 0);
+            IceBar(dc, r, fx, m.ClassColor, lead, 0, edge: EdgeClear(r.Left + fx), tip: EdgeClear(r.Left + fx));
             // a healer's share of the group's healing as a mint line along the slab's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
                 dc.DrawRectangle(HealLine, null, new Rect(r.X, r.Bottom - 2, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2));
@@ -278,12 +306,15 @@ sealed partial class HudFrost
         {
             if (_m is null || s.Width < 30) return;
             var r = Slab(s);
-            double fx = r.Width * Math.Clamp(_bar, 0, 1);
+            double fx = Track(r) * Math.Clamp(_bar, 0, 1);
             if (fx < 2) return;
             double sl = Math.Min(3, fx / 2);
             dc.PushClip(new RectangleGeometry(new Rect(r.Left, r.Top, fx + sl, r.Height)));
+            // a soft white band of frost along the top, a few larger crystals; the leader's bar the full hoarfrost
+            dc.DrawRectangle(RimeBand, null, new Rect(r.Left, r.Top + .5, fx + sl, 3));
             dc.PushTransform(new TranslateTransform(r.Left, r.Top));
-            dc.DrawGeometry(null, RimeEdgePen, RimeEdge);
+            dc.DrawGeometry(null, TuftPen, RimeTufts);
+            if (_m.Rank == 1 && !_m.CpOnly) dc.DrawGeometry(null, RimeEdgePen, RimeEdge);
             dc.Pop(); dc.Pop();
         }
 
@@ -299,7 +330,7 @@ sealed partial class HudFrost
                 _fx = new Canvas { IsHitTestVisible = false, Clip = _fxClip };
                 _veil = new Border { Width = 32, Height = H, Background = VeilBrush, RenderTransform = new TranslateTransform() };
                 _blade = Glint(BladeGeo, BladeBrush);
-                _front = Piece(SparkleBrush, 10, 10); _front.RenderTransform = new TranslateTransform();
+                _front = Piece(SparkleBrush, 18, 18); _front.RenderTransform = new TranslateTransform();
                 _mote1 = Piece(SparkleBrush, 6, 6); _mote1.RenderTransform = new TranslateTransform();
                 _mote2 = Piece(SparkleBrush, 7, 7); _mote2.RenderTransform = new TranslateTransform();
                 foreach (var e in new UIElement[] { _veil, _blade, _front, _mote1, _mote2 }) _fx.Children.Add(e);
@@ -315,7 +346,7 @@ sealed partial class HudFrost
             double w = _root.ActualWidth;
             if (w <= 0) return;
             var r = Slab(new Size(w, H));
-            double fx = r.Width * Math.Clamp(_bar, 0, 1), t = _frost;
+            double fx = Track(r) * Math.Clamp(_bar, 0, 1), t = _frost;
             _fx.Visibility = Visibility.Visible;
             var bar = new Rect(r.Left, r.Top, fx + 3, r.Height);
             if (_fxClip!.Rect != bar) _fxClip.Rect = bar;
@@ -325,7 +356,7 @@ sealed partial class HudFrost
             double front = r.Left + (fx + 3) * Out(Seg(t, 0, .6)), veil = t > 0 ? 1 - Seg(t, .5, .75) : 0;
             _rimeK.ScaleX = Math.Max(.0001, front / w);
             Show(_veil!, veil); ((TranslateTransform)_veil!.RenderTransform).X = front - 30;
-            Show(_front!, .95 * veil); var ft = (TranslateTransform)_front!.RenderTransform; ft.X = front - 6; ft.Y = r.Top - 3;
+            Show(_front!, veil); var ft = (TranslateTransform)_front!.RenderTransform; ft.X = front - 10; ft.Y = r.Top - 6;
             double g = Seg(t, .55, 1);
             Show(_blade!, Math.Sin(Math.PI * g)); var bt = (TranslateTransform)_blade!.RenderTransform; bt.X = r.Left - 20 + (fx + 40) * Out(g); bt.Y = -6;
             int i = 0;
@@ -339,12 +370,21 @@ sealed partial class HudFrost
             }
         }
 
-        /// <summary>The crown crystallises: its six arms grow out turning into place, its branches sprout after, a cold flash and a ring of frost flung out.</summary>
+        /// <summary>
+        /// The flash freeze: a great snowflake of cold light blooms out behind the crown and fades; the crown crystallises in it
+        /// (its six arms grow out turning into place, its branches sprout after), a ring of frost flung out.
+        /// </summary>
         public void Crystallise()
         {
             if (_crown.Visibility != Visibility.Visible) return;
-            Motion.Play(_crown, 900, t =>
+            Motion.Play(_crown, 950, t =>
             {
+                double b = Seg(t, .02, .7);
+                // white-hot for its first frames, then thinning to the outline as it grows and fades
+                Show(_bloomHot, b is > 0 and < 1 ? (b < .08 ? b / .08 : 1 - Seg(b, .14, .4)) : 0);
+                Show(_bloom, b is > 0 and < 1 ? Seg(b, .12, .26) * (1 - Seg(b, .4, 1)) : 0);
+                _bloomK.ScaleX = _bloomK.ScaleY = .3 + .95 * Out(b);
+                _bloomTurn.Angle = 30 * (1 - Out(b));
                 _armsK.ScaleX = _armsK.ScaleY = Math.Max(.01, Out(Seg(t, 0, .42)));
                 _branchesK.ScaleX = _branchesK.ScaleY = Math.Max(.01, Out(Seg(t, .28, .7)));
                 _turn.Angle = -40 * (1 - Out(Seg(t, 0, .6)));
@@ -354,7 +394,7 @@ sealed partial class HudFrost
                 double k = Seg(t, .4, 1);
                 Show(_ring, k is > 0 and < 1 ? .9 * (1 - k) : 0);
                 _ringK.ScaleX = _ringK.ScaleY = .4 + .6 * Out(k);
-            }, () => { _armsK.ScaleX = _armsK.ScaleY = _branchesK.ScaleX = _branchesK.ScaleY = 1; _turn.Angle = 0; _flakeGlow.Opacity = .4; Show(_tip, 0); Show(_ring, 0); });
+            }, () => { _armsK.ScaleX = _armsK.ScaleY = _branchesK.ScaleX = _branchesK.ScaleY = 1; _turn.Angle = 0; _flakeGlow.Opacity = .4; Show(_tip, 0); Show(_ring, 0); Show(_bloom, 0); Show(_bloomHot, 0); });
         }
 
         /// <summary>The row climbed a rank: its rim flashes ice-white and a frost trail runs along its foot.</summary>

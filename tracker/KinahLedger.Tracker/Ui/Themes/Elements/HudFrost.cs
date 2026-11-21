@@ -27,20 +27,20 @@ sealed partial class HudFrost : ModernLook
     const double Pad = 10;
 
     // the room round the look: the panels' drop stays inside the window; 98 at the right for the pickup's chip beside the Buddy
-    readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 12), HorizontalAlignment = HorizontalAlignment.Left };
+    readonly Grid _root = new() { Margin = new Thickness(26, 48, 98, 24), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
     // the Buddy: its slab, the ring, the hour, the session and the timer chips
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
-    readonly IceArt _lineArt = new(9, 3.5, 3);
+    readonly IceArt _lineArt = new(11, 7, 3, crest: .5, icicles: .8);
     readonly TacSketch _lineIce;
     readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(7, 7, 14, 7) };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
     /// <summary>The timer chips over the line, when the pickup strip takes their room on it.</summary>
-    readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 5), Visibility = Visibility.Collapsed };
+    readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 26), Visibility = Visibility.Collapsed };
     /// <summary>The pickup strip in Frost: 24 px tiles in ice frames beside the hour, a frost rule, an ice-white star.</summary>
     static readonly PickStrip.Look Strip = new(24, 6, true, Frozen(Mod.A(RimC, .42)), Frozen(Color.FromRgb(0xD8, 0xF6, 0xFF)));
     bool _dim;
@@ -53,27 +53,28 @@ sealed partial class HudFrost : ModernLook
     readonly TacSketch _lineBreath;
     double _lineGlintT = -1;
     Grid? _ringBox;
-    Border? _ringBurst, _ringSpark;
+    Border? _ringBurst, _ringSpark, _ringStar;
     RotateTransform? _ringOrbit;
     Grid? _firstChip;
     TacSketch? _firstChipGlow;
 
     // the rare drop under the Buddy, and the notice line
-    readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed };
-    readonly IceArt _rareArt = new(7, 3, 11);
-    readonly Grid _note = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed };
+    readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 20, 0, 0), Visibility = Visibility.Collapsed };
+    readonly IceArt _rareArt = new(7, 3, 11, icicles: .6);
+    readonly Grid _note = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 20, 0, 0), Visibility = Visibility.Collapsed };
     readonly IceArt _noteArt = new(5, 2, 13);
     readonly StackPanel _noteBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 4, 12, 5) };
 
     // the fight: one slab of ice, its head, HP, rows and foot on it
-    readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
-    readonly IceArt _fightArt = new(11, 4, 1);
+    readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 24) };
+    readonly IceArt _fightArt = new(12, 8, 1, crest: 1, icicles: .9) { IcicleFrom = .22 };
     readonly TacSketch _fightIce, _fightBreath;
     readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 9, Pad, 9) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _fightShift = new();
     FrameworkElement? _head;
+    Canvas? _shards;
 
     public HudFrost() : base(bare: true)
     {
@@ -149,6 +150,9 @@ sealed partial class HudFrost : ModernLook
                 _ringSpark = Piece(SparkleBrush, 13, 13, 0); _ringSpark.VerticalAlignment = VerticalAlignment.Top; _ringSpark.Margin = new Thickness(0, -1, 0, 0); _ringSpark.Visibility = Visibility.Hidden;
                 _ringOrbit = new RotateTransform();
                 ring.Children.Add(_ringBurst);
+                // and a starburst of ice crystals flung out behind it
+                _ringStar = Piece(Starburst, 96, 96, 0); _ringStar.Margin = new Thickness(-26); _ringStar.Visibility = Visibility.Hidden; _ringStar.RenderTransform = new ScaleTransform(1, 1);
+                ring.Children.Insert(0, _ringStar);
                 ring.Children.Add(new Grid { IsHitTestVisible = false, RenderTransform = _ringOrbit, RenderTransformOrigin = new Point(.5, .5), Children = { _ringSpark } });
                 _ringBox = ring;
                 _lineBody.Children.Add(ring);
@@ -201,6 +205,15 @@ sealed partial class HudFrost : ModernLook
             _rare.Children.Add(plate);
             _rareFlashEl = FrostBreath(_rareArt, c);
             _rare.Children.Add(_rareFlashEl);
+            // its moment's cold glint, clipped to the plate's shape once it has its size
+            var glintHost = new Canvas { IsHitTestVisible = false };
+            _rareGlint = Glint(BandGeo, BandBrush);
+            glintHost.Children.Add(_rareGlint);
+            _rare.Children.Add(glintHost);
+            if (_rareSized != null) _rare.SizeChanged -= _rareSized;
+            _rareSized = (_, e) => { _rareArt.Fit(e.NewSize); glintHost.Clip = _rareArt.Shape; PlaceRareGlint(); };
+            _rare.SizeChanged += _rareSized;
+            if (_rare.ActualWidth > 0) { _rareArt.Fit(_rare.RenderSize); glintHost.Clip = _rareArt.Shape; }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(7, 5, 14, 5) };
             var tile = IceFramed(new Grid { Children = { Tile(r, 26) } }, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             _rareTile = tile;
@@ -211,6 +224,7 @@ sealed partial class HudFrost : ModernLook
             row.Children.Add(nm);
             if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
             _rare.Children.Add(row);
+            _rareRow = row;
             _rare.Visibility = Visibility.Visible;
         }
         else { _rare.Visibility = Visibility.Collapsed; _rareWash = null; _rareTile = null; }
@@ -263,6 +277,19 @@ sealed partial class HudFrost : ModernLook
     bool _timerUp;
 
     TacSketch? _rareWash, _rareFlashEl;
+    System.Windows.Shapes.Path? _rareGlint;
+    FrameworkElement? _rareRow;
+    SizeChangedEventHandler? _rareSized;
+    double _rareGlintT = -1;
+
+    void PlaceRareGlint()
+    {
+        if (_rareGlint is not { } g) return;
+        double t = _rareGlintT, w = _rare.ActualWidth;
+        if (t is < 0 or > 1 || w <= 0) { Show(g, 0); return; }
+        Show(g, Math.Sin(Math.PI * t));
+        var tt = (TranslateTransform)g.RenderTransform; tt.X = -70 + (w + 140) * t; tt.Y = -30;
+    }
     FrameworkElement? _rareTile;
 
     /// <summary>
@@ -311,7 +338,7 @@ sealed partial class HudFrost : ModernLook
     {
         _line.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         if (!shown) { _note.Visibility = Visibility.Collapsed; _rare.Visibility = Visibility.Collapsed; }
-        _fight.Margin = new Thickness(0, 0, 0, shown ? 8 : 0);
+        _fight.Margin = new Thickness(0, 0, 0, shown ? 24 : 0);
         PlaceTimers();
     }
 
@@ -559,23 +586,33 @@ sealed partial class HudFrost : ModernLook
         var reveal = new ScaleTransform(0, 1);
         var clip = Reveal(plate, reveal);
         plate.Clip = clip; flash.Clip = clip;
+        var words = _rareRow;
         Motion.Play(plate, 1500, t =>
         {
             reveal.ScaleX = Out(Seg(t, 0, .42));
+            if (words != null) words.Opacity = Seg(t, .3, .44);
+            _rareGlintT = t is > .3 and < .8 ? Seg(t, .3, .8) : -1; PlaceRareGlint();
             Show(flash, t < .22 ? Seg(t, 0, .22) : 1 - Seg(t, .22, .85));
             sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .08, .42), 2.2);
-        }, () => { plate.Clip = null; flash.Clip = null; Show(flash, 0); sc.ScaleX = sc.ScaleY = 1; });
+        }, () => { plate.Clip = null; flash.Clip = null; if (words != null) words.Opacity = 1; Show(flash, 0); sc.ScaleX = sc.ScaleY = 1; _rareGlintT = -1; PlaceRareGlint(); });
     }
 
-    /// <summary>Your best passed: the frozen ring swells and flings out a ring of frost, a glint runs once round it, a breath of frost and a glint cross the Buddy.</summary>
+    /// <summary>
+    /// Your best passed: the frozen ring swells and bursts, a starburst of ice crystals and a ring of frost flung out round
+    /// it, a glint running once round it, a breath of frost and a glint crossing the Buddy.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
-        if (_ringBox is not { } ring || _ringBurst is not { } burst || _ringSpark is not { } spark || _ringOrbit is not { } orbit) return;
+        if (_ringBox is not { } ring || _ringBurst is not { } burst || _ringSpark is not { } spark || _ringOrbit is not { } orbit || _ringStar is not { } star) return;
         var swell = new ScaleTransform(1, 1);
         ring.RenderTransform = swell;
         var bk = (ScaleTransform)burst.RenderTransform;
+        var sk = (ScaleTransform)star.RenderTransform;
         Motion.Play(ring, 1800, t =>
         {
+            double s0 = Seg(t, .04, .5);
+            Show(star, s0 is > 0 and < 1 ? (s0 < .2 ? s0 / .2 : 1 - Seg(s0, .2, 1)) : 0);
+            sk.ScaleX = sk.ScaleY = .5 + .52 * Out(s0);
             double up = t < .15 ? Out(Seg(t, 0, .15)) : 1 - Out(Seg(t, .15, .45));
             swell.ScaleX = swell.ScaleY = 1 + .1 * up;
             double k = Seg(t, .1, .6);
@@ -586,7 +623,7 @@ sealed partial class HudFrost : ModernLook
             Show(spark, o is > 0 and < 1 ? Math.Sin(Math.PI * o) : 0);
             Show(_lineBreath, t < .3 ? .6 * Seg(t, .1, .3) : .6 * (1 - Seg(t, .3, .9)));
             LineGlint(t is > .4 and < .9 ? Seg(t, .4, .9) : -1);
-        }, () => { swell.ScaleX = swell.ScaleY = 1; Show(burst, 0); Show(spark, 0); orbit.Angle = 0; Show(_lineBreath, 0); LineGlint(-1); });
+        }, () => { swell.ScaleX = swell.ScaleY = 1; Show(burst, 0); Show(star, 0); Show(spark, 0); orbit.Angle = 0; Show(_lineBreath, 0); LineGlint(-1); });
     }
 
     /// <summary>An entry opened: the first timer's chip flashes mint through its ice, grows a touch and settles.</summary>
@@ -609,9 +646,8 @@ sealed partial class HudFrost : ModernLook
         Motion.Play(_fight, 480, t =>
         {
             double k = Out(t);
-            _fightShift.Y = 8 * (1 - k);
-            _fightBody.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
+            _fightShift.Y = 5 * (1 - k);
+        }, () => { _fightShift.Y = 0; });
         if (RowsNow().FirstOrDefault() is { } top) top.Crystallise();
         _lastLead = DateTime.UtcNow;
         Frost();
@@ -619,8 +655,9 @@ sealed partial class HudFrost : ModernLook
 
     /// <summary>
     /// A fight ended: a plate of ice freezes out over the fight's head from the left (its clip's scale), with how it went and
-    /// the clock (cold white and mint for a kill, its rim coral for a wipe), a flash of frost and a glint crossing it; a kill
-    /// sends the frost along the bars. It lifts away after a moment.
+    /// the clock (cold white and mint for a kill, its rim coral for a wipe), a flash of frost and a glint crossing it. A kill
+    /// shatters: a dozen splinters of ice burst off the plate across the meter, spinning and falling as they fade, and the frost
+    /// creeps along the bars. It lifts away after a moment.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
@@ -630,7 +667,9 @@ sealed partial class HudFrost : ModernLook
         var art = new IceArt(8, 3, 29);
         var band = new Grid { VerticalAlignment = VerticalAlignment.Top };
         band.Children.Add(new TacSketch((dc, s) => IcePanel(dc, s, art, 1, tint: wipe ? CoralC : null)));
-        var flash = FrostBreath(art, wipe ? CoralC : null);
+        var flash = FrostBreath(art, wipe ? CoralC : null, fill: false);
+        var slam = new TranslateTransform();
+        band.RenderTransform = slam;
         band.Children.Add(flash);
         var glintHost = new Canvas { IsHitTestVisible = false };
         var glint = Glint(BandGeo, BandBrush);
@@ -646,6 +685,47 @@ sealed partial class HudFrost : ModernLook
         var reveal = new ScaleTransform(0, 1);
         band.Clip = Reveal(band, reveal);
         _fightFx.Children.Clear(); _fightFx.Children.Add(band);
+        // the shatter: splinters of ice painted once, each only moved, turned and faded
+        var shards = new Canvas { IsHitTestVisible = false };
+        var pieces = new List<(Border El, TranslateTransform At, RotateTransform Turn, ScaleTransform K, double Ang, double Dist, double Spin)>();
+        if (!wipe)
+        {
+            double[] angs = { -3.35, -3.1, -2.85, -2.6, -2.35, -2.1, -1.9, -1.7, -1.5, -1.3, -1.1, -.9, -.7, -.5, -.3, -.12, .06, .2 };
+            for (int i = 0; i < angs.Length; i++)
+            {
+                double size = i % 3 == 0 ? 1.4 : i % 3 == 1 ? 1 : .7;
+                var el = new Border { Width = 20 * size, Height = 8 * size, Background = Splinter, IsHitTestVisible = false, Visibility = Visibility.Hidden, RenderTransformOrigin = new Point(.5, .5) };
+                var at = new TranslateTransform(); var turn = new RotateTransform(); var k = new ScaleTransform(1, 1);
+                el.RenderTransform = new TransformGroup { Children = { k, turn, at } };
+                shards.Children.Add(el);
+                pieces.Add((el, at, turn, k, angs[i], 70 + 110 * ((i * 7) % 5) / 4.0, (i % 2 == 0 ? 1 : -1) * (200 + 60 * (i % 3))));
+            }
+            // under the meter's words (behind the rows and over the slab), and mostly up and out into the window's room
+            if (_shards != null) _fight.Children.Remove(_shards);
+            _shards = shards;
+            _fight.Children.Insert(_fight.Children.IndexOf(_fightBody), shards);
+        }
+        double shatterT = -1;
+        void PlaceShards()
+        {
+            if (pieces.Count == 0) return;
+            double w = _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth - 10, h = _fight.ActualHeight > 0 ? _fight.ActualHeight : 160;
+            double x0 = Pad + 34, y0 = band.Margin.Top + (double.IsNaN(band.Height) ? 16 : band.Height / 2);
+            double l = Seg(shatterT, 0, 1);
+            foreach (var (el, at, turn, k, ang, dist, spin) in pieces)
+            {
+                if (shatterT is < 0 or > 1) { Show(el, 0); continue; }
+                // each flies out on its line (kept inside the meter: never past the window), falls a little, spins and fades
+                // flung out past the slab's edges, into the window's own room round it (never past the window)
+                double ex = Math.Clamp(x0 + Math.Cos(ang) * dist, -18, w + 80), ey = Math.Clamp(y0 + Math.Sin(ang) * dist * .8, -40, h + 4);
+                double q = Out(l);
+                at.X = x0 + (ex - x0) * q - el.Width / 2; at.Y = y0 + (ey - y0) * q + 12 * l * l - el.Height / 2;
+                at.Y = Math.Min(at.Y, h + 4);
+                turn.Angle = ang * 57.3 + spin * l;
+                k.ScaleX = k.ScaleY = 1.25 - .5 * l;
+                Show(el, l < .08 ? l / .08 : 1 - Seg(l, .55, 1));
+            }
+        }
         double glintT = -1;
         void PlaceGlint()
         {
@@ -664,19 +744,21 @@ sealed partial class HudFrost : ModernLook
             if (band.Height != h + 10) band.Height = h + 10;
         }
         Seat();
-        if (_head is { } h0) h0.SizeChanged += (_, _) => Seat();
+        if (_head is { } h0) h0.SizeChanged += (_, _) => { Seat(); PlaceShards(); };
         band.SizeChanged += (_, ev) => { art.Fit(ev.NewSize); glintHost.Clip = art.Shape; PlaceGlint(); };
         var head = _head;
         var words0 = words;
         Motion.Play(_fightFx, 2400, t =>
         {
             reveal.ScaleX = Out(Seg(t, 0, .2));
-            Show(flash, t < .2 ? Seg(t, .05, .2) : 1 - Seg(t, .2, .55));
+            Show(flash, t < .14 ? .55 * Seg(t, .06, .14) : .55 * (1 - Seg(t, .14, .32)));
+            slam.Y = t < .1 ? -12 * (1 - Out(Seg(t, 0, .1))) : 2.5 * Math.Sin(Math.PI * Seg(t, .1, .2)) * (1 - Seg(t, .1, .2));
             glintT = t is > .2 and < .6 ? Seg(t, .2, .6) : -1; PlaceGlint();
-            words0.Opacity = t < .84 ? Seg(t, .08, .22) : 1 - Seg(t, .84, 1);
+            shatterT = t is > .16 and < .62 ? Seg(t, .16, .62) : -1; PlaceShards();
+            words0.Opacity = t < .84 ? Seg(t, .02, .07) : 1 - Seg(t, .84, 1);
             band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
             if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .12) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; if (_shards != null) { _fight.Children.Remove(_shards); _shards = null; } });
         if (!wipe) Frost();
     }
 }

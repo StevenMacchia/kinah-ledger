@@ -47,7 +47,7 @@ sealed partial class HudFrost
     }
 
     /// <summary>The cool tint of a class's colour the ice takes (its hue kept, a third of the way to glacier blue).</summary>
-    static Color IceTint(Color c) => Mod.Mix(c, Color.FromRgb(0x9C, 0xDE, 0xFF), .32);
+    static Color IceTint(Color c) => Mod.Mix(c, Color.FromRgb(0x9C, 0xDE, 0xFF), .4);
 
     // ================================================================ rime
 
@@ -96,13 +96,13 @@ sealed partial class HudFrost
         using (var c = g.Open())
         {
             double barb = Math.Max(1.6, len * .13);
-            Feather(c, rnd, new Point(cut * .8, cut * .2 + 1), .16, len, barb, -.008, 1);
-            Feather(c, rnd, new Point(cut * .5, cut * .5), .78, len * .42, barb * .85, .02, 0);
-            Feather(c, rnd, new Point(cut * .2 + 1, cut * .8), 1.38, len * .58, barb * .85, .01, 0);
+            // along the top edge and down the side edge only: never in across the face, where a title starts
+            Feather(c, rnd, new Point(cut * .8, cut * .2 + 1), .06, len, barb * .8, -.004, 1);
+            Feather(c, rnd, new Point(cut * .2 + 1, cut * .8), 1.5, len * .5, barb * .8, .004, 0);
             // a few loose crystals settled near the corner: tiny six-armed stars
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 2; i++)
             {
-                var p = new Point(cut + 4 + rnd.NextDouble() * len * .6, cut + 4 + rnd.NextDouble() * len * .3);
+                var p = new Point(cut + 6 + rnd.NextDouble() * len * .6, 3 + rnd.NextDouble() * 2.5);
                 double s = .9 + rnd.NextDouble() * .6;
                 for (int k = 0; k < 3; k++) { double a = k * Math.PI / 3 + .2; c.BeginFigure(new Point(p.X - Math.Cos(a) * s, p.Y - Math.Sin(a) * s), false, false); c.LineTo(new Point(p.X + Math.Cos(a) * s, p.Y + Math.Sin(a) * s), true, false); }
             }
@@ -166,6 +166,38 @@ sealed partial class HudFrost
         return g;
     }
 
+    /// <summary>A few larger frost crystals along a bar's top edge (every 60 to 110 px, a feathered spike and a smaller one), 1000 px made once.</summary>
+    static readonly Geometry RimeTufts = MakeTufts();
+    static Geometry MakeTufts()
+    {
+        var rnd = new Random(77);
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            double x = 22;
+            while (x < 1000)
+            {
+                foreach (var (dx, h) in new[] { (0.0, 6.5 + rnd.NextDouble() * 1.5), (3.2, 3.5 + rnd.NextDouble()) })
+                {
+                    var top = new Point(x + dx, .6);
+                    c.BeginFigure(top, false, false); c.LineTo(new Point(top.X + .3, top.Y + h), true, false);
+                    for (int k = 1; k <= (h > 5 ? 3 : 1); k++)
+                    {
+                        var m = new Point(top.X + .1 * k, top.Y + h * k / 4.2);
+                        double l = (h > 5 ? 2.6 : 1.6) - .5 * k;
+                        c.BeginFigure(m, false, false); c.LineTo(new Point(m.X - l, m.Y + l * .9), true, false);
+                        c.BeginFigure(m, false, false); c.LineTo(new Point(m.X + l, m.Y + l * .9), true, false);
+                    }
+                }
+                x += 60 + rnd.NextDouble() * 50;
+            }
+        }
+        g.Freeze();
+        return g;
+    }
+    static readonly Pen TuftPen = Mod.P(Mod.Br(Colors.White, .95), .8, round: true);
+    static readonly Brush RimeBand = Mod.Grad(true, (Mod.A(Colors.White, .62), 0), (Mod.A(Colors.White, 0), 1));
+
     /// <summary>The crystal planes in an ice bar: faint slanted lines at an irregular spacing, 1000 px made once.</summary>
     static readonly Geometry Planes = MakePlanes();
     static Geometry MakePlanes()
@@ -193,7 +225,7 @@ sealed partial class HudFrost
     sealed class IceArt
     {
         Size _size;
-        public Geometry Shape = Geometry.Empty, Inner = Geometry.Empty, Facets = Geometry.Empty, Cracks = Geometry.Empty, Crest = Geometry.Empty, Ridges = Geometry.Empty, Icicles = Geometry.Empty;
+        public Geometry Shape = Geometry.Empty, Inner = Geometry.Empty, Facets = Geometry.Empty, Cracks = Geometry.Empty, Crest = Geometry.Empty, CrestShade = Geometry.Empty, Ridges = Geometry.Empty, Cores = Geometry.Empty, Ticks = Geometry.Empty, Collars = Geometry.Empty;
         public Geometry[] Shadow = Array.Empty<Geometry>();
         public Rect R;
         public readonly double A, B;
@@ -260,75 +292,106 @@ sealed partial class HudFrost
         }
 
         /// <summary>
-        /// The block of ice's silhouette: crystal shards jutting up and out from its top corners (a cluster at the big cut, a
-        /// smaller one at the other), each a pointed prism with a lit ridge; icicles hanging from its bottom edge in clusters.
-        /// Made once per size, drawn behind the slab so they grow out from under its edge.
+        /// The block of ice's silhouette: crystal prisms jutting up and out from its top corners (a big cluster at the big cut,
+        /// a smaller one at the other), each with a lit face and a shaded face either side of its ridge; icicles hanging in
+        /// clusters from its bottom edge, faceted the same way. Made once per size, drawn behind the slab so they grow out
+        /// from under its edge.
         /// </summary>
         void MakeCrest(Random rnd)
         {
-            var crest = new StreamGeometry();
+            var lit = new StreamGeometry();
+            var shade = new StreamGeometry();
             var ridges = new StreamGeometry();
-            using (var c = crest.Open())
-            using (var g = ridges.Open())
+            var cores = new StreamGeometry();
+            var ticks = new StreamGeometry();
+            Geometry collars = Geometry.Empty;
+            void Lump(Point p, double rx, double ry)
             {
-                void Shard(Point root, double ang, double len, double w)
+                var e = new EllipseGeometry(p, rx, ry);
+                collars = ReferenceEquals(collars, Geometry.Empty) ? e : new CombinedGeometry(GeometryCombineMode.Union, collars, e);
+            }
+            using (var c = lit.Open())
+            using (var d = shade.Open())
+            using (var g = ridges.Open())
+            using (var e = cores.Open())
+            using (var h = ticks.Open())
+            {
+                void Prism(Point root, double ang, double len, double w)
                 {
-                    // a prism from a base on the edge to a point, its ridge down the middle
                     double ca = Math.Cos(ang), sa = Math.Sin(ang), nx = -sa, ny = ca;
-                    var tip = new Point(root.X + ca * len, root.Y + sa * len);
-                    var sh = new Point(root.X + ca * len * .72, root.Y + sa * len * .72);
-                    c.BeginFigure(new Point(root.X + nx * w, root.Y + ny * w), true, true);
-                    c.LineTo(new Point(sh.X + nx * w * .8, sh.Y + ny * w * .8), true, false);
-                    c.LineTo(tip, true, false);
-                    c.LineTo(new Point(sh.X - nx * w * .8, sh.Y - ny * w * .8), true, false);
-                    c.LineTo(new Point(root.X - nx * w, root.Y - ny * w), true, false);
-                    g.BeginFigure(new Point(root.X + nx * w * .25, root.Y + ny * w * .25), false, false); g.LineTo(tip, true, false);
+                    Point At(double along, double side) => new(root.X + ca * len * along + nx * w * side, root.Y + sa * len * along + ny * w * side);
+                    var tip = At(1, 0);
+                    c.BeginFigure(At(0, 1), true, true); c.LineTo(At(.7, .85), true, false); c.LineTo(tip, true, false); c.LineTo(At(.7, .12), true, false); c.LineTo(At(0, .12), true, false);
+                    d.BeginFigure(At(0, .12), true, true); d.LineTo(At(.7, .12), true, false); d.LineTo(tip, true, false); d.LineTo(At(.7, -.85), true, false); d.LineTo(At(0, -1), true, false);
+                    g.BeginFigure(At(.05, .12), false, false); g.LineTo(At(.7, .12), true, false); g.LineTo(tip, true, false);
+                    // the refraction: a cyan core down the shaded face; the hot white specular near the tip of the lit face
+                    e.BeginFigure(At(.06, -.08), true, true); e.LineTo(At(.66, -.08), true, false); e.LineTo(At(.9, -.02), true, false); e.LineTo(At(.66, -.5), true, false); e.LineTo(At(.06, -.55), true, false);
+                    h.BeginFigure(At(.56, .55), false, false); h.LineTo(At(.84, .22), true, false);
+                    // and a frost collar swallowing the rim where it grows out (a flat lump over the edge, barely into the face)
+                    Lump(new Point(root.X, Math.Max(R.Top + .5, root.Y - 2.5)), w * 1.1 + 1.5, Math.Min(3, w * .4 + 1.2));
                 }
                 if (CrestK > 0)
                 {
                     double k = CrestK, up = -Math.PI / 2;
-                    // the big cluster at the top-left cut: up and out, the tallest in its middle
-                    var tl = new (double X, double Ang, double Len, double W)[] { (A * .2, up - .95, 9, 2.6), (A * .9, up - .45, 12.5, 3.2), (A + 7, up - .12, 9.5, 2.8), (A + 14, up + .2, 6, 2.2), (A + 21, up + .05, 3.8, 1.8) };
-                    foreach (var (x, ang, len, w) in tl) Shard(new Point(R.Left + x, R.Top + (x < A ? A - x : 0) + 1.5), ang, len * k, w * Math.Sqrt(k));
-                    // the smaller one at the top-right
-                    var tr = new (double X, double Ang, double Len, double W)[] { (B + 3, up + .55, 8, 2.4), (B + 10, up + .15, 6.5, 2.2), (B + 16, up - .1, 4, 1.8) };
-                    foreach (var (x, ang, len, w) in tr) Shard(new Point(R.Right - x, R.Top + 1.5), ang, len * k, w * Math.Sqrt(k));
+                    // the big cluster at the top-left cut, fanning up and out over the corner (never over the face's words: each
+                    // grows from under the edge, outwards), the tallest in its middle
+                    var tl = new (double X, double Ang, double Len, double W)[] { (A * .1, up - 1.05, 26, 5.2), (A * .55, up - .62, 44, 7.5), (A + 2, up - .28, 50, 8.5), (A + 10, up + .02, 34, 6.5), (A + 19, up + .22, 21, 4.8), (A + 28, up + .36, 12, 3.4) };
+                    foreach (var (x, ang, len, w) in tl) Prism(new Point(R.Left + x, R.Top + (x < A ? A - x : 0) + 3), ang, len * k, w * Math.Sqrt(k));
+                    // its asymmetric counterpart at the top-right, about two thirds its weight
+                    var tr = new (double X, double Ang, double Len, double W)[] { (B * .3, up + .95, 20, 4.6), (B + 1, up + .5, 34, 6.5), (B + 9, up + .18, 26, 5.4), (B + 18, up - .08, 14, 3.6) };
+                    foreach (var (x, ang, len, w) in tr) Prism(new Point(R.Right - x, R.Top + (x < B ? B - x : 0) + 3), ang, len * k, w * Math.Sqrt(k));
                 }
-            }
-            crest.Freeze(); ridges.Freeze();
-            Crest = crest; Ridges = ridges;
-            var ice = new StreamGeometry();
-            using (var c = ice.Open())
                 if (IcicleK > 0)
                 {
-                    // icicles in clusters along the bottom edge, longest in a cluster's middle, keeping off the cuts
-                    double x = R.Left + Math.Max(A, B) + 4 + R.Width * IcicleFrom, end = R.Right - A - 3;
-                    while (x < end)
+                    // a few real icicles in clusters off-centre along the bottom edge, uneven, the longest in a cluster's middle
+                    double x = R.Left + Math.Max(A, B) + 10 + R.Width * IcicleFrom, end = R.Right - A - 10;
+                    double gap = Math.Max(46, (end - x) / 3.2);
+                    var top = R.Bottom - 2;
+                    int clusters = 0;
+                    while (x < end && clusters++ < 3)
                     {
-                        int n = 2 + rnd.Next(4);
+                        // a cluster: one hero icicle with a short one either side or after it
+                        int n = 2 + rnd.Next(2), hero = n == 3 ? 1 : 0;
                         for (int i = 0; i < n && x < end; i++)
                         {
-                            double mid = 1 - Math.Abs(i - (n - 1) / 2.0) / Math.Max(1, n / 2.0);
-                            double len = (2.5 + 6.5 * mid * (.6 + .4 * rnd.NextDouble())) * IcicleK, w = 1.4 + 1.3 * mid + rnd.NextDouble() * .6;
-                            var top = R.Bottom - 1.2;
-                            c.BeginFigure(new Point(x - w, top), true, true);
-                            c.LineTo(new Point(x + w, top), true, false);
-                            c.LineTo(new Point(x + (rnd.NextDouble() - .5) * .8, top + len), true, false);
-                            x += w * 2 + .6 + rnd.NextDouble() * 1.5;
+                            bool big = i == hero;
+                            double len = (big ? 19 + rnd.NextDouble() * 3 : 7 + rnd.NextDouble() * 4) * IcicleK, w = big ? 4.4 + rnd.NextDouble() * .6 : 2.4 + rnd.NextDouble() * .6;
+                            if (big) Lump(new Point(x, R.Bottom - 1), w * 1.3, 1.9);
+                            var tip = new Point(x + (rnd.NextDouble() - .5) * 1.2, top + len);
+                            c.BeginFigure(new Point(x - w, top), true, true); c.LineTo(new Point(x + w * .15, top), true, false); c.LineTo(tip, true, false);
+                            d.BeginFigure(new Point(x + w * .15, top), true, true); d.LineTo(new Point(x + w, top), true, false); d.LineTo(tip, true, false);
+                            g.BeginFigure(new Point(x + w * .15, top + 1), false, false); g.LineTo(new Point(tip.X, tip.Y - 2), true, false);
+                            x += w * 2 + 1.5 + rnd.NextDouble() * 2.5;
                         }
-                        x += 10 + rnd.NextDouble() * 26;
+                        x += gap * (.8 + .4 * rnd.NextDouble());
                     }
                 }
-            ice.Freeze();
-            Icicles = ice;
+            }
+            lit.Freeze(); shade.Freeze(); ridges.Freeze(); cores.Freeze(); ticks.Freeze(); collars.Freeze();
+            Crest = lit; CrestShade = shade; Ridges = ridges; Cores = cores; Ticks = ticks; Collars = collars;
         }
     }
 
-    static readonly Brush CrestFill = Mod.Grad(true, (Mod.A(FrostC, .98), 0), (Mod.A(IceC, .85), .35), (Mod.A(Color.FromRgb(0x3A, 0x9C, 0xC8), .92), .75), (Mod.A(TopC, .95), 1)),
-        IcicleFill = Mod.Grad(true, (Mod.A(Color.FromRgb(0x2E, 0x7E, 0xA6), .95), 0), (Mod.A(IceC, .9), .45), (Mod.A(FrostC, .75), 1));
-    static readonly Pen CrestEdge = Mod.P(Mod.Br(DeepC, .7), .8), CrestRidge = Mod.P(Mod.Br(Colors.White, .85), .7, round: true), IcicleEdge = Mod.P(Mod.Br(DeepC, .55), .6);
+    // the crystal's two faces: lit (white to pale ice) and shaded (glacier blue to deep teal), a dark outline and a white ridge
+    static readonly Brush CrestLit = Mod.Grad(false, (Mod.A(Colors.White, .97), 0), (Mod.A(Color.FromRgb(0xC4, 0xEE, 0xFF), .95), 1)),
+        CrestShadeFill = Mod.Grad(false, (Mod.A(Color.FromRgb(0x6C, 0xC4, 0xEC), .96), 0), (Mod.A(Color.FromRgb(0x1C, 0x5E, 0x84), .97), 1));
+    static readonly Pen CrestEdge = Mod.P(Mod.Br(Color.FromRgb(0x02, 0x10, 0x1C), .85), .9), CrestRidge = Mod.P(Mod.Br(Colors.White, .9), .7, round: true),
+        CrestTick = Mod.P(Mod.Br(Colors.White), 1.4, round: true), CollarEdge = Mod.P(Mod.Br(Color.FromRgb(0x02, 0x10, 0x1C), .5), .7);
+    static readonly Brush CrestCore = Mod.Grad(false, (Mod.A(Color.FromRgb(0x7F, 0xF0, 0xFF), .75), 0), (Mod.A(CyanC, .2), 1)),
+        CollarFill = Mod.Grad(true, (Mod.A(Colors.White, .92), 0), (Mod.A(Color.FromRgb(0x9E, 0xDD, 0xF6), .85), .55), (Mod.A(Color.FromRgb(0x3C, 0x8C, 0xB4), .8), 1));
     static readonly Pen CrackPen = Mod.P(Mod.Br(Color.FromRgb(0xC8, 0xF0, 0xFF), .17), .7), CrackShade = Mod.P(Mod.Br(Colors.Black, .32), .7), InnerPen = Mod.P(Mod.Br(Colors.Black, .38), 1);
-    static readonly Pen RimPen = Mod.P(Mod.Grad(true, (Mod.A(RimC, .72), 0), (Mod.A(RimC, .3), .45), (Mod.A(RimC, .2), 1)), 1);
+    /// <summary>The bevelled ice rim: 2 px, lit at the top-left, falling to deep shade at the bottom-right.</summary>
+    static readonly Pen RimPen = Mod.P(Bevel(RimC), 2);
+    static Brush Bevel(Color c)
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+        b.GradientStops.Add(new GradientStop(Mod.A(Mod.Mix(c, Colors.White, .45), .98), 0));
+        b.GradientStops.Add(new GradientStop(Mod.A(c, .55), .35));
+        b.GradientStops.Add(new GradientStop(Mod.A(c, .28), .7));
+        b.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0x02, 0x0A, 0x12), .9), 1));
+        b.Freeze();
+        return b;
+    }
 
     /// <summary>
     /// The glacial panel: its drop, the deep navy-teal ice (lighter at its top), a cold light from the top-left, two facet
@@ -344,12 +407,14 @@ sealed partial class HudFrost
         var r = art.R;
         if (shadow) for (int k = 0; k < art.Shadow.Length; k++) dc.DrawGeometry(Mod.Br(Colors.Black, .1 - k * .02), null, art.Shadow[k]);
         // the silhouette: the crystal shards and the icicles, behind the slab (growing out from under its edge)
-        if (art.CrestK > 0)
+        if (art.CrestK > 0 || art.IcicleK > 0)
         {
-            dc.DrawGeometry(CrestFill, CrestEdge, art.Crest);
+            dc.DrawGeometry(CrestLit, CrestEdge, art.Crest);
+            dc.DrawGeometry(CrestShadeFill, CrestEdge, art.CrestShade);
+            dc.DrawGeometry(CrestCore, null, art.Cores);
             dc.DrawGeometry(null, CrestRidge, art.Ridges);
+            dc.DrawGeometry(null, CrestTick, art.Ticks);
         }
-        if (art.IcicleK > 0) dc.DrawGeometry(IcicleFill, IcicleEdge, art.Icicles);
         double a = Math.Clamp(.6 + .32 * opacity, .7, .95);
         dc.DrawGeometry(Mod.Grad(true, (Mod.A(TopC, a), 0), (Mod.A(BotC, Math.Min(.97, a + .04)), 1)), null, art.Shape);
         dc.PushClip(art.Shape);
@@ -387,7 +452,9 @@ sealed partial class HudFrost
             Rime(dc, RimeSmall, r, -1, -1, .7 * rimeK);
         }
         dc.Pop();
-        dc.DrawGeometry(null, tint is { } t ? Mod.P(Mod.Grad(true, (Mod.A(Mod.Mix(t, Colors.White, .4), .9), 0), (Mod.A(t, .45), 1)), 1) : RimPen, art.Shape);
+        dc.DrawGeometry(null, tint is { } t ? Mod.P(Bevel(t), 2) : RimPen, art.Shape);
+        // the frost collars where the crystals grow out, over the rim (so they grow from the ice, not sit on it)
+        if (art.CrestK > 0 || art.IcicleK > 0) dc.DrawGeometry(CollarFill, CollarEdge, art.Collars);
     }
 
     // ================================================================ the ice bar
@@ -398,7 +465,7 @@ sealed partial class HudFrost
     /// through it, a specular line, hoarfrost along its top edge (to <paramref name="rimeTo"/> of its length), and an icy-white
     /// leading edge cut on a slant with a cold glow behind it. <paramref name="lead"/>: the clearest and brightest, a glint at its tip.
     /// </summary>
-    static void IceBar(DrawingContext dc, Rect r, double fx, Color c, bool lead, double rimeTo = 1, double strength = 1, bool tip = true)
+    static void IceBar(DrawingContext dc, Rect r, double fx, Color c, bool lead, double rimeTo = 1, double strength = 1, bool tip = true, bool edge = true)
     {
         if (fx < 1) return;
         var k = BarInk.Of(c, lead, strength);
@@ -432,11 +499,11 @@ sealed partial class HudFrost
             dc.Pop(); dc.Pop();
         }
         // the cold glow behind the leading edge
-        double gw = Math.Min(14, fx);
-        dc.DrawRectangle(k.Glow, null, new Rect(r.Left + fx - gw - sl, r.Top, gw + 2 * sl, r.Height));
+        double gw = Math.Min(5, fx);
+        if (edge) dc.DrawRectangle(k.Glow, null, new Rect(r.Left + fx - gw - sl, r.Top, gw + 2 * sl, r.Height));
         dc.Pop();
         // the leading edge: a crisp icy-white cut on the slant
-        dc.DrawLine(k.Edge, new Point(r.Left + fx + sl - .3, r.Top + .4), new Point(r.Left + fx - sl - .3, r.Bottom - .4));
+        if (edge) dc.DrawLine(k.Edge, new Point(r.Left + fx + sl - .3, r.Top + .4), new Point(r.Left + fx - sl - .3, r.Bottom - .4));
         if (lead && tip) dc.DrawRectangle(SparkleBrush, null, new Rect(r.Left + fx + sl - 5.5, r.Top - 3.5, 10, 10));
     }
 
@@ -548,13 +615,61 @@ sealed partial class HudFrost
     }
 
     /// <summary>The crown in parts a moment grows one after another: the arms with the heart, the branches, the cold light behind, the ring of frost it flings out.</summary>
-    const double FlakeR = 7.6;
-    static readonly DrawingBrush FlakeArms = Paint(new Rect(-9.5, -9.5, 19, 19), dc =>
+    const double FlakeR = 8.8;
+    static readonly DrawingBrush FlakeArms = Paint(new Rect(-10.5, -10.5, 21, 21), dc =>
     {
         InkFlake(dc, FlakeGeo(FlakeR, true));
         dc.DrawGeometry(Mod.Br(IceC), Mod.P(Mod.Br(Colors.White), .8), Hex(FlakeR * .27));
     });
-    static readonly DrawingBrush FlakeBranches = Paint(new Rect(-9.5, -9.5, 19, 19), dc => InkFlake(dc, FlakeGeo(FlakeR, false)));
+    static readonly DrawingBrush FlakeBranches = Paint(new Rect(-10.5, -10.5, 21, 21), dc => InkFlake(dc, FlakeGeo(FlakeR, false)));
+    /// <summary>The flash freeze: a great snowflake in cold light that blooms out behind the crown when someone takes the lead.</summary>
+    static readonly DrawingBrush FlakeBloom = Paint(new Rect(-25, -25, 50, 50), dc =>
+    {
+        dc.DrawEllipse(MakeGlow(CyanC, .5), null, new Point(0, 0), 24, 24);
+        foreach (var arms in new[] { true, false })
+        {
+            var g = FlakeGeo(20, arms);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(CyanC, .45), 3.4, round: true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .95), 1.4, round: true), g);
+        }
+    });
+    /// <summary>The flash freeze's first frames: the great snowflake's arms thick and white-hot in a wide cyan glow.</summary>
+    static readonly DrawingBrush FlakeBloomHot = Paint(new Rect(-25, -25, 50, 50), dc =>
+    {
+        dc.DrawEllipse(MakeGlow(Colors.White, .55), null, new Point(0, 0), 16, 16);
+        foreach (var arms in new[] { true, false })
+        {
+            var g = FlakeGeo(20, arms);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(CyanC, .5), 8, round: true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .95), 3.2, round: true), g);
+        }
+    });
+    /// <summary>Your best passed: a starburst of ice crystals flung out round the ring.</summary>
+    static readonly DrawingBrush Starburst = Paint(new Rect(-48, -48, 96, 96), dc =>
+    {
+        var rnd = new Random(3);
+        for (int i = 0; i < 18; i++)
+        {
+            double a = i * Math.PI * 2 / 18 + (rnd.NextDouble() - .5) * .15, r0 = 21, len = i % 2 == 0 ? 25 : 14;
+            double ca = Math.Cos(a), sa = Math.Sin(a), nx = -sa, ny = ca, w = i % 2 == 0 ? 3 : 2;
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                var b = new Point(ca * r0, sa * r0); var tip = new Point(ca * (r0 + len), sa * (r0 + len));
+                c.BeginFigure(new Point(b.X + nx * w, b.Y + ny * w), true, true); c.LineTo(tip, true, false); c.LineTo(new Point(b.X - nx * w, b.Y - ny * w), true, false);
+            }
+            g.Freeze();
+            dc.DrawGeometry(Mod.Br(Colors.White), Mod.P(Mod.Br(Color.FromRgb(0x1C, 0x5E, 0x84), .8), .9), g);
+        }
+    });
+    /// <summary>A splinter of ice a kill shatters off (a long kite of clear ice with a lit edge).</summary>
+    static readonly DrawingBrush Splinter = Paint(new Rect(-6, -2.5, 12, 5), dc =>
+    {
+        var g = new StreamGeometry();
+        using (var c = g.Open()) { c.BeginFigure(new Point(-5.5, 0), true, true); c.LineTo(new Point(-1, -2), true, false); c.LineTo(new Point(5.5, 0), true, false); c.LineTo(new Point(1, 2), true, false); }
+        g.Freeze();
+        dc.DrawGeometry(Mod.Grad(true, (Colors.White, 0), (Mod.A(IceC, .9), .5), (Mod.A(Color.FromRgb(0x3A, 0x9C, 0xC8), .95), 1)), Mod.P(Mod.Br(DeepC, .6), .5), g);
+    });
     static readonly Brush FlakeGlow = MakeGlow(IceC, .6);
     static readonly DrawingBrush FrostRing = Paint(new Rect(-15, -15, 30, 30), dc =>
     {
@@ -573,7 +688,7 @@ sealed partial class HudFrost
     }
 
     /// <summary>The fresh frost veil riding the creeping front (clear, to white, to clear).</summary>
-    static readonly Brush VeilBrush = Mod.Grad(false, (Mod.A(FrostC, 0), 0), (Mod.A(Colors.White, .6), .82), (Mod.A(FrostC, 0), 1));
+    static readonly Brush VeilBrush = Mod.Grad(false, (Mod.A(FrostC, 0), 0), (Mod.A(Colors.White, .5), .86), (Mod.A(FrostC, 0), 1));
     /// <summary>The cold glint: a narrow slanted blade of light (a row's), a wide band (a panel's).</summary>
     static readonly Geometry BladeGeo = MakeBlade(16, 40, 9), BandGeo = MakeBlade(46, 120, 30);
     static Geometry MakeBlade(double w, double h, double lean)
@@ -583,18 +698,19 @@ sealed partial class HudFrost
         g.Freeze();
         return g;
     }
-    static readonly Brush BladeBrush = Mod.Grad(false, (Mod.A(IceC, 0), 0), (Mod.A(Colors.White, .85), .5), (Mod.A(IceC, 0), 1));
+    static readonly Brush BladeBrush = Mod.Grad(false, (Mod.A(IceC, 0), 0), (Mod.A(Colors.White, .36), .5), (Mod.A(IceC, 0), 1));
     static readonly Brush BandBrush = Mod.Grad(false, (Mod.A(IceC, 0), 0), (Mod.A(IceC, .16), .35), (Mod.A(Colors.White, .36), .55), (Mod.A(IceC, 0), 1));
 
     /// <summary>A slanted glint of light as a shape a moment slides (its geometry and brush frozen), out of sight to start.</summary>
     static System.Windows.Shapes.Path Glint(Geometry g, Brush b) => new() { Data = g, Fill = b, IsHitTestVisible = false, RenderTransform = new TranslateTransform(-400, 0) };
 
     /// <summary>A panel's frost breath: the same ice shape filled with pale frost, drawn once; a moment sets its opacity.</summary>
-    static TacSketch FrostBreath(IceArt art, Color? tint = null) => new((dc, s) =>
+    static TacSketch FrostBreath(IceArt art, Color? tint = null, bool fill = true) => new((dc, s) =>
     {
         if (s.Width < 8) return;
         art.Fit(s);
         var c = tint ?? FrostC;
+        if (!fill) { dc.DrawGeometry(null, Mod.P(Mod.Br(CyanC, .45), 5), art.Shape); dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White), 2), art.Shape); return; }
         dc.DrawGeometry(Mod.Grad(true, (Mod.A(Mod.Mix(c, Colors.White, .4), .32), 0), (Mod.A(c, .1), 1)), Mod.P(Mod.Br(Mod.Mix(c, Colors.White, .5), .9), 1.4), art.Shape);
     }) { Opacity = 0, Visibility = Visibility.Hidden };
 
