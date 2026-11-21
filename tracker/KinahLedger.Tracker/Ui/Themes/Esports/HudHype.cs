@@ -492,7 +492,7 @@ sealed partial class HudHype : ModernLook
     /// <summary>The line under the hour: the session, the latest pickup and its worth (<paramref name="pick"/>); in the Abyss its stats.</summary>
     TextBlock Sub(Figures f, bool pick)
     {
-        var sub = Ht("", 11.5, Frozen(Mod.A(Colors.White, .84)), FontWeights.SemiBold);
+        var sub = Ht("", 12.5, Frozen(Mod.A(Colors.White, .88)), FontWeights.SemiBold);
         sub.Margin = new Thickness(1, 1, 0, 0);
         void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  /  ") { Foreground = Frozen(Mod.A(LimeC, .7)) }); }
         if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Bold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
@@ -712,7 +712,7 @@ sealed partial class HudHype : ModernLook
                 }));
                 HpGhost(track, e, hp, now, 0);
                 _fightBody.Children.Add(track);
-                var hl = Ht("", 11.5, Soft, FontWeights.SemiBold); hl.HorizontalAlignment = HorizontalAlignment.Right; hl.Margin = new Thickness(0, 2, 0, 0);
+                var hl = Ht("", 12.5, Frozen(Mod.A(Colors.White, .9)), FontWeights.SemiBold); hl.HorizontalAlignment = HorizontalAlignment.Right; hl.Margin = new Thickness(0, 2, 0, 0);
                 hl.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(hp * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = hp < .34 ? MagInk : White });
                 var left = HpLeftText(e);
                 if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  /  " + left));

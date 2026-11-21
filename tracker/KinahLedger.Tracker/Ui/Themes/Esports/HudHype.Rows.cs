@@ -36,7 +36,7 @@ sealed partial class HudHype
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         TextBlock Pair(string w, string fig)
         {
-            var t = Ht("", 11, Frozen(Mod.A(LimeInkC, .92)), FontWeights.SemiBold);
+            var t = Ht("", 12, Frozen(Mod.A(LimeInkC, .95)), FontWeights.Bold);
             t.Inlines.Add(new System.Windows.Documents.Run(w.ToUpperInvariant() + " "));
             t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = White, FontSize = 13.5 });
             return t;
@@ -61,7 +61,7 @@ sealed partial class HudHype
         var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         FrameworkElement Dash() => new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Mod.A(LimeC, .7)), null, Para(new Rect(0, 0, s.Width, s.Height), 2)), 18, 2.5) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0) };
         sp.Children.Add(Dash());
-        sp.Children.Add(Ht(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "·", 10, Frozen(Mod.A(Colors.White, .82)), FontWeights.SemiBold));
+        sp.Children.Add(Ht(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "·", 11, Frozen(Mod.A(Colors.White, .86)), FontWeights.SemiBold));
         sp.Children.Add(Dash());
         return Shaded(sp);
     }
@@ -117,7 +117,7 @@ sealed partial class HudHype
         readonly Grid _badge = new() { Width = 26, Height = 19, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         readonly ScaleTransform _badgeScale = new(1, 1);
         readonly RotateTransform _badgeTurn = new(0);
-        readonly TextBlock _rank = Ht("", 13, White, FontWeights.Bold), _name = Ht("", 15, White, FontWeights.Bold), _cp = Ht("", 11, Frozen(Mod.A(Colors.White, .9)), FontWeights.SemiBold),
+        readonly TextBlock _rank = Ht("", 13, White, FontWeights.Bold), _name = Ht("", 15, White, FontWeights.Bold), _cp = Ht("", 11.5, Frozen(Mod.A(Colors.White, .92)), FontWeights.SemiBold),
             _heal = Ht("", 11.5, Heal, FontWeights.Bold), _dps = Ht("", 18.5, White, FontWeights.Bold), _share = Ht("", 11.5, Frozen(Mod.A(Colors.White, .97)), FontWeights.Bold),
             _dmg = Ht("", 11.5, Soft, FontWeights.SemiBold), _crit = Ht("", 11, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -125,7 +125,7 @@ sealed partial class HudHype
         readonly List<FrameworkElement> _marks = new();
         /// <summary>The marks that shorten to their glyph when crowded (★ DPS, ✚ HEAL): full and brief forms, one shown.</summary>
         readonly List<(FrameworkElement Full, FrameworkElement Brief)> _give = new();
-        readonly Grid _healChip;
+        readonly Grid _healChip, _cpHost;
         readonly double _dpsW, _shareW, _dmgW, _critW;
         string _cls = "\0";
         MeterMember? _m;
@@ -168,8 +168,10 @@ sealed partial class HudHype
             _badge.RenderTransform = new TransformGroup { Children = { _badgeScale, _badgeTurn } };
             Put(_badge, 0); Put(_iconHost, 1); Put(_line, 2); Put(_healChip, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
-            _cp.Margin = new Thickness(5, 2, 0, 0);
-            _line.Children.Add(_name); _line.Children.Add(_cp);
+            // the CP on a small dark tag: it reads wherever the bar's end or cap falls under it
+            _cpHost = Chip(_cp, Frozen(Mod.A(InkC, .74)), null, new Thickness(3, 0, 4, 1), 3);
+            _cpHost.Margin = new Thickness(5, 0, 0, 0);
+            _line.Children.Add(_name); _line.Children.Add(_cpHost);
             _root.Children.Add(_glintHost);
             _root.Children.Add(_words);
             _root.Children.Add(_fx);
@@ -274,7 +276,7 @@ sealed partial class HudHype
             if (cols[5].Width.Value != (share ? _shareW : 0)) cols[5].Width = new GridLength(share ? _shareW : 0);
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
             _name.ClearValue(FrameworkElement.MaxWidthProperty);
-            double nw = Mod.W(_name), cpw = _cp.Text.Length > 0 ? Mod.W(_cp) : 0, kept = Kept();
+            double nw = Mod.W(_name), cpw = _cp.Text.Length > 0 ? Mod.W(_cpHost) : 0, kept = Kept();
             double full = _give.Sum(g => Mod.W(g.Full)), brief = _give.Sum(g => Mod.W(g.Brief));
             double room0 = room - (share ? _shareW : 0) - kept;
             // the CP goes first, then the marks shorten to their glyphs, then the name trims (the share went above, for every row)
@@ -282,7 +284,7 @@ sealed partial class HudHype
             bool longMarks = nw + full <= room0 + .5;
             foreach (var (f, b) in _give) { f.Visibility = longMarks ? Visibility.Visible : Visibility.Collapsed; b.Visibility = longMarks ? Visibility.Collapsed : Visibility.Visible; }
             double avail = room0 - (longMarks ? full : brief);
-            _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
+            _cpHost.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
             _name.MaxWidth = Math.Max(Math.Min(NameMin(), nw), avail - (cp ? cpw : 0));
             _art.InvalidateVisual();
         }

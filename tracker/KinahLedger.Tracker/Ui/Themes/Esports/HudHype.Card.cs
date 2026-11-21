@@ -71,7 +71,7 @@ sealed partial class HudHype : IThemeCard
         void Part(int col, string word, string fig, double size, Brush ink)
         {
             var sp = new Grid { Height = 40 };
-            var lb = Ht(word.ToUpperInvariant(), 9.5, Frozen(Mod.A(LimeInkC, .85)), FontWeights.Bold); lb.VerticalAlignment = VerticalAlignment.Top;
+            var lb = Ht(word.ToUpperInvariant(), 10.5, Frozen(Mod.A(LimeInkC, .85)), FontWeights.Bold); lb.VerticalAlignment = VerticalAlignment.Top;
             sp.Children.Add(lb);
             var fv = Ht(fig, size, ink, FontWeights.Bold); fv.VerticalAlignment = VerticalAlignment.Bottom; fv.Margin = new Thickness(0, 0, 0, -size * .16 + 1);
             sp.Children.Add(fv);
@@ -102,7 +102,7 @@ sealed partial class HudHype : IThemeCard
         {
             stack.Children.Add(Hairline(new Thickness(0, 8, 0, 5)));
             var hd = Tac.CardGrid(c, 46, 56, 14);
-            TextBlock Hd(string s, bool right = true) { var t = Ht(s, 9, Frozen(Mod.A(LimeInkC, .8)), FontWeights.Bold); if (right) t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
+            TextBlock Hd(string s, bool right = true) { var t = Ht(s, 10, Frozen(Mod.A(LimeInkC, .85)), FontWeights.Bold); if (right) t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
             Tac.Cell(hd, Hd(L.T("SKILL"), false), 0, c);
             Tac.Cell(hd, Hd(L.T("SHARE")), 1, c);
             Tac.Cell(hd, Hd(L.T("DMG")), 2, c);
@@ -114,10 +114,12 @@ sealed partial class HudHype : IThemeCard
             {
                 var row = new Grid { Height = 21, Margin = new Thickness(-4, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
+                double figW = 46 + 56 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0) + 13 + 6;
                 var art = new TacSketch((dc, s) =>
                 {
                     dc.DrawGeometry(Frozen(Mod.A(TrackC, .7)), null, Para(new Rect(0, 1, s.Width, s.Height - 2), 4));
-                    double bw = s.Width * Math.Clamp(of, 0, 1);
+                    // the bar stops short of the figure columns: its full length is the skill name's room
+                    double bw = Math.Max(0, s.Width - figW) * Math.Clamp(of, 0, 1);
                     if (bw < 1.5) return;
                     dc.DrawGeometry(Mod.Grad(false, (Mod.Mix(tone, Colors.Black, .74), 0), (Mod.Mix(tone, Colors.Black, .5), .8), (Mod.Mix(tone, Colors.Black, .34), 1)), null, Para(new Rect(0, 1, bw, s.Height - 2), 4));
                 });
