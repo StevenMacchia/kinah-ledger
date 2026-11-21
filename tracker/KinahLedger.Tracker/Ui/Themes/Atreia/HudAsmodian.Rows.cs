@@ -144,7 +144,7 @@ sealed partial class HudAsmodian
     /// Its moments: the crown slams down when this row takes the lead (and a crimson flash bursts round it); a row that
     /// climbs a rank flashes its rim and leaves an ember streak along its foot; the heat glint runs along its bar.
     /// </summary>
-    sealed class IronRow : IThemeRow
+    sealed class IronRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double Pad = 5, RankW = 24, IconW = 22;
