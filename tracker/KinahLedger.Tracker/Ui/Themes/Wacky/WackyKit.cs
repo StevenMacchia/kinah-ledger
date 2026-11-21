@@ -587,6 +587,7 @@ static class WkCard
     /// <param name="share">Shows (true) or hides (false) the share; its column stays.</param>
     /// <param name="detail">An expanded row's damage and crit on the same line.</param>
     /// <param name="stack">Puts the heal and TOP marks one over the other (true) or side by side (false).</param>
+    static int _crowdDiag;
     public static void Crowd(FrameworkElement line, double room, UIElement? cp, bool cpWanted, Action<bool> share, UIElement? detail = null, Action<bool>? stack = null)
     {
         stack?.Invoke(false);
@@ -609,6 +610,7 @@ static class WkCard
             steps.Add(() => share(false));
             if (detailWanted) steps.Add(() => detail!.Visibility = Visibility.Collapsed);
             foreach (var step in steps) { if (Fits()) break; step(); }
+            if (_crowdDiag < 60 && line.DesiredSize.Width > room - 14 && line.DesiredSize.Width < room + 30) { _crowdDiag++; Console.WriteLine($"DIAG crowd room {room:0.##} desired {line.DesiredSize.Width:0.##} margin {(line as FrameworkElement)?.Margin} cp {(cp?.Visibility)} wanted {cpWanted} detail {(detail?.Visibility)} steps {steps.Count} fmt {TextOptions.GetTextFormattingMode(line)}"); }
         }
         line.InvalidateMeasure();
     }
