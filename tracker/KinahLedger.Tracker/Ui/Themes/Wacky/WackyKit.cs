@@ -610,7 +610,7 @@ static class WkCard
             steps.Add(() => share(false));
             if (detailWanted) steps.Add(() => detail!.Visibility = Visibility.Collapsed);
             foreach (var step in steps) { if (Fits()) break; step(); }
-            if (_crowdDiag < 60 && line.DesiredSize.Width > room - 14 && line.DesiredSize.Width < room + 30) { _crowdDiag++; Console.WriteLine($"DIAG crowd room {room:0.##} desired {line.DesiredSize.Width:0.##} margin {(line as FrameworkElement)?.Margin} cp {(cp?.Visibility)} wanted {cpWanted} detail {(detail?.Visibility)} steps {steps.Count} fmt {TextOptions.GetTextFormattingMode(line)}"); }
+            if (_crowdDiag < 80 && Math.Abs(room - 410) < 1) { _crowdDiag++; Console.WriteLine($"DIAG crowd room {room:0.##} desired {line.DesiredSize.Width:0.##} margin {(line as FrameworkElement)?.Margin} cp {(cp?.Visibility)} wanted {cpWanted} detail {(detail?.Visibility)} steps {steps.Count} fmt {TextOptions.GetTextFormattingMode(line)}"); }
         }
         line.InvalidateMeasure();
     }
