@@ -308,7 +308,7 @@ public partial class OptionsWindow : Window
         face.LayoutTransform = new ScaleTransform(scale, scale);
         bool inUse = key == HudLooks.Parse(_edit.HudLook);
         HudLookPreview.Children.Clear();
-        HudLookPreview.Children.Add(Stage(face, L.T(look.Name), inUse ? L.F("in use · {0:P0}", scale) : L.T("hover to compare · click to pick"), 160));
+        HudLookPreview.Children.Add(Stage(face, L.T(look.Name), inUse ? L.F("in use · {0:P0}", scale) : L.T("hover to compare · click to pick"), 140));   // 160 until the eight themes' chips took two rows (2026-11-20)
     }
 
     /// <summary>

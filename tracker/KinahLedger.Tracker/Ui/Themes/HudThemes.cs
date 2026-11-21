@@ -28,6 +28,19 @@ public static class HudThemes
     /// </summary>
     public const string Atreia = "atreia";
     public const string Rift = "rift", Elyos = "elyos", Asmodian = "asmodian", Prism = "prism", Arcade = "arcade";
+    /// <summary>
+    /// The Esports theme (the third looks pack, 2026-11-20; Ui/Themes/Esports/): a tournament on the stream. Broadcast (a
+    /// lower third), Telestrator (a caster's pen on the replay), Hype (a sponsor's energy-drink package), Finals (the
+    /// championship's black and gold).
+    /// </summary>
+    public const string Esports = "esports";
+    public const string Broadcast = "broadcast", Telestrator = "telestrator", Hype = "hype", Finals = "finals";
+    /// <summary>
+    /// The Elements theme (the third looks pack, 2026-11-20; Ui/Themes/Elements/): the meter made of the elements. Frost,
+    /// Storm, Magma and Tide.
+    /// </summary>
+    public const string Elements = "elements";
+    public const string Frost = "frost", Storm = "storm", Magma = "magma", Tide = "tide";
 
     public sealed record Theme(string Key, string Name, string Hint);
 
@@ -39,6 +52,8 @@ public static class HudThemes
         new(Glitch, "Glitch", "A haunted tape: VHS, a broken signal, an old green screen"),
         new(Modern, "Modern", "Clean and current: frosted glass, Swiss mono, a bare line, a soft wash"),
         new(Atreia, "Atreia", "The world itself: the Abyss's rift, Elyos gold, Asmodian crimson, a prism's light"),
+        new(Esports, "Esports", "A tournament on the stream: a lower third, a caster's pen, a sponsor's hype, the finals' gold"),
+        new(Elements, "Elements", "The meter made of the elements: frost, lightning, magma, the tide"),
     };
 
     /// <summary>The theme a look belongs to; Classic for the strip, an unknown key or none.</summary>
@@ -68,6 +83,14 @@ public static class HudThemes
         Asmodian => new HudAsmodian { Still = still },
         Prism => new HudPrism { Still = still },
         Arcade => new HudArcade { Still = still },
+        Broadcast => new HudBroadcast { Still = still },
+        Telestrator => new HudTelestrator { Still = still },
+        Hype => new HudHype { Still = still },
+        Finals => new HudFinals { Still = still },
+        Frost => new HudFrost { Still = still },
+        Storm => new HudStorm { Still = still },
+        Magma => new HudMagma { Still = still },
+        Tide => new HudTide { Still = still },
         _ => null,
     };
 
