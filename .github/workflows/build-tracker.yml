@@ -33,17 +33,42 @@ jobs:
           dotnet-version: '8.0.x'
 
       # trackers download game data by this manifest's checksums: a data change committed without it would never reach them
-      # which of the faces the UI draws in this runner has (the layout checks measure text in them)
-      - name: Installed fonts the UI uses
+      # The runner's display is 1024x768 (Hyper-V video); a player's is 1920x1080 or more. The layout checks fit windows to the
+      # screen (Full view's two columns need ~1900 px, the Parser window 1044 px), so on 1024x768 they failed on every run since
+      # 2026-11-15 while passing on a real PC. Set the largest mode the driver offers, up to 1920x1080, and say which.
+      - name: Set a player's screen size
         shell: pwsh
         continue-on-error: true
         run: |
-          Add-Type -AssemblyName System.Drawing
-          [System.Drawing.Text.InstalledFontCollection]::new().Families.Name | Where-Object { $_ -match 'Segoe|Malgun|YaHei|JhengHei|Inter|Arial|Noto|Gothic|Nirmala' } | Sort-Object
-          (Get-CimInstance Win32_OperatingSystem).Caption
-          (Get-CimInstance Win32_VideoController | Select-Object -First 1).Name
+          Add-Type -TypeDefinition @'
+          using System; using System.Runtime.InteropServices;
+          public static class Disp {
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+            public struct DEVMODE {
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+              public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra; public int dmFields;
+              public int dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+              public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+              public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+              public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+            }
+            [DllImport("user32.dll", CharSet = CharSet.Ansi)] public static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+            [DllImport("user32.dll", CharSet = CharSet.Ansi)] public static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+          }
+          '@
+          $best = $null
+          for ($i = 0; ; $i++) {
+            $dm = New-Object Disp+DEVMODE; $dm.dmSize = [int][Runtime.InteropServices.Marshal]::SizeOf($dm)
+            if (-not [Disp]::EnumDisplaySettings($null, $i, [ref]$dm)) { break }
+            if ($dm.dmPelsWidth -le 1920 -and $dm.dmPelsHeight -le 1080 -and $dm.dmBitsPerPel -ge 32 -and ($null -eq $best -or $dm.dmPelsWidth -gt $best.dmPelsWidth)) { $best = $dm }
+          }
+          if ($null -eq $best) { "no mode found"; exit 0 }
+          "setting $($best.dmPelsWidth)x$($best.dmPelsHeight)"
+          "ChangeDisplaySettings -> $([Disp]::ChangeDisplaySettings([ref]$best, 0))"
           Add-Type -AssemblyName System.Windows.Forms
-          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds | Out-String
+          (Get-CimInstance Win32_OperatingSystem).Caption
 
       - name: Check data/manifest.json is current
         id: manifest
