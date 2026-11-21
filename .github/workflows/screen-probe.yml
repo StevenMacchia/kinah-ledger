@@ -2,11 +2,13 @@ name: screen probe
 on:
   push:
     branches: [ci/fonts-diagnostic]
-    paths: [".github/workflows/screen-probe.yml", "tools/probe-odo.ps1"]
+    paths: [".github/workflows/screen-probe.yml"]
 jobs:
   p:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - shell: powershell
-        run: powershell -ExecutionPolicy Bypass -File tools/probe-odo.ps1
+      - shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $have = [System.Drawing.Text.InstalledFontCollection]::new().Families.Name
+          foreach ($f in 'Bahnschrift','Impact','Cascadia Mono','Consolas','Lucida Console','Ink Free','Segoe Print','Segoe UI Black','Segoe UI Variable Text','Segoe UI Symbol','Arial Black') { '{0,-26} {1}' -f $f, $(if ($have -contains $f) { 'present' } else { 'MISSING' }) }
