@@ -72,7 +72,7 @@ sealed partial class HudVersus
     /// ✚, deaths, YOU), a healer's healing a second in mint. At the right a black score plate holds the DPS big in Impact and
     /// the share. Short of room the CP goes first, then the share; a name keeps ten characters; a figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class VersusRow : IThemeRow
+    sealed class VersusRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 28, Pitch = 31;
         const double RankW = 25, ChipW = 25, Air = 4, PlatePad = 5, PadR = 6;

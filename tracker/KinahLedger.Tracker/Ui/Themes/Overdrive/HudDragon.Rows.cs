@@ -76,7 +76,7 @@ sealed partial class HudDragon
     /// CP goes first, then the share; a name keeps at least ten characters; a figure is never cut (Mod.Fit).
     /// Moments: fire racing down the bar (a band of hot gold, under the words), a breath bursting along it, the crest landing.
     /// </summary>
-    internal sealed class DragonRow : IThemeRow
+    internal sealed class DragonRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         static readonly LinearGradientBrush NameBand = Mod.Grad(false, (Mod.A(Colors.Black, .34), 0), (Mod.A(Colors.Black, .26), .6), (Mod.A(Colors.Black, 0), 1));

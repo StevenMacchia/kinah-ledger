@@ -72,7 +72,7 @@ sealed partial class HudManga
     /// climax panel: white, concentration lines driving in from its edges, its words in ink. Short of room the CP goes first,
     /// then the share; a name keeps at least ten characters; a figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class MangaRow : IThemeRow
+    sealed class MangaRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 32, Pitch = 34, BarH = 11, LineH = 19;
         const double Pad = 7;

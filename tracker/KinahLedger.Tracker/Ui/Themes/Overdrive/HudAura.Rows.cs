@@ -103,7 +103,7 @@ sealed partial class HudAura
     /// figure. Short of room the CP goes first, then the share; a name keeps at least ten characters; a figure is never cut.
     /// Its moments (driven by the look): ignite, flare, gutter, the power-up, a climb's flare.
     /// </summary>
-    internal sealed class AuraRow : IThemeRow
+    internal sealed class AuraRow : IThemeRow, IThemeBarSpan
     {
         public const double Z = 13, PH = 23, H = Z + PH + 1, Pitch = H + 1, Stage = 16;
         const double In = 2, Sl = 6, PadL = 11, PadR = 17, FrontW = 22, SurgeW = 46, TrailW = 80;
