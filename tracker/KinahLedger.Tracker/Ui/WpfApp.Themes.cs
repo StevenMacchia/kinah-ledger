@@ -156,6 +156,10 @@ public static partial class WpfApp
             }
     }
 
+    /// <summary>The moments' held frames: 15/40/75%, or with KL_MOMENT_SEQ=N every 1/N from 0 to 1.</summary>
+    static double[] MomentFrames() => int.TryParse(Environment.GetEnvironmentVariable("KL_MOMENT_SEQ"), out var n) && n > 1
+        ? Enumerable.Range(0, n + 1).Select(i => i / (double)n).ToArray() : new[] { 0.15, 0.4, 0.75 };
+
     static void ShotThemes(MainWindow w, string dir)
     {
         var only = (Environment.GetEnvironmentVariable("KL_THEME_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -262,7 +266,7 @@ public static partial class WpfApp
                     DoEvents();
                     Motion.FrozenAt = frozen0;
                 }
-                string file = $"ui-theme-{look}-{tag}{(frame is double ff ? "-" + Math.Round(ff * 100) : "")}.png";
+                string file = $"ui-theme-{look}-{tag}{(frame is double ff ? (MomentFrames().Length > 3 ? $"-s{Array.IndexOf(MomentFrames(), ff):00}" : "-" + Math.Round(ff * 100)) : "")}.png";
                 Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, ShotGround);
                 SpillNote(dir, file, (FrameworkElement)h.Content);
                 h.Close();
@@ -272,7 +276,9 @@ public static partial class WpfApp
                 foreach (var s in states) Shot(s.Tag, s.V, s.T, s.E, s.At, s.Dungeon, null);
                 if (stateOnly.Length > 0) continue;
                 foreach (var m in moments)
-                    foreach (var f in new[] { 0.15, 0.4, 0.75 })
+                    // KL_MOMENT_SEQ=N: every moment as N+1 frames, 0 to 1, to judge it moving (tests/ui/clips.py makes the clips);
+                    // files ui-theme-LOOK-MOMENT-sNN.png. Without it, the three held frames.
+                    foreach (var f in MomentFrames())
                         Shot(m.Tag, MomentOnly(m.Tag, m.V), m.T, m.E, m.At, m.Dungeon, f);
                 // the widest meter, and the Parser's own window in this look (Settings › In game › Parser › Overlay look)
                 double w0 = HudStackLook.FightWidth; HudStackLook.FightWidth = HudStackLook.FightWidthMax;
