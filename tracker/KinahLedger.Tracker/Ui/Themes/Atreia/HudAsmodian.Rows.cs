@@ -136,7 +136,7 @@ sealed partial class HudAsmodian
         const double Pad = 5, RankW = 20, IconW = 23;
         readonly HudAsmodian _look;
         readonly Grid _root = new() { Height = H };
-        readonly TacSketch _art, _fx, _burst, _crownArt;
+        readonly TacSketch _art, _crownArt;
         readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad + 3, 0) };
         readonly TextBlock _rank = Big("", 13.5, Soft, FontWeights.Bold), _name = Tt("", 12.5, White, FontWeights.Bold), _cp = Tt("", 9.5, Quiet, FontWeights.SemiBold),
             _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _dps = Big("", 17, White, FontWeights.SemiBold), _share = Tt("", 10, Soft, FontWeights.SemiBold),
@@ -148,14 +148,15 @@ sealed partial class HudAsmodian
         readonly Border _iconHost = new() { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
-        string _cls = "\0";
+        string _cls = "\0", _markSig = "\0";
         MeterMember? _m;
-        double _bar, _glint = -1, _slam = -1, _climb = -1;
+        double _bar;
         int _lastRank;
         bool _expanded, _shareOn = true;
-
-        /// <summary>Where the bar's burning end is, from the row's left (for the embers).</summary>
-        public double TipX { get; private set; } = 40;
+        /// <summary>The moments' layer over the slab, under the words: its pieces are made when a moment starts and go when it ends.</summary>
+        readonly Canvas _fxLayer = new() { IsHitTestVisible = false };
+        System.Windows.Shapes.Rectangle? _glint;
+        TacSketch? _flash;
 
         public FrameworkElement Root => _root;
 
@@ -173,15 +174,13 @@ sealed partial class HudAsmodian
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
             _art = new TacSketch(Draw);
-            _fx = new TacSketch(DrawFx);
-            _root.Children.Add(_art); _root.Children.Add(_fx);
-            // the rank's cell: the number, or the crown (its burst behind it)
-            _burst = new TacSketch(DrawBurst);
+            _root.Children.Add(_art); _root.Children.Add(_fxLayer);
+            // the rank's cell: the number, or the crown
             _crownArt = new TacSketch((dc, s) => Crown(dc, new Point(0, 0), 1.12), 18, 15);
             _crown.Children.Add(_crownArt);
             _crown.RenderTransformOrigin = new Point(.5, .65); _crown.RenderTransform = _crownScale;
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            _rankHost.Children.Add(_burst); _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crown);
+            _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crown);
             Put(_rankHost, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
@@ -204,8 +203,8 @@ sealed partial class HudAsmodian
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
             // the crown on the top row once there is damage (by Combat Power before it, the rank stays a number)
             bool crown = m.Rank == 1 && !m.CpOnly && !m.Pvp;
-            _crown.Visibility = crown ? Visibility.Visible : Visibility.Collapsed;
-            _rank.Visibility = crown ? Visibility.Collapsed : Visibility.Visible;
+            var cv = crown ? Visibility.Visible : Visibility.Collapsed;
+            if (_crown.Visibility != cv) { _crown.Visibility = cv; _rank.Visibility = crown ? Visibility.Collapsed : Visibility.Visible; }
             if (!fresh && c.Moves && _lastRank > 0)
             {
                 if (crown && _lastRank > 1) { Slam(); _look.Lead(); }
@@ -221,14 +220,20 @@ sealed partial class HudAsmodian
             }
             _name.Text = m.Name;
             _cp.Text = m.Cp;
-            // the marks after the name: ★ DPS, a healer's ✚, deaths, YOU (kept whole: the name and the CP give way first)
-            foreach (var mk in _marks) _line.Children.Remove(mk);
-            _marks.Clear();
-            void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
-            if (m.TopDps) { var t = Chip("★ " + L.T("DPS"), Gold2, GoldC2, size: 8.5); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
-            if (m.TopHeals) { var t = Chip("✚", MarkMint, MintC2, size: 8.5); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
-            if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10.5, Coral, FontWeights.Bold); d.Tag = "deaths"; Add(d); }
-            if (m.You) { var y = Chip(L.T("YOU"), White, CrimC, filled: true, size: 8.5); y.Tag = "you"; Add(y); }
+            // the marks after the name: ★ DPS, a healer's ✚, deaths, YOU (kept whole: the name and the CP give way first); made
+            // again only when they change, not on every draw
+            var sig = $"{m.TopDps}|{m.TopHeals}|{m.Deaths}|{m.You}";
+            if (sig != _markSig)
+            {
+                _markSig = sig;
+                foreach (var mk in _marks) _line.Children.Remove(mk);
+                _marks.Clear();
+                void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
+                if (m.TopDps) { var t = Chip("★ " + L.T("DPS"), Gold2, GoldC2, size: 8.5); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
+                if (m.TopHeals) { var t = Chip("✚", MarkMint, MintC2, size: 8.5); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
+                if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10.5, Coral, FontWeights.Bold); d.Tag = "deaths"; Add(d); }
+                if (m.You) { var y = Chip(L.T("YOU"), White, CrimC, filled: true, size: 8.5); y.Tag = "you"; Add(y); }
+            }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _dps.Text = m.Figure;
@@ -239,7 +244,7 @@ sealed partial class HudAsmodian
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
-            SlideBar(_art, c, "bar", m.CpOnly ? 0 : BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); _fx.InvalidateVisual(); });
+            SlideBar(_art, c, "bar", m.CpOnly ? 0 : BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); });
             _art.InvalidateVisual();
         }
 
@@ -262,29 +267,81 @@ sealed partial class HudAsmodian
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        /// <summary>The heat glint along the bar, 0..1 (-1: none); the look's embers drive it.</summary>
-        public void SetGlint(double g) { _glint = g; _fx.InvalidateVisual(); }
+        /// <summary>The row's width now (the meter's rows' width before its first layout, as in a render's held frame).</summary>
+        double W => _root.ActualWidth > 0 ? _root.ActualWidth : _look._rowsW;
 
-        /// <summary>The crown slams down: it falls from twice its size, bites in a touch small, settles; a crimson flash bursts round it.</summary>
+        /// <summary>
+        /// The heat glint along the bar, 0..1 (-1: none): a band of ember light (one frozen brush) running along the bar to its
+        /// burning end, moved by its transform inside the bar's shape (clipped once when it starts).
+        /// </summary>
+        public void SetGlint(double g)
+        {
+            if (g is <= 0 or >= 1)
+            {
+                if (_glint != null) { _fxLayer.Children.Remove(_glint); _glint = null; _fxLayer.Clip = null; }
+                return;
+            }
+            var r = new Rect(.5, .5, Math.Max(1, W - 1), H - 1);
+            double fx = r.Width * Math.Clamp(_bar, 0, 1);
+            if (fx < 8) return;
+            if (_glint == null)
+            {
+                _glint = new System.Windows.Shapes.Rectangle { Width = 26, Height = H, Fill = GlintFill, IsHitTestVisible = false, RenderTransform = new TranslateTransform() };
+                _fxLayer.Clip = Blade(r, fx);
+                _fxLayer.Children.Add(_glint);
+            }
+            ((TranslateTransform)_glint.RenderTransform).X = r.Left - 26 + (fx + 26) * Out(g);
+            _glint.Opacity = Math.Sin(Math.PI * g);
+        }
+
+        /// <summary>The slab's flash (a slam, a climb): its outline in pale fire and a hot wash, drawn once, its opacity moved.</summary>
+        TacSketch Flash()
+        {
+            if (_flash != null) return _flash;
+            _flash = new TacSketch((dc, s) =>
+            {
+                var slab = Plate(new Rect(.5, .5, s.Width - 1, s.Height - 1), 6, 0);
+                dc.DrawGeometry(Mod.Br(HotC, .3), Mod.P(Mod.Br(PaleC), 1.6), slab);
+            }) { Width = W, Height = H, Opacity = 0 };
+            // over the slab, under the words (the moments' layer is clipped to the bar for the glint: the flash sits beside it)
+            _root.Children.Insert(_root.Children.IndexOf(_fxLayer) + 1, _flash);
+            return _flash;
+        }
+
+        void FlashOff() { if (_flash != null) { _root.Children.Remove(_flash); _flash = null; } }
+
+        /// <summary>
+        /// The crown slams down: it falls from twice its size, bites in a touch small, settles; a pale flash and a crimson ring
+        /// burst round it and the slab flashes. Each piece made once and moved by scale and opacity.
+        /// </summary>
         public void Slam()
         {
+            var flash = Flash();
+            var ring = new System.Windows.Shapes.Ellipse { Width = 16, Height = 13, Stroke = BurstStroke, StrokeThickness = 2.2, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+            var glow = new System.Windows.Shapes.Ellipse { Width = 34, Height = 28, Fill = BurstGlow, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+            var rs = new ScaleTransform(1, 1); ring.RenderTransform = rs;
+            _rankHost.Children.Insert(0, glow); _rankHost.Children.Insert(1, ring);
             Motion.Play(_rankHost, 760, t =>
             {
-                _slam = t;
                 double k;
                 if (t < .3) { double a = Seg(t, 0, .3); k = 2.3 - 1.46 * a * a; }
                 else if (t < .55) k = .84 + .22 * Out(Seg(t, .3, .55));
                 else k = 1.06 - .06 * Out(Seg(t, .55, 1));
                 _crownScale.ScaleX = _crownScale.ScaleY = k;
                 _crown.Opacity = Math.Min(1, Seg(t, 0, .14) * 1.2);
-                _burst.InvalidateVisual(); _fx.InvalidateVisual();
-            }, () => { _slam = -1; _crownScale.ScaleX = _crownScale.ScaleY = 1; _crown.Opacity = 1; _burst.InvalidateVisual(); _fx.InvalidateVisual(); });
+                double b = Seg(t, .22, .95);
+                glow.Opacity = t < .22 ? 0 : b < .15 ? b / .15 : 1 - b;
+                ring.Opacity = t < .22 ? 0 : 1 - b;
+                rs.ScaleX = rs.ScaleY = 1 + 2.2 * Out(b);
+                flash.Opacity = t is > .25 and < .8 ? 1 - Seg(t, .25, .8) : 0;
+            }, () => { _crownScale.ScaleX = _crownScale.ScaleY = 1; _crown.Opacity = 1; _rankHost.Children.Remove(glow); _rankHost.Children.Remove(ring); FlashOff(); });
         }
 
-        /// <summary>The row climbed a rank: its rim flashes crimson and an ember streak runs along its foot (with the glide, not against it).</summary>
+        /// <summary>The row climbed a rank: its slab flashes and a glint runs along its bar (with the glide, not against it).</summary>
         void Climb()
         {
-            Motion.Play(_fx, 620, t => { _climb = t; _fx.InvalidateVisual(); }, () => { _climb = -1; _fx.InvalidateVisual(); });
+            var flash = Flash();
+            Motion.Play(flash, 620, t => { flash.Opacity = .85 * (1 - t); SetGlint(t); }, () => { SetGlint(-1); FlashOff(); });
         }
 
         static double Seg(double p, double a, double b) => Math.Clamp((p - a) / (b - a), 0, 1);
@@ -295,9 +352,8 @@ sealed partial class HudAsmodian
             if (_m is not { } m || s.Width < 30) return;
             var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
             var slab = Plate(r, 6, 0);
-            dc.DrawGeometry(Mod.Grad(true, (Color.FromArgb(0xE6, 0x21, 0x11, 0x14), 0), (Color.FromArgb(0xEE, 0x10, 0x08, 0x0A), 1)), null, slab);
+            dc.DrawGeometry(SlabFill, null, slab);
             double fx = r.Width * Math.Clamp(_bar, 0, 1);
-            TipX = r.Left + Math.Max(fx, 30);
             dc.PushClip(slab);
             // the figures' well (the DPS, the share; expanded, the damage and the crit), when the bar reaches under them; from the
             // heal figure on, the bar's end burns low with no hot line through a digit
@@ -309,54 +365,20 @@ sealed partial class HudAsmodian
             if (fx > figL - 18) Well(dc, r, figL);
             // a healer's share of the group's healing as a mint line along the slab's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
-                dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2));
+                dc.DrawRectangle(HealLine, null, new Rect(r.X, r.Bottom - 2, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2));
             // you: a hot crimson spine at the left
-            if (m.You) dc.DrawRectangle(Mod.Grad(true, (PaleC, 0), (HotC, .35), (CrimC, 1)), null, new Rect(r.Left, r.Top, 3, r.Height));
+            if (m.You) dc.DrawRectangle(Spine, null, new Rect(r.Left, r.Top, 3, r.Height));
             dc.Pop();
-            dc.DrawGeometry(null, Mod.P(Mod.Br(m.You ? HotC : RimC, m.You ? .9 : 1), m.You ? 1.2 : 1), slab);
-        }
-
-        void DrawFx(DrawingContext dc, Size s)
-        {
-            if (_m is null || s.Width < 30) return;
-            var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
-            double fx = r.Width * Math.Clamp(_bar, 0, 1);
-            if (_glint is > 0 and < 1 && fx > 8)
-            {
-                // the heat glint: a band of ember light running along the bar to its burning end
-                dc.PushClip(Blade(r, fx));
-                double x = r.Left - 26 + (fx + 26) * Out(_glint), a = Math.Sin(Math.PI * _glint);
-                dc.DrawRectangle(Mod.Grad(false, (Mod.A(CrimC, 0), 0), (Mod.A(EmberC, .5 * a), .55), (Mod.A(PaleC, .95 * a), .86), (Mod.A(EmberC, 0), 1)), null, new Rect(x, r.Top, 26, r.Height));
-                dc.Pop();
-            }
-            var slab = Plate(r, 6, 0);
-            if (_slam is > .25 and < .8)
-            {
-                double k = Seg(_slam, .25, .8);
-                dc.DrawGeometry(Mod.Br(HotC, .3 * (1 - k)), Mod.P(Mod.Br(PaleC, (1 - k)), 1.6), slab);
-            }
-            if (_climb is > 0 and < 1)
-            {
-                double k = _climb;
-                dc.DrawGeometry(null, Mod.P(Mod.Br(HotC, .85 * (1 - k)), 1.4), slab);
-                dc.PushClip(slab);
-                double len = r.Width * Out(Seg(k, 0, .6));
-                dc.DrawRectangle(Mod.Grad(false, (Mod.A(HotC, 0), 0), (Mod.A(PaleC, .9 * (1 - k)), 1)), null, new Rect(r.Left, r.Bottom - 2, len, 2));
-                dc.Pop();
-            }
-        }
-
-        /// <summary>The crown's burst: a crimson ring flung out from it and a blood glow, as it lands.</summary>
-        void DrawBurst(DrawingContext dc, Size s)
-        {
-            if (_slam is not (> .22 and < .95)) return;
-            double k = Seg(_slam, .22, .95);
-            var c = new Point(s.Width / 2, s.Height / 2);
-            dc.PushOpacity(1 - k);
-            dc.DrawEllipse(BloodGlow, null, c, 10 + 8 * k, 9 + 6 * k);
-            dc.Pop();
-            if (k < .3) dc.DrawEllipse(MakeRadial(Mod.A(PaleC, .9 * (1 - k / .3)), Mod.A(HotC, 0)), null, c, 11, 11);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(HotC, (1 - k)), .8 + 3 * (1 - k)), c, 5 + 18 * Out(k), 4 + 13 * Out(k));
+            dc.DrawGeometry(null, m.You ? YouRim : Rim, slab);
         }
     }
+
+    // the rows' frozen brushes and pens, made once for every row
+    static readonly Brush SlabFill = Mod.Grad(true, (Color.FromArgb(0xE6, 0x21, 0x11, 0x14), 0), (Color.FromArgb(0xEE, 0x10, 0x08, 0x0A), 1));
+    static readonly Brush HealLine = Frozen(Color.FromArgb(0xE6, 0x5D, 0xF2, 0xA6));
+    static readonly Brush Spine = Mod.Grad(true, (Color.FromRgb(0xFF, 0xD0, 0x8A), 0), (Color.FromRgb(0xFF, 0x4A, 0x3D), .35), (Color.FromRgb(0xC2, 0x1F, 0x2E), 1));
+    static readonly Pen Rim = Mod.P(Frozen(Color.FromRgb(0x4A, 0x20, 0x26)), 1), YouRim = Mod.P(Frozen(Color.FromArgb(0xE6, 0xFF, 0x4A, 0x3D)), 1.2);
+    static readonly Brush GlintFill = Mod.Grad(false, (Color.FromArgb(0, 0xC2, 0x1F, 0x2E), 0), (Color.FromArgb(0x80, 0xFF, 0x8A, 0x3D), .55), (Color.FromArgb(0xF2, 0xFF, 0xD0, 0x8A), .86), (Color.FromArgb(0, 0xFF, 0x8A, 0x3D), 1));
+    static readonly Brush BurstStroke = Frozen(Color.FromRgb(0xFF, 0x4A, 0x3D));
+    static readonly Brush BurstGlow = MakeRadial(Color.FromArgb(0xE6, 0xFF, 0xD0, 0x8A), Color.FromArgb(0, 0xC2, 0x1F, 0x2E), Color.FromArgb(0x90, 0xFF, 0x4A, 0x3D));
 }
