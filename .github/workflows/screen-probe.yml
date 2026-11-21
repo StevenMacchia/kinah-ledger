@@ -2,13 +2,11 @@ name: screen probe
 on:
   push:
     branches: [ci/fonts-diagnostic]
-    paths: [".github/workflows/screen-probe.yml", "tools/probe-text.ps1"]
+    paths: [".github/workflows/screen-probe.yml", "tools/probe-odo.ps1"]
 jobs:
   p:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - shell: powershell
-        run: |
-          powershell -ExecutionPolicy Bypass -File tools/probe-text.ps1
-          Get-ChildItem C:\Windows\Fonts\segoeui*.ttf, C:\Windows\Fonts\SegUIVar*.ttf | ForEach-Object { "{0} {1} {2}" -f $_.Name, $_.Length, $_.VersionInfo.FileVersion }
+        run: powershell -ExecutionPolicy Bypass -File tools/probe-odo.ps1
