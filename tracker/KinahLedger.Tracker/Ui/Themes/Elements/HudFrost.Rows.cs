@@ -157,8 +157,11 @@ sealed partial class HudFrost
             _tip.VerticalAlignment = VerticalAlignment.Top; _tip.Margin = new Thickness(0, -6, 0, 0);
             var flake = new Grid { RenderTransform = _turn, RenderTransformOrigin = new Point(.5, .5), Children = { _arms, _branches } };
             _crown.Children.Add(_bloom); _crown.Children.Add(_bloomHot); _crown.Children.Add(_flakeGlow); _crown.Children.Add(_ring); _crown.Children.Add(flake); _crown.Children.Add(_tip);
+            // the heart the numeral sits on: a dark hexagon of deep ice with a lit rim, over the flake's own heart
+            var heart = Piece(FlakeHeart, 15, 15); heart.Margin = new Thickness(2);
+            _crown.Children.Add(heart);
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crown);
+            _rankHost.Children.Add(_crown); _rankHost.Children.Add(_rank);
             Put(_rankHost, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
@@ -166,6 +169,8 @@ sealed partial class HudFrost
             _words.Effect = Shade();
             _root.Children.Add(_words);
             _root.SizeChanged += (_, _) => { Fit(); PlaceFrost(); };
+            // the plates under the figures and the bar's clear end follow the words' places: drawn again once they are laid out
+            foreach (var el in new FrameworkElement[] { _name, _cp, _heal, _dps, _share, _dmg, _crit, _line }) el.SizeChanged += (_, _) => _art.InvalidateVisual();
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
@@ -182,8 +187,8 @@ sealed partial class HudFrost
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
             // the snowflake crown on the top row once there is damage (by Combat Power before it, the rank stays a number)
             bool crown = m.Rank == 1 && !m.CpOnly && !m.Pvp;
-            _crown.Visibility = crown ? Visibility.Visible : Visibility.Collapsed;
-            _rank.Visibility = crown ? Visibility.Collapsed : Visibility.Visible;
+            _crown.Visibility = crown ? Visibility.Visible : Visibility.Collapsed;   // the rank's numeral always shows (on the crown's heart at rank 1)
+            _rank.FontSize = crown ? 11 : 12;
             if (!fresh && c.Moves && _lastRank > 0)
             {
                 if (crown && _lastRank > 1) { Crystallise(); _look.Lead(); }
@@ -233,7 +238,8 @@ sealed partial class HudFrost
             double room = total - 2 * Pad - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
             var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
-            _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
+            var cpv = cp ? Visibility.Visible : Visibility.Collapsed;
+            if (_cp.Visibility != cpv) { _cp.Visibility = cpv; _art.InvalidateVisual(); }
             if (share != _shareOn || cols[5].Width.Value != (share ? _shareW : 0))
             {
                 _shareOn = share;
@@ -259,13 +265,28 @@ sealed partial class HudFrost
         /// </summary>
         bool EdgeClear(double x)
         {
-            foreach (var el in new FrameworkElement[] { _rankHost, _iconHost, _line, _heal, _dps, _share, _dmg, _crit })
+            foreach (var el in Words())
             {
-                if (el.Visibility != Visibility.Visible || el.ActualWidth <= 0 || !el.IsDescendantOf(_root)) continue;
-                double l = el.TranslatePoint(new Point(0, 0), _root).X;
-                if (x > l - 6 && x < l + el.ActualWidth + 6) return false;
+                if (Box(el) is not { } b) continue;
+                if (x > b.Left - 6 && x < b.Right + 6) return false;
             }
             return true;
+        }
+
+        /// <summary>The row's words and figures, each on its own (for the bar's end and the plates under the figures).</summary>
+        IEnumerable<FrameworkElement> Words()
+        {
+            yield return _rankHost; yield return _iconHost; yield return _name; yield return _cp;
+            foreach (var mk in _marks) yield return mk;
+            yield return _heal; yield return _dps; yield return _share; yield return _dmg; yield return _crit;
+        }
+
+        /// <summary>An element's box in the row, or null when it isn't shown.</summary>
+        Rect? Box(FrameworkElement el)
+        {
+            if (el.Visibility != Visibility.Visible || el.ActualWidth <= 0 || !el.IsDescendantOf(_root)) return null;
+            var p = el.TranslatePoint(new Point(0, 0), _root);
+            return new Rect(p.X, p.Y, el.ActualWidth, el.ActualHeight);
         }
 
         /// <summary>For the PB ghost (Ui/GhostMarks.cs, IThemeBarSpan): the element the bar is drawn in and the rect a full bar fills.</summary>
@@ -290,12 +311,15 @@ sealed partial class HudFrost
                 dc.DrawRectangle(HealLine, null, new Rect(r.X, r.Bottom - 2, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2));
             // you: an ice-white spine at the left
             if (m.You) dc.DrawRectangle(YouSpine, null, new Rect(r.Left, r.Top, 3, r.Height));
-            // the DPS's breath of cold light behind it (no effect on the figure: a soft glow drawn here)
-            if (_dps.ActualWidth > 0 && !m.CpOnly)
+            // the figures that sit on the ice (the CP, the heal rate, the DPS, the share, the expanded columns) each on a dark
+            // plate of deep ice with a faint cold rim, so no bright ice lies under a digit
+            double barEnd = r.Left + fx + 4;
+            foreach (var el in new FrameworkElement[] { _cp, _heal, _dps, _share, _dmg, _crit })
             {
-                var cols = _words.ColumnDefinitions;
-                double right = Pad + cols[4].Offset + cols[4].ActualWidth, tw = _dps.ActualWidth;
-                dc.DrawEllipse(DpsHalo, null, new Point(right - tw / 2, r.Top + r.Height / 2), tw / 2 + 9, 11);
+                if (Box(el) is not { } b || b.Left > barEnd) continue;
+                var plate = new Rect(b.Left - 3, r.Top + 4, b.Width + 6, r.Height - 8);
+                if (el == _dps) plate = new Rect(b.Left - 4, r.Top + 3, b.Width + 8, r.Height - 6);
+                dc.DrawGeometry(FigurePlate, FigureRim, Shard(plate, 3, 1));
             }
             dc.Pop();
             dc.DrawGeometry(null, m.You ? YouRim : lead ? LeadRim : RowRim, slab);

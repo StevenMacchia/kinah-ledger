@@ -726,8 +726,13 @@ sealed partial class HudFrost
     // (here, after the palette they're made from: static fields of a partial class run file by file)
     // the rows' brushes and pens (frozen, shared by every row)
     static readonly Brush SlabFill = Mod.Grad(true, (Mod.A(Color.FromRgb(0x0A, 0x22, 0x30), .84), 0), (Mod.A(DeepC, .9), 1)),
+        FigurePlate = Mod.Grad(true, (Mod.A(Color.FromRgb(0x06, 0x1A, 0x26), .78), 0), (Mod.A(DeepC, .86), 1)),
         HealLine = Mod.Br(MintC2, .9), YouSpine = Mod.Grad(true, (Colors.White, 0), (Mod.A(IceC, .9), 1)), DpsHalo = MakeGlow(CyanC, .26),
         ClimbTrail = Mod.Grad(false, (Mod.A(IceC, 0), 0), (Mod.A(Colors.White, .9), 1));
+    static readonly Pen FigureRim = Mod.P(Mod.Br(CyanC, .28), .8);
+    /// <summary>The crown's heart: a dark hexagon of deep ice, a lit rim, where the rank's numeral sits.</summary>
+    static readonly DrawingBrush FlakeHeart = Paint(new Rect(-7.5, -7.5, 15, 15), dc =>
+        dc.DrawGeometry(Mod.Br(Color.FromRgb(0x05, 0x16, 0x22), .96), Mod.P(Mod.Br(FrostC, .95), 1.1), Hex(6.4, Math.PI / 6)));
     static readonly Pen LeadHalo = Mod.P(Mod.Br(CyanC, .2), 3), ClimbPen = Mod.P(Mod.Br(FrostC, .9), 1.4),
         YouRim = Mod.P(Mod.Grad(true, (Mod.A(FrostC, .9), 0), (Mod.A(RimC, .5), 1)), 1.2),
         LeadRim = Mod.P(Mod.Grad(true, (Mod.A(RimC, .62), 0), (Mod.A(RimC, .16), 1)), 1),
