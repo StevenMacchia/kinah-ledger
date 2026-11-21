@@ -182,7 +182,7 @@ sealed partial class HudManga
             void Add(FrameworkElement el) { el.Margin = new Thickness(5, 1, 0, 0); el.VerticalAlignment = VerticalAlignment.Top; _line.Children.Add(el); _marks.Add(el); }
             if (m.TopDps) { var t = Mark("★ " + L.T("DPS"), inverse: !lead); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
             if (m.TopHeals) { var t = Mark("✚", inverse: !lead); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
-            if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10.5, RedB, FontWeights.Black); d.Tag = "deaths"; Add(d); d.Margin = new Thickness(5, 2, 0, 0); }
+            if (m.Deaths > 0) { var d = Mark($"✕{m.Deaths}", red: true, size: 9.5); d.Tag = "deaths"; Add(d); }
             if (m.You) { var y = Mark(L.T("YOU"), red: true); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;

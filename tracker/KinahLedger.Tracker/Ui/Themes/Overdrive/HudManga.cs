@@ -446,7 +446,8 @@ sealed partial class HudManga : ModernLook
         if (rowsHost != null) { PutRows(rowsHost, e, now, inner - 2 * RowsPad); _fightBody.Children.Add(rowsHost); }
         if (band != null)
         {
-            sfx = e.HasDamage && Meter?.Members.FirstOrDefault() is { Rank: 1, CpOnly: false, Pvp: false };
+            // the sound effect only while the fight runs: once it's over the head says how it ended and the band folds away
+            sfx = e.Live && e.HasDamage && Meter?.Members.FirstOrDefault() is { Rank: 1, CpOnly: false, Pvp: false };
             var hp = HpOf(e);
             bandH = hp != null || sfx ? 24 : 5;
             _bandHp = hp != null;

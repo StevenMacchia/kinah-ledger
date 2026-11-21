@@ -17,8 +17,8 @@ sealed partial class HudManga
     static readonly Color InkC = Color.FromRgb(0x0A, 0x0A, 0x0D), PaperC = Color.FromRgb(0xFB, 0xF9, 0xF2), RedC = Color.FromRgb(0xE8, 0x1C, 0x2B),
         GreyC = Color.FromRgb(0x6A, 0x6A, 0x72);
     static readonly SolidColorBrush InkB = Frozen(InkC), PaperB = Frozen(PaperC), RedB = Frozen(RedC), White = Frozen(Colors.White),
-        OnInkSoft = Frozen(Mod.A(Colors.White, .88)), OnInkQuiet = Frozen(Mod.A(Colors.White, .62)),
-        OnPaperSoft = Frozen(Mod.A(InkC, .76)), OnPaperQuiet = Frozen(Mod.A(InkC, .58));
+        OnInkSoft = Frozen(Mod.A(Colors.White, .95)), OnInkQuiet = Frozen(Mod.A(Colors.White, .74)),
+        OnPaperSoft = Frozen(Mod.A(InkC, .9)), OnPaperQuiet = Frozen(Mod.A(InkC, .74));
 
     /// <summary>The figures' face: Impact, crisp condensed digits (the clock, the DPS, the hour).</summary>
     static readonly FontFamily FigFace = HudThemes.Impact;
