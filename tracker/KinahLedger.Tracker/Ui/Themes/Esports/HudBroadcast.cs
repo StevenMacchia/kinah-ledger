@@ -268,6 +268,12 @@ sealed partial class HudBroadcast : ModernLook
         public Color Fill, Accent;
         public double Alpha, AccentW, Lean;
         public bool Rule = true;
+        /// <summary>A hard offset shadow under the plate (px down and right; 0 none), the package's depth.</summary>
+        public double Shadow;
+        /// <summary>A second plate peeking out behind this one, up and right (a broadcast's layered plates).</summary>
+        public Color? Back;
+        /// <summary>A gloss on the plate's top half.</summary>
+        public bool Gloss = true;
         public Action<DrawingContext, Size, Geometry, double>? Paint;
         public FrameworkElement? Content { get; }
 
@@ -316,11 +322,39 @@ sealed partial class HudBroadcast : ModernLook
             double l = Math.Min(Lean, s.Width / 3);
             var shape = Cut(new Rect(0, 0, s.Width, s.Height), l);
             double a = Math.Min(1, Alpha * (Fill == InkC || Fill == Ink2C ? Ground : 1));
+            if (Back is { } bk)
+            {
+                dc.PushTransform(new TranslateTransform(5, -3));
+                dc.DrawGeometry(Mod.Grad(false, (Mod.A(bk, .15), 0), (Mod.A(bk, .85), 1)), null, shape);
+                dc.Pop();
+            }
+            if (Shadow > 0)
+            {
+                dc.PushTransform(new TranslateTransform(Shadow, Shadow));
+                dc.DrawGeometry(ShadowB, null, shape);
+                dc.Pop();
+            }
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Mod.Mix(Fill, Colors.White, .08), a), 0), (Mod.A(Fill, a), .55), (Mod.A(Mod.Mix(Fill, Colors.Black, .12), a), 1)), null, shape);
+            if (Gloss) dc.DrawGeometry(GlossB, null, shape);
             Paint?.Invoke(dc, s, shape, l);
             if (AccentW > 0) dc.DrawGeometry(Frozen(Accent), null, Cut(new Rect(0, 0, AccentW + l, s.Height), l));
             if (Rule) { dc.PushClip(shape); dc.DrawRectangle(Frozen(Mod.A(Colors.White, .16)), null, new Rect(0, 0, s.Width, 1)); dc.Pop(); }
         }
+    }
+
+    /// <summary>The package's depth: the hard offset shadow under a plate, the gloss on its top half (frozen, shared).</summary>
+    static readonly Brush ShadowB = Frozen(Mod.A(Colors.Black, .55)),
+        GlossB = Mod.Grad(true, (Mod.A(Colors.White, .17), 0), (Mod.A(Colors.White, .05), .46), (Mod.A(Colors.White, 0), .5), (Mod.A(Colors.Black, 0), .8), (Mod.A(Colors.Black, .14), 1));
+
+    /// <summary>A class's colour made deep and vivid for a bar's fill (light pastels like the gladiator's blue went pale under white names).</summary>
+    static Color Vivid(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0, max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+        double h = d == 0 ? 0 : max == r ? ((g - b) / d % 6 + 6) % 6 : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
+        double sat = Math.Max(max == 0 ? 0 : d / max, .84), val = Math.Clamp(max, .62, h is >= .5 and < 1.6 ? .8 : .86);
+        double cc = val * sat, x = cc * (1 - Math.Abs(h % 2 - 1)), m = val - cc;
+        var (r1, g1, b1) = h < 1 ? (cc, x, 0.0) : h < 2 ? (x, cc, 0.0) : h < 3 ? (0.0, cc, x) : h < 4 ? (0.0, x, cc) : h < 5 ? (x, 0.0, cc) : (cc, 0.0, x);
+        return Color.FromRgb((byte)Math.Round((r1 + m) * 255), (byte)Math.Round((g1 + m) * 255), (byte)Math.Round((b1 + m) * 255));
     }
 
     /// <summary>The foot of a slanted plate from <paramref name="y0"/> down to its bottom, as a shape of its own (a bar along it).</summary>
@@ -435,19 +469,19 @@ sealed partial class HudBroadcast : ModernLook
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 8, 0);
             _rareTile = tile;
             row.Children.Add(tile);
-            var mk = Tag(L.T("RARE DROP"), c, InkB, 16, 10.5); mk.Margin = new Thickness(0, 0, 7, 0);
+            var mk = Tag(L.T("RARE DROP"), GoldC2, InkB, 17, 11); mk.Margin = new Thickness(0, 0, 8, 0); mk.Shadow = 1.5;
             row.Children.Add(mk);
-            var nm = Bc(r.Name, 15, Frozen(Mod.Mix(c, Colors.White, .55)), FontWeights.Bold, tight: false);
+            var nm = Bc(r.Name, 15, Frozen(Mod.Mix(c, Colors.White, .7)), FontWeights.Bold, tight: false);
             row.Children.Add(nm);
             if (r.Count.Length > 0) { var cn = Bc(" " + r.Count, 12, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
-            var plate = new Slab(Shaded(row), InkC, .92, c, 34, padX: 6, accentW: 4.5);
+            var plate = new Slab(Shaded(row), InkC, .95, c, 34, padX: 6, accentW: 5) { Shadow = 2.5, Back = GoldC2 };
             plate.Paint = (dc, s, shape, l) =>
             {
                 // the grade's colour washing in from the left
                 var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(s.Width, 0) };
-                b.GradientStops.Add(new GradientStop(Mod.A(c, .55), 0));
-                b.GradientStops.Add(new GradientStop(Mod.A(c, .14), .75));
-                b.GradientStops.Add(new GradientStop(Mod.A(c, .06), 1));
+                b.GradientStops.Add(new GradientStop(Mod.A(c, .34), 0));
+                b.GradientStops.Add(new GradientStop(Mod.A(c, .08), .5));
+                b.GradientStops.Add(new GradientStop(Mod.A(c, 0), 1));
                 b.Freeze();
                 dc.DrawGeometry(b, null, shape);
             };
@@ -467,7 +501,7 @@ sealed partial class HudBroadcast : ModernLook
             var tone = warn ? WarnC2 : ReferenceEquals(f.NoteTone, Gold) ? GoldC2 : ReferenceEquals(f.NoteTone, Mint) ? MintC2 : Color.FromRgb(0xF2, 0xF4, 0xF8);
             var t = Bc(f.Note, 13, Frozen(Mod.Mix(tone, Colors.White, .2)), FontWeights.SemiBold, tight: false); t.TextTrimming = TextTrimming.CharacterEllipsis; t.MaxWidth = 380;
             sp.Children.Add(t);
-            _note.Children.Add(new Slab(Shaded(sp), InkC, .9, tone, 22, padX: 5, accentW: 3) { HorizontalAlignment = HorizontalAlignment.Left });
+            _note.Children.Add(new Slab(Shaded(sp), InkC, .9, tone, 22, padX: 5, accentW: 3) { HorizontalAlignment = HorizontalAlignment.Left, Shadow = 2.5 });
             _note.Visibility = Visibility.Visible;
         }
         else _note.Visibility = Visibility.Collapsed;
@@ -482,10 +516,24 @@ sealed partial class HudBroadcast : ModernLook
     /// <summary>Your best here as the Buddy's stat tile: the share big ("91%"), a cyan bar along its foot to the share; mint with a star once beaten.</summary>
     Slab BestTile(Figures f)
     {
-        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        words.Children.Add(Bc(f.Beat ? "★" : Pct(f.Share), f.Beat ? 19 : 20, f.Beat ? InkB : White));
-        if (!f.Beat) { var pc = Bc("%", 11, Cyan); pc.VerticalAlignment = VerticalAlignment.Bottom; pc.Margin = new Thickness(1, 0, 0, 3); words.Children.Add(pc); }
-        var t = new Slab(words, f.Beat ? MintC2 : Ink2C, 1, null, 36, padX: 4) { MinWidth = 52, Margin = new Thickness(-LineLean / 2 - 4, -5, 10, -7), Rule = false };
+        FrameworkElement words;
+        if (f.Beat)
+        {
+            // beaten: the cyan tile, NEW BEST over a navy star
+            var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            var kick = Bc(L.T("NEW BEST"), 9, InkB); kick.HorizontalAlignment = HorizontalAlignment.Center;
+            var star = Bc("★", 19, InkB); star.HorizontalAlignment = HorizontalAlignment.Center; star.Margin = new Thickness(0, -3, 0, -2);
+            sp.Children.Add(kick); sp.Children.Add(star);
+            words = sp;
+        }
+        else
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            sp.Children.Add(Bc(Pct(f.Share), 20, White));
+            var pc = Bc("%", 11, Cyan); pc.VerticalAlignment = VerticalAlignment.Bottom; pc.Margin = new Thickness(1, 0, 0, 3); sp.Children.Add(pc);
+            words = sp;
+        }
+        var t = new Slab(words, f.Beat ? CyanC : Ink2C, 1, null, 36, padX: 4) { MinWidth = 52, Margin = new Thickness(-LineLean / 2 - 4, -5, 10, -7), Rule = false };
         t.Height = double.NaN; t.VerticalAlignment = VerticalAlignment.Stretch;
         if (!f.Beat)
         {
@@ -544,8 +592,16 @@ sealed partial class HudBroadcast : ModernLook
         if (s.Width < 4 || s.Height < 4) return;
         var shape = Cut(new Rect(0, 0, s.Width, s.Height), LineLean);
         double a = Math.Min(1, .9 * Ground);
+        // the layered plates: a cyan one peeking out behind, up and right; a hard shadow under
+        dc.PushTransform(new TranslateTransform(6, -4));
+        dc.DrawGeometry(Mod.Grad(false, (Mod.A(_dim ? GreyC : CyanC, .1), 0), (Mod.A(_dim ? GreyC : CyanC, .8), 1)), null, shape);
+        dc.Pop();
+        dc.PushTransform(new TranslateTransform(3, 3));
+        dc.DrawGeometry(ShadowB, null, shape);
+        dc.Pop();
         dc.DrawGeometry(Mod.Grad(true, (Mod.A(Color.FromRgb(0x12, 0x1A, 0x30), a), 0), (Mod.A(InkC, a), .6), (Mod.A(InkC, a), 1)), null, shape);
         var acc = _dim ? GreyC : CyanC;
+        dc.DrawGeometry(GlossB, null, shape);
         dc.PushClip(shape);
         dc.DrawRectangle(Frozen(Mod.A(Colors.White, .14)), null, new Rect(0, 0, s.Width, 1));
         dc.DrawRectangle(Frozen(acc), null, new Rect(0, s.Height - 3, s.Width, 3));
@@ -576,7 +632,7 @@ sealed partial class HudBroadcast : ModernLook
             if (tone == TimerBadge.Tone.On) t.Foreground = Frozen(Mod.Mix(MintC2, Colors.White, .4));
             var chip = new Slab(Shaded(t), InkC, .92, c, first ? 24 : 20, padX: first ? 6 : 5, accentW: first ? 4 : 3)
             {
-                Margin = new Thickness(first ? 0 : 3 - (20 * Tan), 0, 0, 0), Tag = first ? "timer-chip" : null,
+                Margin = new Thickness(first ? 0 : 3 - (20 * Tan), 0, 0, 0), Tag = first ? "timer-chip" : null, Shadow = 2,
             };
             if (first) _firstChip = chip;
             _timers.Children.Add(chip);
@@ -639,16 +695,17 @@ sealed partial class HudBroadcast : ModernLook
             tag.Tag = "outcome";
         }
         else tag = Tag(L.T("LIVE"), LiveC, White, HeadH, 13.5, dot: true);
+        tag.Shadow = 2.5;
         head.Children.Add(tag);
         var title = Bc(e.Title, 15, White, FontWeights.SemiBold, tight: false); title.TextTrimming = TextTrimming.CharacterEllipsis;
-        var plate = new Slab(Shaded(title), InkC, .94, CyanC, HeadH, padX: 6) { Margin = new Thickness(join, 0, 0, 0) };
+        var plate = new Slab(Shaded(title), InkC, .94, CyanC, HeadH, padX: 6) { Margin = new Thickness(join, 0, 0, 0), Shadow = 2.5, Back = CyanC };
         Grid.SetColumn(plate, 1); head.Children.Add(plate);
         _headSlabs.Add(tag); _headSlabs.Add(plate);
         if (!e.Waiting)
         {
             bool live = outcome.Length == 0;
             var clock = Bc(Clock(e, now), 19, live ? InkB : White); clock.Tag = "fight-clock";
-            var ck = new Slab(clock, live ? CyanC : Ink2C, live ? 1 : .96, null, HeadH, padX: 6) { Margin = new Thickness(join, 0, 0, 0), Rule = !live };
+            var ck = new Slab(clock, live ? CyanC : Ink2C, live ? 1 : .96, null, HeadH, padX: 6) { Margin = new Thickness(join, 0, 0, 0), Rule = !live, Shadow = 2.5 };
             Grid.SetColumn(ck, 2); head.Children.Add(ck);
             _headSlabs.Add(ck);
         }
@@ -656,8 +713,8 @@ sealed partial class HudBroadcast : ModernLook
         _fightBody.Children.Add(head);
         if (e.Waiting)
         {
-            var wt = Bc(e.ReadyText, 13, Soft, FontWeights.SemiBold, tight: false); wt.Margin = new Thickness(4, 6, 0, 2); wt.TextTrimming = TextTrimming.CharacterEllipsis;
-            _fightBody.Children.Add(Lit(wt));
+            var wt = Bc(e.ReadyText, 13, Soft, FontWeights.SemiBold, tight: false); wt.TextTrimming = TextTrimming.CharacterEllipsis;
+            _fightBody.Children.Add(new Slab(Shaded(wt), InkC, .9, null, 22, padX: 6) { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0), Shadow = 2 });
             if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, w); }
         }
         else
@@ -665,7 +722,7 @@ sealed partial class HudBroadcast : ModernLook
             if (HpOf(e) is { } hp)
             {
                 // the boss's HP: a slanted strip under the head, ticks at the thirds; the figure and what's left on a navy tab at its end
-                var line = new Grid { Margin = new Thickness(0, 4, 0, 0), Height = 16 };
+                var line = new Grid { Margin = new Thickness(0, 3, 0, 0), Height = 18 };
                 line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var track = new Grid { Height = 8, VerticalAlignment = VerticalAlignment.Center };
                 track.Children.Add(new TacSketch((dc, s) =>
@@ -690,7 +747,7 @@ sealed partial class HudBroadcast : ModernLook
                 var left = HpLeftText(e);
                 if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  " + left) { FontWeight = FontWeights.SemiBold });
                 hl.Tag = "hp-text";
-                var tab = new Slab(Shaded(hl), InkC, .9, null, 16, padX: 3) { Margin = new Thickness(3 - 8 * Tan * 2, 0, 0, 0), Rule = false };
+                var tab = new Slab(Shaded(hl), InkC, .9, null, 18, padX: 6) { Margin = new Thickness(3 - 8 * Tan * 2, 0, 0, 0), Rule = false };
                 Grid.SetColumn(tab, 1); line.Children.Add(tab);
                 _hpLine = line;
                 _fightBody.Children.Add(line);
@@ -704,7 +761,7 @@ sealed partial class HudBroadcast : ModernLook
         PlaceTimers();
         // a new leader: the crown lands on their chip and the stinger crosses the plates
         long top = Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly)?.Id ?? 0;
-        if (_leadFight == e.Id && top != 0 && _leadId != 0 && top != _leadId && e.Live && Moves) NewLeader();
+        if (_leadFight == e.Id && top != 0 && _leadId != 0 && top != _leadId && e.Live && Moves) NewLeader(_leadId);
         _leadFight = e.Id; _leadId = top;
     }
 
@@ -727,10 +784,10 @@ sealed partial class HudBroadcast : ModernLook
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
         var words = new StackPanel();
         words.Children.Add(Bc(worth, 17, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .3)) : White));
-        var nm = Bc(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 10.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -3, 0, 0);
+        var nm = Bc(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 12.5, White, FontWeights.SemiBold); nm.Margin = new Thickness(0, -3, 0, 0);
         words.Children.Add(nm);
-        var chip = new Slab(Shaded(words), InkC, .94, MintC2, 36, padX: 3, accentW: 3) { MaxWidth = 90 };
-        Canvas.SetLeft(chip, 4); Canvas.SetTop(chip, -18);
+        var chip = new Slab(Shaded(words), InkC, .96, MintC2, 36, padX: 3, accentW: 3) { MaxWidth = 96, Shadow = 2.5 };
+        Canvas.SetLeft(chip, -LineLean / 2 + 1); Canvas.SetTop(chip, -18);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
         Motion.Play(chip, 1900, t =>
         {
@@ -790,40 +847,45 @@ sealed partial class HudBroadcast : ModernLook
     }
 
     /// <summary>
-    /// A fight started: the head's plates wipe in one after another, then each row's plates on their slant (a broadcast's
-    /// build-in), the stinger crossing them as they land and the crown landing on the leader's chip; the foot last.
+    /// A fight started: the branded stinger wipes across the whole meter (HudBroadcast.Stingers.cs); as its plates leave, the
+    /// head's plates wipe in one after another, then each row's on their slant (a broadcast's build-in), the stinger's light
+    /// crossing them as they land, the crown landing on the leader's chip, the foot last.
     /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
+        if (held && MomentHook == "leader") { LeaderTicker(); return; }
         var rows = RowsNow();
         var foot = _footSlab;
         var hpLine = _hpLine;
         var heads = _headSlabs.ToList();
-        Motion.Play(_fight, 1300, t =>
+        var o = OpenParts(e);
+        Motion.Play(_fight, 1500, t =>
         {
+            OpenStinger(t, o);
             for (int k = 0; k < heads.Count; k++)
             {
                 var s = heads[k];
-                s.Wipe = Out(Seg(t, k * .05, k * .05 + .2));
-                if (s.Content != null) s.Content.Opacity = Seg(t, k * .05 + .1, k * .05 + .22);
-                s.SweepAt(Band(t, .3 + k * .03));
+                s.Wipe = Out(Seg(t, .52 + k * .04, .66 + k * .04));
+                if (s.Content != null) s.Content.Opacity = Seg(t, .6 + k * .04, .7 + k * .04);
+                s.SweepAt(Band(t, .66 + k * .03, .22));
             }
-            if (hpLine != null) hpLine.Opacity = Seg(t, .1, .25);
+            if (hpLine != null) hpLine.Opacity = Seg(t, .6, .7);
             foreach (var (r, i) in rows)
             {
-                r.Enter = Out(Seg(t, .1 + i * .06, .34 + i * .06));
-                r.SweepAt(Band(t, .34 + i * .045), CyanC);
-                if (r.Leader) r.Crown = Seg(t, .28, .55);
+                r.Enter = Out(Seg(t, .56 + i * .04, .74 + i * .04));
+                r.SweepAt(Band(t, .66 + i * .035, .22), CyanC);
+                if (r.Leader) r.Crown = Seg(t, .74, .95);
             }
             if (foot != null)
             {
-                double at = .14 + rows.Count * .06;
-                foot.Wipe = Out(Seg(t, at, at + .24));
-                if (foot.Content != null) foot.Content.Opacity = Seg(t, at + .12, at + .26);
-                foot.SweepAt(Band(t, .34 + rows.Count * .045));
+                double at = .6 + rows.Count * .04;
+                foot.Wipe = Out(Seg(t, at, at + .16));
+                if (foot.Content != null) foot.Content.Opacity = Seg(t, at + .08, at + .18);
+                foot.SweepAt(Band(t, at + .08, .2));
             }
         }, () =>
         {
+            _fight.Children.Remove(o.Fx);
             foreach (var s in heads) { s.Wipe = 1; s.SweepAt(-1); if (s.Content != null) s.Content.Opacity = 1; }
             if (hpLine != null) hpLine.Opacity = 1;
             foreach (var (r, _) in rows) { r.Enter = 1; r.SweepAt(-1, CyanC); r.Crown = 1; }
@@ -831,50 +893,16 @@ sealed partial class HudBroadcast : ModernLook
         });
     }
 
-    /// <summary>The stinger's place on a plate it reaches at <paramref name="at"/> of a course: 0 to 1 over the next 32% (-1 outside).</summary>
-    static double Band(double t, double at) => t >= at && t <= at + .32 ? (t - at) / .32 : -1;
+    /// <summary>The stinger's place on a plate it reaches at <paramref name="at"/> of a course: 0 to 1 over the next <paramref name="span"/> (-1 outside).</summary>
+    static double Band(double t, double at, double span = .32) => t >= at && t <= at + span ? (t - at) / span : -1;
 
-    /// <summary>A new leader: the crown lands on their chip (cyan wiping in, the crown punching in) and the stinger crosses every plate.</summary>
-    void NewLeader()
-    {
-        var rows = RowsNow();
-        if (rows.Count == 0) return;
-        var heads = _headSlabs.ToList();
-        Motion.Play(_fightBody, 1100, t =>
-        {
-            foreach (var (r, i) in rows)
-            {
-                r.SweepAt(Band(t, .05 + i * .05), CyanC);
-                if (r.Leader) r.Crown = Seg(t, 0, .5);
-            }
-            foreach (var s in heads) s.SweepAt(Band(t, 0));
-        }, () => { foreach (var (r, _) in rows) { r.SweepAt(-1, CyanC); r.Crown = 1; } foreach (var s in heads) s.SweepAt(-1); });
-    }
+    /// <summary>A new leader: the NEW LEADER ticker with their player card over the head, the crown landing, the stinger down the rows.</summary>
+    void NewLeader(long was) => LeaderTicker(was);
 
-    /// <summary>A fight ended: a slanted banner (mint KILLED, red WIPED) wipes across the head with the time, the stinger crosses the rows, then it lifts.</summary>
+    /// <summary>A fight ended (a kill, a wipe, a clear): the VICTORY (DEFEAT) stinger across the rows (HudBroadcast.Stingers.cs).</summary>
     protected override void FightEnded(Encounter e, bool held)
     {
-        if (e.Outcome is not ("kill" or "wipe" or "cleared") || _head is not { } head) return;
-        bool wipe = e.Outcome == "wipe";
-        var c = wipe ? LiveC : MintC2;
-        var ink = wipe ? White : InkB;
-        var words = new StackPanel { Orientation = Orientation.Horizontal };
-        words.Children.Add(Bc(OutcomeText(e).ToUpper(CultureInfo.CurrentCulture), 19, ink));
-        var ck = Bc(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, ink, FontWeights.SemiBold); ck.Margin = new Thickness(10, 1, 0, 0);
-        words.Children.Add(ck);
-        var banner = new Slab(words, c, 1, wipe ? Color.FromRgb(0x14, 0x08, 0x0C) : InkC, HeadH, padX: 8, accentW: 5) { Tag = "fight-banner", Rule = false };
-        Grid.SetColumnSpan(banner, 3);
-        head.Children.Add(banner);
-        var rows = RowsNow();
-        var under = _headSlabs.ToList();
-        Motion.Play(banner, 2400, t =>
-        {
-            foreach (var s in under) s.Opacity = t < .82 ? 1 - Seg(t, .02, .12) : Seg(t, .82, 1);
-            banner.Wipe = Out(Seg(t, 0, .2));
-            banner.Opacity = t < .82 ? 1 : 1 - Seg(t, .82, 1);
-            if (banner.Content != null) banner.Content.Opacity = Seg(t, .1, .2);
-            banner.SweepAt(Band(t, .16), Colors.White);
-            foreach (var (r, i) in rows) r.SweepAt(Band(t, .22 + i * .045), c);
-        }, () => { head.Children.Remove(banner); foreach (var s in under) s.Opacity = 1; foreach (var (r, _) in rows) r.SweepAt(-1, c); });
+        if (e.Outcome is not ("kill" or "wipe" or "cleared") || _head == null) return;
+        VictoryStinger(e);
     }
 }
