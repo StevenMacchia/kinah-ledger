@@ -39,7 +39,7 @@ public partial class MainWindow
     /// <summary>Half a second's work: what happened handed to the companion, its mood, and whether it shows.</summary>
     void CompanionTick(DateTime now)
     {
-        if (!_companionPrefs.On || _demo) { CloseCompanion(); return; }
+        if (!_companionPrefs.On || (_demo && !CompanionForceForTest)) { CloseCompanion(); return; }
         List<CompanionMoment> said;
         bool fight;
         try { said = CompanionMoments(now, out fight); }
@@ -78,7 +78,7 @@ public partial class MainWindow
     /// <summary>A rare drop the window's moment played: the companion's too (MainWindow.RareTickDone).</summary>
     void CompanionRare(string name, string grade)
     {
-        if (!_companionPrefs.On || _demo || _companion is not { Wanted: true } c || !_companionPrefs.Reacts(CompanionKind.Rare)) return;
+        if (!_companionPrefs.On || (_demo && !CompanionForceForTest) || _companion is not { Wanted: true } c || !_companionPrefs.Reacts(CompanionKind.Rare)) return;
         _companionAwake = DateTime.UtcNow;
         c.Play(CompanionWatch.Rare(name, grade, DateTime.UtcNow));
     }

@@ -398,6 +398,19 @@ public sealed class CompanionSprite : Grid
         _blink.Stop();
     }
 
+    /// <summary>Everything stopped: the idle and any reaction under way, which ends without saying so (no <see cref="Rested"/>).</summary>
+    public void Quiet()
+    {
+        Stop();
+        Motion.Halt(this);
+        _back.Stop();
+        if (_playing == null) return;
+        _playing = null;
+        Clear();
+        SetFace(RestFace);
+        Compose();
+    }
+
     /// <summary>The mood at rest: idle, leaning in for a fight, dozing after a long quiet.</summary>
     public void SetMood(Mood m)
     {

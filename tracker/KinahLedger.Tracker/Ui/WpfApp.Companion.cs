@@ -23,6 +23,7 @@ public static partial class WpfApp
     {
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         static void Flip(CheckBox c) { c.IsChecked = c.IsChecked != true; Click(c); }
+        bool invisible0 = CompanionOverlay.InvisibleForTest;
         CompanionOverlay.InvisibleForTest = true;
         var prefs0 = w.CompanionPrefsForTest;
         w.CompanionPrefsForTest = CompanionPrefs.Defaults();   // never saved
@@ -94,8 +95,16 @@ public static partial class WpfApp
             check(dBase && dSame && died is { Kind: CompanionKind.Death } && dNew && t1 is [{ Kind: CompanionKind.Timer }] && t1[0].Text.Contains("Gartua") && t1[0].Accent == L.F("in {0} min", 5) && t2.Count == 0,
                 $"companion: a death of yours once (none on a first look or another session), a watched timer come close once ({string.Join(",", t1.Select(m => m.Text + m.Accent))})");
 
-            // the window: shown with the game, one reaction at a time, a better one first, the bubble with Lines on
+            // an extra beside Buddy, never in place of it: the Kinah overlay and its look stay as they are, on and off
+            string look0 = w.HudLook; bool kinah0 = w.OverlaysForTest().First(o => o.Name == "Kinah").On;
             w.CompanionForceForTest = true;
+            w.SetCompanionOverlay(true, save: false); DoEvents();
+            bool beside = w.HudLook == look0 && w.OverlaysForTest().First(o => o.Name == "Kinah").On == kinah0 && w.CompanionOverlayForTest != null;
+            w.SetCompanionOverlay(false, save: false); DoEvents();
+            bool gone = w.CompanionOverlayForTest == null && !w.CompanionOn && w.HudLook == look0 && w.OverlaysForTest().First(o => o.Name == "Kinah").On == kinah0;
+            check(beside && gone, $"companion: an extra beside Buddy: switched on or off, the Kinah overlay and its look (Buddy) stay as they were, and off closes it ({beside}, {gone})");
+
+            // the window: shown with the game, one reaction at a time, a better one first, the bubble with Lines on
             w.SetCompanionOverlay(true, save: false); DoEvents();
             var ov = w.CompanionOverlayForTest;
             bool shown = ov is { IsVisible: true } && ov.FaceForTest != null;
@@ -140,15 +149,16 @@ public static partial class WpfApp
             w.ResetCompanionPosition();
             check(w.CompanionPrefsForTest.X == null && w.CompanionPrefsForTest.Y == null, "companion: Reset position forgets the spot");
 
-            // at Steven's size (1.1) with click-through on, as he plays: drawn larger, nothing cut
-            ov?.Match(HudThemes.Classic, 0.94, 1.1); w.SetCompanionClickThrough(true); DoEvents();
+            // at Steven's size (1.1) and look (Terminal: the Glitch theme) with click-through on, as he plays: drawn larger, nothing cut
+            ov?.Match(HudThemes.Glitch, 0.94, 1.1); w.SetCompanionClickThrough(true); DoEvents();
             ov?.Play(MainWindow.CompanionSample(CompanionKind.Best, now)); DoEvents();
             double wide = ov?.ActualWidth ?? 0;
+            bool glitch = ov?.FaceForTest?.Theme == HudThemes.Glitch;
             bool big = Math.Abs(wide - (CompanionSprite.Side + CompanionFace.BubbleRoom) * 1.1) < 2 && (ov?.ExStyleForTest & Native.ExTransparent) != 0;
             ov?.EndReactionForTest();
             w.SetCompanionClickThrough(false);
             ov?.Match(HudThemes.Classic, 0.94, 1);
-            check(big, $"companion: at 110% with click-through on (Steven's hud.json) it is drawn 1.1× ({wide:0} px) and lets clicks through");
+            check(big && glitch, $"companion: at 110% in the Glitch theme with click-through on (Steven's hud.json) it is drawn 1.1× ({wide:0} px) and lets clicks through");
 
             // its mood: leaning in for a fight, dozing after a long quiet
             ov?.SetMood(CompanionSprite.Mood.Focused);
@@ -170,8 +180,10 @@ public static partial class WpfApp
             if (o.CompanionChk != null) Flip(o.CompanionChk);
             DoEvents();
             bool back = w.CompanionOn && w.CompanionOverlayForTest is { IsVisible: true };
-            if (o.CompanionReactChks.TryGetValue(CompanionKind.Wipe, out var wipeChk)) Flip(wipeChk);
+            bool hasWipe = o.CompanionReactChks.TryGetValue(CompanionKind.Wipe, out var wipeChk);
+            if (wipeChk != null) Flip(wipeChk);
             bool wipeOff = !w.CompanionPrefsForTest.Reacts(CompanionKind.Wipe);
+            if (!wipeOff) Console.WriteLine($"  companion page: wipe switch {(hasWipe ? "found" : "missing")}, checked {wipeChk?.IsChecked}, prefs same {ReferenceEquals(o.CompanionPrefsShownForTest, w.CompanionPrefsForTest)}");
             if (wipeChk != null) Flip(wipeChk);
             var pageWords = w.SourceWordsShown(o.PageCompanion);
             o.Close(); DoEvents();
@@ -209,6 +221,7 @@ public static partial class WpfApp
             w.CompanionForceForTest = false;
             w.CompanionPrefsForTest = prefs0;
             Motion.Still = still0;
+            CompanionOverlay.InvisibleForTest = invisible0;
         }
     }
 
@@ -262,15 +275,18 @@ public static partial class WpfApp
                 }
             }
 
-            // Steven's size: the Classic reactions at 1.1
-            var stv = Sheet(); int j = 0;
-            foreach (var k in CompanionKinds)
+            // Steven's size (1.1) and look (Terminal, the Glitch theme), and Classic at it
+            foreach (var theme in new[] { HudThemes.Glitch, HudThemes.Classic })
             {
-                var face = KeyFace(HudThemes.Classic, k, now, false);
-                face.LayoutTransform = new ScaleTransform(1.1, 1.1);
-                Cell(stv, face, j / 2, j % 2, k + " · 110%"); j++;
+                var stv = Sheet(); int j = 0;
+                foreach (var k in CompanionKinds)
+                {
+                    var face = KeyFace(theme, k, now, false);
+                    face.LayoutTransform = new ScaleTransform(1.1, 1.1);
+                    Cell(stv, face, j / 2, j % 2, k + " · 110%"); j++;
+                }
+                SaveSheet(stv, Path.Combine(dir, $"companion-{theme}-110.png"), 1);
             }
-            SaveSheet(stv, Path.Combine(dir, "companion-classic-110.png"), 1);
 
             // each reaction frame by frame (Classic, 2x), the bubble's course alongside
             double[] at = { 0, 100, 220, 360, 500, 680, 900, 1200, 1600, 2000, 2300, 2400 };

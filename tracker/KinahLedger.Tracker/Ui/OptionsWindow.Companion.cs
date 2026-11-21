@@ -18,6 +18,7 @@ public partial class OptionsWindow
     internal Button? CompanionResetBtn { get; private set; }
     internal readonly Dictionary<CompanionKind, CheckBox> CompanionReactChks = new();
     internal CompanionFace? CompanionStageForTest => _companionStage;
+    internal CompanionPrefs? CompanionPrefsShownForTest { get; private set; }
     CompanionFace? _companionStage;
     DispatcherTimer? _companionCycle;
     int _companionNext;
@@ -40,6 +41,7 @@ public partial class OptionsWindow
         PageCompanion.Children.Clear();
         CompanionReactChks.Clear();
         var p = _host.CompanionChoices;
+        CompanionPrefsShownForTest = p;
         void Add(UIElement e) => PageCompanion.Children.Add(e);
 
         CompanionChk = Switch(p.On, on => _host.SetCompanionOverlay(on));

@@ -82,9 +82,9 @@ sealed class CompanionOverlay : Window
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible && _prefs.ClickThrough) _hover.Start(); else _hover.Stop();
-            if (IsVisible) _face?.Sprite.Start(); else _face?.Sprite.Stop();
+            if (IsVisible) _face?.Sprite.Start(); else Quiet();
         };
-        Closed += (_, _) => { _hover.Stop(); _face?.Sprite.Stop(); };
+        Closed += (_, _) => { _hover.Stop(); Quiet(); };
         new WindowInteropHelper(this).EnsureHandle();   // the never-focus style is set before it is ever shown
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = -32000; Top = -32000;
@@ -94,11 +94,21 @@ sealed class CompanionOverlay : Window
     /// <summary>The overlay theme and the Kinah overlay's opacity and size (Settings › Buddy): the face is drawn again in them.</summary>
     public void Match(string theme, double opacity, double scale)
     {
+        double keep = IsVisible && _face != null ? SpriteX : _prefs.X ?? 0;   // where the companion is, at the size it was drawn
         _theme = theme;
         _opacity = Math.Clamp(opacity, 0.3, 1);
         _scale = Math.Clamp(scale, HudPrefs.MinScale, HudPrefs.MaxScale);
         _host.LayoutTransform = Math.Abs(_scale - 1) < 0.001 ? Transform.Identity : new ScaleTransform(_scale, _scale);
-        Rebuild(force: false);
+        Build(keep, force: false);
+    }
+
+    /// <summary>Hidden or closed: no reaction, bubble or idle runs on, and nothing waits to play.</summary>
+    void Quiet()
+    {
+        _face?.Hush();
+        _face?.Sprite.Quiet();
+        _now = null;
+        _queue.Clear();
     }
 
     /// <summary>The bubble's side: on the left while the companion sits in the right half of its screen.</summary>
@@ -125,14 +135,20 @@ sealed class CompanionOverlay : Window
         if (force || sig != _sig || _face == null)
         {
             _sig = sig;
-            _face?.Sprite.Stop();
+            if (_face != null)
+            {
+                // the old face's reaction is cut, never left to end later and start the next moment on the new one
+                _face.Sprite.Rested -= Next;
+                _face.Hush();
+                _face.Sprite.Quiet();
+            }
             _face = new CompanionFace(_theme, _opacity, _prefs.Lines, left);
             _face.Sprite.Rested += Next;
             _face.Sprite.SetMood(_mood);
             _faceSlot.Child = _face;
             _grip.HorizontalAlignment = left ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             _grip.Margin = new Thickness(left ? 0 : 6, 0, left ? 6 : 0, 2);
-            _now = null; _queue.Clear();
+            _now = null;
             if (IsVisible) _face.Sprite.Start();
         }
         if (IsVisible && !InvisibleForTest) Left = spriteX - (left ? CompanionFace.BubbleRoom * _scale : 0);
@@ -253,7 +269,13 @@ sealed class CompanionOverlay : Window
     {
         if (InvisibleForTest) { Left = -12000; Top = -12000; _placed = true; return; }
         double x, y;
-        if (KinahBox?.Invoke() is { } k) { x = k.Right + 8; y = k.Top; }
+        if (KinahBox?.Invoke() is { } k)
+        {
+            // just right of it; left of it when it sits at its screen's right edge (Steven's, 2026-11-20)
+            x = k.Right + 8; y = k.Top;
+            var area = WorkAreaAt(k.Left, k.Top);
+            if (x + CompanionSprite.Side * _scale > area.Right) x = k.Left - 8 - CompanionSprite.Side * _scale;
+        }
         else { x = SystemParameters.WorkArea.Left + 24; y = SystemParameters.WorkArea.Top + SystemParameters.WorkArea.Height * 0.35; }
         Top = y;
         Build(x, force: false);
@@ -269,12 +291,15 @@ sealed class CompanionOverlay : Window
         if (IsVisible) PlaceFirst();
     }
 
-    static Rect WorkAreaAt(double x, double y)
+    /// <summary>The work area of the screen under (<paramref name="x"/>, <paramref name="y"/>), both in WPF units (the screens' own are pixels).</summary>
+    Rect WorkAreaAt(double x, double y)
     {
         try
         {
-            var a = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)Math.Round(x), (int)Math.Round(y))).WorkingArea;
-            return new Rect(a.Left, a.Top, a.Width, a.Height);
+            double k = 1;
+            try { k = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch (Exception) { }
+            var a = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)Math.Round(x * k), (int)Math.Round(y * k))).WorkingArea;
+            return new Rect(a.Left / k, a.Top / k, a.Width / k, a.Height / k);
         }
         catch (Exception) { return SystemParameters.WorkArea; }
     }
