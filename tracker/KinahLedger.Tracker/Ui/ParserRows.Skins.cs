@@ -166,7 +166,7 @@ public sealed partial class ParserRows
             var icon = ClassArt.Icon(f.Class, 20, f.Name); icon.Margin = new Thickness(0, 0, 6, 0);
             cols.Children.Add(PK.Col(icon, 1));
             // the name over its Combat Power and a healer's healing
-            var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, -1, 0, 0), Children = { cpPair } };
+            var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 0), Children = { cpPair } };   // was -1: the Combat Power word touched the name's ink box on a 100% screen (options-test)
             healPill.Margin = new Thickness(8, 0, 0, 0);
             sub.Children.Add(healPill);
             nm.Children.Add(pb); nm.Children.Add(plates);

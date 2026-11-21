@@ -224,7 +224,8 @@ public partial class OptionsWindow
         AddPopOutLink(PageMeter, meter: true);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: the look in use (or under the mouse) in a boss fight, big, over the game
-        _parserLookStage = new Border { Margin = new Thickness(0, 12, 0, 0) };
+        // 10 and 8 px (were 12 and 10): on a 100% screen the page was 624 px in a 621 px window, a scroll bar on a page that must fit (options-test)
+        _parserLookStage = new Border { Margin = new Thickness(0, 10, 0, 0) };
         AutomationProperties.SetName(_parserLookStage, "Overlay look preview");
         PageMeter.Children.Add(_parserLookStage);
 
@@ -261,7 +262,7 @@ public partial class OptionsWindow
         throughSaid.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var place = new StackPanel { Orientation = Orientation.Horizontal, Children = { reset, throughSaid, _parserThroughChk } };
         stack.Children.Add(SideRow("Meter position", "Drag it anywhere while click-through is off.", place));
-        PageMeter.Children.Add(Styled(new Border { Child = stack, Margin = new Thickness(0, 10, 0, 0) }, "Group"));
+        PageMeter.Children.Add(Styled(new Border { Child = stack, Margin = new Thickness(0, 8, 0, 0) }, "Group"));
 
         // More: the extras, each off or on as the honest pass left them
         var more = new StackPanel { Tag = "More" };
