@@ -40,7 +40,7 @@ sealed partial class HudPrism : ModernLook
     };
 
     /// <summary>The cut of a panel's corners, and the meter panel's inner room.</summary>
-    const double Cut = 7, PadX = 9;
+    const double Cut = 7, PadX = 11;
 
     // the room round the look: the crystal's drop stays inside the window; 98 at the right for the pickup's chip beside the Buddy
     readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 10), HorizontalAlignment = HorizontalAlignment.Left };
@@ -73,14 +73,16 @@ sealed partial class HudPrism : ModernLook
     // the rare drop under the Buddy, and the notice line
     readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed };
     readonly Grid _noteHost = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed };
-    readonly StackPanel _note = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(11, 4, 12, 5) };
+    readonly StackPanel _note = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 4, 12, 5) };
 
     // the fight: one crystal, its head, HP, rows and foot on it
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
     readonly TacSketch _fightGlass;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(PadX, 8, PadX, 8) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(PadX, 10, PadX, 10) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
+    /// <summary>The moments over the whole crystal: the fight's opening light (white in, split to the rows) and a kill's facets lighting in turn.</summary>
+    readonly Grid _momentFx = new() { IsHitTestVisible = false };
     /// <summary>The clock of the sheen down the bars (its own element, so it never cuts another course short).</summary>
     readonly Border _sweepClock = new() { Width = 0, Height = 0, IsHitTestVisible = false };
     readonly TranslateTransform _fightShift = new();
@@ -93,11 +95,11 @@ sealed partial class HudPrism : ModernLook
         _lineGlass = new TacSketch((dc, s) => Crystal(dc, s, _opacity, -1, Colors.White));
         _lineBand.RenderTransform = _lineBandX;
         _lineFx.Children.Add(_lineBand);
-        _lineFx.SizeChanged += (_, e) => _lineFx.Clip = Octa(new Rect(1, .5, Math.Max(0, e.NewSize.Width - 2), Math.Max(0, e.NewSize.Height - 3)), Cut);
+        _lineFx.SizeChanged += (_, e) => _lineFx.Clip = ShardShape(e.NewSize, Cut);
         // the words straight on the crystal's dark glass: no shade effect needed (or paid for) on it
         _line.Children.Add(_lineGlass); _line.Children.Add(_lineFx); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
         _fightGlass = new TacSketch((dc, s) => Crystal(dc, s, _opacity, -1, Colors.White));
-        _fight.Children.Add(_fightGlass); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx); _fight.Children.Add(_sweepClock);
+        _fight.Children.Add(_fightGlass); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx); _fight.Children.Add(_momentFx); _fight.Children.Add(_sweepClock);
         _fight.RenderTransform = _fightShift;
         _noteHost.Children.Add(new TacSketch((dc, s) => Crystal(dc, s, _opacity, -1, Colors.White, cut: 5, glint: false)));
         _noteHost.Children.Add(_note);
@@ -197,66 +199,119 @@ sealed partial class HudPrism : ModernLook
     }
 
     /// <summary>
-    /// The crystal: a slab of nearly neutral smoked glass with cut corners. A drop under it, the smoke (lighter at the top), a
-    /// lighter facet falling from the top-left with a faint ridge, a darker one at the bottom-right, the table line inset from
-    /// the rim, the bevel (bright along the top and left, dim at the bottom and right), the top-left cut lit, and the light
-    /// entering there split into a thin streak of spectrum along the top edge. <paramref name="sheen"/> 0 to 1: a band of
-    /// spectrum crossing it; <paramref name="tint"/> a wash of colour from the left (a rare drop's grade) at <paramref name="tintA"/>.
+    /// A crystal's outline and its table: a shard with its top-left and bottom-right corners cut deep (<paramref name="cut"/>
+    /// twice over) and the other two cut shallow, and the same shape inset by the bevel. Vertices clockwise from the top
+    /// edge's left end, so edge k runs from vertex k to k+1: 0 top, 1 the top-right cut, 2 right, 3 the bottom-right cut,
+    /// 4 bottom, 5 the bottom-left cut, 6 left, 7 the top-left cut.
+    /// </summary>
+    static (Point[] O, Point[] I) ShardOf(Size s, double cut)
+    {
+        var r = new Rect(1, .5, Math.Max(0, s.Width - 2), Math.Max(0, s.Height - 3));
+        double lim = Math.Min(r.Width, r.Height) / 2.4, big = Math.Min(cut * 2, lim), small = Math.Min(cut * .7, lim);
+        double b = Math.Clamp(Math.Min(r.Width, r.Height) / 10, 2, 4.5);
+        static Point[] Of(Rect q, double big, double small) => new[]
+        {
+            new Point(q.Left + big, q.Top), new Point(q.Right - small, q.Top), new Point(q.Right, q.Top + small), new Point(q.Right, q.Bottom - big),
+            new Point(q.Right - big, q.Bottom), new Point(q.Left + small, q.Bottom), new Point(q.Left, q.Bottom - small), new Point(q.Left, q.Top + big),
+        };
+        var inner = new Rect(r.X + b, r.Y + b, Math.Max(0, r.Width - 2 * b), Math.Max(0, r.Height - 2 * b));
+        return (Of(r, big, small), Of(inner, Math.Max(0, big - b * .6), Math.Max(0, small - b * .6)));
+    }
+
+    /// <summary>The outline of a crystal of this size (a clip for what moves on it).</summary>
+    static Geometry ShardShape(Size s, double cut) => Poly(ShardOf(s, cut).O);
+
+    static Point Lerp(Point a, Point b, double t) => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+
+    /// <summary>
+    /// The crystal: a shard of nearly neutral smoked glass. A drop under it; the smoke; on its face (when
+    /// <paramref name="glint"/>) the light refracted through it: three slanting pools of spectrum; the bevel's eight facets, each lit as the light from the top-left falls on it, the deep
+    /// top-left cut carrying the light entering split into a full spectrum and the bottom-right cut the light leaving; the
+    /// ridges between the facets, the table's rim, the outer rim and a sparkle where the light enters. Drawn when its size
+    /// changes only. <paramref name="tint"/>: a wash of colour from the left at <paramref name="tintA"/> (a plate's tone).
     /// </summary>
     static void Crystal(DrawingContext dc, Size s, double opacity, double sheen, Color sheenC, double cut = Cut, bool glint = true, Color? tint = null, double tintA = 0, double tintW = 1)
     {
-        if (s.Width < 6 || s.Height < 6) return;
+        if (s.Width < 8 || s.Height < 8) return;
         double w = s.Width, h = s.Height;
-        var r = new Rect(1, .5, w - 2, h - 3);
-        var shape = Octa(r, cut);
-        // the drop: a soft dark edge just below and round it (inside its own room)
+        var (o, i) = ShardOf(s, cut);
+        var outer = Poly(o); var table = Poly(i);
+        // the drop: a dark edge just below and round it (inside its own room)
         dc.PushTransform(new TranslateTransform(0, 1.5));
-        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.Black, .24), 2), shape);
+        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.Black, .26), 2), outer);
         dc.Pop();
         double a = Math.Clamp(.66 + .3 * opacity, .74, .96);
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(SmokeC, a), 0), (Mod.A(DeepC, Math.Min(.97, a + .04)), 1)), null, shape);
-        dc.PushClip(shape);
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(SmokeC, a), 0), (Mod.A(DeepC, Math.Min(.97, a + .04)), 1)), null, outer);
+        dc.PushClip(table);
         if (tint is { } tc && tintA > 0 && tintW > 0)
-        {
-            var tw = w * Math.Clamp(tintW, 0, 1);
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(tc, tintA), 0), (Mod.A(tc, tintA * .45), .6), (Mod.A(tc, 0), 1)), null, new Rect(0, 0, tw, h));
-        }
-        // the facets: a lighter plane from the top-left with its ridge, a darker one at the bottom-right
-        double fx = Math.Min(w * .5, 150);
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.White, .07), 0), (Mod.A(Colors.White, .015), 1)), null, Poly(new Point(0, 0), new Point(fx, 0), new Point(fx * .35, h), new Point(0, h)));
-        dc.DrawLine(Mod.P(Mod.Grad(true, (Mod.A(Colors.White, .08), 0), (Mod.A(Colors.White, 0), .8)), 1), new Point(fx, 0), new Point(fx * .35, h));
-        dc.DrawGeometry(Mod.Br(Colors.Black, .16), null, Poly(new Point(w, h * .3), new Point(w, h), new Point(w - Math.Min(w * .4, 120), h)));
-        if (sheen is > 0 and < 1)
-        {
-            // the refraction sheen: a slanted band of spectrum crossing left to right, a white core in it
-            double x = -70 + (w + 140) * sheen, k = Math.Sin(Math.PI * sheen);
-            var band = Poly(new Point(x + 14, 0), new Point(x + 54, 0), new Point(x + 40, h), new Point(x, h));
-            dc.DrawGeometry(SpecGrad(new Point(x, 0), new Point(x + 54, 0), .34 * k, fade: true), null, band);
-            dc.DrawLine(Mod.P(Mod.Br(sheenC, .5 * k), 1.5), new Point(x + 34, 0), new Point(x + 20, h));
-        }
-        // the top's light: a pixel of white along the top edge, brightest left of centre
-        dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.White, .62), 0), (Mod.A(Colors.White, .32), .45), (Mod.A(Colors.White, .05), 1)), null, new Rect(cut, 1, Math.Max(0, w - 2 * cut), 1));
+            dc.DrawRectangle(Mod.Grad(false, (Mod.A(tc, tintA), 0), (Mod.A(tc, tintA * .45), .6), (Mod.A(tc, 0), 1)), null, new Rect(0, 0, w * Math.Clamp(tintW, 0, 1), h));
+        if (glint) Caustics(dc, w, h, o[0].X);
         dc.Pop();
-        // the table: a faint line inset from the rim
-        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .065), 1), Octa(new Rect(3.5, 3.5, Math.Max(0, w - 7), Math.Max(0, h - 7)), Math.Max(0, cut - 2.5)));
-        // the bevel: the rim lit from the top-left
-        var rim = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(Math.Min(w, 260), h) };
-        rim.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .58), 0)); rim.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .2), .55)); rim.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .13), 1));
-        rim.Freeze();
-        dc.DrawGeometry(null, new Pen(rim, 1), shape);
-        // the cuts: the top-left one bright, the top-right one lit, the bottom ones dim
-        dc.DrawLine(Mod.P(Mod.Br(Colors.White, .95), 1.2), new Point(r.Left, r.Top + cut), new Point(r.Left + cut, r.Top));
-        dc.DrawLine(Mod.P(Mod.Br(Colors.White, .45), 1), new Point(r.Right - cut, r.Top), new Point(r.Right, r.Top + cut));
-        if (!glint) return;
-        // the light entering at the top-left cut, split: six hairlines of spectrum along the top edge, fading out
-        double gx = r.Left + cut * .55, len = Math.Min(64, w * .3);
-        for (int i = 0; i < Spec.Length; i++)
+        // the bevel's facets, lit from the top-left: the cuts facing the light bright, the bottom and its cuts in shade
+        double[] lit = { .15, .2, .05, -.18, -.32, -.2, .1, .26 };
+        for (int k = 0; k < 8; k++)
         {
-            double y = 2.2 + i * .85, x1 = gx + 6 + i * 1.5;
-            var p = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(x1 - 6, 0), EndPoint = new Point(x1 + len, 0) };
-            p.GradientStops.Add(new GradientStop(Mod.A(Spec[i], .8), 0)); p.GradientStops.Add(new GradientStop(Mod.A(Spec[i], 0), 1)); p.Freeze();
-            dc.DrawLine(new Pen(p, .8), new Point(x1 - 4, y), new Point(x1 + len, y + .4));
+            var quad = Poly(o[k], o[(k + 1) % 8], i[(k + 1) % 8], i[k]);
+            dc.DrawGeometry(lit[k] > 0 ? Mod.Br(Colors.White, lit[k]) : Mod.Br(Colors.Black, -lit[k]), null, quad);
         }
+        if (glint)
+        {
+            // the deep cuts split the light: the top-left one (where it enters) a full spectrum across the facet, the bottom-right fainter
+            SpecFacet(dc, o[7], o[0], i[7], i[0], .62);
+            SpecFacet(dc, o[3], o[4], i[3], i[4], .3);
+        }
+        // the ridges between the facets, the table's rim, the outer rim lit from the top-left
+        for (int k = 0; k < 8; k++) dc.DrawLine(Mod.P(Mod.Br(Colors.White, k is 7 or 0 or 1 ? .42 : .16), .8), o[k], i[k]);
+        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .16), .8), table);
+        var rim = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(Math.Min(w, 260), h) };
+        rim.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .75), 0)); rim.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .24), .5)); rim.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .14), 1));
+        rim.Freeze();
+        dc.DrawGeometry(null, new Pen(rim, 1), outer);
+        dc.DrawLine(Mod.P(Mod.Br(Colors.White, .95), 1.2), o[7], o[0]);
+        if (glint && w > 60) Sparkle(dc, o[0], 5.5);
+    }
+
+    /// <summary>A bevel facet split into six bands of spectrum, red at its outer edge to violet at the table's, at <paramref name="a"/>.</summary>
+    static void SpecFacet(DrawingContext dc, Point o0, Point o1, Point i0, Point i1, double a)
+    {
+        for (int k = 0; k < Spec.Length; k++)
+        {
+            double t0 = (double)k / Spec.Length, t1 = (double)(k + 1) / Spec.Length;
+            dc.DrawGeometry(Mod.Br(Spec[k], a), null, Poly(Lerp(o0, i0, t0), Lerp(o1, i1, t0), Lerp(o1, i1, t1), Lerp(o0, i0, t1)));
+        }
+    }
+
+    /// <summary>A four-point sparkle of white light (where the light enters the crystal).</summary>
+    static void Sparkle(DrawingContext dc, Point c, double r)
+    {
+        dc.DrawGeometry(Mod.Br(Colors.White, .95), null, Poly(new Point(c.X, c.Y - r), new Point(c.X + r * .18, c.Y - r * .18), new Point(c.X + r, c.Y), new Point(c.X + r * .18, c.Y + r * .18),
+            new Point(c.X, c.Y + r), new Point(c.X - r * .18, c.Y + r * .18), new Point(c.X - r, c.Y), new Point(c.X - r * .18, c.Y - r * .18)));
+    }
+
+    /// <summary>
+    /// The light refracted across a crystal's face, drawn once: two broad pools of spectrum slanting down from the top (the
+    /// light entering at the top-left cut, spread) and a fainter one rising from the foot, faint enough that the words
+    /// on the face read as clearly as on plain smoke.
+    /// </summary>
+    static void Caustics(DrawingContext dc, double w, double h, double x0)
+    {
+        void Pool(double xa, double xb, double xc, double xd, double alpha)
+        {
+            // a band from the top edge (xa..xb) to the bottom (xd..xc), its spectrum across its width
+            double dx = (xc + xd) / 2 - (xa + xb) / 2, dy = h, len = Math.Sqrt(dx * dx + dy * dy), wid = (xb - xa) * dy / len;
+            var n = new Vector(dy / len, -dx / len);
+            var st = new Point(xa, 0);
+            var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = st, EndPoint = st + n * wid };
+            b.GradientStops.Add(new GradientStop(Mod.A(Spec[0], 0), 0));
+            for (int k = 0; k < Spec.Length; k++) b.GradientStops.Add(new GradientStop(Mod.A(Spec[k], alpha), .1 + .8 * k / (Spec.Length - 1)));
+            b.GradientStops.Add(new GradientStop(Mod.A(Spec[^1], 0), 1));
+            b.Freeze();
+            dc.DrawGeometry(b, null, Poly(new Point(xa, 0), new Point(xb, 0), new Point(xc, h), new Point(xd, h)));
+        }
+        Pool(x0, x0 + w * .2, w * .58, w * .4, .13);
+        Pool(w * .66, w * .74, w * .97, w * .86, .1);
+        // a third pool rising from the foot towards the top-right: the light bouncing back off the bottom-right cut
+        Pool(w * .3, w * .38, w * .2, w * .06, .07);
     }
 
     /// <summary>A small crystal chip (TOP DPS, the heal mark, AVG): smoke, a rim lit at the top; <paramref name="filled"/> white with dark words (YOU).</summary>
@@ -350,7 +405,7 @@ sealed partial class HudPrism : ModernLook
         if (!KinahHidden && Rare(Values) is { } r)
         {
             var c = ColorOf(r.Color, r.Grade);
-            var glass = new TacSketch((dc, s) => Crystal(dc, s, _opacity, -1, c, cut: 6, glint: false));
+            var glass = new TacSketch((dc, s) => Crystal(dc, s, _opacity, -1, c, cut: 5, glint: false));
             _rare.Children.Add(glass);
             // the grade's colour washed in from the left: a rectangle drawn once, bloomed by its scale and flashed by its opacity
             var tint = new Rectangle
@@ -363,7 +418,7 @@ sealed partial class HudPrism : ModernLook
             fx.Children.Add(band);
             _rare.Children.Add(tint); _rare.Children.Add(fx);
             _rareWash = tint; _rareBand = band;
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 5, 16, 5) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(11, 5, 16, 5) };
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 8, 0);
             _rareTile = tile;
             row.Children.Add(tile);
@@ -588,7 +643,7 @@ sealed partial class HudPrism : ModernLook
         {
             var wt = Tt(e.ReadyText, 12.5, Soft, FontWeights.SemiBold); wt.Margin = new Thickness(0, 5, 0, 1); wt.TextTrimming = TextTrimming.CharacterEllipsis;
             _fightBody.Children.Add(wt);
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, inner); }
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 7 }); PutRows(_fightBody, e, now, inner); }
         }
         else
         {
@@ -622,9 +677,9 @@ sealed partial class HudPrism : ModernLook
                 if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left) { FontWeight = FontWeights.Medium });
                 hl.Tag = "hp-text";
                 _fightBody.Children.Add(hl);
-                _fightBody.Children.Add(new Border { Height = 3 });
+                _fightBody.Children.Add(new Border { Height = 5 });   // the crown's prism rises into this room and the line's
             }
-            else _fightBody.Children.Add(new Border { Height = 7 });
+            else _fightBody.Children.Add(new Border { Height = 14 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
@@ -640,27 +695,99 @@ sealed partial class HudPrism : ModernLook
 
     /// <summary>
     /// The refraction sheen: a band of spectrum light sweeps along each bar, row by row down the meter (each a beat after the
-    /// one above). One course of <paramref name="ms"/>.
+    /// one above). One course of <paramref name="ms"/>, held back by <paramref name="leadMs"/>.
     /// </summary>
-    void SweepAll(double ms = 1150)
+    void SweepAll(double ms = 1150, double leadMs = 0)
     {
         if (Meter is not { } m) return;
         var rows = m.Members.Select(x => m.RowOf(x.Id) as PrismRow).Where(r => r != null).Cast<PrismRow>().ToList();
         if (rows.Count == 0) return;
-        Motion.Play(_sweepClock, ms, t =>
+        double total = ms + leadMs;
+        Motion.Play(_sweepClock, total, t =>
         {
-            for (int i = 0; i < rows.Count; i++) rows[i].SweepAt(Seg(t, i * .07, i * .07 + .68));
+            double q = Math.Max(0, (t * total - leadMs) / ms);
+            for (int i = 0; i < rows.Count; i++) rows[i].SweepAt(q <= 0 ? -1 : Seg(q, i * .07, i * .07 + .68));
         }, () => { foreach (var r in rows) r.SweepAt(-1); });
     }
 
-    /// <summary>A row took the lead (PrismRow tells it): its crown has flashed in; the sheen sweeps the bars.</summary>
+    /// <summary>A row took the lead (PrismRow tells it): its crown has flared in; the sheen sweeps the bars.</summary>
     internal void NewLeader() { if (Moves) SweepAll(); }
 
-    /// <summary>The top row's crown flashes in (the fight's first leader).</summary>
-    void CrownTop()
+    /// <summary>The top row (the leader's), or null.</summary>
+    PrismRow? TopRow() => Meter is { } m && m.Members.FirstOrDefault(x => x.Rank == 1 && !x.Pinned) is { } top ? m.RowOf(top.Id) as PrismRow : null;
+
+    /// <summary>
+    /// The fight's opening light: a beam of white light shoots in from the crystal's left edge to the crown's prism, and out
+    /// of the prism the light splits into a ray to each bar's leading edge in that member's colour, fading as the bars take
+    /// it (the sheen sweeps them). Drawn once (where the rows sit when it is drawn), moved by its scale and opacity.
+    /// </summary>
+    void OpeningLight(double ms)
     {
-        if (Meter is not { } m || m.Members.FirstOrDefault(x => x.Rank == 1 && !x.Pinned) is not { } top) return;
-        (m.RowOf(top.Id) as PrismRow)?.Crown();
+        var top = TopRow();
+        if (top == null || Meter is not { } m) return;
+        var rows = m.Members.Select(x => m.RowOf(x.Id) as PrismRow).Where(r => r != null).Cast<PrismRow>().ToList();
+        var beamScale = new ScaleTransform(.001, 1);
+        var beam = new TacSketch((dc, s) =>
+        {
+            var at = top.PrismIn(_momentFx);
+            var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(2, 0), EndPoint = at };
+            b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .25), 0)); b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, 1), 1)); b.Freeze();
+            dc.DrawGeometry(b, null, Poly(new Point(2, at.Y - 5), at + new Vector(0, -1), at + new Vector(0, 1), new Point(2, at.Y + 5)));
+            var glow = new RadialGradientBrush(Mod.A(Colors.White, .9), Mod.A(Colors.White, 0)); glow.Freeze();
+            dc.DrawEllipse(glow, null, at, 9, 9);
+        }) { RenderTransform = beamScale };
+        var rays = new TacSketch((dc, s) =>
+        {
+            var from = top.PrismIn(_momentFx) + new Vector(12, 0);
+            foreach (var r in rows)
+            {
+                var to = r.EdgeAt(_momentFx);
+                var c = Mod.Mix(r.Tone, Colors.White, .2);
+                var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = from, EndPoint = to };
+                b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .9), 0)); b.GradientStops.Add(new GradientStop(Mod.A(c, .95), .35)); b.GradientStops.Add(new GradientStop(Mod.A(c, .7), 1)); b.Freeze();
+                var n = to - from; if (n.Length < 4) continue;
+                n.Normalize(); var side = new Vector(-n.Y, n.X);
+                dc.DrawGeometry(b, null, Poly(from + side * .6, to + side * 2.2, to - side * 2.2, from - side * .6));
+                var spark = new RadialGradientBrush(Mod.A(c, .9), Mod.A(c, 0)); spark.Freeze();
+                dc.DrawEllipse(spark, null, to, 7, 7);
+            }
+        }) { Opacity = 0 };
+        _momentFx.Children.Clear(); _momentFx.Children.Add(rays); _momentFx.Children.Add(beam);
+        Motion.Play(_momentFx, ms, t =>
+        {
+            beamScale.ScaleX = Math.Max(.001, Out(Seg(t, 0, .3)));
+            beam.Opacity = t < .45 ? 1 : 1 - Seg(t, .45, .65);
+            rays.Opacity = t < .5 ? Seg(t, .3, .42) : 1 - Seg(t, .62, .95);
+        }, () => _momentFx.Children.Clear());
+    }
+
+    /// <summary>A kill: the crystal's eight bevel facets light up one after another round it, white flaring into each one's own colour of the spectrum.</summary>
+    void FacetsLight(double ms)
+    {
+        var size = new Size(_fight.ActualWidth, _fight.ActualHeight);
+        if (size.Width < 20 || size.Height < 20) return;
+        var (o, i) = ShardOf(size, Cut);
+        var lights = new List<System.Windows.Shapes.Path>();
+        _momentFx.Children.Clear();
+        for (int k = 0; k < 8; k++)
+        {
+            int e = (7 + k) % 8;   // from the top-left cut, round clockwise
+            var c = Mod.Mix(Spec[k % Spec.Length], Colors.White, .45);
+            var path = new System.Windows.Shapes.Path
+            {
+                Data = Poly(o[e], o[(e + 1) % 8], i[(e + 1) % 8], i[e]), Opacity = 0, IsHitTestVisible = false,
+                Fill = Frozen(Mod.A(c, .95)), Stroke = Frozen(Mod.A(Colors.White, .9)), StrokeThickness = 2.2, StrokeLineJoin = PenLineJoin.Bevel,
+            };
+            lights.Add(path); _momentFx.Children.Add(path);
+        }
+        Motion.Play(_momentFx, ms, t =>
+        {
+            for (int k = 0; k < lights.Count; k++)
+            {
+                double a = Seg(t, k * .075, k * .075 + .14), b = Seg(t, k * .075 + .2, k * .075 + .5);
+                lights[k].Opacity = a * (1 - b);
+            }
+        }, () => _momentFx.Children.Clear());
     }
 
     // ================================================================ the moments
@@ -670,7 +797,7 @@ sealed partial class HudPrism : ModernLook
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-        var words = new StackPanel { Margin = new Thickness(9, 3, 11, 4) };
+        var words = new StackPanel { Margin = new Thickness(12, 4, 11, 5) };
         words.Children.Add(Tt(worth, 14, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .25)) : White, FontWeights.Bold));
         var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
         words.Children.Add(nm);
@@ -769,7 +896,7 @@ sealed partial class HudPrism : ModernLook
         }, () => chip.Effect = null);
     }
 
-    /// <summary>A fight started: the crystal rises a few pixels as it fades up, the leader's crown flashes in and the sheen sweeps the bars.</summary>
+    /// <summary>A fight started: the crystal rises a few pixels as it fades up, white light enters the crown's prism and splits into the rows' colours, the sheen sweeps the bars.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
         Motion.Play(_fight, 520, t =>
@@ -778,11 +905,13 @@ sealed partial class HudPrism : ModernLook
             _fightShift.Y = 8 * (1 - k);
             _fightBody.Opacity = k;
         }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
-        CrownTop();
-        SweepAll();
+        // the opening light: white in from the edge, the prism flashing as it arrives, the colours out to every bar, the sheen
+        OpeningLight(1300);
+        TopRow()?.Crown(leadMs: 360);
+        SweepAll(1150, 520);
     }
 
-    /// <summary>A fight ended: a crystal plate tinted mint (coral for a wipe) lays over the head with the outcome and the clock, then lifts; a kill sweeps the bars.</summary>
+    /// <summary>A fight ended: a crystal plate tinted mint (coral for a wipe) lays over the head with the outcome and the clock, then lifts; a kill lights the crystal's facets in turn round it and sweeps the bars.</summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
@@ -809,6 +938,6 @@ sealed partial class HudPrism : ModernLook
             band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
             if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .12) : Seg(t, .84, 1);
         }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
-        if (!wipe) SweepAll(1300);
+        if (!wipe) { FacetsLight(1100); SweepAll(1300); }
     }
 }

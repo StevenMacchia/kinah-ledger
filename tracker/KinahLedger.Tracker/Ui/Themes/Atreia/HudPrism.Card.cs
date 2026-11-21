@@ -18,10 +18,10 @@ sealed partial class HudPrism : IThemeCard
     /// </summary>
     public FrameworkElement DrawCard(MemberCard c)
     {
-        const double In = 12;
+        const double In = 13;
         double w = 270 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
-        var stack = new StackPanel { Margin = new Thickness(In, 11, In, 10) };
+        var stack = new StackPanel { Margin = new Thickness(In, 14, In, 12) };
 
         // the head on its class-tinted glass band: notch, art, name, CP, YOU ... class
         var head = new Grid { Height = 32, Margin = new Thickness(-5, 0, -5, 8) };
@@ -143,7 +143,7 @@ sealed partial class HudPrism : IThemeCard
 
         // the ground: the crystal itself, under a soft drop
         var card = new Grid { Margin = new Thickness(4, 4, 10, 14), Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 16, ShadowDepth = 3, Direction = 270, Opacity = .5 } };
-        card.Children.Add(new TacSketch((dc, s) => Crystal(dc, s, 1, -1, Colors.White, cut: 9)));
+        card.Children.Add(new TacSketch((dc, s) => Crystal(dc, s, 1, -1, Colors.White, cut: 7)));
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);
