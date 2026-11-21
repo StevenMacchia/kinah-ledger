@@ -31,7 +31,7 @@ sealed partial class HudArcade : IThemeCard
         icon.Margin = new Thickness(0, 0, 8, 0);
         hg.Children.Add(icon);
         var who = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var name = Tt(c.Name, 15, White, FontWeights.Bold); name.TextTrimming = TextTrimming.CharacterEllipsis; name.Effect = Shade();
+        var name = Tt(c.Name, 15, White, FontWeights.Bold); name.TextTrimming = TextTrimming.CharacterEllipsis;
         who.Children.Add(name);
         double extra = 0;
         if (c.Cp.Length > 0)
@@ -90,8 +90,6 @@ sealed partial class HudArcade : IThemeCard
         }
 
         // the abilities: each with an LED strip under it, as long as its part of the top one
-        var bars = new List<TacSketch>();
-        double grow = 1;
         if (c.Abilities.Count > 0)
         {
             stack.Children.Add(Dots(new Thickness(0, 8, 0, 6), MazeHiC, .5));
@@ -108,8 +106,7 @@ sealed partial class HudArcade : IThemeCard
             {
                 var row = new Grid { Height = 22, Margin = new Thickness(0, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
-                var art = new TacSketch((dc, s) => DrawLed(dc, new Rect(0, s.Height - 3, s.Width, 3), of * grow, tone, 4, 1.5, .08));
-                bars.Add(art);
+                var art = new TacSketch((dc, s) => DrawLed(dc, new Rect(0, s.Height - 3, s.Width, 3), of, tone, 4, 1.5, .08));
                 row.Children.Add(art);
                 var g = Tac.CardGrid(c, 46, 56);
                 g.Margin = new Thickness(0, 0, 0, 3);
@@ -132,29 +129,22 @@ sealed partial class HudArcade : IThemeCard
             stack.Children.Add(fl);
         }
 
-        // the screen: black with scanlines in a double pixel frame in the class's colour
-        double open = 1;
-        var ground = Ground;
-        var screen = new TacSketch((dc, s) =>
-        {
-            if (open >= 1) { DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), Mod.Mix(tone, MazeC, .25), Math.Max(.93, ground)); return; }
-            double h = Math.Max(2, s.Height * open), y = (s.Height - h) / 2;
-            if (h < 14) { dc.DrawRectangle(Frozen(Mod.Mix(tone, Colors.White, .6)), null, new Rect(0, s.Height / 2 - 1, s.Width, 2)); return; }
-            DrawScreen(dc, new Rect(0, y, s.Width, h), Mod.Mix(tone, MazeC, .25), Math.Max(.93, ground));
-        });
-        var body = new Grid();
+        // the screen: black with scanlines in a double pixel frame in the class's colour (drawn once)
+        var ground = Math.Max(.93, Ground);
+        var screen = new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), Mod.Mix(tone, MazeC, .25), ground));
+        var body = new Grid { RenderTransformOrigin = new Point(.5, .5) };
         body.Children.Add(screen);
         body.Children.Add(stack);
+        var on = new ScaleTransform(1, 1);
+        body.RenderTransform = on;
         var card = new Border { Child = body, Margin = new Thickness(4, 4, 10, 14), Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 14, ShadowDepth = 3, Direction = 270, Opacity = .5 } };
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Face);
+        // the entrance: the screen switches on as a tube does (a line opening out), the words coming up after
         Tac.CardIn(card, 240, t =>
         {
-            open = Out(Seg(t, 0, .55));
-            screen.InvalidateVisual();
-            stack.Opacity = Seg(t, .35, .7);
-            grow = Out(Seg(t, .45, 1));
-            foreach (var art in bars) art.InvalidateVisual();
+            on.ScaleY = .03 + .97 * Out(Seg(t, 0, .55));
+            stack.Opacity = Seg(t, .35, .8);
         });
         return card;
     }

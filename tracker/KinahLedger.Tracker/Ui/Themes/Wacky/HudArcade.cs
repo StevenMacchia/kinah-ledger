@@ -56,9 +56,10 @@ sealed partial class HudArcade : ModernLook
     TacSketch? _ringArt;
     /// <summary>The score and the session under it (dimmed under HIGH SCORE!).</summary>
     StackPanel? _lineWords;
-    double _share = -1, _complete, _sheen = -1, _lineLit;
+    double _share = -1, _complete;
+    /// <summary>The Buddy screen's flare: its frame lit, drawn once; a moment moves its opacity.</summary>
+    readonly TacSketch _lineFlare;
     bool _beat;
-    Color _sheenC = Colors.White;
     Border? _firstChip;
 
     // the rare drop under the Buddy, and the notice line
@@ -73,7 +74,8 @@ sealed partial class HudArcade : ModernLook
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Stretch };
     readonly ScaleTransform _fightOpen = new(1, 1);
-    double _fightLit;
+    readonly TacSketch _fightFlare;
+    readonly ScaleTransform _lineOn = new(0, 1);
     FrameworkElement? _head;
 
     /// <summary>The table's inset from the screen's sides.</summary>
@@ -84,17 +86,20 @@ sealed partial class HudArcade : ModernLook
         // the look's own rows (Ui/Themes/ThemeRows.cs): the high-score table's lines
         UseRows(ArcadeRow.Pitch, m => new ArcadeRow(), 14, GapLine);
         _lineLegend = Legend(L.T("1UP"));
-        _lineScreen = new TacSketch((dc, s) => Screen(dc, s, _lineLegend, _dim ? GreyC : MazeC, _lineLit));
-        _line.Children.Add(_lineScreen); _line.Children.Add(_lineBody); _line.Children.Add(_lineLegend); _line.Children.Add(_lineFx); _line.Children.Add(_lineAnchor);
+        _lineScreen = new TacSketch((dc, s) => Screen(dc, s, _lineLegend, _dim ? GreyC : MazeC));
+        _lineFlare = Flare(_lineLegend, MintC2);
+        _line.Children.Add(_lineScreen); _line.Children.Add(_lineFlare); _line.Children.Add(_lineBody); _line.Children.Add(_lineLegend); _line.Children.Add(_lineFx); _line.Children.Add(_lineAnchor);
         _fightLegend = Legend(L.T("HI-SCORE"));
-        _fightScreen = new TacSketch((dc, s) => Screen(dc, s, _fightLegend, MazeC, _fightLit));
+        _fightScreen = new TacSketch((dc, s) => Screen(dc, s, _fightLegend, MazeC));
+        _fightFlare = Flare(_fightLegend, Color.FromRgb(0xB8, 0xC8, 0xFF));
         _fightBody.RenderTransformOrigin = new Point(.5, .5);
         _fightBody.RenderTransform = _fightOpen;
-        _fight.Children.Add(_fightScreen); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightLegend); _fight.Children.Add(_fightFx);
+        _fight.Children.Add(_fightScreen); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightLegend); _fight.Children.Add(_fightFx);
         _runHeadLit = new Border { Child = _runHead, Visibility = Visibility.Collapsed };
         _runHead.Effect = Shade();
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
+        _rare.RenderTransformOrigin = new Point(0, .5); _rare.RenderTransform = _rareOpen;
         System.Windows.Documents.TextElement.SetFontFamily(_root, Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
@@ -141,11 +146,26 @@ sealed partial class HudArcade : ModernLook
     }
 
     /// <summary>A screen under its legend: its top edge at <see cref="Top"/>, broken round the legend.</summary>
-    void Screen(DrawingContext dc, Size s, FrameworkElement legend, Color frame, double lit)
+    void Screen(DrawingContext dc, Size s, FrameworkElement legend, Color frame)
     {
         double lw = legend is LedWord led ? led.DotW : legend.ActualWidth > 0 ? legend.ActualWidth : legend.DesiredSize.Width;
         double g0 = legend.Margin.Left - 4, g1 = legend.Margin.Left + lw + 3;
-        DrawScreen(dc, new Rect(0, Top, s.Width, s.Height - Top), frame, Ground, g0, g1, lit);
+        DrawScreen(dc, new Rect(0, Top, s.Width, s.Height - Top), frame, Ground, g0, g1);
+    }
+
+    /// <summary>A screen's flare layer: its frame lit in <paramref name="c"/>, drawn once, hidden until a moment moves its opacity.</summary>
+    static TacSketch Flare(FrameworkElement legend, Color c) => new((dc, s) =>
+    {
+        double lw = legend is LedWord led ? led.DotW : legend.ActualWidth;
+        DrawFlare(dc, new Rect(0, Top, s.Width, s.Height - Top), c, legend.Margin.Left - 4, legend.Margin.Left + lw + 3);
+    }) { Opacity = 0, Visibility = Visibility.Hidden };
+
+    /// <summary>An effect layer at <paramref name="a"/>: hidden at none, so an idle layer costs nothing to draw.</summary>
+    static void Fade(UIElement el, double a)
+    {
+        el.Opacity = Math.Clamp(a, 0, 1);
+        var v = a > .004 ? Visibility.Visible : Visibility.Hidden;
+        if (el.Visibility != v) el.Visibility = v;
     }
 
     /// <summary>A square chip (TOP DPS, the heal mark, AVG, READY): dark with a 1 px edge; <paramref name="filled"/> white with black words (YOU).</summary>
@@ -242,15 +262,11 @@ sealed partial class HudArcade : ModernLook
         if (!KinahHidden && Rare(Values) is { } r)
         {
             var c = ColorOf(r.Color, r.Grade);
-            _rareC = c; _rareBloom = 1; _rareFlash = 0;
-            var scr = new TacSketch((dc, s) =>
-            {
-                double w = Math.Max(14, s.Width * Math.Clamp(_rareBloom, 0, 1));
-                DrawScreen(dc, new Rect(0, 0, w, s.Height), Mod.Mix(c, Colors.White, .1), Ground, lit: _rareFlash);
-                if (_rareFlash > 0) dc.DrawRectangle(Frozen(Mod.A(c, .22 * _rareFlash)), null, new Rect(4, 4, Math.Max(0, w - 8), Math.Max(0, s.Height - 8)));
-            });
+            var scr = new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), Mod.Mix(c, Colors.White, .1), Ground));
+            var flare = new TacSketch((dc, s) => DrawFlare(dc, new Rect(0, 0, s.Width, s.Height), c)) { Opacity = 0, Visibility = Visibility.Hidden };
+            _rareFlare = flare;
             _rareScreen = scr;
-            _rare.Children.Add(scr);
+            _rare.Children.Add(scr); _rare.Children.Add(flare);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 8, 14, 8) };
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             Pixelate(tile);
@@ -259,13 +275,13 @@ sealed partial class HudArcade : ModernLook
             var mk = Word(L.T("RARE DROP"), 1.3, Mod.Mix(c, Colors.White, .3), .4, textSize: 10); mk.Margin = new Thickness(0, 0, 8, 0); mk.VerticalAlignment = VerticalAlignment.Center;
             _rareWord = mk;
             row.Children.Add(mk);
-            var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .5)), FontWeights.Bold); nm.Effect = Shade();
+            var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .5)), FontWeights.Bold);
             row.Children.Add(nm);
             if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
             _rare.Children.Add(row);
             _rare.Visibility = Visibility.Visible;
         }
-        else { _rare.Visibility = Visibility.Collapsed; _rareScreen = null; _rareTile = null; _rareWord = null; }
+        else { _rare.Visibility = Visibility.Collapsed; _rareScreen = null; _rareFlare = null; _rareTile = null; _rareWord = null; }
 
         // the notice: its words in their tone under the Buddy, the warning sign before a pause
         _note.Children.Clear();
@@ -315,9 +331,8 @@ sealed partial class HudArcade : ModernLook
     /// <summary>The timer chips sit over the line, to leave its room to the pickup strip.</summary>
     bool _timerUp;
 
-    Color _rareC;
-    double _rareBloom = 1, _rareFlash;
-    TacSketch? _rareScreen;
+    TacSketch? _rareScreen, _rareFlare;
+    readonly ScaleTransform _rareOpen = new(1, 1);
     FrameworkElement? _rareTile, _rareWord;
 
     /// <summary>
@@ -437,7 +452,7 @@ sealed partial class HudArcade : ModernLook
         // the head: the boss, the outcome once it's over, the clock
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = Tt(e.Title, 14, White, FontWeights.Bold); title.TextTrimming = TextTrimming.CharacterEllipsis; title.Effect = Shade();
+        var title = Tt(e.Title, 14, White, FontWeights.Bold); title.TextTrimming = TextTrimming.CharacterEllipsis;
         head.Children.Add(title);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
         if (e.Waiting) right.Children.Add(Mark(L.T("READY"), MarkMint, MarkMintC, size: 9.5));
@@ -511,7 +526,7 @@ sealed partial class HudArcade : ModernLook
 
     // ================================================================ the moments
 
-    /// <summary>A pickup: its worth pops up beside the Buddy in LED digits as a score does over a hit, a light steps across the screen.</summary>
+    /// <summary>A pickup: its worth pops up beside the Buddy in LED digits as a score does over a hit, the screen's frame flares.</summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
@@ -523,49 +538,45 @@ sealed partial class HudArcade : ModernLook
         words.Children.Add(fig);
         var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, 3, 0, 0);
         words.Children.Add(nm);
-        var chip = new Border
-        {
-            Child = words, MaxWidth = 88, Background = Frozen(Mod.A(DeepC, .88)), BorderThickness = new Thickness(1.5),
-            BorderBrush = Frozen(Mod.A(MazeC, .95)),
-        };
+        var chip = new Border { Child = words, MaxWidth = 88, Background = Ink(DeepC, .9), BorderThickness = new Thickness(1.5), BorderBrush = Ink(MazeC, .95) };
         var shift = new TranslateTransform();
         chip.RenderTransform = shift;
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
-        _sheenC = tone;
         Motion.Play(chip, 1900, t =>
         {
-            // the screen's frame flares as the score lands, then the popup rises a few pixels in steps and goes
-            _lineLit = t < .12 ? Seg(t, 0, .12) : 1 - Seg(t, .12, .45);
-            _lineScreen.InvalidateVisual();
+            // the frame flares as the score lands; the popup pops up and rises a few pixels in whole steps, then goes
+            Fade(_lineFlare, t < .12 ? Seg(t, 0, .12) : 1 - Seg(t, .12, .45));
             double k = Seg(t, 0, .12);
             shift.Y = 6 * (1 - Back(k, 2.4)) - Math.Floor(Seg(t, .45, 1) * 4) * 2;
             chip.Opacity = t < .82 ? Math.Min(1, k * 2) : 1 - Seg(t, .82, 1);
-        }, () => { _lineLit = 0; _lineScreen.InvalidateVisual(); _lineAnchor.Children.Remove(chip); });
+        }, () => { Fade(_lineFlare, 0); _lineAnchor.Children.Remove(chip); });
     }
 
-    /// <summary>A rare drop: its screen opens out to the right, its frame flashes in the grade's colour three times, the tile pops in.</summary>
+    /// <summary>A rare drop: its screen opens out from the left, its frame flashes three times in the grade's colour, the tile pops in.</summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareScreen is not { } scr) return;
+        if (_rareScreen is not { } scr || _rareFlare is not { } flare) return;
         var tile = _rareTile;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var word = _rareWord;
         Motion.Play(scr, 1600, t =>
         {
-            _rareBloom = Out(Seg(t, 0, .3));
+            _rareOpen.ScaleX = .04 + .96 * Out(Seg(t, 0, .25));
             // three flashes, stepped (an LED blinking), fading over the course
             double b = Seg(t, .2, .9);
-            _rareFlash = b > 0 && b < 1 && ((int)(b * 6)) % 2 == 0 ? 1 - b * .6 : 0;
-            scr.InvalidateVisual();
+            Fade(flare, b > 0 && b < 1 && ((int)(b * 6)) % 2 == 0 ? 1 - b * .6 : 0);
             sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .08, .38), 2.4);
             if (word != null) word.Opacity = t < .2 ? Seg(t, .1, .2) : 1;
-        }, () => { _rareBloom = 1; _rareFlash = 0; scr.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; if (word != null) word.Opacity = 1; });
+        }, () => { _rareOpen.ScaleX = 1; Fade(flare, 0); sc.ScaleX = sc.ScaleY = 1; if (word != null) word.Opacity = 1; });
     }
 
-    /// <summary>Your best passed: the ring fills on cell by cell to full in mint, and HIGH SCORE! flashes over the screen.</summary>
+    /// <summary>
+    /// Your best passed: the ring's cells fill on one by one to full in mint, HIGH SCORE! slams onto a banner beside it and the
+    /// screen's frame blinks. The ring redraws only when another cell lights (twenty steps), never each frame.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_ringArt is not { } art) return;
@@ -575,7 +586,7 @@ sealed partial class HudArcade : ModernLook
         // the banner from the ring's right to the screen's frame: the ring fills on beside it, the score dims under it
         double left = _lineBody.Margin.Left + 52;
         var band = new Grid { Height = 26, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(left, 0, 5, 0) };
-        band.Children.Add(new Border { Background = Frozen(DeepC), BorderBrush = Frozen(Mod.A(MintC2, .9)), BorderThickness = new Thickness(0, 1.5, 0, 1.5) });
+        band.Children.Add(new Border { Background = Ink(DeepC), BorderBrush = Ink(MintC2, .9), BorderThickness = new Thickness(0, 1.5, 0, 1.5) });
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0xF6, 0xA8), 0)); fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x9A, 0x2E), 1)); fill.Freeze();
         var hs = L.T("HIGH SCORE!");
@@ -587,20 +598,25 @@ sealed partial class HudArcade : ModernLook
         word.RenderTransformOrigin = new Point(.5, .5); word.RenderTransform = ws;
         band.Children.Add(word);
         _lineFx.Children.Clear(); _lineFx.Children.Add(band);
+        double shown = -1;
         Motion.Play(art, 2000, t =>
         {
-            _beat = false; _share = was;
-            _complete = Math.Floor(Out(Seg(t, 0, .4)) * 20) / 20;
-            if (t >= .4) { _beat = beat; _complete = 1; }
-            art.InvalidateVisual();
+            double step = t >= .4 ? 1 : Math.Floor(Out(Seg(t, 0, .4)) * 20) / 20;
+            if (step != shown)
+            {
+                shown = step;
+                _beat = t >= .4 && beat; _share = was; _complete = step;
+                art.InvalidateVisual();
+            }
             double k = Seg(t, .3, .45);
-            band.Opacity = t < .85 ? k : 1 - Seg(t, .85, 1);
+            Fade(band, t < .85 ? k : 1 - Seg(t, .85, 1));
             if (words != null) words.Opacity = Math.Max(.08, 1 - 3 * band.Opacity);
             ws.ScaleX = ws.ScaleY = 1.5 - .5 * Back(k, 2);
-            _lineLit = t > .3 && t < .8 && ((int)(Seg(t, .3, .8) * 8)) % 2 == 0 ? .8 : 0;
-            _lineScreen.InvalidateVisual();
-        }, () => { _complete = 0; _beat = beat; _lineLit = 0; art.InvalidateVisual(); _lineScreen.InvalidateVisual(); _lineFx.Children.Remove(band); if (words != null) words.Opacity = 1; });
+            Fade(_lineFlare, t > .3 && t < .8 && ((int)(Seg(t, .3, .8) * 8)) % 2 == 0 ? .9 : 0);
+        }, () => { _complete = 0; _beat = beat; Fade(_lineFlare, 0); art.InvalidateVisual(); _lineFx.Children.Remove(band); if (words != null) words.Opacity = 1; });
     }
+
+    static readonly SolidColorBrush EntryOn = Frozen(Mod.A(MintC2, .32)), EntryEdge = Frozen(MintC2);
 
     /// <summary>An entry opened: the first timer's chip blinks mint three times, as a cabinet's start button does, and settles.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
@@ -609,13 +625,16 @@ sealed partial class HudArcade : ModernLook
         var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
         chip.Effect = glow;
         var edge = chip.BorderBrush; var bg = chip.Background;
-        var on = Frozen(Mod.A(MintC2, .32));
+        bool? was = null;
         Motion.Play(chip, 1300, t =>
         {
             bool lit = t < .75 && ((int)(t / .125)) % 2 == 0;
             glow.Opacity = lit ? .9 : .15 * (1 - t);
-            chip.BorderBrush = lit ? Frozen(MintC2) : edge;
-            chip.Background = lit ? on : bg;
+            // the brushes change only on a blink, never each frame
+            if (was == lit) return;
+            was = lit;
+            chip.BorderBrush = lit ? EntryEdge : edge;
+            chip.Background = lit ? EntryOn : bg;
         }, () => { chip.Effect = null; chip.BorderBrush = edge; chip.Background = bg; });
     }
 
@@ -625,8 +644,8 @@ sealed partial class HudArcade : ModernLook
     /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        var line = new Border { Height = 2, Background = White, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0),
-            Effect = new DropShadowEffect { Color = Color.FromRgb(0xB8, 0xC8, 0xFF), ShadowDepth = 0, BlurRadius = 12, Opacity = .9 } };
+        var line = new Border { Height = 2, Background = White, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0), RenderTransform = _lineOn,
+            RenderTransformOrigin = new Point(.5, .5), Effect = new DropShadowEffect { Color = Color.FromRgb(0xB8, 0xC8, 0xFF), ShadowDepth = 0, BlurRadius = 12, Opacity = .9 } };
         _fightFx.Children.Clear(); _fightFx.Children.Add(line);
         Motion.Play(_fightFx, 640, t =>
         {
@@ -634,10 +653,9 @@ sealed partial class HudArcade : ModernLook
             _fightOpen.ScaleY = .02 + .98 * k;
             _fightBody.Opacity = Seg(t, .05, .4);
             line.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .3, .6);
-            line.RenderTransform = new ScaleTransform(Seg(t, 0, .12), 1, (FightWidth - 22) / 2, 1);
-            _fightLit = t < .5 ? Seg(t, 0, .2) : 1 - Seg(t, .5, 1);
-            _fightScreen.InvalidateVisual();
-        }, () => { _fightOpen.ScaleY = 1; _fightBody.Opacity = 1; _fightLit = 0; _fightScreen.InvalidateVisual(); _fightFx.Children.Remove(line); });
+            _lineOn.ScaleX = Out(Seg(t, 0, .12));
+            Fade(_fightFlare, t < .5 ? Seg(t, 0, .2) : 1 - Seg(t, .5, 1));
+        }, () => { _fightOpen.ScaleY = 1; _fightBody.Opacity = 1; Fade(_fightFlare, 0); _fightFx.Children.Remove(line); });
         ChaseRows(260, Colors.White, crown: true);
     }
 
@@ -663,32 +681,30 @@ sealed partial class HudArcade : ModernLook
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
         var c = wipe ? CoralC : MintC2;
-        double open = 0;
-        var band = new Grid { Height = 34, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(5, 14, 5, 0) };
-        var scr = new TacSketch((dc, s) =>
-        {
-            double h = s.Height * open, y = (s.Height - h) / 2;
-            if (h < 3) { dc.DrawRectangle(Frozen(Mod.A(c, .9)), null, new Rect(0, s.Height / 2 - 1, s.Width, 2)); return; }
-            DrawScreen(dc, new Rect(0, y, s.Width, h), c, .96);
-        });
-        band.Children.Add(scr);
+        var open = new ScaleTransform(1, .03);
+        var band = new Grid { Height = 34, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(5, 14, 5, 0), RenderTransformOrigin = new Point(.5, .5), RenderTransform = open };
+        band.Children.Add(new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), c, .96)));
         var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var text = wipe ? L.T("GAME OVER") : OutcomeText(e).ToUpperInvariant();
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         fill.GradientStops.Add(new GradientStop(Mod.Mix(c, Colors.White, .7), 0)); fill.GradientStops.Add(new GradientStop(c, 1)); fill.Freeze();
         var word = Word(text, 2.2, c, .5, fill, 19);
-        words.Children.Add(word);
-        var ck = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 13, Frozen(Mod.Mix(c, Colors.White, .55)), FontWeights.Bold); ck.Margin = new Thickness(10, 1, 0, 0);
+        // the typing: a black cover over the word steps right a letter at a time (its transform only)
+        var typed = new Grid { ClipToBounds = true };
+        typed.Children.Add(word);
+        var coverAt = new TranslateTransform();
+        var cover = new Border { Background = Ink(DeepC), RenderTransform = coverAt, Margin = new Thickness(-2, -3, -4, -3) };
+        if (word is LedWord) typed.Children.Add(cover);
+        words.Children.Add(typed);
+        var ck = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 13, Ink(Mod.Mix(c, Colors.White, .55)), FontWeights.Bold); ck.Margin = new Thickness(10, 1, 0, 0);
         words.Children.Add(ck);
         band.Children.Add(words);
         _fightFx.Children.Clear(); _fightFx.Children.Add(band);
         var head = _head;
-        int letters = text.Length;
         Motion.Play(_fightFx, 2600, t =>
         {
-            open = Out(Seg(t, 0, .1)) * (t < .88 ? 1 : 1 - Seg(t, .88, 1));
-            scr.InvalidateVisual();
-            if (word is LedWord lw) { lw.Reveal = Seg(t, .1, .36) * letters; lw.InvalidateVisual(); }
+            open.ScaleY = Math.Max(.03, Out(Seg(t, 0, .1)) * (t < .88 ? 1 : 1 - Seg(t, .88, 1)));
+            if (word is LedWord lw) coverAt.X = lw.LetterEnd((int)Math.Floor(Seg(t, .1, .36) * lw.Letters) - 1) + 2;
             else word.Opacity = Seg(t, .1, .2);
             words.Opacity = t < .86 ? 1 : 1 - Seg(t, .86, .92);
             ck.Opacity = Seg(t, .34, .4);

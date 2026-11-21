@@ -15,7 +15,7 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudArcade
 {
-    static readonly RunInk Ink = new(Led, Soft, Quiet, Quiet, Mint2, Coral, Frozen(GoldC2), Frozen(GoldC2), 22, 10.5);
+    static readonly RunInk RunTones = new(Led, Soft, Quiet, Quiet, Mint2, Coral, Frozen(GoldC2), Frozen(GoldC2), 22, 10.5);
 
     /// <summary>The run's head over the wash, lined up with the words on it (collapsed out of a run).</summary>
     readonly TextBlock _runHead = RunHead();
@@ -40,18 +40,18 @@ sealed partial class HudArcade
         small.Margin = new Thickness(1, 1, 0, 0);
         words.Children.Add(big); words.Children.Add(small);
 
-        var (fullW, needW) = ModernRun.Widths(big, small, s, Ink);
+        var (fullW, needW) = ModernRun.Widths(big, small, s, RunTones);
         var strips = RunStrips(Strip);
         double timerW = LineTimerW();
         var (strip, up, room) = ModernRun.Place(cap, fullW, needW, timerW, strips, 12);
         _timerUp = up;
         _stripTimerW = strips.Count > 0 ? timerW : -1;
-        ModernRun.Fill(big, small, s, room, Ink);
+        ModernRun.Fill(big, small, s, room, RunTones);
         small.Visibility = small.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _lineBody.Children.Add(words);
         if (strip != null) { strip.Margin = new Thickness(12, 0, 0, 0); Pixelate(strip); _lineBody.Children.Add(strip); }
 
-        ModernRun.Head(_runHead, s, FightWidth - 10 - _runHead.Margin.Left, Ink);
+        ModernRun.Head(_runHead, s, FightWidth - 10 - _runHead.Margin.Left, RunTones);
         _runHeadLit.Opacity = _dim ? .62 : 1;
         _runHeadLit.Visibility = Visibility.Visible;
     }

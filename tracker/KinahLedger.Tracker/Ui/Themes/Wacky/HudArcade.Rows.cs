@@ -79,10 +79,16 @@ sealed partial class HudArcade
     /// </summary>
     sealed class ArcadeRow : IThemeRow
     {
-        public const double H = 28, Pitch = 30;
+        public const double H = 27, Pitch = 29;
         const double PadL = 9, PadR = 6, RankW = 30, IconW = 23, BarH = 5, BarCell = 5, BarGap = 2;
         readonly Grid _root = new() { Height = H };
-        readonly TacSketch _art, _fx, _crown;
+        readonly TacSketch _art, _light, _crown, _spark;
+        /// <summary>The chase's window over the bar (clips the light), and the light's place in it.</summary>
+        readonly Canvas _chaseHost = new() { ClipToBounds = true, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        readonly TranslateTransform _chaseAt = new();
+        readonly ScaleTransform _sparkOut = new(1, 1);
+        Rect _barRect = Rect.Empty;
+        double _dpsInk;
         readonly Grid _words = new() { Margin = new Thickness(PadL, 0, PadR, 0) };
         readonly Border _rankHost = new() { HorizontalAlignment = HorizontalAlignment.Center };
         readonly TextBlock _name = Tt("", 13, White, FontWeights.SemiBold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .66)), FontWeights.SemiBold),
@@ -96,7 +102,7 @@ sealed partial class HudArcade
         string _cls = "\0";
         MeterMember? _m;
         int _rank, _lastRank;
-        double _bar, _chase = -1, _land;
+        double _bar;
         Color _chaseC = Colors.White;
         bool _expanded, _shareOn = true;
 
@@ -116,17 +122,21 @@ sealed partial class HudArcade
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
             _art = new TacSketch(Draw);
-            _fx = new TacSketch(DrawFx);
-            _crown = new TacSketch(DrawCrownArt, RankW, 12) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0), RenderTransform = _crownDrop, Visibility = Visibility.Collapsed };
+            _light = new TacSketch((dc, _) => DrawChaseLight(dc, _chaseC, BarCell, BarGap, BarH), 4 * (BarCell + BarGap) + 2, BarH + 4) { RenderTransform = _chaseAt, Visibility = Visibility.Hidden };
+            _chaseHost.Children.Add(_light);
+            // the crown: a frozen drawing, placed once; its drop and its sparkles are transforms and opacity
+            _crown = new TacSketch((dc, s) => { dc.PushTransform(new TranslateTransform(Math.Round((s.Width - CrownW) / 2), 1)); dc.DrawDrawing(Crown); dc.Pop(); }, RankW, 11)
+                { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0), RenderTransform = _crownDrop, Visibility = Visibility.Collapsed };
+            _spark = new TacSketch(DrawSparks, RankW, 11) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0),
+                RenderTransformOrigin = new Point(.5, .5), RenderTransform = _sparkOut, Visibility = Visibility.Hidden };
             _root.Children.Add(_art);
-            Put(_rankHost, 0); Put(_crown, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
+            Put(_rankHost, 0); Put(_crown, 0); Put(_spark, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 3, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
-            // the words' tight shade: one effect for the row's words
-            _words.Effect = Shade();
+            // no effect on the row's words: they sit on the screen's black, where a shade adds nothing but cost
             _root.Children.Add(_words);
-            _root.Children.Add(_fx);
+            _root.Children.Add(_chaseHost);
             _root.SizeChanged += (_, _) => Fit();
         }
 
@@ -176,7 +186,8 @@ sealed partial class HudArcade
             _dps.Text = m.Figure;
             _dps.FontSize = m.CpOnly ? 14 : 17;
             // a wider figure (Combat Power before the first hit, "167,548") widens its column: never a digit cut
-            _words.ColumnDefinitions[4].Width = new GridLength(Math.Max(_dpsW, TextW(_dps, m.Figure) + 6));
+            _dpsInk = TextW(_dps, m.Figure);
+            _words.ColumnDefinitions[4].Width = new GridLength(Math.Max(_dpsW, _dpsInk + 6));
             _share.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
@@ -225,69 +236,74 @@ sealed partial class HudArcade
         {
             if (_m is not { } m || s.Width < 40) return;
             var tone = RankC(m.Rank);
-            // you: the player-one glow: a light band, a dotted selection box round the row, the pixel cursor at its left
+            // you: the player-one glow: a light band, a dotted selection box round the row (frozen tiles), the pixel cursor at its left
             if (m.You)
             {
-                dc.DrawRectangle(Mod.Grad(false, (Mod.A(LedC, .16), 0), (Mod.A(LedC, .05), .6), (Mod.A(LedC, .1), 1)), null, new Rect(0, 0, s.Width, s.Height));
-                var dot = Frozen(Mod.A(LedC, .75));
-                for (double x = 0; x + 2 <= s.Width; x += 4) { dc.DrawRectangle(dot, null, new Rect(x, 0, 2, 1.5)); dc.DrawRectangle(dot, null, new Rect(x, s.Height - 1.5, 2, 1.5)); }
-                DrawCursor(dc, 1.5, s.Height / 2, 1.1, Frozen(Mod.Mix(LedC, Colors.White, .4)));
+                dc.DrawRectangle(YouBand, null, new Rect(0, 0, s.Width, s.Height));
+                dc.DrawRectangle(YouDots, null, new Rect(0, 0, s.Width, 1.5));
+                dc.PushTransform(new TranslateTransform(0, s.Height - 1.5)); dc.DrawRectangle(YouDots, null, new Rect(0, 0, s.Width, 1.5)); dc.Pop();
+                DrawCursor(dc, 1.5, s.Height / 2, 1.1, YouCursor);
             }
             // the DPS's LED bloom: a soft glow in the rank's colour behind the figure
             var cols = _words.ColumnDefinitions;
             double dx = PadL + cols[0].ActualWidth + cols[1].ActualWidth + cols[2].ActualWidth + cols[3].ActualWidth;
             double dw = cols[4].ActualWidth;
-            if (dw > 0)
-            {
-                var bloom = new RadialGradientBrush(Mod.A(tone, .26), Mod.A(tone, 0));
-                bloom.Freeze();
-                dc.DrawEllipse(bloom, null, new Point(dx + dw - Math.Min(dw, TextW(_dps, _dps.Text)) / 2, s.Height / 2), dw * .62, s.Height * .5);
-            }
+            if (dw > 0) dc.DrawEllipse(Bloom(tone), null, new Point(dx + dw - Math.Min(dw, _dpsInk) / 2, s.Height / 2), dw * .62, s.Height * .5);
             // the bar: LED cells lit to the share in the class's colour
             var bar = BarRect(s);
             DrawLed(dc, bar, m.CpOnly ? 0 : _bar, m.ClassColor, BarCell, BarGap);
             // a healer's share of the group's healing as a mint pixel line under the cells (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
-                dc.DrawRectangle(Frozen(Mod.A(MintC2, .95)), null, new Rect(bar.X, bar.Bottom + 1.5, Math.Max(3, bar.Width * Math.Clamp(m.HealShare, 0, 1)), 1.5));
-        }
-
-        /// <summary>The chase over the cells (and a flash of the rank word's light while it runs).</summary>
-        void DrawFx(DrawingContext dc, Size s)
-        {
-            if (_chase < 0 || _chase > 1 || s.Width < 40) return;
-            DrawChase(dc, BarRect(s), _chase, _chaseC, BarCell, BarGap);
-        }
-
-        /// <summary>The crown over 1ST, and on its landing four pixel sparkles round it, fading.</summary>
-        void DrawCrownArt(DrawingContext dc, Size s)
-        {
-            double x = Math.Round((s.Width - CrownW) / 2), y = 1;
-            DrawCrown(dc, x, y, CrownPx);
-            if (_land is > 0 and < 1)
+                dc.DrawRectangle(Ink(MintC2, .95), null, new Rect(bar.X, bar.Bottom + 1, Math.Max(3, bar.Width * Math.Clamp(m.HealShare, 0, 1)), 1.5));
+            // the chase's window follows the bar (set only when the bar's place changes)
+            if (bar != _barRect)
             {
-                var b = Frozen(Mod.A(Color.FromRgb(0xFF, 0xF4, 0xB0), 1 - _land));
-                double spread = 2 + 3 * _land;
-                foreach (var (px, py) in new[] { (x - spread, y + 1), (x + CrownW + spread - 1, y + 1), (x - spread + 1, y + CrownH - 2), (x + CrownW + spread - 2, y + CrownH - 2) })
-                {
-                    if (px < 0 || px + 3 > s.Width) continue;
-                    dc.DrawRectangle(b, null, new Rect(px, py + 1, 3, 1));
-                    dc.DrawRectangle(b, null, new Rect(px + 1, py, 1, 3));
-                }
+                _barRect = bar;
+                _chaseHost.Margin = new Thickness(bar.X, bar.Y - 2, 0, 0);
+                _chaseHost.Width = Cells(bar.Width, BarCell, BarGap).W + 2; _chaseHost.Height = BarH + 4;
             }
         }
 
-        /// <summary>A chase of light along this row's cells, in <paramref name="c"/>, after <paramref name="delay"/> ms.</summary>
+        static readonly Brush YouBand = Mod.Grad(false, (Mod.A(LedC, .16), 0), (Mod.A(LedC, .05), .6), (Mod.A(LedC, .1), 1)), YouCursor = Frozen(Mod.Mix(LedC, Colors.White, .4));
+        static readonly DrawingBrush YouDots = CellTile(Mod.A(LedC, .75), 2, 2, 1.5, false);
+        static readonly Dictionary<Color, Brush> Blooms = new();
+        static Brush Bloom(Color c)
+        {
+            if (Blooms.TryGetValue(c, out var b)) return b;
+            var r = new RadialGradientBrush(Mod.A(c, .26), Mod.A(c, 0)); r.Freeze();
+            return Blooms[c] = r;
+        }
+
+        /// <summary>The crown's landing sparkles: four pixel crosses round it, drawn once; the landing scales them out and fades them.</summary>
+        static void DrawSparks(DrawingContext dc, Size s)
+        {
+            double x = Math.Round((s.Width - CrownW) / 2), y = 1;
+            var b = Ink(Color.FromRgb(0xFF, 0xF4, 0xB0));
+            foreach (var (px, py) in new[] { (x - 4, y), (x + CrownW + 1, y), (x - 3, y + CrownH - 3), (x + CrownW, y + CrownH - 3) })
+            {
+                dc.DrawRectangle(b, null, new Rect(px, py + 1, 3, 1));
+                dc.DrawRectangle(b, null, new Rect(px + 1, py, 1, 3));
+            }
+        }
+
+        /// <summary>
+        /// A chase of light along this row's cells, in <paramref name="c"/>, after <paramref name="delay"/> ms: the light (drawn
+        /// once) steps along the bar a whole cell at a time by its transform; nothing is drawn again while it runs.
+        /// </summary>
         internal void Chase(double delay, Color c)
         {
             const double Run = 560;
-            double total = delay + Run;
-            _chaseC = c;
-            Motion.Play(_fx, total, p =>
+            double total = delay + Run, pitch = BarCell + BarGap;
+            if (_chaseC != c) { _chaseC = c; _light.InvalidateVisual(); }
+            int n = _barRect.IsEmpty ? 30 : Cells(_barRect.Width, BarCell, BarGap).N;
+            Motion.Play(_light, total, p =>
             {
                 double l = (p * total - delay) / Run;
-                _chase = l < 0 || l >= 1 ? -1 : l;
-                _fx.InvalidateVisual();
-            }, () => { _chase = -1; _fx.InvalidateVisual(); });
+                if (l < 0 || l >= 1) { Fade(_light, 0); return; }
+                int c0 = (int)Math.Floor(-3 + (n + 6) * l);
+                _chaseAt.X = (c0 - 3) * pitch - 2;
+                Fade(_light, 1);
+            }, () => Fade(_light, 0));
         }
 
         /// <summary>The crown drops onto 1ST from above with a bounce, and sparkles as it lands (after <paramref name="delay"/> ms).</summary>
@@ -304,9 +320,10 @@ sealed partial class HudArcade
                 double y = fall < 1 ? -11 * (1 - fall * fall) : l < .75 ? -3 * Math.Sin(Math.PI * Seg(l, .55, .75)) : -1 * Math.Sin(Math.PI * Seg(l, .75, .9));
                 _crownDrop.Y = Math.Round(y);
                 _crown.Opacity = Seg(l, 0, .15);
-                _land = l < .55 ? 0 : Seg(l, .55, .95);
-                _crown.InvalidateVisual();
-            }, () => { _crownDrop.Y = 0; _crown.Opacity = 1; _land = 0; _crown.InvalidateVisual(); });
+                double land = l < .55 ? 0 : Seg(l, .55, .95);
+                _sparkOut.ScaleX = _sparkOut.ScaleY = .8 + .5 * land;
+                Fade(_spark, land > 0 && land < 1 ? 1 - land : 0);
+            }, () => { _crownDrop.Y = 0; _crown.Opacity = 1; Fade(_spark, 0); });
         }
     }
 }

@@ -95,7 +95,7 @@ sealed partial class HudArcade
 
     /// <summary>
     /// A word in the LED font: dots <see cref="Px"/> wide, a dark shade a dot under them and a glow in the ink round them,
-    /// <see cref="Reveal"/> letters shown (a name entry's typing). Sized to its dots.
+    /// sized to its dots. Drawn once (its geometry cached per word and size); a moment moves it by its transform.
     /// </summary>
     sealed class LedWord : FrameworkElement
     {
@@ -104,8 +104,6 @@ sealed partial class HudArcade
         public Brush Ink;
         public Color GlowC;
         public double GlowA;
-        /// <summary>How many letters show (a letter partly in flickers in at half strength); all by default.</summary>
-        public double Reveal = double.MaxValue;
         readonly Geometry _dots;
         readonly double[] _ends;
 
@@ -155,29 +153,24 @@ sealed partial class HudArcade
 
         protected override Size MeasureOverride(Size available) => new(Math.Ceiling(DotW + _px * .7), Math.Ceiling(7 * _px + _px * .7));
 
+        /// <summary>Where letter <paramref name="i"/> ends, in px from the word's left (a typing wipe steps by these).</summary>
+        public double LetterEnd(int i) => i < 0 ? 0 : _ends[Math.Min(i, _ends.Length - 1)] + _px * .5;
+        public int Letters => _ends.Length;
+
         protected override void OnRender(DrawingContext dc)
         {
-            if (_ends.Length == 0) return;
-            int whole = (int)Math.Floor(Math.Min(Reveal, _ends.Length));
-            double part = Math.Min(Reveal, _ends.Length) - whole;
-            if (whole >= _ends.Length) { Paint(dc); return; }
-            // the letters still to come are clipped off; the next one flickers in at half strength
-            double full = whole == 0 ? 0 : _ends[whole - 1] + _px * .5, h = 7 * _px + 8;
-            if (whole > 0) { dc.PushClip(new RectangleGeometry(new Rect(-4, -4, full + 4, h))); Paint(dc); dc.Pop(); }
-            if (part > .35)
-            {
-                double next = _ends[whole] + _px * .5;
-                dc.PushClip(new RectangleGeometry(new Rect(full, -4, next - full, h)));
-                dc.PushOpacity(.55); Paint(dc); dc.Pop();
-                dc.Pop();
-            }
+            if (_ends.Length > 0) Paint(dc);
         }
+
+        Pen? _glow;
+        TranslateTransform? _down;
+        Pen GlowPen() { var p = new Pen(Ink(GlowC, GlowA), _px * 1.5) { LineJoin = PenLineJoin.Round }; p.Freeze(); return p; }
 
         void Paint(DrawingContext dc)
         {
             // the glow: the dots stroked wide in the ink's colour, faint; then the shade a dot down; then the dots
-            if (GlowA > 0) dc.DrawGeometry(null, new Pen(Frozen(Mod.A(GlowC, GlowA)), _px * 1.5) { LineJoin = PenLineJoin.Round }, _dots);
-            dc.PushTransform(new TranslateTransform(0, _px * .7));
+            if (GlowA > 0) dc.DrawGeometry(null, _glow ??= GlowPen(), _dots);
+            dc.PushTransform(_down ??= new TranslateTransform(0, _px * .7));
             dc.DrawGeometry(ShadeB, null, _dots);
             dc.Pop();
             dc.DrawGeometry(Ink, null, _dots);
@@ -194,7 +187,6 @@ sealed partial class HudArcade
     {
         if (Spells(s)) return new LedWord(s, px, fill ?? Frozen(ink), ink, glowA);
         var t = Tt(s, textSize > 0 ? textSize : Math.Round(7 * px * 1.22 * 2) / 2, fill ?? Frozen(ink), FontWeights.Bold);
-        t.Effect = Shade();
         return t;
     }
 
@@ -218,17 +210,24 @@ sealed partial class HudArcade
         ['R'] = Frozen(Color.FromRgb(0xFF, 0x3B, 0x5C)), ['B'] = Frozen(Color.FromRgb(0x4D, 0xC8, 0xFF)),
     };
 
-    /// <summary>The pixel crown, <paramref name="px"/> a pixel, with a black outline a pixel round it so it reads on any ground.</summary>
-    static void DrawCrown(DrawingContext dc, double x, double y, double px)
+    /// <summary>The pixel crown, drawn once (a black outline a pixel round it, so it reads on any ground) and reused.</summary>
+    static readonly Drawing Crown = MakeCrown(CrownPx);
+
+    static Drawing MakeCrown(double px)
     {
-        int w = CrownArt[0].Length, h = CrownArt.Length;
-        // the outline: each lit pixel's square grown by a pixel, in black
-        for (int r = 0; r < h; r++)
-            for (int c = 0; c < w; c++)
-                if (CrownArt[r][c] != '.') dc.DrawRectangle(ShadeB, null, new Rect(x + (c - .6) * px, y + (r - .6) * px, px * 2.2, px * 2.2));
-        for (int r = 0; r < h; r++)
-            for (int c = 0; c < w; c++)
-                if (CrownInk.TryGetValue(CrownArt[r][c], out var b)) dc.DrawRectangle(b, null, new Rect(x + c * px, y + r * px, px + .05, px + .05));
+        var g = new DrawingGroup();
+        using (var dc = g.Open())
+        {
+            int w = CrownArt[0].Length, h = CrownArt.Length;
+            for (int r = 0; r < h; r++)
+                for (int c = 0; c < w; c++)
+                    if (CrownArt[r][c] != '.') dc.DrawRectangle(ShadeB, null, new Rect((c - .6) * px, (r - .6) * px, px * 2.2, px * 2.2));
+            for (int r = 0; r < h; r++)
+                for (int c = 0; c < w; c++)
+                    if (CrownInk.TryGetValue(CrownArt[r][c], out var b)) dc.DrawRectangle(b, null, new Rect(c * px, r * px, px + .05, px + .05));
+        }
+        g.Freeze();
+        return g;
     }
 
     const double CrownPx = 1.1;
@@ -261,29 +260,57 @@ sealed partial class HudArcade
         return b;
     }
 
+    /// <summary>A frozen brush per colour, made once (the drawing never allocates a brush per frame).</summary>
+    static SolidColorBrush Ink(Color c, double a = 1)
+    {
+        var k = Mod.A(c, a * c.A / 255.0);
+        uint key = ((uint)k.A << 24) | ((uint)k.R << 16) | ((uint)k.G << 8) | k.B;
+        if (!Inks.TryGetValue(key, out var b)) Inks[key] = b = Frozen(k);
+        return b;
+    }
+    static readonly Dictionary<uint, SolidColorBrush> Inks = new();
+
+    /// <summary>The screens' ground at an opacity (a tube's black, a touch lighter at its middle), made once per opacity.</summary>
+    static Brush ScreenFill(double ground)
+    {
+        int key = (int)Math.Round(ground * 100);
+        if (Fills.TryGetValue(key, out var f)) return f;
+        var fill = new RadialGradientBrush { Center = new Point(.5, .42), GradientOrigin = new Point(.5, .42), RadiusX = .75, RadiusY = .9 };
+        fill.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0x0D, 0x10, 0x1E), key / 100.0), 0));
+        fill.GradientStops.Add(new GradientStop(Mod.A(ScreenC, key / 100.0), 1));
+        fill.Freeze();
+        return Fills[key] = fill;
+    }
+    static readonly Dictionary<int, Brush> Fills = new();
+
     /// <summary>
-    /// The screen in <paramref name="r"/>: the black ground (a touch lighter at its middle, as a tube is), the scanlines, and
-    /// the frame: a 2 px outer line and a 1 px inner one in <paramref name="frame"/>, the corners stepped in pixels; the top edge
-    /// broken from <paramref name="gap0"/> to <paramref name="gap1"/> for a legend set into it. <paramref name="lit"/> brightens the frame (a moment).
+    /// The screen in <paramref name="r"/>: the black ground, the scanlines (a frozen tile), and the frame: a 2 px outer line and
+    /// a 1 px inner one in <paramref name="frame"/>, the corners stepped in pixels; the top edge broken from
+    /// <paramref name="gap0"/> to <paramref name="gap1"/> for a legend set into it. Drawn on a change only; a moment's flare is
+    /// <see cref="DrawFlare"/> on a layer of its own whose opacity moves.
     /// </summary>
-    static void DrawScreen(DrawingContext dc, Rect r, Color frame, double ground, double gap0 = -1, double gap1 = -1, double lit = 0)
+    static void DrawScreen(DrawingContext dc, Rect r, Color frame, double ground, double gap0 = -1, double gap1 = -1)
     {
         if (r.Width < 12 || r.Height < 12) return;
-        var fill = new RadialGradientBrush { Center = new Point(.5, .42), GradientOrigin = new Point(.5, .42), RadiusX = .75, RadiusY = .9 };
-        fill.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0x0D, 0x10, 0x1E), ground), 0));
-        fill.GradientStops.Add(new GradientStop(Mod.A(ScreenC, ground), 1));
-        fill.Freeze();
+        var fill = ScreenFill(ground);
         // the ground inside the stepped corners
         var inner = new Rect(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2);
         dc.DrawRectangle(fill, null, new Rect(inner.X + 2, inner.Y, inner.Width - 4, inner.Height));
         dc.DrawRectangle(fill, null, new Rect(inner.X, inner.Y + 2, 2, inner.Height - 4));
         dc.DrawRectangle(fill, null, new Rect(inner.Right - 2, inner.Y + 2, 2, inner.Height - 4));
         dc.DrawRectangle(Scan, null, new Rect(inner.X + 2, inner.Y + 2, inner.Width - 4, inner.Height - 4));
-        var c = lit > 0 ? Mod.Mix(frame, Colors.White, .55 * Math.Clamp(lit, 0, 1)) : frame;
-        var outer = Frozen(c);
-        var hair = Frozen(Mod.A(Mod.Mix(c, Colors.White, .25), .7));
-        Frame(dc, r, 2, 3, outer, gap0, gap1);
-        Frame(dc, new Rect(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8), 1, 2, hair, gap0, gap1);
+        Frame(dc, r, 2, 3, Ink(frame), gap0, gap1);
+        Frame(dc, new Rect(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8), 1, 2, Ink(Mod.Mix(frame, Colors.White, .25), .7), gap0, gap1);
+    }
+
+    /// <summary>A screen's frame lit white-hot with a faint wash inside: drawn once on its own layer, the moment moves its opacity.</summary>
+    static void DrawFlare(DrawingContext dc, Rect r, Color c, double gap0 = -1, double gap1 = -1)
+    {
+        if (r.Width < 12 || r.Height < 12) return;
+        var hot = Mod.Mix(c, Colors.White, .6);
+        dc.DrawRectangle(Ink(c, .1), null, new Rect(r.X + 5, r.Y + 5, r.Width - 10, r.Height - 10));
+        Frame(dc, r, 2, 3, Ink(hot), gap0, gap1);
+        Frame(dc, new Rect(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8), 1, 2, Ink(hot, .8), gap0, gap1);
     }
 
     /// <summary>A pixel frame: lines <paramref name="t"/> thick, each corner cut by a <paramref name="step"/> px step; the top broken for a legend.</summary>
@@ -309,65 +336,67 @@ sealed partial class HudArcade
 
     // ================================================================ the LED bars
 
-    /// <summary>The cells of an LED bar <paramref name="w"/> wide: each cell's width and the pitch from one to the next.</summary>
-    static (int N, double Pitch) Cells(double w, double cell, double gap)
+    /// <summary>
+    /// A row of LED cells as one frozen tile (a cell <paramref name="cell"/> wide, <paramref name="gap"/> of air, a light line
+    /// along its top when <paramref name="top"/>), so a whole bar is one rectangle filled with it, not a rectangle per cell.
+    /// </summary>
+    static DrawingBrush CellTile(Color c, double cell, double gap, double h, bool top)
+    {
+        var key = (c, cell, gap, h, top);
+        if (Tiles.TryGetValue(key, out var t)) return t;
+        var g = new DrawingGroup();
+        g.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, cell + gap, h))));
+        g.Children.Add(new GeometryDrawing(Ink(c), null, new RectangleGeometry(new Rect(0, 0, cell, h))));
+        if (top) g.Children.Add(new GeometryDrawing(Ink(Colors.White, .42), null, new RectangleGeometry(new Rect(0, 0, cell, 1))));
+        var b = new DrawingBrush(g)
+        {
+            TileMode = TileMode.Tile, Stretch = Stretch.None, Viewport = new Rect(0, 0, cell + gap, h), ViewportUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(0, 0, cell + gap, h), ViewboxUnits = BrushMappingMode.Absolute,
+        };
+        b.Freeze();
+        return Tiles[key] = b;
+    }
+    static readonly Dictionary<(Color, double, double, double, bool), DrawingBrush> Tiles = new();
+
+    /// <summary>How many whole cells fit in <paramref name="w"/>, and the bar's drawn width (the last cell flush, no trailing air).</summary>
+    static (int N, double W) Cells(double w, double cell, double gap)
     {
         int n = Math.Max(1, (int)Math.Floor((w + gap) / (cell + gap)));
-        return (n, (w + gap) / n);
+        return (n, n * (cell + gap) - gap);
     }
 
     /// <summary>
     /// An LED bar: <paramref name="share"/> of its cells lit in <paramref name="tone"/> (the cell at the edge lit in part), each
     /// lit cell with a light line along its top and a faint bloom round the lit run, the cell at the head hot (nearly white);
-    /// the unlit cells dim.
+    /// the unlit cells dim. Five rectangles whatever its length: the cells are tiles.
     /// </summary>
     static void DrawLed(DrawingContext dc, Rect r, double share, Color tone, double cell = 5, double gap = 2, double dimA = .1)
     {
         if (r.Width < 4 || r.Height < 2) return;
-        var (n, pitch) = Cells(r.Width, cell, gap);
-        double cw = pitch - gap, fill = Math.Clamp(share, 0, 1) * n;
+        double pitch = cell + gap, h = r.Height;
+        var (n, w) = Cells(r.Width, cell, gap);
+        double fill = Math.Clamp(share, 0, 1) * n;
         int whole = (int)Math.Floor(fill);
         double part = fill - whole;
-        var dim = Frozen(Mod.A(Colors.White, dimA));
-        var lit = Frozen(Mod.Mix(tone, Colors.White, .08));
-        var top = Frozen(Mod.A(Colors.White, .42));
-        // the bloom round the lit run
-        if (fill > .05) dc.DrawRectangle(Frozen(Mod.A(tone, .2)), null, new Rect(r.X - 1.5, r.Y - 1.5, Math.Min(r.Width, fill * pitch - gap) + 3, r.Height + 3));
-        for (int i = 0; i < n; i++)
-        {
-            var cr = new Rect(r.X + i * pitch, r.Y, cw, r.Height);
-            if (i < whole)
-            {
-                bool head = i == whole - 1 && part < .5;
-                dc.DrawRectangle(head ? Frozen(Mod.Mix(tone, Colors.White, .55)) : lit, null, cr);
-                dc.DrawRectangle(top, null, new Rect(cr.X, cr.Y, cr.Width, 1));
-            }
-            else if (i == whole && part > .02)
-            {
-                dc.DrawRectangle(dim, null, cr);
-                dc.DrawRectangle(Frozen(Mod.A(Mod.Mix(tone, Colors.White, .55), part)), null, cr);
-            }
-            else dc.DrawRectangle(dim, null, cr);
-        }
+        dc.PushTransform(new TranslateTransform(r.X, r.Y));
+        if (fill > .05) dc.DrawRectangle(Ink(tone, .2), null, new Rect(-1.5, -1.5, Math.Min(w, fill * pitch - gap) + 3, h + 3));
+        dc.DrawRectangle(CellTile(Mod.A(Colors.White, dimA), cell, gap, h, false), null, new Rect(0, 0, w, h));
+        if (whole > 0) dc.DrawRectangle(CellTile(Mod.Mix(tone, Colors.White, .08), cell, gap, h, true), null, new Rect(0, 0, whole * pitch - gap, h));
+        var hot = Mod.Mix(tone, Colors.White, .55);
+        if (whole > 0 && part < .5) dc.DrawRectangle(Ink(hot), null, new Rect((whole - 1) * pitch, 0, cell, h));
+        if (whole < n && part > .02) dc.DrawRectangle(Ink(hot, Math.Round(part * 20) / 20), null, new Rect(whole * pitch, 0, cell, h));
+        dc.Pop();
     }
 
     /// <summary>
-    /// The chase over an LED bar's cells (<paramref name="t"/> 0 to 1): a light three cells long running left to right, stepping
-    /// cell by cell as an LED does, the cell at its front brightest; it runs the bar's whole length, lit cells and dim.
+    /// A chase's light: four cells, the front one brightest with a halo, fading behind it. Drawn once; the chase moves it along
+    /// a bar a whole cell at a time (a transform, as an LED steps).
     /// </summary>
-    static void DrawChase(DrawingContext dc, Rect r, double t, Color c, double cell = 5, double gap = 2)
+    static void DrawChaseLight(DrawingContext dc, Color c, double cell, double gap, double h)
     {
-        if (t < 0 || t > 1 || r.Width < 4) return;
-        var (n, pitch) = Cells(r.Width, cell, gap);
-        double cw = pitch - gap;
-        int c0 = (int)Math.Floor(-3 + (n + 6) * t);
-        for (int i = Math.Max(0, c0 - 3); i <= Math.Min(n - 1, c0); i++)
-        {
-            double k = 1 - (c0 - i) / 3.5;
-            if (k <= 0) continue;
-            if (i == c0) dc.DrawRectangle(Frozen(Mod.A(c, .35)), null, new Rect(r.X + i * pitch - 2, r.Y - 2, cw + 4, r.Height + 4));
-            dc.DrawRectangle(Frozen(Mod.A(c, .95 * k)), null, new Rect(r.X + i * pitch, r.Y, cw, r.Height));
-        }
+        double pitch = cell + gap;
+        dc.DrawRectangle(Ink(c, .35), null, new Rect(3 * pitch - 2, 0, cell + 4, h + 4));
+        for (int i = 0; i < 4; i++) dc.DrawRectangle(Ink(c, Math.Round(.95 * (1 - (3 - i) / 3.5) * 20) / 20), null, new Rect(i * pitch, 2, cell, h));
     }
 
     /// <summary>
