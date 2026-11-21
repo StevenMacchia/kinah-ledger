@@ -35,13 +35,15 @@ sealed partial class HudAsmodian : ModernLook
 
     // the Buddy: its plate, the ring, the hour, the session and the timer chips
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
-    readonly TacSketch _linePlate, _lineHeat = HeatLayer();
+    readonly TacSketch _linePlate, _lineHeat = HeatLayer(9, 3, room: LineRoom);
+    /// <summary>The Buddy's plate wears its crest of thorns out of a dungeon run (the run's tab sits there in one).</summary>
+    bool _lineCrest = true;
     /// <summary>The pickup's ember band, clipped to the plate's shape; and the sparks off the ring (each moved by transform alone).</summary>
     readonly Canvas _lineSheenHost = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly System.Windows.Shapes.Path _sheenBand = SheenBand();
     readonly Canvas _lineSparkLayer = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly Sparks _lineSparks;
-    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(G + 8, G + 6, G + 13, G + 6) };
+    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(LineRoom.Left + 8, LineRoom.Top + 5, LineRoom.Right + 13, LineRoom.Bottom + 5) };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
@@ -65,9 +67,11 @@ sealed partial class HudAsmodian : ModernLook
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 4) };
     readonly TacSketch _fightPlate;
     const double FightPad = 10;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(G + FightPad, G + 7, G + FightPad, G + 8) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(FightRoom.Left + FightPad, FightRoom.Top + 6, FightRoom.Right + FightPad, FightRoom.Bottom + 7) };
+    /// <summary>The fight's moments' layer over the plate (a kill's shockwave, the fight's opening cut), clipped to the fight's own bounds.</summary>
+    readonly System.Windows.Controls.Canvas _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
-    readonly TacSketch _fightHeat = HeatLayer(11);
+    readonly TacSketch _fightHeat = HeatLayer(11, room: FightRoom);
     /// <summary>The embers' layer, over the rows inside the meter's own grid (rows' coordinates), and the burst on it.</summary>
     readonly Canvas _emberLayer = new() { IsHitTestVisible = false };
     readonly Sparks _embers;
@@ -81,14 +85,15 @@ sealed partial class HudAsmodian : ModernLook
     {
         // the look's own rows (Ui/Themes/ThemeRows.cs): each an iron slab with its forged bar
         UseRows(IronRow.Pitch, m => new IronRow(this), 14, GapLine);
-        _linePlate = new TacSketch((dc, s) => Iron(dc, s, _opacity, 0, _dim ? AshC : null));
+        _linePlate = new TacSketch((dc, s) => WarPlate(dc, s, _opacity, LineRoom, 9, 30, edge: _dim ? AshC : null, crest: _lineCrest));
         _lineSheenHost.Children.Add(_sheenBand);
         _lineSparks = new Sparks(_lineSparkLayer);
         _line.Children.Add(_linePlate); _line.Children.Add(_lineHeat); _line.Children.Add(_lineSheenHost); _line.Children.Add(_lineBody); _line.Children.Add(_lineSparkLayer); _line.Children.Add(_lineAnchor);
         // the band's clip follows the plate's shape (set when the plate's size changes, never per frame)
-        _line.SizeChanged += (_, e) => _lineSheenHost.Clip = Plate(new Rect(G, G, Math.Max(0, e.NewSize.Width - 2 * G), Math.Max(0, e.NewSize.Height - 2 * G)), 9, 3);
-        _fightPlate = new TacSketch((dc, s) => Iron(dc, s, _opacity, big: 11));
-        _fight.Children.Add(_fightPlate); _fight.Children.Add(_fightHeat); _fight.Children.Add(_fightBody);
+        _line.SizeChanged += (_, e) => _lineSheenHost.Clip = Plate(new Rect(LineRoom.Left, LineRoom.Top, Math.Max(0, e.NewSize.Width - LineRoom.Left - LineRoom.Right), Math.Max(0, e.NewSize.Height - LineRoom.Top - LineRoom.Bottom)), 9, 3);
+        // the war plate: horns, crest, fangs and the blood moon behind the title, drawn once per size
+        _fightPlate = new TacSketch((dc, s) => WarPlate(dc, s, _opacity, FightRoom, 11, 40, new Point(FightPad + 34, 14), 34));
+        _fight.Children.Add(_fightPlate); _fight.Children.Add(_fightHeat); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _embers = new Sparks(_emberLayer);
         Panel.SetZIndex(_emberLayer, 50);
         Meter!.Children.Add(_emberLayer);
@@ -159,6 +164,7 @@ sealed partial class HudAsmodian : ModernLook
         if (mark) { var m = AbyssMark(f.Icon, 36); m.Margin = new Thickness(0, 0, 10, 0); _lineBody.Children.Add(m); }
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudAsmodian.Run.cs)
         var rs = RunNow();
+        if (_lineCrest != (rs == null)) { _lineCrest = rs == null; _linePlate.InvalidateVisual(); }
         _runHeadHost.Visibility = Visibility.Collapsed;
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
@@ -233,18 +239,24 @@ sealed partial class HudAsmodian : ModernLook
             // the plate drawn once; its moment moves it by transform (forged out to the right) and lights its heat layer
             var plate = new TacSketch((dc, s) =>
             {
-                Iron(dc, s, _opacity, .35, c, big: 8);
-                dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .3), 0), (Mod.A(c, 0), .6)), null, new Rect(G + 1, G + 1, Math.Max(0, s.Width - 2 * G - 2), Math.Max(0, s.Height - 2 * G - 2)));
+                Iron(dc, s, _opacity, .35, big: 8);
+                // the grade's colour as a wash from the tile and a thin line under the plate's top
+                dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .28), 0), (Mod.A(c, 0), .5)), null, new Rect(G + 1, G + 1, Math.Max(0, s.Width - 2 * G - 2), Math.Max(0, s.Height - 2 * G - 2)));
+                dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .9), 0), (Mod.A(c, 0), 1)), null, new Rect(G + 9, G + 2, Math.Max(0, s.Width * .6), 1));
             });
             _rareArt = plate;
             _rare.Children.Add(plate);
-            _rareHeat = HeatLayer(8, 3, Mod.Mix(c, Colors.White, .2));
+            _rareHeat = HeatLayer(8, 3);
             _rare.Children.Add(_rareHeat);
+            var bandHost = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
+            _rareBand = SheenBand(); _rareBand.Fill = RareSheen(c); _rareBand.Height = 60;
+            bandHost.Children.Add(_rareBand);
+            _rare.Children.Add(bandHost);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(G + 7, G + 5, G + 14, G + 5) };
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             _rareTile = tile;
             row.Children.Add(tile);
-            var mk = Chip(L.T("RARE DROP"), Frozen(Mod.Mix(c, Colors.White, .55)), c, size: 8); mk.Margin = new Thickness(0, 0, 8, 0);
+            var mk = Chip(L.T("RARE DROP"), Frozen(Color.FromRgb(0xFF, 0x5A, 0x48)), CrimC, size: 8.5); mk.Margin = new Thickness(0, 0, 8, 0);
             row.Children.Add(mk);
             var nm = Head(r.Name, 15, Frozen(Mod.Mix(c, Colors.White, .4)), FontWeights.Bold);
             row.Children.Add(nm);
@@ -308,6 +320,10 @@ sealed partial class HudAsmodian : ModernLook
     FrameworkElement? _rareTile, _rareRow;
     readonly Canvas _rareSparkLayer = new() { IsHitTestVisible = false };
     Sparks? _rareSparks;
+    System.Windows.Shapes.Path? _rareBand;
+
+    /// <summary>A rare drop's band of light in its grade's colour (made once per drop shown).</summary>
+    static Brush RareSheen(Color c) => Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(Mod.Mix(c, Colors.White, .5), .55), .55), (Mod.A(c, 0), 1));
 
     /// <summary>
     /// The run's ring as a ring of crimson iron: a dark well, a heavy iron track with four studs, your best's share as a
@@ -427,7 +443,7 @@ sealed partial class HudAsmodian : ModernLook
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _embers.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 10;
         _fight.Width = w;
-        double inner = w - 2 * (G + FightPad);
+        double inner = w - FightRoom.Left - FightRoom.Right - 2 * FightPad;
         _rowsW = inner; _shownE = e;
         _fightBody.Children.Add(_timersInFight);
         // the head: the boss in the heavy face, the outcome once it's over, the clock
@@ -531,21 +547,22 @@ sealed partial class HudAsmodian : ModernLook
     /// one row after another, the plate's heat flaring and cooling with them. One course, then gone. Everything in it moves
     /// by transform and opacity: the sparks are laid once on the rows' own layer, at the bars' ends as the fight says them.
     /// </summary>
-    void Embers()
+    void Embers(bool storm = false)
     {
         if (Meter is not { } m || _shownE is not { } e) return;
         var rows = m.Members.Select(x => m.RowOf(x.Id)).OfType<IronRow>().ToList();
         var pts = new List<(Point, int, double)>();
-        for (int i = 0, n = 0; i < m.Members.Count && n < 9; i++)
+        int cap = storm ? 16 : 9;
+        for (int i = 0, n = 0; i < m.Members.Count && n < cap; i++)
         {
             var mm = m.Members[i];
             double y = i * IronRow.Pitch + (mm.Pinned ? 14 : 0) + IronRow.H / 2 + 3;
             double x = Math.Max(30, (mm.CpOnly ? 0 : e.BarOf(mm.F)) * _rowsW);
-            int count = i == 0 ? 3 : i < 3 ? 2 : 1;
-            for (int k = 0; k < count && n < 9; k++, n++) pts.Add((new Point(Math.Max(8, x - 6 - 11 * k), y), n * 7 + i, 22 + 4 * (count - k)));
+            int count = storm ? (i == 0 ? 5 : i < 3 ? 4 : 2) : i == 0 ? 3 : i < 3 ? 2 : 1;
+            for (int k = 0; k < count && n < cap; k++, n++) pts.Add((new Point(Math.Max(8, x - 6 - (storm ? 9 : 11) * k), y), n * 7 + i, (storm ? 30 : 22) + 4 * (count - k)));
         }
-        _embers.Start(pts);
-        Motion.Play(_emberLayer, 1150, t =>
+        _embers.Start(pts, cap);
+        Motion.Play(_emberLayer, storm ? 1300 : 1150, t =>
         {
             _embers.Step(t);
             for (int i = 0; i < rows.Count; i++) rows[i].SetGlint(Seg(t, .05 * i, .5 + .05 * i));
@@ -565,7 +582,7 @@ sealed partial class HudAsmodian : ModernLook
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
         var words = new StackPanel { Margin = new Thickness(9, 3, 11, 4) };
-        words.Children.Add(Big(worth, 15, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .25)) : White, FontWeights.Bold));
+        words.Children.Add(Big(worth, 16, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .25)) : White, FontWeights.Bold));
         var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -1, 0, 0);
         words.Children.Add(nm);
         var chip = new Grid { MaxWidth = 88 };
@@ -589,27 +606,33 @@ sealed partial class HudAsmodian : ModernLook
         }, () => { _sheenBand.Opacity = 0; Heat(_lineHeat, 0); _lineAnchor.Children.Remove(chip); });
     }
 
-    /// <summary>A rare drop: its plate forges out to the right, flaring in its grade's colour, its words coming up, the tile stamping in, sparks off it.</summary>
+    /// <summary>
+    /// A rare drop: its plate's edge flares in the grade's colour, a band of that light forges across the plate, the tile
+    /// stamps in from half again its size and sparks fly off it. The plate and its words are whole from the first frame.
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareArt is not { } art || _rareSparks is not { } sparks) return;
-        var tile = _rareTile; var heat = _rareHeat; var row = _rareRow;
+        var tile = _rareTile; var heat = _rareHeat; var band = _rareBand;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        var bloom = new ScaleTransform(1, 1);
-        art.RenderTransformOrigin = new Point(0, .5); art.RenderTransform = bloom;
-        if (heat != null) { heat.RenderTransformOrigin = new Point(0, .5); heat.RenderTransform = bloom; }
         // the sparks off the tile (its place on the plate is fixed: the row's margin, the tile's 26 px)
         double tx = G + 7 + 13, ty = G + 6;
         sparks.Start(Enumerable.Range(0, 7).Select(i => (new Point(tx - 10 + 3.4 * i, ty), 40 + i, 20.0)));
+        double w = Math.Max(160, _rare.ActualWidth > 0 ? _rare.ActualWidth : 260);
+        var slam = new ScaleTransform(1, 1); _rare.RenderTransformOrigin = new Point(.2, .5); _rare.RenderTransform = slam;
+        var white = new TacSketch((dc, s) => { if (s.Width > 2 * G && s.Height > 2 * G) dc.DrawGeometry(Brushes.White, null, Plate(new Rect(G, G, s.Width - 2 * G, s.Height - 2 * G), 8, 3)); }) { Opacity = 0, IsHitTestVisible = false };
+        _rare.Children.Add(white);
         Motion.Play(art, 1500, t =>
         {
-            bloom.ScaleX = Math.Max(.05, Out(Seg(t, 0, .4)));
-            if (heat != null) Heat(heat, t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, .85));
-            if (row != null) row.Opacity = Seg(t, .15, .4);
+            // the slam: from 1.25 to its size in 100 ms, a white flash on the plate
+            slam.ScaleX = slam.ScaleY = 1.25 - .25 * Out(Seg(t, 0, .07));
+            white.Opacity = t < .04 ? .8 * Seg(t, 0, .04) : .8 * (1 - Seg(t, .04, .2));
+            if (heat != null) Heat(heat, t < .15 ? Seg(t, 0, .15) : 1 - Seg(t, .15, .85));
+            if (band != null) { double k = Seg(t, .05, .6); ((TranslateTransform)band.RenderTransform).X = -70 + (w + 70) * Out(k); band.Opacity = k is > 0 and < 1 ? Math.Sin(Math.PI * k) : 0; }
             sparks.Step(t is > .12 and < .95 ? Seg(t, .12, .95) : 1);
-            sc.ScaleX = sc.ScaleY = t < .1 ? 1.5 : 1.5 - .5 * Back(Seg(t, .1, .4), 2.4);
-        }, () => { bloom.ScaleX = 1; if (heat != null) Heat(heat, 0); if (row != null) row.Opacity = 1; sparks.Clear(); sc.ScaleX = sc.ScaleY = 1; });
+            sc.ScaleX = sc.ScaleY = t < .08 ? 1.6 : 1.6 - .6 * Back(Seg(t, .08, .35), 2.6);
+        }, () => { if (heat != null) Heat(heat, 0); if (band != null) band.Opacity = 0; sparks.Clear(); sc.ScaleX = sc.ScaleY = 1; slam.ScaleX = slam.ScaleY = 1; _rare.Children.Remove(white); });
     }
 
     /// <summary>
@@ -628,8 +651,16 @@ sealed partial class HudAsmodian : ModernLook
         // the sparks off the ring's top (its place in the line: the body's margin)
         double cx = _lineBody.Margin.Left + 21, cy = _lineBody.Margin.Top + 14;
         _lineSparks.Start(Enumerable.Range(0, 8).Select(i => { double ang = Math.PI * (.15 + .7 * i / 7.0); return (new Point(cx - 15 * Math.Cos(ang), cy - 12 * Math.Sin(ang)), 70 + i, 18.0); }));
+        // the NEW BEST tag drops into the strip between the horns (over the crest) and stays for the moment
+        var tag = Chip(L.T("NEW BEST"), Frozen(PaleC), EmberC, size: 10, face: Bahn, pad: new Thickness(8, 1, 8, 2));
+        tag.HorizontalAlignment = HorizontalAlignment.Center; tag.VerticalAlignment = VerticalAlignment.Top; tag.Margin = new Thickness(0, 2, 0, 0);
+        var tagDrop = new TranslateTransform(); tag.RenderTransform = tagDrop; tag.Opacity = 0; tag.IsHitTestVisible = false;
+        _line.Children.Add(tag);
         Motion.Play(art, 1800, t =>
         {
+            double d = Seg(t, .3, .4);
+            tagDrop.Y = -12 * (1 - Back(d, 2));
+            tag.Opacity = t < .3 ? 0 : t < .88 ? Math.Min(1, d * 2) : 1 - Seg(t, .88, 1);
             double k = Out(Seg(t, 0, .45));
             rot.Angle = 360 * (was + (1 - was) * k);
             head.Opacity = t < .45 ? Math.Min(1, Seg(t, 0, .08) * 1.5) : 1 - Seg(t, .45, .6);
@@ -639,7 +670,7 @@ sealed partial class HudAsmodian : ModernLook
         }, () =>
         {
             _beat = beat; _share = was; art.InvalidateVisual();
-            gold.Opacity = 0; gold.Visibility = Visibility.Collapsed; head.Visibility = Visibility.Collapsed; _lineSparks.Clear(); Heat(_lineHeat, 0);
+            gold.Opacity = 0; gold.Visibility = Visibility.Collapsed; head.Visibility = Visibility.Collapsed; _lineSparks.Clear(); Heat(_lineHeat, 0); _line.Children.Remove(tag);
         });
     }
 
@@ -662,12 +693,9 @@ sealed partial class HudAsmodian : ModernLook
     /// <summary>A fight started: the plate rises in as it fades up, the crown slams onto the top row, embers lift off the bars.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 480, t =>
-        {
-            double k = Out(t);
-            _fightShift.Y = 6 * (1 - k);
-            _fightBody.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
+        Cut(Color.FromRgb(0xE0, 0x1C, 0x2A), 300);
+        Motion.Play(_fight, 360, t => _fightShift.Y = 5 * (1 - Out(t)), () => _fightShift.Y = 0);
+        SigilFlare();
         if (Meter is { Members.Count: > 0 } m && m.RowOf(m.Members[0].Id) is IronRow top) top.Slam();
         Embers();
     }
@@ -694,23 +722,90 @@ sealed partial class HudAsmodian : ModernLook
         band.Children.Add(flare);
         var words = new Grid { Margin = new Thickness(G + 10, G + 2, G + 10, G + 2), VerticalAlignment = VerticalAlignment.Center };
         words.ColumnDefinitions.Add(new ColumnDefinition()); words.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var ot = Head(OutcomeText(e), 21, Frozen(Mod.Mix(c, Colors.White, .3)), FontWeights.Bold);
+        var ot = Head(OutcomeText(e).ToUpper(System.Globalization.CultureInfo.CurrentCulture), 25, Frozen(Mod.Mix(c, Colors.White, .3)), FontWeights.Bold);
         if (!wipe) ot.Effect = Underglow(.6);
         words.Children.Add(ot);
-        var ck = Big(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 19, White);
+        var ck = Big(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 21, White);
         Grid.SetColumn(ck, 1); words.Children.Add(ck);
         band.Children.Add(words);
-        var sc = new ScaleTransform(1, 1);
-        band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = sc;
+        var sc = new ScaleTransform(1, 1); var drop = new TranslateTransform();
+        band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = new TransformGroup { Children = { sc, drop } };
         foreach (var old in head.Children.OfType<Grid>().Where(g => Equals(g.Tag, "end-banner")).ToList()) head.Children.Remove(old);
         head.Children.Add(band);
         Motion.Play(band, 2400, t =>
         {
-            double i = Seg(t, 0, .14), o = Seg(t, .84, 1);
-            band.Opacity = Math.Min(1, i * 2.5) * (1 - o);
-            sc.ScaleX = sc.ScaleY = 1 + .14 * (1 - Out(i));
+            // it drops from the crest in 120 ms with an overshoot, holds, lifts away at the end
+            double i = Seg(t, 0, .05), o = Seg(t, .88, 1);
+            band.Opacity = Math.Min(1, i * 3) * (1 - o);
+            drop.Y = -30 * (1 - Back(i, 2.2)) - 10 * Out(o);
+            sc.ScaleX = sc.ScaleY = 1 + .05 * (1 - Out(Seg(t, .05, .12)));
             if (!wipe) Heat(flare, t < .14 ? 0 : 1 - Seg(t, .14, .6));
         }, () => head.Children.Remove(band));
-        if (!wipe) Embers();
+        if (!wipe) { Shockwave(); Embers(storm: true); }
     }
+
+    /// <summary>
+    /// A band of light (a cut) sweeping across the fight's plate, left to right: one frozen path, moved by its transform.
+    /// </summary>
+    void Cut(Color c, double ms)
+    {
+        double h = Math.Max(60, _fight.ActualHeight > 0 ? _fight.ActualHeight : 200), w = Math.Max(200, _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth);
+        var band = new System.Windows.Shapes.Path { Data = CutShape, Stretch = Stretch.Fill, Width = 90, Height = h, IsHitTestVisible = false, Opacity = 0,
+            Fill = SlashFill, RenderTransform = new TranslateTransform(-90, 0) };
+        _fightFx.Children.Add(band);
+        Motion.Play(band, ms, t =>
+        {
+            ((TranslateTransform)band.RenderTransform).X = -90 + (w + 90) * Out(t);
+            band.Opacity = Math.Sin(Math.PI * t);
+        }, () => _fightFx.Children.Remove(band));
+    }
+
+    static readonly Geometry CutShape = MakeCut();
+    static Geometry MakeCut() { var g = Geometry.Parse("M 76,0 L 90,0 L 14,100 L 0,100 Z"); g.Freeze(); return g; }
+    static readonly Brush SlashFill = Mod.Grad(false, (Color.FromArgb(0x00, 0xE0, 0x1C, 0x2A), 0), (Color.FromArgb(0xD0, 0xE0, 0x1C, 0x2A), .3), (Color.FromArgb(0xFF, 0xFF, 0xF2, 0xE0), .5), (Color.FromArgb(0xD0, 0xE0, 0x1C, 0x2A), .7), (Color.FromArgb(0x00, 0xE0, 0x1C, 0x2A), 1));
+
+    /// <summary>The blood moon behind the title flares: a bright copy of it (drawn once) scales from 1.4 down to its place and fades.</summary>
+    void SigilFlare()
+    {
+        double r = 34, cx = FightRoom.Left + FightPad + 34, cy = FightRoom.Top + 14;
+        var flare = new TacSketch((dc, s) => { BloodMoon(dc, new Point(r * 1.4, r * 1.4), r); dc.DrawEllipse(SigilHot, null, new Point(r * 1.4, r * 1.4), r * .9, r * .9); }, r * 2.8, r * 2.8)
+            { Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(1.4, 1.4) };
+        Canvas.SetLeft(flare, cx - r * 1.4); Canvas.SetTop(flare, cy - r * 1.4);
+        _fightFx.Children.Add(flare);
+        Motion.Play(flare, 700, t =>
+        {
+            var sc = (ScaleTransform)flare.RenderTransform; sc.ScaleX = sc.ScaleY = 1.4 - .4 * Out(Seg(t, 0, .4));
+            flare.Opacity = t < .15 ? Seg(t, 0, .15) : 1 - Seg(t, .3, 1);
+        }, () => _fightFx.Children.Remove(flare));
+    }
+
+    static readonly Brush SigilHot = MakeRadial(Color.FromArgb(0x90, 0xFF, 0xC0, 0x90), Color.FromArgb(0, 0xFF, 0x3A, 0x2E), Color.FromArgb(0x60, 0xFF, 0x4A, 0x3D));
+
+    /// <summary>
+    /// A kill's shockwave: a blood-red flash fills the plate and two rings (a hot crimson one and a wide blood one behind it)
+    /// burst out from the banner across the whole meter, clipped to the fight's bounds. Three elements, scale and opacity only.
+    /// </summary>
+    void Shockwave()
+    {
+        double w = Math.Max(200, _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth), h = Math.Max(80, _fight.ActualHeight > 0 ? _fight.ActualHeight : 200);
+        var at = new Point(w / 2, FightRoom.Top + 16);
+        double D = 2.3 * Math.Max(w, h);
+        var flash = new System.Windows.Shapes.Rectangle { Width = w, Height = h, Fill = KillFlash, IsHitTestVisible = false, Opacity = 0 };
+        System.Windows.Shapes.Ellipse Ring(Brush b, double th) => new() { Width = D, Height = D * .62, Stroke = b, StrokeThickness = th, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(1, 1) };
+        var hot = Ring(ShockHot, 4); var blood = Ring(ShockBlood, 8);
+        foreach (var r in new[] { blood, hot }) { Canvas.SetLeft(r, at.X - D / 2); Canvas.SetTop(r, at.Y - D * .31); }
+        _fightFx.Children.Add(flash); _fightFx.Children.Add(blood); _fightFx.Children.Add(hot);
+        Motion.Play(hot, 900, t =>
+        {
+            flash.Opacity = t < .06 ? Seg(t, 0, .06) * .65 : .65 * (1 - Seg(t, .06, .4));
+            double a = Seg(t, 0, .7), b = Seg(t, .1, .9);
+            ((ScaleTransform)hot.RenderTransform).ScaleX = ((ScaleTransform)hot.RenderTransform).ScaleY = .02 + .98 * Out(a);
+            hot.Opacity = a is > 0 and < 1 ? .95 * (1 - a) : 0;
+            ((ScaleTransform)blood.RenderTransform).ScaleX = ((ScaleTransform)blood.RenderTransform).ScaleY = .02 + .8 * Out(b);
+            blood.Opacity = b is > 0 and < 1 ? .9 * (1 - b) : 0;
+        }, () => { _fightFx.Children.Remove(flash); _fightFx.Children.Remove(hot); _fightFx.Children.Remove(blood); });
+    }
+
+    static readonly Brush KillFlash = MakeRadial(Color.FromArgb(0x70, 0xFF, 0x3A, 0x30), Color.FromArgb(0, 0x8E, 0x0F, 0x1C), Color.FromArgb(0x40, 0xC2, 0x1F, 0x2E));
+    static readonly Brush ShockHot = Frozen(Color.FromRgb(0xFF, 0x6A, 0x4A)), ShockBlood = Frozen(Color.FromArgb(0xB0, 0x8E, 0x0F, 0x1C));
 }

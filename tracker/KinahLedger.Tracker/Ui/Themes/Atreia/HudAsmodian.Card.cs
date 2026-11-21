@@ -19,7 +19,7 @@ sealed partial class HudAsmodian : IThemeCard
         const double In = 11;
         double w = 270 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
-        var stack = new StackPanel { Margin = new Thickness(G + In, G + 9, G + In, G + 9) };
+        var stack = new StackPanel { Margin = new Thickness(CardRoom.Left + In, CardRoom.Top + 8, CardRoom.Right + In, CardRoom.Bottom + 8) };
 
         // the head on a forged bar: art, name, CP, YOU ... class
         var head = new Grid { Height = 30, Margin = new Thickness(-5, 0, -5, 7) };
@@ -56,9 +56,9 @@ sealed partial class HudAsmodian : IThemeCard
         Grid.SetColumn(cls, 2); hg.Children.Add(cls);
         head.Children.Add(hg);
         // the card widens for a long name (up to 60 more) before the name is cut
-        double need = 20 + 8 + Mod.W(name) + extra + Mod.W(cls) + 8 + 2 * (G + In) + 6;
+        double need = 20 + 8 + Mod.W(name) + extra + Mod.W(cls) + 8 + CardRoom.Left + CardRoom.Right + 2 * In + 6;
         w = Math.Max(w, Math.Min(w + 60, need));
-        double inner = w - 2 * (G + In);
+        double inner = w - CardRoom.Left - CardRoom.Right - 2 * In;
         stack.Width = inner;
         name.MaxWidth = Math.Max(60, inner + 10 - 6 - 9 - 28 - extra - Mod.W(cls) - 8);
         stack.Children.Add(head);
@@ -101,7 +101,7 @@ sealed partial class HudAsmodian : IThemeCard
 
         // the abilities: each on its own forged bar, as long as its part of the top one
         var bars = new List<TacSketch>();
-        double figW = 46 + 56 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
+        double rateW = (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0), figW = 46 + 56 + rateW;
         if (c.Abilities.Count > 0)
         {
             stack.Children.Add(Rule(new Thickness(0, 5, 0, 3)));
@@ -122,7 +122,7 @@ sealed partial class HudAsmodian : IThemeCard
                 {
                     var r = new Rect(0, 1.5, s.Width, s.Height - 3);
                     dc.DrawRectangle(Mod.Br(Color.FromRgb(0x1C, 0x0D, 0x10), .8), null, r);
-                    double fx = r.Width * Math.Clamp(of, 0, 1);
+                    double fx = (r.Width - (rateW > 0 ? rateW - 6 : 0)) * Math.Clamp(of, 0, 1);   // the blade's cut lands in the rate columns' empty lead, never on a digit
                     Forged(dc, r, fx, tone, .55, r.Width - figW - 6, .75);
                 });
                 // the bar forges out on the card's entrance by its transform (drawn once)
@@ -151,8 +151,8 @@ sealed partial class HudAsmodian : IThemeCard
         }
 
         // the plate behind it all
-        var plate = new TacSketch((dc, s) => Iron(dc, s, 1, big: 12));
-        var heat = HeatLayer(12);
+        var plate = new TacSketch((dc, s) => WarPlate(dc, s, 1, CardRoom, 12, 31));
+        var heat = HeatLayer(12, room: CardRoom);
         var card = new Grid { Margin = new Thickness(2, 2, 6, 6) };
         card.Children.Add(plate); card.Children.Add(heat);
         card.Children.Add(stack);
