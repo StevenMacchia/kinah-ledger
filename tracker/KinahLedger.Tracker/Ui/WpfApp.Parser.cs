@@ -7,7 +7,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "inspect", "compare", "timeline", "fight", "taken", "full", "inspect-full" };
+    static readonly string[] ParserStates = { "live", "history", "detail", "nodamage", "nogroup", "empty", "inspect", "compare", "timeline", "track", "fight", "taken", "full", "inspect-full" };
 
     /// <summary>
     /// ui-shot --parser [live|history|detail|nodamage|empty|overlay] [--skin night|abyss|daylight|wacky|tactical|glitch]: the Parser page from
@@ -62,12 +62,49 @@ public static partial class WpfApp
                 var name = "ui-parser-" + st + (skin != null ? "-" + skin : "");
                 Save((FrameworkElement)w.Content, Path.Combine(dir, name + ".png"), 800 - 16);
                 SavePart(w.ParserPage, Path.Combine(dir, name + "-page.png"), w.TryFindResource("Bg") as Brush);
+                if (st == "track") ShotTrackHovers(w, dir, name);
             }
         }
         catch (Exception ex) { Console.WriteLine(ex); return 1; }
         finally { w?.Close(); }
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
+    }
+
+    /// <summary>
+    /// The Timeline tab's hovers and zoom (ui-parser-track-*.png): the chart with the box at a cast, at a death, at your biggest
+    /// hit and at an HP phase, then zoomed to a death's last 20 seconds with its recap opened.
+    /// </summary>
+    static void ShotTrackHovers(MainWindow w, string dir, string name)
+    {
+        if (ParserTimeline.Last is not { } ch || ch.Data is not { } t) { Console.WriteLine("track: no timeline drawn"); return; }
+        void Shot(string what) { DoEvents(); SavePart(ch, Path.Combine(dir, name + "-" + what + ".png"), w.TryFindResource("Card") as Brush); }
+        Point On(string kind, double at, int nth = 0)
+        {
+            var row = ch.Rows.Where(r => r.Kind == kind).ElementAtOrDefault(nth) ?? ch.Rows[0];
+            return new Point(ch.XOf(at), row.Top + row.Height / 2);
+        }
+        if (t.Abilities.FirstOrDefault()?.Casts is { Count: > 2 } casts) { ch.HoverForTest(On("ability", casts[casts.Count / 2].At)); Shot("hover-cast"); }
+        if (t.BigHits.FirstOrDefault() is { } big) { ch.HoverForTest(On("hits", big.At)); Shot("hover-hit"); }
+        if (t.Phases.FirstOrDefault(p => p.Mark == 0.5) is { } ph) { ch.HoverForTest(On("hp", ph.At)); Shot("hover-phase"); }
+        if (t.Spikes.FirstOrDefault() is { } sp) { ch.HoverForTest(On("group", sp.Second + 0.5)); Shot("hover-spike"); }
+        if (t.Deaths.FirstOrDefault() is { } d)
+        {
+            ch.HoverForTest(On("member", d.At, t.Members.FindIndex(m => m.F == d.F))); Shot("hover-death");
+            ch.HoverForTest(new Point(-1, -1));
+            ch.SetSpan(Math.Max(0, d.At - 16), d.At + 4, notify: false); Shot("zoom-death");
+            ch.SetSpan(0, ch.Length, notify: false);
+            // the page with the first death's recap open, then with every ability shown
+            ParserTimeline.DeathOpenForTest = 0; w.ParserTabForTest = "Track"; DoEvents();
+            SavePart(w.ParserPage, Path.Combine(dir, name + "-recap-page.png"), w.TryFindResource("Bg") as Brush);
+            ParserTimeline.DeathOpenForTest = -1;
+        }
+        if (t.Folded != null)
+        {
+            ParserTimeline.AllForTest = true; w.ParserTabForTest = "Track"; DoEvents();
+            SavePart(w.ParserPage, Path.Combine(dir, name + "-all-page.png"), w.TryFindResource("Bg") as Brush);
+            ParserTimeline.AllForTest = false; w.ParserTabForTest = "Track"; DoEvents();
+        }
     }
 
     /// <summary>The game-like grey under the overlays' renders; KL_SHOT_CLEAR=1 leaves them clear, to lay over real game pictures.</summary>

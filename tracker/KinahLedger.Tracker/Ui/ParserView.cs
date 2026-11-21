@@ -44,6 +44,8 @@ public sealed class FightView
     /// <summary>The pull measured against by default (your best kill of the fight, else your best pull of it).</summary>
     public Encounter? CompareBest;
     public bool HasCompare => Diff?.You != null;
+    /// <summary>The Timeline tab (Parser/PullTimeline.cs): a kept boss pull with your lanes in it (kept from 1.0.38 on).</summary>
+    public bool HasPullTimeline => IsBossPull && PullTimeline.Has(E);
     public int Deaths => Members.Sum(m => m.Deaths);
 
     /// <param name="against">The pull to compare against (its id), picked on the Compare tab; null or gone: your best kill of the fight.</param>

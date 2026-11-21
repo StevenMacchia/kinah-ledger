@@ -153,6 +153,7 @@ public partial class MainWindow
         FrameworkElement body = ctx.Tab switch
         {
             "Compare" => ParserCommand.Compare(v, ctx.Copy(ParserShare.Compare), ctx),
+            "Track" => (FrameworkElement?)ParserTimeline.View(v, ctx, ctx.Copy(ParserShare.Track)) ?? new Border(),   // the Timeline tab (Ui/ParserTimeline.cs)
             "Timeline" => GraphsView(e, v, live, ctx),   // the Graphs tab, the group's table under it (Ui/MainWindow.ParserGraphs.cs)
             "Taken" => ParserCommand.Taken(v, ctx.Copy(ParserShare.Taken)),
             _ => (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) ? ParserCommand.Group(v, ctx, live, detail: !live) : new Border(),
@@ -246,6 +247,56 @@ public partial class MainWindow
                     f.Damage += a.Damage - d0; f.BossDamage += a.BossDamage - b0;
                 }
             }
+    }
+
+    /// <summary>
+    /// The Timeline tab's render sample (render states only): a kept pull's lanes as 1.0.38 keeps them on your row, each
+    /// ability's damage spread over its casts through the pull (adding up to its row), a damage over time ticking every 2 s,
+    /// your biggest hits from the casts; a member's death with a recap where the sample has none.
+    /// </summary>
+    static void ParserDemoTimeline(Encounter e)
+    {
+        static double N(long a, long b, long c) { unchecked { uint h = (uint)(a * 73856093) ^ (uint)(b * 19349663) ^ (uint)(c * 83492791); h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15; return (h % 10000) / 10000.0; } }
+        if (e.You is not { } you) return;
+        double len = Math.Max(6, e.Duration(e.End ?? e.LastAt).TotalSeconds);
+        var top = new List<TopHit>();
+        foreach (var a in you.Abilities)
+        {
+            a.Seconds = new(); a.BossSeconds = new();
+            bool dot = a.Skill <= 0;
+            int c = dot ? Math.Max(1, (int)(len / 2)) : Math.Max(1, a.Casts ?? Math.Max(1, a.Hits / 2));
+            double gap = len / c, off = N(a.Skill, you.Id, 1) * gap * 0.8;
+            if (!dot) { a.Casts = c; a.CastLog = new(); }
+            long left = a.Damage, leftB = a.BossDamage;
+            for (int i = 0; i < c; i++)
+            {
+                double at = Math.Clamp(dot ? 1 + i * 2 : off + i * gap + (N(a.Skill, i, 2) - 0.5) * gap * 0.35, 0, len - 0.05);
+                long d = i == c - 1 ? left : (long)(a.Damage / (double)c * (0.7 + N(a.Skill, i, 3) * 0.6));
+                long db = i == c - 1 ? leftB : (long)(a.BossDamage / (double)c * (0.7 + N(a.Skill, i, 3) * 0.6));
+                d = Math.Min(d, left); db = Math.Min(db, leftB); left -= d; leftB -= db;
+                int s = (int)at;
+                a.Seconds[s] = a.Seconds.GetValueOrDefault(s) + d;
+                if (db > 0) a.BossSeconds[s] = a.BossSeconds.GetValueOrDefault(s) + db;
+                if (dot) continue;
+                int hits = Math.Max(1, a.Hits / c);
+                a.CastLog!.Add(new CastMark { At = Math.Round(at, 2), Damage = d, Hits = hits });
+                top.Add(new TopHit { At = Math.Round(at, 2), Skill = a.Skill, Amount = (long)(d / (double)hits * (1.2 + N(a.Skill, i, 4) * 0.5)), Kinds = N(a.Skill, i, 5) < 0.35 ? new() { "result:3" } : new() { "result:2" } });
+            }
+        }
+        you.TopHits = top.OrderByDescending(h => h.Amount).Take(Fighter.TopHitsKept).ToList();
+        // each death in the sample with a recap (the sample's deaths carry none): the boss's attacks get placeholder names
+        foreach (var f in e.Members.Where(f => f.Deaths > 0 && (f.DeathLog?.Count ?? 0) < f.Deaths))
+        {
+            f.DeathLog ??= new();
+            for (int k = f.DeathLog.Count; k < f.Deaths; k++)
+            {
+                double at = Math.Round(len * (0.45 + 0.3 * N(f.Id, k, 6)), 1);
+                var d = new DeathRecord { At = at, Killer = e.Boss, BossHpLeft = 0.38, KillerSkill = 0 };
+                foreach (var (dt, src, amt) in new[] { (-3.8, "Tail Sweep", 14_200L), (-2.5, "Horn Charge", 21_900L), (-1.1, "Ground Slam", 16_400L), (0.0, "Searing Breath", 31_700L) })
+                    d.Last.Add(new TakenHit { At = Math.Round(at + dt, 2), Source = src, Amount = amt });
+                f.DeathLog.Add(d);
+            }
+        }
     }
 
     /// <summary>
