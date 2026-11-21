@@ -55,10 +55,16 @@ public sealed class CompanionSprite : Grid
     readonly RotateTransform _lean = new(0, 0, 10);
     readonly TranslateTransform _move = new();
     readonly RotateTransform _wingL = new(), _wingR = new();
-    readonly Ellipse _aura, _burst, _shadow, _ring;
+    readonly Ellipse _aura, _burst, _shadow, _ring, _ring2;
+    /// <summary>The white flash over the body as a moment lands (its impact).</summary>
+    readonly Path _flash;
     readonly Path _tint, _ghostR, _ghostC;
     readonly Canvas _eyes = new();
     readonly ScaleTransform _eyeScale = new(1, 1, 0, 1);
+    /// <summary>Where its eyes look (a glance during an idle flourish).</summary>
+    readonly TranslateTransform _eyeLook = new();
+    /// <summary>The flourish under way: 0 a glance around, 1 a smile, 2 a plain float (they take turns).</summary>
+    int _variant;
     readonly List<UIElement> _openEyes = new();
     readonly Path _happyEyes, _closedEyes, _xEyes, _browsFierce, _browsSad, _browsFocus;
     readonly Ellipse _cheekL, _cheekR, _mouthO;
@@ -201,6 +207,8 @@ public sealed class CompanionSprite : Grid
         // a warm flush (a streak) or a grey cast (a wipe, a fall) over the body
         _tint = new Path { Data = body, Fill = new SolidColorBrush(Colors.Transparent), Opacity = 0 };
         _rig.Children.Add(_tint);
+        _flash = new Path { Data = body, Fill = new SolidColorBrush(Colors.White), Opacity = 0, IsHitTestVisible = false };
+        _rig.Children.Add(_flash);
         // the gloss
         var shine = Disc(11, 6.5, new RadialGradientBrush(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF)));
         Place(shine, -8, -6);
@@ -213,7 +221,7 @@ public sealed class CompanionSprite : Grid
         // the face
         var ink = Frozen(_p.Ink);
         Canvas.SetTop(_eyes, 1);
-        _eyes.RenderTransform = _eyeScale;
+        _eyes.RenderTransform = new TransformGroup { Children = { _eyeScale, _eyeLook } };
         foreach (double ex in new[] { -7.5, 7.5 })
         {
             var eye = new Rectangle { Width = 6.6, Height = 9.4, RadiusX = 3.3, RadiusY = 3.3, Fill = ink };
@@ -277,6 +285,9 @@ public sealed class CompanionSprite : Grid
         _ring = new Ellipse { Stroke = _ringInk, StrokeThickness = 2.2, Opacity = 0, Width = 20, Height = 20 };
         Place(_ring, Cx, Cy);
         _stage.Children.Add(_ring);
+        _ring2 = new Ellipse { Stroke = _ringInk, StrokeThickness = 1.6, Opacity = 0, Width = 20, Height = 20 };
+        Place(_ring2, Cx, Cy);
+        _stage.Children.Add(_ring2);
         for (int i = 0; i < 10; i++)
         {
             var at = new TranslateTransform(); var size = new ScaleTransform(0, 0); var turn = new RotateTransform();
@@ -337,7 +348,7 @@ public sealed class CompanionSprite : Grid
         fill.GradientStops.Add(new GradientStop(Color.FromArgb(0x50, _p.WingEdge.R, _p.WingEdge.G, _p.WingEdge.B), 1));
         fill.Freeze();
         var w = new Path { Data = Geometry.Parse(d), Fill = fill, Stroke = Frozen(Color.FromArgb(Theme == HudThemes.Wacky ? (byte)0xFF : (byte)0x90, _p.Rim.R, _p.Rim.G, _p.Rim.B)), StrokeThickness = Theme == HudThemes.Wacky ? 1.6 : .9, StrokeLineJoin = PenLineJoin.Round, RenderTransform = turn };
-        Canvas.SetLeft(w, side * 15); Canvas.SetTop(w, -3);
+        Canvas.SetLeft(w, side * 13.5); Canvas.SetTop(w, -3);
         return w;
     }
 
@@ -420,7 +431,8 @@ public sealed class CompanionSprite : Grid
         int n = ++_flourishes;
         _flourish.Interval = TimeSpan.FromMilliseconds(IdleMs + (_mood == Mood.Focused ? 1800 : _mood == Mood.Sleepy ? 7000 : 4200) + (n * 911) % 1700);
         if (_playing != null) return;
-        Motion.Play(_stage, IdleMs, Idle, () => Idle(0), IdleFps);
+        _variant = n % 3;
+        Motion.Play(_stage, IdleMs, Idle, () => { Idle(0); _variant = 2; }, IdleFps);
     }
 
     /// <summary>Everything stopped: the idle and any reaction under way, which ends without saying so (no <see cref="Rested"/>).</summary>
@@ -453,6 +465,7 @@ public sealed class CompanionSprite : Grid
     void Idle(double p)
     {
         double w = 2 * Math.PI * p;
+        Expression(p);
         switch (_mood)
         {
             case Mood.Focused:
@@ -469,6 +482,19 @@ public sealed class CompanionSprite : Grid
                 break;
         }
         Compose();
+    }
+
+    /// <summary>
+    /// Its face through an idle flourish, awake only (a reaction's face is left alone): a glance one way and back, or a smile
+    /// in the middle of the float; between flourishes it looks ahead with its mood's face.
+    /// </summary>
+    void Expression(double p)
+    {
+        if (_playing != null || _mood == Mood.Sleepy) { _eyeLook.X = 0; return; }
+        _eyeLook.X = _variant == 0 ? 2.2 * Math.Sin(2 * Math.PI * p) : 0;
+        _eyeLook.Y = _variant == 0 ? -.6 * Math.Abs(Math.Sin(2 * Math.PI * p)) : 0;
+        var want = _variant == 1 && p > .3 && p < .75 ? Face.Happy : RestFace;
+        if (_face != want) SetFace(want);
     }
 
     /// <summary>Two z's float up and fade, one after the other, while it dozes.</summary>
@@ -545,26 +571,31 @@ public sealed class CompanionSprite : Grid
         switch (_playing)
         {
             case CompanionKind.Rare:
-                Hop(t, 0, 17); Hop(t, 760, 7);
-                _reWing = -30 * Math.Abs(Math.Sin(2 * Math.PI * t / 190)) * (1 - Win(t, 900, 1500));
-                Sparks(t, 380, 760, 12, 44, 0);
-                Ring(t, 380, 640, 28, 98);
-                _reAura = .9 * Bump(t, 250, 1700);
+                Hop(t, 0, 20); Hop(t, 760, 8);
+                Flash(t, 330, Colors.White);
+                _reWing = -34 * Math.Abs(Math.Sin(2 * Math.PI * t / 170)) * (1 - Win(t, 900, 1500));
+                Sparks(t, 360, 700, 10, 42, 0);
+                Ring(_ring, t, 360, 560, 26, 94); Ring(_ring2, t, 500, 560, 20, 78);
+                _reAura = Math.Max(1.2 * Bump(t, 320, 520), .85 * Bump(t, 250, 1700));
                 break;
             case CompanionKind.Best:
                 Hop(t, 0, 13);
+                Flash(t, 600, Rgb(0xFFF4C8));
+                double power = Bump(t, 580, 860);   // the crown lands: it swells with it
+                _reSx *= 1 + .14 * power; _reSy *= 1 + .14 * power;
                 double drop = Win(t, 240, 640);
                 ((TranslateTransform)_crown.RenderTransform).Y = -31 - 30 * (1 - Back(drop));
                 _crown.Opacity = Math.Min(1, drop * 3) * fadeOut;
                 _rays.Opacity = Win(t, 160, 520) * fadeOut;
                 _raysTurn.Angle = t * 0.035;
-                Ring(t, 560, 600, 30, 92);
-                Sparks(t, 600, 800, 16, 40, 18);
-                _reAura = .85 * Win(t, 200, 600) * fadeOut;
+                Ring(_ring, t, 580, 520, 30, 92); Ring(_ring2, t, 700, 520, 24, 80);
+                Sparks(t, 600, 760, 16, 40, 18);
+                _reAura = Math.Max(1.2 * Bump(t, 580, 780), .85 * Win(t, 200, 600) * fadeOut);
                 _reWing = -16 * Math.Abs(Math.Sin(2 * Math.PI * t / 260)) * (1 - Win(t, 700, 1300));
                 break;
             case CompanionKind.Kill:
-                Hop(t, 0, 11); Hop(t, 600, 8);
+                Hop(t, 0, 14); Hop(t, 600, 9);
+                Flash(t, 0, Colors.White);
                 Confetti(t, 330);
                 _reAura = .45 * Bump(t, 200, 1500);
                 _reWing = -20 * Math.Abs(Math.Sin(2 * Math.PI * t / 220)) * (1 - Win(t, 900, 1400));
@@ -576,12 +607,13 @@ public sealed class CompanionSprite : Grid
                     var g = (TransformGroup)_flames.Children[i].RenderTransform;
                     var s = (ScaleTransform)g.Children[0];
                     double f = Math.Abs(Math.Sin(2 * Math.PI * (t / 260 + i * 0.27)));
-                    s.ScaleY = .6 + .5 * f; s.ScaleX = .85 + .2 * (1 - f);
+                    s.ScaleY = .7 + .6 * f; s.ScaleX = .9 + .25 * (1 - f);
                 }
                 _tint.Opacity = .26 * Win(t, 0, 240) * fadeOut;
                 Embers(t);
-                _reX = 1.8 * Math.Sin(2 * Math.PI * t / 64) * (1 - Win(t, 0, 700));
-                _reWing = -24 * Math.Abs(Math.Sin(2 * Math.PI * t / 150)) * fadeOut;
+                _reX = 3 * Math.Sin(2 * Math.PI * t / 60) * (1 - Win(t, 0, 700));
+                Flash(t, 0, Rgb(0xFFD08A));
+                _reWing = (-10 - 18 * Math.Abs(Math.Sin(2 * Math.PI * t / 150))) * fadeOut;   // raised, beating: clear of the window's edges as it shakes
                 _reAura = .7 * Win(t, 0, 300) * fadeOut;
                 Hop(t, 120, 6);
                 break;
@@ -592,13 +624,18 @@ public sealed class CompanionSprite : Grid
                 var asz = (ScaleTransform)ag.Children[0];
                 asz.ScaleX = asz.ScaleY = Back(pop);
                 _alert.Opacity = Math.Min(1, pop * 4) * fadeOut;
-                _reTurn = 8 * Math.Sin(2 * Math.PI * t / 240) * (1 - Win(t, 200, 1100));
-                Ring(t, 0, 620, 30, 94); Ring2(t, 640, 620);
+                _reTurn = 12 * Math.Sin(2 * Math.PI * t / 220) * (1 - Win(t, 200, 1100));
+                _reWing = -16 * (1 - Win(t, 900, 1300));   // wings up in alarm (and clear of the edges as it wobbles)
+                Flash(t, 40, Rgb(0xFFE2A0));
+                Ring(_ring, t, 0, 560, 30, 92); Ring(_ring2, t, 520, 560, 30, 82);
                 _reAura = .6 * Bump(t, 0, 1400);
                 break;
             case CompanionKind.Pvp:
                 _reX = t < 170 ? 10 * Motion.Out(t / 170) : 10 * (1 - Motion.Out(Win(t, 170, 620)));
-                _reSx = 1 + .1 * Bump(t, 0, 300); _reSy = 1 - .08 * Bump(t, 0, 300);
+                _reSx = 1 + .16 * Bump(t, 0, 300); _reSy = 1 - .14 * Bump(t, 0, 300);
+                _reY = 1.6 * Math.Sin(2 * Math.PI * t / 50) * Bump(t, 120, 520);   // the clash shakes it
+                Flash(t, 120, Rgb(0xFFD0D0));
+                Ring(_ring, t, 140, 480, 24, 84);
                 double clash = Win(t, 80, 400);
                 var sg = (TransformGroup)_slashes.RenderTransform;
                 ((ScaleTransform)sg.Children[0]).ScaleX = ((ScaleTransform)sg.Children[0]).ScaleY = Back(clash);
@@ -606,7 +643,7 @@ public sealed class CompanionSprite : Grid
                 _slashes.Opacity = Math.Min(1, clash * 4) * fadeOut;
                 _slashes.Children[0].Opacity = Bump(t, 220, 900);
                 Sparks(t, 330, 520, 10, 30, 22);
-                _reAura = .7 * Bump(t, 120, 1300);
+                _reAura = Math.Max(1.1 * Bump(t, 100, 300), .7 * Bump(t, 120, 1300));
                 _reWing = -26 * Math.Abs(Math.Sin(2 * Math.PI * t / 170)) * (1 - Win(t, 500, 1000));
                 break;
             case CompanionKind.Wipe:
@@ -632,6 +669,7 @@ public sealed class CompanionSprite : Grid
             case CompanionKind.Death:
                 double tip = Motion.Out(Win(t, 0, 420)) * fadeOut;
                 _reTurn = -9 * tip + 3.5 * Math.Sin(2 * Math.PI * t / 520) * tip; _reY = 5 * tip; _reSy = 1 - .06 * tip; _reWing = 52 * tip;
+                Flash(t, 0, Rgb(0xFF8A8A));
                 _tint.Opacity = .38 * tip;
                 _dizzy.Opacity = Win(t, 200, 420) * fadeOut;
                 for (int i = 0; i < _dizzy.Children.Count; i++)
@@ -662,7 +700,7 @@ public sealed class CompanionSprite : Grid
         _reX = _reY = _reTurn = _reWing = _reAura = 0; _reSx = _reSy = 1;
         _crown.Opacity = _alert.Opacity = _cloud.Opacity = _tear.Opacity = 0;
         _rays.Opacity = _flames.Opacity = _rain.Opacity = _dizzy.Opacity = _slashes.Opacity = 0;
-        _tint.Opacity = 0; _ring.Opacity = 0; _burst.Opacity = 0;
+        _tint.Opacity = 0; _ring.Opacity = 0; _ring2.Opacity = 0; _burst.Opacity = 0; _flash.Opacity = 0;
         foreach (var s in _sparks) s.P.Opacity = 0;
         if (Theme == HudThemes.Glitch)
         {
@@ -697,9 +735,9 @@ public sealed class CompanionSprite : Grid
     {
         double a = t - t0;
         if (a < 0 || a > 680) return;
-        if (a < 80) { double k = a / 80; _reSy *= 1 - .14 * k; _reSx *= 1 + .1 * k; return; }
-        if (a < 500) { double k = (a - 80) / 420; _reY -= height * Math.Sin(Math.PI * k); _reSy *= 1 + .09 * Math.Cos(Math.PI * k); _reSx *= 1 - .06 * Math.Cos(Math.PI * k); return; }
-        double l = Math.Sin(Math.PI * (a - 500) / 180); _reSy *= 1 - .15 * l; _reSx *= 1 + .11 * l;
+        if (a < 80) { double k = a / 80; _reSy *= 1 - .22 * k; _reSx *= 1 + .15 * k; return; }
+        if (a < 500) { double k = (a - 80) / 420; _reY -= height * Math.Sin(Math.PI * k); _reSy *= 1 + .16 * Math.Cos(Math.PI * k); _reSx *= 1 - .1 * Math.Cos(Math.PI * k); return; }
+        double l = Math.Sin(Math.PI * (a - 500) / 180); _reSy *= 1 - .24 * l; _reSx *= 1 + .17 * l;
     }
 
     /// <summary>The sparks fly out from its middle, turning, from <paramref name="t0"/> over <paramref name="ms"/>.</summary>
@@ -713,7 +751,7 @@ public sealed class CompanionSprite : Grid
             double ang = (turnStart + i * 360.0 / _sparks.Count) * Math.PI / 180;
             double r = (from + (to - from) * Motion.Out(a)) * (i % 2 == 0 ? 1 : .78);
             s.At.X = r * Math.Cos(ang); s.At.Y = r * Math.Sin(ang) - 2;
-            double k = Math.Sin(Math.PI * a) * 1.15;
+            double k = Math.Sin(Math.PI * a) * 1.45;
             s.Size.ScaleX = s.Size.ScaleY = k;
             s.Turn.Angle = 160 * a;
             s.P.Opacity = Math.Min(1, k);
@@ -737,20 +775,25 @@ public sealed class CompanionSprite : Grid
         }
     }
 
-    /// <summary>A ring that grows out and fades.</summary>
-    void Ring(double t, double t0, double ms, double from, double to)
+    /// <summary>A shockwave ring that bursts out and fades.</summary>
+    static void Ring(Ellipse ring, double t, double t0, double ms, double from, double to)
     {
         double a = Win(t, t0, t0 + ms);
         if (a <= 0 || a >= 1) return;
         double d = from + (to - from) * Motion.Out(a);
-        _ring.Width = _ring.Height = d;
-        Place(_ring, Cx, Cy);
-        _ring.StrokeThickness = 2.6 * (1 - a) + .6;
-        _ring.Opacity = (1 - a) * .95;
+        ring.Width = ring.Height = d;
+        Place(ring, Cx, Cy);
+        ring.StrokeThickness = 3.4 * (1 - a) + .6;
+        ring.Opacity = (1 - a) * .95;
     }
 
-    /// <summary>A second pulse of the ring (a timer's): the ring again, a little smaller.</summary>
-    void Ring2(double t, double t0, double ms) { if (t >= t0) Ring(t, t0, ms, 30, 80); }
+    /// <summary>The impact: the body flashes <paramref name="c"/> as the moment lands at <paramref name="t0"/>, gone in 220 ms.</summary>
+    void Flash(double t, double t0, Color c)
+    {
+        if (t < t0 || t > t0 + 220) return;
+        ((SolidColorBrush)_flash.Fill).Color = c;
+        _flash.Opacity = .8 * (1 - Motion.Out((t - t0) / 220));
+    }
 
 
     /// <summary>A streak's embers: the sparks, small, rising from round its head and fading as they go.</summary>
@@ -792,8 +835,9 @@ public sealed class CompanionSprite : Grid
     };
 
     /// <summary>For renders: a reaction's frame at <paramref name="ms"/>, or the idle at <paramref name="idle"/> (0 to 1).</summary>
-    internal void HoldForRender(CompanionKind? kind, Color accent, double ms, double idle)
+    internal void HoldForRender(CompanionKind? kind, Color accent, double ms, double idle, int variant = 2)
     {
+        _variant = variant;
         Idle(idle);
         if (kind is { } k)
         {

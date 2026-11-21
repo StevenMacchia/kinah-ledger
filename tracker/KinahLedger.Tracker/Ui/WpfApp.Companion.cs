@@ -165,8 +165,11 @@ public static partial class WpfApp
             bool focused = ov?.FaceForTest?.Sprite.FaceForTest == "Focused";
             ov?.SetMood(CompanionSprite.Mood.Sleepy);
             bool sleepy = ov?.FaceForTest?.Sprite.FaceForTest == "Sleepy";
+            var faces = new CompanionFace(HudThemes.Classic, 0.94, false, false).Sprite;
+            faces.HoldForRender(null, Colors.White, 0, .5, 1); string smile = faces.FaceForTest;
+            faces.HoldForRender(null, Colors.White, 0, .5, 2); string plain = faces.FaceForTest;
             ov?.SetMood(CompanionSprite.Mood.Idle);
-            check(focused && sleepy, "companion: leans in for a fight and dozes after a long quiet");
+            check(focused && sleepy && smile == "Happy" && plain == "Idle", $"companion: leans in for a fight, dozes after a long quiet, and smiles now and then as it floats ({smile}, {plain})");
 
             // the Settings page: an overlay page, its switch turns the companion off and on, a switch and Try per reaction
             var o = new OptionsWindow(w, OptionsWindow.Page.Companion) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
@@ -294,13 +297,13 @@ public static partial class WpfApp
             {
                 // the moods: idle (two points of its float), leaning in, dozing
                 var moods = Sheet();
-                var cols = new (string Name, CompanionSprite.Mood Mood, double At)[] { ("idle", CompanionSprite.Mood.Idle, .25), ("idle-low", CompanionSprite.Mood.Idle, .75), ("focused", CompanionSprite.Mood.Focused, .3), ("sleepy", CompanionSprite.Mood.Sleepy, .35) };
+                var cols = new (string Name, CompanionSprite.Mood Mood, double At, int Variant)[] { ("idle", CompanionSprite.Mood.Idle, .25, 2), ("idle glance", CompanionSprite.Mood.Idle, .25, 0), ("idle smile", CompanionSprite.Mood.Idle, .5, 1), ("focused", CompanionSprite.Mood.Focused, .3, 2), ("sleepy", CompanionSprite.Mood.Sleepy, .35, 2) };
                 for (int r = 0; r < CompanionThemes.Length; r++)
                     for (int c = 0; c < cols.Length; c++)
                     {
                         var face = new CompanionFace(CompanionThemes[r], 0.94, false, false);
                         face.Sprite.SetMood(cols[c].Mood);
-                        face.Sprite.HoldForRender(null, Colors.White, 0, cols[c].At);
+                        face.Sprite.HoldForRender(null, Colors.White, 0, cols[c].At, cols[c].Variant);
                         Cell(moods, face, r, c, CompanionThemes[r] + " · " + cols[c].Name);
                     }
                 SaveSheet(moods, Path.Combine(dir, $"companion-moods-{scale:0}x.png"), scale);

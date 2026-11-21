@@ -124,14 +124,14 @@ public sealed class CompanionFace : Grid
         if (_bubble == null) return;
         _bubble.Visibility = Visibility.Visible;
         double inP = Math.Clamp(t / (InMs - 20), 0, 1), outP = Math.Clamp((t - (SayMs - OutMs)) / OutMs, 0, 1);
-        double s = .78 + .22 * Overshoot(inP);
+        double s = .62 + .38 * Overshoot(inP);
         _pop.ScaleX = _pop.ScaleY = s - .06 * outP;
         _slide.X = (BubbleLeft ? 10 : -10) * (1 - Motion.Out(inP));
         _slide.Y = -4 * outP;
         _bubble.Opacity = Math.Min(1, t / 150) * (1 - outP);
     }
 
-    static double Overshoot(double p) { const double k = 1.7; double q = p - 1; return 1 + (k + 1) * q * q * q + k * q * q; }
+    static double Overshoot(double p) { const double k = 2.4; double q = p - 1; return 1 + (k + 1) * q * q * q + k * q * q; }
 
     /* ---------------- the bubble, theme by theme ---------------- */
 
