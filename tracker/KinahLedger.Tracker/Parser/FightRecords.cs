@@ -113,14 +113,27 @@ public sealed class FightRecords
     public GhostCurve? GhostFor(Encounter e, Func<IEnumerable<Encounter>> kept)
     {
         if (e.ModeKind != ParserMode.Bosses || (e.Boss.Length == 0 && e.BossId <= 0)) return null;
+        string key = KeyOf(e), bestId;
         lock (_gate)
         {
             var map = Load();
-            if (!map.TryGetValue(KeyOf(e), out var r) || r.BestDps <= 0 || r.BestDpsFight == e.Id) return null;
+            if (!map.TryGetValue(key, out var r) || r.BestDps <= 0 || r.BestDpsFight == e.Id) return null;
             if (r.Ghost is { } g && g.Fight == r.BestDpsFight) return g;
-            Encounter? best = null;
-            try { best = kept().FirstOrDefault(p => p.Id == r.BestDpsFight && !p.Live); } catch (Exception ex) { CrashLog.Write("parser: finding the best fight", ex); }
-            if (best == null || GhostCurve.Of(best) is not { } made) return null;
+            bestId = r.BestDpsFight;
+        }
+        // the fights kept are looked through outside this lock: the store takes its own lock and then this one (EncounterStore.Add
+        // notes each fight kept here), so asking for them while holding this one could leave both waiting on each other for good
+        // (1.0.40: the meter asks on the window's thread at a pull's first draw while the session keeps the fight that ended)
+        Encounter? best = null;
+        try { best = kept().FirstOrDefault(p => p.Id == bestId && !p.Live); } catch (Exception ex) { CrashLog.Write("parser: finding the best fight", ex); }
+        if (best == null || GhostCurve.Of(best) is not { } made) return null;
+        lock (_gate)
+        {
+            var map = Load();
+            if (!map.TryGetValue(key, out var r)) return null;
+            // a new best set meanwhile brought its own curve
+            if (r.BestDpsFight != bestId) return r.Ghost is { } g && g.Fight == r.BestDpsFight && r.BestDpsFight != e.Id ? g : null;
+            if (r.Ghost is { } had && had.Fight == bestId) return had;
             r.Ghost = made;
             Save(map);
             return made;

@@ -56,9 +56,35 @@ static class PbGhostTests
         {
             Encounter.ActiveBasis = false; Encounter.BossOnly = true; PbGhost.Shown = true;
             Made(check, t);
+            LockOrder(check, t);
             Recorded(check, recording, replay);
         }
         finally { Encounter.ActiveBasis = active0; Encounter.BossOnly = boss0; PbGhost.Shown = shown0; PbGhost.Source = src0; PbGhost.Forget(); }
+    }
+
+    /// <summary>
+    /// The ghost asked for while a fight is kept: the meter asks on the window's thread at a pull's first draw
+    /// (FightRecords.GhostFor, which looks among the fights kept for an older record's best), while the session keeps the
+    /// fight that just ended (EncounterStore.Add, which notes it in the records). In 1.0.40 the two took the store's lock and
+    /// the records' in opposite orders, and could hang the window and the session for good.
+    /// </summary>
+    static void LockOrder(Action<bool, string> check, DateTime t)
+    {
+        var dir = TestTemp.Path("ghost-lock-" + Guid.NewGuid().ToString("N"));
+        var store = new EncounterStore(() => dir);
+        // an older record's best with no curve to race (kept before the fights carried their seconds): every ask looks among the fights kept
+        Encounter Old(int i) { var e = Pull("old" + i, t.AddMinutes(i), new long[] { 9_000 }); foreach (var f in e.Roster) { f.PerSecond = null; f.BossPerSecond = null; } return e; }
+        store.Add(Old(0));
+        var now = LiveCut(Pull("now", t.AddHours(2), Enumerable.Repeat(8_000L, 30).ToArray()), 10);
+        bool stop = false; int adds = 0, asks = 0;
+        var keeping = new Thread(() => { for (int i = 1; !stop && i <= 3000; i++) { store.Add(Old(i)); adds++; } }) { IsBackground = true, Name = "ghost-lock keep" };
+        var asking = new Thread(() => { while (!stop) { store.Records.GhostFor(now, () => store.All()); asks++; } }) { IsBackground = true, Name = "ghost-lock ask" };
+        keeping.Start(); asking.Start();
+        bool kept = keeping.Join(TimeSpan.FromSeconds(60));
+        stop = true;
+        bool asked = asking.Join(TimeSpan.FromSeconds(5));
+        check(kept && asked && adds == 3000,
+            $"ghost: asked for while fights are kept, nothing waits on itself ({adds:N0} of 3,000 fights kept, {asks:N0} asks{(kept && asked ? "" : ", then both threads hung")})");
     }
 
     static void Made(Action<bool, string> check, DateTime t)
