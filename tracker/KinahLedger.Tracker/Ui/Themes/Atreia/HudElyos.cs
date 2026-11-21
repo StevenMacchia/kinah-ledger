@@ -37,8 +37,9 @@ sealed partial class HudElyos : ModernLook
     /// <summary>The figures' face: crisp, tabular, a touch narrower than Inter.</summary>
     static readonly FontFamily Fig = HudThemes.Bahn;
 
-    // the room round the look: the plates' shadow and crest stay inside the window; 98 at the right for the pickup's chip
-    readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 10), HorizontalAlignment = HorizontalAlignment.Left };
+    // the room round the look: the plates' shadow and winged crest stay inside the window; 48 at the left for the leader's great
+    // wing (and the feathers it sheds), 98 at the right for the other wing and the pickup's chip
+    readonly Grid _root = new() { Margin = new Thickness(48, 24, 98, 10), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
@@ -57,14 +58,16 @@ sealed partial class HudElyos : ModernLook
     TacSketch? _ringArt;
     FrameworkElement? _ringFull;
     System.Windows.Shapes.Ellipse? _ringFlare;
+    TacSketch? _ringRays;
+    static readonly Transform RingRaysAt = Fz(new TranslateTransform(21, 21));
     double _share = -1;
     bool _beat;
     Border? _firstChip;
     // the sunlit glint over the Buddy's plate: one band (a frozen brush) moved by its transform, clipped to the plate when it starts
     readonly Canvas _lineSheenHost = new() { IsHitTestVisible = false };
-    readonly System.Windows.Shapes.Rectangle _lineSheen = new() { Width = 56, Fill = SheenBrush, Opacity = 0, IsHitTestVisible = false };
+    readonly System.Windows.Shapes.Rectangle _lineSheen = new() { Width = 72, Fill = SheenBrush, Opacity = 0, IsHitTestVisible = false };
     readonly TranslateTransform _lineSheenShift = new();
-    static readonly LinearGradientBrush SheenBrush = Lin(new Point(0, 0), new Point(1, 0), (Mod.A(WarmC, 0), 0), (Mod.A(WarmC, .26), .42), (Mod.A(Colors.White, .34), .55), (Mod.A(WarmC, 0), 1));
+    static readonly LinearGradientBrush SheenBrush = Lin(new Point(0, 0), new Point(1, 0), (Mod.A(WarmC, 0), 0), (Mod.A(WarmC, .4), .4), (Mod.A(Colors.White, .62), .55), (Mod.A(WarmC, 0), 1));
 
     // the rare drop under the Buddy, and the notice line
     readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed };
@@ -78,11 +81,18 @@ sealed partial class HudElyos : ModernLook
     const double Pad = 10;
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 3, 0, 10) };
     readonly TacSketch _fightArt;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 9, Pad, 8) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 10, Pad, 10) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
-    readonly Canvas _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+    // the fight's moments (the beam, the gold, the burst, the outcome's band), kept inside the fight's box
+    readonly Canvas _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly TranslateTransform _fightShift = new();
     FrameworkElement? _head;
+    // the leader's great wings: behind the plate, rooted on its edges at the leader's row, rising to its top edge
+    readonly TacSketch _bigWingL, _bigWingR;
+    readonly ScaleTransform _bigWingLScale = new(), _bigWingRScale = new();
+    readonly RotateTransform _bigWingLTurn = new(), _bigWingRTurn = new();
+    double _wingY = double.NaN;
+    readonly TacSketch _lineWings;
     string _leadFight = "";
     long _leadId;
 
@@ -93,9 +103,16 @@ sealed partial class HudElyos : ModernLook
         _lineArt = new TacSketch((dc, s) => PlateArt(dc, s, _dim ? .55 : _opacity, crest: true, dim: _dim));
         _lineSheen.RenderTransform = new TransformGroup { Children = { new SkewTransform(-28, 0), _lineSheenShift } };
         _lineSheenHost.Children.Add(_lineSheen);
+        _lineWings = new TacSketch(DrawLineWings);
+        _line.Children.Add(_lineWings);
         _line.Children.Add(_lineArt); _line.Children.Add(_lineSheenHost); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
-        _fightArt = new TacSketch((dc, s) => PlateArt(dc, s, _opacity, crest: true));
+        _fightArt = new TacSketch((dc, s) => PlateArt(dc, s, _opacity, crest: true, band: 4));
+        _bigWingL = new TacSketch((dc, s) => DrawBigWing(dc, s, false)) { RenderTransform = new TransformGroup { Children = { _bigWingLScale, _bigWingLTurn } }, Opacity = 0 };
+        _bigWingR = new TacSketch((dc, s) => DrawBigWing(dc, s, true)) { RenderTransform = new TransformGroup { Children = { _bigWingRScale, _bigWingRTurn } }, Opacity = 0 };
         _fight.Children.Add(_fightArt); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        // the wings are laid out after the rows (they read where the leader's row stands as they are drawn), drawn behind the plate
+        Panel.SetZIndex(_bigWingL, -1); Panel.SetZIndex(_bigWingR, -1);
+        _fight.Children.Add(_bigWingL); _fight.Children.Add(_bigWingR);
         _fight.RenderTransform = _fightShift;
         _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
@@ -154,7 +171,12 @@ sealed partial class HudElyos : ModernLook
     static readonly LinearGradientBrush Leaf = Lin(new Point(0, 0), new Point(1, .35),
         (GoldHiC, 0), (GoldMidC, .22), (GoldLoC, .42), (GoldHiC, .62), (GoldMidC, .8), (GoldLoC, 1));
     static readonly Pen LeafPen = Frz(new Pen(Leaf, 1));
-    static readonly Pen InnerPen = Frz(new Pen(Frozen(Mod.A(GoldHiC, .17)), .8));
+    static readonly Pen InnerPen = Frz(new Pen(Frozen(Mod.A(Color.FromRgb(0x7F, 0xC4, 0xFF), .55)), .9));
+    static readonly Pen InnerGlow = Frz(new Pen(Frozen(Mod.A(Color.FromRgb(0x7F, 0xC4, 0xFF), .14)), 3));
+    /// <summary>The sky in a plate's head: ivory light at its top edge fading through azure.</summary>
+    static readonly LinearGradientBrush HeadSky = Lin(new Point(0, 0), new Point(0, 1), (Mod.A(Color.FromRgb(0xFF, 0xF8, 0xEA), .34), 0), (Mod.A(Color.FromRgb(0x7F, 0xC4, 0xFF), .3), .42), (Mod.A(Color.FromRgb(0x7F, 0xC4, 0xFF), 0), 1));
+    /// <summary>The pearl band in a plate's frame: white at its top fading to pearl.</summary>
+    static readonly LinearGradientBrush PearlBand = Lin(new Point(0, 0), new Point(0, 1), (Color.FromRgb(0xFF, 0xFD, 0xF6), 0), (Color.FromRgb(0xEE, 0xE7, 0xD7), .5), (Color.FromRgb(0xD6, 0xCB, 0xB2), 1));
     static readonly Pen DiamondEdge = Frz(new Pen(Frozen(Mod.A(AbyssC, .7)), .7));
     /// <summary>A filled gold: light at the top, deep at the foot (YOU, the diamonds, the wings).</summary>
     static readonly LinearGradientBrush GoldFill = Lin(new Point(0, 0), new Point(0, 1), (Color.FromRgb(0xFF, 0xF0, 0xC4), 0), (GoldHiC, .4), (GoldMidC, .75), (GoldLoC, 1));
@@ -200,7 +222,7 @@ sealed partial class HudElyos : ModernLook
     /// the opacity setting changes: the moments' light crosses it as an element of its own.
     /// </summary>
     internal static void PlateArt(DrawingContext dc, Size s, double opacity, bool crest = false, bool shadow = true, double cut = 6,
-        Color? edge = null, bool dim = false)
+        Color? edge = null, bool dim = false, double band = 0, double crestScale = 1)
     {
         if (s.Width < 14 || s.Height < 12) return;
         var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
@@ -219,13 +241,24 @@ sealed partial class HudElyos : ModernLook
         double a = Math.Clamp(.8 + .18 * opacity, .8, .98);
         dc.DrawGeometry(Mod.Grad(true, (Mod.A(dim ? Mod.Mix(RoyalC, GreyC, .3) : RoyalC, a), 0), (Mod.A(NightC, a), .55), (Mod.A(AbyssC, Math.Min(.98, a + .02)), 1)), null, shape);
         dc.PushClip(shape);
-        if (!dim) dc.DrawRectangle(SkyGlow, null, new Rect(0, 0, s.Width, Math.Min(s.Height, 80)));
+        if (!dim) { dc.DrawRectangle(HeadSky, null, new Rect(0, 0, s.Width, Math.Min(s.Height * .6, 54))); dc.DrawRectangle(SkyGlow, null, new Rect(0, 0, s.Width, Math.Min(s.Height, 80))); }
         // a line of light along the top edge
         dc.DrawRectangle(Mod.Grad(false, (Mod.A(IvoryC, 0), 0), (Mod.A(IvoryC, .2), .3), (Mod.A(IvoryC, .2), .7), (Mod.A(IvoryC, 0), 1)), null, new Rect(cut, 1.5, Math.Max(0, s.Width - 2 * cut), 1));
         dc.Pop();
         // the frames
         dc.DrawGeometry(null, edge is { } ec ? Frz(new Pen(Mod.Grad(false, (Mod.Mix(ec, GoldHiC, .35), 0), (ec, .5), (Mod.Mix(ec, GoldLoC, .3), 1)), 1)) : LeafPen, shape);
-        if (s.Height > 26) dc.DrawGeometry(null, InnerPen, Plate(new Rect(r.X + 3, r.Y + 3, r.Width - 6, r.Height - 6), Math.Max(1, cut - 1.2)));
+        if (band > 0)
+        {
+            // the frame's pearl band between gold hairlines, the sky's line inside it
+            double h = band / 2 + .5;
+            dc.DrawGeometry(null, Frz(new Pen(PearlBand, band)), Plate(new Rect(r.X + h, r.Y + h, r.Width - 2 * h, r.Height - 2 * h), Math.Max(1, cut - h * .6)));
+            double g2 = band + 1;
+            dc.DrawGeometry(null, LeafPen, Plate(new Rect(r.X + g2, r.Y + g2, r.Width - 2 * g2, r.Height - 2 * g2), Math.Max(1, cut - g2 * .6)));
+            double a3 = band + 3;
+            var inner = Plate(new Rect(r.X + a3, r.Y + a3, r.Width - 2 * a3, r.Height - 2 * a3), Math.Max(1, cut - a3 * .6));
+            dc.DrawGeometry(null, InnerGlow, inner); dc.DrawGeometry(null, InnerPen, inner);
+        }
+        else if (s.Height > 26) { var inner = Plate(new Rect(r.X + 3, r.Y + 3, r.Width - 6, r.Height - 6), Math.Max(1, cut - 1.2)); dc.DrawGeometry(null, InnerGlow, inner); dc.DrawGeometry(null, InnerPen, inner); }
         // the cut corners: a gold diamond on each, gold strokes along the edges from it
         double L = r.Left, T = r.Top, R = r.Right, B = r.Bottom, len = Math.Min(12, Math.Min(s.Width, s.Height) / 4);
         dc.DrawRectangle(FadeR, null, new Rect(L + cut, T - .3, len, 1.6)); dc.DrawRectangle(FadeD, null, new Rect(L - .3, T + cut, 1.6, len));
@@ -235,13 +268,15 @@ sealed partial class HudElyos : ModernLook
         double d = cut / 2, dr = Math.Min(2.6, cut * .45);
         Diamond(dc, new Point(L + d, T + d), dr); Diamond(dc, new Point(R - d, T + d), dr);
         Diamond(dc, new Point(L + d, B - d), dr); Diamond(dc, new Point(R - d, B - d), dr);
-        if (crest && s.Width > 80)
+        if (crest && s.Width > 110)
         {
-            // the crest: a diamond on the top edge's middle, a fine gold line flaring out from it each way
+            // the winged crest: a gold sun on the top edge's middle, its wings along the edge, a fine gold line flaring on from each
             double cx = Math.Round(s.Width / 2);
-            dc.DrawRectangle(FadeL, null, new Rect(cx - 30, T - .3, 26, 1.6));
-            dc.DrawRectangle(FadeR, null, new Rect(cx + 4, T - .3, 26, 1.6));
-            Diamond(dc, new Point(cx, T + .5), 3.2);
+            dc.DrawRectangle(FadeL, null, new Rect(cx - 66, T - .3, 34, 1.6));
+            dc.DrawRectangle(FadeR, null, new Rect(cx + 32, T - .3, 34, 1.6));
+            dc.PushTransform(new MatrixTransform(crestScale, 0, 0, crestScale, cx, T + .5));
+            dc.DrawDrawing(CrestWings);
+            dc.Pop();
         }
     }
 
@@ -334,6 +369,9 @@ sealed partial class HudElyos : ModernLook
                 ring.Children.Add(_ringFull);
                 _ringFlare = new System.Windows.Shapes.Ellipse { Width = 42, Height = 42, Stroke = Frozen(Mod.A(WarmC, .9)), StrokeThickness = 1.6, Opacity = 0, IsHitTestVisible = false, RenderTransform = new ScaleTransform(1, 1, 21, 21) };
                 ring.Children.Add(_ringFlare);
+                // the halo's rays for your best passed: the kill's burst, small, turning round the ring (hidden at rest)
+                _ringRays = new TacSketch((dc, _) => { dc.PushTransform(RingRaysAt); dc.DrawDrawing(BurstRays); dc.Pop(); }) { Opacity = 0, RenderTransform = new ScaleTransform(.1, .1, 21, 21) };
+                ring.Children.Insert(0, _ringRays);
                 var pc = F(f.Beat ? "★" : Pct(f.Share), 13.5, f.Beat ? GoldHi : Ivory); pc.HorizontalAlignment = HorizontalAlignment.Center;
                 ring.Children.Add(pc);
                 _lineBody.Children.Add(ring);
@@ -392,6 +430,10 @@ sealed partial class HudElyos : ModernLook
             var flash = new TacSketch((dc, s) => { dc.PushClip(Plate(new Rect(.5, .5, s.Width - 1, s.Height - 1), 5)); dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .45), 0), (Mod.A(c, .2), .6), (Mod.A(c, 0), 1)), null, new Rect(0, 0, s.Width, s.Height)); dc.Pop(); }) { Opacity = 0 };
             _rareArt = art; _rareFlashArt = flash;
             _rare.Children.Add(art); _rare.Children.Add(flash);
+            // the drop's burst behind its tile (hidden at rest)
+            _rareRays = new TacSketch((dc, _) => { dc.PushTransform(RareRaysAt); dc.DrawDrawing(BurstRays); dc.Pop(); })
+            { Opacity = 0, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, RenderTransform = new ScaleTransform(.05, .05, 19, 18) };
+            _rare.Children.Add(_rareRays);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 5, 16, 5) };
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             _rareTile = tile;
@@ -456,7 +498,8 @@ sealed partial class HudElyos : ModernLook
     /// <summary>The timer chips sit over the line, to leave its room to the pickup strip.</summary>
     bool _timerUp;
 
-    TacSketch? _rareArt, _rareFlashArt;
+    TacSketch? _rareArt, _rareFlashArt, _rareRays;
+    static readonly Transform RareRaysAt = Fz(new TranslateTransform(19, 18));
     FrameworkElement? _rareTile;
 
     /// <summary>
@@ -658,7 +701,87 @@ sealed partial class HudElyos : ModernLook
         }
         _fight.Visibility = Visibility.Visible;
         PlaceTimers();
+        PlaceWings();
         Leader(e);
+    }
+
+    /// <summary>
+    /// The great wings shown while someone leads with damage (the meter's top row), redrawn with each fight draw: where the
+    /// leader's row stands is read as they are drawn (layout done by then), so no layout is forced here.
+    /// </summary>
+    void PlaceWings()
+    {
+        _wingsOn = Meter is { } m && m.Members.FirstOrDefault() is { Rank: 1, CpOnly: false, Pvp: false } && _fight.Visibility == Visibility.Visible;
+        if (!Motion.Playing(_bigWingL)) _bigWingL.Opacity = _bigWingR.Opacity = _wingsOn ? 1 : 0;
+        _bigWingL.InvalidateVisual(); _bigWingR.InvalidateVisual();
+    }
+
+    bool _wingsOn;
+
+    /// <summary>
+    /// A great wing (the right one when <paramref name="right"/>): the frozen wing rooted 3 px inside the plate's edge at the
+    /// middle of the leader's row, scaled so its tip reaches 6 px over the plate's top (kept at least 72% as wide as tall a
+    /// scale), shown only outside the plate, as if it spread from behind it.
+    /// </summary>
+    void DrawBigWing(DrawingContext dc, Size s, bool right)
+    {
+        if (!_wingsOn || s.Width < 40 || Meter is not { } m || !m.IsDescendantOf(_fight)) return;
+        double y = m.TranslatePoint(new Point(0, 0), _fight).Y + ElyosRow.H / 2;
+        if (y < 20) return;
+        _wingY = y;
+        var box = WingBox;
+        // the tips rise 18 px over the plate's top; the left wing kept to its 44 px of room, the right spread wide in its 98
+        double sy = Math.Clamp((y + 18) / -box.Top, .3, 1.25), sx = Math.Max(sy, .72);
+        sx = right ? Math.Min(1.6 * sx, 84 / -box.Left) : Math.Min(sx, 42 / -box.Left);
+        double x0 = right ? s.Width - 3 : 3;
+        var sc = right ? _bigWingRScale : _bigWingLScale;
+        var tu = right ? _bigWingRTurn : _bigWingLTurn;
+        if (sc.CenterX != x0 || sc.CenterY != y) { sc.CenterX = x0; sc.CenterY = y; tu.CenterX = x0; tu.CenterY = y; }
+        dc.PushClip(new RectangleGeometry(right ? new Rect(s.Width - .5, -60, 140, s.Height + 120) : new Rect(-140, -60, 140.5, s.Height + 120)));
+        dc.PushTransform(new MatrixTransform(sx, 0, 0, sy, x0, y));
+        dc.DrawDrawing(right ? WingR : WingL);
+        dc.Pop(); dc.Pop();
+    }
+
+    /// <summary>The Buddy's small wings: the same wing, a third the size, behind each end of its plate.</summary>
+    void DrawLineWings(DrawingContext dc, Size s)
+    {
+        if (s.Width < 60 || s.Height < 20) return;
+        var box = WingBox;
+        double sy = Math.Min(.55, (s.Height - 2) / -box.Top), sx = .62, y = s.Height - 6;
+        dc.PushClip(new RectangleGeometry(new Rect(-80, -40, 80.5, s.Height + 80)));
+        dc.PushTransform(new MatrixTransform(sx, 0, 0, sy, 3, y)); dc.DrawDrawing(WingL); dc.Pop();
+        dc.Pop();
+        dc.PushClip(new RectangleGeometry(new Rect(s.Width - .5, -40, 80, s.Height + 80)));
+        dc.PushTransform(new MatrixTransform(sx, 0, 0, sy, s.Width - 3, y)); dc.DrawDrawing(WingR); dc.Pop();
+        dc.Pop();
+    }
+
+    /// <summary>The great wings unfurl (after <paramref name="delay"/> ms): they spread out from behind the plate's edges past the row with a small overshoot.</summary>
+    void UnfurlWings(double delay = 0)
+    {
+        if (!_wingsOn) return;
+        double total = delay + 1100;
+        Motion.Play(_bigWingL, total, q =>
+        {
+            double p = Math.Clamp((q * total - delay) / 1100, 0, 1);
+            double k = Back(Seg(p, 0, .5), 1.5);
+            _bigWingLScale.ScaleX = _bigWingRScale.ScaleX = .05 + .95 * k;
+            _bigWingLScale.ScaleY = _bigWingRScale.ScaleY = .25 + .75 * Math.Min(1.04, k);
+            _bigWingL.Opacity = _bigWingR.Opacity = Math.Clamp(p / .15, 0, 1);
+        }, () => { _bigWingLScale.ScaleX = _bigWingRScale.ScaleX = _bigWingLScale.ScaleY = _bigWingRScale.ScaleY = 1; _bigWingL.Opacity = _bigWingR.Opacity = 1; });
+    }
+
+    /// <summary>A kill's flare of the wings: they swing out 12 degrees and up a touch, then settle back.</summary>
+    void FlareWings()
+    {
+        if (!_wingsOn) return;
+        Motion.Play(_bigWingL, 900, p =>
+        {
+            double k = p < .3 ? Out(p / .3) : 1 - Out((p - .3) / .7);
+            _bigWingLTurn.Angle = -12 * k; _bigWingRTurn.Angle = 12 * k;
+            _bigWingLScale.ScaleY = _bigWingRScale.ScaleY = 1 + .06 * k;
+        }, () => { _bigWingLTurn.Angle = _bigWingRTurn.Angle = 0; _bigWingLScale.ScaleY = _bigWingRScale.ScaleY = 1; });
     }
 
     /// <summary>A new leader in the fight seen live: the wings unfurl round their numeral and a glint runs along their bar.</summary>
@@ -667,17 +790,17 @@ sealed partial class HudElyos : ModernLook
         var lead = Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly && !m.Pvp);
         long id = lead?.Id ?? 0;
         bool same = e.Id == _leadFight;
-        if (same && id != 0 && _leadId != 0 && id != _leadId && e.Live && Moves && Meter?.RowOf(id) is ElyosRow row) { row.Crown(); row.Glint(80); }
+        if (same && id != 0 && _leadId != 0 && id != _leadId && e.Live && Moves && Meter?.RowOf(id) is ElyosRow row) { row.Crown(); row.Glint(80); UnfurlWings(); }
         _leadFight = e.Id;
         if (id != 0) _leadId = id;
     }
 
     /// <summary>The glint down the bars: each row's in turn, top to bottom (<paramref name="step"/> ms apart).</summary>
-    void GlintRows(double step = 70)
+    void GlintRows(double step = 70, double first = 60)
     {
         if (Meter is not { } m) return;
         int i = 0;
-        foreach (var mm in m.Members) if (m.RowOf(mm.Id) is ElyosRow r) r.Glint(60 + step * i++);
+        foreach (var mm in m.Members) if (m.RowOf(mm.Id) is ElyosRow r) r.Glint(first + step * i++);
     }
 
     // ================================================================ the moments
@@ -740,7 +863,13 @@ sealed partial class HudElyos : ModernLook
             bloom.ScaleX = Math.Max(.01, Out(Seg(t, 0, .45)));
             flash.Opacity = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, .8);
             sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, .05, .4), 2.2);
-        }, () => { bloom.ScaleX = 1; flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; });
+            if (_rareRays is { RenderTransform: ScaleTransform rs } rr)
+            {
+                double b = Seg(t, 0, .6);
+                rs.ScaleX = rs.ScaleY = .05 + .17 * Out(b);
+                rr.Opacity = b is > 0 and < 1 ? Math.Sin(Math.PI * Math.Pow(b, .6)) : 0;
+            }
+        }, () => { bloom.ScaleX = 1; flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; if (_rareRays != null) _rareRays.Opacity = 0; });
     }
 
     /// <summary>Your best passed: the full halo fades in over the arc, a ring of light flares out from it, and a glint crosses the plate.</summary>
@@ -751,11 +880,17 @@ sealed partial class HudElyos : ModernLook
         Motion.Play(full, 1800, t =>
         {
             full.Opacity = Out(Seg(t, 0, .4));
-            double f = Seg(t, .35, .85);
-            fs.ScaleX = fs.ScaleY = .8 + .2 * Out(f);
+            double f = Seg(t, .3, .8);
+            fs.ScaleX = fs.ScaleY = .8 + .75 * Out(f);
             flare.Opacity = f is > 0 and < 1 ? 1 - f : 0;
-            LineSheen(Seg(t, .35, .9));
-        }, () => { full.Opacity = 1; flare.Opacity = 0; LineSheen(-1); });
+            if (_ringRays is { RenderTransform: ScaleTransform rs } rr)
+            {
+                double b = Seg(t, .25, .85);
+                rs.ScaleX = rs.ScaleY = .1 + .18 * Out(b);
+                rr.Opacity = b is > 0 and < 1 ? Math.Sin(Math.PI * Math.Pow(b, .6)) : 0;
+            }
+            LineSheen(Seg(t, .3, .85));
+        }, () => { full.Opacity = 1; flare.Opacity = 0; if (_ringRays != null) _ringRays.Opacity = 0; LineSheen(-1); });
     }
 
     /// <summary>An entry opened: the first timer's chip glows gold round its edge and settles (the glow's opacity alone moves).</summary>
@@ -770,18 +905,61 @@ sealed partial class HudElyos : ModernLook
             () => { chip.Effect = null; chip.BorderBrush = edge; });
     }
 
-    /// <summary>A fight started: the plate rises in as it fades up, a glint runs down the bars and the wings unfurl round rank I.</summary>
+    /// <summary>
+    /// A fight started: a beam of light (a white core, gold falling off to 40 px) drops onto the plate's crest and flares there,
+    /// then the plate opens out from the beam to both sides behind a molten edge (a clip on the plate that widens, never a
+    /// fill over the words), the words fading up once it is open; a glint runs down the bars and the wings unfurl. Transforms, opacity and one clip only.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 520, t =>
+        _fight.UpdateLayout();
+        double w = _fight.ActualWidth, h = _fight.ActualHeight;
+        _fightFx.Children.Clear();
+        if (w > 20 && h > 20)
         {
-            double k = Out(t);
-            _fightShift.Y = 8 * (1 - k);
-            _fight.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fight.Opacity = 1; });
-        GlintRows();
-        if (Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly) is { } lead && Meter.RowOf(lead.Id) is ElyosRow row) { row.Crown(); _leadId = lead.Id; _leadFight = e.Id; }
+            double cx = Math.Round(w / 2);
+            var beamScale = new ScaleTransform(1, 0);
+            var beam = new System.Windows.Shapes.Rectangle { Width = 40, Height = h, Fill = BeamBrush, RenderTransform = beamScale, RenderTransformOrigin = new Point(.5, 0) };
+            Canvas.SetLeft(beam, cx - 20);
+            var halo = new System.Windows.Shapes.Rectangle { Width = 150, Height = h, Fill = BeamHalo, RenderTransform = beamScale, RenderTransformOrigin = new Point(.5, 0) };
+            Canvas.SetLeft(halo, cx - 75);
+            _fightFx.Children.Add(halo);
+            var flareScale = new ScaleTransform(.2, .2, 40, 20);
+            var flare = new System.Windows.Shapes.Ellipse { Width = 80, Height = 40, Fill = FlareBrush, Opacity = 0, RenderTransform = flareScale };
+            Canvas.SetLeft(flare, cx - 40); Canvas.SetTop(flare, -14);
+            // the molten edges that lead the opening, one each way
+            var edgeL = new System.Windows.Shapes.Rectangle { Width = 3, Height = h, Fill = MoltenBrush, Opacity = 0 };
+            var edgeR = new System.Windows.Shapes.Rectangle { Width = 3, Height = h, Fill = MoltenBrush, Opacity = 0 };
+            var eL = new TranslateTransform(cx, 0); var eR = new TranslateTransform(cx, 0);
+            edgeL.RenderTransform = eL; edgeR.RenderTransform = eR;
+            _fightFx.Children.Add(beam); _fightFx.Children.Add(edgeL); _fightFx.Children.Add(edgeR); _fightFx.Children.Add(flare);
+            var open = new RectangleGeometry(new Rect(cx, -20, 0, h + 40));
+            _fightArt.Clip = open; _fightBody.Opacity = 0;
+            Motion.Play(_fightFx, 1000, t =>
+            {
+                double drop = Seg(t, 0, .2), wipe = Out(Seg(t, .2, .55));
+                beamScale.ScaleY = Out(drop);
+                beam.Opacity = halo.Opacity = t < .2 ? 1 : 1 - Seg(t, .35, .75);
+                double f = Seg(t, .15, .5);
+                flareScale.ScaleX = flareScale.ScaleY = .2 + .9 * Out(f);
+                flare.Opacity = f is > 0 and < 1 ? Math.Sin(Math.PI * Math.Pow(f, .5)) : 0;
+                double half = (w / 2 + 2) * wipe;
+                open.Rect = new Rect(cx - half, -20, 2 * half, h + 40);
+                eL.X = cx - half - 1.5; eR.X = cx + half - 1.5;
+                edgeL.Opacity = edgeR.Opacity = wipe is > 0 and < 1 ? 1 - wipe * .6 : 0;
+                _fightBody.Opacity = Seg(t, .28, .5);
+                _fightShift.Y = 5 * (1 - Out(Seg(t, .25, .7)));
+            }, () => { _fightFx.Children.Clear(); _fightArt.Clip = null; _fightBody.Opacity = 1; _fightShift.Y = 0; });
+        }
+        GlintRows(70, 450);
+        if (Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly) is { } lead && Meter.RowOf(lead.Id) is ElyosRow row) { row.Crown(); UnfurlWings(200); _leadId = lead.Id; _leadFight = e.Id; }
     }
+
+    static readonly RadialGradientBrush FlareBrush = Fz(new RadialGradientBrush
+    {
+        GradientStops = { new GradientStop(Mod.A(Colors.White, .95), 0), new GradientStop(Mod.A(Color.FromRgb(0xFF, 0xE6, 0xB0), .6), .35), new GradientStop(Mod.A(Color.FromRgb(0xFF, 0xE6, 0xB0), 0), 1) },
+    });
+    static readonly LinearGradientBrush MoltenBrush = Lin(new Point(0, 0), new Point(1, 0), (Color.FromArgb(0, 0xFF, 0x9A, 0x3C), 0), (Color.FromRgb(0xFF, 0xD2, 0x7A), .5), (Color.FromArgb(0, 0xFF, 0x9A, 0x3C), 1));
 
     /// <summary>
     /// A fight ended: a band laid over the fight's head (gold for a kill or a clear, coral for a wipe) with the outcome in the
@@ -795,27 +973,49 @@ sealed partial class HudElyos : ModernLook
         if (_head is not { } head) return;
         _fight.UpdateLayout();
         var at = head.TranslatePoint(new Point(0, 0), _fight);
-        double bw = Math.Max(0, _fight.ActualWidth - 2 * (Pad - 5)), bh = Math.Max(26, head.ActualHeight + 8);
+        double bw = Math.Max(0, _fight.ActualWidth - 6), bh = Math.Max(24, head.ActualHeight + 6);
         var band = new Grid { Width = bw, Height = bh };
         var bloom = new ScaleTransform(0, 1);
+        // the strip: molten gold for a kill or a clear (coral for a wipe), lighter at its top, dark hairlines along both edges
+        var strip = wipe ? Lin(new Point(0, 0), new Point(0, 1), (Color.FromRgb(0xFF, 0xB8, 0xAE), 0), (Color.FromRgb(0xE0, 0x6A, 0x60), .55), (Color.FromRgb(0xB8, 0x45, 0x40), 1))
+            : Lin(new Point(0, 0), new Point(0, 1), (Color.FromRgb(0xFF, 0xF4, 0xCE), 0), (GoldHiC, .35), (GoldMidC, .75), (GoldLoC, 1));
         var art = new TacSketch((dc, s) =>
         {
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(AbyssC, .96), 0), (Mod.A(NightC, .94), 1)), null, new Rect(0, 0, s.Width, s.Height));
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .42), 0), (Mod.A(c, .12), .7), (Mod.A(c, 0), 1)), null, new Rect(0, 0, s.Width, s.Height));
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .95), 0), (Mod.A(c, .4), .7), (Mod.A(c, 0), 1)), null, new Rect(0, 0, s.Width, 1));
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .95), 0), (Mod.A(c, .4), .7), (Mod.A(c, 0), 1)), null, new Rect(0, s.Height - 1, s.Width, 1));
+            dc.DrawRectangle(strip, null, new Rect(0, 0, s.Width, s.Height));
+            dc.DrawRectangle(Frozen(Mod.A(AbyssC, .7)), null, new Rect(0, 0, s.Width, 1));
+            dc.DrawRectangle(Frozen(Mod.A(AbyssC, .7)), null, new Rect(0, s.Height - 1, s.Width, 1));
+            dc.DrawRectangle(Frozen(Mod.A(Colors.White, .55)), null, new Rect(0, 1, s.Width, 1));
         }) { RenderTransform = bloom, RenderTransformOrigin = new Point(0, .5) };
         band.Children.Add(art);
         var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Caps(OutcomeText(e), 19, wipe ? Coral : GoldHi));
-        var ck = F(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 13, Frozen(Mod.Mix(c, IvoryC, .55))); ck.Margin = new Thickness(10, 3, 0, 0);
+        words.Children.Add(Caps(OutcomeText(e), 17, Frozen(Color.FromRgb(0x0E, 0x15, 0x30))));
+        var ck = F(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 13.5, Frozen(Color.FromRgb(0x0E, 0x15, 0x30))); ck.Margin = new Thickness(10, 2, 0, 0);
         words.Children.Add(ck);
         band.Children.Add(words);
-        Canvas.SetLeft(band, Pad - 5); Canvas.SetTop(band, at.Y - (bh - head.ActualHeight) / 2);
-        _fightFx.Children.Clear(); _fightFx.Children.Add(band);
+        Canvas.SetLeft(band, 3); Canvas.SetTop(band, at.Y - (bh - head.ActualHeight) / 2);
+        _fightFx.Children.Clear();
+        // a kill (or a clear): a flare of light on the crest, the wings swinging out
+        System.Windows.Shapes.Ellipse? flare = null;
+        ScaleTransform? flareScale = null;
+        if (!wipe)
+        {
+            double cx = Math.Round(_fight.ActualWidth / 2);
+            flareScale = new ScaleTransform(.2, .2, 50, 22);
+            flare = new System.Windows.Shapes.Ellipse { Width = 100, Height = 44, Fill = FlareBrush, Opacity = 0, RenderTransform = flareScale, IsHitTestVisible = false };
+            Canvas.SetLeft(flare, cx - 50); Canvas.SetTop(flare, -18);
+            FlareWings();
+        }
+        _fightFx.Children.Add(band);
+        if (flare != null) _fightFx.Children.Add(flare);
         if (!wipe) GlintRows(60);
         Motion.Play(_fightFx, 2400, t =>
         {
+            if (flare != null && flareScale != null)
+            {
+                double f = Seg(t, 0, .3);
+                flareScale.ScaleX = flareScale.ScaleY = .2 + 1.1 * Out(f);
+                flare.Opacity = f is > 0 and < 1 ? Math.Sin(Math.PI * Math.Pow(f, .5)) : 0;
+            }
             bloom.ScaleX = Out(Seg(t, 0, .22));
             words.Opacity = t < .84 ? Seg(t, .08, .22) : 1 - Seg(t, .84, 1);
             band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
