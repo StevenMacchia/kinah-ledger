@@ -72,6 +72,7 @@ internal static class Program
         {
             KinahLedger.Data.DictionaryCache.DirOverride = TestTemp.Path("KinahLedger-test-items");
             KinahLedger.Ui.Native.NoHotkeys = true;   // ...and their windows take no shortcut from the player's PC
+            KinahLedger.Ui.ScreenArea.EnableFromEnvironment();   // ...and may be given a screen to fit (KL_TEST_WORKAREA, Ui/ScreenArea.cs)
             // ...and the meter's Odyle Energy is never the player's own: none, or KL_ODYLE's figure for a render (Ui/EnergyMark.cs)
             KinahLedger.Ui.EnergyMark.Fixed = int.TryParse(Environment.GetEnvironmentVariable("KL_ODYLE"), out var odyle) && odyle >= 0 ? odyle : -1;
         }
