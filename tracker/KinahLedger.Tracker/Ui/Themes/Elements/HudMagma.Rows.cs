@@ -277,10 +277,11 @@ sealed partial class HudMagma
         /// <summary>The flow's room in the row (its rect) and its front's x now.</summary>
         (Rect Flow, double Front) FlowNow(double w)
         {
-            // the flow pours up to the share's column: the share (and, expanded, the damage and crit) sit on the stone past it
+            // the flow pours up to the DPS figure's column: the figures (DPS, share; expanded, damage and crit) sit on the stone
+            // past it, clear of the lip, each over its warm underglow
             var cols = _words.ColumnDefinitions;
-            double wall = PadR + cols[5].Width.Value + cols[6].Width.Value + cols[7].Width.Value;
-            var flow = new Rect(3.5, 2, Math.Max(20, w - wall - 3.5 + 3), H - 4);   // its lip in the air before the share, clear of the DPS figure
+            double wall = PadR + cols[4].Width.Value + cols[5].Width.Value + cols[6].Width.Value + cols[7].Width.Value + 3;
+            var flow = new Rect(3.5, 2, Math.Max(20, w - wall - 3.5), H - 4);
             return (flow, flow.X + flow.Width * Math.Clamp(_bar, 0, 1));
         }
 
