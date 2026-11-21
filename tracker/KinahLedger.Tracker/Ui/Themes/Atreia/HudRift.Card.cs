@@ -61,7 +61,6 @@ sealed partial class HudRift : IThemeCard
         Grid.SetColumn(who, 1); hg.Children.Add(who);
         var cls = Tt(c.ClassName, 10, Soft, FontWeights.SemiBold); cls.Margin = new Thickness(8, 1, 0, 0);
         Grid.SetColumn(cls, 2); hg.Children.Add(cls);
-        hg.Effect = Shade();
         head.Children.Add(hg);
         // the card widens for a long name (up to 60 more) before the name is cut
         double need = 22 + 8 + Mod.W(name) + extra + Mod.W(cls) + 8 + 2 * In + 12;
@@ -107,8 +106,7 @@ sealed partial class HudRift : IThemeCard
         }
 
         // the abilities: each on its own small bar out of the Abyss, as long as its part of the top one, a fissure at its end
-        var bars = new List<TacSketch>();
-        double grow = 1;
+        var grows = new List<ScaleTransform>();
         if (c.Abilities.Count > 0)
         {
             stack.Children.Add(Seam(new Thickness(0, 8, 0, 5), .8));
@@ -127,11 +125,14 @@ sealed partial class HudRift : IThemeCard
                 var row = new Grid { Height = 21, Margin = new Thickness(-4, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
                 int seed = n++;
+                row.Children.Add(new TacSketch((dc, s) => dc.DrawRoundedRectangle(Mod.Br(VoidC, .55), null, new Rect(0, 1.5, s.Width, s.Height - 3), 4, 4)));
+                // the bar drawn once at its length; on the card's entrance it only grows out (a scale) from its root
+                var grow = new ScaleTransform(1, 1);
+                grows.Add(grow);
                 var art = new TacSketch((dc, s) =>
                 {
                     var r = new Rect(0, 1.5, s.Width, s.Height - 3);
-                    dc.DrawRoundedRectangle(Mod.Br(VoidC, .55), null, r, 4, 4);
-                    double fx = s.Width * Math.Clamp(of * grow, 0, 1);
+                    double fx = s.Width * Math.Clamp(of, 0, 1);
                     if (fx < 1) return;
                     var fill = new Rect(0, r.Y, fx, r.Height);
                     dc.PushClip(new RectangleGeometry(r, 4, 4));
@@ -140,7 +141,7 @@ sealed partial class HudRift : IThemeCard
                     dc.Pop();
                     Fissure(dc, Math.Max(1.5, fx - .5), r.Y, r.Height, tone, .32, seed);   // faint: the figures sit over it
                 });
-                bars.Add(art);
+                art.RenderTransform = grow;
                 row.Children.Add(art);
                 var g = Tac.CardGrid(c, 46, 56);
                 g.Margin = new Thickness(4, 0, 7, 0);   // the last figure clear of the top ability's fissure
@@ -151,7 +152,6 @@ sealed partial class HudRift : IThemeCard
                 var dm = Tt(a.Damage, 11.5, White, FontWeights.Bold); dm.HorizontalAlignment = HorizontalAlignment.Right; Tac.Cell(g, dm, 2, c);
                 if (c.CritCol) { var cr = Tt(a.Crit, 10.5, Soft, FontWeights.SemiBold); cr.HorizontalAlignment = HorizontalAlignment.Right; Tac.Cell(g, cr, 3, c); }
                 if (c.BackCol) { var bk = Tt(a.Back, 10.5, Soft, FontWeights.SemiBold); bk.HorizontalAlignment = HorizontalAlignment.Right; Tac.Cell(g, bk, 4, c); }
-                g.Effect = Shade();
                 row.Children.Add(g);
                 stack.Children.Add(row);
             }
@@ -165,12 +165,13 @@ sealed partial class HudRift : IThemeCard
         }
 
         // the glass under it all, its tear along the top
-        double pulse = -1;
-        // (inset in the card so the drop under the glass stays inside the card's bounds)
-        var glass = new TacSketch((dc, s) => RiftPanel(dc, s, 12, 1, pulse, null, pulse is > 0 and < 1 ? .5 * Math.Sin(Math.PI * pulse) : 0)) { Margin = new Thickness(7, 4, 8, 14) };
+        // (inset in the card so the drop under the glass stays inside the card's bounds; the pulse a layer over it)
+        var glass = new TacSketch((dc, s) => RiftPanel(dc, s, 12, 1)) { Margin = new Thickness(7, 4, 8, 14) };
+        var pulse = new RiftPulse(12) { Margin = glass.Margin };
         stack.Margin = new Thickness(stack.Margin.Left + 7, stack.Margin.Top + 4, stack.Margin.Right + 8, stack.Margin.Bottom + 14);
         var card = new Grid();
         card.Children.Add(glass);
+        card.Children.Add(pulse);
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);
@@ -179,9 +180,8 @@ sealed partial class HudRift : IThemeCard
         Tac.CardIn(card, 260, t =>
         {
             card.Opacity = Out(t); shift.Y = 5 * (1 - Out(t));
-            grow = Out(Seg(t, .2, 1));
-            pulse = t < 1 ? t : -1; glass.InvalidateVisual();
-            foreach (var art in bars) art.InvalidateVisual();
+            foreach (var g in grows) g.ScaleX = Math.Max(.01, Out(Seg(t, .2, 1)));
+            pulse.At(t);
         });
         return card;
     }

@@ -67,7 +67,7 @@ sealed partial class HudRift
     /// <summary>
     /// One member as a bar out of the Abyss: a void-dark ground with a faint violet rim (yours in starlight), the bar rising from
     /// the Abyss's violet into the member's class colour with the stars showing through it, and at its leading edge a fissure
-    /// of rift light (the leader's the brightest). On it, under one tight violet-black shade: the rank, the class's emblem in
+    /// of rift light (the leader's the brightest). On it (the bars kept dark enough that no shade effect is needed): the rank, the class's emblem in
     /// a lilac ring (the leader's crowned with three crystal shards), the name in white with the Combat Power after it and the
     /// marks (★ DPS, ✚ Heal, YOU, deaths), a healer's healing a second in mint, the DPS big in starlight and the share.
     /// Crowding (Steven, 2026-11-17): the CP goes first, then the marks shorten to their glyphs, then the name trims (never
@@ -92,8 +92,18 @@ sealed partial class HudRift
         readonly List<(FrameworkElement Full, FrameworkElement Short)> _give = new();
         MeterMember? _m;
         string _iconCls = "\0";
-        double _bar, _land = -1, _climb = -1;
+        double _bar;
         int _was;
+        static readonly SolidColorBrush RankInk = Frozen(Mod.A(LilacC, .95)), LeadRim = Frozen(Mod.A(LightC, .9)), Rim = Frozen(Mod.A(LilacC, .55));
+        // the moments' layer, made on the first moment: all of it drawn once, only moved and faded while a moment plays
+        readonly TranslateTransform _crownAt = new();
+        Canvas? _fx;
+        System.Windows.Shapes.Rectangle? _band;
+        Color? _bandC;
+        TacSketch? _flare, _streak, _flash;
+        System.Windows.Shapes.Ellipse? _ring;
+        readonly TranslateTransform _bandAt = new(), _flareAt = new(), _streakAt = new();
+        readonly ScaleTransform _ringScale = new(1, 1, 17, 6);
         bool _expanded;
 
         public FrameworkElement Root => _root;
@@ -109,7 +119,7 @@ sealed partial class HudRift
             _root.Children.Add(_art);
             _root.Children.Add(_words);
             _root.Children.Add(_crown);
-            _words.Effect = Shade();
+            _crown.RenderTransform = _crownAt;
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
             Put(_rank, 1); Put(_icon, 3);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -139,7 +149,7 @@ sealed partial class HudRift
                 _words.ColumnDefinitions[9].Width = new GridLength(c.Expanded ? DmgW : 0);
             }
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
-            _rank.Foreground = Leads ? White : Frozen(Mod.A(LilacC, .95));
+            _rank.Foreground = Leads ? White : RankInk;
             if (_iconCls != m.Class)
             {
                 _iconCls = m.Class;
@@ -147,7 +157,7 @@ sealed partial class HudRift
                 ic.HorizontalAlignment = HorizontalAlignment.Center;
                 _icon.Child = ic;
             }
-            _icon.BorderBrush = Leads ? Frozen(Mod.A(LightC, .9)) : Frozen(Mod.A(LilacC, .55));
+            _icon.BorderBrush = Leads ? LeadRim : Rim;
             _name.Text = m.Name;
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
             _keep.Clear(); _give.Clear();
@@ -182,17 +192,78 @@ sealed partial class HudRift
             return m;
         }
 
-        internal void Redraw() { _art.InvalidateVisual(); }
+        // ---- the moments: small parts drawn once, only moved (transforms) and faded (opacity) while they play
 
-        /// <summary>The crown lands: it drops onto its place over the emblem with a flash of rift light down through it and a ring of light spreading out.</summary>
-        internal void Land()
+        const double CrownX = PadX + RankW + Gap1 + IconW / 2, CrownY = (H - IconW) / 2 + 5;
+
+        /// <summary>The bar's leading edge, px from the row's left.</summary>
+        double Edge() => Math.Max(2, (_root.ActualWidth - 1) * Math.Clamp(_bar, 0, 1));
+
+        void Fx()
         {
-            Motion.Play(_crown, 1000, t => { _land = t; _crown.InvalidateVisual(); _art.InvalidateVisual(); }, () => { _land = -1; _crown.InvalidateVisual(); _art.InvalidateVisual(); });
+            if (_fx != null) return;
+            _fx = new Canvas { IsHitTestVisible = false };
+            // the pulse's band of light, sweeping up the bar (in a layer clipped to the row, under the words)
+            var clip = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
+            _band = new System.Windows.Shapes.Rectangle { Width = 60, Height = H, Opacity = 0, RenderTransform = _bandAt };
+            clip.Children.Add(_band);
+            // the fissure's flare (breaking out above and below the bar), the streak a climb leaves, the crown's flash and ring
+            _flare = new TacSketch((dc, _) => Fissure(dc, 0, .5, H - 1, LightC, 2.2, 3)) { Opacity = 0, RenderTransform = _flareAt };
+            _streak = new TacSketch((dc, _) => dc.DrawRectangle(Mod.Grad(true, (Mod.A(CyanC, .75), 0), (Mod.A(VioletC, 0), 1)), null, new Rect(-1.2, H, 2.4, 18))) { Opacity = 0, RenderTransform = _streakAt };
+            _flash = new TacSketch((dc, _) => Fissure(dc, CrownX, CrownY - 14, 24, VioletC, .9, 6)) { Opacity = 0 };
+            _ring = new System.Windows.Shapes.Ellipse { Width = 34, Height = 12, Stroke = Mod.Br(CyanC, .9), StrokeThickness = 1.3, Opacity = 0, RenderTransform = _ringScale, IsHitTestVisible = false };
+            Canvas.SetLeft(_ring, CrownX - 17); Canvas.SetTop(_ring, CrownY - 7);
+            foreach (var el in new UIElement[] { _flare, _streak, _flash, _ring }) _fx.Children.Add(el);
+            _root.Children.Insert(1, clip);
+            _root.Children.Add(_fx);
         }
 
+        /// <summary>The seams' pulse (0 to 1, -1: none) at this row, in rank order: a band of light sweeping up the bar into its fissure, which flares.</summary>
+        internal void Seam(double t, Color? c)
+        {
+            if (_m is not { } m) return;
+            int at = Math.Max(0, Math.Min(m.Rank, 6) - 1);
+            double seam = t is > 0 and < 1 && !m.CpOnly ? Seg(t, .2 + .1 * at, .62 + .1 * at) : 0;
+            if (seam is <= 0 or >= 1) { if (_band != null) { _band.Opacity = 0; _flare!.Opacity = 0; } return; }
+            Fx();
+            var col = c ?? LightC;
+            if (_bandC != col)
+            {
+                _bandC = col;
+                _band!.Fill = Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, col, .5), .35), .55), (Mod.A(col, .85), .86), (Mod.A(Colors.White, .9), .9), (Mod.A(col, 0), 1));
+            }
+            double fx = Edge();
+            _bandAt.X = -60 + (fx + 4) * Out(Math.Min(1, seam / .7));
+            _band!.Opacity = Math.Min(1, 1.2 * Math.Sin(Math.PI * Math.Min(1, seam / .8)));
+            _flareAt.X = fx;
+            _flare!.Opacity = seam > .55 ? Math.Sin(Math.PI * (seam - .55) / .45) : 0;
+        }
+
+        /// <summary>The crown lands: it drops onto its place over the emblem, a fissure of rift light flashes down through it and a ring of light spreads from its feet.</summary>
+        internal void Land()
+        {
+            Fx();
+            Motion.Play(_crown, 1000, t =>
+            {
+                _crownAt.Y = -7 * (1 - Back(Seg(t, 0, .4), 2.4));
+                _crown.Opacity = Seg(t, 0, .18);
+                _flash!.Opacity = t < .3 ? 0 : Math.Sin(Math.PI * Seg(t, .3, .8));
+                double r = Seg(t, .3, .95);
+                _ringScale.ScaleX = _ringScale.ScaleY = .25 + .9 * r;
+                _ring!.Opacity = t < .3 ? 0 : .85 * (1 - r);
+            }, () => { _crownAt.Y = 0; _crown.Opacity = 1; _flash!.Opacity = 0; _ring!.Opacity = 0; });
+        }
+
+        /// <summary>A rank won: the fissure flares and leaves a streak of rift light below it as the row glides up.</summary>
         void Climb()
         {
-            Motion.Play(_words, 620, t => { _climb = t; _art.InvalidateVisual(); }, () => { _climb = -1; _art.InvalidateVisual(); });
+            Fx();
+            Motion.Play(_streak!, 620, t =>
+            {
+                _streakAt.X = _flareAt.X = Edge();
+                _streak!.Opacity = 1 - t;
+                _flare!.Opacity = .8 * (1 - t);
+            }, () => { _streak!.Opacity = 0; _flare!.Opacity = 0; });
         }
 
         /// <summary>The name line's room with every column shown (the row's width less every other column).</summary>
@@ -264,13 +335,6 @@ sealed partial class HudRift
             // the ground: the void, a breath of violet at its top
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(DuskC, .78), 0), (Mod.A(VoidC, .82), 1)), null, pill);
             double fx = r.Width * Math.Clamp(_bar, 0, 1);
-            // the seams' pulse reaching this row (rank order), and its own moments
-            int at = Math.Max(0, Math.Min(m.Rank, 6) - 1);
-            double seam = _look._seam is > 0 and < 1 ? Seg(_look._seam, .2 + .1 * at, .2 + .1 * at + .42) : 0;
-            var light = _look._seamC ?? LightC;
-            double flare = seam is > .55 and < 1 ? Math.Sin(Math.PI * (seam - .55) / .45) : 0;
-            double land = _land is > .25 and < 1 && Leads ? Math.Sin(Math.PI * Seg(_land, .25, 1)) : 0;
-            double climb = _climb is > 0 and < 1 ? 1 - _climb : 0;
             if (fx > 1)
             {
                 dc.PushClip(pill);
@@ -283,13 +347,6 @@ sealed partial class HudRift
                 // depth: lighter along its top half, a hairline of light on its top
                 dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .13), 0), (Mod.A(Colors.White, 0), .55)), null, fill);
                 dc.DrawRectangle(Mod.Br(LilacC, .3), null, new Rect(r.X, r.Y, fx, 1));
-                if (seam is > 0 and < 1)
-                {
-                    // the pulse sweeping up the bar into its fissure
-                    double bx = r.X - 20 + (fx + 20) * Out(Math.Min(1, seam / .7)), a = Math.Min(1, 1.2 * Math.Sin(Math.PI * Math.Min(1, seam / .8)));
-                    dc.DrawRectangle(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, light, .5), .35 * a), .55), (Mod.A(light, .85 * a), .92), (Mod.A(light, 0), 1)), null, new Rect(bx - 56, r.Y, 60, r.Height));
-                    dc.DrawRectangle(Mod.Br(Colors.White, .8 * a), null, new Rect(bx - 5, r.Y + 1, 1.5, r.Height - 2));
-                }
                 dc.Pop();
             }
             // a healer's share of the group's healing as a mint line along the bar's foot (Settings' heal bars)
@@ -300,45 +357,14 @@ sealed partial class HudRift
                 dc.Pop();
             }
             dc.DrawGeometry(null, Mod.P(m.You ? Mod.Br(StarC, .6) : Mod.Br(LilacC, .14), m.You ? 1.2 : 1), pill);
-            if (fx > 1)
-            {
-                // the fissure at the leading edge: the leader's the brightest; a pulse, a landing or a climb flares it
-                double k = (Leads ? 1.4 : .62) + 1.2 * flare + .9 * land + .8 * climb;
-                Fissure(dc, Math.Max(r.X + 1.5, r.X + fx - .5), r.Y, r.Height, tone, k, (int)(m.Id & 7));
-                if (climb > 0)
-                {
-                    // the streak of rift light the edge leaves below it as the row glides up
-                    double ex = r.X + fx - .5, len = 18 * climb;
-                    dc.DrawRectangle(Mod.Grad(true, (Mod.A(CyanC, .7 * climb), 0), (Mod.A(VioletC, 0), 1)), null, new Rect(ex - 1.2, r.Bottom, 2.4, len));
-                }
-            }
+            // the fissure at the leading edge: the leader's the brightest
+            if (fx > 1) Fissure(dc, Math.Max(r.X + 1.5, r.X + fx - .5), r.Y, r.Height, tone, Leads ? 1.4 : .62, (int)(m.Id & 7));
         }
 
-        /// <summary>The crown over the leader's emblem: three crystal shards floating over it; landing, they drop in and a flash of rift light runs down through them.</summary>
+        /// <summary>The crown over the leader's emblem: three crystal shards floating over it (drawn once; a landing moves it).</summary>
         void DrawCrown(DrawingContext dc, Size s)
         {
-            if (!Leads) return;
-            double cx = PadX + RankW + Gap1 + IconW / 2, by = (s.Height - IconW) / 2 + 5;
-            double drop = 0, glow = 0, op = 1;
-            if (_land is >= 0 and < 1)
-            {
-                double t = _land;
-                drop = -7 * (1 - Back(Seg(t, 0, .4), 2.4));
-                op = Seg(t, 0, .18);
-                glow = t > .25 ? Math.Sin(Math.PI * Seg(t, .25, 1)) : 0;
-                if (glow > 0)
-                {
-                    // the flash: a thin fissure of rift light down through the crown, a ring of light spreading from its feet
-                    double f = t < .3 ? 0 : Math.Sin(Math.PI * Seg(t, .3, .8));
-                    if (f > 0) Fissure(dc, cx, Math.Max(-3, by - 14), 20 + 4 * f, VioletC, .9 * f, 6);
-                    double rr = 4 + 13 * Seg(t, .3, .9);
-                    dc.DrawEllipse(null, Mod.P(Mod.Br(CyanC, .85 * (1 - Seg(t, .3, .95))), 1.3), new Point(cx, by - 1), rr, rr * .36);
-                }
-            }
-            dc.PushOpacity(op);
-            dc.PushTransform(new TranslateTransform(0, drop));
-            Crown(dc, cx, by, 1.45, glow);
-            dc.Pop(); dc.Pop();
+            if (Leads) Crown(dc, CrownX, CrownY, 1.45, 0);
         }
     }
 }
