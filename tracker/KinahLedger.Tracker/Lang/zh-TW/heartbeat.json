@@ -1,0 +1,3 @@
+{
+  "Open check: while the tracker is open and sharing is on, every 5 minutes it tells kinahledger.com (https://kinahledger.com/v1/beat) that it's open, with the app version, the install ID, whether the game is open, and which of your characters is counted (its number here, never its name). It goes while the game is closed too, so the site knows how many trackers are open; the Share switch turns it off.": "開啟確認：追蹤器開啟且分享開啟時，每 5 分鐘會告訴 kinahledger.com（https://kinahledger.com/v1/beat）它正在執行，並附上程式版本、安裝 ID、遊戲是否開啟，以及目前計算的角色（只有這裡的編號，絕不含名稱）。遊戲關閉時也會傳送，讓網站知道有多少追蹤器開著；分享開關可關閉此功能。"
+}

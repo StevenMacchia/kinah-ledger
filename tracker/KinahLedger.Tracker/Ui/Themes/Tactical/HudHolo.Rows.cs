@@ -91,7 +91,7 @@ sealed partial class HudHolo
     /// with a bright edge at its left. Short of room a chip goes to its glyph, then YOU (the skills card says them all), and only
     /// then does the name trim (never a 10-letter name): never a figure cut.
     /// </summary>
-    sealed class HoloRow : IThemeRow
+    sealed class HoloRow : IThemeRow, IThemeBarSpan
     {
         /// <summary>The row's height and pitch: one line; expanded, two (the damage and crit leave the words too little room for one).</summary>
         public const double H = 28, Pitch = 31, H2 = 34, Pitch2 = 37;
@@ -117,6 +117,26 @@ sealed partial class HudHolo
         const double TextIn = 10;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The light's full run: the pane from the hex (2 px past the rank column) to 8 px short of the figure's room (<see cref="FigRoom"/>), inset 3.5 px top and foot for you (2 for the rest).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack
+        {
+            get
+            {
+                var cols = _root.ColumnDefinitions;
+                if (_art.ActualWidth <= 0 || _m is not { } m) return null;
+                double by = m.You ? 3.5 : 2, bw = cols[1].ActualWidth + cols[2].ActualWidth - 2;
+                return (_art, new Rect(cols[0].ActualWidth + 2, by, Math.Max(0, bw - FigRoom()), _art.ActualHeight - 2 * by));
+            }
+        }
+
+        /// <summary>The room kept clear of the bar's end for the DPS figure (its column, or a wider figure) and 8 px more.</summary>
+        double FigRoom()
+        {
+            _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Max(_root.ColumnDefinitions[2].ActualWidth, _dps.DesiredSize.Width + _dps.Margin.Right) + 8;
+        }
+
         public bool Shown => _root.Parent != null;
 
         public HoloRow(CpTable table)
@@ -286,8 +306,7 @@ sealed partial class HudHolo
             dc.DrawGeometry(Frozen(Tac.A(DeepC, .55)), Tac.P(Frozen(Tac.A(CyanC, .26)), 1), pane);
             // the light runs to 8 px short of the figure's room (the DPS column, or a wider figure: "167,548" before a hit), the
             // same for every row, so a full bar ends clear of the digits; its last 6 px fade out, never a hard edge through a letter
-            _dps.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double figRoom = Math.Max(cols[2].ActualWidth, _dps.DesiredSize.Width + _dps.Margin.Right) + 8;
+            double figRoom = FigRoom();
             double fx = Math.Max(0, bw - figRoom) * Math.Clamp(_bar, 0, 1);
             if (fx > .5)
             {

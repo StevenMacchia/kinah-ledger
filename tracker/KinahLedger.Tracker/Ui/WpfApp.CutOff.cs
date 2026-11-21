@@ -308,6 +308,14 @@ public static partial class WpfApp
         var fixtures = new[] { ("live", live, now), ("killed", killed, now), ("solo", solo, now), ("ready", ready, now) };
         var names = WorstNames.Append(ready.Title).Append(live.Title).ToList();
         var cuts = new List<(string, string, string)>();
+        // the PB ghost on the live fight and the kill (Ui/GhostMarks.cs): its strip and line, the group's pace beside it
+        var ghostSrc0 = PbGhost.Source; bool ghost0 = PbGhost.Shown, ghostGroup0 = PbGhost.GroupShown;
+        var liveGhost = FlatGhost(live.Dps(live.You!, now) / 1.062, live.GroupDps(now) / 1.031, boss: live.BossView);
+        var killGhost = FlatGhost(killed.Dps(killed.You!, now) / 1.041, killed.GroupDps(now) / 1.025, boss: killed.BossView);
+        PbGhost.Shown = true; PbGhost.GroupShown = true; PbGhost.Forget();
+        PbGhost.Source = e => e.Id == live.Id ? (liveGhost, liveGhost.Dps) : e.Id == killed.Id ? (killGhost, killGhost.Dps) : (null, 0);
+        try
+        {
         // KL_WORST_LOOK=neon,sticker: those looks only (a quick run while fixing them; the test runs them all)
         var only = (Environment.GetEnvironmentVariable("KL_WORST_LOOK") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         bool Wanted(string look) => only.Length == 0 || only.Contains(look);
@@ -315,7 +323,7 @@ public static partial class WpfApp
         var kinahLooks = HudLooks.All.Select(l => l.Key).Where(k => Wanted(HudThemes.Themed(k) || HudLooks.FightLooks.Contains(k) ? k : ParserPrefs.StandardLook)).ToList();
         void Frame(string look, string where, FrameworkElement el)
         {
-            foreach (var c in CutOffs(el, names)) cuts.Add((look, where, c));
+            foreach (var c in CutOffs(el, names).Concat(GhostChipClashes(el))) cuts.Add((look, where, c));
             if (shots != null) { var f = Path.Combine(shots, $"ui-worst-{where}.png"); Save(el, f, 0, ShotGround); SpillNote(shots, Path.GetFileName(f), el); }
         }
         foreach (var scale in scales)
@@ -365,6 +373,8 @@ public static partial class WpfApp
                     }
                 h.Close();
             }
+        }
+        finally { PbGhost.Source = ghostSrc0; PbGhost.Shown = ghost0; PbGhost.GroupShown = ghostGroup0; PbGhost.Forget(); }
         return cuts;
     }
 

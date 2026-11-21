@@ -117,7 +117,7 @@ sealed partial class HudScorebug
     /// A leaderboard row of either package: its ground, its words, and the two moments a row plays (a kill's glint crossing it,
     /// <see cref="Sweep"/>; its entrance wiping in behind a slanted edge, <see cref="Enter"/>, the words on once it is in).
     /// </summary>
-    abstract class BoardRow : IThemeRow
+    abstract class BoardRow : IThemeRow, IThemeBarSpan
     {
         protected readonly Grid RootG = new();
         /// <summary>The row's words (faded in after its entrance's wipe, so no figure is ever shown cut).</summary>
@@ -132,6 +132,9 @@ sealed partial class HudScorebug
         public double Enter = 1;
 
         public FrameworkElement Root => RootG;
+
+        /// <summary>Where the row's bar is drawn (each package says; none by default).</summary>
+        public virtual (FrameworkElement On, Rect Track)? BarTrack => null;
 
         protected BoardRow(double h)
         {
@@ -258,6 +261,17 @@ sealed partial class HudScorebug
 
         readonly List<FrameworkElement> _keep = new();
         readonly List<(FrameworkElement, FrameworkElement?)> _give = new();
+
+        /// <summary>The LED line: DrawLeds' rect (the art's whole width; 16 px tall and centred, or 13 px from y 5 with a healer's line under it). A bar of v lights round(v * segments) of them, so it ends on a segment.</summary>
+        public override (FrameworkElement On, Rect Track)? BarTrack
+        {
+            get
+            {
+                if (_leds.ActualWidth <= 0) return null;
+                double bh = _healer ? 13 : 16, y = _healer ? 5 : Math.Round((_leds.ActualHeight - bh) / 2);
+                return (_leds, new Rect(0, y, _leds.ActualWidth, bh));
+            }
+        }
 
         public override void Set(MeterMember m, MeterContext c, bool fresh)
         {

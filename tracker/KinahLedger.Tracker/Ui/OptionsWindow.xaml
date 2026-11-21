@@ -237,6 +237,7 @@
         <StackPanel x:Name="PageMeter" Visibility="Collapsed"/>
         <StackPanel x:Name="PageTimers" Visibility="Collapsed"/>
         <StackPanel x:Name="PageApplicants" Visibility="Collapsed"/>
+        <StackPanel x:Name="PageCompanion" Visibility="Collapsed"/>
 
         <!-- General: language, the app's theme, the window's size and how it starts -->
         <StackPanel x:Name="PageGeneral" Visibility="Collapsed">

@@ -154,6 +154,8 @@ public static partial class WpfApp
             pw.Close();
             Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
         }
+        // KL_OPTIONS_ONLY=ghost: the PB ghost alone (Ui/WpfApp.PbGhost.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "ghost") { var gw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; gw.Show(); gw.ShowDemo(); DoEvents(); GhostChecks(gw, Check); gw.Close(); Console.WriteLine(fails == 0 ? "options test (PB ghost): all passed" : $"options test (PB ghost): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=pullshare: Share this pull alone (Ui/WpfApp.PullShare.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "pullshare") { var sw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; sw.Show(); sw.ShowDemo(); DoEvents(); if (Environment.GetEnvironmentVariable("KL_PULLSHARE_METER") == "1") MeterShareChecks(sw, Check); PullShareChecks(sw, Check); sw.Close(); Console.WriteLine(fails == 0 ? "options test (pull share): all passed" : $"options test (pull share): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=timeline: the Parser page's Timeline tab alone (Ui/WpfApp.Timeline.cs)
@@ -180,6 +182,8 @@ public static partial class WpfApp
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "typing") { var tw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; tw.Show(); DoEvents(); TypingChecks(tw, Check); tw.Close(); Console.WriteLine(fails == 0 ? "options test (terminal typing): all passed" : $"options test (terminal typing): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=odyle: the meter's Odyle Energy alone (Ui/WpfApp.Odyle.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "odyle") { var keep = new Window { Left = -12000, Top = -12000, Width = 10, Height = 10, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, WindowStartupLocation = WindowStartupLocation.Manual }; keep.Show(); OdyleChecks(Check); keep.Close(); Console.WriteLine(fails == 0 ? "options test (odyle energy): all passed" : $"options test (odyle energy): {fails} failed"); return fails == 0 ? 0 : 1; }
+        // KL_OPTIONS_ONLY=companion: the companion alone (Ui/WpfApp.Companion.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "companion") { var cw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; cw.Show(); DoEvents(); CompanionChecks(cw, Check); cw.Close(); Console.WriteLine(fails == 0 ? "options test (companion): all passed" : $"options test (companion): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=applicants: the Applicants window alone (Ui/WpfApp.Applicants.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "applicants") { var aw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; aw.Show(); DoEvents(); ApplicantsChecks(aw, Check); aw.Close(); Console.WriteLine(fails == 0 ? "options test (applicants): all passed" : $"options test (applicants): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=settings: the settings revamp's checks (left bar, every page fits, every row found and jumped to) and the
@@ -420,6 +424,7 @@ public static partial class WpfApp
         HudIdleChecks(w, Check);   // the overlay's idle line in every look (Ui/WpfApp.HudIdle.cs)
         TypingChecks(w, Check);   // the Terminal types a new pickup out (Ui/WpfApp.Typing.cs; KL_OPTIONS_ONLY=typing alone)
         ApplicantsChecks(w, Check);   // the Applicants window (Ui/WpfApp.Applicants.cs; KL_OPTIONS_ONLY=applicants alone)
+        CompanionChecks(w, Check);   // the companion (Ui/WpfApp.Companion.cs; KL_OPTIONS_ONLY=companion alone)
         using (new MainStatics()) NpcapChecks(settings, Check);   // (its own main windows: the shared layer and lookups put back after, Ui/WpfApp.PopOuts.cs) what keeps the DPS meter off, Npcap missing first (Ui/WpfApp.Npcap.cs; KL_OPTIONS_ONLY=npcap alone)
         OdyleChecks(Check);   // the meter's Odyle Energy (Ui/WpfApp.Odyle.cs; KL_OPTIONS_ONLY=odyle alone)
         PopOutChecks(settings, Check);   // the pop-out windows, on a main window of their own (Ui/WpfApp.PopOuts.cs; KL_OPTIONS_ONLY=popouts alone)
@@ -1116,12 +1121,12 @@ public static partial class WpfApp
             // flips its overlay and the dot follows
             w.SetParserSeparateForTest(true);
             string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
-            bool defaultTwo = defaultMenu == "Kinah,Applicants,Parser" && w.OverlayEntries().Count(e => !MainWindow.IsPopOutEntry(e)) == 3;   // Applicants since 1.0.14; the pop-outs' switches apart (1.0.17)
+            bool defaultTwo = defaultMenu == "Kinah,Applicants,Companion,Parser" && w.OverlayEntries().Count(e => !MainWindow.IsPopOutEntry(e)) == 4;   // Applicants since 1.0.14, the companion since 1.0.39 (off); the pop-outs' switches apart (1.0.17)
             Check(defaultTwo && !w.TimersSeparate, $"the header's Overlays menu by default: Kinah and the Parser ({defaultMenu}), the timers being a line on top of the Kinah overlay");
             w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
             var entries = w.OverlayEntries().Where(e => !MainWindow.IsPopOutEntry(e)).ToList();   // the overlays' own switches (the pop-outs' are checked in Ui/WpfApp.PopOuts.cs)
-            Check(ovs.Count == 4 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Applicants", "Kinah", "Parser", "Timers" }) && entries.Count == 4 && entries.All(e => e.On != null && e.Sub.Length > 0),
+            Check(ovs.Count == 5 && ovs[0].Name == "Kinah" && ovs.Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "Applicants", "Companion", "Kinah", "Parser", "Timers" }) && entries.Count == 5 && entries.All(e => e.On != null && e.Sub.Length > 0),
                 $"the header's Overlays menu: a switch each for Kinah first, the Parser and Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
             bool kinahWas = ovs[0].On;
             entries[0].Do!(); DoEvents();
@@ -1438,6 +1443,7 @@ public static partial class WpfApp
         ParserShareChecks(w, Check);   // the Parser page's pictures, Copy as text and the back button (Ui/WpfApp.ParserShare.cs)
         PullShareChecks(w, Check);   // Share this pull: the list's share mark and the PB badge (Ui/WpfApp.PullShare.cs)
         TimelineChecks(w, Check);   // the Parser page's Timeline tab (Ui/WpfApp.Timeline.cs)
+        GhostChecks(w, Check);   // the PB ghost: its switches, its line and words in the meter (Ui/WpfApp.PbGhost.cs)
         MeterMotionChecks(Check);
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs

@@ -1,0 +1,14 @@
+{
+  "{0} vs best": "對比最佳 {0}",
+  "New best by {0}!": "新紀錄，超越 {0}！",
+  "{0} off your best": "距最佳紀錄 {0}",
+  "group {0}": "隊伍 {0}",
+  "Your DPS {0} against your best here, {1}.": "你的 DPS {0}，此處最佳紀錄 {1}。",
+  "Your DPS {0}; your best kill here had {1} at this point of the fight.": "你的 DPS {0}；你在此處的最佳擊殺在戰鬥的這個時點是 {1}。",
+  "Lined up by the boss's HP.": "依首領 HP 對齊。",
+  "Lined up by the time into the pull.": "依開打後經過的時間對齊。",
+  "PB ghost": "PB 幽靈",
+  "On a boss you've killed before, your row races your best kill of that fight: a line where your best's pace would put you, and \"+6.2% vs best\" or \"−3.1%\", live. At the kill: a new best, or how far off it.": "在你擊殺過的首領上，你的那一列會和該場戰鬥的最佳擊殺賽跑：以最佳紀錄的步調你會在哪裡，就畫一條線，並即時顯示「對比最佳 +6.2%」或「−3.1%」。擊殺時：是否創下新紀錄，或差了多少。",
+  "Group pace": "隊伍步調",
+  "The group's DPS against the group's in your best kill, beside yours.": "在你的旁邊顯示隊伍 DPS 對比你最佳擊殺時的隊伍 DPS。"
+}
