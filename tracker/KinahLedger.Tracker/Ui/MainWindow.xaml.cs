@@ -1917,6 +1917,7 @@ public partial class MainWindow : Window
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (ScreenArea.Test != null && ScreenArea.RaiseMaxTrack(msg, lParam, VisualTreeHelper.GetDpi(this).DpiScaleX, VisualTreeHelper.GetDpi(this).DpiScaleY)) return IntPtr.Zero;   // a test's bigger screen (Ui/ScreenArea.cs)
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
         else if (msg == Native.WM_HOTKEY && wParam.ToInt32() == Hotkey.MarkWrongId) { MarkLastLineWrong(); handled = true; }   // Ui/MainWindow.MarkWrong.cs
         else if (msg == WM_SIZING) { OnSizing(wParam, lParam); handled = true; return new IntPtr(1); }   // an edge dragged: the window's size (Ui/MainWindow.Fit.cs)
