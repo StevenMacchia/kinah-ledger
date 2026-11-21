@@ -1,5 +1,8 @@
 name: screen probe
-on: workflow_dispatch
+on:
+  push:
+    branches: [ci/fonts-diagnostic]
+    paths: [".github/workflows/screen-probe.yml"]
 jobs:
   p:
     runs-on: windows-latest
