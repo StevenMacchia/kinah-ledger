@@ -25,6 +25,11 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    # GitHub's Windows runners are 1024x768 and no step can change that (the video driver offers no other mode), so the checks written for a
+    # 1080p desktop (Full view's two columns, the Parser at 150%) get a screen to fit by KL_TEST_WORKAREA (Ui/ScreenArea.cs): the app's work
+    # area and its windows' size limit, in DIPs. Read only by options-test and ui-shot (both run below), never by a normal launch
+    env:
+      KL_TEST_WORKAREA: 1920x1040
     steps:
       - uses: actions/checkout@v4
 
@@ -77,15 +82,10 @@ jobs:
           dist/KinahLedger.exe options-test | cat
 
       # Options and the window in a demo (player features), and the window and its cards drawn for layout review
-      # GitHub's Windows runners are 1024x768 and no step can change that (the video driver offers no other mode), so the checks written for a
-      # 1080p desktop (Full view's two columns, the Parser at 150%) get a screen to fit by KL_TEST_WORKAREA (Ui/ScreenArea.cs): the app's work
-      # area and the windows' size limit, in DIPs. Read only by options-test and ui-shot, never by a normal launch
       - name: options-test
         id: options
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
         shell: bash
-        env:
-          KL_TEST_WORKAREA: 1920x1040
         run: dist/KinahLedger.exe options-test | cat
 
       - name: Layout renders
