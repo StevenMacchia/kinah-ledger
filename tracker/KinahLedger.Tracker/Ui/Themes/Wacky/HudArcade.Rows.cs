@@ -79,8 +79,9 @@ sealed partial class HudArcade
     /// </summary>
     sealed class ArcadeRow : IThemeRow
     {
-        public const double H = 27, Pitch = 29;
-        const double PadL = 9, PadR = 6, RankW = 30, IconW = 23, BarH = 5, BarCell = 5, BarGap = 2;
+        public const double H = 30, Pitch = 32;
+        const double PadL = 9, PadR = 6, RankW = 30, IconW = 23, BarH = 8, BarCell = 6, BarGap = 2;
+        readonly HudArcade _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art, _light, _crown, _spark;
         /// <summary>The chase's window over the bar (clips the light), and the light's place in it.</summary>
@@ -92,12 +93,16 @@ sealed partial class HudArcade
         readonly Grid _words = new() { Margin = new Thickness(PadL, 0, PadR, 0) };
         readonly Border _rankHost = new() { HorizontalAlignment = HorizontalAlignment.Center };
         readonly TextBlock _name = Tt("", 13, White, FontWeights.SemiBold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .66)), FontWeights.SemiBold),
-            _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _dps = Tt("", 17, White, FontWeights.Bold), _share = Tt("", 10, Frozen(Mod.A(Colors.White, .8)), FontWeights.Bold),
+            _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _share = Tt("", 10, Frozen(Mod.A(Colors.White, .8)), FontWeights.Bold),
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) };
-        readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0) };
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
+        /// <summary>The DPS in the score face (LED digits), its host in the DPS column; rebuilt only when the figure or the rank changes.</summary>
+        readonly Border _dps = new() { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Tag = "row-dps" };
+        string _dpsSig = "";
+        const double DpsPx = 2.1;
         readonly TranslateTransform _crownDrop = new();
         string _cls = "\0";
         MeterMember? _m;
@@ -108,15 +113,15 @@ sealed partial class HudArcade
 
         public FrameworkElement Root => _root;
 
-        public ArcadeRow()
+        public ArcadeRow(HudArcade look)
         {
-            _dps.Tag = "row-dps"; _share.Tag = "row-share"; _heal.Tag = "heal-figures"; _cp.Tag = "cp";
-            _dps.HorizontalAlignment = _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
-            _dps.VerticalAlignment = VerticalAlignment.Center; _dps.Margin = new Thickness(0, 0, 0, 1);
+            _look = look;
+            _share.Tag = "row-share"; _heal.Tag = "heal-figures"; _cp.Tag = "cp";
+            _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
             _share.Margin = new Thickness(0, 3, 0, 0); _dmg.Margin = new Thickness(0, 1, 0, 0); _crit.Margin = new Thickness(0, 1, 0, 0);
             _heal.Margin = new Thickness(6, 3, 0, 0); _heal.VerticalAlignment = VerticalAlignment.Top;
             // the columns: rank, the class art, the name's line over its bar (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
-            _dpsW = FigCol(_dps, "888.8K") + 6; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
+            _dpsW = Math.Ceiling(LedWord.WidthOf("888.8K", DpsPx, true)) + 8; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
             _dmgW = FigCol(_dmg, "888.88M") + 8; _critW = FigCol(_crit, "88%") + 8;
             foreach (var w in new[] { RankW, IconW, double.NaN, 0, _dpsW, _shareW, 0, 0 })
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
@@ -125,9 +130,9 @@ sealed partial class HudArcade
             _light = new TacSketch((dc, _) => DrawChaseLight(dc, _chaseC, BarCell, BarGap, BarH), 4 * (BarCell + BarGap) + 2, BarH + 4) { RenderTransform = _chaseAt, Visibility = Visibility.Hidden };
             _chaseHost.Children.Add(_light);
             // the crown: a frozen drawing, placed once; its drop and its sparkles are transforms and opacity
-            _crown = new TacSketch((dc, s) => { dc.PushTransform(new TranslateTransform(Math.Round((s.Width - CrownW) / 2), 1)); dc.DrawDrawing(Crown); dc.Pop(); }, RankW, 11)
+            _crown = new TacSketch((dc, s) => { dc.PushTransform(new TranslateTransform(Math.Round((s.Width - CrownW) / 2), 1)); dc.DrawDrawing(Crown); dc.Pop(); }, RankW, 13)
                 { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0), RenderTransform = _crownDrop, Visibility = Visibility.Collapsed };
-            _spark = new TacSketch(DrawSparks, RankW, 11) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0),
+            _spark = new TacSketch(DrawSparks, RankW, 13) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0),
                 RenderTransformOrigin = new Point(.5, .5), RenderTransform = _sparkOut, Visibility = Visibility.Hidden };
             _root.Children.Add(_art);
             Put(_rankHost, 0); Put(_crown, 0); Put(_spark, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
@@ -161,8 +166,7 @@ sealed partial class HudArcade
                 _rankHost.Child = rw;
                 _crown.Visibility = m.Rank == 1 ? Visibility.Visible : Visibility.Collapsed;
                 _rankHost.VerticalAlignment = m.Rank == 1 ? VerticalAlignment.Bottom : VerticalAlignment.Center;
-                _rankHost.Margin = new Thickness(0, 0, 0, m.Rank == 1 ? 2 : 0);
-                _dps.Foreground = Frozen(Mod.Mix(tone, Colors.White, .42));
+                _rankHost.Margin = new Thickness(0, 0, 0, m.Rank == 1 ? 1 : 0);
             }
             if (m.Class != _cls)
             {
@@ -183,10 +187,15 @@ sealed partial class HudArcade
             if (m.You) { var y = Mark(L.T("YOU"), filled: true); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _dps.Text = m.Figure;
-            _dps.FontSize = m.CpOnly ? 14 : 17;
+            double px = m.CpOnly ? 1.6 : DpsPx;
+            var sig = m.Figure + "|" + m.Rank + "|" + px;
+            if (sig != _dpsSig)
+            {
+                _dpsSig = sig;
+                _dps.Child = Fig(m.Figure, px, Mod.Mix(tone, Colors.White, .35), 0, textSize: m.CpOnly ? 14 : 17);
+            }
             // a wider figure (Combat Power before the first hit, "167,548") widens its column: never a digit cut
-            _dpsInk = TextW(_dps, m.Figure);
+            _dpsInk = Spells(m.Figure, true) ? Math.Ceiling(LedWord.WidthOf(m.Figure, px, true)) : TextW(Tt("", m.CpOnly ? 14 : 17, White, FontWeights.Bold), m.Figure);
             _words.ColumnDefinitions[4].Width = new GridLength(Math.Max(_dpsW, _dpsInk + 6));
             _share.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
@@ -198,7 +207,7 @@ sealed partial class HudArcade
             if (!fresh && c.Moves && _lastRank > 0 && m.Rank < _lastRank)
             {
                 Chase(0, Mod.Mix(tone, Colors.White, .5));
-                if (m.Rank == 1) CrownDrop(0);
+                if (m.Rank == 1) { CrownDrop(0); _look.NewLeader(this, m.You); }
             }
             _lastRank = m.Rank;
         }
@@ -227,8 +236,8 @@ sealed partial class HudArcade
         Rect BarRect(Size s)
         {
             var cols = _words.ColumnDefinitions;
-            double x0 = PadL + cols[0].ActualWidth + cols[1].ActualWidth;
-            double x1 = x0 + cols[2].ActualWidth + cols[3].ActualWidth - 8;
+            double x0 = PadL + cols[0].ActualWidth;
+            double x1 = x0 + cols[1].ActualWidth + cols[2].ActualWidth + cols[3].ActualWidth - 8;
             return new Rect(x0, s.Height - BarH - 3, Math.Max(0, x1 - x0), BarH);
         }
 
@@ -251,7 +260,7 @@ sealed partial class HudArcade
             if (dw > 0) dc.DrawEllipse(Bloom(tone), null, new Point(dx + dw - Math.Min(dw, _dpsInk) / 2, s.Height / 2), dw * .62, s.Height * .5);
             // the bar: LED cells lit to the share in the class's colour
             var bar = BarRect(s);
-            DrawLed(dc, bar, m.CpOnly ? 0 : _bar, m.ClassColor, BarCell, BarGap);
+            DrawLed(dc, bar, m.CpOnly ? 0 : _bar, Vivid(m.ClassColor), BarCell, BarGap, .14);
             // a healer's share of the group's healing as a mint pixel line under the cells (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
                 dc.DrawRectangle(Ink(MintC2, .95), null, new Rect(bar.X, bar.Bottom + 1, Math.Max(3, bar.Width * Math.Clamp(m.HealShare, 0, 1)), 1.5));
@@ -279,7 +288,7 @@ sealed partial class HudArcade
         {
             double x = Math.Round((s.Width - CrownW) / 2), y = 1;
             var b = Ink(Color.FromRgb(0xFF, 0xF4, 0xB0));
-            foreach (var (px, py) in new[] { (x - 4, y), (x + CrownW + 1, y), (x - 3, y + CrownH - 3), (x + CrownW, y + CrownH - 3) })
+            foreach (var (px, py) in new[] { (Math.Max(0, x - 5), y), (Math.Min(s.Width - 3, x + CrownW + 2), y), (Math.Max(0, x - 4), y + CrownH - 3), (Math.Min(s.Width - 3, x + CrownW + 1), y + CrownH - 3) })
             {
                 dc.DrawRectangle(b, null, new Rect(px, py + 1, 3, 1));
                 dc.DrawRectangle(b, null, new Rect(px + 1, py, 1, 3));
@@ -304,6 +313,18 @@ sealed partial class HudArcade
                 _chaseAt.X = (c0 - 3) * pitch - 2;
                 Fade(_light, 1);
             }, () => Fade(_light, 0));
+        }
+
+        /// <summary>The crown's middle on <paramref name="on"/> (where a new leader's sparks fly from), or null before it is laid out.</summary>
+        internal Point? CrownAt(UIElement on)
+        {
+            try
+            {
+                if (_crown.Visibility != Visibility.Visible) return null;
+                if (_crown.ActualWidth <= 0) _root.UpdateLayout();
+                return _crown.ActualWidth > 0 ? _crown.TranslatePoint(new Point(_crown.ActualWidth / 2, 6), on) : null;
+            }
+            catch (InvalidOperationException) { return null; }
         }
 
         /// <summary>The crown drops onto 1ST from above with a bounce, and sparkles as it lands (after <paramref name="delay"/> ms).</summary>

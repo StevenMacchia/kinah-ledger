@@ -20,8 +20,8 @@ sealed partial class HudArcade : IThemeCard
         const double In = 13;
         double w = 270 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
-        var label = Frozen(Color.FromRgb(0xFF, 0x6A, 0x6A));
-        var stack = new StackPanel { Margin = new Thickness(In, 12, In, 11) };
+        var label = Ink(LedC);
+        var stack = new StackPanel { Margin = new Thickness(In + 3, 15, In + 3, 14) };
 
         // the head: art, name, CP, YOU ... class, over a dotted rule in the class's colour
         var hg = new Grid { Margin = new Thickness(0, 0, 0, 6) };
@@ -62,10 +62,10 @@ sealed partial class HudArcade : IThemeCard
         void Part(int col, string word, string fig, double size, Brush ink, Effect? fx = null)
         {
             var sp = new Grid { Height = 38 };
-            var lb = Tt(word, 8.5, label, FontWeights.Bold); lb.VerticalAlignment = VerticalAlignment.Top;
+            var lb = Word(word, 1.2, LedC, .3, textSize: 9); lb.VerticalAlignment = VerticalAlignment.Top; lb.HorizontalAlignment = HorizontalAlignment.Left;
             sp.Children.Add(lb);
-            var fv = Tt(fig, size, ink, FontWeights.Bold); fv.VerticalAlignment = VerticalAlignment.Bottom; fv.Margin = new Thickness(0, 0, 0, -size * .18 + 1);
-            fv.Effect = fx;
+            FrameworkElement fv = fx != null ? Fig(fig, 3, LedC, .45, textSize: size) : Tt(fig, size, ink, FontWeights.Bold);
+            fv.VerticalAlignment = VerticalAlignment.Bottom; fv.HorizontalAlignment = HorizontalAlignment.Left; fv.Margin = new Thickness(0, 0, 0, fx != null ? 1 : -size * .18 + 1);
             sp.Children.Add(fv);
             Grid.SetColumn(sp, col); read.Children.Add(sp);
         }
@@ -94,7 +94,7 @@ sealed partial class HudArcade : IThemeCard
         {
             stack.Children.Add(Dots(new Thickness(0, 8, 0, 6), MazeHiC, .5));
             var hd = Tac.CardGrid(c, 46, 56, 14);
-            TextBlock H(string s, bool right = true) { var t = Tt(s, 8, label, FontWeights.Bold); if (right) t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
+            FrameworkElement H(string s, bool right = true) { var t = Word(s, 1.1, LedC, .25, textSize: 8.5); t.HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left; return t; }
             Tac.Cell(hd, H(L.T("SKILL"), false), 0, c);
             Tac.Cell(hd, H(L.T("SHARE")), 1, c);
             Tac.Cell(hd, H(L.T("DMG")), 2, c);
@@ -104,12 +104,13 @@ sealed partial class HudArcade : IThemeCard
             stack.Children.Add(hd);
             foreach (var a in c.Abilities)
             {
-                var row = new Grid { Height = 22, Margin = new Thickness(0, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
+                var row = new Grid { Height = 24, Margin = new Thickness(0, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
-                var art = new TacSketch((dc, s) => DrawLed(dc, new Rect(0, s.Height - 3, s.Width, 3), of, tone, 4, 1.5, .08));
+                var vivid = Vivid(tone);
+                var art = new TacSketch((dc, s) => DrawLed(dc, new Rect(0, s.Height - 5, s.Width, 5), of, vivid, 5, 2, .12));
                 row.Children.Add(art);
                 var g = Tac.CardGrid(c, 46, 56);
-                g.Margin = new Thickness(0, 0, 0, 3);
+                g.Margin = new Thickness(0, 0, 0, 6);
                 var nm = Tac.AbilityName(a, 11.5, White, Face, FontWeights.SemiBold, Frozen(Mod.Mix(tone, Colors.White, .55)), 9.5);
                 nm.Margin = new Thickness(0, 0, 6, 0);
                 Tac.Cell(g, nm, 0, c);
@@ -131,7 +132,7 @@ sealed partial class HudArcade : IThemeCard
 
         // the screen: black with scanlines in a double pixel frame in the class's colour (drawn once)
         var ground = Math.Max(.93, Ground);
-        var screen = new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), Mod.Mix(tone, MazeC, .25), ground));
+        var screen = new TacSketch((dc, s) => DrawScreen(dc, new Rect(3, 3, s.Width - 6, s.Height - 6), Mod.Mix(tone, MazeC, .25), ground));
         var body = new Grid { RenderTransformOrigin = new Point(.5, .5) };
         body.Children.Add(screen);
         body.Children.Add(stack);

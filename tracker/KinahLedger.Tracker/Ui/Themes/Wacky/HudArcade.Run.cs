@@ -17,14 +17,13 @@ sealed partial class HudArcade
 {
     static readonly RunInk RunTones = new(Led, Soft, Quiet, Quiet, Mint2, Coral, Frozen(GoldC2), Frozen(GoldC2), 22, 10.5);
 
-    /// <summary>The run's head over the wash, lined up with the words on it (collapsed out of a run).</summary>
+    /// <summary>The run's head, set into the Buddy's top edge after 1UP (collapsed out of a run).</summary>
     readonly TextBlock _runHead = RunHead();
-    readonly Border _runHeadLit;
 
     static TextBlock RunHead()
     {
-        var t = Tt("", 10.5, Soft, FontWeights.SemiBold);
-        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(4, 0, 0, 3);
+        var t = Tt("", 10, Soft, FontWeights.SemiBold);
+        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(0);
         return t;
     }
 
@@ -51,8 +50,10 @@ sealed partial class HudArcade
         _lineBody.Children.Add(words);
         if (strip != null) { strip.Margin = new Thickness(12, 0, 0, 0); Pixelate(strip); _lineBody.Children.Add(strip); }
 
-        ModernRun.Head(_runHead, s, FightWidth - 10 - _runHead.Margin.Left, RunTones);
-        _runHeadLit.Opacity = _dim ? .62 : 1;
-        _runHeadLit.Visibility = Visibility.Visible;
+        // the head on its plate across the top edge, after the 1UP legend
+        double left = _lineLegend.Margin.Left + Mod.W(_lineLegend) + 6;
+        _runPlate.Margin = new Thickness(left, -1, 0, 0);
+        ModernRun.Head(_runHead, s, FightWidth - 10 - left - 20, RunTones);
+        _runPlate.Visibility = Visibility.Visible;
     }
 }
