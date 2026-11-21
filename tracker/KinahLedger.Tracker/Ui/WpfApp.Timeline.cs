@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -105,6 +105,8 @@ public static partial class WpfApp
             check(!names.Contains("Parser view: Timeline"), $"timeline: a pull kept before has no Timeline tab ({string.Join(", ", names)})");
         }
         catch (Exception ex) { check(false, "timeline: " + ex); }
-        finally { w.ShowDemo(); DoEvents(); }
+        // the page as the checks before left it (the Parser's list), the timeline's picks cleared: the checks after (the page
+        // tabs' light among them) see the window as they always have
+        finally { ParserTimeline.DeathOpenForTest = -1; ParserTimeline.AllForTest = false; ParserTimeline.Last = null; w.ShowParserDemo("history"); DoEvents(); w.ShowDemo(); DoEvents(); }
     }
 }
