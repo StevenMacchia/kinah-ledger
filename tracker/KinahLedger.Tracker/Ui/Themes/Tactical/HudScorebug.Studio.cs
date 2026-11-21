@@ -159,6 +159,16 @@ sealed partial class HudScorebug
         Color _rc;
         bool _expanded;
 
+        /// <summary>The band along the card's foot: DrawCard's groove (from x 35, less the share's room and 16 px at the end, Band tall); a bar is never shorter than Band.</summary>
+        public override (FrameworkElement On, Rect Track)? BarTrack
+        {
+            get
+            {
+                double x0 = 35, bw = _card.ActualWidth - x0 - ShareW - 16;
+                return _card.ActualWidth < 80 || bw <= Band ? null : (_card, new Rect(x0, _card.ActualHeight - Band - BandFoot, bw, Band));
+            }
+        }
+
         public StudioRow() : base(H)
         {
             _card = new TacSketch(DrawCard);

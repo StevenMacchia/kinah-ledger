@@ -60,7 +60,7 @@ public partial class MainWindow
             var fresh = ParserPrefs.Load();
             _parserPrefs.Details = fresh.Details; _parserPrefs.KillsNear = fresh.KillsNear; _parserPrefs.Deaths = fresh.Deaths; _parserPrefs.Targets = fresh.Targets; _parserPrefs.Filters = fresh.Filters; _parserPrefs.Hovers = fresh.Hovers; _parserPrefs.Separate = fresh.Separate; _parserPrefs.Look = fresh.Look; _parserPrefs.DpsActive = fresh.DpsActive;
             Encounter.ActiveBasis = fresh.DpsActive; Encounter.BossOnly = fresh.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(fresh.CritNow); Encounter.BackKey = Encounter.BackKeyOf(fresh.BackNow);
-            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; _parserPrefs.PvpPanel = fresh.PvpPanel; _parserPrefs.OdyleEnergy = fresh.OdyleEnergy; ApplyMeterExpanded();
+            _parserPrefs.Width = fresh.Width; _parserPrefs.WidthPicked = fresh.WidthPicked; _parserPrefs.Expanded = fresh.Expanded; _parserPrefs.HealBars = fresh.HealBars; _parserPrefs.PvpPanel = fresh.PvpPanel; _parserPrefs.OdyleEnergy = fresh.OdyleEnergy; _parserPrefs.Ghost = fresh.Ghost; _parserPrefs.GhostGroup = fresh.GhostGroup; ApplyMeterExpanded();
             ParserOverlayTick();
             DrawOverlayPills();   // the menu lists the Parser only while it is separate
             if (!_parserPrefs.Filters) { _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; }
@@ -78,6 +78,8 @@ public partial class MainWindow
         // your record on this fight (this boss in this instance and mode), kept in records.json: the overlay's record moments and
         // its pace measure against it, never against the same boss elsewhere (Steven, 2026-11-16: "ONLY pop up on a per fight basis")
         ParserRows.BestOf = e => _demo ? FightView.Records(e, ParserPast()).Best : RecordRef(TrackerSession.FightStore.Records.Of(e), e);
+        // the PB ghost (Parser/PbGhost.cs): your best kill of this fight second by second, and the best before this pull
+        PbGhost.Source = e => _demo ? DemoGhost(e) : (TrackerSession.FightStore.Records.GhostFor(e, () => TrackerSession.FightStore.All()), RecordRef(TrackerSession.FightStore.Records.Of(e), e)?.Dps ?? 0);
         if (watch) StartFarmTicker();
         Encounter.ActiveBasis = _parserPrefs.DpsActive; Encounter.BossOnly = _parserPrefs.Targets != "all"; Encounter.CritKey = Encounter.CritKeyOf(_parserPrefs.CritNow); Encounter.BackKey = Encounter.BackKeyOf(_parserPrefs.BackNow);   // crit and back attacks: none until a release picks the kind
         if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it

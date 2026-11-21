@@ -90,7 +90,7 @@ static class VhsRows
     }
 
     /// <summary>A row of either tape: its parts kept, set again each draw; a kill's glint over it.</summary>
-    public abstract class TapeRow : IThemeRow
+    public abstract class TapeRow : IThemeRow, IThemeBarSpan
     {
         protected readonly Grid Box = new();
         protected readonly Border GlintLayer = new() { Background = Br(0xFFFFFF), Opacity = 0, IsHitTestVisible = false, Margin = new Thickness(-4, -2, -4, -2) };
@@ -104,6 +104,18 @@ static class VhsRows
         Color _cc = Colors.Transparent;
 
         public FrameworkElement Root => Box;
+
+        /// <summary>The level bar's track: its fill is the track's width (less the fill's margins) * share and its full height (Bar.Apply).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack
+        {
+            get
+            {
+                var r = Level.Root;
+                if (r.ActualWidth <= 0) return null;
+                var mg = Level.Fill.Margin;
+                return (r, new Rect(mg.Left, 0, Math.Max(0, r.ActualWidth - mg.Left - mg.Right), r.ActualHeight));
+            }
+        }
 
         protected TapeRow(double barH)
         {

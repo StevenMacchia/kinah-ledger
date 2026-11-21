@@ -40,7 +40,7 @@ static class CorruptRows
         return t;
     }
 
-    public sealed class Row : IThemeRow
+    public sealed class Row : IThemeRow, IThemeBarSpan
     {
         readonly Grid _root = new() { Height = CorruptRows.Height };
         readonly Grid _slab = new() { Margin = new Thickness(-4, 0, -4, 0) };
@@ -67,6 +67,9 @@ static class CorruptRows
         readonly TextBlock _extra = Txt("", 10, OnBar, Face), _fig = FigCell(13, White, Face, Math.Ceiling(TextW("199.9K", Face, 13, FontWeights.Bold))), _share = FigCell(10.5, Lilac, Face, Math.Ceiling(TextW("33.3%", Face, 10.5, FontWeights.Bold)));
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The bar fills the slab inside its 1 px rim (the top half and the foot half, GlitchLevel: width * share); in the slab's coordinates, so the tear carries the line with it.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _slab.ActualWidth <= 2 ? null : (_slab, new Rect(1, 1, _slab.ActualWidth - 2, _slab.ActualHeight - 2));
 
         public Row()
         {
