@@ -73,7 +73,7 @@ sealed partial class HudRift
     /// Crowding (Steven, 2026-11-17): the CP goes first, then the marks shorten to their glyphs, then the name trims (never
     /// below ten letters), then the share column goes for every row; a figure is never cut.
     /// </summary>
-    internal sealed class RiftRow : IThemeRow
+    internal sealed class RiftRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double PadX = 8, RankW = 14, Gap1 = 4, IconW = 20, Gap2 = 6, ShareW = 34, DmgW = 54, CritW = 36;
