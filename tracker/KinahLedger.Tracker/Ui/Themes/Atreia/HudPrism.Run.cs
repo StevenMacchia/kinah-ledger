@@ -6,8 +6,8 @@ using static KinahLedger.Ui.HudKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Fade's Buddy in a dungeon run (the "run*" values, MainWindow.HudRun.cs; Steven, 2026-11-18: "Yes, all looks"): a
-/// speedrun timer on the same blue wash. Over the wash, small and lit straight on the game, the dungeon and its mode with
+/// Prism's Buddy in a dungeon run (the "run*" values, MainWindow.HudRun.cs; Steven, 2026-11-18: "Yes, all looks"): a
+/// speedrun timer on the same crystal. Over it, small and lit straight on the game, the dungeon and its mode with
 /// "Run 3 today · 38 clears"; on it the run clock big in white, mint ahead of your fastest run's pace and coral behind, the
 /// pace and your best beside it, the last bosses' splits under it (a new best split in gold). After the final boss NEW BEST
 /// in mint or "Cleared in 4:17 · 2nd fastest", and the run's worth in gold against your average; between runs today here.
@@ -28,7 +28,7 @@ sealed partial class HudPrism
         return t;
     }
 
-    /// <summary>The run on the wash: the figures in the hour's place, the strip after them (the timer chips follow); the head over it.</summary>
+    /// <summary>The run on the crystal: the figures in the hour's place, the strip after them (the timer chips follow); the head over it.</summary>
     void DrawRun(RunBuddy.State s)
     {
         var lead = new Border { Width = 8 };

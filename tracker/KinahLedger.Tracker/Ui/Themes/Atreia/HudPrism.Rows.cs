@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using KinahLedger.Parser;
 using static KinahLedger.Ui.HudKit;
 
@@ -36,7 +37,7 @@ sealed partial class HudPrism
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         TextBlock Pair(string w, string fig)
         {
-            var t = new TextBlock { FontFamily = Mod.Face, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), VerticalAlignment = VerticalAlignment.Center };
+            var t = new TextBlock { FontFamily = Mod.Face, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .8)), VerticalAlignment = VerticalAlignment.Center };
             System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
             t.Inlines.Add(new System.Windows.Documents.Run(w + " "));
             t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = White, FontSize = 12 });
@@ -45,7 +46,7 @@ sealed partial class HudPrism
         var tp = Pair(L.T("Total"), total);
         EnergyMark.After(tp, 11, Frozen(Mod.A(Colors.White, .72)));   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(tp);
-        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
         if (word.Length > 0) right.Children.Add(Pair(word, group));
         if (held)
         {
@@ -53,50 +54,80 @@ sealed partial class HudPrism
             right.Children.Add(avg);
         }
         Grid.SetColumn(right, 1); g.Children.Add(right);
-        return AsFoot(Lit(g), e, now);
+        return AsFoot(g, e, now);
     }
 
-    /// <summary>The line between the party and you pinned below it: "2 MORE", small and quiet.</summary>
+    /// <summary>The line between the party and you pinned below it: "2 MORE", small and quiet between two spectrum-tipped hairlines.</summary>
     static FrameworkElement GapLine(int left)
     {
-        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "·", 9, Frozen(Mod.A(Colors.White, .82)), FontWeights.SemiBold);
+        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "·", 9, Frozen(Mod.A(Colors.White, .8)), FontWeights.SemiBold);
         t.HorizontalAlignment = HorizontalAlignment.Center;
-        var lit = Lit(t);
-        lit.HorizontalAlignment = HorizontalAlignment.Center;
-        return lit;
+        t.Effect = Shade();
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
+        FrameworkElement Rule(bool toRight) => new TacSketch((dc, s) =>
+            dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.White, toRight ? 0 : .3), 0), (Mod.A(Colors.White, toRight ? .3 : 0), 1)), null, new Rect(0, 0, s.Width, 1)))
+            { Height = 1, Margin = new Thickness(toRight ? 20 : 8, 0, toRight ? 8 : 20, 0), VerticalAlignment = VerticalAlignment.Center };
+        var l = Rule(true); var r = Rule(false);
+        Grid.SetColumn(t, 1); Grid.SetColumn(r, 2);
+        g.Children.Add(l); g.Children.Add(t); g.Children.Add(r);
+        return g;
     }
 
     /// <summary>
-    /// One member as a soft class wash fading out to the right (the mock-up's Fade row): the wash runs from the row's left for
-    /// the member's part of the top (rounded at its left, ~62% colour, ~38% at 70% of its length, then gone). On it, straight
-    /// over the game in shaded white: the rank, the class's art in a thin white ring, the name, Combat Power small, the marks
-    /// (★ DPS, a healer's ✚, deaths, YOU), a healer's healing a second in mint, the DPS big and the share small at the right.
-    /// You: a thin white bar at the row's left edge. Short of room the CP goes first, then the share; a name keeps at least
-    /// ten characters; a figure is never cut (Mod.Fit).
+    /// One member as a clear glass bar on the crystal: a faint glass channel the row's length (corners cut), filled to the
+    /// member's part of the top with clear white glass holding a touch of the class's colour, a light along its top; a notch
+    /// in the class's colour at the row's left. At the fill's leading edge a white line where the light leaves the glass, and
+    /// past it the light split: six hairlines red to violet fanning out from the edge's top, the leader's widest. Rank 1 wears
+    /// the crown: a small triangular prism round its rank casting a rainbow ray behind the class's art. On the bar in white
+    /// with a tight shade: the rank, the class's art in a thin white ring, the name, Combat Power small, the marks (★ DPS, a
+    /// healer's ✚, deaths, YOU), a healer's healing a second in mint, the DPS big and the share small at the right. You: a
+    /// brighter rim round your bar. Short of room the CP goes first, then the share; a name keeps at least ten characters; a
+    /// figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class FadeRow : IThemeRow
+    sealed class PrismRow : IThemeRow
     {
-        public const double H = 29, Pitch = 32;
-        const double Pad = 8;
+        public const double H = 26, Pitch = 29;
+        const double PadL = 5, RankW = 19, IconW = 24;
+        /// <summary>The fan's spread per hairline (px at the bar's foot): the leader's, the others'.</summary>
+        const double SpreadTop = 2.1, SpreadRest = 1.3;
+        /// <summary>The room kept at the bar's right end for the widest fan, so it never leaves the row.</summary>
+        static readonly double FanRoom = 2 + 5 * SpreadTop + 2;
+        /// <summary>The words stop short of the fan's slot at the row's right end, so the leader's split light never runs through a figure.</summary>
+        static readonly double PadR = FanRoom + 1;
+        readonly HudPrism _look;
         readonly Grid _root = new() { Height = H };
-        readonly TacSketch _wash;
-        readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad, 0) };
-        readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .74)), FontWeights.SemiBold),
-            _heal = Tt("", 11, Mint2, FontWeights.Bold), _dps = Tt("", 16.5, White, FontWeights.Bold), _share = Tt("", 10.5, Frozen(Mod.A(Colors.White, .88)), FontWeights.SemiBold),
+        readonly TacSketch _art;
+        readonly Grid _words = new() { Margin = new Thickness(PadL, 0, PadR, 0) };
+        readonly TextBlock _rank = Tt("", 11.5, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .7)), FontWeights.SemiBold),
+            _heal = Tt("", 11, Mint2, FontWeights.Bold), _dps = Tt("", 16.5, White, FontWeights.Bold), _share = Tt("", 10.5, Frozen(Mod.A(Colors.White, .86)), FontWeights.SemiBold),
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
+        // the courses' own clocks (the bar's slide runs on the art, the glide on the root)
+        readonly Border _crownClock = new() { Width = 0, Height = 0 }, _glintClock = new() { Width = 0, Height = 0 };
+        // the sheen: a band drawn once (Band), slid along the row by its transform, the row's own bounds its clip
+        readonly Grid _fx = new() { ClipToBounds = true, IsHitTestVisible = false };
+        readonly Rectangle _band = new() { Width = 46, Fill = Band, HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        readonly TranslateTransform _bandX = new();
+        // the crown, made the first time the row leads: the prism and its resting ray (drawn on a resize only), the long ray the
+        // flash shoots (drawn once, scaled along the row) and the white bloom as the prism lands (opacity only)
+        TacSketch? _crownArt, _rayArt;
+        Ellipse? _bloom;
+        readonly ScaleTransform _pop = new(1, 1), _rayScale = new(.001, 1);
         readonly double _dpsW, _shareW, _dmgW, _critW;
         string _cls = "\0";
         MeterMember? _m;
         double _bar;
+        int _lastRank;
         bool _expanded, _shareOn = true;
 
         public FrameworkElement Root => _root;
 
-        public FadeRow()
+        public PrismRow(HudPrism look)
         {
+            _look = look;
             _dps.Tag = "row-dps"; _share.Tag = "row-share"; _heal.Tag = "heal-figures"; _cp.Tag = "cp";
             _dps.HorizontalAlignment = _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
             _share.Margin = new Thickness(0, 2, 0, 0); _dmg.Margin = new Thickness(0, 1, 0, 0); _crit.Margin = new Thickness(0, 1, 0, 0);
@@ -104,21 +135,31 @@ sealed partial class HudPrism
             // the columns: rank, the class art, the name's line (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
             _dpsW = FigCol(_dps, "888.8K") + 4; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
             _dmgW = FigCol(_dmg, "888.88M") + 8; _critW = FigCol(_crit, "88%") + 8;
-            foreach (var w in new[] { 17.0, 25, double.NaN, 0, _dpsW, _shareW, 0, 0 })
+            foreach (var w in new[] { RankW, IconW, double.NaN, 0, _dpsW, _shareW, 0, 0 })
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
-            _wash = new TacSketch(Draw);
-            _root.Children.Add(_wash);
+            _art = new TacSketch(Draw);
+            _root.Children.Add(_crownClock); _root.Children.Add(_glintClock);
+            _band.RenderTransform = _bandX;
+            _fx.Children.Add(_band);
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
+            _iconHost.Margin = new Thickness(2, 0, 0, 0);
             Put(_rank, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
-            _root.Children.Add(Lit(_words));
+            // the words straight on the crystal's dark glass (no shade effect: the rows update every tick and stay cheap)
+            _root.Children.Add(_words);
+            // the bar after the words in the grid (arranged after them, so it reads where their figures sit) but drawn under
+            // them, the sheen's band over the bar
+            Panel.SetZIndex(_art, -1); Panel.SetZIndex(_fx, -1);
+            _root.Children.Add(_art); _root.Children.Add(_fx);
             _root.SizeChanged += (_, _) => Fit();
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
+
+        bool Crowned => _m is { Rank: 1, Pinned: false, CpOnly: false };
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
@@ -130,11 +171,12 @@ sealed partial class HudPrism
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            bool crowned = Crowned;
             if (m.Class != _cls)
             {
                 _cls = m.Class;
                 var icon = ThemeText.Icon(m.Class, 17, m.Name);
-                if (icon is Border b) { b.BorderBrush = Frozen(Mod.A(Colors.White, .75)); b.BorderThickness = new Thickness(1); }
+                if (icon is Border b) { b.BorderBrush = Frozen(Mod.A(Colors.White, .8)); b.BorderThickness = new Thickness(1); }
                 _iconHost.Child = icon;
             }
             _name.Text = m.Name;
@@ -156,8 +198,69 @@ sealed partial class HudPrism
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
-            SlideBar(_wash, c, "bar", BarOf(m, c), v => { _bar = v; _wash.InvalidateVisual(); });
-            _wash.InvalidateVisual();
+            SlideBar(_art, c, "bar", BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); });
+            // a rank won: the lead takes the crown (and the look sweeps the bars); any other climb catches a glint
+            if (!fresh && c.Moves && _lastRank > 0 && m.Rank < _lastRank)
+            {
+                if (crowned) { Crown(); _look.NewLeader(); }
+                else Glint();
+            }
+            _lastRank = m.Rank;
+            ShowCrown(crowned);
+            _art.InvalidateVisual();
+        }
+
+        /// <summary>The sheen's place along this bar (0 to 1; outside it none), set by the look's sweep: the band's transform and opacity only.</summary>
+        internal void SweepAt(double p)
+        {
+            bool on = p is > 0 and < 1;
+            if (on != (_band.Visibility == Visibility.Visible)) _band.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (!on) return;
+            _bandX.X = -48 + (_root.ActualWidth + 96) * p;
+            _band.Opacity = .5 + .5 * Math.Sin(Math.PI * p);
+        }
+
+        /// <summary>A row that climbed: the sheen runs once along its bar alone.</summary>
+        void Glint() => Motion.Play(_glintClock, 650, t => SweepAt(t), () => SweepAt(-1));
+
+        /// <summary>The crown flashes in: the prism pops in white and its ray shoots along the row, then settles to its rest.</summary>
+        internal void Crown()
+        {
+            if (!Crowned) return;
+            ShowCrown(true);
+            if (_rayArt is not { } ray || _bloom is not { } bloom) return;
+            ray.Visibility = Visibility.Visible;
+            Motion.Play(_crownClock, 1100, p =>
+            {
+                double flash = p < .12 ? Seg(p, 0, .12) : 1 - Seg(p, .12, .55);
+                _pop.ScaleX = _pop.ScaleY = Math.Max(.01, Back(Seg(p, 0, .3), 2.6));
+                bloom.Opacity = flash;
+                double r = p < .35 ? Out(Seg(p, .05, .35)) : 1 - Out(Seg(p, .45, 1));
+                _rayScale.ScaleX = Math.Max(.001, r);
+                ray.Opacity = Math.Min(1, r * 1.5);
+            }, () => { _pop.ScaleX = _pop.ScaleY = 1; bloom.Opacity = 0; ray.Visibility = Visibility.Collapsed; });
+        }
+
+        /// <summary>The crown's parts shown on the leader's row (made the first time), hidden on the others.</summary>
+        void ShowCrown(bool on)
+        {
+            if (on && _crownArt == null)
+            {
+                _crownArt = new TacSketch((dc, s) => DrawCrown(dc, s.Width, s.Height)) { RenderTransform = _pop };
+                _rayArt = new TacSketch((dc, s) => DrawRay(dc, s.Width - RayX - 4, 1)) { RenderTransform = _rayScale, Visibility = Visibility.Collapsed, Opacity = 0 };
+                _rayScale.CenterX = RayX;
+                _pop.CenterX = PadL + RankW / 2; _pop.CenterY = CrownTop + CrownTall;
+                _bloom = new Ellipse
+                {
+                    Width = 24, Height = 24, Fill = Bloom, Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(PadL + RankW / 2 - 12, CrownTop + CrownTall * .6 - 12, 0, 0),
+                };
+                foreach (var el in new FrameworkElement[] { _rayArt, _crownArt, _bloom }) { Panel.SetZIndex(el, -1); _root.Children.Add(el); }
+            }
+            if (_crownArt == null) return;
+            var v = on ? Visibility.Visible : Visibility.Collapsed;
+            if (_crownArt.Visibility != v) _crownArt.Visibility = _bloom!.Visibility = v;
+            if (!on) { Motion.Halt(_crownClock); _rayArt!.Visibility = Visibility.Collapsed; _pop.ScaleX = _pop.ScaleY = 1; }
         }
 
         /// <summary>The crowding rule (Mod.Fit): the CP goes first, then the share; the name keeps at least ten characters.</summary>
@@ -167,7 +270,7 @@ sealed partial class HudPrism
             if (total <= 0) return;
             var cols = _words.ColumnDefinitions;
             double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0;
-            double room = total - 2 * Pad - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
+            double room = total - PadL - PadR - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
             var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
@@ -179,20 +282,119 @@ sealed partial class HudPrism
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>Whether the span [x0, x1] of the row lies over a figure's words (the DPS, the share, a healer's healing, the damage, the crit rate).</summary>
+        bool UnderFigure(double x0, double x1)
+        {
+            foreach (var t in new[] { _dps, _share, _heal, _dmg, _crit })
+            {
+                if (t.Visibility != Visibility.Visible || t.ActualWidth <= 0 || t.Text.Length == 0 || !t.IsDescendantOf(_root)) continue;
+                double a = t.TranslatePoint(new Point(0, 0), _root).X;
+                if (x1 > a - 1 && x0 < a + t.ActualWidth + 1) return true;
+            }
+            return false;
+        }
+
         void Draw(DrawingContext dc, Size s)
         {
-            if (_m is not { } m || s.Width < 20) return;
-            double fx = s.Width * Math.Clamp(_bar, 0, 1);
-            var c = m.ClassColor;
-            // the wash: the class's colour from the left, fading out by the end of the member's part
-            if (fx > .5) Wash(dc, new Rect(0, 0, fx, s.Height), c, .62, .38, 6);
-            // you: a thin white bar at the row's left edge, inside the wash's rounded corner
-            if (m.You)
+            if (_m is not { } m || s.Width < 40) return;
+            double w = s.Width, h = s.Height;
+            var r = new Rect(.5, .5, w - 1, h - 1);
+            var shape = Octa(r, 3.5);
+            var tone = m.ClassColor;
+            // the channel: faint glass, a touch lighter at its top, its rim a hairline
+            dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.White, .075), 0), (Mod.A(Colors.White, .03), 1)), null, shape);
+            double span = Math.Max(0, r.Width - FanRoom);
+            double fx = span * Math.Clamp(_bar, 0, 1), ex = r.X + fx;
+            dc.PushClip(shape);
+            if (fx > 1)
             {
-                dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Max(fx, 12) + 6, s.Height), 6, 6));
-                dc.DrawRectangle(White, null, new Rect(0, 0, 3, s.Height));
-                dc.Pop();
+                var fill = new Rect(r.X, r.Y, fx, r.Height);
+                // clear glass: white, a breath of the class's colour deepening to the edge, lighter along its top half
+                dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .2), 0), (Mod.A(Colors.White, .1), 1)), null, fill);
+                dc.DrawRectangle(Mod.Grad(false, (Mod.A(tone, .14), 0), (Mod.A(Mod.Mix(tone, Colors.White, .25), .34), 1)), null, fill);
+                dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .12), 0), (Mod.A(Colors.White, 0), .5)), null, fill);
+                dc.DrawRectangle(Mod.Br(Colors.White, .55), null, new Rect(r.X, r.Y, fx, 1));
+                dc.DrawRectangle(Mod.Br(Colors.Black, .25), null, new Rect(r.X, r.Bottom - 1, fx, 1));
+                // the light split at the leading edge: a white line, then six hairlines fanning red to violet, a soft spectrum behind them
+                // (in the fight only: before the first hit the bars are Combat Power, quiet); an edge that lands under a figure
+                // goes faint there, so the light never runs through the digits
+                if (fx > 4 && !m.CpOnly)
+                {
+                    bool lead = Crowned;
+                    double sp = lead ? SpreadTop : SpreadRest, top = r.Y + 1, bot = r.Bottom - 1, k = !lead && UnderFigure(ex - 2, ex + 3 + 5 * sp) ? .35 : 1;
+                    var glow = Poly(new Point(ex, top), new Point(ex + 2, top), new Point(ex + 2 + 5 * sp + 1.5, bot), new Point(ex, bot));
+                    dc.DrawGeometry(SpecGrad(new Point(ex, 0), new Point(ex + 3 + 5 * sp, 0), .2 * k), null, glow);
+                    for (int i = 0; i < Spec.Length; i++)
+                        dc.DrawLine(new Pen(Frozen(Mod.A(Spec[i], (lead ? .95 : .8) * k)), 1), new Point(ex + .8 + i * .3, top), new Point(ex + 1.2 + i * sp, bot));
+                    dc.DrawRectangle(Mod.Br(Colors.White, (lead ? .9 : .7) * k), null, new Rect(ex - 1.1, r.Y, 1.1, r.Height));
+                }
+            }
+            // a healer's share of the group's healing as a mint line along the bar's foot (Settings' heal bars)
+            if (ParserRows.HealBarsPref && m.HealShare > 0)
+                dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2.5, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2.5));
+            // the class's notch at the row's left
+            dc.DrawRectangle(Mod.Grad(true, (Mod.Mix(tone, Colors.White, .2), 0), (tone, 1)), null, new Rect(r.X, r.Y + 3, 2.5, r.Height - 6));
+            dc.Pop();
+            // the rim: a lit top edge; yours brighter all round
+            if (m.You) dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .62), 1.1), shape);
+            else dc.DrawGeometry(null, Mod.P(Mod.Grad(true, (Mod.A(Colors.White, .22), 0), (Mod.A(Colors.White, .05), 1)), 1), shape);
+        }
+
+        /// <summary>The crown's place: the prism's apex over the bar's top edge, its height, its side's depth and where its ray leaves it.</summary>
+        const double CrownTop = -5.5, CrownTall = 10.5, CrownHalf = 6.2, CrownDepth = 4.4;
+        static readonly double RayX = PadL + RankW / 2 + CrownHalf + CrownDepth * .6;
+
+        /// <summary>
+        /// The crown: a small triangular prism standing on the bar's top edge over the rank (its front face lit, its side face in
+        /// shade, a dark rim), casting its resting rainbow ray from its side along the top of the bar. It hangs a few pixels over
+        /// the row (into the room above it), never past the meter's panel. Drawn when the row's size changes only.
+        /// </summary>
+        static void DrawCrown(DrawingContext dc, double w, double h)
+        {
+            DrawRay(dc, Math.Min(80, w - RayX - 4), .8);
+            double cx = PadL + RankW / 2, top = CrownTop;
+            var apex = new Point(cx, top); var bl = new Point(cx - CrownHalf, top + CrownTall); var br = new Point(cx + CrownHalf, top + CrownTall);
+            var side = Poly(apex, new Point(apex.X + CrownDepth, apex.Y + 1.2), new Point(br.X + CrownDepth, br.Y - .6), br);
+            dc.DrawGeometry(Mod.Grad(true, (Color.FromRgb(0x9A, 0xA4, 0xB8), 0), (Color.FromRgb(0x4A, 0x50, 0x5E), 1)), null, side);
+            dc.DrawGeometry(Mod.Grad(true, (Colors.White, 0), (Color.FromRgb(0xC8, 0xD2, 0xE4), 1)), null, Poly(apex, br, bl));
+            dc.DrawGeometry(Mod.Br(Colors.White, .4), null, Poly(apex, new Point(cx, top + CrownTall), bl));
+            dc.DrawGeometry(null, Mod.P(Mod.Br(DeepC, .85), .9), Poly(apex, new Point(apex.X + CrownDepth, apex.Y + 1.2), new Point(br.X + CrownDepth, br.Y - .6), bl));
+        }
+
+        /// <summary>The prism's ray: six hairlines out of its side face, fanning down onto the bar's top over <paramref name="len"/> px, fading at their ends.</summary>
+        static void DrawRay(DrawingContext dc, double len, double a)
+        {
+            if (len < 4) return;
+            double oy = CrownTop + CrownTall * .55;
+            for (int i = 0; i < Spec.Length; i++)
+            {
+                var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(RayX, 0), EndPoint = new Point(RayX + len, 0) };
+                b.GradientStops.Add(new GradientStop(Mod.A(Spec[i], a), 0)); b.GradientStops.Add(new GradientStop(Mod.A(Spec[i], a * .5), .4)); b.GradientStops.Add(new GradientStop(Mod.A(Spec[i], 0), 1)); b.Freeze();
+                dc.DrawLine(new Pen(b, 1.15), new Point(RayX, oy + i * .5), new Point(RayX + len, 1.4 + i * 1.15));
             }
         }
     }
+
+    /// <summary>The sheen's band, drawn once: a slanted band of spectrum, faded at its sides, with a white (or mint) core.</summary>
+    static readonly DrawingBrush Band = MakeBand(Colors.White), BandMint = MakeBand(MintC2);
+
+    static DrawingBrush MakeBand(Color core)
+    {
+        const double w = 46, h = 26;
+        var g = new DrawingGroup();
+        using (var dc = g.Open())
+        {
+            dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, w, h));
+            dc.DrawGeometry(SpecGrad(new Point(0, 0), new Point(w - 4, 0), .55, fade: true), null, Poly(new Point(12, 0), new Point(w - 4, 0), new Point(w - 14, h), new Point(0, h)));
+            dc.DrawLine(Mod.P(Mod.Br(core, .65), 1.3), new Point(w - 18, 0), new Point(w - 28, h));
+        }
+        g.Freeze();
+        var b = new DrawingBrush(g) { Stretch = Stretch.Fill };
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>The white bloom as the crown lands, made once.</summary>
+    static readonly Brush Bloom = MakeBloom();
+    static Brush MakeBloom() { var b = new RadialGradientBrush(Mod.A(Colors.White, .9), Mod.A(Colors.White, 0)); b.Freeze(); return b; }
 }
