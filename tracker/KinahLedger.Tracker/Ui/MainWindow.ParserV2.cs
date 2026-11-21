@@ -43,6 +43,7 @@ public partial class MainWindow
         ParserRows.ExpandedPref = _parserPrefs.Expanded;
         ParserRows.HealBarsPref = _parserPrefs.HealBars;
         EnergyMark.Pref = _parserPrefs.OdyleEnergy;
+        PbGhost.Shown = _parserPrefs.Ghost; PbGhost.GroupShown = _parserPrefs.GhostGroup;
         HudStackLook.FightWidth = _parserPrefs.Width + MeterExtraWidth;
         _hud?.ApplyFightWidth();
         ParserOverlayTick();

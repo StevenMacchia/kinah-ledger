@@ -1,0 +1,3 @@
+{
+  "Open check: while the tracker is open and sharing is on, every 5 minutes it tells kinahledger.com (https://kinahledger.com/v1/beat) that it's open, with the app version, the install ID, whether the game is open, and which of your characters is counted (its number here, never its name). It goes while the game is closed too, so the site knows how many trackers are open; the Share switch turns it off.": "실행 확인: 트래커가 열려 있고 공유가 켜져 있으면 5분마다 kinahledger.com(https://kinahledger.com/v1/beat)에 열려 있다고 알려요. 앱 버전, 설치 ID, 게임이 열려 있는지, 지금 집계 중인 캐릭터(여기서의 번호만, 이름은 절대 아님)를 함께 보내요. 게임이 꺼져 있을 때도 보내서 사이트가 열린 트래커 수를 알 수 있어요. 공유 스위치로 끌 수 있어요."
+}

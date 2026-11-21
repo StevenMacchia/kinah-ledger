@@ -127,6 +127,7 @@ public partial class MainWindow : Window
         RegisterKinahOverlay();   // the header's Overlays group: Kinah first, then Timers (Ui/MainWindow.Overlays.cs)
         InitTimers(watch);   // the timers overlay and its chime (Ui/MainWindow.Timers.cs); the Timers page is Ui/MainWindow.TimersPage.cs
         InitApplicants(watch);   // the people asking to join the group you lead (Ui/MainWindow.Applicants.cs)
+        InitCompanion(watch);   // Buddy 2.0, the companion that reacts to the session (Ui/MainWindow.Companion.cs)
         InitMeterBlock(watch);   // what keeps the DPS meter off, Npcap missing first (Ui/MainWindow.MeterBlock.cs)
         // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
         // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
@@ -265,6 +266,8 @@ public partial class MainWindow : Window
         // miscount reports the site couldn't take before (no connection, the route not deployed yet) go now, when the backoff allows
         if (watch) { var up = _settings.Upload; _ = Task.Run(async () => { try { await Upload.ReportClient.FlushAsync(up); } catch (Exception ex) { CrashLog.Write("miscount report upload", ex); } }); }
         if (watch) _watcher.Start();
+        // the heartbeat: every 5 minutes while open and sharing, idle or not, so the site can tell an open tracker from a closed one (Upload/Heartbeat.cs)
+        if (watch) Upload.Heartbeat.Start(_settings.Upload, () => (Upload.Heartbeat.StateOf(_watcher.GameRunning, _watcher.Chat != null), Upload.CharacterPayload.Now()?.id));
     }
 
     /// <summary>
@@ -1715,6 +1718,7 @@ public partial class MainWindow : Window
         L.T("Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.") + "\n\n" +
         L.T("Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.") + "\n\n" +
         L.T("Updates: at start and every 10 minutes the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.") + "\n\n" +
+        L.T("Open check: while the tracker is open and sharing is on, every 5 minutes it tells kinahledger.com (https://kinahledger.com/v1/beat) that it's open, with the app version, the install ID, whether the game is open, and which of your characters is counted (its number here, never its name). It goes while the game is closed too, so the site knows how many trackers are open; the Share switch turns it off.") + "\n\n" +
         L.T("Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.") + "\n\n" +
         L.T("DPS meter checks: with the reading checks, whether the DPS meter ran or what kept it off, whether your own hits were recognized and how quickly, how many fights showed your damage, whether the game was in exclusive fullscreen, and how often the screen was read. Counts only, never names, IDs or chat.") + "\n\n" +
         L.T("Help improve counting (on unless you turn it off in Options › Sharing, and only while sharing is on): when two of the tracker's own checks agree on a pickup (a chat line and the loot list, a Kina line and the Kinah counter, a gather and the gathering bar, an event card's icon and its grade), what it read and what it settled on go to kinahledger.com (https://kinahledger.com/v1/labels) with the app version, the install ID, the window size and the text height, plus small pictures of that item's name words, icon or reward slot (at most 60 an hour, https://kinahledger.com/v1/label-crops). Never the chat box, never a chat line that isn't your own pickup, never anyone's name, never a whole screenshot. The pictures are deleted after 90 days. Turned off, nothing is written or sent for it and what was waiting on this PC is deleted.") + "\n\n" +

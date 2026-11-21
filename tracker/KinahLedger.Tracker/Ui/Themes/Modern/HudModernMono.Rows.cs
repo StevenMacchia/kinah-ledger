@@ -101,7 +101,7 @@ sealed partial class HudModernMono
     /// first, then the share; the name keeps ten characters at least (the marks fold to their glyphs before it is cut further);
     /// figures are never cut.
     /// </summary>
-    sealed class MonoRow : IThemeRow
+    sealed class MonoRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 27, Pitch = 31, BarH = 4;
         const double RankW = 14, IconW = 22, ShareW = 38, DmgW = 56, CritW = 36;
@@ -121,6 +121,9 @@ sealed partial class HudModernMono
         bool _you, _expanded;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The flat bar fills its whole art (DrawBar: s.Width * len, the art BarH tall at the row's foot).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _bar.ActualWidth <= 0 ? null : (_bar, new Rect(0, 0, _bar.ActualWidth, _bar.ActualHeight));
 
         public MonoRow()
         {

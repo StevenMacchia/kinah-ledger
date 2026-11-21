@@ -51,9 +51,10 @@ public static partial class Motion
 
     /// <summary>
     /// Runs <paramref name="step"/> from 0 to 1 over <paramref name="ms"/>, then 1 and <paramref name="done"/>. A new course
-    /// on the element replaces the one under way (its done doesn't run).
+    /// on the element replaces the one under way (its done doesn't run). <paramref name="fps"/> caps its frames a second (0: the
+    /// display's rate), for an overlay over the game that must stay light (the companion, Ui/CompanionSprite.cs).
     /// </summary>
-    internal static void Play(UIElement el, double ms, Action<double> step, Action? done = null)
+    internal static void Play(UIElement el, double ms, Action<double> step, Action? done = null, int fps = 0)
     {
         // a render's frame: every course at the same point of its own length, or (FrozenMs) at the same moment in real time,
         // so a sequence of courses of different lengths shows as it plays (the meter's finale)
@@ -61,6 +62,7 @@ public static partial class Motion
         var token = ++_token;
         Runs.AddOrUpdate(el, new Course { Step = step, Token = token });
         var a = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms)) { FillBehavior = FillBehavior.HoldEnd };
+        if (fps > 0) Timeline.SetDesiredFrameRate(a, fps);
         a.Completed += (_, _) =>
         {
             if (!Runs.TryGetValue(el, out var r) || r.Token != token) return;

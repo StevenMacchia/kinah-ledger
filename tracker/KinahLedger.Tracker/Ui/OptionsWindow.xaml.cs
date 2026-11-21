@@ -23,10 +23,10 @@ public partial class OptionsWindow : Window
     /// revamp (Steven, 2026-11-17: "the overlays are the most important thing that people want") Server is a part of Sharing
     /// (Account &amp; sharing) and About a part of Updates; both still open their page.
     /// </summary>
-    public enum Page { General, Server, Sharing, Reading, InGame, Meter, Timers, Tips, Updates, About, Alerts, Applicants }
+    public enum Page { General, Server, Sharing, Reading, InGame, Meter, Timers, Tips, Updates, About, Alerts, Applicants, Companion }
 
     /// <summary>The left bar: the three overlays first, then the rest.</summary>
-    internal static readonly (Page Page, string Name)[] OverlayPages = { (Page.InGame, "Buddy"), (Page.Meter, "DPS meter"), (Page.Timers, "Timers"), (Page.Applicants, "Applicants") };
+    internal static readonly (Page Page, string Name)[] OverlayPages = { (Page.InGame, "Buddy"), (Page.Meter, "DPS meter"), (Page.Timers, "Timers"), (Page.Applicants, "Applicants"), (Page.Companion, "Companion") };
     internal static readonly (Page Page, string Name)[] SettingsPages =
     {
         (Page.General, "General"), (Page.Sharing, "Account & sharing"), (Page.Alerts, "Alerts & sounds"), (Page.Reading, "Game reading"),
@@ -70,6 +70,7 @@ public partial class OptionsWindow : Window
         FillTips();     // built now, so the search finds the keys
         FillTimers();   // and the timers' rows (built again each time the page shows)
         FillApplicants();   // and the Applicants page (Ui/OptionsWindow.Applicants.cs)
+        FillCompanion();   // and the Companion page (Ui/OptionsWindow.Companion.cs)
         L.Apply(this);   // the window's own words in the player's language (Ui/Lang.cs)
         Title = L.T(Title);
         foreach (var link in new[] { WhatsSentLink, WhatsReadLink, ReleasesLink, ReleasesDiscordLink }) foreach (var run in link.Inlines.OfType<System.Windows.Documents.Run>()) run.Text = L.T(run.Text);   // links are not TextBlocks, L.Apply skips them
@@ -135,7 +136,7 @@ public partial class OptionsWindow : Window
     /// <summary>Each page's panel, as the left bar lists them.</summary>
     IEnumerable<(Page Page, Panel Panel)> PagePanels => new (Page, Panel)[]
     {
-        (Page.InGame, PageInGame), (Page.Meter, PageMeter), (Page.Timers, PageTimers), (Page.Applicants, PageApplicants), (Page.General, PageGeneral), (Page.Sharing, PageSharing),
+        (Page.InGame, PageInGame), (Page.Meter, PageMeter), (Page.Timers, PageTimers), (Page.Applicants, PageApplicants), (Page.Companion, PageCompanion), (Page.General, PageGeneral), (Page.Sharing, PageSharing),
         (Page.Alerts, PageAlerts), (Page.Reading, PageReading), (Page.Tips, PageTips), (Page.Updates, PageUpdates),
     };
 
@@ -149,6 +150,7 @@ public partial class OptionsWindow : Window
         if (page == Page.Tips) FillTips();   // the keys as they are now (Ui/OptionsWindow.Tips.cs)
         if (page == Page.Timers) FillTimers();   // the timers overlay, the chime and each timer's picks (Ui/OptionsWindow.Timers.cs)
         if (page == Page.Applicants) FillApplicants();   // the Applicants window's switch, preview and spot (Ui/OptionsWindow.Applicants.cs)
+        if (page == Page.Companion) FillCompanion();   // the companion's switch, stage, lines, spot and reactions (Ui/OptionsWindow.Companion.cs)
         RefreshFoldCounts();
         Scroller.ScrollToTop();
         RefreshLive();

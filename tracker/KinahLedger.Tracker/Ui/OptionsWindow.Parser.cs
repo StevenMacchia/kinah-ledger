@@ -50,7 +50,7 @@ public partial class OptionsWindow
     string? _parserLookShown;
     Slider? _parserWidth;
     TextBlock? _parserWidthLbl;
-    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserPvpChk = null!, _parserOdyleChk = null!, _parserHideNamesChk = null!, _parserAddsChk = null!;
+    CheckBox _parserDetailsChk = null!, _parserKillsChk = null!, _parserDeathsChk = null!, _parserFiltersChk = null!, _parserHoversChk = null!, _parserSeparateChk = null!, _parserActiveChk = null!, _parserExpandedChk = null!, _parserCritChk = null!, _parserHealBarsChk = null!, _parserGhostChk = null!, _parserGhostGroupChk = null!, _parserPvpChk = null!, _parserOdyleChk = null!, _parserHideNamesChk = null!, _parserAddsChk = null!;
     /// <summary>The share picture's shortcut as picked here ("Off" for none), its field and the line under it.</summary>
     string _parserShareKey = ParserPrefs.DefaultHotkey;
     TextBox? _parserShareKeyBox;
@@ -80,6 +80,7 @@ public partial class OptionsWindow
         _parserExpandedChk.IsChecked = p.Expanded;
         _parserCritChk.IsChecked = p.CritNow != "none" || p.BackNow != "none";
         _parserHealBarsChk.IsChecked = p.HealBars;
+        _parserGhostChk.IsChecked = p.Ghost; _parserGhostGroupChk.IsChecked = p.GhostGroup;
         _parserPvpChk.IsChecked = p.PvpPanel;
         _parserOdyleChk.IsChecked = p.OdyleEnergy;
         _parserHideNamesChk.IsChecked = p.ShareShowNames;
@@ -106,7 +107,7 @@ public partial class OptionsWindow
     /// </summary>
     string _parserSnap = "";
     string ParserSnap() => _parserLabel == null ? "" : string.Join("|",
-        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserPvpChk, _parserOdyleChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk, _parserAddsChk }
+        new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserGhostChk, _parserGhostGroupChk, _parserPvpChk, _parserOdyleChk, _parserHideNamesChk, _parserOverlayChk, _parserThroughChk, _parserAddsChk }
             .Select(c => c.IsChecked == true ? "1" : "0"))
         + "|" + _parserWhenBox.SelectedIndex + "|" + _parserLookPick + "|" + Math.Round(_parserWidth?.Value ?? 0) + "|" + _parserShareKey;
     /// <summary>Something on the DPS meter page differs from parser.json: Save lights up for it.</summary>
@@ -143,6 +144,7 @@ public partial class OptionsWindow
         p.Targets = _parserAddsChk.IsChecked == true ? "all" : "boss";
         p.Expanded = _parserExpandedChk.IsChecked == true;
         p.HealBars = _parserHealBarsChk.IsChecked == true;
+        p.Ghost = _parserGhostChk.IsChecked == true; p.GhostGroup = _parserGhostGroupChk.IsChecked == true;
         p.PvpPanel = _parserPvpChk.IsChecked == true;
         p.OdyleEnergy = _parserOdyleChk.IsChecked == true;
         p.ShareShowNames = _parserHideNamesChk.IsChecked == true;
@@ -275,6 +277,22 @@ public partial class OptionsWindow
         }
         _parserExpandedChk = Row("Expanded meter", "The overlay's meter shows everyone with their damage. Off, the top four, and you always. A click on the meter switches it too.", "Parser expanded meter");
         _parserHealBarsChk = Row("Heal bars", "A green bar along each healer's row on the overlay's meter: their share of the group's healing. The HEAL chip after the name keeps their healing a second either way.", "Parser heal bars");
+        // the PB ghost (Parser/PbGhost.cs): its switch, and the group's pace beside it as a small second switch in the same row
+        {
+            _parserGhostChk = Styled(new CheckBox(), "Switch");
+            AutomationProperties.SetName(_parserGhostChk, "PB ghost");
+            _parserGhostGroupChk = Styled(new CheckBox(), "Switch");
+            AutomationProperties.SetName(_parserGhostGroupChk, "Group pace");
+            var groupSaid = new TextBlock { Text = L.T("Group pace"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), ToolTip = L.T("The group's DPS against the group's in your best kill, beside yours.") };
+            groupSaid.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+            var ghostRight = new StackPanel { Orientation = Orientation.Horizontal, Children = { groupSaid, _parserGhostGroupChk, new Border { Width = 18 }, _parserGhostChk } };
+            void GroupOn() => _parserGhostGroupChk.IsEnabled = groupSaid.IsEnabled = _parserGhostChk.IsChecked == true;
+            _parserGhostChk.Click += (_, _) => { GroupOn(); Refresh(); };
+            _parserGhostGroupChk.Click += (_, _) => Refresh();
+            _parserGhostChk.Checked += (_, _) => GroupOn(); _parserGhostChk.Unchecked += (_, _) => GroupOn();
+            _parserMoreStack.Children.Add(Styled(new Border(), "Divider"));
+            _parserMoreStack.Children.Add(SideRow("PB ghost", "On a boss you've killed before, your row races your best kill of that fight: a line where your best's pace would put you, and \"+6.2% vs best\" or \"−3.1%\", live. At the kill: a new best, or how far off it.", ghostRight));
+        }
         _parserPvpChk = Row("PvP kills in PvP", "In the Abyss and the arenas the meter shows your last 5 player kills instead of the DPS: your damage on each, Kill or Assist, and your skills on them when the pointer rests on a row. A boss fight there keeps the DPS meter.", "Parser PvP kills");
         _parserOdyleChk = Row("Odyle Energy", "Your character's Odyle Energy, small, after the meter's total: what's left for a run's final reward. It updates whenever it changes, and after each run at least.", "Parser Odyle Energy");
         _parserDetailsChk = Row("Group details", "Each member's class, Combat Power, item level and damage beside their DPS, on the Parser page and its overlay.", "Parser group details");
@@ -582,11 +600,12 @@ public partial class OptionsWindow
     internal CheckBox ParserAddsForTest => _parserAddsChk;
     internal CheckBox ParserExpandedForTest => _parserExpandedChk;
     internal CheckBox ParserHealBarsForTest => _parserHealBarsChk;
+    internal (CheckBox Ghost, CheckBox Group) ParserGhostForTest => (_parserGhostChk, _parserGhostGroupChk);
     internal CheckBox ParserPvpForTest => _parserPvpChk;
     internal CheckBox ParserOdyleForTest => _parserOdyleChk;
     internal (CheckBox Show, CheckBox Through, ComboBox When) ParserOverlaySwitchesForTest => (_parserOverlayChk, _parserThroughChk, _parserWhenBox);
 
     /// <summary>For the options test: every switch's title under More.</summary>
-    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserAddsChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserPvpChk, _parserOdyleChk, _parserHideNamesChk }
+    internal List<string> ParserSwitchTitlesForTest => new[] { _parserDetailsChk, _parserKillsChk, _parserDeathsChk, _parserFiltersChk, _parserHoversChk, _parserSeparateChk, _parserActiveChk, _parserAddsChk, _parserExpandedChk, _parserCritChk, _parserHealBarsChk, _parserGhostChk, _parserGhostGroupChk, _parserPvpChk, _parserOdyleChk, _parserHideNamesChk }
         .Select(c => AutomationProperties.GetName(c)).ToList();
 }
