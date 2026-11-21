@@ -1,0 +1,22 @@
+name: options lab
+on:
+  push:
+    branches: [ci/lab]
+    paths: [".github/workflows/options-lab.yml", "tracker/**"]
+jobs:
+  lab:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        working-directory: tracker/KinahLedger.Tracker
+        run: dotnet publish -c Release -o ../../dist
+      - name: options-test
+        continue-on-error: true
+        shell: bash
+        env:
+          KL_TEST_WORKAREA: 1920x1040
+        run: dist/KinahLedger.exe options-test | cat | grep -E -A8 "^FAIL" | cut -c1-900 | head -150
