@@ -122,7 +122,7 @@ abstract class PopOutWindow : Window
         Closing += (_, _) => Remember();
         SourceInitialized += (_, _) => HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(SizeHook);
         // the drawing never taller than the screen it is on (it scales down to fit, then)
-        _fit.MaxHeight = Math.Max(160, SystemParameters.WorkArea.Height - HeadHeight - 2 * StagePad - 24);
+        _fit.MaxHeight = Math.Max(160, ScreenArea.Work.Height - HeadHeight - 2 * StagePad - 24);
     }
 
     /// <summary>The cross in the head (the self-test presses it).</summary>

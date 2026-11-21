@@ -718,6 +718,8 @@ public sealed class PacketReader : IDisposable, IBossFeed
 
     /// <summary>How near a screen pickup an item rise covers it: the game's update lands about 1.5 s before the chat line (up to 4.5 s), never much after.</summary>
     const double ItemBefore = 8, ItemAfter = 0.5;
+    /// <summary>How long before its rise a chat line may be dated: the settle dates a line from when its reads began to garble.</summary>
+    const double BackdatedSeconds = 15;
     /// <summary>
     /// How much later than usual the screen may date a pickup line: while it is the backup (TrackerSession.ScreenBackup) the
     /// chat is read every few seconds, and a line a busy chat scrolled past one read is counted from the next reads that show
@@ -833,6 +835,12 @@ public sealed class PacketReader : IDisposable, IBossFeed
             // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
             // screen's to count, no miss); another item's rise (the line misread its name)
             var own = _itemSeen.Where(p => Near(p) && !p.First && p.Delta > 0 && Twin(p.Id, s.Id) && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ThenBy(p => p.Id == s.Id ? 0 : 1).ToList();
+            // ...else the first one soon after it: a line the settle dated from when its reads began to garble, before the rise
+            // it is (2026-11-20 16:46: "Acquired Oricha", dated 16:46:01.0, the gather's +2 at 16:46:07.2; 12:22:37.5, an Odyle
+            // line before three gathers' rises at 45 to 57 s: each counted a fourth time "the game's messages didn't show")
+            if (own.Count == 0)
+                own = _itemSeen.Where(p => (p.At - s.At).TotalSeconds is var d && d > ItemAfter && d <= BackdatedSeconds && !p.First && p.Delta > 0 && Twin(p.Id, s.Id) && !_risesTaken.Contains((p.Id, p.At)))
+                    .OrderBy(p => p.At).ToList();
             if (own.Count > 0)
             {
                 _risesTaken.Add((own[0].Id, own[0].At)); Verdicts.Add("covered");

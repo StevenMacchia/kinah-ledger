@@ -81,6 +81,24 @@ public partial class MainWindow
     /// on the right both stay left under Next up; a gathering stretch (no enemies) sends Just dropped beside the bag. A
     /// placement only changes for a gap 48 px better than the current one, so a pickup doesn't make cards hop.
     /// </summary>
+    bool _balanceQueued;
+
+    /// <summary>
+    /// The three cards that move between Full view's columns, watched: one that changes height (the zone board arriving after the
+    /// view's first balance, a feed filling) balances the columns again, once the layout is in, so the columns end level whenever
+    /// the cards' heights come in, not only on the next refresh. A move never changes a card's height (both columns are as wide).
+    /// </summary>
+    void WatchBalance()
+    {
+        foreach (var card in new FrameworkElement[] { FeedCard, WhereSection, QuestOdds })
+            card.SizeChanged += (_, e) =>
+            {
+                if (_balanceQueued || !FullShown || Math.Abs(e.NewSize.Height - e.PreviousSize.Height) < 1) return;
+                _balanceQueued = true;
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => { _balanceQueued = false; BalanceFull(); });
+            };
+    }
+
     void BalanceFull()
     {
         if (!(_part == "Farming" && !_welcome && FullShown)) return;

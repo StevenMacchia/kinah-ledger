@@ -1218,6 +1218,9 @@ public sealed partial class ParserRows : Grid
             Foreground = crit ? HudKit.B(0xFFD36B) : HudKit.Ink, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5),
             Effect = crit ? new DropShadowEffect { Color = Color.FromRgb(0x6B, 0x3A, 0x00), BlurRadius = 5, ShadowDepth = 0, Opacity = 1 } : TextHalo() };
         System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        // measured the way the meter draws it (its window sets Display; a block not yet in it would read Ideal, a pixel narrower on a 100% screen,
+        // and two pop-ups on a row then sat 9 px apart, not the 10 they keep)
+        TextOptions.SetTextFormattingMode(t, TextFormattingMode.Display);
         t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double pw = t.DesiredSize.Width, ph = t.DesiredSize.Height;
         // the open bar: from past the name's line (the name, YOU, the plates) to just short of the DPS's column; no room, no pop-up

@@ -30,10 +30,10 @@ static class ApplicantsFace
             HudThemes.Tactical => Tactical(shown, older, items.Count, now, opacity),
             HudThemes.Wacky => Wacky(shown, older, items.Count, now, opacity),
             HudThemes.Glitch => Glitch(shown, older, items.Count, now, opacity),
-            HudThemes.Modern => Modern(shown, older, items.Count, now, opacity),
+            HudThemes.Modern or HudThemes.Atreia => Modern(shown, older, items.Count, now, opacity),   // Atreia (2026-11-20) wears Modern's dark glass
             _ => Classic(shown, older, items.Count, now, opacity),
         };
-        face.Tag = "applicants:" + (theme is HudThemes.Tactical or HudThemes.Wacky or HudThemes.Glitch or HudThemes.Modern ? theme : HudThemes.Classic);
+        face.Tag = "applicants:" + (theme == HudThemes.Atreia ? HudThemes.Modern : theme is HudThemes.Tactical or HudThemes.Wacky or HudThemes.Glitch or HudThemes.Modern ? theme : HudThemes.Classic);
         TextOptions.SetTextFormattingMode(face, TextFormattingMode.Display);
         System.Windows.Automation.AutomationProperties.SetName(face, L.F("{0} asking to join", items.Count));
         return face;

@@ -48,6 +48,15 @@ public sealed partial class TrackerSession
     readonly List<CurrencyChange> _packetHeld = new();
     const double PacketHoldSeconds = 3, PacketNearSeconds = 10;
 
+    /// <summary>When the player's Rank Points last rose (the game's messages), the last 40: each is a kill of theirs.</summary>
+    readonly List<DateTime> _rankRises = new();
+    /// <summary>How far from a Rank Points rise a currency change is the same kill's pay (one update; the parts can come a few tenths apart).</summary>
+    const double KillPaySeconds = 1;
+    /// <summary>The most Abyss Points a kill pays with no Rank Points beside it (a kill's are tens to a few hundred).</summary>
+    const long KillAbyssPointsMax = 1_000;
+    /// <summary>A change that came with a rise of the player's Rank Points: a kill's pay, whether or not its kill was told yet.</summary>
+    bool KillPay(DateTime at) => _rankRises.Any(r => Math.Abs((r - at).TotalSeconds) <= KillPaySeconds);
+
     /// <summary>
     /// A packet amount counted (or a craft or an item): the window redraws now rather than at its next half-second tick
     /// (Steven, 2026-11-13: "if we're using packets these numbers should be instantaneous"). Raised on the reading loop.
@@ -78,7 +87,11 @@ public sealed partial class TrackerSession
     {
         if (Packets is not { } p) return;
         _packetCountedNow = false;
-        while (p.Next() is { } next) _packetHeld.Add(next);
+        while (p.Next() is { } next)
+        {
+            _packetHeld.Add(next);
+            if (next.What == CurrencyKind.RankPoints && !next.First && next.Delta > 0) { _rankRises.Add(next.At); if (_rankRises.Count > 40) _rankRises.RemoveAt(0); }
+        }
         var now = PacketClock.Now;
         // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
         DrainFights(p, now);
@@ -93,6 +106,8 @@ public sealed partial class TrackerSession
             if (area.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Over or AreaEvent.Kind.Closed && area.Code.Length > 0)
                 Fights.MapEvent(area.Code, area.At, closed: area.What == AreaEvent.Kind.Closed, over: area.What == AreaEvent.Kind.Over);
         }
+        // the Parser saw the room open again after the last boss: the run log's run closes there and the next opens
+        while (_runsAgain.TryDequeue(out var again)) Instances.RunAgain(again.At, again.Instance);
         DrainItems(p, now);
         while (_packetHeld.Count > 0)
         {
@@ -110,12 +125,22 @@ public sealed partial class TrackerSession
             bool nearKill = (_lastKillAt - c.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - c.At).TotalSeconds >= -PacketNearSeconds
                 // a pickup the traffic counted in the last few seconds: still farming (in the Abyss the kill's lines are few and
                 // late, so on Steven's 2026-11-13 log this decided 38 of the 51 pickups that would otherwise have waited)
-                || (c.At - _packetPickupAt).TotalSeconds is >= 0 and <= PacketNearSeconds;
+                || (c.At - _packetPickupAt).TotalSeconds is >= 0 and <= PacketNearSeconds
+                // a kill's pay: Rank Points rise only for a kill, and the game pays a kill's bound Kinah, Rank and Abyss
+                // Points in one update. Its kill can be told 4 to 7 s later (2026-11-20 10:15:42: three Abyss kills' pay
+                // waited its 3 s, no kill was in yet, and 184 bound Kinah, 105 Rank and 52 Abyss Points went uncounted)
+                || KillPay(c.At);
             bool screenSaw = p.ScreenNear(c.What, c.At, PacketNearSeconds);
             bool waited = (now - c.At).TotalSeconds >= PacketHoldSeconds;
             string? why = InBase ? $"in a base ({Zone})"
                 : MarketOpen?.Invoke(c.At) == true ? "with the Market open"
                 : c.Delta > PacketPickupMax ? "at once"
+                // more bound Kinah or Abyss Points than a kill pays, with no Rank Points beside it: a quest's turn-in or a reward's,
+                // whatever was killed around it (2026-11-20 11:10 to 11:17, Western Altamia: four quests' 50,000 to 80,000 bound
+                // Kinah and 2,500 Abyss Points each, counted as pickups because kills were going on; 13:43:14, 1,260 Abyss Points
+                // a second before the "Rewards Collected" screen)
+                : Instances.Current == null && !KillPay(c.At) && (c.What == CurrencyKind.BoundKinah && c.Delta > SessionEngine.AbyssKillKinaMax
+                    || c.What == CurrencyKind.AbyssPoints && c.Delta > KillAbyssPointsMax) ? "more than a kill pays, with no Rank Points beside it (a quest's or a reward's)"
                 : nearKill || screenSaw || Instances.Current != null ? null
                 : waited ? "with no kill, gather or pickup line around it"
                 : "";
@@ -237,6 +262,9 @@ public sealed partial class TrackerSession
     {
         if (ev is RewardReceived rr) { _rewardLines.Add((ev.Time, Unbound(rr.Name))); if (_rewardLines.Count > 40) _rewardLines.RemoveAt(0); }
         if (Packets is not { } p || ev.Via == "packets" || ev.Via.Contains("reward table")) return false;
+        // a run's reward no list knows, counted by its name: the game's data can't name it, so it is the chat's, and never a
+        // pickup the data "didn't show" (2026-11-20 12:23: three such lines stopped the data counting items for three hours)
+        if (ev is ItemAcquired { Via: "unlisted" }) return false;
         // an item pickup from the screen while the packets count items: the agreement check decides whether the chat's line counts after all
         if (ev is ItemAcquired { Count: > 0 } ia && p.CountingItems(ev.Time) && !_screenLate.Contains(ev))
         {
@@ -420,6 +448,10 @@ public sealed partial class TrackerSession
             return;
         }
         var gather = GatherOf(b);
+        // the screen's line for any item of this one update: the update is a pickup the player saw, all of it (2026-11-20
+        // 11:34:49, Gartua's drop: Refining Stone and Artisan's Refining Stone came in one update; the plain one was judged
+        // first, before the Artisan's count made the update "near", and was left out as "no kill or pickup line around it")
+        bool updateSeen = b.Net().Any(x => !x.Unknown && x.Net > 0 && p.ScreenNearItem(x.ItemId, b.At, PacketNearSeconds));
         foreach (var (id, n0, unknown) in b.Net())
         {
             string name = _items.NameOf(id);
@@ -461,7 +493,8 @@ public sealed partial class TrackerSession
                 // currencies. In the Abyss the game names the player's own kill for only some kills: on 2026-11-16 from 16:37
                 // to 17:00 three Earth gear pieces, a mace and seven bound drops came among Kinah counted every second, and
                 // none counted
-                || (_packetPickupAt - b.At).TotalSeconds >= -PacketNearSeconds;
+                || (_packetPickupAt - b.At).TotalSeconds >= -PacketNearSeconds
+                || updateSeen;
             string un = Unbound(name);
             bool outside = Instances.Current == null && !InRun;
             // a bound item comes from a quest or a box when one was just turned in or opened (BoundRewardWhy); otherwise, with

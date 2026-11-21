@@ -72,6 +72,7 @@ internal static class Program
         {
             KinahLedger.Data.DictionaryCache.DirOverride = TestTemp.Path("KinahLedger-test-items");
             KinahLedger.Ui.Native.NoHotkeys = true;   // ...and their windows take no shortcut from the player's PC
+            KinahLedger.Ui.ScreenArea.EnableFromEnvironment();   // ...and may be given a screen to fit (KL_TEST_WORKAREA, Ui/ScreenArea.cs)
             // ...and the meter's Odyle Energy is never the player's own: none, or KL_ODYLE's figure for a render (Ui/EnergyMark.cs)
             KinahLedger.Ui.EnergyMark.Fixed = int.TryParse(Environment.GetEnvironmentVariable("KL_ODYLE"), out var odyle) && odyle >= 0 ? odyle : -1;
         }
@@ -3832,6 +3833,18 @@ options: --process aion[,other]");
         Check("...a kill's drop 10 s later: a drop", $"{n(sp2.Engine, "Spiritstone")}", "1");
         if (n(sp2.Engine, "Spiritstone") != 1)
             foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(40)) Console.WriteLine("      note: " + nl);
+        // a map that pays a kill's Kina bound (2026-11-20 11:16:20 to 25, Western Altamia, Steven's log): the kill's soul line,
+        // then its bound Kina and a Spiritstone that dropped with it. The kill's Kina is no payout, so the stone is a drop
+        var sk = new TrackerSession(null, settings, items, "Test");
+        sk.Engine.SetZone("Western Altamia Highland");
+        var skAt = b0.AddMinutes(30);
+        sk.ProcessChat(new List<string> { "[Player1] hi" }, skAt);
+        var skLines = new List<string> { "[Player1] hi", "Obtained 1 Dracuni Herbalist Soul Points.", "Defeat Dracuni, Krall Processing Maintenance", "Machines, and Distorted Spirits (16/20)" };
+        for (int i = 1; i <= 3; i++) sk.ProcessChat(skLines, skAt.AddSeconds(i * 0.4));
+        var skLines2 = skLines.Concat(new[] { "Acquired 142 Kina (Bound).", "Spiritstone acquired." }).ToList();
+        for (int i = 0; i < 5; i++) sk.ProcessChat(skLines2, skAt.AddSeconds(2.5 + i * 0.4));
+        sk.FlushVotes(skAt.AddSeconds(6));
+        Check("a kill's own bound Kina (a map that pays it bound) is no payout: the Spiritstone with it is a drop", $"{n(sk.Engine, "Spiritstone")}", "1");
 
         // ---- gathering (Steven, 2026-10-23 11:28-11:29, Orichalcum: "like a 25% accuracy") ----
         // the loot list band read the gathering panel (node, proficiency, item, Success) as rows; the game upgraded the ore
@@ -5238,6 +5251,19 @@ options: --process aion[,other]");
                 log.Zone("Shugo Festival", b0.AddMinutes(10));
                 log.Loot(new KinahChanged(b0.AddMinutes(12), 40_000, false));
                 Check("instance runs: a run still open isn't handed over", log.TakeUnshared(b0).Count.ToString(), "0");
+                // Krao Cave back to back in one copy (Steven's log, 2026-11-20 11:40 to 11:54): the room opened again after the last
+                // boss with no entry, move or countdown, so only the next table split the runs (13:47 for a 7-minute run), and its
+                // table's coin slot went unread while the game's data counted the 960,000 Kinah it paid: kept as 0 Kinah
+                var kl = new InstanceLog(); var k0 = b0.AddHours(3);
+                kl.Zone("Krao Cave", k0); kl.StartLine(k0.AddSeconds(15));
+                kl.RunAgain(k0.AddMinutes(3), "Krao Cave");   // a wipe's retry before the table: the same run
+                kl.GameCurrency(k0.AddSeconds(410), 960_000);
+                kl.RewardTable(k0.AddSeconds(413), new GameEvent[] { new ItemAcquired(k0.AddSeconds(413), items.IdOf("Earth Helm"), 1, false) }, 1, kinahUnread: true);
+                kl.RunAgain(k0.AddSeconds(428), "Krao Cave");
+                var krao = kl.TakeUnshared(b0);
+                Check("a run's room opening again after its table: the run closes there, its Kinah the payout the game's data counted with the table",
+                    krao.Count == 1 ? $"{krao[0].Seconds:0} s, {krao[0].Kinah:N0} Kinah, Kinah {(krao[0].KinahNotRead ? "not read" : "known")}; the next from +{(kl.Current!.Value.Start - k0).TotalSeconds:0} s" : $"{krao.Count} runs closed",
+                    "413 s, 960,000 Kinah, Kinah known; the next from +428 s");
             }
             Check("player chat is not loot-shaped", Reread.LooksLikeLoot("[Drogo] bro i live between 1984 and 2008") ? "yes" : "no", "no");
         }

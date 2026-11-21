@@ -354,7 +354,10 @@ static class Tac
     public static double TextW(TextBlock like, string s)
     {
         var probe = new TextBlock { Text = s, FontFamily = like.FontFamily, FontSize = like.FontSize, FontWeight = like.FontWeight, FontStretch = like.FontStretch, FontStyle = like.FontStyle, Padding = like.Padding };
-        TextOptions.SetTextFormattingMode(probe, TextOptions.GetTextFormattingMode(like));
+        // the overlays draw in Display mode (the window sets it; the block here isn't in one yet, so it would read Ideal): Display's
+        // hinted widths round per glyph to the screen's pixels, wider than Ideal's at some scales, which cut the last figure of a column
+        // sized in Ideal (options-test on a 100% screen: "124.56M" cut by its box, left 3 px)
+        TextOptions.SetTextFormattingMode(probe, TextFormattingMode.Display);
         System.Windows.Documents.Typography.SetNumeralAlignment(probe, System.Windows.Documents.Typography.GetNumeralAlignment(like));
         probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return Math.Ceiling(probe.DesiredSize.Width);

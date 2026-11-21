@@ -29,7 +29,7 @@ public partial class OptionsWindow
     }
 
     /// <summary>The DPS meter page's stage: a little shorter while the line shows, so the page still fits.</summary>
-    double MeterStageHeight => _host.MeterBlockShown == MeterBlock.None ? 196 : 170;
+    double MeterStageHeight => _host.MeterBlockShown == MeterBlock.None ? 176 : 150;   // 196/170 until the eight themes' chips took two rows (2026-11-20)
 
     void FillMeterBlock(Border host)
     {
