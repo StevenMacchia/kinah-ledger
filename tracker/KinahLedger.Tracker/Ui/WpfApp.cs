@@ -1119,7 +1119,7 @@ public static partial class WpfApp
             // flips its overlay and the dot follows
             w.SetParserSeparateForTest(true);
             string defaultMenu = string.Join(",", w.OverlaysForTest().Select(p => p.Name));
-            bool defaultTwo = defaultMenu == "Kinah,Applicants,Companion,Parser" && w.OverlayEntries().Count(e => !MainWindow.IsPopOutEntry(e)) == 4;   // Applicants since 1.0.14, the companion since 1.0.38 (off); the pop-outs' switches apart (1.0.17)
+            bool defaultTwo = defaultMenu == "Kinah,Applicants,Companion,Parser" && w.OverlayEntries().Count(e => !MainWindow.IsPopOutEntry(e)) == 4;   // Applicants since 1.0.14, the companion since 1.0.39 (off); the pop-outs' switches apart (1.0.17)
             Check(defaultTwo && !w.TimersSeparate, $"the header's Overlays menu by default: Kinah and the Parser ({defaultMenu}), the timers being a line on top of the Kinah overlay");
             w.TimerPrefsForTest.Separate = true; w.DrawOverlayPills(); DoEvents();
             var ovs = w.OverlaysForTest();
