@@ -133,10 +133,10 @@ sealed partial class HudStorm
         Pen? _edgePen, _edgeGlowPen;
 
         /// <summary>The bar's bolt-cut leading edge at <paramref name="ex"/>: four fixed points down the row, three px either way (seeded by the member, so it never twitches).</summary>
-        List<Point> Zig(double ex, double h, double fx)
+        List<Point> Zig(double ex, double h, double fx, bool quiet)
         {
             int seed = (int)(Math.Abs(_m!.Id) % 997);
-            double k = fx < 56 ? 0 : 1;   // a short bar (its end by the class art) ends straight
+            double k = quiet ? 0 : 1;   // an edge under words or figures ends straight
             double[] o = (seed % 3) switch { 0 => new[] { 2.5, -3, 2, -2.5 }, 1 => new[] { -2.0, 3, -3, 2 }, _ => new[] { 3.0, -2, 3, -3 } };
             return new List<Point> { new(ex + o[0] * k, .5), new(ex + o[1] * k, h * .34), new(ex + o[2] * k, h * .64), new(ex + o[3] * k, h - .5) };
         }
@@ -157,6 +157,12 @@ sealed partial class HudStorm
 
         /// <summary>The bar's leading edge, px from the row's left.</summary>
         public double EdgeX => Math.Max(0, (_root.ActualWidth - 1) * Math.Clamp(_bar, 0, 1));
+
+        /// <summary>Where the figure column starts, less some air: no spark or arc reaches past it.</summary>
+        public double FigureX => Math.Max(0, _root.ActualWidth - _scrimW - 8);
+
+        /// <summary>Whether the bar's end lies by a word or figure (then an arc lands in the gap only, with no glow).</summary>
+        public bool EdgeQuiet => _root.ActualWidth <= 0 || UnderWords(.5 + EdgeX, _root.ActualWidth);
 
         /// <summary>Where a full bar is drawn (the PB ghost, IThemeBarSpan): the conduit's whole slot, from its half-pixel inset.</summary>
         public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(.5, 0, Math.Max(0, _art.ActualWidth - 1), _art.ActualHeight));
@@ -243,7 +249,26 @@ sealed partial class HudStorm
         }
 
         /// <summary>The charge band's room: the bar as filled now.</summary>
-        void Clip() => _sweepClip.Rect = new Rect(0, 0, Math.Max(0, EdgeX + 1), H);
+        void Clip() => _sweepClip.Rect = new Rect(0, 0, Math.Max(0, Math.Min(EdgeX + 1, _root.ActualWidth - _scrimW - 6)), H);   // the charge stops short of the figures
+
+        /// <summary>
+        /// Whether a bar's end at <paramref name="ex"/> lies on or within 8 px of any word or figure on the row (the rank and the
+        /// class art, the name with its CP and marks, a healer's figure, the figure column): there it ends quietly, a plain
+        /// straight end with no bolt cut, hot edge or sparks, so nothing bright is ever drawn over a word.
+        /// </summary>
+        bool UnderWords(double ex, double width)
+        {
+            const double air = 8;
+            if (ex < Pad + RankW + 25 + air) return true;
+            if (ex > width - _scrimW - air) return true;
+            bool On(FrameworkElement el, double w0)
+            {
+                if (el.Visibility != Visibility.Visible || !el.IsDescendantOf(_root)) return false;
+                double x = el.TranslatePoint(new Point(0, 0), _root).X;
+                return ex > x - air && ex < x + w0 + air;
+            }
+            return On(_line, _line.DesiredSize.Width) || On(_heal, _heal.ActualWidth);
+        }
 
         /// <summary>The shimmer's charge running along this bar (0 to 1; -1 off): the band moved, never redrawn.</summary>
         public void Sweep(double t)
@@ -281,7 +306,7 @@ sealed partial class HudStorm
             }
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
             double sw = 8 + _dpsW + _shareW + (_expanded ? _dmgW + _critW : 0) + 10;   // the same on every row: one clean column
-            if (Math.Abs(sw - _scrimW) > .5) { _scrimW = sw; _art.InvalidateVisual(); }
+            if (Math.Abs(sw - _scrimW) > .5) { _scrimW = sw; Clip(); _art.InvalidateVisual(); }
         }
 
         /// <summary>Whether this row holds the lead's glyph: first with damage done.</summary>
@@ -319,8 +344,9 @@ sealed partial class HudStorm
             {
                 dc.PushClip(slot);
                 double ex = .5 + fx;
-                // the leading edge cut as a bolt: a fixed zigzag (seeded per member), three px either way
-                var zig = Zig(ex, h, fx);
+                bool quiet = UnderWords(ex, s.Width);
+                // the leading edge cut as a bolt: a fixed zigzag (seeded per member), three px either way; under words, straight
+                var zig = Zig(ex, h, fx, quiet);
                 var shapeG = new StreamGeometry();
                 using (var g = shapeG.Open())
                 {
@@ -339,10 +365,10 @@ sealed partial class HudStorm
                 double cy = h - 4;
                 dc.DrawRectangle(_coreGlow, null, new Rect(1, cy - 2.5, Math.Max(0, fx + 3), 5));
                 dc.DrawRectangle(_core, null, new Rect(1, cy - 1, Math.Max(0, fx + 3), 2));
-                // charge building into the edge
-                dc.DrawRectangle(_edgeGlow, null, new Rect(Math.Max(.5, ex - 16), .5, Math.Min(19, fx + 3), h - 1));
+                // charge building into the edge (not under words)
+                if (!quiet) dc.DrawRectangle(_edgeGlow, null, new Rect(Math.Max(.5, ex - 16), .5, Math.Min(19, fx + 3), h - 1));
                 dc.Pop();
-                if (fx > 8)
+                if (fx > 8 && !quiet)
                 {
                     // the bolt edge itself: a glow and a white-hot line along the zigzag
                     var edgeLine = new StreamGeometry();
@@ -368,8 +394,7 @@ sealed partial class HudStorm
                 double ex = Math.Min(.5 + fx, s.Width - 3);
                 bool lead = Lead;
                 int dir = ex > s.Width - 16 ? -1 : 1;
-                double healW = _heal.Visibility == Visibility.Visible ? _heal.ActualWidth + _heal.Margin.Left : 0;
-                bool sparks = ex < s.Width - _scrimW - healW - 10;
+                bool sparks = !UnderWords(.5 + fx, s.Width);
                 var key = $"{lead}|{dir}|{tone}|{h}|{sparks}";
                 if (_crown == null || key != _crownKey)
                 {

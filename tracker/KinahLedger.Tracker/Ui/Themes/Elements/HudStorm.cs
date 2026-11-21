@@ -647,14 +647,16 @@ sealed partial class HudStorm : ModernLook, IThemeCard
                 double k = Seg(_shimT, .06 + step * i + .17, .06 + step * i + .32);
                 if (k is <= 0 or >= 1) continue;
                 double gy = (at.Bottom + bt.Y) / 2, alpha = Math.Sin(Math.PI * k);
-                var p0 = new Point(at.X + Math.Max(4, ra.EdgeX) - 1, at.Bottom - 2);
-                var p1 = new Point(bt.X + Math.Max(4, rb.EdgeX) - 1, bt.Y + 2);
+                static double gyOf(Rect a, Rect b) => (a.Bottom + b.Y) / 2;
+                // from edge to edge, but never past the figure column (the arc stays clear of every figure)
+                bool qa = ra.EdgeQuiet, qb = rb.EdgeQuiet;
+                var p0 = new Point(at.X + Math.Clamp(ra.EdgeX - 1, 4, ra.FigureX), qa ? gyOf(at, bt) : at.Bottom - 2);
+                var p1 = new Point(bt.X + Math.Clamp(rb.EdgeX - 1, 4, rb.FigureX), qb ? gyOf(at, bt) : bt.Y + 2);
                 var pts = new List<Point> { p0 };
                 pts.AddRange(BoltPts(new Point(p0.X, gy), new Point(Math.Abs(p1.X - p0.X) < 3 ? p0.X + 6 : p1.X, gy), 501 + i * 37, 1.8, 4));
                 pts.Add(p1);
                 DrawBolt(dc, pts, alpha, 1.35);
-                var g = new RadialGradientBrush(Mod.A(ArcC, .8 * alpha), Mod.A(VoltC, 0)); g.Freeze();
-                dc.DrawEllipse(g, null, p1, 9, 6);
+                if (!qb) { var g = new RadialGradientBrush(Mod.A(ArcC, .8 * alpha), Mod.A(VoltC, 0)); g.Freeze(); dc.DrawEllipse(g, null, p1, 9, 4); }
             }
         }
     }
