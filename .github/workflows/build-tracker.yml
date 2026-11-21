@@ -33,6 +33,18 @@ jobs:
           dotnet-version: '8.0.x'
 
       # trackers download game data by this manifest's checksums: a data change committed without it would never reach them
+      # which of the faces the UI draws in this runner has (the layout checks measure text in them)
+      - name: Installed fonts the UI uses
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          [System.Drawing.Text.InstalledFontCollection]::new().Families.Name | Where-Object { $_ -match 'Segoe|Malgun|YaHei|JhengHei|Inter|Arial|Noto|Gothic|Nirmala' } | Sort-Object
+          (Get-CimInstance Win32_OperatingSystem).Caption
+          (Get-CimInstance Win32_VideoController | Select-Object -First 1).Name
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+
       - name: Check data/manifest.json is current
         id: manifest
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
