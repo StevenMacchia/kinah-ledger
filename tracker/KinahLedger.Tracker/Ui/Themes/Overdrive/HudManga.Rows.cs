@@ -79,7 +79,7 @@ sealed partial class HudManga
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
         readonly TacSketch _ground;
         readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad, 0) };
-        readonly TextBlock _rank = Fig("", 15, White), _name = Tt("", 12.5, White, FontWeights.Black, NameFace), _cp = Tt("", 10, OnInkSoft, FontWeights.Bold),
+        readonly TextBlock _rank = Fig("", 16.5, White), _name = Tt("", 12.5, White, FontWeights.Black, NameFace), _cp = Tt("", 10, OnInkSoft, FontWeights.Bold),
             _heal = Tt("", 11, White, FontWeights.Black), _dps = Fig("", 21, White), _share = Tt("", 10.5, OnInkSoft, FontWeights.Bold),
             _dmg = Tt("", 11, OnInkSoft, FontWeights.Bold), _crit = Tt("", 10.5, OnInkSoft, FontWeights.Bold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) };
@@ -99,7 +99,7 @@ sealed partial class HudManga
         string _cls = "\0", _barSig = "";
         MeterMember? _m;
         double _bar, _barW;
-        bool _expanded, _shareOn = true, _lead, _leadDrawn;
+        bool _expanded, _shareOn = true, _lead;
         int _lastRank;
 
         public FrameworkElement Root => _root;
@@ -204,8 +204,9 @@ sealed partial class HudManga
             double total = _root.ActualWidth;
             if (total <= 0) return;
             var cols = _words.ColumnDefinitions;
-            double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0;
-            double room = total - 2 * Pad - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
+            // (a block's measured width already holds its margin)
+            double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) : 0;
+            double room = total - 2 * Pad - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 1;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
             var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
@@ -262,7 +263,6 @@ sealed partial class HudManga
         /// <summary>The ground: nothing on an ordinary row (the panel's ink); the leader's white climax panel with its concentration lines.</summary>
         void DrawGround(DrawingContext dc, Size s)
         {
-            _leadDrawn = _lead;
             if (!_lead || s.Width < 20) return;
             dc.DrawDrawing(FocusArt(s.Width, s.Height));
         }
@@ -276,6 +276,10 @@ sealed partial class HudManga
             d = Drawn(dc =>
             {
                 dc.DrawGeometry(PaperB, null, Brushed(new[] { P(0, .5), P(w, 0), P(w - .5, h), P(.5, h - .5) }, 27, .5, 14));
+                // faint concentration lines out of the rank's badge, across the whole panel, behind its words
+                dc.PushClip(new RectangleGeometry(new Rect(0, 0, w, h)));
+                dc.DrawGeometry(Frozen(Mod.A(InkC, .14)), null, Burst(P(Pad + 9, LineH / 2 + .5), 13, w * 1.1, 34, 77, 1.6));
+                dc.Pop();
                 var mid = P(w / 2, h / 2);
                 var g = new StreamGeometry();
                 using (var x = g.Open())

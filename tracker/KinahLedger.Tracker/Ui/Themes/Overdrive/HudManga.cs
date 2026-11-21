@@ -63,7 +63,7 @@ sealed partial class HudManga : ModernLook
     readonly TranslateTransform _fightShift = new();
     InkArt? _sfx;
     ScaleTransform? _sfxScale;
-    double _pageW, _pageH, _rowsTop, _rowsH, _headH;
+    double _pageW, _pageH, _rowsTop, _rowsH;
     string _pageSig = "";
     bool _bandHp;
     readonly List<double> _gutters = new();
@@ -192,10 +192,10 @@ sealed partial class HudManga : ModernLook
         {
             _rare.Children.Add(new TacSketch(DrawRarePanel));
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 30, 6) };
-            var tileHost = new Grid { Width = 28, Height = 28, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            var tileHost = new Grid { Width = 34, Height = 34, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center };
             var fx = new Canvas { Width = 0, Height = 0, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             tileHost.Children.Add(fx);
-            var tile = Tile(r, 28);
+            var tile = Tile(r, 34);
             tileHost.Children.Add(tile);
             _rareTile = tile; _rareFx = fx;
             row.Children.Add(tileHost);
@@ -428,7 +428,6 @@ sealed partial class HudManga : ModernLook
         _fightBody.Children.Add(head);
         panels.Add((y, HeadH, 0));
         y += HeadH;
-        _headH = HeadH;
 
         bool rowsShown = false, sfx = false;
         _bandHp = false;
@@ -499,7 +498,7 @@ sealed partial class HudManga : ModernLook
         if (sig != _pageSig)
         {
             _pageSig = sig;
-            _page.Art = Page(w, _pageH, panels, bandTop, bandH, leaderRow, false, _gutters, _bandHp ? 0 : SfxRoom());
+            _page.Art = Page(w, _pageH, panels, bandTop, bandH, leaderRow, _gutters, _bandHp ? 0 : SfxRoom());
             _page.Width = _pageInv.Width = w; _page.Height = _pageInv.Height = _pageH;
             _pageInv.Art = null;   // the impact frame, made when a kill wants it
         }
@@ -572,13 +571,13 @@ sealed partial class HudManga : ModernLook
     /// The page: a sheet of paper with a brushed ink edge, tilted a hair; the head and the rows as black ink panels on it
     /// (the head's top left corner cut away, the rows' lower right), screentone in those two cut corners, ink flung off the
     /// sheet's right edge, and round the leader's row concentration lines spilling out of the panel into the gutters.
-    /// <paramref name="inverse"/>: the impact frame, every ink turned paper and every paper ink.
+    /// The rows' panel is split by paper <paramref name="gutters"/>; without the boss's HP the band carries tone from <paramref name="toneFrom"/>.
     /// </summary>
-    static DrawingGroup Page(double w, double h, List<(double Top, double H, int Kind)> panels, double bandTop, double bandH, bool leaderRow, bool inverse, IReadOnlyList<double> gutters, double toneFrom)
+    static DrawingGroup Page(double w, double h, List<(double Top, double H, int Kind)> panels, double bandTop, double bandH, bool leaderRow, IReadOnlyList<double> gutters, double toneFrom)
     {
         gutters = gutters.Where(g => g >= 0).ToList();
-        var ink = inverse ? PaperB : InkB;
-        var paper = inverse ? InkB : PaperB;
+        var ink = InkB;
+        var paper = PaperB;
         return Drawn(dc =>
         {
             // the sheet's ink edge, then its paper
@@ -628,15 +627,23 @@ sealed partial class HudManga : ModernLook
             Splat(dc, P(w - 1, 9), new Vector(1, .45), 41, 2.6, ink);
             Splat(dc, P(w, h - 16), new Vector(1, -.2), 42, 2.1, ink);
             Splat(dc, P(3, h - 3), new Vector(1, .1), 43, 1.6, ink);
-            if (inverse)
-            {
-                // the impact frame's lines, out of the head's middle
-                dc.PushClip(sheet);
-                dc.DrawGeometry(Frozen(Mod.A(PaperC, .55)), null, Burst(P(w / 2, HeadH / 2 + Mg), 22, Math.Max(w, h), 72, 9, 2.4));
-                dc.Pop();
-            }
         });
     }
+
+    /// <summary>
+    /// The impact frame: the page's paper turned to ink (the sheet one black slab, a white line round it), white impact
+    /// lines out of the head's middle behind every word, the foot's strip hot red so its ink words still read. The words
+    /// themselves are not touched: white on the ink, ink on the red.
+    /// </summary>
+    static DrawingGroup ImpactArt(double w, double h, double footTop) => Drawn(dc =>
+    {
+        var sheet = Brushed(new[] { P(-.5, 1), P(w + .5, -.5), P(w + .5, h + .5), P(-.5, h + .5) }, 11, .9, 13);
+        dc.DrawGeometry(InkB, Pn(White, 2), sheet);
+        dc.PushClip(sheet);
+        dc.DrawGeometry(Frozen(Mod.A(Colors.White, .42)), null, Burst(P(w / 2, HeadH / 2 + Mg), 26, Math.Max(w, h), 80, 9, 2.6));
+        if (footTop > 0 && footTop < h - 6) dc.DrawRectangle(RedB, null, new Rect(Mg - 2, footTop + 1, w - 2 * Mg + 4, h - footTop - Mg + 2));
+        dc.Pop();
+    });
 
     // ================================================================ the moments
 
@@ -694,19 +701,23 @@ sealed partial class HudManga : ModernLook
     static Drawing SparkleArt => _sparkleArt ??= Drawn(dc =>
     {
         // a bloom of screentone, then a field of sparkles in four sizes and bubbles, flung wider to the right (the tile sits near the window's left)
-        Tone(dc, new EllipseGeometry(P(6, 0), 30, 22), P(0, 0), 30, 3.4, 1.4, Frozen(Mod.A(InkC, .55)));
-        var edge = Pn(InkB, 1.2);
-        double[] sizes = { 9, 6.5, 4.5, 3 };
-        for (int i = 0; i < 16; i++)
+        // the bloom: a ring of tone round the tile, densest at the tile's edge
+        var bloom = Geometry.Combine(new EllipseGeometry(P(16, 0), 38, 30), new EllipseGeometry(P(0, 0), 16, 16), GeometryCombineMode.Exclude, null);
+        Tone(dc, bloom, P(0, 0), 46, 3.2, 1.9, Frozen(Mod.A(InkC, .9)));
+        var edge = Pn(InkB, 1.6);
+        double[] sizes = { 13, 9, 6.5, 4.2 };
+        for (int i = 0; i < 14; i++)
         {
-            double a = 2 * Math.PI * i / 16 + .3 * J(51, i), r = 18 + 9 * (J(52, i) + 1) / 2, s = sizes[i % 4];
-            double x = r * Math.Cos(a) * (Math.Cos(a) > 0 ? 1.6 : .7), y = r * Math.Sin(a) * .8;
+            // round the tile, outside it: wide to the right, close at the left (the window's edge), shallow above and below
+            double a = 2 * Math.PI * i / 14 + .25 * J(51, i), r = 25 + 6 * (J(52, i) + 1) / 2, s = sizes[i % 4];
+            double x = r * Math.Cos(a) * (Math.Cos(a) > 0 ? 1.75 : .95), y = r * Math.Sin(a) * .95;
+            y = Math.Clamp(y, -34 + s, 28 - s); x = Math.Max(x, -24 + s);
             dc.DrawGeometry(White, edge, Sparkle(P(x, y), s));
         }
         for (int i = 0; i < 9; i++)
         {
             double a = 2 * Math.PI * (i + .5) / 9, r = 15 + 6 * J(53, i);
-            double x = r * Math.Cos(a) * (Math.Cos(a) > 0 ? 1.5 : .7), y = r * Math.Sin(a) * .8;
+            double x = r * Math.Cos(a) * (Math.Cos(a) > 0 ? 1.6 : .6), y = r * Math.Sin(a) * .7;
             dc.DrawEllipse(White, Pn(InkB, .9), P(x, y), 1.8 + J(54, i) * .6, 1.8 + J(54, i) * .6);
         }
     });
@@ -718,7 +729,7 @@ sealed partial class HudManga : ModernLook
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
         // the balloon breaks out over the bubble's top left, clear of the hour
-        var balloon = new InkArt(BangArt, 0, 0) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 4, 0, 0) };
+        var balloon = new InkArt(BangArt, 0, 0) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(9, 13, 0, 0) };
         var sc = new ScaleTransform(0, 0);
         balloon.RenderTransform = sc;
         host.Children.Add(balloon);
@@ -737,8 +748,8 @@ sealed partial class HudManga : ModernLook
     /// <summary>The "!!" balloon: a red explosion with an ink edge, "!!" lettered in white, round its origin.</summary>
     static Drawing BangArt => _bangArt ??= Drawn(dc =>
     {
-        dc.DrawGeometry(RedB, Pn(InkB, 1.8), Balloon(P(0, 0), 15, 9.5, 11, 61));
-        var bang = Lettered("!!", 15, Colors.White, InkC, null, 2.6, 6, out var s);
+        dc.DrawGeometry(RedB, Pn(InkB, 2.2), Balloon(P(0, 0), 22, 13.5, 12, 61));
+        var bang = Lettered("!!", 24, Colors.White, InkC, null, 3.6, 6, out var s);
         dc.PushTransform(new TranslateTransform(-s.Width / 2, -s.Height / 2));
         dc.DrawDrawing(bang);
         dc.Pop();
@@ -788,12 +799,13 @@ sealed partial class HudManga : ModernLook
         var sfx = _sfx; var sfs = _sfxScale;
         Motion.Play(_fightFx, 820, t =>
         {
-            double k = Out(Seg(t, 0, .6));
+            double k = Out(Seg(t, 0, .42));
             clipShift.X = -(w + 60) * (1 - k);
             sx.X = (w + 40) * k - 44;
-            stroke.Opacity = t < .55 ? 1 : 1 - Seg(t, .55, .68);
+            stroke.Opacity = t < .36 ? 1 : 1 - Seg(t, .36, .48);
             _fightShift.X = -6 * (1 - k);
-            _fightBody.Opacity = Out(Seg(t, .12, .5));
+            // the words come up as the stroke passes, whole once the page is on (never over the bare game)
+            _fightBody.Opacity = Seg(t, .28, .42);
             if (sfx != null && sfs != null)
             {
                 double s = Seg(t, .58, .82);
@@ -811,12 +823,7 @@ sealed partial class HudManga : ModernLook
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
-        if (_pageInv.Art == null && _pageSig.Length > 0)
-        {
-            var panels = new List<(double, double, int)> { (Mg, _headH, 0) };
-            if (_rowsH > 0) panels.Add((_rowsTop, _rowsH, 1));
-            _pageInv.Art = Page(_pageW, _pageH, panels, 0, 0, false, true, _gutters, 0);
-        }
+        if (_pageInv.Art == null && _pageSig.Length > 0) _pageInv.Art = ImpactArt(_pageW, _pageH, _rowsH > 0 ? _rowsTop + _rowsH : 0);
         double w = _pageW > 0 ? _pageW : FightWidth - 10;
         var word = wipe ? L.T("CRASH") : L.T("KABOOM!");
         var art = Lettered(word, 34, wipe ? Color.FromRgb(0xD8, 0xD8, 0xDC) : Colors.White, InkC, RedC, 6, wipe ? 5 : -8, out var size);
