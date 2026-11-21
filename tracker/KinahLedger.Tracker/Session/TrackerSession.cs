@@ -2685,6 +2685,8 @@ public sealed partial class TrackerSession
     public const double RewardWindowSeconds = 10;
     /// <summary>After a bound Kina payout, what lands this long after is the payout's: short, so a kill just after it still counts.</summary>
     public const double PayoutWindowSeconds = 3;
+    /// <summary>How long after a kill of the player's a bound Kina line of a kill's size is that kill's, not a payout.</summary>
+    const double KillKinaSeconds = 6;
     /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
     public const double NoKillSeconds = 15;
     /// <summary>A Soul Crystal line of at most this many, with a kill counted at most <see cref="KillCrystalSeconds"/> s before it, is the kill's (0.8.61).</summary>
@@ -2836,6 +2838,10 @@ public sealed partial class TrackerSession
             // in the Abyss every kill's Kina is bound: a kill's is no payout, and the drops printed with it are drops (Steven,
             // 2026-11-13 18:44: Earth Spellbook, Earth Greaves and the soul crystals beside each kill's bound Kina were set aside)
             if (SessionEngine.IsAbyssKillKina(kb.Delta, Zone)) return;
+            // ...and out of it, where some maps pay a kill's Kina bound too (2026-11-20 11:07 to 11:16, Western Altamia: every
+            // kill's Kina bound, so a Spiritstone dropped among the kills at 11:16:25 was "a box's or a reward's contents"):
+            // bound Kina of a kill's size with a kill of the player's just before it is that kill's
+            if (kb.Delta <= SessionEngine.AbyssKillKinaMax && (ev.Time - _lastKillAt).TotalSeconds is >= -1 and <= KillKinaSeconds) return;
             var until = now.AddSeconds(PayoutWindowSeconds);
             if (until > _boxUntil) _boxUntil = until;
             return;

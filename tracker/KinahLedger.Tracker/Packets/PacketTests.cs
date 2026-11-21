@@ -233,6 +233,40 @@ public static class PacketTests
             feed.Wait();
             double worst = e.PacketDelays.Count > 0 ? e.PacketDelays.Max() : 99;
             Check(e.Engine.Kinah == 500 && worst < 0.3, $"...the reading loop's wait counts each message as it comes: {e.PacketDelays.Count} of 5 counted, the slowest {worst * 1000:0} ms after its message (under 300)");
+            // a kill's pay is its own evidence (2026-11-20 10:15:42, Steven's log): in the Abyss three kills' bound Kinah, Rank
+            // and Abyss Points came 2 s after the last counted pickup's 10 s were up, their kills were told 4 to 7 s later, so
+            // each waited its 3 s and was left out as "a sale, the mail or a reward". Rank Points rise only for a kill.
+            var rk = new PacketReader(); rk.ReadingForTest();
+            var k = new TrackerSession(null, settings, items, "Test") { Packets = rk };
+            k.Engine.SetZone("Chaotic Lower Reshanta");
+            var kt = DateTime.UtcNow.AddSeconds(-60);
+            rk.AmountForTest(CurrencyKind.BoundKinah, 27_051, kt); rk.AmountForTest(CurrencyKind.RankPoints, 16_546, kt); rk.AmountForTest(CurrencyKind.AbyssPoints, 7_895, kt);
+            var p1 = DateTime.UtcNow.AddSeconds(-4.5);   // the three kills' pay, each already past its 3 s hold
+            // first, Abyss Points alone with nothing killed (a supply delivery's 1,640 at 10:31:25): a reward, not counted
+            rk.AmountForTest(CurrencyKind.AbyssPoints, 7_895 + 1_640, p1.AddSeconds(-8));
+            long bk = 27_051, rp = 16_546, ap = 7_895 + 1_640;
+            foreach (var (dbk, drp, dap, dt) in new[] { (105L, 52L, 26L, 0.0), (53L, 34L, 17L, 1.3), (26L, 19L, 9L, 1.5) })
+            {
+                rk.AmountForTest(CurrencyKind.BoundKinah, bk += dbk, p1.AddSeconds(dt));
+                rk.AmountForTest(CurrencyKind.RankPoints, rp += drp, p1.AddSeconds(dt + 0.05));
+                rk.AmountForTest(CurrencyKind.AbyssPoints, ap += dap, p1.AddSeconds(dt + 0.1));
+            }
+            k.DrainPacketsForTest();
+            // the chat's line for one item of an update is the whole update's (2026-11-20 11:34:49, Gartua's drop): Refining Stone
+            // and Artisan's Refining Stone came in one update, no kill of the player's around it (a world boss), the chat's line
+            // only for the Artisan's; the plain one was judged first and left out
+            {
+                long plain = items.IdOf("Refining Stone"), artisan = items.IdOf("Artisan's Refining Stone");
+                var g = Fresh(out var rg);
+                var gt = DateTime.UtcNow.AddSeconds(-4);   // past the wait for the plain one's line
+                g.CommitForTest(new ItemAcquired(gt.AddSeconds(0.3), artisan, 1, false) { Via = "chat" });
+                rg.ItemsForTest(new ItemChange(gt, plain, ItemOp.Changed, 11, 1, 7, false, 1, 2, false), new ItemChange(gt, artisan, ItemOp.Changed, 12, 1, 2, false, 1, 2, false));
+                g.DrainPacketsForTest();
+                Check(g.Engine.Items.GetValueOrDefault(plain) == 1 && g.Engine.Items.GetValueOrDefault(artisan) == 1,
+                    $"...the chat's line for one item of an update stands for all of it: Refining Stone {g.Engine.Items.GetValueOrDefault(plain)}, Artisan's Refining Stone {g.Engine.Items.GetValueOrDefault(artisan)} (1 and 1)");
+            }
+            Check(k.Engine.AbyssBoundKinah == 184 && k.Engine.RankPoints == 105 && k.Engine.AbyssPoints == 52,
+                $"...a kill's pay (bound Kinah, Rank and Abyss Points in one update) counts though its kill is told later: bound Kinah +{k.Engine.AbyssBoundKinah} (184), Rank Points +{k.Engine.RankPoints} (105), Abyss Points +{k.Engine.AbyssPoints} (52; the lone 1,640 before them no kill's)");
         }
 
         // kills and deaths (0.10.72): the game says whose kill it was and what died; a kill naming no killer is the player's

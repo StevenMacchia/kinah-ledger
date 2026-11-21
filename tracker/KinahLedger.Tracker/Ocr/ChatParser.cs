@@ -873,7 +873,7 @@ public sealed partial class ChatParser
                     yield break;
                 }
                 // inside a run a reward the item list lacks (an event's own token, a voucher) is still the run's, by its name
-                if (InRun?.Invoke() == true && System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$"))
+                if (InRun?.Invoke() == true && RunOwnName(name, rawLine))
                 {
                     Note($"not in the item list, counted for the run by its name: {name}");
                     NoteCount(rawLine, countUnsure);
@@ -974,6 +974,22 @@ public sealed partial class ChatParser
         }
         return null;
     }
+
+    /// <summary>
+    /// Whether a name no list knows, read in a run, is the run's own unlisted reward (an event's token, a voucher), counted by
+    /// its name. Not the game's own text ("No items available to acquire."), a wardrobe unlock ("Adamant Guardian (Cloak)
+    /// Skjn"), a one-word scrap ("sour") or a known item read garbled or cut ("Amplify St", "FineOdyle x3", "Enhance Stonexl
+    /// '310"): on Steven's 2026-11-20 log all 17 names this path took were those, and three of them in five minutes told the
+    /// game's data it had missed three pickups, so it stopped counting items for the next three hours.
+    /// </summary>
+    bool RunOwnName(string name, string line) =>
+        System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$")
+        && !name.Any(char.IsDigit)   // a count's debris left in the name ("Enhance Stonexl '310"): a known item's line read garbled
+        && !NotAnItemRx.IsMatch(name) && !SkinTailRx.IsMatch(name) && !PickupCheck.IsSkinUnlock(line)
+        && name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Count(w => w.Count(char.IsLetter) >= 3) >= 2
+        && _items.Near(name, Math.Max(2, name.Length / 3)).Count == 0 && _items.Fragment(name, 3).Count == 0;
+    static readonly System.Text.RegularExpressions.Regex NotAnItemRx = new(@"\b(no items?|available|deleted|invalid|cannot|can't|required)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly System.Text.RegularExpressions.Regex SkinTailRx = new(@"\bSk\W?[il1j!|]\W?n\W*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>"Point(s)", "Pointe)": the tail of a currency line whose head was lost, naming no currency.</summary>
     internal static bool PointsFragment(string name)

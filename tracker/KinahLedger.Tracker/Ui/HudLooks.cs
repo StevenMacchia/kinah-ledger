@@ -42,6 +42,7 @@ public static class HudLooks
         new(HudThemes.Sticker, L.T("Sticker"), L.T("Comic stickers slapped over the game: black outlines, hard shadows, a POW on every pickup"), HudThemes.Wacky),
         new(HudThemes.Neon, L.T("Neon"), L.T("An arcade cabinet's glowing rim; pickups streak up like combo scores"), HudThemes.Wacky),
         new(HudThemes.Goo, L.T("Holo card"), L.T("A holographic trading card; pickups flip out as foil chips"), HudThemes.Wacky),   // "goo" kept: a saved Goo is the Holo card
+        new(HudThemes.Arcade, L.T("Arcade"), L.T("A high-score table: 1ST to 5TH in blazing LED, a player-one glow on you"), HudThemes.Wacky),
         new(HudThemes.Fighter, L.T("Fighter"), L.T("A jet's HUD: green lines straight over the game, a reticle, a lock-on on every pickup"), HudThemes.Tactical),
         // Arena keeps the Scorebug's key, so a saved Scorebug carries over (Steven, 2026-11-17)
         new(HudThemes.Scorebug, L.T("Arena"), L.T("A stadium's video board: a black tower, LED bars in class colours, amber figures"), HudThemes.Tactical),
@@ -56,6 +57,20 @@ public static class HudLooks
         new(HudThemes.ModernMono, L.T("Mono"), L.T("Swiss minimal: near-black, off-white and one accent, flat bars on an exact grid"), HudThemes.Modern),
         new(HudThemes.ModernLine, L.T("Line"), L.T("Barely there: a hairline frame and slim class-colour bars under each name"), HudThemes.Modern),
         new(HudThemes.ModernFade, L.T("Fade"), L.T("No panel: each row a soft class-colour wash fading out to the right"), HudThemes.Modern),
+        // Atreia (the second looks pack, 2026-11-20): Ui/Themes/Atreia/
+        new(HudThemes.Rift, L.T("Rift"), L.T("The Abyss torn open: deep violet glass, a rift of light down each bar, starlight figures"), HudThemes.Atreia),
+        new(HudThemes.Elyos, L.T("Elyos"), L.T("Elyos radiance: midnight blue and gold leaf, wings of light round the top row"), HudThemes.Atreia),
+        new(HudThemes.Asmodian, L.T("Asmodian"), L.T("Asmodian shadow: black iron, crimson edges and embers, a blood-red crown on the top row"), HudThemes.Atreia),
+        new(HudThemes.Prism, L.T("Prism"), L.T("A glass prism: rainbow light splits along each bar's edge, crisp white figures"), HudThemes.Atreia),
+        // Esports and Elements (the third looks pack, 2026-11-20): Ui/Themes/Esports/, Ui/Themes/Elements/
+        new(HudThemes.Broadcast, L.T("Broadcast"), L.T("An esports lower third: slanted plates, a LIVE tag, every rank swap wiped in"), HudThemes.Esports),
+        new(HudThemes.Telestrator, L.T("Telestrator"), L.T("A caster's pen on the replay: the leader circled, arrows and notes drawn live over the meter"), HudThemes.Esports),
+        new(HudThemes.Hype, L.T("Hype"), L.T("A sponsor's hype package: chrome, speed lines and an electric lime, every lead change a slam"), HudThemes.Esports),
+        new(HudThemes.Finals, L.T("Finals"), L.T("The championship's black and gold: a trophy over the leader, confetti on the kill"), HudThemes.Esports),
+        new(HudThemes.Frost, L.T("Frost"), L.T("Ice: frosted crystal bars, rime creeping along their edges, breath-cold light"), HudThemes.Elements),
+        new(HudThemes.Storm, L.T("Storm"), L.T("Lightning: storm-dark glass, bolts arcing off each bar, a thunderclap on the lead"), HudThemes.Elements),
+        new(HudThemes.Magma, L.T("Magma"), L.T("Magma: cooled basalt split by glowing lava, each bar a molten flow"), HudThemes.Elements),
+        new(HudThemes.Tide, L.T("Tide"), L.T("The deep: caustic light rippling over sea-blue glass, each bar a rising wave"), HudThemes.Elements),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>
