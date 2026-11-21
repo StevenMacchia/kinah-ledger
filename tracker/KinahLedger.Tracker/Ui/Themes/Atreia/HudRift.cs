@@ -38,7 +38,7 @@ sealed partial class HudRift : ModernLook
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TacSketch _lineArt;
     readonly StackPanel _lineStack = new();
-    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 8, 14, 8) };
+    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 18, 14, 8) };
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
     /// <summary>The timer chips over the line, when the pickup strip takes their room on it.</summary>
@@ -50,6 +50,11 @@ sealed partial class HudRift : ModernLook
     bool _beat, _ringEmpty;
     /// <summary>The pulses of light along the Buddy's and the meter's tears (layers over the glass: the glass is never drawn again for them).</summary>
     readonly RiftPulse _linePulse = new(Radius), _fightPulse = new(Radius);
+    /// <summary>The wound flaring: its frozen drawing again over the glass, only faded in and out.</summary>
+    readonly TacSketch _lineFlare = new((dc, s) => dc.DrawDrawing(WoundArt(Math.Round(s.Width), CyanC))) { Opacity = 0, IsHitTestVisible = false },
+        _fightFlare = new((dc, s) => dc.DrawDrawing(WoundArt(Math.Round(s.Width), CyanC))) { Opacity = 0, IsHitTestVisible = false };
+    /// <summary>The Buddy's moments' layer, clipped to its glass (a best's burst never leaves it).</summary>
+    readonly Grid _lineFx = new() { IsHitTestVisible = false };
     Border? _firstChip;
 
     // the rare drop under the Buddy (its own glass), and the notice line
@@ -59,7 +64,7 @@ sealed partial class HudRift : ModernLook
     // the fight: its glass, its head, HP, rows and foot
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
     readonly TacSketch _fightArt;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 10, Pad, 9) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 19, Pad, 9) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 8), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _settle = new();
@@ -70,11 +75,14 @@ sealed partial class HudRift : ModernLook
         // the look's own rows (Ui/Themes/ThemeRows.cs), a fit shared by the rows so the share column holds or goes for all
         var fit = new RiftFit();
         UseRows(RiftRow.Pitch, m => new RiftRow(this, fit), 15, GapLine);
-        _lineArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity));
+        _lineArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity, wound: true));
         _lineStack.Children.Add(_runHead); _lineStack.Children.Add(_lineBody);
-        _line.Children.Add(_lineArt); _line.Children.Add(_linePulse); _line.Children.Add(_lineStack);
-        _fightArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity));
-        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightPulse); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        _line.Children.Add(_lineArt); _line.Children.Add(_lineFlare); _line.Children.Add(_linePulse); _line.Children.Add(_lineStack); _line.Children.Add(_lineFx);
+        _lineFx.SizeChanged += (_, _) => { var g = new RectangleGeometry(new Rect(0, 0, _lineFx.ActualWidth, _lineFx.ActualHeight), Radius, Radius); g.Freeze(); _lineFx.Clip = g; };
+        _fightArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity, wound: true));
+        _deepHost.Children.Add(_deep);
+        _deepHost.SizeChanged += (_, _) => ClipDeep();
+        _fight.Children.Add(_fightArt); _fight.Children.Add(_deepHost); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightPulse); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _settle;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
@@ -147,7 +155,7 @@ sealed partial class HudRift : ModernLook
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _lineStack.Opacity = _dim ? .62 : 1;
-        _lineBody.Margin = new Thickness(8, 8, 14, 8);
+        _lineBody.Margin = new Thickness(8, 18, 14, 8);
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (mark) { var m = AbyssMark(f.Icon, 40); m.Margin = new Thickness(0, 0, 10, 0); _lineBody.Children.Add(m); }
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudRift.Run.cs)
@@ -258,7 +266,7 @@ sealed partial class HudRift : ModernLook
     FrameworkElement? _rareTile;
     /// <summary>The rare drop's moment, drawn once and only faded and stretched while it plays: the grade's light behind the tile, the fissure beside it, the rifts along the pill's top and foot, the pulse.</summary>
     FrameworkElement? _rareGlow, _rareFissure, _rareTears;
-    readonly ScaleTransform _rareRun = new(1, 1, 36, 0);
+    readonly ScaleTransform _rareRun = new(1, 1, 40, 0);
     RiftPulse? _rarePulse;
 
     /// <summary>The rare drop the window holds, on its own glass under the Buddy: its tile, RARE DROP, its name in its grade's colour; the tear in that colour.</summary>
@@ -272,6 +280,7 @@ sealed partial class HudRift : ModernLook
             _rare.Children.Add(new TacSketch((dc, s) =>
             {
                 RiftPanel(dc, s, s.Height / 2, _opacity, tint: c, flare: .25, shadow: false);
+                TornEnds(dc, s, c);
                 // the grade's light breathing in the glass behind the tile
                 dc.PushOpacity(.35);
                 dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(c, .6), 0), (Mod.A(c, 0), 1)), null, new Rect(0, -4, 50, s.Height + 8));
@@ -282,22 +291,22 @@ sealed partial class HudRift : ModernLook
             var lc = Mod.Mix(c, Colors.White, .35);
             var fx = new Grid { IsHitTestVisible = false, ClipToBounds = true };
             fx.SizeChanged += (_, _) => { var g = new RectangleGeometry(new Rect(0, 0, fx.ActualWidth, fx.ActualHeight), fx.ActualHeight / 2, fx.ActualHeight / 2); g.Freeze(); fx.Clip = g; };
-            _rareGlow = new TacSketch((dc, s) => dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(c, .7), 0), (Mod.A(c, 0), 1)), null, new Rect(0, -4, 70, s.Height + 8))) { Opacity = 0 };
-            _rareFissure = new TacSketch((dc, s) => Fissure(dc, 41, 2, s.Height - 4, c, 1.9, 2)) { Opacity = 0 };
+            _rareGlow = new TacSketch((dc, s) => dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(c, .7), 0), (Mod.A(c, 0), 1)), null, new Rect(0, -6, 150, s.Height + 12))) { Opacity = 0 };
+            _rareFissure = new TacSketch((dc, s) => Fissure(dc, 45, 2, s.Height - 4, c, 1.9, 2)) { Opacity = 0 };
             _rareTears = new TacSketch((dc, s) =>
             {
                 double x1 = s.Width - s.Height / 2;
                 foreach (var y in new[] { 2.2, s.Height - 2.2 })
                 {
-                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(lc, .95), 0), (Mod.A(lc, .8), .7), (Mod.A(c, 0), 1)), null, TearAcross(36, x1 + 6, y, 3.4, y > 3 ? 7 : 4));
-                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(Colors.White, 1), 0), (Mod.A(Colors.White, .7), .6), (Mod.A(Colors.White, 0), 1)), null, TearAcross(36, x1, y, 1.4, 5));
+                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(lc, .95), 0), (Mod.A(lc, .8), .7), (Mod.A(c, 0), 1)), null, TearAcross(40, x1 + 6, y, 5, y > 3 ? 7 : 4));
+                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(Colors.White, 1), 0), (Mod.A(Colors.White, .7), .6), (Mod.A(Colors.White, 0), 1)), null, TearAcross(40, x1, y, 1.4, 5));
                 }
             }) { Opacity = 0, RenderTransform = _rareRun };
             _rarePulse = new RiftPulse(99);
             _rarePulse.Tint(c);
             foreach (var el in new UIElement[] { _rareGlow, _rareFissure, _rareTears, _rarePulse }) fx.Children.Add(el);
             _rare.Children.Add(fx);
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 6, 16, 8) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(13, 6, 26, 8) };   // clear of the torn ends
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             _rareTile = tile;
             row.Children.Add(tile);
@@ -343,7 +352,13 @@ sealed partial class HudRift : ModernLook
         dc.DrawEllipse(Radial(new Point(.5, .5), .5, .5, (Mod.A(VoidC, .85), 0), (Mod.A(DeepVioletC, .7), .8), (Mod.A(VioletC, .25), 1)), null, center, r + 1, r + 1);
         dc.DrawEllipse(null, Mod.P(Mod.Br(VioletC, .2), 7.5), center, r, r);
         dc.DrawEllipse(null, Mod.P(Mod.Br(Color.FromRgb(0x3A, 0x1E, 0x70), 1), 3.4), center, r, r);
-        if (_ringEmpty) { dc.DrawEllipse(null, Mod.P(Mod.Br(LilacC, .4), 1), center, r + 1.7, r + 1.7); return; }
+        if (_ringEmpty)
+        {
+            dc.DrawEllipse(null, Mod.P(Mod.Br(LilacC, .55), 1.2), center, r + 1.7, r + 1.7);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(VioletC, .6), 3.4), center, r, r);
+            dc.PushOpacity(.6); dc.DrawRectangle(Spark, null, new Rect(c - 6, c - r - 6, 12, 12)); dc.Pop();
+            return;
+        }
         double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
         double shown = share;
         bool full = shown >= .999;
@@ -472,7 +487,7 @@ sealed partial class HudRift : ModernLook
         {
             var wt = Tt(e.ReadyText, 12.5, Soft, FontWeights.Medium); wt.Margin = new Thickness(0, 6, 0, 0); wt.TextWrapping = TextWrapping.Wrap;
             _fightBody.Children.Add(wt);
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 8 }); PutRows(_fightBody, e, now, inner); }
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 8 }); PutRows(_fightBody, e, now, inner); }   // (no crown before damage)
         }
         else
         {
@@ -508,9 +523,9 @@ sealed partial class HudRift : ModernLook
                 hl.Tag = "hp-text";
                 Grid.SetColumn(hl, 1); hpLine.Children.Add(hl);
                 _fightBody.Children.Add(hpLine);
-                _fightBody.Children.Add(new Border { Height = 8 });
+                _fightBody.Children.Add(new Border { Height = 15 });   // the room the leader's crown floats in
             }
-            else _fightBody.Children.Add(new Border { Height = 8 });
+            else _fightBody.Children.Add(new Border { Height = 15 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
@@ -537,8 +552,9 @@ sealed partial class HudRift : ModernLook
         Motion.Play(_fightPulse, 1500, t =>
         {
             _fightPulse.At(t < .4 ? t / .4 : -1);
+            _fightFlare.Opacity = t < .08 ? Seg(t, 0, .08) : 1 - Seg(t, .08, .45);
             RowsSeam(t, c);
-        }, () => { _fightPulse.At(-1); RowsSeam(-1, c); });
+        }, () => { _fightPulse.At(-1); _fightFlare.Opacity = 0; RowsSeam(-1, c); });
     }
 
     void RowsSeam(double t, Color? c)
@@ -564,7 +580,7 @@ sealed partial class HudRift : ModernLook
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         _linePulse.Tint(null);
-        Motion.Play(_linePulse, 1100, t => _linePulse.At(t), () => _linePulse.At(-1));
+        Motion.Play(_linePulse, 1100, t => { _linePulse.At(t); _lineFlare.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .1, .6); }, () => { _linePulse.At(-1); _lineFlare.Opacity = 0; });
     }
 
     /// <summary>A rare drop: its glass tears open in its grade's colour (a fissure flaring behind the tile, the tear lit in the colour), the tile popping in.</summary>
@@ -610,6 +626,32 @@ sealed partial class HudRift : ModernLook
         var burst = new System.Windows.Shapes.Ellipse { Width = 2 * r, Height = 2 * r, Margin = new Thickness(c - r), Stroke = Mod.Br(LightC, .9), StrokeThickness = 1.8, Opacity = 0, RenderTransform = pop, IsHitTestVisible = false };
         var parts = new UIElement[] { lit, burst, orbit };
         foreach (var el in parts) host.Children.Insert(1, el);
+        // the burst in the Buddy's clipped layer: a shock ring two and a half times the portal, shards, NEW BEST over the wound
+        var at0 = host.IsDescendantOf(_line) && host.ActualWidth > 0 ? host.TranslatePoint(new Point(c, c), _line) : new Point(8 + c, 18 + c);
+        var shock = new System.Windows.Shapes.Ellipse { Width = 76, Height = 76, Stroke = Mod.Br(LightC, .9), StrokeThickness = 2.4, Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(at0.X - 38, at0.Y - 38, 0, 0) };
+        var shockScale = new ScaleTransform(.3, .3, 38, 38); shock.RenderTransform = shockScale;
+        var flying = new Canvas { IsHitTestVisible = false };
+        var bits = new List<(UIElement El, TranslateTransform At, double Dx, double Dy)>();
+        for (int i = 0; i < 8; i++)
+        {
+            double a = i * Math.PI / 4 + .3, d = (22 + 6 * (i % 3)) * (Math.Cos(i * Math.PI / 4 + .3) < 0 ? .7 : 1.15);
+            var sh = ShardOf(9, 2.6);
+            var mv = new TranslateTransform();
+            sh.RenderTransform = new TransformGroup { Children = { new RotateTransform(a * 180 / Math.PI + 90), mv } };
+            sh.Opacity = 0;
+            Canvas.SetLeft(sh, at0.X); Canvas.SetTop(sh, at0.Y);
+            flying.Children.Add(sh);
+            bits.Add((sh, mv, Math.Cos(a) * d, Math.Sin(a) * d));
+        }
+        var tag = new Border
+        {
+            Child = Tt(L.T("NEW BEST"), 10.5, Frozen(LightC), FontWeights.Bold), Padding = new Thickness(8, 0, 8, 1), CornerRadius = new CornerRadius(3),
+            Background = Frozen(Mod.A(Color.FromRgb(0x2A, 0x0F, 0x5C), .95)), BorderBrush = Frozen(Mod.A(LightC, .9)), BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0), Opacity = 0, Tag = "rift-new-best",
+        };
+        var tagScale = new ScaleTransform(1.5, 1.5); tag.RenderTransformOrigin = new Point(.5, .5); tag.RenderTransform = tagScale;
+        var burstParts = new UIElement[] { shock, flying, tag };
+        foreach (var el in burstParts) _lineFx.Children.Add(el);
         _linePulse.Tint(MintC2);
         Motion.Play(art, 1800, t =>
         {
@@ -621,8 +663,19 @@ sealed partial class HudRift : ModernLook
             pop.ScaleX = pop.ScaleY = 1 + .28 * Out(b);
             burst.Opacity = t < .52 ? 0 : .9 * (1 - b);
             _linePulse.At(t is > .45 and < .95 ? Seg(t, .45, .95) : -1);
+            double sb = Seg(t, .5, .9);
+            shockScale.ScaleX = shockScale.ScaleY = .3 + .7 * Out(sb);
+            shock.Opacity = t < .5 ? 0 : .9 * (1 - sb);
+            double fly = Out(Seg(t, .5, .95));
+            foreach (var bt in bits) { bt.At.X = bt.Dx * fly; bt.At.Y = bt.Dy * fly; bt.El.Opacity = t < .5 ? 0 : 1 - Seg(t, .7, .95); }
+            double tg = Seg(t, .5, .62);
+            tagScale.ScaleX = tagScale.ScaleY = 1.5 - .5 * Back(tg, 2);
+            tag.Opacity = t < .5 ? 0 : tg < 1 ? tg : 1 - Seg(t, .92, 1);
+            _lineFlare.Opacity = t < .5 ? 0 : 1 - Seg(t, .5, .9);
         }, () =>
         {
+            foreach (var el in burstParts) _lineFx.Children.Remove(el);
+            _lineFlare.Opacity = 0;
             foreach (var el in parts) host.Children.Remove(el);
             _beat = beat; _share = was; art.InvalidateVisual();
             _linePulse.At(-1);
@@ -640,10 +693,117 @@ sealed partial class HudRift : ModernLook
         Motion.Play(chip, 1300, t => glow.Opacity = .9 * (t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1)), () => { chip.Effect = null; chip.BorderBrush = edge; });
     }
 
-    /// <summary>A fight started: its glass settles in (rising a few pixels as it fades up), the crown lands on the leader, a pulse runs the seams.</summary>
+    // ---- the Abyss tearing open (a fight's start): parts drawn once, then only clipped, moved, turned and faded
+
+    /// <summary>The deep field of stars behind the meter's glass (a layer of its own, clipped to the glass): still, but for a drift of parallax during a moment.</summary>
+    readonly Grid _deepHost = new() { IsHitTestVisible = false };
+    readonly TacSketch _deep = new((dc, s) => { dc.PushOpacity(.75); dc.DrawRectangle(DeepStars, null, new Rect(-40, -40, s.Width + 80, s.Height + 80)); dc.Pop(); }) { IsHitTestVisible = false };
+    readonly TranslateTransform _deepAt = new();
+    Grid? _openFx;
+    TacSketch? _flash, _ripFront, _ripFront2;
+    readonly TranslateTransform _ripAt2 = new();
+    /// <summary>The words' reveal as the rip opens: a mask opaque only inside the slit (its stops moved, nothing laid out).</summary>
+    readonly GradientStop _revealA = new(Colors.Transparent, 0), _revealB = new(Colors.Black, 0), _revealC = new(Colors.Black, 1), _revealD = new(Colors.Transparent, 1);
+    LinearGradientBrush? _revealBrush;
+    LinearGradientBrush _reveal => _revealBrush ??= new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0), GradientStops = { _revealA, _revealB, _revealC, _revealD } };
+    readonly ScaleTransform _flashScale = new();
+    readonly TranslateTransform _ripAt = new();
+    readonly RectangleGeometry _ripClip = new();
+    readonly List<(UIElement El, TranslateTransform At, RotateTransform Turn, double Dx, double Dy, double Spin)> _shards = new();
+
+    void ClipDeep()
+    {
+        var g = new RectangleGeometry(new Rect(.5, .5, Math.Max(0, _deepHost.ActualWidth - 1), Math.Max(0, _deepHost.ActualHeight - 1)), Radius, Radius); g.Freeze();
+        _deepHost.Clip = g;
+    }
+
+    void OpenFx()
+    {
+        _deep.RenderTransform ??= _deepAt;
+        if (_openFx != null) return;
+        // the layer over the glass, clipped to it, so the flung shards never leave it
+        _openFx = new Grid { IsHitTestVisible = false, ClipToBounds = true };
+        // the flash: a blinding ellipse of rift light out of the wound's widest point
+        _flash = new TacSketch((dc, s) =>
+        {
+            dc.DrawRectangle(Radial(new Point(WoundPeak, .12), .6, .8, (Mod.A(Colors.White, 1), 0), (Mod.A(LightC, .8), .18), (Mod.A(CyanC, .45), .4), (Mod.A(VioletC, .2), .7), (Mod.A(VioletC, 0), 1)), null, new Rect(0, -14, s.Width, 120));
+            dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, 1), WoundPeak), (Mod.A(Colors.White, 0), 1)), null, new Rect(0, 1, s.Width, 7));
+        })
+        { Opacity = 0, RenderTransform = _flashScale, VerticalAlignment = VerticalAlignment.Top, Height = 100 };
+        // the rip's fronts: two jagged lines of light running out sideways from the wound as the slit opens
+        _ripFront = new TacSketch((dc, s) =>
+        {
+            dc.DrawRectangle(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, CyanC, .4), .7), .5), (Mod.A(VioletC, 0), 1)), null, new Rect(0, 0, 24, s.Height));
+            dc.DrawGeometry(Mod.Br(Color.FromRgb(0xFF, 0x2E, 0x9A), .7), null, TearDown(12, 0, s.Height, 4.5, 9));
+            dc.DrawGeometry(Mod.Br(Colors.White, 1), null, TearDown(12, 2, s.Height - 4, 2, 9));
+        }) { Opacity = 0, Width = 24, HorizontalAlignment = HorizontalAlignment.Left, RenderTransform = _ripAt };
+        _ripFront2 = new TacSketch((dc, s) =>
+        {
+            dc.DrawRectangle(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, CyanC, .4), .7), .5), (Mod.A(VioletC, 0), 1)), null, new Rect(0, 0, 24, s.Height));
+            dc.DrawGeometry(Mod.Br(Color.FromRgb(0xFF, 0x2E, 0x9A), .7), null, TearDown(12, 0, s.Height, 4.5, 4));
+            dc.DrawGeometry(Mod.Br(Colors.White, 1), null, TearDown(12, 2, s.Height - 4, 2, 4));
+        }) { Opacity = 0, Width = 24, HorizontalAlignment = HorizontalAlignment.Left, RenderTransform = _ripAt2 };
+        var shards = new Canvas { IsHitTestVisible = false };
+        var rnd = new Random(919);
+        for (int i = 0; i < 13; i++)
+        {
+            double dx = (rnd.NextDouble() < .5 ? -1 : 1) * (25 + 120 * rnd.NextDouble()), dy = 18 + 70 * rnd.NextDouble();
+            var sh = ShardOf(8 + 7 * rnd.NextDouble(), 2.4 + 1.6 * rnd.NextDouble());
+            var turn = new RotateTransform(Math.Atan2(dx, -dy) * 180 / Math.PI);
+            var at = new TranslateTransform();
+            sh.RenderTransform = new TransformGroup { Children = { turn, at } };
+            sh.Opacity = 0;
+            shards.Children.Add(sh);
+            _shards.Add((sh, at, turn, dx, dy, (rnd.NextDouble() - .5) * 240));
+        }
+        _openFx.Children.Add(_flash); _openFx.Children.Add(_ripFront); _openFx.Children.Add(_ripFront2); _openFx.Children.Add(shards);
+        _fight.Children.Add(_openFx);
+    }
+
+    /// <summary>
+    /// A fight started: the Abyss tears open. The meter's glass rips open down from the wound (a clip running down it, a jagged
+    /// line of light at its front), a flash bursts out of the wound's widest point, shards of light fly out of it, the deep
+    /// stars drift in behind; the crown lands on the leader in a burst; a pulse runs the seams.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 460, t => { double k = Out(t); _settle.Y = 6 * (1 - k); _fight.Opacity = .2 + .8 * k; }, () => { _settle.Y = 0; _fight.Opacity = 1; });
+        OpenFx();
+        foreach (var s in _shards) { Canvas.SetLeft(s.El, Math.Max(20, FightWidth - 8) * WoundPeak); Canvas.SetTop(s.El, WoundY); }
+        // the glass and the deep stars tear open sideways from the wound's widest point (a clip on the art alone: no word is ever
+        // cut, and the rows stay solid), a flash over the slit, shards flying out of it
+        _fightArt.Clip = _ripClip;
+        Motion.Play(_fight, 950, t =>
+        {
+            double w = _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth - 8, h = _fight.ActualHeight > 0 ? _fight.ActualHeight : 200;
+            double u = Seg(t, .02, .42), open = u * u * (3 - 2 * u), px = w * WoundPeak, half = 1 + (Math.Max(px, w - px) + 20) * open;
+            _ripClip.Rect = new Rect(px - half, -12, 2 * half, h + 40);
+            _deepHost.Opacity = open;
+            if (open < 1)
+            {
+                double a = Math.Clamp((px - half) / w, 0, 1), b = Math.Clamp((px + half) / w, 0, 1);
+                _revealA.Offset = a; _revealB.Offset = Math.Min(1, a + .015); _revealC.Offset = Math.Max(0, b - .015); _revealD.Offset = b;
+                _fightBody.OpacityMask ??= _reveal;
+            }
+            else _fightBody.OpacityMask = null;
+            _ripAt.X = Math.Max(-12, px - half - 12); _ripAt2.X = Math.Min(w - 12, px + half - 12);
+            _ripFront!.Opacity = _ripFront2!.Opacity = t < .02 ? Seg(t, 0, .02) : open < 1 ? 1 : 1 - Seg(t, .42, .52);
+            _flashScale.CenterX = px; _flashScale.CenterY = 6;
+            _flashScale.ScaleX = Math.Max(.05, Math.Min(1, 2 * half / w)); _flashScale.ScaleY = .7 + .3 * open;
+            _flash!.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .14, .4);
+            _fightFlare.Opacity = t < .3 ? open : 1 - Seg(t, .3, .6);
+            double fly = Seg(t, .03, .8), k = Out(fly);
+            foreach (var s in _shards)
+            {
+                s.At.X = s.Dx * k; s.At.Y = s.Dy * k + 26 * fly * fly;
+                s.Turn.Angle = Math.Atan2(s.Dx, -s.Dy) * 180 / Math.PI + s.Spin * k * .3;
+                s.El.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .45, .8);
+            }
+            _deepAt.Y = 16 * (1 - Out(Seg(t, 0, .9))); _deepAt.X = -8 * (1 - Out(Seg(t, 0, .9)));
+        }, () =>
+        {
+            _fightArt.Clip = null; _fightBody.OpacityMask = null; _deepHost.Opacity = 1; _ripFront!.Opacity = _ripFront2!.Opacity = 0; _flash!.Opacity = 0; _fightFlare.Opacity = 0; _deepAt.X = _deepAt.Y = 0;
+            foreach (var s in _shards) s.El.Opacity = 0;
+        });
         LeaderRow()?.Land();
         Seams(null);
     }
@@ -665,8 +825,10 @@ sealed partial class HudRift : ModernLook
             var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
             dc.DrawGeometry(Mod.Br(VoidC, .96), null, Mod.Pill(r, r.Height / 2));
             RiftPanel(dc, s, s.Height / 2, 1, tint: c, flare: .6, shadow: false);
+            TornEnds(dc, s, c);
             dc.DrawGeometry(Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .18), .5), (Mod.A(c, 0), 1)), null, Mod.Pill(r, r.Height / 2));
             dc.DrawGeometry(null, Mod.P(Mod.Br(c, .6), 1.2), Mod.Pill(r, r.Height / 2));
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Color.FromRgb(0xC7, 0x7D, 0xFF), .95), .5), (Mod.A(VioletC, 0), 1)), null, TearAcross(s.Height / 2, s.Width - s.Height / 2, s.Height - 2.5, 3.2, 8));
         });
         plate.Children.Add(art);
         var lit = new RiftPulse(99);
@@ -691,7 +853,7 @@ sealed partial class HudRift : ModernLook
             return laid;
         }
         bool seated = Seat();
-        Seams(wipe ? CoralC : null);
+        Seams(wipe ? CoralC : LilacC);
         Motion.Play(_fightFx, 2400, t =>
         {
             if (!seated) seated = Seat();   // once the head is laid out (a fight just drawn), then never again

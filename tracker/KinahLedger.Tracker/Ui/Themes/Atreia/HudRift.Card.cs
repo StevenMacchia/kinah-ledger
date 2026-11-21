@@ -20,7 +20,7 @@ sealed partial class HudRift : IThemeCard
         const double In = 12;
         double w = 272 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
-        var stack = new StackPanel { Margin = new Thickness(In, 11, In, 10) };
+        var stack = new StackPanel { Margin = new Thickness(In, 19, In, 10) };
 
         // the head on the member's bar: emblem, name, CP, YOU ... class
         var head = new Grid { Height = 32, Margin = new Thickness(-5, 0, -5, 8) };
@@ -107,6 +107,7 @@ sealed partial class HudRift : IThemeCard
 
         // the abilities: each on its own small bar out of the Abyss, as long as its part of the top one, a fissure at its end
         var grows = new List<ScaleTransform>();
+        double rateCols = (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         if (c.Abilities.Count > 0)
         {
             stack.Children.Add(Seam(new Thickness(0, 8, 0, 5), .8));
@@ -132,14 +133,14 @@ sealed partial class HudRift : IThemeCard
                 var art = new TacSketch((dc, s) =>
                 {
                     var r = new Rect(0, 1.5, s.Width, s.Height - 3);
-                    double fx = s.Width * Math.Clamp(of, 0, 1);
+                    double fx = Math.Max(0, s.Width - rateCols - 4) * Math.Clamp(of, 0, 1);   // the bars end before the crit and back columns
                     if (fx < 1) return;
                     var fill = new Rect(0, r.Y, fx, r.Height);
                     dc.PushClip(new RectangleGeometry(r, 4, 4));
                     dc.DrawRectangle(Mod.Grad(false, (Mod.A(Mod.Mix(DeepVioletC, tone, .12), .9), 0), (Mod.A(Mod.Mix(tone, VioletC, .35), .55), 1)), null, fill);
                     dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .1), 0), (Mod.A(Colors.White, 0), .6)), null, fill);
                     dc.Pop();
-                    Fissure(dc, Math.Max(1.5, fx - .5), r.Y, r.Height, tone, .32, seed);   // faint: the figures sit over it
+                    dc.DrawRectangle(Mod.Br(LilacC, .55), null, new Rect(Math.Max(0, fx - 1.5), r.Y + 1, 1.5, r.Height - 2));   // a soft end, no fissure under the figures
                 });
                 art.RenderTransform = grow;
                 row.Children.Add(art);
@@ -166,9 +167,9 @@ sealed partial class HudRift : IThemeCard
 
         // the glass under it all, its tear along the top
         // (inset in the card so the drop under the glass stays inside the card's bounds; the pulse a layer over it)
-        var glass = new TacSketch((dc, s) => RiftPanel(dc, s, 12, 1)) { Margin = new Thickness(7, 4, 8, 14) };
+        var glass = new TacSketch((dc, s) => RiftPanel(dc, s, 12, 1, wound: true)) { Margin = new Thickness(7, 8, 8, 14) };
         var pulse = new RiftPulse(12) { Margin = glass.Margin };
-        stack.Margin = new Thickness(stack.Margin.Left + 7, stack.Margin.Top + 4, stack.Margin.Right + 8, stack.Margin.Bottom + 14);
+        stack.Margin = new Thickness(stack.Margin.Left + 7, stack.Margin.Top + 8, stack.Margin.Right + 8, stack.Margin.Bottom + 14);
         var card = new Grid();
         card.Children.Add(glass);
         card.Children.Add(pulse);
