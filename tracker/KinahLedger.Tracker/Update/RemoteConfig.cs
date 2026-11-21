@@ -68,7 +68,7 @@ public sealed class RemoteConfig
 
     // ---- kill switches: true turns that reader off ----
     public HashSet<string> Killed { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-    public static readonly string[] Switches = { "loot_list", "craft_panel", "target", "nameplates", "reward_grid", "balance", "zone", "name_colours", "loot_icons", "market", "accuracy_upload", "layout_hint" };
+    public static readonly string[] Switches = { "loot_list", "craft_panel", "target", "nameplates", "reward_grid", "balance", "zone", "name_colours", "loot_icons", "market", "accuracy_upload", "layout_hint", "heartbeat" };
     public bool Off(string reader) => Killed.Contains(reader);
 
     // ---- the scene classifier (Session/SceneState.cs) ----

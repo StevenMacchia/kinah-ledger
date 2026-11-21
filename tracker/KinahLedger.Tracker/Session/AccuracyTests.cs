@@ -447,6 +447,39 @@ public static class AccuracyTests
         Console.WriteLine($"\nSynthetic chat, clean: {clean}\nSynthetic chat, noisy: {noisy}\nSynthetic chat, rough: {rough}");
         Check("synthetic, clean chat: every Kina, item and kill", $"{clean.KinahCounted == clean.KinahTrue} {clean.Phantom} {clean.Missed} {clean.KillsCounted == clean.KillsTrue}", "True 0 0 True");
 
+        // ---- the heartbeat (1.0.38): every 5 minutes while open and sharing; never with sharing off, and quiet when the site can't take it ----
+        Console.WriteLine("Heartbeat:");
+        Check("state: the game open, its chat read", Heartbeat.StateOf(true, true), "reading");
+        Check("state: the game open, no chat yet", Heartbeat.StateOf(true, false), "game");
+        Check("state: no game (a chat reader left over changes nothing)", $"{Heartbeat.StateOf(false, false)} {Heartbeat.StateOf(false, true)}", "idle idle");
+        Check("wait: what the site asks for, between 2 minutes and an hour", string.Join(",", new[] { "{\"every\":300}", "{\"every\":5}", "{\"every\":99999}", "{\"ok\":true}", "not json" }.Select(b => Heartbeat.WaitFrom(b)?.TotalSeconds.ToString() ?? "none")), "300,120,3600,none,none");
+        using (var site = new NotFoundSite())
+        {
+            RemoteConfig.Current = RemoteConfig.BuiltIn;
+            var u = new UploadSettings { Endpoint = $"http://127.0.0.1:{site.Port}/v1/runs" };
+            Check("sent beside /v1/runs", Heartbeat.Url(u), $"http://127.0.0.1:{site.Port}/v1/beat");
+            var p = Heartbeat.Payload(u, "reading", "c2");
+            var pj = JsonSerializer.Serialize(p);
+            Check("what a beat holds: the install ID, the version, the state and the character slot, nothing else", $"{p!.install == InstallId.Get()} {p.app == RunPayload.AppVersion} {string.Join(",", JsonNode.Parse(pj)!.AsObject().Select(kv => kv.Key))}", "True True install,app,state,character");
+            Check("no character yet: none sent", $"{JsonSerializer.Serialize(Heartbeat.Payload(u, "idle", null)).Contains("character")} {JsonSerializer.Serialize(Heartbeat.Payload(u, "idle", "")).Contains("character")}", "False False");
+            int r0 = site.Requests;
+            var none = Heartbeat.SendAsync(u, "idle", null).GetAwaiter().GetResult();
+            Check("a site without the route: not sent, nothing thrown, the next one in 5 minutes", $"{none.Sent} {none.Next.TotalMinutes} {site.Requests - r0}", "False 5 1");
+            site.Answer = 200; while (site.Bodies.TryDequeue(out _)) { }
+            var ok = Heartbeat.SendAsync(u, "game", "c1").GetAwaiter().GetResult();
+            site.Bodies.TryDequeue(out var sentBody);
+            var sb = JsonNode.Parse(sentBody ?? "{}")!.AsObject();
+            Check("the site takes it: what went", $"{ok.Sent} {sb["state"]} {sb["character"]} {sb["app"]}", $"True game c1 {RunPayload.AppVersion}");
+            r0 = site.Requests;
+            var off = new UploadSettings { Enabled = false, Endpoint = u.Endpoint };
+            Check("sharing off: no beat at all", $"{Heartbeat.Payload(off, "idle", "c1") == null} {Heartbeat.SendAsync(off, "idle", "c1").GetAwaiter().GetResult().Sent} {site.Requests - r0}", "True False 0");
+            var blank = new UploadSettings { Endpoint = "" };
+            Check("no site address: no beat", $"{Heartbeat.Payload(blank, "idle", null) == null}", "True");
+            RemoteConfig.Current = new RemoteConfig { Killed = new(StringComparer.OrdinalIgnoreCase) { "heartbeat" } };
+            Check("the site's heartbeat switch: no beat", $"{Heartbeat.Payload(u, "idle", null) == null} {Heartbeat.SendAsync(u, "idle", null).GetAwaiter().GetResult().Sent} {site.Requests - r0}", "True False 0");
+            RemoteConfig.Current = RemoteConfig.BuiltIn;
+        }
+
         CrashLog.DirOverride = null; RemoteConfig.PathOverride = null; RemoteConfig.Current = RemoteConfig.BuiltIn; Accuracy.Reset();
         Console.WriteLine(fails == 0 ? "\nAll accuracy cases passed." : $"\n{fails} accuracy case(s) failed.");
         return fails == 0 ? 0 : 1;
