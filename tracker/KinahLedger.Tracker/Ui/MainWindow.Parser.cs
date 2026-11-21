@@ -1175,18 +1175,40 @@ public partial class MainWindow
         if (now is { ModeKind: ParserMode.Bosses, HasDamage: true } && mode == ParserMode.Bosses) all.AddRange(ParserDemoEarlier(now, _parserDemoNow));
         // the compare's render: casts and hit kinds on every pull, so its Casts and Crit columns can be seen (render states only)
         if (state == "compare") foreach (var x in all.Append(now)) if (x != null) ParserDemoCasts(x);
+        // the Timeline tab's render: the kept pulls with your lanes (render states only); KL_TIMELINE_PULLS=records.jsonl (from
+        // parser-replay --save) renders real pulls instead, KL_TIMELINE_PICK=n the n-th of them (else the one with most deaths)
+        string? trackOpen = null;
+        if (state == "track")
+        {
+            if (Environment.GetEnvironmentVariable("KL_TIMELINE_PULLS") is { Length: > 0 } tp && File.Exists(tp))
+            {
+                var real = File.ReadAllLines(tp).Where(l => l.Trim().StartsWith('{')).Select(l => System.Text.Json.JsonSerializer.Deserialize<Encounter>(l)!).Where(PullTimeline.Has).ToList();
+                if (real.Count > 0)
+                {
+                    all = real; now = null;
+                    int pick = int.TryParse(Environment.GetEnvironmentVariable("KL_TIMELINE_PICK"), out var pk) ? Math.Clamp(pk, 0, real.Count - 1) : -1;
+                    trackOpen = (pick >= 0 ? real[pick] : real.OrderByDescending(e => e.Members.Sum(f => f.Deaths)).ThenByDescending(e => e.Duration(e.End ?? e.LastAt)).First()).Id;
+                }
+            }
+            if (trackOpen == null)
+            {
+                foreach (var x in all) if (x.ModeKind == ParserMode.Bosses && !x.Live) { ParserDemoCasts(x); ParserDemoTimeline(x); }
+                trackOpen = all.LastOrDefault(e => PullTimeline.Has(e) && e.Roster.Any(f => f.Deaths > 0))?.Id ?? all.LastOrDefault(PullTimeline.Has)?.Id;
+            }
+        }
         _parserDemoPast = all.OrderBy(e => e.Start).ToList(); _parserDemoLive = now;
         _parserDemoWhere = state == "empty" ? (ContentKind.Other, "") : (ContentKind.Expedition, "Ferocious Horn Den");
         _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = "";
         _parserOpen = state switch
         {
             "detail" => all.LastOrDefault(e => e.ModeKind == ParserMode.Bosses && e.Kills.Any(k => !k.Boss) && e.Roster.Any(f => f.Deaths > 0))?.Id,
+            "track" => trackOpen,
             _ => null,
         };
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
         // Parser v2's views: the tab, the member opened, and for the renders of what the record will carry (the timeline, damage
         // taken, crits), a sample of those figures (ParserViewSample: render states only, the app never sets it)
-        _parserTab = state switch { "compare" => "Compare", "timeline" or "fight" => "Timeline", "taken" => "Taken", _ => "Group" };
+        _parserTab = state switch { "compare" => "Compare", "timeline" or "fight" => "Timeline", "track" => "Track", "taken" => "Taken", _ => "Group" };
         _parserSort = "Damage";
         var shownNow = _parserOpen != null ? all.FirstOrDefault(e => e.Id == _parserOpen) : now;
         _parserInspect = state is "inspect" or "inspect-full" ? shownNow?.Ranked().FirstOrDefault(f => f.You && f.Abilities.Count > 0)?.Id : null;

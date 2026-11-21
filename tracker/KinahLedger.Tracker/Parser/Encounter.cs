@@ -115,7 +115,14 @@ public sealed class Encounter : IJsonOnDeserialized
     public void MoveStart(DateTime to)
     {
         int shift = (int)Math.Floor((to - Start).TotalSeconds);
+        double exact = (to - Start).TotalSeconds;
         Start = to;
+        // the Timeline tab's casts and hits (your row) move by the exact time
+        foreach (var f in Roster)
+        {
+            foreach (var a in f.Abilities) if (a.CastLog != null) foreach (var c in a.CastLog) c.At = Math.Max(0, Math.Round(c.At - exact, 2));
+            if (f.TopHits != null) foreach (var h in f.TopHits) h.At = Math.Max(0, Math.Round(h.At - exact, 2));
+        }
         if (shift == 0) return;
         static void Move<T>(List<T>? l, int k, T fill)
         {
@@ -124,7 +131,21 @@ public sealed class Encounter : IJsonOnDeserialized
             else l.InsertRange(0, Enumerable.Repeat(fill, -k));
         }
         Move(BossHpPerSecond, shift, 1.0);
-        foreach (var f in Roster) { Move(f.PerSecond, shift, 0L); Move(f.BossPerSecond, shift, 0L); Move(f.HealPerSecond, shift, 0L); Move(f.TakenPerSecond, shift, 0L); }
+        foreach (var f in Roster)
+        {
+            Move(f.PerSecond, shift, 0L); Move(f.BossPerSecond, shift, 0L); Move(f.HealPerSecond, shift, 0L); Move(f.TakenPerSecond, shift, 0L);
+            // the Timeline tab's (your row): seconds before a later start fold into its second 0 (the lists drop them), so an
+            // ability's seconds still add up to its damage
+            foreach (var a in f.Abilities) { a.Seconds = MoveSeconds(a.Seconds, shift); a.BossSeconds = MoveSeconds(a.BossSeconds, shift); }
+        }
+    }
+
+    static Dictionary<int, long>? MoveSeconds(Dictionary<int, long>? d, int shift)
+    {
+        if (d == null || shift == 0) return d;
+        var m = new Dictionary<int, long>();
+        foreach (var (k, v) in d) { int at = Math.Max(0, k - shift); m[at] = m.GetValueOrDefault(at) + v; }
+        return m;
     }
     /// <summary>Gaps in the game's traffic during it.</summary>
     public int Gaps { get; set; }
@@ -664,6 +685,9 @@ public sealed class Fighter
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? HealPerSecond { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<long>? TakenPerSecond { get; set; }
+    /// <summary>Your biggest hits of a boss pull, biggest first, at most <see cref="TopHitsKept"/> (the Timeline tab's marks; your row only, 1.0.38).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<TopHit>? TopHits { get; set; }
+    public const int TopHitsKept = 5;
 
     /// <summary>Adds damage at its second to a per-second list (made on first use); the list.</summary>
     internal static List<long> AddAt(List<long>? list, int second, long amount)
@@ -721,15 +745,16 @@ public sealed class Fighter
     /// A share of damage by one ability (a damage over time is its own, negative skill): its damage, and its hits when they
     /// were counted. A share with no count adds no made-up hit, and its damage is left out of the average a hit.
     /// </summary>
-    public void AddAbility(int skill, long amount, int hits, bool boss = false)
+    public AbilityShare AddAbility(int skill, long amount, int hits, bool boss = false)
     {
         var a = Abilities.FirstOrDefault(x => x.Skill == skill);
         if (a == null) Abilities.Add(a = new AbilityShare { Skill = skill });
         a.Damage += amount;
         if (hits > 0) a.Hits += hits; else a.Uncounted += amount;
-        if (!boss) return;
+        if (!boss) return a;
         a.BossDamage += amount;
         if (hits > 0) a.BossHits += hits; else a.BossUncounted += amount;
+        return a;
     }
 
     /// <summary>The game's number for the class, when it came as one (0 = not); the class itself once it is paired (Parser/ClassNumbers.cs).</summary>
@@ -785,6 +810,33 @@ public sealed class AbilityShare
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, long>? KindMax { get; set; }
     /// <summary>The specialties the skill's hits named (Abilities.PicksOf, bits 1 to 5): a pick that changes none of its hits isn't seen.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Picks { get; set; }
+
+    // ---- the Timeline tab (Parser/PullTimeline.cs): your own row of a boss pull only (1.0.38); null on every other row and record ----
+    /// <summary>
+    /// The ability's damage in each second it did some (second from Encounter.Start → damage), to every target and to the boss:
+    /// added with <see cref="Damage"/> and <see cref="BossDamage"/> from the same hits, so each adds up to them exactly.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<int, long>? Seconds { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<int, long>? BossSeconds { get; set; }
+    /// <summary>Each cast as it landed (one per counted cast, so as many as <see cref="Casts"/>): when, and the damage and hits of its hits seen.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<CastMark>? CastLog { get; set; }
+}
+
+/// <summary>A cast of yours on the Timeline: seconds from the record's start (its first hit that landed), its hits' damage and their count.</summary>
+public sealed class CastMark
+{
+    [JsonPropertyName("t")] public double At { get; set; }
+    [JsonPropertyName("d")] public long Damage { get; set; }
+    [JsonPropertyName("n")] public int Hits { get; set; }
+}
+
+/// <summary>One of your biggest hits on the Timeline: seconds from the record's start, the skill, the damage, its kinds as they came (a crit only once Encounter.CritKey names one).</summary>
+public sealed class TopHit
+{
+    public double At { get; set; }
+    public int Skill { get; set; }
+    public long Amount { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string>? Kinds { get; set; }
 }
 
 /// <summary>Healing by one ability: healing done (HP as dealt), its effective part, the heals (ticks for a heal over time), and how many were on the healer.</summary>

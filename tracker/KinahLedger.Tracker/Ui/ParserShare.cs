@@ -21,6 +21,8 @@ public static class ParserShare
 {
     /// <summary>The views a picture can hold: the page's tabs, the hero, everything stacked, and a member's abilities (their inspect view).</summary>
     public const string Hero = "hero", Group = "group", Compare = "compare", Timeline = "timeline", Taken = "taken", All = "all", Abilities = "abilities";
+    /// <summary>The Timeline tab's view (Ui/ParserTimeline.cs): <see cref="Timeline"/> is the Graphs tab's, named so before the tab was.</summary>
+    public const string Track = "track";
 
     /// <summary>The views' width in the picture, in DIPs: the group's every column with room for a name and its tags ("Member 5 joined late left").</summary>
     public const double ContentWidth = 700;
@@ -35,13 +37,14 @@ public static class ParserShare
     static MemberView? MemberOf(FightView v, Parts p) => p.Member is long id ? v.Members.FirstOrDefault(m => m.F.Id == id && m.Abilities.Count > 0) : null;
 
     /// <summary>The page's tab as a view ("Group" is "group").</summary>
-    public static string ViewOfTab(string tab) => tab switch { "Compare" => Compare, "Timeline" => Timeline, "Taken" => Taken, _ => Group };
+    public static string ViewOfTab(string tab) => tab switch { "Compare" => Compare, "Timeline" => Timeline, "Track" => Track, "Taken" => Taken, _ => Group };
 
     /// <summary>A view the fight has something for (Timeline, Taken and Compare only once its record carries them).</summary>
     public static bool Has(FightView v, string view) => view switch
     {
         Compare => v.HasCompare,
         Timeline => v.HasTimeline && v.IsBossPull,
+        Track => v.HasPullTimeline,
         Taken => v.HasTaken,
         Group => v.Members.Count > 0,
         Abilities => v.Members.Any(m => m.Abilities.Count > 0),
@@ -60,7 +63,8 @@ public static class ParserShare
         Hero => L.T("Summary card"),
         Group => L.T("Group table"),
         Compare => L.T("Compare"),
-        Timeline => L.T("Timeline"),
+        Timeline => L.T("Graphs"),
+        Track => L.T("Timeline"),
         Taken => L.T("Damage taken"),
         Abilities => L.T("Abilities table"),
         _ => L.T("Everything"),
@@ -80,6 +84,7 @@ public static class ParserShare
         {
             Hero => ParserCommand.Hero(v, ctx, live, Array.Empty<FrameworkElement>()),
             Compare => ParserCommand.Compare(v, null, ctx),
+            Track => (FrameworkElement?)ParserTimeline.View(v, ctx, null, ContentWidth) ?? ParserCommand.Group(v, ctx, live, detail: !live),
             Timeline => ParserCommand.Timeline(v, ContentWidth - 34),   // the glass's sides and edges
             Taken => ParserCommand.Taken(v),
             // the member's card and their abilities, as the page shows them opened (no way back drawn)
