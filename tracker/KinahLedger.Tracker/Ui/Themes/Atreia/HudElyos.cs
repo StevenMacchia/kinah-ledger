@@ -47,6 +47,8 @@ sealed partial class HudElyos : ModernLook
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TacSketch _lineArt;
     readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 6, 14, 6) };
+    /// <summary>The Buddy's words: a dungeon run's head (inside the plate, over the figures) and the line itself.</summary>
+    readonly StackPanel _lineStack = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
@@ -106,7 +108,8 @@ sealed partial class HudElyos : ModernLook
         _lineSheenHost.Children.Add(_lineSheen);
         _lineWings = new TacSketch(DrawLineWings);
         _line.Children.Add(_lineWings);
-        _line.Children.Add(_lineArt); _line.Children.Add(_lineSheenHost); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
+        _lineStack.Children.Add(_runHeadLit); _lineStack.Children.Add(_lineBody);
+        _line.Children.Add(_lineArt); _line.Children.Add(_lineSheenHost); _line.Children.Add(_lineStack); _line.Children.Add(_lineAnchor);
         _fightArt = new TacSketch((dc, s) => PlateArt(dc, s, _opacity, crest: true, band: 4));
         _bigWingL = new TacSketch((dc, s) => DrawBigWing(dc, s, false)) { RenderTransform = new TransformGroup { Children = { _bigWingLScale, _bigWingLTurn } }, Opacity = 0 };
         _bigWingR = new TacSketch((dc, s) => DrawBigWing(dc, s, true)) { RenderTransform = new TransformGroup { Children = { _bigWingRScale, _bigWingRTurn } }, Opacity = 0 };
@@ -115,8 +118,7 @@ sealed partial class HudElyos : ModernLook
         Panel.SetZIndex(_bigWingL, -1); Panel.SetZIndex(_bigWingR, -1);
         _fight.Children.Add(_bigWingL); _fight.Children.Add(_bigWingR);
         _fight.RenderTransform = _fightShift;
-        _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
-        _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
+        _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
@@ -352,6 +354,7 @@ sealed partial class HudElyos : ModernLook
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudElyos.Run.cs)
         var rs = RunNow();
         _runHeadLit.Visibility = Visibility.Collapsed;
+        _lineBody.Margin = new Thickness(9, 6, 14, 6);
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
         {
@@ -745,7 +748,7 @@ sealed partial class HudElyos : ModernLook
         dc.Pop(); dc.Pop();
     }
 
-    /// <summary>Whether words sit just over the Buddy's plate: the run's head, or the timer chips moved up over it.</summary>
+    /// <summary>Whether words sit at the Buddy's top edge: the timer chips moved up over it, or a run's head inside its top.</summary>
     bool LineCovered => _runHeadLit.Visibility == Visibility.Visible || _timersUp.Visibility == Visibility.Visible;
 
     bool _lineCovered;

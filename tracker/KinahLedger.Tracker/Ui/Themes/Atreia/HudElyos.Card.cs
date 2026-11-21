@@ -115,11 +115,11 @@ sealed partial class HudElyos : IThemeCard
             foreach (var a in c.Abilities)
             {
                 var row = new Grid { Height = 21, Margin = new Thickness(-4, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
-                double of = a.OfTop;
+                double of = a.OfTop, figs = 46 + 56 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0) + 6;
                 row.Children.Add(new TacSketch((dc, s) => dc.DrawRectangle(Frozen(Mod.A(AbyssC, .55)), null, new Rect(0, 1, s.Width, s.Height - 2))));
                 var art = new TacSketch((dc, s) =>
                 {
-                    double bw = s.Width * Math.Clamp(of, 0, 1);
+                    double bw = Math.Max(0, s.Width - figs) * Math.Clamp(of, 0, 1);   // never under a figure
                     if (bw < .5) return;
                     var b = new Rect(0, 1, bw, s.Height - 2);
                     dc.DrawRectangle(Mod.Grad(true, (Mod.A(Mod.Mix(tone, WarmC, .25), .62), 0), (Mod.A(tone, .48), .5), (Mod.A(Mod.Mix(tone, AbyssC, .4), .55), 1)), null, b);

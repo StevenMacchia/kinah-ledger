@@ -48,7 +48,7 @@ sealed partial class HudElyos
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         TextBlock Pair(string w, string fig)
         {
-            var t = new TextBlock { FontFamily = Serif, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = GoldInk, VerticalAlignment = VerticalAlignment.Center };
+            var t = new TextBlock { FontFamily = Serif, FontSize = 13.5, FontWeight = FontWeights.Bold, Foreground = GoldHi, VerticalAlignment = VerticalAlignment.Center };
             System.Windows.Documents.Typography.SetCapitals(t, FontCapitals.SmallCaps);
             System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
             t.Inlines.Add(new System.Windows.Documents.Run(w + " "));
@@ -128,6 +128,7 @@ sealed partial class HudElyos
         string _cls = "\0";
         MeterMember? _m;
         double _bar;
+        Border? _healMark;
         int _lastRank;
 
 
@@ -207,7 +208,8 @@ sealed partial class HudElyos
             _marks.Clear();
             void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
             if (m.TopDps) { var t = Mark("★ " + L.T("DPS")); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
-            if (m.TopHeals) { var t = Mark("✚", MintC2); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
+            _healMark = null;
+            if (m.TopHeals) { var t = Mark("✚ " + L.T("Heal"), MintC2); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); _healMark = t; }
             if (m.Deaths > 0) { var d = F($"✕{m.Deaths}", 11, Coral, FontWeights.Bold); d.Tag = "deaths"; d.ToolTip = L.F(m.Deaths == 1 ? "{0} death" : "{0} deaths", m.Deaths); Add(d); }
             if (m.You) { var y = Mark(L.T("YOU"), filled: true); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
@@ -236,7 +238,14 @@ sealed partial class HudElyos
             double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0;
             double room = total - PadL - PadR - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
+            // the heal mark in full ("✚ Heal") unless the name would be cut for it: then its glyph alone
+            if (_healMark is { Child: TextBlock ht }) ht.Text = "✚ " + L.T("Heal");
             var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
+            if (_healMark is { Child: TextBlock hs } && _name.MaxWidth < TextW(_name, _name.Text) - .5)
+            {
+                hs.Text = "✚";
+                (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
+            }
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
             if (share != _shareOn || cols[5].Width.Value != (share ? _shareW : 0))
             {
@@ -338,12 +347,12 @@ sealed partial class HudElyos
         {
             var g = new DrawingGroup();
             var edge = Frz(new Pen(Frozen(Mod.A(AbyssC, .75)), .7));
-            double[] ang = { 10, 33, 58 }, len = { 14.5, 12.5, 10 }, wid = { 2.9, 2.6, 2.2 };
+            double[] ang = { 14, 38, 62 }, len = { 9.5, 8.5, 7 }, wid = { 2.2, 2, 1.7 };
             for (int side = -1; side <= 1; side += 2)
                 for (int i = 0; i < 3; i++)
                 {
                     double a = ang[i] * Math.PI / 180, l = len[i];
-                    var b = new Point(side * 2.6, 7.5);
+                    var b = new Point(side * 5.2, 7.5);
                     var d = new Vector(side * Math.Sin(a), -Math.Cos(a));
                     var n = new Vector(-d.Y, d.X) * side;   // towards the wing's outside and down
                     var tip = b + d * l;

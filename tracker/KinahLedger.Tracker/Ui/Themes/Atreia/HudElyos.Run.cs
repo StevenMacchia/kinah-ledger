@@ -19,14 +19,14 @@ sealed partial class HudElyos
     static RunInk? _ink;
     static RunInk Ink => _ink ??= new(Ivory, Soft, Quiet, Quiet, Mint2, Coral, GoldHi, GoldHi, 23, 10.5);
 
-    /// <summary>The run's head over the plate, lined up with the words on it (collapsed out of a run).</summary>
+    /// <summary>The run's head inside the plate, over the words on it (collapsed out of a run).</summary>
     readonly TextBlock _runHead = RunHead();
-    readonly Border _runHeadLit;
+    readonly Border _runHeadLit = new() { Visibility = Visibility.Collapsed };
 
     static TextBlock RunHead()
     {
         var t = Tt("", 11.5, GoldHi, FontWeights.Bold, Serif);
-        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(10, 0, 0, 3);
+        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(11, 7, 14, 0);
         return t;
     }
 
@@ -54,9 +54,11 @@ sealed partial class HudElyos
         _lineBody.Children.Add(words);
         if (strip != null) { strip.Margin = new Thickness(14, 0, 0, 0); _lineBody.Children.Add(strip); }
 
-        ModernRun.Head(_runHead, s, FightWidth - 10 - _runHead.Margin.Left, Ink);
+        ModernRun.Head(_runHead, s, FightWidth - 10 - _runHead.Margin.Left - _runHead.Margin.Right, Ink);
+        _runHeadLit.Child ??= _runHead;
         _runHeadLit.Opacity = _dim ? .62 : 1;
         _runHeadLit.Visibility = Visibility.Visible;
+        _lineBody.Margin = new Thickness(9, 3, 14, 6);
         LineAboveChanged();
     }
 }
