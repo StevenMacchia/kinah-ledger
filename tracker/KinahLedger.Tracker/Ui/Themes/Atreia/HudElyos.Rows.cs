@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using KinahLedger.Parser;
 using static KinahLedger.Ui.HudKit;
 
@@ -25,10 +26,21 @@ sealed partial class HudElyos
     /// <summary>A figure column's width: the widest of <paramref name="forms"/>, the block's margins and a pixel of air.</summary>
     static double FigCol(TextBlock fig, params string[] forms) => forms.Max(f => TextW(fig, f)) + fig.Margin.Left + fig.Margin.Right + 1;
 
-    /// <summary>A member's bar, 0 to 1, against the fight's top (by Combat Power before any damage).</summary>
-    static double BarOf(MeterMember m, MeterContext c) => c.E.BarOf(m.F);   // against the top member's: the top bar full, the rest in proportion (2026-11-20)
+    /// <summary>A member's bar, 0 to 1, against the fight's top (the top bar full, the rest in proportion).</summary>
+    static double BarOf(MeterMember m, MeterContext c) => m.CpOnly ? 0 : c.E.BarOf(m.F);
 
-    /// <summary>The fight's foot under its hairline: "Total 622.4M" at the left, the group's word and figure at the right, the AVG mark on a held average.</summary>
+    /// <summary>
+    /// A rank in Roman numerals (I to XX), else in figures. The letters are set apart by hair spaces, as numerals cut in
+    /// stone are; that also keeps "III" or "VIII" from reading as an English word to the language check (LangCheck).
+    /// </summary>
+    static string Roman(int n)
+    {
+        if (n < 1 || n > 20) return n.ToString(CultureInfo.InvariantCulture);
+        string[] ones = { "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX" };
+        return string.Join(" ", ((n >= 10 ? "X" : "") + (n >= 20 ? "X" : "") + ones[n % 10]).ToCharArray());
+    }
+
+    /// <summary>The fight's foot after the gold rule: "Total 2.03M" at the left, the group's word and figure at the right, the AVG mark on a held average.</summary>
     FrameworkElement Foot(Encounter e, DateTime now)
     {
         var (total, word, group, held) = FootOf(e, now);
@@ -36,66 +48,86 @@ sealed partial class HudElyos
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         TextBlock Pair(string w, string fig)
         {
-            var t = new TextBlock { FontFamily = Mod.Face, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), VerticalAlignment = VerticalAlignment.Center };
+            var t = new TextBlock { FontFamily = Serif, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = GoldInk, VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Documents.Typography.SetCapitals(t, FontCapitals.SmallCaps);
             System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
             t.Inlines.Add(new System.Windows.Documents.Run(w + " "));
-            t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = White, FontSize = 12 });
+            t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontFamily = Fig, FontWeight = FontWeights.SemiBold, Foreground = Ivory, FontSize = 13 });
             return t;
         }
         var tp = Pair(L.T("Total"), total);
-        EnergyMark.After(tp, 11, Frozen(Mod.A(Colors.White, .72)));   // Odyle Energy (Ui/EnergyMark.cs)
+        EnergyMark.After(tp, 11, Frozen(Mod.A(IvoryC, .72)));   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(tp);
-        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (word.Length > 0) right.Children.Add(Pair(word, group));
         if (held)
         {
-            var avg = Mark(L.T("AVG"), size: 8.5); avg.Tag = "avg-badge"; avg.ToolTip = L.T(Encounter.AvgBadge); avg.Margin = new Thickness(5, 0, 0, 0);
+            var avg = Mark(L.T("AVG"), size: 8.5); avg.Tag = "avg-badge"; avg.ToolTip = L.T(Encounter.AvgBadge); avg.Margin = new Thickness(6, 0, 0, 0);
             right.Children.Add(avg);
         }
         Grid.SetColumn(right, 1); g.Children.Add(right);
-        return AsFoot(Lit(g), e, now);
+        return AsFoot(g, e, now);
     }
 
-    /// <summary>The line between the party and you pinned below it: "2 MORE", small and quiet.</summary>
+    /// <summary>The line between the party and you pinned below it: "2 more" in the serif's gold capitals between two fine gold lines.</summary>
     static FrameworkElement GapLine(int left)
     {
-        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "·", 9, Frozen(Mod.A(Colors.White, .82)), FontWeights.SemiBold);
-        t.HorizontalAlignment = HorizontalAlignment.Center;
-        var lit = Lit(t);
-        lit.HorizontalAlignment = HorizontalAlignment.Center;
-        return lit;
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        FrameworkElement Line(bool toLeft) => new Border
+        {
+            Width = 22, Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 1, 6, 0),
+            Background = toLeft ? Lin(new Point(1, 0), new Point(0, 0), (Mod.A(GoldHiC, .6), 0), (Mod.A(GoldHiC, 0), 1)) : Lin(new Point(0, 0), new Point(1, 0), (Mod.A(GoldHiC, .6), 0), (Mod.A(GoldHiC, 0), 1)),
+        };
+        sp.Children.Add(Line(true));
+        sp.Children.Add(Caps(left > 0 ? L.F("{0} more", left) : "◆", 10, Frozen(Mod.A(GoldHiC, .85))));
+        sp.Children.Add(Line(false));
+        return sp;
     }
 
     /// <summary>
-    /// One member as a soft class wash fading out to the right (the mock-up's Fade row): the wash runs from the row's left for
-    /// the member's part of the top (rounded at its left, ~62% colour, ~38% at 70% of its length, then gone). On it, straight
-    /// over the game in shaded white: the rank, the class's art in a thin white ring, the name, Combat Power small, the marks
-    /// (★ DPS, a healer's ✚, deaths, YOU), a healer's healing a second in mint, the DPS big and the share small at the right.
-    /// You: a thin white bar at the row's left edge. Short of room the CP goes first, then the share; a name keeps at least
-    /// ten characters; a figure is never cut (Mod.Fit).
+    /// One member on the Elyos plate: a dark slot the width of the row, the member's bar in their class's colour washed with
+    /// warm light from above, a gold edge along its top and an ivory leading edge; on it the rank in gold Roman numerals (the
+    /// leader's between wings of light), the class's art in a gold ring, the name in ivory with Combat Power small after it and
+    /// the marks (★ DPS, a healer's ✚, deaths, YOU), a healer's healing a second in mint, the DPS big and the share in gold at
+    /// the right. You: a gold edge at the row's left and a gold hairline round it. A healer's share of the healing a mint line
+    /// along the foot (Settings' heal bars). Short of room the CP goes first, then the share; a name keeps at least ten
+    /// characters; a figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class FadeRow : IThemeRow
+    sealed class ElyosRow : IThemeRow
     {
-        public const double H = 29, Pitch = 32;
-        const double Pad = 8;
+        public const double H = 26, Pitch = 29;
+        const double PadL = 2, RankW = 25, IconCol = 25, PadR = 7;
         readonly Grid _root = new() { Height = H };
-        readonly TacSketch _wash;
-        readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad, 0) };
-        readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .74)), FontWeights.SemiBold),
-            _heal = Tt("", 11, Mint2, FontWeights.Bold), _dps = Tt("", 16.5, White, FontWeights.Bold), _share = Tt("", 10.5, Frozen(Mod.A(Colors.White, .88)), FontWeights.SemiBold),
-            _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
+        readonly TacSketch _art, _wingArt;
+        // the moments' parts, moved only by their transforms and opacity: the glint's band, the wings' scale, the flash
+        readonly Canvas _glintHost = new() { IsHitTestVisible = false, ClipToBounds = false };
+        readonly System.Windows.Shapes.Rectangle _glintBand = new() { Width = 42, Height = H, Fill = GlintBrush, Opacity = 0, IsHitTestVisible = false };
+        readonly TranslateTransform _glintShift = new();
+        readonly ScaleTransform _wingScale = new(1, 1, PadL + RankW / 2, H / 2);
+        readonly System.Windows.Shapes.Ellipse _flash = new()
+        {
+            Width = 28, Height = 24, Fill = FlashBrush, Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(PadL + RankW / 2 - 14, H / 2 - 12, 0, 0),
+        };
+        Brush? _body;
+        Color _bodyFor;
+        readonly Grid _words = new() { Margin = new Thickness(PadL, 0, PadR, 0) };
+        readonly TextBlock _rank = Tt("", 12.5, GoldHi, FontWeights.Bold, Serif), _name = Tt("", 13, Ivory, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(IvoryC, .86)), FontWeights.SemiBold),
+            _heal = F("", 11.5, Mint2), _dps = F("", 17, Ivory), _share = F("", 11, Frozen(Color.FromRgb(0xF2, 0xDC, 0xA2)), FontWeights.Medium),
+            _dmg = F("", 11.5, Soft, FontWeights.Medium), _crit = F("", 11, Soft, FontWeights.Medium);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        readonly Border _iconHost = new() { Width = 19, Height = 19, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
         string _cls = "\0";
         MeterMember? _m;
         double _bar;
+        int _lastRank;
         bool _expanded, _shareOn = true;
 
         public FrameworkElement Root => _root;
 
-        public FadeRow()
+        public ElyosRow()
         {
             _dps.Tag = "row-dps"; _share.Tag = "row-share"; _heal.Tag = "heal-figures"; _cp.Tag = "cp";
             _dps.HorizontalAlignment = _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
@@ -104,17 +136,22 @@ sealed partial class HudElyos
             // the columns: rank, the class art, the name's line (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
             _dpsW = FigCol(_dps, "888.8K") + 4; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
             _dmgW = FigCol(_dmg, "888.88M") + 8; _critW = FigCol(_crit, "88%") + 8;
-            foreach (var w in new[] { 17.0, 25, double.NaN, 0, _dpsW, _shareW, 0, 0 })
+            foreach (var w in new[] { RankW, IconCol, double.NaN, 0, _dpsW, _shareW, 0, 0 })
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
-            _wash = new TacSketch(Draw);
-            _root.Children.Add(_wash);
-            _rank.HorizontalAlignment = HorizontalAlignment.Center;
+            _art = new TacSketch(Draw);
+            _wingArt = new TacSketch(DrawWings) { RenderTransform = _wingScale };
+            _glintBand.RenderTransform = new TransformGroup { Children = { new SkewTransform(-24, 0, 0, H / 2), _glintShift } };
+            _glintHost.Children.Add(_glintBand);
+            _root.Children.Add(_art); _root.Children.Add(_glintHost); _root.Children.Add(_flash); _root.Children.Add(_wingArt);
+            _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.Margin = new Thickness(0, 0, 0, 1);
             Put(_rank, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
-            _root.Children.Add(Lit(_words));
+            // one tight shade under all the row's words, so they read on any class colour
+            _words.Effect = new DropShadowEffect { Color = Color.FromRgb(0x02, 0x05, 0x10), Direction = 270, ShadowDepth = 1, BlurRadius = 3, Opacity = .95 };
+            _root.Children.Add(_words);
             _root.SizeChanged += (_, _) => Fit();
         }
 
@@ -122,6 +159,8 @@ sealed partial class HudElyos
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
+            bool climbed = !fresh && c.Moves && _lastRank > 0 && m.Rank < _lastRank && m.Rank > 1;
+            _lastRank = m.Rank;
             _m = m;
             if (_expanded != c.Expanded)
             {
@@ -129,12 +168,20 @@ sealed partial class HudElyos
                 _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            // the rank in Roman numerals, a smaller size for a long one so it keeps its column
+            var rk = Roman(m.Rank);
+            if (_rank.Text != rk)
+            {
+                _rank.Text = rk;
+                _rank.FontSize = 12.5;
+                while (_rank.FontSize > 8 && TextW(_rank, rk) > RankW - 3) _rank.FontSize -= .5;
+            }
+            _rank.Foreground = m.Rank == 1 && !m.CpOnly ? Frozen(Color.FromRgb(0xFF, 0xF4, 0xD0)) : GoldHi;
             if (m.Class != _cls)
             {
                 _cls = m.Class;
-                var icon = ThemeText.Icon(m.Class, 17, m.Name);
-                if (icon is Border b) { b.BorderBrush = Frozen(Mod.A(Colors.White, .75)); b.BorderThickness = new Thickness(1); }
+                var icon = ThemeText.Icon(m.Class, 19, m.Name);
+                if (icon is Border b) { b.BorderBrush = Leaf; b.BorderThickness = new Thickness(1.2); }
                 _iconHost.Child = icon;
             }
             _name.Text = m.Name;
@@ -144,20 +191,22 @@ sealed partial class HudElyos
             _marks.Clear();
             void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
             if (m.TopDps) { var t = Mark("★ " + L.T("DPS")); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
-            if (m.TopHeals) { var t = Mark("✚", MarkMint, MarkMintC); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
-            if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10, Coral, FontWeights.Bold); d.Tag = "deaths"; Add(d); }
+            if (m.TopHeals) { var t = Mark("✚", MintC2); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
+            if (m.Deaths > 0) { var d = F($"✕{m.Deaths}", 11, Coral, FontWeights.Bold); d.Tag = "deaths"; d.ToolTip = L.F(m.Deaths == 1 ? "{0} death" : "{0} deaths", m.Deaths); Add(d); }
             if (m.You) { var y = Mark(L.T("YOU"), filled: true); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _dps.Text = m.Figure;
+            _dps.FontSize = m.CpOnly ? 14.5 : 17;
             // a wider figure (Combat Power before the first hit, "167,548") widens its column: never a digit cut
             _words.ColumnDefinitions[4].Width = new GridLength(Math.Max(_dpsW, TextW(_dps, m.Figure) + 4));
             _share.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
-            SlideBar(_wash, c, "bar", BarOf(m, c), v => { _bar = v; _wash.InvalidateVisual(); });
-            _wash.InvalidateVisual();
+            SlideBar(_art, c, "bar", BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); });
+            _art.InvalidateVisual(); _wingArt.InvalidateVisual();
+            if (climbed) Glint(0);
         }
 
         /// <summary>The crowding rule (Mod.Fit): the CP goes first, then the share; the name keeps at least ten characters.</summary>
@@ -167,7 +216,7 @@ sealed partial class HudElyos
             if (total <= 0) return;
             var cols = _words.ColumnDefinitions;
             double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0;
-            double room = total - 2 * Pad - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
+            double room = total - PadL - PadR - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
             var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
@@ -179,20 +228,146 @@ sealed partial class HudElyos
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
         }
 
+
         void Draw(DrawingContext dc, Size s)
         {
-            if (_m is not { } m || s.Width < 20) return;
-            double fx = s.Width * Math.Clamp(_bar, 0, 1);
-            var c = m.ClassColor;
-            // the wash: the class's colour from the left, fading out by the end of the member's part
-            if (fx > .5) Wash(dc, new Rect(0, 0, fx, s.Height), c, .62, .38, 6);
-            // you: a thin white bar at the row's left edge, inside the wash's rounded corner
+            if (_m is not { } m || s.Width < 30) return;
+            var r = new Rect(0, 0, s.Width, s.Height);
+            var tone = m.ClassColor;
+            // the slot: darker than the plate, a royal lift for you
+            dc.DrawRectangle(m.You ? YouSlot : Slot, null, r);
+            double fx = Math.Round(s.Width * Math.Clamp(_bar, 0, 1), 1);
+            if (fx > .5)
+            {
+                var bar = new Rect(0, 0, fx, s.Height);
+                // the body: the class's colour, lit warm at the top and deepening at the foot (its brush made once per class)
+                if (_body == null || _bodyFor != tone) { _bodyFor = tone; _body = Mod.Grad(true, (Mod.A(Mod.Mix(tone, WarmC, .3), .92), 0), (Mod.A(tone, .86), .45), (Mod.A(Mod.Mix(tone, AbyssC, .4), .9), 1)); }
+                dc.DrawRectangle(_body, null, bar);
+                // a shade at its left, under the rank and the name
+                dc.DrawRectangle(ShadeL, null, new Rect(0, 0, Math.Min(fx, 150), s.Height));
+                // a shade at its right, under the figures, so they read wherever a bright bar ends
+                double sx = Math.Max(0, s.Width - 140);
+                if (fx > sx) { dc.PushClip(new RectangleGeometry(bar)); dc.DrawRectangle(ShadeR, null, new Rect(sx, 0, s.Width - sx, s.Height)); dc.Pop(); }
+                // the warm light over its top half
+                dc.DrawRectangle(WarmTop, null, bar);
+                // the leading edge: a soft glow in the warm light, a fine ivory line fading out downwards (never a hard
+                // stroke through a figure that sits over it), and a bead of light where it meets the gold top edge
+                double gw = Math.Min(14, fx);
+                dc.DrawRectangle(EdgeGlow, null, new Rect(fx - gw, 0, gw, s.Height));
+                dc.DrawRectangle(EdgeFade, null, new Rect(Math.Max(0, fx - 1), 0, Math.Min(1, fx), s.Height * .6));
+                dc.DrawRectangle(Bead, null, new Rect(Math.Max(0, fx - 2.5), 0, Math.Min(2.5, fx), 2));
+                // the gold edge along its top
+                dc.DrawRectangle(GoldTop, null, new Rect(0, 0, fx, 1.2));
+            }
+            // a healer's share of the group's healing as a mint line along the foot (Settings' heal bars)
+            if (ParserRows.HealBarsPref && m.HealShare > 0)
+                dc.DrawRectangle(HealLine, null, new Rect(0, s.Height - 2, Math.Max(3, s.Width * Math.Clamp(m.HealShare, 0, 1)), 2));
+            // you: a gold edge at the row's left, a gold hairline round it
             if (m.You)
             {
-                dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Max(fx, 12) + 6, s.Height), 6, 6));
-                dc.DrawRectangle(White, null, new Rect(0, 0, 3, s.Height));
-                dc.Pop();
+                dc.DrawRectangle(null, YouRim, new Rect(.5, .5, s.Width - 1, s.Height - 1));
+                dc.DrawRectangle(GoldFill, null, new Rect(0, 0, 3, s.Height));
             }
+        }
+
+        /// <summary>
+        /// The leader's wings of light (rank I, once there is damage): the frozen pair (<see cref="Wings"/>) at the numeral. They
+        /// unfurl by their scale alone (<see cref="Crown"/>).
+        /// </summary>
+        void DrawWings(DrawingContext dc, Size s)
+        {
+            if (_m is not { Rank: 1, CpOnly: false, Pvp: false }) return;
+            dc.PushTransform(WingsAt);
+            dc.DrawDrawing(Wings);
+            dc.Pop();
+        }
+
+        // the row's brushes, made once
+        static readonly Brush Slot = Frozen(Mod.A(AbyssC, .6)), YouSlot = Mod.Grad(false, (Mod.A(RoyalC, .95), 0), (Mod.A(NightC, .8), 1)),
+            ShadeL = Lin(new Point(0, 0), new Point(1, 0), (Mod.A(AbyssC, .5), 0), (Mod.A(AbyssC, 0), 1)),
+            ShadeR = Lin(new Point(0, 0), new Point(1, 0), (Mod.A(AbyssC, 0), 0), (Mod.A(AbyssC, .36), .6), (Mod.A(AbyssC, .42), 1)),
+            WarmTop = Mod.Grad(true, (Mod.A(WarmC, .2), 0), (Mod.A(WarmC, 0), .5)), EdgeGlow = Mod.Grad(false, (Mod.A(WarmC, 0), 0), (Mod.A(WarmC, .3), 1)),
+            Bead = Frozen(Color.FromRgb(0xFF, 0xF8, 0xE0)), GoldTop = Lin(new Point(0, 0), new Point(1, 0), (GoldMidC, 0), (GoldHiC, .5), (Color.FromRgb(0xFF, 0xF2, 0xCC), 1)),
+            HealLine = Frozen(Mod.A(MintC2, .95)),
+            GlintBrush = Lin(new Point(0, 0), new Point(1, 0), (Mod.A(WarmC, 0), 0), (Mod.A(WarmC, .5), .38), (Mod.A(Colors.White, .78), .58), (Mod.A(Colors.White, 0), 1)),
+            FlashBrush = MakeFlash();
+        static readonly Pen YouRim = Frz(new Pen(Frozen(Mod.A(GoldHiC, .6)), 1));
+        static readonly Transform WingsAt = MakeAt();
+        static Transform MakeAt() { var t = new TranslateTransform(PadL + RankW / 2, H / 2); t.Freeze(); return t; }
+        static Brush MakeFlash()
+        {
+            var b = new RadialGradientBrush(Mod.A(Colors.White, .85), Mod.A(WarmC, 0));
+            b.GradientStops.Add(new GradientStop(Mod.A(GoldHiC, .5), .45));
+            b.Freeze();
+            return b;
+        }
+
+        /// <summary>
+        /// The wings, drawn once: three feathers each side of the numeral's centre (0, 0), sweeping up and out in gold with a dark
+        /// line round each so they read on a bright bar.
+        /// </summary>
+        static readonly Drawing Wings = MakeWings();
+        static Drawing MakeWings()
+        {
+            var g = new DrawingGroup();
+            var edge = Frz(new Pen(Frozen(Mod.A(AbyssC, .75)), .7));
+            double[] ang = { 10, 33, 58 }, len = { 14.5, 12.5, 10 }, wid = { 2.9, 2.6, 2.2 };
+            for (int side = -1; side <= 1; side += 2)
+                for (int i = 0; i < 3; i++)
+                {
+                    double a = ang[i] * Math.PI / 180, l = len[i];
+                    var b = new Point(side * 2.6, 7.5);
+                    var d = new Vector(side * Math.Sin(a), -Math.Cos(a));
+                    var n = new Vector(-d.Y, d.X) * side;   // towards the wing's outside and down
+                    var tip = b + d * l;
+                    var feather = new StreamGeometry();
+                    using (var x = feather.Open())
+                    {
+                        x.BeginFigure(b, true, true);
+                        x.QuadraticBezierTo(b + d * (l * .55) - n * wid[i], tip, true, false);
+                        x.QuadraticBezierTo(b + d * (l * .45) + n * (wid[i] * .6), b, true, false);
+                    }
+                    feather.Freeze();
+                    g.Children.Add(new GeometryDrawing(GoldFill, edge, feather));
+                }
+            g.Freeze();
+            return g;
+        }
+
+        static readonly LinearGradientBrush EdgeFade = Lin(new Point(0, 0), new Point(0, 1), (Mod.A(IvoryC, .9), 0), (Mod.A(IvoryC, 0), 1));
+
+        /// <summary>
+        /// A sunlit glint along this row's bar, after <paramref name="delay"/> ms (a run down the meter): a slanted band of
+        /// gold-white light (one frozen brush) crossing the bar, moved by its transform and faded by its opacity, clipped once
+        /// to the bar as it stood when the glint began.
+        /// </summary>
+        public void Glint(double delay)
+        {
+            const double Ms = 620;
+            double fx = _root.ActualWidth * Math.Clamp(_bar, 0, 1);
+            if (fx < 6) return;
+            var clip = new RectangleGeometry(new Rect(0, 0, fx, H)); clip.Freeze();
+            _glintHost.Clip = clip;
+            double total = delay + Ms;
+            Motion.Play(_glintBand, total, p =>
+            {
+                double l = Math.Clamp((p * total - delay) / Ms, 0, 1);
+                _glintShift.X = -50 + (fx + 70) * Out(l);
+                _glintBand.Opacity = l is > 0 and < 1 ? Math.Sin(Math.PI * l) : 0;
+            }, () => _glintBand.Opacity = 0);
+        }
+
+        /// <summary>The wings unfurl round the numeral (this row just took the lead): they spread out from the middle with a flash of light behind.</summary>
+        public void Crown()
+        {
+            Motion.Play(_wingArt, 950, p =>
+            {
+                double k = Back(Seg(p, 0, .7), 1.6);
+                _wingScale.ScaleX = .08 + .92 * k;
+                _wingScale.ScaleY = .5 + .5 * Math.Min(1.08, k);
+                _wingArt.Opacity = Math.Clamp(p / .25, 0, 1);
+                _flash.Opacity = Math.Sin(Math.PI * Seg(p, .1, .8));
+            }, () => { _wingScale.ScaleX = _wingScale.ScaleY = 1; _wingArt.Opacity = 1; _flash.Opacity = 0; });
         }
     }
 }
