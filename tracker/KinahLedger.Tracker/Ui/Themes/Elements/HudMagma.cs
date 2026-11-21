@@ -592,7 +592,7 @@ sealed partial class HudMagma : ModernLook
         Motion.Play(_fight, 480, t =>
         {
             double k = Out(t);
-            _fightShift.Y = 6 * (1 - k);
+            _fightShift.Y = 2.5 * (1 - k);   // a short rise: the drips under the slab stay inside the window
             _fightBody.Opacity = k;
         }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
         if (Meter is { Members.Count: > 0 } m && m.RowOf(m.Members[0].Id) is MagmaRow top) top.Rise();

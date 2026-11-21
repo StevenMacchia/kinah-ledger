@@ -154,7 +154,7 @@ sealed partial class HudMagma : IThemeCard
 
         // the ground: one basalt slab with its cracks
         var card = new Grid { Margin = new Thickness(4, 4, 10, 14) };
-        card.Children.Add(new TacSketch((dc, s) => Slab(dc, s, .97, 41, river: true)));
+        card.Children.Add(new TacSketch((dc, s) => Slab(dc, s, .97, 41, river: true, drip: false)));
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);

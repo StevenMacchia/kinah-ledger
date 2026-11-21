@@ -72,6 +72,37 @@ sealed partial class HudMagma
 
     static readonly Dictionary<(int, int, int), (Geometry Shape, Geometry Cracks)> Slabs = new();
     static readonly Dictionary<(int, int, int), (Brush Melt, Geometry Rafts)> Rivers = new();
+    static readonly Dictionary<(int, int, int), Geometry> Drips = new();
+
+    /// <summary>The river spilling over a slab's foot: a few molten drips hanging under it (made once; at most <see cref="DripH"/> below).</summary>
+    static Geometry DripsOf(Size s, int seed)
+    {
+        var key = ((int)Math.Round(s.Width), (int)Math.Round(s.Height), seed);
+        if (Drips.TryGetValue(key, out var hit)) return hit;
+        if (Drips.Count > 64) Drips.Clear();
+        var rnd = new Random(seed * 911 + key.Item1);
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            int n = Math.Max(2, (int)(s.Width / 90));
+            for (int i = 0; i < n; i++)
+            {
+                double x = 18 + (s.Width - 36) * (i + .2 + rnd.NextDouble() * .6) / n, len = 2.5 + rnd.NextDouble() * (DripH - 3.5), rw = 2.3 + rnd.NextDouble() * 1.3;
+                double top = s.Height - 1.6, tip = s.Height - 1 + len;
+                // a teardrop: wide where it leaves the river, narrowing, a round bead at its tip
+                c.BeginFigure(new Point(x - rw - 1.2, top), true, true);
+                c.BezierTo(new Point(x - rw * .5, top + .6), new Point(x - rw * .55, tip - rw * 1.2), new Point(x - rw * .9, tip - rw * .4), true, true);
+                c.ArcTo(new Point(x + rw * .9, tip - rw * .4), new Size(rw * .95, rw * .95), 0, true, SweepDirection.Counterclockwise, true, true);
+                c.BezierTo(new Point(x + rw * .55, tip - rw * 1.2), new Point(x + rw * .5, top + .6), new Point(x + rw + 1.2, top), true, true);
+            }
+        }
+        g.Freeze();
+        Drips[key] = g;
+        return g;
+    }
+
+    /// <summary>How far the drips hang under a slab at most (inside the look's margin, so never past the window).</summary>
+    const double DripH = 5;
 
     /// <summary>
     /// The lava river a slab sits in (made once for a size and seed): a band of melt along its foot, mottled from deep red to
@@ -227,7 +258,7 @@ sealed partial class HudMagma
     /// <paramref name="heat"/> 0..1 flares the cracks and the foot's glow (a moment); <paramref name="tint"/> turns the
     /// cracks' fire to a colour (a rare drop's grade); <paramref name="ash"/> cools them (a wipe, a pause).
     /// </summary>
-    static void Slab(DrawingContext dc, Size s, double alpha, int seed, double heat = 0, Color? tint = null, bool ash = false, bool cracks = true, bool river = false)
+    static void Slab(DrawingContext dc, Size s, double alpha, int seed, double heat = 0, Color? tint = null, bool ash = false, bool cracks = true, bool river = false, bool drip = true)
     {
         if (s.Width < 8 || s.Height < 8) return;
         var (shape, crack) = SlabOf(s, seed);
@@ -260,6 +291,12 @@ sealed partial class HudMagma
         }
         dc.Pop();
         dc.DrawGeometry(null, RimPen, shape);
+        if (river && drip && s.Height > 20 && !ash)
+        {
+            // the river spilling over the slab's foot: molten drips hanging under it
+            var drips = DripsOf(s, seed);
+            dc.DrawGeometry(Mod.Grad(true, (LavaHotC, 0), (LavaC, .45), (Mod.Mix(LavaRedC, LavaYelC, .25), 1)), Mod.P(Frozen(Color.FromArgb(0xC0, 0x2A, 0x0A, 0x02)), .6), drips);
+        }
     }
 
     /// <summary>
