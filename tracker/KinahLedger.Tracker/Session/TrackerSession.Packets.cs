@@ -52,6 +52,8 @@ public sealed partial class TrackerSession
     readonly List<DateTime> _rankRises = new();
     /// <summary>How far from a Rank Points rise a currency change is the same kill's pay (one update; the parts can come a few tenths apart).</summary>
     const double KillPaySeconds = 1;
+    /// <summary>The most Abyss Points a kill pays with no Rank Points beside it (a kill's are tens to a few hundred).</summary>
+    const long KillAbyssPointsMax = 1_000;
     /// <summary>A change that came with a rise of the player's Rank Points: a kill's pay, whether or not its kill was told yet.</summary>
     bool KillPay(DateTime at) => _rankRises.Any(r => Math.Abs((r - at).TotalSeconds) <= KillPaySeconds);
 
@@ -133,6 +135,12 @@ public sealed partial class TrackerSession
             string? why = InBase ? $"in a base ({Zone})"
                 : MarketOpen?.Invoke(c.At) == true ? "with the Market open"
                 : c.Delta > PacketPickupMax ? "at once"
+                // more bound Kinah or Abyss Points than a kill pays, with no Rank Points beside it: a quest's turn-in or a reward's,
+                // whatever was killed around it (2026-11-20 11:10 to 11:17, Western Altamia: four quests' 50,000 to 80,000 bound
+                // Kinah and 2,500 Abyss Points each, counted as pickups because kills were going on; 13:43:14, 1,260 Abyss Points
+                // a second before the "Rewards Collected" screen)
+                : Instances.Current == null && !KillPay(c.At) && (c.What == CurrencyKind.BoundKinah && c.Delta > SessionEngine.AbyssKillKinaMax
+                    || c.What == CurrencyKind.AbyssPoints && c.Delta > KillAbyssPointsMax) ? "more than a kill pays, with no Rank Points beside it (a quest's or a reward's)"
                 : nearKill || screenSaw || Instances.Current != null ? null
                 : waited ? "with no kill, gather or pickup line around it"
                 : "";
