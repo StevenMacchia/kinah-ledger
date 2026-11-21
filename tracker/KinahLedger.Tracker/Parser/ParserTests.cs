@@ -2733,6 +2733,9 @@ public static class ParserTests
         // the Timeline tab (Parser/PullTimeline.cs): a made-up pull, then Steven's recorded boss fights
         PullTimelineTests.Run(Check, t, () => New(), Me, Ally, Recording, path => Replay(path, hits: true));
 
+        // the PB ghost (Parser/PbGhost.cs): made-up pulls, then Steven's recorded boss fights raced against their best
+        PbGhostTests.Run(Check, t, Recording, (path, tick) => Replay(path, hits: true, tick: tick));
+
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }

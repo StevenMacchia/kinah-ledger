@@ -76,7 +76,7 @@ sealed partial class HudModernGlass
     /// first, then the marks shorten to their glyphs, then the name trims (never below ten letters), then the share column
     /// goes for every row; a figure is never cut.
     /// </summary>
-    sealed class GlassRow : IThemeRow
+    sealed class GlassRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double PadX = 8, RankW = 14, Gap1 = 4, IconW = 20, Gap2 = 6, ShareW = 33, DmgW = 54, CritW = 36;
@@ -96,6 +96,9 @@ sealed partial class HudModernGlass
         bool _expanded;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The bar fills the pill: Draw's rect (.5 in from every edge), in the art's coordinates.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(.5, .5, _art.ActualWidth - 1, _art.ActualHeight - 1));
 
         public GlassRow(GlassFit fit)
         {

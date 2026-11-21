@@ -44,6 +44,15 @@ public static partial class WpfApp
         if (main != "parser") w.ShowPartForTest("Home");
         if (opts.ContainsKey("separate")) prefs.InKinah = false;
         w.ApplyMeterExpandedForTest();
+        // --ghost on|off: the PB ghost racing a best of about the fed pull's pace (Parser/PbGhost.cs), or none at all
+        string ghost = Opt("ghost", "");
+        if (ghost.Length > 0)
+        {
+            PbGhost.Shown = ghost == "on";
+            var curve = FlatGhost(party * 12_000 / (every / 1000.0) / party * 0.97, party * 12_000 / (every / 1000.0) * 0.98, seconds: 5000);
+            PbGhost.Forget();
+            PbGhost.Source = e => (curve, curve.Dps);
+        }
         var hud = new HudWindow(null, look, still: still) { Left = -12000, Top = -12000, ShowActivated = false };
         hud.SetScale(scale);
         // the Kinah line as the window has it, shown (the game in front: the window says "hidden" while it isn't)
@@ -124,7 +133,7 @@ public static partial class WpfApp
                 var after = Threads(uiTid, feederTid);
                 var rows = after.Select(kv => (Label: kv.Value.Label, Ms: kv.Value.Ms - (before.TryGetValue(kv.Key, out var b) ? b.Ms : 0)))
                     .GroupBy(r => r.Label).Select(g => (Label: g.Key, Cores: g.Sum(r => r.Ms) / 1000 / span)).OrderByDescending(r => r.Cores).ToList();
-                Console.WriteLine($"meter-load: hud {look} at {scale:0.##}, meter {prefs.Look}, party {party}, a hit each {every} ms a member, heals {heals}, still {still}, main {main}; measured {span:0.0} s");
+                Console.WriteLine($"meter-load: hud {look} at {scale:0.##}, meter {prefs.Look}, party {party}, a hit each {every} ms a member, heals {heals}, still {still}, main {main}, PB ghost {(PbGhost.Shown ? "on" : "off")}{(w.ParserLiveForTest is { } gl && PbGhost.Of(gl, DateTime.UtcNow) is { } gp ? $" ({PbGhost.Words(gp)})" : "")}; measured {span:0.0} s");
                 Console.WriteLine($"  process {rows.Sum(r => r.Cores):0.000} cores");
                 foreach (var r in rows.Where(r => r.Cores >= 0.002)) Console.WriteLine($"  {r.Cores,6:0.000}  {r.Label}");
                 var (d50, d95, dmax, dn) = MainWindow.MeterDrawStats.Stats();

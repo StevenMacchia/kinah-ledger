@@ -74,7 +74,7 @@ sealed partial class HudModernFade
     /// You: a thin white bar at the row's left edge. Short of room the CP goes first, then the share; a name keeps at least
     /// ten characters; a figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class FadeRow : IThemeRow
+    sealed class FadeRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 29, Pitch = 32;
         const double Pad = 8;
@@ -94,6 +94,9 @@ sealed partial class HudModernFade
         bool _expanded, _shareOn = true;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The wash runs the whole width and height of its art (Draw: s.Width * bar).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _wash.ActualWidth <= 0 ? null : (_wash, new Rect(0, 0, _wash.ActualWidth, _wash.ActualHeight));
 
         public FadeRow()
         {
