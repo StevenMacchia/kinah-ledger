@@ -75,7 +75,7 @@ sealed partial class HudVersus
     sealed class VersusRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 28, Pitch = 31;
-        const double RankW = 25, ChipW = 25, Air = 4, PlatePad = 5, PadR = 6;
+        const double RankW = 25, ChipW = 25, Air = 4, PlatePad = 5, PadR = 10;
         readonly HudVersus _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art, _crown;
@@ -105,9 +105,9 @@ sealed partial class HudVersus
             _heal.Margin = new Thickness(4, 0, 3, 0); _heal.Padding = new Thickness(3, 0, 3, 1); _heal.Background = Frozen(Mod.A(InkC, .74));
             _cp.Padding = new Thickness(3, 0, 3, 0); _cp.Background = Frozen(Mod.A(InkC, .5));
             // the columns: rank, the portrait chip, air, the name's line (the rest), heal, the plate's lead-in, DPS, share; expanded, damage and crit; the plate's end
-            _dpsW = FigCol(_dps, "888.8K"); _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 5;
+            _dpsW = FigCol(_dps, "888.8K"); _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 3;
             _dmgW = FigCol(_dmg, "888.88M") + 7; _critW = FigCol(_crit, "88%") + 7;
-            foreach (var w in new[] { RankW, ChipW, Air + 4, double.NaN, 0, PlatePad + Lean * H, _dpsW, _shareW, 0, 0, PadR })
+            foreach (var w in new[] { RankW, ChipW, Air + 2, double.NaN, 0, PlatePad + Lean * H, _dpsW, _shareW, 0, 0, PadR })
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[8].Width = new GridLength(0); _words.ColumnDefinitions[9].Width = new GridLength(0);
             _art = new TacSketch(Draw);
@@ -124,6 +124,9 @@ sealed partial class HudVersus
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
+
+        /// <summary>Deaths on a small dark pill in a bright coral, so they read on any class colour over a bright scene.</summary>
+        static readonly SolidColorBrush DeathInk = Frozen(Color.FromRgb(0xFF, 0x8C, 0x8C)), DeathPill = Frozen(Mod.A(InkC, .8));
 
         /// <summary>The TOP DPS badge's words (its long or its short form), null without one.</summary>
         TextBlock? _top;
@@ -159,11 +162,11 @@ sealed partial class HudVersus
             // the marks after the name: ★ DPS, a healer's ✚, deaths, YOU (kept whole: the name and the CP give way first)
             foreach (var mk in _marks) _line.Children.Remove(mk);
             _marks.Clear();
-            void Add(FrameworkElement el) { el.Margin = new Thickness(6, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
+            void Add(FrameworkElement el) { el.Margin = new Thickness(4, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
             _top = null;
             if (m.TopDps) { var t = Badge("★ " + L.T("DPS"), YellowC); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); _top = (TextBlock)t.Child; }
             if (m.TopHeals) { var t = Badge("✚", MintC); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
-            if (m.Deaths > 0) { var d = T($"✕{m.Deaths}", 10.5, Coral, FontWeights.Bold); d.Tag = "deaths"; d.ToolTip = L.F(m.Deaths == 1 ? "{0} death" : "{0} deaths", m.Deaths); Add(d); }
+            if (m.Deaths > 0) { var d = T($"✕{m.Deaths}", 10.5, DeathInk, FontWeights.Bold); d.Background = DeathPill; d.Padding = new Thickness(2, 0, 2, 0); d.Tag = "deaths"; d.ToolTip = L.F(m.Deaths == 1 ? "{0} death" : "{0} deaths", m.Deaths); Add(d); }
             if (m.You) { var y = Badge(L.T("YOU"), CyanC); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
