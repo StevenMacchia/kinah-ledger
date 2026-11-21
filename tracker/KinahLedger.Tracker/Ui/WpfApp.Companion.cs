@@ -9,7 +9,8 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] CompanionThemes = { HudThemes.Classic, HudThemes.Modern, HudThemes.Tactical, HudThemes.Wacky, HudThemes.Glitch };
+    /// <summary>Every theme family: the companion has clothes for each (the bubble's own finish in the first five).</summary>
+    static readonly string[] CompanionThemes = HudThemes.All.Select(t => t.Key).ToArray();
     static readonly CompanionKind[] CompanionKinds = Enum.GetValues<CompanionKind>();
 
     /// <summary>
@@ -171,6 +172,16 @@ public static partial class WpfApp
             ov?.SetMood(CompanionSprite.Mood.Idle);
             check(focused && sleepy && smile == "Happy" && plain == "Idle", $"companion: leans in for a fight, dozes after a long quiet, and smiles now and then as it floats ({smile}, {plain})");
 
+            // clothes (turban, vest, sash) for every theme family, so it matches the Buddy's look: none falls back to Classic's, and the
+            // families whose looks differ (Elements: frost against magma) tint it by the look the Buddy uses
+            var fams = HudThemes.All.Select(t => (t.Key, Sprite: new CompanionSprite(t.Key))).ToList();
+            bool ownTint = fams.All(f => f.Sprite.Theme == f.Key) && fams.Select(f => f.Sprite.TintForTest).Distinct().Count() == fams.Count;
+            bool byLook = new CompanionSprite(HudThemes.Elements, HudThemes.Magma).TintForTest != new CompanionSprite(HudThemes.Elements, HudThemes.Frost).TintForTest;
+            ov?.Match(HudThemes.Elements, 0.94, 1, HudThemes.Magma); DoEvents();
+            bool matched = ov?.FaceForTest?.Sprite is { Theme: HudThemes.Elements, Look: HudThemes.Magma } && ov.FaceForTest.Theme == HudThemes.Classic;
+            ov?.Match(HudThemes.Classic, 0.94, 1);
+            check(ownTint && byLook && matched, $"companion: its own clothes in each of the {fams.Count} theme families, by look where a family's looks differ, and the window follows the Buddy's look ({ownTint}, {byLook}, {matched})");
+
             // the Settings page: an overlay page, its switch turns the companion off and on, a switch and Try per reaction
             var o = new OptionsWindow(w, OptionsWindow.Page.Companion) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
             o.Show(); DoEvents();
@@ -308,6 +319,22 @@ public static partial class WpfApp
                     }
                 SaveSheet(moods, Path.Combine(dir, $"companion-moods-{scale:0}x.png"), scale);
 
+                // the palettes: every theme family, and each look of the families whose looks tint it apart
+                var tints = Sheet(); int ti = 0;
+                foreach (var l in HudLooks.All.Where(l => HudThemes.Themed(l.Key)))
+                {
+                    var face = new CompanionFace(l.Theme, 0.94, false, false, l.Key);
+                    face.Sprite.HoldForRender(null, Colors.White, 0, .5, 1);
+                    Cell(tints, face, ti / 8, ti % 8, l.Theme + " · " + l.Key); ti++;
+                }
+                foreach (var key in new[] { HudThemes.Classic })
+                {
+                    var face = new CompanionFace(key, 0.94, false, false);
+                    face.Sprite.HoldForRender(null, Colors.White, 0, .5, 1);
+                    Cell(tints, face, ti / 8, ti % 8, key); ti++;
+                }
+                SaveSheet(tints, Path.Combine(dir, $"companion-palettes-{scale:0}x.png"), scale);
+
                 // every reaction's key frame with its line, theme by theme
                 foreach (var theme in CompanionThemes)
                 {
@@ -339,6 +366,31 @@ public static partial class WpfApp
                 SaveSheet(stv, Path.Combine(dir, $"companion-{theme}-110.png"), 1);
             }
 
+            // every frame of every reaction in every theme family inside the window (a cut there shows in game for a moment)
+            foreach (var theme in CompanionThemes)
+            {
+                var face = new CompanionFace(theme, 0.94, false, false);
+                var win = Parked(face);
+                foreach (var k in CompanionKinds)
+                {
+                    var m = MainWindow.CompanionSample(k, now);
+                    string first = ""; double firstAt = 0; int frames = 0;
+                    for (double t = 0; t <= CompanionSprite.ReactMs; t += 40)
+                    {
+                        face.Sprite.HoldForRender(k, m.Tone, t, 0);
+                        face.UpdateLayout();
+                        var cut = Spill(face);
+                        if (cut.Length == 0) continue;
+                        if (frames++ == 0) { first = cut; firstAt = t; }
+                    }
+                    if (frames > 0) File.AppendAllText(spill, $"companion-frames-{theme}-{k}: {frames} frames, the first at {firstAt:0} ms {first}{Environment.NewLine}");
+                }
+                win.Close();
+            }
+
+            // beside the Buddy: each themed look on the farming sample with the companion in its palette beside it, at rest and tossing a coin
+            ShotCompanionBeside(settings, dir);
+
             // each reaction frame by frame (Classic, 2x), the bubble's course alongside
             double[] at = { 0, 90, 180, 300, 420, 560, 720, 900, 1100, 1350, 1600, 1800 };
             foreach (var k in CompanionKinds)
@@ -369,6 +421,44 @@ public static partial class WpfApp
         finally { keep.Close(); Motion.Still = still0; }
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}" + (File.Exists(spill) ? " (spill.txt lists what was cut)" : " (nothing cut)"));
         return File.Exists(spill) ? 1 : 0;
+
+        static void ShotCompanionBeside(Settings settings, string dir)
+        {
+            var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            w.Show(); DoEvents();
+            try
+            {
+                var v = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
+                foreach (var (k, x) in w.HudSample()) if (!v.ContainsKey(k) || k.StartsWith("pick") || k.StartsWith("top")) v[k] = x;
+                v["show"] = "1";
+                foreach (var url in v.Where(kv => kv.Key.EndsWith("Icon")).Select(kv => kv.Value).Distinct()) IconCache.Get(url);
+                IconCache.Drain(TimeSpan.FromSeconds(10)); DoEvents();
+                var now = DateTime.UtcNow;
+                var looks = HudLooks.All.Where(l => HudThemes.Themed(l.Key)).ToList();
+                for (int part = 0; part * 8 < looks.Count; part++)
+                {
+                    var sheet = Sheet(); int i = 0;
+                    foreach (var l in looks.Skip(part * 8).Take(8))
+                    {
+                        var look = HudThemes.Make(l.Key, still: true);
+                        if (look == null) continue;
+                        look.SetOpacity(1);
+                        look.Update(v);
+                        var ins = look.Inset;
+                        var buddy = new Border { Child = look.Root, Margin = new Thickness(-ins.Left, -ins.Top, -ins.Right, -ins.Bottom), VerticalAlignment = VerticalAlignment.Center };
+                        var rest = new CompanionFace(l.Theme, 0.94, false, false, l.Key);
+                        rest.Sprite.HoldForRender(null, Colors.White, 0, .5, 1);
+                        var m = MainWindow.CompanionSample(CompanionKind.Rare, now);
+                        var coin = new CompanionFace(l.Theme, 0.94, false, false, l.Key);
+                        coin.Sprite.HoldForRender(CompanionKind.Rare, m.Tone, CompanionSprite.KeyMs(CompanionKind.Rare), .25);
+                        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { buddy, rest, coin } };
+                        Cell(sheet, row, i / 2, i % 2, l.Theme + " · " + l.Key); i++;
+                    }
+                    SaveSheet(sheet, Path.Combine(dir, $"companion-beside-{part + 1}.png"), 1);
+                }
+            }
+            finally { w.Close(); }
+        }
 
         static CompanionFace KeyFace(string theme, CompanionKind k, DateTime now, bool left)
         {

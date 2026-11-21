@@ -7,8 +7,9 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// Buddy 2.0, the companion (Steven, 2026-11-20: "think more overlays and buddies and parsers ... WOW factor for everything"):
-/// a little winged wisp in its own small overlay that lives through the session with you. It idles (floats, blinks, its wings
-/// flutter), leans in while a boss pull is under way, dozes after a long quiet, and reacts to what the tracker already knows:
+/// a tiny Shugo, the game's white stoat merchant (1.0.39's first one was a winged wisp; Steven, 2026-11-21: "maybe a tiny
+/// shugo lol"), in its own small overlay that lives through the session with you. It idles (breathes, blinks, twitches its
+/// ears, wags its tail), squares up while a boss pull is under way, dozes after a long quiet, and reacts to what the tracker already knows:
 /// a rare drop, a new best on a boss, a boss down, a run of big hits, a watched timer coming close, a PvP kill or assist,
 /// a wipe, your death. Each reaction is a short animation and, when Lines is on, a two-line bubble ("NEW BEST" over
 /// "Gadioton +8.2%"). Nothing here guesses: every moment comes from a figure another part of the tracker shows.

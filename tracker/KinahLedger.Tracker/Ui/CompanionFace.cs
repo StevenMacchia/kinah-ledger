@@ -32,12 +32,14 @@ public sealed class CompanionFace : Grid
     readonly ScaleTransform _pop = new(1, 1);
     readonly TranslateTransform _slide = new();
 
-    public CompanionFace(string theme, double opacity, bool lines, bool bubbleLeft)
+    /// <param name="theme">The Buddy's theme family: the sprite's fur and gear in every family, the bubble's finish in the five that have one (Classic's otherwise).</param>
+    /// <param name="look">The Buddy's look, for the families whose looks each tint the companion (Elements, Atreia...).</param>
+    public CompanionFace(string theme, double opacity, bool lines, bool bubbleLeft, string? look = null)
     {
         Theme = theme is HudThemes.Modern or HudThemes.Tactical or HudThemes.Wacky or HudThemes.Glitch ? theme : HudThemes.Classic;
         _opacity = Math.Clamp(opacity, 0.3, 1);
         Lines = lines; BubbleLeft = bubbleLeft;
-        Sprite = new CompanionSprite(Theme);
+        Sprite = new CompanionSprite(theme, look);
         Tag = "companion-face:" + Theme;
         ClipToBounds = false;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);

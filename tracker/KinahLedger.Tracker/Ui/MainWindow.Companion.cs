@@ -95,7 +95,7 @@ public partial class MainWindow
         _companion.Closed += (_, _) => _companion = null;
     }
 
-    void MatchCompanion() => _companion?.Match(HudThemes.Of(HudLook), _hudPreview?.HudOpacity ?? _prefs.HudOpacity, _hudPreview?.HudScale ?? _hudPrefs.Scale);
+    void MatchCompanion() => _companion?.Match(HudThemes.Of(HudLook), _hudPreview?.HudOpacity ?? _prefs.HudOpacity, _hudPreview?.HudScale ?? _hudPrefs.Scale, HudLook);
 
     void CloseCompanion() { _companion?.Close(); _companion = null; }
 
