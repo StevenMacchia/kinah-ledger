@@ -66,7 +66,7 @@ sealed partial class HudAsmodian : ModernLook
     // the fight: one iron plate, its head, HP, rows and foot
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 4) };
     readonly TacSketch _fightPlate;
-    const double FightPad = 10;
+    const double FightPad = 6;
     readonly StackPanel _fightBody = new() { Margin = new Thickness(FightRoom.Left + FightPad, FightRoom.Top + 6, FightRoom.Right + FightPad, FightRoom.Bottom + 7) };
     /// <summary>The fight's moments' layer over the plate (a kill's shockwave, the fight's opening cut), clipped to the fight's own bounds.</summary>
     readonly System.Windows.Controls.Canvas _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
@@ -92,7 +92,7 @@ sealed partial class HudAsmodian : ModernLook
         // the band's clip follows the plate's shape (set when the plate's size changes, never per frame)
         _line.SizeChanged += (_, e) => _lineSheenHost.Clip = Plate(new Rect(LineRoom.Left, LineRoom.Top, Math.Max(0, e.NewSize.Width - LineRoom.Left - LineRoom.Right), Math.Max(0, e.NewSize.Height - LineRoom.Top - LineRoom.Bottom)), 9, 3);
         // the war plate: horns, crest, fangs and the blood moon behind the title, drawn once per size
-        _fightPlate = new TacSketch((dc, s) => WarPlate(dc, s, _opacity, FightRoom, 11, 40, new Point(FightPad + 34, 14), 34));
+        _fightPlate = new TacSketch((dc, s) => WarPlate(dc, s, _opacity, FightRoom, 11, 40, new Point(2, 16), 30));
         _fight.Children.Add(_fightPlate); _fight.Children.Add(_fightHeat); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _embers = new Sparks(_emberLayer);
         Panel.SetZIndex(_emberLayer, 50);
@@ -559,7 +559,7 @@ sealed partial class HudAsmodian : ModernLook
             double y = i * IronRow.Pitch + (mm.Pinned ? 14 : 0) + IronRow.H / 2 + 3;
             double x = Math.Max(30, (mm.CpOnly ? 0 : e.BarOf(mm.F)) * _rowsW);
             int count = storm ? (i == 0 ? 5 : i < 3 ? 4 : 2) : i == 0 ? 3 : i < 3 ? 2 : 1;
-            for (int k = 0; k < count && n < cap; k++, n++) pts.Add((new Point(Math.Max(8, x - 6 - (storm ? 9 : 11) * k), y), n * 7 + i, (storm ? 30 : 22) + 4 * (count - k)));
+            for (int k = 0; k < count && n < cap; k++, n++) pts.Add((new Point(Math.Clamp(x - 6 - (storm ? 9 : 11) * k, 8, Math.Max(8, _rowsW - 105)), y), n * 7 + i, (storm ? 30 : 22) + 4 * (count - k)));
         }
         _embers.Start(pts, cap);
         Motion.Play(_emberLayer, storm ? 1300 : 1150, t =>
@@ -652,7 +652,7 @@ sealed partial class HudAsmodian : ModernLook
         double cx = _lineBody.Margin.Left + 21, cy = _lineBody.Margin.Top + 14;
         _lineSparks.Start(Enumerable.Range(0, 8).Select(i => { double ang = Math.PI * (.15 + .7 * i / 7.0); return (new Point(cx - 15 * Math.Cos(ang), cy - 12 * Math.Sin(ang)), 70 + i, 18.0); }));
         // the NEW BEST tag drops into the strip between the horns (over the crest) and stays for the moment
-        var tag = Chip(L.T("NEW BEST"), Frozen(PaleC), EmberC, size: 10, face: Bahn, pad: new Thickness(8, 1, 8, 2));
+        var tag = Chip(L.T("NEW BEST"), Frozen(PaleC), EmberC, size: 11.5, face: Bahn, pad: new Thickness(9, 1, 9, 2));
         tag.HorizontalAlignment = HorizontalAlignment.Center; tag.VerticalAlignment = VerticalAlignment.Top; tag.Margin = new Thickness(0, 2, 0, 0);
         var tagDrop = new TranslateTransform(); tag.RenderTransform = tagDrop; tag.Opacity = 0; tag.IsHitTestVisible = false;
         _line.Children.Add(tag);
@@ -750,16 +750,21 @@ sealed partial class HudAsmodian : ModernLook
     void Cut(Color c, double ms)
     {
         double h = Math.Max(60, _fight.ActualHeight > 0 ? _fight.ActualHeight : 200), w = Math.Max(200, _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth);
-        var band = new System.Windows.Shapes.Path { Data = CutShape, Stretch = Stretch.Fill, Width = 90, Height = h, IsHitTestVisible = false, Opacity = 0,
-            Fill = SlashFill, RenderTransform = new TranslateTransform(-90, 0) };
-        _fightFx.Children.Add(band);
-        Motion.Play(band, ms, t =>
+        var line = new LineGeometry(new Point(h * .5, 0), new Point(0, h)); line.Freeze();
+        var move = new TranslateTransform(-h * .5 - 10, 0);
+        var body = new System.Windows.Shapes.Path { Data = line, Stroke = SlashBody, StrokeThickness = 10, IsHitTestVisible = false, Opacity = 0, RenderTransform = move };
+        var core = new System.Windows.Shapes.Path { Data = line, Stroke = Brushes.White, StrokeThickness = 2, IsHitTestVisible = false, Opacity = 0, RenderTransform = move };
+        _fightFx.Children.Add(body); _fightFx.Children.Add(core);
+        double end = w - 70;   // it fades out before the figure column
+        Motion.Play(body, ms, t =>
         {
-            ((TranslateTransform)band.RenderTransform).X = -90 + (w + 90) * Out(t);
-            band.Opacity = Math.Sin(Math.PI * t);
-        }, () => _fightFx.Children.Remove(band));
+            move.X = -h * .5 - 10 + (end + h * .5) * Out(t);
+            double x = move.X + h * .25;
+            body.Opacity = core.Opacity = Math.Min(1, Seg(t, 0, .12) * 1.2) * (1 - Seg(x, end - 120, end));
+        }, () => { _fightFx.Children.Remove(body); _fightFx.Children.Remove(core); });
     }
 
+    static readonly Brush SlashBody = Frozen(Color.FromRgb(0xE0, 0x10, 0x1A));
     static readonly Geometry CutShape = MakeCut();
     static Geometry MakeCut() { var g = Geometry.Parse("M 76,0 L 90,0 L 14,100 L 0,100 Z"); g.Freeze(); return g; }
     static readonly Brush SlashFill = Mod.Grad(false, (Color.FromArgb(0x00, 0xE0, 0x1C, 0x2A), 0), (Color.FromArgb(0xD0, 0xE0, 0x1C, 0x2A), .3), (Color.FromArgb(0xFF, 0xFF, 0xF2, 0xE0), .5), (Color.FromArgb(0xD0, 0xE0, 0x1C, 0x2A), .7), (Color.FromArgb(0x00, 0xE0, 0x1C, 0x2A), 1));
@@ -767,7 +772,7 @@ sealed partial class HudAsmodian : ModernLook
     /// <summary>The blood moon behind the title flares: a bright copy of it (drawn once) scales from 1.4 down to its place and fades.</summary>
     void SigilFlare()
     {
-        double r = 34, cx = FightRoom.Left + FightPad + 34, cy = FightRoom.Top + 14;
+        double r = 30, cx = FightRoom.Left + 2, cy = FightRoom.Top + 16;
         var flare = new TacSketch((dc, s) => { BloodMoon(dc, new Point(r * 1.4, r * 1.4), r); dc.DrawEllipse(SigilHot, null, new Point(r * 1.4, r * 1.4), r * .9, r * .9); }, r * 2.8, r * 2.8)
             { Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(1.4, 1.4) };
         Canvas.SetLeft(flare, cx - r * 1.4); Canvas.SetTop(flare, cy - r * 1.4);
@@ -789,23 +794,28 @@ sealed partial class HudAsmodian : ModernLook
     {
         double w = Math.Max(200, _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth), h = Math.Max(80, _fight.ActualHeight > 0 ? _fight.ActualHeight : 200);
         var at = new Point(w / 2, FightRoom.Top + 16);
-        double D = 2.3 * Math.Max(w, h);
+        double D = .8 * Math.Max(w, h);
         var flash = new System.Windows.Shapes.Rectangle { Width = w, Height = h, Fill = KillFlash, IsHitTestVisible = false, Opacity = 0 };
-        System.Windows.Shapes.Ellipse Ring(Brush b, double th) => new() { Width = D, Height = D * .62, Stroke = b, StrokeThickness = th, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(1, 1) };
-        var hot = Ring(ShockHot, 4); var blood = Ring(ShockBlood, 8);
-        foreach (var r in new[] { blood, hot }) { Canvas.SetLeft(r, at.X - D / 2); Canvas.SetTop(r, at.Y - D * .31); }
-        _fightFx.Children.Add(flash); _fightFx.Children.Add(blood); _fightFx.Children.Add(hot);
+        var white = new System.Windows.Shapes.Rectangle { Width = w, Height = h, Fill = Brushes.White, IsHitTestVisible = false, Opacity = 0 };
+        System.Windows.Shapes.Ellipse Ring(Brush b, double th, double d) => new() { Width = d, Height = d * .62, Stroke = b, StrokeThickness = th, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(.2, .2) };
+        var blood = Ring(ShockBlood, 8, D); var hot = Ring(ShockHot, 4, D); var core = Ring(Brushes.White, 1, D - 4);
+        foreach (var (r, d) in new[] { (blood, D), (hot, D), (core, D - 4) }) { Canvas.SetLeft(r, at.X - d / 2); Canvas.SetTop(r, at.Y - d * .31); }
+        double figX = FightRoom.Left + FightPad + Math.Max(60, _rowsW - 110);
+        var layer = new Canvas { IsHitTestVisible = false, Clip = new RectangleGeometry(new Rect(0, 0, figX, h)) };
+        foreach (var el in new UIElement[] { flash, white, blood, hot, core }) layer.Children.Add(el);
+        _fightFx.Children.Add(layer);
+        void Scale(System.Windows.Shapes.Ellipse r, double k) { var sc = (ScaleTransform)r.RenderTransform; sc.ScaleX = sc.ScaleY = .2 + 1.2 * k; }
         Motion.Play(hot, 900, t =>
         {
-            flash.Opacity = t < .06 ? Seg(t, 0, .06) * .65 : .65 * (1 - Seg(t, .06, .4));
-            double a = Seg(t, 0, .7), b = Seg(t, .1, .9);
-            ((ScaleTransform)hot.RenderTransform).ScaleX = ((ScaleTransform)hot.RenderTransform).ScaleY = .02 + .98 * Out(a);
-            hot.Opacity = a is > 0 and < 1 ? .95 * (1 - a) : 0;
-            ((ScaleTransform)blood.RenderTransform).ScaleX = ((ScaleTransform)blood.RenderTransform).ScaleY = .02 + .8 * Out(b);
+            white.Opacity = t < .045 ? .35 * Seg(t, 0, .045) : .35 * (1 - Seg(t, .045, .09));
+            flash.Opacity = t < .06 ? Seg(t, 0, .06) * .45 : .45 * (1 - Seg(t, .06, .45));
+            double a = Seg(t, 0, .4), b = Seg(t, .05, .5);
+            Scale(hot, Out(a)); Scale(core, Out(a)); Scale(blood, Out(b));
+            hot.Opacity = core.Opacity = a is > 0 and < 1 ? 1 - a : 0;
             blood.Opacity = b is > 0 and < 1 ? .9 * (1 - b) : 0;
-        }, () => { _fightFx.Children.Remove(flash); _fightFx.Children.Remove(hot); _fightFx.Children.Remove(blood); });
+        }, () => _fightFx.Children.Remove(layer));
     }
 
     static readonly Brush KillFlash = MakeRadial(Color.FromArgb(0x70, 0xFF, 0x3A, 0x30), Color.FromArgb(0, 0x8E, 0x0F, 0x1C), Color.FromArgb(0x40, 0xC2, 0x1F, 0x2E));
-    static readonly Brush ShockHot = Frozen(Color.FromRgb(0xFF, 0x6A, 0x4A)), ShockBlood = Frozen(Color.FromArgb(0xB0, 0x8E, 0x0F, 0x1C));
+    static readonly Brush ShockHot = Frozen(Color.FromRgb(0xFF, 0x2A, 0x2A)), ShockBlood = Frozen(Color.FromArgb(0xC0, 0xA0, 0x0E, 0x1C));
 }

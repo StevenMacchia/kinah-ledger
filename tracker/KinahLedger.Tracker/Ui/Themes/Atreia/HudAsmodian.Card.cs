@@ -118,12 +118,16 @@ sealed partial class HudAsmodian : IThemeCard
             {
                 var row = new Grid { Height = 20, Margin = new Thickness(-4, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
+                TextBlock? nmRef = null;
                 var art = new TacSketch((dc, s) =>
                 {
                     var r = new Rect(0, 1.5, s.Width, s.Height - 3);
                     dc.DrawRectangle(Mod.Br(Color.FromRgb(0x1C, 0x0D, 0x10), .8), null, r);
-                    double fx = (r.Width - (rateW > 0 ? rateW - 6 : 0)) * Math.Clamp(of, 0, 1);   // the blade's cut lands in the rate columns' empty lead, never on a digit
-                    Forged(dc, r, fx, tone, .55, r.Width - figW - 6, .75);
+                    double fx = (r.Width - (rateW > 0 ? rateW - 18 : 0)) * Math.Clamp(of, 0, 1);   // the blade's cut lands in the rate columns' empty lead, never on a digit
+                    // the blade's edge only between the skill's name and the figures, never on a letter or a digit
+                    double nameR = 5 + (nmRef?.DesiredSize.Width ?? 0) + 4;
+                    bool onText = r.Left + fx - 13 < nameR || r.Left + fx + 3 > r.Width - figW;
+                    Forged(dc, r, fx, tone, .55, onText ? double.NegativeInfinity : double.PositiveInfinity, .75);
                 });
                 // the bar forges out on the card's entrance by its transform (drawn once)
                 art.RenderTransformOrigin = new Point(0, .5); art.RenderTransform = new ScaleTransform(1, 1);
@@ -132,6 +136,7 @@ sealed partial class HudAsmodian : IThemeCard
                 var g = Tac.CardGrid(c, 46, 56);
                 g.Margin = new Thickness(5, 0, 0, 0);
                 var nm = Tac.AbilityName(a, 11.5, White, Mod.Face, FontWeights.SemiBold, Frozen(Mod.Mix(tone, Colors.White, .55)), 9.5);
+                nmRef = nm;
                 nm.Margin = new Thickness(1, 0, 6, 0);
                 Tac.Cell(g, nm, 0, c);
                 var sh = Tt(a.ShareText, 10.5, Soft, FontWeights.SemiBold); sh.HorizontalAlignment = HorizontalAlignment.Right; Tac.Cell(g, sh, 1, c);

@@ -23,12 +23,18 @@ sealed partial class HudAsmodian
         return new Point(u * u * u * a.X + 3 * u * u * t * b.X + 3 * u * t * t * c.X + t * t * t * d.X, u * u * u * a.Y + 3 * u * u * t * b.Y + 3 * u * t * t * c.Y + t * t * t * d.Y);
     }
 
-    static readonly Brush HornFill = Mod.Grad(true, (Color.FromRgb(0x5A, 0x16, 0x1C), 0), (Color.FromRgb(0x2A, 0x0B, 0x0F), .35), (Color.FromRgb(0x0C, 0x05, 0x06), 1));
-    static readonly Pen HornRim = Mod.P(Frozen(Color.FromRgb(0xFF, 0x3B, 0x2F)), 1.5);
+    static readonly Brush HornFill = Mod.Grad(true, (Color.FromRgb(0x3A, 0x0A, 0x0A), 0), (Color.FromRgb(0x1A, 0x06, 0x06), 1));
+    static readonly Pen HornGlow = Bevel(Color.FromArgb(0x80, 0xE0, 0x1C, 0x22), 7), HornOutline = Bevel(Colors.Black, 4.2);
+
+    /// <summary>A pen whose joins are bevelled: a sharp tip's miter would reach far past the art (and the window).</summary>
+    static Pen Bevel(Color c, double w) { var p = new Pen(Frozen(c), w) { LineJoin = PenLineJoin.Bevel }; p.Freeze(); return p; }
+    static readonly Pen HornRim = Bevel(Color.FromRgb(0xFF, 0x3B, 0x2F), 2);
     static readonly Pen HornEdge = Mod.P(Frozen(Color.FromArgb(0xE0, 0xFF, 0xC0, 0x90)), 1);
     static readonly Pen HornRidge = Mod.P(Frozen(Color.FromArgb(0xE0, 0x05, 0x02, 0x03)), 1.4), HornRidgeLit = Mod.P(Frozen(Color.FromArgb(0xA0, 0xFF, 0x4A, 0x3D)), .8);
     static readonly Brush TipGlow = MakeRadial(Color.FromArgb(0xC0, 0xFF, 0x9A, 0x5A), Color.FromArgb(0, 0xFF, 0x4A, 0x3D));
-    static readonly Brush SpikeFill = Mod.Grad(true, (Color.FromRgb(0xFF, 0x7A, 0x5A), 0), (Color.FromRgb(0xA8, 0x18, 0x24), .4), (Color.FromRgb(0x2A, 0x0A, 0x0D), 1));
+    static readonly Pen SpikeOutline = Bevel(Colors.Black, 2.6), SpikeRim = Bevel(Color.FromRgb(0xFF, 0x3B, 0x2F), 1.1);
+    static readonly Brush SpikeTip = MakeRadial(Color.FromRgb(0xFF, 0xF0, 0xD0), Color.FromArgb(0, 0xFF, 0x6A, 0x4A));
+    static readonly Brush SpikeFill = Mod.Grad(true, (Color.FromRgb(0x3A, 0x0A, 0x0A), 0), (Color.FromRgb(0x1A, 0x06, 0x06), 1));
 
     /// <summary>
     /// A demon horn in the box <paramref name="box"/> (its base along the box's foot): it sweeps out and up from its base and
@@ -37,8 +43,8 @@ sealed partial class HudAsmodian
     static void Horn(DrawingContext dc, Rect box, bool right)
     {
         Point P(double x, double y) => new(box.Left + (right ? 1 - x : x) * box.Width, box.Top + y * box.Height);
-        Point o0 = P(.4, 1), o1 = P(.34, .42), o2 = P(.14, .1), tip = P(.01, .03);
-        Point i1 = P(.26, .3), i2 = P(.6, .4), i3 = P(.9, 1);
+        Point o0 = P(.36, 1), o1 = P(.3, .4), o2 = P(.12, .1), tip = P(.03, .05);
+        Point i1 = P(.36, .34), i2 = P(.68, .48), i3 = P(.95, 1);
         var g = new StreamGeometry();
         using (var x = g.Open())
         {
@@ -47,6 +53,8 @@ sealed partial class HudAsmodian
             x.BezierTo(i1, i2, i3, true, true);
         }
         g.Freeze();
+        // the glow outside it, a black outline (it holds over snow), the iron, the hot rim
+        dc.DrawGeometry(null, HornGlow, g); dc.DrawGeometry(null, HornOutline, g);
         dc.DrawGeometry(HornFill, HornRim, g);
         // a hot light along the outer sweep
         var lit = new StreamGeometry();
@@ -80,7 +88,9 @@ sealed partial class HudAsmodian
                 x.LineTo(c + along * half - @out * 1.5, true, false);
             }
             g.Freeze();
-            dc.DrawGeometry(SpikeFill, null, g);
+            dc.DrawGeometry(null, SpikeOutline, g);
+            dc.DrawGeometry(SpikeFill, SpikeRim, g);
+            if (lens[i] >= 6) dc.DrawEllipse(SpikeTip, null, c + @out * (lens[i] - 1.2), 2, 2);
         }
     }
 

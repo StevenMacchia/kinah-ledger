@@ -53,9 +53,15 @@ sealed partial class HudAsmodian
     {
         if (fx < 1) return;
         // an end under the figures (from quiet on) smoulders low, with no hot line through the digits
-        bool under = r.Left + fx > quiet;
+        bool under = r.Left + fx > quiet, soft = double.IsNegativeInfinity(quiet);
         if (under) burn *= .4;
-        var blade = Blade(r, fx);
+        if (soft)
+        {
+            var mask = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(r.Left + fx - 16, 0), EndPoint = new Point(r.Left + fx, 0) };
+            mask.GradientStops.Add(new GradientStop(Colors.Black, 0)); mask.GradientStops.Add(new GradientStop(Colors.Transparent, 1)); mask.Freeze();
+            dc.PushOpacityMask(mask);
+        }
+        var blade = soft ? new RectangleGeometry(new Rect(r.Left, r.Top, fx, r.Height)) : Blade(r, fx);
         dc.DrawGeometry(Mod.Grad(false, (Mod.A(Mod.Mix(tone, IronC, .4 * temper), .98), 0), (Mod.A(Mod.Mix(tone, IronC, .08 * temper), .98), 1)), null, blade);
         dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.White, .16), 0), (Mod.A(Colors.White, 0), .4), (Mod.A(Colors.Black, .45), 1)), null, blade);
         dc.PushClip(blade);
@@ -72,6 +78,7 @@ sealed partial class HudAsmodian
             dc.DrawLine(EdgeBloom, a, b); dc.DrawLine(EdgeBody, a, b); dc.DrawLine(EdgeCore, a, b);
             dc.Pop();
         }
+        if (soft) dc.Pop();
     }
 
     /// <summary>
@@ -140,7 +147,7 @@ sealed partial class HudAsmodian
     sealed class IronRow : IThemeRow
     {
         public const double H = 26, Pitch = 29;
-        const double Pad = 5, RankW = 27, IconW = 23;
+        const double Pad = 5, RankW = 24, IconW = 22;
         readonly HudAsmodian _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art, _crownArt;
@@ -150,7 +157,9 @@ sealed partial class HudAsmodian
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly Grid _rankHost = new() { Width = RankW, Height = H };
-        readonly Grid _crown = new() { Width = 26, Height = 21, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, 0, 0), Visibility = Visibility.Collapsed };
+        readonly Grid _crown = new() { Width = 28, Height = 18, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -11, 0, 0), Visibility = Visibility.Collapsed };
+        /// <summary>The leader's badge behind the rank: a disc of black iron with a hot rim (the crown sits on it).</summary>
+        readonly TacSketch _badge = new((dc, s) => CrownBadge(dc, s), 20, 20) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
         readonly ScaleTransform _crownScale = new(1, 1);
         readonly Border _iconHost = new() { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
@@ -183,18 +192,24 @@ sealed partial class HudAsmodian
             _art = new TacSketch(Draw);
             _root.Children.Add(_art); _root.Children.Add(_fxLayer);
             // the rank's cell: the number, or the crown
-            _crownArt = new TacSketch((dc, s) => Crown(dc, new Point(0, 0), 1.3), 26, 21);
+            _crownArt = new TacSketch((dc, s) => CrownHero(dc, s), 28, 18);
             _crown.Children.Add(_crownArt);
-            _crown.RenderTransformOrigin = new Point(.5, .65); _crown.RenderTransform = _crownScale;
+            _crown.RenderTransformOrigin = new Point(.5, .9); _crown.RenderTransform = _crownScale;
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crown);
+            _rankHost.Children.Add(_badge); _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crown);
             Put(_rankHost, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
             _root.Children.Add(_words);
             _root.SizeChanged += (_, _) => Fit();
+            // the bar knows where the words are only once they are laid out: drawn again then (the first layout, a new width)
+            _words.SizeChanged += (_, _) => _art.InvalidateVisual();
+            _line.SizeChanged += (_, _) => _art.InvalidateVisual();
         }
+
+        /// <summary>The PB ghost's track (main's IThemeBarSpan, added at integration): the rect a full bar fills in the slab's sketch (Draw's r).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(.5, .5, Math.Max(0, _art.ActualWidth - 1), Math.Max(0, _art.ActualHeight - 1)));
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
 
@@ -211,7 +226,7 @@ sealed partial class HudAsmodian
             // the crown on the top row once there is damage (by Combat Power before it, the rank stays a number)
             bool crown = m.Rank == 1 && !m.CpOnly && !m.Pvp;
             var cv = crown ? Visibility.Visible : Visibility.Collapsed;
-            if (_crown.Visibility != cv) { _crown.Visibility = cv; _rank.Visibility = crown ? Visibility.Collapsed : Visibility.Visible; }
+            if (_crown.Visibility != cv) { _crown.Visibility = _badge.Visibility = cv; _rank.Foreground = crown ? White : Soft; _rank.Margin = new Thickness(0, crown ? 6 : 0, 0, 0); _rank.FontSize = crown ? 11.5 : 13.5; }
             if (!fresh && c.Moves && _lastRank > 0)
             {
                 if (crown && _lastRank > 1) { Slam(); _look.Lead(); }
@@ -289,7 +304,9 @@ sealed partial class HudAsmodian
                 return;
             }
             var r = new Rect(.5, .5, Math.Max(1, W - 1), H - 1);
-            double fx = r.Width * Math.Clamp(_bar, 0, 1);
+            var cols = _words.ColumnDefinitions;
+            double figL = cols[4].ActualWidth > 0 ? r.Right - _words.Margin.Right - cols[4].ActualWidth - cols[5].ActualWidth - cols[6].ActualWidth - cols[7].ActualWidth - 6 : r.Right - 100;
+            double fx = Math.Min(r.Width * Math.Clamp(_bar, 0, 1), figL - r.Left);
             if (fx < 8) return;
             if (_glint == null)
             {
@@ -424,8 +441,12 @@ sealed partial class HudAsmodian
             var cols = _words.ColumnDefinitions;
             double figL = r.Right - _words.Margin.Right - cols[4].ActualWidth - cols[5].ActualWidth - cols[6].ActualWidth - cols[7].ActualWidth + 2;
             if (cols[4].ActualWidth <= 0) figL = r.Right;
-            double quiet = figL - (_heal.Visibility == Visibility.Visible ? cols[3].ActualWidth : 0) - 8;
-            Forged(dc, r, fx, m.ClassColor, 1, quiet, m.You ? .6 : 1);
+            // the text's runs on the row: the name's line (name, CP, marks), the heal figure, the figures
+            double nameL = _words.Margin.Left + cols[0].ActualWidth + cols[1].ActualWidth, nameR = nameL + _line.DesiredSize.Width;
+            double healR = figL, healL = _heal.Visibility == Visibility.Visible ? figL - cols[3].ActualWidth : figL;
+            double e0 = r.Left + fx - 13, e1 = r.Left + fx + 3;
+            bool onText = (e1 > nameL && e0 < nameR) || (e1 > healL && e0 < healR) || e1 > figL - 2;
+            Forged(dc, r, fx, m.ClassColor, 1, onText ? double.NegativeInfinity : double.PositiveInfinity, m.You ? .6 : 1);
             if (fx > figL - 18) Well(dc, r, figL);
             // a healer's share of the group's healing as a mint line along the slab's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
@@ -450,7 +471,7 @@ sealed partial class HudAsmodian
     static readonly Brush BurstStroke = Frozen(Color.FromRgb(0xFF, 0x4A, 0x3D));
     static readonly Brush ImpactFlash = MakeRadial(Color.FromArgb(0xFF, 0xFF, 0xF6, 0xE0), Color.FromArgb(0, 0xFF, 0x4A, 0x3D), Color.FromArgb(0xC0, 0xFF, 0x9A, 0x5A));
     static readonly Brush CrackGlow = Frozen(Color.FromArgb(0x90, 0xFF, 0x3A, 0x2E)), CrackCore = Frozen(Color.FromRgb(0xFF, 0xE2, 0xB0));
-    static readonly Pen EdgeBloom = Mod.P(Frozen(Color.FromArgb(0x70, 0xE0, 0x1C, 0x2A)), 6), EdgeBody = Mod.P(Frozen(Color.FromArgb(0xE0, 0xFF, 0x7A, 0x30)), 3.4), EdgeCore = Mod.P(Frozen(Color.FromRgb(0xFF, 0xF6, 0xE6)), 1.6);
+    static readonly Pen EdgeBloom = Mod.P(Frozen(Color.FromArgb(0x70, 0xE0, 0x1C, 0x2A)), 4), EdgeBody = Mod.P(Frozen(Color.FromArgb(0xE0, 0xFF, 0x7A, 0x30)), 3.4), EdgeCore = Mod.P(Frozen(Color.FromRgb(0xFF, 0xF6, 0xE6)), 1.6);
     static readonly Pen LeadRim = Mod.P(Frozen(Color.FromRgb(0xFF, 0x4A, 0x3D)), 1.5), LeadGlow = Mod.P(Frozen(Color.FromArgb(0x48, 0xFF, 0x3A, 0x2E)), 6);
     static readonly Brush BurstGlow = MakeRadial(Color.FromArgb(0xE6, 0xFF, 0xD0, 0x8A), Color.FromArgb(0, 0xC2, 0x1F, 0x2E), Color.FromArgb(0x90, 0xFF, 0x4A, 0x3D));
 }
