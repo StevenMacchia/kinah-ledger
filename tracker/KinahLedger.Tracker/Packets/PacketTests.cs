@@ -252,6 +252,19 @@ public static class PacketTests
                 rk.AmountForTest(CurrencyKind.AbyssPoints, ap += dap, p1.AddSeconds(dt + 0.1));
             }
             k.DrainPacketsForTest();
+            // a quest's turn-in among kills (2026-11-20 11:16:31, Western Altamia): 50,000 bound Kinah and 2,500 Abyss Points with no
+            // Rank Points, a kill's 300 bound Kinah a moment before. The kill's counts; the quest's is more than a kill pays
+            {
+                var q = Fresh(out var rq);
+                q.Engine.SetZone("Western Altamia Highland");
+                var qt = DateTime.UtcNow;
+                rq.AmountForTest(CurrencyKind.BoundKinah, 135_421, qt.AddSeconds(-60)); rq.AmountForTest(CurrencyKind.AbyssPoints, 13_442, qt.AddSeconds(-60));
+                q.CommitForTest(new CurrencyGained(qt.AddSeconds(-1.5), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+                rq.AmountForTest(CurrencyKind.BoundKinah, 135_721, qt.AddSeconds(-1));
+                rq.AmountForTest(CurrencyKind.BoundKinah, 185_721, qt.AddSeconds(-0.2)); rq.AmountForTest(CurrencyKind.AbyssPoints, 15_942, qt.AddSeconds(-0.2));
+                q.DrainPacketsForTest();
+                Check(q.Engine.KinahBound == 300, $"...a quest's 50,000 bound Kinah and 2,500 Abyss Points among kills is more than a kill pays: bound Kinah +{q.Engine.KinahBound:N0} (the kill's 300)");
+            }
             // the chat's line for one item of an update is the whole update's (2026-11-20 11:34:49, Gartua's drop): Refining Stone
             // and Artisan's Refining Stone came in one update, no kill of the player's around it (a world boss), the chat's line
             // only for the Artisan's; the plain one was judged first and left out
@@ -478,6 +491,23 @@ public static class PacketTests
             bool broken = reader.ItemsBroken != null;
             s.CommitForTest(new ItemAcquired(t0.AddSeconds(150), Odyle, 2, false) { Via = "chat" });
             Check(broken && M(Odyle) == 5, $"...three chat pickups the traffic never showed: items are the screen's again (Odyle {M(Odyle)}, every chat line counted)");
+
+            // a chat line dated before its rise (2026-11-20 16:46, Steven's log): the gather's +2 at 16:46:07.2, its line read garbled
+            // and settled as "Acquired Oricha" dated 16:46:01.0; and an Odyle line dated 12:22:37.5 before three gathers' rises (45.3,
+            // 52.2, 56.6) and their three lines. Each line is a rise's: none "the game's messages didn't show"
+            {
+                long ore = items.IdOf("Orichalcum Ore"), ody = items.IdOf("Odyle");
+                var pb = new PacketReader(); pb.ReadingForTest();
+                var tb = DateTime.UtcNow.AddMinutes(-2);
+                pb.ItemsForTest(new ItemChange(tb.AddSeconds(6.2), ore, ItemOp.Changed, 31, 2, 19, false, 900, 1, false));
+                pb.ScreenSawItem(ore, 1, tb, true, new object());
+                foreach (var (at, total) in new[] { (45.3, 27L), (52.2, 28L), (56.6, 29L) })
+                    pb.ItemsForTest(new ItemChange(tb.AddSeconds(at), ody, ItemOp.Changed, 32, 1, total, false, 901 + (int)at, 1, false));
+                foreach (var at in new[] { 37.5, 45.8, 52.6, 57.0 }) pb.ScreenSawItem(ody, 1, tb.AddSeconds(at), true, new object());
+                pb.AgreeItemsForTest(DateTime.UtcNow);
+                Check(!pb.Verdicts.Contains("not shown") && pb.Verdicts.Count == 5,
+                    $"...a line the settle dated before its rise is that rise's: {string.Join(", ", pb.Verdicts)} (5 lines, none \"not shown\")");
+            }
 
             // a bought item read again (Steven, 2026-11-13 18:35: two Wrathful Ego bought, the crafting window over the chat, the
             // same two lines read again 23 s later with a kill beside them, counted as rare drops): a rise the tracker didn't

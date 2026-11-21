@@ -320,6 +320,12 @@ static class ChatCountTests
                 string.Join(" · ", new[] { "No items available to acquire.", "Acquired Amplify St", "Acquired-sour", "Acquired \"Enhance Stonexl '310.", "Adamant Guardian (Cloak) Skjn acquired.", "GOFan•äace) Skin acquired.", "Skin acquired." }.Select(R6)),
                 "(nothing) · (nothing) · (nothing) · (nothing) · (nothing) · (nothing) · (nothing)");
             Check("...while an event's own token no list knows is the run's by its name", R6("Acquired Glimmerfen Parade Token x3."), "Glimmerfen Parade Token x3");
+            // 2026-11-20 13:54:16 (Steven's log, a Force in the Abyss): the game printed his own share with his name, "Swoly acquired
+            // Earth Dagger through Force" (its "distribution." wrapped), and it was dropped as another player's
+            var po = new ChatParser(items) { OwnName = () => "Swoly" };
+            Check("the player's own Force share printed with the player's name is the player's; another name's is not",
+                string.Join(" · ", new[] { P(po, "Swoly acquired Earth Dagger through Force"), P(po, "Tianya acquired Earth Dagger through Force distribution."), P(p, "Swoly acquired Earth Dagger through Force") }),
+                "Earth Dagger x1 · (nothing) · (nothing)");
             Check("out of a run the same lines are the kill's points", string.Join(" · ", new[] { "Acquired 207 Rank' Point(S).", "Acquired 189 Abyss" }.Select(l => string.Join("; ", p.Parse(l, t0).Select(D2)))), "207 Rank Points · 189 Abyss Points");
             Check("meaning: \"Acquired 181 Abyss Point(s).\" is exactly Abyss Points x181", p.Meaning("Acquired 181 Abyss Point(s).").ToString(), "(i:abyss pointsx181, True)");
             Check("a kill's payout lines are no reward batch", $"{p.IsKillPay("Acquired 181 Rank Point(s).")} {p.IsKillPay("Acquired 80 Kina.")} {p.IsKillPay("Acquired 190 Abyss Point(s).")} {p.IsKillPay("Acquired 17T Rank, Point(s).")} {p.IsKillPay("c quired 223 Abyss P")} {p.IsKillPay("Acquired 1,000 Abyss Point(s).")} {p.IsKillPay("Acquired Odyle x5.")} {p.IsKillPay("Vagabond Cloak acquired.")}", "True True True True True False False False");
