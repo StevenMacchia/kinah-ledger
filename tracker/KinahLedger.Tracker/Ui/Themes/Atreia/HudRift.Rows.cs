@@ -9,26 +9,7 @@ namespace KinahLedger.Ui;
 
 sealed partial class HudRift
 {
-    /// <summary>A name of up to this many characters always shows whole (the crowding rule's floor).</summary>
-    const int NameKeep = 10;
-
-    /// <summary>A text's width in a block's own face, size and weight (a figure column sized for its widest form).</summary>
-    static double TextW(TextBlock like, string s)
-    {
-        var probe = new TextBlock { Text = s, FontFamily = like.FontFamily, FontSize = like.FontSize, FontWeight = like.FontWeight, FontStretch = like.FontStretch, Padding = like.Padding };
-        TextOptions.SetTextFormattingMode(probe, TextFormattingMode.Display);
-        System.Windows.Documents.Typography.SetNumeralAlignment(probe, FontNumeralAlignment.Tabular);
-        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return Math.Ceiling(probe.DesiredSize.Width);
-    }
-
-    /// <summary>A figure column's width: the widest of <paramref name="forms"/>, the block's margins and a pixel of air.</summary>
-    static double FigCol(TextBlock fig, params string[] forms) => forms.Max(f => TextW(fig, f)) + fig.Margin.Left + fig.Margin.Right + 1;
-
-    /// <summary>A member's bar, 0 to 1, against the fight's top (by Combat Power before any damage).</summary>
-    static double BarOf(MeterMember m, MeterContext c) => c.E.BarOf(m.F);   // against the top member's: the top bar full, the rest in proportion (2026-11-20)
-
-    /// <summary>The fight's foot under its hairline: "Total 622.4M" at the left, the group's word and figure at the right, the AVG mark on a held average.</summary>
+    /// <summary>The meter's foot: "Total 622.4M" at the left, "Group DPS 999K" (or your best or peak) at the right, the AVG mark after it.</summary>
     FrameworkElement Foot(Encounter e, DateTime now)
     {
         var (total, word, group, held) = FootOf(e, now);
@@ -36,163 +17,328 @@ sealed partial class HudRift
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         TextBlock Pair(string w, string fig)
         {
-            var t = new TextBlock { FontFamily = Mod.Face, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), VerticalAlignment = VerticalAlignment.Center };
-            System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+            var t = Tt("", 11.5, Soft, FontWeights.Medium);
             t.Inlines.Add(new System.Windows.Documents.Run(w + " "));
             t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = White, FontSize = 12 });
             return t;
         }
         var tp = Pair(L.T("Total"), total);
-        EnergyMark.After(tp, 11, Frozen(Mod.A(Colors.White, .72)));   // Odyle Energy (Ui/EnergyMark.cs)
+        EnergyMark.After(tp, 11, Soft);   // Odyle Energy (Ui/EnergyMark.cs)
         g.Children.Add(tp);
-        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (word.Length > 0) right.Children.Add(Pair(word, group));
         if (held)
         {
-            var avg = Mark(L.T("AVG"), size: 8.5); avg.Tag = "avg-badge"; avg.ToolTip = L.T(Encounter.AvgBadge); avg.Margin = new Thickness(5, 0, 0, 0);
+            var avg = Mark(L.T("AVG"), size: 8.5); avg.Tag = "avg-badge"; avg.ToolTip = L.T(Encounter.AvgBadge); avg.Margin = new Thickness(6, 0, 0, 0);
             right.Children.Add(avg);
         }
         Grid.SetColumn(right, 1); g.Children.Add(right);
-        return AsFoot(Lit(g), e, now);
+        return AsFoot(g, e, now);
     }
 
-    /// <summary>The line between the party and you pinned below it: "2 MORE", small and quiet.</summary>
+    /// <summary>The line between the party and you pinned below it: "2 MORE", small and quiet, between two faint seams.</summary>
     static FrameworkElement GapLine(int left)
     {
-        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "·", 9, Frozen(Mod.A(Colors.White, .82)), FontWeights.SemiBold);
+        var t = Tt(left > 0 ? L.F("{0} more", left).ToUpperInvariant() : "···", 9, Quiet, FontWeights.SemiBold);
         t.HorizontalAlignment = HorizontalAlignment.Center;
-        var lit = Lit(t);
-        lit.HorizontalAlignment = HorizontalAlignment.Center;
-        return lit;
+        return t;
     }
 
     /// <summary>
-    /// One member as a soft class wash fading out to the right (the mock-up's Fade row): the wash runs from the row's left for
-    /// the member's part of the top (rounded at its left, ~62% colour, ~38% at 70% of its length, then gone). On it, straight
-    /// over the game in shaded white: the rank, the class's art in a thin white ring, the name, Combat Power small, the marks
-    /// (★ DPS, a healer's ✚, deaths, YOU), a healer's healing a second in mint, the DPS big and the share small at the right.
-    /// You: a thin white bar at the row's left edge. Short of room the CP goes first, then the share; a name keeps at least
-    /// ten characters; a figure is never cut (Mod.Fit).
+    /// The rows' shared fit: a figure column holds or goes for every row at once (a column that jumps from row to row can't
+    /// be read down). Level 0 shows every column; 1 lets the share go; 2, on the expanded meter, the crit rate too.
     /// </summary>
-    sealed class FadeRow : IThemeRow
+    internal sealed class RiftFit
     {
-        public const double H = 29, Pitch = 32;
-        const double Pad = 8;
+        readonly Dictionary<RiftRow, int> _need = new();
+        public int Level { get; private set; }
+
+        public void Report(RiftRow row, int need)
+        {
+            _need[row] = need;
+            foreach (var gone in _need.Keys.Where(r => r.Root.Parent == null && r != row).ToList()) _need.Remove(gone);
+            int level = _need.Values.DefaultIfEmpty(0).Max();
+            if (level == Level) return;
+            Level = level;
+            foreach (var r in _need.Keys.Where(r => r != row).ToList()) r.Layout();
+        }
+    }
+
+    /// <summary>
+    /// One member as a bar out of the Abyss: a void-dark ground with a faint violet rim (yours in starlight), the bar rising from
+    /// the Abyss's violet into the member's class colour with the stars showing through it, and at its leading edge a fissure
+    /// of rift light (the leader's the brightest). On it, under one tight violet-black shade: the rank, the class's emblem in
+    /// a lilac ring (the leader's crowned with three crystal shards), the name in white with the Combat Power after it and the
+    /// marks (★ DPS, ✚ Heal, YOU, deaths), a healer's healing a second in mint, the DPS big in starlight and the share.
+    /// Crowding (Steven, 2026-11-17): the CP goes first, then the marks shorten to their glyphs, then the name trims (never
+    /// below ten letters), then the share column goes for every row; a figure is never cut.
+    /// </summary>
+    internal sealed class RiftRow : IThemeRow
+    {
+        public const double H = 26, Pitch = 29;
+        const double PadX = 8, RankW = 14, Gap1 = 4, IconW = 20, Gap2 = 6, ShareW = 34, DmgW = 54, CritW = 36;
+        readonly HudRift _look;
+        readonly RiftFit _fit;
         readonly Grid _root = new() { Height = H };
-        readonly TacSketch _wash;
-        readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad, 0) };
-        readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .74)), FontWeights.SemiBold),
-            _heal = Tt("", 11, Mint2, FontWeights.Bold), _dps = Tt("", 16.5, White, FontWeights.Bold), _share = Tt("", 10.5, Frozen(Mod.A(Colors.White, .88)), FontWeights.SemiBold),
-            _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
-        readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-        readonly List<FrameworkElement> _marks = new();
-        readonly double _dpsW, _shareW, _dmgW, _critW;
-        string _cls = "\0";
+        readonly Grid _words = new();
+        readonly TacSketch _art, _crown;
+        readonly TextBlock _rank = Tt("", 12, Frozen(Mod.A(LilacC, .95)), FontWeights.Bold), _name = Tt("", 13.5, Frozen(Colors.White), FontWeights.SemiBold),
+            _cp = Tt("", 10.5, Frozen(Mod.A(Color.FromRgb(0xE8, 0xE0, 0xFF), .8)), FontWeights.Medium),
+            _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _dps = Tt("", 17, White, FontWeights.Bold), _share = Tt("", 10.5, Frozen(Mod.A(Color.FromRgb(0xF2, 0xEE, 0xFF), .95)), FontWeights.SemiBold),
+            _dmg = Tt("", 12, Soft, FontWeights.SemiBold), _crit = Tt("", 11, Quiet, FontWeights.SemiBold);
+        readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = false };
+        readonly Border _icon = new() { Width = IconW, Height = IconW, CornerRadius = new CornerRadius(IconW / 2), BorderThickness = new Thickness(1.5), BorderBrush = Frozen(Mod.A(LilacC, .55)), Background = Frozen(Mod.A(VoidC, .55)), VerticalAlignment = VerticalAlignment.Center };
+        readonly List<FrameworkElement> _keep = new();
+        readonly List<(FrameworkElement Full, FrameworkElement Short)> _give = new();
         MeterMember? _m;
-        double _bar;
-        bool _expanded, _shareOn = true;
+        string _iconCls = "\0";
+        double _bar, _land = -1, _climb = -1;
+        int _was;
+        bool _expanded;
 
         public FrameworkElement Root => _root;
 
-        public FadeRow()
+        public RiftRow(HudRift look, RiftFit fit)
         {
-            _dps.Tag = "row-dps"; _share.Tag = "row-share"; _heal.Tag = "heal-figures"; _cp.Tag = "cp";
-            _dps.HorizontalAlignment = _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
-            _share.Margin = new Thickness(0, 2, 0, 0); _dmg.Margin = new Thickness(0, 1, 0, 0); _crit.Margin = new Thickness(0, 1, 0, 0);
-            _heal.Margin = new Thickness(6, 1, 0, 0);
-            // the columns: rank, the class art, the name's line (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
-            _dpsW = FigCol(_dps, "888.8K") + 4; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
-            _dmgW = FigCol(_dmg, "888.88M") + 8; _critW = FigCol(_crit, "88%") + 8;
-            foreach (var w in new[] { 17.0, 25, double.NaN, 0, _dpsW, _shareW, 0, 0 })
-                _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
-            _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
-            _wash = new TacSketch(Draw);
-            _root.Children.Add(_wash);
+            _look = look; _fit = fit;
+            foreach (var w in new[] { PadX, RankW, Gap1, IconW, Gap2, double.NaN, 0, 0, ShareW, 0, 0, PadX })
+                _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
+            _words.ColumnDefinitions[6].Width = GridLength.Auto; _words.ColumnDefinitions[7].Width = GridLength.Auto;
+            _art = new TacSketch(Draw);
+            _crown = new TacSketch(DrawCrown);
+            _root.Children.Add(_art);
+            _root.Children.Add(_words);
+            _root.Children.Add(_crown);
+            _words.Effect = Shade();
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            Put(_rank, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
+            Put(_rank, 1); Put(_icon, 3);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
-            _cp.Margin = new Thickness(5, 2, 0, 0);
-            _line.Children.Add(_name); _line.Children.Add(_cp);
-            _root.Children.Add(Lit(_words));
+            _nameLine.Children.Add(_name);
+            Put(_nameLine, 5);
+            _heal.Margin = new Thickness(5, 0, 0, 0); _heal.Tag = "heal-figures"; Put(_heal, 6);
+            _dps.Margin = new Thickness(5, 0, 0, 0); _dps.HorizontalAlignment = HorizontalAlignment.Right; _dps.Tag = "row-dps"; Put(_dps, 7);
+            _share.Tag = "row-share"; _cp.Tag = "cp";
+            foreach (var (t, col) in new[] { (_share, 8), (_dmg, 9), (_crit, 10) }) { t.HorizontalAlignment = HorizontalAlignment.Right; Put(t, col); }
+            _cp.Margin = new Thickness(5, 1, 0, 0);
             _root.SizeChanged += (_, _) => Fit();
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
 
+        bool Leads => _m is { Rank: 1, CpOnly: false, Pvp: false };
+
         public void Set(MeterMember m, MeterContext c, bool fresh)
         {
+            // a rank won with effects playing: the fissure flares and leaves a streak of rift light below it as the row glides up
+            if (!fresh && c.Moves && _was > 0 && m.Rank < _was) Climb();
+            _was = m.Rank;
             _m = m;
             if (_expanded != c.Expanded)
             {
                 _expanded = c.Expanded;
-                _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
-                _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
+                _words.ColumnDefinitions[9].Width = new GridLength(c.Expanded ? DmgW : 0);
             }
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
-            if (m.Class != _cls)
+            _rank.Foreground = Leads ? White : Frozen(Mod.A(LilacC, .95));
+            if (_iconCls != m.Class)
             {
-                _cls = m.Class;
-                var icon = ThemeText.Icon(m.Class, 17, m.Name);
-                if (icon is Border b) { b.BorderBrush = Frozen(Mod.A(Colors.White, .75)); b.BorderThickness = new Thickness(1); }
-                _iconHost.Child = icon;
+                _iconCls = m.Class;
+                var ic = ThemeText.Icon(m.Class, IconW - 3, m.Name);
+                ic.HorizontalAlignment = HorizontalAlignment.Center;
+                _icon.Child = ic;
             }
+            _icon.BorderBrush = Leads ? Frozen(Mod.A(LightC, .9)) : Frozen(Mod.A(LilacC, .55));
             _name.Text = m.Name;
+            while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
+            _keep.Clear(); _give.Clear();
             _cp.Text = m.Cp;
-            // the marks after the name: ★ DPS, a healer's ✚, deaths, YOU (kept whole: the name and the CP give way first)
-            foreach (var mk in _marks) _line.Children.Remove(mk);
-            _marks.Clear();
-            void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
-            if (m.TopDps) { var t = Mark("★ " + L.T("DPS")); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
-            if (m.TopHeals) { var t = Mark("✚", MarkMint, MarkMintC); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
-            if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10, Coral, FontWeights.Bold); d.Tag = "deaths"; Add(d); }
-            if (m.You) { var y = Mark(L.T("YOU"), filled: true); y.Tag = "you"; Add(y); }
+            if (m.Cp.Length > 0) _nameLine.Children.Add(_cp);
+            FrameworkElement Add(FrameworkElement el) { el.Margin = new Thickness(4, 0, 0, 0); _nameLine.Children.Add(el); return el; }
+            if (m.TopDps) _give.Add((Add(TopMark("★ " + L.T("DPS"), false)), Add(TopMark("★", false, L.T("Top DPS")))));
+            if (m.TopHeals) _give.Add((Add(TopMark("✚ " + L.T("Heal"), true)), Add(TopMark("✚", true, L.T("Top heals")))));
+            if (m.You) { var y = Mark(L.T("YOU"), filled: true, size: 9); y.Tag = "you"; _keep.Add(Add(y)); }
+            if (m.Deaths > 0) { var d = Tt("✕" + m.Deaths.ToString(CultureInfo.InvariantCulture), 10.5, Coral, FontWeights.Bold); d.Tag = "deaths"; d.ToolTip = L.F(m.Deaths == 1 ? "{0} death" : "{0} deaths", m.Deaths); _keep.Add(Add(d)); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _dps.Text = m.Figure;
-            // a wider figure (Combat Power before the first hit, "167,548") widens its column: never a digit cut
-            _words.ColumnDefinitions[4].Width = new GridLength(Math.Max(_dpsW, TextW(_dps, m.Figure) + 4));
+            _dps.FontSize = m.CpOnly ? 14 : 17;
             _share.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
-            SlideBar(_wash, c, "bar", BarOf(m, c), v => { _bar = v; _wash.InvalidateVisual(); });
-            _wash.InvalidateVisual();
+            // filled against the top member's (the top bar full, the rest in proportion, 2026-11-20: Encounter.BarOf)
+            SlideBar(_art, c, "bar", m.CpOnly ? 0 : c.E.BarOf(m.F), v => { _bar = v; _art.InvalidateVisual(); });
+            _art.InvalidateVisual(); _crown.InvalidateVisual();
+            if (Leads) _look.Lead(this, m, c);
         }
 
-        /// <summary>The crowding rule (Mod.Fit): the CP goes first, then the share; the name keeps at least ten characters.</summary>
+        /// <summary>A top mark as a violet glass chip: ★ DPS lilac-rimmed, ✚ Heal mint-rimmed.</summary>
+        static Border TopMark(string s, bool heal, string? tip = null)
+        {
+            var m = Mark(s, heal ? Mint2 : White, heal ? MintC2 : null, size: 9);
+            m.Tag = heal ? "top-heals" : "top-dps";
+            m.ToolTip = tip;
+            if (s.Length == 1) m.Padding = new Thickness(3, 0, 3, 1);
+            return m;
+        }
+
+        internal void Redraw() { _art.InvalidateVisual(); }
+
+        /// <summary>The crown lands: it drops onto its place over the emblem with a flash of rift light down through it and a ring of light spreading out.</summary>
+        internal void Land()
+        {
+            Motion.Play(_crown, 1000, t => { _land = t; _crown.InvalidateVisual(); _art.InvalidateVisual(); }, () => { _land = -1; _crown.InvalidateVisual(); _art.InvalidateVisual(); });
+        }
+
+        void Climb()
+        {
+            Motion.Play(_words, 620, t => { _climb = t; _art.InvalidateVisual(); }, () => { _climb = -1; _art.InvalidateVisual(); });
+        }
+
+        /// <summary>The name line's room with every column shown (the row's width less every other column).</summary>
+        double Room()
+        {
+            double w = _root.ActualWidth;
+            if (w <= 0) return double.NaN;
+            double other = PadX + RankW + Gap1 + IconW + Gap2 + Mod.W(_dps) + _dps.Margin.Left + (_heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0)
+                + (_expanded ? DmgW + CritW : 0) + PadX;
+            return w - other - ShareW;
+        }
+
+        /// <summary>The room a fit level gives back: the share's column, then (expanded) the crit rate's.</summary>
+        double Freed(int level) => (level >= 1 ? ShareW : 0) + (level >= 2 && _expanded ? CritW : 0);
+
+        /// <summary>The narrowest the name goes: its first ten letters and the ellipsis (a shorter name, whole).</summary>
+        double NameMin()
+        {
+            var s = _name.Text;
+            if (s.Length <= 10) return Mod.W(_name);
+            var t = Tt(s[..10] + "…", _name.FontSize, White, _name.FontWeight);
+            return Mod.W(t) + 1;
+        }
+
         void Fit()
         {
-            double total = _root.ActualWidth;
-            if (total <= 0) return;
-            var cols = _words.ColumnDefinitions;
-            double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0;
-            double room = total - 2 * Pad - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
-            double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
-            var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
+            double room = Room();
+            if (double.IsNaN(room)) return;
+            _name.ClearValue(FrameworkElement.MaxWidthProperty);
+            double least = Math.Min(Mod.W(_name), NameMin()) + _keep.Sum(e => Mod.W(e) + 4) + _give.Sum(g => Mod.W(g.Short) + 4);
+            // a column goes (for every row) only when the CP gone, the marks short and the name at its ten letters still don't fit
+            int need = 0;
+            while (need < 2 && least > room + Freed(need) + .5) need++;
+            _fit.Report(this, need);
+            Layout();
+        }
+
+        /// <summary>The row laid out at the meter's fit level: its columns, the CP, the marks' forms and the name's width.</summary>
+        internal void Layout()
+        {
+            double room = Room();
+            if (double.IsNaN(room)) return;
+            int level = _fit.Level;
+            _words.ColumnDefinitions[8].Width = new GridLength(level >= 1 ? 0 : ShareW);
+            _share.Visibility = level >= 1 ? Visibility.Collapsed : Visibility.Visible;
+            _words.ColumnDefinitions[10].Width = new GridLength(_expanded && level < 2 ? CritW : 0);
+            _crit.Visibility = level >= 2 ? Visibility.Collapsed : Visibility.Visible;
+            room += Freed(level);
+            _name.ClearValue(FrameworkElement.MaxWidthProperty);
+            double nw = Mod.W(_name), keep = _keep.Sum(e => Mod.W(e) + 4);
+            double cpw = _cp.Text.Length > 0 ? Mod.W(_cp) + _cp.Margin.Left : 0;
+            double full = _give.Sum(g => Mod.W(g.Full) + 4), shorts = _give.Sum(g => Mod.W(g.Short) + 4);
+            // the CP goes first (and stays gone once a column has gone), then the marks shorten, then the name trims
+            bool cp = level == 0 && cpw > 0 && nw + cpw + keep + full <= room;
+            bool longMarks = nw + keep + full <= room;
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
-            if (share != _shareOn || cols[5].Width.Value != (share ? _shareW : 0))
-            {
-                _shareOn = share;
-                cols[5].Width = new GridLength(share ? _shareW : 0);
-            }
-            _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var (f, sh) in _give) { f.Visibility = longMarks ? Visibility.Visible : Visibility.Collapsed; sh.Visibility = longMarks ? Visibility.Collapsed : Visibility.Visible; }
+            double marks = keep + (longMarks ? full : shorts) + (cp ? cpw : 0);
+            _name.MaxWidth = Math.Max(Math.Min(nw, NameMin()), room - marks);
         }
 
         void Draw(DrawingContext dc, Size s)
         {
-            if (_m is not { } m || s.Width < 20) return;
-            double fx = s.Width * Math.Clamp(_bar, 0, 1);
-            var c = m.ClassColor;
-            // the wash: the class's colour from the left, fading out by the end of the member's part
-            if (fx > .5) Wash(dc, new Rect(0, 0, fx, s.Height), c, .62, .38, 6);
-            // you: a thin white bar at the row's left edge, inside the wash's rounded corner
-            if (m.You)
+            if (_m is not { } m || s.Width < 40) return;
+            double h = s.Height;
+            var r = new Rect(.5, .5, s.Width - 1, h - 1);
+            var pill = Mod.Pill(r, 5);
+            var tone = m.ClassColor;
+            // the ground: the void, a breath of violet at its top
+            dc.DrawGeometry(Mod.Grad(true, (Mod.A(DuskC, .78), 0), (Mod.A(VoidC, .82), 1)), null, pill);
+            double fx = r.Width * Math.Clamp(_bar, 0, 1);
+            // the seams' pulse reaching this row (rank order), and its own moments
+            int at = Math.Max(0, Math.Min(m.Rank, 6) - 1);
+            double seam = _look._seam is > 0 and < 1 ? Seg(_look._seam, .2 + .1 * at, .2 + .1 * at + .42) : 0;
+            var light = _look._seamC ?? LightC;
+            double flare = seam is > .55 and < 1 ? Math.Sin(Math.PI * (seam - .55) / .45) : 0;
+            double land = _land is > .25 and < 1 && Leads ? Math.Sin(Math.PI * Seg(_land, .25, 1)) : 0;
+            double climb = _climb is > 0 and < 1 ? 1 - _climb : 0;
+            if (fx > 1)
             {
-                dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Max(fx, 12) + 6, s.Height), 6, 6));
-                dc.DrawRectangle(White, null, new Rect(0, 0, 3, s.Height));
+                dc.PushClip(pill);
+                var fill = new Rect(r.X, r.Y, fx, r.Height);
+                // the body: the Abyss's violet at its root rising into the class's colour, the stars showing through
+                dc.DrawRectangle(Mod.Grad(false, (Mod.A(Mod.Mix(DeepVioletC, tone, .14), .94), 0), (Mod.A(Mod.Mix(Mod.Mix(tone, VioletC, .3), VoidC, .3), .82), .55), (Mod.A(Mod.Mix(tone, DeepVioletC, .32), .94), 1)), null, fill);
+                dc.PushOpacity(.5);
+                dc.DrawRectangle(Stars, null, fill);
+                dc.Pop();
+                // depth: lighter along its top half, a hairline of light on its top
+                dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .13), 0), (Mod.A(Colors.White, 0), .55)), null, fill);
+                dc.DrawRectangle(Mod.Br(LilacC, .3), null, new Rect(r.X, r.Y, fx, 1));
+                if (seam is > 0 and < 1)
+                {
+                    // the pulse sweeping up the bar into its fissure
+                    double bx = r.X - 20 + (fx + 20) * Out(Math.Min(1, seam / .7)), a = Math.Min(1, 1.2 * Math.Sin(Math.PI * Math.Min(1, seam / .8)));
+                    dc.DrawRectangle(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, light, .5), .35 * a), .55), (Mod.A(light, .85 * a), .92), (Mod.A(light, 0), 1)), null, new Rect(bx - 56, r.Y, 60, r.Height));
+                    dc.DrawRectangle(Mod.Br(Colors.White, .8 * a), null, new Rect(bx - 5, r.Y + 1, 1.5, r.Height - 2));
+                }
                 dc.Pop();
             }
+            // a healer's share of the group's healing as a mint line along the bar's foot (Settings' heal bars)
+            if (ParserRows.HealBarsPref && m.HealShare > 0)
+            {
+                dc.PushClip(pill);
+                dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2.5, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2.5));
+                dc.Pop();
+            }
+            dc.DrawGeometry(null, Mod.P(m.You ? Mod.Br(StarC, .6) : Mod.Br(LilacC, .14), m.You ? 1.2 : 1), pill);
+            if (fx > 1)
+            {
+                // the fissure at the leading edge: the leader's the brightest; a pulse, a landing or a climb flares it
+                double k = (Leads ? 1.4 : .62) + 1.2 * flare + .9 * land + .8 * climb;
+                Fissure(dc, Math.Max(r.X + 1.5, r.X + fx - .5), r.Y, r.Height, tone, k, (int)(m.Id & 7));
+                if (climb > 0)
+                {
+                    // the streak of rift light the edge leaves below it as the row glides up
+                    double ex = r.X + fx - .5, len = 18 * climb;
+                    dc.DrawRectangle(Mod.Grad(true, (Mod.A(CyanC, .7 * climb), 0), (Mod.A(VioletC, 0), 1)), null, new Rect(ex - 1.2, r.Bottom, 2.4, len));
+                }
+            }
+        }
+
+        /// <summary>The crown over the leader's emblem: three crystal shards floating over it; landing, they drop in and a flash of rift light runs down through them.</summary>
+        void DrawCrown(DrawingContext dc, Size s)
+        {
+            if (!Leads) return;
+            double cx = PadX + RankW + Gap1 + IconW / 2, by = (s.Height - IconW) / 2 + 5;
+            double drop = 0, glow = 0, op = 1;
+            if (_land is >= 0 and < 1)
+            {
+                double t = _land;
+                drop = -7 * (1 - Back(Seg(t, 0, .4), 2.4));
+                op = Seg(t, 0, .18);
+                glow = t > .25 ? Math.Sin(Math.PI * Seg(t, .25, 1)) : 0;
+                if (glow > 0)
+                {
+                    // the flash: a thin fissure of rift light down through the crown, a ring of light spreading from its feet
+                    double f = t < .3 ? 0 : Math.Sin(Math.PI * Seg(t, .3, .8));
+                    if (f > 0) Fissure(dc, cx, Math.Max(-3, by - 14), 20 + 4 * f, VioletC, .9 * f, 6);
+                    double rr = 4 + 13 * Seg(t, .3, .9);
+                    dc.DrawEllipse(null, Mod.P(Mod.Br(CyanC, .85 * (1 - Seg(t, .3, .95))), 1.3), new Point(cx, by - 1), rr, rr * .36);
+                }
+            }
+            dc.PushOpacity(op);
+            dc.PushTransform(new TranslateTransform(0, drop));
+            Crown(dc, cx, by, 1.45, glow);
+            dc.Pop(); dc.Pop();
         }
     }
 }
