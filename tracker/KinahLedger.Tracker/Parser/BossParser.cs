@@ -293,7 +293,7 @@ public sealed class BossParser
                         else { r.Boss = ""; r.BossHp = 0; r.BossMaxHp = 0; }
                         return r;
                     case ParserMode.Fights: return _fight == null ? null : Copy(_fight);
-                    default: return _cur == null || _cur.Wave ? null : Copy(_cur);
+                    default: return _cur == null || _cur.Wave ? null : Copy(_cur, live: true);
                 }
             }
         }
@@ -303,7 +303,7 @@ public sealed class BossParser
     /// The Always on meter now: the boss pull under way (a pull always starts the meter from 0), else the tally under way,
     /// else null (then the meter holds <see cref="AlwaysEnded"/>).
     /// </summary>
-    public Encounter? AlwaysLive { get { lock (_gate) return _cur is { Wave: false } c ? Copy(c) : _always != null ? Tally(Copy(_always)) : null; } }
+    public Encounter? AlwaysLive { get { lock (_gate) return _cur is { Wave: false } c ? Copy(c, live: true) : _always != null ? Tally(Copy(_always)) : null; } }
     static Encounter Tally(Encounter e) { e.Always = true; return e; }
 
     /// <summary>What the Always on meter showed that ended last (a tally or a pull, with its end), or null.</summary>
@@ -326,14 +326,40 @@ public sealed class BossParser
     }
 
     /// <summary>A copy of a record (the live copy the window draws), its big hits with it (they are never written).</summary>
-    public static Encounter Copy(Encounter e)
+    /// <param name="live">For the meter and the page while the pull is under way (<see cref="LiveAt"/>, <see cref="AlwaysLive"/>):
+    /// without the Timeline tab's lanes, casts and biggest hits (<see cref="LiveJson"/>), which only a kept pull draws.</param>
+    public static Encounter Copy(Encounter e, bool live = false)
     {
-        var c = JsonSerializer.Deserialize<Encounter>(JsonSerializer.Serialize(e))!;
+        var c = JsonSerializer.Deserialize<Encounter>(live ? JsonSerializer.Serialize(e, LiveJson) : JsonSerializer.Serialize(e))!;
         if (e.BigHits is { Count: > 0 } b) c.BigHits = b.ToList();
         // the big hit's measure too (a record restored from a copy keeps its members' averages); the round trip keeps the order
         for (int i = 0; i < c.Roster.Count && i < e.Roster.Count; i++) { c.Roster[i].StreamHitCount = e.Roster[i].StreamHitCount; c.Roster[i].StreamHitSum = e.Roster[i].StreamHitSum; }
         return c;
     }
+
+    /// <summary>
+    /// The live copy's JSON: every field but the Timeline tab's (AbilityShare.Seconds, BossSeconds and CastLog, Fighter.TopHits;
+    /// 1.0.38), which a pull under way never draws (PullTimeline.Has: kept pulls only). They grow with the pull (a second per
+    /// ability, a mark per cast), and the meter copies the pull under the parser's lock at every redraw, up to 16 a second: on a
+    /// 10-minute pull with 25 abilities a copy went from 1 ms to 14 ms with them (parser-test checks the copy leaves them out).
+    /// </summary>
+    static readonly JsonSerializerOptions LiveJson = new()
+    {
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
+        {
+            Modifiers =
+            {
+                ti =>
+                {
+                    string[]? skip = ti.Type == typeof(AbilityShare) ? new[] { nameof(AbilityShare.Seconds), nameof(AbilityShare.BossSeconds), nameof(AbilityShare.CastLog) }
+                        : ti.Type == typeof(Fighter) ? new[] { nameof(Fighter.TopHits) } : null;
+                    if (skip == null) return;
+                    foreach (var p in ti.Properties)
+                        if (p.AttributeProvider is System.Reflection.MemberInfo mi && skip.Contains(mi.Name)) p.ShouldSerialize = (_, _) => false;
+                },
+            },
+        },
+    };
 
     /// <summary>A dungeon whose fights are kept (Encounter.Dungeon): a Transcendence, an Expedition, a Sanctuary, a Nightmare instance.</summary>
     static bool Kept(ContentKind k) => Encounter.Dungeon(k);

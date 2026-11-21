@@ -512,6 +512,7 @@ public static class ParserTests
         // KL_PARSER_ONLY=timeline: the Timeline tab's part alone (a minute or two on the recordings, not the whole test)
         if (Environment.GetEnvironmentVariable("KL_PARSER_ONLY") == "timeline")
         {
+            LiveCopyChecks();
             PullTimelineTests.Run(Check, t, () => New(), Me, Ally, Recording, path => Replay(path, hits: true));
             Console.WriteLine(_fails == 0 ? "parser-test (timeline): all passed" : $"parser-test (timeline): {_fails} failed");
             return _fails == 0 ? 0 : 1;
@@ -2731,6 +2732,7 @@ public static class ParserTests
         PullCompareTests.Run(Check, t, Recording, path => Replay(path, hits: true));
 
         // the Timeline tab (Parser/PullTimeline.cs): a made-up pull, then Steven's recorded boss fights
+        LiveCopyChecks();
         PullTimelineTests.Run(Check, t, () => New(), Me, Ally, Recording, path => Replay(path, hits: true));
 
         // the PB ghost (Parser/PbGhost.cs): made-up pulls, then Steven's recorded boss fights raced against their best
@@ -2738,5 +2740,49 @@ public static class ParserTests
 
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The meter's live copy of a boss pull leaves out the Timeline tab's lists (BossParser.LiveJson), which grow with the pull
+    /// and which only a kept pull draws: with them a copy of a 10-minute pull of 25 abilities took 14 ms (1 ms without), made
+    /// under the parser's lock at every redraw. The kept copy keeps them.
+    /// </summary>
+    static void LiveCopyChecks()
+    {
+        Encounter Pull(bool timeline)
+        {
+            var e = new Encounter { Id = "b", Mode = "boss", Boss = "Talisra of the Void", HasDamage = true, Start = new DateTime(2026, 11, 20, 21, 0, 0, DateTimeKind.Utc) };
+            e.LastAt = e.Start.AddMinutes(10);
+            for (int m = 0; m < 6; m++)
+            {
+                var f = new Fighter { Id = m + 1, Name = "M" + m, Class = "Chanter", You = m == 0 };
+                for (int s = 0; s < 600; s++) { f.PerSecond = Fighter.AddAt(f.PerSecond, s, 1000); f.BossPerSecond = Fighter.AddAt(f.BossPerSecond, s, 1000); }
+                for (int a = 0; a < 25; a++)
+                {
+                    var ab = f.AddAbility(11_000_000 + a * 10_000, 100_000, 100, true);
+                    if (!timeline || m != 0) continue;
+                    ab.Seconds = new(); ab.BossSeconds = new(); ab.CastLog = new();
+                    for (int s = 0; s < 600; s++) { ab.Seconds[s] = 1000; ab.BossSeconds[s] = 1000; }
+                    for (int c = 0; c < 60; c++) ab.CastLog.Add(new CastMark { At = c * 10, Damage = 5000, Hits = 2 });
+                }
+                if (timeline && m == 0) f.TopHits = new() { new TopHit { At = 12, Skill = 11_000_000, Amount = 90_000 } };
+                e.Roster.Add(f);
+            }
+            return e;
+        }
+        var full = Pull(timeline: true);
+        var live = BossParser.Copy(full, live: true);
+        var kept = BossParser.Copy(full);
+        var you = live.You!; var keptYou = kept.You!;
+        Check(you.TopHits == null && you.Abilities.All(a => a.Seconds == null && a.BossSeconds == null && a.CastLog == null)
+            && keptYou.TopHits?.Count == 1 && keptYou.Abilities.All(a => a.Seconds?.Count == 600 && a.BossSeconds?.Count == 600 && a.CastLog?.Count == 60),
+            "the meter's live copy of a pull leaves out the Timeline tab's lanes, casts and biggest hits; the kept copy keeps them");
+        Check(live.You!.Damage == full.You!.Damage && live.Members.Sum(f => f.Abilities.Sum(a => a.Damage)) == full.Members.Sum(f => f.Abilities.Sum(a => a.Damage))
+            && live.You.PerSecond?.Count == 600 && live.Members.Count() == 6,
+            "...and every figure the meter draws is in it as it was");
+        double Ms(bool lv) { for (int i = 0; i < 3; i++) BossParser.Copy(full, lv); var sw = System.Diagnostics.Stopwatch.StartNew(); for (int i = 0; i < 20; i++) BossParser.Copy(full, lv); return sw.Elapsed.TotalMilliseconds / 20; }
+        double liveMs = Ms(true), keptMs = Ms(false);
+        int liveKb = System.Text.Json.JsonSerializer.Serialize(live).Length / 1024, plainKb = System.Text.Json.JsonSerializer.Serialize(Pull(timeline: false)).Length / 1024;
+        Check(liveKb <= plainKb + 1, $"...as small as a pull without them ({liveKb} KB against {plainKb} KB; a copy takes {liveMs:0.0} ms live, {keptMs:0.0} ms kept)");
     }
 }
