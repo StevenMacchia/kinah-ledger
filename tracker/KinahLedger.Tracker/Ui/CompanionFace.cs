@@ -49,6 +49,9 @@ public sealed class CompanionFace : Grid
         {
             Grid.SetColumn(_room, bubbleLeft ? 0 : 1);
             Children.Add(_room);
+            // the window only as big as the companion while it says nothing (a smaller window over the game costs less to
+            // draw); a bubble on the left keeps its room, so the companion never moves when one comes
+            if (!bubbleLeft) _room.Visibility = Visibility.Collapsed;
         }
         System.Windows.Automation.AutomationProperties.SetName(this, L.T("Companion"));
     }
@@ -61,24 +64,46 @@ public sealed class CompanionFace : Grid
     {
         if (!Lines) return;
         Show(m);
-        if (Motion.On) Motion.Play(_bubble!, SayMs, p => Pop(p * SayMs), Hush);
+        _hush ??= new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, Dispatcher);
+        _hush.Stop();
+        _hush.Tick -= Fade; _hush.Tick -= HushTick;
+        if (Motion.On && Motion.FrozenAt == null)
+        {
+            // only its pop and its fade draw frames; while it holds, nothing is drawn
+            Motion.Play(_bubble!, InMs, p => Pop(p * InMs), null, CompanionSprite.ReactFps);
+            _hush.Interval = TimeSpan.FromMilliseconds(SayMs - OutMs);
+            _hush.Tick += Fade;
+        }
         else
         {
             // motion off: the bubble shown whole for as long as it would play
             Pop(600);
-            _hush ??= new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(SayMs), System.Windows.Threading.DispatcherPriority.Background, (_, _) => { _hush!.Stop(); Hush(); }, Dispatcher);
-            _hush.Stop(); _hush.Start();
+            _hush.Interval = TimeSpan.FromMilliseconds(SayMs);
+            _hush.Tick += HushTick;
         }
+        _hush.Start();
     }
 
+    const double InMs = 300, OutMs = 340;
     System.Windows.Threading.DispatcherTimer? _hush;
+
+    void Fade(object? s, EventArgs e)
+    {
+        _hush!.Stop();
+        if (_bubble == null) return;
+        Motion.Play(_bubble, OutMs, p => Pop(SayMs - OutMs + p * OutMs), Hush, CompanionSprite.ReactFps);
+    }
+
+    void HushTick(object? s, EventArgs e) { _hush!.Stop(); Hush(); }
 
     /// <summary>For renders: the bubble for <paramref name="m"/> held at <paramref name="ms"/> from its start.</summary>
     internal void HoldForRender(CompanionMoment m, double ms) { if (!Lines) return; Show(m); Pop(ms); }
 
     public void Hush()
     {
+        _hush?.Stop();
         if (_bubble != null) { Motion.Halt(_bubble); _bubble.Visibility = Visibility.Collapsed; }
+        if (!BubbleLeft) _room.Visibility = Visibility.Collapsed;
     }
 
     void Show(CompanionMoment m)
@@ -90,6 +115,7 @@ public sealed class CompanionFace : Grid
         _bubble.RenderTransformOrigin = new Point(BubbleLeft ? 1 : 0, 0.5);
         _bubble.RenderTransform = new TransformGroup { Children = { _pop, _slide } };
         _room.Children.Add(_bubble);
+        _room.Visibility = Visibility.Visible;
     }
 
     /// <summary>The bubble at <paramref name="t"/> ms: it pops out of the companion's side, holds, then fades away.</summary>
@@ -97,7 +123,7 @@ public sealed class CompanionFace : Grid
     {
         if (_bubble == null) return;
         _bubble.Visibility = Visibility.Visible;
-        double inP = Math.Clamp(t / 280, 0, 1), outP = Math.Clamp((t - (SayMs - 340)) / 340, 0, 1);
+        double inP = Math.Clamp(t / (InMs - 20), 0, 1), outP = Math.Clamp((t - (SayMs - OutMs)) / OutMs, 0, 1);
         double s = .78 + .22 * Overshoot(inP);
         _pop.ScaleX = _pop.ScaleY = s - .06 * outP;
         _slide.X = (BubbleLeft ? 10 : -10) * (1 - Motion.Out(inP));

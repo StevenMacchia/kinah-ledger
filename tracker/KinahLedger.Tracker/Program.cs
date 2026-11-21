@@ -150,6 +150,8 @@ internal static class Program
                 case "repair-categories": return RepairCategories(pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
+                // what the companion costs idling and reacting (Ui/WpfApp.Companion.cs); run it under tests\hidden-run.ps1
+                case "companion-bench": return WpfApp.BenchCompanion(pos.Count > 0 && int.TryParse(pos[0], out var bs) ? bs : 60, opts.ContainsKey("on-screen"));
                 // packet reading (Packets/): its parts on made-up bytes, and the reader over a saved capture
                 case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
                 // the boss-fight Parser (Parser/): its rules on made-up fight events

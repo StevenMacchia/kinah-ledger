@@ -27,8 +27,12 @@ public sealed class CompanionSprite : Grid
     /// <summary>The sprite's side at 100%.</summary>
     public const double Side = 96;
     /// <summary>A reaction's course, start to back at rest.</summary>
-    public const double ReactMs = 2400;
-    const double IdleMs = 3600;
+    public const double ReactMs = 1800;
+    /// <summary>A flourish of the idle (one float), and its frames a second: a slow float needs few.</summary>
+    const double IdleMs = 2400;
+    const int IdleFps = 10;
+    /// <summary>A reaction's, a blink's and a bubble's frames a second: smooth enough for a short moment, light over the game.</summary>
+    internal const int ReactFps = 24;
     const double Cx = 48, Cy = 50;
 
     /// <summary>A theme's look: the body's light, base, deep and rim, the wings, the glow, the face's ink, the cheeks, the rim's width.</summary>
@@ -74,7 +78,8 @@ public sealed class CompanionSprite : Grid
     Color _accent;
     // the parts the idle and a reaction each put in, added up into the transforms (Compose)
     double _bobY, _wingIdle, _auraIdle = .6, _reX, _reY, _reSx = 1, _reSy = 1, _reTurn, _reWing, _reAura;
-    readonly DispatcherTimer _blink, _back;
+    readonly DispatcherTimer _blink, _back, _flourish;
+    int _flourishes;
     bool _running;
     int _blinks;
 
@@ -301,8 +306,11 @@ public sealed class CompanionSprite : Grid
         SetFace(Face.Idle);
         Compose();
 
+
         _blink = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(3900) };
         _blink.Tick += (_, _) => Blink();
+        _flourish = new DispatcherTimer(DispatcherPriority.Background);
+        _flourish.Tick += (_, _) => Flourish();
         _back = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(ReactMs) };
         _back.Tick += (_, _) => { _back.Stop(); Rest(); };
         Unloaded += (_, _) => Stop();
@@ -382,13 +390,20 @@ public sealed class CompanionSprite : Grid
 
     /* ---------------- idle ---------------- */
 
-    /// <summary>The idle's loop and blinks: started while it shows, stopped when it hides (no frame drawn for nothing).</summary>
+    /// <summary>
+    /// The idle: still between flourishes (one slow float with a flutter of its wings, every few seconds) and blinks, so it
+    /// draws nothing most of the time (Steven, 2026-11-20: "lightweight - not bulky"). Started while it shows, stopped when
+    /// it hides.
+    /// </summary>
     public void Start()
     {
         if (_running) return;
         _running = true;
-        Motion.Loop(_stage, IdleMs, Idle, 30);
-        if (Motion.On && Motion.FrozenAt == null) _blink.Start();
+        Idle(0);
+        if (!Motion.On || Motion.FrozenAt != null) return;
+        _blink.Start();
+        _flourish.Interval = TimeSpan.FromMilliseconds(1500);
+        _flourish.Start();
     }
 
     public void Stop()
@@ -396,6 +411,16 @@ public sealed class CompanionSprite : Grid
         _running = false;
         Motion.Halt(_stage);
         _blink.Stop();
+        _flourish.Stop();
+    }
+
+    /// <summary>A flourish: one float of the idle, then still till the next (sooner while a fight is on, later while it dozes).</summary>
+    void Flourish()
+    {
+        int n = ++_flourishes;
+        _flourish.Interval = TimeSpan.FromMilliseconds(IdleMs + (_mood == Mood.Focused ? 1800 : _mood == Mood.Sleepy ? 7000 : 4200) + (n * 911) % 1700);
+        if (_playing != null) return;
+        Motion.Play(_stage, IdleMs, Idle, () => Idle(0), IdleFps);
     }
 
     /// <summary>Everything stopped: the idle and any reaction under way, which ends without saying so (no <see cref="Rested"/>).</summary>
@@ -417,7 +442,7 @@ public sealed class CompanionSprite : Grid
         if (m == _mood) return;
         _mood = m;
         if (_playing == null) SetFace(RestFace);
-        if (!_running) Idle(Motion.FrozenAt ?? 0);
+        if (!Motion.Playing(_stage)) Idle(Motion.FrozenAt ?? 0);   // its rest pose for the mood (a flourish under way takes it up as it goes)
     }
 
     public Mood MoodNow => _mood;
@@ -431,15 +456,15 @@ public sealed class CompanionSprite : Grid
         switch (_mood)
         {
             case Mood.Focused:
-                _bobY = 2 * Math.Sin(w * 2); _wingIdle = 10 * Math.Sin(w * 4) - 4; _auraIdle = .72 + .12 * Math.Sin(w * 2);
+                _bobY = 2 * Math.Sin(w * 2); _wingIdle = 10 * Math.Sin(w * 4) - 4; _auraIdle = .72;
                 _zs.Opacity = 0;
                 break;
             case Mood.Sleepy:
-                _bobY = 1.8 * Math.Sin(w) + 2; _wingIdle = 16 + 3 * Math.Sin(w); _auraIdle = .38 + .1 * Math.Sin(w);
+                _bobY = 1.8 * Math.Sin(w) + 2; _wingIdle = 16 + 3 * Math.Sin(w); _auraIdle = .38;
                 ZsAt(p);
                 break;
             default:
-                _bobY = 3.2 * Math.Sin(w); _wingIdle = 7 * Math.Sin(w * 2); _auraIdle = .58 + .14 * Math.Sin(w);
+                _bobY = 3.2 * Math.Sin(w); _wingIdle = 7 * Math.Sin(w * 2); _auraIdle = .62;
                 _zs.Opacity = 0;
                 break;
         }
@@ -464,7 +489,7 @@ public sealed class CompanionSprite : Grid
     {
         _blink.Interval = TimeSpan.FromMilliseconds(3200 + (++_blinks * 1777) % 2600);   // never the same gap twice in a row
         if (_face is not (Face.Idle or Face.Focused) || !Motion.On) return;
-        Motion.Play(_eyes, 170, p => _eyeScale.ScaleY = 1 - .9 * Math.Sin(Math.PI * p), () => _eyeScale.ScaleY = 1);
+        Motion.Play(_eyes, 170, p => _eyeScale.ScaleY = 1 - .9 * Math.Sin(Math.PI * p), () => _eyeScale.ScaleY = 1, ReactFps);
     }
 
     /* ---------------- reactions ---------------- */
@@ -478,7 +503,7 @@ public sealed class CompanionSprite : Grid
     {
         Prepare(kind, accent);
         _back.Stop();
-        if (Motion.On) Motion.Play(this, ReactMs, p => Frame(p * ReactMs), Rest);
+        if (Motion.On) Motion.Play(this, ReactMs, p => Frame(p * ReactMs), Rest, ReactFps);
         else { Frame(KeyMs(kind)); _back.Start(); }   // motion off: the moment's key frame, held as long as the reaction would play
     }
 
@@ -752,8 +777,8 @@ public sealed class CompanionSprite : Grid
         double wing = _wingIdle + _reWing;
         _wingL.Angle = -wing; _wingR.Angle = wing;
         _aura.Opacity = Math.Clamp(_auraIdle + Math.Min(0, _reAura), 0, 1);
-        // the higher it floats, the smaller and fainter its shadow
-        double lift = Math.Clamp(-y / 18, -0.4, 1);
+        // the higher it hops, the smaller and fainter its shadow (the idle's float leaves it be: one thing less to draw)
+        double lift = Math.Clamp(-_reY / 18, -0.4, 1);
         double k = 1 - .35 * lift;
         _shadowSize.ScaleX = _shadowSize.ScaleY = k;
         _shadow.Opacity = .9 - .5 * lift;

@@ -226,6 +226,54 @@ public static partial class WpfApp
     }
 
     /// <summary>
+    /// companion-bench [seconds] [--on-screen]: what the companion costs (Steven, 2026-11-20: "lightweight - not bulky"). The
+    /// process's CPU time over a quiet baseline (a parked window, nothing drawn), then the companion idling (its float, wings,
+    /// glow and blinks at 30 frames a second), then reacting every 6 s with its line; each as ms of CPU a second and % of one
+    /// core. Parked off every screen unless --on-screen (only under tests\hidden-run.ps1, on its own desktop).
+    /// </summary>
+    public static int BenchCompanion(int seconds, bool onScreen)
+    {
+        Ensure();
+        bool still0 = Motion.Still; Motion.Still = false;
+        CompanionOverlay.InvisibleForTest = !onScreen;
+        var proc = System.Diagnostics.Process.GetCurrentProcess();
+        double Cpu() { proc.Refresh(); return proc.TotalProcessorTime.TotalMilliseconds; }
+        static void Run(double sec)
+        {
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(sec) };
+            t.Tick += (_, _) => { t.Stop(); frame.Continue = false; };
+            t.Start();
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+        }
+        var keep = Parked(new Border { Width = 4, Height = 4 });
+        try
+        {
+            Run(3);   // settle after start-up
+            double c0 = Cpu(); var w0 = DateTime.UtcNow; Run(Math.Max(10, seconds / 3.0)); double baseMs = Cpu() - c0, baseWall = (DateTime.UtcNow - w0).TotalMilliseconds;
+            var ov = new CompanionOverlay(CompanionPrefs.Defaults());
+            if (!onScreen) ov.Opacity = 1;   // parked off screen, still drawn every frame
+            ov.Match(HudThemes.Glitch, 0.94, 1.1);   // Steven's look and size
+            ov.ShowWanted(true);
+            Run(2);
+            c0 = Cpu(); w0 = DateTime.UtcNow; Run(seconds); double idleMs = Cpu() - c0, idleWall = (DateTime.UtcNow - w0).TotalMilliseconds;
+            int n = 0;
+            var react = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+            react.Tick += (_, _) => ov.Play(MainWindow.CompanionSample(CompanionKinds[n++ % CompanionKinds.Length], DateTime.UtcNow));
+            ov.Play(MainWindow.CompanionSample(CompanionKinds[n++], DateTime.UtcNow)); react.Start();
+            c0 = Cpu(); w0 = DateTime.UtcNow; Run(seconds); double reactMs = Cpu() - c0, reactWall = (DateTime.UtcNow - w0).TotalMilliseconds;
+            react.Stop(); ov.Close();
+            string Line(string what, double ms, double wall) => $"{what,-34} {ms / wall * 1000,7:0.0} ms CPU a second  ({ms / wall * 100,5:0.00}% of one core)";
+            Console.WriteLine(Line("baseline (tracker idle, no companion)", baseMs, baseWall));
+            Console.WriteLine(Line($"companion idling, {seconds} s", idleMs, idleWall));
+            Console.WriteLine(Line($"companion reacting every 6 s, {seconds} s", reactMs, reactWall));
+            Console.WriteLine($"companion's own share: idle {(idleMs / idleWall - baseMs / baseWall) * 100:0.00}% of one core, reacting {(reactMs / reactWall - baseMs / baseWall) * 100:0.00}%; window {ov.ActualWidth:0}x{ov.ActualHeight:0} px, no bitmaps (vector only)");
+        }
+        finally { keep.Close(); Motion.Still = still0; CompanionOverlay.InvisibleForTest = false; }
+        return 0;
+    }
+
+    /// <summary>
     /// ui-shot --companion: the companion in every theme, at 1x and 2x (and 1.1, Steven's size): its moods, each reaction's
     /// key frame with its line, and each reaction's sequence frame by frame (Classic), over the game's scene; the reactions
     /// again in Korean and Chinese. spill.txt lists anything drawn past its window's edge (cut in game).
@@ -289,7 +337,7 @@ public static partial class WpfApp
             }
 
             // each reaction frame by frame (Classic, 2x), the bubble's course alongside
-            double[] at = { 0, 100, 220, 360, 500, 680, 900, 1200, 1600, 2000, 2300, 2400 };
+            double[] at = { 0, 90, 180, 300, 420, 560, 720, 900, 1100, 1350, 1600, 1800 };
             foreach (var k in CompanionKinds)
             {
                 var seq = Sheet();
@@ -297,7 +345,7 @@ public static partial class WpfApp
                 {
                     var m = MainWindow.CompanionSample(k, now);
                     var face = new CompanionFace(HudThemes.Classic, 0.94, false, false);
-                    face.Sprite.HoldForRender(k, m.Tone, at[f], (at[f] / 3600) % 1);
+                    face.Sprite.HoldForRender(k, m.Tone, at[f], 0);
                     Cell(seq, face, f / 6, f % 6, $"{at[f]:0} ms");
                 }
                 SaveSheet(seq, Path.Combine(dir, $"companion-seq-{k}.png"), 2);
