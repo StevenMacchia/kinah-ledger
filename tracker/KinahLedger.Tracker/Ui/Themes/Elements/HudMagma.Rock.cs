@@ -71,6 +71,44 @@ sealed partial class HudMagma
     // ---------------------------------------------------------------- the slab and its cracks
 
     static readonly Dictionary<(int, int, int), (Geometry Shape, Geometry Cracks)> Slabs = new();
+    static readonly Dictionary<(int, int, int), (Brush Melt, Geometry Rafts)> Rivers = new();
+
+    /// <summary>
+    /// The lava river a slab sits in (made once for a size and seed): a band of melt along its foot, mottled from deep red to
+    /// yellow, and the dark crust rafts floating on it.
+    /// </summary>
+    static (Brush Melt, Geometry Rafts) RiverOf(Size s, int seed)
+    {
+        var key = ((int)Math.Round(s.Width), (int)Math.Round(s.Height), seed);
+        if (Rivers.TryGetValue(key, out var hit)) return hit;
+        if (Rivers.Count > 64) Rivers.Clear();
+        var rnd = new Random(seed * 3571 + key.Item1);
+        var melt = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(s.Width, 0) };
+        for (double x = 0; x <= s.Width; x += 14 + rnd.NextDouble() * 22)
+        {
+            double k = rnd.NextDouble();
+            melt.GradientStops.Add(new GradientStop(k < .3 ? LavaRedC : k < .75 ? LavaC : k < .93 ? LavaHotC : LavaYelC, x / s.Width));
+        }
+        melt.Freeze();
+        var rafts = new StreamGeometry();
+        double y0 = s.Height - RiverH;
+        using (var c = rafts.Open())
+        {
+            for (double x = 6 + rnd.NextDouble() * 10; x < s.Width - 8; x += 9 + rnd.NextDouble() * 20)
+            {
+                double rw = 4 + rnd.NextDouble() * 9, top = y0 + .8 + rnd.NextDouble() * 1.2, bot = s.Height;
+                c.BeginFigure(new Point(x, bot), true, true);
+                c.PolyLineTo(new[] { new Point(x + rw * .15, top + .8), new Point(x + rw * .5, top), new Point(x + rw * .85, top + .6), new Point(x + rw, bot) }, true, true);
+            }
+        }
+        rafts.Freeze();
+        var made = ((Brush)melt, (Geometry)rafts);
+        Rivers[key] = made;
+        return made;
+    }
+
+    /// <summary>The lava river's depth along a slab's foot.</summary>
+    const double RiverH = 4.5;
 
     /// <summary>A slab's chipped outline and the lava cracks along its edges, made once for a size and seed.</summary>
     static (Geometry Shape, Geometry Cracks) SlabOf(Size s, int seed)
@@ -82,27 +120,37 @@ sealed partial class HudMagma
         var rnd = new Random(seed * 7919 + key.Item1 * 31 + key.Item2);
         double J(double a) => (rnd.NextDouble() - .5) * 2 * a;
 
-        // the outline: chamfered corners, the edges chipped a pixel in
-        const double Ch = 4;
+        // the outline: a broken slab of rock. Each corner knocked off at its own angle (two facets), the long edges stepping
+        // in and out by a pixel or two over spans of rock, the short ones chipped
         var pts = new List<Point>();
-        void Edge(Point a, Point b, double step, Vector inward)
+        var o = new Vector(.75, .75);
+        double C() => Math.Min(Math.Min(w, h) * .3, 4 + rnd.NextDouble() * 6);
+        double tl = C(), tr = C(), br = C(), bl = C();
+        void Corner(Point a, Point b, Vector outward)
         {
-            double len = (b - a).Length;
-            int n = Math.Max(1, (int)(len / step));
-            for (int i = 0; i < n; i++)
+            // two facets: the knocked-off corner's middle pushed out a little, so it reads as broken, not cut
+            pts.Add(a + o);
+            pts.Add(a + (b - a) * (.4 + rnd.NextDouble() * .2) + outward * (.6 + rnd.NextDouble() * 1.2) + o);
+        }
+        void Edge(Point a, Point b, Vector inward, double maxStep)
+        {
+            double len = (b - a).Length, at = 0, off = rnd.NextDouble() * maxStep * .5;
+            while (at < len - 4)
             {
-                var p = a + (b - a) * ((double)i / n);
-                pts.Add((i == 0 ? p : p + inward * (rnd.NextDouble() * 1.1)) + new Vector(.75, .75));
+                pts.Add(a + (b - a) * (at / len) + inward * off + o);
+                at += 6 + rnd.NextDouble() * 9;
+                if (rnd.NextDouble() < .35) off = Math.Clamp(off + J(maxStep), 0, maxStep);   // a step in the rock
+                else off = Math.Clamp(off + J(.6), 0, maxStep);
             }
         }
-        Edge(new Point(Ch, 0), new Point(w - Ch, 0), 11, new Vector(0, 1));
-        Edge(new Point(w - Ch, 0), new Point(w, Ch), 99, new Vector(0, 0));
-        Edge(new Point(w, Ch), new Point(w, h - Ch), 9, new Vector(-1, 0));
-        Edge(new Point(w, h - Ch), new Point(w - Ch, h), 99, new Vector(0, 0));
-        Edge(new Point(w - Ch, h), new Point(Ch, h), 11, new Vector(0, -1));
-        Edge(new Point(Ch, h), new Point(0, h - Ch), 99, new Vector(0, 0));
-        Edge(new Point(0, h - Ch), new Point(0, Ch), 9, new Vector(1, 0));
-        Edge(new Point(0, Ch), new Point(Ch, 0), 99, new Vector(0, 0));
+        Edge(new Point(tl, 0), new Point(w - tr, 0), new Vector(0, 1), 2.2);
+        Corner(new Point(w - tr, 0), new Point(w, tr), new Vector(-.7, .7) * -1);
+        Edge(new Point(w, tr), new Point(w, h - br), new Vector(-1, 0), 1.4);
+        Corner(new Point(w, h - br), new Point(w - br, h), new Vector(.7, .7));
+        Edge(new Point(w - br, h), new Point(bl, h), new Vector(0, -1), 1.8);
+        Corner(new Point(bl, h), new Point(0, h - bl), new Vector(-.7, .7));
+        Edge(new Point(0, h - bl), new Point(0, tl), new Vector(1, 0), 1.4);
+        Corner(new Point(0, tl), new Point(tl, 0), new Vector(-.7, -.7));
         var shape = new StreamGeometry();
         using (var g = shape.Open())
         {
@@ -158,7 +206,7 @@ sealed partial class HudMagma
             if (h > 26)
             {
                 bool right = rnd.NextDouble() < .5;
-                double x = right ? w : 0, d = right ? -1 : 1, y = Ch + 3 + rnd.NextDouble() * 4;
+                double x = right ? w : 0, d = right ? -1 : 1, y = 9 + rnd.NextDouble() * 4;
                 var side = new List<Point> { new(x + d * .3, y) };
                 for (int i = 0; i < 3; i++) { y += 3 + rnd.NextDouble() * 3; side.Add(new Point(x + d * (1.8 + rnd.NextDouble() * 2.2), y)); }
                 side.Add(new Point(x + d * .3, y + 3));
@@ -179,7 +227,7 @@ sealed partial class HudMagma
     /// <paramref name="heat"/> 0..1 flares the cracks and the foot's glow (a moment); <paramref name="tint"/> turns the
     /// cracks' fire to a colour (a rare drop's grade); <paramref name="ash"/> cools them (a wipe, a pause).
     /// </summary>
-    static void Slab(DrawingContext dc, Size s, double alpha, int seed, double heat = 0, Color? tint = null, bool ash = false, bool cracks = true)
+    static void Slab(DrawingContext dc, Size s, double alpha, int seed, double heat = 0, Color? tint = null, bool ash = false, bool cracks = true, bool river = false)
     {
         if (s.Width < 8 || s.Height < 8) return;
         var (shape, crack) = SlabOf(s, seed);
@@ -196,6 +244,20 @@ sealed partial class HudMagma
         // the bevel: a warm light along the top edge
         dc.DrawRectangle(Mod.Grad(true, (Mod.A(BevelC, .55), 0), (Mod.A(BevelC, 0), 1)), null, new Rect(0, 0, s.Width, 2.2));
         if (cracks) Cracks(dc, crack, heat, tint, ash);
+        if (river && s.Height > 20)
+        {
+            // the slab sits in a lava river: the melt along its foot, a glow rising off it, the crust rafts floating on it
+            var (melt, rafts) = RiverOf(s, seed);
+            var band = new Rect(0, s.Height - RiverH, s.Width, RiverH);
+            dc.DrawRectangle(Mod.Grad(true, (Mod.A(ash ? AshC : LavaC, 0), 0), (Mod.A(ash ? AshC : LavaC, ash ? .12 : .32), 1)), null, new Rect(0, band.Top - 7, s.Width, 7));
+            if (ash) dc.DrawRectangle(Frozen(Color.FromRgb(0x3A, 0x22, 0x1C)), null, band);
+            else
+            {
+                dc.DrawRectangle(melt, null, band);
+                dc.DrawRectangle(Mod.Br(LavaYelC, .55), null, new Rect(0, band.Top, s.Width, .8));
+            }
+            dc.DrawGeometry(Frozen(Color.FromRgb(0x1E, 0x13, 0x0F)), null, rafts);
+        }
         dc.Pop();
         dc.DrawGeometry(null, RimPen, shape);
     }
@@ -215,6 +277,26 @@ sealed partial class HudMagma
         dc.DrawGeometry(null, Mod.P(Mod.Br(c, .5), 8, true), crack);
         dc.DrawGeometry(null, Mod.P(Mod.Br(tint is { } t ? Mod.Mix(t, WhiteHotC, .4) : LavaYelC, 1), 1.8, true), crack);
         dc.DrawGeometry(null, Mod.P(Mod.Br(WhiteHotC, 1), .8, true), crack);
+        dc.Pop();
+    }
+
+    /// <summary>
+    /// The eruption's flash frame over a slab (drawn once; its opacity is the moment): the lava light bursting up from the
+    /// river at its foot, white-hot there, orange up the stone, and a faint heat over the whole slab.
+    /// </summary>
+    static void Eruption(DrawingContext dc, Size s, int seed)
+    {
+        if (s.Width < 8 || s.Height < 8) return;
+        var (shape, _) = SlabOf(s, seed);
+        dc.PushClip(shape);
+        dc.DrawRectangle(Mod.Br(LavaC, .1), null, new Rect(0, 0, s.Width, s.Height));
+        var g = new RadialGradientBrush { Center = new Point(.5, 1), GradientOrigin = new Point(.5, 1), RadiusX = .75, RadiusY = 1.1 };
+        g.GradientStops.Add(new GradientStop(Mod.A(WhiteHotC, .7), 0));
+        g.GradientStops.Add(new GradientStop(Mod.A(LavaYelC, .5), .18));
+        g.GradientStops.Add(new GradientStop(Mod.A(LavaC, .3), .5));
+        g.GradientStops.Add(new GradientStop(Mod.A(LavaRedC, 0), 1));
+        g.Freeze();
+        dc.DrawRectangle(g, null, new Rect(0, 0, s.Width, s.Height));
         dc.Pop();
     }
 
@@ -355,15 +437,16 @@ sealed partial class HudMagma
     /// The molten crown (16 by 13 at <paramref name="at"/>): lava from a yellow crest down to deep orange at its band, two
     /// drips off its foot, a dark crust edge. <paramref name="hot"/> 0..1 whitens it (just risen from the pool, still glowing).
     /// </summary>
-    static void Crown(DrawingContext dc, Point at, double hot = 0)
+    static void Crown(DrawingContext dc, Point at, double hot = 0, double scale = 1)
     {
         dc.PushTransform(new TranslateTransform(at.X, at.Y));
+        dc.PushTransform(new ScaleTransform(scale, scale));
         var fill = Mod.Grad(true, (Mod.Mix(LavaYelC, WhiteHotC, .4 + .6 * hot), 0), (Mod.Mix(LavaHotC, WhiteHotC, .6 * hot), .4), (Mod.Mix(LavaC, LavaYelC, .5 * hot), .78), (Mod.Mix(LavaRedC, LavaHotC, .5 * hot), 1));
         dc.DrawGeometry(fill, null, CrownDrips);
         dc.DrawGeometry(fill, Mod.P(Frozen(Color.FromRgb(0x24, 0x0A, 0x03)), .9), CrownShape);
         dc.DrawLine(Mod.P(Mod.Br(Color.FromRgb(0x3A, 0x10, 0x04), .7), .8), new Point(1.3, 9.6), new Point(14.7, 9.6));
         dc.DrawEllipse(WhiteHot, null, new Point(8, 1.8), .9, .9);
-        dc.Pop();
+        dc.Pop(); dc.Pop();
     }
 
     /// <summary>The lava pool under the crown: a glowing ellipse, <paramref name="k"/> its flare (0 calm, 1 bright and wide).</summary>
@@ -399,7 +482,43 @@ sealed partial class HudMagma
     /// <summary>Words given the tight shade.</summary>
     static T Shaded<T>(T el) where T : FrameworkElement { el.Effect = Shade(); return el; }
 
-    /// <summary>A lava seam across (the foot's rule, the card's): a thin glowing crack, brightest in its middle, cooling to its ends.</summary>
+    /// <summary>
+    /// The split: a lava fissure right across a slab, edge to edge, its ends breaking out through the rim (the meter's slab
+    /// split into plates under its head and over its foot). <paramref name="m"/> takes it out to the slab's edges.
+    /// </summary>
+    static FrameworkElement Split(Thickness m, int seed)
+    {
+        return new TacSketch((dc, s) =>
+        {
+            if (s.Width < 10) return;
+            var rnd = new Random(seed * 131 + (int)s.Width);
+            var g = new StreamGeometry();
+            double y = s.Height / 2;
+            using (var c = g.Open())
+            {
+                c.BeginFigure(new Point(0, y + (rnd.NextDouble() - .5) * 2), false, false);
+                var pts = new List<Point>();
+                for (double x = 3 + rnd.NextDouble() * 4; x < s.Width - 2; x += 4 + rnd.NextDouble() * 8) pts.Add(new Point(x, y + (rnd.NextDouble() - .5) * 3.2));
+                pts.Add(new Point(s.Width, y + (rnd.NextDouble() - .5) * 2));
+                c.PolyLineTo(pts, true, true);
+                // forks off the fissure into the plates either side
+                foreach (var p in pts.Where((_, i) => i % 5 == 2))
+                {
+                    double d = rnd.NextDouble() < .5 ? -1 : 1;
+                    c.BeginFigure(p, false, false);
+                    c.PolyLineTo(new[] { new Point(p.X + 2 + rnd.NextDouble() * 2, p.Y + d * (1.5 + rnd.NextDouble())), new Point(p.X + 4 + rnd.NextDouble() * 3, p.Y + d * (2.5 + rnd.NextDouble())) }, true, true);
+                }
+            }
+            g.Freeze();
+            // the gap in the rock (dark), the melt in it, its glow, a white-hot core
+            dc.DrawGeometry(null, Mod.P(Frozen(Color.FromArgb(0xE0, 0x08, 0x04, 0x02)), 3.6, true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(LavaC, .32), 7, true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Grad(false, (LavaRedC, 0), (LavaHotC, .25), (LavaYelC, .5), (LavaHotC, .75), (LavaRedC, 1)), 1.9, true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Grad(false, (Mod.A(WhiteHotC, 0), 0), (Mod.A(WhiteHotC, .9), .5), (Mod.A(WhiteHotC, 0), 1)), .7, true), g);
+        }) { Height = 8, Margin = m, IsHitTestVisible = false };
+    }
+
+    /// <summary>A lava seam across (the gap line, the card's): a thin glowing crack, brightest in its middle, cooling to its ends.</summary>
     static FrameworkElement Seam(Thickness m, double a = 1)
     {
         return new TacSketch((dc, s) =>

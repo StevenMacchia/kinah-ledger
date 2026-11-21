@@ -87,7 +87,7 @@ sealed partial class HudMagma
     sealed class MagmaRow : IThemeRow
     {
         public const double H = 26, Pitch = 29;
-        const double PadL = 7, PadR = 7, RankW = 19, IconW = 23, BandW = 48;
+        const double PadL = 6, PadR = 7, RankW = 23, IconW = 23, BandW = 48, CrownK = 1.3;
         readonly HudMagma _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
@@ -115,8 +115,10 @@ sealed partial class HudMagma
         readonly Grid _crownMove = new();
         readonly TranslateTransform _crownY = new();
         readonly TacSketch _crownHot, _poolFlare, _flash;
-        readonly System.Windows.Shapes.Ellipse[] _drops = new System.Windows.Shapes.Ellipse[2];
-        readonly TranslateTransform[] _dropT = { new(), new() };
+        readonly System.Windows.Shapes.Ellipse[] _drops = new System.Windows.Shapes.Ellipse[6];
+        readonly TranslateTransform[] _dropT = { new(), new(), new(), new(), new(), new() };
+        /// <summary>The lead's flash frame over the whole row: white-hot at the crown, fading along the channel (drawn once).</summary>
+        readonly TacSketch _erupt;
 
         string _cls = "\0";
         MeterMember? _m;
@@ -158,11 +160,13 @@ sealed partial class HudMagma
             _root.Children.Add(_climbFx);
 
             // the rank's cell: the number, or the molten crown over its pool
-            var pool = new TacSketch((dc, s) => Pool(dc, new Point(s.Width / 2, s.Height / 2 + 6.5), 0));
-            _poolFlare = new TacSketch((dc, s) => Pool(dc, new Point(s.Width / 2, s.Height / 2 + 6.5), 1)) { Opacity = 0 };
-            var window = new Grid { ClipToBounds = true, Height = H / 2 + 8.5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-3, 0, -3, 0) };
-            var cool = new TacSketch((dc, s) => Crown(dc, new Point(s.Width / 2 - 8, H / 2 - 6), 0));
-            _crownHot = new TacSketch((dc, s) => Crown(dc, new Point(s.Width / 2 - 8, H / 2 - 6), 1)) { Opacity = 0 };
+            // (the crown 1.3 times its drawing: about 21 by 17, standing on its pool at the cell's foot)
+            double cw = 16 * CrownK, top = H / 2 - 8.5, poolY = top + 12 * CrownK + .5;
+            var pool = new TacSketch((dc, s) => Pool(dc, new Point(s.Width / 2, poolY), 0));
+            _poolFlare = new TacSketch((dc, s) => Pool(dc, new Point(s.Width / 2, poolY), 1)) { Opacity = 0 };
+            var window = new Grid { ClipToBounds = true, Height = poolY + 2.5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-3, 0, -3, 0) };
+            var cool = new TacSketch((dc, s) => Crown(dc, new Point(s.Width / 2 - cw / 2, top), 0, CrownK));
+            _crownHot = new TacSketch((dc, s) => Crown(dc, new Point(s.Width / 2 - cw / 2, top), 1, CrownK)) { Opacity = 0 };
             _crownMove.Children.Add(cool); _crownMove.Children.Add(_crownHot);
             _crownMove.RenderTransform = _crownY;
             window.Children.Add(_crownMove);
@@ -172,11 +176,20 @@ sealed partial class HudMagma
                 dc.DrawEllipse(g, null, new Point(s.Width / 2, s.Height / 2), 10, 10);
             }) { Opacity = 0 };
             _crownHost.Children.Add(pool); _crownHost.Children.Add(_poolFlare); _crownHost.Children.Add(window); _crownHost.Children.Add(_flash);
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < _drops.Length; i++)
             {
-                _drops[i] = new System.Windows.Shapes.Ellipse { Width = 2.4, Height = 2.4, Fill = i == 0 ? LavaYel : LavaHot, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Opacity = 0, RenderTransform = _dropT[i], Margin = new Thickness(0, 13, 0, 0) };
+                _drops[i] = new System.Windows.Shapes.Ellipse { Width = i < 2 ? 3 : 2.2, Height = i < 2 ? 3 : 2.2, Fill = i % 2 == 0 ? LavaYel : LavaHot, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Opacity = 0, RenderTransform = _dropT[i], Margin = new Thickness(0, poolY - 1.5, 0, 0) };
                 _crownHost.Children.Add(_drops[i]);
             }
+            _erupt = new TacSketch((dc, s) =>
+            {
+                var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
+                dc.PushClip(Mod.Pill(r, 3.5));
+                dc.DrawRectangle(Mod.Grad(false, (Mod.A(WhiteHotC, .85), 0), (Mod.A(LavaYelC, .55), .25), (Mod.A(LavaC, .25), .6), (Mod.A(LavaC, 0), 1)), null, r);
+                dc.Pop();
+                dc.DrawGeometry(null, Mod.P(Mod.Br(LavaYelC, 1), 1.6), Mod.Pill(r, 3.5));
+            }) { Opacity = 0, Visibility = Visibility.Collapsed };
+            _root.Children.Add(_erupt);
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
             _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crownHost);
             Put(_rankHost, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
@@ -313,22 +326,28 @@ sealed partial class HudMagma
         {
             if (!_crown) return;
             foreach (var d in _drops) d.Opacity = 0;
+            _erupt.Visibility = Visibility.Visible;
             Motion.Play(_crownHost, 1100, t =>
             {
+                // the flash frame over the row, white-hot from the crown, gone in a quarter of the course
+                _erupt.Opacity = t < .06 ? Seg(t, 0, .06) : 1 - Out(Seg(t, .06, .32));
                 double up = Out(Seg(t, .05, .5));
-                _crownY.Y = 13 * (1 - up);
+                _crownY.Y = 17 * (1 - up);
                 _crownHot.Opacity = t < .45 ? 1 : 1 - Seg(t, .45, 1);
                 _poolFlare.Opacity = t < .5 ? Math.Min(1, Math.Sin(Math.PI * Seg(t, 0, .5)) + .3) * (1 - Seg(t, .4, .5)) : 0;
                 _flash.Opacity = t is > .3 and < .75 ? 1 - Seg(t, .3, .75) : 0;
-                double k = Seg(t, .12, .7);
-                for (int i = 0; i < 2; i++)
+                // the burst: six drops of lava flung out of the pool, arcing and falling back
+                double k = Seg(t, .08, .62);
+                for (int i = 0; i < _drops.Length; i++)
                 {
-                    _drops[i].Opacity = t is > .12 and < .7 ? 1 - .6 * k : 0;
-                    _dropT[i].X = (i == 0 ? -1 : 1) * (3 + 4 * k);
-                    _dropT[i].Y = -10 * Math.Sin(Math.PI * k);
+                    double side = i % 2 == 0 ? -1 : 1, spread = 2.5 + 2.2 * (i / 2), lift = 11 - 2.5 * (i / 2);
+                    _drops[i].Opacity = t is > .08 and < .62 ? 1 - .7 * k : 0;
+                    _dropT[i].X = side * spread * (.4 + 1.6 * k);
+                    _dropT[i].Y = -lift * Math.Sin(Math.PI * Math.Min(1, k * 1.1)) + 3 * k;
                 }
             }, () =>
             {
+                _erupt.Opacity = 0; _erupt.Visibility = Visibility.Collapsed;
                 _crownY.Y = 0; _crownHot.Opacity = 0; _poolFlare.Opacity = 0; _flash.Opacity = 0;
                 foreach (var d in _drops) d.Opacity = 0;
             });

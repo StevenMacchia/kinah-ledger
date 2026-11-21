@@ -64,11 +64,11 @@ sealed partial class HudMagma : ModernLook
 
     // the fight: one basalt slab, its head, HP, rows and foot
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 4) };
-    readonly TacSketch _fightSlab, _fightFlare;
+    readonly TacSketch _fightSlab, _fightFlare, _fightErupt;
     const double FightPad = 9;
     readonly StackPanel _fightBody = new() { Margin = new Thickness(FightPad, 8, FightPad, 8) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
-    readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
+    readonly Grid _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly TranslateTransform _fightShift = new();
     DateTime _lastLead;
     FrameworkElement? _head;
@@ -77,14 +77,15 @@ sealed partial class HudMagma : ModernLook
     {
         // the look's own rows (Ui/Themes/ThemeRows.cs): each a channel in the stone with its molten flow
         UseRows(MagmaRow.Pitch, m => new MagmaRow(this), 14, GapLine);
-        _lineSlab = new TacSketch((dc, s) => Slab(dc, s, SlabA, 11, ash: _dim));
+        _lineSlab = new TacSketch((dc, s) => Slab(dc, s, SlabA, 11, ash: _dim, river: true));
         _lineFlare = new TacSketch((dc, s) => Flare(dc, s, 11)) { Opacity = 0 };
         _sheenBand.RenderTransform = _sheenX;
         _lineFx.Children.Add(_sheenBand);
         _line.Children.Add(_lineSlab); _line.Children.Add(_lineFlare); _line.Children.Add(_lineFx); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
-        _fightSlab = new TacSketch((dc, s) => Slab(dc, s, SlabA, 23));
+        _fightSlab = new TacSketch((dc, s) => Slab(dc, s, SlabA, 23, river: true));
         _fightFlare = new TacSketch((dc, s) => Flare(dc, s, 23)) { Opacity = 0 };
-        _fight.Children.Add(_fightSlab); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        _fightErupt = new TacSketch((dc, s) => Eruption(dc, s, 23)) { Opacity = 0 };
+        _fight.Children.Add(_fightSlab); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightErupt); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _fightShift;
         _note.Children.Add(new TacSketch((dc, s) => Slab(dc, s, SlabA, 5, cracks: false)));
         _note.Children.Add(_noteBody);
@@ -193,7 +194,7 @@ sealed partial class HudMagma : ModernLook
             var slab = new Grid();
             slab.Children.Add(new TacSketch((dc, s) =>
             {
-                Slab(dc, s, SlabA, 7, .35, c);
+                Slab(dc, s, SlabA, 7, .35, c, river: true);
                 // the grade's glow from the tile's side
                 dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .28), 0), (Mod.A(c, 0), .55)), null, new Rect(2, 2, s.Width - 4, s.Height - 4));
             }));
@@ -439,13 +440,13 @@ sealed partial class HudMagma : ModernLook
                 if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left) { FontWeight = FontWeights.Medium });
                 hl.Tag = "hp-text";
                 _fightBody.Children.Add(hl);
-                _fightBody.Children.Add(new Border { Height = 3 });
             }
-            else _fightBody.Children.Add(new Border { Height = 7 });
+            // the slab split under its head: a lava fissure edge to edge
+            _fightBody.Children.Add(Split(new Thickness(-FightPad, HpOf(e) != null ? 1 : 4, -FightPad, 2), 1));
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Seam(new Thickness(0, 4, 0, 3)));
+                _fightBody.Children.Add(Split(new Thickness(-FightPad, 2, -FightPad, 1), 2));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }
@@ -460,6 +461,7 @@ sealed partial class HudMagma : ModernLook
     {
         if (!Moves || (DateTime.UtcNow - _lastLead).TotalMilliseconds < 1500) return;
         _lastLead = DateTime.UtcNow;
+        Erupt(700);
         Heat();
     }
 
@@ -594,7 +596,21 @@ sealed partial class HudMagma : ModernLook
             _fightBody.Opacity = k;
         }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
         if (Meter is { Members.Count: > 0 } m && m.RowOf(m.Members[0].Id) is MagmaRow top) top.Rise();
+        Erupt(900);
         Heat();
+    }
+
+    /// <summary>
+    /// The eruption: the slab's lava light bursts up from its foot (a flash frame, white-hot at the river, washing up the
+    /// stone) and dies back to embers in under a second; the cracks flare with it. One drawing, its opacity alone moves.
+    /// </summary>
+    void Erupt(double ms)
+    {
+        Motion.Play(_fightErupt, ms, t =>
+        {
+            _fightErupt.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Out(Seg(t, .1, 1));
+            _fightFlare.Opacity = Math.Max(_fightFlare.Opacity, t < .12 ? Seg(t, 0, .12) : 1 - Seg(t, .12, 1));
+        }, () => { _fightErupt.Opacity = 0; });
     }
 
     /// <summary>
@@ -610,21 +626,31 @@ sealed partial class HudMagma : ModernLook
         var flare = new TacSketch((dc, s) => Flare(dc, s, 31)) { Opacity = 0, Visibility = wipe ? Visibility.Collapsed : Visibility.Visible };
         band.Children.Add(flare);
         var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 2, 12, 2), VerticalAlignment = VerticalAlignment.Center };
-        var ot = Tt(OutcomeText(e), 19, wipe ? Frozen(Color.FromRgb(0xE8, 0xDE, 0xD8)) : WhiteHot, FontWeights.Black, Heavy);
+        var ot = Tt(OutcomeText(e), 22, wipe ? Frozen(Color.FromRgb(0xE8, 0xDE, 0xD8)) : WhiteHot, FontWeights.Black, Heavy);
         var otHost = new Border { Child = ot, Effect = wipe ? null : Underglow() };
         words.Children.Add(otHost);
         var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 14, wipe ? Soft : Frozen(LavaYelC), FontWeights.Bold); ck.Margin = new Thickness(4, 2, 0, 0);
         words.Children.Add(ck);
         band.Children.Add(words);
-        var shift = new TranslateTransform();
-        band.RenderTransform = shift;
-        _fightFx.Children.Clear(); _fightFx.Children.Add(band);
+        var slam = new ScaleTransform(1, 1);
+        band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = slam;
+        // the shock ring off the slam: one ellipse's outline, drawn once, scaled out and faded
+        var ring = new TacSketch((dc, s) =>
+        {
+            var c = new Point(s.Width / 2, s.Height / 2);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? AshC : LavaC, .45), 9), c, s.Width / 2 - 6, s.Height / 2 - 6);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? Colors.White : LavaYelC, .9), 2.2), c, s.Width / 2 - 6, s.Height / 2 - 6);
+        }) { Width = 220, Height = 90, Opacity = 0, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+        var ringS = new ScaleTransform(.2, .2);
+        ring.RenderTransformOrigin = new Point(.5, .5); ring.RenderTransform = ringS;
+        _fightFx.Children.Clear(); _fightFx.Children.Add(ring); _fightFx.Children.Add(band);
         void Seat()
         {
             double y = _fightBody.Margin.Top, h = 22;
             if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight)) { y = hd.TranslatePoint(new Point(0, 0), _fight).Y; h = hd.ActualHeight; }
             band.Margin = new Thickness(3, Math.Max(2, y - 5), 3, 0);
-            band.Height = h + 10;
+            band.Height = h + 12;
+            ring.Margin = new Thickness(4, Math.Max(0, y - 5) + (h + 12) / 2 - 45, 0, 0);
         }
         Seat();
         bool seated = _head is { ActualHeight: > 0 };
@@ -632,12 +658,16 @@ sealed partial class HudMagma : ModernLook
         Motion.Play(_fightFx, 2400, t =>
         {
             if (!seated && _head is { ActualHeight: > 0 }) { Seat(); seated = true; }   // seated once, after the head's first layout
-            double i = Seg(t, 0, .14), o = Seg(t, .84, 1);
-            band.Opacity = Math.Min(1, i * 2.2) * (1 - o);
-            shift.Y = -5 * (1 - Out(i));
+            double i = Seg(t, 0, .1), o = Seg(t, .84, 1);
+            band.Opacity = Math.Min(1, i * 3) * (1 - o);
+            // the slam: down from a third larger onto its place, a touch past, settled
+            slam.ScaleX = slam.ScaleY = t < .1 ? 1.35 - .4 * i * i : 1 - .05 * Math.Sin(Math.PI * Seg(t, .1, .22));
+            double r = Seg(t, .08, .45);
+            ringS.ScaleX = ringS.ScaleY = .2 + 1.15 * Out(r);
+            ring.Opacity = t is > .08 and < .45 ? 1 - r : 0;
             flare.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .1, .7);
             if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .1) : Seg(t, .84, 1);
         }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
-        if (!wipe) Heat();
+        if (!wipe) { Erupt(1000); Heat(); }
     }
 }
