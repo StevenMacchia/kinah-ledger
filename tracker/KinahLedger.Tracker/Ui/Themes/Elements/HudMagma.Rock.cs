@@ -342,9 +342,9 @@ sealed partial class HudMagma
             return g;
         }
         double lean = (rnd.NextDouble() - .5) * w * .5;
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaRedC, .2), 0), (Mod.A(LavaRedC, .85), .35), (LavaC, 1)), null, Spout(w / 2, lean));
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaHotC, .3), 0), (LavaHotC, .4), (LavaYelC, 1)), null, Spout(w * .3, lean * .9));
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(WhiteHotC, 0), .1), (WhiteHotC, .55), (WhiteHotC, 1)), null, Spout(w * .12, lean * .8));
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaC, .7), 0), (Mod.A(LavaRedC, .95), .3), (LavaC, 1)), null, Spout(w / 2, lean));
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaYelC, .85), 0), (LavaHotC, .35), (LavaYelC, 1)), null, Spout(w * .3, lean * .9));
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(WhiteHotC, .5), 0), (WhiteHotC, .3), (WhiteHotC, 1)), null, Spout(w * .12, lean * .8));
         dc.DrawEllipse(LavaYel, null, new Point(cx + lean * 1.3 + (rnd.NextDouble() - .5) * 3, 2.5), 1.6, 1.9);
     }
 
@@ -450,8 +450,8 @@ sealed partial class HudMagma
             crust.Freeze();
             dc.DrawRectangle(crust, null, bar);
             var glow = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(r.X, 0), EndPoint = new Point(r.X + fx, 0) };
-            glow.GradientStops.Add(new GradientStop(Mod.A(LavaRedC, .38), 0));
-            glow.GradientStops.Add(new GradientStop(Mod.A(LavaC, .55), e0 * .65));
+            glow.GradientStops.Add(new GradientStop(Mod.A(LavaC, .62), 0));
+            glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, .78), e0 * .65));
             glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, .9), e0));
             glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, 0), e1));
             glow.Freeze();
@@ -459,7 +459,7 @@ sealed partial class HudMagma
             dc.PushTransform(new TranslateTransform(r.X, r.Y));
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Min(fx, end + fade), r.Height)));
             var gl = glow.Clone(); gl.Transform = new TranslateTransform(-r.X, 0); gl.Freeze();
-            dc.DrawGeometry(null, Mod.P(gl, .95, true), cracks);
+            dc.DrawGeometry(null, Mod.P(gl, 1.05, true), cracks);
             dc.Pop(); dc.Pop();
         }
         // the channel's roundness: shade at the top and the foot

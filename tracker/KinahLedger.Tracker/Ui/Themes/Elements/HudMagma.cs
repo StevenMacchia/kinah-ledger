@@ -42,6 +42,9 @@ sealed partial class HudMagma : ModernLook
     readonly Canvas _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true, Visibility = Visibility.Collapsed };
     readonly TacSketch _sheenBand = new((dc, s) => dc.DrawRectangle(Mod.Grad(false, (Mod.A(LavaC, 0), 0), (Mod.A(LavaC, .24), .55), (Mod.A(LavaYelC, .34), .88), (Mod.A(LavaYelC, 0), 1)), null, new Rect(0, 0, s.Width, s.Height)), 64, double.NaN);
     readonly TranslateTransform _sheenX = new();
+    /// <summary>Three small jets off the Buddy's slab (best passed), standing on its river; drawn once.</summary>
+    readonly Grid _lineJets = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Width = 150, Margin = new Thickness(40, 0, 0, RiverH - 1), Visibility = Visibility.Collapsed };
+    readonly List<(UIElement Jet, ScaleTransform S)> _lineJetParts = new();
     readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 7, 14, 7) };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -66,10 +69,17 @@ sealed partial class HudMagma : ModernLook
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 4) };
     readonly TacSketch _fightSlab, _fightFlare, _fightErupt;
     /// <summary>The eruption's lava jets, standing on the river along the slab's foot (drawn once; each scaled up out of the river and back).</summary>
-    readonly System.Windows.Controls.Primitives.UniformGrid _jets = new() { Rows = 1, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 6, RiverH - 1) };
-    readonly List<(UIElement Jet, ScaleTransform S)> _jetParts = new();
+    readonly Grid _jets = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(4, 0, 4, RiverH - 1) };
+    readonly List<(UIElement Jet, ScaleTransform S, UIElement Bead, TranslateTransform B, double H, double Delay, double Peak)> _jetParts = new();
+    /// <summary>The jets: their columns' widths (uneven), heights (three tiers: the tall ones rise up into the rows behind the words) and starts.</summary>
+    static readonly (double Col, double H, double W, double Delay)[] JetPlan =
+    {
+        (1.0, 30, 15, .05), (1.5, 58, 20, 0), (.8, 18, 12, .1), (1.3, 44, 17, .03), (1.7, 22, 13, .12), (.9, 62, 21, .02), (1.2, 32, 15, .08),
+    };
     /// <summary>The fissures splitting the meter's slab: their flares, flashed by a moment.</summary>
     readonly List<UIElement> _splitFlares = new();
+    /// <summary>The dark plates under the foot's words, shown only while an eruption's jets play behind them (Foot).</summary>
+    readonly SolidColorBrush _footPlate = new(Color.FromArgb(0xC8, 0x0A, 0x06, 0x04)) { Opacity = 0 };
     const double FightPad = 9;
     readonly StackPanel _fightBody = new() { Margin = new Thickness(FightPad, 8, FightPad, 8) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
@@ -86,18 +96,33 @@ sealed partial class HudMagma : ModernLook
         _lineFlare = new TacSketch((dc, s) => Flare(dc, s, 11)) { Opacity = 0 };
         _sheenBand.RenderTransform = _sheenX;
         _lineFx.Children.Add(_sheenBand);
-        _line.Children.Add(_lineSlab); _line.Children.Add(_lineFlare); _line.Children.Add(_lineFx); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
-        _fightSlab = new TacSketch((dc, s) => Slab(dc, s, SlabA, 23, river: true));
-        _fightFlare = new TacSketch((dc, s) => Flare(dc, s, 23)) { Opacity = 0 };
-        _fightErupt = new TacSketch((dc, s) => Eruption(dc, s, 23)) { Opacity = 0 };
-        for (int i = 0; i < 7; i++)
+        foreach (var (i, jh, jw) in new[] { (0, 24.0, 12.0), (1, 34.0, 15.0), (2, 20.0, 11.0) })
         {
-            int seed = 71 + i * 13;
-            double jh = 40 + (i * 37 % 5) * 8, jw = 14 + (i * 23 % 3) * 3;
+            int seed = 301 + i * 7;
+            _lineJets.ColumnDefinitions.Add(new ColumnDefinition());
             var jet = new TacSketch((dc, s) => Jet(dc, s, seed), jw, jh) { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0 };
             var sc = new ScaleTransform(1, 0);
             jet.RenderTransformOrigin = new Point(.5, 1); jet.RenderTransform = sc;
-            _jets.Children.Add(jet); _jetParts.Add((jet, sc));
+            Grid.SetColumn(jet, i); _lineJets.Children.Add(jet); _lineJetParts.Add((jet, sc));
+        }
+        _line.Children.Add(_lineSlab); _line.Children.Add(_lineFlare); _line.Children.Add(_lineFx); _line.Children.Add(_lineJets); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
+        _fightSlab = new TacSketch((dc, s) => Slab(dc, s, SlabA, 23, river: true));
+        _fightFlare = new TacSketch((dc, s) => Flare(dc, s, 23)) { Opacity = 0 };
+        _fightErupt = new TacSketch((dc, s) => Eruption(dc, s, 23)) { Opacity = 0 };
+        for (int i = 0; i < JetPlan.Length; i++)
+        {
+            int seed = 71 + i * 13;
+            var (col, jh, jw, delay) = JetPlan[i];
+            _jets.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(col, GridUnitType.Star) });
+            var jet = new TacSketch((dc, s) => Jet(dc, s, seed), jw, jh) { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0 };
+            var sc = new ScaleTransform(1, 0);
+            jet.RenderTransformOrigin = new Point(.5, 1); jet.RenderTransform = sc;
+            var bg = new RadialGradientBrush(WhiteHotC, Mod.A(LavaHotC, 0)) { GradientOrigin = new Point(.5, .4) }; bg.Freeze();
+            var bt = new TranslateTransform();
+            var bead = new System.Windows.Shapes.Ellipse { Width = 5, Height = 6, Fill = bg, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0, RenderTransform = bt };
+            Grid.SetColumn(jet, i); Grid.SetColumn(bead, i);
+            _jets.Children.Add(jet); _jets.Children.Add(bead);
+            _jetParts.Add((jet, sc, bead, bt, jh, delay, jh > 40 ? .75 : 1));
         }
         _jets.Visibility = Visibility.Collapsed;
         _fight.Children.Add(_fightSlab); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightErupt); _fight.Children.Add(_jets); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
@@ -570,8 +595,32 @@ sealed partial class HudMagma : ModernLook
             dots.Add((d, tt, -Math.PI / 2 + (i - 3) * .38));
         }
         _ringHost?.Children.Add(sparks);
+        // the ring's flare: it swells a quarter and settles, a halo of heat ringing out off it
+        var halo = new TacSketch((dc, s) =>
+        {
+            var c = new Point(21, 21);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(LavaC, .5), 7), c, 19, 19);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(LavaYelC, 1), 2), c, 19, 19);
+        }, 42, 42) { Opacity = 0 };
+        var haloS = new ScaleTransform(1, 1);
+        halo.RenderTransformOrigin = new Point(.5, .5); halo.RenderTransform = haloS;
+        _ringHost?.Children.Insert(0, halo);
+        var swell = new ScaleTransform(1, 1);
+        if (_ringHost != null) { _ringHost.RenderTransformOrigin = new Point(.5, .5); _ringHost.RenderTransform = swell; }
+        _lineJets.Visibility = Visibility.Visible;
         Motion.Play(art, 1800, t =>
         {
+            double fl = Seg(t, .4, .75);
+            swell.ScaleX = swell.ScaleY = 1 + .22 * Math.Sin(Math.PI * fl);
+            haloS.ScaleX = haloS.ScaleY = 1 + .55 * Out(fl);
+            halo.Opacity = fl is > 0 and < 1 ? 1 - fl : 0;
+            for (int i = 0; i < _lineJetParts.Count; i++)
+            {
+                var (jet, sc) = _lineJetParts[i];
+                double k = Seg(t, .4 + i * .04, .78 + i * .04);
+                sc.ScaleY = k < .4 ? 1.1 * Out(Seg(k, 0, .4)) : 1.1 * (1 - Seg(k, .4, 1) * Seg(k, .4, 1));
+                jet.Opacity = k is > 0 and < 1 ? .9 : 0;
+            }
             _beat = false; _share = was;
             _complete = Out(Seg(t, 0, .45));
             if (t >= .45) { _beat = beat; _complete = 1; }
@@ -585,7 +634,12 @@ sealed partial class HudMagma : ModernLook
                 d.Opacity = t > .4 ? 1 - sp : 0;
             }
             _lineFlare.Opacity = t < .45 ? Seg(t, 0, .45) : 1 - Seg(t, .45, 1);
-        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFlare.Opacity = 0; (sparks.Parent as Panel)?.Children.Remove(sparks); });
+        }, () =>
+        {
+            _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFlare.Opacity = 0; (sparks.Parent as Panel)?.Children.Remove(sparks); (halo.Parent as Panel)?.Children.Remove(halo);
+            swell.ScaleX = swell.ScaleY = 1; _lineJets.Visibility = Visibility.Collapsed;
+            foreach (var (jet, sc) in _lineJetParts) { jet.Opacity = 0; sc.ScaleY = 0; }
+        });
     }
 
     /// <summary>An entry opened: the first timer's chip flares mint round its edge and settles.</summary>
@@ -619,6 +673,7 @@ sealed partial class HudMagma : ModernLook
     void Erupt(double ms)
     {
         _jets.Visibility = Visibility.Visible;
+
         var flares = _splitFlares.ToList();
         Motion.Play(_fightErupt, ms, t =>
         {
@@ -627,19 +682,24 @@ sealed partial class HudMagma : ModernLook
             // the fissures flash white-hot for a beat
             double f = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .05, .35);
             foreach (var fl in flares) fl.Opacity = f;
-            // the jets: each shoots up out of the river, overshoots, and falls back, a few ms after the one before
-            for (int i = 0; i < _jetParts.Count; i++)
+            _footPlate.Opacity = t < .06 ? Seg(t, 0, .06) : 1 - Seg(t, .6, 1);
+            // the jets: each shoots up out of the river on its own beat, overshoots and falls back; the tall ones, up among the
+            // rows, stay translucent behind the words; a bead of lava flies off each tip and fades
+            foreach (var (jet, sc, bead, bt, jh, delay, peak) in _jetParts)
             {
-                var (jet, sc) = _jetParts[i];
-                double k = Seg(t, (i * 3 % 7) * .025, .55 + (i * 3 % 7) * .025);
-                sc.ScaleY = k < .45 ? 1.2 * Out(Seg(k, 0, .45)) : 1.2 * (1 - Seg(k, .45, 1) * Seg(k, .45, 1));
-                jet.Opacity = k is > 0 and < 1 ? 1 - .6 * Seg(k, .6, 1) : 0;
+                double k = Seg(t, delay, .5 + delay);
+                sc.ScaleY = k < .4 ? 1.15 * Out(Seg(k, 0, .4)) : 1.15 * (1 - Seg(k, .4, 1) * Seg(k, .4, 1));
+                jet.Opacity = k is > 0 and < 1 ? peak * (1 - .6 * Seg(k, .6, 1)) : 0;
+                double b = Seg(k, .3, 1);
+                bt.Y = -jh * 1.1 - 16 * Out(b) + 10 * b * b;
+                bead.Opacity = b is > 0 and < 1 ? 1 - b : 0;
             }
         }, () =>
         {
             _fightErupt.Opacity = 0; _jets.Visibility = Visibility.Collapsed;
+            _footPlate.Opacity = 0;
             foreach (var fl in flares) fl.Opacity = 0;
-            foreach (var (jet, sc) in _jetParts) { jet.Opacity = 0; sc.ScaleY = 0; }
+            foreach (var (jet, sc, bead, _, _, _, _) in _jetParts) { jet.Opacity = 0; sc.ScaleY = 0; bead.Opacity = 0; }
         });
     }
 
@@ -672,10 +732,11 @@ sealed partial class HudMagma : ModernLook
         var ring = new TacSketch((dc, s) =>
         {
             var c = new Point(s.Width / 2, s.Height / 2);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? AshC : LavaC, .45), 9), c, s.Width / 2 - 6, s.Height / 2 - 6);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? Colors.White : LavaYelC, .9), 2.2), c, s.Width / 2 - 6, s.Height / 2 - 6);
-        }) { Width = 200, Height = 70, Opacity = 0, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
-        var ringS = new ScaleTransform(.6, .6);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? AshC : LavaC, .4), 8), c, s.Width / 2 - 5, s.Height / 2 - 5);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? AshC : LavaHotC, 1), 3), c, s.Width / 2 - 5, s.Height / 2 - 5);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? Colors.White : WhiteHotC, 1), 1), c, s.Width / 2 - 6.5, s.Height / 2 - 6.5);
+        }) { Width = Math.Max(120, FightWidth - 16), Height = 44, Opacity = 0, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
+        var ringS = new ScaleTransform(.3, .3);
         ring.RenderTransformOrigin = new Point(.5, .5); ring.RenderTransform = ringS;
         var drop = new TranslateTransform();
         var tg = new TransformGroup(); tg.Children.Add(slam); tg.Children.Add(drop);
@@ -687,7 +748,7 @@ sealed partial class HudMagma : ModernLook
             if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight)) { y = hd.TranslatePoint(new Point(0, 0), _fight).Y; h = hd.ActualHeight; }
             band.Margin = new Thickness(3, Math.Max(2, y - 5), 3, 0);
             band.Height = h + 12;
-            ring.Margin = new Thickness(10, Math.Max(0, y - 5) + (h + 12) / 2 - 35, 0, 0);
+            ring.Margin = new Thickness(0, Math.Max(0, y - 5) + (h + 12) / 2 - 22, 0, 0);
         }
         Seat();
         bool seated = _head is { ActualHeight: > 0 };
@@ -702,7 +763,7 @@ sealed partial class HudMagma : ModernLook
             slam.ScaleX = slam.ScaleY = t < .1 ? 1.15 : 1 - .04 * Math.Sin(Math.PI * Seg(t, .1, .22));
             // the shock ring off the landing, and the fissures flaring thick with it
             double r = Seg(t, .1, .5);
-            ringS.ScaleX = ringS.ScaleY = .6 + 1.2 * Out(r);
+            ringS.ScaleX = .3 + 1.1 * Out(r); ringS.ScaleY = .3 + .7 * Out(r);
             ring.Opacity = t is >= .1 and < .5 ? 1 - r * r : 0;
             flare.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .1, .7);
             if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, .06, .1) : Seg(t, .84, 1);

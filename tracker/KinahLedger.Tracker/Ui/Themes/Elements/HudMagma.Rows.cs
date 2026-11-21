@@ -47,7 +47,8 @@ sealed partial class HudMagma
         }
         var tp = Pair(L.T("Total"), total);
         EnergyMark.After(tp, 11, Quiet);   // Odyle Energy (Ui/EnergyMark.cs)
-        g.Children.Add(tp);
+        // each side's words on a dark plate that shows only while an eruption's jets play behind them
+        g.Children.Add(new Border { Child = tp, Background = _footPlate, CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0), Margin = new Thickness(-3, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Left });
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         if (word.Length > 0) right.Children.Add(Pair(word, group));
         if (held)
@@ -55,7 +56,8 @@ sealed partial class HudMagma
             var avg = Chip(L.T("AVG"), Soft, LavaHotC, size: 8.5); avg.Tag = "avg-badge"; avg.ToolTip = L.T(Encounter.AvgBadge); avg.Margin = new Thickness(6, 0, 0, 0);
             right.Children.Add(avg);
         }
-        Grid.SetColumn(right, 1); g.Children.Add(right);
+        var rb = new Border { Child = right, Background = _footPlate, CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0), Margin = new Thickness(0, 0, -3, 0) };
+        Grid.SetColumn(rb, 1); g.Children.Add(rb);
         return AsFoot(Shaded(g), e, now);
     }
 
