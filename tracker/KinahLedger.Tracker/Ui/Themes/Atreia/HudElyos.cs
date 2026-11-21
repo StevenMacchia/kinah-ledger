@@ -100,7 +100,8 @@ sealed partial class HudElyos : ModernLook
     {
         // the look's own rows (Ui/Themes/ThemeRows.cs): gold-edged class bars on the plate
         UseRows(ElyosRow.Pitch, m => new ElyosRow(), 15, GapLine);
-        _lineArt = new TacSketch((dc, s) => PlateArt(dc, s, _dim ? .55 : _opacity, crest: true, dim: _dim));
+        // the crest only with nothing over the plate (a run's head or the timer chips sit there): nothing is ever drawn over words
+        _lineArt = new TacSketch((dc, s) => PlateArt(dc, s, _dim ? .55 : _opacity, crest: !LineCovered, dim: _dim));
         _lineSheen.RenderTransform = new TransformGroup { Children = { new SkewTransform(-28, 0), _lineSheenShift } };
         _lineSheenHost.Children.Add(_lineSheen);
         _lineWings = new TacSketch(DrawLineWings);
@@ -612,6 +613,7 @@ sealed partial class HudElyos : ModernLook
         _timersInFight.Visibility = inside && any ? Visibility.Visible : Visibility.Collapsed;
         _timersUp.Visibility = up && any ? Visibility.Visible : Visibility.Collapsed;
         _timersInLine.Visibility = !inside && !up && any ? Visibility.Visible : Visibility.Collapsed;
+        LineAboveChanged();
     }
 
     // ================================================================ the fight
@@ -743,12 +745,26 @@ sealed partial class HudElyos : ModernLook
         dc.Pop(); dc.Pop();
     }
 
+    /// <summary>Whether words sit just over the Buddy's plate: the run's head, or the timer chips moved up over it.</summary>
+    bool LineCovered => _runHeadLit.Visibility == Visibility.Visible || _timersUp.Visibility == Visibility.Visible;
+
+    bool _lineCovered;
+
+    /// <summary>The plate and its wings drawn again when what sits over the plate comes or goes (the crest shown or left out).</summary>
+    void LineAboveChanged()
+    {
+        if (LineCovered == _lineCovered) return;
+        _lineCovered = LineCovered;
+        _lineArt.InvalidateVisual(); _lineWings.InvalidateVisual();
+    }
+
     /// <summary>The Buddy's small wings: the same wing, a third the size, behind each end of its plate.</summary>
     void DrawLineWings(DrawingContext dc, Size s)
     {
         if (s.Width < 60 || s.Height < 20) return;
         var box = WingBox;
-        double sy = Math.Min(.55, (s.Height - 2) / -box.Top), sx = .62, y = s.Height - 6;
+        // the tips rise over the plate's top only with nothing above it, else they stop at its edge
+        double sy = Math.Min(.55, (LineCovered ? s.Height - 7 : s.Height - 2) / -box.Top), sx = .62, y = s.Height - 6;
         dc.PushClip(new RectangleGeometry(new Rect(-80, -40, 80.5, s.Height + 80)));
         dc.PushTransform(new MatrixTransform(sx, 0, 0, sy, 3, y)); dc.DrawDrawing(WingL); dc.Pop();
         dc.Pop();
