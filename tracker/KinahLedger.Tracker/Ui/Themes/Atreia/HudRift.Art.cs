@@ -126,7 +126,7 @@ sealed partial class HudRift
     /// </summary>
     static double Out(double p) => Motion.Out(p);
 
-    internal static void RiftPanel(DrawingContext dc, Size s, double radius, double opacity, double pulse = -1, Color? tint = null, double flare = 0, bool shadow = true, double tear = 1)
+    internal static void RiftPanel(DrawingContext dc, Size s, double radius, double opacity, double pulse = -1, Color? tint = null, double flare = 0, bool shadow = true, double tear = 1, bool wound = false)
     {
         if (s.Width < 6 || s.Height < 6) return;
         var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
@@ -152,6 +152,7 @@ sealed partial class HudRift
         dc.DrawRectangle(Stars, null, all);
         dc.Pop();
         dc.DrawRectangle(Mod.Grad(true, (Mod.A(LilacC, .07), 0), (Mod.A(LilacC, 0), .4)), null, all);
+        if (wound) tear = 0;
         if (tear > 0)
         {
             // the tear: its bloom falling into the glass, the sliver of light along the top, a white core in it
@@ -183,6 +184,218 @@ sealed partial class HudRift
         dc.Pop();
         // the rim: a violet hairline, lighter along the top
         dc.DrawGeometry(null, Mod.P(Mod.Grad(true, (Mod.A(LilacC, .34), 0), (Mod.A(VioletC, .16), .5), (Mod.A(VioletC, .22), 1)), 1), shape);
+        // the wound over it all, breaking the top edge
+        if (wound) dc.DrawDrawing(WoundArt(Math.Round(s.Width), tint ?? CyanC));
+    }
+
+    /// <summary>The wound's widest point, as a share of the panel's width (the rip and the bursts start there).</summary>
+    internal const double WoundPeak = .32, WoundY = 5;
+
+    static readonly Dictionary<(double W, Color C), Drawing> WoundCache = new();
+
+    /// <summary>
+    /// The wound in space along a panel's top edge, made once per width and colour and frozen: a jagged lens of light up to
+    /// 8 px wide at <see cref="WoundPeak"/>, violet halo, cyan body, white core, cracks branching off it, light bleeding down
+    /// from it in drips, streaks of warped light (violet and cyan, a pixel apart) along it, motes round it and a violet bloom
+    /// falling into the glass. Its upper edge breaks a few pixels past the panel's top (the window's room above it).
+    /// </summary>
+    internal static Drawing WoundArt(double w, Color c)
+    {
+        if (WoundCache.TryGetValue((w, c), out var d)) return d;
+        if (WoundCache.Count > 60) WoundCache.Clear();
+        var g = new DrawingGroup();
+        var rnd = new Random(7177);
+        double x0 = -4, x1 = w + 4, y = WoundY, peak = WoundPeak;
+        // a gentle bend along it, so it reads as torn rather than ruled
+        double Bend(double t) => .9 * Math.Sin(Math.PI * 2.3 * t + .6);
+        double Half(double t)
+        {
+            double u = t < peak ? .5 * t / peak : .5 + .5 * (t - peak) / (1 - peak);
+            return Math.Pow(Math.Sin(Math.PI * u), 1.6);
+        }
+        Geometry Lens(double thick, int seed)
+        {
+            var r = new Random(seed);
+            int n = 2 * Math.Max(8, (int)((x1 - x0) / 44));
+            var top = new Point[n + 1]; var bot = new Point[n + 1];
+            for (int i = 0; i <= n; i++)
+            {
+                double t = (double)i / n + (i == 0 || i == n ? 0 : (r.NextDouble() - .5) * 1.1 / n), x = x0 + (x1 - x0) * t, h = thick / 2 * (.12 + .88 * Half(t)), yc = y + Bend(t);
+                double up = i % 2 == 0 ? .45 + .45 * r.NextDouble() : .12 + .25 * r.NextDouble(), dn = i % 2 == 1 ? .65 + .65 * r.NextDouble() : .2 + .3 * r.NextDouble();
+                top[i] = new Point(x, yc - h * up); bot[i] = new Point(x, yc + h * dn);
+            }
+            var sg = new StreamGeometry();
+            using (var sc = sg.Open())
+            {
+                sc.BeginFigure(top[0], true, true);
+                for (int i = 1; i <= n; i++) sc.LineTo(top[i], true, false);
+                for (int i = n; i >= 0; i--) sc.LineTo(bot[i], true, false);
+            }
+            sg.Freeze();
+            return sg;
+        }
+        using (var dc = g.Open())
+        {
+            // the bloom: violet light falling into the glass from the wound, brightest under its widest point
+            dc.DrawRectangle(Radial(new Point(peak, .22), .6, .9, (Mod.A(Color.FromRgb(0x7B, 0x2C, 0xFF), .7), 0), (Mod.A(Color.FromRgb(0x7B, 0x2C, 0xFF), .28), .45), (Mod.A(VioletC, 0), 1)), null, new Rect(-6, -6, w + 12, 42));
+            // the streaks of warped light along it: violet and cyan, a pixel apart, as space bends round the wound
+            for (int i = 0; i < 7; i++)
+            {
+                double t = .1 + .8 * rnd.NextDouble(), len = Math.Min(w * .3, 18 + 46 * rnd.NextDouble()), sx = Math.Clamp(x0 + (x1 - x0) * t - len / 2, 4, Math.Max(4, w - len - 4));   // inside the panel's width
+                double sy = y + (rnd.Next(2) == 0 ? -1 : 1) * (2.5 + 3 * Half(t) + 4 * rnd.NextDouble());
+                if (sy < -3) sy = y + 4 + 3 * rnd.NextDouble();
+                var sv = Mod.Grad(false, (Mod.A(Color.FromRgb(0xC2, 0x4D, 0xFF), 0), 0), (Mod.A(Color.FromRgb(0xC2, 0x4D, 0xFF), .55), .5), (Mod.A(Color.FromRgb(0xC2, 0x4D, 0xFF), 0), 1));
+                var scy = Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .6), .5), (Mod.A(c, 0), 1));
+                dc.DrawRectangle(sv, null, new Rect(sx - 2, sy, len, .9));
+                dc.DrawRectangle(scy, null, new Rect(sx + 2, sy + 1, len, .9));
+            }
+            // the wound's heat: a hot white-cyan glow round its widest point
+            dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(LightC, .75), 0), (Mod.A(CyanC, .35), .4), (Mod.A(VioletC, 0), 1)), null, new Rect(x0 + (x1 - x0) * peak - 90, y - 11, 180, 26));
+            // the wound: halo, body, core
+                        var edgeC = Color.FromRgb(0xC7, 0x7D, 0xFF);
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(VioletC, .75), .12), (Mod.A(edgeC, .9), peak), (Mod.A(VioletC, .75), .88), (Mod.A(VioletC, 0), 1)), null, Lens(20, 11));
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(edgeC, .2), 0), (Mod.A(Mod.Mix(edgeC, c, .5), .95), .12), (Mod.A(c, 1), peak), (Mod.A(Mod.Mix(edgeC, c, .5), .95), .88), (Mod.A(edgeC, .2), 1)), null, Lens(16, 12));
+            var raw = Color.FromRgb(0xFF, 0x2E, 0x9A);
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(raw, 0), .05), (Mod.A(raw, .55), .18), (Mod.A(raw, .95), peak), (Mod.A(raw, .55), .7), (Mod.A(raw, 0), .95)), null, Lens(9.5, 14));
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(Colors.White, .3), 0), (Mod.A(Colors.White, .9), .15), (Mod.A(Colors.White, 1), peak), (Mod.A(Colors.White, .9), .85), (Mod.A(Colors.White, .3), 1)), null, Lens(5.5, 13));
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(Color.FromRgb(0x05, 0x02, 0x0C), 0), peak - .16), (Mod.A(Color.FromRgb(0x05, 0x02, 0x0C), .95), peak), (Mod.A(Color.FromRgb(0x05, 0x02, 0x0C), 0), peak + .2)), null, Lens(1.8, 15));
+            // the cracks branching off it, and the light bleeding down from it
+            var crackFill = Mod.Grad(false, (Mod.A(LightC, .95), 0), (Mod.A(CyanC, 0), 1));
+            for (int i = 0; i < 9; i++)
+            {
+                double t = .12 + .76 * rnd.NextDouble(), bx = x0 + (x1 - x0) * t;
+                bool up = rnd.NextDouble() < .3;
+                double len = up ? 4 + 3 * rnd.NextDouble() : 6 + 12 * rnd.NextDouble(), ang = (rnd.NextDouble() - .5) * 1.6, wid = .7 + .9 * Half(t);
+                double ex = Math.Clamp(bx + Math.Sin(ang) * len * 1.6, 2, w - 2), ey = y + (up ? -1 : 1) * Math.Cos(ang) * len;
+                double mx = (bx + ex) / 2 + (rnd.NextDouble() - .5) * 3, my = (y + ey) / 2;
+                var cg = new StreamGeometry();
+                using (var sc = cg.Open())
+                {
+                    sc.BeginFigure(new Point(bx - wid, y), true, true);
+                    sc.LineTo(new Point(mx, my), true, false);
+                    sc.LineTo(new Point(ex, ey), true, false);
+                    sc.LineTo(new Point(mx + .4, my), true, false);
+                    sc.LineTo(new Point(bx + wid, y), true, false);
+                }
+                cg.Freeze();
+                dc.DrawGeometry(Mod.Br(Mod.Mix(c, Colors.White, .4), .85), null, cg);
+            }
+            for (int i = 0; i < 2; i++)
+            {
+                double t = peak + (i == 0 ? -.06 : .08), dx = x0 + (x1 - x0) * t, len = i == 0 ? 13 : 9, dw = 1.1;
+                double top = y + Bend(t) + 3 + 6 * Half(t);
+                dc.DrawRectangle(Mod.Grad(true, (Mod.A(Color.FromRgb(0xC7, 0x7D, 0xFF), .85), 0), (Mod.A(VioletC, .45), .5), (Mod.A(VioletC, 0), 1)), null, new Rect(dx - dw / 2, top, dw, len));
+                dc.DrawEllipse(Mod.Br(Color.FromRgb(0xC7, 0x7D, 0xFF), .9), null, new Point(dx, top + len * .72), .7, 1);
+            }
+            // motes of light round it
+            for (int i = 0; i < 14; i++)
+            {
+                double t = .1 + .8 * rnd.NextDouble(), mx = x0 + (x1 - x0) * t, my = y + (rnd.NextDouble() - .35) * 16;
+                if (my < -2) my = -2;
+                dc.DrawEllipse(Mod.Br(rnd.Next(3) == 0 ? CyanC : Colors.White, .45 + .5 * rnd.NextDouble()), null, new Point(mx, my), .5 + .6 * rnd.NextDouble(), .5 + .6 * rnd.NextDouble());
+            }
+        }
+        g.Freeze();
+        WoundCache[(w, c)] = g;
+        return g;
+    }
+
+    /// <summary>
+    /// A capsule's torn ends (the rare drop's pill, the end plate): at each end a jagged fringe of light with six teeth, a bloom
+    /// of violet light round it and two still shards beside it, as if the capsule had been torn out of the glass. Inside its size.
+    /// </summary>
+    internal static void TornEnds(DrawingContext dc, Size s, Color c)
+    {
+        double h = s.Height;
+        var lit = Mod.Mix(c, Colors.White, .4);
+        foreach (var left in new[] { true, false })
+        {
+            double ex = left ? h * .32 : s.Width - h * .32, dir = left ? 1 : -1;
+            dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(Color.FromRgb(0xA8, 0x55, 0xF7), .6), 0), (Mod.A(Color.FromRgb(0xA8, 0x55, 0xF7), 0), 1)), null, new Rect(ex - 15, -2, 30, h + 4));
+            var g = new StreamGeometry();
+            using (var sc = g.Open())
+            {
+                sc.BeginFigure(new Point(ex, 2), true, true);
+                for (int i = 0; i < 6; i++)
+                {
+                    double y0 = 2 + (h - 4) * i / 6, y1 = 2 + (h - 4) * (i + .5) / 6;
+                    sc.LineTo(new Point(ex + dir * (3.5 + (i % 2) * 1.5), y1), true, false);
+                    sc.LineTo(new Point(ex + dir * .6, 2 + (h - 4) * (i + 1) / 6), true, false);
+                }
+                sc.LineTo(new Point(ex - dir * 1.2, h - 2), true, false);
+                sc.LineTo(new Point(ex - dir * 1.2, 2), true, false);
+            }
+            g.Freeze();
+            dc.DrawGeometry(Mod.Grad(true, (Mod.A(lit, .95), 0), (Mod.A(c, .9), .5), (Mod.A(lit, .95), 1)), null, g);
+            // two still shards beside it
+            foreach (var (dx, dy, len) in new[] { (9.0, h * .3, 6.0), (12.0, h * .7, 4.5) })
+            {
+                var sh = new StreamGeometry();
+                double x = ex + dir * dx, yy = dy;
+                using (var sc = sh.Open())
+                {
+                    sc.BeginFigure(new Point(x, yy - len / 2), true, true);
+                    sc.LineTo(new Point(x + 1.2, yy), true, false);
+                    sc.LineTo(new Point(x, yy + len / 2), true, false);
+                    sc.LineTo(new Point(x - 1.2, yy), true, false);
+                }
+                sh.Freeze();
+                dc.DrawGeometry(Mod.Br(lit, .8), null, sh);
+            }
+        }
+    }
+
+    /// <summary>The deep field: fewer, larger, brighter stars, a layer behind the glass's own that drifts only during a moment (parallax).</summary>
+    internal static readonly ImageBrush DeepStars = MakeDeepStars();
+
+    static ImageBrush MakeDeepStars()
+    {
+        const int n = 220;
+        var px = new byte[n * n * 4];
+        var rnd = new Random(4421);
+        void Put(int x, int y, Color c, double a)
+        {
+            x = (x % n + n) % n; y = (y % n + n) % n;
+            int i = (y * n + x) * 4;
+            byte al = (byte)Math.Clamp(Math.Round(a * 255), 0, 255);
+            if (al <= px[i + 3]) return;
+            px[i] = (byte)(c.B * al / 255); px[i + 1] = (byte)(c.G * al / 255); px[i + 2] = (byte)(c.R * al / 255); px[i + 3] = al;
+        }
+        for (int k = 0; k < 26; k++)
+        {
+            int x = rnd.Next(n), y = rnd.Next(n);
+            var c = rnd.NextDouble() < .6 ? Colors.White : rnd.NextDouble() < .5 ? CyanC : LilacC;
+            double a = .45 + .5 * rnd.NextDouble();
+            Put(x, y, c, a);
+            Put(x + 1, y, c, a * .5); Put(x - 1, y, c, a * .5); Put(x, y + 1, c, a * .5); Put(x, y - 1, c, a * .5);
+            if (a > .8) { Put(x + 2, y, c, a * .2); Put(x - 2, y, c, a * .2); Put(x, y + 2, c, a * .2); Put(x, y - 2, c, a * .2); }
+        }
+        var bmp = BitmapSource.Create(n, n, 96, 96, PixelFormats.Pbgra32, null, px, n * 4);
+        bmp.Freeze();
+        var b = new ImageBrush(bmp) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, n, n), ViewportUnits = BrushMappingMode.Absolute, Stretch = Stretch.None };
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>A shard of light, drawn once at its own origin (pointing up), for the bursts to fling: white at its tip, cyan to violet at its foot.</summary>
+    internal static TacSketch ShardOf(double len, double wid)
+    {
+        var geo = new StreamGeometry();
+        using (var c = geo.Open())
+        {
+            c.BeginFigure(new Point(0, -len * .6), true, true);
+            c.LineTo(new Point(wid / 2, len * .1), true, false);
+            c.LineTo(new Point(0, len * .4), true, false);
+            c.LineTo(new Point(-wid / 2, len * .1), true, false);
+        }
+        geo.Freeze();
+        var fill = Mod.Grad(true, (Colors.White, 0), (LightC, .35), (CyanC, .7), (VioletC, 1));
+        return new TacSketch((dc, _) =>
+        {
+            dc.DrawRectangle(Mod.Grad(true, (Mod.A(LightC, .75), 0), (Mod.A(VioletC, 0), 1)), null, new Rect(-.7, len * .3, 1.4, len * 1.6));
+            dc.DrawRectangle(Spark, null, new Rect(-wid * 1.6, -len * .7, wid * 3.2, len * 1.2));
+            dc.DrawGeometry(fill, null, geo);
+        }) { IsHitTestVisible = false };
     }
 
     /// <summary>
@@ -244,6 +457,7 @@ sealed partial class HudRift
     {
         readonly Canvas _spot = new() { IsHitTestVisible = false };
         readonly TranslateTransform _at = new();
+        readonly ScaleTransform _trail = new(1, 1, 120, 0);
         readonly double _radius;
         Color? _tint = Colors.Transparent;
 
@@ -251,6 +465,7 @@ sealed partial class HudRift
         {
             _radius = radius; IsHitTestVisible = false; ClipToBounds = true; Opacity = 0;
             _spot.RenderTransform = _at;
+            _at.X = 124;
             Children.Add(_spot);
             Tint(null);
             SizeChanged += (_, _) =>
@@ -270,6 +485,7 @@ sealed partial class HudRift
             _spot.Children.Clear();
             var trail = new System.Windows.Shapes.Rectangle { Width = 120, Height = 5, Fill = Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(Mod.Mix(c, Colors.White, .4), .6), 1)) };
             Canvas.SetLeft(trail, -120); Canvas.SetTop(trail, 0);
+            trail.RenderTransform = _trail;
             var glow = new System.Windows.Shapes.Rectangle { Width = 80, Height = 28, Fill = tint is { } t ? Radial(new Point(.5, .5), .5, .5, (Mod.A(Colors.White, 1), 0), (Mod.A(t, .6), .3), (Mod.A(t, 0), 1)) : PulseGlow };
             Canvas.SetLeft(glow, -40); Canvas.SetTop(glow, -12);
             var dot = new System.Windows.Shapes.Ellipse { Width = 4.8, Height = 3.2, Fill = Brushes.White };
@@ -280,9 +496,11 @@ sealed partial class HudRift
         /// <summary>The pulse at <paramref name="t"/> of its run along the tear (outside 0..1: gone).</summary>
         public void At(double t)
         {
-            if (t is <= 0 or >= 1) { Opacity = 0; return; }
+            // (at rest the light waits where its trail stays inside the glass: nothing ever drawn past the window)
+            if (t is <= 0 or >= 1) { Opacity = 0; _at.X = 124; _trail.ScaleX = 1; return; }
             double x0 = _radius * .35, x1 = ActualWidth - _radius * .35;
             _at.X = x0 + (x1 - x0) * Motion.Out(t);
+            _trail.ScaleX = Math.Clamp((_at.X - 2) / 120, .01, 1);   // the trail never reaches back past the glass's left
             Opacity = Math.Min(1, 1.6 * Math.Sin(Math.PI * t));
         }
     }
@@ -313,8 +531,19 @@ sealed partial class HudRift
             g.Freeze();
             dc.DrawGeometry(fill, edge, g);
         }
-        Shard(cx - 4.4 * scale, 6.6 * scale, 3.4 * scale, -.32);
-        Shard(cx + 4.4 * scale, 6.6 * scale, 3.4 * scale, .32);
-        Shard(cx, 9.6 * scale, 4.2 * scale, 0);
+        Shard(cx - 4.6 * scale, 6.8 * scale, 3.6 * scale, -.34);
+        Shard(cx + 4.6 * scale, 6.8 * scale, 3.6 * scale, .34);
+        Shard(cx, 10 * scale, 4.4 * scale, 0);
+        // the band the shards stand on: a slim arc of light
+        var band = new StreamGeometry();
+        using (var c = band.Open())
+        {
+            c.BeginFigure(new Point(cx - 7 * scale, by - .4 * scale), true, true);
+            c.QuadraticBezierTo(new Point(cx, by + 1.6 * scale), new Point(cx + 7 * scale, by - .4 * scale), true, false);
+            c.LineTo(new Point(cx + 6.4 * scale, by + .9 * scale), true, false);
+            c.QuadraticBezierTo(new Point(cx, by + 2.9 * scale), new Point(cx - 6.4 * scale, by + .9 * scale), true, false);
+        }
+        band.Freeze();
+        dc.DrawGeometry(Mod.Grad(false, (VioletC, 0), (LightC, .5), (VioletC, 1)), edge, band);
     }
 }

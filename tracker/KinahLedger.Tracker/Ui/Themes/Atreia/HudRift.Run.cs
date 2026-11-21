@@ -23,7 +23,7 @@ sealed partial class HudRift
     static TextBlock RunHead()
     {
         var t = Tt("", 10.5, Lilac, FontWeights.SemiBold);
-        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(15, 9, 14, 0);
+        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(15, 17, 14, 0);
         t.Visibility = Visibility.Collapsed;
         return t;
     }

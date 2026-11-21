@@ -100,13 +100,17 @@ sealed partial class HudRift
         Canvas? _fx;
         System.Windows.Shapes.Rectangle? _band;
         Color? _bandC;
-        TacSketch? _flare, _streak, _flash;
+        TacSketch? _flare, _streak, _flash, _edges, _glow;
         System.Windows.Shapes.Ellipse? _ring;
         readonly TranslateTransform _bandAt = new(), _flareAt = new(), _streakAt = new();
-        readonly ScaleTransform _ringScale = new(1, 1, 17, 6);
+        readonly ScaleTransform _ringScale = new(1, 1, 40, 13), _edgesRun = new(1, 1, CrownX, 0);
+        readonly List<(UIElement El, TranslateTransform At, double Dx, double Dy)> _burst = new();
         bool _expanded;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>Where the DPS bar is drawn, for the PB ghost (IThemeBarSpan on main): the rect a full bar fills in the bar's art.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(.5, .5, Math.Max(0, _art.ActualWidth - 1), Math.Max(0, _art.ActualHeight - 1)));
 
         public RiftRow(HudRift look, RiftFit fit)
         {
@@ -194,7 +198,21 @@ sealed partial class HudRift
 
         // ---- the moments: small parts drawn once, only moved (transforms) and faded (opacity) while they play
 
-        const double CrownX = PadX + RankW + Gap1 + IconW / 2, CrownY = (H - IconW) / 2 + 5;
+        const double CrownX = PadX + RankW + Gap1 + IconW / 2, CrownY = (H - IconW) / 2 + 3.5;
+
+        /// <summary>Whether a point across the row (px from its left) falls under its words or figures, give or take 4 px.</summary>
+        bool UnderWords(double x)
+        {
+            foreach (FrameworkElement el in new FrameworkElement[] { _rank, _icon, _nameLine, _heal, _dps, _share, _dmg, _crit })
+            {
+                if (el.Visibility != Visibility.Visible || el.ActualWidth <= 0 || !el.IsDescendantOf(_root)) continue;
+                double a = el.TranslatePoint(new Point(0, 0), _root).X;
+                double w = el == _nameLine ? _nameLine.Children.OfType<FrameworkElement>().Where(c => c.Visibility == Visibility.Visible).Sum(c => c.ActualWidth + c.Margin.Left) : el.ActualWidth;
+                if (el is TextBlock tb && tb.HorizontalAlignment == HorizontalAlignment.Right) { a += el.ActualWidth - tb.DesiredSize.Width; w = tb.DesiredSize.Width; }
+                if (x > a - 4 && x < a + w + 4) return true;
+            }
+            return false;
+        }
 
         /// <summary>The bar's leading edge, px from the row's left.</summary>
         double Edge() => Math.Max(2, (_root.ActualWidth - 1) * Math.Clamp(_bar, 0, 1));
@@ -210,11 +228,35 @@ sealed partial class HudRift
             // the fissure's flare (breaking out above and below the bar), the streak a climb leaves, the crown's flash and ring
             _flare = new TacSketch((dc, _) => Fissure(dc, 0, .5, H - 1, LightC, 2.2, 3)) { Opacity = 0, RenderTransform = _flareAt };
             _streak = new TacSketch((dc, _) => dc.DrawRectangle(Mod.Grad(true, (Mod.A(CyanC, .75), 0), (Mod.A(VioletC, 0), 1)), null, new Rect(-1.2, H, 2.4, 18))) { Opacity = 0, RenderTransform = _streakAt };
-            _flash = new TacSketch((dc, _) => Fissure(dc, CrownX, CrownY - 14, 24, VioletC, .9, 6)) { Opacity = 0 };
-            _ring = new System.Windows.Shapes.Ellipse { Width = 34, Height = 12, Stroke = Mod.Br(CyanC, .9), StrokeThickness = 1.3, Opacity = 0, RenderTransform = _ringScale, IsHitTestVisible = false };
-            Canvas.SetLeft(_ring, CrownX - 17); Canvas.SetTop(_ring, CrownY - 7);
+            _flash = new TacSketch((dc, _) => Fissure(dc, CrownX, CrownY - 17, 30, VioletC, 1.6, 6)) { Opacity = 0 };
+            _ring = new System.Windows.Shapes.Ellipse { Width = 80, Height = 26, Stroke = Mod.Br(LightC, .95), StrokeThickness = 1.6, Opacity = 0, RenderTransform = _ringScale, IsHitTestVisible = false };
+            Canvas.SetLeft(_ring, CrownX - 40); Canvas.SetTop(_ring, CrownY - 15);
+            // the new leader's burst: the row's edges torn open in rift light, rushing out from the crown; a glow over the row; shards
+            _edges = new TacSketch((dc, s) =>
+            {
+                foreach (var (y, seed) in new[] { (.8, 21), (H - .8, 22) })
+                {
+                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(VioletC, .2), 0), (Mod.A(LightC, .95), CrownX / Math.Max(1, s.Width)), (Mod.A(CyanC, .7), .6), (Mod.A(VioletC, 0), 1)), null, TearAcross(0, s.Width, y, 3.4, seed));
+                    dc.DrawGeometry(Mod.Br(Colors.White, .9), null, TearAcross(CrownX - 20, Math.Min(s.Width, CrownX + s.Width * .5), y, 1.1, seed + 5));
+                }
+            }) { Opacity = 0, RenderTransform = _edgesRun };
+            _glow = new TacSketch((dc, s) => dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(LightC, .55), 0), (Mod.A(VioletC, .3), .45), (Mod.A(VioletC, 0), 1)), null, new Rect(-14, -10, 2 * (CrownX + 14), H + 20))) { Opacity = 0 };
+            var layer = new Grid { IsHitTestVisible = false, Children = { _glow, _edges } };
+            var rnd = new Random(313);
+            for (int i = 0; i < 7; i++)
+            {
+                double a = -Math.PI / 2 + (i - 3) * .42 + (rnd.NextDouble() - .5) * .2, d = 18 + 22 * rnd.NextDouble();
+                var sh = ShardOf(5 + 4 * rnd.NextDouble(), 2 + rnd.NextDouble());
+                var at = new TranslateTransform();
+                sh.RenderTransform = new TransformGroup { Children = { new RotateTransform(a * 180 / Math.PI + 90), at } };
+                sh.Opacity = 0;
+                Canvas.SetLeft(sh, CrownX); Canvas.SetTop(sh, CrownY - 6);
+                _fx.Children.Add(sh);
+                _burst.Add((sh, at, Math.Cos(a) * d, Math.Sin(a) * d * .8));
+            }
             foreach (var el in new UIElement[] { _flare, _streak, _flash, _ring }) _fx.Children.Add(el);
             _root.Children.Insert(1, clip);
+            _root.Children.Insert(2, layer);
             _root.Children.Add(_fx);
         }
 
@@ -230,28 +272,44 @@ sealed partial class HudRift
             if (_bandC != col)
             {
                 _bandC = col;
-                _band!.Fill = Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, col, .5), .35), .55), (Mod.A(col, .85), .86), (Mod.A(Colors.White, .9), .9), (Mod.A(col, 0), 1));
+                _band!.Fill = Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(Mod.Mix(VioletC, col, .5), .3), .55), (Mod.A(col, .6), .86), (Mod.A(LightC, .7), .92), (Mod.A(col, 0), 1));
             }
             double fx = Edge();
             _bandAt.X = -60 + (fx + 4) * Out(Math.Min(1, seam / .7));
-            _band!.Opacity = Math.Min(1, 1.2 * Math.Sin(Math.PI * Math.Min(1, seam / .8)));
+            _band!.Opacity = Math.Min(1, 1.2 * Math.Sin(Math.PI * Math.Min(1, seam / .8))) * (UnderWords(_bandAt.X + 54) ? .35 : 1);   // its bright head never glares behind a figure
             _flareAt.X = fx;
-            _flare!.Opacity = seam > .55 ? Math.Sin(Math.PI * (seam - .55) / .45) : 0;
+            _flare!.Opacity = (seam > .55 ? Math.Sin(Math.PI * (seam - .55) / .45) : 0) * (UnderWords(fx) ? 0 : 1);
         }
 
-        /// <summary>The crown lands: it drops onto its place over the emblem, a fissure of rift light flashes down through it and a ring of light spreads from its feet.</summary>
+        /// <summary>
+        /// A new leader's rift burst: the crown slams down onto the emblem; as it lands, a fissure of light flashes down through
+        /// it, the row's top and bottom edges tear open in rift light rushing out from it, a glow floods the row, shards fly up
+        /// off the crown, a shock ring spreads and the bar's fissure flares. Under a second, transforms and opacity only.
+        /// </summary>
         internal void Land()
         {
             Fx();
             Motion.Play(_crown, 1000, t =>
             {
-                _crownAt.Y = -7 * (1 - Back(Seg(t, 0, .4), 2.4));
-                _crown.Opacity = Seg(t, 0, .18);
-                _flash!.Opacity = t < .3 ? 0 : Math.Sin(Math.PI * Seg(t, .3, .8));
-                double r = Seg(t, .3, .95);
-                _ringScale.ScaleX = _ringScale.ScaleY = .25 + .9 * r;
-                _ring!.Opacity = t < .3 ? 0 : .85 * (1 - r);
-            }, () => { _crownAt.Y = 0; _crown.Opacity = 1; _flash!.Opacity = 0; _ring!.Opacity = 0; });
+                _crownAt.Y = -9 * (1 - Back(Seg(t, 0, .28), 2.6));
+                _crown.Opacity = Seg(t, 0, .12);
+                double hit = t < .26 ? 0 : 1 - Seg(t, .26, .9);
+                _flash!.Opacity = t < .24 ? 0 : Math.Sin(Math.PI * Seg(t, .24, .7));
+                double r = Seg(t, .26, .9);
+                _ringScale.ScaleX = _ringScale.ScaleY = .15 + 1.15 * Out(r);
+                _ring!.Opacity = t < .26 ? 0 : .95 * (1 - r);
+                _edgesRun.ScaleX = Math.Max(.02, Out(Seg(t, .26, .6)));
+                _edges!.Opacity = t < .26 ? 0 : 1 - Seg(t, .6, 1);
+                _glow!.Opacity = t < .26 ? 0 : .9 * Math.Sin(Math.PI * Seg(t, .26, .95));
+                double fly = Out(Seg(t, .26, .95));
+                foreach (var b in _burst) { b.At.X = b.Dx * fly; b.At.Y = b.Dy * fly; b.El.Opacity = t < .26 ? 0 : 1 - Seg(t, .55, .95); }
+                _flareAt.X = Edge();
+                _flare!.Opacity = (hit > 0 ? Math.Sin(Math.PI * Seg(t, .3, .95)) : 0) * (UnderWords(_flareAt.X) ? 0 : 1);
+            }, () =>
+            {
+                _crownAt.Y = 0; _crown.Opacity = 1; _flash!.Opacity = 0; _ring!.Opacity = 0; _edges!.Opacity = 0; _glow!.Opacity = 0; _flare!.Opacity = 0;
+                foreach (var b in _burst) b.El.Opacity = 0;
+            });
         }
 
         /// <summary>A rank won: the fissure flares and leaves a streak of rift light below it as the row glides up.</summary>
@@ -262,7 +320,7 @@ sealed partial class HudRift
             {
                 _streakAt.X = _flareAt.X = Edge();
                 _streak!.Opacity = 1 - t;
-                _flare!.Opacity = .8 * (1 - t);
+                _flare!.Opacity = .8 * (1 - t) * (UnderWords(_flareAt.X) ? 0 : 1);
             }, () => { _streak!.Opacity = 0; _flare!.Opacity = 0; });
         }
 
@@ -328,11 +386,12 @@ sealed partial class HudRift
         // the row's brushes and pens, made once (a bar's body once per class colour): a redraw allocates next to nothing
         static readonly Brush Ground = Mod.Grad(true, (Mod.A(DuskC, .78), 0), (Mod.A(VoidC, .82), 1)), Sheen = Mod.Grad(true, (Mod.A(Colors.White, .13), 0), (Mod.A(Colors.White, 0), .55)), TopLine = Mod.Br(LilacC, .3);
         static readonly Pen YouRim = Mod.P(Mod.Br(StarC, .6), 1.2), RowRim = Mod.P(Mod.Br(LilacC, .14), 1);
+        static readonly Brush LeadBody = Mod.Grad(false, (Mod.A(Color.FromRgb(0x3B, 0x10, 0x80), .95), 0), (Mod.A(Color.FromRgb(0x5E, 0x22, 0xC8), .88), .55), (Mod.A(Color.FromRgb(0x8B, 0x3D, 0xFF), .85), 1));
         static readonly Dictionary<Color, Brush> Bodies = new();
         static Brush Body(Color tone)
         {
             if (!Bodies.TryGetValue(tone, out var b))
-                Bodies[tone] = b = Mod.Grad(false, (Mod.A(Mod.Mix(DeepVioletC, tone, .14), .94), 0), (Mod.A(Mod.Mix(Mod.Mix(tone, VioletC, .3), VoidC, .3), .82), .55), (Mod.A(Mod.Mix(tone, DeepVioletC, .32), .94), 1));
+                Bodies[tone] = b = Mod.Grad(false, (Mod.A(Mod.Mix(Color.FromRgb(0x2A, 0x0F, 0x5C), tone, .1), .95), 0), (Mod.A(Mod.Mix(Mod.Mix(tone, VioletC, .3), VoidC, .45), .88), .55), (Mod.A(Mod.Mix(Mod.Mix(tone, Color.FromRgb(0x80, 0x80, 0x90), .3), DeepVioletC, .5), .95), 1));
             return b;
         }
 
@@ -351,7 +410,7 @@ sealed partial class HudRift
                 dc.PushClip(pill);
                 var fill = new Rect(r.X, r.Y, fx, r.Height);
                 // the body: the Abyss's violet at its root rising into the class's colour, the stars showing through
-                dc.DrawRectangle(Body(tone), null, fill);
+                dc.DrawRectangle(Leads ? LeadBody : Body(tone), null, fill);
                 dc.PushOpacity(.5);
                 dc.DrawRectangle(Stars, null, fill);
                 dc.Pop();
@@ -368,14 +427,18 @@ sealed partial class HudRift
                 dc.Pop();
             }
             dc.DrawGeometry(null, m.You ? YouRim : RowRim, pill);
-            // the fissure at the leading edge: the leader's the brightest
-            if (fx > 1) Fissure(dc, Math.Max(r.X + 1.5, r.X + fx - .5), r.Y, r.Height, tone, Leads ? 1.4 : .62, (int)(m.Id & 7));
+            // the fissure at the leading edge: the leader's the brightest; under words, only a faint line (never bright under a figure)
+            if (fx > 1)
+            {
+                double ex = Math.Max(r.X + 1.5, r.X + fx - .5);
+                if (!UnderWords(ex)) Fissure(dc, ex, r.Y, r.Height, tone, Leads ? 1.75 : .62, (int)(m.Id & 7));
+            }
         }
 
         /// <summary>The crown over the leader's emblem: three crystal shards floating over it (drawn once; a landing moves it).</summary>
         void DrawCrown(DrawingContext dc, Size s)
         {
-            if (Leads) Crown(dc, CrownX, CrownY, 1.45, 0);
+            if (Leads) Crown(dc, CrownX, CrownY, 2.05, 0);
         }
     }
 }
