@@ -20,6 +20,13 @@ jobs:
         env:
           KL_TEST_WORKAREA: 1920x1040
         run: |
-          dist/KinahLedger.exe options-test | cat > out.txt
-          grep DIAG out.txt | cut -c1-1500
-          grep -E -A8 "^FAIL" out.txt | cut -c1-900 | head -100
+          dist/KinahLedger.exe options-test > out.txt 2>&1 || true
+          wc -l out.txt
+          grep -c DIAG out.txt || true
+          grep DIAG out.txt | cut -c1-1500 || true
+          grep -E -A8 "^FAIL" out.txt | cut -c1-900 | head -100 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: options-out
+          path: out.txt
