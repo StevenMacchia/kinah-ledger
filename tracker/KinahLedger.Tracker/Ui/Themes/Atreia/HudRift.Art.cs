@@ -250,7 +250,7 @@ sealed partial class HudRift
                 dc.DrawRectangle(scy, null, new Rect(sx + 2, sy + 1, len, .9));
             }
             // the wound's heat: a hot white-cyan glow round its widest point
-            dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(LightC, .75), 0), (Mod.A(CyanC, .35), .4), (Mod.A(VioletC, 0), 1)), null, new Rect(x0 + (x1 - x0) * peak - 90, y - 11, 180, 26));
+            dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(LightC, .75), 0), (Mod.A(CyanC, .35), .4), (Mod.A(VioletC, 0), 1)), null, new Rect(x0 + (x1 - x0) * peak - Math.Min(90, (x1 - x0) * peak), y - 11, 2 * Math.Min(90, (x1 - x0) * peak), 26));   // never past the panel's left
             // the wound: halo, body, core
                         var edgeC = Color.FromRgb(0xC7, 0x7D, 0xFF);
             dc.DrawGeometry(Mod.Grad(false, (Mod.A(VioletC, 0), 0), (Mod.A(VioletC, .75), .12), (Mod.A(edgeC, .9), peak), (Mod.A(VioletC, .75), .88), (Mod.A(VioletC, 0), 1)), null, Lens(20, 11));
