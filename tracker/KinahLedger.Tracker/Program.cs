@@ -3832,6 +3832,18 @@ options: --process aion[,other]");
         Check("...a kill's drop 10 s later: a drop", $"{n(sp2.Engine, "Spiritstone")}", "1");
         if (n(sp2.Engine, "Spiritstone") != 1)
             foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(40)) Console.WriteLine("      note: " + nl);
+        // a map that pays a kill's Kina bound (2026-11-20 11:16:20 to 25, Western Altamia, Steven's log): the kill's soul line,
+        // then its bound Kina and a Spiritstone that dropped with it. The kill's Kina is no payout, so the stone is a drop
+        var sk = new TrackerSession(null, settings, items, "Test");
+        sk.Engine.SetZone("Western Altamia Highland");
+        var skAt = b0.AddMinutes(30);
+        sk.ProcessChat(new List<string> { "[Player1] hi" }, skAt);
+        var skLines = new List<string> { "[Player1] hi", "Obtained 1 Dracuni Herbalist Soul Points.", "Defeat Dracuni, Krall Processing Maintenance", "Machines, and Distorted Spirits (16/20)" };
+        for (int i = 1; i <= 3; i++) sk.ProcessChat(skLines, skAt.AddSeconds(i * 0.4));
+        var skLines2 = skLines.Concat(new[] { "Acquired 142 Kina (Bound).", "Spiritstone acquired." }).ToList();
+        for (int i = 0; i < 5; i++) sk.ProcessChat(skLines2, skAt.AddSeconds(2.5 + i * 0.4));
+        sk.FlushVotes(skAt.AddSeconds(6));
+        Check("a kill's own bound Kina (a map that pays it bound) is no payout: the Spiritstone with it is a drop", $"{n(sk.Engine, "Spiritstone")}", "1");
 
         // ---- gathering (Steven, 2026-10-23 11:28-11:29, Orichalcum: "like a 25% accuracy") ----
         // the loot list band read the gathering panel (node, proficiency, item, Success) as rows; the game upgraded the ore
