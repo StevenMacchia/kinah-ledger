@@ -16,14 +16,23 @@ sealed partial class HudTelestrator
         PenC = Color.FromRgb(0xFF, 0xE1, 0x3B), PinkC = Color.FromRgb(0xFF, 0x47, 0xB0), PenMintC = Color.FromRgb(0x6B, 0xFF, 0xB4);
 
     /// <summary>The tactics board's ruling: a fine grid every 12 px and a firmer one every 48 px.</summary>
-    static readonly DrawingBrush GridMinor = MakeGrid(12, .03), GridMajor = MakeGrid(48, .045);
+    static readonly DrawingBrush GridMinor = MakeGrid(12, .05), GridMajor = MakeGrid(48, .085, true);
 
-    static DrawingBrush MakeGrid(double n, double a)
+    static DrawingBrush MakeGrid(double n, double a, bool cross = false)
     {
         var lines = new GeometryGroup();
         lines.Children.Add(new RectangleGeometry(new Rect(0, 0, n, 1)));
         lines.Children.Add(new RectangleGeometry(new Rect(0, 0, 1, n)));
-        var d = new GeometryDrawing(Mod.Br(Colors.White, a), null, lines);
+        var d = new DrawingGroup();
+        d.Children.Add(new GeometryDrawing(Mod.Br(Colors.White, a), null, lines));
+        if (cross)
+        {
+            // a tactics board's "+" at each major cell's middle
+            var plus = new GeometryGroup();
+            plus.Children.Add(new RectangleGeometry(new Rect(n / 2 - 2, n / 2, 5, 1)));
+            plus.Children.Add(new RectangleGeometry(new Rect(n / 2, n / 2 - 2, 1, 5)));
+            d.Children.Add(new GeometryDrawing(Mod.Br(Colors.White, .2), null, plus));
+        }
         var b = new DrawingBrush(d)
         {
             TileMode = TileMode.Tile, Viewport = new Rect(0, 0, n, n), ViewportUnits = BrushMappingMode.Absolute,
@@ -37,7 +46,7 @@ sealed partial class HudTelestrator
     /// The analysis board: a soft drop under it (outside its shape, inside the window's room), charcoal glass darker at its
     /// foot, the tactics grid, a faint light along its top, the hairline rim and the replay frame's corner brackets.
     /// </summary>
-    static void Board(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool grid = true, double brackets = .4)
+    static void Board(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool grid = true, double brackets = .55)
     {
         if (s.Width < 4 || s.Height < 4) return;
         // drawn once per size and setting, then replayed (a board is redrawn only when its size changes)
@@ -85,7 +94,7 @@ sealed partial class HudTelestrator
     /// <summary>The replay frame's four corner brackets, 7 px each, just inside the rim.</summary>
     static void Brackets(DrawingContext dc, Rect r, double a)
     {
-        const double L = 7, I = 3;
+        const double L = 10, I = 3;
         var g = new StreamGeometry();
         using (var c = g.Open())
         {
@@ -99,7 +108,7 @@ sealed partial class HudTelestrator
             Corner(new Point(r.Left + I, r.Bottom - I), 1, -1); Corner(new Point(r.Right - I, r.Bottom - I), -1, -1);
         }
         g.Freeze();
-        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, a), 1.2), g);
+        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, a), 2), g);
     }
 
     /// <summary>A pen of round caps and joins.</summary>
@@ -115,45 +124,110 @@ sealed partial class HudTelestrator
 
     static readonly Dictionary<(Color, double), Pen> Pens = new();
 
-    /// <summary>A pen line's geometry, made once per key (a mark that sits still is never rebuilt).</summary>
-    static Geometry? Cached(string key, Func<Geometry?> make)
+    /// <summary>A pen's mark, made once per key (a mark that sits still is never rebuilt, its outline cached with it).</summary>
+    static T? Cached<T>(string key, Func<T?> make) where T : class
     {
-        if (Shapes.TryGetValue(key, out var g)) return g;
+        if (Shapes.TryGetValue(key, out var g)) return g as T;
         if (Shapes.Count > 256) Shapes.Clear();
-        return Shapes[key] = make();
+        var made = make();
+        Shapes[key] = made;
+        return made;
     }
 
-    static readonly Dictionary<string, Geometry?> Shapes = new();
+    static readonly Dictionary<string, object?> Shapes = new();
 
-    /// <summary>A marker stroke: a dark edge under it, so it reads on a lit bar and over snow alike, then the ink.</summary>
-    static void Ink(DrawingContext dc, Geometry? g, Color c, double w = 2.2, double a = 1)
+    static SolidColorBrush BrOf(Color c)
     {
-        if (g == null || a <= .01) return;
-        dc.DrawGeometry(null, PenOf(Mod.A(Colors.Black, .5 * a), w + 2.2), g);
-        dc.DrawGeometry(null, PenOf(Mod.A(c, a), w), g);
+        if (Brs.TryGetValue(c, out var b)) return b;
+        if (Brs.Count > 256) Brs.Clear();
+        return Brs[c] = Frozen(c);
     }
 
-    /// <summary>A pen's line through <paramref name="pts"/>, its first <paramref name="drawn"/> of its length (a stroke being drawn on).</summary>
-    static Geometry? Poly(IReadOnlyList<Point> pts, double drawn = 1)
+    static readonly Dictionary<Color, SolidColorBrush> Brs = new();
+    static readonly TranslateTransform Nudge = MakeNudge();
+    static TranslateTransform MakeNudge() { var t = new TranslateTransform(.7, .6); t.Freeze(); return t; }
+
+    /// <summary>
+    /// A stroke of the pen: its points and, once asked for, its outline at a width (a felt tip's: thin where the pen lands,
+    /// full in the middle, thin where it lifts), kept with it.
+    /// </summary>
+    sealed class PenLine
+    {
+        public required List<Point> Pts;
+        readonly Dictionary<double, Geometry> _shapes = new();
+
+        public Geometry Shape(double w)
+        {
+            if (_shapes.TryGetValue(w, out var g)) return g;
+            return _shapes[w] = Taper(Pts, w);
+        }
+
+        static Geometry Taper(List<Point> pts, double w)
+        {
+            int n = pts.Count;
+            var len = new double[n];
+            for (int i = 1; i < n; i++) len[i] = len[i - 1] + (pts[i] - pts[i - 1]).Length;
+            double total = Math.Max(.001, len[n - 1]);
+            var left = new Point[n]; var right = new Point[n];
+            for (int i = 0; i < n; i++)
+            {
+                var t = pts[Math.Min(i + 1, n - 1)] - pts[Math.Max(i - 1, 0)];
+                if (t.Length < 1e-6) t = new Vector(1, 0); else t.Normalize();
+                var nrm = new Vector(-t.Y, t.X);
+                double u = len[i] / total, half = w / 2 * (.3 + .7 * Math.Pow(Math.Sin(Math.PI * Math.Clamp(u, 0, 1)), .55));
+                half = Math.Max(.45, half);
+                left[i] = pts[i] + nrm * half; right[i] = pts[i] - nrm * half;
+            }
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                c.BeginFigure(left[0], true, true);
+                for (int i = 1; i < n; i++) c.LineTo(left[i], true, true);
+                for (int i = n - 1; i >= 0; i--) c.LineTo(right[i], true, true);
+            }
+            g.Freeze();
+            return g;
+        }
+    }
+
+    /// <summary>
+    /// A marker stroke: a dark edge round it (so it reads on a lit bar and over snow alike), a second pass of the ink a hair
+    /// off the first (a marker's double line), then the ink, tapered at both ends. <paramref name="w"/> is its full width.
+    /// </summary>
+    static void Ink(DrawingContext dc, PenLine? p, Color c, double w = 2.2, double a = 1, bool edge = true)
+    {
+        if (p == null || a <= .01) return;
+        var g = p.Shape(Math.Round(w * 1.3, 2));
+        if (edge) dc.DrawGeometry(BrOf(Mod.A(Colors.Black, .55 * a)), PenOf(Mod.A(Colors.Black, .55 * a), 1.8), g);
+        dc.PushTransform(Nudge);
+        dc.DrawGeometry(BrOf(Mod.A(c, .4 * a)), null, g);
+        dc.Pop();
+        dc.DrawGeometry(BrOf(Mod.A(c, a)), null, g);
+    }
+
+    /// <summary>A plain pen geometry (the replay frame's brackets): its dark edge, then the ink.</summary>
+    static void InkGeom(DrawingContext dc, Geometry g, Color c, double w)
+    {
+        dc.DrawGeometry(null, PenOf(Mod.A(Colors.Black, .5), w + 2.2), g);
+        dc.DrawGeometry(null, PenOf(c, w), g);
+    }
+
+    /// <summary>A pen's stroke through <paramref name="pts"/>, its first <paramref name="drawn"/> of its length (a stroke being drawn on).</summary>
+    static PenLine? Poly(IReadOnlyList<Point> pts, double drawn = 1)
     {
         if (pts.Count < 2 || drawn <= .005) return null;
         double total = 0;
         for (int i = 1; i < pts.Count; i++) total += (pts[i] - pts[i - 1]).Length;
         double want = total * Math.Clamp(drawn, 0, 1), run = 0;
-        var g = new StreamGeometry();
-        using (var c = g.Open())
+        var o = new List<Point>(pts.Count) { pts[0] };
+        for (int i = 1; i < pts.Count; i++)
         {
-            c.BeginFigure(pts[0], false, false);
-            for (int i = 1; i < pts.Count; i++)
-            {
-                double d = (pts[i] - pts[i - 1]).Length;
-                if (run + d >= want) { double k = d > 0 ? (want - run) / d : 0; c.LineTo(pts[i - 1] + (pts[i] - pts[i - 1]) * k, true, true); break; }
-                c.LineTo(pts[i], true, true);
-                run += d;
-            }
+            double d = (pts[i] - pts[i - 1]).Length;
+            if (run + d >= want) { double k = d > 0 ? (want - run) / d : 0; o.Add(pts[i - 1] + (pts[i] - pts[i - 1]) * k); break; }
+            o.Add(pts[i]);
+            run += d;
         }
-        g.Freeze();
-        return g;
+        return o.Count >= 2 ? new PenLine { Pts = o } : null;
     }
 
     /// <summary>
@@ -198,7 +272,7 @@ sealed partial class HudTelestrator
     }
 
     /// <summary>An arrow's head at the end of <paramref name="pts"/>: two quick strokes back from its tip.</summary>
-    static Geometry? Head(IReadOnlyList<Point> pts, double size)
+    static PenLine? Head(IReadOnlyList<Point> pts, double size)
     {
         if (pts.Count < 3) return null;
         var tip = pts[^1];
@@ -206,15 +280,11 @@ sealed partial class HudTelestrator
         if (dir.Length < .01) return null;
         dir.Normalize();
         static Vector Rot(Vector v, double deg) { double t = deg * Math.PI / 180; return new Vector(v.X * Math.Cos(t) - v.Y * Math.Sin(t), v.X * Math.Sin(t) + v.Y * Math.Cos(t)); }
-        var g = new StreamGeometry();
-        using (var c = g.Open())
-        {
-            c.BeginFigure(tip + Rot(-dir, 32) * size, false, false);
-            c.LineTo(tip, true, true);
-            c.LineTo(tip + Rot(-dir, -30) * size * .9, true, true);
-        }
-        g.Freeze();
-        return g;
+        var a = tip + Rot(-dir, 32) * size; var b = tip + Rot(-dir, -30) * size * .9;
+        var o = new List<Point>();
+        for (int i = 0; i <= 5; i++) o.Add(a + (tip - a) * (i / 5.0));
+        for (int i = 1; i <= 5; i++) o.Add(tip + (b - tip) * (i / 5.0));
+        return new PenLine { Pts = o };
     }
 
     /// <summary>A pen arrow: its line drawn on to <paramref name="drawn"/>, the head once the line has reached its end.</summary>
@@ -230,6 +300,23 @@ sealed partial class HudTelestrator
         double s = size;
         Ink(dc, Poly(LinePts(new Point(o.X + .5, o.Y + s * .54), new Point(o.X + s - .5, o.Y + s * .46), .5, seed, .25)), c, w);
         Ink(dc, Poly(LinePts(new Point(o.X + s * .47, o.Y + .5), new Point(o.X + s * .53, o.Y + s - .5), -.4, seed + 3, .25)), c, w);
+    }
+
+    /// <summary>
+    /// Three quick strokes of emphasis flicked off a point (a caster's "look here!"): fanned up and to the right from
+    /// <paramref name="at"/>, <paramref name="len"/> px long, drawn on to <paramref name="drawn"/>.
+    /// </summary>
+    static void Emphasis(DrawingContext dc, Point at, double len, int seed, Color c, double drawn)
+    {
+        if (drawn <= 0) return;
+        for (int k = 0; k < 3; k++)
+        {
+            double ang = (-75 + 32 * k) * Math.PI / 180, l = len * (k == 1 ? 1 : .78);
+            var a = at + new Vector(Math.Cos(ang), Math.Sin(ang)) * 2.5;
+            var b = at + new Vector(Math.Cos(ang), Math.Sin(ang)) * (2.5 + l);
+            double part = Math.Clamp(drawn * 3 - k * .6, 0, 1);
+            if (part > 0) Ink(dc, Cached($"emph|{seed}|{k}|{at.X:0.0}|{at.Y:0.0}|{len}", () => Poly(LinePts(a, b, .6, seed + k, .2))) is { } g && part >= 1 ? g : Poly(LinePts(a, b, .6, seed + k, .2), part), c, 2);
+        }
     }
 
     /// <summary>A member's seed for their marks (the same marks each draw).</summary>

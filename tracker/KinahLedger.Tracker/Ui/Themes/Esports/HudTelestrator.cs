@@ -9,16 +9,20 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// Telestrator (the Esports theme; 2026-11-20): an analyst desk breaking down the replay. Everything sits on the analysis
-/// board, charcoal glass with a tactics grid ruled into it and a replay frame's corner brackets (HudTelestrator.Ink.cs);
-/// the figures are crisp white Inter, the bars flat lanes in each class's colour with a bright playhead at their end. Over
-/// it the caster's pen, bright marker strokes with a hand's wobble that never cross a figure: the leader's rank circled in
-/// yellow, a pink underline under your name, a scribbled plus before a healer's figure, an arrow drawn up beside a row that
-/// climbed. The Buddy is the same board: the ring of your best a hand-drawn yellow loop, the hour big, a scribbled arrow
-/// from it to the best drop in the strip, the session under it, the timers as small board tags.
-/// The moments are the pen at work: the leader's circle drawn on when the lead changes (and as a fight starts); a
-/// highlighter swipe along the bars on the first hit, a kill and a new leader; a pickup's swipe across the Buddy with its
-/// worth pinned beside it; a rare drop circled in its grade's colour; your best passed closes the loop; an opened entry
-/// circled in mint; a fight's end written over its head by hand ("Killed", underlined).
+/// board, charcoal glass with a tactics grid ruled into it (a "+" at each major cell) and a replay frame's corner brackets
+/// (HudTelestrator.Ink.cs); the figures are crisp white Inter, the bars flat lanes in each class's colour with a white
+/// scrubber head at their end, the boss's HP a scrub track with the same head. Over it the caster's pen, felt-tip strokes
+/// (tapered, a marker's double line, a dark edge) with a hand's wobble that never cross a figure: the leader's rank circled
+/// in yellow, a pink underline under your name, a scribbled plus before a healer's figure, an arrow drawn up beside a row that
+/// climbed. The pen tray (three markers) lies in the foot. The Buddy is the same board: the ring of your best a hand-drawn
+/// yellow loop, the hour big, a pen arrow from it to the best drop in the strip, the session under it, the timers as small
+/// board tags; a rare drop's tile circled and its name underlined in its grade's colour.
+/// The moments are the pen at work, each under a second or two: a fight starts with a flash frame and the replay brackets
+/// snapping onto the board, the leader circled and a highlighter's light run down the bars; a new leader gets the head
+/// ("New lead" handwritten, their name beside it); a kill writes "Killed" big by hand over the head, double underlined;
+/// your best passed closes the loop and slaps a "New best" tag beside the Buddy; a pickup swipes the Buddy and pins its worth.
+/// Light by design: boards and the tray drawn once per size and replayed, the pen's still marks cached, moments moved by
+/// transform and opacity, redrawn only while a stroke is being written.
 /// </summary>
 sealed partial class HudTelestrator : ModernLook
 {
@@ -68,6 +72,9 @@ sealed partial class HudTelestrator : ModernLook
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
     readonly Border _swipeHost = new() { IsHitTestVisible = false };
+    /// <summary>The fight start's flash frame and the replay frame's brackets snapping in (drawn once, moved by scale and opacity).</summary>
+    readonly TacSketch _flash, _snap;
+    readonly ScaleTransform _snapScale = new(1, 1);
     readonly TranslateTransform _fightShift = new();
     FrameworkElement? _head;
 
@@ -82,7 +89,9 @@ sealed partial class HudTelestrator : ModernLook
         _line.Children.Add(_lineBoard); _line.Children.Add(_lineSwipe); _line.Children.Add(_lineCol); _line.Children.Add(_lineInk); _line.Children.Add(_lineAnchor);
         _lineBody.SizeChanged += (_, _) => _lineInk.InvalidateVisual();
         _fightBoard = new TacSketch((dc, s) => Board(dc, s, Radius, _opacity));
-        _fight.Children.Add(_fightBoard); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx); _fight.Children.Add(_swipeHost);
+        _flash = new TacSketch((dc, s) => dc.DrawGeometry(FlashBr, null, Mod.Pill(new Rect(.5, .5, Math.Max(1, s.Width - 1), Math.Max(1, s.Height - 1)), Radius))) { Visibility = Visibility.Collapsed };
+        _snap = new TacSketch((dc, s) => SnapBrackets(dc, s)) { Visibility = Visibility.Collapsed, RenderTransform = _snapScale, RenderTransformOrigin = new Point(.5, .5) };
+        _fight.Children.Add(_fightBoard); _fight.Children.Add(_flash); _fight.Children.Add(_snap); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx); _fight.Children.Add(_swipeHost);
         _fight.RenderTransform = _fightShift;
         _note.Children.Add(new TacSketch((dc, s) => Board(dc, s, 4, _opacity, shadow: false, grid: false, brackets: 0)));
         _note.Children.Add(_noteBody);
@@ -131,6 +140,23 @@ sealed partial class HudTelestrator : ModernLook
 
     static readonly Pen ChalkPen = MakeChalk(), RulerPen = Mod.P(Mod.Br(Colors.White, .3), 1);
     static readonly SolidColorBrush HpTrackBr = Mod.Br(Colors.White, .14), HpBr = Frozen(HpC);
+
+    static readonly SolidColorBrush FlashBr = Mod.Br(Colors.White, .16);
+
+    /// <summary>The replay frame's brackets at the fight start: 16 px, bright, in the pen's yellow.</summary>
+    static void SnapBrackets(DrawingContext dc, Size s)
+    {
+        if (s.Width < 40 || s.Height < 40) return;
+        const double L = 16, I = 2.5;
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            void Corner(Point o, double dx, double dy) { c.BeginFigure(new Point(o.X + dx * L, o.Y), false, false); c.LineTo(o, true, true); c.LineTo(new Point(o.X, o.Y + dy * L), true, true); }
+            Corner(new Point(I, I), 1, 1); Corner(new Point(s.Width - I, I), -1, 1); Corner(new Point(I, s.Height - I), 1, -1); Corner(new Point(s.Width - I, s.Height - I), -1, -1);
+        }
+        g.Freeze();
+        InkGeom(dc, g, PenC, 2.4);
+    }
 
     static Pen MakeChalk()
     {
@@ -217,16 +243,24 @@ sealed partial class HudTelestrator : ModernLook
             var c = ColorOf(r.Color, r.Grade);
             _rareC = c; _rareLoop = 1;
             _rare.Children.Add(new TacSketch((dc, s) => Board(dc, s, 4, _opacity, shadow: true, grid: false, brackets: 0)));
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 14, 6) };
-            var host = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(11, 8, 14, 8) };
+            var host = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 13, 0), VerticalAlignment = VerticalAlignment.Center };
             var tile = Tile(r, 26);
             _rareTile = tile;
             host.Children.Add(tile);
-            var ink = new TacSketch((dc, s) => Ink(dc, _rareLoop >= 1 ? Cached($"rare|{s.Width}", () => Poly(LoopPts(new Rect(-5, -5, s.Width + 10, s.Height + 10), 41))) : Poly(LoopPts(new Rect(-5, -5, s.Width + 10, s.Height + 10), 41), _rareLoop), Mod.Mix(c, Colors.White, .2), 1.9));
+            var ink = new TacSketch((dc, s) =>
+            {
+                var pc = Mod.Mix(c, Colors.White, .2);
+                var loop = _rareLoop >= 1 ? Cached($"rare|{s.Width}", () => Poly(LoopPts(new Rect(-8, -8, s.Width + 16, s.Height + 16), 41))) : Poly(LoopPts(new Rect(-8, -8, s.Width + 16, s.Height + 16), 41), _rareLoop);
+                Ink(dc, loop, pc, 2.4);
+                Ink(dc, loop, Colors.White, .8, .9, edge: false);   // a white core: the loop reads on a tile of its own colour
+                if (_rareTicks > 0) Emphasis(dc, new Point(s.Width + 3, -1), 7, 37, pc, _rareTicks);
+            });
             _rareInk = ink;
             host.Children.Add(ink);
             row.Children.Add(host);
-            var mk = Chip(L.T("RARE DROP"), PenC, size: 8); mk.Margin = new Thickness(0, 0, 7, 0);
+            var mk = Chip(L.T("RARE DROP"), Mod.Mix(c, Colors.White, .15), size: 8.5); mk.Margin = new Thickness(0, 0, 7, 0);
+            ((TextBlock)mk.Child).Foreground = Frozen(Color.FromRgb(0x0E, 0x10, 0x14));
             row.Children.Add(mk);
             var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .45)), FontWeights.Bold);
             // the name underlined by the pen in its grade's colour (made once per width)
@@ -299,7 +333,7 @@ sealed partial class HudTelestrator : ModernLook
     bool _timerUp;
 
     Color _rareC;
-    double _rareLoop = 1;
+    double _rareLoop = 1, _rareTicks;
     TacSketch? _rareInk;
     FrameworkElement? _rareTile;
 
@@ -320,7 +354,7 @@ sealed partial class HudTelestrator : ModernLook
             g.LineTo(new Point(4, y1), true, false);
         }
         band.Freeze();
-        dc.DrawGeometry(Mod.Br(_sheenC, .2), null, band);
+        dc.DrawGeometry(Mod.Br(_sheenC, .3), null, band);
     }
 
     /// <summary>The Buddy's swipe at its point (0 to 1; outside: put away), in <paramref name="c"/>.</summary>
@@ -345,10 +379,10 @@ sealed partial class HudTelestrator : ModernLook
         if (end.X - a.X < 10) return;
         double bow = -Math.Min(9, Math.Max(4, a.Y - 1));
         var pts = LinePts(a, end, bow, 23, .3);
-        if (_arrowDrawn < 1) { Arrow(dc, pts, PenC, _arrowDrawn, 1, 1.8, 4); return; }
+        if (_arrowDrawn < 1) { Arrow(dc, pts, PenC, _arrowDrawn, 1, 2.2, 4.5); return; }
         string k = $"buddy|{a.X:0.0}|{a.Y:0.0}|{end.X:0.0}|{end.Y:0.0}";
-        Ink(dc, Cached(k + "|line", () => Poly(pts)), PenC, 1.8);
-        Ink(dc, Cached(k + "|head", () => Head(pts, 4)), PenC, 1.8);
+        Ink(dc, Cached(k + "|line", () => Poly(pts)), PenC, 2.2);
+        Ink(dc, Cached(k + "|head", () => Head(pts, 4.5)), PenC, 2.2);
     }
 
     /// <summary>The ring of your best: a hand-drawn loop, its track faint chalk, your best's share in yellow marker (closed with its tail once beaten).</summary>
@@ -358,12 +392,12 @@ sealed partial class HudTelestrator : ModernLook
         var c = new Point(s.Width / 2, s.Height / 2);
         dc.DrawEllipse(Mod.Br(BoardDeepC, .55), null, c, s.Width / 2 - 5, s.Height / 2 - 5);
         var pts = RingPts ??= LoopPts(r, 17, 1.12);
-        dc.DrawGeometry(null, PenOf(Mod.A(Colors.White, .16), 2), Cached("ring|track", () => Poly(pts, 1 / 1.12)));
+        Ink(dc, Cached("ring|track", () => Poly(pts, 1 / 1.12)), Colors.White, 1.6, .16, edge: false);
         double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
         double shown = share + (1 - share) * Math.Clamp(_complete, 0, 1);
         if (shown < .004) return;
         double cut = shown >= .999 ? 1 : Math.Round(shown / 1.12, 3);
-        Ink(dc, Cached($"ring|{cut}", () => Poly(pts, cut)), PenC, 2.4);
+        Ink(dc, Cached($"ring|{cut}", () => Poly(pts, cut)), PenC, 2.7);
     }
 
     /// <summary>The ring's loop (the ring is always 42 px), made once.</summary>
@@ -472,7 +506,7 @@ sealed partial class HudTelestrator : ModernLook
                 st.Margin = new Thickness(5, 0, 5, 1);
                 var og = new Grid { Margin = new Thickness(0, 1, 10, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "outcome" };
                 og.Children.Add(st);
-                og.Children.Add(new TacSketch((dc, s) => Ink(dc, Cached($"outcome|{s.Width:0.0}|{s.Height:0.0}", () => Poly(LoopPts(new Rect(-3, -4, s.Width + 6, s.Height + 8), 61))), c, 1.7)));
+                og.Children.Add(new TacSketch((dc, s) => Ink(dc, Cached($"outcome|{s.Width:0.0}|{s.Height:0.0}", () => Poly(LoopPts(new Rect(-3, -4, s.Width + 6, s.Height + 8), 61))), c, 2)));
                 right.Children.Add(og);
             }
             var clock = Tt(Clock(e, now), 18, White, FontWeights.Bold); clock.Tag = "fight-clock";
@@ -492,15 +526,22 @@ sealed partial class HudTelestrator : ModernLook
             if (HpOf(e) is { } hp)
             {
                 // the boss's HP: a flat red bar on a ruler (a tick each tenth, longer at the half), the figure and what's left at its right
-                var line = new Grid { Margin = new Thickness(0, 5, 0, 2) };
+                var line = new Grid { Margin = new Thickness(0, 2, 0, 1) };
                 line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var cell = new Grid { Height = 12, VerticalAlignment = VerticalAlignment.Center };
-                var track = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) };
+                var cell = new Grid { Height = 16, VerticalAlignment = VerticalAlignment.Center };
+                var track = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0) };
                 track.Children.Add(new TacSketch((dc, s) =>
                 {
                     double x1 = Math.Round(s.Width * Math.Clamp(hp, 0, 1));
                     dc.DrawRectangle(HpTrackBr, null, new Rect(0, 0, s.Width, s.Height));
                     if (x1 > .5) dc.DrawRectangle(HpBr, null, new Rect(0, 0, x1, s.Height));
+                    // the scrubber's head on the HP: a white stem through the bar and a cap over it
+                    double hx = Math.Max(1, x1);
+                    dc.DrawRectangle(Brushes.White, null, new Rect(hx - 1, -1.5, 2, s.Height + 3));
+                    var cap = new StreamGeometry();
+                    using (var cg = cap.Open()) { cg.BeginFigure(new Point(hx - 3.5, -5.5), true, true); cg.LineTo(new Point(hx + 3.5, -5.5), true, false); cg.LineTo(new Point(hx, -1), true, false); }
+                    cap.Freeze();
+                    dc.DrawGeometry(Brushes.White, null, cap);
                 }));
                 HpGhost(track, e, hp, now, 0);
                 cell.Children.Add(track);
@@ -510,7 +551,7 @@ sealed partial class HudTelestrator : ModernLook
                     for (int k = 0; k <= 10; k++)
                     {
                         double x = Math.Round(Math.Min(s.Width - .5, s.Width * k / 10)) + (k == 0 ? .5 : -.5);
-                        dc.DrawLine(pen, new Point(x, 7), new Point(x, k == 5 ? 12 : k % 10 == 0 ? 11 : 9));
+                        dc.DrawLine(pen, new Point(x, 11), new Point(x, k == 5 ? 16 : k % 10 == 0 ? 15 : 13));
                     }
                 }));
                 line.Children.Add(cell);
@@ -569,7 +610,7 @@ sealed partial class HudTelestrator : ModernLook
         }, () => { LineSwipe(-1, PenC); _arrowDrawn = 1; _lineInk.InvalidateVisual(); _lineAnchor.Children.Remove(note); });
     }
 
-    /// <summary>A rare drop: the pen circles its tile in the grade's colour as the tile pops in.</summary>
+    /// <summary>A rare drop: the tile pops in, the pen circles it in the grade's colour and flicks three marks of emphasis off it.</summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareInk is not { } ink) return;
@@ -578,19 +619,33 @@ sealed partial class HudTelestrator : ModernLook
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         Motion.Play(ink, 1300, t =>
         {
-            _rareLoop = Out(Seg(t, .15, .65));
-            ink.InvalidateVisual();
+            if (t <= .72 || _rareLoop < 1)
+            {
+                _rareLoop = Out(Seg(t, .15, .55));
+                _rareTicks = Out(Seg(t, .45, .7));
+                ink.InvalidateVisual();
+            }
             sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, 0, .35), 2.2);
-        }, () => { _rareLoop = 1; ink.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+        }, () => { _rareLoop = 1; _rareTicks = 0; ink.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
     }
 
-    /// <summary>Your best passed: the pen closes the loop round to its tail, and a mint highlighter swipe crosses the Buddy.</summary>
+    /// <summary>
+    /// Your best passed: the pen closes the loop round to its tail, a mint highlighter swipe crosses the Buddy, and a note is
+    /// slapped on at its end: "New best" written by hand in mint, three marks of emphasis off it.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_ringArt is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
         bool closed = false;
+        var note = HandNote(L.T("New best"), PenMintC, 16, out var noteInk, out var setInk);
+        var sc = new ScaleTransform(1, 1);
+        note.RenderTransformOrigin = new Point(1, .5);   // it pops in from larger over the Buddy, never past the window
+        note.RenderTransform = sc;
+        note.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(note, 0); Canvas.SetTop(note, -note.DesiredSize.Height / 2);
+        _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(note);
         Motion.Play(art, 1800, t =>
         {
             if (t < .5 || !closed)
@@ -600,8 +655,40 @@ sealed partial class HudTelestrator : ModernLook
                 if (t >= .5) { _beat = beat; _complete = 1; closed = true; }
                 art.InvalidateVisual();
             }
-            LineSwipe(t is > .3 and < .9 ? Seg(t, .3, .9) : -1, PenMintC);
-        }, () => { _complete = 0; _beat = beat; LineSwipe(-1, PenC); art.InvalidateVisual(); });
+            // the note: slapped on as the loop closes (a pop from larger), its emphasis flicked off, gone at the end
+            double k = Seg(t, .18, .32);
+            sc.ScaleX = sc.ScaleY = t < .18 ? 1.4 : 1.4 - .4 * Back(k, 2);
+            note.Opacity = t < .18 ? 0 : t < .86 ? Out(k * 2) : 1 - Seg(t, .86, 1);
+            setInk(Out(Seg(t, .28, .42)));
+            if (t is >= .26 and <= .44) noteInk.InvalidateVisual();
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineAnchor.Children.Remove(note); });
+    }
+
+    /// <summary>A note written by hand: the word in Ink Free, three short strokes of emphasis at its upper right (drawn on to the fraction set).</summary>
+    static Grid HandNote(string word, Color c, double size, out TacSketch ink, out Action<double> setInk)
+    {
+        double drawn = 1;
+        var g = new Grid();
+        var t = Tt(word, size, Frozen(c), FontWeights.Bold, HudThemes.Hand);
+        t.Margin = new Thickness(0, -2, 0, 0);
+        // on a small charcoal tag with a hairline in its colour, tilted a few degrees as a note slapped on
+        var tag = new Border
+        {
+            Child = t, Background = Frozen(Mod.A(BoardDeepC, .84)), BorderBrush = Frozen(Mod.A(c, .8)), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 1, 6, 2), Margin = new Thickness(1, 4, 8, 3),
+            RenderTransform = new RotateTransform(-4), RenderTransformOrigin = new Point(.5, .5),
+        };
+        g.Children.Add(tag);
+        var sk = new TacSketch((dc, s) =>
+        {
+            if (drawn <= 0) return;
+            var at = new Point(s.Width - 8, 7);
+            Emphasis(dc, at, 6, 29, c, drawn);
+        });
+        g.Children.Add(sk);
+        ink = sk;
+        setInk = v => drawn = v;
+        return g;
     }
 
     /// <summary>An entry opened: the pen circles the first timer's tag in mint, and the circle fades.</summary>
@@ -615,44 +702,70 @@ sealed partial class HudTelestrator : ModernLook
         }, () => { _chipLoop = -1; ink.Opacity = 1; ink.InvalidateVisual(); });
     }
 
-    /// <summary>A fight started: the board settles in, the pen circles the leader, a highlighter swipe runs down the bars.</summary>
+    /// <summary>
+    /// A fight started, the replay rolls: a flash frame on the board, the replay frame's brackets snap in onto its corners, the
+    /// board settles, the pen circles the leader and a highlighter swipe runs down the bars.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 460, t =>
+        _snap.Visibility = Visibility.Visible; _flash.Visibility = Visibility.Visible;
+        _snap.InvalidateVisual(); _flash.InvalidateVisual();
+        Motion.Play(_fight, 820, t =>
         {
-            double k = Out(t);
+            double k = Out(Seg(t, 0, .56));
             _fightShift.Y = 8 * (1 - k);
             _fightBody.Opacity = .25 + .75 * k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
+            _flash.Opacity = 1 - Out(Seg(t, 0, .3));
+            _snapScale.ScaleX = _snapScale.ScaleY = 1.045 - .045 * Out(Seg(t, 0, .4));
+            _snap.Opacity = 1 - Seg(t, .55, 1);
+        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; _snap.Visibility = Visibility.Collapsed; _flash.Visibility = Visibility.Collapsed; });
         LeaderRow()?.Crown();
         Swipe();
     }
 
+    /// <summary>A new leader (seen live): the pen circles them, the swipe runs, and the head gets a plate: "New lead" by hand in yellow, their name beside it.</summary>
+    void NewLead(MeterMember m) => HeadPlate(L.T("New lead"), PenC, m.Name, 1500, ticks: true);
+
     /// <summary>
     /// A fight ended: a plate of the board over its head, the outcome written there by hand in the outcome's marker (mint, coral
-    /// for a wipe) with a quick underline, the time crisp beside it; on a kill a highlighter swipe runs down the bars. Then it lifts.
+    /// for a wipe) with a quick underline and, on a kill, three marks of emphasis; the time crisp beside it; on a kill a
+    /// highlighter swipe runs down the bars. Then it lifts.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
-        var c = wipe ? CoralC : PenMintC;
+        HeadPlate(OutcomeText(e), wipe ? CoralC : PenMintC, Clock(e.Duration(e.End ?? DateTime.UtcNow)), 2400, ticks: !wipe, small: e.Title);
+        if (!wipe) Swipe();
+    }
+
+    /// <summary>
+    /// A plate over the fight's head for a moment (it hides the head, which says the same): <paramref name="hand"/> written by
+    /// hand big in <paramref name="c"/>, underlined by the pen (and flicked with emphasis), <paramref name="crisp"/> beside it
+    /// in white. In, written, held, lifted; transforms and opacity only, the pen redrawn only while it writes.
+    /// </summary>
+    void HeadPlate(string hand, Color c, string crisp, double ms, bool ticks, string small = "")
+    {
         double under = 0;
         var plate = new Grid { VerticalAlignment = VerticalAlignment.Top };
         plate.Children.Add(new TacSketch((dc, s) => Board(dc, s, 4, 1, shadow: false, grid: true, brackets: 0)));
         var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-        var word = Tt(OutcomeText(e), 21, Frozen(c), FontWeights.Bold, HudThemes.Hand);
-        word.Margin = new Thickness(0, -3, 0, 0);
+        var word = Tt(hand, 28, Frozen(c), FontWeights.Bold, HudThemes.Hand);
+        word.Margin = new Thickness(0, -6, 0, -2);
+        word.Effect = Shade();
         words.Children.Add(word);
-        var ck = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, White, FontWeights.Bold); ck.Margin = new Thickness(10, 1, 0, 0);
+        var ck = Tt(crisp, 15, White, FontWeights.Bold); ck.Margin = new Thickness(18, 1, 0, 0); ck.TextTrimming = TextTrimming.CharacterEllipsis;
         words.Children.Add(ck);
+        if (small.Length > 0) { var sm = Tt(small, 11, Quiet, FontWeights.SemiBold); sm.Margin = new Thickness(8, 3, 0, 0); sm.TextTrimming = TextTrimming.CharacterEllipsis; words.Children.Add(sm); }
         plate.Children.Add(words);
         var ink = new TacSketch((dc, s) =>
         {
             if (under <= 0 || word.ActualWidth <= 0) return;
             var p = word.TranslatePoint(new Point(0, 0), plate);
-            double y = Math.Min(s.Height - 3, p.Y + word.ActualHeight - 2);
-            Ink(dc, Poly(LinePts(new Point(p.X - 1, y + .5), new Point(p.X + word.ActualWidth + 4, y - 1.2), -1, 83, .35), under), c, 1.9);
+            double y = Math.Min(s.Height - 3, p.Y + word.ActualHeight - 3);
+            Ink(dc, Poly(LinePts(new Point(p.X - 1, y + .5), new Point(p.X + word.ActualWidth + 4, y - 1.4), -1, 83, .35), under), c, 2.4);
+            if (under > .55) Ink(dc, Poly(LinePts(new Point(p.X + 4, y + 4), new Point(p.X + word.ActualWidth - 2, y + 2.6), -.8, 89, .3), Seg(under, .55, 1)), c, 1.9);
+            if (ticks) Emphasis(dc, new Point(p.X + word.ActualWidth + 6, p.Y + 7), 8, 31, c, Seg(under, .4, 1));
         });
         plate.Children.Add(ink);
         var shift = new TranslateTransform();
@@ -663,20 +776,23 @@ sealed partial class HudTelestrator : ModernLook
         {
             double y = _fightBody.Margin.Top, h = 22;
             if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight)) { y = hd.TranslatePoint(new Point(0, 0), _fight).Y; h = hd.ActualHeight; }
-            plate.Margin = new Thickness(Pad - 5, Math.Max(3, y - 4), Pad - 5, 0);
-            plate.Height = h + 8;
+            plate.Margin = new Thickness(Pad - 5, Math.Max(3, y - 7), Pad - 5, 0);
+            plate.Height = h + 16;
+            double fw = _fight.Width > 0 ? _fight.Width : 300;
+            words.MaxWidth = Math.Max(60, fw - 2 * Pad - 4);
         }
         Seat();
         plate.Loaded += (_, _) => Seat();
-        if (!wipe) Swipe();
         var head = _head;
-        Motion.Play(_fightFx, 2400, t =>
+        double inT = 140 / ms, outT = 1 - 380 / ms;
+        Motion.Play(_fightFx, ms, t =>
         {
-            double i = Out(Seg(t, 0, .14)), o = Seg(t, .84, 1);
+            double i = Out(Seg(t, 0, inT)), o = Seg(t, outT, 1);
             plate.Opacity = i * (1 - o);
             shift.Y = -4 * (1 - i);
-            under = Out(Seg(t, .14, .34)); if (t is >= .13 and <= .36) ink.InvalidateVisual();
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .1) : Seg(t, .84, 1);
+            double a = inT, b = inT + 420 / ms;
+            under = Out(Seg(t, a, b)); if (t >= a - .01 && t <= b + .02) ink.InvalidateVisual();
+            if (head != null) head.Opacity = t < outT ? 1 - Seg(t, 0, inT * .7) : Seg(t, outT, 1);
         }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
     }
 }

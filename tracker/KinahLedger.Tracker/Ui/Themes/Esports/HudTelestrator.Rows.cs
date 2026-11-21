@@ -37,7 +37,7 @@ sealed partial class HudTelestrator
     {
         var (total, word, group, held) = FootOf(e, now);
         var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         TextBlock Pair(string w, string fig)
         {
             var t = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, FontWeight = FontWeights.Medium, Foreground = Quiet, VerticalAlignment = VerticalAlignment.Center };
@@ -56,7 +56,16 @@ sealed partial class HudTelestrator
             var avg = Chip(L.T("AVG"), size: 8.5); avg.Tag = "avg-badge"; avg.ToolTip = L.T(Encounter.AvgBadge); avg.Margin = new Thickness(5, 0, 0, 0);
             right.Children.Add(avg);
         }
-        Grid.SetColumn(right, 1); g.Children.Add(right);
+        Grid.SetColumn(right, 2); g.Children.Add(right);
+        // the pen tray between them: three markers lying at an angle, the yellow one nearest (drawn only with room to spare)
+        var tray = new TacSketch((dc, s) =>
+        {
+            if (s.Width < 78) return;
+            dc.PushTransform(new TranslateTransform(Math.Round(s.Width / 2), Math.Round(s.Height / 2)));
+            dc.DrawDrawing(TrayArt);
+            dc.Pop();
+        });
+        Grid.SetColumn(tray, 1); g.Children.Add(tray);
         return AsFoot(g, e, now);
     }
 
@@ -74,14 +83,14 @@ sealed partial class HudTelestrator
     long _leadId;
     /// <summary>The highlighter swipe's moment in ms from its start (-1: none); each row takes its turn <see cref="SwipeStep"/> after the one above.</summary>
     double _swipeMs = -1;
-    const double SwipeMs = 720, SwipeStep = 70;
+    const double SwipeMs = 330, SwipeStep = 35;
 
     /// <summary>The leader's row as drawn: a new leader in the fight seen (with effects playing) is circled and the bars get a swipe.</summary>
     internal void Lead(TeleRow row, MeterMember m, MeterContext c)
     {
         bool changed = _leadFight == c.E.Id && _leadId != 0 && _leadId != m.Id;
         _leadFight = c.E.Id; _leadId = m.Id;
-        if (changed && c.Moves) { row.Crown(); Swipe(); }
+        if (changed && c.Moves) { row.Crown(); Swipe(); NewLead(m); }
     }
 
     TeleRow? LeaderRow() => Meter is { } m && m.Members.FirstOrDefault(x => x.Rank == 1 && !x.CpOnly && !x.Pvp) is { } top ? m.RowOf(top.Id) as TeleRow : null;
@@ -103,7 +112,36 @@ sealed partial class HudTelestrator
         foreach (var x in m.Members) if (m.RowOf(x.Id) is TeleRow r) r.SwipeTo(SwipeAt(r.Index));
     }
 
-    static readonly SolidColorBrush LaneBr = Mod.Br(Colors.Black, .3), BarTopBr = Mod.Br(Colors.White, .07), SwipeBr = Mod.Br(PenC, .24);
+    /// <summary>The pen tray: three marker silhouettes (a body, a darker cap band, a chisel tip), tilted, centred on 0,0; drawn once.</summary>
+    static readonly DrawingGroup TrayArt = MakeTray();
+
+    static DrawingGroup MakeTray()
+    {
+        var dg = new DrawingGroup();
+        using (var dc = dg.Open())
+        {
+            dc.DrawRectangle(Mod.Br(Colors.White, .16), null, new Rect(-27, 5, 54, 1));
+            var cols = new[] { PinkC, PenMintC, PenC };
+            for (int k = 0; k < 3; k++)
+            {
+                double x = -17 + k * 14, y = k == 2 ? -1 : 0;
+                dc.PushTransform(new RotateTransform(-20, x, y));
+                var body = Mod.Pill(new Rect(x - 8, y - 2, 13, 4), 1.6);
+                dc.DrawGeometry(Mod.Br(Colors.Black, .5), Mod.P(Mod.Br(Colors.Black, .5), 1.6), body);
+                dc.DrawGeometry(Frozen(cols[k]), null, body);
+                dc.DrawRectangle(Frozen(Mod.Mix(cols[k], Colors.Black, .45)), null, new Rect(x - 8, y - 2, 3.5, 4));
+                var tip = new StreamGeometry();
+                using (var g = tip.Open()) { g.BeginFigure(new Point(x + 5, y - 2), true, true); g.LineTo(new Point(x + 8.5, y - .6), true, false); g.LineTo(new Point(x + 8.5, y + 1.2), true, false); g.LineTo(new Point(x + 5, y + 2), true, false); }
+                tip.Freeze();
+                dc.DrawGeometry(Frozen(Mod.Mix(cols[k], Colors.White, .35)), null, tip);
+                dc.Pop();
+            }
+        }
+        dg.Freeze();
+        return dg;
+    }
+
+    static readonly SolidColorBrush LaneBr = Mod.Br(Colors.Black, .3), BarTopBr = Mod.Br(Colors.White, .07), StripeBr = Frozen(Color.FromArgb(0xD0, 0xFF, 0xEC, 0x7A)), SwipeEdgeBr = Frozen(Color.FromRgb(0xFF, 0xE1, 0x4A)), PlayheadBr = Frozen(Colors.White);
 
     /// <summary>
     /// One member on the board: a dark lane the width of the meter, the bar in the member's class colour, flat and clean, as
@@ -123,7 +161,7 @@ sealed partial class HudTelestrator
         readonly HudTelestrator _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _bar, _ink, _swipe, _arrow;
-        readonly ScaleTransform _swipeScale = new(0, 1);
+        readonly TranslateTransform _swipeShift = new(-30, 0);
         readonly Grid _words = new() { Margin = new Thickness(Pad, 0, Pad, 0) };
         readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 12.5, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .78)), FontWeights.SemiBold),
             _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _dps = Tt("", 15.5, White, FontWeights.Bold), _share = Tt("", 10, Frozen(Mod.A(Colors.White, .86)), FontWeights.SemiBold),
@@ -141,6 +179,8 @@ sealed partial class HudTelestrator
         bool _expanded, _shareOn = true, _lead, _you, _swipeOn;
 
         public FrameworkElement Root => _root;
+        /// <summary>Where the DPS bar is drawn (IThemeBarSpan, for the PB ghost): a full bar fills the whole lane.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _bar.ActualWidth <= 0 ? null : (_bar, new Rect(0, 0, _bar.ActualWidth, _bar.ActualHeight));
         /// <summary>The row's place from the top (its turn in the swipe).</summary>
         public int Index { get; private set; }
 
@@ -151,7 +191,7 @@ sealed partial class HudTelestrator
             _dps.HorizontalAlignment = _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
             _share.Margin = new Thickness(0, 2, 0, 0); _dmg.Margin = new Thickness(0, 1, 0, 0); _crit.Margin = new Thickness(0, 1, 0, 0);
             // the healer's note: a scribbled plus, then the figure
-            var plus = new TacSketch((dc, s) => Plus(dc, new Point(.5, 1), 8, PenMintC, 11, 1.6), 10, 10) { Margin = new Thickness(0, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center };
+            var plus = new TacSketch((dc, s) => Plus(dc, new Point(.5, .5), 9, PenMintC, 11, 1.9), 10.5, 10.5) { Margin = new Thickness(0, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center };
             _healBox.Children.Add(plus); _healBox.Children.Add(_heal);
             // the columns: rank, the class art, the name's line (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
             _dpsW = FigCol(_dps, "888.8K") + 4; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
@@ -160,7 +200,7 @@ sealed partial class HudTelestrator
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
             _words.ColumnDefinitions[6].Width = new GridLength(0); _words.ColumnDefinitions[7].Width = new GridLength(0);
             _bar = new TacSketch(DrawBar);
-            _swipe = new TacSketch(DrawSwipe) { RenderTransform = _swipeScale, Visibility = Visibility.Collapsed };
+            _swipe = new TacSketch(DrawSwipe) { RenderTransform = _swipeShift, Visibility = Visibility.Collapsed };
             _ink = new TacSketch(DrawInk);
             _arrow = new TacSketch(DrawArrow) { Visibility = Visibility.Collapsed };
             _root.Children.Add(_bar); _root.Children.Add(_swipe);
@@ -284,8 +324,10 @@ sealed partial class HudTelestrator
                 _swipe.Visibility = Visibility.Visible;
                 _swipe.InvalidateVisual();
             }
-            _swipeScale.ScaleX = Math.Max(.001, Out(Seg(sw, 0, .6)));
-            _swipe.Opacity = 1 - Seg(sw, .5, 1);
+            // the stripe travels the bar's length (and a little past its end), fading in and out at its two ends
+            double run = Math.Max(Math.Round((_root.ActualWidth > 0 ? _root.ActualWidth : 300) * Math.Clamp(_barV, 0, 1)), 60) + 8;
+            _swipeShift.X = -24 + (run + 24) * Out(sw);
+            _swipe.Opacity = Math.Min(Seg(sw, 0, .12), 1 - Seg(sw, .8, 1));
         }
 
         void DrawBar(DrawingContext dc, Size s)
@@ -302,28 +344,49 @@ sealed partial class HudTelestrator
                 // the playhead: the bar's end marked at its top and foot only, clear of the words between
                 if (fx > 4)
                 {
-                    dc.DrawRectangle(_headBr, null, new Rect(fx - 2, 0, 2, 4));
-                    dc.DrawRectangle(_headBr, null, new Rect(fx - 2, s.Height - 4, 2, 4));
+                    // a scrubber's head: a white cap pointing down onto the bar's end, a stub at its foot
+                    dc.DrawGeometry(PlayheadBr, null, PlayCap(fx - 1));
+                    dc.DrawRectangle(PlayheadBr, null, new Rect(fx - 2, 0, 2, 4.5));
+                    dc.DrawRectangle(PlayheadBr, null, new Rect(fx - 2, s.Height - 4.5, 2, 6.5));
                 }
             }
+        }
+
+        /// <summary>The scrubber head's cap: a 6x4 triangle sitting just over the bar, its point on the bar's end.</summary>
+        static Geometry PlayCap(double x)
+        {
+            var g = new StreamGeometry();
+            using (var c = g.Open()) { c.BeginFigure(new Point(x - 3.5, -3), true, true); c.LineTo(new Point(x + 3.5, -3), true, false); c.LineTo(new Point(x, 1.5), true, false); }
+            g.Freeze();
+            return g;
         }
 
         /// <summary>The highlighter's band along the bar, drawn once as a swipe starts (a chisel tip); scaled out by the swipe.</summary>
         void DrawSwipe(DrawingContext dc, Size s)
         {
-            double len = Math.Max(Math.Round(s.Width * Math.Clamp(_barV, 0, 1)), 44), y0 = 5, y1 = s.Height - 5, tip = 5;
-            if (len < 6) return;
-            var band = new StreamGeometry();
-            using (var g = band.Open())
+            // a highlighter's light run along the bar's top and foot edges (clear of the words between): a 24 px slanted streak
+            // of yellow at each edge with a solid leading tip, moved along the bar by its transform (it leaves nothing behind)
+            double h = s.Height;
+            foreach (var (y0, y1) in new[] { (0.0, 4.5), (h - 4.5, h) })
             {
-                g.BeginFigure(new Point(0, y0), true, true);
-                g.LineTo(new Point(len, y0), true, false);
-                g.LineTo(new Point(len - tip, y1), true, false);
-                g.LineTo(new Point(0, y1), true, false);
+                dc.DrawGeometry(StripeBr, null, Stripe(0, 24, y0, y1, 1.5));
+                dc.DrawGeometry(SwipeEdgeBr, null, Stripe(20, 24, y0, y1, 1.5));
             }
-            band.Freeze();
-            dc.DrawGeometry(SwipeBr, null, band);
-                    }
+        }
+
+        static Geometry Stripe(double x0, double x1, double y0, double y1, double slant)
+        {
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                c.BeginFigure(new Point(x0 + slant, y0), true, true);
+                c.LineTo(new Point(x1 + slant, y0), true, false);
+                c.LineTo(new Point(x1, y1), true, false);
+                c.LineTo(new Point(x0, y1), true, false);
+            }
+            g.Freeze();
+            return g;
+        }
 
         void DrawInk(DrawingContext dc, Size s)
         {
@@ -333,7 +396,7 @@ sealed partial class HudTelestrator
             {
                 var rect = new Rect(.5, -4.5, Pad + 17 + 24 - 1, H + 9);
                 int seed = _seed;
-                Ink(dc, _crown >= 1 ? Cached($"crown|{seed}", () => Poly(LoopPts(rect, seed))) : Poly(LoopPts(rect, seed), _crown), PenC, 2.1);
+                Ink(dc, _crown >= 1 ? Cached($"crown|{seed}", () => Poly(LoopPts(rect, seed))) : Poly(LoopPts(rect, seed), _crown), PenC, 2.6);
             }
             // you: a quick pink underline under your name (made again only when the name's place or width changes)
             if (_you && _name.ActualWidth > 4 && _name.IsVisible)
@@ -341,7 +404,7 @@ sealed partial class HudTelestrator
                 var p = _name.TranslatePoint(new Point(0, 0), _root);
                 double y = Math.Round(p.Y + _name.ActualHeight + 1, 1), x = Math.Round(p.X, 1), w = Math.Round(_name.ActualWidth, 1);
                 int seed = _seed;
-                Ink(dc, Cached($"you|{seed}|{x}|{y}|{w}", () => Poly(LinePts(new Point(x - 1, y + .6), new Point(x + w + 1, y - .9), -.8, seed + 5, .35))), PinkC, 1.8);
+                Ink(dc, Cached($"you|{seed}|{x}|{y}|{w}", () => Poly(LinePts(new Point(x - 1, y + .6), new Point(x + w + 1, y - .9), -.8, seed + 5, .35))), PinkC, 2.2);
             }
         }
 
@@ -354,7 +417,7 @@ sealed partial class HudTelestrator
                 : _dps.TranslatePoint(new Point(_dps.ActualWidth - TextW(_dps, _dps.Text), 0), _root).X - 6;
             if (to - from < 16) return;
             double x = from + Math.Min(8, (to - from - 14) / 2);
-            Arrow(dc, LinePts(new Point(x, H - 4), new Point(x + 11, 3.5), 3.5, _seed + 9, .3), PenC, Out(Seg(_climb, 0, .3)), 1, 2, 4.5);
+            Arrow(dc, LinePts(new Point(x, H - 4), new Point(x + 11, 3.5), 3.5, _seed + 9, .3), PenC, Out(Seg(_climb, 0, .3)), 1, 2.4, 5);
         }
     }
 }
