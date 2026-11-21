@@ -228,7 +228,7 @@ public partial class OptionsWindow
 
         var stack = new StackPanel();
         // its own theme chips: its looks come from here, whatever the Kinah overlay's theme
-        _parserThemeHost = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -6, -6) };   // two even rows of four (OptionsWindow.Compact)
+        _parserThemeHost = new System.Windows.Controls.Primitives.UniformGrid { Columns = 5, Margin = new Thickness(0, 0, -6, -6) };   // two even rows of five (OptionsWindow.Compact)
         AutomationProperties.SetName(_parserThemeHost, "Parser overlay theme");
         _parserThemeRow = LabelRow("Theme", _parserThemeHost);
         stack.Children.Add(_parserThemeRow);
