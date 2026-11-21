@@ -100,8 +100,8 @@ sealed partial class HudPrism : IThemeCard
 
         // the abilities: each a clear glass bar as long as its part of the top one, its edge splitting the light
         var grow = new ScaleTransform(1, 1);   // the bars fill in by one shared scale from the left (drawn once)
-        // the bars run under the names and the shares: the top one's edge splits the light in the room left of the damage figures
-        double rightCols = 56 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0) - 5;
+        // the bars run under the skills' names only: every tip and its split light end short of the SHARE column
+        double rightCols = 46 + 56 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0) + 10;
         if (c.Abilities.Count > 0)
         {
             stack.Children.Add(Hairline(new Thickness(0, 8, 0, 5), .2));
@@ -143,7 +143,7 @@ sealed partial class HudPrism : IThemeCard
 
         // the ground: the crystal itself, under a soft drop
         var card = new Grid { Margin = new Thickness(4, 4, 10, 14), Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 16, ShadowDepth = 3, Direction = 270, Opacity = .5 } };
-        card.Children.Add(new TacSketch((dc, s) => Crystal(dc, s, 1, -1, Colors.White, cut: 7)));
+        card.Children.Add(new TacSketch((dc, s) => Crystal(dc, s, 1, -1, Colors.White, cut: 7, pools: false)));   // the bevel's spectrum, no light across the table
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);

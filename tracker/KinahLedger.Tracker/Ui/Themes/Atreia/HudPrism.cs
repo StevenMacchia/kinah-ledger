@@ -230,7 +230,7 @@ sealed partial class HudPrism : ModernLook
     /// ridges between the facets, the table's rim, the outer rim and a sparkle where the light enters. Drawn when its size
     /// changes only. <paramref name="tint"/>: a wash of colour from the left at <paramref name="tintA"/> (a plate's tone).
     /// </summary>
-    static void Crystal(DrawingContext dc, Size s, double opacity, double sheen, Color sheenC, double cut = Cut, bool glint = true, Color? tint = null, double tintA = 0, double tintW = 1)
+    static void Crystal(DrawingContext dc, Size s, double opacity, double sheen, Color sheenC, double cut = Cut, bool glint = true, Color? tint = null, double tintA = 0, double tintW = 1, bool pools = true)
     {
         if (s.Width < 8 || s.Height < 8) return;
         double w = s.Width, h = s.Height;
@@ -245,7 +245,7 @@ sealed partial class HudPrism : ModernLook
         dc.PushClip(table);
         if (tint is { } tc && tintA > 0 && tintW > 0)
             dc.DrawRectangle(Mod.Grad(false, (Mod.A(tc, tintA), 0), (Mod.A(tc, tintA * .45), .6), (Mod.A(tc, 0), 1)), null, new Rect(0, 0, w * Math.Clamp(tintW, 0, 1), h));
-        if (glint) Caustics(dc, w, h, o[0].X);
+        if (glint && pools) Caustics(dc, w, h, o[0].X);
         dc.Pop();
         // the bevel's facets, lit from the top-left: the cuts facing the light bright, the bottom and its cuts in shade
         double[] lit = { .15, .2, .05, -.18, -.32, -.2, .1, .26 };
@@ -308,10 +308,10 @@ sealed partial class HudPrism : ModernLook
             b.Freeze();
             dc.DrawGeometry(b, null, Poly(new Point(xa, 0), new Point(xb, 0), new Point(xc, h), new Point(xd, h)));
         }
-        Pool(x0, x0 + w * .2, w * .58, w * .4, .13);
-        Pool(w * .66, w * .74, w * .97, w * .86, .1);
+        Pool(x0, x0 + w * .2, w * .58, w * .4, .1);
+        Pool(w * .66, w * .74, w * .97, w * .86, .08);
         // a third pool rising from the foot towards the top-right: the light bouncing back off the bottom-right cut
-        Pool(w * .3, w * .38, w * .2, w * .06, .07);
+        Pool(w * .3, w * .38, w * .2, w * .06, .06);
     }
 
     /// <summary>A small crystal chip (TOP DPS, the heal mark, AVG): smoke, a rim lit at the top; <paramref name="filled"/> white with dark words (YOU).</summary>
@@ -677,9 +677,9 @@ sealed partial class HudPrism : ModernLook
                 if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left) { FontWeight = FontWeights.Medium });
                 hl.Tag = "hp-text";
                 _fightBody.Children.Add(hl);
-                _fightBody.Children.Add(new Border { Height = 5 });   // the crown's prism rises into this room and the line's
+                _fightBody.Children.Add(new Border { Height = 6 });   // the crown's prism rises into this room and the line's
             }
-            else _fightBody.Children.Add(new Border { Height = 14 });
+            else _fightBody.Children.Add(new Border { Height = 18 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {

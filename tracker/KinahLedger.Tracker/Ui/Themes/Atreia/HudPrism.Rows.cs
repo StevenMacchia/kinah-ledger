@@ -101,6 +101,8 @@ sealed partial class HudPrism
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
+        /// <summary>The top healer's mark in its two forms: "✚ Heal", and the bare cross when the long one would crowd the name or the CP.</summary>
+        (Border Full, Border Short)? _healMark;
         // the courses' own clocks (the bar's slide runs on the art, the glide on the root)
         readonly Border _crownClock = new() { Width = 0, Height = 0 }, _glintClock = new() { Width = 0, Height = 0 };
         // the sheen: a band drawn once (Band), slid along the row by its transform, the row's own bounds its clip
@@ -182,10 +184,17 @@ sealed partial class HudPrism
             _cp.Text = m.Cp;
             // the marks after the name: ★ DPS, a healer's ✚, deaths, YOU (kept whole: the name and the CP give way first)
             foreach (var mk in _marks) _line.Children.Remove(mk);
+            if (_healMark is { } old) { _line.Children.Remove(old.Full); _line.Children.Remove(old.Short); _healMark = null; }
             _marks.Clear();
             void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
             if (m.TopDps) { var t = Mark("★ " + L.T("DPS")); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
-            if (m.TopHeals) { var t = Mark("✚", MarkMint, MarkMintC); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
+            if (m.TopHeals)
+            {
+                var full = Mark("✚ " + L.T("Heal"), MarkMint, MarkMintC); full.Tag = "top-heals"; full.ToolTip = L.T("Top heals");
+                var bare = Mark("✚", MarkMint, MarkMintC); bare.Tag = "top-heals"; bare.ToolTip = L.T("Top heals"); bare.Visibility = Visibility.Collapsed;
+                Add(full); bare.Margin = full.Margin; _line.Children.Insert(_line.Children.IndexOf(full) + 1, bare);
+                _healMark = (full, bare);
+            }
             if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10, Coral, FontWeights.Bold); d.Tag = "deaths"; Add(d); }
             if (m.You) { var y = Mark(L.T("YOU"), filled: true); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
@@ -213,7 +222,12 @@ sealed partial class HudPrism
         internal void SweepAt(double p)
         {
             bool on = p is > 0 and < 1;
-            if (on != (_band.Visibility == Visibility.Visible)) _band.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (on != (_band.Visibility == Visibility.Visible))
+            {
+                _band.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+                // the sheen runs on the bars only: clipped at the figures' plate (set as it starts: a clip, no layout)
+                if (on) _fx.Clip = new RectangleGeometry(new Rect(0, 0, Math.Max(0, PlateX(_root.ActualWidth)), H));
+            }
             if (!on) return;
             _bandX.X = -48 + (_root.ActualWidth + 96) * p;
             _band.Opacity = .5 + .5 * Math.Sin(Math.PI * p);
@@ -315,6 +329,21 @@ sealed partial class HudPrism
             double room = total - PadL - PadR - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
             var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
+            if (_healMark is { } hm)
+            {
+                // the long heal mark only where nothing else gives way for it; else the bare cross in its place
+                bool crowded = (!cp && _cp.Text.Length > 0) || !share || _name.MaxWidth < Mod.W(_name) - .5;
+                int at = _marks.IndexOf(hm.Full) is var i0 and >= 0 ? i0 : _marks.IndexOf(hm.Short);
+                if (crowded && at >= 0)
+                {
+                    _marks[at] = hm.Short;
+                    (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
+                }
+                else if (at >= 0) _marks[at] = hm.Full;
+                bool full = _marks.Contains(hm.Full);
+                hm.Full.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
+                hm.Short.Visibility = full ? Visibility.Collapsed : Visibility.Visible;
+            }
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
             if (share != _shareOn || cols[5].Width.Value != (share ? _shareW : 0))
             {
@@ -349,7 +378,7 @@ sealed partial class HudPrism
                 if (fx > 4 && !m.CpOnly)
                 {
                     bool lead = Crowned;
-                    Beam(dc, ex, lead ? r.Right : Math.Min(ex + 34, plate), r.Top + 1, r.Bottom - 1, lead ? 1 : .8, fade: !lead);
+                    Beam(dc, ex, lead ? plate - 1 : Math.Min(ex + 34, plate - 1), r.Top + 1, r.Bottom - 1, lead ? 1 : .8, fade: !lead);
                     dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, .26), 1)), null, new Rect(Math.Max(r.X, ex - 7), r.Y, Math.Min(7, fx), r.Height));
                     // the edge's white line at its top and foot only: the words crossing it keep their middle
                     dc.DrawRectangle(Mod.Br(Colors.White, .95), null, new Rect(ex - 1.3, r.Y, 1.3, r.Height * .27));
@@ -401,7 +430,7 @@ sealed partial class HudPrism
         }
 
         /// <summary>The crown's place: the prism (twice the rank's height) standing on the bar's top edge over the rank, its side's depth, where its ray leaves it.</summary>
-        const double CrownX = PadL + RankW / 2 + 1, CrownTop = -12, CrownTall = 19, CrownHalf = 11, CrownDepth = 5.5;
+        const double CrownX = PadL + RankW / 2 + 1, CrownTop = -16, CrownTall = 18, CrownHalf = 11, CrownDepth = 5.5;
         static readonly double RayX = CrownX + CrownHalf * .5 + CrownDepth * .7;
 
         /// <summary>
