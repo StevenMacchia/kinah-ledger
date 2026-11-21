@@ -12,25 +12,24 @@ jobs:
           Add-Type -TypeDefinition @'
           using System; using System.Runtime.InteropServices;
           public static class Disp {
-            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-            public struct DEVMODE {
-              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
-              public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra; public int dmFields;
-              public int dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
-              public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
-              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
-              public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
-              public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
-            }
-            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplaySettingsW(string dev, int mode, ref DEVMODE dm);
-            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int ChangeDisplaySettingsW(ref DEVMODE dm, int flags);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplaySettingsW(string dev, int mode, IntPtr dm);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int ChangeDisplaySettingsW(IntPtr dm, int flags);
           }
           '@
-          $n = 0; $seen = @{}
-          for ($i = 0; $i -lt 400; $i++) {
-            $dm = New-Object Disp+DEVMODE; $dm.dmSize = [int][Runtime.InteropServices.Marshal]::SizeOf($dm)
-            if (-not [Disp]::EnumDisplaySettingsW($null, $i, [ref]$dm)) { "stop at $i size $($dm.dmSize)"; break }
-            $seen["$($dm.dmPelsWidth)x$($dm.dmPelsHeight)x$($dm.dmBitsPerPel)"] = 1
+          # a raw DEVMODEW (220 bytes): dmSize at 68, dmFields at 72, dmBitsPerPel 168, dmPelsWidth 172, dmPelsHeight 176
+          $M = [Runtime.InteropServices.Marshal]
+          $buf = $M::AllocHGlobal(220); $best = $null; $bw = 0
+          for ($i = 0; $i -lt 500; $i++) {
+            $M::Copy([byte[]]::new(220), 0, $buf, 220); $M::WriteInt16($buf, 68, 220)
+            if (-not [Disp]::EnumDisplaySettingsW($null, $i, $buf)) { break }
+            $w = $M::ReadInt32($buf, 172); $h = $M::ReadInt32($buf, 176)
+            if ($M::ReadInt32($buf, 168) -ge 32 -and $w -le 1920 -and $h -le 1080 -and $w -gt $bw) { $bw = $w; $best = New-Object byte[] 220; $M::Copy($buf, $best, 0, 220) }
           }
-          $seen.Keys | Sort-Object
-          Get-CimInstance Win32_VideoController | Format-List Name, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, DriverVersion
+          "modes read: $i"
+          if ($null -eq $best) { "no mode found"; exit 0 }
+          $M::Copy($best, 0, $buf, 220)
+          "setting $($M::ReadInt32($buf, 172))x$($M::ReadInt32($buf, 176))"
+          "ChangeDisplaySettingsW -> $([Disp]::ChangeDisplaySettingsW($buf, 0)) (0 = done)"
+          Start-Sleep 2
+          Add-Type -AssemblyName System.Windows.Forms
+          "screen now: " + [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
