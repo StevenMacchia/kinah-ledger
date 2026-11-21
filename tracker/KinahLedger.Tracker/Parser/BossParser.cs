@@ -44,6 +44,9 @@ public sealed class BossParser
     /// <summary>A record that has ended and is worth keeping: the caller saves it (Parser/EncounterStore.cs).</summary>
     public Action<Encounter>? Ended { get; set; }
 
+    /// <summary>A new run of the instance began in the same copy (<see cref="RunAgain"/>): its time and the instance. The session queues it for the run log.</summary>
+    public Action<DateTime, string>? NewRun { get; set; }
+
     /// <summary>
     /// Something the window draws changed: said at once, on the thread that brought it (the packet reader's, for the game's
     /// events), with the event's capture time (null when no event brought it: a record given up, the mode changed). The
@@ -787,6 +790,7 @@ public sealed class BossParser
     void RunAgain(List<Encounter> done, DateTime at, string why)
     {
         Log($"{_instance}: {why}: a new run of it in the same copy");
+        try { NewRun?.Invoke(at, _instance); } catch (Exception ex) { CrashLog.Write("new run", ex); }
         if (_cur is { } c) ClosePull(c, BossOutcome.Left, c.LastAt, done, "a new run of the instance", yours: true);
         if (_run is { } r) CloseRun(RunEnd(r), r.LastAt, done, "a new run of the instance");
         _bossNames.Clear(); _downHere.Clear(); _downIds.Clear(); _roomClosedAt = null;

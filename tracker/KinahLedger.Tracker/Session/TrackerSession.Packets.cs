@@ -104,6 +104,8 @@ public sealed partial class TrackerSession
             if (area.What is AreaEvent.Kind.Phase or AreaEvent.Kind.Over or AreaEvent.Kind.Closed && area.Code.Length > 0)
                 Fights.MapEvent(area.Code, area.At, closed: area.What == AreaEvent.Kind.Closed, over: area.What == AreaEvent.Kind.Over);
         }
+        // the Parser saw the room open again after the last boss: the run log's run closes there and the next opens
+        while (_runsAgain.TryDequeue(out var again)) Instances.RunAgain(again.At, again.Instance);
         DrainItems(p, now);
         while (_packetHeld.Count > 0)
         {
