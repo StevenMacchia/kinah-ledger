@@ -27,7 +27,7 @@ sealed partial class HudFrost : ModernLook
     const double Pad = 10;
 
     // the room round the look: the panels' drop stays inside the window; 98 at the right for the pickup's chip beside the Buddy
-    readonly Grid _root = new() { Margin = new Thickness(26, 48, 98, 24), HorizontalAlignment = HorizontalAlignment.Left };
+    readonly Grid _root = new() { Margin = new Thickness(26, 54, 98, 24), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 

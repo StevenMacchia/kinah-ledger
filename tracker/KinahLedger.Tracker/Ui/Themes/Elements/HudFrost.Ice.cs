@@ -335,7 +335,7 @@ sealed partial class HudFrost
                     double k = CrestK, up = -Math.PI / 2;
                     // the big cluster at the top-left cut, fanning up and out over the corner (never over the face's words: each
                     // grows from under the edge, outwards), the tallest in its middle
-                    var tl = new (double X, double Ang, double Len, double W)[] { (A * .1, up - 1.05, 26, 5.2), (A * .55, up - .62, 44, 7.5), (A + 2, up - .28, 50, 8.5), (A + 10, up + .02, 34, 6.5), (A + 19, up + .22, 21, 4.8), (A + 28, up + .36, 12, 3.4) };
+                    var tl = new (double X, double Ang, double Len, double W)[] { (A * .1, up - 1.05, 26, 5.2), (A * .55, up - .62, 44, 7.5), (A + 2, up - .28, 46, 8.5), (A + 10, up + .02, 34, 6.5), (A + 19, up + .22, 21, 4.8), (A + 28, up + .36, 12, 3.4) };
                     foreach (var (x, ang, len, w) in tl) Prism(new Point(R.Left + x, R.Top + (x < A ? A - x : 0) + 3), ang, len * k, w * Math.Sqrt(k));
                     // its asymmetric counterpart at the top-right, about two thirds its weight
                     var tr = new (double X, double Ang, double Len, double W)[] { (B * .3, up + .95, 20, 4.6), (B + 1, up + .5, 34, 6.5), (B + 9, up + .18, 26, 5.4), (B + 18, up - .08, 14, 3.6) };
