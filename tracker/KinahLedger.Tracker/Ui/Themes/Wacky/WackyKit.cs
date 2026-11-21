@@ -601,7 +601,9 @@ static class WkCard
                 void Dirty(DependencyObject d) { if (d is UIElement u) u.InvalidateMeasure(); for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Dirty(VisualTreeHelper.GetChild(d, i)); }
                 Dirty(line);
                 line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                return line.DesiredSize.Width <= room + .5;
+                // no half pixel of slack: the name's column is what is left of the room, so a line over by 0.2 px trimmed a 10-letter name
+                // ("Aerinwynn…") with its Combat Power still shown (options-test, 100% screen, Korean)
+                return line.DesiredSize.Width <= room + .01;
             }
             var steps = new List<Action>();
             if (stack != null) steps.Add(() => stack(true));
