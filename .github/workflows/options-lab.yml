@@ -2,7 +2,7 @@ name: options lab
 on:
   push:
     branches: [ci/fonts-diagnostic]
-    paths: [".github/workflows/options-lab.yml", "tracker/KinahLedger.Tracker/Ui/WpfApp.CutOff.cs"]
+    paths: [".github/workflows/options-lab.yml", "tracker/**"]
 jobs:
   lab:
     runs-on: windows-latest
@@ -17,4 +17,4 @@ jobs:
       - name: options-test
         continue-on-error: true
         shell: bash
-        run: dist/KinahLedger.exe options-test | cat | grep -E "DIAG|FAIL" | head -60
+        run: dist/KinahLedger.exe options-test | cat | grep -E -A8 "^FAIL" | cut -c1-900 | head -150

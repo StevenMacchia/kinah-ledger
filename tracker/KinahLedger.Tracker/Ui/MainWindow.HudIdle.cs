@@ -67,11 +67,15 @@ public partial class MainWindow
     internal const double IdleShortWidth = 212, IdleShortSize = 12.5;
 
     static readonly Typeface IdleFace = new(HudKit.Text, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    static double ScreenDip => _screenDip ??= VisualTreeHelper.GetDpi(new DrawingVisual()).PixelsPerDip;
+    static double? _screenDip;
 
     /// <summary>True when <paramref name="line"/> fits <paramref name="width"/> at <paramref name="size"/> (the looks' line, by default).</summary>
     internal static bool IdleFits(string line, double width = IdleWidth, double size = 13)
     {
-        var ft = new FormattedText(line, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, IdleFace, size, Brushes.White, 1.0);
+        // the way the overlays draw it: Display mode at the screen's scale (Ideal at 1.0 read a few pixels short on a 100% screen,
+        // and a line that "fit" was cut off in the window; options-test caught it on a 100% runner)
+        var ft = new FormattedText(line, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, IdleFace, size, Brushes.White, null, TextFormattingMode.Display, ScreenDip);
         return ft.WidthIncludingTrailingWhitespace <= width;
     }
 
