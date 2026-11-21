@@ -158,6 +158,7 @@ public static partial class WpfApp
                 // at 150% a 1,040 px screen leaves the graphs less than their smallest: then the page scrolls in its area
                 double dpsNow = g!.ChartOf(ParserGraphs.Dps).ActualHeight;
                 bool fits = w.GraphsBottomForTest <= w.ParserViewportForTest + 1;
+                Console.WriteLine($"DIAG parser zoom {zoom}: win {w.ActualWidth:0}x{w.ActualHeight:0} graphsBottom {w.GraphsBottomForTest:0.#} viewport {w.ParserViewportForTest:0.#} dps {dpsNow:0.#} scale {w.FitState.Scale:0.###} dpi {System.Windows.Media.VisualTreeHelper.GetDpi(w).PixelsPerDip}");
                 check(Math.Abs(w.FitState.Scale - zoom) < 0.001 && Problems() == "" && (fits || dpsNow <= 113) && w.ActualHeight <= 1040.5,
                     $"resize, Parser at {zoom:P0}: the room drawn {w.FitState.Scale:P0}, the window {w.ActualWidth:0}x{w.ActualHeight:0} within the screen, the page under the header, its graphs {(fits ? "fitting" : $"at their smallest ({dpsNow:0} px) and the page scrolling")} {Problems()}");
             }

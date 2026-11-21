@@ -816,6 +816,7 @@ public static partial class WpfApp
         // Full view's columns end level (Steven's no-empty-space rule; the left one used to stop halfway beside the second)
         w.ShowFull(); DoEvents();
         var bal = w.FullBalanceForTest();
+        Console.WriteLine("DIAG full: " + w.DiagFull());
         Check(bal.Left > 0 && bal.Right > 0 && Math.Abs(bal.Left - bal.Right) <= 0.2 * Math.Max(bal.Left, bal.Right),
             $"Full view: the columns end within a fifth of each other, {bal.Left:0} and {bal.Right:0} px; Just dropped {(bal.FeedRight ? "right" : "left")}, Where to farm {(bal.WhereRight ? "right" : "left")}");
         w.ShowCompact(); DoEvents();

@@ -19,4 +19,7 @@ jobs:
         shell: bash
         env:
           KL_TEST_WORKAREA: 1920x1040
-        run: dist/KinahLedger.exe options-test | cat | grep -E -A8 "^FAIL" | cut -c1-900 | head -150
+        run: |
+          dist/KinahLedger.exe options-test | cat > out.txt
+          grep DIAG out.txt | cut -c1-1500
+          grep -E -A8 "^FAIL" out.txt | cut -c1-900 | head -100

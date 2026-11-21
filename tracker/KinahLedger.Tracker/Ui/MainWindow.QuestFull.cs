@@ -68,6 +68,13 @@ public partial class MainWindow
     (bool Feed, bool Where, bool Odds)? _fullSides;
 
     /// <summary>For options-test: the Full view's two columns' heights as laid out, and where Just dropped and Where to farm went.</summary>
+    internal string DiagFull()
+    {
+        string Kids(Panel p) => string.Join(" ", p.Children.OfType<FrameworkElement>().Where(c => c.Visibility == Visibility.Visible).Select(c => $"{(string.IsNullOrEmpty(c.Name) ? c.GetType().Name : c.Name)}={c.ActualHeight:0}"));
+        var d = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+        return $"win {ActualWidth:0}x{ActualHeight:0} scale {FitState.Scale:0.###} dpi {d.PixelsPerDip} | LEFT {Kids(LeftCol)} | RIGHT {Kids(QuestRight)}";
+    }
+
     internal (double Left, double Right, bool FeedRight, bool WhereRight) FullBalanceForTest()
     {
         double Sum(Panel p) => p.Children.OfType<FrameworkElement>().Where(c => c.Visibility == Visibility.Visible).Sum(c => c.ActualHeight + c.Margin.Top + c.Margin.Bottom);
