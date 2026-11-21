@@ -487,7 +487,7 @@ sealed partial class HudDragon : ModernLook
             PutRows(_fightBody, e, now, RowsW);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 6, 0, 4)));
+                _fightBody.Children.Add(Hairline(new Thickness(0, 2, 0, 3)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }

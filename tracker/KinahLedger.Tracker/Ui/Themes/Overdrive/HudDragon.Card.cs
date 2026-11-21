@@ -134,7 +134,7 @@ sealed partial class HudDragon : IThemeCard
         }
 
         // the ground: the small dragon's coil round an obsidian plate, its head at the top-left
-        var frame = new Grid();
+        var frame = new Grid { ClipToBounds = true };
         frame.Children.Add(new TacSketch((dc, s) => { if (s.Width > 20 && s.Height > 12) dc.DrawDrawing(LineCoil(Math.Floor(s.Width), Math.Floor(s.Height), .96, true, false)); }));
         frame.Children.Add(stack);
         var card = new Border

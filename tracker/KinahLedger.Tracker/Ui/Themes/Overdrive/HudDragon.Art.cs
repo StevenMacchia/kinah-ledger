@@ -274,13 +274,13 @@ sealed partial class HudDragon
     // ================================================================ the meter's coil
 
     /// <summary>The meter's frame: the room inside the coil, where the words go.</summary>
-    static readonly Thickness FightPad = new(26, 30, 18, 20);
+    static readonly Thickness FightPad = new(27, 25, 22, 15);
 
     /// <summary>Where the head sits on the meter, and its size; the words beside it start at <see cref="TitleX"/>.</summary>
-    const double FightHeadX = 0, FightHeadY = 0, FightHeadK = 1.7, TitleX = 98;
+    const double FightHeadX = 0, FightHeadY = 0, FightHeadK = 1.5, TitleX = 88;
 
     /// <summary>The ground's top: the head and the tail's curl rise over it.</summary>
-    const double GroundTop = 22;
+    const double GroundTop = 18;
 
     static readonly Dictionary<string, DrawingGroup> CoilCache = new();
 
@@ -305,7 +305,7 @@ sealed partial class HudDragon
         // the ground inside the coil, a bronze rim along its open top
         var gr = new Rect(13, GroundTop, w - 22, h - GroundTop - 9);
         dc.DrawRoundedRectangle(Mod.Grad(true, (Mod.A(Color.FromRgb(0x17, 0x12, 0x1D), ground), 0), (Mod.A(Color.FromRgb(0x0B, 0x09, 0x0E), ground), .55), (Mod.A(Color.FromRgb(0x07, 0x0A, 0x09), ground), 1)), null, gr, 12, 12);
-        dc.DrawLine(Mod.P(Mod.Grad(false, (Mod.A(BronzeC, .9), 0), (Mod.A(Color.FromRgb(0xF2, 0xD4, 0x92), .7), .5), (Mod.A(BronzeC, 0), 1)), 1), new Point(70, GroundTop + .5), new Point(w - 46, GroundTop + .5));
+        dc.DrawLine(Mod.P(Mod.Grad(false, (Mod.A(BronzeC, .9), 0), (Mod.A(Color.FromRgb(0xF2, 0xD4, 0x92), .7), .5), (Mod.A(BronzeC, 0), 1)), 1), new Point(62, GroundTop + .5), new Point(w - 46, GroundTop + .5));
         var (sp, thick) = FightSpine(w, h);
         Body(dc, sp, thick, Sheen(w, h), spikeMax: 9, spikeStep: 52);
         Head(dc, FightHeadX, FightHeadY, FightHeadK);
@@ -314,16 +314,16 @@ sealed partial class HudDragon
     /// <summary>The meter's spine and its thickness: the neck from under the head down the left, the bottom, up the right, the tail's curl over the top-right corner.</summary>
     static (Spine Sp, Func<double, double> Thick) FightSpine(double w, double h)
     {
-        double x0 = 14, x1 = w - 11, y1 = h - 10, r = 14;
+        double x0 = 13, x1 = w - 11, y1 = h - 8, r = 13;
         var spine = G(FormattableString.Invariant(
-            $"M 30,56 Q {x0},57 {x0},74 L {x0},{y1 - r} Q {x0},{y1} {x0 + r},{y1} L {x1 - r},{y1} Q {x1},{y1} {x1},{y1 - r} L {x1},48 C {x1},30 {x1 - 4},13 {x1 - 18},9 C {x1 - 32},6 {x1 - 41},15 {x1 - 34},23 C {x1 - 29},28 {x1 - 21},25 {x1 - 23},18"));
+            $"M 26,49 Q {x0},50 {x0},64 L {x0},{y1 - r} Q {x0},{y1} {x0 + r},{y1} L {x1 - r},{y1} Q {x1},{y1} {x1},{y1 - r} L {x1},48 C {x1},30 {x1 - 4},13 {x1 - 18},9 C {x1 - 32},6 {x1 - 41},15 {x1 - 34},23 C {x1 - 29},28 {x1 - 21},25 {x1 - 23},18"));
         var sp = new Spine(spine);
         double L = sp.Length;
-        double left = (22 + (y1 - r - 74)) / L, bottom = left + (22 + (x1 - x0 - 2 * r)) / L, right = bottom + (22 + (y1 - r - 48)) / L;
+        double left = (20 + (y1 - r - 64)) / L, bottom = left + (22 + (x1 - x0 - 2 * r)) / L, right = bottom + (22 + (y1 - r - 48)) / L;
         double Thick(double s) =>
-            s < .03 ? 15 + 3 * s / .03
-            : s < left ? 18
-            : s < bottom ? 18 - 7 * (s - left) / Math.Max(.01, bottom - left)
+            s < .03 ? 13 + 3 * s / .03
+            : s < left ? 16
+            : s < bottom ? 16 - 6 * (s - left) / Math.Max(.01, bottom - left)
             : s < right ? 11 - 4 * (s - bottom) / Math.Max(.01, right - bottom)
             : Math.Max(2.4, 7 - 4.6 * Math.Pow((s - right) / Math.Max(.01, 1 - right), 1.3));
         return (sp, Thick);

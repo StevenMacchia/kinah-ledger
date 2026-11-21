@@ -100,7 +100,7 @@ sealed partial class HudDragon
             _dmg = Tt("", 10.5, Soft, FontWeights.SemiBold), _crit = Tt("", 10, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         /// <summary>The CP on a small dark plate of its own, so it reads on the fire's front as on the dark.</summary>
-        readonly Border _cpBox = new() { Background = Frozen(Mod.A(Color.FromRgb(0x08, 0x06, 0x0A), .62)), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0), Margin = new Thickness(4, 2, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly Border _cpBox = new() { Background = Frozen(Mod.A(Color.FromRgb(0x08, 0x06, 0x0A), .88)), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0), Margin = new Thickness(4, 2, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
@@ -184,7 +184,12 @@ sealed partial class HudDragon
             void Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _line.Children.Add(el); _marks.Add(el); }
             if (m.TopDps) { var t = Mark("★ " + L.T("DPS"), GoldInk, DragonGoldC); t.Tag = "top-dps"; t.ToolTip = L.T("Top DPS"); Add(t); }
             if (m.TopHeals) { var t = Mark("✚", EmeraldInk, EmeraldC); t.Tag = "top-heals"; t.ToolTip = L.T("Top heals"); Add(t); }
-            if (m.Deaths > 0) { var d = Tt($"✕{m.Deaths}", 10, Coral, FontWeights.Bold); d.Tag = "deaths"; Add(d); }
+            if (m.Deaths > 0)
+            {
+                // on a dark plate of its own, so the coral reads on the fire's front
+                var d = Tt($"✕{m.Deaths}", 10, Frozen(Color.FromRgb(0xFF, 0xA0, 0x9A)), FontWeights.Bold); d.Tag = "deaths";
+                Add(new Border { Child = d, Background = Frozen(Mod.A(Color.FromRgb(0x08, 0x06, 0x0A), .88)), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center });
+            }
             if (m.You) { var y = Mark(L.T("YOU"), filled: true); y.Tag = "you"; Add(y); }
             _heal.Text = m.Heal.Length > 0 ? "+" + m.Heal : "";
             _heal.Visibility = m.Heal.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
