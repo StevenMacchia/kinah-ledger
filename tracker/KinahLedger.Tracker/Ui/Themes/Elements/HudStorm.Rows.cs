@@ -130,14 +130,36 @@ sealed partial class HudStorm
         Geometry? _slot;
         Color _tone;
         Brush? _fill, _coreGlow, _core, _edgeGlow, _edge;
+        Pen? _edgePen, _edgeGlowPen;
+
+        /// <summary>The bar's bolt-cut leading edge at <paramref name="ex"/>: four fixed points down the row, three px either way (seeded by the member, so it never twitches).</summary>
+        List<Point> Zig(double ex, double h, double fx)
+        {
+            int seed = (int)(Math.Abs(_m!.Id) % 997);
+            double k = fx < 56 ? 0 : 1;   // a short bar (its end by the class art) ends straight
+            double[] o = (seed % 3) switch { 0 => new[] { 2.5, -3, 2, -2.5 }, 1 => new[] { -2.0, 3, -3, 2 }, _ => new[] { 3.0, -2, 3, -3 } };
+            return new List<Point> { new(ex + o[0] * k, .5), new(ex + o[1] * k, h * .34), new(ex + o[2] * k, h * .64), new(ex + o[3] * k, h - .5) };
+        }
+
+        /// <summary>A class colour a touch richer (about 15% more saturated), so the conduits read as charged.</summary>
+        static Color Rich(Color c)
+        {
+            double g = (c.R + c.G + c.B) / 3.0;
+            byte F(byte v) => (byte)Math.Clamp(Math.Round(g + (v - g) * 1.15), 0, 255);
+            return Color.FromArgb(c.A, F(c.R), F(c.G), F(c.B));
+        }
         string _crownKey = "";
         DrawingGroup? _crown;
+        double _scrimW;
 
         public FrameworkElement Root => _root;
         public MeterMember? Member => _m;
 
         /// <summary>The bar's leading edge, px from the row's left.</summary>
         public double EdgeX => Math.Max(0, (_root.ActualWidth - 1) * Math.Clamp(_bar, 0, 1));
+
+        /// <summary>Where a full bar is drawn (the PB ghost, IThemeBarSpan): the conduit's whole slot, from its half-pixel inset.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(.5, 0, Math.Max(0, _art.ActualWidth - 1), _art.ActualHeight));
 
         public StormRow()
         {
@@ -156,9 +178,9 @@ sealed partial class HudStorm
             _sweepHost.Children.Add(_sweepEl);
             _sweepHost.Clip = _sweepClip;
             // the lead's bolt glyph: drawn once, landed by its scale
-            _glyph = new TacSketch((dc, s) => Glyph(dc, new Rect(0, 0, s.Width, s.Height)), 7.5, 13)
+            _glyph = new TacSketch((dc, s) => Glyph(dc, new Rect(0, 0, s.Width, s.Height)), 10, 17)
             {
-                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(Pad + 12, 0, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(Pad + 9, 0, 0, 0),
                 RenderTransformOrigin = new Point(.5, .5), RenderTransform = _glyphScale, Visibility = Visibility.Collapsed,
             };
             _root.Children.Add(_art); _root.Children.Add(_sweepHost); _root.Children.Add(_flashEl); _root.Children.Add(_glyph);
@@ -211,7 +233,7 @@ sealed partial class HudStorm
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
             _glyph.Visibility = Lead ? Visibility.Visible : Visibility.Collapsed;
-            _rank.Margin = new Thickness(Lead ? 1 : 3, 0, 0, 0);
+            _rank.Margin = new Thickness(Lead ? 0 : 3, 0, 0, 0);
             SlideBar(_art, c, "bar", BarOf(m, c), v => { _bar = v; Clip(); _art.InvalidateVisual(); });
             _art.InvalidateVisual();
             // a rank won: a charge runs along the bar of the row that climbed (the glide carries it up)
@@ -236,7 +258,7 @@ sealed partial class HudStorm
         /// <summary>The thunderclap on this row: its white flash (0 to 1) and the bolt glyph landing (0 to 1, a pop past 1).</summary>
         public void Strike(double flash, double glyph)
         {
-            _flashEl.Opacity = Math.Clamp(flash, 0, 1);
+            _flashEl.Opacity = .4 * Math.Clamp(flash, 0, 1);
             _flashEl.Visibility = flash > .01 ? Visibility.Visible : Visibility.Collapsed;
             _glyphScale.ScaleX = _glyphScale.ScaleY = Math.Max(0, glyph);
         }
@@ -258,13 +280,15 @@ sealed partial class HudStorm
                 cols[5].Width = new GridLength(share ? _shareW : 0);
             }
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
+            double sw = 8 + _dpsW + _shareW + (_expanded ? _dmgW + _critW : 0) + 10;   // the same on every row: one clean column
+            if (Math.Abs(sw - _scrimW) > .5) { _scrimW = sw; _art.InvalidateVisual(); }
         }
 
         /// <summary>Whether this row holds the lead's glyph: first with damage done.</summary>
         bool Lead => _m is { Rank: 1, CpOnly: false } m && !double.IsNaN(m.FigureValue) && m.FigureValue > 0;
 
         static readonly Brush SlotGround = Mod.Grad(true, (Mod.A(Deep1C, .72), 0), (Mod.A(Deep0C, .8), 1)), TopLight = Mod.Grad(true, (Mod.A(Colors.White, .14), 0), (Mod.A(Colors.White, 0), .5)),
-            HealLine = Mod.Br(MintC2, .95);
+            HealLine = Mod.Br(MintC2, .95), ScrimIn = Mod.Grad(false, (Mod.A(Deep0C, 0), 0), (Mod.A(Deep0C, .6), 1)), ScrimFill = Mod.Br(Deep0C, .6), ScrimEdge = Mod.Br(VoltC, .16);
         static readonly Pen Rim = Mod.P(Mod.Br(VoltC, .14), 1), YouRim = Mod.P(Mod.Br(VoltC, .7), 1.2);
 
         void Draw(DrawingContext dc, Size s)
@@ -277,7 +301,7 @@ sealed partial class HudStorm
                 _slot = Cut(new Rect(.5, .5, Math.Max(1, s.Width - 1), Math.Max(1, h - 1)), 6, 2);
             }
             var slot = _slot;
-            var tone = m.ClassColor;
+            var tone = Rich(m.ClassColor);
             if (_fill == null || tone != _tone)
             {
                 _tone = tone;
@@ -286,25 +310,47 @@ sealed partial class HudStorm
                 _core = Mod.Grad(false, (Mod.A(Mod.Mix(tone, Colors.White, .55), .25), 0), (Mod.A(Mod.Mix(tone, Colors.White, .75), 1), 1));
                 _edgeGlow = Mod.Grad(false, (Mod.A(tone, 0), 0), (Mod.A(Mod.Mix(tone, Colors.White, .35), .55), 1));
                 _edge = Mod.Br(Mod.Mix(tone, Colors.White, .7), 1);
+                _edgePen = new Pen(Mod.Br(Mod.Mix(tone, Colors.White, .75), 1), 1.3) { LineJoin = PenLineJoin.Round }; _edgePen.Freeze();
+                _edgeGlowPen = new Pen(Mod.Br(Mod.Mix(tone, VoltC, .5), .55), 4) { LineJoin = PenLineJoin.Round }; _edgeGlowPen.Freeze();
             }
             dc.DrawGeometry(SlotGround, null, slot);
             double fx = w * Math.Clamp(_bar, 0, 1);
             if (fx > 1)
             {
                 dc.PushClip(slot);
-                var bar = new Rect(.5, .5, fx, h - 1);
+                double ex = .5 + fx;
+                // the leading edge cut as a bolt: a fixed zigzag (seeded per member), three px either way
+                var zig = Zig(ex, h, fx);
+                var shapeG = new StreamGeometry();
+                using (var g = shapeG.Open())
+                {
+                    g.BeginFigure(new Point(.5, .5), true, true);
+                    foreach (var p in zig) g.LineTo(p, true, false);
+                    g.LineTo(new Point(.5, h - .5), true, false);
+                }
+                shapeG.Freeze();
+                dc.PushClip(shapeG);
+                var bar = new Rect(.5, .5, fx + 4, h - 1);
                 // the conduit: charging from deep at the left to its full colour at the edge, its windings, a light along its top
                 dc.DrawRectangle(_fill, null, bar);
                 dc.DrawRectangle(Windings, null, new Rect(.5, 1, Math.Max(0, fx - 4), h - 6));
                 dc.DrawRectangle(TopLight, null, bar);
                 // the electric core along its foot: a glow and a white-hot line
                 double cy = h - 4;
-                dc.DrawRectangle(_coreGlow, null, new Rect(1, cy - 1.5, Math.Max(0, fx - 1), 3));
-                dc.DrawRectangle(_core, null, new Rect(1, cy - .6, Math.Max(0, fx - 1), 1.2));
-                // the leading edge: charge building into it
-                double ex = .5 + fx;
-                dc.DrawRectangle(_edgeGlow, null, new Rect(Math.Max(.5, ex - 14), .5, Math.Min(14, fx), h - 1));
-                dc.DrawRectangle(_edge, null, new Rect(Math.Max(.5, ex - 1.2), .5, Math.Min(1.2, fx), h - 1));
+                dc.DrawRectangle(_coreGlow, null, new Rect(1, cy - 2.5, Math.Max(0, fx + 3), 5));
+                dc.DrawRectangle(_core, null, new Rect(1, cy - 1, Math.Max(0, fx + 3), 2));
+                // charge building into the edge
+                dc.DrawRectangle(_edgeGlow, null, new Rect(Math.Max(.5, ex - 16), .5, Math.Min(19, fx + 3), h - 1));
+                dc.Pop();
+                if (fx > 8)
+                {
+                    // the bolt edge itself: a glow and a white-hot line along the zigzag
+                    var edgeLine = new StreamGeometry();
+                    using (var g = edgeLine.Open()) { g.BeginFigure(zig[0], false, false); for (int i = 1; i < zig.Count; i++) g.LineTo(zig[i], true, true); }
+                    edgeLine.Freeze();
+                    dc.DrawGeometry(null, _edgeGlowPen, edgeLine);
+                    dc.DrawGeometry(null, _edgePen, edgeLine);
+                }
                 dc.Pop();
             }
             if (m.You || (ParserRows.HealBarsPref && m.HealShare > 0))
@@ -322,12 +368,14 @@ sealed partial class HudStorm
                 double ex = Math.Min(.5 + fx, s.Width - 3);
                 bool lead = Lead;
                 int dir = ex > s.Width - 16 ? -1 : 1;
-                var key = $"{lead}|{dir}|{tone}|{h}";
+                double healW = _heal.Visibility == Visibility.Visible ? _heal.ActualWidth + _heal.Margin.Left : 0;
+                bool sparks = ex < s.Width - _scrimW - healW - 10;
+                var key = $"{lead}|{dir}|{tone}|{h}|{sparks}";
                 if (_crown == null || key != _crownKey)
                 {
                     _crownKey = key;
                     var g = new DrawingGroup();
-                    using (var gc = g.Open()) Crown(gc, h, dir, lead, tone, (int)(Math.Abs(m.Id) % 100003) + 17);
+                    using (var gc = g.Open()) Crown(gc, h, dir, lead, tone, (int)(Math.Abs(m.Id) % 100003) + 17, sparks);
                     g.Freeze();
                     _crown = g;
                 }
@@ -335,31 +383,42 @@ sealed partial class HudStorm
                 dc.DrawDrawing(_crown);
                 dc.Pop();
             }
+            // the figures' column: one even night scrim behind the DPS and the share on every row (over the bar and its sparks)
+            if (_scrimW > 0)
+            {
+                double x0 = Math.Max(6, s.Width - _scrimW);
+                dc.PushClip(slot);
+                dc.DrawRectangle(ScrimIn, null, new Rect(x0 - 6, 0, 6, h));
+                dc.DrawRectangle(ScrimFill, null, new Rect(x0, 0, s.Width - x0, h));
+                dc.DrawRectangle(ScrimEdge, null, new Rect(x0, 2, 1, h - 4));
+                dc.Pop();
+            }
         }
 
         /// <summary>
-        /// The static spark crown, drawn at the edge (x 0): the edge a jagged white-hot filament, seeded bolts leaping off its
-        /// top and foot corners into the gaps between rows (<paramref name="dir"/> -1: back inward, at the row's end); the
-        /// lead's brighter, with longer arcs running back along both gaps.
+        /// The static spark crown, drawn at the edge (x 0): seeded sparks leaping off its top and foot corners out into the gaps
+        /// between rows (never across the words), a glow on each corner; the lead's brighter, with longer arcs running back
+        /// along both gaps.
         /// </summary>
-        static void Crown(DrawingContext dc, double h, int dir, bool lead, Color tone, int seed)
+        static void Crown(DrawingContext dc, double h, int dir, bool lead, Color tone, int seed, bool sparks = true)
         {
-            double a = lead ? 1 : .75, k = lead ? 1.2 : 1;
+            double a = lead ? 1 : .8, k = lead ? 1.2 : 1, sx = dir > 0 ? 5 * k : -2;
             var glow = Mod.Mix(tone, VoltC, .6);
-            // the edge's filament (tight: it stays clear of the figures beside it); at the row's end the sparks leap up and down, out of the words' way
-            DrawBolt(dc, BoltPts(new Point(0, .5), new Point(0, h - .5), seed + 11, 1.2, 3), a, lead ? .5 : .4, glow);
-            double sx = dir > 0 ? 7 * k : 2;
-            DrawBolt(dc, BoltPts(new Point(0, 2), new Point(sx, -2.8), seed, 2, 3), a, lead ? .62 : .5, glow);
-            DrawBolt(dc, BoltPts(new Point(0, h - 2), new Point(dir > 0 ? 6 * k : 2, h + 2.8), seed + 7, 2, 3), a, lead ? .62 : .5, glow);
+            if (sparks)
+            {
+                DrawBolt(dc, BoltPts(new Point(0, 2.5), new Point(sx, -2.8), seed, 1.8, 3), a, lead ? .62 : .5, glow);
+                DrawBolt(dc, BoltPts(new Point(0, h - 2.5), new Point(sx * .8, h + 2.8), seed + 7, 1.6, 3), a, lead ? .62 : .5, glow);
+            }
             if (lead)
             {
-                DrawBolt(dc, BoltPts(new Point(-1, 0), new Point(-30, -1.2), seed + 3, 2, 4), .95, .55);
-                DrawBolt(dc, BoltPts(new Point(-1, h), new Point(-18, h + 1.2), seed + 5, 1.6, 3), .8, .5);
+                DrawBolt(dc, BoltPts(new Point(-1, -.5), new Point(-34, -1.4), seed + 3, 1.4, 4), .95, .55);
+                DrawBolt(dc, BoltPts(new Point(-1, h + .5), new Point(-20, h + 1.4), seed + 5, 1.2, 3), .8, .5);
             }
-            var g = new RadialGradientBrush(Mod.A(ArcC, lead ? .7 : .45), Mod.A(VoltC, 0));
+            if (!sparks) return;
+            var g = new RadialGradientBrush(Mod.A(ArcC, lead ? .75 : .5), Mod.A(VoltC, 0));
             g.Freeze();
-            dc.DrawEllipse(g, null, new Point(0, 1.5), lead ? 7 : 5, 4);
-            dc.DrawEllipse(g, null, new Point(0, h - 1.5), lead ? 6 : 4.5, 3.5);
+            dc.DrawEllipse(g, null, new Point(0, 1), lead ? 7 : 5, 3.5);
+            dc.DrawEllipse(g, null, new Point(0, h - 1), lead ? 6 : 4.5, 3);
         }
     }
 }

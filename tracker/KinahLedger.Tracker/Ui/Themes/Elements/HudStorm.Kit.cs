@@ -98,26 +98,34 @@ sealed partial class HudStorm
     static Pen MakeRimPen() { var p = new Pen(Mod.Br(VoltC, .2), 1) { LineJoin = PenLineJoin.Round }; p.Freeze(); return p; }
 
     /// <summary>
-    /// The storm's crest: the heads of cloud billowing over a panel's top edge (x, y, rx, ry), seeded by its width so they hold
-    /// still: a few big heads, tallest two thirds across where the storm builds, low shoulders of cloud between them.
+    /// The storm's crest: a few uneven cumulus heads billowing over a panel's top edge (x, y, rx, ry), seeded by its width so they
+    /// hold still: the tallest (the storm's head, first in the list) two thirds across, lower heads either side, low shoulders of
+    /// cloud between them.
     /// </summary>
     static List<(double X, double Y, double Rx, double Ry)> Puffs(double w, double big, double small, double crest)
     {
         var list = new List<(double, double, double, double)>();
         if (crest < 3 || w < 60) return list;
         var rnd = new Spark(97 + (int)w);
-        double x = big + 14, prev = -1;
-        while (x < w - small - 14)
+        double[] at = w < 220 ? new[] { .24, .64, .88 } : w < 420 ? new[] { .16, .38, .64, .87 } : new[] { .12, .29, .47, .65, .85 };
+        int hero = Array.IndexOf(at, at.OrderBy(f => Math.Abs(f - .65)).First());
+        double y = crest + 2.5;
+        var heads = new List<(double, double, double, double)>();
+        for (int i = 0; i < at.Length; i++)
         {
-            double f = x / w;
-            double lift = .35 + .65 * Math.Sin(Math.PI * Math.Clamp(f * 1.15 - .12, 0, 1));
-            double rx = Math.Min(13 + 11 * rnd.Next(), Math.Min(x - 1.5, w - 2.5 - x));
-            double ry = Math.Clamp(crest * (.5 + .55 * lift * (.75 + .25 * rnd.Next())), 4, crest + .8);
-            list.Add((x, crest + 1.5, rx, ry));
-            // a low shoulder of cloud between this head and the last
-            if (prev > 0) { double mx = (prev + x) / 2, srx = Math.Min(8 + 4 * rnd.Next(), Math.Min(mx - 1.5, w - 2.5 - mx)); list.Add((mx, crest + 1.5, srx, crest * (.32 + .12 * rnd.Next()))); }
-            prev = x;
-            x += 28 + 18 * rnd.Next();
+            double x = Math.Max(big + 10, Math.Min(w - small - 12, w * at[i] + (rnd.Next() - .5) * 10));
+            bool h = i == hero;
+            double ry = h ? crest + 1.5 : crest * (.36 + .16 * rnd.Next());
+            double rx = Math.Min(h ? crest * 1.75 : crest * (1.05 + .4 * rnd.Next()), Math.Min(x - 1.5, w - 2.5 - x));
+            heads.Add((x, y, rx, Math.Min(ry, y - .8)));
+        }
+        list.Add(heads[hero]);
+        for (int i = 0; i < heads.Count; i++) if (i != hero) list.Add(heads[i]);
+        // the shoulders: low cloud running between the heads, so the crest is one storm, not a row of beads
+        for (int i = 0; i + 1 < heads.Count; i++)
+        {
+            double mx = (heads[i].Item1 + heads[i + 1].Item1) / 2, half = (heads[i + 1].Item1 - heads[i].Item1) / 2;
+            list.Add((mx, y, Math.Min(half + 4, Math.Min(mx - 1.5, w - 2.5 - mx)), crest * (.22 + .06 * rnd.Next())));
         }
         return list;
     }
@@ -172,35 +180,38 @@ sealed partial class HudStorm
         dc.DrawRectangle(Mod.Grad(true, (Mod.A(VoltC, .07), 0), (Mod.A(VoltC, 0), .5)), null, new Rect(0, 0, s.Width, s.Height));
         if (crest > 0)
         {
-            // the crest's heads lit from within: a cold glow in the tallest, the storm's charge showing through
             var puffs = Puffs(s.Width, big, small, crest);
-            // each head's volume: lit from the upper left by the storm's own light, its underside in shadow
+            // each head's volume: lit from the upper left by the storm's own light, a shade lighter than the glass so the crest
+            // stands off the panel and the sky, its underside in shadow
             foreach (var (x, y, rx, ry) in puffs)
             {
-                var v = new RadialGradientBrush { Center = new Point(.38, .3), GradientOrigin = new Point(.32, .2), RadiusX = .75, RadiusY = .8 };
-                v.GradientStops.Add(new GradientStop(Mod.A(Mod.Mix(VoltC, Deep1C, .35), .3), 0));
-                v.GradientStops.Add(new GradientStop(Mod.A(Deep1C, 0), .6));
-                v.GradientStops.Add(new GradientStop(Mod.A(Deep0C, .35), 1));
+                var v = new RadialGradientBrush { Center = new Point(.4, .32), GradientOrigin = new Point(.32, .18), RadiusX = .72, RadiusY = .8 };
+                v.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0x4A, 0x5B, 0xA3), .8), 0));
+                v.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0x2E, 0x38, 0x68), .5), .55));
+                v.GradientStops.Add(new GradientStop(Mod.A(Deep0C, .3), 1));
                 v.Freeze();
                 dc.DrawEllipse(v, null, new Point(x, y), rx, ry);
             }
-            foreach (var (x, y, rx, ry) in puffs.OrderByDescending(p => p.Ry).Take(3))
+            if (puffs.Count > 0)
             {
-                var g = new RadialGradientBrush(Mod.A(VoltC, .34), Mod.A(VoltC, 0)) { Center = new Point(.5, .5), GradientOrigin = new Point(.5, .5) };
-                g.Freeze();
-                dc.DrawEllipse(g, null, new Point(x, y - ry * .25), rx * 1.25, ry * 1.1);
-            }
-            if (puffs.Count > 2)
-            {
-                // a bolt caught inside the tallest head, forking along the cloud base
-                var top = puffs.OrderByDescending(p => p.Ry).First();
-                var p0 = new Point(top.X - top.Rx * .5, top.Y - top.Ry * .55);
-                var pts = BoltPts(p0, new Point(Math.Min(s.Width - 10, top.X + top.Rx * 1.4), crest + 3), 271 + (int)s.Width, 2.2, 4).Select(q => new Point(Math.Clamp(q.X, 5, s.Width - 6), Math.Max(q.Y, 3))).ToList();
-                DrawBolt(dc, pts, .75, .55);
-                DrawBolt(dc, BoltPts(pts[pts.Count / 2], new Point(pts[pts.Count / 2].X - 12, crest + 4), 277, 1.6, 3), .55, .45);
+                // the storm's head: its underbelly lit from inside by the charge, and a bolt caught in it, forking
+                var (hx, hy, hrx, hry) = puffs[0];
+                var belly = new RadialGradientBrush(Mod.A(Color.FromRgb(0xCF, 0xE3, 0xFF), .42), Mod.A(VoltC, 0)) { Center = new Point(.5, .5), GradientOrigin = new Point(.5, .6) };
+                belly.Freeze();
+                dc.DrawEllipse(belly, null, new Point(hx + hrx * .1, hy - hry * .15), hrx * .85, hry * .75);
+                // the other heads: the same light, about a third as strong
+                int heads = (puffs.Count + 1) / 2;
+                var small2 = new RadialGradientBrush(Mod.A(Color.FromRgb(0xCF, 0xE3, 0xFF), .16), Mod.A(VoltC, 0)) { Center = new Point(.5, .5), GradientOrigin = new Point(.5, .65) };
+                small2.Freeze();
+                for (int i = 1; i < heads && i < puffs.Count; i++) { var (x2, y2, rx2, ry2) = puffs[i]; dc.DrawEllipse(small2, null, new Point(x2, y2 - ry2 * .2), rx2 * .8, ry2 * .7); }
+                // one clean zigzag trunk down to the right, one fork off its second turn down to the left: no crossing strokes
+                Point P(double fx, double fy) => new(Math.Clamp(hx + hrx * fx, 6, s.Width - 7), Math.Clamp(hy - hry + (crest + 3 - (hy - hry)) * fy, 5.5, crest + 4));
+                var trunk = new List<Point> { P(-.42, .12), P(-.02, .36), P(-.2, .5), P(.3, .78), P(.12, .84), P(.5, 1) };
+                DrawBolt(dc, trunk, 1, 1.6);
+                DrawBolt(dc, new List<Point> { trunk[2], P(-.38, .72), P(-.3, .78), P(-.55, 1) }, .75, .9);
             }
             // where the cloud meets the glass: a shadow under the crest
-            dc.DrawRectangle(Mod.Grad(true, (Mod.A(Deep0C, .45), 0), (Mod.A(Deep0C, 0), 1)), null, new Rect(0, crest + 1, s.Width, 6));
+            dc.DrawRectangle(Mod.Grad(true, (Mod.A(Deep0C, .4), 0), (Mod.A(Deep0C, 0), 1)), null, new Rect(0, crest + 2, s.Width, 6));
         }
         if (lit > 0) dc.DrawRectangle(Mod.Grad(true, (Mod.A(ArcC, .24 * lit), 0), (Mod.A(VoltC, .07 * lit), 1)), null, new Rect(0, 0, s.Width, s.Height));
         dc.Pop();
@@ -208,8 +219,8 @@ sealed partial class HudStorm
         dc.DrawGeometry(null, RimPen, shape);
         if (crest > 0)
         {
-            var lip = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(0, crest + 2) };
-            lip.GradientStops.Add(new GradientStop(Mod.A(ArcC, .85), 0)); lip.GradientStops.Add(new GradientStop(Mod.A(VoltC, .5), .6)); lip.GradientStops.Add(new GradientStop(Mod.A(VoltC, 0), 1));
+            var lip = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(0, crest + 6) };
+            lip.GradientStops.Add(new GradientStop(Mod.A(ArcC, .9), 0)); lip.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0xA8, 0xCC, 0xFF), .6), .5)); lip.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0xA8, 0xCC, 0xFF), .5), .8)); lip.GradientStops.Add(new GradientStop(Mod.A(VoltC, .12), 1));
             lip.Freeze();
             var pen = new Pen(lip, 1) { LineJoin = PenLineJoin.Round }; pen.Freeze();   // 1 px: its half-width ends on the bounds
             dc.DrawGeometry(null, pen, shape);

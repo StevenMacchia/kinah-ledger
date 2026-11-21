@@ -29,7 +29,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         Mint2 = Frozen(Color.FromRgb(0x8C, 0xFF, 0xC6)), MarkMint = Frozen(MarkMintC), Coral = Frozen(CoralC);
     const double Pad = 10;
     /// <summary>How tall the storm cloud's crest rises over the meter's glass, and over the Buddy's.</summary>
-    const double FightCrest = 21, LineCrest = 14;
+    const double FightCrest = 26, LineCrest = 14;
 
     // the room round the look: the panels' drop inside the window; 98 at the right for the pickup's spark and chip beside the Buddy
     readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 12), HorizontalAlignment = HorizontalAlignment.Left };
@@ -287,58 +287,58 @@ sealed partial class HudStorm : ModernLook, IThemeCard
     }
 
     /// <summary>
-    /// The run's ring as a charged coil: 30 windings round a dark core, those up to your best's share lit blue-white with a
-    /// glowing arc under them; past your best, every winding white-hot and a blue halo round it. <see cref="_head"/>: a spark
-    /// running round ahead of the charge (your best passed).
+    /// The run's ring as a charged capacitor: six cut cells round a dark core, charged blue-white up to your best's share (the
+    /// last one part-charged), a hot spark at the charge's front; past your best, every cell white-hot and a blue halo round
+    /// it. <see cref="_head"/>: the spark running round ahead of the charge (your best passed).
     /// </summary>
     void DrawCoil(DrawingContext dc, Size s)
     {
         double c = s.Width / 2, r = c - 5;
         var center = new Point(c, c);
-        dc.DrawEllipse(Frozen(Mod.A(Deep0C, .7)), Mod.P(Mod.Br(VoltC, .12), 1), center, r - 3.5, r - 3.5);
+        dc.DrawEllipse(Frozen(Mod.A(Deep0C, .78)), Mod.P(Mod.Br(VoltC, .16), 1), center, r - 4, r - 4);
         double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
         double shown = share + (1 - share) * Math.Clamp(_complete, 0, 1);
         bool full = _beat || _complete >= 1 || shown >= .999;
         if (full)
         {
             var halo = new RadialGradientBrush { GradientOrigin = new Point(.5, .5), Center = new Point(.5, .5), RadiusX = .5, RadiusY = .5 };
-            halo.GradientStops.Add(new GradientStop(Mod.A(VoltC, 0), .62)); halo.GradientStops.Add(new GradientStop(Mod.A(VoltC, .45), .8)); halo.GradientStops.Add(new GradientStop(Mod.A(VoltC, 0), 1));
+            halo.GradientStops.Add(new GradientStop(Mod.A(VoltC, 0), .6)); halo.GradientStops.Add(new GradientStop(Mod.A(VoltC, .55), .8)); halo.GradientStops.Add(new GradientStop(Mod.A(VoltC, 0), 1));
             halo.Freeze();
             dc.DrawEllipse(halo, null, center, c, c);
         }
-        // the glowing arc under the windings
-        void ArcTo(double to, Brush b, double w)
+        PathGeometry Arc(double from, double to)
         {
-            if (to < .004) return;
-            if (to >= .999) { dc.DrawEllipse(null, Mod.P(b, w), center, r, r); return; }
-            double a = 2 * Math.PI * to;
-            var fig = new PathFigure { StartPoint = new Point(c, c - r) };
-            fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
+            double a0 = 2 * Math.PI * from, a1 = 2 * Math.PI * to;
+            var fig = new PathFigure { StartPoint = new Point(c + r * Math.Sin(a0), c - r * Math.Cos(a0)) };
+            fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a1), c - r * Math.Cos(a1)), new Size(r, r), 0, a1 - a0 > Math.PI, SweepDirection.Clockwise, true));
             var pg = new PathGeometry(); pg.Figures.Add(fig); pg.Freeze();
-            dc.DrawGeometry(null, Mod.P(b, w, round: true), pg);
+            return pg;
         }
-        dc.DrawEllipse(null, Mod.P(Mod.Br(VoltC, .14), 2), center, r, r);
-        ArcTo(shown, Mod.Br(VoltC, full ? .55 : .4), 4.5);
-        // the windings: short slanted turns across the ring
-        const int n = 30;
-        var off = Mod.P(Mod.Br(VoltC, .26), 1.2, round: true);
-        var on = Mod.P(full ? Arc : Mod.Br(Mod.Mix(VoltC, Colors.White, .45), 1), 1.5, round: true);
+        // the six cells: a gap between each, empty ones a dim track, charged ones glowing with a white-hot core
+        const int n = 6;
+        const double gap = .035;
+        var track = new Pen(Mod.Br(VoltC, .22), 4.5) { StartLineCap = PenLineCap.Flat, EndLineCap = PenLineCap.Flat }; track.Freeze();
+        var glow = new Pen(Mod.Br(VoltC, full ? .6 : .45), 6.5) { StartLineCap = PenLineCap.Flat, EndLineCap = PenLineCap.Flat }; glow.Freeze();
+        var core = new Pen(full ? Arc0 : Mod.Br(Mod.Mix(VoltC, Colors.White, .55), 1), 3) { StartLineCap = PenLineCap.Flat, EndLineCap = PenLineCap.Flat }; core.Freeze();
         for (int i = 0; i < n; i++)
         {
-            double f = (i + .5) / n, a0 = 2 * Math.PI * f, a1 = a0 + .16;
-            var p0 = new Point(c + (r - 3.2) * Math.Sin(a0), c - (r - 3.2) * Math.Cos(a0));
-            var p1 = new Point(c + (r + 3.2) * Math.Sin(a1), c - (r + 3.2) * Math.Cos(a1));
-            dc.DrawLine(f <= shown ? on : off, p0, p1);
+            double f0 = (double)i / n + gap / 2, f1 = (double)(i + 1) / n - gap / 2;
+            dc.DrawGeometry(null, track, Arc(f0, f1));
+            double lit = Math.Min(f1, shown);
+            if (lit > f0 + .004) { var g = Arc(f0, lit); dc.DrawGeometry(null, glow, g); dc.DrawGeometry(null, core, g); }
         }
-        if (_head is > 0 and < 1 && shown is > .01 and < .999)
+        if (shown is > .01 and < .999)
         {
+            // the charge's front: a hot spark (brighter while the charge runs round)
             double ah = 2 * Math.PI * shown;
             var p = new Point(c + r * Math.Sin(ah), c - r * Math.Cos(ah));
-            var g = new RadialGradientBrush(Mod.A(ArcC, .95), Mod.A(VoltC, 0)); g.Freeze();
-            dc.DrawEllipse(g, null, p, 6, 6);
-            dc.DrawEllipse(Arc, null, p, 2, 2);
+            var g = new RadialGradientBrush(Mod.A(ArcC, _head is > 0 and < 1 ? 1 : .75), Mod.A(VoltC, 0)); g.Freeze();
+            dc.DrawEllipse(g, null, p, _head is > 0 and < 1 ? 7 : 5, _head is > 0 and < 1 ? 7 : 5);
+            dc.DrawEllipse(Arc0, null, p, 1.6, 1.6);
         }
     }
+
+    static readonly SolidColorBrush Arc0 = Frozen(ArcC);
 
     // ---- the rare drop
 
@@ -369,7 +369,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
                 dc.DrawRectangle(Mod.Grad(false, (Mod.A(c, .42), 0), (Mod.A(c, .12), .55), (Mod.A(c, 0), 1)), null, new Rect(0, 0, s.Width, s.Height));
                 dc.DrawRectangle(Mod.Br(Mod.Mix(c, Colors.White, .5), 1), null, new Rect(0, 0, 2.5, s.Height));
                 dc.Pop();
-                dc.DrawGeometry(null, Mod.P(Mod.Br(c, .55), 1), shape);
+                dc.DrawGeometry(null, Mod.P(Mod.Br(Mod.Mix(c, VioletC, .45), .85), 1.4), shape);
             }) { RenderTransform = _rareBloom });
             _rareFlash = Flash(_rare, 8, 2);
             _rareFlash.Fill = Mod.Grad(false, (Mod.A(Mod.Mix(c, Colors.White, .4), .5), 0), (Mod.A(c, .12), 1));
@@ -394,7 +394,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             _rareTile = tile;
             row.Children.Add(tile);
-            var mk = Mark(L.T("RARE DROP"), Frozen(Mod.Mix(c, Colors.White, .6)), c, size: 9); mk.Margin = new Thickness(0, 0, 8, 0);
+            var mk = Mark(L.T("RARE DROP"), Frozen(Mod.Mix(GoldC2, Colors.White, .25)), GoldC2, size: 9); mk.Margin = new Thickness(0, 0, 8, 0);
             row.Children.Add(mk);
             var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .5)), FontWeights.Bold);
             nm.Effect = Shade();
@@ -601,22 +601,26 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         {
             double t = _clapT, reach = Out(Seg(t, 0, .06));
             double a = ClapLight(t);
-            var land = new Point(lead.At.X + 10, lead.At.Y + 1);
+            var land = new Point(lead.At.X + 2, lead.At.Y + lead.At.Height / 2);   // at the slot's edge, short of the rank's digit
             if (a > .01)
             {
-                // the strike: out of the crest's head, down onto the leader's rank
-                var down = BoltPts(new Point(Pad + 18, FightCrest * .45), land, 907, 8, 5);
-                for (int i = 0; i < down.Count; i++) down[i] = new Point(Math.Clamp(down[i].X, 4, 52), Math.Max(2, down[i].Y));
+                // the strike: out of the crest's first head, across to the glass's left gutter, down it (where no word sits), into the leader's rank
+                double gx = 5;
+                var head = new Point(Pad + 22, FightCrest * .55);
+                var down = BoltPts(head, new Point(gx, FightCrest + 10), 907, 4, 3);
+                down.AddRange(BoltPts(new Point(gx, FightCrest + 10), new Point(gx, land.Y), 911, 3, 5).Skip(1).Select(q => new Point(Math.Clamp(q.X, 2, 8), q.Y)));
+                down.AddRange(BoltPts(new Point(gx, land.Y), land, 913, 1.2, 2).Skip(1));
                 // a wide halo of the strike's light first, then the bolt itself
                 dc.DrawGeometry(null, Mod.P(Mod.Br(VoltC, .16 * a), 20, round: true), BoltLine(down, Math.Max(2, (int)Math.Ceiling(down.Count * reach))));
                 DrawBolt(dc, down, a, 2.8, VoltC, reach);
                 if (reach >= 1)
                 {
                     // forks off the stroke, a third and two thirds down, and one running back up into the cloud
-                    var f0 = down[down.Count / 3]; var f1 = down[down.Count * 2 / 3];
-                    DrawBolt(dc, BoltPts(f0, new Point(Math.Min(70, f0.X + 22), f0.Y + 14), 919, 3.5, 4), a * .85, 1);
-                    DrawBolt(dc, BoltPts(f1, new Point(Math.Max(4, f1.X - 8), Math.Min(land.Y - 2, f1.Y + 11)), 923, 2.5, 3), a * .7, .75);
-                    DrawBolt(dc, BoltPts(new Point(Pad + 18, FightCrest * .45), new Point(Pad + 70, 4), 929, 3, 4), a * .7, .8);
+                    // forks: one back up into the cloud, one along the crest's base, one off the gutter
+                    DrawBolt(dc, BoltPts(head, new Point(Pad + 80, 5), 929, 3, 4), a * .8, .9);
+                    DrawBolt(dc, BoltPts(head, new Point(Pad + 60, FightCrest + 3), 931, 2.5, 3), a * .6, .7);
+                    var f1 = down[down.Count * 2 / 3];
+                    DrawBolt(dc, BoltPts(f1, new Point(2.5, Math.Min(land.Y - 3, f1.Y + 10)), 923, 1.5, 3), a * .6, .7);
                     var g = new RadialGradientBrush(Mod.A(ArcC, a), Mod.A(VoltC, 0)); g.Freeze();
                     dc.DrawEllipse(g, null, land, 34, 17);
                 }
@@ -625,9 +629,11 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             double k = Seg(t, .06, .5);
             if (k is > 0 and < 1)
             {
-                double rx = 8 + 120 * Out(k), ry = 4 + 34 * Out(k);
-                dc.DrawEllipse(null, Mod.P(Mod.Br(VoltC, .5 * (1 - k)), 6 * (1 - k) + 1), land, rx, ry);
-                dc.DrawEllipse(null, Mod.P(Mod.Br(ArcC, .9 * (1 - k)), 1.4), land, rx, ry);
+                // centred on the lead's glyph, kept small so it never sits on the rank's digit
+                var at = new Point(lead.At.X + 20, lead.At.Y + lead.At.Height / 2);
+                double rx = 4 + 8 * Out(k), ry = 3 + 6 * Out(k);
+                dc.DrawEllipse(null, Mod.P(Mod.Br(VoltC, .5 * (1 - k)), 5 * (1 - k) + 1), at, rx, ry);
+                dc.DrawEllipse(null, Mod.P(Mod.Br(ArcC, .9 * (1 - k)), 1.2), at, rx, ry);
             }
         }
         if (shim)
@@ -680,7 +686,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
                     r.Strike(flash, glyph);
                 }
             }
-            if (clap) Lite(_fightFlash, ClapLight(t));
+            if (clap) Lite(_fightFlash, .5 * ClapLight(t));   // the glass lit, never washed out
             else if (flicker) Lite(_fightFlash, .75 * (t < .05 ? Seg(t, 0, .05) : t < .12 ? 1 - Seg(t, .05, .12) : t < .16 ? Seg(t, .12, .16) : 1 - Seg(t, .16, .4)));
             _bolts.InvalidateVisual();
         }, () =>
@@ -710,9 +716,9 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         var shift = new TranslateTransform();
         chip.RenderTransform = shift;
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(chip, 12); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
+        Canvas.SetLeft(chip, 3); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2 + LineCrest / 2);
         // the spark it leaps out on: drawn once, shown by its opacity
-        var arc = new TacSketch((dc, _) => DrawBolt(dc, BoltPts(new Point(-3, 0), new Point(13, 0), 77, 2.2, 3), 1, .7)) { Opacity = 0 };
+        var arc = new TacSketch((dc, _) => DrawBolt(dc, BoltPts(new Point(-8, LineCrest / 2), new Point(6, LineCrest / 2), 77, 2.2, 3), 1, .8)) { Opacity = 0 };
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(arc); _lineAnchor.Children.Add(chip);
         Motion.Play(chip, 1900, t =>
         {
@@ -735,7 +741,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         Motion.Play(sparks, 1500, t =>
         {
             _rareBloom.ScaleX = Math.Max(.02, Out(Seg(t, 0, .4)));
-            if (row != null) row.Opacity = Seg(t, .1, .35);
+            if (row != null) row.Opacity = Seg(t, 0, .12);
             if (_rareFlash != null) Lite(_rareFlash, t < .15 ? Seg(t, 0, .15) : 1 - Seg(t, .15, .7));
             _rareBurst = t is > .12 and < .7 ? Seg(t, .12, .7) : -1;
             sparks.InvalidateVisual();
