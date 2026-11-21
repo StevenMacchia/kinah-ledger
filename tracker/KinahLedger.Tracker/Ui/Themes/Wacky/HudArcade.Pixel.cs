@@ -90,8 +90,26 @@ sealed partial class HudArcade
         return g;
     }
 
+    /// <summary>The score face: narrow solid LED digits (four dots wide) for the figures, the meter's and the Buddy's.</summary>
+    static readonly Dictionary<char, string[]> FigGlyphs = new()
+    {
+        ['0'] = new[] { ".##.", "#..#", "#..#", "#..#", "#..#", "#..#", ".##." },
+        ['1'] = new[] { ".#.", "##.", ".#.", ".#.", ".#.", ".#.", "###" },
+        ['2'] = new[] { ".##.", "#..#", "...#", "..#.", ".#..", "#...", "####" },
+        ['3'] = new[] { "###.", "...#", "...#", ".##.", "...#", "...#", "###." },
+        ['4'] = new[] { "..#.", ".##.", "#.#.", "#.#.", "####", "..#.", "..#." },
+        ['5'] = new[] { "####", "#...", "###.", "...#", "...#", "#..#", ".##." },
+        ['6'] = new[] { ".##.", "#...", "#...", "###.", "#..#", "#..#", ".##." },
+        ['7'] = new[] { "####", "...#", "..#.", "..#.", ".#..", ".#..", ".#.." },
+        ['8'] = new[] { ".##.", "#..#", "#..#", ".##.", "#..#", "#..#", ".##." },
+        ['9'] = new[] { ".##.", "#..#", "#..#", ".###", "...#", "...#", ".##." },
+        ['K'] = new[] { "#..#", "#.#.", "##..", "##..", "#.#.", "#..#", "#..#" },
+        ['B'] = new[] { "###.", "#..#", "#..#", "###.", "#..#", "#..#", "###." },
+        ['–'] = new[] { "...", "...", "...", "###", "...", "...", "..." },
+    };
+
     /// <summary>Whether the LED font spells every letter of <paramref name="s"/> (else a text stands in).</summary>
-    static bool Spells(string s) => s.Length > 0 && s.All(ch => Glyphs.ContainsKey(char.ToUpperInvariant(ch)));
+    static bool Spells(string s, bool fig = false) => s.Length > 0 && s.All(ch => (fig && FigGlyphs.ContainsKey(char.ToUpperInvariant(ch))) || Glyphs.ContainsKey(char.ToUpperInvariant(ch)));
 
     /// <summary>
     /// A word in the LED font: dots <see cref="Px"/> wide, a dark shade a dot under them and a glow in the ink round them,
@@ -104,14 +122,14 @@ sealed partial class HudArcade
         public Brush Ink;
         public Color GlowC;
         public double GlowA;
-        readonly Geometry _dots;
+        readonly Geometry _dots, _edge, _halo;
         readonly double[] _ends;
 
-        public LedWord(string text, double px, Brush ink, Color glow, double glowA = .3)
+        public LedWord(string text, double px, Brush ink, Color glow, double glowA = .3, bool fig = false)
         {
             _text = text.ToUpperInvariant(); _px = px; Ink = ink; GlowC = glow; GlowA = glowA;
             IsHitTestVisible = false; SnapsToDevicePixels = true;
-            (_dots, _ends) = Build(_text, px);
+            (_dots, _edge, _halo, _ends) = Build(_text, px, fig);
             VerticalAlignment = VerticalAlignment.Center;
             System.Windows.Automation.AutomationProperties.SetName(this, text);
         }
@@ -119,36 +137,49 @@ sealed partial class HudArcade
         public string Text => _text;
         public double DotW => _ends.Length == 0 ? 0 : _ends[^1];
 
-        static readonly Dictionary<(string, double), (Geometry, double[])> Cache = new();
+        static readonly Dictionary<(string, double, bool), (Geometry, Geometry, Geometry, double[])> Cache = new();
 
-        static (Geometry, double[]) Build(string s, double px)
+        /// <summary>The width of <paramref name="s"/> in the face at <paramref name="px"/> (a figure column sized for its widest form).</summary>
+        public static double WidthOf(string s, double px, bool fig) { var e = Build(s.ToUpperInvariant(), px, fig).Item4; return e.Length == 0 ? 0 : e[^1] + px * .7; }
+
+        /// <summary>
+        /// The word's dots, once per word and size: the dots themselves (a figure's overlap a touch, so no seam shows between
+        /// them), its dark edge (each dot grown by about half a dot) and its halo (grown by a dot), each one frozen geometry.
+        /// </summary>
+        static (Geometry, Geometry, Geometry, double[]) Build(string s, double px, bool fig)
         {
-            if (Cache.TryGetValue((s, px), out var hit)) return hit;
-            var sg = new StreamGeometry();
+            if (Cache.TryGetValue((s, px, fig), out var hit)) return hit;
             var ends = new double[s.Length];
-            double x = 0, dot = px >= 1.9 ? px * .84 : px;   // big words read as LED dots, small ones as solid pixels
-            using (var ctx = sg.Open())
+            var cells = new List<(double X, double Y)>();
+            double x = 0;
+            for (int i = 0; i < s.Length; i++)
             {
-                for (int i = 0; i < s.Length; i++)
-                {
-                    var rows = Glyphs.TryGetValue(s[i], out var g) ? g : Glyphs[' '];
-                    for (int r = 0; r < 7; r++)
-                        for (int c = 0; c < rows[r].Length; c++)
-                        {
-                            if (rows[r][c] != '#') continue;
-                            double l = x + c * px, t = r * px;
-                            ctx.BeginFigure(new Point(l, t), true, true);
-                            ctx.LineTo(new Point(l + dot, t), false, false);
-                            ctx.LineTo(new Point(l + dot, t + dot), false, false);
-                            ctx.LineTo(new Point(l, t + dot), false, false);
-                        }
-                    x += rows[0].Length * px;
-                    ends[i] = x;
-                    x += px;
-                }
+                var rows = fig && FigGlyphs.TryGetValue(s[i], out var fg) ? fg : Glyphs.TryGetValue(s[i], out var g) ? g : Glyphs[' '];
+                for (int r = 0; r < 7; r++)
+                    for (int c = 0; c < rows[r].Length; c++)
+                        if (rows[r][c] == '#') cells.Add((x + c * px, r * px));
+                x += rows[0].Length * px;
+                ends[i] = x;
+                x += px;
             }
-            sg.Freeze();
-            return Cache[(s, px)] = (sg, ends);
+            // figures solid (the dots overlap a hair); big words as LED dots with a hairline between; small words solid pixels
+            double dot = fig ? px + .4 : px < 1.9 ? px + .15 : px * .9;
+            Geometry Squares(double grow)
+            {
+                var sg = new StreamGeometry { FillRule = FillRule.Nonzero };
+                using (var ctx = sg.Open())
+                    foreach (var (l, t) in cells)
+                    {
+                        ctx.BeginFigure(new Point(l - grow, t - grow), true, true);
+                        ctx.LineTo(new Point(l + dot + grow, t - grow), false, false);
+                        ctx.LineTo(new Point(l + dot + grow, t + dot + grow), false, false);
+                        ctx.LineTo(new Point(l - grow, t + dot + grow), false, false);
+                    }
+                sg.Freeze();
+                return sg;
+            }
+            var built = (Squares(0), Squares(Math.Max(.8, px * .45)), Squares(px * 1.1), ends);
+            return Cache[(s, px, fig)] = built;
         }
 
         protected override Size MeasureOverride(Size available) => new(Math.Ceiling(DotW + _px * .7), Math.Ceiling(7 * _px + _px * .7));
@@ -159,25 +190,33 @@ sealed partial class HudArcade
 
         protected override void OnRender(DrawingContext dc)
         {
-            if (_ends.Length > 0) Paint(dc);
-        }
-
-        Pen? _glow;
-        TranslateTransform? _down;
-        Pen GlowPen() { var p = new Pen(Ink(GlowC, GlowA), _px * 1.5) { LineJoin = PenLineJoin.Round }; p.Freeze(); return p; }
-
-        void Paint(DrawingContext dc)
-        {
-            // the glow: the dots stroked wide in the ink's colour, faint; then the shade a dot down; then the dots
-            if (GlowA > 0) dc.DrawGeometry(null, _glow ??= GlowPen(), _dots);
-            dc.PushTransform(_down ??= new TranslateTransform(0, _px * .7));
-            dc.DrawGeometry(ShadeB, null, _dots);
-            dc.Pop();
+            if (_ends.Length == 0) return;
+            // the phosphor bloom (the halo in the ink's colour, faint), a dark edge round the letters (they hold over a bright
+            // scene), then the dots
+            if (GlowA > 0) dc.DrawGeometry(Ink(GlowC, GlowA * .5), null, _halo);
+            dc.DrawGeometry(ShadeB, null, _edge);
             dc.DrawGeometry(Ink, null, _dots);
         }
     }
 
     static readonly SolidColorBrush ShadeB = Frozen(Color.FromArgb(0xE0, 0, 0, 0));
+
+    /// <summary>A figure in the score face (LED digits, solid, a dark edge, a phosphor bloom); a text where it can't spell it.</summary>
+    static FrameworkElement Fig(string s, double px, Color ink, double glowA = .4, Brush? fill = null, double textSize = 0)
+    {
+        if (Spells(s, true)) return new LedWord(s, px, fill ?? Ink(ink), ink, glowA, fig: true);
+        return Tt(s, textSize > 0 ? textSize : Math.Round(7 * px * 1.25 * 2) / 2, fill ?? Ink(ink), FontWeights.Bold);
+    }
+
+    /// <summary>A class's colour pushed vivid for the LED cells (the class colours are pastel; lit LEDs are saturated).</summary>
+    static Color Vivid(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0, max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b));
+        if (max - min < .04) return c;
+        double k = 1.55, l = (max + min) / 2;
+        byte P(double v) => (byte)Math.Round(255 * Math.Clamp(l + (v - l) * k, 0, 1));
+        return Color.FromRgb(P(r), P(g), P(b));
+    }
 
     /// <summary>
     /// A word for the screen: the LED font when it spells it, else a bold text of about the same height in the same colour
@@ -230,7 +269,7 @@ sealed partial class HudArcade
         return g;
     }
 
-    const double CrownPx = 1.1;
+    const double CrownPx = 1.6;
     static double CrownW => CrownArt[0].Length * CrownPx;
     static double CrownH => CrownArt.Length * CrownPx;
 
@@ -253,9 +292,9 @@ sealed partial class HudArcade
     static DrawingBrush MakeScan()
     {
         var g = new DrawingGroup();
-        g.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 4, 3))));
-        g.Children.Add(new GeometryDrawing(Frozen(Color.FromArgb(0x5A, 0, 0, 0)), null, new RectangleGeometry(new Rect(0, 2, 4, 1))));
-        var b = new DrawingBrush(g) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 4, 3), ViewportUnits = BrushMappingMode.Absolute, Stretch = Stretch.None };
+        g.Children.Add(new GeometryDrawing(Frozen(Color.FromArgb(0x10, 0x60, 0x80, 0xFF)), null, new RectangleGeometry(new Rect(0, 0, 4, 1))));
+        g.Children.Add(new GeometryDrawing(Frozen(Color.FromArgb(0x50, 0, 0, 0)), null, new RectangleGeometry(new Rect(0, 1, 4, 1))));
+        var b = new DrawingBrush(g) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 4, 2), ViewportUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, 4, 2), ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.None };
         b.Freeze();
         return b;
     }
@@ -283,34 +322,137 @@ sealed partial class HudArcade
     }
     static readonly Dictionary<int, Brush> Fills = new();
 
-    /// <summary>
-    /// The screen in <paramref name="r"/>: the black ground, the scanlines (a frozen tile), and the frame: a 2 px outer line and
-    /// a 1 px inner one in <paramref name="frame"/>, the corners stepped in pixels; the top edge broken from
-    /// <paramref name="gap0"/> to <paramref name="gap1"/> for a legend set into it. Drawn on a change only; a moment's flare is
-    /// <see cref="DrawFlare"/> on a layer of its own whose opacity moves.
-    /// </summary>
-    static void DrawScreen(DrawingContext dc, Rect r, Color frame, double ground, double gap0 = -1, double gap1 = -1)
+    static readonly Color BezelC = Color.FromRgb(0x04, 0x05, 0x0A);
+
+    /// <summary>The tube's curvature: its corners and edges darker than its middle (a frozen radial, drawn once).</summary>
+    static readonly Brush Vignette = MakeVignette();
+    static Brush MakeVignette()
     {
-        if (r.Width < 12 || r.Height < 12) return;
-        var fill = ScreenFill(ground);
-        // the ground inside the stepped corners
-        var inner = new Rect(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2);
-        dc.DrawRectangle(fill, null, new Rect(inner.X + 2, inner.Y, inner.Width - 4, inner.Height));
-        dc.DrawRectangle(fill, null, new Rect(inner.X, inner.Y + 2, 2, inner.Height - 4));
-        dc.DrawRectangle(fill, null, new Rect(inner.Right - 2, inner.Y + 2, 2, inner.Height - 4));
-        dc.DrawRectangle(Scan, null, new Rect(inner.X + 2, inner.Y + 2, inner.Width - 4, inner.Height - 4));
-        Frame(dc, r, 2, 3, Ink(frame), gap0, gap1);
-        Frame(dc, new Rect(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8), 1, 2, Ink(Mod.Mix(frame, Colors.White, .25), .7), gap0, gap1);
+        var b = new RadialGradientBrush { Center = new Point(.5, .5), GradientOrigin = new Point(.5, .5), RadiusX = .72, RadiusY = .85 };
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), .55));
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0x70, 0, 0, 0), 1));
+        b.Freeze();
+        return b;
     }
 
-    /// <summary>A screen's frame lit white-hot with a faint wash inside: drawn once on its own layer, the moment moves its opacity.</summary>
-    static void DrawFlare(DrawingContext dc, Rect r, Color c, double gap0 = -1, double gap1 = -1)
+    /// <summary>The glass: a faint sheen over the tube's upper part, as light lies on a curved screen.</summary>
+    static readonly Brush Sheen = MakeSheen();
+    static Brush MakeSheen()
     {
-        if (r.Width < 12 || r.Height < 12) return;
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(.25, 1) };
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF), 0));
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0x05, 0xFF, 0xFF, 0xFF), .35));
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0xFF, 0xFF), .5));
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>The bezel's inset: where the tube starts inside the screen's rectangle.</summary>
+    const double Bezel = 6;
+
+    /// <summary>The marquee's height over the meter's screen (its lit sign).</summary>
+    const double MarqueeH = 16;
+
+    /// <summary>The marquee's lit glass: red to orange to yellow and back, a frozen gradient.</summary>
+    static readonly Brush MarqueeFill = MakeMarquee();
+    static Brush MakeMarquee()
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xE8, 0x1E, 0x2E), 0));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x7A, 0x1A), .35));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0xD4, 0x3A), .6));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x7A, 0x1A), .85));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xE8, 0x1E, 0x2E), 1));
+        b.Freeze();
+        return b;
+    }
+    static readonly Brush MarqueeGloss = Mod.Grad(true, (Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), .5), (Color.FromArgb(0x30, 0, 0, 0), 1));
+
+    /// <summary>The marquee's place in a screen <paramref name="r"/>.</summary>
+    static Rect MarqueeRect(Rect r) => new(r.X + Bezel, r.Y + Bezel, r.Width - 2 * Bezel, MarqueeH);
+
+    /// <summary>A row of bulbs along the marquee's top and bottom edges: every other one when <paramref name="phase"/> is 0 or 1, all at -1.</summary>
+    static void DrawBulbs(DrawingContext dc, Rect m, Brush b, int phase = -1, double size = 2)
+    {
+        int i = 0;
+        for (double x = m.X + 3; x + size <= m.Right - 2; x += 6, i++)
+        {
+            if (phase >= 0 && i % 2 != phase) continue;
+            dc.DrawRectangle(b, null, new Rect(x, m.Y + 1, size, size));
+            dc.DrawRectangle(b, null, new Rect(x, m.Bottom - 1 - size, size, size));
+        }
+    }
+
+    /// <summary>
+    /// A cabinet screen in <paramref name="r"/>, drawn once per size: a faint phosphor glow round it, a thin line in
+    /// <paramref name="frame"/> and the 6 px black bezel inside it with a bevel of light, its corners stepped; with
+    /// <paramref name="marquee"/>, the lit marquee across the bezel's top (red to yellow glass, a row of bulbs on each edge);
+    /// then the tube with rounded corners: its black, scanlines every 2 px, the curvature's vignette and the glass's glare.
+    /// </summary>
+    static void DrawScreen(DrawingContext dc, Rect r, Color frame, double ground, bool marquee = false)
+    {
+        if (r.Width < 20 || r.Height < 20) return;
+        for (int i = 1; i <= 3; i++) dc.DrawRectangle(null, PenOf(Ink(frame, .22 / i), 1), new Rect(r.X - i + .5, r.Y - i + .5, r.Width + 2 * i - 1, r.Height + 2 * i - 1));
+        Stepped(dc, r, 4, Ink(BezelC, Math.Max(.9, ground)));
+        Frame(dc, r, 1.5, 4, Ink(frame), -1, -1);
+        dc.DrawRectangle(Ink(Colors.White, .14), null, new Rect(r.X + 4, r.Y + 2, r.Width - 8, 1));
+        dc.DrawRectangle(Ink(Colors.Black, .6), null, new Rect(r.X + 4, r.Bottom - 3, r.Width - 8, 1));
+        var tr = r;
+        if (marquee)
+        {
+            var m = MarqueeRect(r);
+            dc.DrawRectangle(MarqueeFill, null, m);
+            dc.DrawRectangle(MarqueeGloss, null, m);
+            DrawBulbs(dc, m, Ink(Color.FromRgb(0xFF, 0xF4, 0xC8), .75));
+            dc.DrawRectangle(Ink(Colors.Black, .8), null, new Rect(m.X, m.Bottom, m.Width, 1));
+            tr = new Rect(r.X, m.Bottom - Bezel + 2, r.Width, r.Bottom - (m.Bottom - Bezel + 2));
+        }
+        var tube = Tube(tr);
+        dc.DrawGeometry(ScreenFill(ground), PenOf(Ink(frame, .45), 1), tube);
+        dc.PushClip(tube);
+        dc.DrawRectangle(Scan, null, tube.Bounds);
+        dc.DrawRectangle(Vignette, null, tube.Bounds);
+        dc.DrawRectangle(Sheen, null, tube.Bounds);
+        dc.Pop();
+    }
+
+    /// <summary>The tube inside a screen: its glass with rounded corners, inset by the bezel.</summary>
+    static Geometry Tube(Rect r)
+    {
+        var g = new RectangleGeometry(new Rect(r.X + Bezel, r.Y + Bezel, Math.Max(1, r.Width - 2 * Bezel), Math.Max(1, r.Height - 2 * Bezel)), 9, 9);
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>A rectangle with its corners stepped <paramref name="step"/> px, filled (the bezel).</summary>
+    static void Stepped(DrawingContext dc, Rect r, double step, Brush b)
+    {
+        dc.DrawRectangle(b, null, new Rect(r.X + step, r.Y, r.Width - 2 * step, r.Height));
+        dc.DrawRectangle(b, null, new Rect(r.X, r.Y + step, step, r.Height - 2 * step));
+        dc.DrawRectangle(b, null, new Rect(r.Right - step, r.Y + step, step, r.Height - 2 * step));
+        dc.DrawRectangle(b, null, new Rect(r.X + step / 2, r.Y + step / 2, step / 2, step / 2));
+        dc.DrawRectangle(b, null, new Rect(r.Right - step, r.Y + step / 2, step / 2, step / 2));
+        dc.DrawRectangle(b, null, new Rect(r.X + step / 2, r.Bottom - step, step / 2, step / 2));
+        dc.DrawRectangle(b, null, new Rect(r.Right - step, r.Bottom - step, step / 2, step / 2));
+    }
+
+    static readonly Dictionary<(Brush, double), Pen> Pens = new();
+    static Pen PenOf(Brush b, double w)
+    {
+        if (Pens.TryGetValue((b, w), out var p)) return p;
+        p = new Pen(b, w); p.Freeze();
+        return Pens[(b, w)] = p;
+    }
+
+    /// <summary>A screen's frame lit white-hot with its phosphor glow up and a wash on the glass: drawn once on its own layer.</summary>
+    static void DrawFlare(DrawingContext dc, Rect r, Color c, bool marquee = false)
+    {
+        if (r.Width < 20 || r.Height < 20) return;
         var hot = Mod.Mix(c, Colors.White, .6);
-        dc.DrawRectangle(Ink(c, .1), null, new Rect(r.X + 5, r.Y + 5, r.Width - 10, r.Height - 10));
-        Frame(dc, r, 2, 3, Ink(hot), gap0, gap1);
-        Frame(dc, new Rect(r.X + 4, r.Y + 4, r.Width - 8, r.Height - 8), 1, 2, Ink(hot, .8), gap0, gap1);
+        for (int i = 1; i <= 3; i++) dc.DrawRectangle(null, PenOf(Ink(c, .5 / i), 1.5), new Rect(r.X - i + .5, r.Y - i + .5, r.Width + 2 * i - 1, r.Height + 2 * i - 1));
+        Frame(dc, r, 2, 4, Ink(hot), -1, -1);
+        var tr = marquee ? new Rect(r.X, MarqueeRect(r).Bottom - Bezel + 2, r.Width, r.Bottom - (MarqueeRect(r).Bottom - Bezel + 2)) : r;
+        dc.DrawGeometry(Ink(c, .08), PenOf(Ink(hot, .9), 1.5), Tube(tr));
     }
 
     /// <summary>A pixel frame: lines <paramref name="t"/> thick, each corner cut by a <paramref name="step"/> px step; the top broken for a legend.</summary>
