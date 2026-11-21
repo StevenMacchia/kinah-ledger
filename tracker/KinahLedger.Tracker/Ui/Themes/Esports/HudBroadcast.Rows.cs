@@ -53,7 +53,7 @@ sealed partial class HudBroadcast
             right.Children.Add(avg);
         }
         Grid.SetColumn(right, 1); g.Children.Add(right);
-        var foot = new Slab(Shaded(g), InkC, .9, CyanC, 22, padX: 6) { Margin = new Thickness(0, 4, 0, 0) };
+        var foot = new Slab(Shaded(g), InkC, .9, CyanC, 22, padX: 6) { Margin = new Thickness(0, 4, 0, 0), Shadow = 2.5 };
         _footSlab = foot;
         return AsFoot(foot, e, now);
     }
@@ -83,7 +83,7 @@ sealed partial class HudBroadcast
     sealed class BcRow : IThemeRow
     {
         public const double H = 26, Pitch = 29;
-        const double ChipW = 26, ChipGap = 3, Lead = 8, IconW = 17, CutW = 14, Ln = H * Tan;
+        const double ChipW = 31, ChipGap = 3, Lead = 8, IconW = 17, CutW = 14, Ln = H * Tan;
         readonly Grid _root = new() { Height = H };
         readonly Grid _layers = new() { IsHitTestVisible = false }, _fillHost = new() { IsHitTestVisible = false };
         readonly TacSketch _base, _fill, _over, _crown;
@@ -93,9 +93,12 @@ sealed partial class HudBroadcast
         readonly Sweep _sweep = new(Ln);
         readonly Grid _words = new();
         readonly TextBlock _rank = Bc("", 15, White), _name = Bc("", 15, White, FontWeights.SemiBold), _cp = Bc("", 11, Frozen(Mod.A(Colors.White, .7)), FontWeights.SemiBold),
-            _heal = Bc("", 12.5, Mint2), _dps = Bc("", 19, White), _share = Bc("", 11.5, Frozen(Mod.Mix(CyanC, Colors.White, .55)), FontWeights.SemiBold),
+            _heal = Bc("", 12.5, Mint2), _dps = Bc("", 19, White), _share = Bc("", 12.5, Frozen(Color.FromRgb(0xC4, 0xD2, 0xE2)), FontWeights.SemiBold),
             _dmg = Bc("", 12.5, Soft, FontWeights.SemiBold), _crit = Bc("", 12, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        readonly Grid _nameTag = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-4, 0, 0, 0) };
+        const double TagPad = 4;
+        static readonly Brush NameTagB = Mod.Grad(false, (Mod.A(InkC, .62), 0), (Mod.A(InkC, .5), .8), (Mod.A(InkC, 0), 1));
         readonly Border _iconHost = new() { Width = IconW, Height = IconW, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
@@ -111,12 +114,15 @@ sealed partial class HudBroadcast
 
         public FrameworkElement Root => _root;
 
+        /// <summary>Where a full bar is drawn (the PB ghost's track, IThemeBarSpan): the plate from its left foot to the score tile, in the row's base layer.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _base.ActualWidth <= 0 || _bodyW <= 0 ? null : (_base, new Rect(ChipW + ChipGap - Ln, 0, _bodyW, _base.ActualHeight));
+
         public BcRow()
         {
             _dps.Tag = "row-dps"; _share.Tag = "row-share"; _heal.Tag = "heal-figures"; _cp.Tag = "cp";
             _dps.HorizontalAlignment = _share.HorizontalAlignment = _dmg.HorizontalAlignment = _crit.HorizontalAlignment = HorizontalAlignment.Right;
             _share.Margin = new Thickness(0, 3, 0, 0); _dmg.Margin = new Thickness(0, 1, 0, 0); _crit.Margin = new Thickness(0, 1, 0, 0);
-            _heal.Margin = new Thickness(6, 1, 0, 0);
+            _heal.Margin = new Thickness(6, 1, 9, 0);
             // the columns: the chip, the plate's lead, the class art, a gap, the name's line (the rest), heal, the cut to the
             // score tile, the DPS, the share; expanded, the damage and the crit rate; the tile's end
             _dpsW = FigCol(_dps, "888.8K") + 2; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
@@ -136,12 +142,21 @@ sealed partial class HudBroadcast
             _crownWipe = new Wiper(_crown, Ln);
             _crownPunch.CenterX = ChipW / 2; _crownPunch.CenterY = H / 2;
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            Put(_rank, 0); Put(_iconHost, 2); Put(_line, 4); Put(_heal, 5); Put(_dps, 7); Put(_share, 8); Put(_dmg, 9); Put(_crit, 10);
+            Put(_rank, 0); Put(_iconHost, 2); Put(_nameTag, 4); Put(_heal, 5); Put(_dps, 7); Put(_share, 8); Put(_dmg, 9); Put(_crit, 10);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
+            // the name's tag: a slanted navy backing under the name, CP and marks, so they read on any class's fill
+            _line.Margin = new Thickness(TagPad, 0, TagPad + 2, 0);
+            _nameTag.Children.Add(new TacSketch((dc, s) =>
+            {
+                if (s.Width < 8) return;
+                double h = 19, y = (s.Height - h) / 2;
+                dc.DrawGeometry(NameTagB, null, Cut(new Rect(-2, y, s.Width + 2, h), h * Tan));
+            }));
+            _nameTag.Children.Add(_line);
             _root.Children.Add(Shaded(_words));
-            _sweep.Shape = s => { var p = Parts(s); var g = new GeometryGroup { Children = { p.Chip, p.Plate, p.Tile } }; return g; };
+            _sweep.Shape = s => { var p = Parts(s); var g = new GeometryGroup { Children = { p.Chip, p.Plate } }; return g; };
             _root.Children.Add(_sweep);
             _root.SizeChanged += (_, _) => { Fit(); Shape(); };
         }
@@ -155,6 +170,9 @@ sealed partial class HudBroadcast
         public void SweepAt(double p, Color c, double strength = .9) => _sweep.At(p, c, strength);
 
         /// <summary>The crown landing on the leader's chip: the cyan wiping in (to .5), then the chip punching in (1: landed).</summary>
+        /// <summary>A pulse of the leader's chip (0 to 1: up and back), the crown kept on it.</summary>
+        public double Pulse { set { _crownWipe.At(1); _crownPunch.ScaleX = _crownPunch.ScaleY = 1 + .28 * Math.Sin(Math.PI * Math.Clamp(value, 0, 1)); } }
+
         public double Crown
         {
             set
@@ -179,8 +197,8 @@ sealed partial class HudBroadcast
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
             // the leader's digit sits under the crown, in ink on the cyan
             bool lead = m.Rank == 1;
-            _rank.Margin = new Thickness(0, lead ? 7 : 0, 0, 0);
-            _rank.FontSize = m.Rank >= 10 ? 13 : 15;
+            _rank.Margin = new Thickness(lead ? 2 : 0, lead ? 9 : 0, 0, 0);
+            _rank.FontSize = lead ? 14 : m.Rank >= 10 ? 13 : 15;
             _rank.Foreground = lead ? InkB : White;
             _crown.Visibility = lead ? Visibility.Visible : Visibility.Collapsed;
             if (m.Class != _cls)
@@ -210,7 +228,7 @@ sealed partial class HudBroadcast
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
-            if (m.ClassColor != _fillC) { _fillC = m.ClassColor; _fill.InvalidateVisual(); }
+            if (Vivid(m.ClassColor) is var vc && vc != _fillC) { _fillC = vc; _fill.InvalidateVisual(); }
             Shape();
             // the drawn layers again only when what they show moved (most ticks change a figure, not a plate)
             var sig = $"{m.You}|{Math.Round(m.HealShare, 3)}|{ParserRows.HealBarsPref}|{_bodyR:0.#}|{_w:0.#}|{Ground:0.###}";
@@ -231,7 +249,7 @@ sealed partial class HudBroadcast
             double room = total - cols[0].Width.Value - cols[1].Width.Value - cols[2].Width.Value - cols[3].Width.Value - heal - cols[6].Width.Value
                 - cols[7].Width.Value - cols[9].Width.Value - cols[10].Width.Value - cols[11].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
-            var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
+            var (cp, share) = Mod.Fit(_name, room - 2 * TagPad - 2 + 4, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
             _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
             if (share != _shareOn || cols[8].Width.Value != (share ? _shareW : 0))
             {
@@ -282,11 +300,16 @@ sealed partial class HudBroadcast
             if (_m == null || s.Width < 60) return;
             var (chip, _, plate, tile) = Parts(s);
             double g = Ground;
+            // the depth: a hard offset shadow under the three plates
+            dc.PushTransform(new TranslateTransform(2.5, 2.5));
+            dc.DrawGeometry(ShadowB, null, chip); dc.DrawGeometry(ShadowB, null, plate); dc.DrawGeometry(ShadowB, null, tile);
+            dc.Pop();
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Ink2C, .96 * g), 0), (Mod.A(InkC, .96 * g), 1)), null, chip);
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Color.FromRgb(0x10, 0x18, 0x2D), .9 * g), 0), (Mod.A(InkC, .9 * g), .6)), null, plate);
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Color.FromRgb(0x1A, 0x25, 0x44), .97 * g), 0), (Mod.A(Ink2C, .97 * g), .55), (Mod.A(InkC, .97 * g), 1)), null, tile);
+            dc.DrawGeometry(GlossB, null, chip); dc.DrawGeometry(GlossB, null, tile);
             dc.PushClip(tile);
-            dc.DrawRectangle(Frozen(Mod.A(Colors.White, .18)), null, new Rect(0, 0, s.Width, 1));
+            dc.DrawRectangle(Frozen(Mod.A(Colors.White, .2)), null, new Rect(0, 0, s.Width, 1));
             dc.Pop();
         }
 
@@ -307,16 +330,20 @@ sealed partial class HudBroadcast
             fill.Freeze();
             var fg = Cut(fr, Ln);
             dc.DrawGeometry(fill, null, fg);
+            // a darker lower half under the gloss: the fill reads as a lit slab, not a flat wash
+            dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.Black, 0), .5), (Mod.A(Colors.Black, .26), 1)), null, fg);
             dc.PushClip(fg);
             dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .16), 0), (Mod.A(Colors.White, .03), .45), (Mod.A(Colors.White, 0), .5)), null, fr);
             double ex = bx + w;
             // the speed lines: three thin slanted strokes behind the edge, fading back
             for (int k = 0; k < 3; k++)
             {
-                double x = ex - 9 - k * 6;
+                double x = ex - 13 - k * 6;
                 dc.DrawGeometry(Frozen(Mod.A(Colors.White, .26 - k * .08)), null, Cut(new Rect(x - Ln, 0, 1.6 + Ln, s.Height), Ln));
             }
-            dc.DrawGeometry(Frozen(Mod.Mix(c, Colors.White, .62)), null, Cut(new Rect(ex - 2.5 - Ln, 0, 2.5 + Ln, s.Height), Ln));
+            // the leading edge: a 6 px glow into a 2 px white line
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(Mod.Mix(c, Colors.White, .5), 0), 0), (Mod.A(Mod.Mix(c, Colors.White, .6), .85), 1)), null, Cut(new Rect(ex - 8 - Ln, 0, 6 + Ln, s.Height), Ln));
+            dc.DrawGeometry(White, null, Cut(new Rect(ex - 2 - Ln, 0, 2 + Ln, s.Height), Ln));
             dc.Pop();
         }
 
@@ -340,7 +367,7 @@ sealed partial class HudBroadcast
         {
             var chip = Cut(new Rect(0, 0, ChipW, s.Height), Ln);
             dc.DrawGeometry(Mod.Grad(true, (Mod.Mix(CyanC, Colors.White, .35), 0), (CyanC, .5), (Mod.Mix(CyanC, InkC, .15), 1)), null, chip);
-            double cx = ChipW / 2 + Ln * .32, cy = 7.6, w = 11, hh = 5.4;
+            double cx = ChipW / 2 + Ln * .3, cy = 9.2, w = 15, hh = 7.4;
             var crown = new StreamGeometry();
             using (var x = crown.Open())
             {

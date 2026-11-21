@@ -20,6 +20,7 @@ sealed partial class HudBroadcast : IThemeCard
         const double In = 12;
         double w = 280 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
+        var vivid = Vivid(tone);
         var stack = new StackPanel { Margin = new Thickness(In, 12, In, 12) };
 
         // the name plate on the class's colour: art, name, CP, YOU ... class
@@ -42,9 +43,9 @@ sealed partial class HudBroadcast : IThemeCard
         }
         if (c.You) { var y = Mark(L.T("YOU"), filled: true); y.Margin = new Thickness(5, 0, 0, 0); who.Children.Add(y); extra += Mod.W(y) + 5; }
         Grid.SetColumn(who, 1); hg.Children.Add(who);
-        var cls = Bc(c.ClassName, 11.5, Soft, FontWeights.SemiBold); cls.Margin = new Thickness(8, 1, 0, 0);
+        var cls = Bc(c.ClassName, 12.5, White, FontWeights.SemiBold); cls.Margin = new Thickness(8, 1, 0, 0);
         Grid.SetColumn(cls, 2); hg.Children.Add(cls);
-        var head = new Slab(Shaded(hg), Mod.Mix(tone, InkC, .35), 1, CyanC, 32, padX: 6, accentW: 4) { Margin = new Thickness(-4, 0, -4, 8) };
+        var head = new Slab(Shaded(hg), Mod.Mix(vivid, InkC, .3), 1, CyanC, 32, padX: 6, accentW: 4) { Margin = new Thickness(-4, 0, -4, 8), Shadow = 2.5 };
         head.Paint = (dc, s, shape, l) => dc.DrawGeometry(Mod.Grad(false, (Mod.A(InkC, .55), 0), (Mod.A(InkC, 0), .7)), null, shape);
         // the card widens for a long name (up to 60 more) before the name is cut
         double need = 20 + 7 + Mod.W(name) + extra + Mod.W(cls) + 8 + 2 * In + 32 * Tan + 24;
@@ -63,14 +64,15 @@ sealed partial class HudBroadcast : IThemeCard
         void Part(int col, string word, string fig, double size, bool lead)
         {
             var sp = new StackPanel();
-            sp.Children.Add(Bc(word.ToUpperInvariant(), 9.5, Frozen(Mod.Mix(CyanC, Colors.White, .2)), FontWeights.Bold));
-            var fv = Bc(fig, size, White); fv.Margin = new Thickness(0, -2, 0, -1);
+            sp.Children.Add(Bc(word.ToUpperInvariant(), 9.5, lead ? InkB : Frozen(Mod.Mix(CyanC, Colors.White, .2)), FontWeights.Bold));
+            var fv = Bc(fig, size, lead ? InkB : White); fv.Margin = new Thickness(0, -3, 0, -2);
             sp.Children.Add(fv);
-            var t = new Slab(Shaded(sp), lead ? Ink2C : InkC, .95, lead ? CyanC : null, 38, padX: 4, padY: 2) { Margin = new Thickness(col == 0 ? 0 : 3 - 38 * Tan, 0, 0, 0) };
+            // the DPS on the package's cyan score tile, the rest on navy
+            var t = new Slab(lead ? sp : Shaded(sp), lead ? CyanC : InkC, lead ? 1 : .95, null, 42, padX: 5, padY: 2) { Margin = new Thickness(col == 0 ? 0 : 3 - 42 * Tan, 0, 0, 0), Shadow = 2 };
             Grid.SetColumn(t, col); read.Children.Add(t);
             tiles.Add(t);
         }
-        Part(0, L.T("DPS"), c.Dps.Length > 0 ? c.Dps : "–", 22, true);
+        Part(0, L.T("DPS"), c.Dps.Length > 0 ? c.Dps : "–", 26, true);
         Part(1, L.T("SHARE"), c.Share, 17, false);
         Part(2, L.T("DAMAGE"), c.Damage, 17, false);
         stack.Children.Add(read);
@@ -103,35 +105,38 @@ sealed partial class HudBroadcast : IThemeCard
             Tac.Cell(hd, H(L.T("DMG")), 2, c);
             if (c.CritCol) Tac.Cell(hd, H(L.T("CRIT")), 3, c);
             if (c.BackCol) Tac.Cell(hd, H(L.T("BACK")), 4, c);
-            hd.Margin = new Thickness(2, 9, 0, 2);
+            hd.Margin = new Thickness(21 * Tan / 2 + 4, 9, 21 * Tan + 12, 2);
             stack.Children.Add(hd);
             foreach (var a in c.Abilities)
             {
                 var row = new Grid { Height = 21, Margin = new Thickness(0, 2, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = Math.Clamp(a.OfTop, 0, 1);
                 const double l = 21 * Tan;
-                var track = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Mod.A(Ink2C, .85)), null, Cut(new Rect(0, 0, s.Width, s.Height), l)));
+                // alternating navy plates; the share as a thin class-colour bar along each one's foot
+                bool odd = bars.Count % 2 == 1;
+                var track = new TacSketch((dc, s) =>
+                {
+                    var tg = Cut(new Rect(0, 0, s.Width, s.Height), l);
+                    dc.DrawGeometry(Frozen(Mod.A(odd ? Color.FromRgb(0x0C, 0x13, 0x26) : Ink2C, .95)), null, tg);
+                    dc.DrawGeometry(Frozen(Mod.A(Colors.White, .08)), null, FootStrip(s, l, s.Height - 3.5));
+                });
                 var fx = new TranslateTransform();
                 var fill = new TacSketch((dc, s) =>
                 {
-                    var fg = Cut(new Rect(0, 0, s.Width, s.Height), l);
-                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(Mod.Mix(tone, InkC, .55), .9), 0), (Mod.A(Mod.Mix(tone, InkC, .15), .92), 1)), null, fg);
-                    dc.PushClip(fg);
-                    dc.DrawGeometry(Frozen(Mod.Mix(tone, Colors.White, .55)), null, Cut(new Rect(s.Width - 2 - l, 0, 2 + l, s.Height), l));
-                    dc.Pop();
+                    var fg = FootStrip(s, l, s.Height - 3.5);
+                    dc.DrawGeometry(Mod.Grad(false, (Mod.Mix(vivid, InkC, .3), 0), (vivid, .9), (Mod.Mix(vivid, Colors.White, .6), 1)), null, fg);
                 }) { RenderTransform = fx };
                 var host = new Grid { IsHitTestVisible = false, Children = { fill } };
                 host.SizeChanged += (_, e) =>
                 {
-                    var g = Cut(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), l); g.Freeze();
-                    host.Clip = g;
+                    host.Clip = FootStrip(e.NewSize, l, e.NewSize.Height - 3.5);
                     fx.X = -(1 - of) * (e.NewSize.Width + l);
                 };
                 bars.Add((fx, host, of));
                 row.Children.Add(track);
                 row.Children.Add(host);
                 var g = Tac.CardGrid(c, 46, 58);
-                g.Margin = new Thickness(l / 2 + 4, 0, l + 4, 0);
+                g.Margin = new Thickness(l / 2 + 4, 0, l + 12, 1);
                 var nm = Tac.AbilityName(a, 12.5, White, Cond, FontWeights.SemiBold, Frozen(Mod.Mix(tone, Colors.White, .55)), 10.5, FontStretches.Condensed);
                 nm.Margin = new Thickness(0, 0, 6, 0);
                 Tac.Cell(g, nm, 0, c);
