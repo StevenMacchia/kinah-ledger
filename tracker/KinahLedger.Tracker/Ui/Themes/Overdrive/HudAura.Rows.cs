@@ -99,13 +99,12 @@ sealed partial class HudAura
     /// do; inside the plate the bar is a gauge of pure energy (a soft body, a white-hot core line along its foot, a bright
     /// front with one tongue licking up). On it, in shaded white: the rank, the class's art, the name, Combat Power small,
     /// the marks (★ DPS, a healer's ✚, deaths, YOU), a healer's healing a second in mint, the DPS big, the share small.
-    /// The leader's aura goes gold-white with static lightning crackling over it and a POWER reading floats over their
-    /// figure. Short of room the CP goes first, then the share; a name keeps at least ten characters; a figure is never cut.
+    /// The leader's aura goes gold-white with a bolt of static lightning crackling up through it. Short of room the CP goes first, then the share; a name keeps at least ten characters; a figure is never cut.
     /// Its moments (driven by the look): ignite, flare, gutter, the power-up, a climb's flare.
     /// </summary>
     internal sealed class AuraRow : IThemeRow, IThemeBarSpan
     {
-        public const double Z = 13, PH = 23, H = Z + PH + 1, Pitch = H + 1, Stage = 16;
+        public const double Z = 13, PH = 23, H = Z + PH + 1, Pitch = H + 1, Stage = 4;
         const double In = 2, Sl = 6, PadL = 11, PadR = 17, FrontW = 22, SurgeW = 46, TrailW = 80;
         readonly HudAura _look;
         readonly Grid _root = new() { Height = H };
@@ -117,10 +116,10 @@ sealed partial class HudAura
         readonly Grid _words = new() { Margin = new Thickness(PadL, Z, PadR, 1), Height = PH };
         readonly TextBlock _rank = Tt("", 12, White, FontWeights.Bold), _name = Tt("", 13, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(Colors.White, .9)), FontWeights.SemiBold),
             _heal = Tt("", 11, Mint2, FontWeights.Bold), _dps = Tt("", 16.5, White, FontWeights.Bold), _share = Tt("", 10.5, Frozen(Mod.A(Colors.White, .88)), FontWeights.SemiBold),
-            _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold), _chipFig = Tt("", 11, White, FontWeights.Bold);
+            _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly Border _iconHost = new() { Width = 17, Height = 17, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-        readonly Border _chip, _cpPill;
+        readonly Border _cpPill;
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
         string _cls = "\0";
@@ -180,18 +179,6 @@ sealed partial class HudAura
             _words.Effect = Shade();
             _root.Children.Add(_words);
 
-            // the leader's power reading, floating over their figure
-            var cp = new StackPanel { Orientation = Orientation.Horizontal };
-            var (sf, sw) = ShoutFace();
-            var pw = Tt(L.T("POWER"), 10.5, Frozen(AuGoldC), sw, sf); pw.Margin = new Thickness(0, 0, 5, 0);
-            cp.Children.Add(pw); cp.Children.Add(_chipFig);
-            _chip = new Border
-            {
-                Child = cp, Padding = new Thickness(6, 0, 6, 0), Height = 17, CornerRadius = new CornerRadius(2), Background = Frozen(Mod.A(CoreBotC, .92)),
-                BorderThickness = new Thickness(1), BorderBrush = Frozen(Mod.A(AuGoldC, .9)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, -Stage + 1, PadR - 2, 0), Visibility = Visibility.Collapsed, IsHitTestVisible = false, Tag = "power-chip",
-            };
-            _root.Children.Add(_chip);
             _root.SizeChanged += (_, _) => { Fit(); Place(); };
         }
 
@@ -208,7 +195,7 @@ sealed partial class HudAura
                 _fire.InvalidateVisual(); _gold.InvalidateVisual(); _plate.InvalidateVisual(); _energy.InvalidateVisual(); _front.InvalidateVisual(); _flash.InvalidateVisual(); _bolts.InvalidateVisual();
             }
             _fire.Visibility = lead ? Visibility.Collapsed : Visibility.Visible;
-            _gold.Visibility = _bolts.Visibility = _chip.Visibility = lead ? Visibility.Visible : Visibility.Collapsed;
+            _gold.Visibility = _bolts.Visibility = lead ? Visibility.Visible : Visibility.Collapsed;
             _strike.Visibility = _ring.Visibility = lead ? Visibility.Visible : Visibility.Collapsed;
             // a lower row sits under the one above it: its aura rises behind that row's plate, never over its words
             Panel.SetZIndex(_root, 1000 - m.Rank);
@@ -250,7 +237,6 @@ sealed partial class HudAura
             _share.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
             _crit.Text = c.Expanded ? m.Crit : "";
-            _chipFig.Text = m.Figure;
             bool heal = ParserRows.HealBarsPref && m.HealShare > 0;
             _healLine.Visibility = heal ? Visibility.Visible : Visibility.Collapsed;
             if (heal) _healLine.InvalidateVisual();
@@ -390,7 +376,7 @@ sealed partial class HudAura
             dc.DrawEllipse(null, Pn(Colors.White, 1, 1), c, rx, ry);
         }
 
-        /// <summary>The dark wedge behind the DPS and share: 72% dark from just before the figures to the plate's end.</summary>
+        /// <summary>The dark wedge behind the DPS and share: it ramps in just before the figures and is near opaque under them (the gauge's end never steps through a digit).</summary>
         /// <summary>A sharp zig-zag: three segments, out to one side, back across, down to the end.</summary>
         static Geometry Zig(Point a, Point b, double amp)
         {
@@ -414,7 +400,7 @@ sealed partial class HudAura
             double x = s.Width - PadR - _rightW - 4;
             dc.PushClip(Plate(r, Sl));
             var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(x - 24, 0), EndPoint = new Point(x, 0) };
-            b.GradientStops.Add(new GradientStop(Mod.A(CoreBotC, 0), 0)); b.GradientStops.Add(new GradientStop(Mod.A(CoreBotC, .72), 1)); b.Freeze();
+            b.GradientStops.Add(new GradientStop(Mod.A(CoreBotC, 0), 0)); b.GradientStops.Add(new GradientStop(Mod.A(CoreBotC, .95), 1)); b.Freeze();
             dc.DrawRectangle(b, null, new Rect(x - 24, r.Y + 2, r.Right - x + 24, r.Height - 2));
             dc.Pop();
         }

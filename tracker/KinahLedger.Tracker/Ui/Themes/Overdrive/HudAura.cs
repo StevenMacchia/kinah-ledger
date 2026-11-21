@@ -13,7 +13,7 @@ namespace KinahLedger.Ui;
 /// panel: each member's row is a dark core plate (an energy cell with slanted ends) with an aura burning round it, flame
 /// tongues in the class's colour rising off its top edge along the member's part of the top, taller and brighter the more
 /// damage they do; the bar inside is a gauge of pure energy (a soft body, a white-hot core line, a bright front). The
-/// leader's aura goes gold-white with static lightning crackling over it and a POWER reading floating over their figure.
+/// leader's aura goes gold-white with a bolt of static lightning crackling up through it.
 /// The fight's title sits on a dark energy band, the boss's HP is an energy bar draining. The Buddy is the same core plate
 /// with a low azure aura, the hour beside a burning ring (the ring's fill is your best's share, and only the filled arc burns).
 ///
@@ -123,7 +123,7 @@ sealed partial class HudAura : ModernLook
     }
 
     /// <summary>
-    /// The face a shouted word takes (POWER, LIMIT BREAK, the fight's outcome): Impact in English; a heavy face that has the
+    /// The face a shouted word takes (LIMIT BREAK, the fight's outcome): Impact in English; a heavy face that has the
     /// script in Korean and Chinese (Impact has no Hangul or Hanzi, and the fallback would draw them thin).
     /// </summary>
     static (FontFamily Face, FontWeight Weight) ShoutFace() => L.Code switch
