@@ -41,6 +41,13 @@ public static class HudThemes
     /// </summary>
     public const string Elements = "elements";
     public const string Frost = "frost", Storm = "storm", Magma = "magma", Tide = "tide";
+    /// <summary>
+    /// The Overdrive theme (2026-11-20; Ui/Themes/Overdrive/; Steven: "at least 1 theme should be WILD", "my bar is the
+    /// HIGHEST"): looks that leave the dark panel of bars behind. Versus (a fighting game's HUD), Manga (a finisher's page),
+    /// Dragon (a Balaur dragon round the meter), Aura (power-up auras).
+    /// </summary>
+    public const string Overdrive = "overdrive";
+    public const string Versus = "versus", Manga = "manga", Dragon = "dragon", Aura = "aura";
 
     public sealed record Theme(string Key, string Name, string Hint);
 
@@ -54,6 +61,7 @@ public static class HudThemes
         new(Atreia, "Atreia", "The world itself: the Abyss's rift, Elyos gold, Asmodian crimson, a prism's light"),
         new(Esports, "Esports", "A tournament on the stream: a lower third, a caster's pen, a sponsor's hype, the finals' gold"),
         new(Elements, "Elements", "The meter made of the elements: frost, lightning, magma, the tide"),
+        new(Overdrive, "Overdrive", "Wild: a fighting game, a manga finisher, a Balaur dragon, power-up auras"),
     };
 
     /// <summary>The theme a look belongs to; Classic for the strip, an unknown key or none.</summary>
@@ -91,6 +99,10 @@ public static class HudThemes
         Storm => new HudStorm { Still = still },
         Magma => new HudMagma { Still = still },
         Tide => new HudTide { Still = still },
+        Versus => new HudVersus { Still = still },
+        Manga => new HudManga { Still = still },
+        Dragon => new HudDragon { Still = still },
+        Aura => new HudAura { Still = still },
         _ => null,
     };
 
