@@ -21,6 +21,13 @@ public static class HudThemes
     public const string Deck = "deck";
     /// <summary>The Modern theme's looks (Steven, 2026-11-17, picked from HTML mock-ups): Glass, Mono, Line and Fade (Ui/Themes/Modern/).</summary>
     public const string ModernGlass = "glass", ModernMono = "mono", ModernLine = "line", ModernFade = "fade";
+    /// <summary>
+    /// The Atreia theme (the second looks pack, 2026-11-20; Ui/Themes/Atreia/): the game's own world. Rift (the Abyss torn
+    /// open), Elyos (light and gold), Asmodian (crimson and shadow), Prism (glass splitting the light). Arcade joined Wacky in the
+    /// same pack.
+    /// </summary>
+    public const string Atreia = "atreia";
+    public const string Rift = "rift", Elyos = "elyos", Asmodian = "asmodian", Prism = "prism", Arcade = "arcade";
 
     public sealed record Theme(string Key, string Name, string Hint);
 
@@ -31,6 +38,7 @@ public static class HudThemes
         new(Tactical, "Tactical", "A pro's HUD: jet lines, a broadcast scorebug, holo glass"),
         new(Glitch, "Glitch", "A haunted tape: VHS, a broken signal, an old green screen"),
         new(Modern, "Modern", "Clean and current: frosted glass, Swiss mono, a bare line, a soft wash"),
+        new(Atreia, "Atreia", "The world itself: the Abyss's rift, Elyos gold, Asmodian crimson, a prism's light"),
     };
 
     /// <summary>The theme a look belongs to; Classic for the strip, an unknown key or none.</summary>
@@ -55,6 +63,11 @@ public static class HudThemes
         ModernMono => new HudModernMono { Still = still },
         ModernLine => new HudModernLine { Still = still },
         ModernFade => new HudModernFade { Still = still },
+        Rift => new HudRift { Still = still },
+        Elyos => new HudElyos { Still = still },
+        Asmodian => new HudAsmodian { Still = still },
+        Prism => new HudPrism { Still = still },
+        Arcade => new HudArcade { Still = still },
         _ => null,
     };
 
