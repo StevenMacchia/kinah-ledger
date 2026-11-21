@@ -12,7 +12,7 @@ sealed partial class HudAsmodian : IThemeCard
     /// class's colour, as their meter row has it (the art in its ring, the name in the heavy face, CP, YOU, the class small at
     /// the right); DPS big, share and damage with small words over them; the rates; each ability on its own forged bar, its
     /// length its part of the top ability, its end burning; the rest and the foot after crimson rules.
-    /// Entrance: it rises in from the left as its edge flares and the bars forge out (240 ms).
+    /// Entrance: it slides in from the left as its edge flares and cools and the bars forge out (240 ms, transforms and opacity only).
     /// </summary>
     public FrameworkElement DrawCard(MemberCard c)
     {
@@ -23,14 +23,13 @@ sealed partial class HudAsmodian : IThemeCard
 
         // the head on a forged bar: art, name, CP, YOU ... class
         var head = new Grid { Height = 30, Margin = new Thickness(-5, 0, -5, 7) };
-        double grow = 1;
         head.Children.Add(new TacSketch((dc, s) =>
         {
             var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
             var slab = Plate(r, 6, 0);
             dc.DrawGeometry(Mod.Br(Color.FromRgb(0x1A, 0x0D, 0x10), .95), null, slab);
             dc.PushClip(slab);
-            Forged(dc, r, r.Width * Math.Clamp(.35 + .65 * grow, 0, 1), tone, .8);
+            Forged(dc, r, r.Width, tone, .8);
             dc.Pop();
             dc.DrawGeometry(null, Mod.P(Mod.Br(c.You ? HotC : RimC), c.You ? 1.2 : 1), slab);
         }));
@@ -123,9 +122,11 @@ sealed partial class HudAsmodian : IThemeCard
                 {
                     var r = new Rect(0, 1.5, s.Width, s.Height - 3);
                     dc.DrawRectangle(Mod.Br(Color.FromRgb(0x1C, 0x0D, 0x10), .8), null, r);
-                    double fx = r.Width * Math.Clamp(of * grow, 0, 1);
+                    double fx = r.Width * Math.Clamp(of, 0, 1);
                     Forged(dc, r, fx, tone, .55, r.Width - figW - 6, .75);
                 });
+                // the bar forges out on the card's entrance by its transform (drawn once)
+                art.RenderTransformOrigin = new Point(0, .5); art.RenderTransform = new ScaleTransform(1, 1);
                 bars.Add(art);
                 row.Children.Add(art);
                 var g = Tac.CardGrid(c, 46, 56);
@@ -150,10 +151,10 @@ sealed partial class HudAsmodian : IThemeCard
         }
 
         // the plate behind it all
-        double heat = 0;
-        var plate = new TacSketch((dc, s) => Iron(dc, s, 1, heat, big: 12));
+        var plate = new TacSketch((dc, s) => Iron(dc, s, 1, big: 12));
+        var heat = HeatLayer(12);
         var card = new Grid { Margin = new Thickness(2, 2, 6, 6) };
-        card.Children.Add(plate);
+        card.Children.Add(plate); card.Children.Add(heat);
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);
@@ -162,11 +163,10 @@ sealed partial class HudAsmodian : IThemeCard
         Tac.CardIn(card, 240, t =>
         {
             card.Opacity = Out(t); shift.X = -6 * (1 - Out(t));
-            grow = Out(Seg(t, .2, 1));
-            heat = 1 - Out(t);
-            plate.InvalidateVisual();
-            ((TacSketch)head.Children[0]).InvalidateVisual();
-            foreach (var art in bars) art.InvalidateVisual();
+            // the entrance moves transforms and opacity only: the bars forge out, the edge's heat cools
+            double grow = Math.Max(.01, Out(Seg(t, .2, 1)));
+            foreach (var art in bars) ((ScaleTransform)art.RenderTransform).ScaleX = grow;
+            Heat(heat, 1 - Out(t));
         });
         return card;
     }

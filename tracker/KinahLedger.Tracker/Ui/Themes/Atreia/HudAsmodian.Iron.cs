@@ -243,19 +243,99 @@ sealed partial class HudAsmodian
     static double Hash(int seed, int salt = 0) { uint h = (uint)(seed * 374761393 + salt * 668265263); h = (h ^ (h >> 13)) * 1274126177; return (h ^ (h >> 16)) % 1000 / 1000.0; }
 
     /// <summary>
-    /// One spark of a burst at <paramref name="t"/> (0..1 of the burst): born a little after the burst starts, it rises from
-    /// <paramref name="from"/> on a sway, shrinks, turns from pale gold to crimson and fades. Nothing outside its life.
+    /// A burst of sparks as small elements on a canvas (<see cref="Start"/> lays them once; <see cref="Step"/> moves them by
+    /// transform and opacity only, a frozen brush each): each is born a little after the burst starts, rises from its point
+    /// on a sway, shrinks, turns from pale gold to crimson and fades. <see cref="Clear"/> takes them away.
     /// </summary>
-    static void Spark(DrawingContext dc, Point from, int seed, double t, double rise = 24)
+    sealed class Sparks
     {
-        double born = Hash(seed, 1) * .28, l = (t - born) / .62;
-        if (l <= 0 || l >= 1) return;
-        double h2 = Hash(seed, 2), h3 = Hash(seed, 3);
-        double x = from.X + (h2 - .5) * 10 * l + 2.4 * Math.Sin(h3 * 6.28 + l * 7), y = from.Y - (rise * (.7 + .5 * h3)) * Motion.Out(l);
-        double size = (2.7 + 2 * h2) * (1 - .45 * l);
-        double op = l < .12 ? l / .12 : l > .5 ? 1 - (l - .5) / .5 : 1;
-        dc.PushOpacity(op);
-        dc.DrawEllipse(l < .45 ? SparkPale : SparkHot, null, new Point(x, y), size * 1.7, size * 1.7);
+        const double D = 12;
+        readonly Canvas _layer;
+        readonly List<(System.Windows.Shapes.Ellipse El, TranslateTransform T, ScaleTransform S, int Seed, double Rise)> _live = new();
+        public Sparks(Canvas layer) => _layer = layer;
+
+        public void Start(IEnumerable<(Point At, int Seed, double Rise)> pts)
+        {
+            Clear();
+            foreach (var (at, seed, rise) in pts.Take(9))
+            {
+                var t = new TranslateTransform(); var sc = new ScaleTransform(1, 1);
+                var el = new System.Windows.Shapes.Ellipse { Width = D, Height = D, Fill = SparkPale, Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5) };
+                el.RenderTransform = new TransformGroup { Children = { sc, t } };
+                Canvas.SetLeft(el, at.X - D / 2); Canvas.SetTop(el, at.Y - D / 2);
+                _layer.Children.Add(el);
+                _live.Add((el, t, sc, seed, rise));
+            }
+        }
+
+        public void Step(double t)
+        {
+            foreach (var (el, tr, sc, seed, rise) in _live)
+            {
+                double born = Hash(seed, 1) * .28, l = (t - born) / .62;
+                if (l <= 0 || l >= 1) { el.Opacity = 0; continue; }
+                double h2 = Hash(seed, 2), h3 = Hash(seed, 3);
+                tr.X = (h2 - .5) * 10 * l + 2.4 * Math.Sin(h3 * 6.28 + l * 7);
+                tr.Y = -rise * (.7 + .5 * h3) * Motion.Out(l);
+                sc.ScaleX = sc.ScaleY = (2.7 + 2 * h2) * (1 - .45 * l) * 1.7 * 2 / D;
+                el.Opacity = l < .12 ? l / .12 : l > .5 ? 1 - (l - .5) / .5 : 1;
+                var fill = l < .45 ? SparkPale : SparkHot;
+                if (!ReferenceEquals(el.Fill, fill)) el.Fill = fill;
+            }
+        }
+
+        public void Clear()
+        {
+            foreach (var s in _live) _layer.Children.Remove(s.El);
+            _live.Clear();
+        }
+    }
+
+    /// <summary>
+    /// A plate's heat, drawn once as its own layer over the plate (its opacity animated, never the plate redrawn): the edge's
+    /// glow in hot crimson past the plate, a hot smoulder from its foot and a hot edge line.
+    /// </summary>
+    static void HotEdge(DrawingContext dc, Size s, double big = 9, double small = 3, Color? edge = null, double g = G)
+    {
+        if (s.Width < 2 * g + 6 || s.Height < 2 * g + 6) return;
+        var r = new Rect(g, g, s.Width - 2 * g, s.Height - 2 * g);
+        var shape = Plate(r, big, small);
+        var ec = edge ?? HotC;
+        for (int k = 3; k >= 1; k--) dc.DrawGeometry(null, Mod.P(Mod.Br(ec, k == 1 ? .34 : k == 2 ? .16 : .07), 2 * k * Math.Min(1, g / 5)), shape);
+        dc.PushClip(shape);
+        dc.DrawRectangle(Mod.Grad(true, (Mod.A(ec, 0), 0), (Mod.A(ec, 0), .45), (Mod.A(ec, .16), 1)), null, r);
+        dc.DrawRectangle(Mod.Grad(false, (Mod.A(ec, .1), 0), (Mod.A(ec, 0), .3)), null, r);
         dc.Pop();
+        dc.DrawGeometry(null, Mod.P(Mod.Br(Mod.Mix(ec, PaleC, .35)), 1.2), shape);
+    }
+
+    /// <summary>A heat layer for a plate (collapsed and clear until a moment lights it).</summary>
+    static TacSketch HeatLayer(double big = 9, double small = 3, Color? edge = null, double g = G) =>
+        new((dc, s) => HotEdge(dc, s, big, small, edge, g)) { Opacity = 0, Visibility = Visibility.Collapsed };
+
+    /// <summary>A heat layer's strength for a moment (shown while above nothing).</summary>
+    static void Heat(UIElement layer, double k)
+    {
+        layer.Opacity = Math.Clamp(k, 0, 1);
+        var v = k > .001 ? Visibility.Visible : Visibility.Collapsed;
+        if (layer.Visibility != v) layer.Visibility = v;
+    }
+
+    /// <summary>The ember band a pickup sends across a plate: a slanted band of light, drawn once, moved by its transform.</summary>
+    static System.Windows.Shapes.Path SheenBand()
+    {
+        var g = Geometry.Parse("M 26,0 L 66,0 L 40,60 L 0,60 Z"); g.Freeze();
+        return new System.Windows.Shapes.Path { Data = g, Fill = SheenFill, IsHitTestVisible = false, Opacity = 0, RenderTransform = new TranslateTransform() };
+    }
+
+    static readonly Brush SheenFill = MakeSheen();
+    static Brush MakeSheen()
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0x8A, 0x3D), 0));
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0x40, 0xFF, 0xD0, 0x8A), .55));
+        b.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0x8A, 0x3D), 1));
+        b.Freeze();
+        return b;
     }
 }
