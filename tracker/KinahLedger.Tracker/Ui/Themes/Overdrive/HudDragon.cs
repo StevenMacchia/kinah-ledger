@@ -42,7 +42,8 @@ sealed partial class HudDragon : ModernLook
     readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 12, 18, 12) };
     readonly Canvas _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
-    readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>The timer chips; beside the meter's head they wrap to a second line before any is cut.</summary>
+    readonly WrapPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
     /// <summary>The timer chips over the line, when the pickup strip takes their room on it.</summary>
     readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(6, 0, 0, 4), Visibility = Visibility.Collapsed };
@@ -70,6 +71,8 @@ sealed partial class HudDragon : ModernLook
     readonly Canvas _fightOver = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly Canvas _eye = new() { IsHitTestVisible = false };
     readonly StackPanel _fightBody = new() { Margin = FightPad };
+    /// <summary>The words over the rows (timers, title, HP), never shorter than the head's jaws reach: the rows start under them.</summary>
+    readonly StackPanel _fightTop = new() { MinHeight = HeadFloor - FightPad.Top };
     readonly Border _timersInFight = new() { Margin = new Thickness(TitleX - 26, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
     readonly Ellipse _eyeFlare, _mouthGlow;
@@ -91,14 +94,14 @@ sealed partial class HudDragon : ModernLook
         // the eye's flare, its lid, the glow in the jaws (at the head's own points on the meter)
         var eye = new Point(FightHeadX + EyeAt.X * FightHeadK, FightHeadY + EyeAt.Y * FightHeadK);
         var mouth = new Point(FightHeadX + MouthAt.X * FightHeadK, FightHeadY + MouthAt.Y * FightHeadK);
-        _eyeFlare = new Ellipse { Width = 34, Height = 24, Fill = Glow(DragonGoldC, .95), Opacity = 0 };
-        Canvas.SetLeft(_eyeFlare, eye.X - 17); Canvas.SetTop(_eyeFlare, eye.Y - 12);
-        _mouthGlow = new Ellipse { Width = 46, Height = 26, Fill = Glow(HotC, .95), Opacity = 0 };
-        Canvas.SetLeft(_mouthGlow, mouth.X - 23); Canvas.SetTop(_mouthGlow, mouth.Y - 13);
+        _eyeFlare = new Ellipse { Width = 40, Height = 26, Fill = Glow(DragonGoldC, .95), Opacity = 0 };
+        Canvas.SetLeft(_eyeFlare, eye.X - 20); Canvas.SetTop(_eyeFlare, eye.Y - 13);
+        _mouthGlow = new Ellipse { Width = 56, Height = 44, Fill = Glow(HotC, .95), Opacity = 0 };
+        Canvas.SetLeft(_mouthGlow, mouth.X - 30); Canvas.SetTop(_mouthGlow, mouth.Y - 22);
         var lidGeo = G(LidPath).Clone();
         lidGeo.Transform = new MatrixTransform(FightHeadK, 0, 0, FightHeadK, FightHeadX, FightHeadY); lidGeo.Freeze();
-        _lid = new System.Windows.Shapes.Path { Data = lidGeo, Fill = Mod.Grad(true, (Color.FromRgb(0x3E, 0x35, 0x48), 0), (Color.FromRgb(0x16, 0x12, 0x1C), 1)), Stroke = Frozen(Mod.A(BronzeC, .7)), StrokeThickness = .6 };
-        _lidScale.CenterY = eye.Y - 2.2 * FightHeadK;
+        _lid = new System.Windows.Shapes.Path { Data = lidGeo, Fill = Mod.Grad(true, (Color.FromRgb(0x46, 0x2C, 0x2C), 0), (Color.FromRgb(0x16, 0x0A, 0x0C), 1)), Stroke = Frozen(Mod.A(BronzeC, .7)), StrokeThickness = .6 };
+        _lidScale.CenterY = FightHeadY + LidTop * FightHeadK;
         _lid.RenderTransform = _lidScale;
         _eye.Children.Add(_eyeFlare); _eye.Children.Add(_mouthGlow); _eye.Children.Add(_lid);
         _blaze = new TacSketch((dc, s) => { if (s.Width > 60 && s.Height > 40) dc.DrawDrawing(FightBlaze(Math.Floor(s.Width), Math.Floor(s.Height), _blazeC)); }) { Opacity = 0, ClipToBounds = true };
@@ -371,7 +374,7 @@ sealed partial class HudDragon : ModernLook
             {
                 Child = sp, CornerRadius = new CornerRadius(9, 2, 9, 2), Padding = first ? new Thickness(8, 3, 10, 4) : new Thickness(7, 2, 9, 3), VerticalAlignment = VerticalAlignment.Center,
                 Background = Frozen(Mod.A(DeepC, .86)), BorderThickness = new Thickness(1), BorderBrush = Frozen(Mod.A(tone == TimerBadge.Tone.On ? EmeraldC : BronzeC, tone == TimerBadge.Tone.On ? .75 : .6)),
-                Margin = new Thickness(first ? 0 : 5, 0, 0, 0), Tag = first ? "timer-chip" : null,
+                Margin = new Thickness(first ? 0 : 5, 1.5, 0, 1.5), Tag = first ? "timer-chip" : null,
             };
             if (first) _firstChip = chip;
             _timers.Children.Add(chip);
@@ -415,11 +418,12 @@ sealed partial class HudDragon : ModernLook
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
-        _fightBody.Children.Clear();
+        _fightBody.Children.Clear(); _fightTop.Children.Clear();
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); _fightUnder.Children.Clear(); _fightOver.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 6;
         _fight.Width = w;
-        _fightBody.Children.Add(_timersInFight);
+        _fightBody.Children.Add(_fightTop);
+        _fightTop.Children.Add(_timersInFight);
         // the head row: the title beside the dragon's head, the outcome once it's over, the clock
         var head = new Grid { Margin = new Thickness(TitleX - FightPad.Left, 0, 0, 0), MinHeight = 22 };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -444,15 +448,26 @@ sealed partial class HudDragon : ModernLook
             right.Children.Add(clock);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
-        // beside the head the title's room is short: a long name steps its size down (to 11.5) before it is ever cut
-        double titleRoom = RowsW - head.Margin.Left - Mod.W(right) - right.Margin.Left - 2, titleW = Mod.W(title);
+        // beside the head the title's room is short: the outcome drops to its own line under the title (beside the jaws, where
+        // there is room) before the name is squeezed, then a long name steps its size down (to 11.5) before it is ever cut
+        double titleW = Mod.W(title), titleRoom = RowsW - head.Margin.Left - Mod.W(right) - right.Margin.Left - 2;
+        Border? under = null;
+        if (titleW > titleRoom && right.Children.Count > 1 && right.Children[0] is Border oc && (string?)oc.Tag == "outcome")
+        {
+            right.Children.Remove(oc);
+            oc.Margin = new Thickness(TitleX - FightPad.Left, 2, 0, 0); oc.HorizontalAlignment = HorizontalAlignment.Left;
+            under = oc;
+            titleRoom = RowsW - head.Margin.Left - Mod.W(right) - right.Margin.Left - 2;
+        }
         if (titleW > titleRoom && titleRoom > 40) title.FontSize = Math.Max(11.5, Math.Floor(title.FontSize * titleRoom / titleW * 10) / 10);
-        _head = Lit(head);
-        _fightBody.Children.Add(_head);
+        // the title row and the outcome under it are one block: a kill's plate slams over both
+        if (under != null) { var both = new StackPanel(); both.Children.Add(head); both.Children.Add(under); _head = Lit(both); }
+        else _head = Lit(head);
+        _fightTop.Children.Add(_head);
         if (e.Waiting)
         {
             var wt = Tt(e.ReadyText, 12.5, Soft, FontWeights.SemiBold); wt.Margin = new Thickness(TitleX - FightPad.Left, 2, 0, 8); wt.TextTrimming = TextTrimming.CharacterEllipsis;
-            _fightBody.Children.Add(Lit(wt));
+            _fightTop.Children.Add(Lit(wt));
             if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, RowsW); }
         }
         else
@@ -480,7 +495,7 @@ sealed partial class HudDragon : ModernLook
                 hl.Tag = "hp-text";
                 var hlLit = Lit(hl); Grid.SetColumn(hlLit, 1);
                 hpRow.Children.Add(hlLit);
-                _fightBody.Children.Add(hpRow);
+                _fightTop.Children.Add(hpRow);
                 _fightBody.Children.Add(new Border { Height = 6 });
             }
             else _fightBody.Children.Add(new Border { Height = 10 });

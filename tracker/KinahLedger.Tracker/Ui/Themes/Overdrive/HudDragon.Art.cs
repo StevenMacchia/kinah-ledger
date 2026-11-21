@@ -28,80 +28,173 @@ sealed partial class HudDragon
 
     // ================================================================ the head
 
-    /// <summary>The head's box in its own units (it faces right); the eye's and the jaws' points in it.</summary>
-    const double HeadW = 56, HeadH = 40;
-    static readonly Point EyeAt = new(34, 15.4), MouthAt = new(52, 26.4);
+    /// <summary>
+    /// The head's box in its own units (it faces right, roaring): 116 x 68, drawn 1:1 on the meter. The eye's and the jaws'
+    /// points in it.
+    /// </summary>
+    const double HeadW = 116, HeadH = 68;
+    static readonly Point EyeAt = new(63.2, 26.4), MouthAt = new(103, 41);
 
-    /// <summary>The eye's lid in the head's units (the meter blinks it over the eye).</summary>
-    internal const string LidPath = "M 29.2,13.6 C 32.4,12.8 36.4,14.2 39,16.9 C 35.8,17.6 31.8,16.7 29.2,13.6 Z";
+    /// <summary>The eye's lid in the head's units (the meter blinks it over the eye), and the line it closes from.</summary>
+    internal const string LidPath = "M 53,23.8 L 62,23.2 L 73.2,26.8 C 66.4,30 58.6,29.4 53,23.8 Z";
+    const double LidTop = 23.4;
 
     static Geometry G(string data) { var g = Geometry.Parse(data); g.Freeze(); return g; }
 
-    /// <summary>The Balaur's head, drawn once (its own units; place it with a transform).</summary>
-    static readonly DrawingGroup HeadArt = MakeHead();
+    // the head's own heat: a crimson under the ember, the throat's dark red (before the head: static fields start in order)
+    static readonly Color CrimsonC = Color.FromRgb(0xF0, 0x22, 0x12), BloodC = Color.FromRgb(0x5A, 0x06, 0x06);
 
-    static DrawingGroup MakeHead()
+    /// <summary>The Balaur's head, drawn once (its own units; place it with a transform): the meter's in full, and a bolder, plainer one for the small sizes.</summary>
+    static readonly DrawingGroup HeadArt = MakeHead(false), HeadSmallArt = MakeHead(true);
+
+    /// <summary>A tooth from <paramref name="p"/> on a jaw's edge (running <paramref name="u"/>), toward <paramref name="dir"/>: a curved blade, its root inside the jaw.</summary>
+    static void Tooth(StreamGeometryContext c, Point p, Vector u, Vector dir, double len, double w, double bend = .18)
+    {
+        u.Normalize(); dir.Normalize();
+        Point a = p - u * w - dir * 1.4, b = p + u * w - dir * 1.4, tip = p + dir * len - u * (len * bend);
+        c.BeginFigure(a, true, true);
+        c.QuadraticBezierTo(p - u * (w * .35) + dir * (len * .6), tip, true, true);
+        c.QuadraticBezierTo(p + u * (w * .55) + dir * (len * .4), b, true, true);
+    }
+
+    static DrawingGroup MakeHead(bool small)
     {
         var g = new DrawingGroup();
         using (var dc = g.Open())
         {
-            var skin = Mod.Grad(true, (Color.FromRgb(0x46, 0x3C, 0x52), 0), (Color.FromRgb(0x1E, 0x19, 0x26), .45), (ObsidianC, 1));
-            var rim = Mod.P(Mod.Grad(false, (Color.FromRgb(0x7A, 0x5E, 0x36), 0), (Color.FromRgb(0xF4, 0xD6, 0x92), .55), (Color.FromRgb(0x8A, 0x6A, 0x3C), 1)), .75);
-            var horn = Mod.Grad(false, (Color.FromRgb(0x6E, 0x62, 0x4C), 0), (IvoryC, .75), (Color.FromRgb(0xFF, 0xF8, 0xE6), 1));
-            var hornRim = Mod.P(Frozen(Color.FromArgb(0xCC, 0x1A, 0x14, 0x10)), .55);
-            var ink = Frozen(Color.FromRgb(0x08, 0x06, 0x0A));
-            // the roar's light: the fire in the open jaws glowing out past them
-            dc.DrawEllipse(Fz(new RadialGradientBrush(Mod.A(DragonGoldC, .7), Mod.A(EmberC, 0))), null, new Point(47, 26.5), 14, 9);
-            // the great horns: two swept back and rising, behind the skull
-            dc.DrawGeometry(horn, hornRim, G("M 25,10.5 C 20,4.2 12,0.9 0.6,0.5 C 7.5,2.6 13.5,6.4 17.2,13 Z"));
-            dc.DrawGeometry(horn, hornRim, G("M 18.5,14.2 C 13.5,9.6 7.6,7.4 0.4,7.8 C 5.6,9.4 9.6,12.2 12.6,17 Z"));
-            // the spines down the back of the skull and the neck
-            dc.DrawGeometry(skin, rim, G("M 12.6,17 L 4.4,15.8 L 11.4,20.4 L 3.2,21.6 L 11.2,24 Z"));
-            // the cheek blades, swept back over the neck's join
-            dc.DrawGeometry(skin, rim, G("M 14,23 L 1.6,25.4 L 10.6,28 L 2.6,33.6 L 13.2,31 L 8.6,38.6 L 19.6,32.6 L 24,30 Z"));
-            // the lower jaw, thrown wide open in the roar
-            dc.DrawGeometry(skin, rim, G("M 23.5,24.6 L 34,28.4 L 46,33 C 49,34 51.2,34.6 52.6,35.6 L 50.4,37.2 C 44,38.4 36,37.8 28,35.2 C 22,33.4 17,31 14,28 C 17.4,27.6 20.6,26.4 23.5,24.6 Z"));
-            // inside the jaws: the throat's dark and the fire coming up it
-            dc.DrawGeometry(Mod.Grad(false, (Color.FromRgb(0x3A, 0x08, 0x06), 0), (Color.FromRgb(0x9A, 0x1E, 0x0C), .55), (EmberC, 1)), null, G("M 24,24.2 L 54,21.6 L 52,34.4 L 46,32.6 L 34,28.2 Z"));
-            dc.DrawGeometry(Mod.Grad(false, (Mod.A(EmberC, 0), 0), (DragonGoldC, .5), (HotC, 1)), null, G("M 30,25.8 C 38,24.6 46,24.4 55.6,23.6 C 53,26.4 54.6,28.4 55.8,30.4 C 48,29.6 40,28.6 30,25.8 Z"));
-            // the upper fangs (two long ones) and the lower teeth, set before the jaws' rims so their roots sit inside
-            dc.DrawGeometry(Frozen(IvoryC), hornRim, G("M 36,22.8 L 37.2,26 L 38.4,22.7 Z M 40.6,22.4 L 42.2,27.6 L 43.6,22.2 Z M 45.6,22 L 46.6,25.2 L 47.6,21.9 Z M 49.6,21.7 L 51.2,27.4 L 52.6,21.4 Z"));
-            dc.DrawGeometry(Frozen(IvoryC), hornRim, G("M 35.4,29.4 L 36.8,26.4 L 38,30 Z M 40.4,31.2 L 41.8,27.6 L 43.2,31.8 Z M 45.6,33.2 L 47,29.4 L 48.4,33.8 Z M 49.8,34.6 L 50.8,31.8 L 51.8,35 Z"));
-            // the skull and upper jaw: a deep wedge, the snout's horn at its tip
-            dc.DrawGeometry(skin, rim, G("M 11,20 C 11,14.4 15,10.6 21,9.4 L 28,8.6 C 32,8.8 36,10.6 39.6,12.6 L 48,15.4 L 50.6,11.4 L 51.6,15.8 C 54,16.6 55.6,17.8 56,19.8 L 55.4,22 L 45,22.4 L 36,23 L 24,24.6 C 19,26.4 14.4,26.4 11.4,24.4 Z"));
-            // the brow horn and the ridge of spikes over it
-            dc.DrawGeometry(horn, hornRim, G("M 26.4,9.6 C 26.6,5.6 28.6,2.6 32.4,0.8 C 31,3.6 30.8,6.6 31.6,9.6 Z"));
-            dc.DrawGeometry(horn, hornRim, G("M 33.4,10.4 C 34.2,7.6 35.8,5.8 38.4,4.8 C 37.4,6.8 37.2,8.8 37.8,11.4 Z"));
-            // scales on the skull and the snout
-            var scale = Mod.P(Frozen(Mod.A(Color.FromRgb(0xD8, 0xB4, 0x72), .55)), .55);
-            foreach (var d in new[] { "M 13.6,20.4 L 15.8,17.8 L 18,20.4", "M 17.8,16.6 L 20,14 L 22.2,16.6", "M 18.6,23 L 20.8,20.4 L 23,23", "M 22.8,19.6 L 25,17 L 27.2,19.6", "M 41,18 L 43,15.8 L 45,18.2", "M 45.4,19.4 L 47.2,17.4 L 49,19.6" })
-                dc.DrawGeometry(null, scale, G(d));
-            // the scowl: a heavy brow plate driven down toward the snout over the eye
-            dc.DrawGeometry(Mod.Grad(true, (Color.FromRgb(0x52, 0x46, 0x5E), 0), (ObsidianC, 1)), rim, G("M 26,12.4 C 30,10.2 35,10.4 41.4,15.6 L 39.8,16.2 C 35.6,13.8 31,13 27,14.4 Z"));
-            dc.DrawGeometry(null, Mod.P(ink, 1.2, true), G("M 50.4,17.8 L 53.6,19.2"));
-            // the snarl's wrinkles along the upper lip
-            dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(Color.FromRgb(0x0A, 0x08, 0x0C), .8)), .7, true), G("M 39,19.4 Q 41.6,20.8 44,19.6 M 44.6,20.4 Q 47,21.4 49.4,20.2"));
-            // the emerald under-glow along the jaw
-            dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(EmeraldC, .3)), 2.6, true), G("M 22,33.4 C 30,36.6 40,38 50.4,37.2"));
-            dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(EmeraldC, .9)), .8, true), G("M 22,33.4 C 30,36.6 40,38 50.4,37.2"));
-            // the eye: narrowed under the brow, molten, its slit a blade
-            dc.DrawEllipse(Glow(EmberC, .95), null, EyeAt, 9, 6);
-            dc.DrawEllipse(Glow(DragonGoldC, .9), null, EyeAt, 5.5, 3.6);
-            dc.DrawGeometry(Fz(new RadialGradientBrush(HotC, EmberC) { GradientOrigin = new Point(.4, .4) }), Mod.P(ink, .6), G("M 29.6,14.2 C 32.6,13.6 36.4,14.8 38.6,16.8 C 35.6,17.4 32,16.8 29.6,14.2 Z"));
-            dc.PushTransform(new RotateTransform(-8, 34.2, 15.6));
-            dc.DrawEllipse(Frozen(Color.FromRgb(0x08, 0x04, 0x02)), null, new Point(34.2, 15.6), .55, 1.9);
+            // obsidian with blood in it; the lit planes warmer; a dark edge, a bronze rim (bold on the small head, where it carries the shape)
+            var skin = Mod.Grad(true, (Color.FromRgb(0x30, 0x1E, 0x22), 0), (Color.FromRgb(0x17, 0x0D, 0x10), .5), (Color.FromRgb(0x08, 0x04, 0x05), 1));
+            var plate = Mod.Grad(true, (Color.FromRgb(0x52, 0x36, 0x34), 0), (Color.FromRgb(0x22, 0x14, 0x16), .55), (Color.FromRgb(0x0C, 0x06, 0x07), 1));
+            var edge = Mod.P(Frozen(Color.FromArgb(0xF0, 0x04, 0x02, 0x03)), small ? 2.2 : .9);
+            var lit = Mod.P(Frozen(Mod.A(Color.FromRgb(0xFF, 0xD8, 0x96), small ? .9 : .8)), small ? 2 : .8, true);
+            var bronze = Mod.P(Frozen(Mod.A(Color.FromRgb(0xC8, 0x8E, 0x4C), .55)), .6, true);
+            // bone: pale at the tips, darkening into blood at the roots (the tips point left: the gradient runs tip to root)
+            var horn = Mod.Grad(false, (Color.FromRgb(0xFF, 0xF4, 0xDC), 0), (Color.FromRgb(0xD6, 0xC2, 0x9C), .38), (Color.FromRgb(0x7A, 0x56, 0x40), .78), (Color.FromRgb(0x2E, 0x12, 0x10), 1));
+            var hornFar = Mod.Grad(false, (Color.FromRgb(0xB0, 0x9C, 0x80), 0), (Color.FromRgb(0x6A, 0x52, 0x40), .5), (Color.FromRgb(0x1E, 0x0C, 0x0C), 1));
+            var hornUp = Mod.Grad(true, (Color.FromRgb(0xFF, 0xF4, 0xDC), 0), (Color.FromRgb(0xC8, 0xAE, 0x86), .45), (Color.FromRgb(0x2E, 0x12, 0x10), 1));
+            var hornEdge = Mod.P(Frozen(Color.FromArgb(0xE6, 0x0C, 0x05, 0x04)), small ? 1.6 : .7);
+            var bone = Mod.Grad(true, (Color.FromRgb(0xFF, 0xFA, 0xEA), 0), (Color.FromRgb(0xE6, 0xD4, 0xB0), .6), (Color.FromRgb(0xA8, 0x86, 0x5C), 1));
+
+            // the roar's light: the furnace in the open jaws thrown out past them
+            dc.DrawEllipse(Fz(new RadialGradientBrush(Mod.A(DragonGoldC, .8), Mod.A(CrimsonC, 0)) { GradientStops = { new GradientStop(Mod.A(EmberC, .5), .5) } }), null, new Point(96, 41), small ? 28 : 24, small ? 22 : 18);
+
+            // a warm halo round the head's mass, so its dark reads over the obsidian ground
+            var halo = Mod.P(Frozen(Mod.A(Color.FromRgb(0xE8, 0xA0, 0x58), small ? .3 : .26)), small ? 4.4 : 2.6, true);
+            dc.DrawGeometry(null, halo, G("M 28,24 L 40,15 L 56,11 L 68,14 C 80,15 92,15 102,13 L 109,14.6 L 113.4,18.6 L 111.6,24 L 106.6,26.8 M 100,55.6 L 105.4,53 L 104,58.8 L 96,62.2 L 76,62.8 L 58,58.8 L 42,52 M 44,45 L 34,44 L 27,36 L 28,24"));
+
+            // the horns, swept back off the skull: a far one in shadow, the great near one rising to the corner
+            dc.DrawGeometry(hornFar, hornEdge, G("M 44,16 C 32,10 18,8.6 1.4,11.4 C 14,14.4 24,19 32,26.4 Z"));
+            dc.DrawGeometry(horn, hornEdge, G("M 55,12 C 43,3.4 24,0.4 3.4,0.8 C 18,3.8 28,8.6 34,15.6 C 37,19 39,21.4 40.4,24.6 Z"));
+            if (!small)
+                foreach (var d in new[] { "M 13.6,2.4 Q 15.6,5.4 18.6,7.2", "M 23.6,3.4 Q 25,7.6 28.4,10.4", "M 33.4,6 Q 34.6,10.4 38,13.6", "M 12,11.8 Q 13.6,14.6 16.6,15.6", "M 22,12.4 Q 23.6,16 26.4,18" })
+                    dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(Color.FromRgb(0x3A, 0x22, 0x18), .75)), .7, true), G(d));
+            // the frill: long blades fanned back off the cheek, over the neck
+            dc.DrawGeometry(plate, small ? edge : Mod.P(Frozen(Color.FromArgb(0xF0, 0x04, 0x02, 0x03)), .8), small
+                ? G("M 33,29 L 4,26 L 29,37 Z M 32,41 L 10,54 L 40,48 Z")
+                : G("M 33,29 L 1.6,25.4 L 29,36.6 Z M 30,36 L 4,42.4 L 30.4,43.4 Z M 33,42.4 L 12.4,56 L 39,48 Z M 39,47.6 L 27.4,62 L 46.6,52.4 Z"));
+            if (!small) dc.DrawGeometry(null, bronze, G("M 33,29 L 1.6,25.4 M 30,36 L 4,42.4 M 33,42.4 L 12.4,56 M 39,47.6 L 27.4,62"));
+
+            // inside the jaws: the throat's dark and the fire coming up it, bursting out past the fangs
+            dc.DrawGeometry(Mod.Grad(false, (Color.FromRgb(0x1A, 0x02, 0x02), 0), (BloodC, .28), (Color.FromRgb(0xB4, 0x1E, 0x0A), .7), (EmberC, 1)), null, G("M 48,41.6 L 108,25.6 L 104,57 L 54,44.6 Z"));
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(CrimsonC, 0), 0), (Mod.A(EmberC, .85), .3), (DragonGoldC, .66), (HotC, 1)), null,
+                G("M 60,41 C 74,36 92,31 108.4,29.4 C 104.4,33.4 107.4,36 114.6,37 C 106.6,40 106.6,43 112.6,47 C 104.6,48 105,50.4 108.6,54.4 C 92,51 76,46.6 60,43.4 Z"));
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(HotC, 0), 0), (Mod.A(HotC, .85), .5), (Mod.A(Colors.White, .95), 1)), null,
+                G("M 72,41.6 C 84,39 94,37.6 106,37.4 C 102.4,40 103.4,42.4 108,44.4 C 96,45 84,44 72,42.8 Z"));
+
+            // the teeth: long curved fangs and a jagged row between, set before the jaws so their roots sit inside
+            var teeth = new StreamGeometry();
+            using (var c = teeth.Open())
+            {
+                // upper, hanging from the lip line (106.6,26.8) to (55,40.4)
+                var lu = new Vector(-51.6, 13.6); var down = new Vector(-.1, 1);
+                Point Lip(double t) => new(106.6 - 51.6 * t, 26.8 + 13.6 * t);
+                var up = small ? new[] { (.05, 16.0, 3.8), (.42, 12.5, 3.4) } : new[] { (.04, 14.4, 2.8), (.16, 5.0, 1.7), (.27, 7.6, 2.0), (.40, 11.8, 2.5), (.53, 5.4, 1.7), (.66, 6.8, 1.8), (.80, 4.4, 1.5) };
+                foreach (var (t, len, w) in up) Tooth(c, Lip(t), lu, down, len, w);
+                // lower, rising from the gum line (56,44) to (100,55.6)
+                var gu = new Vector(44, 11.6); var rise = new Vector(.12, -1);
+                Point Gum(double t) => new(56 + 44 * t, 44 + 11.6 * t);
+                var lo = small ? new[] { (.9, 13.0, 3.6) } : new[] { (.92, 11.6, 2.6), (.78, 5.0, 1.7), (.62, 7.8, 2.0), (.46, 4.4, 1.6), (.3, 5.4, 1.7), (.15, 3.6, 1.5) };
+                foreach (var (t, len, w) in lo) Tooth(c, Gum(t), gu, rise, len, w, -.14);
+            }
+            teeth.Freeze();
+            dc.DrawGeometry(bone, Mod.P(Frozen(Color.FromArgb(0xE0, 0x1A, 0x08, 0x04)), small ? 1.4 : .55), teeth);
+
+            // the lower jaw, thrown wide open, hooked at the chin, spurs raked back under it
+            dc.DrawGeometry(plate, small ? edge : Mod.P(Frozen(Color.FromArgb(0xF0, 0x04, 0x02, 0x03)), .7), G("M 64,59.6 L 55,65.4 L 70.6,61.4 Z M 83,62 L 75,67 L 89.4,61.8 Z"));
+            dc.DrawGeometry(skin, edge, G("M 36,43 L 54,43.4 L 76,49.6 L 100,55.6 L 105.4,53 L 104,58.8 L 96,62.2 L 76,62.8 L 58,58.8 L 42,52 Z"));
+            if (!small) dc.DrawGeometry(Frozen(Mod.A(Colors.Black, .35)), null, G("M 58,53 L 99,58.4 L 96,62.2 L 76,62.8 L 58,58.8 Z"));
+            // the fire's light along the gums and the lip
+            dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(EmberC, .9)), small ? 1.6 : .8, true), G("M 55,44.4 L 76,50.4 L 100,56.4"));
+
+            // the skull and upper jaw: a long angular wedge, the crest high behind the brow, the snout hooked over the fangs
+            dc.DrawGeometry(skin, edge, G("M 28,24 L 40,15 L 56,11 L 68,14 C 80,15 92,15 102,13 L 109,14.6 L 113.4,18.6 L 111.6,24 L 106.6,26.8 L 90,30 L 72,35 L 55,40.4 L 44,45 L 34,44 L 27,36 Z"));
+            if (!small)
+            {
+                // the lit planes: the snout's top, the skull's crown, the cheek; a shadow under the brow
+                var warm = Frozen(Mod.A(Color.FromRgb(0x9A, 0x66, 0x52), .38));
+                dc.DrawGeometry(warm, null, G("M 68,14 C 80,15 92,15 102,13 L 109,14.6 L 104,18.6 L 88,20 L 74,21.4 Z M 40,15 L 56,11 L 58,17.4 L 44,21.6 Z"));
+                dc.DrawGeometry(Frozen(Mod.A(Color.FromRgb(0x7A, 0x4C, 0x40), .26)), null, G("M 29.6,29 L 46,24.6 L 53,31 L 36,36 Z"));
+                // the cheek's ridges: two blades raked back along the jaw's hinge
+                dc.DrawGeometry(plate, Mod.P(Frozen(Color.FromArgb(0xF0, 0x04, 0x02, 0x03)), .7), G("M 52,33.4 L 30.4,34.6 L 46,37.6 Z M 50,39.4 L 31.4,42.6 L 45.4,43.4 Z"));
+                dc.DrawGeometry(null, bronze, G("M 52,33.4 L 30.4,34.6 M 50,39.4 L 31.4,42.6"));
+                // seams between the plates, glowing like a forge's cracks
+                var seams = G("M 79,15.4 L 81,20.6 M 92.6,15 L 94,19.8 M 45,21.6 L 49,28 M 68,57.4 L 71,62.4 M 86,59.6 L 88,62.4 M 38,34.6 L 43,33.4");
+                dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(CrimsonC, .4)), 2.2, true), seams);
+                dc.DrawGeometry(null, Mod.P(Frozen(Color.FromRgb(0x05, 0x02, 0x03)), .9, true), seams);
+                dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(EmberC, .95)), .4, true), seams);
+                // light catching the top edges
+                dc.DrawGeometry(null, lit, G("M 41,15.4 L 56,11.6 L 67,14.6 C 80,15.6 92,15.6 102,13.6 L 108.6,15.2 L 112.6,18.8"));
+                dc.DrawGeometry(null, bronze, G("M 28.6,24.4 L 40,15.6 M 113,19 L 111.2,23.8 L 106.6,26.6"));
+            }
+            if (small) dc.DrawGeometry(null, lit, G("M 40,15.4 L 56,11.6 L 67,14.6 C 80,15.6 92,15.6 102,13.6 L 108.6,15.2"));
+            dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(EmberC, .9)), small ? 1.6 : .8, true), G("M 106.4,27.4 L 90,30.6 L 72,35.6 L 56,40.8"));
+
+            // the horns on the snout, raked forward
+            dc.DrawGeometry(hornUp, hornEdge, G("M 96.6,14.2 C 99,9.6 101,6.6 104.8,3.4 C 104.6,7.2 104.2,10.6 103.6,13.6 Z"));
+            if (!small) dc.DrawGeometry(hornUp, hornEdge, G("M 86.6,14.8 L 89.4,9.4 L 92,14.6 Z"));
+
+            // the scowl: a brow blade jutting forward over a deep socket, its spikes raked back
+            dc.DrawGeometry(hornUp, hornEdge, G("M 51,12.4 C 49.4,7.8 47,4.4 43,1.4 C 50,2.8 55.4,6.4 58.4,11.4 Z"));
+            if (!small) dc.DrawGeometry(hornUp, hornEdge, G("M 61.4,13.2 C 61,9.8 60,7.2 58,4.6 C 62.6,6 65.6,9.2 66.8,13.8 Z"));
+            dc.DrawEllipse(Frozen(Mod.A(Colors.Black, .7)), null, new Point(63, 26.6), small ? 13 : 11.6, small ? 6 : 4.6);
+            dc.DrawGeometry(plate, edge, G("M 44,17.6 L 58,13.4 L 82,19.4 L 77,22.2 L 70,23.4 L 61,22.8 L 51,24.6 Z"));
+            dc.DrawGeometry(null, lit, G("M 45,17.6 L 58,13.8 L 81,19.4"));
+
+            // the nostril, smouldering
+            dc.DrawGeometry(Frozen(Color.FromRgb(0x05, 0x02, 0x02)), Mod.P(Frozen(Mod.A(EmberC, .85)), small ? 1.2 : .5), G("M 102.6,16.4 L 109,17.2 L 106,19.6 Z"));
+
+            // the eye: a slanted slit deep under the brow, blood-red with a white-hot slit, a heat glow round it
+            dc.DrawEllipse(Fz(new RadialGradientBrush(Mod.A(CrimsonC, .95), Mod.A(CrimsonC, 0)) { GradientStops = { new GradientStop(Mod.A(CrimsonC, .55), .45) } }), null, EyeAt, small ? 24 : 15.5, small ? 15 : 9.4);
+            dc.DrawEllipse(Glow(EmberC, .85), null, EyeAt, small ? 10 : 6.4, small ? 6 : 3.6);
+            dc.DrawGeometry(Fz(new RadialGradientBrush(new GradientStopCollection { new GradientStop(Color.FromRgb(0xFF, 0xD0, 0x60), 0), new GradientStop(Color.FromRgb(0xFF, 0x4A, 0x18), .3), new GradientStop(CrimsonC, .62), new GradientStop(BloodC, 1) }) { GradientOrigin = new Point(.55, .5), Center = new Point(.55, .5) }),
+                Mod.P(Frozen(Color.FromRgb(0x08, 0x02, 0x02)), small ? 1.4 : .6), G("M 53.6,24.4 L 62,23.8 L 72.6,27 C 66,29.6 58.8,29 53.6,24.4 Z"));
+            dc.PushTransform(new RotateTransform(-10, EyeAt.X, EyeAt.Y));
+            dc.DrawEllipse(Glow(Color.FromRgb(0xFF, 0xF0, 0xB0), 1), null, EyeAt, small ? 2.8 : 2, small ? 4.6 : 3.4);
+            dc.DrawEllipse(Frozen(Color.FromRgb(0xFF, 0xFC, 0xE8)), null, EyeAt, small ? 1.1 : .55, small ? 3 : 2.3);
             dc.Pop();
-            dc.DrawEllipse(Frozen(Mod.A(Colors.White, .9)), null, new Point(32.4, 14.8), .5, .4);
+
+            if (!small)
+            {
+                // smoke curling off the nostril, embers flung out of the jaws
+                var smoke = Mod.Grad(true, (Mod.A(Color.FromRgb(0x9A, 0x8C, 0x96), 0), 0), (Mod.A(Color.FromRgb(0x9A, 0x8C, 0x96), .55), .55), (Mod.A(Color.FromRgb(0x8A, 0x52, 0x40), .7), 1));
+                dc.DrawGeometry(null, Mod.P(smoke, 1.7, true), G("M 107,15.6 C 111,12.6 107.4,9.4 111,6.4 C 114,4 112.6,2 115.6,0.6"));
+                dc.DrawGeometry(null, Mod.P(smoke, 1.1, true), G("M 109.6,17.4 C 113,15.6 112.6,12.6 115.6,10.6"));
+                foreach (var (x, y, r) in new[] { (112.4, 32.6, 1.4), (115, 42.6, 1.1), (110.6, 52.6, 1.2), (115.2, 26, .8), (107, 60.4, .8) })
+                {
+                    dc.DrawEllipse(Glow(EmberC, .9), null, new Point(x, y), r * 2.6, r * 2.6);
+                    dc.DrawEllipse(Frozen(HotC), null, new Point(x, y), r * .55, r * .55);
+                }
+            }
         }
         g.Freeze();
         return g;
     }
 
-    /// <summary>The head at (<paramref name="x"/>, <paramref name="y"/>), <paramref name="k"/> times its own size.</summary>
+    /// <summary>The head at (<paramref name="x"/>, <paramref name="y"/>), <paramref name="k"/> times its own size (the plainer one under half size).</summary>
     static void Head(DrawingContext dc, double x, double y, double k)
     {
         dc.PushTransform(new MatrixTransform(k, 0, 0, k, x, y));
-        dc.DrawDrawing(HeadArt);
+        dc.DrawDrawing(k < .6 ? HeadSmallArt : HeadArt);
         dc.Pop();
     }
 
@@ -241,25 +334,33 @@ sealed partial class HudDragon
         // the bronze edge along the outside, as light catching the coil's back
         dc.DrawGeometry(null, Mod.P(sheen, .9, true), Poly(rimLine));
 
-        // the dorsal spikes, raked toward the tail
+        // the dorsal spikes: hooked bone blades raked toward the tail, a big one and a small one in turn, dark at the root
         if (spikes)
         {
-            var sg = new StreamGeometry();
+            var sg = new StreamGeometry(); var roots = new StreamGeometry();
             int k = 0;
             using (var c = sg.Open())
-                for (double d = 10; d < L - 12; d += spikeStep * (.7 + .6 * ((k * 0.6180339887) % 1)), k++)
+            using (var rc = roots.Open())
+                for (double d = 10; d < L - 12; d += spikeStep * (.75 + .5 * ((k * 0.6180339887) % 1)), k++)
                 {
                     double w = thick(d / L) / 2;
                     if (w < 2.6) continue;
                     var (p, t) = sp.At(d);
                     var nv = new Vector(-t.Y, t.X);
-                    double len = Math.Min(spikeMax, w * .9) * (k % 2 == 0 ? 1 : .55), bw = Math.Min(k % 2 == 0 ? 4.2 : 3, w * .6);
-                    c.BeginFigure(p + nv * (w * .6) - t * bw, true, true);
-                    c.QuadraticBezierTo(p + nv * (w + len * .4) - t * bw * .2, p + nv * (w + len) + t * bw * 1.1, true, true);
-                    c.QuadraticBezierTo(p + nv * (w + len * .2) + t * bw * .6, p + nv * (w * .6) + t * bw, true, true);
+                    bool big = k % 2 == 0;
+                    double len = Math.Min(Math.Min(spikeMax, w * 1.15), 14 - w) * (big ? 1 : .58), bw = Math.Min(big ? 4.4 : 3, w * .62);
+                    Point b0 = p + nv * (w * .5) - t * bw, tip = p + nv * (w + len) + t * bw * 1.7, b1 = p + nv * (w * .5) + t * bw * .9;
+                    c.BeginFigure(b0, true, true);
+                    c.QuadraticBezierTo(p + nv * (w + len * .55) - t * bw * .35, tip, true, true);
+                    c.QuadraticBezierTo(p + nv * (w + len * .32) + t * bw * .75, b1, true, true);
+                    rc.BeginFigure(b0, true, true);
+                    rc.LineTo(p + nv * (w + len * .3) - t * bw * .25, true, true);
+                    rc.LineTo(p + nv * (w + len * .18) + t * bw * .7, true, true);
+                    rc.LineTo(b1, true, true);
                 }
-            sg.Freeze();
-            dc.DrawGeometry(Mod.Grad(true, (IvoryC, 0), (Color.FromRgb(0x9C, 0x80, 0x52), .45), (Color.FromRgb(0x2A, 0x22, 0x30), 1)), Mod.P(Frozen(Color.FromArgb(0xDD, 0x06, 0x05, 0x08)), .6), sg);
+            sg.Freeze(); roots.Freeze();
+            dc.DrawGeometry(Frozen(Color.FromRgb(0xE4, 0xD2, 0xAC)), Mod.P(Frozen(Color.FromArgb(0xE6, 0x06, 0x04, 0x05)), .6), sg);
+            dc.DrawGeometry(Frozen(Color.FromRgb(0x3E, 0x1E, 0x1C)), null, roots);
         }
 
         // the emerald under-glow along the belly (the inside, toward the meter)
@@ -272,7 +373,7 @@ sealed partial class HudDragon
     }
 
     /// <summary>The scales' own colour: obsidian with a violet lift, lit from above.</summary>
-    static readonly LinearGradientBrush ScaleFill = Mod.Grad(true, (Color.FromRgb(0x3E, 0x33, 0x4C), 0), (Color.FromRgb(0x24, 0x1D, 0x2E), 1));
+    static readonly LinearGradientBrush ScaleFill = Mod.Grad(true, (Color.FromRgb(0x40, 0x2C, 0x34), 0), (Color.FromRgb(0x22, 0x16, 0x1C), 1));
 
     static StreamGeometry Poly(List<Point> pts)
     {
@@ -288,7 +389,10 @@ sealed partial class HudDragon
     static readonly Thickness FightPad = new(27, 25, 22, 15);
 
     /// <summary>Where the head sits on the meter, and its size; the words beside it start at <see cref="TitleX"/>.</summary>
-    const double FightHeadX = 0, FightHeadY = 0, FightHeadK = 1.5, TitleX = 88;
+    const double FightHeadX = 0, FightHeadY = 0, FightHeadK = 1, TitleX = 118;
+
+    /// <summary>The rows start under the head's jaws: the words over them (title, timers, HP) keep at least this much room.</summary>
+    const double HeadFloor = 68;
 
     /// <summary>The ground's top: the head and the tail's curl rise over it.</summary>
     const double GroundTop = 18;
@@ -316,9 +420,11 @@ sealed partial class HudDragon
         // the ground inside the coil, a bronze rim along its open top
         var gr = new Rect(13, GroundTop, w - 22, h - GroundTop - 9);
         dc.DrawRoundedRectangle(Mod.Grad(true, (Mod.A(Color.FromRgb(0x17, 0x12, 0x1D), ground), 0), (Mod.A(Color.FromRgb(0x0B, 0x09, 0x0E), ground), .55), (Mod.A(Color.FromRgb(0x07, 0x0A, 0x09), ground), 1)), null, gr, 12, 12);
-        dc.DrawLine(Mod.P(Mod.Grad(false, (Mod.A(BronzeC, .9), 0), (Mod.A(Color.FromRgb(0xF2, 0xD4, 0x92), .7), .5), (Mod.A(BronzeC, 0), 1)), 1), new Point(62, GroundTop + .5), new Point(w - 46, GroundTop + .5));
+        dc.DrawLine(Mod.P(Mod.Grad(false, (Mod.A(BronzeC, .9), 0), (Mod.A(Color.FromRgb(0xF2, 0xD4, 0x92), .7), .5), (Mod.A(BronzeC, 0), 1)), 1), new Point(TitleX - 8, GroundTop + .5), new Point(w - 46, GroundTop + .5));
         var (sp, thick) = FightSpine(w, h);
-        Body(dc, sp, thick, Sheen(w, h), spikeMax: 9, spikeStep: 52);
+        Body(dc, sp, thick, Sheen(w, h), spikeMax: 9, spikeStep: 24);
+        // its forefoot gripping the frame down the left side, the talons curled in over the ground's edge (short of the ranks)
+        Claw(dc, new Point(13, Math.Max(HeadFloor + 26, h * .56)), false);
         Head(dc, FightHeadX, FightHeadY, FightHeadK);
     });
 
@@ -327,17 +433,30 @@ sealed partial class HudDragon
     {
         double x0 = 13, x1 = w - 11, y1 = h - 8, r = 13;
         var spine = G(FormattableString.Invariant(
-            $"M 26,49 Q {x0},50 {x0},64 L {x0},{y1 - r} Q {x0},{y1} {x0 + r},{y1} L {x1 - r},{y1} Q {x1},{y1} {x1},{y1 - r} L {x1},48 C {x1},30 {x1 - 4},13 {x1 - 18},9 C {x1 - 32},6 {x1 - 41},15 {x1 - 34},23 C {x1 - 29},28 {x1 - 21},25 {x1 - 23},18"));
+            $"M 36,46 Q {x0},49 {x0},70 L {x0},{y1 - r} Q {x0},{y1} {x0 + r},{y1} L {x1 - r},{y1} Q {x1},{y1} {x1},{y1 - r} L {x1},48 C {x1},30 {x1 - 4},13 {x1 - 18},9 C {x1 - 32},6 {x1 - 41},15 {x1 - 34},23 C {x1 - 29},28 {x1 - 21},25 {x1 - 23},18"));
         var sp = new Spine(spine);
         double L = sp.Length;
-        double left = (20 + (y1 - r - 64)) / L, bottom = left + (22 + (x1 - x0 - 2 * r)) / L, right = bottom + (22 + (y1 - r - 48)) / L;
+        double left = (30 + (y1 - r - 70)) / L, bottom = left + (22 + (x1 - x0 - 2 * r)) / L, right = bottom + (22 + (y1 - r - 48)) / L;
         double Thick(double s) =>
-            s < .03 ? 13 + 3 * s / .03
+            s < .06 ? 21 - 5 * s / .06
             : s < left ? 16
             : s < bottom ? 16 - 6 * (s - left) / Math.Max(.01, bottom - left)
             : s < right ? 11 - 4 * (s - bottom) / Math.Max(.01, right - bottom)
             : Math.Max(2.4, 7 - 4.6 * Math.Pow((s - right) / Math.Max(.01, 1 - right), 1.3));
         return (sp, Thick);
+    }
+
+    /// <summary>A forefoot on the coil at <paramref name="at"/>, three hooked talons curled in over the ground's edge (to the left when <paramref name="mirror"/>).</summary>
+    static void Claw(DrawingContext dc, Point at, bool mirror)
+    {
+        const double k = .8;
+        dc.PushTransform(new MatrixTransform(mirror ? -k : k, 0, 0, k, at.X, at.Y));
+        dc.DrawGeometry(ScaleFill, Mod.P(Mod.Grad(false, (Color.FromRgb(0x7A, 0x5A, 0x34), 0), (Color.FromRgb(0xF2, 0xD0, 0x8A), .6), (Color.FromRgb(0x8A, 0x5E, 0x30), 1)), .9),
+            G("M -6,-8 C 1,-10.4 9,-6.4 10.4,-0.6 C 11,4.6 6.4,9.4 0,9.4 C -5.6,8.6 -8,3 -6,-8 Z"));
+        dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(Color.FromRgb(0xD8, 0xB4, 0x72), .6)), .6, true), G("M -2,-4 L 1,-6.4 L 4,-4 M 0,2 L 3,-0.4 L 6,2"));
+        dc.DrawGeometry(Mod.Grad(false, (Color.FromRgb(0x3E, 0x1E, 0x1C), 0), (Color.FromRgb(0xD8, 0xC6, 0xA0), .55), (Color.FromRgb(0xFF, 0xF6, 0xE0), 1)), Mod.P(Frozen(Color.FromArgb(0xE6, 0x08, 0x04, 0x04)), .6),
+            G("M 7,-6.4 C 12.4,-6.8 16.2,-3.6 17,1.8 C 14.6,-1.2 12.2,-2.2 8.4,-2 Z M 8.8,-1 C 13.8,-0.2 16.8,3.4 16.8,8.8 C 14.8,5.8 12.4,4.4 8.4,3.8 Z M 6,4.4 C 10.2,5.8 12.6,9.4 12,14 C 10.4,11.2 8.4,9.8 4.6,8.8 Z"));
+        dc.Pop();
     }
 
     /// <summary>
@@ -354,8 +473,8 @@ sealed partial class HudDragon
         dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(c, .16)), 24, true), line);
         dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(c, .3)), 18, true), line);
         dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(Mod.Mix(c, Colors.White, .5), .6)), 4, true), line);
-        var head = new Point(FightHeadX + 30 * FightHeadK, FightHeadY + 20 * FightHeadK);
-        dc.DrawEllipse(Glow(c, .75), null, new Point(head.X + 4, head.Y), 50, 40);
+        var head = new Point(FightHeadX + 60 * FightHeadK, FightHeadY + 38 * FightHeadK);
+        dc.DrawEllipse(Glow(c, .75), null, head, 66, 50);
     });
 
     // ================================================================ the Buddy's coil
@@ -378,7 +497,7 @@ sealed partial class HudDragon
         double L = sp.Length, turn = (x1 - r - x0 + (h - 13)) / L;
         double Thick(double s) => s < .04 ? 6.5 + 3.5 * s / .04 : s < turn * .6 ? 10 : Math.Max(4.5, 10 - 5.5 * Math.Pow((s - turn * .6) / Math.Max(.01, 1 - turn * .6), 1.1));
         Body(dc, sp, Thick, Sheen(w, h, dim ? .55 : 1), spikes: true, spade: false, glow: dim ? .35 : .8, spikeMax: 3, spikeStep: 58, plateStep: 9.5, twoRowsAt: 99);
-        if (head) Head(dc, -1, -2, .78);
+        if (head) Head(dc, 0, -1, .46);
     });
 
     // ================================================================ the ouroboros ring
@@ -407,11 +526,9 @@ sealed partial class HudDragon
     /// <summary>The ouroboros's head at the top, facing round the ring, its jaws closing on the tail (drawn over the molten fill).</summary>
     static void OuroborosHead(DrawingContext dc, double size)
     {
-        double c = size / 2, R = c - 7, a = 340 * Math.PI / 180, k = .74;
+        double c = size / 2, R = c - 7, a = 340 * Math.PI / 180, k = .42;
         var neck = new Point(c + R * Math.Sin(a), c - R * Math.Cos(a));
-        dc.PushTransform(new MatrixTransform(k, 0, 0, k, neck.X - 12 * k, neck.Y - 27 * k));
-        dc.DrawDrawing(HeadArt);
-        dc.Pop();
+        Head(dc, neck.X - 30 * k, neck.Y - 46 * k, k);
     }
 
     /// <summary>
