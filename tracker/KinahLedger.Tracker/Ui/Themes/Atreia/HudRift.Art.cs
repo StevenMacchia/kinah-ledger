@@ -193,25 +193,46 @@ sealed partial class HudRift
     internal static void Fissure(DrawingContext dc, double x, double top, double h, Color tone, double k, int seed = 0)
     {
         k = Math.Clamp(k, 0, 2.4);
-        double k1 = Math.Min(1, k);
-        var glow = Mod.Mix(VioletC, tone, .35);
         double bw = Math.Min(14, Math.Max(0, x - 1));
-        if (bw > 0) dc.DrawRectangle(Mod.Grad(false, (Mod.A(glow, 0), 0), (Mod.A(Mod.Mix(glow, Colors.White, .4), .7 * k1), 1)), null, new Rect(x - bw, top, bw, h));
-        // the light spilling out past the edge into the dark, an ellipse of cyan going violet
-        dc.PushOpacity(k1);
-        dc.DrawRectangle(EdgeGlow, null, new Rect(x - 7 - 2 * k, top - 1, 14 + 4 * k, h + 2));
+        // drawn at the edge from a drawing made once for its height, strength, colour and seed (a row's redraw allocates nothing)
+        dc.PushTransform(new TranslateTransform(x, top));
+        dc.DrawDrawing(FissureArt(Math.Round(h * 2) / 2, Math.Round(k * 20) / 20, tone, seed & 7, Math.Round(bw)));
         dc.Pop();
-        dc.DrawGeometry(Mod.Br(VioletC, .6 * k1), null, TearDown(x - .5, top, h, 4.2 + 1.2 * k, seed));
-        dc.DrawGeometry(Mod.Br(CyanC, .9 * k1), null, TearDown(x - .5, top, h, 2.6 + .8 * k, seed));
-        dc.DrawGeometry(Mod.Br(Colors.White, Math.Min(1, .25 + .65 * k)), null, TearDown(x - .5, top + .5, h - 1, 1.3 + .35 * k, seed));
-        if (k > 1)
+    }
+
+    static readonly Dictionary<(double H, double K, Color Tone, int Seed, double Bw), Drawing> FissureCache = new();
+
+    /// <summary>A fissure at x 0, y 0 (see <see cref="Fissure"/>), made once and frozen for its height, strength, colour, seed and the bloom's room behind it.</summary>
+    static Drawing FissureArt(double h, double k, Color tone, int seed, double bw)
+    {
+        var key = (h, k, tone, seed, bw);
+        if (FissureCache.TryGetValue(key, out var d)) return d;
+        if (FissureCache.Count > 400) FissureCache.Clear();
+        var g = new DrawingGroup();
+        using (var dc = g.Open())
         {
-            // a flare: the light breaking out above and below the bar for a moment
-            double f = k - 1;
-            dc.PushOpacity(Math.Min(1, f));
-            dc.DrawRectangle(Spark, null, new Rect(x - 6 - 4 * f, top - 3 - 2 * f, 12 + 8 * f, h + 6 + 4 * f));
+            double k1 = Math.Min(1, k);
+            var glow = Mod.Mix(VioletC, tone, .35);
+            if (bw > 0) dc.DrawRectangle(Mod.Grad(false, (Mod.A(glow, 0), 0), (Mod.A(Mod.Mix(glow, Colors.White, .4), .7 * k1), 1)), null, new Rect(-bw, 0, bw, h));
+            // the light spilling out past the edge into the dark, an ellipse of cyan going violet
+            dc.PushOpacity(k1);
+            dc.DrawRectangle(EdgeGlow, null, new Rect(-7 - 2 * k, -1, 14 + 4 * k, h + 2));
             dc.Pop();
+            dc.DrawGeometry(Mod.Br(VioletC, .6 * k1), null, TearDown(-.5, 0, h, 4.2 + 1.2 * k, seed));
+            dc.DrawGeometry(Mod.Br(CyanC, .9 * k1), null, TearDown(-.5, 0, h, 2.6 + .8 * k, seed));
+            dc.DrawGeometry(Mod.Br(Colors.White, Math.Min(1, .25 + .65 * k)), null, TearDown(-.5, .5, h - 1, 1.3 + .35 * k, seed));
+            if (k > 1)
+            {
+                // a flare: the light breaking out above and below the bar
+                double f = k - 1;
+                dc.PushOpacity(Math.Min(1, f));
+                dc.DrawRectangle(Spark, null, new Rect(-6 - 4 * f, -3 - 2 * f, 12 + 8 * f, h + 6 + 4 * f));
+                dc.Pop();
+            }
         }
+        g.Freeze();
+        FissureCache[key] = g;
+        return g;
     }
 
     /// <summary>

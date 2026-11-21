@@ -325,6 +325,17 @@ sealed partial class HudRift
             _name.MaxWidth = Math.Max(Math.Min(nw, NameMin()), room - marks);
         }
 
+        // the row's brushes and pens, made once (a bar's body once per class colour): a redraw allocates next to nothing
+        static readonly Brush Ground = Mod.Grad(true, (Mod.A(DuskC, .78), 0), (Mod.A(VoidC, .82), 1)), Sheen = Mod.Grad(true, (Mod.A(Colors.White, .13), 0), (Mod.A(Colors.White, 0), .55)), TopLine = Mod.Br(LilacC, .3);
+        static readonly Pen YouRim = Mod.P(Mod.Br(StarC, .6), 1.2), RowRim = Mod.P(Mod.Br(LilacC, .14), 1);
+        static readonly Dictionary<Color, Brush> Bodies = new();
+        static Brush Body(Color tone)
+        {
+            if (!Bodies.TryGetValue(tone, out var b))
+                Bodies[tone] = b = Mod.Grad(false, (Mod.A(Mod.Mix(DeepVioletC, tone, .14), .94), 0), (Mod.A(Mod.Mix(Mod.Mix(tone, VioletC, .3), VoidC, .3), .82), .55), (Mod.A(Mod.Mix(tone, DeepVioletC, .32), .94), 1));
+            return b;
+        }
+
         void Draw(DrawingContext dc, Size s)
         {
             if (_m is not { } m || s.Width < 40) return;
@@ -333,20 +344,20 @@ sealed partial class HudRift
             var pill = Mod.Pill(r, 5);
             var tone = m.ClassColor;
             // the ground: the void, a breath of violet at its top
-            dc.DrawGeometry(Mod.Grad(true, (Mod.A(DuskC, .78), 0), (Mod.A(VoidC, .82), 1)), null, pill);
+            dc.DrawGeometry(Ground, null, pill);
             double fx = r.Width * Math.Clamp(_bar, 0, 1);
             if (fx > 1)
             {
                 dc.PushClip(pill);
                 var fill = new Rect(r.X, r.Y, fx, r.Height);
                 // the body: the Abyss's violet at its root rising into the class's colour, the stars showing through
-                dc.DrawRectangle(Mod.Grad(false, (Mod.A(Mod.Mix(DeepVioletC, tone, .14), .94), 0), (Mod.A(Mod.Mix(Mod.Mix(tone, VioletC, .3), VoidC, .3), .82), .55), (Mod.A(Mod.Mix(tone, DeepVioletC, .32), .94), 1)), null, fill);
+                dc.DrawRectangle(Body(tone), null, fill);
                 dc.PushOpacity(.5);
                 dc.DrawRectangle(Stars, null, fill);
                 dc.Pop();
                 // depth: lighter along its top half, a hairline of light on its top
-                dc.DrawRectangle(Mod.Grad(true, (Mod.A(Colors.White, .13), 0), (Mod.A(Colors.White, 0), .55)), null, fill);
-                dc.DrawRectangle(Mod.Br(LilacC, .3), null, new Rect(r.X, r.Y, fx, 1));
+                dc.DrawRectangle(Sheen, null, fill);
+                dc.DrawRectangle(TopLine, null, new Rect(r.X, r.Y, fx, 1));
                 dc.Pop();
             }
             // a healer's share of the group's healing as a mint line along the bar's foot (Settings' heal bars)
@@ -356,7 +367,7 @@ sealed partial class HudRift
                 dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2.5, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2.5));
                 dc.Pop();
             }
-            dc.DrawGeometry(null, Mod.P(m.You ? Mod.Br(StarC, .6) : Mod.Br(LilacC, .14), m.You ? 1.2 : 1), pill);
+            dc.DrawGeometry(null, m.You ? YouRim : RowRim, pill);
             // the fissure at the leading edge: the leader's the brightest
             if (fx > 1) Fissure(dc, Math.Max(r.X + 1.5, r.X + fx - .5), r.Y, r.Height, tone, Leads ? 1.4 : .62, (int)(m.Id & 7));
         }
