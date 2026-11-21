@@ -25,6 +25,11 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    # GitHub's Windows runners are 1024x768 and no step can change that (the video driver offers no other mode), so the checks written for a
+    # 1080p desktop (Full view's two columns, the Parser at 150%) get a screen to fit by KL_TEST_WORKAREA (Ui/ScreenArea.cs): the app's work
+    # area and its windows' size limit, in DIPs. Read only by options-test and ui-shot (both run below), never by a normal launch
+    env:
+      KL_TEST_WORKAREA: 1920x1040
     steps:
       - uses: actions/checkout@v4
 

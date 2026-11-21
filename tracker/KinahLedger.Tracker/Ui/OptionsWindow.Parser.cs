@@ -30,7 +30,7 @@ public partial class OptionsWindow
     /// theme of the look in use.
     /// </summary>
     string? _parserTheme;
-    WrapPanel? _parserThemeHost;
+    System.Windows.Controls.Primitives.UniformGrid? _parserThemeHost;
     FrameworkElement? _parserThemeRow;
 
     /// <summary>The meter window's looks in a theme: Classic's are Standard and the four drawn for fights; another theme's, all of its own.</summary>
@@ -224,13 +224,14 @@ public partial class OptionsWindow
         AddPopOutLink(PageMeter, meter: true);   // Open in its own window, under the switch (Ui/OptionsWindow.PopOuts.cs)
 
         // the stage: the look in use (or under the mouse) in a boss fight, big, over the game
-        _parserLookStage = new Border { Margin = new Thickness(0, 12, 0, 0) };
+        // 10 and 8 px (were 12 and 10): on a 100% screen the page was 624 px in a 621 px window, a scroll bar on a page that must fit (options-test)
+        _parserLookStage = new Border { Margin = new Thickness(0, 10, 0, 0) };
         AutomationProperties.SetName(_parserLookStage, "Overlay look preview");
         PageMeter.Children.Add(_parserLookStage);
 
         var stack = new StackPanel();
         // its own theme chips: its looks come from here, whatever the Kinah overlay's theme
-        _parserThemeHost = new WrapPanel { Margin = new Thickness(0, 0, 0, -6) };
+        _parserThemeHost = new System.Windows.Controls.Primitives.UniformGrid { Columns = 5, Margin = new Thickness(0, 0, -6, -6) };   // two even rows of five (OptionsWindow.Compact)
         AutomationProperties.SetName(_parserThemeHost, "Parser overlay theme");
         _parserThemeRow = LabelRow("Theme", _parserThemeHost);
         stack.Children.Add(_parserThemeRow);
@@ -261,7 +262,7 @@ public partial class OptionsWindow
         throughSaid.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var place = new StackPanel { Orientation = Orientation.Horizontal, Children = { reset, throughSaid, _parserThroughChk } };
         stack.Children.Add(SideRow("Meter position", "Drag it anywhere while click-through is off.", place));
-        PageMeter.Children.Add(Styled(new Border { Child = stack, Margin = new Thickness(0, 10, 0, 0) }, "Group"));
+        PageMeter.Children.Add(Styled(new Border { Child = stack, Margin = new Thickness(0, 8, 0, 0) }, "Group"));
 
         // More: the extras, each off or on as the honest pass left them
         var more = new StackPanel { Tag = "More" };
@@ -501,7 +502,7 @@ public partial class OptionsWindow
             foreach (var t in HudThemes.All)
             {
                 var tk = t.Key;
-                var chip = _host.Chip(L.T(t.Name), tk == _parserTheme, () => { if (tk == _parserTheme) return; _parserTheme = tk; DrawParserLooks(); }, L.T(t.Hint));
+                var chip = Compact(_host.Chip(L.T(t.Name), tk == _parserTheme, () => { if (tk == _parserTheme) return; _parserTheme = tk; DrawParserLooks(); }, L.T(t.Hint)));
                 chip.Tag = "parser-theme:" + tk;
                 _parserThemeHost.Children.Add(chip);
             }

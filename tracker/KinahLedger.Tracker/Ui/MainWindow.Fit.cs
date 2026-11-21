@@ -45,6 +45,7 @@ public partial class MainWindow
     {
         if (_demo) return double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_W"), out var sw) && sw > 300 ? sw : double.PositiveInfinity;
         var h = new WindowInteropHelper(this).Handle;
+        if (ScreenArea.Test is { } ts) return ts.Width;
         if (h == IntPtr.Zero) return SystemParameters.WorkArea.Width;
         double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
         return WF.Screen.FromHandle(h).WorkingArea.Width / (dpi > 0 ? dpi : 1);
@@ -55,6 +56,7 @@ public partial class MainWindow
     {
         if (_demo) return double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var sh) && sh > 300 ? sh : double.PositiveInfinity;
         var h = new WindowInteropHelper(this).Handle;
+        if (ScreenArea.Test is { } ts) return ts.Height;
         if (h == IntPtr.Zero) return SystemParameters.WorkArea.Height;
         double dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
         return WF.Screen.FromHandle(h).WorkingArea.Height / (dpi > 0 ? dpi : 1);
@@ -441,6 +443,7 @@ public partial class MainWindow
     void FitMaxHeight()
     {
         if (_demo) return;
+        if (ScreenArea.Test is { } ts) { _screenMax = ts.Height; ApplyMaxHeight(); return; }
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero) return;
         double dpi = VisualTreeHelper.GetDpi(this).DpiScaleY, dpiX = VisualTreeHelper.GetDpi(this).DpiScaleX;

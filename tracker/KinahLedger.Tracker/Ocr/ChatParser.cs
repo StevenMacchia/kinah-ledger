@@ -506,6 +506,21 @@ public sealed partial class ChatParser
     public Func<long, bool>? Rare { get; set; }
     /// <summary>A run is open (an event, an expedition, a Transcendence, or just left): every reward there is the run's. Never set while farming.</summary>
     public Func<bool>? InRun { get; set; }
+    /// <summary>The playing character's name, when known: "&lt;name&gt; acquired X through Force distribution." is the player's own (<see cref="OwnLine"/>).</summary>
+    public Func<string?>? OwnName { get; set; }
+
+    /// <summary>
+    /// The player's own share of a Force's loot printed with the player's own name ("Swoly acquired Earth Dagger through Force
+    /// distribution.", Steven's log 2026-11-20 13:53:42 and 13:54:16) read as the player's line, "Acquired Earth Dagger
+    /// through Force distribution.". Any other name is another player's (<see cref="SomeoneElses"/>).
+    /// </summary>
+    string OwnLine(string line)
+    {
+        if (OwnName?.Invoke() is not { Length: >= 2 } me) return line;
+        var m = Regex.Match(line, @"^\W*(?<name>\S+)\s+(?<rest>acqu\w*\s+.+)$", RegexOptions.IgnoreCase);
+        return m.Success && string.Equals(m.Groups["name"].Value, me, StringComparison.OrdinalIgnoreCase)
+            ? "A" + m.Groups["rest"].Value.Substring(1) : line;
+    }
 
     /// <summary>Each grade's colour as printed on this PC, learned from names read exactly (null: names aren't judged by colour).</summary>
     public GradeColours? Colours { get; set; }
@@ -618,7 +633,7 @@ public sealed partial class ChatParser
     {
         var line = Timestamp().Replace(raw.Trim(), "");
         if (line.Length == 0 || line.StartsWith('[')) return ("", false);
-        line = CleanSystemLine(line);
+        line = OwnLine(CleanSystemLine(line));
         if (SomeoneElses(line)) return ("", false);
         line = WithoutDistribution(line);
         var k = Kina().Match(line);
@@ -669,6 +684,7 @@ public sealed partial class ChatParser
         if (!line.StartsWith('[')) line = CleanSystemLine(line);
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
+        line = OwnLine(line);
         if (SomeoneElses(line)) yield break;
         line = WithoutDistribution(line);
         if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot
@@ -873,7 +889,7 @@ public sealed partial class ChatParser
                     yield break;
                 }
                 // inside a run a reward the item list lacks (an event's own token, a voucher) is still the run's, by its name
-                if (InRun?.Invoke() == true && System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$"))
+                if (InRun?.Invoke() == true && RunOwnName(name, rawLine))
                 {
                     Note($"not in the item list, counted for the run by its name: {name}");
                     NoteCount(rawLine, countUnsure);
@@ -974,6 +990,22 @@ public sealed partial class ChatParser
         }
         return null;
     }
+
+    /// <summary>
+    /// Whether a name no list knows, read in a run, is the run's own unlisted reward (an event's token, a voucher), counted by
+    /// its name. Not the game's own text ("No items available to acquire."), a wardrobe unlock ("Adamant Guardian (Cloak)
+    /// Skjn"), a one-word scrap ("sour") or a known item read garbled or cut ("Amplify St", "FineOdyle x3", "Enhance Stonexl
+    /// '310"): on Steven's 2026-11-20 log all 17 names this path took were those, and three of them in five minutes told the
+    /// game's data it had missed three pickups, so it stopped counting items for the next three hours.
+    /// </summary>
+    bool RunOwnName(string name, string line) =>
+        System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$")
+        && !name.Any(char.IsDigit)   // a count's debris left in the name ("Enhance Stonexl '310"): a known item's line read garbled
+        && !NotAnItemRx.IsMatch(name) && !SkinTailRx.IsMatch(name) && !PickupCheck.IsSkinUnlock(line)
+        && name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Count(w => w.Count(char.IsLetter) >= 3) >= 2
+        && _items.Near(name, Math.Max(2, name.Length / 3)).Count == 0 && _items.Fragment(name, 3).Count == 0;
+    static readonly System.Text.RegularExpressions.Regex NotAnItemRx = new(@"\b(no items?|available|deleted|invalid|cannot|can't|required)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly System.Text.RegularExpressions.Regex SkinTailRx = new(@"\bSk\W?[il1j!|]\W?n\W*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>"Point(s)", "Pointe)": the tail of a currency line whose head was lost, naming no currency.</summary>
     internal static bool PointsFragment(string name)

@@ -129,7 +129,25 @@ static class GhostMarks
         bool _rechecking;
         (string Text, double Dip, FormattedText Ft)? _ftLast, _ftLast2;
 
-        void Redraw() { using var dc = _drawing.Open(); Paint(dc); }
+        bool _painting;
+
+        /// <summary>
+        /// The line drawn again. The row's words are read before the drawing opens: reading a text's inlines can run a layout
+        /// pass, which renders this element and so asks for a redraw while the drawing is still open (2026-11-21, the Hype
+        /// look's rows: "This object has an outstanding DrawingContext"); a redraw asked during one is dropped.
+        /// </summary>
+        void Redraw()
+        {
+            if (_painting) return;
+            _painting = true;
+            try
+            {
+                if (_words.Count == 0 && Row != null && Pace != null) _words = Words();
+                using var dc = _drawing.Open();
+                Paint(dc);
+            }
+            finally { _painting = false; }
+        }
 
         protected override void OnRender(DrawingContext dc) { _words = Words(); Redraw(); dc.DrawDrawing(_drawing); }
 
@@ -209,8 +227,7 @@ static class GhostMarks
             ChipShown = null; ChipRect = null;
             if (Pace is not { } p || ActualWidth < 20 || ActualHeight < 6) return;
             var bar = Full();
-            if (_words.Count == 0 && Row != null) _words = Words();   // a row just given: its words before the chip goes anywhere
-            var words = _words;
+            var words = _words;   // a row just given: its words read in Redraw, before the drawing opened
             WordsLast = words.Count;
             // a thin bar (a line look's hairline) gets a marker a little taller than itself, a thick one its own height
             double ext = bar.Height < 10 ? 2.5 : 0;

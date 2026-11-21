@@ -896,6 +896,14 @@ public sealed class InstanceLog
     {
         lock (_lock)
         {
+            // an expedition's: a payout-sized Kinah rise is kept for its table, whose coin slot may go unread (ExpeditionCoinLocked)
+            if (abyssId == 0 && delta >= ExpeditionCoinMin && _cur is { Kind: not "Event" and not WorldBoss } x && at >= x.Start.AddSeconds(-5)
+                && !(_leftAt is { } gone && (at - gone).TotalSeconds > RewardGraceSeconds))
+            {
+                x.GameCoins.Add(new GameCoin(at, delta, false, _leftAt == null));
+                ExpeditionCoinLocked(x);
+                return;
+            }
             if (!GameRunLocked(at) || delta <= 0) return;
             var c = _cur!;
             if (abyssId != 0) c.GameAbyssId = abyssId;
@@ -903,6 +911,26 @@ public sealed class InstanceLog
             if (c.Tables > 0 || c.FromGame) UseGameLocked(c, "a game update after its reward picture");
         }
     }
+
+    /// <summary>
+    /// An expedition run whose reward table's coin slot wasn't read: its Kinah is the payout the game's data counted with the
+    /// table (the largest rise of <see cref="ExpeditionCoinMin"/> or more within <see cref="ExpeditionCoinSeconds"/> of it).
+    /// On 2026-11-20 eleven of twelve Krao Cave runs paid 960,000 Kinah each that the game's data counted, and every one of them
+    /// was kept as 0 Kinah: its table's coin slot went unread, and the chat's 960,000 was set aside as the table's to give.
+    /// </summary>
+    void ExpeditionCoinLocked(InstanceRun r)
+    {
+        if (r.Kind == "Event" || r.Tables == 0 || !r.KinahNotRead || r.FromGame || _tableAt is not DateTime tab) return;
+        var coin = r.GameCoins.Where(c => !c.Abyss && c.Delta >= ExpeditionCoinMin && Math.Abs((c.At - tab).TotalSeconds) <= ExpeditionCoinSeconds)
+            .OrderByDescending(c => c.Delta).FirstOrDefault();
+        if (coin == null) return;
+        r.Kinah += coin.Delta; r.KinahNotRead = false;
+        r.ChatKinahSetAside = Math.Max(0, r.ChatKinahSetAside - coin.Delta);
+        CrashLog.Note($"{r.Label}: its table's coin slot wasn't read; its Kinah is the {coin.Delta:N0} the game's data counted with the table ({coin.At.ToLocalTime():HH:mm:ss.f})");
+    }
+    /// <summary>The least Kinah taken for an expedition's payout (a kill inside gives hundreds), and how near its table it must come.</summary>
+    public const long ExpeditionCoinMin = 10_000;
+    public const double ExpeditionCoinSeconds = 30;
 
     /// <summary>The event run's rewards from the game's item data, when it gave them: in place of its reward picture's slots.</summary>
     void UseGameLocked(InstanceRun r, string when)
@@ -999,6 +1027,32 @@ public sealed class InstanceLog
             _byMinimap = true;
             CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (a second reward table at {t.ToLocalTime():HH:mm:ss})");
             return true;
+        }
+    }
+
+    /// <summary>
+    /// The game's map says the instance's boss room opened again after its last boss died: a new run in the same copy, with
+    /// no entry, no move and no countdown between (BossParser.RunAgain). The open run of that place closes here once its own
+    /// table was read, and the next opens now. Until 1.0.46 only the next run's table split them (TableStarting), so on
+    /// 2026-11-20 eight of twelve Krao Cave records ran twice as long as the run (13:47, 13:49, 18:00) and took the next run's
+    /// first gathers and its 960,000 Kinah. Before its table the room opening again is that run's own (a wipe's retry): nothing.
+    /// </summary>
+    public void RunAgain(DateTime at, string instance)
+    {
+        lock (_lock)
+        {
+            if (_cur is not { } c || c.Kind is "Event" or WorldBoss || !RoomWitness.SameName(instance, c.Zone)) return;
+            if (_tableAt is not DateTime tab || tab < c.Start || at < tab)
+            {
+                CrashLog.Note($"{c.Label}: the game's map says its room opened again ({at.ToLocalTime():HH:mm:ss}) before its reward table was read: the same run");
+                return;
+            }
+            var zone = c.Zone; var kind = c.Kind; var ev = c.Event; var fam = c.Family;
+            CloseLocked($"its room opened again after its last boss died ({at.ToLocalTime():HH:mm:ss}, the game's map): a new run in the same copy");
+            _cur = new InstanceRun { Zone = zone, Kind = kind, Event = ev, Family = fam, Start = at };
+            _byMinimap = true;
+            Witness(_cur, "game: room again", at);
+            CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (its room opened again in the same copy, {at.ToLocalTime():HH:mm:ss})");
         }
     }
 
@@ -1255,6 +1309,8 @@ public sealed class InstanceLog
             CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, counted with what was read)" : "")}; the chat's {chatItems} set aside");
             // an event whose rewards the game's own item data gave: those, complete, in place of the cards' slots
             UseGameLocked(_cur, "its reward cards filed");
+            // an expedition whose coin slot went unread: the payout the game's data counted with the table
+            ExpeditionCoinLocked(_cur);
         }
     }
 
