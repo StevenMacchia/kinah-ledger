@@ -204,6 +204,8 @@ public static partial class WpfApp
             ("timer", kinah, soon, null, now, false),
             ("enter", kinah, due, null, now, false),
             ("idle", idle, null, null, now, false),
+            // before the first count with farming done today: the whole Buddy on today's figures (Steven, 2026-11-21)
+            ("today", new Dictionary<string, string>(idle) { ["todayRate"] = "568K", ["todayTotal"] = "1.27M" }, soon, null, now, false),
             ("warming", warming, null, null, now, false),
             ("best", best, soon, null, now, false),
             ("notice", notice, null, null, now, false),

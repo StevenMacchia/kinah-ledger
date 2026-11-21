@@ -242,7 +242,7 @@ sealed partial class HudScorebug : TacticalLook
             if (f.Total.Length > 0)
             {
                 var ses = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                ses.Children.Add(Cap(f.Abyss ? f.TotalWord : L.T("Session"), Sub));
+                ses.Children.Add(Cap(f.Abyss ? f.TotalWord : f.Today ? Cap1(L.T("today")) : L.T("Session"), Sub));
                 var tv = T(f.Total, 18, InkB); tv.Margin = new Thickness(0, -3, 0, 0);
                 ses.Children.Add(tv);
                 Row(_bug, new Block(LightC, ses, BugH, new Thickness(13, 0, 13, 0)));

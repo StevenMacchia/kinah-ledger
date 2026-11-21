@@ -210,7 +210,7 @@ sealed partial class HudFighter : TacticalLook
             _topRow = top;
             // SES 894K · BEST −130K (in the Abyss: AP 24.7K)
             var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, -1, 0, 0) };
-            if (f.Total.Length > 0) { sub.Children.Add(Label(f.Abyss ? f.TotalWord : L.T("SES"))); sub.Children.Add(Fig(f.Total, Phos, 16)); }
+            if (f.Total.Length > 0) { sub.Children.Add(Label(f.Abyss ? f.TotalWord : f.Today ? L.T("today").ToUpperInvariant() : L.T("SES"))); sub.Children.Add(Fig(f.Total, Phos, 16)); }
             var gap = Gap(f);
             if (gap.Length > 0 && !f.Abyss)
             {

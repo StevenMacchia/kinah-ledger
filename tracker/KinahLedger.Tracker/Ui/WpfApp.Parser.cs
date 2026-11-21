@@ -809,7 +809,8 @@ public static partial class WpfApp
             check(HudStackLook.FightWidth == wBefore, $"...and moved back puts the meter back ({HudStackLook.FightWidth:0}, was {wBefore:0})");
             // every look stays on offer inside the Kinah overlay too (Steven, 2026-11-20: "you should not have to choose the buddy
             // theme to choose the dps meter theme ... the styles should always all be available"): another theme's chip shows its
-            // looks, and picking one gives the Parser its own window in it with the Kinah overlay's look untouched
+            // looks, and picking one gives the Parser its own window in it; the Buddy takes the same look (Steven, 2026-11-21: "sync
+            // the buddy and the dpsmeter styles together"), and picking the Buddy's look picks the meter's back
             {
                 string kinahLook0 = opt.HudLookEditForTest;
                 string other = HudThemes.All.Select(t => t.Key).First(t => t != HudThemes.Of(kinahLook0) && t != HudThemes.Classic);
@@ -817,8 +818,11 @@ public static partial class WpfApp
                 var (otherKeys, otherOn) = opt.ParserLooksForTest;
                 string otherPick = otherKeys.LastOrDefault() ?? "";
                 opt.PickParserLookForTest(otherPick); DoEvents();
-                check(otherKeys.SequenceEqual(OptionsWindow.ParserLooksOf(other)) && otherOn == null && sws.Separate.IsChecked == false && opt.ParserLooksForTest.On == otherPick && opt.HudLookEditForTest == kinahLook0,
-                    $"Options › DPS meter: inside the Kinah overlay every theme's looks are on offer ({other}: {string.Join(", ", otherKeys)}); picking {otherPick} gives the Parser its own window in it (inside the overlay now {sws.Separate.IsChecked}, outlined {opt.ParserLooksForTest.On ?? "none"}) and the Kinah overlay keeps {kinahLook0} ({opt.HudLookEditForTest})");
+                check(otherKeys.SequenceEqual(OptionsWindow.ParserLooksOf(other)) && otherOn == null && sws.Separate.IsChecked == false && opt.ParserLooksForTest.On == otherPick && opt.HudLookEditForTest == otherPick,
+                    $"Options › DPS meter: inside the Kinah overlay every theme's looks are on offer ({other}: {string.Join(", ", otherKeys)}); picking {otherPick} gives the Parser its own window in it (inside the overlay now {sws.Separate.IsChecked}, outlined {opt.ParserLooksForTest.On ?? "none"}) and the Buddy takes it too ({opt.HudLookEditForTest})");
+                opt.PickHudLookForTest(kinahLook0); DoEvents();
+                check(opt.HudLookEditForTest == kinahLook0 && (!HudThemes.Themed(kinahLook0) || opt.ParserLooksForTest.On == kinahLook0 || sws.Separate.IsChecked == true),
+                    $"...and picking the Buddy's look {kinahLook0} picks the meter's too (Buddy {opt.HudLookEditForTest}, meter {opt.ParserLooksForTest.On ?? "none"})");
                 sws.Separate.IsChecked = true; sws.Separate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
                 check(opt.ParserLooksForTest.Keys.SequenceEqual(HudThemes.FightLooks(HudThemes.Of(kinahLook0))), $"...and Parser inside the Kinah overlay on again offers the overlay's own fight looks first ({string.Join(", ", opt.ParserLooksForTest.Keys)})");
             }

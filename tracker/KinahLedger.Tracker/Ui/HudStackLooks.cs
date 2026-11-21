@@ -165,16 +165,16 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
 
     /// <param name="Abyss">In the Abyss (HudKit.Abyss): Rate is the Abyss Points hour and Total the points so far, then Stats (kills, deaths, Kinah) and the points' art (Icon).</param>
     protected sealed record Figures(bool Counted, bool Warm, string Rate, string Total, double Share, string ToBest, bool Beat, string Zone, string Clock, string Note, Brush NoteTone,
-        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon, string Idle = "", string? StatsTip = null)
+        bool Abyss, IReadOnlyList<(string Figure, string Word, Brush Tone)> Stats, string Icon, string Idle = "", string? StatsTip = null, bool Today = false)
     {
         /// <summary>A sign of the figures, for a look's redraw check.</summary>
-        public string Sig => $"{Counted}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{StatsTip}|{Icon}|{(Counted && Rate.Length > 0 ? "" : Idle)}";
+        public string Sig => $"{Counted}|{Today}|{Warm}|{Rate}|{Total}|{Math.Round(Share, 2)}|{Beat}|{Note}|{Abyss}|{string.Join(",", Stats.Select(s => s.Figure + s.Word))}|{StatsTip}|{Icon}|{(Counted && Rate.Length > 0 ? "" : Idle)}";
         /// <summary>The hour's colour: gold for Kinah, ink for Abyss Points.</summary>
         public Brush Tone => Abyss ? Ink : Gold;
         /// <summary>The hour's word: "/h", or "AP/h" for Abyss Points; none while it warms up.</summary>
         public string Unit => Warm ? "" : Abyss ? L.T("AP/h") : L.T("/h");
-        /// <summary>The session's word: "session", or "AP" for the points so far.</summary>
-        public string TotalWord => Abyss ? "AP" : L.T("session");
+        /// <summary>The session's word: "session", "today" for today's figures before the first count, or "AP" for the points so far.</summary>
+        public string TotalWord => Abyss ? "AP" : Today ? L.T("today") : L.T("session");
     }
 
     /// <summary>The Abyss's stats as one small line ("9 PvP · 2 deaths · 266.5K Kinah"), figures in their colour, words muted.</summary>
@@ -199,6 +199,8 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
         bool counted = run || V("total") is not ("" or "0") || Picks(v).Count > 0;
         var (share, words, beat) = Chase(v);
         bool abyss = Abyss(v);
+        // before this count's first figure, the whole Buddy with today's figures (Steven, 2026-11-21); the idle line only with none today
+        bool today = !counted && !abyss && V("todayTotal").Length > 0 && V("todayRate").Length > 0;
         if (abyss) { share = -1; words = ""; }   // the ring of your best is a Kinah hour's: not beside the points
         string note; Brush tone;
         if (V("paused").Length > 0) { note = V("paused"); tone = Warn; }
@@ -208,9 +210,14 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
         else if (_acc.Length > 0) { note = _acc; tone = _accCheck ? Warn : Mint; }
         else { note = ""; tone = Muted; }
         _idle = V("idle");
+        if (today)
+            return _figsNow = new Figures(true, false, V("todayRate"), V("todayTotal"), -1, "", false, V("zone"), "", note, tone, false, Array.Empty<(string, string, Brush)>(), "", _idle, null, Today: true);
         return _figsNow = new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
             abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle, abyss && counted ? AbyssTip(v) : null);
     }
+
+    /// <summary>A word with its first letter capital ("Today"), for a look whose labels are in title case.</summary>
+    protected static string Cap1(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     /// <summary>The window's idle line as last read (the "idle" value), for <see cref="Waiting(bool)"/>.</summary>
     string _idle = "";

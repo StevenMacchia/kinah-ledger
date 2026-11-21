@@ -529,7 +529,10 @@ public partial class OptionsWindow
                 if (!own) { PickHudLook(k); return; }
                 // a look from another theme than the Kinah overlay's: the Parser takes its own window in it, the overlay stays
                 if (inKinah) _parserSeparateChk.IsChecked = false;
-                _parserLookPick = k; DrawParserLooks(); Refresh();
+                _parserLookPick = k;
+                // the Buddy takes the same look (Steven, 2026-11-21: "sync the buddy and the dpsmeter styles together")
+                if (HudThemes.Themed(k)) PickHudLook(k);
+                DrawParserLooks(); Refresh();
             }
             card.MouseLeftButtonUp += (_, _) => Pick();
             card.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Pick(); e.Handled = true; } };

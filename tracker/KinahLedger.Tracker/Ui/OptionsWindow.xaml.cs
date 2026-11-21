@@ -382,6 +382,8 @@ public partial class OptionsWindow : Window
         if (_loading || key == _edit.HudLook) return;
         Edit(_edit with { HudLook = key });
         BuildHudLooks(key);
+        // the meter takes the same look when its theme draws one (Steven, 2026-11-21: "sync the buddy and the dpsmeter styles together")
+        if (HudThemes.Themed(key) && ParserLooksOf(HudThemes.Of(key)).Contains(key)) { _parserLookPick = key; _parserTheme = null; }
         DrawParserLooks();   // In game › Parser's look row shows the same choice
     }
 
