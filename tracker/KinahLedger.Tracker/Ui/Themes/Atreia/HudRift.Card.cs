@@ -133,7 +133,7 @@ sealed partial class HudRift : IThemeCard
                 var art = new TacSketch((dc, s) =>
                 {
                     var r = new Rect(0, 1.5, s.Width, s.Height - 3);
-                    double fx = Math.Max(0, s.Width - rateCols - 4) * Math.Clamp(of, 0, 1);   // the bars end before the crit and back columns
+                    double fx = Math.Max(0, s.Width - 46 - 56 - rateCols - 8) * Math.Clamp(of, 0, 1);   // the bars stay under the skill's name, clear of every figure column
                     if (fx < 1) return;
                     var fill = new Rect(0, r.Y, fx, r.Height);
                     dc.PushClip(new RectangleGeometry(r, 4, 4));

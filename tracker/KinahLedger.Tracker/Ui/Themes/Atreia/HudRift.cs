@@ -523,9 +523,9 @@ sealed partial class HudRift : ModernLook
                 hl.Tag = "hp-text";
                 Grid.SetColumn(hl, 1); hpLine.Children.Add(hl);
                 _fightBody.Children.Add(hpLine);
-                _fightBody.Children.Add(new Border { Height = 15 });   // the room the leader's crown floats in
+                _fightBody.Children.Add(new Border { Height = 18 });   // the room the leader's crown floats in
             }
-            else _fightBody.Children.Add(new Border { Height = 15 });
+            else _fightBody.Children.Add(new Border { Height = 18 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {

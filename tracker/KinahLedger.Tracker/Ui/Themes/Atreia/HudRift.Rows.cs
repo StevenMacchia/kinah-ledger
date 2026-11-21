@@ -135,9 +135,20 @@ sealed partial class HudRift
             foreach (var (t, col) in new[] { (_share, 8), (_dmg, 9), (_crit, 10) }) { t.HorizontalAlignment = HorizontalAlignment.Right; Put(t, col); }
             _cp.Margin = new Thickness(5, 1, 0, 0);
             _root.SizeChanged += (_, _) => Fit();
+            // the bar's edge is drawn knowing where the words sit: drawn again when they move or change width (never on a tick)
+            foreach (var el in new FrameworkElement[] { _nameLine, _heal, _dps, _share, _cp }) el.SizeChanged += (_, _) => _art.InvalidateVisual();
+            _words.LayoutUpdated += OnWordsLaid;
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
+
+        /// <summary>The first layout of the words: the bar drawn again once they have their places (then the handler goes).</summary>
+        void OnWordsLaid(object? sender, EventArgs e)
+        {
+            if (_name.ActualWidth <= 0) return;
+            _words.LayoutUpdated -= OnWordsLaid;
+            _art.InvalidateVisual();
+        }
 
         bool Leads => _m is { Rank: 1, CpOnly: false, Pvp: false };
 
@@ -198,7 +209,7 @@ sealed partial class HudRift
 
         // ---- the moments: small parts drawn once, only moved (transforms) and faded (opacity) while they play
 
-        const double CrownX = PadX + RankW + Gap1 + IconW / 2, CrownY = (H - IconW) / 2 + 3.5;
+        const double CrownX = PadX + RankW + Gap1 + IconW / 2, CrownY = -1.5;   // floating above the emblem, clear of it and of the rank
 
         /// <summary>Whether a point across the row (px from its left) falls under its words or figures, give or take 4 px.</summary>
         bool UnderWords(double x)
@@ -228,7 +239,7 @@ sealed partial class HudRift
             // the fissure's flare (breaking out above and below the bar), the streak a climb leaves, the crown's flash and ring
             _flare = new TacSketch((dc, _) => Fissure(dc, 0, .5, H - 1, LightC, 2.2, 3)) { Opacity = 0, RenderTransform = _flareAt };
             _streak = new TacSketch((dc, _) => dc.DrawRectangle(Mod.Grad(true, (Mod.A(CyanC, .75), 0), (Mod.A(VioletC, 0), 1)), null, new Rect(-1.2, H, 2.4, 18))) { Opacity = 0, RenderTransform = _streakAt };
-            _flash = new TacSketch((dc, _) => Fissure(dc, CrownX, CrownY - 17, 30, VioletC, 1.6, 6)) { Opacity = 0 };
+            _flash = new TacSketch((dc, _) => Fissure(dc, CrownX, CrownY - 14, 18, VioletC, 1.6, 6)) { Opacity = 0 };
             _ring = new System.Windows.Shapes.Ellipse { Width = 80, Height = 26, Stroke = Mod.Br(LightC, .95), StrokeThickness = 1.6, Opacity = 0, RenderTransform = _ringScale, IsHitTestVisible = false };
             Canvas.SetLeft(_ring, CrownX - 40); Canvas.SetTop(_ring, CrownY - 15);
             // the new leader's burst: the row's edges torn open in rift light, rushing out from the crown; a glow over the row; shards
@@ -438,7 +449,7 @@ sealed partial class HudRift
         /// <summary>The crown over the leader's emblem: three crystal shards floating over it (drawn once; a landing moves it).</summary>
         void DrawCrown(DrawingContext dc, Size s)
         {
-            if (Leads) Crown(dc, CrownX, CrownY, 2.05, 0);
+            if (Leads) Crown(dc, CrownX, CrownY, 1.5, 0);
         }
     }
 }
