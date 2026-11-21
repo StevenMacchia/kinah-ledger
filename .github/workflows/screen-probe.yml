@@ -14,22 +14,18 @@ jobs:
           public static class Disp {
             [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplaySettingsW(string dev, int mode, IntPtr dm);
             [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int ChangeDisplaySettingsW(IntPtr dm, int flags);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplayDevicesW(string d, int n, byte[] dd, int f);
+            public static string[] Dev() { var l = new System.Collections.Generic.List<string>(); for (int i = 0; i < 6; i++) { var dd = new byte[840]; BitConverter.GetBytes(840).CopyTo(dd, 0); if (!EnumDisplayDevicesW(null, i, dd, 0)) break; l.Add(System.Text.Encoding.Unicode.GetString(dd, 4, 64).TrimEnd((char)0) + " | " + System.Text.Encoding.Unicode.GetString(dd, 68, 256).TrimEnd((char)0) + " | flags " + BitConverter.ToInt32(dd, 324)); } return l.ToArray(); }
           }
           '@
           # a raw DEVMODEW (220 bytes): dmSize at 68, dmFields at 72, dmBitsPerPel 168, dmPelsWidth 172, dmPelsHeight 176
           $M = [Runtime.InteropServices.Marshal]
-          $buf = $M::AllocHGlobal(220); $best = $null; $bw = 0
-          for ($i = 0; $i -lt 500; $i++) {
-            $M::Copy([byte[]]::new(220), 0, $buf, 220); $M::WriteInt16($buf, 68, 220)
-            if (-not [Disp]::EnumDisplaySettingsW($null, $i, $buf)) { break }
-            $w = $M::ReadInt32($buf, 172); $h = $M::ReadInt32($buf, 176)
-            if ($M::ReadInt32($buf, 168) -ge 32 -and $w -le 1920 -and $h -le 1080 -and $w -gt $bw) { $bw = $w; $best = New-Object byte[] 220; $M::Copy($buf, $best, 0, 220) }
+          $buf = $M::AllocHGlobal(220)
+          [Disp]::Dev() | ForEach-Object { "device: $_" }
+          foreach ($dev in @($null, '\.\DISPLAY1', '\.\DISPLAY2')) {
+            foreach ($i in @(-1, 0, 1)) {
+              $M::Copy([byte[]]::new(220), 0, $buf, 220); $M::WriteInt16($buf, 68, 220)
+              $ok = [Disp]::EnumDisplaySettingsW($dev, $i, $buf)
+              "dev '$dev' mode $i -> $ok $($M::ReadInt32($buf, 172))x$($M::ReadInt32($buf, 176))x$($M::ReadInt32($buf, 168)) err $($M::GetLastWin32Error())"
+            }
           }
-          "modes read: $i"
-          if ($null -eq $best) { "no mode found"; exit 0 }
-          $M::Copy($best, 0, $buf, 220)
-          "setting $($M::ReadInt32($buf, 172))x$($M::ReadInt32($buf, 176))"
-          "ChangeDisplaySettingsW -> $([Disp]::ChangeDisplaySettingsW($buf, 0)) (0 = done)"
-          Start-Sleep 2
-          Add-Type -AssemblyName System.Windows.Forms
-          "screen now: " + [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
