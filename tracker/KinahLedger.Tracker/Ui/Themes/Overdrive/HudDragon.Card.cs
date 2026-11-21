@@ -17,13 +17,14 @@ sealed partial class HudDragon : IThemeCard
     /// </summary>
     public FrameworkElement DrawCard(MemberCard c)
     {
-        const double In = 12;
+        // In: the plate's inner edge; HeadRoom: the small dragon's head before the member's name
+        const double In = 12, HeadRoom = 40;
         double w = 270 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
         var stack = new StackPanel { Margin = new Thickness(In, 12, In + 4, 12) };
 
         // the head on the class wash: art, name, CP, YOU ... class
-        var head = new Grid { Height = 28, Margin = new Thickness(26, 0, 0, 6) };
+        var head = new Grid { Height = 28, Margin = new Thickness(HeadRoom, 0, 0, 6) };
         var hg = new Grid();
         hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var icon = ThemeText.Icon(c.Class, 20, c.Name);
@@ -47,11 +48,11 @@ sealed partial class HudDragon : IThemeCard
         Grid.SetColumn(cls, 2); hg.Children.Add(cls);
         head.Children.Add(Lit(hg));
         // the card widens for a long name (up to 60 more) before the name is cut
-        double need = 26 + 20 + 8 + Mod.W(name) + extra + Mod.W(cls) + 8 + 2 * In + 8;
+        double need = HeadRoom + 20 + 8 + Mod.W(name) + extra + Mod.W(cls) + 8 + 2 * In + 8;
         w = Math.Max(w, Math.Min(w + 60, need));
         double inner = w - 2 * In - 4;
         stack.Width = inner;
-        name.MaxWidth = Math.Max(60, inner - 26 - 28 - extra - Mod.W(cls) - 8);
+        name.MaxWidth = Math.Max(60, inner - HeadRoom - 28 - extra - Mod.W(cls) - 8);
         stack.Children.Add(head);
 
         // the figures: DPS big, share and damage, each under its small word
