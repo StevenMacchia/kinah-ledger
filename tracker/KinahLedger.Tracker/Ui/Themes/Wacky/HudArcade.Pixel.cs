@@ -202,10 +202,33 @@ sealed partial class HudArcade
     static readonly SolidColorBrush ShadeB = Frozen(Color.FromArgb(0xE0, 0, 0, 0));
 
     /// <summary>A figure in the score face (LED digits, solid, a dark edge, a phosphor bloom); a text where it can't spell it.</summary>
-    static FrameworkElement Fig(string s, double px, Color ink, double glowA = .4, Brush? fill = null, double textSize = 0)
+    /// <remarks>
+    /// A real text (the tests, the cut-off check and screen readers read it), in the bold tabular face, worn as an LED
+    /// read-out: a frozen dot-grid mask over its glyphs makes them a matrix of lit dots; the big ones (the score, the clock, the
+    /// card's DPS) glow. <paramref name="px"/> only sizes it when <paramref name="textSize"/> isn't given.
+    /// </remarks>
+    static TextBlock Fig(string s, double px, Color ink, double glowA = .4, Brush? fill = null, double textSize = 0)
     {
-        if (Spells(s, true)) return new LedWord(s, px, fill ?? Ink(ink), ink, glowA, fig: true);
-        return Tt(s, textSize > 0 ? textSize : Math.Round(7 * px * 1.25 * 2) / 2, fill ?? Ink(ink), FontWeights.Bold);
+        var t = Tt(s, textSize > 0 ? textSize : Math.Round(7 * px * 1.25 * 2) / 2, fill ?? Ink(ink), FontWeights.Bold);
+        t.OpacityMask = t.FontSize >= 15 ? DotMaskBig : DotMask;
+        if (glowA >= .45) t.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = ink, ShadowDepth = 0, BlurRadius = 8, Opacity = .55 };
+        return t;
+    }
+
+    /// <summary>The LED dot grid a figure is seen through: lit dots with a dim hairline between them (frozen, tiled, made once).</summary>
+    static readonly DrawingBrush DotMask = MakeDots(1.5, 1.15), DotMaskBig = MakeDots(2, 1.5);
+    static DrawingBrush MakeDots(double pitch, double dot)
+    {
+        var g = new DrawingGroup();
+        g.Children.Add(new GeometryDrawing(new SolidColorBrush(Color.FromArgb(0xA8, 0, 0, 0)), null, new RectangleGeometry(new Rect(0, 0, pitch, pitch))));
+        g.Children.Add(new GeometryDrawing(Brushes.Black, null, new RectangleGeometry(new Rect(0, 0, dot, dot))));
+        var b = new DrawingBrush(g)
+        {
+            TileMode = TileMode.Tile, Stretch = Stretch.None, Viewport = new Rect(0, 0, pitch, pitch), ViewportUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(0, 0, pitch, pitch), ViewboxUnits = BrushMappingMode.Absolute,
+        };
+        b.Freeze();
+        return b;
     }
 
     /// <summary>A class's colour pushed vivid for the LED cells (the class colours are pastel; lit LEDs are saturated).</summary>

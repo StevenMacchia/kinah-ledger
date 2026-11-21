@@ -113,7 +113,7 @@ sealed partial class HudArcade
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
         /// <summary>The DPS in the score face (LED digits), its host in the DPS column; rebuilt only when the figure or the rank changes.</summary>
-        readonly Border _dps = new() { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Tag = "row-dps" };
+        readonly Border _dps = new() { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         string _dpsSig = "";
         const double DpsPx = 2.1;
         readonly TranslateTransform _crownDrop = new();
@@ -134,7 +134,7 @@ sealed partial class HudArcade
             _share.Margin = new Thickness(0, 3, 0, 0); _dmg.Margin = new Thickness(0, 1, 0, 0); _crit.Margin = new Thickness(0, 1, 0, 0);
             _heal.Margin = new Thickness(6, 3, 0, 0); _heal.VerticalAlignment = VerticalAlignment.Top;
             // the columns: rank, the class art, the name's line over its bar (the rest), heal, the DPS, the share; expanded, the damage and the crit rate
-            _dpsW = Math.Ceiling(LedWord.WidthOf("888.8K", DpsPx, true)) + 8; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
+            _dpsW = FigCol(Fig("", DpsPx, Colors.White, 0, textSize: 17), "888.8K") + 6; _shareW = FigCol(_share, "88.8%", "100%", L.T("CP")) + 6;
             _dmgW = FigCol(_dmg, "888.88M") + 8; _critW = FigCol(_crit, "88%") + 8;
             foreach (var w in new[] { RankW, IconW, double.NaN, 0, _dpsW, _shareW, 0, 0 })
                 _words.ColumnDefinitions.Add(new ColumnDefinition { Width = double.IsNaN(w) ? new GridLength(1, GridUnitType.Star) : w == 0 ? GridLength.Auto : new GridLength(w) });
@@ -205,10 +205,12 @@ sealed partial class HudArcade
             if (sig != _dpsSig)
             {
                 _dpsSig = sig;
-                _dps.Child = Fig(m.Figure, px, Mod.Mix(tone, Colors.White, .35), 0, textSize: m.CpOnly ? 14 : 17);
+                var fig = Fig(m.Figure, px, Mod.Mix(tone, Colors.White, .35), 0, textSize: m.CpOnly ? 14 : 17);
+                fig.Tag = "row-dps";
+                _dps.Child = fig;
             }
             // a wider figure (Combat Power before the first hit, "167,548") widens its column: never a digit cut
-            _dpsInk = Spells(m.Figure, true) ? Math.Ceiling(LedWord.WidthOf(m.Figure, px, true)) : TextW(Tt("", m.CpOnly ? 14 : 17, White, FontWeights.Bold), m.Figure);
+            _dpsInk = TextW(Tt("", m.CpOnly ? 14 : 17, White, FontWeights.Bold), m.Figure);
             _words.ColumnDefinitions[4].Width = new GridLength(Math.Max(_dpsW, _dpsInk + 6));
             _share.Text = m.ShareText;
             _dmg.Text = c.Expanded ? m.Damage : "";
