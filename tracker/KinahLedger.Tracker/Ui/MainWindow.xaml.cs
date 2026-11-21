@@ -235,7 +235,7 @@ public partial class MainWindow : Window
         // the tables grow with what's farmed and the window with them, never scrolling while it fits; 0.7.6 (Steven): the
         // window is never taller than the screen, so past that, one scroll area below the summary holds the pickups and
         // every table (they no longer scroll on their own). A wheel over a table scrolls the whole area.
-        _screenMax = SystemParameters.WorkArea.Height; ApplyMaxHeight();
+        _screenMax = ScreenArea.Work.Height; ApplyMaxHeight();
         foreach (var inner in new[] { DropsScroll, CraftScroll })
             inner.PreviewMouseWheel += (_, ev) =>
             {
@@ -1667,7 +1667,7 @@ public partial class MainWindow : Window
     /// <summary>When the window grows past the bottom of the screen it's on, it moves up instead (main screen only; elsewhere it's left where the player put it).</summary>
     void KeepOnScreen()
     {
-        var wa = SystemParameters.WorkArea;
+        var wa = ScreenArea.Work;
         if (WindowState != WindowState.Normal || double.IsNaN(Top) || Left < wa.Left || Left >= wa.Right) return;
         if (Top + ActualHeight > wa.Bottom) Top = Math.Max(wa.Top, wa.Bottom - ActualHeight);
         // Full view doubles the width: near the right edge the window moves left to stay on the screen
