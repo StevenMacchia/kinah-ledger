@@ -229,6 +229,7 @@ public partial class MainWindow : Window
         };
         _timer.Start();
         SourceInitialized += OnSourceInitialized;
+        WatchBalance();
         StateChanged += OnStateChanged;
         Closing += OnClosingWindow;
 

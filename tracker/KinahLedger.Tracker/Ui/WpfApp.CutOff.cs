@@ -138,7 +138,7 @@ public static partial class WpfApp
                 if (needs > has + 0.75)
                 {
                     bool ellipsis = t.TextTrimming != TextTrimming.None;
-                    if (!(ellipsis && mayTrim)) { var chain = new System.Text.StringBuilder(); for (DependencyObject? a = t; a != null && chain.Length < 600; a = VisualTreeHelper.GetParent(a)) if (a is FrameworkElement fa) chain.Append($"{fa.GetType().Name}:{fa.ActualWidth:0.#}  "); Console.WriteLine($"DIAG trimmed '{s}' {info[s]} chain {chain}"); }
+                    if (!(ellipsis && mayTrim)) { var chain = new System.Text.StringBuilder(); for (DependencyObject? a = t; a != null && chain.Length < 600; a = VisualTreeHelper.GetParent(a)) if (a is FrameworkElement fa) chain.Append($"{fa.GetType().Name}:{fa.ActualWidth:0.#}  "); Console.WriteLine($"DIAG trimmed '{s}' {info[s]} chain {chain}"); for (DependencyObject? a = t; a != null; a = VisualTreeHelper.GetParent(a)) if (a is Grid ga && ga.ColumnDefinitions.Count > 0) Console.WriteLine($"DIAG grid {ga.ActualWidth:0.##} cols [{string.Join(" ", ga.ColumnDefinitions.Select(c => c.ActualWidth.ToString("0.##")))}] kids [{string.Join(" ", ga.Children.OfType<FrameworkElement>().Select(k => $"{k.GetType().Name}:{(k.Tag as string)}:{k.DesiredSize.Width:0.##}/{k.ActualWidth:0.##}/c{Grid.GetColumn(k)}"))}]"); }
                     if (!(ellipsis && mayTrim)) found.Add($"\"{s}\": {(ellipsis ? "trimmed" : "cut by its box")} ({needs:0.#} px wide in {has:0.#})");
                     return;   // said once
                 }
