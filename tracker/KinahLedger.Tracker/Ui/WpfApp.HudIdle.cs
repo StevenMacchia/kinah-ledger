@@ -48,7 +48,7 @@ public static partial class WpfApp
             CultureInfo.DefaultThreadCurrentCulture = defCulture; CultureInfo.DefaultThreadCurrentUICulture = defUi;
         }
         var baseV = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
-        var idleV = new Dictionary<string, string>(baseV) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["feedText"] = "", ["feedValue"] = "", ["feedRate"] = "", ["chase"] = "", ["toBest"] = "", ["paused"] = "", ["notice"] = "", ["flash"] = "", ["flag"] = "", ["show"] = "" };
+        var idleV = new Dictionary<string, string>(baseV) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["feedText"] = "", ["feedValue"] = "", ["feedRate"] = "", ["chase"] = "", ["toBest"] = "", ["paused"] = "", ["notice"] = "", ["flash"] = "", ["flag"] = "", ["show"] = "", ["todayRate"] = "", ["todayTotal"] = "" };
         foreach (var k in idleV.Keys.Where(k => k.StartsWith("pick") || k.StartsWith("top") || k.StartsWith("rare")).ToList()) idleV[k] = "";
         foreach (var k in MainWindow.AbyssKeys) idleV[k] = "";
         double w0 = HudStackLook.FightWidth; HudStackLook.FightWidth = 350;
@@ -76,6 +76,17 @@ public static partial class WpfApp
                 }
         }
         finally { HudStackLook.FightWidth = w0; }
+        // with farming done today, a themed look draws its whole card on today's figures, named "today" (Steven, 2026-11-21)
+        {
+            var tv = new Dictionary<string, string>(idleV) { ["idle"] = lines[0].Line, ["idleShort"] = lines[0].Short, ["todayRate"] = "568K", ["todayTotal"] = "1.27M" };
+            var th = new HudWindow(null, HudLooks.Default, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            th.SetScale(1.1); th.Update(tv); th.Show(); DoEvents();
+            var tt = VisibleTexts(th);
+            var tall = string.Join(" ", tt);
+            th.Close();
+            check(tall.Contains("568K") && tall.Contains("1.27M") && tall.Contains("today", StringComparison.OrdinalIgnoreCase) && !tall.Contains(lines[0].Line),
+                $"before the first count with farming done today, the Buddy ({HudLooks.Default}) shows its whole card on today's figures, not the idle line ({tall})");
+        }
         check(missing.Count == 0, "every look shows the idle line whole where the hour waits, in English, Korean and Chinese" + (missing.Count > 0 ? ": " + string.Join("; ", missing.Take(16)) : ""));
         check(old.Count == 0, "no look says \"Waiting for the first count\" or \"Waiting for Abyss Points\" while there is an idle line" + (old.Count > 0 ? ": " + string.Join("; ", old.Take(16)) : ""));
         check(cut.Count == 0, "the idle line is never cut off, in any look or language, at width 350 and Scale 1.1" + (cut.Count > 0 ? ": " + string.Join("; ", cut.Take(80)) : ""));

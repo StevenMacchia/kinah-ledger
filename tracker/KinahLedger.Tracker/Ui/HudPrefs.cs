@@ -49,6 +49,8 @@ public sealed class HudPrefs
     public bool LookPicked { get; set; }
     /// <summary>The 1.0.8 move to Modern Glass is done (see <see cref="FromText"/>), so a later pick of Buddy stays.</summary>
     public bool GlassSettled { get; set; }
+    /// <summary>The 1.0.52 one-time sync is done: the Buddy took the DPS meter's look (see <see cref="Load"/>).</summary>
+    public bool LookSynced { get; set; }
 
     public const double MinScale = 0.7, MaxScale = 2;
 
@@ -73,13 +75,26 @@ public sealed class HudPrefs
             var p = PathFor();
             if (File.Exists(p) && FromText(File.ReadAllText(p), out bool moved) is { } saved)
             {
+                // 1.0.52 (Steven, 2026-11-21: "sync the buddy and the dpsmeter styles together"): the Buddy takes the meter's look
+                // once, when the meter's is a theme's look that draws a Buddy too; from then on picking either picks both (Options)
+                if (!saved.LookSynced)
+                {
+                    try
+                    {
+                        var meter = KinahLedger.Parser.ParserPrefs.Load().Look;
+                        if (HudThemes.Themed(meter) && HudLooks.All.Any(l => l.Key == meter)) saved.Look = meter;
+                    }
+                    catch (Exception) { /* no meter choice: the Buddy keeps its look */ }
+                    saved.LookSynced = true;
+                    moved = true;
+                }
                 if (moved) saved.Save();
                 return saved;
             }
         }
         catch (Exception) { /* corrupt: decide again */ }
         // overlays move by a plain drag, and click-through is a choice in Options, off at first (Steven, 2026-11-14)
-        var fresh = new HudPrefs { Locked = false, LookSettled = true, BuddySettled = true };
+        var fresh = new HudPrefs { Locked = false, LookSettled = true, BuddySettled = true, LookSynced = true };
         fresh.Save();
         return fresh;
     }

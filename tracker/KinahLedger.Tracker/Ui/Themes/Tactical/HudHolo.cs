@@ -194,7 +194,7 @@ sealed partial class HudHolo : TacticalLook
                     dc.DrawRectangle(Tac.Grad(true, (Tac.A(CyanC, 0), 0), (Tac.A(CyanC, .55), .5), (Tac.A(CyanC, 0), 1)), null, new Rect(0, 0, 1, s.Height));
                 }) { Width = 1, Height = 36, Margin = new Thickness(14, 0, 13, 0), VerticalAlignment = VerticalAlignment.Center });
                 var ses = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                ses.Children.Add(Label(f.Abyss ? f.TotalWord : L.T("SESSION")));
+                ses.Children.Add(Label(f.Abyss ? f.TotalWord : f.Today ? L.T("today").ToUpperInvariant() : L.T("SESSION")));
                 var tv = Tt(f.Total, 19, White, Face, FontWeights.SemiBold); tv.Margin = new Thickness(0, -1, 0, 0);
                 ses.Children.Add(tv);
                 row.Children.Add(ses);

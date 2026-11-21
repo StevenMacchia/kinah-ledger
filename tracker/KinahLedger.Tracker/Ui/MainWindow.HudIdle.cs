@@ -147,7 +147,7 @@ public partial class MainWindow
     /// <summary>The short form of the renders' sample, for Badge.</summary>
     internal static string IdleShortSample() => IdleShortLine(IdleSampleFacts("open"));
 
-    string _idleKey = "", _idleLine = "", _idleShort = "";
+    string _idleKey = "", _idleLine = "", _idleShort = "", _idleTodayRate = "", _idleTodayTotal = "";
 
     /// <summary>
     /// The "idle" and "idleShort" values: worked out again only when the place, the instance's mode, the day's count or the
@@ -159,10 +159,22 @@ public partial class MainWindow
         var key = $"{zone}|{ParserFights?.GameMode}|{TodayEngine?.Events}|{DateTime.Now:yyyyMMddHHmm}|{L.Code}";
         if (key == _idleKey) return (_idleLine, _idleShort);
         _idleKey = key;
-        try { var f = IdleFactsNow(zone, DateTime.UtcNow); _idleLine = IdleLine(f); _idleShort = IdleShortLine(f); }
-        catch (Exception ex) { CrashLog.Write("the overlay's idle line", ex); _idleLine = _idleShort = ""; }
+        try
+        {
+            var f = IdleFactsNow(zone, DateTime.UtcNow); _idleLine = IdleLine(f); _idleShort = IdleShortLine(f);
+            (_idleTodayRate, _idleTodayTotal) = TodayFigures(f);
+        }
+        catch (Exception ex) { CrashLog.Write("the overlay's idle line", ex); _idleLine = _idleShort = _idleTodayRate = _idleTodayTotal = ""; }
         return (_idleLine, _idleShort);
     }
+
+    /// <summary>
+    /// Today's hour and made, for the whole Buddy before this count has a figure (Steven, 2026-11-21: "make sure its actually
+    /// showing the whole buddy ... its not the whole buddy"): the looks draw their full card with today's figures in place
+    /// of the session's, named "today". Empty in the Abyss or with under a minute farmed today.
+    /// </summary>
+    internal static (string Rate, string Total) TodayFigures(IdleFacts f) =>
+        f.Abyss || f.TodayMade <= 0 || f.TodayActive < 60 ? ("", "") : (Fk(f.TodayMade / (f.TodayActive / 3600.0)), Fk(f.TodayMade));
 
     /// <summary>What the stores say about <paramref name="zone"/> and today, for the idle line.</summary>
     internal IdleFacts IdleFactsNow(string zone, DateTime nowUtc)
