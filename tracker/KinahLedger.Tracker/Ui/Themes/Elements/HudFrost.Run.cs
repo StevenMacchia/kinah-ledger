@@ -24,7 +24,7 @@ sealed partial class HudFrost
     static TextBlock RunHead()
     {
         var t = Tt("", 10.5, Soft, FontWeights.SemiBold);
-        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(11, 0, 0, 3);
+        t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(48, 0, 0, 4);   // clear of the crystal crest at the slab's corner
         return t;
     }
 
