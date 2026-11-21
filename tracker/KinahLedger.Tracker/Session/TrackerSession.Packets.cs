@@ -252,6 +252,9 @@ public sealed partial class TrackerSession
     {
         if (ev is RewardReceived rr) { _rewardLines.Add((ev.Time, Unbound(rr.Name))); if (_rewardLines.Count > 40) _rewardLines.RemoveAt(0); }
         if (Packets is not { } p || ev.Via == "packets" || ev.Via.Contains("reward table")) return false;
+        // a run's reward no list knows, counted by its name: the game's data can't name it, so it is the chat's, and never a
+        // pickup the data "didn't show" (2026-11-20 12:23: three such lines stopped the data counting items for three hours)
+        if (ev is ItemAcquired { Via: "unlisted" }) return false;
         // an item pickup from the screen while the packets count items: the agreement check decides whether the chat's line counts after all
         if (ev is ItemAcquired { Count: > 0 } ia && p.CountingItems(ev.Time) && !_screenLate.Contains(ev))
         {
@@ -435,6 +438,10 @@ public sealed partial class TrackerSession
             return;
         }
         var gather = GatherOf(b);
+        // the screen's line for any item of this one update: the update is a pickup the player saw, all of it (2026-11-20
+        // 11:34:49, Gartua's drop: Refining Stone and Artisan's Refining Stone came in one update; the plain one was judged
+        // first, before the Artisan's count made the update "near", and was left out as "no kill or pickup line around it")
+        bool updateSeen = b.Net().Any(x => !x.Unknown && x.Net > 0 && p.ScreenNearItem(x.ItemId, b.At, PacketNearSeconds));
         foreach (var (id, n0, unknown) in b.Net())
         {
             string name = _items.NameOf(id);
@@ -476,7 +483,8 @@ public sealed partial class TrackerSession
                 // currencies. In the Abyss the game names the player's own kill for only some kills: on 2026-11-16 from 16:37
                 // to 17:00 three Earth gear pieces, a mace and seven bound drops came among Kinah counted every second, and
                 // none counted
-                || (_packetPickupAt - b.At).TotalSeconds >= -PacketNearSeconds;
+                || (_packetPickupAt - b.At).TotalSeconds >= -PacketNearSeconds
+                || updateSeen;
             string un = Unbound(name);
             bool outside = Instances.Current == null && !InRun;
             // a bound item comes from a quest or a box when one was just turned in or opened (BoundRewardWhy); otherwise, with

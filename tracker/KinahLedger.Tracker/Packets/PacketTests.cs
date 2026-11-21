@@ -252,6 +252,19 @@ public static class PacketTests
                 rk.AmountForTest(CurrencyKind.AbyssPoints, ap += dap, p1.AddSeconds(dt + 0.1));
             }
             k.DrainPacketsForTest();
+            // the chat's line for one item of an update is the whole update's (2026-11-20 11:34:49, Gartua's drop): Refining Stone
+            // and Artisan's Refining Stone came in one update, no kill of the player's around it (a world boss), the chat's line
+            // only for the Artisan's; the plain one was judged first and left out
+            {
+                long plain = items.IdOf("Refining Stone"), artisan = items.IdOf("Artisan's Refining Stone");
+                var g = Fresh(out var rg);
+                var gt = DateTime.UtcNow.AddSeconds(-4);   // past the wait for the plain one's line
+                g.CommitForTest(new ItemAcquired(gt.AddSeconds(0.3), artisan, 1, false) { Via = "chat" });
+                rg.ItemsForTest(new ItemChange(gt, plain, ItemOp.Changed, 11, 1, 7, false, 1, 2, false), new ItemChange(gt, artisan, ItemOp.Changed, 12, 1, 2, false, 1, 2, false));
+                g.DrainPacketsForTest();
+                Check(g.Engine.Items.GetValueOrDefault(plain) == 1 && g.Engine.Items.GetValueOrDefault(artisan) == 1,
+                    $"...the chat's line for one item of an update stands for all of it: Refining Stone {g.Engine.Items.GetValueOrDefault(plain)}, Artisan's Refining Stone {g.Engine.Items.GetValueOrDefault(artisan)} (1 and 1)");
+            }
             Check(k.Engine.AbyssBoundKinah == 184 && k.Engine.RankPoints == 105 && k.Engine.AbyssPoints == 52,
                 $"...a kill's pay (bound Kinah, Rank and Abyss Points in one update) counts though its kill is told later: bound Kinah +{k.Engine.AbyssBoundKinah} (184), Rank Points +{k.Engine.RankPoints} (105), Abyss Points +{k.Engine.AbyssPoints} (52; the lone 1,640 before them no kill's)");
         }
