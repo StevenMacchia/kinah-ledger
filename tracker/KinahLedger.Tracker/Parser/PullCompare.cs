@@ -56,7 +56,10 @@ public sealed class PullCompare
         ?? others.OrderByDescending(YourDps).FirstOrDefault();
 
     /// <summary>Pull <paramref name="a"/> against <paramref name="b"/>, each at its end (a live pull at <paramref name="aAt"/>).</summary>
-    public static PullCompare? Of(Encounter a, Encounter b, DateTime? aAt = null)
+    /// <param name="nameOfA">The name a member of <paramref name="a"/> is matched by in <paramref name="b"/>, when it isn't the one
+    /// it carries: a share picture's copy with the other names hidden ("Chanter", MeterShare.Hidden) is still matched by the real
+    /// names, which the other pull carries.</param>
+    public static PullCompare? Of(Encounter a, Encounter b, DateTime? aAt = null, Func<Fighter, string>? nameOfA = null)
     {
         if (a.You is not { } ya || b.You is not { } yb) return null;
         var c = new PullCompare { A = a, B = b, AAt = a.Live ? aAt ?? a.LastAt : a.End ?? a.LastAt, BAt = b.End ?? b.LastAt, BossOnly = a.BossView && b.BossView };
@@ -65,7 +68,7 @@ public sealed class PullCompare
         // the other members by name (the game's ids for them change from one entry to the next), when both pulls have their damage
         var bByName = b.Members.Where(f => !f.You && f.Name.Trim().Length > 0).GroupBy(f => f.Name.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         foreach (var fa in a.Members.Where(f => !f.You && c.Fig(f) > 0).OrderByDescending(c.Fig))
-            if (bByName.TryGetValue(fa.Name.Trim(), out var fb) && c.Fig(fb) > 0) c.Members.Add(c.MemberOf(fa, fb));
+            if (bByName.TryGetValue((nameOfA?.Invoke(fa) ?? fa.Name).Trim(), out var fb) && c.Fig(fb) > 0) c.Members.Add(c.MemberOf(fa, fb));
         return c;
     }
 

@@ -49,7 +49,8 @@ public sealed class FightView
     public int Deaths => Members.Sum(m => m.Deaths);
 
     /// <param name="against">The pull to compare against (its id), picked on the Compare tab; null or gone: your best kill of the fight.</param>
-    public static FightView Of(Encounter e, DateTime now, IEnumerable<Encounter>? past, string? against = null)
+    /// <param name="nameOf">The name each member is matched by in the other pull (PullCompare.Of), when not the one it carries.</param>
+    public static FightView Of(Encounter e, DateTime now, IEnumerable<Encounter>? past, string? against = null, Func<Fighter, string>? nameOf = null)
     {
         var v = new FightView { E = e, Now = now };
         var shown = e.HasDamage ? e.Ranked().Where(f => !f.Other).ToList() : e.Ranked().Where(f => !f.Other).ToList();
@@ -76,7 +77,7 @@ public sealed class FightView
             v.CompareChoices = PullCompare.Others(e, list);
             v.CompareBest = PullCompare.Best(v.CompareChoices);
             var other = (against != null ? v.CompareChoices.FirstOrDefault(p => p.Id == against) : null) ?? v.CompareBest;
-            if (other != null) v.Diff = PullCompare.Of(e, other, now);
+            if (other != null) v.Diff = PullCompare.Of(e, other, now, nameOf);
         }
         return v;
     }

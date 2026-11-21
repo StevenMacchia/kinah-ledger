@@ -123,9 +123,26 @@ public static class ParserShare
         finally { if (swap) Skins.Apply(was); }
     }
 
-    static FightView ViewOf(Encounter e, DateTime now, List<Encounter> past, Action<FightView>? sample, string? against = null)
+    /// <summary>
+    /// The view of <paramref name="shown"/> (the fight as the picture shows it). With the other names hidden it is a copy whose
+    /// members are called by their class, so the compare still pairs them with the other pull's by their real names (the
+    /// fight's own, <paramref name="e"/>), and the member picked on the Compare tab (a real name) becomes the name the copy
+    /// calls them by: <paramref name="p"/> comes back with that pick. Until 1.0.39 the picture and the text of a member picked
+    /// fell back to your own figures whenever party names were off, the default.
+    /// </summary>
+    static FightView ViewOf(Encounter e, Encounter shown, DateTime now, List<Encounter> past, Action<FightView>? sample, ref Parts p)
     {
-        var v = FightView.Of(e, now, past, against);
+        Func<Fighter, string>? real = null;
+        if (!ReferenceEquals(shown, e))
+        {
+            // the copy keeps the roster's order (BossParser.Copy)
+            var names = new Dictionary<Fighter, string>(ReferenceEqualityComparer.Instance);
+            for (int i = 0; i < shown.Roster.Count && i < e.Roster.Count; i++) names[shown.Roster[i]] = e.Roster[i].Name;
+            real = f => names.TryGetValue(f, out var n) ? n : f.Name;
+            if (p.CompareMember is { } who)
+                p = p with { CompareMember = shown.Roster.FirstOrDefault(f => !f.You && !f.Other && real(f).Trim().Equals(who.Trim(), StringComparison.OrdinalIgnoreCase))?.Name };
+        }
+        var v = FightView.Of(shown, now, past, p.CompareWith, real);
         sample?.Invoke(v);
         return v;
     }
@@ -133,7 +150,7 @@ public static class ParserShare
     static T With<T>(Encounter e, DateTime now, List<Encounter> past, string view, Parts p, Action<FightView>? sample, Func<Border, T> use)
     {
         var shown = Shown(e, p);
-        var v = ViewOf(shown, now, past, sample, p.CompareWith);
+        var v = ViewOf(e, shown, now, past, sample, ref p);
         if (view == Abilities ? MemberOf(v, p) == null : view != All && !Has(v, view)) view = Group;
         return MeterShare.Framed(shown, now, () => Faces(v, view, e.Live, p), "parser-share-" + view, use);
     }
@@ -161,7 +178,7 @@ public static class ParserShare
     public static string Text(Encounter e, DateTime now, List<Encounter> past, string view, Parts p, Action<FightView>? sample = null)
     {
         var shown = Shown(e, p);
-        var v = ViewOf(shown, now, past, sample, p.CompareWith);
+        var v = ViewOf(e, shown, now, past, sample, ref p);
         var sb = new StringBuilder();
         var bits = new List<string> { shown.Title };
         var member = view == Abilities ? MemberOf(v, p) : null;
