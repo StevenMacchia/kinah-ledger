@@ -150,6 +150,8 @@ internal static class Program
                 case "repair-categories": return RepairCategories(pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
+                // what the companion costs idling and reacting (Ui/WpfApp.Companion.cs); run it under tests\hidden-run.ps1
+                case "companion-bench": return WpfApp.BenchCompanion(pos.Count > 0 && int.TryParse(pos[0], out var bs) ? bs : 60, opts.ContainsKey("on-screen"));
                 // packet reading (Packets/): its parts on made-up bytes, and the reader over a saved capture
                 case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
                 // the boss-fight Parser (Parser/): its rules on made-up fight events
@@ -1497,6 +1499,7 @@ options: --process aion[,other]");
         if (o.ContainsKey("simplify")) return WpfApp.ShotSimplify(s, dir);   // the Parser page's copy buttons, Settings › DPS meter, the Overlays menu (Ui/WpfApp.SettingsSimplify.cs); KL_LANG for ko, zh-TW
         if (o.ContainsKey("popouts")) return WpfApp.ShotPopOuts(s, dir);   // the DPS meter and Applicants pop-out windows, sizes, skins, three languages (Ui/WpfApp.PopOuts.cs)
         if (o.ContainsKey("resize")) return WpfApp.ShotResize(s, dir);   // the main window dragged and zoomed on Farm, Parser and Runs (Ui/WpfApp.Resize.cs)
+        if (o.ContainsKey("companion")) return WpfApp.ShotCompanion(s, dir);   // the companion: moods, every reaction in every theme at 1x/2x/110%, frame by frame, ko + zh-TW (Ui/WpfApp.Companion.cs)
         if (o.ContainsKey("applicants")) return WpfApp.ShotApplicants(s, dir);   // the Applicants window, every theme, 1/4/10 waiting, three languages (Ui/WpfApp.Applicants.cs)
         // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
         var statesDir = Ui.UiState.FindDir(o.GetValueOrDefault("states-dir"));

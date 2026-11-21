@@ -308,7 +308,7 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
 
     /// <summary>The fight's sign: a fight's id, its second, its damage and its HP, so each hit draws once.</summary>
     // the time to a tenth of a second: a live DPS moves as the meter's clock runs, not once a second (Steven, 2026-11-15)
-    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{ParserRows.HealBarsPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}:{e.GroupHealing}:{e.Roster.Sum(f => f.HealingEffective)}:{e.Roster.Sum(f => f.HealingEstimated)}:{EnergyMark.Sig}";
+    protected static string FightSig(Encounter? e, DateTime now) => e == null ? "" : $"{e.Id}:{(int)(e.Duration(now).TotalSeconds * 10)}:{e.Outcome}:{e.Roster.Sum(f => f.Damage)}:{e.BossHp}:{e.Roster.Count}:{e.Boss}:{e.Roster.Sum(f => f.Deaths)}:{ParserRows.ExpandedPref}:{ParserRows.HealBarsPref}:{Encounter.ActiveBasis}:{Encounter.BossOnly}:{e.BigHits?.LastOrDefault()?.Seq}:{e.GroupHealing}:{e.Roster.Sum(f => f.HealingEffective)}:{e.Roster.Sum(f => f.HealingEstimated)}:{EnergyMark.Sig}:{PbGhost.Sig(e, now)}";
 
     protected static (string Text, Brush Tone)? TimerChip(IReadOnlyList<TimerBoard.Item> items, DateTime now)
     {

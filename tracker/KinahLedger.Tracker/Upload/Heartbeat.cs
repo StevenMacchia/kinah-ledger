@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace KinahLedger.Upload;
 
 /// <summary>
-/// The heartbeat (1.0.39, Steven 2026-11-20): while the tracker is open and sharing is on, every five minutes it tells the
+/// The heartbeat (1.0.41, Steven 2026-11-20): while the tracker is open and sharing is on, every five minutes it tells the
 /// site it is open, so the owner can see which trackers are running, idle ones too (runs and batches are only sent while
 /// something is counted). What goes: the install ID (the same one runs carry, hashed by the site), the app version, the
 /// character counted for now (its number here, "c1") and whether the game is open: "reading" (its chat is read), "game"

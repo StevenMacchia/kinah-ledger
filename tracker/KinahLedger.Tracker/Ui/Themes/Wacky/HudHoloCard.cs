@@ -802,7 +802,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
     /// by <see cref="Extra"/>). (2026-11-20, Steven: "some are just bulky": one line a row, 24 on a 27 pitch where it was a
     /// name line over a bar, 40 on 49.)
     /// </summary>
-    sealed class HoloRow : IThemeRow
+    sealed class HoloRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 24, Pitch = H + 3, Extra = 11;
         readonly Grid _root = new() { Height = H, Background = Brushes.Transparent };
@@ -833,6 +833,9 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         bool? _cpOnly;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The foil bar runs the groove's inside (the track, 1.5 px in from the groove): Wk.BarFill makes the fill width * share (8 px at the least).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _track.ActualWidth <= 0 ? null : (_track, new Rect(0, 0, _track.ActualWidth, _track.ActualHeight));
 
         static Border Stamp(out TextBlock t)
         {

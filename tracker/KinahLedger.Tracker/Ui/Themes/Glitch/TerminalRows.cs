@@ -83,7 +83,7 @@ static class TerminalRows
         return t;
     }
 
-    public sealed class Row : IThemeRow
+    public sealed class Row : IThemeRow, IThemeBarSpan
     {
         readonly Grid _root = new() { Height = TerminalRows.Height };
         readonly Grid _line = Columns(BarLine);
@@ -107,6 +107,9 @@ static class TerminalRows
         readonly TextBlock _extra = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The load's cells: the level's whole track (its fill is width * share, the cells drawn over it).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _bar.Root.ActualWidth <= 0 ? null : (_bar.Root, new Rect(0, 0, _bar.Root.ActualWidth, _bar.Root.ActualHeight));
 
         public Row()
         {

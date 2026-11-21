@@ -59,6 +59,11 @@ public sealed class ThemeRows : Grid
     bool _expanded;
     Encounter? _shownE;
     DateTime _shownAt;
+    /// <summary>The PB ghost (Parser/PbGhost.cs): its line and chip over your row (Ui/GhostMarks.cs), adding no height.</summary>
+    readonly GhostMarks.LineArt _ghostLine = new() { VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed };
+    /// <summary>For the tests and renders: your pace as the rows show it now (null: no ghost shown).</summary>
+    public GhostPace? PaceShown { get; private set; }
+    internal GhostMarks.LineArt GhostLineForTest => _ghostLine;
 
     /// <param name="rowHeight">Each row's pitch (its height plus the space under it).</param>
     /// <param name="make">A new row for a member.</param>
@@ -186,6 +191,34 @@ public sealed class ThemeRows : Grid
             Children.Add(host);
         }
         Height = members.Count == 0 ? 0 : (members.Count - 1) * _rowH + (pin ? _gapH : 0) + _rowH;
+        ShowGhost(e, now, members);
+    }
+
+    /// <summary>
+    /// The PB ghost: on your row (where it is drawn), the ghost's line at the length its bar would have at your best's pace, the
+    /// gap lit along the foot and the chip beside it; nothing added to the rows' height.
+    /// </summary>
+    void ShowGhost(Encounter e, DateTime now, IReadOnlyList<MeterMember> members)
+    {
+        var pace = PbGhost.Of(e, now);
+        var you = members.FirstOrDefault(m => m.You);
+        PaceShown = you != null ? pace : null;
+        if (_ghostLine.Parent == null) { Panel.SetZIndex(_ghostLine, 50); Children.Add(_ghostLine); }
+        if (pace != null && you != null && _rows.TryGetValue(you.Id, out var slot))
+        {
+            var root = slot.Row.Root;
+            double h = root.ActualHeight > 0 ? root.ActualHeight : !double.IsNaN(root.Height) ? root.Height : Math.Max(12, _rowH - 3);
+            _ghostLine.Margin = new Thickness(0, slot.Y, 0, 0);
+            _ghostLine.Height = h;
+            _ghostLine.RenderTransform = slot.Shift;   // it glides with the row
+            // the look's bar where it says (IThemeBarSpan), in the line's coordinates (the row's: both at the rows' left, at its top)
+            var row = slot.Row;
+            _ghostLine.Bar = () => row is IThemeBarSpan { BarTrack: { } bt } && bt.On.IsVisible && row.Root.IsAncestorOf(bt.On)
+                ? new Rect(bt.On.TranslatePoint(bt.Track.TopLeft, row.Root), bt.On.TranslatePoint(bt.Track.BottomRight, row.Root)) : null;
+            _ghostLine.Row = row.Root;   // its words: the line never crosses them
+            _ghostLine.Set(pace, you.CpOnly ? 0 : e.BarOf(you.F));
+        }
+        else _ghostLine.Set(null, 0);
     }
 
     // ---- the member's card (as the Parser's rows open it)

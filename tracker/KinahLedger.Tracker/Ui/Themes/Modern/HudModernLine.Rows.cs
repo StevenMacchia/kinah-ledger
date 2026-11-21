@@ -38,7 +38,7 @@ sealed partial class HudModernLine
     /// Combat Power and marks after it, a healer's healing a second, the DPS big at the right, the share small after it;
     /// under them, the class-coloured 4 px bar on a faint track, glowing softly. Every word has the look's shade.
     /// </summary>
-    sealed class LineRow : IThemeRow
+    sealed class LineRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 34, Pitch = 36, TextH = 27, BarH = 4, Pad = 3, RankW = 14, IconS = 17, IconW = IconS + 6, ShareW = 37, DmgW = 52, CritW = 38, DpsMin = 54;
         static readonly TextDecorationCollection Under = MakeUnder();
@@ -69,6 +69,9 @@ sealed partial class HudModernLine
         Brush _barB = WhiteB, _glowNear = WhiteB, _glowMid = WhiteB, _glowFar = WhiteB;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The 4 px bar under the text: DrawBar's track (Pad in from each side, BarH tall at the row's foot).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _bar.ActualWidth <= 0 ? null : (_bar, new Rect(Pad, H - BarH, _bar.ActualWidth - 2 * Pad, BarH));
 
         public LineRow(HudModernLine look)
         {

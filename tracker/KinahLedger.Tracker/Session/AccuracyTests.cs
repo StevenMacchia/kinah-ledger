@@ -447,7 +447,7 @@ public static class AccuracyTests
         Console.WriteLine($"\nSynthetic chat, clean: {clean}\nSynthetic chat, noisy: {noisy}\nSynthetic chat, rough: {rough}");
         Check("synthetic, clean chat: every Kina, item and kill", $"{clean.KinahCounted == clean.KinahTrue} {clean.Phantom} {clean.Missed} {clean.KillsCounted == clean.KillsTrue}", "True 0 0 True");
 
-        // ---- the heartbeat (1.0.39): every 5 minutes while open and sharing; never with sharing off, and quiet when the site can't take it ----
+        // ---- the heartbeat (1.0.41): every 5 minutes while open and sharing; never with sharing off, and quiet when the site can't take it ----
         Console.WriteLine("Heartbeat:");
         Check("state: the game open, its chat read", Heartbeat.StateOf(true, true), "reading");
         Check("state: the game open, no chat yet", Heartbeat.StateOf(true, false), "game");

@@ -735,7 +735,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
     /// under the words. You are a magenta band with a ▶ and a YOU tube; a healer's heal is a green figure over a thin green
     /// tube; deaths a red ✖; TOP DPS and TOP HEALS lit signs at a kill. DPS and % right-aligned and tabular.
     /// </summary>
-    sealed class NeonRow : IThemeRow
+    sealed class NeonRow : IThemeRow, IThemeBarSpan
     {
         // 2026-11-20 (Steven: "some are just bulky"): 21 on a 24 pitch, the words and the tube the row's height, where the row
         // was 27 on a 30 pitch with 6 of it empty under the words
@@ -773,6 +773,9 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         readonly Run _critWord = new() { FontSize = 8, FontWeight = FontWeights.Bold, Foreground = Wk.S(LilacC, .6) };
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The neon tube runs its host (from x 36 to 3 px short of the row's end, 1 px in top and foot): Wk.BarFill makes the tube width * share (10 px at the least); its glow ring is 2 px wider round.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _tubeHost.ActualWidth <= 0 ? null : (_tubeHost, new Rect(0, 0, _tubeHost.ActualWidth, _tubeHost.ActualHeight));
 
         public NeonRow()
         {
