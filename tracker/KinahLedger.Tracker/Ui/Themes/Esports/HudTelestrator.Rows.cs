@@ -154,7 +154,7 @@ sealed partial class HudTelestrator
     /// Light by design: brushes made once per class, the pen's marks made once and replayed, the marks after the name built
     /// again only when they change; the swipe and the climb's arrow are their own small parts, moved by scale and opacity.
     /// </summary>
-    internal sealed class TeleRow : IThemeRow
+    internal sealed class TeleRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double Pad = 8;

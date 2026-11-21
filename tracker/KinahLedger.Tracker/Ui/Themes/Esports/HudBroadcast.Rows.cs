@@ -80,7 +80,7 @@ sealed partial class HudBroadcast
     /// Drawn once per change of its figures; the bar slides by moving its fill under the plate's clip, the build-in is a
     /// slanted clip slid in, the stinger a band slid across, the crown a cyan chip wiped in: transforms and opacities only.
     /// </summary>
-    sealed class BcRow : IThemeRow
+    sealed class BcRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double ChipW = 31, ChipGap = 3, Lead = 8, IconW = 17, CutW = 14, Ln = H * Tan;

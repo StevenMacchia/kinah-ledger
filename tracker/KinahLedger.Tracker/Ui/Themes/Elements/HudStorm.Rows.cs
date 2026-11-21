@@ -100,7 +100,7 @@ sealed partial class HudStorm
     /// Cheap: the conduit is one drawing (its windings a frozen tile, its spark crown a frozen drawing made once for the edge's
     /// kind and moved there); the moments only move or fade three small parts (the charge band, the flash, the glyph).
     /// </summary>
-    sealed class StormRow : IThemeRow
+    sealed class StormRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double Pad = 6, RankW = 20;

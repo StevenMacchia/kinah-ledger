@@ -86,7 +86,7 @@ sealed partial class HudMagma
     /// Its moments: the crown rises out of the pool when this row takes the lead (white-hot, cooling to orange); a row that
     /// climbs a rank flares its rim and runs a molten streak along its foot; the heat pulse and haze roll along its flow.
     /// </summary>
-    sealed class MagmaRow : IThemeRow
+    sealed class MagmaRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double PadL = 6, PadR = 7, RankW = 23, IconW = 23, BandW = 48, CrownK = 1.3;

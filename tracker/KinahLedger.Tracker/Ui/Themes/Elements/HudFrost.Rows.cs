@@ -88,7 +88,7 @@ sealed partial class HudFrost
     /// Its moments: the frost creeps along the bar anew and a cold glint follows (<see cref="SetFrost"/>), the crown
     /// crystallises (<see cref="Crystallise"/>) when the row takes the lead, and a row that climbs leaves a frost trail.
     /// </summary>
-    sealed class FrostRow : IThemeRow
+    sealed class FrostRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double Pad = 7;

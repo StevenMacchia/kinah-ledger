@@ -99,7 +99,7 @@ sealed partial class HudHype
     /// a healer's healing a second in green before the plate. Short of room the CP goes first, then the share for every row;
     /// a name keeps at least ten characters; a figure is never cut.
     /// </summary>
-    sealed class HypeRow : IThemeRow
+    sealed class HypeRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double PadL = 5, PadR = 7, BadgeW = 31, IconW = 24, Slant = 5;

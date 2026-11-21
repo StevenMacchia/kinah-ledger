@@ -71,7 +71,7 @@ sealed partial class HudTide
     /// foam at the row's left edge. Short of room the CP goes first, then the share; a name keeps at least ten characters; a
     /// figure is never cut (Mod.Fit).
     /// </summary>
-    internal sealed class TideRow : IThemeRow
+    internal sealed class TideRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 28, Pitch = 31;
         const double Pad = 8, RankW = 30;

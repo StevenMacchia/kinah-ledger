@@ -76,7 +76,7 @@ sealed partial class HudFinals
     /// 2026-11-17): the CP goes first, then the marks shorten to their glyphs, then the name trims (never below ten letters),
     /// then the share column goes for every row; a figure is never cut.
     /// </summary>
-    sealed class FinalsRow : IThemeRow
+    sealed class FinalsRow : IThemeRow, IThemeBarSpan
     {
         static readonly Brush CupGlow = MakeCupGlow(), LeadCp = Mod.Br(Color.FromRgb(0xF0, 0xE2, 0xB4), .9), RowCp = Mod.Br(Colors.White, .7);
         static Brush MakeCupGlow()
