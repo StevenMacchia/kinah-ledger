@@ -274,7 +274,7 @@ sealed partial class HudMagma
                     c.BeginFigure(a, false, false); c.LineTo(new Point(a.X - 3 - rnd.NextDouble() * 4, a.Y + J(3)), true, true);
                 }
                 last = line;
-                x += 9 + rnd.NextDouble() * 8;
+                x += 12 + rnd.NextDouble() * 10;
             }
         }
         g.Freeze();
@@ -318,8 +318,8 @@ sealed partial class HudMagma
             crust.Freeze();
             dc.DrawRectangle(crust, null, bar);
             var glow = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(r.X, 0), EndPoint = new Point(r.X + fx, 0) };
-            glow.GradientStops.Add(new GradientStop(Mod.A(LavaRedC, .5), 0));
-            glow.GradientStops.Add(new GradientStop(Mod.A(LavaC, .7), e0 * .65));
+            glow.GradientStops.Add(new GradientStop(Mod.A(LavaRedC, .38), 0));
+            glow.GradientStops.Add(new GradientStop(Mod.A(LavaC, .55), e0 * .65));
             glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, .9), e0));
             glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, 0), e1));
             glow.Freeze();

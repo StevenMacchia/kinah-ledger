@@ -92,7 +92,7 @@ sealed partial class HudMagma
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
         readonly Grid _words = new() { Margin = new Thickness(PadL, 0, PadR, 0) };
-        readonly TextBlock _rank = Tt("", 12, Frozen(Color.FromRgb(0xFF, 0xE6, 0xCC)), FontWeights.Bold), _name = Tt("", 12.5, White, FontWeights.Bold), _cp = Tt("", 9.5, Quiet, FontWeights.SemiBold),
+        readonly TextBlock _rank = Tt("", 12, Frozen(Color.FromRgb(0xFF, 0xE6, 0xCC)), FontWeights.Bold), _name = Tt("", 12.5, White, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Color.FromArgb(0xE6, 0xF2, 0xD8, 0xC4)), FontWeights.SemiBold),
             _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _dps = Tt("", 16, White, FontWeights.Bold), _share = Tt("", 10, Soft, FontWeights.SemiBold),
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
