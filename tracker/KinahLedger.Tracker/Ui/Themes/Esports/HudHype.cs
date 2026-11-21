@@ -9,73 +9,107 @@ using static KinahLedger.Ui.HudKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Fade (the Modern theme; Steven, 2026-11-17, from the mock-up "Modern theme, the fourth look, lighter"): no panel at all.
-/// Each meter row is a soft wash in the member's class colour, fading out to the right over the length of their share,
-/// rounded at its left; the words sit straight on the game in white with a soft dark shade (a tight drop under each glyph and
-/// a wide faint halo), so they read over snow and sky as over a cave. You: a thin white bar at your row's left edge. Marks are
-/// small dark-glass chips with a light hairline; the boss's HP a slim line with ticks at the thirds; the foot under a faint
-/// hairline. The Buddy is the same idea: a soft blue wash fading to the right, rounded at its left, the run's ring, the hour
-/// big with the best drop and the last pickups as tiles beside it, the session under it, the next timer as a dark-glass chip at its end.
-/// The moments stay quiet: a pickup sends a light across the wash and its worth floats in beside it; a rare drop's wash
-/// blooms in its grade's colour; your best passed runs the ring round in mint; an entry opening lights its chip; a fight
-/// slides in; its end lays a wash with the outcome over the fight's head.
+/// Hype (the Esports theme, 2026-11-20): a sponsor's energy-drink package at full volume, still readable at a glance. Every
+/// panel is a black plate with its top-left and bottom-right corners cut, a brushed-chrome bevel round it, a faint carbon
+/// weave in it, a hard drop under it, an electric-lime stripe and a hot-magenta tab along its top and static speed lines
+/// streaking behind its head. Words are Bahnschrift Bold Condensed in italics (the outcome in Impact), figures italic, bold,
+/// tabular and white. The meter's rows are angled bars with chrome caps, the leader's in lime with a hard glow, the figures on
+/// a black plate at the row's end; rank 1 wears a lightning-bolt badge. The Buddy: the hour huge in chrome-lime, the run's
+/// ring as a lime gauge, the pickups in chrome tiles. The moments are loud and short: a lead change slams the bolt badge in
+/// (a big overshoot, a shockwave ring, one white frame on the row) and races a chrome glint along every bar while speed lines
+/// streak across the panel (also on a fight's start and a kill); a pickup's worth slams in beside the Buddy with a lime glint
+/// across its plate; a rare drop's plate flashes its grade; your best passed sweeps the gauge to full; an opened entry's chip
+/// punches lime; a fight's end drops a black band with the outcome over its head.
 /// </summary>
 sealed partial class HudHype : ModernLook
 {
-    static readonly Color BlueC = Color.FromRgb(0x2B, 0x5C, 0xFF), MintC2 = Color.FromRgb(0x5D, 0xF2, 0xA6), MarkMintC = Color.FromRgb(0x7D, 0xFF, 0xC0),
-        CoralC = Color.FromRgb(0xFF, 0x86, 0x86), HpC = Color.FromRgb(0xFF, 0x6B, 0x7D), DeepC = Color.FromRgb(0x0B, 0x0C, 0x10), GreyC = Color.FromRgb(0x8A, 0x90, 0xA0),
-        WarnC2 = Color.FromRgb(0xFF, 0xB0, 0x86), GoldC2 = Color.FromRgb(0xFF, 0xCF, 0x6A);
+    static readonly Color LimeC = Color.FromRgb(0xC6, 0xFF, 0x00), LimeDeepC = Color.FromRgb(0x2E, 0x3E, 0x00), LimeInkC = Color.FromRgb(0xE2, 0xFF, 0x7A),
+        MagC = Color.FromRgb(0xFF, 0x2B, 0xD6), MagHotC = Color.FromRgb(0xFF, 0x5A, 0x8C), MagInkC = Color.FromRgb(0xFF, 0x8F, 0xE6),
+        InkC = Color.FromRgb(0x05, 0x06, 0x08), SteelC = Color.FromRgb(0x1B, 0x1F, 0x25), TrackC = Color.FromRgb(0x23, 0x28, 0x30), GreyC = Color.FromRgb(0x8A, 0x90, 0xA0),
+        HealC = Color.FromRgb(0x6B, 0xFF, 0xB8), WarnC2 = Color.FromRgb(0xFF, 0xB0, 0x86), GoldC2 = Color.FromRgb(0xFF, 0xCF, 0x6A), MintC2 = Color.FromRgb(0x5D, 0xF2, 0xA6);
     static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Frozen(Mod.A(Colors.White, .84)), Quiet = Frozen(Mod.A(Colors.White, .62)),
-        Mint2 = Frozen(Color.FromRgb(0x8C, 0xFF, 0xC6)), MarkMint = Frozen(MarkMintC), Coral = Frozen(CoralC);
+        Lime = Frozen(LimeC), LimeInk = Frozen(LimeInkC), Mag = Frozen(MagC), MagInk = Frozen(MagInkC), Heal = Frozen(HealC), Black = Frozen(Color.FromRgb(0x08, 0x09, 0x0B));
 
-    // the room round the look: the shade's halo stays inside the window; 98 at the right for the pickup's chip beside the Buddy
+    /// <summary>The look's face: Bahnschrift, set condensed, bold and italic by <see cref="Ht"/>.</summary>
+    static readonly FontFamily Face = HudThemes.Bahn;
+    /// <summary>The look's one headline face (the outcome word).</summary>
+    static readonly FontFamily Punch = HudThemes.Impact;
+    /// <summary>The headline face for ko / zh words (Impact has no Hangul or Han): the bold system CJK faces.</summary>
+    static readonly FontFamily PunchCjk = new("Malgun Gothic, Microsoft JhengHei UI, Microsoft JhengHei, Segoe UI");
+    /// <summary>The plates' cut corners.</summary>
+    const double Cut = 9;
+
+    // the room round the look: the plates' hard drop inside the window; 98 at the right for the pickup's worth beside the Buddy
     readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 10), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
-    // the Buddy: its wash, the ring, the hour, the session and the timer chips
+    // the Buddy: its plate, the gauge, the hour, the session and the timer chips
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
-    readonly TacSketch _lineWash;
-    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(5, 5, 18, 5) };
-    readonly Grid _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true };
+    readonly TacSketch _linePlate;
+    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(13, 7, 24, 11) };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
     /// <summary>The timer chips over the line, when the pickup strip takes their room on it.</summary>
     readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(4, 0, 0, 5), Visibility = Visibility.Collapsed };
-    /// <summary>The pickup strip in Fade: 24 px tiles beside the hour, a soft white rule, a gold star.</summary>
-    static readonly PickStrip.Look Strip = new(24, 4, true, Frozen(Mod.A(Colors.White, .32)), Frozen(Color.FromRgb(0xFF, 0xCF, 0x6A)));
+    /// <summary>The pickup strip in Hype: 24 px tiles in chrome frames beside the hour, a lime rule, a lime star.</summary>
+    static readonly PickStrip.Look Strip = new(26, 4, true, Frozen(Mod.A(LimeC, .55)), Frozen(LimeC));
     bool _dim;
-    TacSketch? _ringArt;
-    double _share = -1, _complete, _sheen = -1;
+    TacSketch? _gaugeArt;
+    double _share = -1, _complete, _gaugeFlash;
     bool _beat;
-    Color _sheenC = Colors.White;
-    Border? _firstChip;
+    /// <summary>The glint that races the Buddy's plate on a moment: two frozen slanted bands on a canvas clipped to the plate, moved by a transform.</summary>
+    readonly Canvas _sheenHost = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+    readonly TranslateTransform _sheenAt = new();
+    Grid? _firstChip;
 
     // the rare drop under the Buddy, and the notice line
     readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
-    readonly StackPanel _note = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 5, 0, 0), Visibility = Visibility.Collapsed };
+    readonly Grid _note = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 4, 0, 0), Visibility = Visibility.Collapsed };
 
-    // the fight: no panel, its head, HP, rows and foot straight over the game
-    readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
-    readonly StackPanel _fightBody = new();
+    // the fight: its plate, head, HP, rows and foot, the moments' layer over it
+    readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 6) };
+    readonly TacSketch _fightPlate;
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(14, 10, 24, 13) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
-    readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
+    readonly Grid _fightFx = new() { IsHitTestVisible = false };
+    /// <summary>The burst's speed lines: frozen gradient bars behind the meter's rows, moved by transforms, the canvas clipped to the plate.</summary>
+    readonly Canvas _streaks = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+    readonly List<(System.Windows.Shapes.Rectangle Bar, TranslateTransform At)> _streakBars = new();
+    readonly Grid _bandHost = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
     readonly TranslateTransform _fightShift = new();
+    readonly SkewTransform _fightSkew = new();
     FrameworkElement? _head;
 
     public HudHype() : base(bare: true)
     {
-        // the look's own rows (Ui/Themes/ThemeRows.cs): each a class wash fading out to the right
-        UseRows(FadeRow.Pitch, m => new FadeRow(), 16, GapLine);
-        _lineWash = new TacSketch(DrawLineWash);
-        _line.Children.Add(_lineWash); _line.Children.Add(_lineFx); _line.Children.Add(Lit(_lineBody)); _line.Children.Add(_lineAnchor);
-        _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
-        _fight.RenderTransform = _fightShift;
-        _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
-        _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
+        // the look's own rows (Ui/Themes/ThemeRows.cs): angled bars, the figures on a black plate, the leader's bar lime
+        var fit = new HypeFit();
+        var lead = new HypeLead();
+        UseRows(HypeRow.Pitch, m => new HypeRow(fit, lead, this), 15, GapLine);
+        _linePlate = new TacSketch((dc, s) => Plate(dc, s, _opacity, LimeC, s.Height, Cut, _dim, tail: true));
+        // the glint's two bands, built once: a soft lime lead and a hard white core, leaning as the plate's stripes do
+        var band = new Canvas { RenderTransform = _sheenAt };
+        band.Children.Add(new System.Windows.Shapes.Path { Data = Para(new Rect(0, 0, 46, 120), 30), Fill = Mod.Grad(false, (Mod.A(LimeC, 0), 0), (Mod.A(LimeC, .32), 1)) });
+        band.Children.Add(new System.Windows.Shapes.Path { Data = Para(new Rect(44, 0, 16, 120), 30), Fill = Frozen(Mod.A(Colors.White, .5)) });
+        _sheenHost.Children.Add(band);
+        _line.Children.Add(_linePlate); _line.Children.Add(_sheenHost); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
+        _fightPlate = new TacSketch((dc, s) => Plate(dc, s, _opacity, LimeC, 48, tail: true));
+        foreach (var (_, _, _, l, t, c) in Streaks)
+        {
+            var at = new TranslateTransform();
+            var bar = new System.Windows.Shapes.Rectangle { Width = l, Height = t * 1.6, Fill = c == 0 ? StreakLime : c == 1 ? StreakWhite : StreakMag, RenderTransform = at, Opacity = 0 };
+            _streaks.Children.Add(bar); _streakBars.Add((bar, at));
+        }
+        _fightFx.Children.Add(_bandHost);
+        _fight.Children.Add(_fightPlate); _fight.Children.Add(_streaks); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        _fight.RenderTransform = new TransformGroup { Children = { _fightSkew, _fightShift } };
+        // the run's head sits over the game: on its own small black tag, never loose on a bright sky
+        _runHeadLit = new Border { Child = Chip(_runHead, Frozen(Mod.A(InkC, .86)), Frozen(Mod.A(LimeC, .6)), new Thickness(9, 1, 10, 2), 4), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(4, 0, 0, 3), Visibility = Visibility.Collapsed };
+        _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
-        System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
+        System.Windows.Documents.TextElement.SetFontFamily(_root, Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
 
@@ -86,71 +120,261 @@ sealed partial class HudHype : ModernLook
 
     public override void SetOpacity(double opacity)
     {
-        // no panel to fade: the Buddy's wash and the rows' washes take the setting (never so faint the bar is lost)
+        // the plates take the setting, never so faint the words lose their black
         _opacity = Math.Clamp(opacity, 0.3, 1);
-        _lineWash.InvalidateVisual();
+        _linePlate.InvalidateVisual(); _fightPlate.InvalidateVisual();
     }
-
-    /// <summary>The wash's strength from the opacity setting: 1 at the usual 90%, a little lighter or richer either side.</summary>
-    double WashK => .7 + .35 * _opacity;
 
     protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dimmed(Values) + "|" + PickStrip.Sig(Values, Strip) + "|" + RunBuddy.Sig(Values);
 
     static bool Dimmed(IReadOnlyDictionary<string, string> v) => (v.TryGetValue("show", out var s) && s == "dim") || (v.TryGetValue("paused", out var p) && p.Length > 0);
 
-    // ================================================================ the shade
+    // ================================================================ the kit
 
-    /// <summary>The tight shade under every glyph straight on the game: 1 px down, 2 px soft, 85% black.</summary>
-    static DropShadowEffect Shade() => new() { Color = Colors.Black, Direction = 270, ShadowDepth = 1, BlurRadius = 3, Opacity = .95 };
+    /// <summary>A text in the look's face: Bahnschrift condensed, bold, in italics (<paramref name="italic"/>), tabular digits.</summary>
+    static TextBlock Ht(string s, double size, Brush fg, FontWeight? weight = null, bool italic = true, FontFamily? face = null)
+    {
+        // ko and zh fall back to Malgun / JhengHei, which have no semibold: their words take the bold so they keep their weight
+        var w = weight ?? FontWeights.Bold;
+        if (w == FontWeights.SemiBold && L.Code != "en") w = FontWeights.Bold;
+        var t = Mod.Text(s, size, fg, w, face ?? Face);
+        if (face == null) t.FontStretch = FontStretches.Condensed;
+        if (italic) t.FontStyle = FontStyles.Italic;
+        // the slant leans past the last glyph: a pixel or two of air so it is never clipped
+        t.Padding = new Thickness(0, 0, italic ? Math.Ceiling(size * .08) : 0, 0);
+        return t;
+    }
 
-    /// <summary>The wide soft halo round a group of words (8 px), so a bright scene behind them goes a shade darker.</summary>
+    /// <summary>The tight shade under words straight on the game: 1 px down, 2 px soft.</summary>
+    static DropShadowEffect Shade() => new() { Color = Colors.Black, Direction = 270, ShadowDepth = 1, BlurRadius = 2.5, Opacity = .9 };
+
+    /// <summary>The wide soft halo round words straight on the game (over the Buddy, the run's head).</summary>
     static DropShadowEffect Halo() => new() { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 10, Opacity = .62 };
 
-    /// <summary>Words lit for the game: the tight shade on them, the halo round them.</summary>
+    /// <summary>Words on a plate: the black plate is their ground, so no effect is spent on them (Steven, 2026-11-20: "lightweight").</summary>
+    static T Shaded<T>(T el) where T : FrameworkElement => el;
+
+    /// <summary>Words straight on the game: the tight shade on them, the halo round them.</summary>
     static Border Lit(FrameworkElement el)
     {
         el.Effect = Shade();
         return new Border { Child = el, Effect = Halo(), HorizontalAlignment = el.HorizontalAlignment, VerticalAlignment = el.VerticalAlignment };
     }
 
-    /// <summary>A soft wash in <paramref name="c"/> from its left (rounded, <paramref name="radius"/>) fading out by its right end.</summary>
-    static void Wash(DrawingContext dc, Rect r, Color c, double a0, double a1, double radius)
+    /// <summary>A parallelogram leaning right by <paramref name="slant"/> over its height (the look's every chip, bar and tag).</summary>
+    internal static Geometry Para(Rect r, double slant)
     {
-        if (r.Width < 1 || r.Height < 1) return;
-        var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(r.Left, 0), EndPoint = new Point(r.Right, 0) };
-        b.GradientStops.Add(new GradientStop(Mod.A(c, a0), 0));
-        b.GradientStops.Add(new GradientStop(Mod.A(c, a1), .7));
-        b.GradientStops.Add(new GradientStop(Mod.A(c, 0), 1));
-        b.Freeze();
-        dc.PushClip(new RectangleGeometry(r));
-        dc.DrawRoundedRectangle(b, null, new Rect(r.Left, r.Top, r.Width + radius + 2, r.Height), radius, radius);
-        dc.Pop();
-    }
-
-    /// <summary>A small dark-glass chip with a light hairline (TOP DPS, the heal mark, AVG): <paramref name="filled"/> white with dark words (YOU).</summary>
-    static Border Mark(string s, Brush? fg = null, Color? edge = null, bool filled = false, double size = 8.5)
-    {
-        var t = Tt(s, size, filled ? Frozen(Color.FromRgb(0x11, 0x11, 0x11)) : fg ?? White, FontWeights.Bold);
-        return new Border
+        var g = new StreamGeometry();
+        using (var c = g.Open())
         {
-            Child = t, CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 1), VerticalAlignment = VerticalAlignment.Center,
-            Background = filled ? White : Frozen(Mod.A(DeepC, .48)), BorderThickness = new Thickness(1),
-            BorderBrush = filled ? White : Frozen(Mod.A(edge ?? Colors.White, edge == null ? .38 : .62)),
-        };
+            c.BeginFigure(new Point(r.Left + slant, r.Top), true, true);
+            c.LineTo(new Point(r.Right, r.Top), true, false);
+            c.LineTo(new Point(r.Right - slant, r.Bottom), true, false);
+            c.LineTo(new Point(r.Left, r.Bottom), true, false);
+        }
+        g.Freeze();
+        return g;
     }
 
-    /// <summary>A faint hairline across (the foot's, the card's).</summary>
-    static Border Hairline(Thickness m, double a = .25) => new() { Height = 1, Background = Frozen(Mod.A(Colors.White, a)), Margin = m, IsHitTestVisible = false };
+    /// <summary>How far a plate's right edge leans in over its height (the whole package leans forward, as its type does).</summary>
+    static double LeanOf(double h) => Math.Min(14, h * .17);
+
+    /// <summary>How far a plate's left edge leans (its top further right): with the right edge, the plate reads as a parallelogram.</summary>
+    static double LeanL(double h) => Math.Min(8, h * .15);
+
+    /// <summary>A plate's shape: its top-left and bottom-right corners cut, its right edge leaning forward (<see cref="LeanOf"/>).</summary>
+    static Geometry PlateGeo(Rect r, double cut)
+    {
+        double lean = LeanOf(r.Height), h = r.Height, notch = Math.Min(14, h * .25);
+        double XL(double y) => r.Left + LeanL(h) * (r.Bottom - y) / h;
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            c.BeginFigure(new Point(XL(r.Top) + cut, r.Top), true, true);
+            c.LineTo(new Point(r.Right, r.Top), true, false);
+            c.LineTo(new Point(r.Right - lean * (h - cut) / h, r.Bottom - cut), true, false);
+            c.LineTo(new Point(r.Right - lean - cut, r.Bottom), true, false);
+            c.LineTo(new Point(r.Left + notch, r.Bottom), true, false);
+            c.LineTo(new Point(XL(r.Bottom - notch), r.Bottom - notch), true, false);
+            c.LineTo(new Point(XL(r.Top + cut), r.Top + cut), true, false);
+        }
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>Brushed chrome, top to bottom: a bright top, the dark horizon, a cooler light under it.</summary>
+    static readonly LinearGradientBrush Chrome = Mod.Grad(true, (Color.FromRgb(0xF7, 0xF9, 0xFC), 0), (Color.FromRgb(0xAE, 0xB6, 0xC0), .3), (Color.FromRgb(0x4A, 0x50, 0x59), .5),
+        (Color.FromRgb(0xDD, 0xE2, 0xE8), .56), (Color.FromRgb(0x84, 0x8C, 0x96), 1));
+    /// <summary>The hour's chrome-lime: a hot white-lime top, the lime's dark horizon, lime under it.</summary>
+    static readonly LinearGradientBrush ChromeLime = Mod.Grad(true, (Color.FromRgb(0xF8, 0xFF, 0xDC), 0), (Color.FromRgb(0xDA, 0xFF, 0x4A), .44), (Color.FromRgb(0x8C, 0xC0, 0x00), .5),
+        (Color.FromRgb(0xC6, 0xFF, 0x00), .62), (Color.FromRgb(0xEC, 0xFF, 0x9C), 1));
+    /// <summary>A speed line's fades (left to right: gone to full), in lime, white and magenta.</summary>
+    static readonly LinearGradientBrush StreakLime = Mod.Grad(false, (Mod.A(LimeC, 0), 0), (Mod.A(LimeC, 1), 1)), StreakWhite = Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, 1), 1)),
+        StreakMag = Mod.Grad(false, (Mod.A(MagC, 0), 0), (Mod.A(MagC, 1), 1));
+
+    /// <summary>The plates' carbon weave: a faint diagonal hatch, made once.</summary>
+    static readonly DrawingBrush Weave = MakeWeave();
+
+    static DrawingBrush MakeWeave()
+    {
+        var g = new GeometryDrawing(null, Mod.P(Frozen(Mod.A(Colors.White, .045)), 1), new LineGeometry(new Point(0, 6), new Point(6, 0)));
+        var b = new DrawingBrush(g) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 6, 6), ViewportUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, 6, 6), ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.None };
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>The static speed lines: (height share, start, length (shares of the region), thickness, strength, colour 0 lime 1 white 2 magenta).</summary>
+    static readonly (double Y, double X, double L, double T, double A, int C)[] Lines =
+    {
+        (.12, .50, .34, 1.6, .26, 0), (.22, .72, .20, 1, .22, 1), (.34, .44, .42, 2.2, .14, 0), (.44, .80, .16, 1, .26, 1), (.55, .60, .26, 1.4, .16, 2),
+        (.66, .86, .12, 1, .22, 0), (.78, .54, .32, 1, .12, 1), (.90, .70, .24, 2, .14, 0),
+    };
+
+    /// <summary>Speed lines in <paramref name="r"/>, leaning up to the right, fading in from their tails; <paramref name="k"/> scales their strength.</summary>
+    static void SpeedLines(DrawingContext dc, Rect r, double k = 1)
+    {
+        foreach (var (y, x, l, t, a, c) in Lines)
+        {
+            double px = r.Left + r.Width * x, py = r.Top + r.Height * y, len = r.Width * l;
+            dc.PushTransform(new RotateTransform(-14, px, py));
+            dc.PushOpacity(Math.Min(1, a * k));
+            dc.DrawRectangle(c == 0 ? StreakLime : c == 1 ? StreakWhite : StreakMag, null, new Rect(px, py, len, t));
+            dc.Pop(); dc.Pop();
+        }
+    }
+
+    /// <summary>
+    /// A plate: the hard drop under it, the black (a touch of steel at its top), the carbon weave, speed lines behind its top
+    /// <paramref name="linesH"/> px (right of its first fifth), the lime stripe and the magenta tab along its top, the chrome
+    /// bevel and a dark line inside it. Drawn inside its element: the drop takes 3 px at the right and 4 at the foot.
+    /// </summary>
+    static void Plate(DrawingContext dc, Size s, double opacity, Color accent, double linesH, double cut = Cut, bool dim = false, bool tail = false)
+    {
+        if (s.Width < 12 || s.Height < 12) return;
+        var r = new Rect(1, 1, s.Width - 4, s.Height - 5);
+        dc.DrawGeometry(Frozen(Mod.A(Colors.Black, .5)), null, PlateGeo(new Rect(r.X + 3, r.Y + 4, r.Width, r.Height), cut));
+        var shape = PlateGeo(r, cut);
+        double a = Math.Clamp(.62 + .34 * opacity, .78, .97);
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(SteelC, a), 0), (Mod.A(InkC, a), .45), (Mod.A(InkC, a), 1)), null, shape);
+        dc.PushClip(shape);
+        dc.DrawRectangle(Weave, null, r);
+        if (!dim) SpeedLines(dc, new Rect(r.Left + r.Width * .2, r.Top, r.Width * .8, Math.Min(linesH, r.Height)));
+        // the power spine: a lime bar down the left edge under the cut, notched like a gauge
+        if (tail)
+        {
+            double y0 = r.Top + cut + 3, y1 = r.Bottom - Math.Min(14, r.Height * .25) - 2, ll = LeanL(r.Height);
+            double XL(double y) => r.Left + ll * (r.Bottom - y) / r.Height;
+            var spine = new StreamGeometry();
+            using (var c = spine.Open())
+            {
+                c.BeginFigure(new Point(XL(y0), y0), true, true);
+                c.LineTo(new Point(XL(y0) + 5, y0), true, false);
+                c.LineTo(new Point(XL(y1) + 5, y1), true, false);
+                c.LineTo(new Point(XL(y1), y1), true, false);
+            }
+            spine.Freeze();
+            dc.DrawGeometry(Frozen(dim ? GreyC : accent), null, spine);
+            for (double y = y0 + 6; y < y1 - 2; y += 8) dc.DrawRectangle(Frozen(Mod.A(Colors.Black, .65)), null, new Rect(XL(y) - 1, y, 7, 1.5));
+        }
+        dc.Pop();
+        // the speed tail: three lime slashes trailing off the leaning right edge, the plate's silhouette broken
+        if (tail)
+        {
+            // three chevron blades (lime, magenta, lime) flying off the leaning right edge, the head's height, black-edged
+            double lean = LeanOf(r.Height), bh = Math.Min(r.Height - cut - 4, 34), top = r.Top + 2;
+            double ex = r.Right - lean * (bh / 2) / r.Height;
+            for (int i = 0; i < 3; i++)
+            {
+                double x = ex + 3 + i * 8.5, w = 5, d = 7, ym = top + bh / 2;
+                var blade = new StreamGeometry();
+                using (var c = blade.Open())
+                {
+                    c.BeginFigure(new Point(x, top), true, true);
+                    c.LineTo(new Point(x + w, top), true, false);
+                    c.LineTo(new Point(x + w + d, ym), true, false);
+                    c.LineTo(new Point(x + w, top + bh), true, false);
+                    c.LineTo(new Point(x, top + bh), true, false);
+                    c.LineTo(new Point(x + d, ym), true, false);
+                }
+                blade.Freeze();
+                dc.DrawGeometry(Frozen(dim ? GreyC : i == 1 ? MagC : Mod.A(accent, i == 0 ? 1 : .75)), Mod.P(Frozen(Mod.A(Colors.Black, .85)), 1), blade);
+            }
+        }
+        // the stripe: lime from the cut along a third of the top, a gap, a magenta tab
+        var ac = dim ? GreyC : accent;
+        double x0 = r.Left + cut + 2, len = Math.Min(170, r.Width * .34);
+        dc.DrawGeometry(Frozen(ac), null, Para(new Rect(x0, r.Top + .5, len, 3), 3));
+        dc.DrawGeometry(Frozen(dim ? GreyC : MagC), null, Para(new Rect(x0 + len + 4, r.Top + .5, 16, 3), 3));
+        dc.DrawGeometry(null, Mod.P(Chrome, 1.6), shape);
+        dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(Colors.Black, .7)), 1), PlateGeo(new Rect(r.X + 1.8, r.Y + 1.8, r.Width - 3.6, r.Height - 3.6), cut - .8));
+    }
+
+    /// <summary>A slanted chip round <paramref name="content"/>: its fill, an optional edge, the content padded inside.</summary>
+    static Grid Chip(FrameworkElement content, Brush fill, Brush? edge, Thickness pad, double slant = 4)
+    {
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new TacSketch((dc, s) => { if (s.Width > 2) dc.DrawGeometry(fill, edge != null ? Mod.P(edge, 1) : null, Para(new Rect(.5, .5, s.Width - 1, s.Height - 1), slant)); }));
+        content.Margin = pad;
+        g.Children.Add(content);
+        return g;
+    }
+
+    /// <summary>A mark (★ DPS, ✚, AVG): black with a lime (or <paramref name="edge"/>) edge and ink; <paramref name="filled"/> white with black words (YOU).</summary>
+    static Grid Mark(string s, Brush? ink = null, Color? edge = null, bool filled = false, double size = 10)
+    {
+        var t = Ht(s, size, filled ? Black : ink ?? LimeInk, FontWeights.Bold);
+        return Chip(t, filled ? White : Frozen(Mod.A(Colors.Black, .82)), filled ? null : Frozen(Mod.A(edge ?? LimeC, .85)), new Thickness(5, 0, 4, 1), 3);
+    }
+
+    /// <summary>A chrome hairline across a plate, bright at its middle.</summary>
+    static FrameworkElement Hairline(Thickness m) => new TacSketch((dc, s) =>
+        dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.White, .05), 0), (Mod.A(Colors.White, .32), .3), (Mod.A(LimeC, .4), .6), (Mod.A(Colors.White, .05), 1)), null, new Rect(0, 0, s.Width, 1))) { Height = 1, Margin = m };
+
+    /// <summary>Chrome frames over a pickup strip's tiles (drawn on top of each tile's own edge; no width taken).</summary>
+    static FrameworkElement ChromeTiles(FrameworkElement strip, double size)
+    {
+        if (strip is not Panel row) return strip;
+        foreach (var cell in row.Children.OfType<Grid>())
+            if (cell.Tag is "pick-tile" or "pick-best")
+                cell.Children.Insert(Math.Min(1, cell.Children.Count), ChromeFrame(size));
+        return strip;
+    }
+
+    /// <summary>A chrome frame <paramref name="size"/> px square: the bevel, a dark line inside it.</summary>
+    static TacSketch ChromeFrame(double size) => new((dc, s) =>
+    {
+        dc.DrawRoundedRectangle(null, Mod.P(Chrome, 1.6), new Rect(.8, .8, s.Width - 1.6, s.Height - 1.6), 3, 3);
+        dc.DrawRoundedRectangle(null, Mod.P(Frozen(Mod.A(Colors.Black, .55)), 1), new Rect(2.1, 2.1, s.Width - 4.2, s.Height - 4.2), 2, 2);
+    }, size, size) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+
+    /// <summary>A small lightning bolt in <paramref name="r"/> (its top at the right, its foot at the left).</summary>
+    internal static Geometry Bolt(Rect r)
+    {
+        double x = r.Left, y = r.Top, w = r.Width, h = r.Height;
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            c.BeginFigure(new Point(x + w * .62, y), true, true);
+            c.LineTo(new Point(x + w * .08, y + h * .58), true, false);
+            c.LineTo(new Point(x + w * .46, y + h * .56), true, false);
+            c.LineTo(new Point(x + w * .28, y + h), true, false);
+            c.LineTo(new Point(x + w * .94, y + h * .38), true, false);
+            c.LineTo(new Point(x + w * .55, y + h * .40), true, false);
+            c.LineTo(new Point(x + w * .82, y), true, false);
+        }
+        g.Freeze();
+        return g;
+    }
 
     // ================================================================ the Buddy
 
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _timerUp = false; _stripTimerW = -1;
+        _gaugeArt = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
-        _line.Opacity = _dim ? .62 : 1;
+        _line.Opacity = _dim ? .66 : 1;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (mark) { var m = AbyssMark(f.Icon, 36); m.Margin = new Thickness(2, 0, 9, 0); _lineBody.Children.Add(m); }
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudHype.Run.cs)
@@ -159,7 +383,7 @@ sealed partial class HudHype : ModernLook
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
         {
-            var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 9, 7, 0, 7);
+            var w = Ht(Waiting(f.Abyss), 13.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 6, 7, 0, 6);
             _lineBody.Children.Add(w);
         }
         else
@@ -167,21 +391,22 @@ sealed partial class HudHype : ModernLook
             if (HasRing(f))
             {
                 _share = f.Share; _beat = f.Beat; _complete = 0;
-                var ring = new Grid { Width = 42, Height = 42, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-                _ringArt = new TacSketch(DrawRing, 42, 42);
-                ring.Children.Add(_ringArt);
-                var pc = Tt(f.Beat ? "★" : Pct(f.Share), 13, White, FontWeights.Bold); pc.HorizontalAlignment = HorizontalAlignment.Center;
+                var ring = new Grid { Width = 46, Height = 46, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+                _gaugeArt = new TacSketch(DrawGauge, 46, 46);
+                ring.Children.Add(_gaugeArt);
+                var pc = Ht(f.Beat ? "★" : Pct(f.Share), 14.5, f.Beat ? Lime : White, FontWeights.Bold); pc.HorizontalAlignment = HorizontalAlignment.Center; pc.Margin = new Thickness(1, 0, 0, 2);
                 ring.Children.Add(pc);
                 _lineBody.Children.Add(ring);
             }
-            else if (!mark) _lineBody.Children.Add(new Border { Width = 8 });
-            // the hour big, its unit small; the session and the latest pickup under it
-            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 0, 1) };
+            else if (!mark) _lineBody.Children.Add(new Border { Width = 4 });
+            // the hour huge in chrome-lime, its unit small; the session and the latest pickup under it
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var top = new StackPanel { Orientation = Orientation.Horizontal };
-            var rate = Tt(f.Rate, f.Warm ? 15 : 22, f.Warm ? Soft : White, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
+            var rate = Ht(f.Rate, f.Warm ? 16 : 30, f.Warm ? Soft : ChromeLime, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
             rate.Tag = "buddy-rate";
+            if (!f.Warm) rate.Margin = new Thickness(0, -3, 0, -3);
             top.Children.Add(rate);
-            if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, Soft, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, 4); top.Children.Add(u); }
+            if (f.Unit.Length > 0) { var u = Ht(f.Unit, 12, LimeInk, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, f.Warm ? 1 : 3); top.Children.Add(u); }
             words.Children.Add(top);
             // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
             // alone under it; with the timer chips at the line's end and no room left beside them, the chips go over the line
@@ -190,16 +415,16 @@ sealed partial class HudHype : ModernLook
             if (StripTime(f))
             {
                 var bare = Sub(f, false);
-                double baseW = 5 + 18 + _lineBody.Children.OfType<FrameworkElement>().Sum(Mod.W), timerW = LineTimerW();
+                double baseW = _lineBody.Margin.Left + _lineBody.Margin.Right + 4 + _lineBody.Children.OfType<FrameworkElement>().Sum(Mod.W), timerW = LineTimerW();
                 double wordsW = Math.Max(Mod.W(top), Mod.W(bare)), oldW = Math.Max(Mod.W(top), Mod.W(sub));
                 foreach (var look in StripFall(Strip))
                 {
                     if ((strip = StripIn(StripRoom(FightWidth - 10, baseW + timerW, wordsW, oldW, 12), look)) != null) break;
                     if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 10, baseW, wordsW, oldW + timerW, 12), look)) != null) { _timerUp = true; break; }
                 }
-                if (strip != null) { sub = bare; strip.Margin = new Thickness(12, 0, 0, 0); }
+                if (strip != null) { sub = bare; strip.Margin = new Thickness(12, 0, 0, 0); ChromeTiles(strip, Strip.Size); }
                 // no room beside the hour: under the session, never dropped (Steven, 2026-11-19)
-                else if ((under = StripUnder(Strip, false)) != null) sub = bare;
+                else if ((under = StripUnder(Strip, false)) != null) { sub = bare; ChromeTiles(under, Strip.Size); }
                 _stripTimerW = timerW;
             }
             if (sub.Inlines.Count > 0) words.Children.Add(sub);
@@ -209,41 +434,56 @@ sealed partial class HudHype : ModernLook
         }
         _lineBody.Children.Add(_timersInLine);
         PlaceTimers();
-        _lineWash.InvalidateVisual();
+        _linePlate.InvalidateVisual();
 
-        // the rare drop the window holds: its tile on a wash in its grade's colour, RARE DROP and its name
+        // the rare drop the window holds: a plate striped in its grade's colour, its tile in chrome, RARE DROP and its name
         _rare.Children.Clear();
         if (!KinahHidden && Rare(Values) is { } r)
         {
             var c = ColorOf(r.Color, r.Grade);
-            _rareC = c; _rareBloom = 1;
-            var wash = new TacSketch((dc, s) => Wash(dc, new Rect(0, 0, s.Width * Math.Clamp(_rareBloom, 0, 1), s.Height), c, .58 * WashK + .4 * _rareFlash, .34 * WashK, s.Height / 2));
-            _rareWash = wash;
-            _rare.Children.Add(wash);
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 4, 24, 4) };
-            var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 8, 0);
-            _rareTile = tile;
-            row.Children.Add(tile);
-            var mk = Mark(L.T("RARE DROP"), size: 8); mk.Margin = new Thickness(0, 0, 7, 0);
+            var plate = new TacSketch((dc, s) =>
+            {
+                if (s.Width < 16) return;
+                var slab = Para(new Rect(1, 1, s.Width - 10, s.Height - 6), 9);
+                dc.DrawGeometry(Mag, null, Para(new Rect(6, 5, s.Width - 10, s.Height - 6), 9));
+                dc.DrawGeometry(Mod.Grad(false, (Color.FromRgb(0xA8, 0xE0, 0x00), 0), (LimeC, .35), (Color.FromRgb(0xE4, 0xFF, 0x7A), 1)), Mod.P(Black, 1.2), slab);
+                dc.PushClip(slab);
+                dc.DrawRectangle(Frozen(c), null, new Rect(0, 0, 17, s.Height));
+                dc.DrawRectangle(Frozen(Mod.A(Colors.White, .45)), null, new Rect(0, 1, s.Width, 1.5));
+                dc.Pop();
+            });
+            _rarePlate = plate;
+            _rare.Children.Add(plate);
+            // the flash in the grade's colour, drawn once, shown by its opacity on the moment
+            _rareFlash = new TacSketch((dc, s) => { if (s.Width > 16) dc.DrawGeometry(White, null, Para(new Rect(1, 1, s.Width - 10, s.Height - 6), 9)); }) { Opacity = 0 };
+            _rare.Children.Add(_rareFlash);
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(21, 5, 26, 9) };
+            var tileHost = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 9, 0) };
+            tileHost.Children.Add(Tile(r, 26)); tileHost.Children.Add(ChromeFrame(26));
+            _rareTile = tileHost;
+            row.Children.Add(tileHost);
+            var mk = Chip(Ht(L.T("RARE DROP"), 11, Lime, FontWeights.Bold), Black, null, new Thickness(8, 1, 8, 1), 5);
+            mk.Margin = new Thickness(0, 0, 9, 0);
             row.Children.Add(mk);
-            var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .45)), FontWeights.Bold);
+            var nm = Ht(r.Name, 16, Black, FontWeights.Bold);
             row.Children.Add(nm);
-            if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
-            var lit = Lit(row);
-            _rare.Children.Add(lit);
+            if (r.Count.Length > 0) { var cn = Ht(" " + r.Count, 13, Black, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
+            _rare.Children.Add(Shaded(row));
             _rare.Visibility = Visibility.Visible;
         }
-        else { _rare.Visibility = Visibility.Collapsed; _rareWash = null; _rareTile = null; }
+        else { _rare.Visibility = Visibility.Collapsed; _rareFlash = null; _rareTile = null; }
 
-        // the notice: its words in their tone under the Buddy, the warning sign before a pause
+        // the notice: its words in their tone on a small black plate under the Buddy, the warning sign before a pause
         _note.Children.Clear();
         if (f.Note.Length > 0 && !KinahHidden)
         {
             bool warn = ReferenceEquals(f.NoteTone, Warn);
-            if (warn) { var wi = WarnIcon(); wi.Width = wi.Height = 13; wi.Margin = new Thickness(0, 0, 5, 0); _note.Children.Add(wi); }
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            if (warn) { var wi = WarnIcon(); wi.Width = wi.Height = 13; wi.Margin = new Thickness(0, 0, 5, 0); sp.Children.Add(wi); }
             var tone = warn ? WarnC2 : ReferenceEquals(f.NoteTone, Gold) ? GoldC2 : ReferenceEquals(f.NoteTone, Mint) ? MintC2 : Color.FromRgb(0xF2, 0xF4, 0xF8);
-            var t = Tt(f.Note, 11.5, Frozen(tone), FontWeights.SemiBold); t.TextTrimming = TextTrimming.CharacterEllipsis; t.MaxWidth = 380;
-            _note.Children.Add(t);
+            var t = Ht(f.Note, 12, Frozen(tone), FontWeights.SemiBold); t.TextTrimming = TextTrimming.CharacterEllipsis; t.MaxWidth = 380;
+            sp.Children.Add(t);
+            _note.Children.Add(Chip(Shaded(sp), Frozen(Mod.A(InkC, .88)), Frozen(Mod.A(warn ? WarnC2 : Colors.White, warn ? .7 : .3)), new Thickness(9, 3, 10, 4), 5));
             _note.Visibility = Visibility.Visible;
         }
         else _note.Visibility = Visibility.Collapsed;
@@ -252,15 +492,15 @@ sealed partial class HudHype : ModernLook
     /// <summary>The line under the hour: the session, the latest pickup and its worth (<paramref name="pick"/>); in the Abyss its stats.</summary>
     TextBlock Sub(Figures f, bool pick)
     {
-        var sub = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), Margin = new Thickness(1, 1, 0, 0) };
-        System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
-        void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Quiet }); }
-        if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.SemiBold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
+        var sub = Ht("", 11.5, Frozen(Mod.A(Colors.White, .84)), FontWeights.SemiBold);
+        sub.Margin = new Thickness(1, 1, 0, 0);
+        void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  /  ") { Foreground = Frozen(Mod.A(LimeC, .7)) }); }
+        if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Bold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
         foreach (var (fig, word, tone) in f.Stats)
         {
             Dot();
-            var c = ReferenceEquals(tone, Rec) ? CoralC : ReferenceEquals(tone, Gold) ? GoldC2 : Colors.White;
-            sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.SemiBold, Foreground = Frozen(c) });
+            var c = ReferenceEquals(tone, Rec) ? MagInkC : ReferenceEquals(tone, Gold) ? GoldC2 : Colors.White;
+            sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = Frozen(c) });
             sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
         }
         if (pick && !f.Abyss && Picks(Values).FirstOrDefault() is { } p)
@@ -268,7 +508,7 @@ sealed partial class HudHype : ModernLook
             Dot();
             sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 22 ? p.Name[..21].TrimEnd() + "…" : p.Name));
             var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-            if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + worth) { FontWeight = FontWeights.Bold, Foreground = p.Worth.Length > 0 ? Mint2 : Soft });
+            if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + worth) { FontWeight = FontWeights.Bold, Foreground = p.Worth.Length > 0 ? Lime : Soft });
         }
         return sub;
     }
@@ -282,52 +522,68 @@ sealed partial class HudHype : ModernLook
     /// <summary>The timer chips sit over the line, to leave its room to the pickup strip.</summary>
     bool _timerUp;
 
-    Color _rareC;
-    double _rareBloom = 1, _rareFlash;
-    TacSketch? _rareWash;
+    TacSketch? _rareFlash, _rarePlate;
     FrameworkElement? _rareTile;
 
-    /// <summary>The Buddy's wash: blue fading out to the right, rounded at its left (grey while paused); a pickup's light crossing it.</summary>
-    void DrawLineWash(DrawingContext dc, Size s)
+    /// <summary>
+    /// The glint racing the Buddy's plate at <paramref name="p"/> (0 to 1; outside: put away): its canvas clipped to the plate
+    /// when it shows, its bands moved by a transform and faded in and out (nothing is drawn again).
+    /// </summary>
+    void Sheen(double p)
     {
-        if (s.Width < 4 || s.Height < 4) return;
-        var c = _dim ? GreyC : BlueC;
-        Wash(dc, new Rect(0, 0, s.Width, s.Height), c, (_dim ? .42 : .6) * WashK, (_dim ? .2 : .3) * WashK, s.Height / 2);
-        if (_sheen is >= 0 and <= 1)
+        if (p is < 0 or > 1 || _line.ActualWidth < 12) { _sheenHost.Visibility = Visibility.Collapsed; return; }
+        if (_sheenHost.Visibility != Visibility.Visible)
         {
-            // the light: a soft band crossing the wash left to right, inside its rounded shape, fading as it nears the faded end
-            double x = -40 + (s.Width * .8 + 40) * _sheen, a = .26 * (1 - _sheen * .7);
-            dc.PushClip(new RectangleGeometry(new Rect(0, 0, s.Width, s.Height), s.Height / 2, s.Height / 2));
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(_sheenC, 0), 0), (Mod.A(_sheenC, a), .5), (Mod.A(_sheenC, 0), 1)), null, new Rect(x, 0, 46, s.Height));
-            dc.Pop();
+            _sheenHost.Clip = PlateGeo(new Rect(1, 1, _line.ActualWidth - 4, _line.ActualHeight - 5), Cut);
+            _sheenHost.Visibility = Visibility.Visible;
         }
+        _sheenAt.X = -70 + (_line.ActualWidth + 80) * p;
+        _sheenHost.Opacity = Math.Sin(Math.PI * p);
     }
 
-    /// <summary>The run's ring: a faint track and your best's share as a white arc (mint once beaten), round caps.</summary>
-    void DrawRing(DrawingContext dc, Size s)
+    /// <summary>
+    /// The run's ring as a lime gauge: a 270° steel track with ticks every tenth, your best's share as a lime arc (full once
+    /// beaten) with a magenta needle at its end; on your best passed it flares.
+    /// </summary>
+    void DrawGauge(DrawingContext dc, Size s)
     {
-        double c = s.Width / 2, r = c - 3;
-        var center = new Point(c, c);
-        dc.DrawEllipse(Frozen(Mod.A(DeepC, .22)), null, center, r - 1, r - 1);
-        dc.DrawEllipse(null, Mod.P(Frozen(Mod.A(Colors.White, .28)), 3.2), center, r, r);
+        double c = s.Width / 2, r = c - 4;
+        dc.DrawEllipse(Frozen(Mod.A(Colors.Black, .55)), Mod.P(Frozen(Mod.A(Colors.White, .14)), 1), new Point(c, c), r + 3, r + 3);
+        const double a0 = 135, sweep = 270;
+        Point At(double deg, double rr) { double t = deg * Math.PI / 180; return new Point(c + rr * Math.Cos(t), c + rr * Math.Sin(t)); }
+        Geometry Arc(double from, double to, double rr)
+        {
+            var fig = new PathFigure { StartPoint = At(from, rr) };
+            fig.Segments.Add(new ArcSegment(At(to, rr), new Size(rr, rr), 0, to - from > 180, SweepDirection.Clockwise, true));
+            var pg = new PathGeometry(); pg.Figures.Add(fig); pg.Freeze();
+            return pg;
+        }
+        dc.DrawGeometry(null, Mod.P(Frozen(TrackC), 4.2), Arc(a0, a0 + sweep, r));
+        for (int k = 0; k <= 10; k++)
+        {
+            double d = a0 + sweep * k / 10;
+            bool major = k % 5 == 0;
+            dc.DrawLine(Mod.P(Frozen(Mod.A(Colors.White, major ? .6 : .3)), major ? 1.4 : 1), At(d, r - 4.5), At(d, r - (major ? 8.5 : 6.5)));
+        }
         double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
         double shown = share + (1 - share) * Math.Clamp(_complete, 0, 1);
-        var tone = _beat || _complete >= 1 ? MintC2 : Colors.White;
-        if (shown >= .999) { dc.DrawEllipse(null, Mod.P(Frozen(tone), 3.4), center, r, r); return; }
-        if (shown < .004) return;
-        double a = 2 * Math.PI * shown;
-        var fig = new PathFigure { StartPoint = new Point(c, c - r) };
-        fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
-        var pg = new PathGeometry(); pg.Figures.Add(fig); pg.Freeze();
-        dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(DeepC, .35)), 5.4, round: true), pg);
-        dc.DrawGeometry(null, Mod.P(Frozen(tone), 3.4, round: true), pg);
+        if (shown > .004)
+        {
+            double end = a0 + sweep * Math.Min(shown, 1);
+            var arc = Arc(a0, Math.Max(a0 + .5, end), r);
+            if (_beat || _complete >= 1 || _gaugeFlash > 0) dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(LimeC, .25 + .4 * _gaugeFlash)), 8), arc);
+            dc.DrawGeometry(null, Mod.P(Frozen(LimeC), 4.2), arc);
+            // the needle: a magenta tick across the arc's end, white at its heart
+            dc.DrawLine(Mod.P(Frozen(MagC), 2.6), At(end, r - 4.5), At(end, r + 3.5));
+            dc.DrawLine(Mod.P(White, 1), At(end, r - 3), At(end, r + 2));
+        }
     }
 
     protected override void KinahShown(bool shown)
     {
         _line.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         if (!shown) { _note.Visibility = Visibility.Collapsed; _rare.Visibility = Visibility.Collapsed; }
-        _fight.Margin = new Thickness(0, 0, 0, shown ? 10 : 0);
+        _fight.Margin = new Thickness(0, 0, 0, shown ? 6 : 0);
         PlaceTimers();
     }
 
@@ -341,18 +597,16 @@ sealed partial class HudHype : ModernLook
         {
             var (text, tone) = TimerWords(i, now);
             bool first = _timers.Children.Count == 0;
-            var c = tone == TimerBadge.Tone.On ? MintC2 : tone == TimerBadge.Tone.Soon ? GoldC2 : Color.FromRgb(0xE6, 0xE9, 0xF0);
+            var c = tone == TimerBadge.Tone.On ? LimeC : tone == TimerBadge.Tone.Soon ? GoldC2 : Color.FromRgb(0xE6, 0xE9, 0xF0);
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
-            sp.Children.Add(new System.Windows.Shapes.Ellipse { Width = first ? 6.5 : 5, Height = first ? 6.5 : 5, Fill = Frozen(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-            var t = Tt(text, first ? 11.5 : 10, first ? White : Soft, first ? FontWeights.Bold : FontWeights.SemiBold);
-            if (tone == TimerBadge.Tone.On) t.Foreground = Frozen(Mod.Mix(MintC2, Colors.White, .45));
+            double d = first ? 7 : 5.5;
+            sp.Children.Add(new TacSketch((dc, s) => dc.DrawGeometry(Frozen(c), null, Para(new Rect(0, 0, s.Width, s.Height), d * .45)), d, d) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            var t = Ht(text, first ? 12.5 : 11, first ? White : Soft, first ? FontWeights.Bold : FontWeights.SemiBold);
+            if (tone == TimerBadge.Tone.On) t.Foreground = LimeInk;
             sp.Children.Add(t);
-            var chip = new Border
-            {
-                Child = sp, CornerRadius = new CornerRadius(99), Padding = first ? new Thickness(8, 3, 10, 4) : new Thickness(7, 2, 9, 3), VerticalAlignment = VerticalAlignment.Center,
-                Background = Frozen(Mod.A(DeepC, .46)), BorderThickness = new Thickness(1), BorderBrush = Frozen(Mod.A(tone == TimerBadge.Tone.On ? MintC2 : Colors.White, tone == TimerBadge.Tone.On ? .5 : .22)),
-                Margin = new Thickness(first ? 0 : 5, 0, 0, 0), Tag = first ? "timer-chip" : null,
-            };
+            var chip = Chip(Shaded(sp), Frozen(Mod.A(InkC, .9)), tone == TimerBadge.Tone.On ? Lime : Chrome, first ? new Thickness(9, 3, 11, 4) : new Thickness(8, 2, 10, 3), 5);
+            chip.Margin = new Thickness(first ? 0 : 5, 0, 0, 0);
+            chip.Tag = first ? "timer-chip" : null;
             if (first) _firstChip = chip;
             _timers.Children.Add(chip);
         }
@@ -386,6 +640,8 @@ sealed partial class HudHype : ModernLook
         _timersInFight.Visibility = inside && any ? Visibility.Visible : Visibility.Collapsed;
         _timersUp.Visibility = up && any ? Visibility.Visible : Visibility.Collapsed;
         _timersInLine.Visibility = !inside && !up && any ? Visibility.Visible : Visibility.Collapsed;
+        // the head's tabs ride up onto the plate's top edge, breaking its line (under the timer chips, in a dungeon, they sit inside)
+        if (_head != null) _head.Margin = inside && any ? new Thickness(0, 0, 0, 2) : new Thickness(-6, -15, 0, 2);
     }
 
     // ================================================================ the fight
@@ -393,194 +649,346 @@ sealed partial class HudHype : ModernLook
     protected override void DrawFight(Encounter? e, DateTime now)
     {
         _fightBody.Children.Clear();
-        if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
+        if (e == null) { _fight.Visibility = Visibility.Collapsed; _bandHost.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 10;
         _fight.Width = w;
+        double inner = w - _fightBody.Margin.Left - _fightBody.Margin.Right;
         _fightBody.Children.Add(_timersInFight);
         // the head: the boss, the outcome once it's over, the clock
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = Tt(e.Title, 14, White, FontWeights.SemiBold); title.TextTrimming = TextTrimming.CharacterEllipsis;
-        head.Children.Add(title);
+        // the boss on a lime sponsor tab, black heavy italic
+        var title = Ht(e.Title, 16, Black, FontWeights.Bold); title.TextTrimming = TextTrimming.CharacterEllipsis;
+        var tab = Chip(title, Lime, Black, new Thickness(10, 1, 12, 1), 7);
+        _titleTab = tab;
+        tab.HorizontalAlignment = HorizontalAlignment.Left;
+        head.Children.Add(tab);
         var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
-        if (e.Waiting) right.Children.Add(Mark(L.T("READY"), MarkMint, MarkMintC, size: 9.5));
+        if (e.Waiting) right.Children.Add(Chip(Ht(L.T("READY"), 11, Black, FontWeights.Bold), Lime, null, new Thickness(7, 1, 7, 1), 4));
         else
         {
             var outcome = OutcomeText(e);
             if (outcome.Length > 0)
             {
                 bool wipe = e.Outcome == "wipe";
-                var st = Tt(outcome, 10, wipe ? Frozen(Color.FromRgb(0xFF, 0x9A, 0x9A)) : MarkMint, FontWeights.Bold);
-                right.Children.Add(new Border { Child = st, CornerRadius = new CornerRadius(99), Padding = new Thickness(7, 1, 7, 2), Background = Frozen(Mod.A(DeepC, .42)), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "outcome" });
+                var st = Chip(Ht(outcome.ToUpperInvariant(), 11, wipe ? White : Black, FontWeights.Bold), wipe ? Mag : Lime, null, new Thickness(7, 1, 7, 1), 4);
+                st.Margin = new Thickness(0, 1, 9, 0); st.Tag = "outcome";
+                _outcomeChip = st;
+                right.Children.Add(st);
             }
-            var clock = Tt(Clock(e, now), 18, White, FontWeights.Bold); clock.Tag = "fight-clock";
-            right.Children.Add(clock);
+            // the clock on a black slab edged in chrome, white and huge: the broadcast's game clock
+            var clock = Ht(Clock(e, now), 21, White, FontWeights.Bold); clock.Tag = "fight-clock";
+            var slab = Chip(clock, Black, Chrome, new Thickness(9, -2, 9, -2), 6);
+            right.Children.Add(slab);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
-        _head = Lit(head);
+        if (!(OutcomeText(e).Length > 0)) _outcomeChip = null;
+        _head = head;
         _fightBody.Children.Add(_head);
         if (e.Waiting)
         {
-            var wt = Tt(e.ReadyText, 12.5, Soft, FontWeights.SemiBold); wt.Margin = new Thickness(0, 6, 0, 2); wt.TextTrimming = TextTrimming.CharacterEllipsis;
-            _fightBody.Children.Add(Lit(wt));
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, w); }
+            var wt = Ht(e.ReadyText, 13, Soft, FontWeights.SemiBold); wt.Margin = new Thickness(0, 6, 0, 2); wt.TextTrimming = TextTrimming.CharacterEllipsis;
+            _fightBody.Children.Add(Shaded(wt));
+            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 7 }); PutRows(_fightBody, e, now, inner); }
         }
         else
         {
             if (HpOf(e) is { } hp)
             {
-                // the boss's HP: a slim 3 px line with ticks at the thirds, the figure and what's left under its right end
-                var track = new Grid { Height = 5, Margin = new Thickness(0, 8, 0, 0) };
+                // the boss's HP: an angled magenta bar with chrome caps and ticks at the thirds, the figure and what's left under its right end
+                var track = new Grid { Height = 8, Margin = new Thickness(0, 7, 0, 0) };
                 track.Children.Add(new TacSketch((dc, s) =>
                 {
-                    double y = 1, h = 3, x1 = s.Width * Math.Clamp(hp, 0, 1);
-                    dc.DrawRoundedRectangle(Frozen(Mod.A(DeepC, .3)), null, new Rect(-.5, y - .5, s.Width + 1, h + 1), 2, 2);
-                    dc.DrawRoundedRectangle(Frozen(Mod.A(Colors.White, .24)), null, new Rect(0, y, s.Width, h), 1.5, 1.5);
-                    if (x1 > .5) dc.DrawRoundedRectangle(Frozen(HpC), null, new Rect(0, y, x1, h), 1.5, 1.5);
-                    for (int k = 1; k <= 2; k++) { double x = Math.Round(s.Width * k / 3); dc.DrawRectangle(Frozen(Mod.A(Colors.Black, .62)), null, new Rect(x - 1, y - .5, 2, h + 1)); }
+                    double h = s.Height, x1 = 5 + (s.Width - 10) * Math.Clamp(hp, 0, 1);
+                    dc.DrawGeometry(Frozen(TrackC), Mod.P(Frozen(Mod.A(Colors.Black, .8)), 1), Para(new Rect(0, 0, s.Width, h), 4));
+                    if (x1 > 5.5)
+                    {
+                        dc.DrawGeometry(Mod.Grad(false, (Color.FromRgb(0x9A, 0x0E, 0x7E), 0), (MagC, .7), (MagHotC, 1)), null, Para(new Rect(3, 1, x1 - 3, h - 2), 3.5));
+                        dc.DrawRectangle(Frozen(Mod.A(Colors.White, .35)), null, new Rect(5, 1, Math.Max(0, x1 - 7), 1));
+                    }
+                    for (int k = 1; k <= 2; k++) { double x = Math.Round(5 + (s.Width - 10) * k / 3); dc.DrawGeometry(Frozen(Mod.A(Colors.Black, .8)), null, Para(new Rect(x - 1.5, 0, 3, h), 2)); }
+                    dc.DrawGeometry(Chrome, null, Para(new Rect(0, 0, 6, h), 4));
+                    dc.DrawGeometry(Chrome, null, Para(new Rect(s.Width - 6, 0, 6, h), 4));
                 }));
-                HpGhost(track, e, hp, now, 1.5);
+                HpGhost(track, e, hp, now, 0);
                 _fightBody.Children.Add(track);
-                var hl = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, Foreground = Soft, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 0) };
-                System.Windows.Documents.Typography.SetNumeralAlignment(hl, FontNumeralAlignment.Tabular);
-                hl.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(hp * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = hp < .34 ? Frozen(Color.FromRgb(0xFF, 0x9A, 0xA4)) : White });
+                var hl = Ht("", 11.5, Soft, FontWeights.SemiBold); hl.HorizontalAlignment = HorizontalAlignment.Right; hl.Margin = new Thickness(0, 2, 0, 0);
+                hl.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(hp * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = hp < .34 ? MagInk : White });
                 var left = HpLeftText(e);
-                if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left) { FontWeight = FontWeights.Medium });
+                if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  /  " + left));
                 hl.Tag = "hp-text";
-                _fightBody.Children.Add(Lit(hl));
-                _fightBody.Children.Add(new Border { Height = 4 });
+                _fightBody.Children.Add(Shaded(hl));
+                _fightBody.Children.Add(new Border { Height = 3 });
             }
             else _fightBody.Children.Add(new Border { Height = 8 });
-            PutRows(_fightBody, e, now, w);
+            PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 8, 0, 6)));
+                _fightBody.Children.Add(Hairline(new Thickness(0, 7, 0, 5)));
                 _fightBody.Children.Add(Foot(e, now));
             }
         }
         _fight.Visibility = Visibility.Visible;
+        _fightPlate.InvalidateVisual();
         PlaceTimers();
     }
 
     // ================================================================ the moments
 
-    /// <summary>A pickup: a soft light crosses the Buddy's wash and the worth floats in beside it, then fades.</summary>
+    /// <summary>
+    /// The hype burst (a fight's start, a kill, a new leader): speed lines streak across the meter's plate and a chrome glint
+    /// races along every bar, row after row; <paramref name="crown"/> slams the bolt badge onto the top row as well.
+    /// </summary>
+    internal void Burst(bool crown)
+    {
+        if (Meter is not { } meter || _fight.Visibility != Visibility.Visible) return;
+        int i = 0;
+        foreach (var m in meter.Members)
+            if (meter.RowOf(m.Id) is HypeRow r) r.Shine(i++ * 70, crown && m.Rank == 1);
+        if (crown && meter.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly) is { } top) CutIn(top.Name);
+        bool placed = false;
+        Motion.Play(_streaks, 900, t =>
+        {
+            double w = _fight.ActualWidth, h = _fight.ActualHeight;
+            if (w < 12 || h < 12) return;
+            if (!placed)
+            {
+                // once per burst: the canvas clipped to the plate, each line at its height
+                placed = true;
+                _streaks.Clip = PlateGeo(new Rect(1, 1, w - 4, h - 5), Cut);
+                for (int k = 0; k < _streakBars.Count; k++) Canvas.SetTop(_streakBars[k].Bar, Math.Round(h * Streaks[k].Y));
+                _streaks.Visibility = Visibility.Visible;
+            }
+            for (int k = 0; k < _streakBars.Count; k++)
+            {
+                var (_, v, d, l, _, _) = Streaks[k];
+                var (bar, at) = _streakBars[k];
+                double p = Math.Clamp((t - d) / (1 - d), 0, 1);
+                if (p <= 0 || p >= 1) { bar.Opacity = 0; continue; }
+                at.X = -l + (w + 2 * l) * Math.Min(1, p * v * 1.15);
+                bar.Opacity = .95 * Math.Sin(Math.PI * p);
+            }
+        }, () => _streaks.Visibility = Visibility.Collapsed);
+    }
+
+    /// <summary>A word drawn as vector lettering (the cut-in's art, not a text of the layout): its outline geometry, frozen.</summary>
+    static Geometry LetterGeo(string s, double size, FontFamily face, FontWeight weight, FontStretch stretch)
+    {
+        var ft = new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface(face, FontStyles.Italic, weight, stretch), size, Brushes.Black, 1.0);
+        var g = ft.BuildGeometry(new Point(0, 0));
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>Vector lettering in black (the cut-in's "#1").</summary>
+    static System.Windows.Shapes.Path Lettering(string s, double size, FontFamily face, FontWeight weight, FontStretch stretch) =>
+        new() { Data = LetterGeo(s, size, face, weight, stretch), Fill = Black };
+
+    Grid? _cutIn;
+    System.Windows.Shapes.Path? _cutName;
+    /// <summary>The head's title tab and outcome chip: the moments hide them under their own words (the clock stays).</summary>
+    FrameworkElement? _titleTab, _outcomeChip;
+    readonly ScaleTransform _cutScale = new(1, 1);
+    readonly SkewTransform _cutSkew = new();
+    Border? _cutFlash;
+    readonly TranslateTransform _cutShift = new();
+
+    /// <summary>
+    /// The new leader's cut-in: "#1" in Impact and their name, black on a lime slab, slamming in at the meter's top right from
+    /// twice its size, held, then whipped off to the left (950 ms). Built once; the name is set once per cut-in; only its
+    /// transforms and opacity move.
+    /// </summary>
+    void CutIn(string name)
+    {
+        if (_cutIn == null)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            var num = Lettering("#1", 22, Punch, FontWeights.Normal, FontStretches.Normal);
+            num.VerticalAlignment = VerticalAlignment.Bottom;
+            sp.Children.Add(num);
+            _cutName = new System.Windows.Shapes.Path { Fill = Black, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(7, 0, 0, 0) };
+            sp.Children.Add(_cutName);
+            var slab = Chip(sp, Mod.Grad(false, (Color.FromRgb(0xA8, 0xE0, 0x00), 0), (LimeC, .3), (Color.FromRgb(0xE4, 0xFF, 0x7A), 1)), Black, new Thickness(11, 3, 13, 3), 8);
+            var under = new Border { Background = Frozen(MagC), Margin = new Thickness(5, 4, -4, -4) };
+            under.RenderTransform = new SkewTransform(-14, 0);
+            _cutFlash = new Border { Background = White, Opacity = 0, Margin = new Thickness(3, 0, 3, 0), RenderTransform = new SkewTransform(-14, 0), RenderTransformOrigin = new Point(.5, .5) };   // sized by the slab, never sizing it
+            // in the title tab's place at the plate's top-left: the clock and the HP stay in view
+            _cutIn = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(6, -6, 0, 0), Opacity = 0, IsHitTestVisible = false };
+            _cutIn.Children.Add(under); _cutIn.Children.Add(slab); _cutIn.Children.Add(_cutFlash);
+            _cutIn.RenderTransformOrigin = new Point(0, .5);
+            _cutIn.RenderTransform = new TransformGroup { Children = { _cutSkew, _cutScale, _cutShift } };
+            _fightFx.Children.Add(_cutIn);
+        }
+        if (_titleTab != null) _cutIn!.MinWidth = Math.Max(0, _titleTab.ActualWidth + 2);
+        _cutName!.Data = LetterGeo(name.Length > 14 ? name[..13].TrimEnd() + "…" : name, 21, Face, FontWeights.Bold, FontStretches.Condensed);
+        var cut = _cutIn;
+        var flash = _cutFlash!;
+        var tab = _titleTab;
+        Motion.Play(cut, 620, t =>
+        {
+            // slam: 1.6x and leaning -12 deg to its size and upright in 140 ms, a white flash plate on impact, held, whipped off left
+            double k = Seg(t, 0, .22), o = Seg(t, .78, 1);
+            _cutScale.ScaleX = _cutScale.ScaleY = k <= 0 ? 1.6 : Math.Max(.94, 1.6 - .6 * Back(k, 3));
+            _cutSkew.AngleX = -12 * (1 - Out(k));
+            _cutShift.X = 20 * (1 - Out(k)) + 60 * o * o;
+            flash.Opacity = t is >= .2 and < .33 ? 1 - Seg(t, .2, .33) : 0;
+            cut.Opacity = t < .78 ? Math.Min(1, k * 3) : 1 - o;
+            if (tab != null) tab.Opacity = t < .78 ? 1 - Seg(t, 0, .12) : o;
+        }, () => { cut.Opacity = 0; if (tab != null) tab.Opacity = 1; flash.Opacity = 0; _cutScale.ScaleX = _cutScale.ScaleY = 1; _cutSkew.AngleX = 0; _cutShift.X = 0; });
+    }
+
+    /// <summary>The moving speed lines: (height share, speed, delay, length px, thickness, colour), streaking left to right.</summary>
+    static readonly (double Y, double V, double D, double L, double T, int C)[] Streaks =
+    {
+        (.16, 1.0, .00, 120, 2, 0), (.27, 1.3, .10, 70, 1, 1), (.39, .9, .05, 160, 1.5, 2), (.50, 1.2, .18, 90, 2.5, 0),
+        (.61, 1.0, .08, 140, 1, 1), (.72, 1.4, .22, 80, 2, 0), (.84, .95, .14, 110, 1.5, 1), (.93, 1.2, .02, 60, 1, 2),
+    };
+
+    /// <summary>A pickup: a lime glint races across the Buddy's plate and the worth slams in beside it on a black tag, then fades.</summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-        var words = new StackPanel { Margin = new Thickness(9, 2, 11, 3) };
-        words.Children.Add(Tt(worth, 14, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .25)) : White, FontWeights.Bold));
-        var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
+        var words = new StackPanel();
+        words.Children.Add(Ht(worth, 21, p.Worth.Length > 0 ? Lime : White, FontWeights.Bold));
+        var nm = Ht(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 10, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
         words.Children.Add(nm);
-        var chip = new Border
-        {
-            Child = words, MaxWidth = 88, CornerRadius = new CornerRadius(10), Background = Frozen(Mod.A(DeepC, .5)), BorderThickness = new Thickness(1),
-            BorderBrush = Frozen(Mod.A(Colors.White, .28)), Effect = Halo(),
-        };
+        var chip = Chip(Shaded(words), Frozen(Mod.A(InkC, .92)), Chrome, new Thickness(9, 2, 11, 4), 6);
+        chip.MaxWidth = 88;
         var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
+        var sc = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(0, .5);
+        chip.RenderTransform = new TransformGroup { Children = { sc, shift } };
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
-        _sheenC = Colors.White;
         Motion.Play(chip, 1900, t =>
         {
-            _sheen = t < .5 ? Seg(t, 0, .5) : -1; _lineWash.InvalidateVisual();
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
-        }, () => { _sheen = -1; _lineWash.InvalidateVisual(); _lineAnchor.Children.Remove(chip); });
+            Sheen(t < .42 ? Seg(t, 0, .42) : -1);
+            // the slam: in from the left a touch big, overshooting, landing hard
+            double k = Seg(t, .04, .2);
+            shift.X = -14 * (1 - Out(k));
+            sc.ScaleX = sc.ScaleY = k <= 0 ? 1.5 : Math.Max(.8, 1.5 - .5 * Back(k, 3));
+            chip.Opacity = t < .82 ? Math.Min(1, k * 3) : 1 - Seg(t, .82, 1);
+        }, () => { Sheen(-1); _lineAnchor.Children.Remove(chip); });
     }
 
-    /// <summary>A rare drop: its wash blooms out to the right in the grade's colour, a flash in it, the tile popping in.</summary>
+    /// <summary>A rare drop: its plate unrolls from the left (a clip widening) flashing its grade, the tile slams in from big.</summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareWash is not { } wash) return;
+        if (_rareFlash is not { } flash) return;
         var tile = _rareTile;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        Motion.Play(wash, 1500, t =>
+        // the slab skids in from the right leaning hard, overshoots upright, flashes white on landing; the tile slams in
+        var skew = new SkewTransform(0, 0);
+        var at = new TranslateTransform();
+        _rare.RenderTransformOrigin = new Point(0, 1);
+        _rare.RenderTransform = new TransformGroup { Children = { skew, at } };
+        Motion.Play(flash, 1100, t =>
         {
-            _rareBloom = Out(Seg(t, 0, .45));
-            _rareFlash = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, .8);
-            wash.InvalidateVisual();
-            sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, .05, .4), 2.2);
-        }, () => { _rareBloom = 1; _rareFlash = 0; wash.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+            double k = Seg(t, 0, .36);
+            at.X = 40 * (1 - Out(k));
+            skew.AngleX = k <= 0 ? -24 : -24 + 24 * Back(k, 3.2);
+            _rare.Opacity = Math.Min(1, k * 4);
+            flash.Opacity = t is >= .3 and < .45 ? 1 - Seg(t, .3, .45) : 0;
+            double s = Seg(t, .3, .6);
+            sc.ScaleX = sc.ScaleY = s <= 0 ? 0 : 1.7 - .7 * Back(s, 3.2);
+        }, () => { at.X = 0; skew.AngleX = 0; _rare.Opacity = 1; flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; });
     }
 
-    /// <summary>Your best passed: the ring runs on round to full in mint and a mint light crosses the wash.</summary>
+    /// <summary>Your best passed: the gauge sweeps on round to full in lime and flares, a lime glint races the plate.</summary>
     protected override void BestPassed(bool held)
     {
-        if (_ringArt is not { } art) return;
+        if (_gaugeArt is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
-        _sheenC = MintC2;
         Motion.Play(art, 1800, t =>
         {
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .5));
-            if (t >= .5) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, .4));
+            if (t >= .4) { _beat = beat; _complete = 1; }
+            _gaugeFlash = t < .4 ? 0 : 1 - Seg(t, .4, .9);
             art.InvalidateVisual();
-            _sheen = t is > .3 and < .85 ? Seg(t, .3, .85) : -1; _lineWash.InvalidateVisual();
-        }, () => { _complete = 0; _beat = beat; _sheen = -1; _sheenC = Colors.White; art.InvalidateVisual(); _lineWash.InvalidateVisual(); });
+            Sheen(t is > .3 and < .8 ? Seg(t, .3, .8) : -1);
+        }, () => { _complete = 0; _beat = beat; _gaugeFlash = 0; Sheen(-1); art.InvalidateVisual(); });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights mint round its edge and settles.</summary>
+    /// <summary>An entry opened: the first timer's chip punches out lime and settles.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
+        var glow = new DropShadowEffect { Color = LimeC, ShadowDepth = 0, BlurRadius = 9, Opacity = 0 };
+        var sc = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(.5, .5);
+        chip.RenderTransform = sc;
         chip.Effect = glow;
-        var edge = chip.BorderBrush;
-        Motion.Play(chip, 1200, t =>
+        Motion.Play(chip, 1100, t =>
         {
-            double k = t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1);
-            glow.Opacity = .85 * k;
-            chip.BorderBrush = Frozen(Mod.A(MintC2, .5 + .5 * k));
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; });
+            double k = t < .12 ? Seg(t, 0, .12) : 1 - Seg(t, .12, 1);
+            glow.Opacity = .95 * k;
+            sc.ScaleX = sc.ScaleY = t < .12 ? 1 + .14 * Seg(t, 0, .12) : 1 + .14 * (1 - Back(Seg(t, .12, .45), 2.5));
+        }, () => { chip.Effect = null; sc.ScaleX = sc.ScaleY = 1; });
     }
 
-    /// <summary>A fight started: the meter slides in from the left as it fades up.</summary>
+    /// <summary>A fight started: the meter snaps upright from a forward lean, the bolt badge slams onto the leader and the burst plays.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 520, t =>
+        // leaning forward from its foot (the left edge stays inside the window), straightening with a small kick
+        _fightSkew.CenterY = _fight.ActualHeight > 0 ? _fight.ActualHeight : 200;
+        Motion.Play(_fight, 420, t =>
         {
-            double k = Out(t);
-            _fightShift.Y = 10 * (1 - k);
-            _fightBody.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
+            _fightSkew.AngleX = -16 * (1 - Out(t));
+            _fightShift.X = -5 * (1 - Back(t, 1.6));
+            _fightBody.Opacity = Math.Min(1, .6 + t * 5);
+        }, () => { _fightSkew.AngleX = 0; _fightShift.X = 0; _fightBody.Opacity = 1; });
+        Burst(crown: true);
     }
 
-    /// <summary>A fight ended: a wash in mint (coral for a wipe) lays over the fight's head with the outcome and the clock, then lifts.</summary>
+    /// <summary>
+    /// A fight ended: a black band with lime edges (magenta for a wipe) slams over the fight's head from the left with the outcome
+    /// in Impact and the clock, then lifts; a kill bursts the bars as well.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
-        var c = wipe ? CoralC : MintC2;
-        double bloom = 0;
-        var band = new Grid { Height = 34, Margin = new Thickness(-4, -6, 0, 0) };
-        band.Children.Add(new TacSketch((dc, s) =>
+        var c = wipe ? MagC : LimeC;
+        // the giant word: vector lettering twice the head's height, a magenta (a wipe: black) copy knocked behind it, breaking
+        // the plate's top edge; Impact for Latin, the bold CJK face for ko / zh (Impact has no Hangul or Han)
+        var word = OutcomeText(e).ToUpperInvariant();
+        bool latin = word.All(ch => ch < 0x2E80);
+        var geo = LetterGeo(word, latin ? 34 : 30, latin ? Punch : PunchCjk, latin ? FontWeights.Normal : FontWeights.Bold, FontStretches.Normal);
+        var copy = new System.Windows.Shapes.Path { Data = geo, Fill = wipe ? Black : Mag, RenderTransform = new TranslateTransform(4, 3) };
+        var main = new System.Windows.Shapes.Path { Data = geo, Fill = Frozen(c), Stroke = Black, StrokeThickness = latin ? 1.6 : 1 };
+        var letters = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16, -7 - geo.Bounds.Top, 0, 0) };
+        letters.Children.Add(copy); letters.Children.Add(main);
+        var wsc = new ScaleTransform(1, 1);
+        letters.RenderTransformOrigin = new Point(.3, .5);
+        letters.RenderTransform = new TransformGroup { Children = { new SkewTransform(-8, 0), wsc } };
+        // the impact ring round the word, going out once
+        double gw = geo.Bounds.Width;
+        var ring = new System.Windows.Shapes.Ellipse { Width = 140, Height = 30, Stroke = Frozen(c), StrokeThickness = 3, Opacity = 0, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        double cx = Math.Max(78, 16 + gw / 2);
+        ring.Margin = new Thickness(cx - 70, -2, 0, 0);
+        var rsc = new ScaleTransform(.5, .5, 70, 15);
+        ring.RenderTransform = rsc;
+        _bandHost.Children.Clear(); _bandHost.Children.Add(ring); _bandHost.Children.Add(letters);
+        var tab = _titleTab;
+        var chip = _outcomeChip;
+        Motion.Play(_bandHost, 1900, t =>
         {
-            var r = new Rect(0, 0, s.Width * bloom, s.Height);
-            Wash(dc, r, DeepC, .72, .5, 8);
-            Wash(dc, r, c, .5, .26, 8);
-        }));
-        var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Tt(OutcomeText(e), 18, White, FontWeights.Bold));
-        var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 12, Frozen(Mod.Mix(c, Colors.White, .5)), FontWeights.SemiBold); ck.Margin = new Thickness(4, 3, 0, 0);
-        words.Children.Add(ck);
-        var lit = Lit(words);
-        band.Children.Add(lit);
-        _fightFx.Children.Clear(); _fightFx.Children.Add(band);
-        var head = _head;
-        Motion.Play(_fightFx, 2400, t =>
-        {
-            bloom = Out(Seg(t, 0, .22));
-            ((TacSketch)band.Children[0]).InvalidateVisual();
-            lit.Opacity = t < .84 ? Seg(t, .08, .22) : 1 - Seg(t, .84, 1);
-            band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .12) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+            double k = Seg(t, 0, .14), o = Seg(t, .8, 1);
+            wsc.ScaleX = wsc.ScaleY = k <= 0 ? 2.1 : Math.Max(.86, 2.1 - 1.1 * Back(k, 3.6));
+            letters.Opacity = t < .8 ? Math.Min(1, k * 3) : 1 - o;
+            double rg = Seg(t, .12, .5);
+            rsc.ScaleX = rsc.ScaleY = .5 + .6 * Out(rg);
+            ring.Opacity = rg is > 0 and < 1 ? 1 - rg : 0;
+            double hide = t < .8 ? 1 - Seg(t, 0, .1) : o;
+            if (tab != null) tab.Opacity = hide;
+            if (chip != null) chip.Opacity = hide;
+        }, () => { _bandHost.Children.Clear(); if (tab != null) tab.Opacity = 1; if (chip != null) chip.Opacity = 1; });
+        if (!wipe) Burst(crown: false);
     }
 }
