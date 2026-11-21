@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using KinahLedger.Parser;
 using KinahLedger.Session;
 using static KinahLedger.Ui.HudKit;
@@ -9,71 +8,79 @@ using static KinahLedger.Ui.HudKit;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Fade (the Modern theme; Steven, 2026-11-17, from the mock-up "Modern theme, the fourth look, lighter"): no panel at all.
-/// Each meter row is a soft wash in the member's class colour, fading out to the right over the length of their share,
-/// rounded at its left; the words sit straight on the game in white with a soft dark shade (a tight drop under each glyph and
-/// a wide faint halo), so they read over snow and sky as over a cave. You: a thin white bar at your row's left edge. Marks are
-/// small dark-glass chips with a light hairline; the boss's HP a slim line with ticks at the thirds; the foot under a faint
-/// hairline. The Buddy is the same idea: a soft blue wash fading to the right, rounded at its left, the run's ring, the hour
-/// big with the best drop and the last pickups as tiles beside it, the session under it, the next timer as a dark-glass chip at its end.
-/// The moments stay quiet: a pickup sends a light across the wash and its worth floats in beside it; a rare drop's wash
-/// blooms in its grade's colour; your best passed runs the ring round in mint; an entry opening lights its chip; a fight
-/// slides in; its end lays a wash with the outcome over the fight's head.
+/// Manga (the Overdrive theme, 2026-11-20; the settings' hint: "A manga finisher: speed-line bursts, screentone, giant sound
+/// effects and a cut-in on every lead change"): the meter is a page from a battle manga at its climax. The fight is a sheet
+/// of paper with a brushed ink edge, its panels stark black ink: the head (the boss, the outcome, the clock in Impact), a
+/// gutter of paper with the boss's HP as a red brush stroke and, over the leader, a hand-lettered sound effect ("DOOM")
+/// breaking out of its panel, the rows' panel, the foot in ink on the paper. Screentone shades two corners, ink is flung
+/// off the sheet. Every row sits on solid ink (HudManga.Rows.cs): the leader's row is the climax panel, white with
+/// concentration lines driving in from its edges and spilling out round the panel; each bar a brush stroke in the class's
+/// colour, the only colour on the page but one hot red. The Buddy is a speech bubble (a shout when your best is beaten):
+/// the hour huge in ink, your best's ring a circle of concentration lines, the pickups small panels, the timers and the
+/// notice black narration boxes.
+/// The moments are a manga's: a fight starts with the page wiped in by a stroke of ink and the sound effect slammed on;
+/// a lead change cuts in a diagonal panel with the new leader's class art and speed lines; a kill flashes an inverted
+/// impact frame under a giant sound effect; your best passed bursts a "!!" balloon; a rare drop throws shoujo sparkles.
 /// </summary>
 sealed partial class HudManga : ModernLook
 {
-    static readonly Color BlueC = Color.FromRgb(0x2B, 0x5C, 0xFF), MintC2 = Color.FromRgb(0x5D, 0xF2, 0xA6), MarkMintC = Color.FromRgb(0x7D, 0xFF, 0xC0),
-        CoralC = Color.FromRgb(0xFF, 0x86, 0x86), HpC = Color.FromRgb(0xFF, 0x6B, 0x7D), DeepC = Color.FromRgb(0x0B, 0x0C, 0x10), GreyC = Color.FromRgb(0x8A, 0x90, 0xA0),
-        WarnC2 = Color.FromRgb(0xFF, 0xB0, 0x86), GoldC2 = Color.FromRgb(0xFF, 0xCF, 0x6A);
-    static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Frozen(Mod.A(Colors.White, .84)), Quiet = Frozen(Mod.A(Colors.White, .62)),
-        Mint2 = Frozen(Color.FromRgb(0x8C, 0xFF, 0xC6)), MarkMint = Frozen(MarkMintC), Coral = Frozen(CoralC);
-
-    // the room round the look: the shade's halo stays inside the window; 98 at the right for the pickup's chip beside the Buddy
+    // the room round the look: 98 at the right for the pickup's panel beside the Buddy
     readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 10), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
-    // the Buddy: its wash, the ring, the hour, the session and the timer chips
+    // the Buddy: the speech bubble, the ring, the hour, the session and the timer captions
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
-    readonly TacSketch _lineWash;
-    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(5, 5, 18, 5) };
-    readonly Grid _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true };
+    readonly TacSketch _bubble;
+    const double TailH = 7;
+    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 5, 15, 5 + TailH) };
     readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-    /// <summary>The timer chips over the line, when the pickup strip takes their room on it.</summary>
-    readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(4, 0, 0, 5), Visibility = Visibility.Collapsed };
-    /// <summary>The pickup strip in Fade: 24 px tiles beside the hour, a soft white rule, a gold star.</summary>
-    static readonly PickStrip.Look Strip = new(24, 4, true, Frozen(Mod.A(Colors.White, .32)), Frozen(Color.FromRgb(0xFF, 0xCF, 0x6A)));
-    bool _dim;
+    /// <summary>The timer captions over the bubble, when the pickup strip takes their room in it.</summary>
+    readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(4, 0, 0, 4), Visibility = Visibility.Collapsed };
+    /// <summary>The pickup strip in Manga: 24 px tiles beside the hour, an ink rule, a red star.</summary>
+    static readonly PickStrip.Look Strip = new(24, 4, true, Frozen(Mod.A(Color.FromRgb(0x0A, 0x0A, 0x0D), .34)), Frozen(Color.FromRgb(0xE8, 0x1C, 0x2B)));
+    bool _dim, _shout;
     TacSketch? _ringArt;
-    double _share = -1, _complete, _sheen = -1;
+    Grid? _ringHost;
+    double _share = -1, _complete;
     bool _beat;
-    Color _sheenC = Colors.White;
     Border? _firstChip;
 
-    // the rare drop under the Buddy, and the notice line
-    readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
-    readonly StackPanel _note = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 5, 0, 0), Visibility = Visibility.Collapsed };
+    // the rare drop under the Buddy, and the notice
+    readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
+    readonly StackPanel _note = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 4, 0, 0), Visibility = Visibility.Collapsed };
 
-    // the fight: no panel, its head, HP, rows and foot straight over the game
-    readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
-    readonly StackPanel _fightBody = new();
-    readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
-    readonly Grid _fightFx = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
+    // the fight: the page and its panels
+    readonly StackPanel _fightOuter = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
+    readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+    readonly InkArt _page = new(), _pageInv = new() { Opacity = 0 };
+    readonly StackPanel _fightBody = new() { VerticalAlignment = VerticalAlignment.Top };
+    readonly Canvas _sfxLayer = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+    readonly Grid _fightFx = new() { IsHitTestVisible = false, ClipToBounds = true };
+    readonly Border _timersInFight = new() { Margin = new Thickness(2, 0, 0, 5), HorizontalAlignment = HorizontalAlignment.Left };
     readonly TranslateTransform _fightShift = new();
-    FrameworkElement? _head;
+    InkArt? _sfx;
+    ScaleTransform? _sfxScale;
+    double _pageW, _pageH, _rowsTop, _rowsH, _headH;
+    string _pageSig = "";
+    bool _bandHp;
+    readonly List<double> _gutters = new();
 
     public HudManga() : base(bare: true)
     {
-        // the look's own rows (Ui/Themes/ThemeRows.cs): each a class wash fading out to the right
-        UseRows(FadeRow.Pitch, m => new FadeRow(), 16, GapLine);
-        _lineWash = new TacSketch(DrawLineWash);
-        _line.Children.Add(_lineWash); _line.Children.Add(_lineFx); _line.Children.Add(Lit(_lineBody)); _line.Children.Add(_lineAnchor);
-        _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        UseRows(MangaRow.Pitch, m => new MangaRow(), 16, GapLine);
+        _bubble = new TacSketch(DrawBubble);
+        _line.Children.Add(_bubble); _line.Children.Add(_lineBody); _line.Children.Add(_lineAnchor);
+        _fight.Children.Add(_page); _fight.Children.Add(_pageInv); _fight.Children.Add(_fightBody); _fight.Children.Add(_sfxLayer); _fight.Children.Add(_fightFx);
+        _page.VerticalAlignment = _pageInv.VerticalAlignment = VerticalAlignment.Top;
+        _page.HorizontalAlignment = _pageInv.HorizontalAlignment = HorizontalAlignment.Left;
         _fight.RenderTransform = _fightShift;
-        _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
-        _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
+        _fightOuter.Children.Add(_timersInFight); _fightOuter.Children.Add(_fight);
+        _runCaption = Caption(_runHead, new Thickness(7, 2, 8, 3)); _runCaption.HorizontalAlignment = HorizontalAlignment.Left; _runCaption.Margin = new Thickness(4, 0, 0, -2);
+        _runCaption.Visibility = Visibility.Collapsed;
+        _body.Children.Add(_fightOuter); _body.Children.Add(_timersUp); _body.Children.Add(_runCaption); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
@@ -82,115 +89,84 @@ sealed partial class HudManga : ModernLook
     public override FrameworkElement Root => _root;
     public override Thickness Inset => _root.Margin;
     public override double Corner => 0;
-    public override FrameworkElement? FightFrame => _fight.Visibility == Visibility.Visible ? _fight : null;
+    public override FrameworkElement? FightFrame => _fightOuter.Visibility == Visibility.Visible ? _fight : null;
 
     public override void SetOpacity(double opacity)
     {
-        // no panel to fade: the Buddy's wash and the rows' washes take the setting (never so faint the bar is lost)
+        // the paper and the bubble take the setting, never so faint the ink is lost
         _opacity = Math.Clamp(opacity, 0.3, 1);
-        _lineWash.InvalidateVisual();
+        _page.Opacity = ArtK;
+        _bubble.Opacity = ArtK;
     }
 
-    /// <summary>The wash's strength from the opacity setting: 1 at the usual 90%, a little lighter or richer either side.</summary>
-    double WashK => .7 + .35 * _opacity;
+    double ArtK => .72 + .28 * _opacity;
 
     protected override string LineSig(Figures f) => base.LineSig(f) + "|" + (Rare(Values)?.Id ?? "") + "|" + (Picks(Values).FirstOrDefault()?.Id ?? "") + "|" + Dimmed(Values) + "|" + PickStrip.Sig(Values, Strip) + "|" + RunBuddy.Sig(Values);
 
     static bool Dimmed(IReadOnlyDictionary<string, string> v) => (v.TryGetValue("show", out var s) && s == "dim") || (v.TryGetValue("paused", out var p) && p.Length > 0);
 
-    // ================================================================ the shade
-
-    /// <summary>The tight shade under every glyph straight on the game: 1 px down, 2 px soft, 85% black.</summary>
-    static DropShadowEffect Shade() => new() { Color = Colors.Black, Direction = 270, ShadowDepth = 1, BlurRadius = 3, Opacity = .95 };
-
-    /// <summary>The wide soft halo round a group of words (8 px), so a bright scene behind them goes a shade darker.</summary>
-    static DropShadowEffect Halo() => new() { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 10, Opacity = .62 };
-
-    /// <summary>Words lit for the game: the tight shade on them, the halo round them.</summary>
-    static Border Lit(FrameworkElement el)
+    /// <summary>A small ink box (TOP DPS, AVG, the heal mark); <paramref name="red"/> the hot red one (YOU); <paramref name="inverse"/> white on a black row.</summary>
+    static Border Mark(string s, bool red = false, bool inverse = false, double size = 8.5)
     {
-        el.Effect = Shade();
-        return new Border { Child = el, Effect = Halo(), HorizontalAlignment = el.HorizontalAlignment, VerticalAlignment = el.VerticalAlignment };
-    }
-
-    /// <summary>A soft wash in <paramref name="c"/> from its left (rounded, <paramref name="radius"/>) fading out by its right end.</summary>
-    static void Wash(DrawingContext dc, Rect r, Color c, double a0, double a1, double radius)
-    {
-        if (r.Width < 1 || r.Height < 1) return;
-        var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(r.Left, 0), EndPoint = new Point(r.Right, 0) };
-        b.GradientStops.Add(new GradientStop(Mod.A(c, a0), 0));
-        b.GradientStops.Add(new GradientStop(Mod.A(c, a1), .7));
-        b.GradientStops.Add(new GradientStop(Mod.A(c, 0), 1));
-        b.Freeze();
-        dc.PushClip(new RectangleGeometry(r));
-        dc.DrawRoundedRectangle(b, null, new Rect(r.Left, r.Top, r.Width + radius + 2, r.Height), radius, radius);
-        dc.Pop();
-    }
-
-    /// <summary>A small dark-glass chip with a light hairline (TOP DPS, the heal mark, AVG): <paramref name="filled"/> white with dark words (YOU).</summary>
-    static Border Mark(string s, Brush? fg = null, Color? edge = null, bool filled = false, double size = 8.5)
-    {
-        var t = Tt(s, size, filled ? Frozen(Color.FromRgb(0x11, 0x11, 0x11)) : fg ?? White, FontWeights.Bold);
+        var fg = red ? White : inverse ? InkB : White;
+        var t = Tt(s, size, fg, FontWeights.Black);
         return new Border
         {
-            Child = t, CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 1), VerticalAlignment = VerticalAlignment.Center,
-            Background = filled ? White : Frozen(Mod.A(DeepC, .48)), BorderThickness = new Thickness(1),
-            BorderBrush = filled ? White : Frozen(Mod.A(edge ?? Colors.White, edge == null ? .38 : .62)),
+            Child = t, Padding = new Thickness(4, 0, 4, 1), VerticalAlignment = VerticalAlignment.Center,
+            Background = red ? RedB : inverse ? White : InkB, BorderThickness = new Thickness(red || !inverse ? 1 : 0), BorderBrush = red ? InkB : White,
         };
     }
-
-    /// <summary>A faint hairline across (the foot's, the card's).</summary>
-    static Border Hairline(Thickness m, double a = .25) => new() { Height = 1, Background = Frozen(Mod.A(Colors.White, a)), Margin = m, IsHitTestVisible = false };
 
     // ================================================================ the Buddy
 
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _timerUp = false; _stripTimerW = -1;
+        _ringArt = null; _ringHost = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
-        _line.Opacity = _dim ? .62 : 1;
+        _line.Opacity = _dim ? .66 : 1;
+        _shout = false;
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
-        if (mark) { var m = AbyssMark(f.Icon, 36); m.Margin = new Thickness(2, 0, 9, 0); _lineBody.Children.Add(m); }
-        // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudManga.Run.cs)
+        if (mark) { var m = AbyssMark(f.Icon, 36); m.Margin = new Thickness(0, 0, 9, 0); _lineBody.Children.Add(m); }
         var rs = RunNow();
-        _runHeadLit.Visibility = Visibility.Collapsed;
+        _runCaption.Visibility = Visibility.Collapsed;
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
         {
-            var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 9, 7, 0, 7);
+            var w = Tt(Waiting(f.Abyss), 12.5, InkB, FontWeights.Bold); w.Margin = new Thickness(mark ? 0 : 4, 6, 0, 6);
             _lineBody.Children.Add(w);
         }
         else
         {
             if (HasRing(f))
             {
-                _share = f.Share; _beat = f.Beat; _complete = 0;
-                var ring = new Grid { Width = 42, Height = 42, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-                _ringArt = new TacSketch(DrawRing, 42, 42);
+                _share = f.Share; _beat = f.Beat; _complete = 0; _shout = f.Beat;
+                var ring = new Grid { Width = 44, Height = 44, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0) };
+                _ringArt = new TacSketch(DrawRing, 44, 44);
                 ring.Children.Add(_ringArt);
-                var pc = Tt(f.Beat ? "★" : Pct(f.Share), 13, White, FontWeights.Bold); pc.HorizontalAlignment = HorizontalAlignment.Center;
+                var pc = f.Beat ? Tt("★", 15, RedB, FontWeights.Bold) : Fig(Pct(f.Share), 15, InkB);
+                pc.HorizontalAlignment = HorizontalAlignment.Center;
                 ring.Children.Add(pc);
+                _ringHost = ring;
                 _lineBody.Children.Add(ring);
             }
-            else if (!mark) _lineBody.Children.Add(new Border { Width = 8 });
-            // the hour big, its unit small; the session and the latest pickup under it
-            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 0, 1) };
+            else if (!mark) _lineBody.Children.Add(new Border { Width = 3 });
+            // the hour huge in ink, its unit small; the session and the latest pickup under it
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
             var top = new StackPanel { Orientation = Orientation.Horizontal };
-            var rate = Tt(f.Rate, f.Warm ? 15 : 22, f.Warm ? Soft : White, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
+            var rate = f.Warm ? Tt(f.Rate, 15, OnPaperSoft, FontWeights.Bold) : Fig(f.Rate, 27, InkB);
             rate.Tag = "buddy-rate";
+            if (!f.Warm) rate.Margin = new Thickness(0, -3, 0, -3);
             top.Children.Add(rate);
-            if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, Soft, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, 4); top.Children.Add(u); }
+            if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, OnPaperSoft, FontWeights.Black); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
             words.Children.Add(top);
-            // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
-            // alone under it; with the timer chips at the line's end and no room left beside them, the chips go over the line
             var sub = Sub(f, true);
             FrameworkElement? strip = null, under = null;
             if (StripTime(f))
             {
                 var bare = Sub(f, false);
-                double baseW = 5 + 18 + _lineBody.Children.OfType<FrameworkElement>().Sum(Mod.W), timerW = LineTimerW();
+                double baseW = 9 + 15 + 14 + _lineBody.Children.OfType<FrameworkElement>().Sum(Mod.W), timerW = LineTimerW();
                 double wordsW = Math.Max(Mod.W(top), Mod.W(bare)), oldW = Math.Max(Mod.W(top), Mod.W(sub));
                 foreach (var look in StripFall(Strip))
                 {
@@ -198,7 +174,6 @@ sealed partial class HudManga : ModernLook
                     if (timerW > 0 && (strip = StripIn(StripRoom(FightWidth - 10, baseW, wordsW, oldW + timerW, 12), look)) != null) { _timerUp = true; break; }
                 }
                 if (strip != null) { sub = bare; strip.Margin = new Thickness(12, 0, 0, 0); }
-                // no room beside the hour: under the session, never dropped (Steven, 2026-11-19)
                 else if ((under = StripUnder(Strip, false)) != null) sub = bare;
                 _stripTimerW = timerW;
             }
@@ -209,58 +184,56 @@ sealed partial class HudManga : ModernLook
         }
         _lineBody.Children.Add(_timersInLine);
         PlaceTimers();
-        _lineWash.InvalidateVisual();
+        _bubble.InvalidateVisual();
 
-        // the rare drop the window holds: its tile on a wash in its grade's colour, RARE DROP and its name
+        // the rare drop the window holds: a black ink panel, its tile, RARE DROP in red and its name
         _rare.Children.Clear();
         if (!KinahHidden && Rare(Values) is { } r)
         {
-            var c = ColorOf(r.Color, r.Grade);
-            _rareC = c; _rareBloom = 1;
-            var wash = new TacSketch((dc, s) => Wash(dc, new Rect(0, 0, s.Width * Math.Clamp(_rareBloom, 0, 1), s.Height), c, .58 * WashK + .4 * _rareFlash, .34 * WashK, s.Height / 2));
-            _rareWash = wash;
-            _rare.Children.Add(wash);
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 4, 24, 4) };
-            var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 8, 0);
-            _rareTile = tile;
-            row.Children.Add(tile);
-            var mk = Mark(L.T("RARE DROP"), size: 8); mk.Margin = new Thickness(0, 0, 7, 0);
+            _rare.Children.Add(new TacSketch(DrawRarePanel));
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 30, 6) };
+            var tileHost = new Grid { Width = 28, Height = 28, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            var fx = new Canvas { Width = 0, Height = 0, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+            tileHost.Children.Add(fx);
+            var tile = Tile(r, 28);
+            tileHost.Children.Add(tile);
+            _rareTile = tile; _rareFx = fx;
+            row.Children.Add(tileHost);
+            var mk = Mark(L.T("RARE DROP"), red: true, size: 8); mk.Margin = new Thickness(0, 0, 7, 0);
             row.Children.Add(mk);
-            var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .45)), FontWeights.Bold);
-            row.Children.Add(nm);
-            if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
-            var lit = Lit(row);
-            _rare.Children.Add(lit);
+            row.Children.Add(Tt(r.Name, 13, InkB, FontWeights.Black));
+            if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, OnPaperSoft, FontWeights.Bold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
+            _rare.Children.Add(row);
             _rare.Visibility = Visibility.Visible;
         }
-        else { _rare.Visibility = Visibility.Collapsed; _rareWash = null; _rareTile = null; }
+        else { _rare.Visibility = Visibility.Collapsed; _rareTile = null; _rareFx = null; }
 
-        // the notice: its words in their tone under the Buddy, the warning sign before a pause
+        // the notice: a narration box under the Buddy, the warning sign before a pause
         _note.Children.Clear();
         if (f.Note.Length > 0 && !KinahHidden)
         {
             bool warn = ReferenceEquals(f.NoteTone, Warn);
-            if (warn) { var wi = WarnIcon(); wi.Width = wi.Height = 13; wi.Margin = new Thickness(0, 0, 5, 0); _note.Children.Add(wi); }
-            var tone = warn ? WarnC2 : ReferenceEquals(f.NoteTone, Gold) ? GoldC2 : ReferenceEquals(f.NoteTone, Mint) ? MintC2 : Color.FromRgb(0xF2, 0xF4, 0xF8);
-            var t = Tt(f.Note, 11.5, Frozen(tone), FontWeights.SemiBold); t.TextTrimming = TextTrimming.CharacterEllipsis; t.MaxWidth = 380;
-            _note.Children.Add(t);
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            if (warn) { var wi = WarnIcon(); wi.Width = wi.Height = 13; wi.Margin = new Thickness(0, 0, 5, 0); sp.Children.Add(wi); }
+            var t = Tt(f.Note, 11.5, White, FontWeights.Bold); t.TextTrimming = TextTrimming.CharacterEllipsis; t.MaxWidth = 380;
+            sp.Children.Add(t);
+            _note.Children.Add(Caption(sp, new Thickness(7, 2, 9, 3), red: warn));
             _note.Visibility = Visibility.Visible;
         }
         else _note.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>The line under the hour: the session, the latest pickup and its worth (<paramref name="pick"/>); in the Abyss its stats.</summary>
+    /// <summary>The line under the hour: the session, the latest pickup and its worth (<paramref name="pick"/>); in the Abyss its stats. Ink on the bubble.</summary>
     TextBlock Sub(Figures f, bool pick)
     {
-        var sub = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .86)), Margin = new Thickness(1, 1, 0, 0) };
+        var sub = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = OnPaperSoft, Margin = new Thickness(1, 1, 0, 0) };
         System.Windows.Documents.Typography.SetNumeralAlignment(sub, FontNumeralAlignment.Tabular);
-        void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = Quiet }); }
-        if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.SemiBold, Foreground = White }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
+        void Dot() { if (sub.Inlines.Count > 0) sub.Inlines.Add(new System.Windows.Documents.Run("  ·  ") { Foreground = OnPaperQuiet }); }
+        if (f.Total.Length > 0) { sub.Inlines.Add(new System.Windows.Documents.Run(f.Total) { FontWeight = FontWeights.Black, Foreground = InkB }); sub.Inlines.Add(new System.Windows.Documents.Run(" " + f.TotalWord)); }
         foreach (var (fig, word, tone) in f.Stats)
         {
             Dot();
-            var c = ReferenceEquals(tone, Rec) ? CoralC : ReferenceEquals(tone, Gold) ? GoldC2 : Colors.White;
-            sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.SemiBold, Foreground = Frozen(c) });
+            sub.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Black, Foreground = ReferenceEquals(tone, Rec) ? RedB : InkB });
             sub.Inlines.Add(new System.Windows.Documents.Run(" " + word));
         }
         if (pick && !f.Abyss && Picks(Values).FirstOrDefault() is { } p)
@@ -268,66 +241,100 @@ sealed partial class HudManga : ModernLook
             Dot();
             sub.Inlines.Add(new System.Windows.Documents.Run(p.Name.Length > 22 ? p.Name[..21].TrimEnd() + "…" : p.Name));
             var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-            if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + worth) { FontWeight = FontWeights.Bold, Foreground = p.Worth.Length > 0 ? Mint2 : Soft });
+            if (worth.Length > 0) sub.Inlines.Add(new System.Windows.Documents.Run(" " + worth) { FontWeight = FontWeights.Black, Foreground = p.Worth.Length > 0 ? RedB : InkB });
         }
         return sub;
     }
 
-    /// <summary>The timer chips' room at the line's end, 0 with none.</summary>
+    /// <summary>The timer captions' room at the bubble's end, 0 with none.</summary>
     double LineTimerW() => _timers.Children.Count > 0 && !KinahHidden ? 10 + Mod.W(_timers) : 0;
 
-    /// <summary>The timers' room the line's strip was fitted to (-1: no strip time); chips that change it draw the line again.</summary>
+    /// <summary>The timers' room the bubble's strip was fitted to (-1: no strip time); captions that change it draw the line again.</summary>
     double _stripTimerW = -1;
-
-    /// <summary>The timer chips sit over the line, to leave its room to the pickup strip.</summary>
     bool _timerUp;
 
-    Color _rareC;
-    double _rareBloom = 1, _rareFlash;
-    TacSketch? _rareWash;
     FrameworkElement? _rareTile;
+    Canvas? _rareFx;
 
-    /// <summary>The Buddy's wash: blue fading out to the right, rounded at its left (grey while paused); a pickup's light crossing it.</summary>
-    void DrawLineWash(DrawingContext dc, Size s)
+    /// <summary>
+    /// The speech bubble: paper inside a thick ink line, a tail at its lower left; with your best beaten a shout (its edge
+    /// burst into spikes). The page's paper under the words, so the hour reads in ink over any scene.
+    /// </summary>
+    void DrawBubble(DrawingContext dc, Size s)
     {
-        if (s.Width < 4 || s.Height < 4) return;
-        var c = _dim ? GreyC : BlueC;
-        Wash(dc, new Rect(0, 0, s.Width, s.Height), c, (_dim ? .42 : .6) * WashK, (_dim ? .2 : .3) * WashK, s.Height / 2);
-        if (_sheen is >= 0 and <= 1)
+        if (s.Width < 20 || s.Height < 20) return;
+        double h = s.Height - TailH, w = s.Width;
+        var body = new Rect(1.5, 1.5, w - 3, h - 3);
+        Geometry shape;
+        if (_shout)
         {
-            // the light: a soft band crossing the wash left to right, inside its rounded shape, fading as it nears the faded end
-            double x = -40 + (s.Width * .8 + 40) * _sheen, a = .26 * (1 - _sheen * .7);
-            dc.PushClip(new RectangleGeometry(new Rect(0, 0, s.Width, s.Height), s.Height / 2, s.Height / 2));
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(_sheenC, 0), 0), (Mod.A(_sheenC, a), .5), (Mod.A(_sheenC, 0), 1)), null, new Rect(x, 0, 46, s.Height));
-            dc.Pop();
+            // the shout: spikes all round, a little longer at the corners
+            var pts = new List<Point>();
+            double per = 2 * (body.Width + body.Height), step = 9;
+            int n = (int)(per / step);
+            for (int i = 0; i < n; i++)
+            {
+                double d = per * i / n, x, y; Vector o;
+                if (d < body.Width) { x = body.Left + d; y = body.Top; o = new Vector(0, -1); }
+                else if (d < body.Width + body.Height) { x = body.Right; y = body.Top + d - body.Width; o = new Vector(1, 0); }
+                else if (d < 2 * body.Width + body.Height) { x = body.Right - (d - body.Width - body.Height); y = body.Bottom; o = new Vector(0, 1); }
+                else { x = body.Left; y = body.Bottom - (d - 2 * body.Width - body.Height); o = new Vector(-1, 0); }
+                double k = i % 2 == 0 ? 0 : 2.6 + 1.2 * J(7, i);
+                // pulled in a touch so the spikes stay inside the part's room
+                pts.Add(new Point(x - o.X * (2.8 - k), y - o.Y * (2.8 - k)));
+            }
+            shape = Brushed(pts, 3, 0, 99);
+        }
+        else shape = new RectangleGeometry(body, Math.Min(15, h / 2.4), Math.Min(15, h / 2.4));
+        // the tail: a wedge from the lower left, ending in a point under the bubble
+        var tail = new StreamGeometry();
+        using (var c = tail.Open())
+        {
+            c.BeginFigure(P(18, h - 4), true, true);
+            c.LineTo(P(9, h - 1 + TailH - .5), true, true);
+            c.LineTo(P(33, h - 4), true, true);
+        }
+        var all = Geometry.Combine(shape, tail, GeometryCombineMode.Union, null);
+        var paper = _dim ? Frozen(Color.FromRgb(0xD8, 0xD8, 0xD4)) : PaperB;
+        dc.DrawGeometry(paper, Pn(InkB, 2.4), all);
+        // screentone in the bubble's lower right, where no word sits
+        Tone(dc, new RectangleGeometry(new Rect(w - 26, h - 16, 24, 14)), P(w, h), 26, 3.6, 1.2, Frozen(Mod.A(InkC, .5)));
+        dc.DrawGeometry(null, Pn(InkB, 2.4), all);
+    }
+
+    /// <summary>The ring of your best: a circle of concentration lines, ink for your part of it, faint for the rest, all red once beaten.</summary>
+    void DrawRing(DrawingContext dc, Size s)
+    {
+        double c = s.Width / 2;
+        const int N = 36;
+        double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
+        double shown = share + (1 - share) * Math.Clamp(_complete, 0, 1);
+        bool red = _beat || _complete >= 1;
+        var on = Pn(red ? RedB : InkB, 2.3, false);
+        var off = Pn(Frozen(Mod.A(InkC, .22)), 1.2, false);
+        int lit = (int)Math.Round(shown * N);
+        for (int i = 0; i < N; i++)
+        {
+            double a = 2 * Math.PI * i / N - Math.PI / 2, r0 = 13.5 + (i % 3 == 0 ? -1.5 : 0), r1 = c - 1.5 - (i % 2) * 2;
+            var p0 = P(c + r0 * Math.Cos(a), c + r0 * Math.Sin(a)); var p1 = P(c + r1 * Math.Cos(a), c + r1 * Math.Sin(a));
+            dc.DrawLine(i < lit ? on : off, p0, p1);
         }
     }
 
-    /// <summary>The run's ring: a faint track and your best's share as a white arc (mint once beaten), round caps.</summary>
-    void DrawRing(DrawingContext dc, Size s)
+    /// <summary>The rare drop's panel: black ink with a brushed edge and a white hairline inside.</summary>
+    void DrawRarePanel(DrawingContext dc, Size s)
     {
-        double c = s.Width / 2, r = c - 3;
-        var center = new Point(c, c);
-        dc.DrawEllipse(Frozen(Mod.A(DeepC, .22)), null, center, r - 1, r - 1);
-        dc.DrawEllipse(null, Mod.P(Frozen(Mod.A(Colors.White, .28)), 3.2), center, r, r);
-        double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
-        double shown = share + (1 - share) * Math.Clamp(_complete, 0, 1);
-        var tone = _beat || _complete >= 1 ? MintC2 : Colors.White;
-        if (shown >= .999) { dc.DrawEllipse(null, Mod.P(Frozen(tone), 3.4), center, r, r); return; }
-        if (shown < .004) return;
-        double a = 2 * Math.PI * shown;
-        var fig = new PathFigure { StartPoint = new Point(c, c - r) };
-        fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
-        var pg = new PathGeometry(); pg.Figures.Add(fig); pg.Freeze();
-        dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(DeepC, .35)), 5.4, round: true), pg);
-        dc.DrawGeometry(null, Mod.P(Frozen(tone), 3.4, round: true), pg);
+        if (s.Width < 10) return;
+        var g = Brushed(new[] { P(1.5, 2), P(s.Width - 1.5, 1), P(s.Width - 3, s.Height - 1.5), P(1, s.Height - 1) }, 21, .7, 14);
+        dc.DrawGeometry(PaperB, Pn(InkB, 2.4), g);
+        Tone(dc, new RectangleGeometry(new Rect(s.Width - 30, 2, 27, s.Height - 4)), P(s.Width, s.Height / 2), 30, 3.6, 1.3, Frozen(Mod.A(InkC, .55)));
     }
 
     protected override void KinahShown(bool shown)
     {
         _line.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
-        if (!shown) { _note.Visibility = Visibility.Collapsed; _rare.Visibility = Visibility.Collapsed; }
-        _fight.Margin = new Thickness(0, 0, 0, shown ? 10 : 0);
+        if (!shown) { _note.Visibility = Visibility.Collapsed; _rare.Visibility = Visibility.Collapsed; _runCaption.Visibility = Visibility.Collapsed; }
+        _fightOuter.Margin = new Thickness(0, 0, 0, shown ? 8 : 0);
         PlaceTimers();
     }
 
@@ -340,30 +347,23 @@ sealed partial class HudManga : ModernLook
         foreach (var i in due.Take(2))
         {
             var (text, tone) = TimerWords(i, now);
-            bool first = _timers.Children.Count == 0;
-            var c = tone == TimerBadge.Tone.On ? MintC2 : tone == TimerBadge.Tone.Soon ? GoldC2 : Color.FromRgb(0xE6, 0xE9, 0xF0);
+            bool first = _timers.Children.Count == 0, on = tone == TimerBadge.Tone.On;
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
-            sp.Children.Add(new System.Windows.Shapes.Ellipse { Width = first ? 6.5 : 5, Height = first ? 6.5 : 5, Fill = Frozen(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-            var t = Tt(text, first ? 11.5 : 10, first ? White : Soft, first ? FontWeights.Bold : FontWeights.SemiBold);
-            if (tone == TimerBadge.Tone.On) t.Foreground = Frozen(Mod.Mix(MintC2, Colors.White, .45));
-            sp.Children.Add(t);
-            var chip = new Border
-            {
-                Child = sp, CornerRadius = new CornerRadius(99), Padding = first ? new Thickness(8, 3, 10, 4) : new Thickness(7, 2, 9, 3), VerticalAlignment = VerticalAlignment.Center,
-                Background = Frozen(Mod.A(DeepC, .46)), BorderThickness = new Thickness(1), BorderBrush = Frozen(Mod.A(tone == TimerBadge.Tone.On ? MintC2 : Colors.White, tone == TimerBadge.Tone.On ? .5 : .22)),
-                Margin = new Thickness(first ? 0 : 5, 0, 0, 0), Tag = first ? "timer-chip" : null,
-            };
+            var dot = on ? White : tone == TimerBadge.Tone.Soon ? RedB : Frozen(Mod.A(Colors.White, .7));
+            sp.Children.Add(new System.Windows.Shapes.Rectangle { Width = first ? 6 : 5, Height = first ? 6 : 5, Fill = dot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), RenderTransformOrigin = new Point(.5, .5), RenderTransform = new RotateTransform(45) });
+            sp.Children.Add(Tt(text, first ? 11.5 : 10, first ? White : OnInkSoft, first ? FontWeights.Black : FontWeights.Bold));
+            var chip = Caption(sp, first ? new Thickness(7, 2, 9, 3) : new Thickness(6, 1, 8, 2), red: on);
+            chip.Margin = new Thickness(first ? 0 : 5, 0, 0, 0); chip.Tag = first ? "timer-chip" : null;
             if (first) _firstChip = chip;
             _timers.Children.Add(chip);
         }
-        // the line's pickup strip was fitted beside the timer chips: chips that come, go or change their width fit it again
         if (_stripTimerW >= 0 && Figs is { } f && Math.Abs(LineTimerW() - _stripTimerW) > .5) DrawLine(f);
         PlaceTimers();
     }
 
     void PlaceTimers()
     {
-        bool inside = KinahHidden && _fight.Visibility == Visibility.Visible, up = !inside && _timerUp;
+        bool inside = KinahHidden && _fightOuter.Visibility == Visibility.Visible, up = !inside && _timerUp;
         if (inside)
         {
             if (_timersInLine.Child == _timers) _timersInLine.Child = null;
@@ -390,197 +390,550 @@ sealed partial class HudManga : ModernLook
 
     // ================================================================ the fight
 
+    const double Mg = 6, HeadH = 34, FootH = 22, RowsPad = 4;
+
+    string _leadFight = "";
+    long _leadId;
+
     protected override void DrawFight(Encounter? e, DateTime now)
     {
         _fightBody.Children.Clear();
-        if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
+        if (e == null) { _fightOuter.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); _leadFight = ""; _leadId = 0; PlaceTimers(); return; }
         double w = FightWidth - 10;
         _fight.Width = w;
-        _fightBody.Children.Add(_timersInFight);
-        // the head: the boss, the outcome once it's over, the clock
-        var head = new Grid();
+        double inner = w - 2 * Mg;
+        double y = Mg;
+        var panels = new List<(double Top, double H, int Kind)>();   // 0 the head, 1 the rows
+
+        // the head panel: the boss, the outcome once it's over, the clock
+        var head = new Grid { Height = HeadH, Margin = new Thickness(Mg, Mg, Mg, 0) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = Tt(e.Title, 14, White, FontWeights.SemiBold); title.TextTrimming = TextTrimming.CharacterEllipsis;
+        var title = Tt(e.Title, 14, White, FontWeights.Black, NameFace); title.TextTrimming = TextTrimming.CharacterEllipsis; title.Margin = new Thickness(13, 0, 0, 8);
         head.Children.Add(title);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
-        if (e.Waiting) right.Children.Add(Mark(L.T("READY"), MarkMint, MarkMintC, size: 9.5));
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 11, 2), VerticalAlignment = VerticalAlignment.Center };
+        if (e.Waiting) right.Children.Add(Mark(L.T("READY"), inverse: true, size: 9.5));
         else
         {
             var outcome = OutcomeText(e);
             if (outcome.Length > 0)
             {
-                bool wipe = e.Outcome == "wipe";
-                var st = Tt(outcome, 10, wipe ? Frozen(Color.FromRgb(0xFF, 0x9A, 0x9A)) : MarkMint, FontWeights.Bold);
-                right.Children.Add(new Border { Child = st, CornerRadius = new CornerRadius(99), Padding = new Thickness(7, 1, 7, 2), Background = Frozen(Mod.A(DeepC, .42)), Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "outcome" });
+                var st = Tt(outcome, 10, White, FontWeights.Black);
+                var ob = new Border { Child = st, Padding = new Thickness(6, 1, 6, 2), Background = e.Outcome == "wipe" ? InkB : RedB, BorderBrush = White, BorderThickness = new Thickness(1.2), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "outcome" };
+                right.Children.Add(ob);
             }
-            var clock = Tt(Clock(e, now), 18, White, FontWeights.Bold); clock.Tag = "fight-clock";
+            var clock = Fig(Clock(e, now), 22, White); clock.Tag = "fight-clock";
             right.Children.Add(clock);
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
-        _head = Lit(head);
-        _fightBody.Children.Add(_head);
+        _fightBody.Children.Add(head);
+        panels.Add((y, HeadH, 0));
+        y += HeadH;
+        _headH = HeadH;
+
+        bool rowsShown = false, sfx = false;
+        _bandHp = false;
+        double bandTop = y, bandH = 0;
         if (e.Waiting)
         {
-            var wt = Tt(e.ReadyText, 12.5, Soft, FontWeights.SemiBold); wt.Margin = new Thickness(0, 6, 0, 2); wt.TextTrimming = TextTrimming.CharacterEllipsis;
-            _fightBody.Children.Add(Lit(wt));
-            if (PartyBeforeHit(e)) { _fightBody.Children.Add(new Border { Height = 6 }); PutRows(_fightBody, e, now, w); }
+            var wt = Tt(e.ReadyText, 12.5, InkB, FontWeights.Bold); wt.Margin = new Thickness(Mg + 4, 5, Mg, 4); wt.TextTrimming = TextTrimming.CharacterEllipsis; wt.Height = 17;
+            _fightBody.Children.Add(wt);
+            y += 26;
+            if (PartyBeforeHit(e)) { rowsShown = true; }
+            else y += 2;
         }
-        else
+        Grid? band = null;
+        if (!e.Waiting) { rowsShown = true; band = new Grid { Margin = new Thickness(Mg, 0, Mg, 0) }; _fightBody.Children.Add(band); }
+        var rowsHost = rowsShown ? new Grid { Margin = new Thickness(Mg + RowsPad, RowsPad, Mg + RowsPad, RowsPad) } : null;
+        if (rowsHost != null) { PutRows(rowsHost, e, now, inner - 2 * RowsPad); _fightBody.Children.Add(rowsHost); }
+        if (band != null)
         {
-            if (HpOf(e) is { } hp)
+            sfx = e.HasDamage && Meter?.Members.FirstOrDefault() is { Rank: 1, CpOnly: false, Pvp: false };
+            var hp = HpOf(e);
+            bandH = hp != null || sfx ? 24 : 5;
+            _bandHp = hp != null;
+            band.Height = bandH;
+            if (hp is { } h)
             {
-                // the boss's HP: a slim 3 px line with ticks at the thirds, the figure and what's left under its right end
-                var track = new Grid { Height = 5, Margin = new Thickness(0, 8, 0, 0) };
-                track.Children.Add(new TacSketch((dc, s) =>
-                {
-                    double y = 1, h = 3, x1 = s.Width * Math.Clamp(hp, 0, 1);
-                    dc.DrawRoundedRectangle(Frozen(Mod.A(DeepC, .3)), null, new Rect(-.5, y - .5, s.Width + 1, h + 1), 2, 2);
-                    dc.DrawRoundedRectangle(Frozen(Mod.A(Colors.White, .24)), null, new Rect(0, y, s.Width, h), 1.5, 1.5);
-                    if (x1 > .5) dc.DrawRoundedRectangle(Frozen(HpC), null, new Rect(0, y, x1, h), 1.5, 1.5);
-                    for (int k = 1; k <= 2; k++) { double x = Math.Round(s.Width * k / 3); dc.DrawRectangle(Frozen(Mod.A(Colors.Black, .62)), null, new Rect(x - 1, y - .5, 2, h + 1)); }
-                }));
-                HpGhost(track, e, hp, now, 1.5);
-                _fightBody.Children.Add(track);
-                var hl = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, Foreground = Soft, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 0) };
+                // the boss's HP: a red brush stroke in an ink track, ticks at the thirds, the figure and what's left at its right
+                band.ColumnDefinitions.Add(new ColumnDefinition()); band.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var track = new Grid { Height = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(sfx ? SfxRoom() : 2, 1, 8, 0) };
+                track.Children.Add(new TacSketch((dc, s) => DrawHp(dc, s, h)));
+                HpGhost(track, e, h, now, 0);
+                band.Children.Add(track);
+                var hl = new TextBlock { FontFamily = Mod.Face, FontSize = 10.5, Foreground = OnPaperSoft, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 2, 0) };
                 System.Windows.Documents.Typography.SetNumeralAlignment(hl, FontNumeralAlignment.Tabular);
-                hl.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(hp * 100):0}%") { FontWeight = FontWeights.Bold, Foreground = hp < .34 ? Frozen(Color.FromRgb(0xFF, 0x9A, 0xA4)) : White });
+                hl.Inlines.Add(new System.Windows.Documents.Run($"{Math.Round(h * 100):0}%") { FontFamily = FigFace, FontSize = 14, Foreground = h < .34 ? RedB : InkB });
                 var left = HpLeftText(e);
-                if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  ·  " + left) { FontWeight = FontWeights.Medium });
+                if (left.Length > 0) hl.Inlines.Add(new System.Windows.Documents.Run("  " + left) { FontWeight = FontWeights.Bold });
                 hl.Tag = "hp-text";
-                _fightBody.Children.Add(Lit(hl));
-                _fightBody.Children.Add(new Border { Height = 4 });
+                Grid.SetColumn(hl, 1); band.Children.Add(hl);
             }
-            else _fightBody.Children.Add(new Border { Height = 8 });
-            PutRows(_fightBody, e, now, w);
-            if (e.HasDamage)
-            {
-                _fightBody.Children.Add(Hairline(new Thickness(0, 8, 0, 6)));
-                _fightBody.Children.Add(Foot(e, now));
-            }
+            y += bandH;
         }
-        _fight.Visibility = Visibility.Visible;
+        if (rowsShown)
+        {
+            double rh = Meter?.Height is double mh && !double.IsNaN(mh) ? mh : 0;
+            _rowsTop = y; _rowsH = rh + 2 * RowsPad;
+            panels.Add((y, _rowsH, 1));
+            y += _rowsH;
+        }
+        if (!e.Waiting && e.HasDamage)
+        {
+            var foot = Foot(e, now);
+            foot.Height = FootH; foot.Margin = new Thickness(Mg + 5, 1, Mg + 4, 0);
+            _fightBody.Children.Add(foot);
+            y += FootH + 1;
+        }
+        y += Mg - 1;
+        _pageW = w; _pageH = Math.Ceiling(y);
+
+        // the page's art, drawn again only when its shape changes
+        bool leaderRow = rowsShown && Meter is { } mt && mt.Members.FirstOrDefault() is { Rank: 1, CpOnly: false, Pvp: false };
+        // the paper gutters between the rows: each row its own panel (none across the "2 more" line before you pinned below)
+        _gutters.Clear();
+        if (rowsShown && Meter is { } mr)
+            for (int i = 1; i < mr.Members.Count; i++)
+                if (!mr.Members[i].Pinned) _gutters.Add(_rowsTop + RowsPad + i * MangaRow.Pitch - (MangaRow.Pitch - MangaRow.H) / 2);
+        if (!_bandHp && bandH > 0) _gutters.Add(-1);   // (the sign of the band's tone in the page's key)
+        var sig = $"{w}|{_pageH}|{string.Join(",", panels.Select(p => $"{p.Top:0.#}:{p.H:0.#}:{p.Kind}"))}|{bandTop}|{bandH}|{leaderRow}|{string.Join(",", _gutters)}";
+        if (sig != _pageSig)
+        {
+            _pageSig = sig;
+            _page.Art = Page(w, _pageH, panels, bandTop, bandH, leaderRow, false, _gutters, _bandHp ? 0 : SfxRoom());
+            _page.Width = _pageInv.Width = w; _page.Height = _pageInv.Height = _pageH;
+            _pageInv.Art = null;   // the impact frame, made when a kill wants it
+        }
+        _page.Opacity = ArtK;
+        _fight.Height = _pageH;
+
+        // the sound effect over the leader, breaking out of the band into the head panel
+        PlaceSfx(sfx, bandTop, bandH);
+
+        // the lead changing hands while the fight runs: the cut-in
+        var leadM = Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly && !m.Pvp);
+        long id = leadM?.Id ?? 0;
+        if (e.Id == _leadFight && id != 0 && _leadId != 0 && id != _leadId && e.Live && !e.Waiting && Moves) LeadChanged(leadM!, false);
+        _leadFight = e.Id; _leadId = id;
+
+        _fightOuter.Visibility = Visibility.Visible;
         PlaceTimers();
+    }
+
+    /// <summary>The HP stroke: an ink track on the paper, the red stroke to what's left, the thirds as ink notches.</summary>
+    static void DrawHp(DrawingContext dc, Size s, double hp)
+    {
+        if (s.Width < 8) return;
+        double x1 = s.Width * Math.Clamp(hp, 0, 1);
+        var track = new Rect(0, 0, s.Width, s.Height);
+        dc.DrawRectangle(PaperB, Pn(InkB, 1.6, false), track);
+        if (x1 > 1)
+        {
+            // the red stroke: a hard brush end, a dry streak along it
+            var g = Brushed(new[] { P(1.5, 1.5), P(Math.Max(2, x1 - 2), 1.5), P(x1 + 1.5, s.Height / 2), P(Math.Max(2, x1 - 3), s.Height - 1.5), P(1.5, s.Height - 1.5) }, 31, .35, 10);
+            dc.PushClip(new RectangleGeometry(track));
+            dc.DrawGeometry(RedB, null, g);
+            dc.DrawRectangle(Frozen(Mod.A(Colors.White, .32)), null, new Rect(3, 2.5, Math.Max(0, x1 - 9), 1.2));
+            dc.Pop();
+        }
+        for (int k = 1; k <= 2; k++) { double x = Math.Round(s.Width * k / 3); dc.DrawRectangle(InkB, null, new Rect(x - 1, 0, 2, s.Height)); }
+    }
+
+    /// <summary>The room the sound effect takes at the band's left.</summary>
+    double SfxRoom() => SfxArt().Size.Width + 4;
+
+    (Drawing Art, Size Size) SfxArt()
+    {
+        var word = L.T("DOOM");
+        if (_sfxWord?.Word == word) return (_sfxWord.Value.Art, _sfxWord.Value.Size);
+        var art = Lettered(word, 25, Colors.White, InkC, RedC, 4.6, -9, out var size);
+        _sfxWord = (word, art, size);
+        return (art, size);
+    }
+
+    (string Word, Drawing Art, Size Size)? _sfxWord;
+
+    void PlaceSfx(bool on, double bandTop, double bandH)
+    {
+        if (!on) { _sfxLayer.Children.Clear(); _sfx = null; return; }
+        var (art, size) = SfxArt();
+        if (_sfx == null)
+        {
+            _sfxScale = new ScaleTransform(1, 1);
+            _sfx = new InkArt(art, size.Width, size.Height) { RenderTransformOrigin = new Point(.5, .5), RenderTransform = _sfxScale, Tag = "manga-sfx" };
+            _sfxLayer.Children.Clear(); _sfxLayer.Children.Add(_sfx);
+        }
+        else { _sfx.Art = art; _sfx.Width = size.Width; _sfx.Height = size.Height; }
+        // its foot sits on the rows' panel, its head in the head panel's lower left (under the title's line)
+        Canvas.SetLeft(_sfx, Mg + 3);
+        Canvas.SetTop(_sfx, bandTop + bandH - size.Height + 1);
+    }
+
+    /// <summary>
+    /// The page: a sheet of paper with a brushed ink edge, tilted a hair; the head and the rows as black ink panels on it
+    /// (the head's top left corner cut away, the rows' lower right), screentone in those two cut corners, ink flung off the
+    /// sheet's right edge, and round the leader's row concentration lines spilling out of the panel into the gutters.
+    /// <paramref name="inverse"/>: the impact frame, every ink turned paper and every paper ink.
+    /// </summary>
+    static DrawingGroup Page(double w, double h, List<(double Top, double H, int Kind)> panels, double bandTop, double bandH, bool leaderRow, bool inverse, IReadOnlyList<double> gutters, double toneFrom)
+    {
+        gutters = gutters.Where(g => g >= 0).ToList();
+        var ink = inverse ? PaperB : InkB;
+        var paper = inverse ? InkB : PaperB;
+        return Drawn(dc =>
+        {
+            // the sheet's ink edge, then its paper
+            var edge = Brushed(new[] { P(-.5, 1), P(w + .5, -.5), P(w + .5, h + .5), P(-.5, h + .5) }, 11, .9, 13);
+            dc.DrawGeometry(ink, null, edge);
+            var sheet = Brushed(new[] { P(2, 3), P(w - 2, 1.8), P(w - 2, h - 2), P(2, h - 2.5) }, 12, .6, 15);
+            dc.DrawGeometry(paper, null, sheet);
+            double x0 = Mg, x1 = w - Mg;
+            // the band without the boss's HP: screentone after the sound effect, swelling to the right
+            if (toneFrom > 0 && bandH > 8)
+                Tone(dc, new RectangleGeometry(new Rect(x0 + toneFrom + 6, bandTop, x1 - x0 - toneFrom - 6, bandH)), P(x1 + 30, bandTop + bandH / 2), Math.Max(60, (x1 - x0 - toneFrom) * .8), 4, 1.7, ink);
+            // the leader's concentration lines, out of the row into the gutters round it
+            var rows = panels.FirstOrDefault(p => p.Kind == 1);
+            if (leaderRow && rows.H > 0)
+            {
+                double cy = rows.Top + RowsPad + MangaRow.H / 2;
+                dc.PushClip(Geometry.Combine(sheet, new RectangleGeometry(new Rect(0, Math.Max(bandTop + bandH - (bandH >= 24 ? 5 : 9), rows.Top - 9), w, MangaRow.H + 2 * RowsPad + 12)), GeometryCombineMode.Intersect, null));
+                dc.DrawGeometry(ink, null, Burst(P(w / 2, cy), .62, 1.8, 96, 5, 1.7, w / 2, MangaRow.H / 2 + 10));
+                dc.Pop();
+            }
+            foreach (var (top, ph, kind) in panels)
+            {
+                Geometry g;
+                if (kind == 0)
+                {
+                    // the head: its top left corner cut away for the tone, its foot slanting up to the right
+                    double cut = 15, b = top + ph;
+                    Tone(dc, new RectangleGeometry(new Rect(0, 0, x0 + cut + 10, top + cut + 10)), P(0, 0), 42, 4, 1.9, ink);
+                    g = Brushed(new[] { P(x0 + cut, top), P(x1, top - .5), P(x1, b - 3), P(x0, b), P(x0, top + cut) }, 13, .55, 12);
+                }
+                else
+                {
+                    double cut = 13, b = top + ph;
+                    Tone(dc, new RectangleGeometry(new Rect(x1 - cut - 10, b - cut - 10, w - x1 + cut + 10, cut + 12)), P(w, b + 2), 30, 4, 1.8, ink);
+                    g = Brushed(new[] { P(x0, top + 1), P(x1, top - .5), P(x1, b - cut), P(x1 - cut, b), P(x0 + .5, b) }, 14, .55, 12);
+                }
+                dc.DrawGeometry(ink, null, g);
+            }
+            // the paper gutters between the rows, each row its own panel (a hair off level, as cut by hand)
+            int gi = 0;
+            foreach (var gy in gutters)
+            {
+                double tilt = 1.1 * J(15, gi++);
+                dc.DrawGeometry(paper, null, new PolygonG(new[] { P(x0 - 1, gy - 1.1 + tilt), P(x1 + 1, gy - 1.1 - tilt), P(x1 + 1, gy + 1.1 - tilt), P(x0 - 1, gy + 1.1 + tilt) }).Geo);
+            }
+            // ink flung off the sheet
+            Splat(dc, P(w - 1, 9), new Vector(1, .45), 41, 2.6, ink);
+            Splat(dc, P(w, h - 16), new Vector(1, -.2), 42, 2.1, ink);
+            Splat(dc, P(3, h - 3), new Vector(1, .1), 43, 1.6, ink);
+            if (inverse)
+            {
+                // the impact frame's lines, out of the head's middle
+                dc.PushClip(sheet);
+                dc.DrawGeometry(Frozen(Mod.A(PaperC, .55)), null, Burst(P(w / 2, HeadH / 2 + Mg), 22, Math.Max(w, h), 72, 9, 2.4));
+                dc.Pop();
+            }
+        });
     }
 
     // ================================================================ the moments
 
-    /// <summary>A pickup: a soft light crosses the Buddy's wash and the worth floats in beside it, then fades.</summary>
+    /// <summary>A pickup: a small panel with its worth slides in beside the bubble behind speed lines, then fades.</summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-        var words = new StackPanel { Margin = new Thickness(9, 2, 11, 3) };
-        words.Children.Add(Tt(worth, 14, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .25)) : White, FontWeights.Bold));
-        var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
+        var words = new StackPanel { Margin = new Thickness(7, 1, 8, 2) };
+        words.Children.Add(Fig(worth, 16, p.Worth.Length > 0 ? RedB : InkB));
+        var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, OnPaperSoft, FontWeights.Bold); nm.Margin = new Thickness(0, -2, 0, 0);
         words.Children.Add(nm);
-        var chip = new Border
-        {
-            Child = words, MaxWidth = 88, CornerRadius = new CornerRadius(10), Background = Frozen(Mod.A(DeepC, .5)), BorderThickness = new Thickness(1),
-            BorderBrush = Frozen(Mod.A(Colors.White, .28)), Effect = Halo(),
-        };
+        var chip = new Border { Child = words, MaxWidth = 84, Background = PaperB, BorderBrush = InkB, BorderThickness = new Thickness(2), RenderTransformOrigin = new Point(.5, .5) };
+        var host = new Grid();
+        host.Children.Add(chip);
         var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
-        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
-        _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
-        _sheenC = Colors.White;
-        Motion.Play(chip, 1900, t =>
+        var tilt = new RotateTransform(-4);
+        var tg = new TransformGroup(); tg.Children.Add(tilt); tg.Children.Add(shift);
+        host.RenderTransform = tg;
+        host.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(host, 8); Canvas.SetTop(host, -host.DesiredSize.Height / 2 - 1);
+        _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(host);
+        Motion.Play(host, 1100, t =>
         {
-            _sheen = t < .5 ? Seg(t, 0, .5) : -1; _lineWash.InvalidateVisual();
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
-        }, () => { _sheen = -1; _lineWash.InvalidateVisual(); _lineAnchor.Children.Remove(chip); });
+            double k = Back(Seg(t, 0, .22), 1.6);
+            shift.X = 22 * (1 - k);
+            host.Opacity = t < .8 ? Seg(t, 0, .1) : 1 - Seg(t, .8, 1);
+        }, () => _lineAnchor.Children.Remove(host));
     }
 
-    /// <summary>A rare drop: its wash blooms out to the right in the grade's colour, a flash in it, the tile popping in.</summary>
+    /// <summary>A rare drop: shoujo sparkles burst out behind the tile as it pops in.</summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareWash is not { } wash) return;
+        if (_rareFx is not { } fx) return;
         var tile = _rareTile;
-        var sc = new ScaleTransform(1, 1);
-        if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        Motion.Play(wash, 1500, t =>
+        var sparkle = new InkArt(SparkleArt, 0, 0);
+        var sc = new ScaleTransform(.3, .3); var rot = new RotateTransform(-20);
+        var tg = new TransformGroup(); tg.Children.Add(sc); tg.Children.Add(rot);
+        sparkle.RenderTransform = tg;
+        fx.Children.Clear(); fx.Children.Add(sparkle);
+        var tsc = new ScaleTransform(1, 1);
+        if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = tsc; }
+        Motion.Play(fx, 1000, t =>
         {
-            _rareBloom = Out(Seg(t, 0, .45));
-            _rareFlash = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, .8);
-            wash.InvalidateVisual();
-            sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, .05, .4), 2.2);
-        }, () => { _rareBloom = 1; _rareFlash = 0; wash.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+            double k = Out(Seg(t, 0, .45));
+            sc.ScaleX = sc.ScaleY = .3 + .75 * k;
+            rot.Angle = -20 + 26 * Out(t);
+            sparkle.Opacity = t < .6 ? 1 : 1 - Seg(t, .6, 1);
+            tsc.ScaleX = tsc.ScaleY = .6 + .4 * Back(Seg(t, .04, .36), 2.4);
+        }, () => { fx.Children.Clear(); tsc.ScaleX = tsc.ScaleY = 1; });
     }
 
-    /// <summary>Your best passed: the ring runs on round to full in mint and a mint light crosses the wash.</summary>
+    /// <summary>The sparkles: big and small four-pointed stars with ink edges and bubbles, round the drawing's origin.</summary>
+    static Drawing? _sparkleArt, _bangArt;
+    static Drawing SparkleArt => _sparkleArt ??= Drawn(dc =>
+    {
+        // a bloom of screentone, then a field of sparkles in four sizes and bubbles, flung wider to the right (the tile sits near the window's left)
+        Tone(dc, new EllipseGeometry(P(6, 0), 30, 22), P(0, 0), 30, 3.4, 1.4, Frozen(Mod.A(InkC, .55)));
+        var edge = Pn(InkB, 1.2);
+        double[] sizes = { 9, 6.5, 4.5, 3 };
+        for (int i = 0; i < 16; i++)
+        {
+            double a = 2 * Math.PI * i / 16 + .3 * J(51, i), r = 18 + 9 * (J(52, i) + 1) / 2, s = sizes[i % 4];
+            double x = r * Math.Cos(a) * (Math.Cos(a) > 0 ? 1.6 : .7), y = r * Math.Sin(a) * .8;
+            dc.DrawGeometry(White, edge, Sparkle(P(x, y), s));
+        }
+        for (int i = 0; i < 9; i++)
+        {
+            double a = 2 * Math.PI * (i + .5) / 9, r = 15 + 6 * J(53, i);
+            double x = r * Math.Cos(a) * (Math.Cos(a) > 0 ? 1.5 : .7), y = r * Math.Sin(a) * .8;
+            dc.DrawEllipse(White, Pn(InkB, .9), P(x, y), 1.8 + J(54, i) * .6, 1.8 + J(54, i) * .6);
+        }
+    });
+
+    /// <summary>Your best passed: the ring's lines fill round in red and a "!!" balloon bursts beside it.</summary>
     protected override void BestPassed(bool held)
     {
-        if (_ringArt is not { } art) return;
+        if (_ringArt is not { } art || _ringHost is not { } host) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
-        _sheenC = MintC2;
-        Motion.Play(art, 1800, t =>
+        // the balloon breaks out over the bubble's top left, clear of the hour
+        var balloon = new InkArt(BangArt, 0, 0) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(3, 4, 0, 0) };
+        var sc = new ScaleTransform(0, 0);
+        balloon.RenderTransform = sc;
+        host.Children.Add(balloon);
+        Motion.Play(art, 950, t =>
         {
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .5));
-            if (t >= .5) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, .4));
+            if (t >= .4) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
-            _sheen = t is > .3 and < .85 ? Seg(t, .3, .85) : -1; _lineWash.InvalidateVisual();
-        }, () => { _complete = 0; _beat = beat; _sheen = -1; _sheenC = Colors.White; art.InvalidateVisual(); _lineWash.InvalidateVisual(); });
+            double k = Back(Seg(t, .3, .55), 2.6);
+            sc.ScaleX = sc.ScaleY = k;
+            balloon.Opacity = t < .8 ? 1 : 1 - Seg(t, .8, 1);
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); host.Children.Remove(balloon); });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights mint round its edge and settles.</summary>
+    /// <summary>The "!!" balloon: a red explosion with an ink edge, "!!" lettered in white, round its origin.</summary>
+    static Drawing BangArt => _bangArt ??= Drawn(dc =>
+    {
+        dc.DrawGeometry(RedB, Pn(InkB, 1.8), Balloon(P(0, 0), 15, 9.5, 11, 61));
+        var bang = Lettered("!!", 15, Colors.White, InkC, null, 2.6, 6, out var s);
+        dc.PushTransform(new TranslateTransform(-s.Width / 2, -s.Height / 2));
+        dc.DrawDrawing(bang);
+        dc.Pop();
+    });
+
+    /// <summary>An entry opened: the first caption flashes red and ink twice, then settles red.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
-        var edge = chip.BorderBrush;
-        Motion.Play(chip, 1200, t =>
+        var bg = chip.Background;
+        Motion.Play(chip, 800, t =>
         {
-            double k = t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1);
-            glow.Opacity = .85 * k;
-            chip.BorderBrush = Frozen(Mod.A(MintC2, .5 + .5 * k));
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; });
+            int beat = (int)(Seg(t, 0, .7) * 6);
+            chip.Background = t < .7 && beat % 2 == 1 ? InkB : RedB;
+            chip.BorderThickness = new Thickness(t < .7 ? 2 : 1.2);
+        }, () => { chip.Background = bg; chip.BorderThickness = new Thickness(1.2); });
     }
 
-    /// <summary>A fight started: the meter slides in from the left as it fades up.</summary>
+    /// <summary>
+    /// A fight started: the page turns in, wiped on behind a stroke of ink that crosses it left to right, and the sound
+    /// effect is slammed onto the leader.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 520, t =>
+        if (held && Environment.GetEnvironmentVariable("KL_MANGA_CUTIN") == "1")
         {
-            double k = Out(t);
-            _fightShift.Y = 10 * (1 - k);
-            _fightBody.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
+            // a render of the cut-in (a lead change has no frame of its own in the theme renders)
+            if (Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly && !m.Pvp) is { } lm) LeadChanged(lm, true);
+            return;
+        }
+        double w = _pageW > 0 ? _pageW : FightWidth - 10, h = _pageH > 0 ? _pageH : 200;
+        var clipShift = new TranslateTransform(-(w + 60), 0);
+        var clip = new StreamGeometry();
+        using (var c = clip.Open()) { c.BeginFigure(P(-120, -20), true, true); c.LineTo(P(w + 40, -20), true, false); c.LineTo(P(w + 10, h + 20), true, false); c.LineTo(P(-120, h + 20), true, false); }
+        clip.Transform = clipShift;
+        // the art is wiped on; the words come up behind the stroke (never cut by it)
+        _page.Clip = clip; _sfxLayer.Clip = clip;
+        var stroke = new InkArt(Drawn(dc =>
+        {
+            dc.DrawGeometry(InkB, null, Brushed(new[] { P(30, -4), P(48, -4), P(18, h + 4), P(0, h + 4) }, 71, 1.6, 9));
+            Splat(dc, P(16, h * .3), new Vector(-1, .2), 72, 2.4, InkB);
+            Splat(dc, P(8, h * .75), new Vector(-1, -.3), 73, 2, InkB);
+        }), 48, h) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        var sx = new TranslateTransform();
+        stroke.RenderTransform = sx;
+        _fightFx.Children.Clear(); _fightFx.Children.Add(stroke);
+        var sfx = _sfx; var sfs = _sfxScale;
+        Motion.Play(_fightFx, 820, t =>
+        {
+            double k = Out(Seg(t, 0, .6));
+            clipShift.X = -(w + 60) * (1 - k);
+            sx.X = (w + 40) * k - 44;
+            stroke.Opacity = t < .55 ? 1 : 1 - Seg(t, .55, .68);
+            _fightShift.X = -6 * (1 - k);
+            _fightBody.Opacity = Out(Seg(t, .12, .5));
+            if (sfx != null && sfs != null)
+            {
+                double s = Seg(t, .58, .82);
+                sfx.Opacity = t < .58 ? 0 : 1;
+                sfs.ScaleX = sfs.ScaleY = 1.9 - .9 * Back(s, 2.2);
+            }
+        }, () => { _page.Clip = null; _sfxLayer.Clip = null; _fightBody.Opacity = 1; _fightFx.Children.Remove(stroke); _fightShift.X = 0; if (sfx != null) sfx.Opacity = 1; if (sfs != null) sfs.ScaleX = sfs.ScaleY = 1; });
     }
 
-    /// <summary>A fight ended: a wash in mint (coral for a wipe) lays over the fight's head with the outcome and the clock, then lifts.</summary>
+    /// <summary>
+    /// A fight ended: the impact frame. The page's art flashes inverted twice (ink to paper, paper to ink, with impact lines
+    /// out of the head; the words stay as they are), and a giant sound effect slams over the head and holds, then goes.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
-        var c = wipe ? CoralC : MintC2;
-        double bloom = 0;
-        var band = new Grid { Height = 34, Margin = new Thickness(-4, -6, 0, 0) };
-        band.Children.Add(new TacSketch((dc, s) =>
+        if (_pageInv.Art == null && _pageSig.Length > 0)
         {
-            var r = new Rect(0, 0, s.Width * bloom, s.Height);
-            Wash(dc, r, DeepC, .72, .5, 8);
-            Wash(dc, r, c, .5, .26, 8);
-        }));
-        var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Tt(OutcomeText(e), 18, White, FontWeights.Bold));
-        var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 12, Frozen(Mod.Mix(c, Colors.White, .5)), FontWeights.SemiBold); ck.Margin = new Thickness(4, 3, 0, 0);
-        words.Children.Add(ck);
-        var lit = Lit(words);
-        band.Children.Add(lit);
+            var panels = new List<(double, double, int)> { (Mg, _headH, 0) };
+            if (_rowsH > 0) panels.Add((_rowsTop, _rowsH, 1));
+            _pageInv.Art = Page(_pageW, _pageH, panels, 0, 0, false, true, _gutters, 0);
+        }
+        double w = _pageW > 0 ? _pageW : FightWidth - 10;
+        var word = wipe ? L.T("CRASH") : L.T("KABOOM!");
+        var art = Lettered(word, 34, wipe ? Color.FromRgb(0xD8, 0xD8, 0xDC) : Colors.White, InkC, RedC, 6, wipe ? 5 : -8, out var size);
+        var big = new InkArt(art, size.Width, size.Height) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, RenderTransformOrigin = new Point(.5, .5) };
+        double fit = Math.Min(1, (w - 30) / Math.Max(1, size.Width));
+        big.Margin = new Thickness(0, Math.Max(0, Mg + HeadH / 2 - size.Height * fit / 2 + 4), 0, 0);
+        var sc = new ScaleTransform(fit, fit);
+        big.RenderTransform = sc;
+        var lines = new InkArt(Drawn(dc => dc.DrawGeometry(InkB, null, Burst(P(0, 0), size.Width * fit * .55, size.Width * fit * .95, 40, 19, 1.6, 1, .55))), 0, 0)
+        { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Mg + HeadH / 2 + 4, 0, 0) };
+        var lsc = new ScaleTransform(1, 1); lines.RenderTransform = lsc;
+        _fightFx.Children.Clear(); _fightFx.Children.Add(lines); _fightFx.Children.Add(big);
+        Motion.Play(_fightFx, 1000, t =>
+        {
+            // two flashes of the inverted frame on the art, the page's own art under it
+            _pageInv.Opacity = (t is > .0 and < .07) || (t is > .12 and < .19) ? ArtK : 0;
+            double k = Seg(t, .03, .22);
+            sc.ScaleX = sc.ScaleY = fit * (2.1 - 1.1 * Back(k, 2));
+            big.Opacity = t < .03 ? 0 : t < .8 ? 1 : 1 - Seg(t, .8, 1);
+            lsc.ScaleX = lsc.ScaleY = .7 + .5 * Out(Seg(t, .05, .5));
+            lines.Opacity = t < .05 ? 0 : 1 - Seg(t, .25, .6);
+        }, () => { _fightFx.Children.Clear(); _pageInv.Opacity = 0; });
+    }
+
+    /// <summary>
+    /// The lead changed hands: a diagonal panel slashes in across the rows with the new leader's class art big and their
+    /// name over speed lines, holds a beat and is gone in under a second; as it leaves, the sound effect is slammed onto
+    /// the new leader, their crown lands and a glint runs along the bars.
+    /// </summary>
+    void LeadChanged(MeterMember lead, bool held)
+    {
+        double w = _pageW > 0 ? _pageW : FightWidth - 10;
+        double bh = 62, top = Math.Max(4, _rowsTop + RowsPad + MangaRow.H / 2 - bh / 2 + 4);
+        var band = new Grid { Width = w, Height = bh, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, top, 0, 0), RenderTransformOrigin = new Point(.5, .5) };
+        band.Children.Add(new InkArt(CutInArt(w, bh, lead.ClassColor), w, bh) { HorizontalAlignment = HorizontalAlignment.Left });
+        // the class's art big, breaking out over the panel's top edge; the name on a narration box beside it
+        var who = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(30, -10, 0, 0) };
+        var icon = ThemeText.Icon(lead.Class, 58, lead.Name);
+        if (icon is Border ib) { ib.BorderBrush = InkB; ib.BorderThickness = new Thickness(3.5); }
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        who.Children.Add(icon);
+        var nm = Tt(lead.Name, 19, White, FontWeights.Black, NameFace); nm.MaxWidth = Math.Max(80, w - 190);
+        nm.TextTrimming = TextTrimming.CharacterEllipsis;
+        var cap = Caption(nm, new Thickness(8, 1, 9, 3)); cap.VerticalAlignment = VerticalAlignment.Top; cap.Margin = new Thickness(6, 24, 0, 0);
+        who.Children.Add(cap);
+        band.Children.Add(who);
+        var zb = Lettered(L.T("ZBAM!"), 24, Colors.White, InkC, RedC, 4.4, -10, out var zs);
+        band.Children.Add(new InkArt(zb, zs.Width, zs.Height) { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -6, 14, 0) });
+        var shift = new TranslateTransform(w, 0);
+        var punch = new ScaleTransform(1.2, 1.2);
+        var tg = new TransformGroup(); tg.Children.Add(punch); tg.Children.Add(new RotateTransform(-6)); tg.Children.Add(shift);
+        band.RenderTransform = tg;
+        // the exit: one hard wipe, the panel cut away left to right (no fade)
+        var wipe = new TranslateTransform();
+        band.Clip = new RectangleGeometry(new Rect(-40, -40, w + 80, bh + 80)) { Transform = wipe };
         _fightFx.Children.Clear(); _fightFx.Children.Add(band);
-        var head = _head;
-        Motion.Play(_fightFx, 2400, t =>
+        var sfx = _sfx; var sfs = _sfxScale;
+        bool crowned = false;
+        Motion.Play(band, 840, t =>
         {
-            bloom = Out(Seg(t, 0, .22));
-            ((TacSketch)band.Children[0]).InvalidateVisual();
-            lit.Opacity = t < .84 ? Seg(t, .08, .22) : 1 - Seg(t, .84, 1);
-            band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .12) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+            double k = Back(Seg(t, 0, .32), 1.3);
+            shift.X = w * 1.05 * (1 - k);
+            punch.ScaleX = punch.ScaleY = 1.2 - .2 * Out(Seg(t, 0, .4));
+            wipe.X = (w + 80) * Out(Seg(t, .66, .84));
+            if (sfx != null && sfs != null)
+            {
+                double s = Seg(t, .62, .86);
+                sfx.Opacity = t < .62 && t > .02 ? 0 : 1;
+                sfs.ScaleX = sfs.ScaleY = t < .62 ? 1 : 1.8 - .8 * Back(s, 2.2);
+            }
+            if (!crowned && t >= .62) { crowned = true; Crown(lead.Id, held); }
+        }, () => { _fightFx.Children.Remove(band); if (sfx != null) sfx.Opacity = 1; if (sfs != null) sfs.ScaleX = sfs.ScaleY = 1; });
+    }
+
+    /// <summary>The new leader's crown lands, and a glint runs down the bars one after another.</summary>
+    void Crown(long id, bool held)
+    {
+        if (Meter is not { } m) return;
+        if (m.RowOf(id) is MangaRow lead) lead.Crown();
+        int i = 0;
+        foreach (var mm in m.Members) if (m.RowOf(mm.Id) is MangaRow r) r.Glint(i++ * 70);
+    }
+
+    /// <summary>
+    /// The cut-in's panel: a slashed parallelogram in the leader's class colour, black speed lines streaming across it, a
+    /// red stripe at its foot, a thick ink border and a white one outside it (so it reads on the rows' ink).
+    /// </summary>
+    static Drawing CutInArt(double w, double h, Color cls) => Drawn(dc =>
+    {
+        double s = 30;
+        var shape = new[] { P(s, 0), P(w - 2, 0), P(w - 2 - s, h), P(2, h) };
+        var g = Brushed(shape, 85, .6, 16);
+        dc.DrawGeometry(White, Pn(White, 6), g);
+        dc.DrawGeometry(Frozen(cls), Pn(InkB, 3.2), g);
+        dc.PushClip(g);
+        // a darker band toward the foot, the red stripe on it
+        dc.DrawRectangle(Frozen(Mod.A(Mod.Mix(cls, Colors.Black, .35), .9)), null, new Rect(0, h * .62, w, h));
+        dc.DrawRectangle(RedB, null, new Rect(0, h - 7, w, 4));
+        for (int i = 0; i < 26; i++)
+        {
+            double y = 3 + (h - 6) * (i + .5 * J(81, i)) / 26, x0 = w * (.3 + .6 * (J(82, i) + 1) / 2);
+            dc.DrawGeometry(Frozen(Mod.A(InkC, .45 + .35 * J(83, i))), null, Streak(P(x0 - w * (.25 + .25 * (J(84, i) + 1)), y), P(x0, y), .7 + .7 * (J(85, i) + 1)));
+        }
+        dc.Pop();
+        dc.DrawGeometry(null, Pn(InkB, 3.2), g);
+    });
+
+    /// <summary>A closed polygon's geometry, frozen.</summary>
+    readonly struct PolygonG
+    {
+        public readonly Geometry Geo;
+        public PolygonG(IReadOnlyList<Point> pts)
+        {
+            var g = new StreamGeometry();
+            using (var c = g.Open()) { c.BeginFigure(pts[0], true, true); c.PolyLineTo(pts.Skip(1).ToList(), true, true); }
+            g.Freeze();
+            Geo = g;
+        }
     }
 }
