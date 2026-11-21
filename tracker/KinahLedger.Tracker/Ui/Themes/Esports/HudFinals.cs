@@ -407,9 +407,9 @@ sealed partial class HudFinals : ModernLook
                 words.Tag = "hp-text";
                 Grid.SetColumn(words, 1); hpLine.Children.Add(words);
                 _fightBody.Children.Add(hpLine);
-                _fightBody.Children.Add(new Border { Height = 10 });
+                _fightBody.Children.Add(new Border { Height = 12 });
             }
-            else _fightBody.Children.Add(new Border { Height = 10 });
+            else _fightBody.Children.Add(new Border { Height = 12 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {

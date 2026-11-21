@@ -92,7 +92,7 @@ sealed partial class HudFinals
         public const double H = 28, Pitch = 31;
         const double PadX = 4, RankW = 26, Gap1 = 5, IconW = 18, Gap2 = 6, ShareW = 36, DmgW = 56, CritW = 36, PadR = 10;
         /// <summary>The leader's trophy: its size (times the 14 × 16 drawing), its centre across the row and its top (over the row's top edge).</summary>
-        public const double CupScale = 2.0, CupX = PadX + RankW / 2, CupTop = -7;
+        public const double CupScale = 1.45, CupX = PadX + RankW / 2, CupTop = -11;
         /// <summary>The figures' column at the row's right (DPS and share): the kill's pyro and confetti keep off it.</summary>
         public const double FiguresW = PadR + ShareW + 64;
         /// <summary>Where the bar starts: after the seed box.</summary>
@@ -137,11 +137,12 @@ sealed partial class HudFinals
             _art = new TacSketch(Draw);
             _root.Children.Add(_art); _root.Children.Add(_shine); _root.Children.Add(_words);
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            Put(_rank, 1); Put(_trophy, 1); Put(_icon, 3);
+            Put(_trophy, 1); Put(_rank, 1); Put(_icon, 3);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _nameLine.Children.Add(_name);
             Put(_nameLine, 5);
-            _heal.Margin = new Thickness(6, 0, 0, 0); _heal.Tag = "heal-figures"; Put(_heal, 6);
+            // the heal figure keeps air before the DPS (the CP gives way first)
+            _heal.Margin = new Thickness(6, 0, 8, 0); _heal.Tag = "heal-figures"; Put(_heal, 6);
             _dps.Margin = new Thickness(6, 0, 0, 0); _dps.HorizontalAlignment = HorizontalAlignment.Right; _dps.Tag = "row-dps"; Put(_dps, 7);
             _share.Tag = "row-share"; _cp.Tag = "cp";
             foreach (var (t, col) in new[] { (_share, 8), (_dmg, 9), (_crit, 10) }) { t.HorizontalAlignment = HorizontalAlignment.Right; t.Margin = new Thickness(0, 1, 0, 0); Put(t, col); }
@@ -164,7 +165,11 @@ sealed partial class HudFinals
             // the tight shade only where the words sit on gold (the graphite bars are dark enough without it)
             if (lead != (_words.Effect != null)) _words.Effect = lead ? Shade() : null;
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
-            _rank.Visibility = lead ? Visibility.Collapsed : Visibility.Visible;
+            // the rank always shows: the leader's "1" in pale gold at the foot of the column, the trophy standing over it
+            _rank.VerticalAlignment = lead ? VerticalAlignment.Bottom : VerticalAlignment.Center;
+            _rank.Margin = lead ? new Thickness(0, 0, 0, .5) : new Thickness(0);
+            _rank.FontSize = 13;
+            _rank.Foreground = lead ? AuPale : White;
             _trophy.Visibility = lead ? Visibility.Visible : Visibility.Collapsed;
             _icon.BorderBrush = lead ? GoldMetal : Mod.Br(Colors.White, .3);
             if (_iconCls != m.Class)
@@ -227,7 +232,7 @@ sealed partial class HudFinals
         {
             double w = _root.ActualWidth;
             if (w <= 0) return double.NaN;
-            double other = PadX + RankW + Gap1 + IconW + Gap2 + Mod.W(_dps) + _dps.Margin.Left + (_heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0)
+            double other = PadX + RankW + Gap1 + IconW + Gap2 + Mod.W(_dps) + _dps.Margin.Left + (_heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left + _heal.Margin.Right : 0)
                 + (_expanded ? DmgW + CritW : 0) + PadR;
             return w - other - ShareW;
         }
