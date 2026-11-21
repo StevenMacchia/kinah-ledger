@@ -9,7 +9,7 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    /// <summary>Every theme family: the companion has fur and gear for each (the bubble's own finish in the first five).</summary>
+    /// <summary>Every theme family: the companion has clothes for each (the bubble's own finish in the first five).</summary>
     static readonly string[] CompanionThemes = HudThemes.All.Select(t => t.Key).ToArray();
     static readonly CompanionKind[] CompanionKinds = Enum.GetValues<CompanionKind>();
 
@@ -172,7 +172,7 @@ public static partial class WpfApp
             ov?.SetMood(CompanionSprite.Mood.Idle);
             check(focused && sleepy && smile == "Happy" && plain == "Idle", $"companion: leans in for a fight, dozes after a long quiet, and smiles now and then as it floats ({smile}, {plain})");
 
-            // fur and gear for every theme family, so it matches the Buddy's look: none falls back to Classic's, and the
+            // clothes (turban, vest, sash) for every theme family, so it matches the Buddy's look: none falls back to Classic's, and the
             // families whose looks differ (Elements: frost against magma) tint it by the look the Buddy uses
             var fams = HudThemes.All.Select(t => (t.Key, Sprite: new CompanionSprite(t.Key))).ToList();
             bool ownTint = fams.All(f => f.Sprite.Theme == f.Key) && fams.Select(f => f.Sprite.TintForTest).Distinct().Count() == fams.Count;
@@ -180,7 +180,7 @@ public static partial class WpfApp
             ov?.Match(HudThemes.Elements, 0.94, 1, HudThemes.Magma); DoEvents();
             bool matched = ov?.FaceForTest?.Sprite is { Theme: HudThemes.Elements, Look: HudThemes.Magma } && ov.FaceForTest.Theme == HudThemes.Classic;
             ov?.Match(HudThemes.Classic, 0.94, 1);
-            check(ownTint && byLook && matched, $"companion: its own fur and gear in each of the {fams.Count} theme families, by look where a family's looks differ, and the window follows the Buddy's look ({ownTint}, {byLook}, {matched})");
+            check(ownTint && byLook && matched, $"companion: its own clothes in each of the {fams.Count} theme families, by look where a family's looks differ, and the window follows the Buddy's look ({ownTint}, {byLook}, {matched})");
 
             // the Settings page: an overlay page, its switch turns the companion off and on, a switch and Try per reaction
             var o = new OptionsWindow(w, OptionsWindow.Page.Companion) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
