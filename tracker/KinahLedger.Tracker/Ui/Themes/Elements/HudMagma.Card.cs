@@ -72,7 +72,7 @@ sealed partial class HudMagma : IThemeCard
         void Part(int col, string word, string fig, double size, bool glow)
         {
             var sp = new Grid { Height = 38 };
-            var lb = Tt(word, 8.5, Frozen(Mod.A(LavaHotC, .9)), FontWeights.Bold); lb.VerticalAlignment = VerticalAlignment.Top;
+            var lb = Tt(word, 8.5, Frozen(Mod.Mix(LavaHotC, LavaYelC, .5)), FontWeights.Bold); lb.VerticalAlignment = VerticalAlignment.Top;
             sp.Children.Add(lb);
             var fv = Tt(fig, size, glow ? WhiteHot : White, FontWeights.Bold);
             var host = new Border { Child = fv, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, -size * .18 + 1), Effect = glow ? Underglow(.8) : null };
@@ -106,7 +106,7 @@ sealed partial class HudMagma : IThemeCard
         {
             stack.Children.Add(Seam(new Thickness(0, 6, 0, 3), .8));
             var hd = Tac.CardGrid(c, 46, 56, 14);
-            TextBlock H(string s, bool right = true) { var t = Tt(s, 8, Frozen(Mod.A(LavaHotC, .9)), FontWeights.Bold); if (right) t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
+            TextBlock H(string s, bool right = true) { var t = Tt(s, 8.5, Frozen(Mod.Mix(LavaHotC, LavaYelC, .5)), FontWeights.Bold); if (right) t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
             Tac.Cell(hd, H(L.T("SKILL"), false), 0, c);
             Tac.Cell(hd, H(L.T("SHARE")), 1, c);
             Tac.Cell(hd, H(L.T("DMG")), 2, c);
@@ -143,7 +143,7 @@ sealed partial class HudMagma : IThemeCard
                 row.Children.Add(g);
                 stack.Children.Add(row);
             }
-            if (c.MoreLine.Length > 0) { var ml = Tt(c.MoreLine, 10, Quiet, FontWeights.Medium); ml.Margin = new Thickness(0, 4, 0, 0); stack.Children.Add(ml); }
+            if (c.MoreLine.Length > 0) { var ml = Tt(c.MoreLine, 10, Soft, FontWeights.Medium); ml.Margin = new Thickness(0, 4, 0, 0); stack.Children.Add(ml); }
         }
         if (c.FootLine.Length > 0)
         {
