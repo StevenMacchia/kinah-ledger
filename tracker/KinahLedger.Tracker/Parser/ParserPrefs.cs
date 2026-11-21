@@ -134,6 +134,12 @@ public sealed class ParserPrefs
     /// <summary>The character's Odyle Energy, small, in the meter's foot (on by default; Settings › DPS meter › More › Odyle Energy; Ui/EnergyMark.cs).</summary>
     public bool OdyleEnergy { get; set; } = true;
     /// <summary>
+    /// The PB ghost (1.0.38, Parser/PbGhost.cs): on a boss you've killed before, your row races your best kill of that fight,
+    /// ahead or behind, live (on by default; Settings › DPS meter › More › PB ghost). <see cref="GhostGroup"/> adds the group's pace.
+    /// </summary>
+    public bool Ghost { get; set; } = true;
+    public bool GhostGroup { get; set; }
+    /// <summary>
     /// Which hit kind the Parser shows as crit ("none", "result3" or "mark08", the two candidates the hits carry), and as a
     /// back attack ("none" or "side1"). Settings' "Crit and back-attack rates" switch picks <see cref="CritPick"/> and <see cref="BackPick"/>. Null, as every player has it, means the release's default
     /// (<see cref="CritDefault"/>, <see cref="BackDefault"/>): null is never written, so a release that changes a default

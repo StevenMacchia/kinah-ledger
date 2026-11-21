@@ -35,6 +35,11 @@ public sealed class FightRecord
     public long BiggestHit { get; set; }
     public DateTime BiggestHitAt { get; set; }
     public DateTime LastKillAt { get; set; }
+    /// <summary>
+    /// Your best DPS kill as it went, second by second (the PB ghost races it, Parser/PbGhost.cs); null in a record kept before
+    /// 1.0.38 until its best fight is found among the fights kept (<see cref="FightRecords.GhostFor"/>) or a new best is set.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public GhostCurve? Ghost { get; set; }
     /// <summary>Fights already counted in (a fight saved twice counts once).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public List<string>? Seen { get; set; }
 
@@ -100,6 +105,41 @@ public sealed class FightRecords
     /// <summary>The record of this fight (null before your first kill of it).</summary>
     public FightRecord? Of(Encounter e) { lock (_gate) return Load().TryGetValue(KeyOf(e), out var r) ? r : null; }
 
+    /// <summary>
+    /// The PB ghost of this fight: the curve of your best kill before it (null with none, or when this fight set the best: the
+    /// ghost it raced was asked for while it ran). A record from before 1.0.38 gets its curve from its best fight when that is
+    /// still among <paramref name="kept"/> (saved once found).
+    /// </summary>
+    public GhostCurve? GhostFor(Encounter e, Func<IEnumerable<Encounter>> kept)
+    {
+        if (e.ModeKind != ParserMode.Bosses || (e.Boss.Length == 0 && e.BossId <= 0)) return null;
+        string key = KeyOf(e), bestId;
+        lock (_gate)
+        {
+            var map = Load();
+            if (!map.TryGetValue(key, out var r) || r.BestDps <= 0 || r.BestDpsFight == e.Id) return null;
+            if (r.Ghost is { } g && g.Fight == r.BestDpsFight) return g;
+            bestId = r.BestDpsFight;
+        }
+        // the fights kept are looked through outside this lock: the store takes its own lock and then this one (EncounterStore.Add
+        // notes each fight kept here), so asking for them while holding this one could leave both waiting on each other for good
+        // (1.0.40: the meter asks on the window's thread at a pull's first draw while the session keeps the fight that ended)
+        Encounter? best = null;
+        try { best = kept().FirstOrDefault(p => p.Id == bestId && !p.Live); } catch (Exception ex) { CrashLog.Write("parser: finding the best fight", ex); }
+        if (best == null || GhostCurve.Of(best) is not { } made) return null;
+        lock (_gate)
+        {
+            var map = Load();
+            if (!map.TryGetValue(key, out var r)) return null;
+            // a new best set meanwhile brought its own curve
+            if (r.BestDpsFight != bestId) return r.Ghost is { } g && g.Fight == r.BestDpsFight && r.BestDpsFight != e.Id ? g : null;
+            if (r.Ghost is { } had && had.Fight == bestId) return had;
+            r.Ghost = made;
+            Save(map);
+            return made;
+        }
+    }
+
     /// <summary>Forget the records read (the fights were rewritten): read or built again at the next ask.</summary>
     public void Reset() { lock (_gate) { _byKey = null; _dirLoaded = ""; } }
 
@@ -133,7 +173,7 @@ public sealed class FightRecords
         r.Kills++;
         if (end > r.LastKillAt) r.LastKillAt = end;
         double dps = e.Dps(you, end);
-        if (dps > r.BestDps) { r.PrevBestDps = r.BestDps; r.BestDps = dps; r.BestDpsFight = e.Id; r.BestDpsAt = end; }
+        if (dps > r.BestDps) { r.PrevBestDps = r.BestDps; r.BestDps = dps; r.BestDpsFight = e.Id; r.BestDpsAt = end; r.Ghost = GhostCurve.Of(e); }
         if (e.HpsOf(you, end) is { } hps && hps > r.BestHps) { r.PrevBestHps = r.BestHps; r.BestHps = hps; r.BestHpsFight = e.Id; r.BestHpsAt = end; }
         double secs = e.Duration(end).TotalSeconds;
         if (secs > 0 && (r.FastestSeconds <= 0 || secs < r.FastestSeconds)) { r.FastestSeconds = secs; r.FastestAt = end; }

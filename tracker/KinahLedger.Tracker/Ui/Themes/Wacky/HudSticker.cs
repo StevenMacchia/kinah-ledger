@@ -662,7 +662,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
     /// edge). You are edged in hot pink with a pink stamp and YOU tag; a healer's heal a green cross; deaths a red tag; TOP DPS
     /// and TOP HEALS stickers at a kill. DPS and % right-aligned and tabular, never moving.
     /// </summary>
-    sealed class StickerRow : IThemeRow
+    sealed class StickerRow : IThemeRow, IThemeBarSpan
     {
         // the row is its pitch tall (27) and the sticker in it 29, run 2 past its foot: a row taller than its room would be
         // clipped to its own box (the last row's foot and a TOP sticker lifted over its top edge). 2026-11-20 (Steven: "some
@@ -713,6 +713,9 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         static readonly Geometry Tear = Geometry.Parse("M0,0 L5,0 L3,2 L6,4 L2.5,6 L5.5,8 L3,9 L0,9 Z");
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The highlighter runs its host, the sticker's face inside its rim (1 px in): Wk.BarFill makes the tape width * share (12 px at the least), its torn end inside that width. The host sits in the turned strip, so the line turns with it.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _tapeHost.ActualWidth <= 0 ? null : (_tapeHost, new Rect(0, 0, _tapeHost.ActualWidth, _tapeHost.ActualHeight));
 
         public StickerRow()
         {

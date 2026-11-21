@@ -154,6 +154,8 @@ public static partial class WpfApp
             pw.Close();
             Console.WriteLine(fails == 0 ? "options test (parser share): all passed" : $"options test (parser share): {fails} failed"); return fails == 0 ? 0 : 1;
         }
+        // KL_OPTIONS_ONLY=ghost: the PB ghost alone (Ui/WpfApp.PbGhost.cs)
+        if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "ghost") { var gw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; gw.Show(); gw.ShowDemo(); DoEvents(); GhostChecks(gw, Check); gw.Close(); Console.WriteLine(fails == 0 ? "options test (PB ghost): all passed" : $"options test (PB ghost): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=pullshare: Share this pull alone (Ui/WpfApp.PullShare.cs)
         if (Environment.GetEnvironmentVariable("KL_OPTIONS_ONLY") == "pullshare") { var sw = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; sw.Show(); sw.ShowDemo(); DoEvents(); if (Environment.GetEnvironmentVariable("KL_PULLSHARE_METER") == "1") MeterShareChecks(sw, Check); PullShareChecks(sw, Check); sw.Close(); Console.WriteLine(fails == 0 ? "options test (pull share): all passed" : $"options test (pull share): {fails} failed"); return fails == 0 ? 0 : 1; }
         // KL_OPTIONS_ONLY=timeline: the Parser page's Timeline tab alone (Ui/WpfApp.Timeline.cs)
@@ -1441,6 +1443,7 @@ public static partial class WpfApp
         ParserShareChecks(w, Check);   // the Parser page's pictures, Copy as text and the back button (Ui/WpfApp.ParserShare.cs)
         PullShareChecks(w, Check);   // Share this pull: the list's share mark and the PB badge (Ui/WpfApp.PullShare.cs)
         TimelineChecks(w, Check);   // the Parser page's Timeline tab (Ui/WpfApp.Timeline.cs)
+        GhostChecks(w, Check);   // the PB ghost: its switches, its line and words in the meter (Ui/WpfApp.PbGhost.cs)
         MeterMotionChecks(Check);
         HealChecks(Check, w);   // Ui/WpfApp.Heals.cs
         HotkeyChecks(w, Check);   // Ui/WpfApp.Hotkeys.cs

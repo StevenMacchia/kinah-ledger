@@ -308,6 +308,8 @@ public static class MeterShare
     {
         bool still0 = Motion.Still; Motion.Still = true;
         double w0 = HudStackLook.FightWidth;
+        // the PB ghost stays on the meter over the game: the picture has its own PB badge, and never says "off your best"
+        bool ghost0 = PbGhost.Shown; PbGhost.Shown = false;
         try
         {
             var shown = hideNames ? Hidden(e) : e;
@@ -325,7 +327,7 @@ public static class MeterShare
             v.UpdateLayout();
             return use(v);
         }
-        finally { HudStackLook.FightWidth = w0; Motion.Still = still0; }
+        finally { HudStackLook.FightWidth = w0; Motion.Still = still0; PbGhost.Shown = ghost0; }
     }
 
     /// <summary>The picture laid out at its size (600 wide or more, as tall as it needs, 315 at least), settled.</summary>

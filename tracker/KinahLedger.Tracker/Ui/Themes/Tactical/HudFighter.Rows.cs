@@ -63,7 +63,7 @@ sealed partial class HudFighter
     /// healer's healing a second), the DPS big at the right and the share small after it. You: amber corner brackets lock round
     /// the row. Short of room a plate goes to its glyph, then YOU, then the CP (the skills card says them all): never a figure cut.
     /// </summary>
-    sealed class TargetRow : IThemeRow
+    sealed class TargetRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 33, Pitch = 36;
         readonly Grid _root = new() { Height = H };
@@ -87,6 +87,18 @@ sealed partial class HudFighter
         const double TextIn = 17;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>The frame Draw fills: from the rank column to the end of the DPS column less 1 px, inset 3 px top and foot for you (1.5 for the rest).</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack
+        {
+            get
+            {
+                var cols = _root.ColumnDefinitions;
+                if (_art.ActualWidth <= 0 || _m is not { } m) return null;
+                double by = m.You ? 3 : 1.5;
+                return (_art, new Rect(cols[0].ActualWidth, by, cols[1].ActualWidth + cols[2].ActualWidth - 1, _art.ActualHeight - 2 * by));
+            }
+        }
 
         public TargetRow()
         {

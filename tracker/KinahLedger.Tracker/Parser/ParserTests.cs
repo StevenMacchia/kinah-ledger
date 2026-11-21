@@ -2735,6 +2735,9 @@ public static class ParserTests
         LiveCopyChecks();
         PullTimelineTests.Run(Check, t, () => New(), Me, Ally, Recording, path => Replay(path, hits: true));
 
+        // the PB ghost (Parser/PbGhost.cs): made-up pulls, then Steven's recorded boss fights raced against their best
+        PbGhostTests.Run(Check, t, Recording, (path, tick) => Replay(path, hits: true, tick: tick));
+
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
     }

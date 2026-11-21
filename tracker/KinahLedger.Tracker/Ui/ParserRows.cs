@@ -190,6 +190,8 @@ public sealed partial class ParserRows : Grid
         public double ChipBlur0, ChipOpacity0, FrameBlur0, FrameOpacity0;
         /// <summary>The row's pop-ups on screen, oldest first (at most <see cref="ParserRows.PopsPerRow"/>).</summary>
         public readonly List<PopEl> Live = new();
+        /// <summary>Your row's PB ghost line (Ui/GhostMarks.cs), made the first time a ghost is shown on it.</summary>
+        public GhostMarks.LineArt? PaceLine;
     }
 
     /// <summary>The fight now: each member's row updated in place, moved to their rank.</summary>
@@ -359,6 +361,7 @@ public sealed partial class ParserRows : Grid
             double? h = best.Hps > 0 && e.HpsOf(you, end) is { } hps && hps / best.Hps - 1 is > 0 and var hh ? hh : null;
             if ((d != null || h != null) && _rows.TryGetValue(you.Id, out var yr)) { _pbShown = e.Id; ShowPb(yr, d, h); }
         }
+        ShowGhost(e, now, you, dmg);   // after the PB moment: its chip and the ghost's never both say a new best
         _wasLive = e.Live;
     }
 
@@ -375,6 +378,42 @@ public sealed partial class ParserRows : Grid
         row.LastDps = value;
     }
 
+    // ---- the PB ghost (Parser/PbGhost.cs, Ui/GhostMarks.cs)
+
+    /// <summary>For the tests and renders: your pace as the rows show it now (null: no ghost shown).</summary>
+    internal GhostPace? PaceShown { get; private set; }
+    internal GhostMarks.LineArt? GhostLineForTest => _rows.Values.FirstOrDefault(r => r.You)?.PaceLine;
+
+    /// <summary>Your row's ghost line and chip (over the bar as drawn), adding no height; at a kill the PB chip on the name's line says a new best.</summary>
+    void ShowGhost(Encounter e, DateTime now, Fighter? you, bool dmg)
+    {
+        var pace = you != null && dmg ? PbGhost.Of(e, now) : null;
+        PaceShown = null;
+        foreach (var r in _rows.Values)
+        {
+            if (!r.You || pace == null || you == null || r.Root.Visibility != Visibility.Visible) { r.PaceLine?.Set(null, 0); continue; }
+            if (r.PaceLine == null)
+            {
+                var row = r;
+                r.PaceLine = new GhostMarks.LineArt
+                {
+                    // the bar as drawn: from the fill's left, over the track's height; your end where the fill ends now
+                    // (the fill's foot: an angled fill leans from its foot, so its foot is where its length is)
+                    Bar = () => row.Track.ActualWidth > 0 && row.Root.IsAncestorOf(row.Track) && row.Root.IsAncestorOf(row.BarFill)
+                        ? new Rect(new Point(row.BarFill.TranslatePoint(new Point(0, row.BarFill.ActualHeight), row.Root).X, row.Track.TranslatePoint(new Point(0, 0), row.Root).Y),
+                            row.Track.TranslatePoint(new Point(row.Track.ActualWidth, row.Track.ActualHeight), row.Root)) : null,
+                    Row = row.Root,   // its words: the line never crosses them
+                    YouEnd = () => row.BarFill.ActualWidth > 0 && row.Root.IsAncestorOf(row.BarFill) ? row.BarFill.TranslatePoint(new Point(row.BarFill.ActualWidth, row.BarFill.ActualHeight), row.Root).X : null,
+                };
+                r.Root.Children.Add(r.PaceLine);
+            }
+            // the PB moment's chip ("PB +4.1%" on the name's line) says a new best already: the ghost's chip stays out of its way
+            r.PaceLine.ChipAllowed = !(pace.NewBest && r.Pb.Visibility == Visibility.Visible);
+            r.PaceLine.Set(pace, e.BarOf(you));
+            PaceShown = pace;
+        }
+    }
+
     /// <summary>Your best on this fight's boss, asked once a fight (the records kept don't change while it runs).</summary>
     PullRef? Best(Encounter e)
     {
@@ -384,10 +423,15 @@ public sealed partial class ParserRows : Grid
         return _best;
     }
 
-    /// <summary>Your pace against your best here: from 0.8 of it the edge warms, 1 and over is gold; null without a best or a figure.</summary>
+    /// <summary>
+    /// Your pace against your best here: from 0.8 of it the edge warms, 1 and over is gold; null without a best or a figure.
+    /// With the PB ghost (Parser/PbGhost.cs) it is the ghost's pace, your DPS beside your best's at the same point of the fight,
+    /// so the frame and the "vs best" words never disagree; else your DPS against your best's whole-fight figure.
+    /// </summary>
     double? Heat(Encounter e, Fighter you, DateTime now)
     {
         if (!e.Live || e.Waiting || !e.HasDamage || e.Duration(now).TotalSeconds < HeatAfterSeconds) return null;
+        if (PbGhost.Of(e, now) is { Final: false } pace) return 1 + pace.Delta;
         if (Best(e) is not { Dps: > 0 } best || e.DpsOf(you, now) is not { } dps) return null;
         return dps / best.Dps;
     }
