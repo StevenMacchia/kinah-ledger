@@ -48,6 +48,13 @@ public sealed partial class TrackerSession
     readonly List<CurrencyChange> _packetHeld = new();
     const double PacketHoldSeconds = 3, PacketNearSeconds = 10;
 
+    /// <summary>When the player's Rank Points last rose (the game's messages), the last 40: each is a kill of theirs.</summary>
+    readonly List<DateTime> _rankRises = new();
+    /// <summary>How far from a Rank Points rise a currency change is the same kill's pay (one update; the parts can come a few tenths apart).</summary>
+    const double KillPaySeconds = 1;
+    /// <summary>A change that came with a rise of the player's Rank Points: a kill's pay, whether or not its kill was told yet.</summary>
+    bool KillPay(DateTime at) => _rankRises.Any(r => Math.Abs((r - at).TotalSeconds) <= KillPaySeconds);
+
     /// <summary>
     /// A packet amount counted (or a craft or an item): the window redraws now rather than at its next half-second tick
     /// (Steven, 2026-11-13: "if we're using packets these numbers should be instantaneous"). Raised on the reading loop.
@@ -78,7 +85,11 @@ public sealed partial class TrackerSession
     {
         if (Packets is not { } p) return;
         _packetCountedNow = false;
-        while (p.Next() is { } next) _packetHeld.Add(next);
+        while (p.Next() is { } next)
+        {
+            _packetHeld.Add(next);
+            if (next.What == CurrencyKind.RankPoints && !next.First && next.Delta > 0) { _rankRises.Add(next.At); if (_rankRises.Count > 40) _rankRises.RemoveAt(0); }
+        }
         var now = PacketClock.Now;
         // the player's kills and deaths first: a kill is the "kill nearby" its own Kinah and drops are checked against
         DrainFights(p, now);
@@ -110,7 +121,11 @@ public sealed partial class TrackerSession
             bool nearKill = (_lastKillAt - c.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - c.At).TotalSeconds >= -PacketNearSeconds
                 // a pickup the traffic counted in the last few seconds: still farming (in the Abyss the kill's lines are few and
                 // late, so on Steven's 2026-11-13 log this decided 38 of the 51 pickups that would otherwise have waited)
-                || (c.At - _packetPickupAt).TotalSeconds is >= 0 and <= PacketNearSeconds;
+                || (c.At - _packetPickupAt).TotalSeconds is >= 0 and <= PacketNearSeconds
+                // a kill's pay: Rank Points rise only for a kill, and the game pays a kill's bound Kinah, Rank and Abyss
+                // Points in one update. Its kill can be told 4 to 7 s later (2026-11-20 10:15:42: three Abyss kills' pay
+                // waited its 3 s, no kill was in yet, and 184 bound Kinah, 105 Rank and 52 Abyss Points went uncounted)
+                || KillPay(c.At);
             bool screenSaw = p.ScreenNear(c.What, c.At, PacketNearSeconds);
             bool waited = (now - c.At).TotalSeconds >= PacketHoldSeconds;
             string? why = InBase ? $"in a base ({Zone})"

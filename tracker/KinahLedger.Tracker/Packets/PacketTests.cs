@@ -233,6 +233,27 @@ public static class PacketTests
             feed.Wait();
             double worst = e.PacketDelays.Count > 0 ? e.PacketDelays.Max() : 99;
             Check(e.Engine.Kinah == 500 && worst < 0.3, $"...the reading loop's wait counts each message as it comes: {e.PacketDelays.Count} of 5 counted, the slowest {worst * 1000:0} ms after its message (under 300)");
+            // a kill's pay is its own evidence (2026-11-20 10:15:42, Steven's log): in the Abyss three kills' bound Kinah, Rank
+            // and Abyss Points came 2 s after the last counted pickup's 10 s were up, their kills were told 4 to 7 s later, so
+            // each waited its 3 s and was left out as "a sale, the mail or a reward". Rank Points rise only for a kill.
+            var rk = new PacketReader(); rk.ReadingForTest();
+            var k = new TrackerSession(null, settings, items, "Test") { Packets = rk };
+            k.Engine.SetZone("Chaotic Lower Reshanta");
+            var kt = DateTime.UtcNow.AddSeconds(-60);
+            rk.AmountForTest(CurrencyKind.BoundKinah, 27_051, kt); rk.AmountForTest(CurrencyKind.RankPoints, 16_546, kt); rk.AmountForTest(CurrencyKind.AbyssPoints, 7_895, kt);
+            var p1 = DateTime.UtcNow.AddSeconds(-4.5);   // the three kills' pay, each already past its 3 s hold
+            // first, Abyss Points alone with nothing killed (a supply delivery's 1,640 at 10:31:25): a reward, not counted
+            rk.AmountForTest(CurrencyKind.AbyssPoints, 7_895 + 1_640, p1.AddSeconds(-8));
+            long bk = 27_051, rp = 16_546, ap = 7_895 + 1_640;
+            foreach (var (dbk, drp, dap, dt) in new[] { (105L, 52L, 26L, 0.0), (53L, 34L, 17L, 1.3), (26L, 19L, 9L, 1.5) })
+            {
+                rk.AmountForTest(CurrencyKind.BoundKinah, bk += dbk, p1.AddSeconds(dt));
+                rk.AmountForTest(CurrencyKind.RankPoints, rp += drp, p1.AddSeconds(dt + 0.05));
+                rk.AmountForTest(CurrencyKind.AbyssPoints, ap += dap, p1.AddSeconds(dt + 0.1));
+            }
+            k.DrainPacketsForTest();
+            Check(k.Engine.AbyssBoundKinah == 184 && k.Engine.RankPoints == 105 && k.Engine.AbyssPoints == 52,
+                $"...a kill's pay (bound Kinah, Rank and Abyss Points in one update) counts though its kill is told later: bound Kinah +{k.Engine.AbyssBoundKinah} (184), Rank Points +{k.Engine.RankPoints} (105), Abyss Points +{k.Engine.AbyssPoints} (52; the lone 1,640 before them no kill's)");
         }
 
         // kills and deaths (0.10.72): the game says whose kill it was and what died; a kill naming no killer is the player's
