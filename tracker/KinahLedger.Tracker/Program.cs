@@ -4419,6 +4419,9 @@ options: --process aion[,other]");
                 // 2026-11-09: Siel's Inina Pasta, 2 asks at 8,500 the site set aside against a 2,221 middle: the server's asks stand, unsure
                 var inina = PriceBook.ParseQuotes("""{"items":[{"item":"Inina Pasta","price":null,"price_from":null,"readings":0,"sure":false,"listings":2,"lowest_seen_at":"2026-11-09T23:07:58Z","region_price":2221,"region_servers":3,"dropped":{"price":8500,"why":"region"}},{"item":"Inina","price":5550,"price_from":"feed","readings":1,"sure":false}]}""", null);
                 Check("an ask the site set aside is still the server's price, unsure; a lone listing stands too", string.Join(", ", inina.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} {kv.Value.Price} {kv.Value.Readings} {(kv.Value.Sure ? "sure" : "unsure")}")), "Inina 5550 1 unsure, Inina Pasta 8500 2 unsure");
+                // 2026-11-21: Siel's Forgotten Gloves, one ask at 10,000,999 the site set aside against 1,000 on 2 servers: a joke, no price
+                var gloves = PriceBook.ParseQuotes("""{"items":[{"item":"Forgotten Gloves","price":null,"price_from":null,"readings":0,"sure":false,"listings":1,"lowest_seen_at":"2026-11-21T21:07:58Z","region_price":1000,"region_servers":2,"dropped":{"price":10000999,"why":"own"}}]}""", null);
+                Check("a set-aside ask over 5x the region's middle is a joke listing: no price", gloves.ContainsKey("Forgotten Gloves") ? $"priced {gloves["Forgotten Gloves"].Price}" : "none", "none");
                 // a gear recipe's Splendent input on plenty of listings costs more than the output by design: never thin
                 PriceBook.SetBoardQuotes(new() { ["Expert's Splendent Orichalcum Greatsword"] = new(1_749_998, PriceBook.From.Feed, 24, true, now, Picked: true), ["Artisan's Orichalcum Greatsword"] = new(199_960, PriceBook.From.Feed, 43, true, now, Picked: true) });
                 var gs = RecipeBook.For("Artisan's Orichalcum Greatsword", 0);

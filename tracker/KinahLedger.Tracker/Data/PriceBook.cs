@@ -432,7 +432,10 @@ public static class PriceBook
                 // Siel's Inina Pasta, 2 asks at 8,500 against a 2,221 middle on 3 servers, had no price at all)
                 if (Num(e, "price") is not long p || p <= 0)
                 {
-                    if (e.TryGetProperty("dropped", out var dr) && dr.ValueKind == JsonValueKind.Object && Num(dr, "price") is long dp && dp > 0)
+                    // ...unless it is a joke against the region: over 5x the other servers' middle is not a price (2026-11-21: Siel's
+                    // Forgotten Gloves, one ask at 10,000,999 against 1,000 on 2 servers, put 8.8M into a gathering hour)
+                    if (e.TryGetProperty("dropped", out var dr) && dr.ValueKind == JsonValueKind.Object && Num(dr, "price") is long dp && dp > 0
+                        && !(region is long rp && rp > 0 && regionN >= 1 && dp > rp * JokeOverRegion))
                         d[name] = new BoardQuote(dp, From.Feed, (int)(Num(e, "listings") ?? 0), false, Time(e, "lowest_seen_at"), region, regionN, Picked: true);
                     continue;
                 }
@@ -461,6 +464,9 @@ public static class PriceBook
     /// </summary>
     public static Dictionary<string, long> ParseBoard(string json, ItemDictionary? items, bool sureOnly = false) =>
         ParseQuotes(json, items).Where(kv => !sureOnly || kv.Value.Sure).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
+
+    /// <summary>A set-aside ask this many times the region's middle is a joke listing, never a price.</summary>
+    const long JokeOverRegion = 5;
 
     static long? Num(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var x) ? (long)Math.Round(x) : null;
     static DateTime? Time(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String && v.TryGetDateTime(out var t) ? t.ToUniversalTime() : null;

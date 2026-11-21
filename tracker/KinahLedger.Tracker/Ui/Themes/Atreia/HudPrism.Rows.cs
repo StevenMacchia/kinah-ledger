@@ -89,8 +89,9 @@ sealed partial class HudPrism
     {
         public const double H = 28, Pitch = 31;
         const double PadL = 5, RankW = 19, IconW = 24, PadR = 7;
-        /// <summary>The top bar's length: this much of the row's free room (left of the figures' plate), the rest the leader's beam's.</summary>
-        const double BarMax = .86;
+        /// <summary>The top bar's length: this much of the whole row (the figures sit over the bars, as in the other looks), the rest the leader's beam's.
+        /// (Steven, 2026-11-21: the bars stopped short of the figures' plate, the leader's at about a third of the window.)</summary>
+        const double BarMax = .9;
         readonly HudPrism _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
@@ -285,9 +286,12 @@ sealed partial class HudPrism
         /// <summary>The bar's leading edge: its part of the free room's top length.</summary>
         /// <summary>Where a full bar would fill, for the PB ghost (IThemeBarSpan): from the channel's left to the top bar's length.</summary>
         public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null
-            : (_art, new Rect(1, 0, Math.Max(0, PlateX(_art.ActualWidth) - 1) * BarMax, _art.ActualHeight));
+            : (_art, new Rect(1, 0, Math.Max(0, TrackEnd(_art.ActualWidth) - 1) * BarMax, _art.ActualHeight));
 
-        double EdgeX(double w) => 1 + Math.Max(0, PlateX(w) - 1) * BarMax * Math.Clamp(_bar, 0, 1);
+        /// <summary>The bars' room ends at the row's right edge: the figures sit over the glass.</summary>
+        static double TrackEnd(double w) => w - 1.5;
+
+        double EdgeX(double w) => 1 + Math.Max(0, TrackEnd(w) - 1) * BarMax * Math.Clamp(_bar, 0, 1);
 
         /// <summary>The crown's parts shown on the leader's row (made the first time), hidden on the others.</summary>
         void ShowCrown(bool on)
@@ -378,25 +382,23 @@ sealed partial class HudPrism
                 if (fx > 4 && !m.CpOnly)
                 {
                     bool lead = Crowned;
-                    Beam(dc, ex, lead ? plate - 1 : Math.Min(ex + 34, plate - 1), r.Top + 1, r.Bottom - 1, lead ? 1 : .8, fade: !lead);
+                    Beam(dc, ex, lead ? r.Right - 1 : Math.Min(ex + 34, r.Right - 1), r.Top + 1, r.Bottom - 1, lead ? 1 : .8, fade: !lead);
                     dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, .26), 1)), null, new Rect(Math.Max(r.X, ex - 7), r.Y, Math.Min(7, fx), r.Height));
                     // the edge's white line at its top and foot only: the words crossing it keep their middle
                     dc.DrawRectangle(Mod.Br(Colors.White, .95), null, new Rect(ex - 1.3, r.Y, 1.3, r.Height * .27));
                     dc.DrawRectangle(Mod.Br(Colors.White, .95), null, new Rect(ex - 1.3, r.Bottom - r.Height * .27, 1.3, r.Height * .27));
                 }
             }
-            // the figures' plate: dark glass the light passes under, so every digit reads
-            var pr = new Rect(plate, r.Y + 1.5, Math.Max(0, r.Right - 1.5 - plate), r.Height - 3);
+            // a shade under the figures, fading in from the left, so every digit reads while the bar's glass shows through to its end
+            var pr = new Rect(Math.Max(r.X, plate - 26), r.Y + 1, Math.Max(0, r.Right - 1 - Math.Max(r.X, plate - 26)), r.Height - 2);
             if (pr.Width > 4)
             {
-                var pg = Octa(pr, 3);
-                dc.DrawGeometry(Mod.Grad(false, (Mod.A(DeepC, .6), 0), (Mod.A(DeepC, .74), .25), (Mod.A(DeepC, .74), 1)), null, pg);
-                dc.DrawLine(Mod.P(Mod.Br(Colors.White, .14), 1), new Point(pr.X + 3, pr.Y + .5), new Point(pr.Right - 3, pr.Y + .5));
-                dc.DrawLine(Mod.P(Mod.Br(Colors.White, .2), 1), new Point(pr.X + .5, pr.Y + 3), new Point(pr.X + .5, pr.Bottom - 3));
+                double f0 = Math.Min(1, 26 / pr.Width);
+                dc.DrawRectangle(Mod.Grad(false, (Mod.A(DeepC, 0), 0), (Mod.A(DeepC, .42), f0), (Mod.A(DeepC, .5), Math.Max(f0, 1 - 60 / pr.Width)), (Mod.A(DeepC, .66), 1)), null, pr);
             }
             // a healer's share of the group's healing as a mint line along the bar's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
-                dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2.5, Math.Max(3, (plate - r.X) * Math.Clamp(m.HealShare, 0, 1)), 2.5));
+                dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2.5, Math.Max(3, (r.Right - 1 - r.X) * Math.Clamp(m.HealShare, 0, 1)), 2.5));
             // the class's notch at the row's left
             dc.DrawRectangle(Mod.Grad(true, (Mod.Mix(tone, Colors.White, .2), 0), (tone, 1)), null, new Rect(r.X, r.Y + 3, 3, r.Height - 6));
             dc.Pop();
