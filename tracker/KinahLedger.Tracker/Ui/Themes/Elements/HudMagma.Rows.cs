@@ -287,6 +287,12 @@ sealed partial class HudMagma
             return (flow, flow.X + flow.Width * Math.Clamp(_bar, 0, 1));
         }
 
+        /// <summary>
+        /// Where this row's bar is drawn, for the PB ghost (IThemeBarSpan on main; the coordinator adds the interface): the
+        /// flow's channel in <see cref="_art"/>, which stops before the DPS figure's column, so a full bar fills exactly this.
+        /// </summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, FlowNow(_art.ActualWidth).Flow);
+
         bool _pulsing;
         double _pendingP = -1;
 
