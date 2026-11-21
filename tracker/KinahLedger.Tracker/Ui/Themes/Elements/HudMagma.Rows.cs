@@ -89,7 +89,7 @@ sealed partial class HudMagma
     sealed class MagmaRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
-        const double PadL = 6, PadR = 7, RankW = 23, IconW = 23, BandW = 48, CrownK = 1.3;
+        const double PadL = 6, PadR = 7, RankW = 23, IconW = 23, BandW = 48, CrownK = .8;
         readonly HudMagma _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
@@ -98,6 +98,8 @@ sealed partial class HudMagma
             _heal = Tt("", 10.5, Mint2, FontWeights.Bold), _dps = Tt("", 16, White, FontWeights.Bold), _share = Tt("", 10, Soft, FontWeights.SemiBold),
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        /// <summary>The CP on its own small basalt plate: legible over the stone and over a flow's hot end alike.</summary>
+        readonly Border _cpBox = new() { Background = Frozen(Color.FromArgb(0xD8, 0x0E, 0x09, 0x07)), CornerRadius = new CornerRadius(3), Padding = new Thickness(3, 0, 3, 1), Margin = new Thickness(5, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly Grid _rankHost = new() { Width = RankW, Height = H };
         readonly Border _iconHost = new() { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
@@ -162,8 +164,8 @@ sealed partial class HudMagma
             _root.Children.Add(_climbFx);
 
             // the rank's cell: the number, or the molten crown over its pool
-            // (the crown 1.3 times its drawing: about 21 by 17, standing on its pool at the cell's foot)
-            double cw = 16 * CrownK, top = H / 2 - 8.5, poolY = top + 12 * CrownK + .5;
+            // (the crown 0.8 of its drawing, about 13 by 10, at the cell's top on its pool; the numeral "1" under it)
+            double cw = 16 * CrownK, top = .5, poolY = top + 12 * CrownK + .5;
             var pool = new TacSketch((dc, s) => Pool(dc, new Point(s.Width / 2, poolY), 0));
             _poolFlare = new TacSketch((dc, s) => Pool(dc, new Point(s.Width / 2, poolY), 1)) { Opacity = 0 };
             var window = new Grid { ClipToBounds = true, Height = poolY + 2.5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-3, 0, -3, 0) };
@@ -193,11 +195,11 @@ sealed partial class HudMagma
             }) { Opacity = 0, Visibility = Visibility.Collapsed };
             _root.Children.Add(_erupt);
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
-            _rankHost.Children.Add(_rank); _rankHost.Children.Add(_crownHost);
+            _rankHost.Children.Add(_crownHost); _rankHost.Children.Add(_rank);
             Put(_rankHost, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
-            _cp.Margin = new Thickness(5, 2, 0, 0);
-            _line.Children.Add(_name); _line.Children.Add(_cp);
+            _cpBox.Child = _cp;
+            _line.Children.Add(_name); _line.Children.Add(_cpBox);
             _words.Effect = Shade();
             _root.Children.Add(_words);
             _root.SizeChanged += (_, _) => { Fit(); if (_pendingP >= 0) SetPulse(_pendingP); };
@@ -219,7 +221,10 @@ sealed partial class HudMagma
             // the crown on the top row once there is damage (by Combat Power before it, the rank stays a number)
             _crown = m.Rank == 1 && !m.CpOnly && !m.Pvp;
             _crownHost.Visibility = _crown ? Visibility.Visible : Visibility.Collapsed;
-            _rank.Visibility = _crown ? Visibility.Collapsed : Visibility.Visible;
+            // the numeral always shows; under the crown it sits low in the cell, a size smaller
+            _rank.FontSize = _crown ? 11 : 12;
+            _rank.VerticalAlignment = _crown ? VerticalAlignment.Bottom : VerticalAlignment.Center;
+            _rank.Margin = new Thickness(0, 0, 0, _crown ? 1 : 0);
             if (!fresh && c.Moves && _lastRank > 0)
             {
                 if (_crown && _lastRank > 1) { Rise(); _look.Lead(); }
@@ -266,8 +271,8 @@ sealed partial class HudMagma
             double heal = _heal.Visibility == Visibility.Visible ? Mod.W(_heal) + _heal.Margin.Left : 0;
             double room = total - PadL - PadR - cols[0].Width.Value - cols[1].Width.Value - heal - cols[4].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2;
             double min = _name.Text.Length <= NameKeep ? TextW(_name, _name.Text) : TextW(_name, _name.Text[..NameKeep] + "…") + 1;
-            var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cp : null, _marks, _shareW, min);
-            _cp.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
+            var (cp, share) = Mod.Fit(_name, room, _cp.Text.Length > 0 ? _cpBox : null, _marks, _shareW, min);
+            _cpBox.Visibility = cp ? Visibility.Visible : Visibility.Collapsed;
             if (share != _shareOn || cols[5].Width.Value != (share ? _shareW : 0))
             {
                 _shareOn = share;
@@ -341,7 +346,7 @@ sealed partial class HudMagma
                 // the flash frame over the row, white-hot from the crown, gone in a quarter of the course
                 _erupt.Opacity = t < .06 ? Seg(t, 0, .06) : 1 - Out(Seg(t, .06, .32));
                 double up = Out(Seg(t, .05, .5));
-                _crownY.Y = 17 * (1 - up);
+                _crownY.Y = 11 * (1 - up);
                 _crownHot.Opacity = t < .45 ? 1 : 1 - Seg(t, .45, 1);
                 _poolFlare.Opacity = t < .5 ? Math.Min(1, Math.Sin(Math.PI * Seg(t, 0, .5)) + .3) * (1 - Seg(t, .4, .5)) : 0;
                 _flash.Opacity = t is > .3 and < .75 ? 1 - Seg(t, .3, .75) : 0;
@@ -422,7 +427,7 @@ sealed partial class HudMagma
                 var ug = new RadialGradientBrush(Mod.A(LavaC, .32), Mod.A(LavaC, 0)); ug.Freeze();
                 dc.DrawEllipse(ug, null, new Point(p.X, p.Y + 4), _dps.ActualWidth * .7 + 4, r.Height * .55);
             }
-            Flow(dc, flow, fx, heat, _seed);
+            Flow(dc, flow, fx, heat, _seed, veins: false);   // the crust plain under the words: no line crosses a name or a figure
             // a healer's share of the group's healing as a mint line along the channel's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
                 dc.DrawRectangle(Mod.Br(MintC2, .9), null, new Rect(r.X, r.Bottom - 2, Math.Max(3, r.Width * Math.Clamp(m.HealShare, 0, 1)), 2));

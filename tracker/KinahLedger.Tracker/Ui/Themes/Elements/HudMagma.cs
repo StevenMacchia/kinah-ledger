@@ -489,7 +489,11 @@ sealed partial class HudMagma : ModernLook
             if (e.HasDamage)
             {
                 _fightBody.Children.Add(Split(new Thickness(-FightPad, 2, -FightPad, 1), 2, _splitFlares));
-                _fightBody.Children.Add(Foot(e, now));
+                var foot = Foot(e, now);
+                _fightBody.Children.Add(foot);
+                // the jets stand between the foot's words (its total at the left, the group's figure at the right)
+                if (foot is Panel fp && fp.Children.Count >= 2)
+                    _jets.Margin = new Thickness(FightPad + Mod.W((FrameworkElement)fp.Children[0]) + 10, 0, FightPad + Mod.W((FrameworkElement)fp.Children[1]) + 10, RiverH - 1);
             }
         }
         _fight.Visibility = Visibility.Visible;

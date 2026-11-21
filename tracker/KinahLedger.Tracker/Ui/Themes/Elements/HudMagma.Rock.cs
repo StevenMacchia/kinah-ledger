@@ -420,7 +420,7 @@ sealed partial class HudMagma
     /// its top and foot); the front's glow. <paramref name="heat"/> 0..1: how hot it runs (the leader's at 1: a brighter
     /// front, a bigger glow, less crust). Drawn only when the bar changes; the heat pulse is a layer of its own moved over it.
     /// </summary>
-    static void Flow(DrawingContext dc, Rect r, double fx, double heat, int seed, bool plates = true, double radius = 2.5)
+    static void Flow(DrawingContext dc, Rect r, double fx, double heat, int seed, bool plates = true, double radius = 2.5, bool veins = true)
     {
         if (fx < 1 || r.Height < 2) return;
         fx = Math.Min(fx, r.Width);
@@ -455,7 +455,7 @@ sealed partial class HudMagma
             glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, .9), e0));
             glow.GradientStops.Add(new GradientStop(Mod.A(LavaHotC, 0), e1));
             glow.Freeze();
-            var cracks = FissuresOf(r.Width, r.Height, seed);
+            var cracks = veins ? FissuresOf(r.Width, r.Height, seed) : Geometry.Empty;
             dc.PushTransform(new TranslateTransform(r.X, r.Y));
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Min(fx, end + fade), r.Height)));
             var gl = glow.Clone(); gl.Transform = new TranslateTransform(-r.X, 0); gl.Freeze();
@@ -569,8 +569,8 @@ sealed partial class HudMagma
         {
             if (s.Width < 10) return;
             var g = Path(s);
-            dc.DrawGeometry(null, Mod.P(Mod.Br(LavaHotC, .55), 10, true), g);
-            dc.DrawGeometry(null, Mod.P(Frozen(LavaYelC), 3.8, true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(LavaHotC, .5), 6, true), g);
+            dc.DrawGeometry(null, Mod.P(Frozen(LavaYelC), 3, true), g);
             dc.DrawGeometry(null, Mod.P(Frozen(WhiteHotC), 1.6, true), g);
         }) { Opacity = 0 };
         flares?.Add(flare);
