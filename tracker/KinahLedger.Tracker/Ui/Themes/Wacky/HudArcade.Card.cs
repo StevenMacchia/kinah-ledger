@@ -107,7 +107,7 @@ sealed partial class HudArcade : IThemeCard
                 var row = new Grid { Height = 24, Margin = new Thickness(0, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
                 var vivid = Vivid(tone);
-                var art = new TacSketch((dc, s) => DrawLed(dc, new Rect(0, s.Height - 5, s.Width, 5), of, vivid, 5, 2, .12));
+                var art = new TacSketch((dc, s) => DrawLed(dc, new Rect(s.Width * .45, s.Height - 5, s.Width * .55, 5), of, vivid, 5, 2, .07));
                 row.Children.Add(art);
                 var g = Tac.CardGrid(c, 46, 56);
                 g.Margin = new Thickness(0, 0, 0, 6);

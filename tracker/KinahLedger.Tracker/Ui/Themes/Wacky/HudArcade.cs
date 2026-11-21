@@ -43,7 +43,7 @@ sealed partial class HudArcade : ModernLook
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TacSketch _lineScreen;
     readonly FrameworkElement _lineLegend;
-    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 15, 15, 9) };
+    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 17, 15, 9) };
     readonly Grid _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     /// <summary>The bursts of pixel sparks over each screen (clipped to it), and the alert plates that flash over its legend.</summary>
     readonly Canvas _lineSparks = new() { IsHitTestVisible = false, ClipToBounds = true }, _fightSparks = new() { IsHitTestVisible = false, ClipToBounds = true };
@@ -75,7 +75,7 @@ sealed partial class HudArcade : ModernLook
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 7) };
     readonly TacSketch _fightScreen;
     readonly FrameworkElement _fightLegend;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(BodyX + 1, 4 + 2 * Bezel + MarqueeH, BodyX + 1, 10) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(BodyX + 1, 2 + 2 * Bezel + MarqueeH, BodyX + 1, 10) };
     /// <summary>The marquee's room on the meter's screen: HI-SCORE, the alerts, the STAGE CLEAR banner and its fireworks (clipped to it).</summary>
     readonly Grid _marquee = new() { Height = MarqueeH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(Bezel, Bezel, Bezel, 0), ClipToBounds = true, IsHitTestVisible = false };
     readonly Canvas _marqueeSparks = new() { IsHitTestVisible = false };
@@ -96,17 +96,18 @@ sealed partial class HudArcade : ModernLook
         // the look's own rows (Ui/Themes/ThemeRows.cs): the high-score table's lines
         UseRows(ArcadeRow.Pitch, m => new ArcadeRow(this), 14, GapLine);
         _lineLegend = Legend(L.T("1UP"));
-        _lineScreen = new TacSketch((dc, s) => Screen(dc, s, _dim ? GreyC : MazeC));
+        _lineScreen = new TacSketch((dc, s) => Screen(dc, s, _dim ? GreyC : CabinetC));
         _lineFlare = Flare(MintC2);
         _runPlate.Background = Ink(DeepC); _runPlate.Child = _runHead;
         _line.Children.Add(_lineScreen); _line.Children.Add(_lineFlare); _line.Children.Add(_lineBody); _line.Children.Add(_lineLegend); _line.Children.Add(_runPlate); _line.Children.Add(_lineFx); _line.Children.Add(_lineSparks); _line.Children.Add(_lineAnchor); _line.Children.Add(_lineAlert);
         _fightLegend = MarqueeWord(L.T("HI-SCORE"));
-        _fightScreen = new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), MazeC, Ground, marquee: true));
+        _fightScreen = new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), CabinetC, Ground, marquee: true));
         _fightFlare = new TacSketch((dc, s) => DrawFlare(dc, new Rect(0, 0, s.Width, s.Height), Color.FromRgb(0xB8, 0xC8, 0xFF), marquee: true)) { Opacity = 0, Visibility = Visibility.Hidden };
         _fightBody.RenderTransformOrigin = new Point(.5, .5);
         _fightBody.RenderTransform = _fightOpen;
         _marquee.Children.Add(_bulbsA); _marquee.Children.Add(_bulbsB); _marquee.Children.Add(_fightLegend); _marquee.Children.Add(_fightAlert); _marquee.Children.Add(_marqueeSparks);
-        _fightAlert.Margin = new Thickness(3, 0, 0, 0); _fightAlert.VerticalAlignment = VerticalAlignment.Stretch; _fightAlert.Padding = new Thickness(4, 0, 4, 0);
+        _fightAlert.Margin = new Thickness(0); _fightAlert.VerticalAlignment = VerticalAlignment.Stretch; _fightAlert.HorizontalAlignment = HorizontalAlignment.Stretch; _fightAlert.Padding = new Thickness(4, 0, 4, 0);
+        _fightAlert.RenderTransformOrigin = new Point(.5, .5);
         _fight.Children.Add(_fightScreen); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightBody); _fight.Children.Add(_marquee); _fight.Children.Add(_fightFx); _fight.Children.Add(_fightSparks);
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
@@ -146,12 +147,13 @@ sealed partial class HudArcade : ModernLook
     /// <summary>An LED glow round a figure (a few figures only: the score, the clock).</summary>
     static DropShadowEffect Glow(Color c, double blur = 9, double a = .6) => new() { Color = c, ShadowDepth = 0, BlurRadius = blur, Opacity = a };
 
-    static readonly Color MarqueeInk = Color.FromRgb(0x3A, 0x06, 0x0A);
+    static readonly Color MarqueeInk = Color.FromRgb(0xFF, 0xF6, 0xDC), MarqueeGlow = Color.FromRgb(0xFF, 0xE0, 0x80);
 
     /// <summary>The Buddy's legend: dark LED letters on a small lit marquee plate set into its top edge, at the left.</summary>
     static FrameworkElement Legend(string s)
     {
-        var w = Word(s, LegendPx, MarqueeInk, 0, textSize: 11);
+        var w = Word(s, LegendPx, MarqueeInk, .35, textSize: 11);
+        if (w is TextBlock tb) tb.Effect = new DropShadowEffect { Color = Color.FromRgb(0x50, 0x08, 0x08), ShadowDepth = 0, BlurRadius = 2, Opacity = 1 };
         var glass = new Grid();
         glass.Children.Add(new TacSketch((dc, sz) => { var r = new Rect(0, 0, sz.Width, sz.Height); dc.DrawRectangle(MarqueeFill, null, r); dc.DrawRectangle(MarqueeGloss, null, r); }));
         glass.Children.Add(new Border { Child = w, Padding = new Thickness(5, 2, 5, 2) });
@@ -165,8 +167,9 @@ sealed partial class HudArcade : ModernLook
     /// <summary>A word on the marquee: dark LED letters at its left, lit by the glass behind them.</summary>
     static FrameworkElement MarqueeWord(string s)
     {
-        var w = Word(s, LegendPx, MarqueeInk, 0, textSize: 11);
-        w.HorizontalAlignment = HorizontalAlignment.Left; w.VerticalAlignment = VerticalAlignment.Center; w.Margin = new Thickness(8, 0, 0, 0);
+        var w = Word(s, 1.9, MarqueeInk, .4, textSize: 14);
+        if (w is TextBlock tb) tb.Effect = new DropShadowEffect { Color = Color.FromRgb(0x50, 0x08, 0x08), ShadowDepth = 0, BlurRadius = 2, Opacity = 1 };
+        w.HorizontalAlignment = HorizontalAlignment.Center; w.VerticalAlignment = VerticalAlignment.Center;
         return w;
     }
 
@@ -174,8 +177,8 @@ sealed partial class HudArcade : ModernLook
     static TacSketch Bulbs(int phase) => new((dc, s) =>
     {
         var m = new Rect(0, 0, s.Width, s.Height);
-        DrawBulbs(dc, m, Ink(Colors.White), phase, 2.5);
-        dc.DrawRectangle(Ink(Colors.White, .14), null, m);
+        DrawBulbs(dc, m, Ink(Colors.White), phase, 3);
+        dc.DrawRectangle(Ink(Colors.White, .12), null, m);
     }) { Opacity = 0, Visibility = Visibility.Hidden };
 
     /// <summary>A chase of the marquee's lights: the two layers of bulbs alternate in steps for <paramref name="ms"/>, after <paramref name="delay"/>.</summary>
@@ -195,7 +198,7 @@ sealed partial class HudArcade : ModernLook
     static Border AlertPlate() => new()
     {
         Background = Ink(DeepC), BorderThickness = new Thickness(1.5), Padding = new Thickness(4, 1, 4, 1), IsHitTestVisible = false, Visibility = Visibility.Hidden, Opacity = 0,
-        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, -1, 0, 0), RenderTransformOrigin = new Point(0, .5),
+        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, -2, 0, 0), RenderTransformOrigin = new Point(0, .5),
     };
 
     /// <summary>The screen: its top edge at <see cref="Top"/> (the legend's plate sits across it).</summary>
@@ -315,7 +318,8 @@ sealed partial class HudArcade : ModernLook
             Pixelate(tile);
             _rareTile = tile;
             row.Children.Add(tile);
-            var mk = new Border { Child = Word(L.T("RARE DROP") + "!", 1.5, LedC, .5, textSize: 11), BorderBrush = Ink(LedC), BorderThickness = new Thickness(1.5), Background = Ink(Color.FromRgb(0x2A, 0x1A, 0x00)), Padding = new Thickness(4, 2, 4, 2), Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center };
+            var rd = Word(L.T("RARE DROP") + "!", 1.5, Color.FromRgb(0x20, 0x10, 0x00), 0, Ink(Color.FromRgb(0x1A, 0x0C, 0x00)), 11);
+            var mk = new Border { Child = rd, Background = MarqueeFill, BorderBrush = Ink(Color.FromRgb(0xFF, 0xF0, 0xB0)), BorderThickness = new Thickness(1), Padding = new Thickness(5, 3, 5, 3), Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center };
             _rareWord = mk;
             row.Children.Add(mk);
             var nm = Tt(r.Name, 13, White, FontWeights.SemiBold, HudKit.Text);
@@ -653,10 +657,13 @@ sealed partial class HudArcade : ModernLook
     void Alert(Border plate, FrameworkElement legend, string word, Color tone, double delay)
     {
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        fill.GradientStops.Add(new GradientStop(Mod.Mix(tone, Colors.White, .65), 0)); fill.GradientStops.Add(new GradientStop(tone, 1)); fill.Freeze();
-        plate.Child = Word(word, 1.6, tone, .55, fill, 13);
+        fill.GradientStops.Add(new GradientStop(Mod.Mix(tone, Colors.White, .8), 0)); fill.GradientStops.Add(new GradientStop(tone, 1)); fill.Freeze();
+        bool big = plate == _fightAlert;
+        var child = Word(word, big ? 2 : 1.3, tone, .55, fill, big ? 15 : 11);
+        child.HorizontalAlignment = HorizontalAlignment.Center; child.VerticalAlignment = VerticalAlignment.Center;
+        plate.Child = child;
         plate.MinWidth = Mod.W(legend) + 8;
-        if (plate == _fightAlert) { MarqueeChase(delay, 900); if (plate.Child is FrameworkElement pc) pc.VerticalAlignment = VerticalAlignment.Center; }
+        if (big) MarqueeChase(delay, 1000);
         plate.BorderBrush = Ink(tone);
         var slam = new ScaleTransform(1, 1);
         plate.RenderTransform = slam;
@@ -665,12 +672,13 @@ sealed partial class HudArcade : ModernLook
         Motion.Play(plate, total, p =>
         {
             double l = (p * total - delay) / Run;
-            if (l < 0 || l >= 1) { Fade(plate, 0); return; }
+            if (l < 0 || l >= 1) { Fade(plate, 0); if (big) legend.Opacity = 1; return; }
+            if (big) legend.Opacity = 0;   // the marquee's own word steps aside while an alert holds it
             slam.ScaleX = slam.ScaleY = 1.35 - .35 * Out(Seg(l, 0, .12));
             // three flashes, on and off in steps, then held a beat and gone
             bool on = l < .3 || (l >= .36 && l < .56) || (l >= .62 && l < .94);
             Fade(plate, on ? 1 : .12);
-        }, () => Fade(plate, 0));
+        }, () => { Fade(plate, 0); if (big) legend.Opacity = 1; });
     }
 
     /// <summary>
@@ -712,10 +720,14 @@ sealed partial class HudArcade : ModernLook
     /// A new leader (a row climbed to 1ST): a burst of pixel sparks off the crown and, on a plate over HI-SCORE, NEW LEADER!
     /// flashing three times (1UP! when the new leader is you).
     /// </summary>
-    void NewLeader(ArcadeRow row, bool you, double delay = 0)
+    void NewLeader(ArcadeRow row, bool you, double delay = 0, string? word = null)
     {
-        if (row.CrownAt(_fight) is { } at) Burst(_fightSparks, at, new[] { LedC, Color.FromRgb(0xFF, 0x66, 0xCC), Colors.White }, 24, delay + 300, 800);
-        Alert(_fightAlert, _fightLegend, you ? L.T("1UP") + "!" : L.T("NEW LEADER!"), you ? MintC2 : LedC, delay + 250);
+        double w = _fight.Width > 0 ? _fight.Width - 2 * Bezel : FightWidth - 10 - 2 * Bezel;
+        double x = row.CrownAt(_fight) is { } at ? at.X - Bezel : 30;
+        Color pink = Color.FromRgb(0xFF, 0x66, 0xCC);
+        Burst(_marqueeSparks, new Point(Math.Clamp(x, 12, w - 12), MarqueeH / 2), new[] { LedC, pink, Colors.White }, 10, delay + 250, 700);
+        Burst(_marqueeSparks, new Point(w - 18, MarqueeH / 2), new[] { pink, LedC, Colors.White }, 9, delay + 420, 650);
+        Alert(_fightAlert, _fightLegend, word ?? L.T("NEW LEADER!"), LedC, delay + 150);
     }
 
     static readonly SolidColorBrush EntryOn = Frozen(Mod.A(MintC2, .32)), EntryEdge = Frozen(MintC2);
@@ -746,14 +758,16 @@ sealed partial class HudArcade : ModernLook
     /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        MarqueeChase(0, 700);
         Motion.Play(_fightFx, 700, t => Fade(_fightFlare, t < .2 ? Seg(t, 0, .1) : 1 - Seg(t, .2, 1)), () => Fade(_fightFlare, 0));
-        ChaseRows(120, Colors.White, crown: true);
-        if (Meter is { } m && m.Members.FirstOrDefault(x => x.Rank == 1) is { } top && m.RowOf(top.Id) is ArcadeRow lead) NewLeader(lead, top.You, 200);
+        if (Meter is { } m && m.Members.FirstOrDefault(x => x.Rank == 1) is { } top && m.RowOf(top.Id) is ArcadeRow lead)
+        {
+            lead.CrownDrop(120);
+            NewLeader(lead, top.You, 0, L.T("READY?") + " " + L.T("FIGHT!"));
+        }
     }
 
     /// <summary>A chase down the table: each row's cells after the row above (<paramref name="delay"/> ms before the first); the crown drops on 1ST.</summary>
-    void ChaseRows(double delay, Color c, bool crown)
+    void ChaseRowsUnused(double delay, Color c, bool crown)
     {
         if (Meter is not { } m) return;
         int i = 0;
@@ -777,9 +791,12 @@ sealed partial class HudArcade : ModernLook
         var text = wipe ? L.T("GAME OVER") : L.T("STAGE CLEAR");
         var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         fill.GradientStops.Add(new GradientStop(Mod.Mix(c, Colors.White, .7), 0)); fill.GradientStops.Add(new GradientStop(c, 1)); fill.Freeze();
-        var word = Word(text, 1.6, c, .55, fill, 13);
+        var word = Word(text, 2, c, .55, fill, 15);
         word.HorizontalAlignment = HorizontalAlignment.Center; word.VerticalAlignment = VerticalAlignment.Center;
-        // the typing: a hard-edged mask over the word steps right a letter at a time (the mask's transform only)
+        // the inverted frame: the marquee a field of the tone with the words in black, flashed against the lit one (opacity only)
+        var inv = Word(text, 2, DeepC, 0, Ink(DeepC), 15);
+        inv.HorizontalAlignment = HorizontalAlignment.Center; inv.VerticalAlignment = VerticalAlignment.Center;
+        // the typing: a hard-edged mask over the words steps right a letter at a time (the mask's transform only)
         var maskAt = new TranslateTransform();
         if (word is LedWord lw0)
         {
@@ -787,9 +804,11 @@ sealed partial class HudArcade : ModernLook
             var mask = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(-mw, 0), EndPoint = new Point(mw, 0), Transform = maskAt };
             mask.GradientStops.Add(new GradientStop(Colors.Black, 0)); mask.GradientStops.Add(new GradientStop(Colors.Black, .5));
             mask.GradientStops.Add(new GradientStop(Colors.Transparent, .5)); mask.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-            word.OpacityMask = mask;
+            word.OpacityMask = mask; inv.OpacityMask = mask;
         }
-        var banner = new Border { Background = Ink(DeepC), BorderBrush = Ink(c), BorderThickness = new Thickness(1.5), Child = word, Opacity = 0 };
+        var lit = new Border { Background = Ink(DeepC), BorderBrush = Ink(c), BorderThickness = new Thickness(1.5), Child = word };
+        var flip = new Border { Background = Ink(c), Child = inv, Opacity = 0, Visibility = Visibility.Hidden };
+        var banner = new Grid { Opacity = 0, Children = { lit, flip } };
         var open = new ScaleTransform(.02, 1);
         banner.RenderTransformOrigin = new Point(.5, .5); banner.RenderTransform = open;
         _marquee.Children.Insert(_marquee.Children.IndexOf(_marqueeSparks), banner);
@@ -798,19 +817,23 @@ sealed partial class HudArcade : ModernLook
         {
             // fireworks along the marquee either side of the words, one after another
             Color pink = Color.FromRgb(0xFF, 0x66, 0xCC), cyan = Color.FromRgb(0x8C, 0xEB, 0xFF);
-            Burst(_marqueeSparks, new Point(w * .08, y), new[] { LedC, pink, Colors.White }, 9, 150, 650);
-            Burst(_marqueeSparks, new Point(w * .92, y), new[] { MintC2, cyan, Colors.White }, 9, 300, 650);
-            Burst(_marqueeSparks, new Point(w * .17, y), new[] { pink, MintC2, Colors.White }, 7, 450, 600);
-            Burst(_marqueeSparks, new Point(w * .83, y), new[] { cyan, LedC, Colors.White }, 7, 600, 600);
+            Burst(_marqueeSparks, new Point(w * .07, y), new[] { LedC, pink, Colors.White }, 11, 150, 650);
+            Burst(_marqueeSparks, new Point(w * .93, y), new[] { MintC2, cyan, Colors.White }, 11, 280, 650);
+            Burst(_marqueeSparks, new Point(w * .16, y), new[] { pink, MintC2, Colors.White }, 9, 410, 600);
+            Burst(_marqueeSparks, new Point(w * .84, y), new[] { cyan, LedC, Colors.White }, 9, 540, 600);
+            Burst(_marqueeSparks, new Point(w * .05, y), new[] { MintC2, LedC, Colors.White }, 8, 700, 600);
+            Burst(_marqueeSparks, new Point(w * .95, y), new[] { LedC, pink, Colors.White }, 8, 820, 600);
         }
         MarqueeChase(0, 1600);
         Motion.Play(banner, 2400, t =>
         {
             open.ScaleX = Math.Max(.02, Out(Seg(t, 0, .1)) * (t < .9 ? 1 : 1 - Seg(t, .9, 1)));
-            Fade(banner, t < .9 ? 1 : 1 - Seg(t, .9, 1));
+            banner.Opacity = t < .9 ? 1 : 1 - Seg(t, .9, 1);
+            // the flip: the inverted field for the first beats, flashing against the lit one, then the lit one held
+            Fade(flip, t > .36 && t < .5 && ((int)((t - .36) / .035)) % 2 == 0 ? 1 : 0);
             _fightLegend.Opacity = t < .95 ? 0 : 1;
             if (word is LedWord lw) { int k = (int)Math.Floor(Seg(t, .08, .35) * lw.Letters); maskAt.X = k >= lw.Letters ? lw.DotW + 20 : lw.LetterEnd(k - 1); }
-            else word.Opacity = Seg(t, .08, .2);
+            else { word.Opacity = Seg(t, .08, .2); inv.Opacity = word.Opacity; }
         }, () => { _marquee.Children.Remove(banner); _fightLegend.Opacity = 1; });
     }
 }
