@@ -278,14 +278,18 @@ public static partial class WpfApp
                 double w0 = HudStackLook.FightWidth; HudStackLook.FightWidth = HudStackLook.FightWidthMax;
                 Shot("boss-wide", kinah, due, live, now, true, null);
                 HudStackLook.FightWidth = w0;
-                foreach (var (tag, e, at) in new[] { ("live", live!, now), ("killed", kill, kill.End!.Value) })
+                // ...and expanded (the damage and crit columns: Steven's meter, 2026-11-21: the bars stopped half way)
+                bool x0 = ParserRows.ExpandedPref;
+                foreach (var (tag, e, at) in new[] { ("live", live!, now), ("killed", kill, kill.End!.Value), ("expanded", live!, now) })
                 {
+                    ParserRows.ExpandedPref = tag.StartsWith("expanded") || x0;
                     var o = new ParserOverlay(still: true) { Left = -12000, Top = -12000, Mode = e.ModeKind, Look = look };
                     o.Draw(e, at); o.Show(); DoEvents();
                     Save((FrameworkElement)o.Content, Path.Combine(dir, $"ui-theme-{look}-overlay-{tag}.png"), 0, ShotGround);
                     SpillNote(dir, $"ui-theme-{look}-overlay-{tag}.png", (FrameworkElement)o.Content);
                     o.Close();
                 }
+                ParserRows.ExpandedPref = x0;
                 // the members' skills cards (a row hovered): the top member's, yours, a healer's, and yours with crit and back-attack rates
                 {
                     var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };

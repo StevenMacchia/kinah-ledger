@@ -105,8 +105,9 @@ public sealed class ParserOverlay : Window
             if ((_clickThrough && !_grabbing) || _still) return;
             double l0 = Left, t0 = Top;
             try { DragMove(); } catch (InvalidOperationException) { return; }
-            // a press that didn't move it is a click: it switches the meter compact or expanded (Parser v2)
-            if (Math.Abs(Left - l0) < 0.5 && Math.Abs(Top - t0) < 0.5 && !_grabbing) Clicked?.Invoke();
+            // a press that didn't move it is a click: it switches the meter compact or expanded (Parser v2); with clicks going
+            // through, a click on the handle does it (Steven, 2026-11-21: "clicking it doesn't expand anymore", click-through on)
+            if (Math.Abs(Left - l0) < 0.5 && Math.Abs(Top - t0) < 0.5 && !_overEdge) Clicked?.Invoke();
             var h = new WindowInteropHelper(this).Handle;
             if (h != IntPtr.Zero && GetWindowRect(h, out var r)) { _anchorBottom = r.Top + FaceHeightPx(); Dropped?.Invoke(r.Left, r.Top, _anchorBottom.Value); }
             if (_clickThrough) WatchGrab();
@@ -231,8 +232,11 @@ public sealed class ParserOverlay : Window
         try
         {
             var t = _faceGrid.TransformToAncestor(this);
-            var tl = t.Transform(new Point(0, 0));
-            var br = t.Transform(new Point(_faceGrid.ActualWidth, _faceGrid.ActualHeight));
+            // a look's room round itself for its glow is clear window, not meter: its edges are the look's own
+            // (Steven, 2026-11-21, the Prism look: "edge to resize doesn't work"; its 98 px room at the right put the edge off the meter)
+            var i = _lookFace is { } lf and not IHudFightAbove ? lf.Inset : default;
+            var tl = t.Transform(new Point(i.Left, i.Top));
+            var br = t.Transform(new Point(Math.Max(i.Left, _faceGrid.ActualWidth - i.Right), Math.Max(i.Top, _faceGrid.ActualHeight - i.Bottom)));
             if (p.Y < tl.Y || p.Y > br.Y) return 0;
             if (p.X >= tl.X && p.X <= tl.X + EdgeGrip) return -1;
             if (p.X <= br.X && p.X >= br.X - EdgeGrip) return 1;
@@ -243,6 +247,8 @@ public sealed class ParserOverlay : Window
 
     /// <summary>For the options test: the meter's frame width, in DIPs.</summary>
     internal double FaceWidthForTest => _faceGrid.ActualWidth;
+    /// <summary>For the options test: the look's clear room round itself (none for the standard panel).</summary>
+    internal Thickness LookInsetForTest => _lookFace is { } lf and not IHudFightAbove ? lf.Inset : default;
 
     /// <summary>For the options test: the meter's bottom edge pinned where it is now; and that edge and the window's top, in pixels.</summary>
     internal void AnchorBottomForTest() { var h = new WindowInteropHelper(this).Handle; if (h != IntPtr.Zero && GetWindowRect(h, out var r)) _anchorBottom = r.Top + FaceHeightPx(); }
@@ -547,6 +553,9 @@ public sealed class ParserOverlay : Window
             _lookFace = MakeLook(k, _still);
             if (_lookFace != null && _opacity >= 0) _lookFace.SetOpacity(_opacity);
             _face.Child = _lookFace == null ? _panelFace : _lookFace is IHudFightAbove ? null : _lookFace.Root;
+            // the handle centred on the meter itself, not on the look's clear room round it
+            var i = _lookFace is { } lf and not IHudFightAbove ? lf.Inset : default;
+            _grab.Margin = new Thickness(i.Left, i.Top + 1, i.Right, 0);
         }
     }
 

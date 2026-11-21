@@ -127,7 +127,8 @@ public sealed class ThemeRows : Grid
                 shareText = f.CombatPower > 0 ? L.T("CP") : "";
             }
             string heal = "";
-            if (dmg && f.Healing > 0) heal = e.HpsOf(f, now) is { } h ? L.F("{0}/s", Amounts.Meter(h)) : Amounts.Meter(f.HealingEffective);
+            // only real healing: a self-heal that all went over full read "+0/s" (Steven, 2026-11-21)
+            if (dmg && f.Healing > 0) heal = e.HpsOf(f, now) is { } h ? (h >= 1 ? L.F("{0}/s", Amounts.Meter(h)) : "") : f.HealingEffective >= 1 ? Amounts.Meter(f.HealingEffective) : "";
             var mv = view?.Members.FirstOrDefault(m => m.F.Id == f.Id);
             list.Add(new MeterMember(f, all.IndexOf(f) + 1, f.You, pin && f.You, ParserRows.NameOf(f), f.Class, ClassArt.ColorOf(f.Class), ClassArt.NameColor(f.Class),
                 figure, value, dmg ? e.Share(f) : 0, shareText, dmg && f.CombatPower > 0 ? Amounts.Meter(f.CombatPower) : "", f.Deaths,

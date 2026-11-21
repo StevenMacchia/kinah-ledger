@@ -395,6 +395,14 @@ public static partial class WpfApp
             check(Math.Abs(onScreen - 360 * 1.1) <= 3 && o.EdgeAt(new Point(onScreen - 2, o.ActualHeight / 2)) == 1 && o.EdgeAt(new Point(2, o.ActualHeight / 2)) == -1,
                 $"...at the overlays' 110% size it is as wide as Buddy at 110% ({onScreen:0}, Buddy {360 * 1.1:0}), its edges where they show");
             o.SetScale(1); DoEvents();
+            // a look with clear room round it for its glow (Prism: 98 px at the right): the edges are the meter's own, not the room's
+            // (Steven, 2026-11-21: "edge to resize doesn't work")
+            o.Look = "prism"; o.Draw(sample!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); DoEvents();
+            double pw = o.FaceWidthForTest, pmid = o.ActualHeight / 2;
+            var pi = o.LookInsetForTest;
+            check(pi.Right > 20 && o.EdgeAt(new Point(pw - pi.Right - 2, pmid)) == 1 && o.EdgeAt(new Point(pw - 2, pmid)) == 0 && o.EdgeAt(new Point(pi.Left + 2, pmid)) == -1,
+                $"...in the Prism look its edges are the meter's, not the clear room round it (room {pi.Right:0} at the right, frame {pw:0})");
+            o.Look = ParserPrefs.StandardLook; o.Draw(sample!, new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc)); DoEvents();
             HudStackLook.FightWidth = w0;
         }
         // a row's hover card: the member's figures and top abilities by damage (at most six), only from what the record has
