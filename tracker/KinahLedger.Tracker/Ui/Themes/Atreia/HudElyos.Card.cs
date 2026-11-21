@@ -20,7 +20,7 @@ sealed partial class HudElyos : IThemeCard
         double w = 272 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0);
         var tone = c.ClassColor;
         // the plate sits 3-5 px inside the card's box, its drop in that room (nothing drawn past the card)
-        var stack = new StackPanel { Margin = new Thickness(In + 3, 15, In + 5, 19) };
+        var stack = new StackPanel { Margin = new Thickness(In + 4, 24, In + 6, 19) };
 
         // the head on the class's colour: art, name, CP, YOU ... class
         var head = new Grid { Height = 32, Margin = new Thickness(-5, 0, -5, 9) };
@@ -151,7 +151,7 @@ sealed partial class HudElyos : IThemeCard
 
         // the plate under it all
         var card = new Grid { Margin = new Thickness(2, 4, 6, 4) };
-        card.Children.Add(new TacSketch((dc, s) => PlateArt(dc, s, 1, crest: true, cut: 7)) { Margin = new Thickness(3, 4, 5, 8) });
+        card.Children.Add(new TacSketch((dc, s) => PlateArt(dc, s, 1, crest: true, cut: 7, band: 3, crestScale: .7)) { Margin = new Thickness(3, 14, 5, 8) });
         card.Children.Add(stack);
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Display);
         System.Windows.Documents.TextElement.SetFontFamily(card, Mod.Face);

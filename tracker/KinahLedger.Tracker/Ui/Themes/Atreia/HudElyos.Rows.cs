@@ -109,10 +109,16 @@ sealed partial class HudElyos
             Width = 28, Height = 24, Fill = FlashBrush, Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(PadL + RankW / 2 - 14, H / 2 - 12, 0, 0),
         };
+        // the leader's great wings, out past the plate's edges at this row, their god-rays and the feathers of light they shed
+        readonly TacSketch _rays;
+        readonly ScaleTransform _raysScale = new(1, 1, PadL + RankW / 2, H / 2);
+        readonly RotateTransform _raysTurn = new(0, PadL + RankW / 2, H / 2);
+        readonly Canvas _fxCanvas = new() { IsHitTestVisible = false };
+        bool _leader;
         Brush? _body;
         Color _bodyFor;
         readonly Grid _words = new() { Margin = new Thickness(PadL, 0, PadR, 0) };
-        readonly TextBlock _rank = Tt("", 12.5, GoldHi, FontWeights.Bold, Serif), _name = Tt("", 13, Ivory, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Mod.A(IvoryC, .86)), FontWeights.SemiBold),
+        readonly TextBlock _rank = Tt("", 12.5, GoldHi, FontWeights.Bold, Serif), _name = Tt("", 13, Ivory, FontWeights.Bold), _cp = Tt("", 9.5, Frozen(Color.FromRgb(0xE6, 0xE9, 0xF2)), FontWeights.SemiBold),
             _heal = F("", 11.5, Mint2), _dps = F("", 17, Ivory), _share = F("", 11, Frozen(Color.FromRgb(0xF2, 0xDC, 0xA2)), FontWeights.Medium),
             _dmg = F("", 11.5, Soft, FontWeights.Medium), _crit = F("", 11, Soft, FontWeights.Medium);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -123,9 +129,14 @@ sealed partial class HudElyos
         MeterMember? _m;
         double _bar;
         int _lastRank;
+
+
         bool _expanded, _shareOn = true;
 
         public FrameworkElement Root => _root;
+
+        /// <summary>Where the DPS bar is drawn (the PB ghost's track, IThemeBarSpan on main): a full bar fills <see cref="_art"/> edge to edge.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, new Rect(0, 0, _art.ActualWidth, _art.ActualHeight));
 
         public ElyosRow()
         {
@@ -143,16 +154,21 @@ sealed partial class HudElyos
             _wingArt = new TacSketch(DrawWings) { RenderTransform = _wingScale };
             _glintBand.RenderTransform = new TransformGroup { Children = { new SkewTransform(-24, 0, 0, H / 2), _glintShift } };
             _glintHost.Children.Add(_glintBand);
-            _root.Children.Add(_art); _root.Children.Add(_glintHost); _root.Children.Add(_flash); _root.Children.Add(_wingArt);
+            _rays = new TacSketch((dc, s) => { dc.PushTransform(RaysAt); dc.DrawDrawing(GodRays); dc.Pop(); }) { Opacity = 0, RenderTransform = new TransformGroup { Children = { _raysScale, _raysTurn } } };
+            _root.Children.Add(_art); _root.Children.Add(_glintHost); _root.Children.Add(_rays); _root.Children.Add(_flash); _root.Children.Add(_wingArt);
             _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.Margin = new Thickness(0, 0, 0, 1);
             Put(_rank, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 2, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
             // one tight shade under all the row's words, so they read on any class colour
-            _words.Effect = new DropShadowEffect { Color = Color.FromRgb(0x02, 0x05, 0x10), Direction = 270, ShadowDepth = 1, BlurRadius = 3, Opacity = .95 };
+            _words.Effect = new DropShadowEffect { Color = Color.FromRgb(0x02, 0x05, 0x10), Direction = 270, ShadowDepth = .6, BlurRadius = 3.5, Opacity = 1 };
             _root.Children.Add(_words);
-            _root.SizeChanged += (_, _) => Fit();
+            _root.Children.Add(_fxCanvas);
+            _root.SizeChanged += (_, e) =>
+            {
+                Fit();
+            };
         }
 
         void Put(FrameworkElement el, int col) { Grid.SetColumn(el, col); _words.Children.Add(el); }
@@ -205,7 +221,9 @@ sealed partial class HudElyos
             _crit.Text = c.Expanded ? m.Crit : "";
             Fit();
             SlideBar(_art, c, "bar", BarOf(m, c), v => { _bar = v; _art.InvalidateVisual(); });
-            _art.InvalidateVisual(); _wingArt.InvalidateVisual();
+            _art.InvalidateVisual();
+            bool leader = m is { Rank: 1, CpOnly: false, Pvp: false };
+            if (leader != _leader) { _leader = leader; _wingArt.InvalidateVisual(); }
             if (climbed) Glint(0);
         }
 
@@ -241,7 +259,14 @@ sealed partial class HudElyos
             {
                 var bar = new Rect(0, 0, fx, s.Height);
                 // the body: the class's colour, lit warm at the top and deepening at the foot (its brush made once per class)
-                if (_body == null || _bodyFor != tone) { _bodyFor = tone; _body = Mod.Grad(true, (Mod.A(Mod.Mix(tone, WarmC, .3), .92), 0), (Mod.A(tone, .86), .45), (Mod.A(Mod.Mix(tone, AbyssC, .4), .9), 1)); }
+                if (_body == null || _bodyFor != tone)
+                {
+                    // a pale class colour (gold, sand) deepened, so white names hold on it and it never reads as the frame's gold
+                    _bodyFor = tone;
+                    double lum = (.2126 * tone.R + .7152 * tone.G + .0722 * tone.B) / 255;
+                    var t2 = lum > .55 ? Mod.Mix(tone, AbyssC, Math.Min(.4, (lum - .55) * 1.4 + .12)) : tone;
+                    _body = Mod.Grad(true, (Mod.A(Mod.Mix(t2, WarmC, lum > .55 ? .12 : .3), .92), 0), (Mod.A(t2, .88), .45), (Mod.A(Mod.Mix(t2, AbyssC, .4), .92), 1));
+                }
                 dc.DrawRectangle(_body, null, bar);
                 // a shade at its left, under the rank and the name
                 dc.DrawRectangle(ShadeL, null, new Rect(0, 0, Math.Min(fx, 150), s.Height));
@@ -276,11 +301,13 @@ sealed partial class HudElyos
         /// </summary>
         void DrawWings(DrawingContext dc, Size s)
         {
-            if (_m is not { Rank: 1, CpOnly: false, Pvp: false }) return;
+            if (!_leader) return;
             dc.PushTransform(WingsAt);
             dc.DrawDrawing(Wings);
             dc.Pop();
         }
+
+        static readonly Transform RaysAt = Fz(new TranslateTransform(PadL + RankW / 2, H / 2));
 
         // the row's brushes, made once
         static readonly Brush Slot = Frozen(Mod.A(AbyssC, .6)), YouSlot = Mod.Grad(false, (Mod.A(RoyalC, .95), 0), (Mod.A(NightC, .8), 1)),
@@ -357,17 +384,50 @@ sealed partial class HudElyos
             }, () => _glintBand.Opacity = 0);
         }
 
-        /// <summary>The wings unfurl round the numeral (this row just took the lead): they spread out from the middle with a flash of light behind.</summary>
+        /// <summary>
+        /// The wings unfurl (this row just took the lead): the great wings spread out from behind the plate's edges past the
+        /// row's height with a small overshoot, the numeral's wings with them, god-rays fan up from the numeral and swing
+        /// across, and six feathers of light drift off the wings, turning as they fall. One course; transforms and opacity only.
+        /// </summary>
         public void Crown()
         {
-            Motion.Play(_wingArt, 950, p =>
+            _fxCanvas.Children.Clear();
+            double w = _root.ActualWidth;
+            var drift = new List<(UIElement El, TranslateTransform At, RotateTransform Turn, Point From, Vector By, double Spin, double Start)>();
+            if (w > 30)
+                for (int k = 0; k < 6; k++)
+                {
+                    int side = k % 2 == 0 ? -1 : 1, j = k / 2;
+                    double x0 = side < 0 ? -Pad - 14 - j * 5 : w + Pad + 14 + j * 5, y0 = H / 2 - 16 + j * 9;
+                    var el = new TacSketch((dc, _) => dc.DrawDrawing(LightFeather)) { Opacity = 0 };
+                    var at = new TranslateTransform(x0, y0); var turn = new RotateTransform(side * (20 + 25 * j));
+                    el.RenderTransform = new TransformGroup { Children = { turn, at } };
+                    _fxCanvas.Children.Add(el);
+                    drift.Add((el, at, turn, new Point(x0, y0), new Vector(side * (5 + 2 * j), 16 + 5 * j), side * (60 + 30 * j), .12 + .07 * j));
+                }
+            Motion.Play(_wingArt, 1150, p =>
             {
-                double k = Back(Seg(p, 0, .7), 1.6);
-                _wingScale.ScaleX = .08 + .92 * k;
-                _wingScale.ScaleY = .5 + .5 * Math.Min(1.08, k);
-                _wingArt.Opacity = Math.Clamp(p / .25, 0, 1);
-                _flash.Opacity = Math.Sin(Math.PI * Seg(p, .1, .8));
-            }, () => { _wingScale.ScaleX = _wingScale.ScaleY = 1; _wingArt.Opacity = 1; _flash.Opacity = 0; });
+                double o = Math.Clamp(p / .18, 0, 1);
+                double s2 = Back(Seg(p, .05, .55), 1.6);
+                _wingScale.ScaleX = .08 + .92 * s2; _wingScale.ScaleY = .5 + .5 * Math.Min(1.08, s2);
+                _wingArt.Opacity = o;
+                _flash.Opacity = Math.Sin(Math.PI * Seg(p, .05, .6));
+                double r = Seg(p, 0, .9);
+                _rays.Opacity = .95 * Math.Sin(Math.PI * r);
+                _raysScale.ScaleX = _raysScale.ScaleY = .45 + .55 * Out(Seg(p, 0, .45));
+                _raysTurn.Angle = -9 + 18 * Out(r);
+                foreach (var (el, at, turn, from, by, spin, start) in drift)
+                {
+                    double q = Seg(p, start, 1);
+                    at.X = from.X + by.X * Out(q); at.Y = from.Y + by.Y * q;
+                    turn.Angle = spin * q;
+                    el.Opacity = Math.Sin(Math.PI * q);
+                }
+            }, () =>
+            {
+                _wingScale.ScaleX = _wingScale.ScaleY = 1; _wingArt.Opacity = 1; _flash.Opacity = 0; _rays.Opacity = 0;
+                _fxCanvas.Children.Clear();
+            });
         }
     }
 }
