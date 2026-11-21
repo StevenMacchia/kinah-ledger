@@ -85,7 +85,7 @@ sealed partial class HudPrism
     /// along the row. You: a brighter rim. Short of room the CP goes first, then the share; a name keeps at least ten
     /// characters; a figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class PrismRow : IThemeRow
+    sealed class PrismRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 28, Pitch = 31;
         const double PadL = 5, RankW = 19, IconW = 24, PadR = 7;
@@ -269,6 +269,10 @@ sealed partial class HudPrism
         }
 
         /// <summary>The bar's leading edge: its part of the free room's top length.</summary>
+        /// <summary>Where a full bar would fill, for the PB ghost (IThemeBarSpan): from the channel's left to the top bar's length.</summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null
+            : (_art, new Rect(1, 0, Math.Max(0, PlateX(_art.ActualWidth) - 1) * BarMax, _art.ActualHeight));
+
         double EdgeX(double w) => 1 + Math.Max(0, PlateX(w) - 1) * BarMax * Math.Clamp(_bar, 0, 1);
 
         /// <summary>The crown's parts shown on the leader's row (made the first time), hidden on the others.</summary>
