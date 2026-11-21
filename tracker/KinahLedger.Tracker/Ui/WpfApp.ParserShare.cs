@@ -265,6 +265,7 @@ public static partial class WpfApp
                 var tl = (text ?? "").Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
                 check(tl.Length >= 3 && tl[1].Split('\t').Contains(L.T("Taken")) && tl.Skip(2).All(l => l.Split('\t').Length == tl[1].Split('\t').Length),
                     $"Parser share: the damage taken copies as text too ({tl.Length - 2} rows)");
+                CompareMemberShareChecks(w, check, () => text, s => text = s);
                 // a right-click on the table: Copy picture and Copy as text, in the window's own menu (no Windows ContextMenu)
                 w.ParserTabForTest = "Group"; DoEvents();
                 var row = FindTagged(w.ParserPage, "parser-member");
@@ -338,6 +339,49 @@ public static partial class WpfApp
     /// member's abilities. Each says its words whole, Copy picture copies that section's picture and Copy text (on a table) its
     /// rows; the button says "Copied" in place, through a redraw too, and its words come back after.
     /// </summary>
+    /// <summary>
+    /// The Compare tab's member picked: its Copy text and Copy picture are that member's, with party names shown and with them
+    /// off (the default: the member called by their class). Until 1.0.39 names off gave your own figures instead: the copy
+    /// whose names were hidden was matched against the other pull by the hidden names, so no member was in both.
+    /// </summary>
+    static void CompareMemberShareChecks(MainWindow w, Action<bool, string> check, Func<string?> text, Action<string?> setText)
+    {
+        bool hide0 = w.ShareHideNamesForTest;
+        string? pick0 = w.ParserCompareMemberForTest;
+        try
+        {
+            w.ShowParserDemo("compare"); DoEvents();
+            var e = w.ParserShownForTest!;
+            var now = w.ShareNowForTest(e);
+            var diff = FightView.Of(e, now, w.ParserPastForTest).Diff;
+            var them = diff?.Members.FirstOrDefault(m => !m.You);
+            if (them == null) { check(false, "Parser share: the compare demo has a member in both pulls"); return; }
+            string real = them.A.Name, dps = Math.Round(them.DpsA).ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+            string youDps = Math.Round(diff!.You!.DpsA).ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+            w.ParserCompareMemberForTest = real;
+            var bad = new List<string>();
+            foreach (bool hide in new[] { false, true })
+            {
+                w.ShareHideNamesForTest = hide;
+                setText(null);
+                w.CopyViewTextForTest(e, ParserShare.Compare);
+                var lines = (text() ?? "").Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+                var total = lines.Length > 2 ? lines[2].Split('\t') : Array.Empty<string>();
+                string label = hide ? MeterShare.Hidden(e).Roster.First(f => f.Id == them.A.Id).Name : real;
+                if (total.Length < 2 || total[0] != label || total[1] != dps)
+                    bad.Add($"names {(hide ? "off" : "on")}: text's total row {string.Join("|", total.Take(3))}, not {label}|{dps}");
+                if (hide && (text() ?? "").Contains(real, StringComparison.OrdinalIgnoreCase)) bad.Add($"names off: the text names {real}");
+                var drawn = DrawnTexts(ParserShare.Laid(e, now, w.ParserPastForTest, ParserShare.Compare, w.SharePartsForTest, MainWindow.ParserViewSample));
+                if (!drawn.Any(t => t.StartsWith(L.T("This pull"), StringComparison.Ordinal) && t.EndsWith(label, StringComparison.Ordinal)))
+                    bad.Add($"names {(hide ? "off" : "on")}: the picture's tile isn't {label}'s ({string.Join("|", drawn.Where(t => t.StartsWith(L.T("This pull"), StringComparison.Ordinal)))})");
+                if (hide && drawn.Any(t => t.Contains(real, StringComparison.OrdinalIgnoreCase))) bad.Add($"names off: the picture names {real}");
+            }
+            check(bad.Count == 0 && dps != youDps,
+                $"Parser share: a member picked on the Compare tab ({real}, {dps} DPS against your {youDps}) is the one its Copy text and Copy picture show, party names on and off (then by class)" + (bad.Count > 0 ? ": " + string.Join("; ", bad) : ""));
+        }
+        finally { w.ShareHideNamesForTest = hide0; w.ParserCompareMemberForTest = pick0; }
+    }
+
     static void CopyButtonChecks(MainWindow w, Action<bool, string> check, List<(int W, int H, string File, BitmapSource Bmp)> got, Func<string?> text, Action<string?> setText)
     {
         static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));

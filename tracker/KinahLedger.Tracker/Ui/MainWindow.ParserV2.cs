@@ -21,6 +21,8 @@ public partial class MainWindow
     string? _parserCompareWith, _parserCompareMember;
     bool _parserCompareAll;
     string? _parserCompareFor;
+    /// <summary>For the options test: the member picked on the Compare tab (their name; null: you), as a chip's click sets it.</summary>
+    internal string? ParserCompareMemberForTest { get => _parserCompareMember; set => _parserCompareMember = value; }
 
     /// <summary>For a render: fills the store-v2 figures of a view with a sample (ui-shot only; the app never sets it).</summary>
     internal static Action<FightView>? ParserViewSample;
