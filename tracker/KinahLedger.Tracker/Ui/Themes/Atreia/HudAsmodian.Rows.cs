@@ -31,7 +31,7 @@ sealed partial class HudAsmodian
     /// <summary>A forged bar's shape: <paramref name="fx"/> long from the row's left, its end cut as a blade (slanted back at its foot).</summary>
     static Geometry Blade(Rect r, double fx)
     {
-        double slant = Math.Min(6, fx);
+        double slant = Math.Min(10, fx);
         var g = new StreamGeometry();
         using (var x = g.Open())
         {
@@ -56,22 +56,29 @@ sealed partial class HudAsmodian
         bool under = r.Left + fx > quiet;
         if (under) burn *= .4;
         var blade = Blade(r, fx);
-        dc.DrawGeometry(Mod.Grad(false, (Mod.A(Mod.Mix(tone, IronC, .62 * temper), .97), 0), (Mod.A(Mod.Mix(tone, IronC, .32 * temper), .97), 1)), null, blade);
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.White, .13), 0), (Mod.A(Colors.White, 0), .45), (Mod.A(Colors.Black, .34), 1)), null, blade);
+        dc.DrawGeometry(Mod.Grad(false, (Mod.A(Mod.Mix(tone, IronC, .4 * temper), .98), 0), (Mod.A(Mod.Mix(tone, IronC, .08 * temper), .98), 1)), null, blade);
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(Colors.White, .16), 0), (Mod.A(Colors.White, 0), .4), (Mod.A(Colors.Black, .45), 1)), null, blade);
         dc.PushClip(blade);
         double ew = Math.Min(22, fx);
         dc.DrawRectangle(Mod.Grad(false, (Mod.A(CrimC, 0), 0), (Mod.A(CrimC, .42 * burn), .5), (Mod.A(HotC, .8 * burn), 1)), null, new Rect(r.Left + fx - ew, r.Top, ew, r.Height));
         dc.DrawRectangle(Mod.Br(Mod.Mix(tone, Colors.White, .45), .5), null, new Rect(r.Left, r.Top, fx, 1));
         dc.Pop();
-        double slant = Math.Min(6, fx);
-        if (!under) dc.DrawLine(Mod.P(Mod.Grad(true, (PaleC, 0), (HotC, 1)), 1.5), new Point(r.Left + fx - .5, r.Top), new Point(r.Left + fx - slant - .5, r.Bottom));
+        double slant = Math.Min(10, fx);
+        if (!under)
+        {
+            // the blade's edge: a crimson bloom, an orange body, a white-hot core down the cut
+            Point a = new(r.Left + fx - 1, r.Top), b = new(r.Left + fx - slant - 1, r.Bottom);
+            dc.PushClip(new RectangleGeometry(r));
+            dc.DrawLine(EdgeBloom, a, b); dc.DrawLine(EdgeBody, a, b); dc.DrawLine(EdgeCore, a, b);
+            dc.Pop();
+        }
     }
 
     /// <summary>
     /// The readout's well: the iron darkened under a row's figures from <paramref name="x"/> to its right end (a soft step in),
     /// so a bar's burning end never draws its hot line through a digit; the bar still shows through.
     /// </summary>
-    static void Well(DrawingContext dc, Rect r, double x, double a = .62)
+    static void Well(DrawingContext dc, Rect r, double x, double a = .3)
     {
         if (x >= r.Right) return;
         dc.DrawRectangle(Mod.Grad(false, (Mod.A(IronC, 0), 0), (Mod.A(IronC, a), 1)), null, new Rect(x - 18, r.Top, 18, r.Height));
@@ -133,7 +140,7 @@ sealed partial class HudAsmodian
     sealed class IronRow : IThemeRow
     {
         public const double H = 26, Pitch = 29;
-        const double Pad = 5, RankW = 20, IconW = 23;
+        const double Pad = 5, RankW = 27, IconW = 23;
         readonly HudAsmodian _look;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art, _crownArt;
@@ -143,7 +150,7 @@ sealed partial class HudAsmodian
             _dmg = Tt("", 11, Soft, FontWeights.SemiBold), _crit = Tt("", 10.5, Soft, FontWeights.SemiBold);
         readonly StackPanel _line = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         readonly Grid _rankHost = new() { Width = RankW, Height = H };
-        readonly Grid _crown = new() { Width = 18, Height = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 1), Visibility = Visibility.Collapsed };
+        readonly Grid _crown = new() { Width = 26, Height = 21, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, 0, 0), Visibility = Visibility.Collapsed };
         readonly ScaleTransform _crownScale = new(1, 1);
         readonly Border _iconHost = new() { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         readonly List<FrameworkElement> _marks = new();
@@ -176,7 +183,7 @@ sealed partial class HudAsmodian
             _art = new TacSketch(Draw);
             _root.Children.Add(_art); _root.Children.Add(_fxLayer);
             // the rank's cell: the number, or the crown
-            _crownArt = new TacSketch((dc, s) => Crown(dc, new Point(0, 0), 1.12), 18, 15);
+            _crownArt = new TacSketch((dc, s) => Crown(dc, new Point(0, 0), 1.3), 26, 21);
             _crown.Children.Add(_crownArt);
             _crown.RenderTransformOrigin = new Point(.5, .65); _crown.RenderTransform = _crownScale;
             _rank.HorizontalAlignment = HorizontalAlignment.Center;
@@ -311,30 +318,87 @@ sealed partial class HudAsmodian
         void FlashOff() { if (_flash != null) { _root.Children.Remove(_flash); _flash = null; } }
 
         /// <summary>
-        /// The crown slams down: it falls from twice its size, bites in a touch small, settles; a pale flash and a crimson ring
-        /// burst round it and the slab flashes. Each piece made once and moved by scale and opacity.
+        /// The crown slams down, heavy: it falls from twice its size and bites in; at the impact a white-hot flash bursts from it,
+        /// cracks tear out across the slab from under it, a crimson ring flies out, embers spit up and the slab flashes. Each
+        /// piece is made when the slam starts, moved by scale and opacity alone, and goes when it ends.
         /// </summary>
         public void Slam()
         {
             var flash = Flash();
-            var ring = new System.Windows.Shapes.Ellipse { Width = 16, Height = 13, Stroke = BurstStroke, StrokeThickness = 2.2, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
-            var glow = new System.Windows.Shapes.Ellipse { Width = 34, Height = 28, Fill = BurstGlow, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+            double cx = Pad + RankW / 2, cy = H / 2;
+            var ring = new System.Windows.Shapes.Ellipse { Width = 22, Height = 18, Stroke = BurstStroke, StrokeThickness = 2.4, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+            var glow = new System.Windows.Shapes.Ellipse { Width = 44, Height = 34, Fill = BurstGlow, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
             var rs = new ScaleTransform(1, 1); ring.RenderTransform = rs;
             _rankHost.Children.Insert(0, glow); _rankHost.Children.Insert(1, ring);
-            Motion.Play(_rankHost, 760, t =>
+            // the impact: a white-hot flash over the crown, the cracks under the words, the embers over them
+            var impact = new System.Windows.Shapes.Ellipse { Width = 70, Height = 50, Fill = ImpactFlash, IsHitTestVisible = false, Opacity = 0 };
+            Canvas.SetLeft(impact, cx - 35); Canvas.SetTop(impact, cy - 25);
+            var crackScale = new ScaleTransform(0, 0, cx, cy);
+            var cracks = Cracks(W, cx, cy);
+            var crackGlow = new System.Windows.Shapes.Path { Data = cracks, Stroke = CrackGlow, StrokeThickness = 3.4, StrokeLineJoin = PenLineJoin.Bevel, IsHitTestVisible = false, RenderTransform = crackScale, Opacity = 0 };
+            var crackCore = new System.Windows.Shapes.Path { Data = cracks, Stroke = CrackCore, StrokeThickness = 1.1, StrokeLineJoin = PenLineJoin.Bevel, IsHitTestVisible = false, RenderTransform = crackScale, Opacity = 0 };
+            var under = new Canvas { IsHitTestVisible = false, Children = { crackGlow, crackCore } };
+            var over = new Canvas { IsHitTestVisible = false, Children = { impact } };
+            _root.Children.Insert(_root.Children.IndexOf(_words), under);
+            _root.Children.Add(over);
+            var sparks = new Sparks(over);
+            sparks.Start(Enumerable.Range(0, 6).Select(i => (new Point(cx - 8 + 3.2 * i, cy - 6), 90 + i, 22.0)));
+            Motion.Play(_rankHost, 900, t =>
             {
                 double k;
-                if (t < .3) { double a = Seg(t, 0, .3); k = 2.3 - 1.46 * a * a; }
-                else if (t < .55) k = .84 + .22 * Out(Seg(t, .3, .55));
-                else k = 1.06 - .06 * Out(Seg(t, .55, 1));
+                if (t < .26) { double a = Seg(t, 0, .26); k = 2.1 - 1.3 * a * a; }
+                else if (t < .45) k = .8 + .26 * Out(Seg(t, .26, .45));
+                else k = 1.06 - .06 * Out(Seg(t, .45, 1));
                 _crownScale.ScaleX = _crownScale.ScaleY = k;
-                _crown.Opacity = Math.Min(1, Seg(t, 0, .14) * 1.2);
-                double b = Seg(t, .22, .95);
-                glow.Opacity = t < .22 ? 0 : b < .15 ? b / .15 : 1 - b;
-                ring.Opacity = t < .22 ? 0 : 1 - b;
-                rs.ScaleX = rs.ScaleY = 1 + 2.2 * Out(b);
-                flash.Opacity = t is > .25 and < .8 ? 1 - Seg(t, .25, .8) : 0;
-            }, () => { _crownScale.ScaleX = _crownScale.ScaleY = 1; _crown.Opacity = 1; _rankHost.Children.Remove(glow); _rankHost.Children.Remove(ring); FlashOff(); });
+                _crown.Opacity = Math.Min(1, Seg(t, 0, .12) * 1.2);
+                // the impact at .26
+                impact.Opacity = t < .26 ? 0 : t < .32 ? Seg(t, .26, .32) : 1 - Seg(t, .32, .6);
+                double c = Seg(t, .26, .5);
+                crackScale.ScaleX = crackScale.ScaleY = Out(c);
+                crackGlow.Opacity = crackCore.Opacity = t < .26 ? 0 : 1 - Seg(t, .6, 1);
+                double b = Seg(t, .26, .9);
+                glow.Opacity = t < .26 ? 0 : b < .15 ? b / .15 : 1 - b;
+                ring.Opacity = t < .26 ? 0 : 1 - b;
+                rs.ScaleX = rs.ScaleY = 1 + 2.6 * Out(b);
+                flash.Opacity = t is > .26 and < .8 ? 1 - Seg(t, .26, .8) : 0;
+                sparks.Step(Seg(t, .26, 1));
+            }, () =>
+            {
+                _crownScale.ScaleX = _crownScale.ScaleY = 1; _crown.Opacity = 1;
+                _rankHost.Children.Remove(glow); _rankHost.Children.Remove(ring); _root.Children.Remove(under); _root.Children.Remove(over); FlashOff();
+            });
+        }
+
+        /// <summary>The cracks a slam tears across the slab from under the crown at (cx, cy): three running out along the row, two short ones up and down. Fixed, jagged.</summary>
+        static Geometry Cracks(double w, double cx, double cy)
+        {
+            var g = new StreamGeometry();
+            using (var x = g.Open())
+            {
+                void Run(double y0, double len, double drift, int seed)
+                {
+                    // along the slab's top or foot edge (y0 its band's middle), so no crack crosses a letter
+                    double lo = y0 < cy ? 1.2 : H - 5.5, hi = y0 < cy ? 5.5 : H - 1.2;
+                    var p = new Point(cx + 9, y0);
+                    x.BeginFigure(p, false, false);
+                    int i = 0;
+                    while (p.X < cx + len)
+                    {
+                        double step = 9 + 9 * Hash(seed, i), jig = (Hash(seed, i + 50) - .5) * 7 + drift;
+                        p = new Point(p.X + step, Math.Clamp(p.Y + jig * .5, lo, hi));
+                        x.LineTo(p, true, false);
+                        i++;
+                    }
+                }
+                Run(3, Math.Max(40, w * .62), 0, 1);
+                Run(H - 3, Math.Max(30, w * .45), 0, 2);
+                // and out of the slab, above and below the crown
+                x.BeginFigure(new Point(cx - 5, 2), false, false); x.LineTo(new Point(cx - 9, -4), true, false); x.LineTo(new Point(cx - 7, -10), true, false);
+                x.BeginFigure(new Point(cx + 4, 2), false, false); x.LineTo(new Point(cx + 8, -5), true, false); x.LineTo(new Point(cx + 14, -8), true, false);
+                x.BeginFigure(new Point(cx + 3, H - 2), false, false); x.LineTo(new Point(cx + 6, H + 4), true, false); x.LineTo(new Point(cx + 3, H + 9), true, false);
+            }
+            g.Freeze();
+            return g;
         }
 
         /// <summary>The row climbed a rank: its slab flashes and a glint runs along its bar (with the glide, not against it).</summary>
@@ -361,7 +425,7 @@ sealed partial class HudAsmodian
             double figL = r.Right - _words.Margin.Right - cols[4].ActualWidth - cols[5].ActualWidth - cols[6].ActualWidth - cols[7].ActualWidth + 2;
             if (cols[4].ActualWidth <= 0) figL = r.Right;
             double quiet = figL - (_heal.Visibility == Visibility.Visible ? cols[3].ActualWidth : 0) - 8;
-            Forged(dc, r, fx, m.ClassColor, 1, quiet);
+            Forged(dc, r, fx, m.ClassColor, 1, quiet, m.You ? .6 : 1);
             if (fx > figL - 18) Well(dc, r, figL);
             // a healer's share of the group's healing as a mint line along the slab's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
@@ -369,7 +433,11 @@ sealed partial class HudAsmodian
             // you: a hot crimson spine at the left
             if (m.You) dc.DrawRectangle(Spine, null, new Rect(r.Left, r.Top, 3, r.Height));
             dc.Pop();
-            dc.DrawGeometry(null, m.You ? YouRim : Rim, slab);
+            bool lead = m.Rank == 1 && !m.CpOnly && !m.Pvp;
+            if (lead) { dc.PushClip(slab); dc.DrawGeometry(null, LeadGlow, slab); dc.Pop(); }
+            dc.DrawGeometry(null, lead ? LeadRim : m.You ? YouRim : Rim, slab);
+            // yours: thorns off the slab's left edge (into the plate's padding), the mark of your bar
+            if (m.You) Spikes(dc, new Point(r.Left, r.Top + 4), new Point(r.Left, r.Bottom - 4), new Vector(-1, 0), 6, 4);
         }
     }
 
@@ -380,5 +448,9 @@ sealed partial class HudAsmodian
     static readonly Pen Rim = Mod.P(Frozen(Color.FromRgb(0x4A, 0x20, 0x26)), 1), YouRim = Mod.P(Frozen(Color.FromArgb(0xE6, 0xFF, 0x4A, 0x3D)), 1.2);
     static readonly Brush GlintFill = Mod.Grad(false, (Color.FromArgb(0, 0xC2, 0x1F, 0x2E), 0), (Color.FromArgb(0x80, 0xFF, 0x8A, 0x3D), .55), (Color.FromArgb(0xF2, 0xFF, 0xD0, 0x8A), .86), (Color.FromArgb(0, 0xFF, 0x8A, 0x3D), 1));
     static readonly Brush BurstStroke = Frozen(Color.FromRgb(0xFF, 0x4A, 0x3D));
+    static readonly Brush ImpactFlash = MakeRadial(Color.FromArgb(0xFF, 0xFF, 0xF6, 0xE0), Color.FromArgb(0, 0xFF, 0x4A, 0x3D), Color.FromArgb(0xC0, 0xFF, 0x9A, 0x5A));
+    static readonly Brush CrackGlow = Frozen(Color.FromArgb(0x90, 0xFF, 0x3A, 0x2E)), CrackCore = Frozen(Color.FromRgb(0xFF, 0xE2, 0xB0));
+    static readonly Pen EdgeBloom = Mod.P(Frozen(Color.FromArgb(0x70, 0xE0, 0x1C, 0x2A)), 6), EdgeBody = Mod.P(Frozen(Color.FromArgb(0xE0, 0xFF, 0x7A, 0x30)), 3.4), EdgeCore = Mod.P(Frozen(Color.FromRgb(0xFF, 0xF6, 0xE6)), 1.6);
+    static readonly Pen LeadRim = Mod.P(Frozen(Color.FromRgb(0xFF, 0x4A, 0x3D)), 1.5), LeadGlow = Mod.P(Frozen(Color.FromArgb(0x48, 0xFF, 0x3A, 0x2E)), 6);
     static readonly Brush BurstGlow = MakeRadial(Color.FromArgb(0xE6, 0xFF, 0xD0, 0x8A), Color.FromArgb(0, 0xC2, 0x1F, 0x2E), Color.FromArgb(0x90, 0xFF, 0x4A, 0x3D));
 }

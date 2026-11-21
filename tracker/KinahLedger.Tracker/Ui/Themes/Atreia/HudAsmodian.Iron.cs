@@ -99,10 +99,12 @@ sealed partial class HudAsmodian
     /// along its top, the crimson edge (<paramref name="edge"/>: another colour for a rare drop, ash while paused) and a thorn
     /// off each deep cut. <paramref name="sheen"/> 0..1: a band of ember light crossing it (a pickup).
     /// </summary>
-    static void Iron(DrawingContext dc, Size s, double opacity, double heat = 0, Color? edge = null, double big = 9, double small = 3, bool thorns = true, double sheen = -1, double g = G)
+    static void Iron(DrawingContext dc, Size s, double opacity, double heat = 0, Color? edge = null, double big = 9, double small = 3, bool thorns = true, double sheen = -1, double g = G, Thickness? room = null)
     {
-        if (s.Width < 2 * g + 6 || s.Height < 2 * g + 6) return;
-        var r = new Rect(g, g, s.Width - 2 * g, s.Height - 2 * g);
+        var rm = room ?? new Thickness(g);
+        if (s.Width < rm.Left + rm.Right + 6 || s.Height < rm.Top + rm.Bottom + 6) return;
+        var r = new Rect(rm.Left, rm.Top, s.Width - rm.Left - rm.Right, s.Height - rm.Top - rm.Bottom);
+        g = Math.Min(Math.Min(rm.Left, rm.Right), Math.Min(rm.Top, rm.Bottom));
         var shape = Plate(r, big, small);
         var ec = edge ?? CrimC;
         // the glow: rings of the edge's colour outside the plate (their inner half lies under the iron)
@@ -201,24 +203,25 @@ sealed partial class HudAsmodian
 
     static Geometry MakeCrown()
     {
-        var g = Geometry.Parse("M 1.6,13 L 1.6,9.2 C 1.2,7 0.2,4.6 0,1.2 C 1.8,3.4 3.4,5 4.6,6.6 L 8,0 L 11.4,6.6 C 12.6,5 14.2,3.4 16,1.2 C 15.8,4.6 14.8,7 14.4,9.2 L 14.4,13 Z");
+        var g = Geometry.Parse("M 3,16 L 3,12 C 1.2,10.5 0,7.5 0.4,3.4 C 2,6.2 3.4,7.6 5,8.6 L 7,3.4 L 8.6,7.2 L 10,0 L 11.4,7.2 L 13,3.4 L 15,8.6 C 16.6,7.6 18,6.2 19.6,3.4 C 20,7.5 18.8,10.5 17,12 L 17,16 Z");
         g.Freeze();
         return g;
     }
 
-    static readonly Brush CrownFill = Mod.Grad(true, (Color.FromRgb(0xFF, 0x6A, 0x52), 0), (Color.FromRgb(0xD0, 0x1E, 0x2C), .45), (Color.FromRgb(0x6A, 0x08, 0x12), 1));
-    static readonly Pen CrownPen = Mod.P(Mod.Br(Color.FromRgb(0x24, 0x04, 0x08)), .9);
+    static readonly Brush CrownFill = Mod.Grad(true, (Color.FromRgb(0x5A, 0x14, 0x1A), 0), (Color.FromRgb(0x24, 0x08, 0x0C), .55), (Color.FromRgb(0x0C, 0x04, 0x06), 1));
+    static readonly Pen CrownPen = Mod.P(Mod.Br(Color.FromRgb(0xFF, 0x5A, 0x3C)), 1.1);
+    static readonly Brush CrownGem = MakeRadial(Color.FromRgb(0xFF, 0xF0, 0xC8), Color.FromArgb(0, 0xFF, 0x4A, 0x3D), Color.FromArgb(0xE0, 0xFF, 0x8A, 0x3D));
 
     /// <summary>The crown drawn at <paramref name="at"/> (its box's top-left), <paramref name="k"/> times its size, with its gem and band light.</summary>
     static void Crown(DrawingContext dc, Point at, double k = 1)
     {
         dc.PushTransform(new MatrixTransform(k, 0, 0, k, at.X, at.Y));
         // a blood glow behind it
-        dc.DrawEllipse(BloodGlow, null, new Point(8, 8), 11, 9);
+        dc.DrawEllipse(BloodGlow, null, new Point(10, 10), 14, 11);
         dc.DrawGeometry(CrownFill, CrownPen, CrownShape);
-        dc.DrawRectangle(Mod.Br(Color.FromRgb(0x3A, 0x05, 0x0B), .9), null, new Rect(1.6, 9.6, 12.8, 1));
-        dc.DrawRectangle(Mod.Br(PaleC, .55), null, new Rect(2.2, 9.2, 11.6, .6));
-        dc.DrawEllipse(Mod.Br(PaleC), null, new Point(8, 11.3), 1.2, 1.2);
+        // the band: a hot line along its top, an ember gem at its middle
+        dc.DrawRectangle(Mod.Br(Color.FromRgb(0xFF, 0x6A, 0x4A), .9), null, new Rect(3.6, 12, 12.8, .9));
+        dc.DrawEllipse(CrownGem, null, new Point(10, 14.2), 2.2, 2.2);
         dc.Pop();
     }
 
@@ -254,10 +257,10 @@ sealed partial class HudAsmodian
         readonly List<(System.Windows.Shapes.Ellipse El, TranslateTransform T, ScaleTransform S, int Seed, double Rise)> _live = new();
         public Sparks(Canvas layer) => _layer = layer;
 
-        public void Start(IEnumerable<(Point At, int Seed, double Rise)> pts)
+        public void Start(IEnumerable<(Point At, int Seed, double Rise)> pts, int cap = 9)
         {
             Clear();
-            foreach (var (at, seed, rise) in pts.Take(9))
+            foreach (var (at, seed, rise) in pts.Take(cap))
             {
                 var t = new TranslateTransform(); var sc = new ScaleTransform(1, 1);
                 var el = new System.Windows.Shapes.Ellipse { Width = D, Height = D, Fill = SparkPale, Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5) };
@@ -295,10 +298,12 @@ sealed partial class HudAsmodian
     /// A plate's heat, drawn once as its own layer over the plate (its opacity animated, never the plate redrawn): the edge's
     /// glow in hot crimson past the plate, a hot smoulder from its foot and a hot edge line.
     /// </summary>
-    static void HotEdge(DrawingContext dc, Size s, double big = 9, double small = 3, Color? edge = null, double g = G)
+    static void HotEdge(DrawingContext dc, Size s, double big = 9, double small = 3, Color? edge = null, double g = G, Thickness? room = null)
     {
-        if (s.Width < 2 * g + 6 || s.Height < 2 * g + 6) return;
-        var r = new Rect(g, g, s.Width - 2 * g, s.Height - 2 * g);
+        var rm = room ?? new Thickness(g);
+        if (s.Width < rm.Left + rm.Right + 6 || s.Height < rm.Top + rm.Bottom + 6) return;
+        var r = new Rect(rm.Left, rm.Top, s.Width - rm.Left - rm.Right, s.Height - rm.Top - rm.Bottom);
+        g = Math.Min(Math.Min(rm.Left, rm.Right), Math.Min(rm.Top, rm.Bottom));
         var shape = Plate(r, big, small);
         var ec = edge ?? HotC;
         for (int k = 3; k >= 1; k--) dc.DrawGeometry(null, Mod.P(Mod.Br(ec, k == 1 ? .34 : k == 2 ? .16 : .07), 2 * k * Math.Min(1, g / 5)), shape);
@@ -310,8 +315,8 @@ sealed partial class HudAsmodian
     }
 
     /// <summary>A heat layer for a plate (collapsed and clear until a moment lights it).</summary>
-    static TacSketch HeatLayer(double big = 9, double small = 3, Color? edge = null, double g = G) =>
-        new((dc, s) => HotEdge(dc, s, big, small, edge, g)) { Opacity = 0, Visibility = Visibility.Collapsed };
+    static TacSketch HeatLayer(double big = 9, double small = 3, Color? edge = null, double g = G, Thickness? room = null) =>
+        new((dc, s) => HotEdge(dc, s, big, small, edge, g, room)) { Opacity = 0, Visibility = Visibility.Collapsed };
 
     /// <summary>A heat layer's strength for a moment (shown while above nothing).</summary>
     static void Heat(UIElement layer, double k)

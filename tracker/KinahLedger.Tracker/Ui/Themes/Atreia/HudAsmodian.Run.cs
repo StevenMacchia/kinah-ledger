@@ -32,7 +32,7 @@ sealed partial class HudAsmodian
     /// <summary>The tab the run's head sits on: a small iron plate joined to the Buddy's top edge.</summary>
     Grid RunHeadPlate(TextBlock head)
     {
-        var g = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(10, 0, 0, -G - 2) };
+        var g = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(LineRoom.Left + 18, 0, 0, -LineRoom.Top - 1) };
         g.Children.Add(new TacSketch((dc, s) => Iron(dc, s, _opacity, big: 5, small: 0, thorns: false)));
         head.Margin = new Thickness(G + 8, G + 2, G + 9, G + 4);
         g.Children.Add(head);
