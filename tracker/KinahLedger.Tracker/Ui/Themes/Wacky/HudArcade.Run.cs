@@ -51,8 +51,10 @@ sealed partial class HudArcade
         if (strip != null) { strip.Margin = new Thickness(12, 0, 0, 0); Pixelate(strip); _lineBody.Children.Add(strip); }
 
         // the head on its plate across the top edge, after the 1UP legend
-        double left = _lineLegend.Margin.Left + Mod.W(_lineLegend) + 6;
-        _runPlate.Margin = new Thickness(left, -1, 0, 0);
+        // the head inside the screen, on its own line under the 1UP plate's edge (clear of the frame), the run's words under it
+        double left = _lineBody.Margin.Left - 4;
+        _runPlate.Margin = new Thickness(left, 17, 0, 0);
+        _lineBody.Margin = new Thickness(LineBodyM.Left, 34, LineBodyM.Right, LineBodyM.Bottom);
         ModernRun.Head(_runHead, s, FightWidth - 10 - left - 20, RunTones);
         _runPlate.Visibility = Visibility.Visible;
     }

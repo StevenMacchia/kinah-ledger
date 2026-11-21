@@ -43,7 +43,8 @@ sealed partial class HudArcade : ModernLook
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TacSketch _lineScreen;
     readonly FrameworkElement _lineLegend;
-    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 17, 15, 9) };
+    readonly StackPanel _lineBody = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 20, 15, 9) };
+    static readonly Thickness LineBodyM = new(12, 20, 15, 9);
     readonly Grid _lineFx = new() { IsHitTestVisible = false, ClipToBounds = true };
     /// <summary>The bursts of pixel sparks over each screen (clipped to it), and the alert plates that flash over its legend.</summary>
     readonly Canvas _lineSparks = new() { IsHitTestVisible = false, ClipToBounds = true }, _fightSparks = new() { IsHitTestVisible = false, ClipToBounds = true };
@@ -98,7 +99,7 @@ sealed partial class HudArcade : ModernLook
         _lineLegend = Legend(L.T("1UP"));
         _lineScreen = new TacSketch((dc, s) => Screen(dc, s, _dim ? GreyC : CabinetC));
         _lineFlare = Flare(MintC2);
-        _runPlate.Background = Ink(DeepC); _runPlate.Child = _runHead;
+        _runPlate.Child = _runHead;
         _line.Children.Add(_lineScreen); _line.Children.Add(_lineFlare); _line.Children.Add(_lineBody); _line.Children.Add(_lineLegend); _line.Children.Add(_runPlate); _line.Children.Add(_lineFx); _line.Children.Add(_lineSparks); _line.Children.Add(_lineAnchor); _line.Children.Add(_lineAlert);
         _fightLegend = MarqueeWord(L.T("HI-SCORE"));
         _fightScreen = new TacSketch((dc, s) => DrawScreen(dc, new Rect(0, 0, s.Width, s.Height), CabinetC, Ground, marquee: true));
@@ -152,14 +153,10 @@ sealed partial class HudArcade : ModernLook
     /// <summary>The Buddy's legend: dark LED letters on a small lit marquee plate set into its top edge, at the left.</summary>
     static FrameworkElement Legend(string s)
     {
-        var w = Word(s, LegendPx, MarqueeInk, .35, textSize: 11);
-        if (w is TextBlock tb) tb.Effect = new DropShadowEffect { Color = Color.FromRgb(0x50, 0x08, 0x08), ShadowDepth = 0, BlurRadius = 2, Opacity = 1 };
-        var glass = new Grid();
-        glass.Children.Add(new TacSketch((dc, sz) => { var r = new Rect(0, 0, sz.Width, sz.Height); dc.DrawRectangle(MarqueeFill, null, r); dc.DrawRectangle(MarqueeGloss, null, r); }));
-        glass.Children.Add(new Border { Child = w, Padding = new Thickness(5, 2, 5, 2) });
+        var w = Word(s, LegendPx, LedC, .45, textSize: 11);
         return new Border
         {
-            Child = glass, BorderBrush = Ink(Colors.Black, .85), BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            Child = w, Background = Ink(DeepC), Padding = new Thickness(5, 2, 5, 2), BorderBrush = Ink(TMoldC), BorderThickness = new Thickness(1.5), IsHitTestVisible = false,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, Spells(s) ? -1 : -3, 0, 0),
         };
     }
@@ -167,10 +164,12 @@ sealed partial class HudArcade : ModernLook
     /// <summary>A word on the marquee: dark LED letters at its left, lit by the glass behind them.</summary>
     static FrameworkElement MarqueeWord(string s)
     {
-        var w = Word(s, 1.9, MarqueeInk, .4, textSize: 14);
-        if (w is TextBlock tb) tb.Effect = new DropShadowEffect { Color = Color.FromRgb(0x50, 0x08, 0x08), ShadowDepth = 0, BlurRadius = 2, Opacity = 1 };
-        w.HorizontalAlignment = HorizontalAlignment.Center; w.VerticalAlignment = VerticalAlignment.Center;
-        return w;
+        var w = Word(s, 1.7, LedC, .5, textSize: 13);
+        return new Border
+        {
+            Child = w, Background = Ink(DeepC, .94), BorderBrush = Ink(Colors.Black, .9), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1, 8, 1),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
     }
 
     /// <summary>The marquee's bulbs lit (every other one, from <paramref name="phase"/>), drawn once, hidden until a moment.</summary>
@@ -238,6 +237,7 @@ sealed partial class HudArcade : ModernLook
 
     protected override void DrawLine(Figures f)
     {
+        _lineBody.Margin = LineBodyM;
         _lineBody.Children.Clear();
         _ringArt = null; _lineWords = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
