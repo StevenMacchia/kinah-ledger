@@ -510,7 +510,7 @@ sealed partial class HudArcade : ModernLook
             {
                 bool wipe = e.Outcome == "wipe";
                 var oc = wipe ? CoralC : MarkMintC;
-                var st = new Border { Child = Word(outcome.ToUpperInvariant(), 1.3, oc, .45, textSize: 10), BorderBrush = Ink(oc, .85), BorderThickness = new Thickness(1), Background = Ink(DeepC, .8),
+                var st = new Border { Child = Fig(outcome.ToUpperInvariant(), 1.3, oc, 0, textSize: 10.5), BorderBrush = Ink(oc, .85), BorderThickness = new Thickness(1), Background = Ink(DeepC, .8),
                     Padding = new Thickness(4, 2, 4, 2), Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "outcome" };
                 right.Children.Add(st);
             }
@@ -584,7 +584,7 @@ sealed partial class HudArcade : ModernLook
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
         var tone = p.Worth.Length > 0 ? MintC2 : Colors.White;
         var words = new StackPanel { Margin = new Thickness(7, 4, 8, 4) };
-        var fig = Word(worth, 2, Mod.Mix(tone, Colors.White, .2), .45, textSize: 15);
+        var fig = Fig(worth, 2, Mod.Mix(tone, Colors.White, .2), 0, textSize: 15);
         fig.HorizontalAlignment = HorizontalAlignment.Left;
         words.Children.Add(fig);
         var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, 3, 0, 0);
