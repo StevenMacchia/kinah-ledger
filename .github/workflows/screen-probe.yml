@@ -2,30 +2,13 @@ name: screen probe
 on:
   push:
     branches: [ci/fonts-diagnostic]
-    paths: [".github/workflows/screen-probe.yml"]
+    paths: [".github/workflows/screen-probe.yml", "tools/probe-text.ps1"]
 jobs:
   p:
     runs-on: windows-latest
     steps:
-      - shell: pwsh
+      - uses: actions/checkout@v4
+      - shell: powershell
         run: |
-          Add-Type -TypeDefinition @'
-          using System; using System.Runtime.InteropServices;
-          public static class Disp {
-            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplaySettingsW(string dev, int mode, IntPtr dm);
-            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int ChangeDisplaySettingsW(IntPtr dm, int flags);
-            [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplayDevicesW(string d, int n, byte[] dd, int f);
-            public static string[] Dev() { var l = new System.Collections.Generic.List<string>(); for (int i = 0; i < 6; i++) { var dd = new byte[840]; BitConverter.GetBytes(840).CopyTo(dd, 0); if (!EnumDisplayDevicesW(null, i, dd, 0)) break; l.Add(System.Text.Encoding.Unicode.GetString(dd, 4, 64).TrimEnd((char)0) + " | " + System.Text.Encoding.Unicode.GetString(dd, 68, 256).TrimEnd((char)0) + " | flags " + BitConverter.ToInt32(dd, 324)); } return l.ToArray(); }
-          }
-          '@
-          # a raw DEVMODEW (220 bytes): dmSize at 68, dmFields at 72, dmBitsPerPel 168, dmPelsWidth 172, dmPelsHeight 176
-          $M = [Runtime.InteropServices.Marshal]
-          $buf = $M::AllocHGlobal(220)
-          [Disp]::Dev() | ForEach-Object { "device: $_" }
-          foreach ($dev in @($null, '\.\DISPLAY1', '\.\DISPLAY2')) {
-            foreach ($i in @(-1, 0, 1)) {
-              $M::Copy([byte[]]::new(220), 0, $buf, 220); $M::WriteInt16($buf, 68, 220)
-              $ok = [Disp]::EnumDisplaySettingsW($dev, $i, $buf)
-              "dev '$dev' mode $i -> $ok $($M::ReadInt32($buf, 172))x$($M::ReadInt32($buf, 176))x$($M::ReadInt32($buf, 168)) err $($M::GetLastWin32Error())"
-            }
-          }
+          powershell -ExecutionPolicy Bypass -File tools/probe-text.ps1
+          Get-ChildItem C:\Windows\Fonts\segoeui*.ttf, C:\Windows\Fonts\SegUIVar*.ttf | ForEach-Object { "{0} {1} {2}" -f $_.Name, $_.Length, $_.VersionInfo.FileVersion }
