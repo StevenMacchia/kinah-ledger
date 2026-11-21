@@ -35,7 +35,7 @@ sealed partial class HudFinals : ModernLook
     // the Buddy: its plate, the medal, the hour, the session and the timer chips
     readonly Grid _line = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TacSketch _linePlate;
-    readonly StackPanel _lineBody = new() { Margin = new Thickness(8, 7, 14, 7) };
+    readonly StackPanel _lineBody = new() { Margin = new Thickness(8, 10, 14, 7) };
     readonly StackPanel _lineRow = new() { Orientation = Orientation.Horizontal };
     readonly StackPanel _timers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly Border _timersInLine = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
@@ -56,13 +56,25 @@ sealed partial class HudFinals : ModernLook
     // the meter
     readonly Grid _fight = new() { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
     readonly TacSketch _fightPlate;
-    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 9, Pad, 9) };
+    readonly StackPanel _fightBody = new() { Margin = new Thickness(Pad, 18, Pad, 9) };
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly Canvas _confetti = new() { IsHitTestVisible = false, ClipToBounds = true };
+    readonly Canvas _pyro = new() { IsHitTestVisible = false, ClipToBounds = true };
     readonly Border _sweepHost = new() { IsHitTestVisible = false };
+    /// <summary>The stage lights behind the head (static at rest; they swing in the moments).</summary>
+    readonly StageBeams _beams = new(4);
+    /// <summary>The trophy in flight to a new leader, its streak of gold and the ring it lands with (hidden at rest).</summary>
+    readonly Canvas _fly = new() { IsHitTestVisible = false, ClipToBounds = true };
+    readonly Trophy _flyer = new(FinalsRow.CupScale) { Opacity = 0 };
+    readonly TranslateTransform _flyAt = new(), _streakAt = new(), _ringAt = new();
+    readonly ScaleTransform _flyGrow = new(1, 1), _streakLen = new(1, 1), _ringGrow = new(1, 1);
+    readonly System.Windows.Shapes.Rectangle _streak = new() { Width = 7, Height = 1, Opacity = 0, RadiusX = 3, RadiusY = 0, Fill = Mod.Grad(true, (Mod.A(AuPaleC, .95), 0), (Mod.A(AuC, .55), .4), (Mod.A(AuC, 0), 1)) };
+    readonly System.Windows.Shapes.Ellipse _ring = new() { Width = 36, Height = 36, Opacity = 0, StrokeThickness = 2, Stroke = Mod.Br(AuLightC, .95) };
     readonly TranslateTransform _settle = new();
     FrameworkElement? _head;
+    /// <summary>The fight's end plate is up over the head (the head's words hidden under it meanwhile).</summary>
+    bool _plateUp;
     string _leadFight = "";
     long _leadId;
 
@@ -71,11 +83,18 @@ sealed partial class HudFinals : ModernLook
         // the look's own rows (Ui/Themes/ThemeRows.cs), a fit shared by the rows so the share column holds or goes for all
         var fit = new FinalsFit();
         UseRows(FinalsRow.Pitch, m => new FinalsRow(fit), 15, GapLine);
-        _linePlate = new TacSketch((dc, s) => Plate(dc, s, Radius, _opacity));
+        _linePlate = new TacSketch((dc, s) => Plate(dc, s, Radius, _opacity, lamps: 3, beams: true));
         _lineBody.Children.Add(_lineRow);
         _line.Children.Add(_linePlate); _line.Children.Add(_lineGlint); _line.Children.Add(_lineBody);
-        _fightPlate = new TacSketch((dc, s) => Plate(dc, s, Radius, _opacity));
-        _fight.Children.Add(_fightPlate); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx); _fight.Children.Add(_confetti); _fight.Children.Add(_sweepHost);
+        _fightPlate = new TacSketch((dc, s) => Plate(dc, s, Radius, _opacity, lamps: 4, rig: true));
+        _fight.Children.Add(_fightPlate); _fight.Children.Add(_beams); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        _fight.Children.Add(_pyro); _fight.Children.Add(_confetti); _fight.Children.Add(_fly); _fight.Children.Add(_sweepHost);
+        _flyer.RenderTransform = new TransformGroup { Children = { _flyGrow, _flyAt } };
+        _flyer.RenderTransformOrigin = new Point(.5, .5);
+        _streak.RenderTransform = new TransformGroup { Children = { _streakLen, _streakAt } };
+        _ring.RenderTransformOrigin = new Point(.5, .5);
+        _ring.RenderTransform = new TransformGroup { Children = { _ringGrow, _ringAt } };
+        _fly.Children.Add(_streak); _fly.Children.Add(_ring); _fly.Children.Add(_flyer);
         _fight.RenderTransform = _settle;
         _body.Children.Add(_timersUp); _body.Children.Add(_fight); _body.Children.Add(_line); _body.Children.Add(_note);
         _root.Children.Add(_body);
@@ -109,7 +128,7 @@ sealed partial class HudFinals : ModernLook
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _lineBody.Opacity = _dim ? .62 : 1;
-        _lineBody.Margin = new Thickness(8, 7, 14, 7);
+        _lineBody.Margin = new Thickness(8, 10, 14, 7);
         bool mark = f.Abyss && f.Counted && f.Icon.Length > 0;
         if (mark) { var m = AbyssMark(f.Icon, 40); m.Margin = new Thickness(2, 0, 10, 0); m.VerticalAlignment = VerticalAlignment.Center; _lineRow.Children.Add(m); }
         // in a dungeon run: the run's head, clock, splits and verdict in place of the hour (HudFinals.Run.cs)
@@ -317,9 +336,11 @@ sealed partial class HudFinals : ModernLook
     protected override void DrawFight(Encounter? e, DateTime now)
     {
         _fightBody.Children.Clear();
-        if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); _confetti.Children.Clear(); _leadFight = ""; _leadId = 0; PlaceTimers(); return; }
+        if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); _confetti.Children.Clear(); _pyro.Children.Clear(); _plateUp = false; _leadFight = ""; _leadId = 0; PlaceTimers(); return; }
         double w = FightWidth - 8;
         _fight.Width = w;
+        _beams.Fit(w);
+        var before = Meter?.Members.ToDictionary(m => m.Id, m => m.Rank) ?? new Dictionary<long, int>();
         double inner = w - 2 * Pad;
         _fightBody.Children.Add(_timersInFight);
         // the head: the boss in tall condensed type (as the game names it), the outcome chip and the clock at the right
@@ -344,6 +365,7 @@ sealed partial class HudFinals : ModernLook
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         _head = head;
+        if (_plateUp) head.Visibility = Visibility.Hidden;   // the end's plate is over it
         _fightBody.Children.Add(head);
         _fightBody.Children.Add(GoldRule(new Thickness(-2, 5, -2, 0)));
         if (e.Waiting)
@@ -385,9 +407,9 @@ sealed partial class HudFinals : ModernLook
                 words.Tag = "hp-text";
                 Grid.SetColumn(words, 1); hpLine.Children.Add(words);
                 _fightBody.Children.Add(hpLine);
-                _fightBody.Children.Add(new Border { Height = 8 });
+                _fightBody.Children.Add(new Border { Height = 10 });
             }
-            else _fightBody.Children.Add(new Border { Height = 8 });
+            else _fightBody.Children.Add(new Border { Height = 10 });
             PutRows(_fightBody, e, now, inner);
             if (e.HasDamage)
             {
@@ -400,7 +422,7 @@ sealed partial class HudFinals : ModernLook
         // the lead changing hands while the fight runs: the trophy rises onto the new leader and a glint sweeps the bars
         var lead = Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.CpOnly && !m.Pvp);
         long id = lead?.Id ?? 0;
-        if (e.Id == _leadFight && id != 0 && _leadId != 0 && id != _leadId && e.Live && !e.Waiting && Moves) LeadChanged(id);
+        if (e.Id == _leadFight && id != 0 && _leadId != 0 && id != _leadId && e.Live && !e.Waiting && Moves) LeadChanged(id, before.TryGetValue(id, out var was) ? was : Meter?.Members.Count ?? 1);
         _leadFight = e.Id; _leadId = id;
     }
 
@@ -422,10 +444,48 @@ sealed partial class HudFinals : ModernLook
         }, () => { foreach (var r in rows) r.Glint(-1); });
     }
 
-    void LeadChanged(long id)
+    /// <summary>
+    /// The lead changing hands: the trophy leaves its stand, picks up the new leader where they climbed from and rides up with
+    /// them to the top on a streak of gold, then lands with a ring of gold and its gleam; the stage lights swing and a glint
+    /// sweeps the bars. Transforms and opacity only.
+    /// </summary>
+    void LeadChanged(long id, int fromRank)
     {
-        if (Meter?.RowOf(id) is FinalsRow row) row.Crown(900);
         Sweep(700);
+        _beams.Play(900, 11);
+        if (Meter is not { } meter || meter.RowOf(id) is not FinalsRow row) return;
+        Point m0;
+        try { m0 = meter.TranslatePoint(new Point(0, 0), _fight); } catch (InvalidOperationException) { row.Crown(900); return; }
+        double cw = 14 * FinalsRow.CupScale, ch = 16 * FinalsRow.CupScale;
+        double x = m0.X + FinalsRow.CupX - cw / 2, yTop = m0.Y + FinalsRow.CupTop;
+        int from = Math.Clamp(fromRank - 1, 0, Math.Max(0, meter.Members.Count - 1));
+        double yFrom = m0.Y + from * FinalsRow.Pitch + FinalsRow.CupTop;
+        if (from == 0) { row.Crown(900); return; }
+        row.CrownAway();
+        bool landed = false;
+        _flyAt.X = x; _flyAt.Y = yFrom;
+        _streakAt.X = x + cw / 2 - 3.5;
+        _ringAt.X = x + cw / 2 - 18; _ringAt.Y = yTop + ch * .55 - 18;
+        Motion.Play(_fly, 950, t =>
+        {
+            double f = Seg(t, 0, .5), k = Out(f);
+            double y = yFrom + (yTop - yFrom) * k - 8 * Math.Sin(Math.PI * f);
+            _flyAt.Y = y;
+            _flyGrow.ScaleX = _flyGrow.ScaleY = 1 + .3 * Math.Sin(Math.PI * f);
+            _flyer.Opacity = t < .05 ? t / .05 : t < .5 ? 1 : 0;
+            // the streak: from the cup back down the way it came, shrinking away once it lands
+            double len = Math.Max(0, yFrom - y) * (1 - Seg(t, .45, .75));
+            _streakAt.Y = y + ch * .45; _streakLen.ScaleY = Math.Max(.01, len);
+            _streak.Opacity = len > 1 ? .95 : 0;
+            double r = Seg(t, .5, .92);
+            _ringGrow.ScaleX = _ringGrow.ScaleY = .4 + 1.8 * Out(r);
+            _ring.Opacity = r is > 0 and < 1 ? 1 - r : 0;
+            if (!landed && t >= .5) { landed = true; row.Crown(650); }
+        }, () =>
+        {
+            _flyer.Opacity = 0; _streak.Opacity = 0; _ring.Opacity = 0;
+            if (!landed) row.Crown(1);
+        });
     }
 
     // ================================================================ the moments
@@ -486,55 +546,160 @@ sealed partial class HudFinals : ModernLook
         }, () => { chip.Effect = null; chip.BorderBrush = edge; });
     }
 
-    /// <summary>A fight started: its plate rises in, a band of gold sweeps the bars, the trophy rises onto the leader.</summary>
+    /// <summary>A fight started: its plate rises in, the stage lights swing on, a band of gold sweeps the bars, the trophy lands on the leader.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
+        // a new fight under the last one's plate: the plate goes, the head comes back
+        if (_plateUp) { Motion.Halt(_fightFx); _fightFx.Children.Clear(); _plateUp = false; if (_head != null) _head.Visibility = Visibility.Visible; }
         Motion.Play(_fight, 420, t => { double k = Out(t); _settle.Y = 6 * (1 - k); _fight.Opacity = .2 + .8 * k; }, () => { _settle.Y = 0; _fight.Opacity = 1; });
+        _beams.Play(1200, 16);
         Sweep(1000, .12);
         if (ShownRows().FirstOrDefault(r => r.Leads) is { } lead) lead.Crown(1100);
     }
 
     /// <summary>
-    /// A fight ended: a plate saying how ("KILLED 2:40") settles over the head for a moment, black and gold (coral for a wipe);
-    /// a kill or a clear throws confetti through the panel and sweeps the bars with gold.
+    /// A fight ended. A kill or a clear is the grand final's last second: gold pyro bursts from both top corners, the stage
+    /// lights swing wide, the CHAMPION plate drops over the head with the top damage dealer's name, their DPS and the time,
+    /// a confetti cannon fires from both bottom corners and a band of gold sweeps the bars. A wipe: a plate in coral over the
+    /// head saying so, nothing more. All of it one course each, transforms and opacity only, clipped to the panel.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
+        double headY = _fightBody.Margin.Top, headH = 24;
+        if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight)) { headY = hd.TranslatePoint(new Point(0, 0), _fight).Y; headH = hd.ActualHeight; }
+        var champ = wipe ? null : Meter?.Members.FirstOrDefault(m => m.TopDps && !m.Pvp) ?? Meter?.Members.FirstOrDefault(m => m.Rank == 1 && !m.Pvp);
         var plate = new Grid { VerticalAlignment = VerticalAlignment.Top };
         plate.Children.Add(new TacSketch((dc, s) =>
         {
             if (s.Width < 6 || s.Height < 6) return;
             dc.DrawGeometry(Frozen(Black0), null, Mod.Pill(new Rect(.75, .75, s.Width - 1.5, s.Height - 1.5), 3));   // nothing of the head shows through
             Plate(dc, s, 3, 1, shadow: false, rim: wipe ? 0 : 1);
+            if (champ != null) Sunburst(dc, s);
             if (wipe) dc.DrawGeometry(null, Mod.P(Mod.Br(CoralC, .75), 1.4), Mod.Pill(new Rect(.75, .75, s.Width - 1.5, s.Height - 1.5), 3));
         }));
-        var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var ow = T(Caps(OutcomeText(e)), 19, wipe ? Frozen(Mod.Mix(CoralC, Colors.White, .25)) : GoldInk, FontWeights.SemiBold, cond: true);
-        words.Children.Add(ow);
-        var ck = T("   " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, White, FontWeights.SemiBold); ck.Margin = new Thickness(0, 1, 0, 0);
-        words.Children.Add(ck);
-        plate.Children.Add(words);
-        var sc = new ScaleTransform(1, 1);
-        plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = sc;
-        _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
-        double headY = _fightBody.Margin.Top, headH = 24;
-        // seated over the head as laid out now, once (nothing is laid out again while it plays)
-        if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight)) { headY = hd.TranslatePoint(new Point(0, 0), _fight).Y; headH = hd.ActualHeight; }
-        plate.Margin = new Thickness(Pad - 4, Math.Max(2, headY - 4), Pad - 4, 0);
-        plate.Height = headH + 8;
-        Motion.Play(_fightFx, 2400, t =>
+        var clock = Clock(e.Duration(e.End ?? DateTime.UtcNow));
+        Band? light = null;
+        FrameworkElement? champLines = null;
+        if (champ != null)
         {
-            double i = Out(Seg(t, 0, .14)), o = Seg(t, .82, 1);
-            plate.Opacity = i * (1 - o);
-            sc.ScaleX = sc.ScaleY = 1.06 - .06 * i;
-        }, () => _fightFx.Children.Clear());
+            // CHAMPION between two trophies; under it the champion, their DPS, how the fight ended and its time
+            var lines = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 1) };
+            var top = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            var word = T(Caps(L.T("CHAMPION")), 25, GoldInk, FontWeights.SemiBold, cond: true);
+            word.Margin = new Thickness(7, -2, 7, -3);
+            word.Effect = new DropShadowEffect { Color = AuC, ShadowDepth = 0, BlurRadius = 8, Opacity = .55 };
+            top.Children.Add(new Trophy(1.25) { VerticalAlignment = VerticalAlignment.Center });
+            top.Children.Add(word);
+            top.Children.Add(new Trophy(1.25) { VerticalAlignment = VerticalAlignment.Center });
+            lines.Children.Add(top);
+            var sub = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            var nm = T(champ.Name, 13.5, White, FontWeights.SemiBold); nm.TextTrimming = TextTrimming.CharacterEllipsis; nm.MaxWidth = Math.Max(80, FightWidth - 8 - 2 * Pad - 190);
+            sub.Children.Add(nm);
+            var rest = T("", 13, Soft, FontWeights.Normal);
+            if (!champ.CpOnly && champ.Figure.Length > 0)
+            {
+                rest.Inlines.Add(new System.Windows.Documents.Run("   " + champ.Figure) { Foreground = AuPale, FontWeight = FontWeights.SemiBold });
+                rest.Inlines.Add(new System.Windows.Documents.Run(" " + L.T("DPS")) { FontSize = 10.5, FontStretch = FontStretches.Condensed, Foreground = AuSoft });
+            }
+            rest.Inlines.Add(new System.Windows.Documents.Run("   ·   ") { Foreground = Au });
+            rest.Inlines.Add(new System.Windows.Documents.Run(Caps(OutcomeText(e)) + " ") { FontSize = 11, FontStretch = FontStretches.Condensed, Foreground = AuSoft });
+            rest.Inlines.Add(new System.Windows.Documents.Run(clock) { Foreground = White, FontWeight = FontWeights.SemiBold });
+            sub.Children.Add(rest);
+            lines.Children.Add(sub);
+            light = new Band(AuPaleC, .4, 54) { Margin = new Thickness(2) };
+            plate.Children.Add(light);
+            plate.Children.Add(lines);
+            champLines = lines;
+            plate.Height = 56;
+        }
+        else
+        {
+            var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            words.Children.Add(T(Caps(OutcomeText(e)), 19, wipe ? Frozen(Mod.Mix(CoralC, Colors.White, .25)) : GoldInk, FontWeights.SemiBold, cond: true));
+            var ck = T("   " + clock, 16, White, FontWeights.SemiBold); ck.Margin = new Thickness(0, 1, 0, 0);
+            words.Children.Add(ck);
+            plate.Children.Add(words);
+            plate.Height = headH + 8;
+        }
+        var flash = new Border { Background = Mod.Br(AuPaleC, .9), CornerRadius = new CornerRadius(3), Opacity = 0, IsHitTestVisible = false };
+        if (!wipe) plate.Children.Add(flash);
+        var sc = new ScaleTransform(1, 1);
+        var drop = new TranslateTransform();
+        plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = new TransformGroup { Children = { sc, drop } };
+        _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
+        _plateUp = true;
+        if (_head != null) _head.Visibility = Visibility.Hidden;
+        // seated over the head as laid out now, once (nothing is laid out again while it plays)
+        // the champion's plate drops over the whole stage head (the rig too); a wipe's over the head only
+        plate.Margin = new Thickness(Pad - 4, champ != null ? 4 : Math.Max(3, headY - 4), Pad - 4, 0);
+        double rowsTop = headY + headH + 17;
+        if (Meter is { } mt && mt.ActualHeight > 0 && mt.IsDescendantOf(_fight)) rowsTop = mt.TranslatePoint(new Point(0, 0), _fight).Y;
+        // never over the leader's trophy: the plate ends just over it
+        if (champ != null) plate.Height = Math.Clamp(rowsTop + FinalsRow.CupTop - 3 - plate.Margin.Top, 42, 60);
+        double plateFoot = plate.Margin.Top + plate.Height;
+        Motion.Play(_fightFx, wipe ? 2400 : 3400, t =>
+        {
+            double i = Seg(t, 0, wipe ? .14 : .1), o = Seg(t, wipe ? .82 : .86, 1);
+            plate.Opacity = Out(i) * (1 - o);
+            if (wipe) { sc.ScaleX = sc.ScaleY = 1.06 - .06 * Out(i); return; }
+            // the plate slams down from above, overshooting, a white-gold flash on impact, then a light runs across it
+            drop.Y = -16 * (1 - Math.Min(1.06, Back(i, 2.4)));
+            sc.ScaleX = sc.ScaleY = 1.14 - .14 * Out(i);
+            double f = Seg(t, .07, .2);
+            flash.Opacity = f is > 0 and < 1 ? .85 * (1 - f) : 0;
+            light?.At(Seg(t, .14, .42));
+        }, () => { _fightFx.Children.Clear(); _plateUp = false; if (_head != null) _head.Visibility = Visibility.Visible; });
         if (wipe) return;
         // the panel's size as laid out (or, not laid out yet in a render's held frame, as it measures)
         double fw = _fight.ActualWidth > 0 ? _fight.ActualWidth : _fight.Width, fh = _fight.ActualHeight;
         if (fh <= 0 || double.IsNaN(fw)) { _fight.Measure(new Size(double.IsNaN(fw) ? double.PositiveInfinity : fw, double.PositiveInfinity)); fh = _fight.DesiredSize.Height - _fight.Margin.Bottom; if (double.IsNaN(fw)) fw = _fight.DesiredSize.Width; }
-        Confetti(_confetti, fw, fh, headY + headH + 8);   // from just under the plate: the pieces never cross its words
-        Sweep(1100, .1);
+        // the pyro and the confetti keep to the banner band over the rows (the stage's floor), out of the plate's words: no
+        // figure, name or mark of a row is ever covered
+        var band = new RectangleGeometry(new Rect(0, 0, fw, Math.Max(20, rowsTop - 1)));
+        Geometry open = band;
+        if (champLines != null)
+        {
+            champLines.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var ds = champLines.DesiredSize;
+            var words = new Rect(fw / 2 - ds.Width / 2 - 4, plate.Margin.Top + (plate.Height - ds.Height) / 2 - 4, ds.Width + 8, ds.Height + 8);
+            open = new CombinedGeometry(GeometryCombineMode.Exclude, band, new RectangleGeometry(words));
+        }
+        open.Freeze();
+        _pyro.Clip = open; _confetti.Clip = open;
+        Pyro(_pyro, fw, fh);
+        Confetti(_confetti, fw, rowsTop);
+        _beams.Play(1800, 24);
+        Sweep(1100, .12);
+    }
+
+    /// <summary>The champion's plate's backdrop: rays of gold fanning out from behind CHAMPION, fading toward the plate's edges (drawn once).</summary>
+    static void Sunburst(DrawingContext dc, Size s)
+    {
+        var c = new Point(s.Width / 2, s.Height * .38);
+        var rays = new StreamGeometry();
+        using (var g = rays.Open())
+        {
+            const int n = 28;
+            double far = s.Width;
+            for (int i = 0; i < n; i += 2)
+            {
+                double a0 = 2 * Math.PI * i / n, a1 = 2 * Math.PI * (i + 1) / n;
+                g.BeginFigure(c, true, true);
+                g.LineTo(new Point(c.X + far * Math.Cos(a0), c.Y + far * Math.Sin(a0)), true, false);
+                g.LineTo(new Point(c.X + far * Math.Cos(a1), c.Y + far * Math.Sin(a1)), true, false);
+            }
+        }
+        rays.Freeze();
+        // the light: gold at the centre, gone by the plate's ends (placed on the plate, not on the rays' far ends)
+        var fill = new RadialGradientBrush { MappingMode = BrushMappingMode.Absolute, Center = c, GradientOrigin = c, RadiusX = s.Width * .55, RadiusY = s.Height * 1.1 };
+        fill.GradientStops.Add(new GradientStop(Mod.A(AuC, .38), 0));
+        fill.GradientStops.Add(new GradientStop(Mod.A(AuC, .16), .6));
+        fill.GradientStops.Add(new GradientStop(Mod.A(AuC, 0), 1));
+        fill.Freeze();
+        dc.PushClip(Mod.Pill(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3), 3));
+        dc.DrawGeometry(fill, null, rays);
+        dc.Pop();
     }
 }

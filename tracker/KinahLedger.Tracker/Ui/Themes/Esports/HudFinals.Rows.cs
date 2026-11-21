@@ -78,22 +78,37 @@ sealed partial class HudFinals
     /// </summary>
     sealed class FinalsRow : IThemeRow
     {
-        public const double H = 26, Pitch = 29;
-        const double PadX = 4, RankW = 20, Gap1 = 6, IconW = 18, Gap2 = 6, ShareW = 36, DmgW = 56, CritW = 36, PadR = 8;
+        static readonly Brush CupGlow = MakeCupGlow(), LeadCp = Mod.Br(Color.FromRgb(0xF0, 0xE2, 0xB4), .9), RowCp = Mod.Br(Colors.White, .7);
+        static Brush MakeCupGlow()
+        {
+            var b = new RadialGradientBrush();
+            b.GradientStops.Add(new GradientStop(Mod.A(AuC, .5), 0));
+            b.GradientStops.Add(new GradientStop(Mod.A(AuC, .18), .55));
+            b.GradientStops.Add(new GradientStop(Mod.A(AuC, 0), 1));
+            b.Freeze();
+            return b;
+        }
+
+        public const double H = 28, Pitch = 31;
+        const double PadX = 4, RankW = 26, Gap1 = 5, IconW = 18, Gap2 = 6, ShareW = 36, DmgW = 56, CritW = 36, PadR = 10;
+        /// <summary>The leader's trophy: its size (times the 14 × 16 drawing), its centre across the row and its top (over the row's top edge).</summary>
+        public const double CupScale = 2.0, CupX = PadX + RankW / 2, CupTop = -7;
+        /// <summary>The figures' column at the row's right (DPS and share): the kill's pyro and confetti keep off it.</summary>
+        public const double FiguresW = PadR + ShareW + 64;
         /// <summary>Where the bar starts: after the seed box.</summary>
         const double BarX = PadX + RankW + 3;
         readonly FinalsFit _fit;
         readonly Grid _root = new() { Height = H };
         readonly TacSketch _art;
         /// <summary>The glint across the row: a band moved by its transform (a sweep, a climb), never a redraw.</summary>
-        readonly Band _shine = new(AuPaleC, .55, 26, -28) { Margin = new Thickness(1) };
+        readonly Band _shine = new(AuPaleC, .6, 46, -28) { Margin = new Thickness(1) };
         readonly Grid _words = new();
         readonly TextBlock _rank = T("", 13, White, FontWeights.SemiBold, cond: true), _name = T("", 14, White, FontWeights.SemiBold), _cp = T("", 10.5, Mod.Br(Colors.White, .7), FontWeights.Normal),
             _heal = T("", 11.5, Mint2, FontWeights.SemiBold), _dps = T("", 17.5, White, FontWeights.SemiBold), _share = T("", 11, Mod.Br(Colors.White, .8), FontWeights.Normal),
             _dmg = T("", 12, Soft, FontWeights.Normal), _crit = T("", 11, Quiet, FontWeights.Normal);
         readonly StackPanel _nameLine = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = false };
         readonly Border _icon = new() { Width = IconW, Height = IconW, CornerRadius = new CornerRadius(IconW / 2), BorderThickness = new Thickness(1.2), VerticalAlignment = VerticalAlignment.Center, Background = Mod.Br(Black0, .6) };
-        readonly Trophy _trophy = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
+        readonly Trophy _trophy = new(CupScale) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-2, CupTop, -2, 0), Visibility = Visibility.Collapsed };
         readonly List<FrameworkElement> _keep = new();
         readonly List<(FrameworkElement Full, FrameworkElement Short)> _give = new();
         MeterMember? _m;
@@ -105,6 +120,13 @@ sealed partial class HudFinals
         public FrameworkElement Root => _root;
         /// <summary>This row is the leader's (rank 1 with damage done): the gold bar and the trophy.</summary>
         public bool Leads => _lead;
+
+        /// <summary>
+        /// Where the DPS bar is drawn, for main's PB ghost (IThemeBarSpan, added at integration): in <see cref="_art"/>, the lane a
+        /// FULL bar fills, from after the seed box to the tile's right edge (as <see cref="Draw"/> lays it out).
+        /// </summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null
+            : (_art, new Rect(BarX, 1.5, Math.Max(0, _art.ActualWidth - 1.5 - BarX), Math.Max(0, _art.ActualHeight - 3)));
 
         public FinalsRow(FinalsFit fit)
         {
@@ -156,6 +178,7 @@ sealed partial class HudFinals
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
             _keep.Clear(); _give.Clear();
             _cp.Text = m.Cp;
+            _cp.Foreground = lead ? LeadCp : RowCp;   // pale gold on the leader's gold, where grey goes faint
             if (m.Cp.Length > 0) _nameLine.Children.Add(_cp);
             FrameworkElement Add(FrameworkElement el) { el.Margin = new Thickness(5, 0, 0, 0); _nameLine.Children.Add(el); return el; }
             if (m.TopDps) _give.Add((Add(Mark("★ " + L.T("DPS"), false)), Add(Mark("★", false, L.T("Top DPS")))));
@@ -182,6 +205,9 @@ sealed partial class HudFinals
 
         /// <summary>The trophy rising into the seed box (the lead just taken, or the fight just begun).</summary>
         public void Crown(double ms) { if (_lead) _trophy.Rise(ms); }
+
+        /// <summary>The trophy away for a moment (in flight to this row); <see cref="Crown"/> lands it.</summary>
+        public void CrownAway() { if (_lead) _trophy.Away(); }
 
         /// <summary>The gold glint's place along the row (0 to 1; outside: none).</summary>
         public void Glint(double at) => _shine.At(at);
@@ -273,9 +299,10 @@ sealed partial class HudFinals
                 dc.PushClip(shape);
                 if (_lead)
                 {
-                    // brushed gold: a deep bronze at the ends and a lit band where the lathe caught the light, bevelled top and foot
+                    // brushed gold: a lit band where the lathe caught the light behind the name, running dark under the figures (so they
+                    // read in pale gold on near-black), bevelled top and foot
                     var gold = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(fill.X, 0), EndPoint = new Point(fill.Right, 0) };
-                    foreach (var (c, at) in new[] { (Color.FromRgb(0x4A, 0x36, 0x12), 0.0), (Color.FromRgb(0x86, 0x63, 0x22), .22), (Color.FromRgb(0xB5, 0x8C, 0x3A), .5), (Color.FromRgb(0x92, 0x6C, 0x28), .7), (Color.FromRgb(0x5E, 0x45, 0x18), 1.0) })
+                    foreach (var (c, at) in new[] { (Color.FromRgb(0x4A, 0x36, 0x12), 0.0), (Color.FromRgb(0x8E, 0x6A, 0x26), .18), (Color.FromRgb(0xC2, 0x98, 0x40), .4), (Color.FromRgb(0x7E, 0x5D, 0x21), .56), (Color.FromRgb(0x3A, 0x2A, 0x0E), .68), (Color.FromRgb(0x1E, 0x16, 0x08), 1.0) })
                         gold.GradientStops.Add(new GradientStop(c, at));
                     gold.Freeze();
                     dc.DrawRectangle(gold, null, fill);
@@ -287,8 +314,10 @@ sealed partial class HudFinals
                 {
                     // graphite lit from inside in the class's colour: deepening toward the leading edge, a glow along top and foot
                     dc.DrawRectangle(Mod.Grad(false, (Color.FromRgb(0x2A, 0x2A, 0x30), 0), (Color.FromRgb(0x2F, 0x2F, 0x36), 1)), null, fill);
-                    dc.DrawRectangle(Mod.Grad(false, (Mod.A(tone, .12), 0), (Mod.A(tone, .34), .75), (Mod.A(tone, .5), 1)), null, fill);
-                    dc.DrawRectangle(Mod.Grad(true, (Mod.A(tone, .55), 0), (Mod.A(tone, 0), .3), (Mod.A(tone, 0), .7), (Mod.A(tone, .45), 1)), null, fill);
+                    dc.DrawRectangle(Mod.Grad(false, (Mod.A(tone, .07), 0), (Mod.A(tone, .2), .75), (Mod.A(tone, .32), 1)), null, fill);
+                    dc.DrawRectangle(Mod.Grad(true, (Mod.A(tone, .45), 0), (Mod.A(tone, 0), .28), (Mod.A(tone, 0), .72), (Mod.A(tone, .36), 1)), null, fill);
+                    // the class's mark: a solid edge where the bar starts
+                    dc.DrawRectangle(Mod.Br(tone, .95), null, new Rect(fill.X, fill.Y, Math.Min(3, fx), fill.Height));
                     double ex = fill.Right;
                     // the leading edge: a soft glow and a slim line, quiet enough that a figure over it still reads
                     dc.DrawRectangle(Mod.Grad(false, (Mod.A(tone, 0), 0), (Mod.A(Mod.Mix(tone, Colors.White, .2), .38), 1)), null, new Rect(Math.Max(fill.X, ex - 14), fill.Y, Math.Min(14, fx), fill.Height));
@@ -299,9 +328,9 @@ sealed partial class HudFinals
             // a healer's share of the group's healing as a mint line along the foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
                 dc.DrawRectangle(Mod.Br(MintC, .9), null, new Rect(lane.X, lane.Bottom - 2.5, Math.Max(3, lane.Width * Math.Clamp(m.HealShare, 0, 1)), 2.5));
-            // the seed box: black, the leader's rimmed in brushed gold
-            var seed = new Rect(PadX + .5, r.Y + 3, RankW - 1, r.Height - 6);
-            dc.DrawGeometry(Mod.Br(Black0, .92), _lead ? Mod.P(GoldMetal, 1.3) : Mod.P(Mod.Br(AuC, .3), 1), Mod.Pill(seed, 2));
+            // the seed: a black box with the rank; the leader's a pool of gold light the trophy stands in
+            if (_lead) dc.DrawEllipse(CupGlow, null, new Point(CupX, h / 2 - 3), 19, 16);
+            else dc.DrawGeometry(Mod.Br(Black0, .92), Mod.P(Mod.Br(AuC, .3), 1), Mod.Pill(new Rect(PadX + (RankW - 20) / 2, r.Y + 4, 20, r.Height - 8), 2));
             // the tile's edge: yours in gold, the rest a faint line
             dc.DrawGeometry(null, Mod.P(m.You ? Mod.Br(AuLightC, .8) : Mod.Br(Colors.White, .07), m.You ? 1.2 : 1), tile);
         }
