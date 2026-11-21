@@ -141,12 +141,12 @@
             <StackPanel>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <!-- "Match the app" under the title; the eight themes' chips (2026-11-20) in two even rows of four -->
+                <!-- "Match the app" under the title; the eight themes' chips (2026-11-20) in two even rows of five (nine since Overdrive) -->
                 <StackPanel VerticalAlignment="Center">
                   <TextBlock Style="{StaticResource RowTitle}" Text="Theme"/>
                   <ContentControl x:Name="HudThemeMatchHost" Focusable="False" IsTabStop="False"/>
                 </StackPanel>
-                <UniformGrid x:Name="HudThemeHost" Grid.Column="1" Columns="4" Margin="0,0,-6,-6"/>
+                <UniformGrid x:Name="HudThemeHost" Grid.Column="1" Columns="5" Margin="0,0,-6,-6"/>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
               <Grid Style="{StaticResource Row}">
