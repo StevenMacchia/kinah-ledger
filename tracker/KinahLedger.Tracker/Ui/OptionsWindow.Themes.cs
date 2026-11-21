@@ -21,7 +21,7 @@ public partial class OptionsWindow
         foreach (var t in HudThemes.All)
         {
             var key = t.Key;
-            var chip = _host.Chip(L.T(t.Name), key == _hudTheme, () => PickHudTheme(key), L.T(t.Hint));
+            var chip = Compact(_host.Chip(L.T(t.Name), key == _hudTheme, () => PickHudTheme(key), L.T(t.Hint)));
             chip.Tag = "theme:" + key;
             HudThemeHost.Children.Add(chip);
         }
@@ -31,6 +31,22 @@ public partial class OptionsWindow
         if (match is TextBlock mt) { mt.Margin = new Thickness(0, 2, 0, 0); mt.FontSize = 12; mt.TextWrapping = TextWrapping.Wrap; }
         HudThemeMatchHost.Content = match;
         return _hudTheme;
+    }
+
+    /// <summary>
+    /// A theme chip made compact for the two rows of four (2026-11-20, eight themes): at the full chip's size they took a third
+    /// row and the In game and DPS meter pages scrolled.
+    /// </summary>
+    internal static System.Windows.Controls.Button Compact(System.Windows.Controls.Button chip)
+    {
+        chip.Padding = new Thickness(8, 0, 8, 0);
+        chip.Height = 28;
+        chip.MinHeight = 0;
+        chip.MinWidth = 0;
+        chip.FontSize = 12.5;
+        chip.Margin = new Thickness(0, 0, 6, 6);
+        chip.HorizontalAlignment = HorizontalAlignment.Stretch;
+        return chip;
     }
 
     void PickHudTheme(string theme)
