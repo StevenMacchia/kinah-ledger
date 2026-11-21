@@ -22,7 +22,7 @@ sealed partial class HudArcade
 
     static TextBlock RunHead()
     {
-        var t = Tt("", 10, Soft, FontWeights.SemiBold);
+        var t = Tt("", 10.5, White, FontWeights.SemiBold);
         t.HorizontalAlignment = HorizontalAlignment.Left; t.Margin = new Thickness(0);
         return t;
     }

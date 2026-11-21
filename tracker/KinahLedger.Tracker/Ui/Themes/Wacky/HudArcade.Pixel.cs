@@ -322,7 +322,7 @@ sealed partial class HudArcade
     }
     static readonly Dictionary<int, Brush> Fills = new();
 
-    static readonly Color BezelC = Color.FromRgb(0x04, 0x05, 0x0A);
+    static readonly Color BezelC = Color.FromRgb(0x04, 0x05, 0x0A), CabinetC = Color.FromRgb(0x3A, 0x14, 0x66), TMoldC = Color.FromRgb(0xFF, 0x8A, 0x2B);
 
     /// <summary>The tube's curvature: its corners and edges darker than its middle (a frozen radial, drawn once).</summary>
     static readonly Brush Vignette = MakeVignette();
@@ -351,18 +351,18 @@ sealed partial class HudArcade
     const double Bezel = 6;
 
     /// <summary>The marquee's height over the meter's screen (its lit sign).</summary>
-    const double MarqueeH = 16;
+    const double MarqueeH = 22;
 
     /// <summary>The marquee's lit glass: red to orange to yellow and back, a frozen gradient.</summary>
     static readonly Brush MarqueeFill = MakeMarquee();
     static Brush MakeMarquee()
     {
         var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xE8, 0x1E, 0x2E), 0));
-        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x7A, 0x1A), .35));
-        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0xD4, 0x3A), .6));
-        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x7A, 0x1A), .85));
-        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xE8, 0x1E, 0x2E), 1));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xD8, 0x22, 0x36), 0));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x7A, 0x1A), .1));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x9E, 0x22), .5));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x7A, 0x1A), .9));
+        b.GradientStops.Add(new GradientStop(Color.FromRgb(0xD8, 0x22, 0x36), 1));
         b.Freeze();
         return b;
     }
@@ -372,7 +372,7 @@ sealed partial class HudArcade
     static Rect MarqueeRect(Rect r) => new(r.X + Bezel, r.Y + Bezel, r.Width - 2 * Bezel, MarqueeH);
 
     /// <summary>A row of bulbs along the marquee's top and bottom edges: every other one when <paramref name="phase"/> is 0 or 1, all at -1.</summary>
-    static void DrawBulbs(DrawingContext dc, Rect m, Brush b, int phase = -1, double size = 2)
+    static void DrawBulbs(DrawingContext dc, Rect m, Brush b, int phase = -1, double size = 3)
     {
         int i = 0;
         for (double x = m.X + 3; x + size <= m.Right - 2; x += 6, i++)
@@ -394,7 +394,9 @@ sealed partial class HudArcade
         if (r.Width < 20 || r.Height < 20) return;
         for (int i = 1; i <= 3; i++) dc.DrawRectangle(null, PenOf(Ink(frame, .22 / i), 1), new Rect(r.X - i + .5, r.Y - i + .5, r.Width + 2 * i - 1, r.Height + 2 * i - 1));
         Stepped(dc, r, 4, Ink(BezelC, Math.Max(.9, ground)));
-        Frame(dc, r, 1.5, 4, Ink(frame), -1, -1);
+        // the cabinet's side: 3 px from its purple to black, and the T-molding along it, a 1 px line of the marquee's orange
+        Frame(dc, r, 3, 4, Ink(frame), -1, -1);
+        Frame(dc, new Rect(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), 1, 4, Ink(TMoldC, .85), -1, -1);
         dc.DrawRectangle(Ink(Colors.White, .14), null, new Rect(r.X + 4, r.Y + 2, r.Width - 8, 1));
         dc.DrawRectangle(Ink(Colors.Black, .6), null, new Rect(r.X + 4, r.Bottom - 3, r.Width - 8, 1));
         var tr = r;
@@ -403,7 +405,8 @@ sealed partial class HudArcade
             var m = MarqueeRect(r);
             dc.DrawRectangle(MarqueeFill, null, m);
             dc.DrawRectangle(MarqueeGloss, null, m);
-            DrawBulbs(dc, m, Ink(Color.FromRgb(0xFF, 0xF4, 0xC8), .75));
+            DrawBulbs(dc, m, Ink(Color.FromRgb(0x5A, 0x12, 0x08), .55));
+            DrawBulbs(dc, m, Ink(Color.FromRgb(0xFF, 0xF4, 0xC8), .9), 0);
             dc.DrawRectangle(Ink(Colors.Black, .8), null, new Rect(m.X, m.Bottom, m.Width, 1));
             tr = new Rect(r.X, m.Bottom - Bezel + 2, r.Width, r.Bottom - (m.Bottom - Bezel + 2));
         }

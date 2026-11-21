@@ -33,13 +33,14 @@ sealed partial class HudArcade
         var (total, word, group, held) = FootOf(e, now);
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        TextBlock Pair(string w, string fig, Color figC)
+        StackPanel Pair(string w, string fig, Color figC)
         {
-            var t = new TextBlock { FontFamily = Face, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Frozen(Mod.A(Colors.White, .78)), VerticalAlignment = VerticalAlignment.Center };
-            System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
-            t.Inlines.Add(new System.Windows.Documents.Run(w + " "));
-            t.Inlines.Add(new System.Windows.Documents.Run(fig) { FontWeight = FontWeights.Bold, Foreground = Frozen(figC), FontSize = 12.5 });
-            return t;
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var t = Tt(w + " ", 11, Frozen(Mod.A(Colors.White, .78)), FontWeights.Medium);
+            sp.Children.Add(t);
+            var f = Fig(fig, 1.6, figC, .3, textSize: 12.5); f.Margin = new Thickness(2, 0, 0, 0);
+            sp.Children.Add(f);
+            return sp;
         }
         var tp = Pair(L.T("Total"), total, Colors.White);
         EnergyMark.After(tp, 11, Frozen(Mod.A(Colors.White, .72)));   // Odyle Energy (Ui/EnergyMark.cs)
@@ -65,6 +66,18 @@ sealed partial class HudArcade
         Grid.SetColumn(t, 1); g.Children.Add(t);
         var b = Dots(new Thickness(6, 0, 6, 0), MazeHiC, .45); b.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(b, 2); g.Children.Add(b);
         return g;
+    }
+
+    /// <summary>A rank in Korean or Chinese: the numeral in the LED face, the language's word for "place" after it, bold in the rank's colour.</summary>
+    static FrameworkElement RankNative(int rank, Color tone)
+    {
+        var n = rank.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(Fig(n, 1.5, tone, .38));
+        var suffix = RankWord(rank)[n.Length..];
+        var t = Tt(suffix, 11, Ink(tone), FontWeights.Bold); t.Margin = new Thickness(1, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center;
+        sp.Children.Add(t);
+        return sp;
     }
 
     /// <summary>
@@ -162,7 +175,7 @@ sealed partial class HudArcade
                 _rank = m.Rank;
                 // the rank word in LED letters (a longer one a dot smaller, to keep the column); "1위" as a text in Korean
                 var word = RankWord(m.Rank);
-                var rw = Word(word, word.Length > 3 ? 1.2 : 1.5, tone, .38, textSize: 12);
+                FrameworkElement rw = Spells(word) ? Word(word, word.Length > 3 ? 1.2 : 1.5, tone, .38) : RankNative(m.Rank, tone);
                 _rankHost.Child = rw;
                 _crown.Visibility = m.Rank == 1 ? Visibility.Visible : Visibility.Collapsed;
                 _rankHost.VerticalAlignment = m.Rank == 1 ? VerticalAlignment.Bottom : VerticalAlignment.Center;
@@ -231,6 +244,14 @@ sealed partial class HudArcade
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
             _art.InvalidateVisual();
         }
+
+        /// <summary>
+        /// Where the DPS bar is drawn, for main's PB ghost (IThemeBarSpan, added at integration): the row's art and, in its
+        /// coordinates, the run of cells a FULL bar lights (the LED bar under the name, flush to its last whole cell).
+        /// </summary>
+        public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth <= 0 ? null : (_art, FullBar(_art.RenderSize));
+
+        Rect FullBar(Size s) { var b = BarRect(s); return new Rect(b.X, b.Y, Cells(b.Width, BarCell, BarGap).W, b.Height); }
 
         /// <summary>The LED bar's place: under the name's line, from the name's start to the DPS column (heal included).</summary>
         Rect BarRect(Size s)
