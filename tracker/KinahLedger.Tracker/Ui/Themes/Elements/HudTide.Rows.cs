@@ -159,8 +159,10 @@ sealed partial class HudTide
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
-            // the leader's rank is the pearl (drawn over the row); the number stays for reading aloud
-            _rank.Opacity = Leads ? 0 : 1;
+            // the leader's numeral at the left of its cell, the pearl beside it
+            _rank.HorizontalAlignment = Leads ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+            _rank.Margin = new Thickness(Leads ? 2 : 0, 0, 0, 0);
+            _rank.Foreground = Leads ? White : Aqua;
             if (m.Class != _cls)
             {
                 _cls = m.Class;
@@ -190,7 +192,7 @@ sealed partial class HudTide
             // filled against the top member's (the top bar full, the rest in proportion, 2026-11-20: Encounter.BarOf)
             SlideBar(_art, c, "bar", m.CpOnly ? 0 : c.E.BarOf(m.F), v => { if (v == _bar) return; _bar = v; _art.InvalidateVisual(); });
             // drawn again only when what it shows changed (a tick that changes nothing redraws nothing)
-            var sig = $"{m.ClassColor}|{m.You}|{Leads}|{m.Rank}|{m.Figure}|{_shareOn}|{c.Expanded}";
+            var sig = $"{m.ClassColor}|{m.You}|{Leads}|{m.Rank}|{m.Figure}|{_shareOn}|{c.Expanded}|{m.Cp}|{_cp.Visibility}";
             if (sig != _drawSig) { _drawSig = sig; _art.InvalidateVisual(); }
             if (Leads != _ledDrawn) { _ledDrawn = Leads; _crown.InvalidateVisual(); }
             if (Leads) _look.Lead(this, m, c);
@@ -219,7 +221,7 @@ sealed partial class HudTide
 
         static readonly Brush BandB = Mod.Grad(false, (Mod.A(FoamC, 0), 0), (Mod.A(FoamC, .42), .62), (Mod.A(FoamC, 0), 1)), CrestGlowB = GlowBrush(FoamC, .8),
             HaloB = GlowBrush(AquaC, .22), ShineB = GlowBrush(FoamC, .6), ChannelB = Mod.Grad(true, (Mod.A(DarkC, .55), 0), (Mod.A(AbyssC, .75), 1)),
-            YouB = Mod.Grad(true, (Mod.A(FoamC, .95), 0), (Mod.A(AquaC, .9), 1)), EbbB = Mod.Grad(false, (Mod.A(DarkC, 0), 0), (Mod.A(DarkC, .5), .35), (Mod.A(DarkC, .62), 1));
+            YouB = Mod.Grad(true, (Mod.A(FoamC, .95), 0), (Mod.A(AquaC, .9), 1)), EbbB = Mod.Grad(false, (Mod.A(DarkC, 0), 0), (Mod.A(DarkC, .5), .35), (Mod.A(DarkC, .62), 1)), CpB = GlowBrush(DarkC, .75);
         static readonly Pen ChannelP = Mod.P(Mod.Br(AquaC, .08), 1), ChannelYouP = Mod.P(Mod.Br(AquaC, .2), 1);
 
         /// <summary>The light on the water (a swell's band, a climb's glint), inside the water's shape (its clip set when a moment starts).</summary>
@@ -256,17 +258,17 @@ sealed partial class HudTide
         /// <summary>The pearl surfaces: it rises from under the water as its shell opens, a shine round it, rings of ripples spreading from it.</summary>
         internal void Surface()
         {
-            double cx = Pad + RankW / 2 - 1, cy = H / 2 - 3.2;
+            double cx = PearlX, cy = PearlY;
             if (_ripples == null)
             {
-                _ripples = new RippleSet(30, .4, FoamC, 3, .9, 1.5);
+                _ripples = new RippleSet(24, .4, FoamC, 3, .9, 1.4);
                 _top.Children.Add(_ripples.Layer);
                 _shine = new System.Windows.Shapes.Ellipse { Width = 30, Height = 30, Fill = ShineB, Opacity = 0, IsHitTestVisible = false };
-                Canvas.SetLeft(_shine, cx - 15); Canvas.SetTop(_shine, cy - 15 + 1.6 * PearlScale);
+                Canvas.SetLeft(_shine, cx - 15); Canvas.SetTop(_shine, cy - 15 + 1.6 * PearlScale);   // round the pearl
                 _top.Children.Insert(0, _shine);
             }
             var ripples = _ripples;
-            ripples.At(cx, cy + 6);
+            ripples.At(cx, cy + 6 * PearlScale);
             _crownS.CenterX = cx; _crownS.CenterY = cy + 8 * PearlScale;
             var shine = _shine!;
             Motion.Play(_crown, 1200, t =>
@@ -302,7 +304,17 @@ sealed partial class HudTide
             // the channel: deep water darker than the glass round it, a faint aqua hairline
             dc.DrawGeometry(ChannelB, m.You ? ChannelYouP : ChannelP, Mod.Pill(new Rect(.5, .5, s.Width - 1, s.Height - 1), 7));
             dc.PushClip(Mod.Pill(r, 7));
-            WaterBar(dc, r, s.Width * Math.Clamp(_bar, 0, 1), m.ClassColor, Leads ? .55 : 0, phase: m.Rank * 1.3);
+            double fx = s.Width * Math.Clamp(_bar, 0, 1), foam = -1;
+            Rect? cpAt = null;
+            if (_cp.Visibility == Visibility.Visible && _cp.ActualWidth > 0 && _cp.IsDescendantOf(_root))
+            {
+                var p = _cp.TranslatePoint(new Point(0, 0), _root);
+                cpAt = new Rect(p.X, p.Y, _cp.ActualWidth, _cp.ActualHeight);
+            }
+            bool Under(double l, double rr) => fx > l - 16 && fx < rr + 14;
+            if ((cpAt is { } cr && Under(cr.Left, cr.Right)) || (_share.Visibility == Visibility.Visible && Under(s.Width - _shareW - 8, s.Width + 20))) foam = .28;
+            WaterBar(dc, r, fx, m.ClassColor, Leads ? .55 : 0, phase: m.Rank * 1.3, foam: foam);
+            if (cpAt is { } cg) dc.DrawEllipse(CpB, null, new Point(cg.X + cg.Width / 2, cg.Y + cg.Height / 2 + .5), cg.Width / 2 + 7, 9);
             // the faint aqua halo behind the DPS figure
             if (_dps.ActualWidth > 0 && _dps.IsDescendantOf(_root))
             {
@@ -317,11 +329,14 @@ sealed partial class HudTide
             dc.Pop();
         }
 
-        /// <summary>The pearl in its shell in rank 1's place (drawn once: PearlArt).</summary>
+        /// <summary>The pearl's centre in the row: in the rank's cell, right of the leader's numeral.</summary>
+        const double PearlX = Pad + RankW - 10.5, PearlY = H / 2 - 2.4;
+
+        /// <summary>The pearl in its shell beside rank 1's numeral (drawn once: PearlArt).</summary>
         void DrawCrown(DrawingContext dc, Size s)
         {
             if (!Leads) return;
-            dc.PushTransform(new TranslateTransform(Pad + RankW / 2 - 1, s.Height / 2 - 3.2));
+            dc.PushTransform(new TranslateTransform(PearlX, PearlY));
             dc.DrawDrawing(PearlArt);
             dc.Pop();
         }

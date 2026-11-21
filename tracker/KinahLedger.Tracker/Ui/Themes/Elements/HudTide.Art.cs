@@ -501,7 +501,7 @@ sealed partial class HudTide
     /// <paramref name="caustic"/>: the caustic net over the water (the leader's). Brushes and pens come from a cache; the
     /// draw makes only the water's shape. Returns the shape (a moment's light is clipped to it).
     /// </summary>
-    static Geometry? WaterBar(DrawingContext dc, Rect r, double fx, Color c, double caustic = 0, double boost = 0, double phase = 0, double alpha = 1)
+    static Geometry? WaterBar(DrawingContext dc, Rect r, double fx, Color c, double caustic = 0, double boost = 0, double phase = 0, double alpha = 1, double foam = -1)
     {
         if (fx < 1.5) return null;
         double x1 = r.X + fx;
@@ -512,7 +512,7 @@ sealed partial class HudTide
         dc.DrawRectangle(FoamKit(0, alpha).Under, null, new Rect(r.X - 2, r.Y, fx + 6, r.Height));
         if (caustic > 0) Caustics(dc, new Rect(r.X, r.Y, fx + 4, r.Height), caustic * alpha, 37);
         dc.Pop();
-        Foam(dc, r.X, x1, r.Y, r.Height, phase, boost, alpha);
+        Foam(dc, r.X, x1, r.Y, r.Height, phase, boost, foam < 0 ? alpha : foam);
         return water;
     }
 
@@ -600,7 +600,7 @@ sealed partial class HudTide
 
     /// <summary>The leader's pearl in its shell, drawn once (centred on 0,0) and reused by every draw.</summary>
     static readonly Drawing PearlArt = MakePearlArt();
-    internal const double PearlScale = 1.25;
+    internal const double PearlScale = .8;
 
     static Drawing MakePearlArt()
     {

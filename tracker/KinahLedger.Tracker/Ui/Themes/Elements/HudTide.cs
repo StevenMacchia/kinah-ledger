@@ -76,6 +76,8 @@ sealed partial class HudTide : ModernLook
     readonly TacSketch _fightArt;
     /// <summary>Over the fight's glass (clipped to it): the bubbles a swell sends up.</summary>
     readonly Canvas _fightOver = new() { IsHitTestVisible = false };
+    /// <summary>Under the fight's words, over its glass (clipped to it): the wall of water a big moment sweeps across.</summary>
+    readonly Canvas _fightUnder = new() { IsHitTestVisible = false };
     readonly BubbleSet _fightBub = new(9);
     /// <summary>The wave that sweeps the meter on its big moments (drawn once per height, only moved), and the splash a kill throws up.</summary>
     readonly TacSketch _bigWave = new((dc, s) => DrawBigWave(dc, s.Height)) { Width = BigWaveW, Height = 200, Visibility = Visibility.Collapsed };
@@ -100,11 +102,11 @@ sealed partial class HudTide : ModernLook
         _fightArt = new TacSketch((dc, s) => SeaPanel(dc, s, Radius, _opacity, surface: true, seabed: _seabed));
         _fightBub.Layer.IsHitTestVisible = false;
         _bigWave.RenderTransform = _bigWaveT;
-        _fightOver.Children.Add(_bigWave); _fightOver.Children.Add(_fightBub.Layer); _fightOver.Children.Add(_fightSplash.Layer);
+        _fightUnder.Children.Add(_bigWave); _fightOver.Children.Add(_fightBub.Layer); _fightOver.Children.Add(_fightSplash.Layer);
         _lineFx.Children.Add(_lineSplash.Layer);
         _rare.SizeChanged += (_, e) => ClipRare(e.NewSize);
-        _fight.SizeChanged += (_, e) => { _fightOver.Clip = PanelShape(e.NewSize, Radius, true); if (Math.Abs(_bigWave.Height - e.NewSize.Height) > .5) _bigWave.Height = e.NewSize.Height; };
-        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightOver); _fight.Children.Add(_fightFx);
+        _fight.SizeChanged += (_, e) => { _fightOver.Clip = _fightUnder.Clip = PanelShape(e.NewSize, Radius, true); if (Math.Abs(_bigWave.Height - e.NewSize.Height) > .5) _bigWave.Height = e.NewSize.Height; };
+        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightUnder); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightOver); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _settle;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
