@@ -324,8 +324,13 @@ sealed partial class HudTelestrator
                 _swipe.Visibility = Visibility.Visible;
                 _swipe.InvalidateVisual();
             }
-            // the stripe travels the bar's length (and a little past its end), fading in and out at its two ends
-            double run = Math.Max(Math.Round((_root.ActualWidth > 0 ? _root.ActualWidth : 300) * Math.Clamp(_barV, 0, 1)), 60) + 8;
+            // the stripe travels the bar's length, fading in and out at its two ends; it stops short of the figures (the heal,
+            // the DPS and the share), so it never crosses one
+            double w = _root.ActualWidth > 0 ? _root.ActualWidth : 300;
+            double stop = w;
+            if (_dps.ActualWidth > 0) stop = Math.Min(stop, _dps.TranslatePoint(new Point(_dps.ActualWidth - TextW(_dps, _dps.Text), 0), _root).X);
+            if (_healBox.Visibility == Visibility.Visible && _healBox.ActualWidth > 0) stop = Math.Min(stop, _healBox.TranslatePoint(new Point(0, 0), _root).X);
+            double run = Math.Max(0, Math.Min(Math.Round(w * Math.Clamp(_barV, 0, 1)), stop - 6) - 24);
             _swipeShift.X = -24 + (run + 24) * Out(sw);
             _swipe.Opacity = Math.Min(Seg(sw, 0, .12), 1 - Seg(sw, .8, 1));
         }

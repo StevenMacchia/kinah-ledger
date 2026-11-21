@@ -125,10 +125,13 @@ sealed partial class HudTelestrator : IThemeCard
             {
                 var row = new Grid { Height = 21, Margin = new Thickness(-4, 1, 0, 0), ToolTip = Tac.AbilityTip(a) };
                 double of = a.OfTop;
+                // the lane runs under the skill's name only and stops short of every figure column (share, damage, crit, back)
+                double figW = 46 + 56 + (c.CritCol ? Tac.CardRate : 0) + (c.BackCol ? Tac.CardRate : 0) + 4 + 6;
                 var art = new TacSketch((dc, s) =>
                 {
-                    dc.DrawRoundedRectangle(Mod.Br(Colors.Black, .26), null, new Rect(0, 1, s.Width, s.Height - 2), 2.5, 2.5);
-                    double x = Math.Round(s.Width * Math.Clamp(of * grow, 0, 1));
+                    double laneW = Math.Max(20, s.Width - figW);
+                    dc.DrawRoundedRectangle(Mod.Br(Colors.Black, .26), null, new Rect(0, 1, laneW, s.Height - 2), 2.5, 2.5);
+                    double x = Math.Round(laneW * Math.Clamp(of * grow, 0, 1));
                     if (x < 1) return;
                     var shape = Mod.Pill(new Rect(0, 1, x, s.Height - 2), 2.5);
                     dc.DrawGeometry(Mod.Br(lane, .8), null, shape);
