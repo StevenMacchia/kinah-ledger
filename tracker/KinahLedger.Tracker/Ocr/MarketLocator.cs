@@ -19,6 +19,9 @@ public sealed class MarketLayout
     /// <summary>The x positions where one column ends and the next starts; one fewer than Kinds.</summary>
     public int[]? Bounds { get; init; }
     public bool Manual => Kinds == null;
+    /// <summary>The window's title read "World Market" or "World Exchange" (open from 2026-11-25): listings from every server
+    /// of the faction and region, so none of them is this server's price.</summary>
+    public bool World { get; init; }
 
     public static MarketLayout FromRegion(Rectangle r) => new() { Table = r, Outline = r };
 
@@ -47,6 +50,9 @@ public static class MarketLocator
     public delegate Task<List<OcrLineBox>> Reader(Rectangle region, int scale, bool boost);
     public static readonly Reader ScreenRead = (r, s, b) => ScreenReader.ReadBoxesAsync(r, s, b);
 
+    // the World Market and World Exchange (from 2026-11-25) trade across every server of the faction and region; their
+    // window is told apart by its title only, so it's never taken for the server's own Market
+    static readonly Regex WorldTitleRx = new(@"^world\s+(?:market(?:place)?|exchange)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static readonly Regex TitleRx = new(@"^(?:server\s+|cross[\s-]*server\s+)?market(?:place)?(?:\s*[|·:\-]?\s*exchange)?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // header words as the recognizer sees them, with its usual slips (1 for l, 7 for t) allowed.
     // Two table shapes: the listing table (Item, Quantity, Unit Price, Total Price) and the Market's main board
@@ -162,10 +168,14 @@ public static class MarketLocator
         var table = Rectangle.FromLTRB(left, top, right, bottom);
 
         // the title sits above the headers; it confirms the window but isn't required, since a scrolled list can push it out of the read area
-        var title = lines.FirstOrDefault(l => TitleRx.IsMatch(Clean(l.Text)) && l.Box.Bottom <= rowTop && rowTop - l.Box.Bottom < game.Height * 25 / 100 && l.Box.Right > left && l.Box.Left < right);
+        bool Above(OcrLineBox l) => l.Box.Bottom <= rowTop && rowTop - l.Box.Bottom < game.Height * 25 / 100 && l.Box.Right > left && l.Box.Left < right;
+        var title = lines.FirstOrDefault(l => TitleRx.IsMatch(Clean(l.Text)) && Above(l));
+        // a World Market title with no server Market title beside it (tabs showing both names can't say which is open)
+        var world = title == null ? lines.FirstOrDefault(l => WorldTitleRx.IsMatch(Clean(l.Text)) && Above(l)) : null;
+        title ??= world;
         int outlineTop = (title != null ? title.Box.Top : rowTop) - hh / 2;
-        var layout = new MarketLayout { Table = table, Outline = Rectangle.FromLTRB(left, Math.Max(game.Top, outlineTop), right, bottom), Kinds = kinds.ToArray(), Bounds = bounds.ToArray() };
-        return (layout, $"{(title != null ? "Market title and " : "")}headers {string.Join(", ", row.Select(o => o.kind))} found; {layout}");
+        var layout = new MarketLayout { Table = table, Outline = Rectangle.FromLTRB(left, Math.Max(game.Top, outlineTop), right, bottom), Kinds = kinds.ToArray(), Bounds = bounds.ToArray(), World = world != null };
+        return (layout, $"{(world != null ? "World Market title and " : title != null ? "Market title and " : "")}headers {string.Join(", ", row.Select(o => o.kind))} found; {layout}");
     }
 }
 

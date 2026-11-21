@@ -74,6 +74,8 @@ public sealed class MarketCapture
     public int Pending { get { lock (_lock) return _pending.Count + _sales.Count + _expired.Count; } }
     /// <summary>The player's own sales and expiries read from the chat this session, and how many of those went out.</summary>
     public int SalesSeen { get; private set; }
+    /// <summary>World Market asks and sale lines seen and kept off this server's prices (from 2026-11-25).</summary>
+    public int WorldSkipped { get; private set; }
     public int ExpiredSeen { get; private set; }
     public int SalesShared { get; private set; }
     public DateTime LastReadAt { get; private set; } = DateTime.MinValue;
@@ -110,6 +112,7 @@ public sealed class MarketCapture
         var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);
         Reads++; LastReadAt = DateTime.UtcNow;
         var (asks, listingRows, unnamed) = ReadAsks(layout, rows);
+        if (layout.World) { WorldSkipped += asks.Count; asks.Clear(); }   // the World Market: every server's listings, none of them this server's price
         bool open = asks.Count > 0 || listingRows > 0;
         if (open && (now - SeenAt).TotalSeconds > OpeningGapSec) BeginOpening(now);
         foreach (var ask in asks)
@@ -261,6 +264,8 @@ public sealed class MarketCapture
     public void OnChatEvent(GameEvent ev)
     {
         if (!Enabled) return;
+        // the World Market's sales, listings and expiries are another board's: they never time or price this server's
+        if (ev is MarketSold { World: true } or MarketListed { World: true } or MarketExpired { World: true }) { WorldSkipped++; return; }
         var now = ev.Time;
         switch (ev)
         {
@@ -376,7 +381,13 @@ public sealed class MarketCapture
         var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);
         Reads++; LastReadAt = DateTime.UtcNow;
         var now = DateTime.UtcNow; int n = 0; var names = new HashSet<string>();
-        foreach (var ask in ReadAsks(layout, rows).Asks)
+        var shareAsks = ReadAsks(layout, rows).Asks;
+        if (layout.World)
+        {
+            WorldSkipped += shareAsks.Count;
+            return (0, 0, false, L.T("This is the World Market. Its prices are every server's, so only your own server's Market is shared."));
+        }
+        foreach (var ask in shareAsks)
         {
             n++; AsksRead++; names.Add(ask.Item);
             PriceBook.Observe(ask.Item, ask.UnitPrice, now);

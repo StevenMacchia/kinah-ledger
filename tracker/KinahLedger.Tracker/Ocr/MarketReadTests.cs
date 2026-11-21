@@ -146,6 +146,16 @@ static class MarketReadTests
             Line(280, 20, ("Raw", 450, 30), ("Leather", 484, 60), ("20", 930, 20), ("14,949", 1080, 60), ("298,980", 1270, 70), ("3h", 1380, 20), ("5min", 1404, 40)),
         };
         Check("rows with a time left read as asks", Asks(listing, rows), "Spiritstone ×10 @ 7,520 / Raw Leather ×20 @ 14,949");
+
+        // the World Market (from 2026-11-25): its title marks the table, so its listings never price this server
+        Console.WriteLine("\nMarket reader, the World Market's title (drawn):");
+        List<OcrLineBox> Titled(params string[] titles) => titles.Select((t, i) => Line(140, 20, (t, 420 + i * 300, 160)))
+            .Append(Line(200, 20, ("Item", 420, 40), ("Quantity", 900, 80), ("Unit", 1050, 40), ("Price", 1094, 50), ("Total", 1250, 50), ("Price", 1304, 50))).ToList();
+        string W(List<OcrLineBox> l) { var (lay, _) = MarketLocator.Detect(game, l); return lay == null ? "(none)" : $"{(lay.World ? "world" : "server")}, {string.Join(", ", lay.Kinds!)}"; }
+        Check("a World Market title marks the table", W(Titled("World Market")), "world, name, qty, unit, total");
+        Check("a World Exchange title too", W(Titled("World Exchange")), "world, name, qty, unit, total");
+        Check("the server's Market title doesn't", W(Titled("Market")), "server, name, qty, unit, total");
+        Check("both names showing (tabs): the server's, as before", W(Titled("Server Market", "World Market")), "server, name, qty, unit, total");
         return ok;
     }
 

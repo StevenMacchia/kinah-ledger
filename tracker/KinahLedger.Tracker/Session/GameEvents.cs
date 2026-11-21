@@ -43,11 +43,12 @@ public sealed record RewardReceived(DateTime Time, string Name, int Count) : Gam
 public sealed record XpGained(DateTime Time, long Amount) : GameEvent(Time);
 
 /// <summary>One of the player's own Market listings sold: what, how many, for how much in total. Never who bought it (the game doesn't say).</summary>
-public sealed record MarketSold(DateTime Time, string Item, int Qty, long Total) : GameEvent(Time);
+/// <param name="World">The line named the World Market (open from 2026-11-25: every server of the faction and region, 20% sales tax), so the sale is not this server's price.</param>
+public sealed record MarketSold(DateTime Time, string Item, int Qty, long Total, bool World = false) : GameEvent(Time);
 /// <summary>The player listed something on the Market: kept on this PC only, so a later sale can say how long it took.</summary>
-public sealed record MarketListed(DateTime Time, string Item, int Qty, long Price) : GameEvent(Time);
+public sealed record MarketListed(DateTime Time, string Item, int Qty, long Price, bool World = false) : GameEvent(Time);
 /// <summary>One of the player's own listings expired unsold.</summary>
-public sealed record MarketExpired(DateTime Time, string Item, int Qty) : GameEvent(Time);
+public sealed record MarketExpired(DateTime Time, string Item, int Qty, bool World = false) : GameEvent(Time);
 /// <summary>A craft finished: the item and whether it worked. Materials and cost aren't shown in chat, so they aren't counted.</summary>
 /// <param name="Combo">The combo roll after a craft (the crafting panel turns blue): whether that craft's item was upgraded, not another craft.</param>
 public sealed record CraftResult(DateTime Time, string Item, bool Ok, bool Combo = false) : GameEvent(Time)
