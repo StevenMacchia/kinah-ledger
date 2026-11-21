@@ -95,7 +95,7 @@ sealed partial class HudDragon : ModernLook
         Canvas.SetLeft(_eyeFlare, eye.X - 17); Canvas.SetTop(_eyeFlare, eye.Y - 12);
         _mouthGlow = new Ellipse { Width = 46, Height = 26, Fill = Glow(HotC, .95), Opacity = 0 };
         Canvas.SetLeft(_mouthGlow, mouth.X - 23); Canvas.SetTop(_mouthGlow, mouth.Y - 13);
-        var lidGeo = G("M 26.6,16 C 29,13.2 33,12.9 36.2,15.4 C 33,17.8 29.5,18.1 26.6,16 Z").Clone();
+        var lidGeo = G(LidPath).Clone();
         lidGeo.Transform = new MatrixTransform(FightHeadK, 0, 0, FightHeadK, FightHeadX, FightHeadY); lidGeo.Freeze();
         _lid = new System.Windows.Shapes.Path { Data = lidGeo, Fill = Mod.Grad(true, (Color.FromRgb(0x3E, 0x35, 0x48), 0), (Color.FromRgb(0x16, 0x12, 0x1C), 1)), Stroke = Frozen(Mod.A(BronzeC, .7)), StrokeThickness = .6 };
         _lidScale.CenterY = eye.Y - 2.2 * FightHeadK;
