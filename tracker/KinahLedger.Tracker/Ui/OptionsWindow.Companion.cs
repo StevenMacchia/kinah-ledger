@@ -45,16 +45,16 @@ public partial class OptionsWindow
         void Add(UIElement e) => PageCompanion.Children.Add(e);
 
         CompanionChk = Switch(p.On, on => _host.SetCompanionOverlay(on));
-        CompanionChk.ToolTip = L.T("A little winged companion beside the game that reacts to what happens in your session.");
+        CompanionChk.ToolTip = L.T("A tiny companion beside the game that reacts to what happens in your session.");
         Add(OverlayHeader(Styled(new TextBlock { Text = L.T("Companion") }, "PageTitle"),
-            Styled(new TextBlock { Text = L.T("A little winged companion that floats beside the game and reacts to your drops, bests and fights. These save as you change them."), TextWrapping = TextWrapping.Wrap }, "PageLead"),
+            Styled(new TextBlock { Text = L.T("A tiny companion that sits beside the game and reacts to your drops, bests and fights. These save as you change them."), TextWrapping = TextWrapping.Wrap }, "PageLead"),
             CompanionChk, "Show the companion over the game"));
 
         // the stage: the companion in the theme in use, playing each reaction in turn
-        string theme = HudThemes.Of(HudLooks.Parse(_edit.HudLook));
+        string look = HudLooks.Parse(_edit.HudLook), theme = HudThemes.Of(look);
         try
         {
-            _companionStage = new CompanionFace(theme, _edit.HudOpacity > 0 ? _edit.HudOpacity : 0.94, true, false);
+            _companionStage = new CompanionFace(theme, _edit.HudOpacity > 0 ? _edit.HudOpacity : 0.94, true, false, look);
             Add(Margined(Stage(_companionStage, L.T("Companion"), L.T("a sample: each reaction in turn"), 150), new Thickness(0, 12, 0, 0)));
             StageTry(CompanionKind.Best, hold: true);
             _companionCycle?.Stop();

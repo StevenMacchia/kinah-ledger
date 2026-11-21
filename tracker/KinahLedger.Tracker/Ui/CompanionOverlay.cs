@@ -34,6 +34,7 @@ sealed class CompanionOverlay : Window
     string _sig = "";
     double _opacity = 0.94, _scale = 1;
     string _theme = HudThemes.Classic;
+    string? _look;
     CompanionSprite.Mood _mood = CompanionSprite.Mood.Idle;
 
     /// <summary>Where the Kinah overlay is now (WPF units), null when it isn't shown: the first spot is just right of it.</summary>
@@ -91,11 +92,12 @@ sealed class CompanionOverlay : Window
         if (_prefs.X is { } && _prefs.Y is { } && !InvisibleForTest) _placed = true;
     }
 
-    /// <summary>The overlay theme and the Kinah overlay's opacity and size (Settings › Buddy): the face is drawn again in them.</summary>
-    public void Match(string theme, double opacity, double scale)
+    /// <summary>The overlay theme (and the Buddy's look in it, which tints the companion) and the Kinah overlay's opacity and size (Settings › Buddy): the face is drawn again in them.</summary>
+    public void Match(string theme, double opacity, double scale, string? look = null)
     {
         double keep = IsVisible && _face != null ? SpriteX : _prefs.X ?? 0;   // where the companion is, at the size it was drawn
         _theme = theme;
+        _look = look;
         _opacity = Math.Clamp(opacity, 0.3, 1);
         _scale = Math.Clamp(scale, HudPrefs.MinScale, HudPrefs.MaxScale);
         _host.LayoutTransform = Math.Abs(_scale - 1) < 0.001 ? Transform.Identity : new ScaleTransform(_scale, _scale);
@@ -131,7 +133,7 @@ sealed class CompanionOverlay : Window
     void Build(double spriteX, bool force)
     {
         bool left = _prefs.Lines && BubbleLeftAt(spriteX);
-        var sig = _theme + "|" + _opacity + "|" + _prefs.Lines + "|" + left;
+        var sig = _theme + "|" + _look + "|" + _opacity + "|" + _prefs.Lines + "|" + left;
         if (force || sig != _sig || _face == null)
         {
             _sig = sig;
@@ -142,7 +144,7 @@ sealed class CompanionOverlay : Window
                 _face.Hush();
                 _face.Sprite.Quiet();
             }
-            _face = new CompanionFace(_theme, _opacity, _prefs.Lines, left);
+            _face = new CompanionFace(_theme, _opacity, _prefs.Lines, left, _look);
             _face.Sprite.Rested += Next;
             _face.Sprite.SetMood(_mood);
             _faceSlot.Child = _face;
