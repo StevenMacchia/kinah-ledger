@@ -93,7 +93,7 @@ sealed partial class HudElyos
     /// along the foot (Settings' heal bars). Short of room the CP goes first, then the share; a name keeps at least ten
     /// characters; a figure is never cut (Mod.Fit).
     /// </summary>
-    sealed class ElyosRow : IThemeRow
+    sealed class ElyosRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
         const double PadL = 2, RankW = 25, IconCol = 25, PadR = 7;
