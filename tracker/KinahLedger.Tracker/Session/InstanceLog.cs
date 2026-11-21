@@ -1033,7 +1033,7 @@ public sealed class InstanceLog
     /// <summary>
     /// The game's map says the instance's boss room opened again after its last boss died: a new run in the same copy, with
     /// no entry, no move and no countdown between (BossParser.RunAgain). The open run of that place closes here once its own
-    /// table was read, and the next opens now. Until 1.0.43 only the next run's table split them (TableStarting), so on
+    /// table was read, and the next opens now. Until 1.0.46 only the next run's table split them (TableStarting), so on
     /// 2026-11-20 eight of twelve Krao Cave records ran twice as long as the run (13:47, 13:49, 18:00) and took the next run's
     /// first gathers and its 960,000 Kinah. Before its table the room opening again is that run's own (a wipe's retry): nothing.
     /// </summary>
