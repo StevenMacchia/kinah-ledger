@@ -57,5 +57,6 @@ sealed partial class HudElyos
         ModernRun.Head(_runHead, s, FightWidth - 10 - _runHead.Margin.Left, Ink);
         _runHeadLit.Opacity = _dim ? .62 : 1;
         _runHeadLit.Visibility = Visibility.Visible;
+        LineAboveChanged();
     }
 }
