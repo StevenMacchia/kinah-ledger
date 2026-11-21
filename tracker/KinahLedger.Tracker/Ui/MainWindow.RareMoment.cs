@@ -89,6 +89,7 @@ public partial class MainWindow
         _hudRare["rareMore"] = more > 0 ? more.ToString() : "";
         if (!leads) _moment?.SetMore(more);
         else if (MomentWanted(best)) ShowMoment(best, more);
+        if (leads && !_demo && !_switchingCharacter && (DateTime.UtcNow - best.At).TotalSeconds <= MomentFreshSeconds) CompanionRare(best.Name, best.Grade);   // the companion's hop (Ui/MainWindow.Companion.cs)
     }
 
     /// <summary>Whether a drop plays its moment: the tracker reading for real, the window showing, motion on, and the drop just read.</summary>
