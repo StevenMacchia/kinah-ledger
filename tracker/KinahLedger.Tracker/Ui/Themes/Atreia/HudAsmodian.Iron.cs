@@ -208,8 +208,38 @@ sealed partial class HudAsmodian
         return g;
     }
 
-    static readonly Brush CrownFill = Mod.Grad(true, (Color.FromRgb(0x5A, 0x14, 0x1A), 0), (Color.FromRgb(0x24, 0x08, 0x0C), .55), (Color.FromRgb(0x0C, 0x04, 0x06), 1));
-    static readonly Pen CrownPen = Mod.P(Mod.Br(Color.FromRgb(0xFF, 0x5A, 0x3C)), 1.1);
+    static readonly Brush CrownFill = Mod.Grad(true, (Color.FromRgb(0xFF, 0x7A, 0x58), 0), (Color.FromRgb(0xE0, 0x24, 0x30), .45), (Color.FromRgb(0x7A, 0x0A, 0x14), 1));
+    static readonly Pen CrownPen = Mod.P(Mod.Br(Color.FromRgb(0x1A, 0x03, 0x05)), 1);
+    static readonly Brush BadgeFill = MakeRadial(Color.FromRgb(0x2E, 0x0E, 0x12), Color.FromRgb(0x0A, 0x04, 0x05));
+    static readonly Pen BadgeRim = Mod.P(Mod.Br(Color.FromRgb(0xFF, 0x5A, 0x3C)), 2), BadgeOutline = Mod.P(Mod.Br(Colors.Black), 4);
+
+    /// <summary>The leader's badge: a disc of black iron with a hot rim under the rank (the crown sits on its top, rising over the row).</summary>
+    static void CrownBadge(DrawingContext dc, Size s)
+    {
+        var c = new Point(s.Width / 2, s.Height / 2);
+        dc.DrawEllipse(null, BadgeOutline, c, 8.5, 8.5);
+        dc.DrawEllipse(BadgeFill, BadgeRim, c, 8.5, 8.5);
+    }
+
+    static readonly Brush HeroFill = Mod.Grad(true, (Color.FromRgb(0xE8, 0x2A, 0x34), 0), (Color.FromRgb(0x9A, 0x10, 0x20), .5), (Color.FromRgb(0x48, 0x06, 0x0E), 1));
+    static readonly Pen HeroRim = MakeJoinPen(Color.FromRgb(0xFF, 0x5A, 0x3C), 2), HeroOutline = MakeJoinPen(Colors.Black, 4);
+    static Pen MakeJoinPen(Color c, double w) { var p = new Pen(Frozen(c), w) { LineJoin = PenLineJoin.Bevel }; p.Freeze(); return p; }
+
+    /// <summary>
+    /// The leader's crown, the hero of the top row: three points and two horns curling out, 24 x 14 (the crown's outline
+    /// stretched wide and low), blood red with a 2 px hot rim over a black outline, its band lit, an ember gem; it sits on
+    /// the badge's top and rises over the row.
+    /// </summary>
+    static void CrownHero(DrawingContext dc, Size s)
+    {
+        dc.DrawEllipse(BloodGlow, null, new Point(s.Width / 2, s.Height * .6), s.Width * .6, s.Height * .6);
+        dc.PushTransform(new MatrixTransform(1.2, 0, 0, .875, (s.Width - 24) / 2, 2));
+        dc.DrawGeometry(null, HeroOutline, CrownShape);
+        dc.DrawGeometry(HeroFill, HeroRim, CrownShape);
+        dc.DrawRectangle(Mod.Br(Color.FromRgb(0xFF, 0xE0, 0xB0), .95), null, new Rect(3.6, 12, 12.8, 1));
+        dc.DrawEllipse(CrownGem, null, new Point(10, 14.2), 2, 2.3);
+        dc.Pop();
+    }
     static readonly Brush CrownGem = MakeRadial(Color.FromRgb(0xFF, 0xF0, 0xC8), Color.FromArgb(0, 0xFF, 0x4A, 0x3D), Color.FromArgb(0xE0, 0xFF, 0x8A, 0x3D));
 
     /// <summary>The crown drawn at <paramref name="at"/> (its box's top-left), <paramref name="k"/> times its size, with its gem and band light.</summary>
@@ -220,7 +250,7 @@ sealed partial class HudAsmodian
         dc.DrawEllipse(BloodGlow, null, new Point(10, 10), 14, 11);
         dc.DrawGeometry(CrownFill, CrownPen, CrownShape);
         // the band: a hot line along its top, an ember gem at its middle
-        dc.DrawRectangle(Mod.Br(Color.FromRgb(0xFF, 0x6A, 0x4A), .9), null, new Rect(3.6, 12, 12.8, .9));
+        dc.DrawRectangle(Mod.Br(Color.FromRgb(0xFF, 0xE0, 0xB0), .9), null, new Rect(3.6, 12, 12.8, .9));
         dc.DrawEllipse(CrownGem, null, new Point(10, 14.2), 2.2, 2.2);
         dc.Pop();
     }
