@@ -15,7 +15,8 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudFinals
 {
-    static readonly RunInk Ink = new(GoldInk, Soft, Quiet, Faint, Mint2, Coral, AuLight, AuLight, 26, 12);
+    // ahead of your pace and NEW BEST in gold (the look's colour of winning), behind in coral
+    static readonly RunInk Ink = new(GoldInk, Soft, Quiet, Faint, AuLight, Coral, AuLight, AuLight, 26, 12);
 
     /// <summary>The run's head at the plate's top, over the clock (in the Buddy's body only during a run).</summary>
     readonly TextBlock _runHead = RunHead();
@@ -30,7 +31,7 @@ sealed partial class HudFinals
     /// <summary>The run on the plate: the figures in the hour's place, the strip after them (the timer chips follow); the head over them.</summary>
     void DrawRun(RunBuddy.State s)
     {
-        _lineBody.Margin = new Thickness(12, 6, 14, 7);
+        _lineBody.Margin = new Thickness(12, 10, 14, 7);
         double cap = FightWidth - 8 - _lineBody.Margin.Left - _lineBody.Margin.Right;
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var big = T("", 26, GoldInk, FontWeights.SemiBold, cond: true);

@@ -77,7 +77,132 @@ sealed partial class HudFinals
     /// the rim's top. Drawn once (again only when its size or the opacity setting changes); the lights that cross it are
     /// <see cref="Band"/>s over it.
     /// </summary>
-    static void Plate(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool spot = true, double rim = 1)
+    static void Plate(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool spot = true, double rim = 1, int lamps = 0, bool beams = false, bool rig = false)
+    {
+        PlateBody(dc, s, radius, opacity, shadow, spot, rim);
+        if (lamps > 0) Rig(dc, s, lamps, beams, rig);
+        if (rim > 0 && lamps > 0) Brackets(dc, s);
+    }
+
+    /// <summary>
+    /// The lighting rig over a plate's top edge: a brushed-gold truss with <paramref name="n"/> lamp heads hanging from it, each
+    /// with a lit lens; with <paramref name="beams"/> each lamp throws a faint cone of light down into the plate (drawn once;
+    /// the meter's own beams are a layer that moves in its moments, <see cref="StageBeams"/>).
+    /// </summary>
+    static void Rig(DrawingContext dc, Size s, int n, bool beams, bool big)
+    {
+        double w = s.Width;
+        if (beams)
+        {
+            dc.PushClip(Mod.Pill(new Rect(.75, .75, w - 1.5, s.Height - 1.5), 4));
+            for (int i = 0; i < n; i++)
+            {
+                double x = LampX(w, n, i), ang = BeamRest(n, i) * Math.PI / 180, len = s.Height * 1.1, spread = Math.Min(70, s.Height * .9);
+                var g = new StreamGeometry();
+                using (var c = g.Open())
+                {
+                    Point P(double px, double py) => new(x + px * Math.Cos(ang) - py * Math.Sin(ang), 6 + px * Math.Sin(ang) + py * Math.Cos(ang));
+                    c.BeginFigure(P(-2, 0), true, true); c.LineTo(P(2, 0), true, false); c.LineTo(P(spread / 2, len), true, false); c.LineTo(P(-spread / 2, len), true, false);
+                }
+                g.Freeze();
+                dc.DrawGeometry(BeamFillStatic, null, g);
+            }
+            dc.Pop();
+        }
+        // the truss: a slim gold bar along the top edge, a lattice of dark slits in it
+        if (big)
+        {
+            // the meter's rig: a real girder across the whole top, two gold chords with a lattice of diagonals between them
+            var g = new Rect(5, -2, Math.Max(0, w - 10), 7.5);
+            dc.DrawRectangle(Frozen(Color.FromRgb(0x1C, 0x16, 0x09)), null, g);
+            var lattice = new StreamGeometry();
+            using (var c = lattice.Open())
+                for (double x = g.X + 2; x + 6 <= g.Right - 1; x += 6)
+                {
+                    c.BeginFigure(new Point(x, g.Y + 1), false, false); c.LineTo(new Point(x + 6, g.Bottom - 1), true, false);
+                    c.BeginFigure(new Point(x + 6, g.Y + 1), false, false); c.LineTo(new Point(x, g.Bottom - 1), true, false);
+                }
+            lattice.Freeze();
+            dc.DrawGeometry(null, Mod.P(Mod.Br(AuC, .55), .8), lattice);
+            dc.DrawRectangle(GoldMetal, null, new Rect(g.X, g.Y, g.Width, 1.4));
+            dc.DrawRectangle(GoldMetal, null, new Rect(g.X, g.Bottom - 1.4, g.Width, 1.4));
+        }
+        else
+        {
+            var truss = new Rect(12, -1.5, Math.Max(0, w - 24), 4);
+            dc.DrawRectangle(Frozen(Color.FromRgb(0x2A, 0x21, 0x0E)), Mod.P(GoldMetal, 1), truss);
+            for (double x = truss.X + 5; x < truss.Right - 3; x += 7) dc.DrawRectangle(Mod.Br(Colors.Black, .55), null, new Rect(x, truss.Y + 1, 2.5, 2));
+        }
+        for (int i = 0; i < n; i++)
+        {
+            double x = LampX(w, n, i);
+            // the lamp head: a dark housing rimmed in gold under the truss, its lens lit
+            if (big)
+            {
+                // a stage lamp: a can hung from the girder, its hot lens glowing at its mouth
+                dc.DrawEllipse(LampGlow, null, new Point(x, 12.5), 13, 7);
+                var can = new Rect(x - 7, 3, 14, 10);
+                dc.DrawRoundedRectangle(Frozen(Color.FromRgb(0x18, 0x14, 0x0B)), Mod.P(GoldMetal, 1.1), can, 2, 2);
+                dc.DrawRectangle(Mod.Br(AuC, .5), null, new Rect(x - 5, 5.5, 10, 1));
+                dc.DrawEllipse(LensFill, null, new Point(x, 12.4), 6, 2.6);
+            }
+            else
+            {
+                var head = new Rect(x - 5.5, 1.5, 11, 6.5);
+                dc.DrawRoundedRectangle(Frozen(Color.FromRgb(0x16, 0x13, 0x0C)), Mod.P(GoldMetal, 1), head, 1.5, 1.5);
+                dc.DrawEllipse(LensFill, null, new Point(x, 7.2), 4.2, 2);
+            }
+        }
+    }
+
+    /// <summary>The lamps' places across a plate: evenly, in from its corners.</summary>
+    static double LampX(double w, int n, int i) => Math.Round(w * (i + 1) / (n + 1));
+
+    /// <summary>A beam's angle at rest (degrees, 0 straight down): the outer lamps aim inward, the inner ones cross a little.</summary>
+    static double BeamRest(int n, int i)
+    {
+        double mid = (n - 1) / 2.0, k = (i - mid) / Math.Max(1, mid);
+        return -k * 22 + (i % 2 == 0 ? 5 : -5);
+    }
+
+    static readonly Brush LampGlow = MakeLampGlow();
+    static Brush MakeLampGlow()
+    {
+        var b = new RadialGradientBrush();
+        b.GradientStops.Add(new GradientStop(Mod.A(AuPaleC, .55), 0));
+        b.GradientStops.Add(new GradientStop(Mod.A(AuC, 0), 1));
+        b.Freeze();
+        return b;
+    }
+    static readonly Brush BeamFillStatic = Mod.Grad(true, (Mod.A(SpotC, .13), 0), (Mod.A(SpotC, .05), .45), (Mod.A(SpotC, 0), 1));
+    static readonly Brush LensFill = MakeLens();
+    static Brush MakeLens()
+    {
+        var b = new RadialGradientBrush();
+        b.GradientStops.Add(new GradientStop(Colors.White, 0));
+        b.GradientStops.Add(new GradientStop(AuPaleC, .5));
+        b.GradientStops.Add(new GradientStop(Mod.A(AuC, .6), 1));
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>Gold corner brackets just outside the rim, as a trophy plinth's corners: an L of brushed gold at each corner.</summary>
+    static void Brackets(DrawingContext dc, Size s)
+    {
+        const double L = 11, o = 2.2;
+        var pen = new Pen(GoldMetal, 2) { StartLineCap = PenLineCap.Square, EndLineCap = PenLineCap.Square, LineJoin = PenLineJoin.Miter };
+        pen.Freeze();
+        double l = -o + 1, t = -o + 1, r = s.Width + o - 1, b = s.Height + o - 1;
+        foreach (var (x, y, dx, dy) in new[] { (l, t, 1, 1), (r, t, -1, 1), (l, b, 1, -1), (r, b, -1, -1) })
+        {
+            var g = new StreamGeometry();
+            using (var c = g.Open()) { c.BeginFigure(new Point(x + dx * L, y), false, false); c.LineTo(new Point(x, y), true, false); c.LineTo(new Point(x, y + dy * L), true, false); }
+            g.Freeze();
+            dc.DrawGeometry(null, pen, g);
+        }
+    }
+
+    static void PlateBody(DrawingContext dc, Size s, double radius, double opacity, bool shadow, bool spot, double rim)
     {
         if (s.Width < 6 || s.Height < 6) return;
         var r = new Rect(.75, .75, s.Width - 1.5, s.Height - 1.5);
@@ -210,8 +335,9 @@ sealed partial class HudFinals
     }
 
     /// <summary>
-    /// The leader's trophy: a gold cup 14 × 16 with a dark outline, a gleam band that can run over it and a spark at its lip.
-    /// <see cref="Rise"/> plays its entrance (one course: transforms and opacity only); at rest it simply stands.
+    /// The trophy: a gold cup (14 × 16 drawn, <paramref name="scale"/> times that on screen) with a dark outline, a gleam band
+    /// that can run over it and a spark at its lip. <see cref="Rise"/> plays its entrance (one course: transforms and opacity
+    /// only); at rest it simply stands.
     /// </summary>
     sealed class Trophy : Grid
     {
@@ -220,99 +346,244 @@ sealed partial class HudFinals
         readonly ScaleTransform _sparkScale = new(0, 0);
         readonly TranslateTransform _lift = new();
         readonly ScaleTransform _grow = new(1, 1);
+        readonly double _scale;
 
-        static readonly Brush CupFill = Mod.Grad(true, (Color.FromRgb(0xFF, 0xF4, 0xC8), 0), (Color.FromRgb(0xF4, 0xC6, 0x5C), .38), (Color.FromRgb(0xC9, 0x93, 0x34), .7), (Color.FromRgb(0x8A, 0x60, 0x1C), 1));
+        static readonly Brush CupFill = Mod.Grad(true, (Color.FromRgb(0xFF, 0xF6, 0xD0), 0), (Color.FromRgb(0xF6, 0xCB, 0x62), .36), (Color.FromRgb(0xCF, 0x98, 0x36), .68), (Color.FromRgb(0x8A, 0x60, 0x1C), 1));
         static readonly Brush GleamFill = Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, .95), .5), (Mod.A(Colors.White, 0), 1));
+        static readonly Brush Outline = Mod.Br(Colors.Black, .85), HandleGold = Frozen(Color.FromRgb(0xE8, 0xB8, 0x52)), SparkWhite = Frozen(Colors.White);
 
-        public Trophy()
+        public Trophy(double scale = 1)
         {
-            Width = 14; Height = 16; IsHitTestVisible = false; ClipToBounds = false;
-            Children.Add(new Path { Data = HandleShape, Stroke = Mod.Br(Colors.Black, .85), StrokeThickness = 2.8 });
-            Children.Add(new Path { Data = CupShape, Fill = Mod.Br(Colors.Black, .85), Stroke = Mod.Br(Colors.Black, .85), StrokeThickness = 1.6, StrokeLineJoin = PenLineJoin.Round });
-            Children.Add(new Path { Data = HandleShape, Stroke = Frozen(Color.FromRgb(0xE8, 0xB8, 0x52)), StrokeThickness = 1.2 });
-            Children.Add(new Path { Data = CupShape, Fill = CupFill });
+            _scale = scale;
+            Width = 14 * scale; Height = 16 * scale; IsHitTestVisible = false; ClipToBounds = false;
+            var art = new Grid { Width = 14, Height = 16, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, RenderTransform = new ScaleTransform(scale, scale) };
+            art.Children.Add(new Path { Data = HandleShape, Stroke = Outline, StrokeThickness = 2.8 });
+            art.Children.Add(new Path { Data = CupShape, Fill = Outline, Stroke = Outline, StrokeThickness = 1.6, StrokeLineJoin = PenLineJoin.Round });
+            art.Children.Add(new Path { Data = HandleShape, Stroke = HandleGold, StrokeThickness = 1.2 });
+            art.Children.Add(new Path { Data = CupShape, Fill = CupFill });
+            // a star struck on the bowl
+            art.Children.Add(new Path { Data = StarShape, Fill = Mod.Br(Color.FromRgb(0x8A, 0x60, 0x1C), .8) });
+            // a fixed highlight down the bowl's left: polished metal
+            art.Children.Add(new Path { Data = SpecShape, Stroke = Mod.Br(Colors.White, .85), StrokeThickness = .9, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
             // the gleam: a slanted white band inside the cup's shape, moved across it
             _gleam = new Rectangle { Width = 5, Height = 18, Fill = GleamFill, RenderTransform = new TransformGroup { Children = { new SkewTransform(-28, 0), _gleamAt } }, Opacity = 0 };
-            Children.Add(new Canvas { Clip = CupShape, IsHitTestVisible = false, Children = { _gleam } });
-            var spark = new Path { Data = SparkShape, Fill = Frozen(Colors.White), RenderTransform = _sparkScale, Opacity = .95 };
+            art.Children.Add(new Canvas { Clip = CupShape, IsHitTestVisible = false, Children = { _gleam } });
+            var spark = new Path { Data = SparkShape, Fill = SparkWhite, RenderTransform = _sparkScale, Opacity = .95 };
             var sparkHost = new Canvas { IsHitTestVisible = false };
             Canvas.SetLeft(spark, 11.8); Canvas.SetTop(spark, 1.4);
             sparkHost.Children.Add(spark);
-            Children.Add(sparkHost);
+            art.Children.Add(sparkHost);
+            Children.Add(art);
             RenderTransformOrigin = new Point(.5, 1);
             RenderTransform = new TransformGroup { Children = { _grow, _lift } };
         }
 
-        /// <summary>The cup rising into place (a pop), its gleam crossing, the spark at its lip flaring: one course, <paramref name="ms"/> long.</summary>
+        /// <summary>The cup landing in place (a pop), its gleam crossing, the spark at its lip flaring: one course, <paramref name="ms"/> long.</summary>
         public void Rise(double ms = 1100)
         {
             Motion.Play(this, ms, t =>
             {
                 double up = Seg(t, 0, .42);
-                _lift.Y = 9 * (1 - Math.Min(1.08, Back(up, 2.2)));
-                _grow.ScaleX = _grow.ScaleY = .55 + .45 * Math.Min(1.06, Back(up, 1.8));
+                _lift.Y = 9 * _scale * (1 - Math.Min(1.08, Back(up, 2.2)));
+                _grow.ScaleX = _grow.ScaleY = .55 + .45 * Math.Min(1.08, Back(up, 1.8));
                 Opacity = Seg(t, 0, .18);
-                double g = Seg(t, .38, .78);
-                _gleamAt.X = -8 + 26 * g; _gleam.Opacity = g is > 0 and < 1 ? Math.Sin(Math.PI * g) : 0;
-                double sp = Seg(t, .5, .95);
-                _sparkScale.ScaleX = _sparkScale.ScaleY = sp is > 0 and < 1 ? Math.Sin(Math.PI * sp) : 0;
+                Shine(Seg(t, .38, .78), Seg(t, .5, .95));
             }, Rest);
         }
+
+        /// <summary>The gleam's and the spark's places in their own courses (0 to 1; outside: none).</summary>
+        public void Shine(double gleam, double spark)
+        {
+            _gleamAt.X = -8 + 26 * gleam; _gleam.Opacity = gleam is > 0 and < 1 ? Math.Sin(Math.PI * gleam) : 0;
+            _sparkScale.ScaleX = _sparkScale.ScaleY = spark is > 0 and < 1 ? 1.3 * Math.Sin(Math.PI * spark) : 0;
+        }
+
+        /// <summary>Hidden for a moment (the trophy is in flight to this row).</summary>
+        public void Away() { Motion.Halt(this); Opacity = 0; }
 
         /// <summary>The cup as it stands.</summary>
         public void Rest()
         {
-            _lift.Y = 0; _grow.ScaleX = _grow.ScaleY = 1; Opacity = 1; _gleam.Opacity = 0; _sparkScale.ScaleX = _sparkScale.ScaleY = 0;
+            _lift.Y = 0; _grow.ScaleX = _grow.ScaleY = 1; Opacity = 1; Shine(-1, -1);
         }
+    }
+
+    static readonly Geometry SpecShape = FreezeG(Geometry.Parse("M4,2.2 C3.9,4.6 4.3,6.4 5.4,7.8"));
+    static readonly Geometry StarShape = FreezeG(Geometry.Parse("M7,3.1 L7.75,4.65 L9.45,4.85 L8.2,6 L8.5,7.7 L7,6.9 L5.5,7.7 L5.8,6 L4.55,4.85 L6.25,4.65 Z"));
+
+    // ================================================================ the stage beams
+
+    /// <summary>
+    /// The stage lights behind the meter's head: a lamp's cone of warm light from each lamp head on the truss, crossing down
+    /// over the head (the rows' tiles cover them below). Paths with one frozen gradient, placed once per width; at rest they
+    /// stand at their angles, and in a moment (<see cref="Swing"/>) they sweep: rotations and opacity only.
+    /// </summary>
+    sealed class StageBeams : Canvas
+    {
+        readonly List<(Path P, RotateTransform R, double At)> _beams = new();
+        readonly int _n;
+        double _w = -1;
+
+        static readonly Brush ConeFill = Mod.Grad(true, (Mod.A(SpotC, .5), 0), (Mod.A(SpotC, .26), .3), (Mod.A(SpotC, .1), .6), (Mod.A(SpotC, 0), 1));
+        static readonly Geometry Cone = FreezeG(Geometry.Parse("M-2.2,0 L2.2,0 L36,150 L-36,150 Z"));
+
+        public StageBeams(int n)
+        {
+            _n = n;
+            ClipToBounds = true; IsHitTestVisible = false; Opacity = .85;
+            for (int i = 0; i < n; i++)
+            {
+                var r = new RotateTransform(BeamRest(n, i));
+                var p = new Path { Data = Cone, Fill = ConeFill, RenderTransform = r, IsHitTestVisible = false };
+                Canvas.SetTop(p, 6);
+                Children.Add(p);
+                _beams.Add((p, r, BeamRest(n, i)));
+            }
+        }
+
+        /// <summary>The lamps' places for the panel's width (set again only when it changes).</summary>
+        public void Fit(double w)
+        {
+            if (Math.Abs(w - _w) < .5) return;
+            _w = w;
+            for (int i = 0; i < _n; i++) Canvas.SetLeft(_beams[i].P, LampX(w, _n, i));
+        }
+
+        /// <summary>The beams sweeping, <paramref name="amp"/> degrees each way, settling back to rest by the course's end, brighter mid-course.</summary>
+        public void Swing(double t, double amp)
+        {
+            double k = Math.Clamp(t, 0, 1), fade = 1 - k;
+            for (int i = 0; i < _beams.Count; i++)
+            {
+                var (_, r, rest) = _beams[i];
+                r.Angle = rest + amp * Math.Sin(Math.PI * 2 * (k * 1.25 + i * .23)) * fade;
+            }
+            Opacity = .85 + .15 * Math.Sin(Math.PI * k);
+        }
+
+        /// <summary>A sweep as one course of <paramref name="ms"/>.</summary>
+        public void Play(double ms, double amp) => Motion.Play(this, ms, t => Swing(t, amp), () => Swing(1, 0));
+    }
+
+    // ================================================================ the pyro
+
+    static readonly Brush RayFill = Mod.Grad(false, (Mod.A(AuC, 0), 0), (Mod.A(AuLightC, .85), .6), (Colors.White, 1));
+    static readonly Brush FlashFill = MakeFlash();
+    static Brush MakeFlash()
+    {
+        var b = new RadialGradientBrush();
+        b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .95), 0));
+        b.GradientStops.Add(new GradientStop(Mod.A(AuLightC, .6), .3));
+        b.GradientStops.Add(new GradientStop(Mod.A(AuC, 0), 1));
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>
+    /// A kill's pyro: a gold burst from each top corner of the panel, a flash and a spray of sparks flying out and dropping,
+    /// then a second smaller burst a beat later. One course on <paramref name="layer"/> (clipped to the panel): every piece a
+    /// shape with a frozen brush, moved by its transforms and faded by its opacity.
+    /// </summary>
+    static void Pyro(Canvas layer, double w, double h, double ms = 1200)
+    {
+        layer.Children.Clear();
+        if (w < 60 || h < 40) return;
+        var parts = new List<Action<double>>();
+        void Burst(double cx, double cy, int side, int rays, double reach, double at, double len)
+        {
+            var flash = new Ellipse { Width = 70, Height = 70, Fill = FlashFill, Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5) };
+            var fs = new ScaleTransform(.2, .2);
+            flash.RenderTransform = new TransformGroup { Children = { fs, new TranslateTransform(cx - 35, cy - 35) } };
+            layer.Children.Add(flash);
+            parts.Add(p =>
+            {
+                double q = Math.Clamp((p - at) / .35, 0, 1);
+                fs.ScaleX = fs.ScaleY = .2 + 1.3 * Motion.Out(q);
+                flash.Opacity = q is > 0 and < 1 ? (q < .2 ? q / .2 : 1 - (q - .2) / .8) : 0;
+            });
+            for (int k = 0; k < rays; k++)
+            {
+                double u = (k + .5) / rays, ang = -24 + 84 * u;   // fanned from along the top edge to steeply down-inward, kept off the rows' figures
+                if (side > 0) ang = 180 - ang;
+                double my = .7 + .3 * ((k * .618) % 1);
+                var ray = new Rectangle { Width = len, Height = 2.8, Fill = RayFill, RadiusX = 1.2, RadiusY = 1.2, Opacity = 0, IsHitTestVisible = false };
+                var stretch = new ScaleTransform(1, 1);
+                var out1 = new TranslateTransform();
+                var drop = new TranslateTransform();
+                ray.RenderTransform = new TransformGroup { Children = { stretch, out1, new RotateTransform(ang), new TranslateTransform(cx, cy - 1.2), drop } };
+                layer.Children.Add(ray);
+                parts.Add(p =>
+                {
+                    double q = Math.Clamp((p - at) / .6, 0, 1);
+                    out1.X = 4 + reach * my * Motion.Out(q);
+                    stretch.ScaleX = .4 + 1.2 * Math.Sin(Math.PI * Math.Min(1, q * 1.4));
+                    drop.Y = 14 * q * q;
+                    ray.Opacity = q is > 0 and < 1 ? (q < .08 ? q / .08 : 1 - q * q) : 0;
+                });
+            }
+        }
+        Burst(10, 6, -1, 14, Math.Min(120, w * .38), 0, 18);
+        Burst(w - 10, 6, 1, 14, Math.Min(120, w * .38), 0, 18);
+        Burst(10, 6, -1, 8, Math.Min(80, w * .26), .26, 13);
+        Burst(w - 10, 6, 1, 8, Math.Min(80, w * .26), .26, 13);
+        Motion.Play(layer, ms, p => { foreach (var a in parts) a(p); }, () => layer.Children.Clear());
     }
 
     // ================================================================ the confetti
 
     /// <summary>At most this many pieces of confetti on a kill.</summary>
-    const int ConfettiN = 14;
+    const int ConfettiN = 24;
 
     static readonly Brush ConfettiWhite = Mod.Br(Colors.White, .95), ConfettiGold = Frozen(Color.FromRgb(0xFF, 0xE1, 0x8E)), ConfettiDeep = Frozen(Color.FromRgb(0xE3, 0xB5, 0x4E));
 
     /// <summary>
-    /// A kill's confetti: <see cref="ConfettiN"/> gold and white pieces (slips and a few squares) fired from the panel's two
-    /// top corners (under the head) as a stage's cannons do, arcing in over the rows and fluttering down through the panel, turning and
-    /// flipping as they go, fading at the end. One course of transforms and opacity (no layout); the layer clips them to the
-    /// panel, so nothing falls past the window's edge. Cheap: plain shapes with frozen brushes, no effects.
+    /// A kill's confetti: <see cref="ConfettiN"/> gold and white pieces (slips and squares) fired in from the panel's two top
+    /// corners over the champion's banner, each to its own place across, then fluttering down to the stage's floor
+    /// (<paramref name="floor"/>, the rows' top) and on behind it, turning and flipping as they go. The layer's clip keeps
+    /// them to the banner band, out of its words: the rows' figures are never covered. One course of transforms and opacity
+    /// (no layout), nothing past the window's edge.
     /// </summary>
-    static void Confetti(Canvas layer, double width, double height, double fromY, double ms = 2200)
+    static void Confetti(Canvas layer, double width, double floor, double ms = 2600)
     {
         layer.Children.Clear();
-        if (width < 40 || height < 40) return;
-        var pieces = new List<(FrameworkElement El, RotateTransform Turn, ScaleTransform Flip, TranslateTransform At, double X0, double Vx, double Lift, double Fall, double Spin, double Sway, double Phase)>();
+        if (width < 40 || floor < 24) return;
+        var pieces = new List<(FrameworkElement El, RotateTransform Turn, ScaleTransform Flip, TranslateTransform At, double X0, double Y0, double Xa, double Ya, double Yend, double Drift, double Spin, double Sway, double Phase, double Born)>();
         for (int i = 0; i < ConfettiN; i++)
         {
-            double u = (i * 0.618034) % 1, v = (i * 0.414214 + .2) % 1;
+            double u = (i * 0.618034) % 1, v = (i * 0.414214 + .2) % 1, z = (i * 0.7548) % 1;
             bool white = i % 3 == 2, square = i % 5 == 4;
             var fill = white ? ConfettiWhite : i % 2 == 0 ? ConfettiDeep : ConfettiGold;
-            var el = square ? new Rectangle { Width = 5, Height = 5, Fill = fill } : new Rectangle { Width = i % 2 == 0 ? 3.8 : 3.2, Height = i % 2 == 0 ? 9 : 7.5, Fill = fill };
+            var el = square ? new Rectangle { Width = 6.5, Height = 6.5, Fill = fill } : new Rectangle { Width = i % 2 == 0 ? 5 : 4.2, Height = i % 2 == 0 ? 11 : 9, Fill = fill };
             var turn = new RotateTransform(u * 180);
             var flip = new ScaleTransform(1, 1);
-            var at = new TranslateTransform(-50, -50);
+            var at = new TranslateTransform(-60, -60);
             el.RenderTransformOrigin = new Point(.5, .5);
             el.RenderTransform = new TransformGroup { Children = { flip, turn, at } };
             el.IsHitTestVisible = false;
             el.Opacity = 0;
             layer.Children.Add(el);
-            // half from each top corner, flying in toward the middle (each to its own depth across)
             int side = i % 2 == 0 ? -1 : 1;
-            double x0 = side < 0 ? 10 : width - 14;
-            pieces.Add((el, turn, flip, at, x0, -side * width * (.12 + .4 * u), 3 + 8 * v, Math.Max(30, height - fromY - 14) * (.62 + .38 * ((i * 0.7548) % 1)), (v - .5) * 600, 3 + 5 * u, v * 6.28));
+            double x0 = side < 0 ? 8 : width - 12, y0 = 12;
+            double xa = x0 - side * width * (.05 + .42 * u), ya = 3 + 9 * v;
+            pieces.Add((el, turn, flip, at, x0, y0, xa, ya, floor + 8 + 10 * z, (z - .5) * 34, (v - .5) * 720, 3 + 6 * u, v * 6.28, (i / 2 % 6) * .03));
         }
         Motion.Play(layer, ms, p =>
         {
-            foreach (var (el, turn, flip, at, x0, vx, lift, fall, spin, sway, phase) in pieces)
+            foreach (var (el, turn, flip, at, x0, y0, xa, ya, yend, drift, spin, sway, phase, born) in pieces)
             {
-                // thrown up for the first fifth, then fluttering down, slowing to a drift
-                at.Y = p < .2 ? fromY - lift * Motion.Out(p / .2) : fromY - lift + (fall + lift) * Math.Pow((p - .2) / .8, 1.25);
-                at.X = x0 + vx * Motion.Out(p) + sway * Math.Sin(phase + p * 10);
-                turn.Angle = phase * 30 + spin * p;
-                flip.ScaleX = Math.Cos(phase + p * 14);
-                el.Opacity = p < .05 ? p / .05 : p > .76 ? Math.Max(0, 1 - (p - .76) / .24) : 1;
+                double q = Math.Clamp((p - born) / (1 - born), 0, 1);
+                if (q <= 0) { el.Opacity = 0; continue; }
+                if (q < .26) { double k = Motion.Out(q / .26); at.X = x0 + (xa - x0) * k; at.Y = y0 + (ya - y0) * k; }
+                else
+                {
+                    // from the top of its flight, fluttering down and drifting, slowing as it goes
+                    double f = (q - .26) / .74;
+                    at.X = xa + drift * f + sway * Math.Sin(phase + q * 10);
+                    at.Y = ya + (yend - ya) * Math.Pow(f, 1.3);
+                }
+                turn.Angle = phase * 30 + spin * q;
+                flip.ScaleX = Math.Cos(phase + q * 14);
+                el.Opacity = q < .04 ? q / .04 : q > .78 ? Math.Max(0, 1 - (q - .78) / .22) : 1;
             }
         }, () => layer.Children.Clear());
     }
