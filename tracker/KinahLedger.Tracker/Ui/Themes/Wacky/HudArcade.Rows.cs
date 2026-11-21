@@ -90,7 +90,7 @@ sealed partial class HudArcade
     /// Moments: a chase of light along the cells (<see cref="Chase"/>), the crown dropping onto 1ST (<see cref="CrownDrop"/>);
     /// a row that climbs runs its own chase, and the one that takes 1ST gets the crown.
     /// </summary>
-    sealed class ArcadeRow : IThemeRow
+    sealed class ArcadeRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 30, Pitch = 32;
         const double PadL = 9, PadR = 6, RankW = 30, IconW = 23, BarH = 8, BarCell = 6, BarGap = 2;
