@@ -45,11 +45,12 @@ sealed partial class HudRift : ModernLook
     readonly Border _timersUp = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 0, 0, 6), Visibility = Visibility.Collapsed };
     bool _dim;
     TacSketch? _ringArt;
-    double _share = -1, _complete, _glint = -1, _linePulse = -1, _burst = -1;
+    Grid? _ringHost;
+    double _share = -1;
     bool _beat, _ringEmpty;
-    Color? _pulseC;
+    /// <summary>The pulses of light along the Buddy's and the meter's tears (layers over the glass: the glass is never drawn again for them).</summary>
+    readonly RiftPulse _linePulse = new(Radius), _fightPulse = new(Radius);
     Border? _firstChip;
-    double _chipLight;
 
     // the rare drop under the Buddy (its own glass), and the notice line
     readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
@@ -69,11 +70,11 @@ sealed partial class HudRift : ModernLook
         // the look's own rows (Ui/Themes/ThemeRows.cs), a fit shared by the rows so the share column holds or goes for all
         var fit = new RiftFit();
         UseRows(RiftRow.Pitch, m => new RiftRow(this, fit), 15, GapLine);
-        _lineArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity, _linePulse, _pulseC, _linePulse is > 0 and < 1 ? .9 * Math.Sin(Math.PI * _linePulse) : 0));
+        _lineArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity));
         _lineStack.Children.Add(_runHead); _lineStack.Children.Add(_lineBody);
-        _line.Children.Add(_lineArt); _line.Children.Add(_lineStack);
-        _fightArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity, _seam is > 0 and < .4 ? _seam / .4 : -1, _seamC, _seam is > 0 and < .4 ? .7 * Math.Sin(Math.PI * _seam / .4) : 0));
-        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        _line.Children.Add(_lineArt); _line.Children.Add(_linePulse); _line.Children.Add(_lineStack);
+        _fightArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity));
+        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightPulse); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _settle;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
         _root.Children.Add(_body);
@@ -101,9 +102,6 @@ sealed partial class HudRift : ModernLook
 
     /// <summary>The violet glow round a big figure in starlight (the hour, the clock): one effect on a few texts.</summary>
     static DropShadowEffect Glow(double blur = 10, double a = .8) => new() { Color = VioletC, ShadowDepth = 0, BlurRadius = blur, Opacity = a };
-
-    /// <summary>The tight dark shade under the meter rows' words, violet-black (one effect for each row's words).</summary>
-    static DropShadowEffect Shade() => new() { Color = Color.FromRgb(0x0A, 0x02, 0x18), Direction = 270, ShadowDepth = 1, BlurRadius = 3, Opacity = .95 };
 
     /// <summary>A small violet glass chip with a lilac hairline (★ DPS, the heal mark, AVG, RARE DROP); <paramref name="filled"/>: starlight with dark violet words (YOU).</summary>
     static Border Mark(string s, Brush? fg = null, Color? edge = null, bool filled = false, double size = 8.5)
@@ -210,9 +208,10 @@ sealed partial class HudRift : ModernLook
     /// <summary>The run's ring as a rift portal: <paramref name="share"/> of your best round it (<paramref name="empty"/>: closed, no hour yet).</summary>
     FrameworkElement Ring(double share, bool beat, bool empty)
     {
-        _share = share; _beat = beat; _complete = 0; _ringEmpty = empty;
+        _share = share; _beat = beat; _ringEmpty = empty;
         var ring = new Grid { Width = 44, Height = 44, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0) };
         _ringArt = new TacSketch(DrawRing, 44, 44);
+        _ringHost = ring;
         ring.Children.Add(_ringArt);
         if (!empty)
         {
@@ -256,9 +255,11 @@ sealed partial class HudRift : ModernLook
     bool _timerUp;
 
     Color _rareC;
-    double _rareOpen = -1;
-    TacSketch? _rareArt;
     FrameworkElement? _rareTile;
+    /// <summary>The rare drop's moment, drawn once and only faded and stretched while it plays: the grade's light behind the tile, the fissure beside it, the rifts along the pill's top and foot, the pulse.</summary>
+    FrameworkElement? _rareGlow, _rareFissure, _rareTears;
+    readonly ScaleTransform _rareRun = new(1, 1, 36, 0);
+    RiftPulse? _rarePulse;
 
     /// <summary>The rare drop the window holds, on its own glass under the Buddy: its tile, RARE DROP, its name in its grade's colour; the tear in that colour.</summary>
     void DrawRare()
@@ -268,33 +269,34 @@ sealed partial class HudRift : ModernLook
         {
             var c = ColorOf(r.Color, r.Grade);
             _rareC = c;
-            var art = new TacSketch((dc, s) =>
+            _rare.Children.Add(new TacSketch((dc, s) =>
             {
-                double open = _rareOpen;
-                RiftPanel(dc, s, s.Height / 2, _opacity, open is > 0 and < 1 ? Seg(open, .1, .7) : -1, c, open is > 0 and < 1 ? 1.2 * Math.Sin(Math.PI * Seg(open, 0, .8)) : .25, shadow: false, tear: 1);
+                RiftPanel(dc, s, s.Height / 2, _opacity, tint: c, flare: .25, shadow: false);
                 // the grade's light breathing in the glass behind the tile
-                double k = open is > 0 and < 1 ? Math.Sin(Math.PI * Seg(open, 0, .9)) : 0;
-                dc.PushOpacity(.35 + .65 * k);
-                dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(c, .6), 0), (Mod.A(c, 0), 1)), null, new Rect(0, -4, 50 + 16 * k, s.Height + 8));
+                dc.PushOpacity(.35);
+                dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(c, .6), 0), (Mod.A(c, 0), 1)), null, new Rect(0, -4, 50, s.Height + 8));
                 dc.Pop();
-                if (k > 0)
+            }));
+            // the moment's layer (clipped to the pill): the glass torn open, a fissure of the grade's light beside the tile and a
+            // rift of it running out along the pill's top and foot (the words between them kept clear), then closing
+            var lc = Mod.Mix(c, Colors.White, .35);
+            var fx = new Grid { IsHitTestVisible = false, ClipToBounds = true };
+            fx.SizeChanged += (_, _) => { var g = new RectangleGeometry(new Rect(0, 0, fx.ActualWidth, fx.ActualHeight), fx.ActualHeight / 2, fx.ActualHeight / 2); g.Freeze(); fx.Clip = g; };
+            _rareGlow = new TacSketch((dc, s) => dc.DrawRectangle(Radial(new Point(.5, .5), .5, .5, (Mod.A(c, .7), 0), (Mod.A(c, 0), 1)), null, new Rect(0, -4, 70, s.Height + 8))) { Opacity = 0 };
+            _rareFissure = new TacSketch((dc, s) => Fissure(dc, 41, 2, s.Height - 4, c, 1.9, 2)) { Opacity = 0 };
+            _rareTears = new TacSketch((dc, s) =>
+            {
+                double x1 = s.Width - s.Height / 2;
+                foreach (var y in new[] { 2.2, s.Height - 2.2 })
                 {
-                    // the glass torn open: a fissure of the grade's light down beside the tile, and a rift of it running out
-                    // along the pill's top and foot from there, then closing (the words between them kept clear)
-                    double run = Out(Seg(open, .05, .45)), x1 = 40 + (s.Width - 58) * run, th = 3.4 * k;
-                    var lc = Mod.Mix(c, Colors.White, .35);
-                    dc.PushOpacity(Math.Min(1, 1.3 * k));
-                    Fissure(dc, 41, 2, s.Height - 4, c, 1 + .9 * k, 2);
-                    foreach (var y in new[] { 2.2, s.Height - 2.2 })
-                    {
-                        dc.DrawGeometry(Mod.Grad(false, (Mod.A(lc, .95), 0), (Mod.A(lc, .8), .7), (Mod.A(c, 0), 1)), null, TearAcross(36, x1 + 6, y, th, y > 3 ? 7 : 4));
-                        dc.DrawGeometry(Mod.Grad(false, (Mod.A(Colors.White, 1), 0), (Mod.A(Colors.White, .7), .6), (Mod.A(Colors.White, 0), 1)), null, TearAcross(36, x1, y, th * .4, 5));
-                    }
-                    dc.Pop();
+                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(lc, .95), 0), (Mod.A(lc, .8), .7), (Mod.A(c, 0), 1)), null, TearAcross(36, x1 + 6, y, 3.4, y > 3 ? 7 : 4));
+                    dc.DrawGeometry(Mod.Grad(false, (Mod.A(Colors.White, 1), 0), (Mod.A(Colors.White, .7), .6), (Mod.A(Colors.White, 0), 1)), null, TearAcross(36, x1, y, 1.4, 5));
                 }
-            });
-            _rareArt = art;
-            _rare.Children.Add(art);
+            }) { Opacity = 0, RenderTransform = _rareRun };
+            _rarePulse = new RiftPulse(99);
+            _rarePulse.Tint(c);
+            foreach (var el in new UIElement[] { _rareGlow, _rareFissure, _rareTears, _rarePulse }) fx.Children.Add(el);
+            _rare.Children.Add(fx);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(9, 6, 16, 8) };
             var tile = Tile(r, 26); tile.Margin = new Thickness(0, 0, 9, 0);
             _rareTile = tile;
@@ -307,7 +309,7 @@ sealed partial class HudRift : ModernLook
             _rare.Children.Add(row);
             _rare.Visibility = Visibility.Visible;
         }
-        else { _rare.Visibility = Visibility.Collapsed; _rareArt = null; _rareTile = null; }
+        else { _rare.Visibility = Visibility.Collapsed; _rareGlow = _rareFissure = _rareTears = null; _rarePulse = null; _rareTile = null; }
     }
 
     /// <summary>The notice: its words in their tone on a slim pill of the glass, the warning sign before a pause.</summary>
@@ -343,18 +345,12 @@ sealed partial class HudRift : ModernLook
         dc.DrawEllipse(null, Mod.P(Mod.Br(Color.FromRgb(0x3A, 0x1E, 0x70), 1), 3.4), center, r, r);
         if (_ringEmpty) { dc.DrawEllipse(null, Mod.P(Mod.Br(LilacC, .4), 1), center, r + 1.7, r + 1.7); return; }
         double share = Math.Clamp(_beat ? 1 : _share, 0, 1);
-        double shown = share + (1 - share) * Math.Clamp(_complete, 0, 1);
+        double shown = share;
         bool full = shown >= .999;
         var arc = Mod.Grad(true, (LilacC, 0), (VioletC, .55), (CyanC, 1));
-        if (_burst is > 0 and < 1)
-        {
-            // the portal opening: a ring of rift light spreading out from it and fading
-            double rr = r + 5 * Out(_burst);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(LightC, .9 * (1 - _burst)), 2.2 * (1 - _burst) + .6), center, rr, rr);
-        }
         if (full)
         {
-            dc.DrawEllipse(null, Mod.P(Mod.Br(CyanC, .3 + (_burst is > 0 and < 1 ? .35 * (1 - _burst) : 0)), 7.5), center, r, r);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(CyanC, .3), 7.5), center, r, r);
             dc.DrawEllipse(null, Mod.P(Mod.Grad(true, (LightC, 0), (CyanC, .6), (LilacC, 1)), 3.4), center, r, r);
             return;
         }
@@ -366,7 +362,7 @@ sealed partial class HudRift : ModernLook
         dc.DrawGeometry(null, Mod.P(arc, 3.4, round: true), pg);
         // the light at the arc's head: the gap the rift's light comes through (brighter as it runs round)
         var p = new Point(c + r * Math.Sin(a), c - r * Math.Cos(a));
-        double g = _glint is > 0 and < 1 ? 1 : 0;
+        const double g = 0;
         dc.DrawRectangle(Spark, null, new Rect(p.X - 6 - 3 * g, p.Y - 6 - 3 * g, 12 + 6 * g, 12 + 6 * g));
         dc.DrawEllipse(Frozen(Colors.White), null, p, 1.7 + .5 * g, 1.7 + .5 * g);
     }
@@ -528,27 +524,27 @@ sealed partial class HudRift : ModernLook
 
     // ================================================================ the seams and the crown
 
-    /// <summary>The seams' pulse, 0 to 1 (-1: none): along the panel's tear first, then down each bar's edge in rank order.</summary>
-    internal double _seam = -1;
-    internal Color? _seamC;
     long _leadId;
     string _leadFight = "";
 
-    /// <summary>A pulse of rift light runs the seams: the meter's tear left to right, then each bar's edge in rank order (a light sweeping up the bar into its fissure, which flares).</summary>
+    /// <summary>
+    /// A pulse of rift light runs the seams: along the meter's tear left to right, then each bar's edge in rank order (a band of
+    /// light sweeping up the bar into its fissure, which flares). Transforms and opacity only: nothing is drawn again.
+    /// </summary>
     void Seams(Color? c)
     {
-        Motion.Play(_fightArt, 1500, t =>
+        _fightPulse.Tint(c);
+        Motion.Play(_fightPulse, 1500, t =>
         {
-            _seam = t; _seamC = c;
-            _fightArt.InvalidateVisual();
-            RedrawRows();
-        }, () => { _seam = -1; _fightArt.InvalidateVisual(); RedrawRows(); });
+            _fightPulse.At(t < .4 ? t / .4 : -1);
+            RowsSeam(t, c);
+        }, () => { _fightPulse.At(-1); RowsSeam(-1, c); });
     }
 
-    void RedrawRows()
+    void RowsSeam(double t, Color? c)
     {
         if (Meter is not { } m) return;
-        foreach (var x in m.Members) if (m.RowOf(x.Id) is RiftRow r) r.Redraw();
+        foreach (var x in m.Members) if (m.RowOf(x.Id) is RiftRow r) r.Seam(t, c);
     }
 
     /// <summary>The leader's row as drawn: a new leader in the fight seen (with effects playing) lands the crown on them and runs the seams.</summary>
@@ -567,41 +563,70 @@ sealed partial class HudRift : ModernLook
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
-        _pulseC = null;
-        Motion.Play(_lineArt, 1100, t => { _linePulse = t; _lineArt.InvalidateVisual(); }, () => { _linePulse = -1; _lineArt.InvalidateVisual(); });
+        _linePulse.Tint(null);
+        Motion.Play(_linePulse, 1100, t => _linePulse.At(t), () => _linePulse.At(-1));
     }
 
     /// <summary>A rare drop: its glass tears open in its grade's colour (a fissure flaring behind the tile, the tear lit in the colour), the tile popping in.</summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareArt is not { } art) return;
+        if (_rareGlow is not { } glow || _rareFissure is not { } fis || _rareTears is not { } tears || _rarePulse is not { } pulse) return;
         var tile = _rareTile;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        Motion.Play(art, 1600, t =>
+        Motion.Play(glow, 1600, t =>
         {
-            _rareOpen = t; art.InvalidateVisual();
+            double k = Math.Sin(Math.PI * Seg(t, 0, .9));
+            glow.Opacity = k;
+            fis.Opacity = tears.Opacity = Math.Min(1, 1.3 * k);
+            _rareRun.ScaleX = Math.Max(.02, Out(Seg(t, .05, .45)));
+            pulse.At(Seg(t, .1, .7) is var u && u > 0 && u < 1 ? u : -1);
             sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .05, .4), 2.2);
-        }, () => { _rareOpen = -1; art.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+        }, () => { glow.Opacity = fis.Opacity = tears.Opacity = 0; pulse.At(-1); _rareRun.ScaleX = 1; sc.ScaleX = sc.ScaleY = 1; });
     }
 
     /// <summary>Your best passed: the portal's arc runs on round to full, its point of light bright at the head, then the whole ring lights; a pulse crosses the tear.</summary>
     protected override void BestPassed(bool held)
     {
-        if (_ringArt is not { } art) return;
+        if (_ringArt is not { } art || _ringHost is not { } host) return;
         double was = _share is > 0 and < 1 ? _share : .84;
         bool beat = _beat;
-        _pulseC = MintC2;
+        // the ring as it was (drawn once), then three parts drawn once over it and only turned, faded and scaled: a point of
+        // light running round from the arc's head to the top, the whole ring of rift light, a ring of light bursting out
+        _beat = false; _share = was; art.InvalidateVisual();
+        const double c = 22, r = 17;
+        var turn = new RotateTransform(0, c, c);
+        var orbit = new TacSketch((dc, _) =>
+        {
+            dc.DrawRectangle(Spark, null, new Rect(c - 9, c - r - 9, 18, 18));
+            dc.DrawEllipse(Brushes.White, null, new Point(c, c - r), 2.2, 2.2);
+        }, 44, 44) { RenderTransform = turn };
+        var lit = new TacSketch((dc, _) =>
+        {
+            dc.DrawEllipse(null, Mod.P(Mod.Br(CyanC, .55), 7.5), new Point(c, c), r, r);
+            dc.DrawEllipse(null, Mod.P(Mod.Grad(true, (LightC, 0), (CyanC, .6), (LilacC, 1)), 3.4), new Point(c, c), r, r);
+        }, 44, 44) { Opacity = 0 };
+        var pop = new ScaleTransform(1, 1, c, c);
+        var burst = new System.Windows.Shapes.Ellipse { Width = 2 * r, Height = 2 * r, Margin = new Thickness(c - r), Stroke = Mod.Br(LightC, .9), StrokeThickness = 1.8, Opacity = 0, RenderTransform = pop, IsHitTestVisible = false };
+        var parts = new UIElement[] { lit, burst, orbit };
+        foreach (var el in parts) host.Children.Insert(1, el);
+        _linePulse.Tint(MintC2);
         Motion.Play(art, 1800, t =>
         {
-            _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .55));
-            _glint = t < .55 ? Seg(t, 0, .55) : -1;
-            if (t >= .55) { _beat = beat; _complete = 1; }
-            _burst = t is > .52 and < .95 ? Seg(t, .52, .95) : -1;
-            art.InvalidateVisual();
-            _linePulse = t is > .45 and < .95 ? Seg(t, .45, .95) : -1; _lineArt.InvalidateVisual();
-        }, () => { _complete = 0; _beat = beat; _glint = -1; _burst = -1; _linePulse = -1; _pulseC = null; art.InvalidateVisual(); _lineArt.InvalidateVisual(); });
+            double run = Out(Seg(t, 0, .55));
+            turn.Angle = 360 * (was + (1 - was) * run);
+            orbit.Opacity = t < .55 ? 1 : 1 - Seg(t, .55, .7);
+            lit.Opacity = Seg(t, .5, .6);
+            double b = Seg(t, .52, .95);
+            pop.ScaleX = pop.ScaleY = 1 + .28 * Out(b);
+            burst.Opacity = t < .52 ? 0 : .9 * (1 - b);
+            _linePulse.At(t is > .45 and < .95 ? Seg(t, .45, .95) : -1);
+        }, () =>
+        {
+            foreach (var el in parts) host.Children.Remove(el);
+            _beat = beat; _share = was; art.InvalidateVisual();
+            _linePulse.At(-1);
+        });
     }
 
     /// <summary>An entry opened: the first timer's chip lights in mint round its edge and settles.</summary>
@@ -611,12 +636,8 @@ sealed partial class HudRift : ModernLook
         var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
         chip.Effect = glow;
         var edge = chip.BorderBrush;
-        Motion.Play(chip, 1300, t =>
-        {
-            _chipLight = t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1);
-            glow.Opacity = .9 * _chipLight;
-            chip.BorderBrush = Frozen(Mod.A(Mod.Mix(MintC2, Colors.White, .3 * _chipLight), .6 + .4 * _chipLight));
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; _chipLight = 0; });
+        chip.BorderBrush = Frozen(Mod.Mix(MintC2, Colors.White, .25));
+        Motion.Play(chip, 1300, t => glow.Opacity = .9 * (t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1)), () => { chip.Effect = null; chip.BorderBrush = edge; });
     }
 
     /// <summary>A fight started: its glass settles in (rising a few pixels as it fades up), the crown lands on the leader, a pulse runs the seams.</summary>
@@ -638,17 +659,19 @@ sealed partial class HudRift : ModernLook
         bool wipe = e.Outcome == "wipe";
         var c = wipe ? CoralC : MintC2;
         var plate = new Grid { VerticalAlignment = VerticalAlignment.Top };
-        double lit = 0;
         var art = new TacSketch((dc, s) =>
         {
             if (s.Width < 6 || s.Height < 6) return;
             var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
             dc.DrawGeometry(Mod.Br(VoidC, .96), null, Mod.Pill(r, r.Height / 2));
-            RiftPanel(dc, s, s.Height / 2, 1, lit is > 0 and < 1 ? lit : -1, c, .6, shadow: false);
+            RiftPanel(dc, s, s.Height / 2, 1, tint: c, flare: .6, shadow: false);
             dc.DrawGeometry(Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .18), .5), (Mod.A(c, 0), 1)), null, Mod.Pill(r, r.Height / 2));
             dc.DrawGeometry(null, Mod.P(Mod.Br(c, .6), 1.2), Mod.Pill(r, r.Height / 2));
         });
         plate.Children.Add(art);
+        var lit = new RiftPulse(99);
+        lit.Tint(c);
+        plate.Children.Add(lit);
         var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(Tt(OutcomeText(e), 16, Frozen(Mod.Mix(c, Colors.White, .3)), FontWeights.Bold));
         var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, White, FontWeights.SemiBold);
@@ -658,22 +681,24 @@ sealed partial class HudRift : ModernLook
         plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = sc;
         _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
         // over the head as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
-        void Seat()
+        bool Seat()
         {
             double y = _fightBody.Margin.Top, h = 22;
-            if (_head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight)) { y = hd.TranslatePoint(new Point(0, 0), _fight).Y; h = hd.ActualHeight; }
+            bool laid = _head is { } hd && hd.ActualHeight > 0 && hd.IsDescendantOf(_fight);
+            if (laid) { y = _head!.TranslatePoint(new Point(0, 0), _fight).Y; h = _head.ActualHeight; }
             plate.Margin = new Thickness(Pad - 4, Math.Max(2, y - 4), Pad - 4, 0);
             plate.Height = h + 8;
+            return laid;
         }
-        Seat();
+        bool seated = Seat();
         Seams(wipe ? CoralC : null);
         Motion.Play(_fightFx, 2400, t =>
         {
-            Seat();
+            if (!seated) seated = Seat();   // once the head is laid out (a fight just drawn), then never again
             double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, 1);
             plate.Opacity = i * (1 - o);
             sc.ScaleX = sc.ScaleY = .96 + .04 * i;
-            lit = Seg(t, .05, .45); art.InvalidateVisual();
+            lit.At(Seg(t, .05, .45) is var u && u > 0 && u < 1 ? u : -1);
         }, () => _fightFx.Children.Clear());
     }
 }

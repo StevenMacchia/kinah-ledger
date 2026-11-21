@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using static KinahLedger.Ui.HudKit;
@@ -210,6 +211,58 @@ sealed partial class HudRift
             dc.PushOpacity(Math.Min(1, f));
             dc.DrawRectangle(Spark, null, new Rect(x - 6 - 4 * f, top - 3 - 2 * f, 12 + 8 * f, h + 6 + 4 * f));
             dc.Pop();
+        }
+    }
+
+    /// <summary>
+    /// A pulse of rift light running along a panel's tear, as a layer over the panel (clipped to its rounded shape): a point of
+    /// light with a soft glow and a trail behind it, drawn once and only moved (a transform) and faded (opacity) as it runs,
+    /// so the panel under it is never drawn again.
+    /// </summary>
+    internal sealed class RiftPulse : Canvas
+    {
+        readonly Canvas _spot = new() { IsHitTestVisible = false };
+        readonly TranslateTransform _at = new();
+        readonly double _radius;
+        Color? _tint = Colors.Transparent;
+
+        public RiftPulse(double radius)
+        {
+            _radius = radius; IsHitTestVisible = false; ClipToBounds = true; Opacity = 0;
+            _spot.RenderTransform = _at;
+            Children.Add(_spot);
+            Tint(null);
+            SizeChanged += (_, _) =>
+            {
+                double r = Math.Min(_radius, ActualHeight / 2);
+                var g = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight), r, r); g.Freeze();
+                Clip = g;
+            };
+        }
+
+        /// <summary>The pulse's colour (null: the rift's own cyan light); made again only when it changes.</summary>
+        public void Tint(Color? tint)
+        {
+            if (tint == _tint) return;
+            _tint = tint;
+            var c = tint ?? CyanC;
+            _spot.Children.Clear();
+            var trail = new System.Windows.Shapes.Rectangle { Width = 120, Height = 5, Fill = Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(Mod.Mix(c, Colors.White, .4), .6), 1)) };
+            Canvas.SetLeft(trail, -120); Canvas.SetTop(trail, 0);
+            var glow = new System.Windows.Shapes.Rectangle { Width = 80, Height = 28, Fill = tint is { } t ? Radial(new Point(.5, .5), .5, .5, (Mod.A(Colors.White, 1), 0), (Mod.A(t, .6), .3), (Mod.A(t, 0), 1)) : PulseGlow };
+            Canvas.SetLeft(glow, -40); Canvas.SetTop(glow, -12);
+            var dot = new System.Windows.Shapes.Ellipse { Width = 4.8, Height = 3.2, Fill = Brushes.White };
+            Canvas.SetLeft(dot, -2.4); Canvas.SetTop(dot, .6);
+            _spot.Children.Add(trail); _spot.Children.Add(glow); _spot.Children.Add(dot);
+        }
+
+        /// <summary>The pulse at <paramref name="t"/> of its run along the tear (outside 0..1: gone).</summary>
+        public void At(double t)
+        {
+            if (t is <= 0 or >= 1) { Opacity = 0; return; }
+            double x0 = _radius * .35, x1 = ActualWidth - _radius * .35;
+            _at.X = x0 + (x1 - x0) * Motion.Out(t);
+            Opacity = Math.Min(1, 1.6 * Math.Sin(Math.PI * t));
         }
     }
 
