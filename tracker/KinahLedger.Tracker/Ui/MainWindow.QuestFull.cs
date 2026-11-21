@@ -109,6 +109,7 @@ public partial class MainWindow
                     if (_fullSides == (f, w, o)) nowGap = gap;
                 }
         if (_fullSides is { } now && nowGap - bestGap < 48) best = now;
+        Console.WriteLine($"DIAG balance: left {left:0.#} right {right:0.#} feed {feed:0.#} where {where:0.#} odds {odds:0.#} -> best {best} bestGap {bestGap:0.#} nowGap {nowGap:0.#} was {_fullSides}");
         _fullSides = best;
         // the left column: Next up, then Just dropped, Where to farm and Drop odds (those that stay), then the footer;
         // the right column: the bag, Who pays, Drop odds, then Just dropped and Where to farm (those that go), the gathering cards last

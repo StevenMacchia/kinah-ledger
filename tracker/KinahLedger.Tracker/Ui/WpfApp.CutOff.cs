@@ -101,6 +101,7 @@ public static partial class WpfApp
         Size topSize = top is FrameworkElement tf ? new Size(tf.ActualWidth, tf.ActualHeight) : root.RenderSize;
         var found = new List<string>();
         var boxes = new List<(string Text, Rect Box, bool Strict)>();
+        var info = new Dictionary<string, string>();
         void Walk(DependencyObject d, double opacity)
         {
             if (d is UIElement u) { if (!u.IsVisible) return; opacity *= u.Opacity; }
@@ -129,6 +130,7 @@ public static partial class WpfApp
             bool mayTrim = isName ? name.Length > 10 : !figure && (names == null || s.Length > 18);
             bool strict = figure || isName;
             double has = t.ActualWidth;
+            info[s] = $"{t.FontFamily.Source}/{t.FontSize}/{t.FontWeight}/w{t.ActualWidth:0.##}/h{t.ActualHeight:0.##}/lh{t.LineHeight}/lang {t.Language}";
             if (s.EndsWith('…') && !mayTrim) found.Add($"\"{s}\": its words end in \"…\"");
             if (t.TextWrapping == TextWrapping.NoWrap)
             {
@@ -136,6 +138,7 @@ public static partial class WpfApp
                 if (needs > has + 0.75)
                 {
                     bool ellipsis = t.TextTrimming != TextTrimming.None;
+                    if (!(ellipsis && mayTrim)) { var chain = new System.Text.StringBuilder(); for (DependencyObject? a = t; a != null && chain.Length < 600; a = VisualTreeHelper.GetParent(a)) if (a is FrameworkElement fa) chain.Append($"{fa.GetType().Name}:{fa.ActualWidth:0.#}  "); Console.WriteLine($"DIAG trimmed '{s}' {info[s]} chain {chain}"); }
                     if (!(ellipsis && mayTrim)) found.Add($"\"{s}\": {(ellipsis ? "trimmed" : "cut by its box")} ({needs:0.#} px wide in {has:0.#})");
                     return;   // said once
                 }
@@ -218,6 +221,7 @@ public static partial class WpfApp
                 // a mark alone (▶, ✕, †) is drawn from a fallback font whose box this can't know: words and figures only
                 if (!(st1 || st2) || s1 == s2 || !s1.Any(char.IsLetterOrDigit) || !s2.Any(char.IsLetterOrDigit)) continue;
                 var x = Rect.Intersect(b1, b2);
+                if (!x.IsEmpty && x.Width > 1.5 && x.Height > 1.5) Console.WriteLine($"DIAG overlap '{s1}' {b1} [{(info.TryGetValue(s1, out var i1) ? i1 : "")}] / '{s2}' {b2} [{(info.TryGetValue(s2, out var i2) ? i2 : "")}]");
                 if (!x.IsEmpty && x.Width > 1.5 && x.Height > 1.5) found.Add($"\"{s1}\" and \"{s2}\" drawn over each other ({x.Width:0.#} x {x.Height:0.#} px)");
             }
         return found.Distinct().ToList();
