@@ -620,6 +620,7 @@ public sealed class BossParser
                         var a = m.Ability(hd.Skill);
                         StreamHit(a, hd);
                         if (firstOfCast) a.Casts = (a.Casts ?? 0) + 1;
+                        TimelineHit(e, m, a, hd, firstOfCast);
                         BigHitOf(e, m, hd, ref seq);
                     }
                 break;
@@ -639,6 +640,7 @@ public sealed class BossParser
             case CastMade cm:
                 // a new cast by this actor: its sequence number is free again for counting (it wraps)
                 _castsLanded.RemoveWhere(c => c.Actor == cm.Actor && c.Cast == cm.Cast);
+                if (_openCasts.Count > 0) foreach (var k in _openCasts.Keys.Where(c => c.Actor == cm.Actor && c.Cast == cm.Cast).ToList()) _openCasts.Remove(k);
                 break;
             case HitTaken ht:
                 if (Ours(ht.Target, false)) AlwaysFight(ht.At, open: false);
@@ -1173,7 +1175,13 @@ public sealed class BossParser
         int sec = e.SecondOf(dd.At);
         src.PerSecond = Fighter.AddAt(src.PerSecond, sec, dd.Amount);
         if (toBoss) src.BossPerSecond = Fighter.AddAt(src.BossPerSecond, sec, dd.Amount);
-        src.AddAbility(dd.Skill, dd.Amount, dd.Hits, toBoss);
+        var ab = src.AddAbility(dd.Skill, dd.Amount, dd.Hits, toBoss);
+        // the Timeline tab's lanes (your row of a boss pull): the ability's damage by second, from the same hit as its total
+        if (e.Mode == "boss" && src.You)
+        {
+            ab.Seconds = AddSecond(ab.Seconds, sec, dd.Amount);
+            if (toBoss) ab.BossSeconds = AddSecond(ab.BossSeconds, sec, dd.Amount);
+        }
         src.Hit(dd.At);
     }
 
@@ -1214,6 +1222,54 @@ public sealed class BossParser
         if (list.Count > Encounter.BigHitsKept) list.RemoveAt(0);
     }
 
+    /// <summary>The casts of your boss pull whose first hit has landed: later hits of the cast add to its mark (the Timeline tab's).</summary>
+    readonly Dictionary<(long Actor, int Cast, int Skill), (Encounter E, CastMark Mark)> _openCasts = new();
+
+    static Dictionary<int, long> AddSecond(Dictionary<int, long>? d, int second, long amount)
+    {
+        d ??= new();
+        d[second] = d.GetValueOrDefault(second) + amount;
+        return d;
+    }
+
+    /// <summary>
+    /// The Timeline tab's marks, on your row of a boss pull only: each cast at its first hit that landed (the hit that counts it
+    /// in <see cref="AbilityShare.Casts"/>), its later hits' damage added to it; and your biggest hits. Ticks and parts with no
+    /// hit under them are neither.
+    /// </summary>
+    void TimelineHit(Encounter e, Fighter m, AbilityShare a, HitDealt hd, bool firstOfCast)
+    {
+        if (e.Mode != "boss" || !m.You || hd.NoRow || hd.Tick) return;
+        double at = Math.Max(0, Math.Round((hd.At - e.Start).TotalSeconds, 2));
+        long amt = Math.Max(0, hd.Amount);
+        var key = (hd.Actor, hd.Cast, hd.Skill);
+        if (firstOfCast)
+        {
+            var mark = new CastMark { At = at, Damage = amt, Hits = 1 };
+            (a.CastLog ??= new()).Add(mark);
+            if (_openCasts.Count > 4096) foreach (var k in _openCasts.Where(x => !ReferenceEquals(x.Value.E, _cur)).Select(x => x.Key).ToList()) _openCasts.Remove(k);
+            _openCasts[key] = (e, mark);
+        }
+        else if (_openCasts.TryGetValue(key, out var open) && ReferenceEquals(open.E, e)) { open.Mark.Damage += amt; open.Mark.Hits++; }
+        if (amt <= 0) return;
+        var top = m.TopHits ??= new();
+        if (top.Count >= Fighter.TopHitsKept && amt <= top[^1].Amount) return;
+        top.Add(new TopHit { At = at, Skill = hd.Skill, Amount = amt, Kinds = KindKeys(hd).ToList() });
+        top.Sort((x, y) => y.Amount.CompareTo(x.Amount));
+        if (top.Count > Fighter.TopHitsKept) top.RemoveAt(top.Count - 1);
+    }
+
+    /// <summary>A hit's kinds as the raw counters key them (unnamed until mapped).</summary>
+    static IEnumerable<string> KindKeys(HitDealt h)
+    {
+        yield return "result:" + h.Result;
+        for (int b = 0; b < 12; b++) if ((h.Marks & (1 << b)) != 0) yield return "mark:" + b;
+        // the side the hit came from, when the row says one (bit 14), kept whole from bits 12-13: 2 in front, 1 behind
+        if ((h.Marks & 0x4000) != 0) yield return "side:" + ((h.Marks >> 12) & 3);
+        if (h.Multi > 0) yield return "multi";
+        if (h.Tick) yield return "tick";
+    }
+
     /// <summary>One hit of the stream onto its ability: counted, its size into the biggest and smallest, its kind into the raw counters.</summary>
     static void StreamHit(AbilityShare a, HitDealt h)
     {
@@ -1232,12 +1288,7 @@ public sealed class BossParser
             kd[key] = kd.GetValueOrDefault(key) + amt;
             km[key] = Math.Max(km.GetValueOrDefault(key), amt);
         }
-        Count("result:" + h.Result);
-        for (int b = 0; b < 12; b++) if ((h.Marks & (1 << b)) != 0) Count("mark:" + b);
-        // the side the hit came from, when the row says one (bit 14), kept whole from bits 12-13: 2 in front, 1 behind
-        if ((h.Marks & 0x4000) != 0) Count("side:" + ((h.Marks >> 12) & 3));
-        if (h.Multi > 0) Count("multi");
-        if (h.Tick) Count("tick");
+        foreach (var key in KindKeys(h)) Count(key);
     }
 
     /// <summary>The pull that just ended (its own record, the Always on meter's held copy): a heal of its last moment can come after its end.</summary>
@@ -1826,7 +1877,9 @@ public sealed class BossParser
             {
                 var a = m.Ability(hd.Skill);
                 StreamHit(a, hd);
-                if (!hd.NoRow && !hd.Tick && hd.Skill > 0 && casts.Add((hd.Actor, hd.Cast, hd.Skill))) a.Casts = (a.Casts ?? 0) + 1;
+                bool first = !hd.NoRow && !hd.Tick && hd.Skill > 0 && casts.Add((hd.Actor, hd.Cast, hd.Skill));
+                if (first) a.Casts = (a.Casts ?? 0) + 1;
+                TimelineHit(c, m, a, hd, first);
                 BigHitOf(c, m, hd, ref seq);
             }
     }

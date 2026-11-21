@@ -76,6 +76,7 @@ static class ParserCommand
         // Graphs first, the group's table under them (Steven, 2026-11-18: "group should just be under the graphs"); Group alone without the seconds
         var t = new List<string> { v.HasTimeline && v.IsBossPull ? "Timeline" : "Group" };   // the graphs on boss pulls only (FightView.IsBossPull)
         if (v.HasCompare) t.Add("Compare");
+        if (v.HasPullTimeline) t.Add("Track");   // the Timeline tab (Ui/ParserTimeline.cs), beside Compare; "Timeline" is the Graphs tab's key
         if (v.HasTaken) t.Add("Taken");
         return t;
     }
@@ -411,6 +412,9 @@ static class ParserCommand
         return g;
     }
 
+    /// <summary>A tab's name as shown (in English, for L.T): "Timeline" is the Graphs tab's key, "Track" the Timeline tab's.</summary>
+    public static string TabWord(string tab) => tab switch { "Timeline" => "Graphs", "Track" => "Timeline", _ => tab };
+
     /// <param name="small">The strip's tabs (the page's fight): smaller, flush right on its first line.</param>
     static FrameworkElement TabRow(List<string> tabs, CommandCtx ctx, bool small = false)
     {
@@ -420,8 +424,8 @@ static class ParserCommand
             bool lit = t == ctx.Tab;
             var b = new Border { CornerRadius = new CornerRadius(small ? 7 : 8), Padding = small ? new Thickness(10, 2, 10, 3) : new Thickness(12, 4, 12, 5), Margin = new Thickness(small ? 2 : 0, 0, small ? 0 : 4, 0), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, Focusable = true,
                 Background = lit ? K("Card2") : Brushes.Transparent, BorderBrush = lit ? K("LineStrong") : Brushes.Transparent,
-                Child = T(L.T(t == "Timeline" ? "Graphs" : t), small ? 12 : 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold, trim: false) };
-            AutomationProperties.SetName(b, $"Parser view: {(t == "Timeline" ? "Graphs" : t)}");
+                Child = T(L.T(TabWord(t)), small ? 12 : 12.5, lit ? Ink : Muted, lit ? FontWeights.Bold : FontWeights.SemiBold, trim: false) };
+            AutomationProperties.SetName(b, $"Parser view: {TabWord(t)}");
             var pick = t;
             b.MouseLeftButtonUp += (_, _) => ctx.SetTab(pick);
             b.KeyDown += (_, k) => { if (k.Key is Key.Enter or Key.Space) { k.Handled = true; ctx.SetTab(pick); } };

@@ -509,6 +509,13 @@ public static class ParserTests
         var t = new DateTime(2026, 11, 13, 21, 0, 0, DateTimeKind.Utc);
 
         (BossParser P, List<Encounter> Kept) New() { var kept = new List<Encounter>(); return (new BossParser(book) { Ended = kept.Add }, kept); }
+        // KL_PARSER_ONLY=timeline: the Timeline tab's part alone (a minute or two on the recordings, not the whole test)
+        if (Environment.GetEnvironmentVariable("KL_PARSER_ONLY") == "timeline")
+        {
+            PullTimelineTests.Run(Check, t, () => New(), Me, Ally, Recording, path => Replay(path, hits: true));
+            Console.WriteLine(_fails == 0 ? "parser-test (timeline): all passed" : $"parser-test (timeline): {_fails} failed");
+            return _fails == 0 ? 0 : 1;
+        }
 
         // the boss list: kinds, stages, finals
         Check(book.Count == 9 && book.KindOf("Chalice of Muspel") == ContentKind.Sanctuary && book.KindOf("Snowfield of Sorrow") == ContentKind.Sanctuary && !book.Knows("Snowfield of Sorrow"),
@@ -2722,6 +2729,9 @@ public static class ParserTests
 
         // pull against pull, the Compare tab (Parser/PullCompare.cs): made-up pulls, then Steven's recorded boss fights
         PullCompareTests.Run(Check, t, Recording, path => Replay(path, hits: true));
+
+        // the Timeline tab (Parser/PullTimeline.cs): a made-up pull, then Steven's recorded boss fights
+        PullTimelineTests.Run(Check, t, () => New(), Me, Ally, Recording, path => Replay(path, hits: true));
 
         Console.WriteLine(_fails == 0 ? "parser-test: all passed" : $"parser-test: {_fails} failed");
         return _fails == 0 ? 0 : 1;
