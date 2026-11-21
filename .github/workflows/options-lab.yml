@@ -1,0 +1,20 @@
+name: options lab
+on:
+  push:
+    branches: [ci/fonts-diagnostic]
+    paths: [".github/workflows/options-lab.yml", "tracker/KinahLedger.Tracker/Ui/WpfApp.CutOff.cs"]
+jobs:
+  lab:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        working-directory: tracker/KinahLedger.Tracker
+        run: dotnet publish -c Release -o ../../dist
+      - name: options-test
+        continue-on-error: true
+        shell: bash
+        run: dist/KinahLedger.exe options-test | cat | grep -E "DIAG|FAIL" | head -60

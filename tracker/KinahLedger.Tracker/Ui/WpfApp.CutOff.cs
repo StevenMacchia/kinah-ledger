@@ -155,6 +155,7 @@ public static partial class WpfApp
             o.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double needs = o.DesiredSize.Width - o.Margin.Left - o.Margin.Right;
             o.InvalidateMeasure();
+            if (o.Text == "124.56M") Console.WriteLine($"DIAG odo '{o.Text}' dip {VisualTreeHelper.GetDpi(o).PixelsPerDip} desired {o.DesiredSize.Width} needs {needs} actual {o.ActualWidth} parent {(VisualTreeHelper.GetParent(o) as FrameworkElement)?.ActualWidth} {(VisualTreeHelper.GetParent(o) as FrameworkElement)?.GetType().Name} fmt {TextOptions.GetTextFormattingMode(o)} win {Window.GetWindow(o)?.GetType().Name} {Window.GetWindow(o)?.ActualWidth}x{Window.GetWindow(o)?.ActualHeight}");
             if (needs > o.ActualWidth + 0.75) { found.Add($"\"{o.Text}\": cut by its box ({needs:0.#} px wide in {o.ActualWidth:0.#})"); return; }
             Clipped(o, o.Text, new Rect(o.ActualWidth - needs, 0, needs, o.ActualHeight), true);
         }
