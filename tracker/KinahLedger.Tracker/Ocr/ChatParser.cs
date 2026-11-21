@@ -506,6 +506,21 @@ public sealed partial class ChatParser
     public Func<long, bool>? Rare { get; set; }
     /// <summary>A run is open (an event, an expedition, a Transcendence, or just left): every reward there is the run's. Never set while farming.</summary>
     public Func<bool>? InRun { get; set; }
+    /// <summary>The playing character's name, when known: "&lt;name&gt; acquired X through Force distribution." is the player's own (<see cref="OwnLine"/>).</summary>
+    public Func<string?>? OwnName { get; set; }
+
+    /// <summary>
+    /// The player's own share of a Force's loot printed with the player's own name ("Swoly acquired Earth Dagger through Force
+    /// distribution.", Steven's log 2026-11-20 13:53:42 and 13:54:16) read as the player's line, "Acquired Earth Dagger
+    /// through Force distribution.". Any other name is another player's (<see cref="SomeoneElses"/>).
+    /// </summary>
+    string OwnLine(string line)
+    {
+        if (OwnName?.Invoke() is not { Length: >= 2 } me) return line;
+        var m = Regex.Match(line, @"^\W*(?<name>\S+)\s+(?<rest>acqu\w*\s+.+)$", RegexOptions.IgnoreCase);
+        return m.Success && string.Equals(m.Groups["name"].Value, me, StringComparison.OrdinalIgnoreCase)
+            ? "A" + m.Groups["rest"].Value.Substring(1) : line;
+    }
 
     /// <summary>Each grade's colour as printed on this PC, learned from names read exactly (null: names aren't judged by colour).</summary>
     public GradeColours? Colours { get; set; }
@@ -618,7 +633,7 @@ public sealed partial class ChatParser
     {
         var line = Timestamp().Replace(raw.Trim(), "");
         if (line.Length == 0 || line.StartsWith('[')) return ("", false);
-        line = CleanSystemLine(line);
+        line = OwnLine(CleanSystemLine(line));
         if (SomeoneElses(line)) return ("", false);
         line = WithoutDistribution(line);
         var k = Kina().Match(line);
@@ -669,6 +684,7 @@ public sealed partial class ChatParser
         if (!line.StartsWith('[')) line = CleanSystemLine(line);
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
+        line = OwnLine(line);
         if (SomeoneElses(line)) yield break;
         line = WithoutDistribution(line);
         if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot

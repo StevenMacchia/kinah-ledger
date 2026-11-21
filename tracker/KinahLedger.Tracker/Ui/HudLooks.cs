@@ -71,6 +71,11 @@ public static class HudLooks
         new(HudThemes.Storm, L.T("Storm"), L.T("Lightning: storm-dark glass, bolts arcing off each bar, a thunderclap on the lead"), HudThemes.Elements),
         new(HudThemes.Magma, L.T("Magma"), L.T("Magma: cooled basalt split by glowing lava, each bar a molten flow"), HudThemes.Elements),
         new(HudThemes.Tide, L.T("Tide"), L.T("The deep: caustic light rippling over sea-blue glass, each bar a rising wave"), HudThemes.Elements),
+        // Overdrive (2026-11-20, Steven: "at least 1 theme should be WILD"): Ui/Themes/Overdrive/
+        new(HudThemes.Versus, L.T("Versus"), L.T("A fighting game's HUD: huge slanted life bars, ROUND and K.O. slams, a combo counter on the leader"), HudThemes.Overdrive),
+        new(HudThemes.Manga, L.T("Manga"), L.T("A manga finisher: speed-line bursts, screentone, giant sound effects and a cut-in on every lead change"), HudThemes.Overdrive),
+        new(HudThemes.Dragon, L.T("Dragon"), L.T("A Balaur dragon coiled round the meter: its fire is every bar, its eye opens on the leader"), HudThemes.Overdrive),
+        new(HudThemes.Aura, L.T("Aura"), L.T("Power-up auras: each row burns in its class colour, the leader goes gold with lightning"), HudThemes.Overdrive),
     };
 
     /// <summary>The looks drawn for fights (the design pass's): the Parser's look row in Options offers these.</summary>

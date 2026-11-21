@@ -18,5 +18,15 @@
   "Magma": "熔岩",
   "Magma: cooled basalt split by glowing lava, each bar a molten flow": "熔岩：發光熔岩劈開冷卻的玄武岩，每條長條都是熔流",
   "Tide": "潮汐",
-  "The deep: caustic light rippling over sea-blue glass, each bar a rising wave": "深海：海藍玻璃上波動的水光，每條長條都是湧起的浪"
+  "The deep: caustic light rippling over sea-blue glass, each bar a rising wave": "深海：海藍玻璃上波動的水光，每條長條都是湧起的浪",
+  "Overdrive": "超載",
+  "Wild: a fighting game, a manga finisher, a Balaur dragon, power-up auras": "狂野：格鬥遊戲、漫畫必殺技、龍族巨龍、覺醒氣場",
+  "Versus": "對戰",
+  "A fighting game's HUD: huge slanted life bars, ROUND and K.O. slams, a combo counter on the leader": "格鬥遊戲 HUD：巨大斜切血條、ROUND 與 K.O. 重擊登場，第一名頭上有連擊計數",
+  "Manga": "漫畫",
+  "A manga finisher: speed-line bursts, screentone, giant sound effects and a cut-in on every lead change": "漫畫必殺技：集中線爆發、網點、巨大的狀聲詞，每次換第一名都有特寫",
+  "Dragon": "巨龍",
+  "A Balaur dragon coiled round the meter: its fire is every bar, its eye opens on the leader": "盤踞統計的龍族巨龍：每條長條都是龍焰，牠的眼睛為第一名睜開",
+  "Aura": "氣場",
+  "Power-up auras: each row burns in its class colour, the leader goes gold with lightning": "覺醒氣場：每列燃起職業色的火焰，第一名化為纏繞閃電的金色"
 }

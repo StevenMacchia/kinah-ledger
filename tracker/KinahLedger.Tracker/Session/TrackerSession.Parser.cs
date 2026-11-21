@@ -21,6 +21,8 @@ public sealed partial class TrackerSession
     /// <summary>The Parser: the record under way and where the player is.</summary>
     public BossParser Fights => _fights ??= NewFights();
     BossParser? _fights;
+    /// <summary>The Parser's new runs in the same copy, for the run log (InstanceLog.RunAgain).</summary>
+    readonly ConcurrentQueue<(DateTime At, string Instance)> _runsAgain = new();
 
     /// <summary>
     /// The PvP panel's last kills and assists (Parser/PvpKills.cs), fed the game's fight events as they are decoded: what the
@@ -53,6 +55,8 @@ public sealed partial class TrackerSession
             _toSave.Enqueue(e);
             if (_onReaderThread) Task.Run(SaveEnded); else SaveEnded();
         };
+        // a new run in the same copy: the run log splits there, drained on the reading loop (DrainPackets), never under the parser's lock
+        p.NewRun = (at, instance) => _runsAgain.Enqueue((at, instance));
         p.SetMode(ParserMode, DateTime.UtcNow);
         var live = FightStore.LoadLive();
         if (live.Count > 0) p.Resume(live, DateTime.UtcNow);

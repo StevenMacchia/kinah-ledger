@@ -514,6 +514,8 @@ public sealed partial class TrackerSession
         // a partly hidden or close name is settled among this run's items and the loot tables of the enemies being fought:
         // the one on the target bar and those whose nameplates show around the character (2026-10-23)
         _parser.InRun = () => InRun;
+        // the playing character's name, for its own Force-loot lines printed with it
+        _parser.OwnName = () => Characters.Current is { NameRead: true } me ? me.Name : null;
         _parser.Likely = () => Engine.ItemRows().Select(r => r.Name)
             .Concat(new[] { Target.Name }.Concat(Engaged).Where(e => e != null).Distinct().SelectMany(e => LootBook.Current.TableOf(e!).Select(x => x.Item))).ToList();
         _parser.Fighting = Fighting;
