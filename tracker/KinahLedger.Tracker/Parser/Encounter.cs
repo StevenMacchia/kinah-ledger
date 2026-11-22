@@ -290,21 +290,12 @@ public sealed class Encounter : IJsonOnDeserialized
     // Damage per second is over the real time since the start (Steven, 2026-11-15, on 0.10.106's combat time, which held the
     // figure while he walked away: "i left and didnt kill anything for a while and it ... didnt drop the dps ... at all"):
     // fighting raises it, every second without a hit lowers it, and the meter shows that as it happens
-    public double DpsSeconds(DateTime now) => FightSeconds(DpsNow(now));
+    // (no hold once a pull goes quiet: Steven wants the figure to fall while he isn't hitting; a wipe's end then sets it
+    // to the fight's own time, its last damage, which is the honest figure)
+    public double DpsSeconds(DateTime now) => FightSeconds(now);
 
     /// <summary>The record's seconds to <paramref name="now"/> as DPS counts them, with no hold for a quiet live pull (healing's clock).</summary>
     double FightSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
-
-    /// <summary>A live boss pull quiet this long holds its DPS clock here past its last damage.</summary>
-    public const double LiveQuietSeconds = 5;
-
-    /// <summary>
-    /// The "now" a live boss pull's DPS is over: once no damage has come for <see cref="LiveQuietSeconds"/>, its last damage
-    /// plus that, no later. A wipe is told only after a minute of quiet, and then ends at its last damage: the figure fell
-    /// through the minute and jumped back up at the end (2026-11-21). Now it holds after 5 s, and a hit again carries on.
-    /// </summary>
-    DateTime DpsNow(DateTime now) =>
-        End == null && ModeKind == ParserMode.Bosses && !Wave && LastDamageAt is { } ld && now > ld.AddSeconds(LiveQuietSeconds) ? ld.AddSeconds(LiveQuietSeconds) : now;
 
     /// <summary>
     /// A DPS is over at least this long: the meter shows a figure from the first hit, never a hit's damage over a split second

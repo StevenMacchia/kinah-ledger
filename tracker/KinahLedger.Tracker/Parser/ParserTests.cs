@@ -2749,18 +2749,8 @@ public static class ParserTests
             q.Take(new DamageDealt(t.AddSeconds(2), 1, 90, 60_000, "Swoly", true));
             q.Take(new DamageDealt(t.AddSeconds(20), 1, 90, 60_000, "Swoly", true));
             var pull = q.AlwaysLive!;
-            Check(pull.Mode == "boss" && Math.Abs(pull.DpsSeconds(t.AddSeconds(24)) - pull.Duration(t.AddSeconds(24)).TotalSeconds) < 0.01,
-                $"...a boss pull is over the pull's own time ({pull.DpsSeconds(t.AddSeconds(24)):0} s)");
-            // ...and once no damage has come for 5 s, held at its last damage plus 5 s (2026-11-21: on a wipe the figure fell
-            // through the minute of quiet, then jumped back up when the wipe ended the pull at its last damage)
-            double held = pull.GroupDps(t.AddSeconds(31)), later = pull.GroupDps(t.AddSeconds(79));
-            Check(Math.Abs(pull.DpsSeconds(t.AddSeconds(31)) - pull.Duration(t.AddSeconds(25)).TotalSeconds) < 0.01 && Math.Abs(held - later) < 0.01
-                  && Math.Abs(held - 120_000 / pull.Duration(t.AddSeconds(25)).TotalSeconds) < 0.01,
-                $"...quiet for 5 s, its DPS holds at its last damage + 5 s, a minute on too ({pull.DpsSeconds(t.AddSeconds(31)):0} s, {held:0}/s then {later:0}/s)");
-            q.Take(new DamageDealt(t.AddSeconds(40), 1, 90, 60_000, "Swoly", true));
-            var again = q.AlwaysLive!;
-            Check(Math.Abs(again.DpsSeconds(t.AddSeconds(42)) - again.Duration(t.AddSeconds(42)).TotalSeconds) < 0.01,
-                $"...and a hit again carries the clock on from now ({again.DpsSeconds(t.AddSeconds(42)):0} s)");
+            Check(pull.Mode == "boss" && Math.Abs(pull.DpsSeconds(t.AddSeconds(31)) - pull.Duration(t.AddSeconds(31)).TotalSeconds) < 0.01,
+                $"...a boss pull is over the pull's own time ({pull.DpsSeconds(t.AddSeconds(31)):0} s)");
         }
         // the Kinah line's farming figure: never over less than 3 s (a mob killed in a second read 209.7K a second)
         {

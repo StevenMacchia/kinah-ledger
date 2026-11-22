@@ -61,8 +61,8 @@ public partial class MainWindow
     {
         var abyss = e.ZoneSnapshot().Values.Where(z => z.AbyssPoints > 0 || z.RankPoints > 0 || z.RankLost > 0).ToList();
         double active = abyss.Sum(z => z.Active);
-        // no farming time counted there yet (an old session's counters, a record without it): the time there
-        return (active > 0 ? active : abyss.Sum(z => z.Seconds)) / 3600;
+        // under a minute of farming time counted there (an old session's counters, a record without it): the time there
+        return (active >= 60 ? active : abyss.Sum(z => z.Seconds)) / 3600;
     }
 
     /// <summary>An Abyss hour from its first minutes swings wildly: said as warming up until this long there.</summary>
