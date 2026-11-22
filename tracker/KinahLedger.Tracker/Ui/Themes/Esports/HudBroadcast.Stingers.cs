@@ -398,14 +398,19 @@ sealed partial class HudBroadcast
         try { y = head.TranslatePoint(new Point(0, 0), _fight).Y + Math.Max(0, (head.ActualHeight - H) / 2); } catch (InvalidOperationException) { }
         row.Margin = new Thickness(0, Math.Max(0, y), 0, 0);
         _fight.Children.Add(row);
+        // the head comes back sliding in from the right under the ticker's leaving plates (never an empty head)
+        var headIn = new TranslateTransform();
+        var headWas = head.RenderTransform;
+        head.RenderTransform = headIn;
         bool gone = false;
         return t =>
         {
             if (gone) return;
-            if (t >= 1) { gone = true; _fight.Children.Remove(row); head.Opacity = 1; return; }
+            if (t >= 1) { gone = true; _fight.Children.Remove(row); head.Opacity = 1; head.RenderTransform = headWas; return; }
             // the head's own words make way under it, and come back as it wipes off
             // (the head's words come back while the plates are still wiping off over them: never an empty head)
-            head.Opacity = t < .87 ? 1 - Seg(t, .18, .22) : Seg(t, .9, .94);
+            head.Opacity = t < .86 ? 1 - Seg(t, .18, .22) : Seg(t, .86, .9);
+            headIn.X = t < .86 ? 0 : 18 * (1 - Out(Seg(t, .86, .94)));
             tag.Wipe = t < .86 ? Out(Seg(t, .2, .28)) : 1 - Seg(t, .86, .96);
             tagT.Opacity = t < .86 ? Seg(t, .24, .28) : 1 - Seg(t, .86, .89);
             punch.ScaleX = punch.ScaleY = t < .24 ? 1.25 : EsportsFx.Punch(Seg(t, .24, .4), 1.25, 2.6);

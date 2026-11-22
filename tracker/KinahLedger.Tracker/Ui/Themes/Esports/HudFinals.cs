@@ -609,21 +609,23 @@ sealed partial class HudFinals : ModernLook
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -3, 0), RenderTransformOrigin = new Point(.5, .5) };
             glint.RenderTransform = new TransformGroup { Children = { gsc, gturn } };
             medal.Children.Add(glint);
-            EsportsFx.Spray(medal, new Point(23, 2), 12, 30, 15, 165, new[] { AuLightC, Colors.White, AuPaleC, AuC }, 1300, fall: 22, delay: .5);
+            // gold flecks falling from the plate's lamps over the medal and the hour
+            EsportsFx.Spray(_line, new Point(40, 2), 5, 14, 70, 110, new[] { AuLightC, Colors.White, AuC }, 1500, fall: 46, delay: .24);
+            EsportsFx.Spray(_line, new Point(_line.ActualWidth > 0 ? _line.ActualWidth * .42 : 130, 2), 5, 14, 70, 110, new[] { AuPaleC, AuLightC, Colors.White }, 1500, fall: 46, delay: .28);
         }
         Motion.Play(art, 1900, t =>
         {
             // the arc's one small drawing (46 px) is drawn again while it runs round; the light is a band on its transform
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .5));
-            _medalGlint = t < .55 ? Seg(t, 0, .55) : -1;
-            if (t >= .55) { _beat = beat; _complete = 1; }
-            if (t <= .57) art.InvalidateVisual();
-            msc.ScaleX = msc.ScaleY = t < .5 ? 1 - .05 * Seg(t, .3, .5) : EsportsFx.Punch(Seg(t, .5, .72), 1.26, 2.4);
-            double g = Seg(t, .52, .86);
+            _complete = Out(Seg(t, 0, .22));
+            _medalGlint = t < .26 ? Seg(t, 0, .26) : -1;
+            if (t >= .26) { _beat = beat; _complete = 1; }
+            if (t <= .28) art.InvalidateVisual();
+            msc.ScaleX = msc.ScaleY = t < .22 ? 1 - .05 * Seg(t, .1, .22) : EsportsFx.Punch(Seg(t, .22, .42), 1.3, 2.4);
+            double g = Seg(t, .24, .6);
             gsc.ScaleX = gsc.ScaleY = g is > 0 and < 1 ? Math.Sin(Math.PI * g) * 1.1 : 0;
             gturn.Angle = 90 * g;
-            _lineGlint.At(Seg(t, .5, 1));
+            _lineGlint.At(Seg(t, .3, .85));
         }, () => { _complete = 0; _medalGlint = -1; _beat = beat; art.InvalidateVisual(); _lineGlint.At(-1); msc.ScaleX = msc.ScaleY = 1; if (glint != null) medal?.Children.Remove(glint); });
     }
 
@@ -633,7 +635,7 @@ sealed partial class HudFinals : ModernLook
         if (_firstChip is not { } chip) return;
         var edge = chip.BorderBrush;
         var sc = new ScaleTransform(1, 1);
-        chip.RenderTransformOrigin = new Point(.5, .5);
+        chip.RenderTransformOrigin = new Point(0, .5);
         chip.RenderTransform = sc;
         var spark = _firstSpark;
         var ssc = new ScaleTransform(0, 0);
@@ -642,7 +644,7 @@ sealed partial class HudFinals : ModernLook
         var lit = Mod.Br(MintC, 1);
         Motion.Play(chip, 1200, t =>
         {
-            sc.ScaleX = sc.ScaleY = t < .1 ? 1 - .08 * Out(Seg(t, 0, .1)) : t < .24 ? .92 + .26 * Out(Seg(t, .1, .24)) : EsportsFx.Punch(Seg(t, .24, .55), 1.18, 2.2);
+            sc.ScaleX = sc.ScaleY = t < .1 ? 1 - .06 * Out(Seg(t, 0, .1)) : t < .24 ? .94 + .14 * Out(Seg(t, .1, .24)) : EsportsFx.Punch(Seg(t, .24, .55), 1.08, 2.2);
             chip.BorderBrush = t is > .12 and < .8 ? lit : edge;
             double g = Seg(t, .2, .62);
             ssc.ScaleX = ssc.ScaleY = g is > 0 and < 1 ? Math.Sin(Math.PI * g) * 1.15 : 0;
@@ -750,7 +752,7 @@ sealed partial class HudFinals : ModernLook
         var wrows = wipe ? ShownRows().ToList() : new List<FinalsRow>();
         if (wipe)
         {
-            dark = new Border { Background = Mod.Br(Black0, .42), BorderBrush = Mod.Br(CoralC, .8), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(Radius), IsHitTestVisible = false, Opacity = 0 };
+            dark = new Border { Background = Mod.Br(Black0, .22), BorderBrush = Mod.Br(CoralC, .8), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(Radius), IsHitTestVisible = false, Opacity = 0 };
             _fight.Children.Insert(_fight.Children.IndexOf(_fightFx), dark);
             _lineGlint.Tint(CoralC, .22);
         }
@@ -763,10 +765,10 @@ sealed partial class HudFinals : ModernLook
                 double fl = Seg(t, 0, .13);
                 drop.Y = t < .13 ? -12 * (1 - fl * fl) : -5 * Math.Abs(Math.Sin(Math.PI * Seg(t, .13, .25))) * (1 - Seg(t, .13, .25));
                 sc.ScaleX = 1 + (t is > .12 and < .17 ? .04 : 0); sc.ScaleY = 1 - (t is > .12 and < .17 ? .08 : 0);
-                if (dark != null) dark.Opacity = t < .12 ? Seg(t, 0, .12) : 1 - Out(Seg(t, .18, .4));
+                if (dark != null) dark.Opacity = t < .1 ? Seg(t, 0, .1) : t < .2 ? 1 : t < .26 ? 1 - .5 * Seg(t, .2, .23) + .5 * Seg(t, .23, .26) : 1 - Out(Seg(t, .3, .45));
                 // the lights flicker off (on, half, gone) and come back slowly once the plate has landed
                 _beams.Opacity = t < .03 ? 1 : t < .06 ? .3 : t < .09 ? .85 : t < .12 ? .25 : t < .5 ? .08 : .08 + .92 * Out(Seg(t, .5, .85));
-                for (int r = 0; r < wrows.Count; r++) wrows[r].Root.Opacity = t < .14 ? 1 - .4 * Seg(t, .06, .14) : .6 + .4 * Out(Seg(t, .3 + (wrows.Count - 1 - r) * .05, .55 + (wrows.Count - 1 - r) * .05));
+                for (int r = 0; r < wrows.Count; r++) wrows[r].Root.Opacity = t < .14 ? 1 - .3 * Seg(t, .06, .14) : .7 + .3 * Out(Seg(t, .18 + (wrows.Count - 1 - r) * .03, .32 + (wrows.Count - 1 - r) * .03));
                 _settle.Y = EsportsFx.Shake(t, .13, .3, 2.5, 2);
                 return;
             }

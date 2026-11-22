@@ -852,7 +852,7 @@ sealed partial class HudBroadcast : ModernLook
         // navy with a mint edge: this is the plate lit)
         var nb = Bc(L.T("New best").ToUpper(System.Globalization.CultureInfo.CurrentCulture), 17, InkB);
         nb.MaxWidth = 78; nb.TextTrimming = TextTrimming.CharacterEllipsis;
-        var plate = new Slab(nb, MintC2, 1, null, 28, padX: 4) { Rule = false, Shadow = 2.5, Back = CyanC };
+        var plate = new Slab(nb, CyanC, 1, null, 28, padX: 4) { Rule = false, Shadow = 2.5, Back = MintC2 };
         var ps = new ScaleTransform(1, 1);
         plate.RenderTransformOrigin = new Point(0, .5);
         plate.RenderTransform = ps;

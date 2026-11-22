@@ -897,20 +897,23 @@ sealed partial class HudHype : ModernLook
         // the landing in the grade's colour (a pickup is lime on black: this floods the slab with the grade), shards of it off
         // the tile and a hard jolt
         var gc = ColorOf(p.Color, p.Grade);
-        var flood = new TacSketch((dc, s) => { if (s.Width > 16) dc.DrawGeometry(Frozen(Mod.A(gc, .5)), null, Para(new Rect(1, 1, s.Width - 10, s.Height - 6), 9)); }) { Opacity = 0, IsHitTestVisible = false };
+        var flood = new TacSketch((dc, s) => { if (s.Width > 16) dc.DrawGeometry(Frozen(Mod.A(gc, .9)), null, Para(new Rect(1, 1, s.Width - 10, s.Height - 6), 9)); }) { Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(1, .5), RenderTransform = new ScaleTransform(1, 1) };
+        var floodSc = (ScaleTransform)flood.RenderTransform;
         _rare.Children.Insert(Math.Max(0, _rare.Children.IndexOf(flash)), flood);
         Point o = new(30, 20);
         try { if (tile != null && tile.ActualWidth > 0) o = tile.TranslatePoint(new Point(tile.ActualWidth / 2, tile.ActualHeight / 2), _rare); } catch (InvalidOperationException) { }
-        EsportsFx.Spray(_rare, o, 9, 34, -175, 5, new[] { gc, Mod.Mix(gc, Colors.White, .5), Colors.White }, 1000, fall: 12, delay: .3, sparks: true);
+        EsportsFx.Spray(_rare, o, 9, 34, -175, 5, new[] { gc, Mod.Mix(gc, Colors.White, .5), Colors.White }, 1000, fall: 12, delay: .2, sparks: true);
         Motion.Play(flash, 1200, t =>
         {
             double k = Seg(t, 0, .32);
-            at.X = 40 * (1 - Out(k)) + EsportsFx.Shake(t, .3, .46, 3, 2.5);
+            at.X = 40 * (1 - Out(k)) + EsportsFx.Shake(t, .22, .4, 3, 2.5);
             skew.AngleX = k <= 0 ? -24 : -24 + 24 * Back(k, 3.2);
             _rare.Opacity = Math.Min(1, k * 4);
-            flash.Opacity = t is >= .28 and < .36 ? .5 * (1 - Seg(t, .28, .36)) : 0;
-            flood.Opacity = t < .28 ? 0 : 1 - Out(Seg(t, .3, .8));
-            double s = Seg(t, .28, .56);
+            flash.Opacity = t is >= .22 and < .3 ? .45 * (1 - Seg(t, .22, .3)) : 0;
+            // the slab floods with the grade as it lands, holds through the stamp and the shards, then the lime wipes back in from the left
+            flood.Opacity = t < .05 ? 0 : Math.Min(1, Seg(t, .05, .12) * 1.4);
+            floodSc.ScaleX = 1 - Out(Seg(t, .6, .74));
+            double s = Seg(t, .1, .26);
             sc.ScaleX = sc.ScaleY = s <= 0 ? 0 : 1.7 - .7 * Back(s, 3.2);
         }, () => { at.X = 0; skew.AngleX = 0; _rare.Opacity = 1; flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; _rare.Children.Remove(flood); });
     }
@@ -986,12 +989,12 @@ sealed partial class HudHype : ModernLook
         Motion.Play(chip, 900, t =>
         {
             double k = Seg(t, 0, .2);
-            sc.ScaleX = sc.ScaleY = k <= 0 ? 1.45 : EsportsFx.Punch(k, 1.45, 3);
+            sc.ScaleX = sc.ScaleY = k <= 0 ? 1.3 : EsportsFx.Punch(k, 1.3, 3);
             skew.AngleX = -16 * (1 - Out(k));
             chip.Opacity = Math.Min(1, .1 + k * 3);
             flash.Opacity = t is >= .18 and < .3 ? .9 * (1 - Seg(t, .18, .3)) : 0;
             double w = Seg(t, .18, .6);
-            waveSc.ScaleX = 1 + .35 * Out(w); waveSc.ScaleY = 1 + .9 * Out(w);
+            waveSc.ScaleX = 1 + .1 * Out(w); waveSc.ScaleY = 1 + .45 * Out(w);
             wave.Opacity = w is > 0 and < 1 ? 1 - w : 0;
         }, () => { sc.ScaleX = sc.ScaleY = 1; skew.AngleX = 0; chip.Opacity = 1; chip.Children.Remove(flash); chip.Children.Remove(wave); });
     }
@@ -1059,7 +1062,7 @@ sealed partial class HudHype : ModernLook
                 ring.Opacity = 0;
                 _fightShift.X = t < .16 ? 0 : EsportsFx.Shake(t, .16, .42, 5, 3);
                 _fightBody.Opacity = t < .16 ? 1 : .5 + .5 * Out(Seg(t, .2, .55));
-                double hide = t < .8 ? 1 - Seg(t, 0, .1) : Seg(t, .9, 1);
+                double hide = t < .8 ? 1 - Seg(t, 0, .03) : Seg(t, .9, 1);
                 if (tab != null) tab.Opacity = hide;
                 if (chip != null) chip.Opacity = hide;
             }, () => { _bandHost.Children.Clear(); _fightShift.X = 0; _fightBody.Opacity = 1; if (tab != null) tab.Opacity = 1; if (chip != null) chip.Opacity = 1; });
@@ -1082,7 +1085,7 @@ sealed partial class HudHype : ModernLook
             ring.Opacity = rg is > 0 and < 1 ? 1 - rg : 0;
             whiteout.Opacity = t is >= .12 and < .22 ? 1 - Seg(t, .12, .22) : 0;
             _fightShift.Y = t < .13 ? 0 : Math.Abs(EsportsFx.Shake(t, .13, .3, 3.5, 1.5));
-            double hide = t < .8 ? 1 - Seg(t, 0, .1) : Seg(t, .9, 1);
+            double hide = t < .8 ? 1 - Seg(t, 0, .03) : Seg(t, .9, 1);
             if (tab != null) tab.Opacity = hide;
             if (chip != null) chip.Opacity = hide;
         }, () => { _bandHost.Children.Clear(); _fightFx.Children.Remove(whiteout); _fightShift.Y = 0; if (tab != null) tab.Opacity = 1; if (chip != null) chip.Opacity = 1; });
