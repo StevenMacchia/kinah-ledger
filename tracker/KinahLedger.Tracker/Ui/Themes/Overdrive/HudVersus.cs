@@ -580,11 +580,15 @@ sealed partial class HudVersus : ModernLook
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         string word = L.T("SPECIAL!");
-        var spark = Spark(20, YellowC, 11); spark.HorizontalAlignment = HorizontalAlignment.Left; spark.Margin = new Thickness(2, 0, 0, 0);
+        // in the grade's colour, the big one (2026-11-21 review: a yellow SPECIAL! read as any pickup), the plate jolted
+        var gc = Rare(Values) is { } rp ? ColorOf(rp.Color, rp.Grade) : YellowC;
+        var gradeFill = Mod.Grad(true, (Mod.Mix(gc, Colors.White, .75), 0), (Mod.Mix(gc, Colors.White, .3), .4), (gc, .7), (Mod.Mix(gc, Colors.Black, .35), 1));
+        var jolt = new TranslateTransform(); _rare.RenderTransform = jolt;
+        var spark = Spark(20, Mod.Mix(gc, Colors.White, .45), 11); spark.HorizontalAlignment = HorizontalAlignment.Left; spark.Margin = new Thickness(2, 0, 0, 0);
         var spSc = new ScaleTransform(1, 1); spark.RenderTransform = spSc;
         var flash = new System.Windows.Shapes.Rectangle { Fill = White, Opacity = 0 };
         fx.Children.Clear(); fx.Children.Add(flash); fx.Children.Add(spark);
-        var slam = Slam(word, SlamSize(word, 22, 92, 34), SlamFill, stroke: 4);
+        var slam = Slam(word, SlamSize(word, 22, 92, 34), gradeFill, stroke: 4);
         var ss = new ScaleTransform(1, 1); slam.RenderTransform = ss;
         var burst = Spark(Math.Min(17, slam.Height * .6), RedC, 10);
         var bs = new ScaleTransform(1, 1); burst.RenderTransform = bs;
@@ -603,7 +607,8 @@ sealed partial class HudVersus : ModernLook
             double u = Seg(t, .3, .7);
             burst.Opacity = t < .3 ? 0 : .9 * (1 - u); bs.ScaleX = bs.ScaleY = .5 + .6 * Out(u);
             flash.Opacity = .45 * Flash(t, .3, .1);
-        }, () => { _rareBloom = 1; plate.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; fx.Children.Clear(); anchor.Children.Clear(); });
+            jolt.X = Ez.Jolt(Seg(t, .3, .5), 3.5, 5);
+        }, () => { _rare.RenderTransform = null; _rareBloom = 1; plate.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; fx.Children.Clear(); anchor.Children.Clear(); });
     }
 
     /// <summary>
@@ -727,6 +732,42 @@ sealed partial class HudVersus : ModernLook
         else { Cinema(L.T("K.O."), SlamFill, null, 1300, drop: false, spark: true); Shimmer(); }
     }
 
+    /// <summary>A screen crack (drawn once): jagged white lines with dark edges out from the panel's middle, a few branches.</summary>
+    static void DrawCrack(DrawingContext dc, Size s)
+    {
+        if (s.Width < 20) return;
+        var c = new Point(s.Width / 2, s.Height / 2);
+        var rnd = new Random(41);
+        var dark = Mod.P(Frozen(Mod.A(Colors.Black, .7)), 3.2, round: true);
+        var lit = Mod.P(Frozen(Mod.A(Colors.White, .85)), 1.3, round: true);
+        var g = new StreamGeometry();
+        using (var x = g.Open())
+        {
+            for (int i = 0; i < 7; i++)
+            {
+                double a = 2 * Math.PI * i / 7 + .4 * rnd.NextDouble(), reach = Math.Max(s.Width, s.Height) * (.35 + .25 * rnd.NextDouble());
+                var p = c; x.BeginFigure(p, false, false);
+                for (int k = 1; k <= 5; k++)
+                {
+                    double r = reach * k / 5, jag = (rnd.NextDouble() - .5) * .5;
+                    var q = new Point(c.X + r * Math.Cos(a + jag), c.Y + r * Math.Sin(a + jag) * .6);
+                    x.LineTo(q, true, false);
+                    if (k == 2 && i % 2 == 0)
+                    {
+                        // a branch off it
+                        x.BeginFigure(q, false, false);
+                        x.LineTo(new Point(q.X + reach * .18 * Math.Cos(a + .9), q.Y + reach * .12 * Math.Sin(a + .9)), true, false);
+                        x.BeginFigure(q, false, false);
+                    }
+                    p = q;
+                }
+            }
+        }
+        g.Freeze();
+        dc.DrawGeometry(null, dark, g);
+        dc.DrawGeometry(null, lit, g);
+    }
+
     /// <summary>A slam over the fight: the word, a dark band behind it, streaks, a flash frame (white, or dark for a drop), a spark and a ring for a kill.</summary>
     void Cinema(string word, Brush fill, Color? edge, double ms, bool drop, bool spark)
     {
@@ -744,6 +785,15 @@ sealed partial class HudVersus : ModernLook
         var lineAt = new TranslateTransform(); lines.RenderTransform = lineAt;
         var flash = new System.Windows.Shapes.Rectangle { Fill = drop ? Frozen(Colors.Black) : White, Opacity = 0 };
         var parts = new List<UIElement> { band, lines };
+        // a wipe cracks the screen as a K.O. never does (2026-11-21 review: they read alike): a veil sags over the panel and
+        // a crack runs out from where the word lands, both drawn once, gone as the word parks
+        TacSketch? crack = null; System.Windows.Shapes.Rectangle? veil = null;
+        if (drop)
+        {
+            veil = new System.Windows.Shapes.Rectangle { Fill = Frozen(Mod.A(Colors.Black, .5)), Opacity = 0, IsHitTestVisible = false };
+            crack = new TacSketch((dc, s) => DrawCrack(dc, s)) { Opacity = 0, IsHitTestVisible = false };
+            parts.Insert(0, veil); parts.Add(crack);
+        }
         TacSketch? burst = null; ScaleTransform? bs = null; RotateTransform? br = null;
         System.Windows.Shapes.Ellipse? ring = null;
         if (spark)
@@ -782,7 +832,7 @@ sealed partial class HudVersus : ModernLook
                 ss.ScaleX = ss.ScaleY = 1 + (rest - 1) * k;
                 sy.Y = -h * .45 * (1 - Back(land, 1.2)) * (1 - k) + liftY * k;
                 rot.Angle = 5 * k;
-                slam.Opacity = t < .82 ? Seg(t, 0, .05) : 1 - Seg(t, .82, .97);
+                slam.Opacity = t < .7 ? Seg(t, 0, .05) : 1 - Seg(t, .7, .85);
             }
             else if (start)
             {
@@ -797,9 +847,11 @@ sealed partial class HudVersus : ModernLook
                 ss.ScaleX = ss.ScaleY = sc + (rest - sc) * k;
                 sy.Y = liftY * k;
                 rot.Angle = -4 * k;
-                slam.Opacity = t < .84 ? Seg(t, 0, .05) : 1 - Seg(t, .84, .98);
+                slam.Opacity = t < .7 ? Seg(t, 0, .05) : 1 - Seg(t, .7, .85);
             }
             flash.Opacity = (drop ? .45 : .55) * Flash(t, hit, .08);
+            if (veil != null) veil.Opacity = t < hit ? 0 : t < .5 ? Out(Seg(t, hit, hit + .06)) : 1 - Seg(t, .5, .7);
+            if (crack != null) crack.Opacity = t < hit ? 0 : t < .3 ? 1 : 1 - Seg(t, .3, .5);
             lines.Opacity = t < .06 ? 0 : .9 * (1 - Seg(t, .14, gone));
             lineAt.X = -w * .3 + w * .5 * Seg(t, .06, gone);
             // the hit shakes the whole panel: a sideways jolt for a kill, a dead vertical thud for a wipe, a light one at the start
@@ -817,7 +869,7 @@ sealed partial class HudVersus : ModernLook
                 ring!.Opacity = t < hit + .02 ? 0 : .9 * (1 - r);
                 ((ScaleTransform)ring.RenderTransform).ScaleX = ((ScaleTransform)ring.RenderTransform).ScaleY = .2 + 1.1 * Out(r);
             }
-            if (head != null) head.Opacity = start ? (t < gone ? .35 + .65 * Seg(t, leave, gone) : 1) : t < .84 ? .35 : .35 + .65 * Seg(t, .84, 1);
+            if (head != null) head.Opacity = start ? (t < gone ? .35 + .65 * Seg(t, leave, gone) : 1) : t < .72 ? .35 : .35 + .65 * Seg(t, .72, .9);
         }, () => { _fightFx.Children.Clear(); if (!start) _fightShift.X = _fightShift.Y = 0; if (head != null) head.Opacity = 1; });
     }
 }

@@ -900,6 +900,8 @@ sealed partial class HudDragon : ModernLook
             _eyeFlare.Opacity = wipe ? 0 : t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .3, .7);
             _mouthGlow.Opacity = wipe ? 0 : t < .08 ? Seg(t, 0, .08) : 1 - Seg(t, .25, .55);
             _lidScale.ScaleY = wipe ? .78 * (t < .2 ? Out(Seg(t, 0, .2)) : 1 - Seg(t, .85, 1)) : 0;
+            // a wipe: the rows sag to half light under the falling ash and come back as the plate leaves (a kill stays bright)
+            if (wipe) _fightBody.Opacity = t < .1 ? 1 : t < .6 ? 1 - .45 * Out(Seg(t, .1, .2)) : .55 + .45 * Seg(t, .6, .8);
             for (int i = 0; i < rows.Count; i++) rows[i].Blaze(Seg(t, .05 + .05 * i, .45 + .05 * i));
             // the plate takes the head's place: the head gone before the plate comes, back only once the plate has left
             // (their words never cross); a kill slams it from big, a wipe drops it from above with a dead thud, tipped
@@ -912,7 +914,7 @@ sealed partial class HudDragon : ModernLook
             }
             else
             {
-                slam.ScaleX = slam.ScaleY = 1 + .22 * (1 - Out(i0));
+                slam.ScaleX = slam.ScaleY = 1.22 - .22 * Back(i0, 2.4);
                 _fightShift.X = Ez.Jolt(Seg(t, .14, .34), 4, 5);
             }
             if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, .03, .07) : Seg(t, .91, 1);
@@ -922,7 +924,7 @@ sealed partial class HudDragon : ModernLook
             _eyeFlare.Opacity = 0; _mouthGlow.Opacity = 0; _lidScale.ScaleY = 0; _blaze.Opacity = 0;
             foreach (var r in rows) r.Blaze(-1);
             if (head != null) head.Opacity = 1;
-            _fightShift.X = _fightShift.Y = 0;
+            _fightShift.X = _fightShift.Y = 0; _fightBody.Opacity = 1;
         });
     }
 }

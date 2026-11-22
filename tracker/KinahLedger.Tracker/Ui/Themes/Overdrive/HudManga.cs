@@ -839,13 +839,14 @@ sealed partial class HudManga : ModernLook
         var sfx = _sfx; var sfs = _sfxScale;
         Motion.Play(_fightFx, 820, t =>
         {
-            double k = Out(Seg(t, 0, .42));
+            // (the wipe in .3 of the course, the words whole by then: the page never hides the figures for long)
+            double k = Out(Seg(t, 0, .3));
             clipShift.X = -(w + 60) * (1 - k);
             sx.X = (w + 40) * k - 44;
-            stroke.Opacity = t < .36 ? 1 : 1 - Seg(t, .36, .48);
+            stroke.Opacity = t < .26 ? 1 : 1 - Seg(t, .26, .36);
             _fightShift.X = -6 * (1 - k);
             // the words come up as the stroke passes, whole once the page is on (never over the bare game)
-            _fightBody.Opacity = Seg(t, .28, .42);
+            _fightBody.Opacity = Seg(t, .18, .3);
             if (sfx != null && sfs != null)
             {
                 double s = Seg(t, .58, .82);
@@ -892,17 +893,20 @@ sealed partial class HudManga : ModernLook
             else
             {
                 // a wipe: no flash; the word falls from above the page, lands heavy (a dead thud down the page), tips and sags
-                double f = Seg(t, 0, .2);
-                drop.Y = -rise * (1 - f * f);
-                sc.ScaleX = sc.ScaleY = fit;
-                tip.Angle = 7 * Out(Seg(t, .2, .7));
-                drop.Y += 4 * Out(Seg(t, .2, .7));
-                _fightShift.Y = Math.Abs(Ez.Jolt(Seg(t, .2, .42), 5, 4));
+                // (from inside the window: a short fall from a little above, big, onto the page)
+                double f = Seg(t, 0, .14);
+                drop.Y = -Math.Min(rise, 16) * (1 - f * f);
+                sc.ScaleX = sc.ScaleY = fit * (1.3 - .3 * f * f);
+                tip.Angle = 7 * Out(Seg(t, .14, .7));
+                drop.Y += 4 * Out(Seg(t, .14, .7));
+                _fightShift.Y = Math.Abs(Ez.Jolt(Seg(t, .14, .36), 4, 4));
+                // the page goes grey under it: the rows sag to half ink and come back as the word goes
+                _fightBody.Opacity = t < .14 ? 1 : t < .62 ? 1 - .45 * Out(Seg(t, .14, .22)) : .55 + .45 * Seg(t, .62, .8);
             }
             big.Opacity = t < .03 ? 0 : t < .8 ? 1 : 1 - Seg(t, .8, 1);
             lsc.ScaleX = lsc.ScaleY = .7 + .5 * Out(Seg(t, .05, .5));
             lines.Opacity = wipe || t < .05 ? 0 : 1 - Seg(t, .25, .6);
-        }, () => { _fightFx.Children.Clear(); _pageInv.Opacity = 0; _fightShift.X = _fightShift.Y = 0; });
+        }, () => { _fightFx.Children.Clear(); _pageInv.Opacity = 0; _fightShift.X = _fightShift.Y = 0; _fightBody.Opacity = 1; });
     }
 
     /// <summary>

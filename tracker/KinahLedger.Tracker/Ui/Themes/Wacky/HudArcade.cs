@@ -621,6 +621,14 @@ sealed partial class HudArcade : ModernLook
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var word = _rareWord;
+        // the big one (2026-11-21 review: weaker than the pickup's flash): pixel fireworks in the grade's colour pop off the
+        // tile, one after another, and RARE DROP! blinks as a cabinet's attract text does while the screen flashes
+        var c = Rare(Values) is { } rp ? ColorOf(rp.Color, rp.Grade) : LedC;
+        var sparks = new Canvas { IsHitTestVisible = false };
+        _rare.Children.Add(sparks);
+        var hot = Mod.Mix(c, Colors.White, .5);
+        Burst(sparks, new Point(22, 21), new[] { c, hot, Colors.White }, 16, 120, 620);
+        Burst(sparks, new Point(30, 18), new[] { hot, c, LedC }, 22, 300, 640);
         Motion.Play(scr, 1600, t =>
         {
             _rareOpen.ScaleX = .04 + .96 * Out(Seg(t, 0, .25));
@@ -628,8 +636,8 @@ sealed partial class HudArcade : ModernLook
             double b = Seg(t, .2, .9);
             Fade(flare, b > 0 && b < 1 && ((int)(b * 6)) % 2 == 0 ? 1 - b * .6 : 0);
             sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .08, .38), 2.4);
-            if (word != null) word.Opacity = t < .2 ? Seg(t, .1, .2) : 1;
-        }, () => { _rareOpen.ScaleX = 1; Fade(flare, 0); sc.ScaleX = sc.ScaleY = 1; if (word != null) word.Opacity = 1; });
+            if (word != null) word.Opacity = t < .2 ? Seg(t, .1, .2) : t < .62 && ((int)((t - .2) / .07)) % 2 == 1 ? .25 : 1;
+        }, () => { _rareOpen.ScaleX = 1; Fade(flare, 0); sc.ScaleX = sc.ScaleY = 1; if (word != null) word.Opacity = 1; _rare.Children.Remove(sparks); });
     }
 
     /// <summary>
@@ -847,8 +855,29 @@ sealed partial class HudArcade : ModernLook
             Burst(_marqueeSparks, new Point(w * .95, y), new[] { LedC, pink, Colors.White }, 8, 820, 600);
         }
         MarqueeChase(0, 1600);
+        // a wipe loses the signal as a tube does when switched off (2026-11-21 review: it read like the clear): the table
+        // flashes white, the white folds to a bright line across the screen, the line shrinks to a dot and is gone, and the
+        // rows under it sag to half light and come back; a clear keeps its fireworks
+        System.Windows.Shapes.Rectangle? crt = null; ScaleTransform? fold = null;
+        if (wipe)
+        {
+            fold = new ScaleTransform(1, 1);
+            crt = new System.Windows.Shapes.Rectangle { Fill = Ink(Color.FromRgb(0xE8, 0xF0, 0xFF)), Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5), RenderTransform = fold,
+                Margin = new Thickness(BodyX, 2 * Bezel + MarqueeH + 4, BodyX, 8) };
+            _fightFx.Children.Add(crt);
+        }
+        var body = _fightBody;
         Motion.Play(banner, 2400, t =>
         {
+            if (crt != null && fold != null)
+            {
+                double a = Seg(t, .04, .1), b = Seg(t, .1, .2), c2 = Seg(t, .2, .28);
+                double hh = crt.ActualHeight > 0 ? crt.ActualHeight : 100;
+                fold.ScaleY = t < .1 ? 1 : Math.Max(2 / hh, 1 - Ez.In(b) * (1 - 2 / hh));
+                fold.ScaleX = t < .2 ? 1 : Math.Max(.01, 1 - Out(c2));
+                crt.Opacity = t < .04 ? 0 : t < .1 ? .35 * (1 - a) + .1 : t < .2 ? .25 + .7 * b : t < .28 ? .95 : 0;
+                body.Opacity = t < .08 ? 1 : t < .5 ? .5 : .5 + .5 * Seg(t, .5, .7);
+            }
             open.ScaleX = Math.Max(.02, Out(Seg(t, 0, .1)) * (t < .9 ? 1 : 1 - Seg(t, .9, 1)));
             banner.Opacity = t < .9 ? 1 : 1 - Seg(t, .9, 1);
             // the flip: the inverted field for the first beats, flashing against the lit one, then the lit one held
@@ -856,6 +885,6 @@ sealed partial class HudArcade : ModernLook
             _fightLegend.Opacity = t < .95 ? 0 : 1;
             if (word is LedWord lw) { int k = (int)Math.Floor(Seg(t, .08, .35) * lw.Letters); maskAt.X = k >= lw.Letters ? lw.DotW + 20 : lw.LetterEnd(k - 1); }
             else { word.Opacity = Seg(t, .08, .2); inv.Opacity = word.Opacity; }
-        }, () => { _marquee.Children.Remove(banner); _fightLegend.Opacity = 1; });
+        }, () => { _marquee.Children.Remove(banner); _fightLegend.Opacity = 1; if (crt != null) _fightFx.Children.Remove(crt); body.Opacity = 1; });
     }
 }

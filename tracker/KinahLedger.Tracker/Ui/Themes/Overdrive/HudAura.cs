@@ -721,6 +721,8 @@ sealed partial class HudAura : ModernLook
         }
     }, w, h) { IsHitTestVisible = false, Opacity = 0 };
 
+    static readonly Brush AuraEntryFlood = Mod.Grad(true, (Mod.A(Mod.Mix(MintC2, Colors.White, .5), .75), 0), (Mod.A(MintC2, .5), .6), (Mod.A(MintC2, .3), 1));
+
     /// <summary>
     /// An entry opened, a power-up: the first timer's chip draws in, then flares out past its size as mint energy surges up
     /// off it and a ring of mint light bursts round it; the chip settles with its edge lit mint.
@@ -733,7 +735,7 @@ sealed partial class HudAura : ModernLook
         var edge = chip.BorderBrush;
         chip.BorderBrush = Frozen(MintC2);
         // the surge and the ring, laid round the chip (its words over them)
-        var surge = Surge(MintC2, cw - 8, ch, 9, 17); surge.HorizontalAlignment = HorizontalAlignment.Center; surge.VerticalAlignment = VerticalAlignment.Bottom;
+        var surge = Surge(MintC2, cw - 6, ch, 14, 17); surge.HorizontalAlignment = HorizontalAlignment.Center; surge.VerticalAlignment = VerticalAlignment.Bottom;
         var rise = new TranslateTransform(); surge.RenderTransform = rise;
         var ring = new System.Windows.Shapes.Rectangle { RadiusX = 6, RadiusY = 6, Stroke = Frozen(Mod.Mix(MintC2, Colors.White, .4)), StrokeThickness = 2, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
         var ringSc = new ScaleTransform(1, 1); ring.RenderTransform = ringSc;
@@ -745,8 +747,12 @@ sealed partial class HudAura : ModernLook
         chip.Child = g;
         var sc = new ScaleTransform(1, 1);
         chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = sc;
+        // the flare: the chip floods mint as it bursts (a brush swapped twice, never each frame)
+        var bg = chip.Background; bool? lit = null;
         Motion.Play(chip, 1200, t =>
         {
+            bool on = t >= .14 && t < .32;
+            if (lit != on) { lit = on; chip.Background = on ? AuraEntryFlood : bg; }
             double wind = Seg(t, 0, .14), pop = Ez.Wob(Seg(t, .14, .6), 1.5, 4), r = Out(Seg(t, .14, .2));
             sc.ScaleX = sc.ScaleY = t < .14 ? 1 - .12 * Ez.InOut(wind) : .88 + .12 * r + .22 * pop;
             double u = Seg(t, .14, .7);
@@ -757,7 +763,7 @@ sealed partial class HudAura : ModernLook
             ring.Opacity = t < .16 ? 0 : 1 - q;
         }, () =>
         {
-            chip.RenderTransform = null; chip.BorderBrush = edge;
+            chip.RenderTransform = null; chip.BorderBrush = edge; chip.Background = bg;
             inner.Child = null; chip.Child = words;
         });
     }

@@ -571,12 +571,31 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         var band = Band(w, h, words);
         var zoom = new ScaleTransform(); words.RenderTransform = zoom; words.RenderTransformOrigin = new Point(.5, .5);
         var s = Spawn(band, StripAt(_fight.Root, h), "end");
+        if (wipe)
+        {
+            // a wipe is a power cut, not a slam (2026-11-21 review: it read like the K.O.): the cabinet's tubes stutter and
+            // sag to half light, GAME OVER sputters on at its own size, the light crawls back up as it holds
+            var cab = _fight.Root;
+            Motion.Play(cab, 2300, q =>
+            {
+                double d = Seg(q, .06, .3), back = Seg(q, .5, .7);
+                double sag = q < .06 ? 1 : q < .3 ? .5 + .5 * PowerDown(d * .9) : .5 + .5 * Out(back);
+                cab.Opacity = Math.Max(.5, sag);
+            }, () => cab.Opacity = 1);
+        }
         Play(s, "end", 2300, q =>
         {
-            zoom.ScaleX = zoom.ScaleY = Lerp(2.2, 1, Back(Seg(q, .05, .22), 2.2));
-            words.Opacity = Seg(q, .05, .1);
-            // GAME OVER blinks once it lands; the K.O. holds
-            if (wipe && q > .24 && q < .36) words.Opacity = (int)(q * 50) % 2 == 0 ? 1 : .35;
+            if (wipe)
+            {
+                zoom.ScaleX = 1; zoom.ScaleY = Lerp(.2, 1, Out(Seg(q, .12, .2)));
+                double on = Seg(q, .12, .34);
+                words.Opacity = on <= 0 ? 0 : on < .2 ? .8 : on < .35 ? .1 : on < .5 ? .9 : on < .6 ? .25 : 1;
+            }
+            else
+            {
+                zoom.ScaleX = zoom.ScaleY = Lerp(2.2, 1, Back(Seg(q, .05, .22), 2.2));
+                words.Opacity = Seg(q, .05, .1);
+            }
             BandLife(s, q, .06, .62, .84);
         });
     }
