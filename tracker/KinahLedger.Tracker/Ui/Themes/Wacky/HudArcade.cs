@@ -235,10 +235,14 @@ sealed partial class HudArcade : ModernLook
 
     // ================================================================ the Buddy
 
+    /// <summary>The score with its unit on the line (a best passed bumps it as a sprite).</summary>
+    FrameworkElement? _hourTop;
+
     protected override void DrawLine(Figures f)
     {
         _lineBody.Margin = LineBodyM;
         _lineBody.Children.Clear();
+        _hourTop = null;
         _ringArt = null; _lineWords = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         bool dim = Dimmed(Values);
@@ -253,7 +257,15 @@ sealed partial class HudArcade : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(0, 5, 0, 5);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(0, 2, 0, 0);
+                stats.Margin = new Thickness(1, 1, 0, 2);
+                _lineBody.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { w, stats } });
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -274,6 +286,7 @@ sealed partial class HudArcade : ModernLook
             FrameworkElement rate = f.Warm ? Tt(f.Rate, 15, Soft, FontWeights.SemiBold) : Fig(f.Rate, 3, LedC, .45, textSize: 23);
             rate.Tag = "buddy-rate";
             top.Children.Add(rate);
+            _hourTop = f.Warm ? null : top;
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, Soft, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(4, 0, 0, 0); top.Children.Add(u); }
             words.Children.Add(top);
             // farming, the pickups as the strip beside the score where it fits (the best drop and the last three), the session
@@ -613,6 +626,14 @@ sealed partial class HudArcade : ModernLook
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var word = _rareWord;
+        // the big one (2026-11-21 review: weaker than the pickup's flash): pixel fireworks in the grade's colour pop off the
+        // tile, one after another, and RARE DROP! blinks as a cabinet's attract text does while the screen flashes
+        var c = Rare(Values) is { } rp ? ColorOf(rp.Color, rp.Grade) : LedC;
+        var sparks = new Canvas { IsHitTestVisible = false };
+        _rare.Children.Add(sparks);
+        var hot = Mod.Mix(c, Colors.White, .5);
+        Burst(sparks, new Point(22, 21), new[] { c, hot, Colors.White }, 16, 120, 620);
+        Burst(sparks, new Point(30, 18), new[] { hot, c, LedC }, 22, 300, 640);
         Motion.Play(scr, 1600, t =>
         {
             _rareOpen.ScaleX = .04 + .96 * Out(Seg(t, 0, .25));
@@ -620,8 +641,8 @@ sealed partial class HudArcade : ModernLook
             double b = Seg(t, .2, .9);
             Fade(flare, b > 0 && b < 1 && ((int)(b * 6)) % 2 == 0 ? 1 - b * .6 : 0);
             sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .08, .38), 2.4);
-            if (word != null) word.Opacity = t < .2 ? Seg(t, .1, .2) : 1;
-        }, () => { _rareOpen.ScaleX = 1; Fade(flare, 0); sc.ScaleX = sc.ScaleY = 1; if (word != null) word.Opacity = 1; });
+            if (word != null) word.Opacity = t < .2 ? Seg(t, .1, .2) : t < .62 && ((int)((t - .2) / .07)) % 2 == 1 ? .25 : 1;
+        }, () => { _rareOpen.ScaleX = 1; Fade(flare, 0); sc.ScaleX = sc.ScaleY = 1; if (word != null) word.Opacity = 1; _rare.Children.Remove(sparks); });
     }
 
     /// <summary>
@@ -637,8 +658,17 @@ sealed partial class HudArcade : ModernLook
         Burst(_lineSparks, new Point(cx, cy), new[] { MintC2, LedC, Colors.White }, 30, 380, 900);
         Alert(_lineAlert, _lineLegend, L.T("HIGH SCORE!"), LedC, 300);
         double shown = -1;
+        // the score bumps as a sprite does when the ring completes (held frames, whole pixels: a squash, a hop, a land), and
+        // blinks three times with the HIGH SCORE! plate (2026-11-21 review: the best had no hit on the figure)
+        var hour = _hourTop;
+        var hsc = new ScaleTransform(1, 1); var hop = new TranslateTransform();
+        if (hour != null) { hour.RenderTransformOrigin = new Point(0, 1); hour.RenderTransform = new TransformGroup { Children = { hsc, hop } }; }
+        (double At, double Y, double Sx, double Sy)[] frames = { (0, 0, 1, 1), (.36, 0, 1.08, .86), (.4, -4, .96, 1.14), (.45, -6, 1.04, 1.08), (.5, -3, 1, 1), (.55, 0, 1.1, .9), (.6, 0, .98, 1.03), (.65, 0, 1, 1) };
         Motion.Play(art, 1600, t =>
         {
+            var fr = frames.Last(x => x.At <= t);
+            hop.Y = fr.Y; hsc.ScaleX = fr.Sx; hsc.ScaleY = fr.Sy;
+            if (hour != null) hour.Opacity = t > .66 && t < .9 && ((int)((t - .66) / .04)) % 2 == 1 ? .35 : 1;
             double step = t >= .4 ? 1 : Math.Floor(Out(Seg(t, 0, .4)) * 20) / 20;
             if (step != shown)
             {
@@ -647,7 +677,7 @@ sealed partial class HudArcade : ModernLook
                 art.InvalidateVisual();
             }
             Fade(_lineFlare, t > .35 && t < .8 && ((int)(Seg(t, .35, .8) * 6)) % 2 == 0 ? .9 : 0);
-        }, () => { _complete = 0; _beat = beat; Fade(_lineFlare, 0); art.InvalidateVisual(); });
+        }, () => { _complete = 0; _beat = beat; Fade(_lineFlare, 0); art.InvalidateVisual(); if (hour != null) { hour.RenderTransform = null; hour.Opacity = 1; } });
     }
 
     /// <summary>
@@ -732,24 +762,38 @@ sealed partial class HudArcade : ModernLook
 
     static readonly SolidColorBrush EntryOn = Frozen(Mod.A(MintC2, .32)), EntryEdge = Frozen(MintC2);
 
-    /// <summary>An entry opened: the first timer's chip blinks mint three times, as a cabinet's start button does, and settles.</summary>
+    /// <summary>
+    /// An entry opened, a coin dropped in: the first timer's chip hops up as a sprite does (whole-pixel steps, a squash on the
+    /// way down), pixel sparks burst off both its ends, and it blinks mint three times as a cabinet's start button does, then
+    /// settles. (No glow effect: the hop and the sparks are transforms on pieces drawn once.)
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush; var bg = chip.Background;
+        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double cw = Math.Max(30, chip.DesiredSize.Width);
+        var (mid, restore) = Ez.Stage(chip, over: true);
+        Color pink = Color.FromRgb(0xFF, 0x66, 0xCC);
+        Burst(mid, new Point(-cw / 2 + 2, 0), new[] { MintC2, Colors.White, LedC }, 9, 90, 560);
+        Burst(mid, new Point(cw / 2 - 2, 0), new[] { MintC2, pink, Colors.White }, 9, 150, 560);
+        var sc = new ScaleTransform(1, 1); var hop = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, 1);
+        chip.RenderTransform = new TransformGroup { Children = { sc, hop } };
+        // the hop's frames: (from, y px, x scale, y scale), held as a sprite's are
+        (double At, double Y, double Sx, double Sy)[] frames = { (0, 0, 1, 1), (.04, 0, 1.12, .82), (.1, -4, .94, 1.12), (.16, -6, 1, 1.04), (.24, -4, 1, 1), (.3, 0, 1.14, .84), (.36, 0, .97, 1.04), (.42, 0, 1, 1) };
         bool? was = null;
         Motion.Play(chip, 1300, t =>
         {
+            var f = frames.Last(x => x.At <= t);
+            hop.Y = f.Y; sc.ScaleX = f.Sx; sc.ScaleY = f.Sy;
             bool lit = t < .75 && ((int)(t / .125)) % 2 == 0;
-            glow.Opacity = lit ? .9 : .15 * (1 - t);
             // the brushes change only on a blink, never each frame
             if (was == lit) return;
             was = lit;
             chip.BorderBrush = lit ? EntryEdge : edge;
             chip.Background = lit ? EntryOn : bg;
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; chip.Background = bg; });
+        }, () => { chip.RenderTransform = null; chip.BorderBrush = edge; chip.Background = bg; restore(); });
     }
 
     /// <summary>
@@ -825,8 +869,29 @@ sealed partial class HudArcade : ModernLook
             Burst(_marqueeSparks, new Point(w * .95, y), new[] { LedC, pink, Colors.White }, 8, 820, 600);
         }
         MarqueeChase(0, 1600);
+        // a wipe loses the signal as a tube does when switched off (2026-11-21 review: it read like the clear): the table
+        // flashes white, the white folds to a bright line across the screen, the line shrinks to a dot and is gone, and the
+        // rows under it sag to half light and come back; a clear keeps its fireworks
+        System.Windows.Shapes.Rectangle? crt = null; ScaleTransform? fold = null;
+        if (wipe)
+        {
+            fold = new ScaleTransform(1, 1);
+            crt = new System.Windows.Shapes.Rectangle { Fill = Ink(Color.FromRgb(0xE8, 0xF0, 0xFF)), Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5), RenderTransform = fold,
+                Margin = new Thickness(BodyX, 2 * Bezel + MarqueeH + 4, BodyX, 8) };
+            _fightFx.Children.Add(crt);
+        }
+        var body = _fightBody;
         Motion.Play(banner, 2400, t =>
         {
+            if (crt != null && fold != null)
+            {
+                double a = Seg(t, .04, .1), b = Seg(t, .1, .2), c2 = Seg(t, .2, .28);
+                double hh = crt.ActualHeight > 0 ? crt.ActualHeight : 100;
+                fold.ScaleY = t < .1 ? 1 : Math.Max(2 / hh, 1 - Ez.In(b) * (1 - 2 / hh));
+                fold.ScaleX = t < .2 ? 1 : Math.Max(.01, 1 - Out(c2));
+                crt.Opacity = t < .04 ? 0 : t < .1 ? .35 * (1 - a) + .1 : t < .2 ? .25 + .7 * b : t < .28 ? .95 : 0;
+                body.Opacity = t < .08 ? 1 : t < .5 ? .5 : .5 + .5 * Seg(t, .5, .7);
+            }
             open.ScaleX = Math.Max(.02, Out(Seg(t, 0, .1)) * (t < .9 ? 1 : 1 - Seg(t, .9, 1)));
             banner.Opacity = t < .9 ? 1 : 1 - Seg(t, .9, 1);
             // the flip: the inverted field for the first beats, flashing against the lit one, then the lit one held
@@ -834,6 +899,6 @@ sealed partial class HudArcade : ModernLook
             _fightLegend.Opacity = t < .95 ? 0 : 1;
             if (word is LedWord lw) { int k = (int)Math.Floor(Seg(t, .08, .35) * lw.Letters); maskAt.X = k >= lw.Letters ? lw.DotW + 20 : lw.LetterEnd(k - 1); }
             else { word.Opacity = Seg(t, .08, .2); inv.Opacity = word.Opacity; }
-        }, () => { _marquee.Children.Remove(banner); _fightLegend.Opacity = 1; });
+        }, () => { _marquee.Children.Remove(banner); _fightLegend.Opacity = 1; if (crt != null) _fightFx.Children.Remove(crt); body.Opacity = 1; });
     }
 }

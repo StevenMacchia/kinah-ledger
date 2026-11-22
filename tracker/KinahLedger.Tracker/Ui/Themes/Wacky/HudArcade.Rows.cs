@@ -255,12 +255,16 @@ sealed partial class HudArcade
 
         Rect FullBar(Size s) { var b = BarRect(s); return new Rect(b.X, b.Y, Cells(b.Width, BarCell, BarGap).W, b.Height); }
 
-        /// <summary>The LED bar's place: under the name's line, from the name's start to the DPS column (heal included).</summary>
+        /// <summary>
+        /// The LED bar's place: under the name's line, from the name's start to the row's end (2026-11-21: it stopped at the DPS
+        /// column, about half the row once the damage and crit columns took their room); under the figures its cells sit on a
+        /// soft shade (<see cref="Draw"/>).
+        /// </summary>
         Rect BarRect(Size s)
         {
             var cols = _words.ColumnDefinitions;
             double x0 = PadL + cols[0].ActualWidth + 4;
-            double x1 = x0 + cols[1].ActualWidth + cols[2].ActualWidth + cols[3].ActualWidth - 8;
+            double x1 = s.Width - PadR - 1;
             return new Rect(x0, s.Height - BarH - 3, Math.Max(0, x1 - x0), BarH);
         }
 
@@ -284,6 +288,15 @@ sealed partial class HudArcade
             // the bar: LED cells lit to the share in the class's colour
             var bar = BarRect(s);
             DrawLed(dc, bar, m.CpOnly ? 0 : _bar, Vivid(m.ClassColor), BarCell, BarGap, .14);
+            // the figures' end: the cells under the heal and the figures dimmed by a shade of the screen's black, so the LED
+            // digits read over them (the heal's column included: its words sit there too)
+            double fx = PadL + cols[0].ActualWidth + cols[1].ActualWidth + cols[2].ActualWidth - 6;
+            if (fx < bar.Right)
+            {
+                dc.PushTransform(new TranslateTransform(fx, 0));
+                dc.DrawRectangle(FigShade, null, new Rect(0, bar.Y - 2, bar.Right - fx + 2, bar.Height + 4));
+                dc.Pop();
+            }
             // a healer's share of the group's healing as a mint pixel line under the cells (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
                 dc.DrawRectangle(Ink(MintC2, .95), null, new Rect(bar.X, bar.Bottom + 1, Math.Max(3, bar.Width * Math.Clamp(m.HealShare, 0, 1)), 1.5));
@@ -296,6 +309,14 @@ sealed partial class HudArcade
             }
         }
 
+        static readonly Brush FigShade = FigShadeOf();
+        static Brush FigShadeOf()
+        {
+            var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(12, 0) };
+            b.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), 0)); b.GradientStops.Add(new GradientStop(Color.FromArgb(0x80, 0, 0, 0), 1));
+            b.Freeze();
+            return b;
+        }
         static readonly Brush YouBand = Mod.Grad(false, (Mod.A(LedC, .16), 0), (Mod.A(LedC, .05), .6), (Mod.A(LedC, .1), 1)), YouCursor = Frozen(Mod.Mix(LedC, Colors.White, .4));
         static readonly DrawingBrush YouDots = CellTile(Mod.A(LedC, .75), 2, 2, 1.5, false);
         static readonly Dictionary<Color, Brush> Blooms = new();

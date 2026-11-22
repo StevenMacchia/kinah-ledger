@@ -319,7 +319,8 @@ sealed partial class HudFrost
                 if (Box(el) is not { } b || b.Left > barEnd) continue;
                 var plate = new Rect(b.Left - 3, r.Top + 4, b.Width + 6, r.Height - 8);
                 if (el == _dps) plate = new Rect(b.Left - 4, r.Top + 3, b.Width + 8, r.Height - 6);
-                dc.DrawGeometry(FigurePlate, FigureRim, Shard(plate, 3, 1));
+                bool small = el == _share || el == _dmg || el == _crit;
+                dc.DrawGeometry(small ? FigureVeil : FigurePlate, small ? null : FigureRim, Shard(plate, 3, 1));
             }
             dc.Pop();
             dc.DrawGeometry(null, m.You ? YouRim : lead ? LeadRim : RowRim, slab);

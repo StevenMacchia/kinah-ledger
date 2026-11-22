@@ -277,7 +277,8 @@ public static class LangCheck
         foreach (var extra in Extra) Add(extra);
         // the timers' events and Abyss bosses, and the places they name
         foreach (var e in KinahLedger.Session.EventTimers.Schedule) { Add(e.Name); Add(e.Where); }
-        foreach (var b in KinahLedger.Session.AbyssBosses.Schedule) { Add(b.Name); Add(b.Place); Add(b.Map); }
+        // (the timers shorten a boss to its own name, "Executor Argo" to "Argo": that is a name too)
+        foreach (var b in KinahLedger.Session.AbyssBosses.Schedule) { Add(b.Name); Add(b.Name.Split(' ')[^1]); Add(b.Place); Add(b.Map); }
         _names = n;
         return n;
     }

@@ -727,6 +727,9 @@ sealed partial class HudFrost
     // the rows' brushes and pens (frozen, shared by every row)
     static readonly Brush SlabFill = Mod.Grad(true, (Mod.A(Color.FromRgb(0x0A, 0x22, 0x30), .84), 0), (Mod.A(DeepC, .9), 1)),
         FigurePlate = Mod.Grad(true, (Mod.A(Color.FromRgb(0x06, 0x1A, 0x26), .78), 0), (Mod.A(DeepC, .86), 1)),
+        // the small figures after the DPS (the share, the expanded damage and crit) on a thin veil of shade: the bar's crystal
+        // reads through it to the row's end (Steven, 2026-11-21: the expanded leader's bar looked cut at two thirds)
+        FigureVeil = Mod.Grad(true, (Mod.A(Color.FromRgb(0x06, 0x1A, 0x26), .36), 0), (Mod.A(DeepC, .46), 1)),
         HealLine = Mod.Br(MintC2, .9), YouSpine = Mod.Grad(true, (Colors.White, 0), (Mod.A(IceC, .9), 1)), DpsHalo = MakeGlow(CyanC, .26),
         ClimbTrail = Mod.Grad(false, (Mod.A(IceC, 0), 0), (Mod.A(Colors.White, .9), 1));
     static readonly Pen FigureRim = Mod.P(Mod.Br(CyanC, .28), .8);

@@ -124,7 +124,7 @@ sealed partial class HudFinals : ModernLook
     {
         _lineRow.Children.Clear();
         while (_lineBody.Children.Count > 0) _lineBody.Children.RemoveAt(0);
-        _medal = null; _rareRing = null; _timerUp = false; _stripTimerW = -1;
+        _medal = null; _rareRing = null; _rareTileEl = null; _stripEl = null; _rareRow = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _lineBody.Opacity = _dim ? .62 : 1;
@@ -138,7 +138,15 @@ sealed partial class HudFinals : ModernLook
         {
             if (!mark) { var g = new TacSketch((dc, _) => Medal(dc, 0, false, 0, -1, empty: true), 46, 46) { Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }; _lineRow.Children.Add(g); }
             var w = T(Waiting(f.Abyss), 14, Soft, FontWeights.SemiBold); w.Margin = new Thickness(0, 0, 4, 2);
-            _lineRow.Children.Add(w);
+            // in the Abyss before the first points: what has happened so far under it ("2 kills · Kinah"), never an empty line
+            var so = f.Abyss ? Sub(f, false) : null;
+            if (so != null && so.Inlines.Count > 0)
+            {
+                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                w.Margin = new Thickness(0, 0, 4, 1); col.Children.Add(w); col.Children.Add(so);
+                _lineRow.Children.Add(col);
+            }
+            else _lineRow.Children.Add(w);
         }
         else
         {
@@ -187,6 +195,7 @@ sealed partial class HudFinals : ModernLook
             if (under != null) words.Children.Add(under);
             _lineRow.Children.Add(words);
             if (strip != null) _lineRow.Children.Add(strip);
+            _stripEl = strip ?? under;
         }
         _lineRow.Children.Add(_timersInLine);
         _lineBody.Children.Add(_lineRow);
@@ -240,6 +249,7 @@ sealed partial class HudFinals : ModernLook
         tile.Children.Add(_rareRing);
         var t = Tile(r, 26); t.HorizontalAlignment = HorizontalAlignment.Center; t.VerticalAlignment = VerticalAlignment.Top; t.Margin = new Thickness(0, 5, 0, 0);
         tile.Children.Add(t);
+        _rareTileEl = t;
         rr.Children.Add(tile);
         var w = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0) };
         w.Children.Add(Label(L.T("RARE DROP"), 10, AuSoft));
@@ -248,6 +258,7 @@ sealed partial class HudFinals : ModernLook
         w.Children.Add(nm);
         rr.Children.Add(w);
         _lineBody.Children.Add(rr);
+        _rareRow = rr;
     }
 
     /// <summary>The notice under the Buddy: its words in their tone on a small black plate, the warning sign before a pause.</summary>
@@ -288,7 +299,7 @@ sealed partial class HudFinals : ModernLook
     protected override void DrawTimers(IReadOnlyList<TimerBoard.Item> due, DateTime now)
     {
         _timers.Children.Clear();
-        _firstChip = null;
+        _firstChip = null; _firstSpark = null;
         foreach (var i in due.Take(2))
         {
             var (text, tone) = TimerWords(i, now);
@@ -308,8 +319,19 @@ sealed partial class HudFinals : ModernLook
                 BorderBrush = on ? Mod.Br(MintC, .7) : tone == TimerBadge.Tone.Soon ? (Brush)GoldMetal : Mod.Br(AuC, .42),
                 Margin = new Thickness(first ? 0 : 5, 0, 0, 0), Tag = first ? "timer-chip" : null,
             };
-            if (first) _firstChip = chip;
-            _timers.Children.Add(chip);
+            if (first)
+            {
+                // the first chip with its spark (a four-point glint at its corner, hidden at rest; the entry's moment flares it)
+                _firstChip = chip;
+                var host = new Grid { VerticalAlignment = VerticalAlignment.Center };
+                host.Children.Add(chip);
+                _firstSpark = new System.Windows.Shapes.Path { Data = SparkGeo, Fill = Frozen(Color.FromRgb(0xFF, 0xF4, 0xD6)), Width = 14, Height = 14, Stretch = Stretch.Fill,
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -6, -5, 0), Opacity = 0, IsHitTestVisible = false,
+                    RenderTransformOrigin = new Point(.5, .5) };
+                host.Children.Add(_firstSpark);
+                _timers.Children.Add(host);
+            }
+            else _timers.Children.Add(chip);
         }
         // the line's pickup strip was fitted beside the timer chips: chips that come, go or change their width fit it again
         if (_stripTimerW >= 0 && Figs is { } f && Math.Abs(LineTimerW() - _stripTimerW) > .5) DrawLine(f);
@@ -490,60 +512,145 @@ sealed partial class HudFinals : ModernLook
 
     // ================================================================ the moments
 
-    /// <summary>A pickup: a band of gold light sweeps the Buddy's plate.</summary>
+    /// <summary>The four-point glint (a trophy's shine), drawn once, scaled and turned by the moments.</summary>
+    static readonly Geometry SparkGeo = Geometry.Parse("M 7,0 C 7.6,5 9,6.4 14,7 C 9,7.6 7.6,9 7,14 C 6.4,9 5,7.6 0,7 C 5,6.4 6.4,5 7,0 Z");
+    System.Windows.Shapes.Path? _firstSpark;
+    FrameworkElement? _rareTileEl, _stripEl, _rareRow;
+
+    /// <summary>
+    /// A pickup: a band of gold light sweeps the Buddy's plate and the worth comes in on a small black-and-gold ticket at the
+    /// plate's right end, over the strip (never over the hour), held a beat and gone.
+    /// </summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         _lineGlint.Tint(AuPaleC, .32);
         Motion.Play(_lineGlint, 1100, t => _lineGlint.At(t), () => _lineGlint.At(-1));
+        var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
+        // one line on a ticket hung on the plate's top rim at its right end, over the lamps: the strip under it stays in view
+        var line = T(worth, 13.5, p.Worth.Length > 0 ? GoldInk : White, FontWeights.SemiBold, cond: true);
+        line.Inlines.Add(new System.Windows.Documents.Run("  " + (p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name)) { FontSize = 10.5, Foreground = Soft });
+        line.TextTrimming = TextTrimming.CharacterEllipsis;
+        var ticket = new Border
+        {
+            Child = line, Background = Mod.Br(Black0, .96), BorderBrush = GoldMetal, BorderThickness = new Thickness(1.2), CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(7, 0, 8, 1), MaxWidth = 150, IsHitTestVisible = false,
+        };
+        var anchor = new Canvas { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
+        ticket.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(ticket, -ticket.DesiredSize.Width - 14); Canvas.SetTop(ticket, -5);
+        var sh = new TranslateTransform();
+        var sc = new ScaleTransform(1, 1);
+        ticket.RenderTransformOrigin = new Point(1, 0);
+        ticket.RenderTransform = new TransformGroup { Children = { sc, sh } };
+        anchor.Children.Add(ticket);
+        _line.Children.Add(anchor);
+        Motion.Play(ticket, 1800, t =>
+        {
+            // slid out from the plate's right end, a touch big and settling, held, then tucked back in
+            double k = Seg(t, .1, .28), o = Seg(t, .82, 1);
+            sh.X = 16 * (1 - Out(k)) + 16 * o * o;
+            sc.ScaleX = sc.ScaleY = EsportsFx.Punch(k, .75, 2.4);
+            ticket.Opacity = t < .82 ? Out(k) : 1 - o;
+        }, () => _line.Children.Remove(anchor));
     }
 
-    /// <summary>A rare drop: a ring of its grade's colour spreads out from its tile, and a light of that colour crosses the plate.</summary>
+    /// <summary>
+    /// A rare drop, the big one: the tile slams in from large, a burst of sparks in the grade's colour flies off it, a ring of
+    /// that colour spreads from it and a light of that colour crosses the plate.
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareRing is not { } ring || ring.RenderTransform is not ScaleTransform sc) return;
-        _lineGlint.Tint(Mod.Mix(ColorOf(p.Color, p.Grade), Colors.White, .35), .3);
-        Motion.Play(ring, 1400, t =>
+        var c = ColorOf(p.Color, p.Grade);
+        _lineGlint.Tint(Mod.Mix(c, Colors.White, .35), .3);
+        var tile = _rareTileEl;
+        var tsc = new ScaleTransform(1, 1);
+        if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = tsc; }
+        var row = _rareRow;
+        var rise = new TranslateTransform();
+        if (row != null) row.RenderTransform = rise;
+        if (ring.Parent is Grid host)
+            EsportsFx.Spray(host, new Point(host.Width / 2, 18), 10, 30, -200, 20, new[] { Mod.Mix(c, Colors.White, .25), Colors.White, c }, 1100, fall: 10, delay: .12, sparks: true);
+        Motion.Play(ring, 1500, t =>
         {
-            double k = Seg(t, 0, .75);
-            sc.ScaleX = 1 + .32 * Out(k); sc.ScaleY = 1 + .2 * Out(k);
+            double k = Seg(t, .1, .75);
+            sc.ScaleX = 1 + .38 * Out(k); sc.ScaleY = 1 + .26 * Out(k);
             ring.Opacity = k is > 0 and < 1 ? 1 - k : 0;
+            tsc.ScaleX = tsc.ScaleY = t < .02 ? 1.8 : EsportsFx.Punch(Seg(t, .02, .3), 1.8, 2.6);
+            if (tile != null) tile.Opacity = Math.Min(1, Seg(t, .04, .1) * 1.6);
+            // the whole line rises into place first (no empty slot showing before it lands)
+            if (row != null) { row.Opacity = Seg(t, 0, .06); rise.Y = 6 * (1 - Out(Seg(t, 0, .16))); }
             _lineGlint.At(Seg(t, .1, .9));
-        }, () => { ring.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; _lineGlint.At(-1); });
+        }, () => { ring.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; tsc.ScaleX = tsc.ScaleY = 1; if (tile != null) tile.Opacity = 1; if (row != null) { row.Opacity = 1; rise.Y = 0; } _lineGlint.At(-1); });
     }
 
-    /// <summary>Your best passed: the medal's gold arc runs on round to full, a point of light at its head, and a light crosses the plate.</summary>
+    /// <summary>
+    /// Your best passed, the trophy shine: the medal's gold arc runs on round to full with a point of light at its head, then
+    /// the medal punches out, a burst of gold sparks flies off it, a four-point glint flares on its rim and a light crosses
+    /// the plate.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_medal is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .82;
         bool beat = _beat;
         _lineGlint.Tint(AuPaleC, .32);
-        Motion.Play(art, 1700, t =>
+        var medal = art.Parent as Grid;
+        var msc = new ScaleTransform(1, 1);
+        System.Windows.Shapes.Path? glint = null;
+        var gsc = new ScaleTransform(0, 0);
+        var gturn = new RotateTransform(0);
+        if (medal != null)
+        {
+            medal.RenderTransformOrigin = new Point(.5, .46);
+            medal.RenderTransform = msc;
+            glint = new System.Windows.Shapes.Path { Data = SparkGeo, Fill = Frozen(Color.FromRgb(0xFF, 0xF8, 0xE4)), Width = 18, Height = 18, Stretch = Stretch.Fill, IsHitTestVisible = false,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -3, 0), RenderTransformOrigin = new Point(.5, .5) };
+            glint.RenderTransform = new TransformGroup { Children = { gsc, gturn } };
+            medal.Children.Add(glint);
+            // gold flecks falling from the plate's lamps over the medal and the hour
+            EsportsFx.Spray(_line, new Point(40, 2), 5, 14, 70, 110, new[] { AuLightC, Colors.White, AuC }, 1500, fall: 46, delay: .24);
+            EsportsFx.Spray(_line, new Point(_line.ActualWidth > 0 ? _line.ActualWidth * .42 : 130, 2), 5, 14, 70, 110, new[] { AuPaleC, AuLightC, Colors.White }, 1500, fall: 46, delay: .28);
+        }
+        Motion.Play(art, 1900, t =>
         {
             // the arc's one small drawing (46 px) is drawn again while it runs round; the light is a band on its transform
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .55));
-            _medalGlint = t < .6 ? Seg(t, 0, .6) : -1;
-            if (t >= .6) { _beat = beat; _complete = 1; }
-            if (t <= .62) art.InvalidateVisual();
-            _lineGlint.At(Seg(t, .45, 1));
-        }, () => { _complete = 0; _medalGlint = -1; _beat = beat; art.InvalidateVisual(); _lineGlint.At(-1); });
+            _complete = Out(Seg(t, 0, .22));
+            _medalGlint = t < .26 ? Seg(t, 0, .26) : -1;
+            if (t >= .26) { _beat = beat; _complete = 1; }
+            if (t <= .28) art.InvalidateVisual();
+            msc.ScaleX = msc.ScaleY = t < .22 ? 1 - .05 * Seg(t, .1, .22) : EsportsFx.Punch(Seg(t, .22, .42), 1.3, 2.4);
+            double g = Seg(t, .24, .6);
+            gsc.ScaleX = gsc.ScaleY = g is > 0 and < 1 ? Math.Sin(Math.PI * g) * 1.1 : 0;
+            gturn.Angle = 90 * g;
+            _lineGlint.At(Seg(t, .3, .85));
+        }, () => { _complete = 0; _medalGlint = -1; _beat = beat; art.InvalidateVisual(); _lineGlint.At(-1); msc.ScaleX = msc.ScaleY = 1; if (glint != null) medal?.Children.Remove(glint); });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights mint round its edge, glows and settles.</summary>
+    /// <summary>An entry opened: the first timer's chip ducks, pops up a touch big as its edge lights mint, a gold glint flares at its corner, and it settles.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC, ShadowDepth = 0, BlurRadius = 9, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush;
+        var sc = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(0, .5);
+        chip.RenderTransform = sc;
+        var spark = _firstSpark;
+        var ssc = new ScaleTransform(0, 0);
+        var sturn = new RotateTransform(0);
+        if (spark != null) spark.RenderTransform = new TransformGroup { Children = { ssc, sturn } };
+        var lit = Mod.Br(MintC, 1);
         Motion.Play(chip, 1200, t =>
         {
-            double k = t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1);
-            glow.Opacity = .85 * k;
-            chip.BorderBrush = Mod.Br(MintC, .55 + .45 * k);
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; });
+            sc.ScaleX = sc.ScaleY = t < .1 ? 1 - .06 * Out(Seg(t, 0, .1)) : t < .24 ? .94 + .14 * Out(Seg(t, .1, .24)) : EsportsFx.Punch(Seg(t, .24, .55), 1.08, 2.2);
+            chip.BorderBrush = t is > .12 and < .8 ? lit : edge;
+            double g = Seg(t, .2, .62);
+            ssc.ScaleX = ssc.ScaleY = g is > 0 and < 1 ? Math.Sin(Math.PI * g) * 1.15 : 0;
+            sturn.Angle = 120 * g;
+            if (spark != null) spark.Opacity = g is > 0 and < 1 ? 1 : 0;
+        }, () => { chip.BorderBrush = edge; sc.ScaleX = sc.ScaleY = 1; if (spark != null) spark.Opacity = 0; });
     }
 
     /// <summary>A fight started: its plate rises in, the stage lights swing on, a band of gold sweeps the bars, the trophy lands on the leader.</summary>
@@ -639,18 +746,43 @@ sealed partial class HudFinals : ModernLook
         // never over the leader's trophy: the plate ends just over it
         if (champ != null) plate.Height = Math.Clamp(rowsTop + FinalsRow.CupTop - 3 - plate.Margin.Top, 42, 60);
         double plateFoot = plate.Margin.Top + plate.Height;
+        // a wipe: the house lights go down. The stage dims under a dark wash, the lights sag, and the plate falls in heavy and
+        // bounces once on the head; no gold, no flash, no confetti (the champion's moment is the opposite)
+        Border? dark = null;
+        var wrows = wipe ? ShownRows().ToList() : new List<FinalsRow>();
+        if (wipe)
+        {
+            dark = new Border { Background = Mod.Br(Black0, .22), BorderBrush = Mod.Br(CoralC, .8), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(Radius), IsHitTestVisible = false, Opacity = 0 };
+            _fight.Children.Insert(_fight.Children.IndexOf(_fightFx), dark);
+            _lineGlint.Tint(CoralC, .22);
+        }
         Motion.Play(_fightFx, wipe ? 2400 : 3400, t =>
         {
             double i = Seg(t, 0, wipe ? .14 : .1), o = Seg(t, wipe ? .82 : .86, 1);
             plate.Opacity = Out(i) * (1 - o);
-            if (wipe) { sc.ScaleX = sc.ScaleY = 1.06 - .06 * Out(i); return; }
+            if (wipe)
+            {
+                double fl = Seg(t, 0, .13);
+                drop.Y = t < .13 ? -12 * (1 - fl * fl) : -5 * Math.Abs(Math.Sin(Math.PI * Seg(t, .13, .25))) * (1 - Seg(t, .13, .25));
+                sc.ScaleX = 1 + (t is > .12 and < .17 ? .04 : 0); sc.ScaleY = 1 - (t is > .12 and < .17 ? .08 : 0);
+                if (dark != null) dark.Opacity = t < .1 ? Seg(t, 0, .1) : t < .2 ? 1 : t < .26 ? 1 - .5 * Seg(t, .2, .23) + .5 * Seg(t, .23, .26) : 1 - Out(Seg(t, .3, .45));
+                // the lights flicker off (on, half, gone) and come back slowly once the plate has landed
+                _beams.Opacity = t < .03 ? 1 : t < .06 ? .3 : t < .09 ? .85 : t < .12 ? .25 : t < .5 ? .08 : .08 + .92 * Out(Seg(t, .5, .85));
+                for (int r = 0; r < wrows.Count; r++) wrows[r].Root.Opacity = t < .14 ? 1 - .3 * Seg(t, .06, .14) : .7 + .3 * Out(Seg(t, .18 + (wrows.Count - 1 - r) * .03, .32 + (wrows.Count - 1 - r) * .03));
+                _settle.Y = EsportsFx.Shake(t, .13, .3, 2.5, 2);
+                return;
+            }
             // the plate slams down from above, overshooting, a white-gold flash on impact, then a light runs across it
-            drop.Y = -16 * (1 - Math.Min(1.06, Back(i, 2.4)));
+            drop.Y = -16 * (1 - Math.Min(1.06, Back(i, 2.4))) - 6 * o;
             sc.ScaleX = sc.ScaleY = 1.14 - .14 * Out(i);
             double f = Seg(t, .07, .2);
             flash.Opacity = f is > 0 and < 1 ? .85 * (1 - f) : 0;
             light?.At(Seg(t, .14, .42));
-        }, () => { _fightFx.Children.Clear(); _plateUp = false; if (_head != null) _head.Visibility = Visibility.Visible; });
+        }, () =>
+        {
+            _fightFx.Children.Clear(); _plateUp = false; if (_head != null) _head.Visibility = Visibility.Visible;
+            if (dark != null) { _fight.Children.Remove(dark); _beams.Opacity = 1; _settle.Y = 0; foreach (var r in wrows) r.Root.Opacity = 1; }
+        });
         if (wipe) return;
         // the panel's size as laid out (or, not laid out yet in a render's held frame, as it measures)
         double fw = _fight.ActualWidth > 0 ? _fight.ActualWidth : _fight.Width, fh = _fight.ActualHeight;

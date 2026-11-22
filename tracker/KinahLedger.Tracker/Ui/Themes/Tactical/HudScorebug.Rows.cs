@@ -130,6 +130,8 @@ sealed partial class HudScorebug
         public double Sweep = -1;
         /// <summary>The row's entrance, 0..1.</summary>
         public double Enter = 1;
+        /// <summary>The row's words once its entrance is in, 0..1 (they come on after the wipe, never cut by it).</summary>
+        public double WordsIn = 1;
 
         public FrameworkElement Root => RootG;
 
@@ -165,7 +167,7 @@ sealed partial class HudScorebug
             else
             {
                 if (Enter >= 1) RootG.ClearValue(UIElement.ClipProperty); else RootG.Clip = Wipe(-10, (Math.Max(RootG.ActualWidth, 300) + 20) * Enter, RootG.Height);
-                Words.Opacity = Enter >= 1 ? 1 : Enter > .85 ? (Enter - .85) / .15 : 0;
+                Words.Opacity = Enter >= 1 ? WordsIn : 0;
             }
             _fx.InvalidateVisual();
         }
@@ -178,7 +180,10 @@ sealed partial class HudScorebug
         {
             if (Sweep is not (> 0 and < 1)) return;
             double x = -60 + (s.Width + 120) * Sweep;
+            // inside the row (it ran past the window's edges as it came on and went off)
+            dc.PushClip(new RectangleGeometry(new Rect(s)));
             dc.DrawGeometry(Tac.Grad(false, (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x9A, 0xFF, 0xF4, 0xC8), .5), (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 1)), null, Tac.Lean(new Rect(x - 30, 0, 60, s.Height), 10));
+            dc.Pop();
         }
     }
 
@@ -238,13 +243,19 @@ sealed partial class HudScorebug
             stack.Children.Add(_subHost);
             nameCol.Children.Add(stack);
             Grid.SetColumn(nameCol, 1); Words.Children.Add(nameCol);
-            // the LED bar (a healer's line under it) and the heal figure at its end
+            // the LED bar (a healer's line under it) runs on under the figures to the row's end (2026-11-21: with the meter
+            // expanded the leader's bar stopped at about half the row), a shade under the figures so every digit reads; the heal
+            // figure at the end of the bar's own column
             _leds = new TacSketch(DrawLeds);
             _barCol.Children.Add(_leds);
+            _barCol.Margin = new Thickness(0, 0, 3, 0);
+            Grid.SetColumn(_barCol, 2); Grid.SetColumnSpan(_barCol, 3); Words.Children.Add(_barCol);
+            var shade = new Border { IsHitTestVisible = false, Margin = new Thickness(-14, 2, 0, 2),
+                Background = Tac.Grad(false, (Tac.A(InkC0, 0), 0), (Tac.A(InkC0, .4), .25), (Tac.A(InkC0, .48), 1)) };
+            Grid.SetColumn(shade, 3); Grid.SetColumnSpan(shade, 2); Words.Children.Add(shade);
             _heal.Effect = Glow(4, 0, 1); _heal.Tag = "heal-figures";
-            _healBox.Child = _heal;
-            _barCol.Children.Add(_healBox);
-            Grid.SetColumn(_barCol, 2); Words.Children.Add(_barCol);
+            _healBox.Child = _heal; _healBox.Margin = new Thickness(0, 0, 8, 0);
+            Grid.SetColumn(_healBox, 2); Words.Children.Add(_healBox);
             // the DPS over the share
             _dps.Tag = "row-dps"; _dps.HorizontalAlignment = HorizontalAlignment.Right;
             _dps.LineHeight = 20; _dps.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;

@@ -183,7 +183,15 @@ sealed partial class HudTelestrator : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 5, 6, 0, 6);
-            _lineBody.Children.Add(w);
+            // in the Abyss before the first points: what has happened so far under it ("2 kills · Kinah"), never an empty line
+            var so = f.Abyss ? Sub(f, false) : null;
+            if (so != null && so.Inlines.Count > 0)
+            {
+                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mark ? 0 : 5, 2, 0, 2) };
+                w.Margin = new Thickness(0); col.Children.Add(w); col.Children.Add(so);
+                _lineBody.Children.Add(col);
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -439,7 +447,8 @@ sealed partial class HudTelestrator : ModernLook
                 var ink = new TacSketch((dc, s) =>
                 {
                     if (_chipLoop is <= 0 or >= 1) return;
-                    Ink(dc, Poly(LoopPts(new Rect(-4, -4, s.Width + 8, s.Height + 8), 53), Out(Seg(_chipLoop, 0, .4))), PenMintC, 1.8);
+                    Ink(dc, Poly(LoopPts(new Rect(-4, -4, s.Width + 8, s.Height + 8), 53), Out(Seg(_chipLoop, 0, .34))), PenMintC, 1.8);
+                    if (_chipLoop > .32) Emphasis(dc, new Point(s.Width - 2, 0), 6, 57, PenMintC, Out(Seg(_chipLoop, .32, .56)));
                 });
                 host.Children.Add(ink);
                 _firstChip = host; _firstChipInk = ink;
@@ -617,16 +626,45 @@ sealed partial class HudTelestrator : ModernLook
         var tile = _rareTile;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        Motion.Play(ink, 1300, t =>
+        // the big one: the board slaps down from the left, a highlighter in the grade's colour runs the whole board, the tile
+        // pops, the pen circles it and flicks emphasis off it (a pickup is a yellow swipe and a note: this is the grade's colour)
+        var c = _rareC;
+        var hl = new Border
+        {
+            Background = Mod.Grad(false, (Mod.A(c, .1), 0), (Mod.A(c, .42), .85), (Mod.A(Mod.Mix(c, Colors.White, .5), .6), 1)),
+            Margin = new Thickness(4, 6, 4, 6), CornerRadius = new CornerRadius(2), IsHitTestVisible = false, Opacity = 0,
+        };
+        var hlSc = new ScaleTransform(0, 1);
+        hl.RenderTransform = hlSc;
+        _rare.Children.Insert(Math.Min(1, _rare.Children.Count), hl);
+        var slap = new TranslateTransform();
+        var tilt = new RotateTransform(0);
+        var pop = new ScaleTransform(1, 1);
+        _rare.RenderTransformOrigin = new Point(0, .5);
+        _rare.RenderTransform = new TransformGroup { Children = { pop, tilt, slap } };
+        // ink flicked off the tile in the grade's colour as the pen lands on it
+        EsportsFx.Spray(_rare, new Point(24, 21), 7, 26, -170, 10, new[] { c, Mod.Mix(c, Colors.White, .45), PenC }, 1100, fall: 12, delay: .2);
+        Motion.Play(ink, 1500, t =>
         {
             if (t <= .72 || _rareLoop < 1)
             {
-                _rareLoop = Out(Seg(t, .15, .55));
-                _rareTicks = Out(Seg(t, .45, .7));
+                _rareLoop = Out(Seg(t, .2, .55));
+                _rareTicks = Out(Seg(t, .48, .7));
                 ink.InvalidateVisual();
             }
-            sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, 0, .35), 2.2);
-        }, () => { _rareLoop = 1; _rareTicks = 0; ink.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+            double k = Seg(t, 0, .16);
+            pop.ScaleX = pop.ScaleY = EsportsFx.Punch(Seg(t, 0, .34), .85, 2.8);
+            slap.X = -14 * (1 - Out(k));
+            tilt.Angle = -2.5 * (1 - EsportsFx.Punch(k, 0, 2.6));
+            _rare.Opacity = Math.Min(1, k * 3);
+            sc.ScaleX = sc.ScaleY = t < .1 ? .4 : EsportsFx.Punch(Seg(t, .1, .38), 1.55, 2.6);
+            hlSc.ScaleX = Out(Seg(t, .12, .42));
+            hl.Opacity = t < .12 ? 0 : 1 - Seg(t, .55, .95);
+        }, () =>
+        {
+            _rareLoop = 1; _rareTicks = 0; ink.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1;
+            _rare.Children.Remove(hl); slap.X = 0; tilt.Angle = 0; _rare.Opacity = 1;
+        });
     }
 
     /// <summary>
@@ -646,6 +684,29 @@ sealed partial class HudTelestrator : ModernLook
         note.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(note, 0); Canvas.SetTop(note, -note.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(note);
+        // the celebration on the ring: it punches as the loop closes, the pen flicks a starburst of strokes round it in mint
+        var ring = art.Parent as Grid;
+        var ringSc = new ScaleTransform(1, 1);
+        double rays = 0;
+        TacSketch? burst = null;
+        if (ring != null)
+        {
+            ring.RenderTransformOrigin = new Point(.5, .5);
+            ring.RenderTransform = ringSc;
+            burst = new TacSketch((dc, s) =>
+            {
+                if (rays <= 0) return;
+                var c = new Point(s.Width / 2, s.Height / 2);
+                for (int k = 0; k < 8; k++)
+                {
+                    double ang = (k * 45 + 22) * Math.PI / 180, r0 = s.Width / 2 + 2, len = k % 2 == 0 ? 7 : 4.5;
+                    var d = new Vector(Math.Cos(ang), Math.Sin(ang));
+                    double part = Math.Clamp(rays * 1.6 - (k % 4) * .15, 0, 1);
+                    if (part > 0) Ink(dc, Poly(LinePts(c + d * r0, c + d * (r0 + len), .3, 101 + k, .15), part), k % 2 == 0 ? PenMintC : PenC, 1.9);
+                }
+            }) { IsHitTestVisible = false };
+            ring.Children.Add(burst);
+        }
         Motion.Play(art, 1800, t =>
         {
             if (t < .5 || !closed)
@@ -655,13 +716,28 @@ sealed partial class HudTelestrator : ModernLook
                 if (t >= .5) { _beat = beat; _complete = 1; closed = true; }
                 art.InvalidateVisual();
             }
+            // the ring winds up a touch while the loop runs round, then punches out as it closes
+            ringSc.ScaleX = ringSc.ScaleY = t < .44 ? 1 - .06 * Seg(t, .2, .44) : EsportsFx.Punch(Seg(t, .44, .72), 1.24, 2.4);
+            if (burst != null)
+            {
+                double r = Seg(t, .46, .66);
+                if (r is > 0 and < 1 || (r >= 1 && rays < 1)) { rays = Out(r); burst.InvalidateVisual(); }
+                burst.Opacity = 1 - Seg(t, .7, .9);
+            }
+            LineSwipe(t is > .44 and < .95 ? Seg(t, .44, .95) : -1, PenMintC);
             // the note: slapped on as the loop closes (a pop from larger), its emphasis flicked off, gone at the end
-            double k = Seg(t, .18, .32);
-            sc.ScaleX = sc.ScaleY = t < .18 ? 1.4 : 1.4 - .4 * Back(k, 2);
-            note.Opacity = t < .18 ? 0 : t < .86 ? Out(k * 2) : 1 - Seg(t, .86, 1);
-            setInk(Out(Seg(t, .28, .42)));
-            if (t is >= .26 and <= .44) noteInk.InvalidateVisual();
-        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineAnchor.Children.Remove(note); });
+            // the note slapped on as the loop closes (the beat after the ring's punch)
+            double k = Seg(t, .48, .6);
+            sc.ScaleX = sc.ScaleY = t < .48 ? 1.4 : 1.4 - .4 * Back(k, 2);
+            note.Opacity = t < .48 ? 0 : t < .88 ? Out(k * 2) : 1 - Seg(t, .88, 1);
+            setInk(Out(Seg(t, .56, .7)));
+            if (t is >= .54 and <= .72) noteInk.InvalidateVisual();
+        }, () =>
+        {
+            _complete = 0; _beat = beat; art.InvalidateVisual(); _lineAnchor.Children.Remove(note);
+            ringSc.ScaleX = ringSc.ScaleY = 1; LineSwipe(-1, PenMintC);
+            if (burst != null) ring?.Children.Remove(burst);
+        });
     }
 
     /// <summary>A note written by hand: the word in Ink Free, three short strokes of emphasis at its upper right (drawn on to the fraction set).</summary>
@@ -691,15 +767,23 @@ sealed partial class HudTelestrator : ModernLook
         return g;
     }
 
-    /// <summary>An entry opened: the pen circles the first timer's tag in mint, and the circle fades.</summary>
+    /// <summary>
+    /// An entry opened: the tag ducks a touch (the pen lands), then pops as the pen circles it in mint and flicks three marks
+    /// of emphasis off its corner; it settles, and the circle fades.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        if (_firstChipInk is not { } ink) return;
+        if (_firstChipInk is not { } ink || _firstChip is not { } host) return;
+        var sc = new ScaleTransform(1, 1);
+        host.RenderTransformOrigin = new Point(.5, .5);
+        host.RenderTransform = sc;
         Motion.Play(ink, 1400, t =>
         {
-            if (t <= .42 || _chipLoop < .4) { _chipLoop = Math.Clamp(t, .001, .999); ink.InvalidateVisual(); }
+            if (t <= .6 || _chipLoop < .58) { _chipLoop = Math.Clamp(t, .001, .999); ink.InvalidateVisual(); }
             ink.Opacity = 1 - Seg(t, .8, 1);
-        }, () => { _chipLoop = -1; ink.Opacity = 1; ink.InvalidateVisual(); });
+            // anticipation (a dip under the pen), the pop as the loop closes, a clean settle
+            sc.ScaleX = sc.ScaleY = t < .1 ? 1 - .07 * Out(Seg(t, 0, .1)) : t < .3 ? .93 + .25 * Out(Seg(t, .1, .3)) : EsportsFx.Punch(Seg(t, .3, .62), 1.18, 2.2);
+        }, () => { _chipLoop = -1; ink.Opacity = 1; ink.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
     }
 
     /// <summary>
@@ -713,10 +797,10 @@ sealed partial class HudTelestrator : ModernLook
         Motion.Play(_fight, 820, t =>
         {
             double k = Out(Seg(t, 0, .56));
-            _fightShift.Y = 8 * (1 - k);
-            _fightBody.Opacity = .25 + .75 * k;
+            _fightShift.Y = 5 * (1 - k);
+            _fightBody.Opacity = .55 + .45 * k;
             _flash.Opacity = 1 - Out(Seg(t, 0, .3));
-            _snapScale.ScaleX = _snapScale.ScaleY = 1.045 - .045 * Out(Seg(t, 0, .4));
+            _snapScale.ScaleX = _snapScale.ScaleY = 1.035 - .035 * Out(Seg(t, 0, .4));
             _snap.Opacity = 1 - Seg(t, .55, 1);
         }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; _snap.Visibility = Visibility.Collapsed; _flash.Visibility = Visibility.Collapsed; });
         LeaderRow()?.Crown();
@@ -735,8 +819,41 @@ sealed partial class HudTelestrator : ModernLook
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
-        HeadPlate(OutcomeText(e), wipe ? CoralC : PenMintC, Clock(e.Duration(e.End ?? DateTime.UtcNow)), 2400, ticks: !wipe, small: e.Title);
-        if (!wipe) Swipe();
+        HeadPlate(OutcomeText(e), wipe ? CoralC : PenMintC, Clock(e.Duration(e.End ?? DateTime.UtcNow)), 2400, ticks: !wipe, small: e.Title, cross: wipe);
+        if (wipe) Rewind();
+        else { FreezeFrame(); LeaderRow()?.Crown(); }
+    }
+
+    /// <summary>
+    /// A kill's replay freeze: one white frame on the board, the replay brackets slamming onto its corners from larger and the
+    /// board thumping down a few px, the brackets held while the pen writes, then lifted.
+    /// </summary>
+    void FreezeFrame()
+    {
+        _snap.Visibility = Visibility.Visible; _flash.Visibility = Visibility.Visible;
+        _snap.InvalidateVisual(); _flash.InvalidateVisual();
+        Motion.Play(_snap, 1300, t =>
+        {
+            _flash.Opacity = t < .03 ? Seg(t, 0, .03) : 1 - Out(Seg(t, .03, .24));
+            _snapScale.ScaleX = _snapScale.ScaleY = EsportsFx.Punch(Seg(t, 0, .2), 1.07, 2.8);
+            _snap.Opacity = t < .72 ? Math.Min(1, t * 20) : 1 - Seg(t, .72, 1);
+            _fightShift.Y = 3.5 * Math.Sin(Math.PI * Seg(t, .02, .16)) - EsportsFx.Shake(t, .16, .3, 1.2, 1.5);
+        }, () => { _fightShift.Y = 0; _snap.Visibility = Visibility.Collapsed; _flash.Visibility = Visibility.Collapsed; _snapScale.ScaleX = _snapScale.ScaleY = 1; });
+    }
+
+    /// <summary>
+    /// A wipe's rewind: the board scrubs back and forth under a coral wash (the replay rewinding over the pull), the wash
+    /// draining away as the pen strikes the word out. No flash, no swipe: the opposite of a kill's beat.
+    /// </summary>
+    void Rewind()
+    {
+        var wash = new Border { CornerRadius = new CornerRadius(Radius), Background = Frozen(Mod.A(CoralC, .2)), BorderBrush = Frozen(Mod.A(CoralC, .7)), BorderThickness = new Thickness(1.5), IsHitTestVisible = false, Opacity = 0 };
+        _fight.Children.Add(wash);
+        Motion.Play(wash, 1200, t =>
+        {
+            wash.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Out(Seg(t, .14, .42));
+            _fightShift.X = EsportsFx.Shake(t, 0, .34, 6, 3.5);
+        }, () => { _fightShift.X = 0; _fight.Children.Remove(wash); });
     }
 
     /// <summary>
@@ -744,7 +861,7 @@ sealed partial class HudTelestrator : ModernLook
     /// hand big in <paramref name="c"/>, underlined by the pen (and flicked with emphasis), <paramref name="crisp"/> beside it
     /// in white. In, written, held, lifted; transforms and opacity only, the pen redrawn only while it writes.
     /// </summary>
-    void HeadPlate(string hand, Color c, string crisp, double ms, bool ticks, string small = "")
+    void HeadPlate(string hand, Color c, string crisp, double ms, bool ticks, string small = "", bool cross = false)
     {
         double under = 0;
         var plate = new Grid { VerticalAlignment = VerticalAlignment.Top };
@@ -763,8 +880,14 @@ sealed partial class HudTelestrator : ModernLook
             if (under <= 0 || word.ActualWidth <= 0) return;
             var p = word.TranslatePoint(new Point(0, 0), plate);
             double y = Math.Min(s.Height - 3, p.Y + word.ActualHeight - 3);
-            Ink(dc, Poly(LinePts(new Point(p.X - 1, y + .5), new Point(p.X + word.ActualWidth + 4, y - 1.4), -1, 83, .35), under), c, 2.4);
-            if (under > .55) Ink(dc, Poly(LinePts(new Point(p.X + 4, y + 4), new Point(p.X + word.ActualWidth - 2, y + 2.6), -.8, 89, .3), Seg(under, .55, 1)), c, 1.9);
+            Ink(dc, Poly(LinePts(new Point(p.X - 1, y + .5), new Point(p.X + word.ActualWidth + 4, y - 1.4), -1, 83, .35), cross ? Math.Min(1, under * 1.6) : under), c, 2.4);
+            if (under > .55 && !cross) Ink(dc, Poly(LinePts(new Point(p.X + 4, y + 4), new Point(p.X + word.ActualWidth - 2, y + 2.6), -.8, 89, .3), Seg(under, .55, 1)), c, 1.9);
+            // a wipe: the word struck out by the pen, a hard stroke through its middle, falling to the right
+            if (cross && under > .5)
+            {
+                double my = p.Y + word.ActualHeight * .52;
+                Ink(dc, Poly(LinePts(new Point(p.X - 3, my - 5), new Point(p.X + word.ActualWidth + 5, my + 3), 1.2, 97, .5), Seg(under, .5, 1)), Mod.Mix(c, Colors.White, .15), 2.8);
+            }
             if (ticks) Emphasis(dc, new Point(p.X + word.ActualWidth + 6, p.Y + 7), 8, 31, c, Seg(under, .4, 1));
         });
         plate.Children.Add(ink);
@@ -785,14 +908,33 @@ sealed partial class HudTelestrator : ModernLook
         plate.Loaded += (_, _) => Seat();
         var head = _head;
         double inT = 140 / ms, outT = 1 - 380 / ms;
+        // a kill's word is slapped down by hand: from larger and tilted to its place, its shade put on once it has landed,
+        // and a few drops of ink fly off its first letter
+        ScaleTransform? wsc = null; RotateTransform? wrot = null;
+        if (ticks)
+        {
+            wsc = new ScaleTransform(1, 1); wrot = new RotateTransform(0);
+            word.RenderTransformOrigin = new Point(.2, .6);
+            word.RenderTransform = new TransformGroup { Children = { wsc, wrot } };
+            word.Effect = null;
+            EsportsFx.Spray(plate, new Point(16, 10), 6, 18, -150, -40, new[] { c, Mod.Mix(c, Colors.White, .4) }, ms * .5, fall: 10, delay: inT * 2.2);
+        }
         Motion.Play(_fightFx, ms, t =>
         {
-            double i = Out(Seg(t, 0, inT)), o = Seg(t, outT, 1);
+            if (wsc != null && wrot != null)
+            {
+                double k = Seg(t, 0, inT * 1.2);
+                wsc.ScaleX = wsc.ScaleY = EsportsFx.Punch(k, 1.35, 2.4);
+                wrot.Angle = -6 * (1 - Out(k));
+                if (k >= 1 && word.Effect == null) word.Effect = Shade();
+            }
+            // in with a drop and a small overshoot; out lifting away before the head's own words come back (never both at once)
+            double i = Out(Seg(t, 0, inT)), o = Seg(t, outT, outT + (1 - outT) * .55);
             plate.Opacity = i * (1 - o);
-            shift.Y = -4 * (1 - i);
+            shift.Y = -7 * (1 - EsportsFx.Punch(Seg(t, 0, inT * 1.6), 0, 2)) - 5 * o;
             double a = inT, b = inT + 420 / ms;
             under = Out(Seg(t, a, b)); if (t >= a - .01 && t <= b + .02) ink.InvalidateVisual();
-            if (head != null) head.Opacity = t < outT ? 1 - Seg(t, 0, inT * .7) : Seg(t, outT, 1);
+            if (head != null) head.Opacity = t < outT ? 1 - Seg(t, 0, inT * .7) : Seg(t, outT + (1 - outT) * .5, 1);
         }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
     }
 }

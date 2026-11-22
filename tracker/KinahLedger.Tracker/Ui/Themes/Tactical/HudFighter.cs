@@ -63,6 +63,8 @@ sealed partial class HudFighter : TacticalLook
     readonly Border _timersIn = new() { Margin = new Thickness(0, 0, 0, 7), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     double _fightSpread, _fightFlash;
+    /// <summary>The head's KILLED / WIPED tag and its T+ clock: a callout flies into one after its hit.</summary>
+    FrameworkElement? _outcomeEl, _clockEl;
     double _opacity = 0.9;
 
     public HudFighter() : base(bare: true, Face)
@@ -434,6 +436,7 @@ sealed partial class HudFighter : TacticalLook
     {
         StripFollowsFight(e);
         _fightBody.Children.Clear();
+        _outcomeEl = _clockEl = null;
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 20;
         _fight.Width = w;
@@ -451,8 +454,9 @@ sealed partial class HudFighter : TacticalLook
         else
         {
             var outcome = OutcomeText(e);
-            if (outcome.Length > 0) { var ot = Tag(outcome.ToUpperInvariant(), e.Outcome == "wipe" ? Red : Phos, Dark, 10.5); ot.Margin = new Thickness(0, 0, 8, 0); right.Children.Add(ot); }
-            right.Children.Add(Halo(Clock(e, now) is { Length: > 0 } tc ? "T+" + Pad(tc) : "", 15, e.Live ? Amber : Phos, FontWeights.Bold));
+            if (outcome.Length > 0) { var ot = Tag(outcome.ToUpperInvariant(), e.Outcome == "wipe" ? Red : Phos, Dark, 10.5); ot.Margin = new Thickness(0, 0, 8, 0); right.Children.Add(ot); _outcomeEl = ot; }
+            var clockFig = Halo(Clock(e, now) is { Length: > 0 } tc ? "T+" + Pad(tc) : "", 15, e.Live ? Amber : Phos, FontWeights.Bold);
+            right.Children.Add(clockFig); _clockEl = clockFig;
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         // a long title gives way to the outcome and the clock: cut with "…", its brackets kept round it (it ran under them)
@@ -573,16 +577,21 @@ sealed partial class HudFighter : TacticalLook
         if (_contactBox == null || _contact.Parent is not Panel) return;
         var host = (Grid)_contactBox.Parent;
         double ping = 0;
+        // the ping in the drop's grade (the big one: a pickup never pings)
+        var gc = ColorOf(p.Color, p.Grade);
         var ring = new TacSketch((dc, s) =>
         {
             if (ping <= 0 || ping >= 1) return;
             double grow = 10 * Out(ping);   // at its widest still inside the window's 14 px room (its outline and halo in)
             var r = new Rect(-grow, -grow, s.Width + 2 * grow, s.Height + 2 * grow);
             dc.DrawGeometry(null, HaloPen2, Tac.Cut(r, 8, all: true));
-            dc.DrawGeometry(null, Tac.P(Frozen(Tac.A(AmberC, Math.Max(.35, 1 - ping))), 2.2), Tac.Cut(r, 8, all: true));
+            dc.DrawGeometry(null, Tac.P(Frozen(Tac.A(gc, Math.Max(.35, 1 - ping))), 2.4), Tac.Cut(r, 8, all: true));
         }) { Width = 40, Height = 40 };
         host.Children.Add(ring);
         var box = _contactBox;
+        // the tile's box locks on: it punches past its size as the first flash lands, settles as the ping runs out
+        // (it grows up from near its foot: the window's edge is a pixel under it)
+        var pop = PopOn(host, new Point(.5, .9));
         Motion.Play(ring, 1500, t =>
         {
             // on, off, on, off, on (two flashes), then held on
@@ -590,7 +599,8 @@ sealed partial class HudFighter : TacticalLook
             _contactOn = t >= .5 ? 1 : phase % 2 == 0 ? 1.01 : 0.12;   // over 1: lit (a filled flash)
             box.InvalidateVisual();
             ping = Seg(t, 0, .55); ring.InvalidateVisual();
-        }, () => { _contactOn = 1; box.InvalidateVisual(); host.Children.Remove(ring); });
+            Pop(pop, t, .02, .36, .28);
+        }, () => { _contactOn = 1; box.InvalidateVisual(); host.Children.Remove(ring); host.ClearValue(UIElement.RenderTransformProperty); });
     }
 
     /// <summary>Your best passed: the reticle turns a quarter and NEW RECORD is stamped across it.</summary>
@@ -599,8 +609,8 @@ sealed partial class HudFighter : TacticalLook
         if (_reticle.Visibility != Visibility.Visible) return;
         var band = new Border { Background = Amber, BorderBrush = Frozen(Tac.A(InkC0, .9)), BorderThickness = new Thickness(1), Padding = new Thickness(5, 0, 5, 0), Child = Tt(L.T("NEW RECORD"), 9.5, Dark, Face, FontWeights.Bold) };
         band.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var clip = new RectangleGeometry(new Rect(0, 0, 0, 30));
-        band.Clip = clip;
+        // the plate opens by its scale from the middle (a clip cut its words while it opened), and is stamped: past its size, back
+        var bs = new ScaleTransform(0, 1); band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = bs;
         // centred across the reticle, an amber rule through it behind the plate
         Canvas.SetLeft(band, -band.DesiredSize.Width / 2); Canvas.SetTop(band, -band.DesiredSize.Height / 2);
         var rule = new Border { Height = 1.5, Width = 0, Background = Amber };
@@ -608,68 +618,146 @@ sealed partial class HudFighter : TacticalLook
         _reticleAnchor.Children.Clear();
         _reticleAnchor.Children.Add(rule);
         _reticleAnchor.Children.Add(band);
-        double bw = band.DesiredSize.Width;
+        // the hour itself takes the hit as the plate is stamped: a punch past its size, settled
+        var figs = _figs; var pop = PopOn(figs, new Point(0, .5));
         Motion.Play(band, 2000, t =>
         {
+            Pop(pop, t, .12, .5, .15);
             _spin = 90 * Back(Seg(t, 0, .35)); _reticleArt.InvalidateVisual();
-            clip.Rect = new Rect(0, 0, bw * Out(Seg(t, .12, .3)), 30);
+            double k = Seg(t, .12, .26);
+            bs.ScaleX = Out(k); bs.ScaleY = t < .12 ? 1 : 1 + .35 * (1 - Back(Seg(t, .2, .34), 2.4)) * (k >= 1 ? 1 : 0);
             double rw = 64 * Out(Seg(t, .05, .2)); rule.Width = rw; Canvas.SetLeft(rule, -rw / 2); rule.Opacity = band.Opacity;
             band.Opacity = t < .85 ? (t > .3 && t < .4 && (int)((t - .3) / .025) % 2 == 1 ? .25 : 1) : 1 - Seg(t, .85, 1);
-        }, () => { _reticleAnchor.Children.Clear(); _spin = 0; _reticleArt.InvalidateVisual(); });
+        }, () => { _reticleAnchor.Children.Clear(); _spin = 0; _reticleArt.InvalidateVisual(); figs.ClearValue(UIElement.RenderTransformProperty); });
     }
 
     /// <summary>An entry opened: the timer's block blinks twice (the block: its words stay put).</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
+        var blk = _timerBlock;
+        var ps = new ScaleTransform(1, 1);
+        if (blk != null) { blk.RenderTransformOrigin = new Point(0, .5); blk.RenderTransform = ps; }
         Motion.Play(_timers, 1300, t =>
         {
             bool on = t >= .6 || (int)(t / .15) % 2 == 1;
+            // the block jolts as its brackets lock: wider and flatter for a frame, back past its size, settled
+            // (its width never past its own: the next chip sits 5 px off)
+            ps.ScaleX = t < .08 ? .82 : t < .3 ? .82 + .18 * Back(Seg(t, .08, .3), 1.2) : 1;
+            ps.ScaleY = t < .08 ? 1.35 : t < .3 ? 1 + .35 * (1 - Back(Seg(t, .08, .3), 2.4)) : 1;
             if (_timerBlock != null) PaintBlock(_timerBlock, TimerBadge.Tone.On, on);
-            _blockLock = 7 * (1 - Out(Seg(t, 0, .55))) + 2;
+            // the brackets hold wide a beat, then lock on with an overshoot
+            _blockLock = t < .14 ? 12 : 10 * (1 - Back(Seg(t, .14, .32), 2)) + 2;
             _blockLockA = 1 - Seg(t, .7, 1);
             _blockBrackets?.InvalidateVisual();
-        }, () => { if (_timerBlock != null) PaintBlock(_timerBlock, _timerTone, true); _blockLock = -1; _blockBrackets?.InvalidateVisual(); });
+        }, () => { if (_timerBlock != null) PaintBlock(_timerBlock, _timerTone, true); blk?.ClearValue(UIElement.RenderTransformProperty); _blockLock = -1; _blockBrackets?.InvalidateVisual(); });
     }
 
-    /// <summary>A fight started: brackets slam onto its box from wide and ENGAGE flashes across it.</summary>
+    /// <summary>A fight started: brackets slam onto its box from wide, ENGAGE hits across it, then flies into the T+ clock, which pops.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        var banner = Banner(L.T("ENGAGE"), null, Amber, AmberC, open: .5);
+        var banner = Banner(L.T("ENGAGE"), null, Amber, AmberC, hit: .12, leave: .22, _clockEl, slump: false);
         _fightFx.Children.Clear(); _fightFx.Children.Add(banner.Root);
-        Motion.Play(_fightFx, 1500, t =>
+        var body = _fightBody;
+        var clock = _clockEl; var pop = PopOn(clock, new Point(1, .5));
+        Motion.Play(_fightFx, 1800, t =>
         {
-            double k = Seg(t, 0, .3); k = k * k * (3 - 2 * k);
-            // from 11 px out (the window's room round the box is 14: the slam is never cut at its edge)
-            _fightSpread = 11 * (1 - k) -(t > .3 && t < .38 ? 3 * Math.Sin((t - .3) / .08 * Math.PI) : 0);
-            _fightFlash = t < .3 ? 0 : 1 - Seg(t, .3, .5);
+            double k = Seg(t, 0, .12); k = k * k * (3 - 2 * k);
+            // from 11 px out (the window's room round the box is 14: the slam is never cut at its edge), a recoil as they seat
+            _fightSpread = 11 * (1 - k) - (t > .12 && t < .19 ? 3 * Math.Sin((t - .12) / .07 * Math.PI) : 0);
+            _fightFlash = t < .12 ? 0 : 1 - Seg(t, .12, .3);
             _fightBrackets.InvalidateVisual();
-            banner.Step(Seg(t, .26, 1));
-        }, () => { _fightFx.Children.Clear(); _fightSpread = 0; _fightFlash = 0; _fightBrackets.InvalidateVisual(); });
+            banner.Step(t);
+            Pop(pop, t, .27, .5, .35);
+        }, () => { _fightFx.Children.Clear(); _fightSpread = 0; _fightFlash = 0; _fightBrackets.InvalidateVisual(); body.Opacity = 1; if (clock != null) { clock.Opacity = 1; clock.ClearValue(UIElement.RenderTransformProperty); } });
     }
 
-    /// <summary>A fight ended: SPLASH ONE / TARGET DOWN for a kill, MISSION FAILED for a wipe, across the box.</summary>
+    /// <summary>
+    /// A fight ended. A kill: the brackets kick out and lock back on white-hot, SPLASH ONE hits across the box (the rows dimmed
+    /// for that moment) and flies into the KILLED tag, which pops; a green light sweeps the rows. A wipe: the box shudders,
+    /// MISSION FAILED hits and slumps away (no overshoot), the WIPED tag flickers red, the rows sag and stutter.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         bool wipe = e.Outcome == "wipe";
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
-        var banner = wipe ? Banner(L.T("MISSION FAILED"), null, Red, RedC)
-            : e.Outcome == "cleared" ? Banner(L.T("MISSION COMPLETE"), L.T("ALL TARGETS DOWN"), Phos, PhosC)
-            : Banner(L.T("SPLASH ONE"), L.T("TARGET DOWN"), Phos, PhosC);
+        var target = _outcomeEl ?? _clockEl;
+        var banner = wipe ? Banner(L.T("MISSION FAILED"), null, Red, RedC, hit: .08, leave: .24, target, slump: true)
+            : e.Outcome == "cleared" ? Banner(L.T("MISSION COMPLETE"), L.T("ALL TARGETS DOWN"), Phos, PhosC, hit: .08, leave: .22, target, slump: false)
+            : Banner(L.T("SPLASH ONE"), L.T("TARGET DOWN"), Phos, PhosC, hit: .08, leave: .22, target, slump: false);
         _fightFx.Children.Clear(); _fightFx.Children.Add(banner.Root);
-        Motion.Play(_fightFx, 2600, t =>
+        var body = _fightBody;
+        var shake = new TranslateTransform(); _fight.RenderTransform = shake;
+        var sag = new TranslateTransform(); body.RenderTransform = sag;
+        var pop = wipe ? null : PopOn(target, new Point(.5, .5));
+        if (!wipe) LightSweep(_fightFx, PhosC, 2000, .3, .62, new Thickness(0, 30, 0, 0));
+        Motion.Play(_fightFx, 2000, t =>
         {
-            _fightFlash = t < .1 ? Seg(t, 0, .05) : 1 - Seg(t, .1, .35);
-            _fightBrackets.InvalidateVisual();
             banner.Step(t);
-        }, () => { _fightFx.Children.Clear(); _fightFlash = 0; _fightBrackets.InvalidateVisual(); });
+            if (wipe)
+            {
+                int s = (int)(t * 60);
+                shake.X = t < .3 ? Math.Round(5 * (1 - t / .3) * (s % 2 == 0 ? 1 : -1)) : 0;
+                _fightFlash = t < .3 && s % 3 != 0 ? .7 : 0;
+                _fightSpread = 0;
+                // the rows sag 2 px and stutter as the box gives up, then stand again
+                sag.Y = t > .24 && t < .6 ? 2 : 0;
+                if (t > .26 && t < .5) body.Opacity = s % 4 == 0 ? .5 : 1;
+                if (target != null) target.Opacity = t > .26 && t < .56 && s % 3 == 0 ? .25 : 1;
+            }
+            else
+            {
+                _fightFlash = t < .1 ? Seg(t, 0, .05) : t < .28 ? 1 - Seg(t, .1, .2) : .8 * (1 - Seg(t, .28, .45));
+                _fightSpread = t < .1 ? 8 * Out(Seg(t, 0, .06)) : 8 * (1 - Back(Seg(t, .1, .2), 2));
+                Pop(pop, t, .28, .48, .35);
+            }
+            _fightBrackets.InvalidateVisual();
+        }, () =>
+        {
+            _fightFx.Children.Clear(); _fightFlash = 0; _fightSpread = 0; _fightBrackets.InvalidateVisual();
+            _fight.ClearValue(UIElement.RenderTransformProperty); body.ClearValue(UIElement.RenderTransformProperty); body.Opacity = 1;
+            if (target != null) { target.Opacity = 1; if (!wipe) target.ClearValue(UIElement.RenderTransformProperty); }
+        });
     }
 
     /// <summary>
     /// A callout across the fight's box: a dark band that opens from its middle, double rules, the words (and a smaller
-    /// line); its step at 0..1 opens it, holds it and lets it go.
+    /// line). Its step at 0..1: the rules run out and the words hit at <paramref name="hit"/> (the box under it dimmed for that
+    /// moment only); at <paramref name="leave"/> it flies into <paramref name="target"/> (the head's tag or clock), shrinking to
+    /// nothing, or with <paramref name="slump"/> it drops and fades, beaten (2026-11-21: a callout held two seconds over the rows,
+    /// then over the head, hid the figures and the boss).
     /// </summary>
-    /// <param name="open">The share of its course the band takes to open (ENGAGE opens slowly behind the slam, then its word hits).</param>
-    (FrameworkElement Root, Action<double> Step) Banner(string big, string? small, Brush tone, Color toneC, double open = .14)
+    (FrameworkElement Root, Action<double> Step) Banner(string big, string? small, Brush tone, Color toneC, double hit, double leave, FrameworkElement? target, bool slump)
+    {
+        var (root, step0) = BannerArt(big, small, tone, toneC);
+        var lift = new TranslateTransform(); var shrink = new ScaleTransform(1, 1);
+        var grid = (FrameworkElement)((Grid)root).Children[1];
+        var words = ((Grid)grid).Children[^1];
+        grid.RenderTransformOrigin = new Point(.5, .5); grid.RenderTransform = new TransformGroup { Children = { shrink, lift } };
+        Vector? to = null; bool sought = false;
+        var body = _fightBody;
+        return (root, t =>
+        {
+            if (!sought)
+            {
+                sought = true;
+                if (Centre(target, _fight) is Point c && _fight.ActualWidth > 0) to = new Vector(c.X - _fight.ActualWidth / 2, c.Y - _fight.ActualHeight / 2);
+            }
+            step0(t, hit);
+            double k = Seg(t, leave, leave + .08);
+            if (slump) { lift.Y = 22 * k * k; shrink.ScaleY = 1 - .35 * k * k; grid.Opacity = 1 - k * k; }
+            else if (to is Vector v) { double q = Out(k); lift.X = v.X * q; lift.Y = v.Y * q; shrink.ScaleX = shrink.ScaleY = 1 - .86 * q; grid.Opacity = k < .7 ? 1 : 1 - (k - .7) / .3; }
+            else grid.Opacity = 1 - k;
+            if (k >= 1) grid.Opacity = 0;
+            if (k > 0) words.Opacity = 0;
+            // the part it flies into steps aside while it lands in it, then pops (never two words over each other)
+            if (target != null && !slump && to != null) target.Opacity = k > .05 && k < 1 ? 0 : 1;
+            // the box dims under the hit only
+            double down = Seg(t, hit - .08, hit - .03), up = Seg(t, leave, leave + .06);
+            body.Opacity = 1 - .88 * down * (1 - up);
+        });
+    }
+    /// <summary>The callout's art and its course (the rules, the band, the words; the dim under it only while it hits).</summary>
+    (FrameworkElement Root, Action<double, double> Step) BannerArt(string big, string? small, Brush tone, Color toneC)
     {
         var outer = new Grid();
         // the box under the callout dims, so the words stand alone on it
@@ -704,19 +792,21 @@ sealed partial class HudFighter : TacticalLook
         });
         grid.Children.Add(chev);
         grid.Children.Add(words);
-        return (outer, t =>
+        var punch = new ScaleTransform(1, 1); words.RenderTransformOrigin = new Point(.5, .5); words.RenderTransform = punch;
+        return (outer, (t, hit) =>
         {
-            dim.Opacity = t < .82 ? Out(Seg(t, 0, Math.Max(.12, open * .5))) : 1 - Seg(t, .82, 1);
-            double k = Seg(t, 0, open * .6);
-            scale.ScaleX = open > .2 ? k * k * (3 - 2 * k) : Out(k);
-            double fill = Seg(t, open * .45, open);
-            double on = open > .2 ? open : .1;
-            double w = t < on ? 0 : t < .82 ? 1 : 1 - Seg(t, .82, 1);
-            // the words come on hard, with one flicker as a HUD's would
-            words.Opacity = t > on + .03 && t < on + .06 ? .3 : w;
+            dim.Opacity = 0;
+            // the rules run out from the middle just before the hit, the band fills between them as the words land
+            double k = Seg(t, hit - .1, hit - .02);
+            scale.ScaleX = k * k * (3 - 2 * k);
+            double fill = Seg(t, hit - .05, hit);
+            double w = t < hit ? 0 : t < .82 ? 1 : 1 - Seg(t, .82, 1);
+            // the words come on hard, past their size and back, with one flicker as a HUD's would
+            words.Opacity = t > hit + .03 && t < hit + .05 ? .3 : w;
+            punch.ScaleX = punch.ScaleY = t < hit ? 1.3 : 1 + .3 * (1 - Back(Seg(t, hit, hit + .08), 2.2));
             chev.Opacity = w;
             band.Opacity = t < .82 ? fill : 1 - Seg(t, .82, 1);
-            rules.Opacity = t < .82 ? 1 : 1 - Seg(t, .82, 1);
+            rules.Opacity = t <= 0 || t < hit - .1 ? 0 : t < .82 ? 1 : 1 - Seg(t, .82, 1);
         });
     }
 

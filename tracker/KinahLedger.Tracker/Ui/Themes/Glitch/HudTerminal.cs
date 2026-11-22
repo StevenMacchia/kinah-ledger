@@ -455,6 +455,45 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         });
     }
 
+    /// <summary>
+    /// The tube's picture squeezed and opened: <paramref name="p"/>'s whole panel scaled about its middle by
+    /// <paramref name="course"/> (its width, its height, the white of the beam over it at 0..1), as a CRT powers on or loses its
+    /// picture. Transforms and one rectangle's opacity only.
+    /// </summary>
+    static void Tube(GlitchPanel p, double ms, Func<double, (double Sx, double Sy, double Beam)> course)
+    {
+        var sc = new ScaleTransform(1, 1);
+        p.Root.RenderTransformOrigin = new Point(.5, .5); p.Root.RenderTransform = sc;
+        var beam = new Border { Background = Br(0xEFFFF4), CornerRadius = new CornerRadius(7), Opacity = 0 };
+        p.Run(beam, ms, t => { var (x, y, b) = course(t); sc.ScaleX = x; sc.ScaleY = y; beam.Opacity = b; });
+        Motion.Play(p.Root, ms, _ => { }, () => p.Root.ClearValue(UIElement.RenderTransformProperty));
+    }
+
+    /// <summary>A degauss: the picture's words ripple wider and narrower about the middle, dying away (the panel's ground stays still).</summary>
+    static void Degauss(GlitchPanel p, double ms, double amp, Color tint)
+    {
+        var sc = new ScaleTransform(1, 1);
+        p.Body.RenderTransformOrigin = new Point(.5, .5); p.Body.RenderTransform = sc;
+        var wash = new Border { CornerRadius = new CornerRadius(7), Background = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(90, tint.R, tint.G, tint.B), 0), Opacity = 0 };
+        p.Run(wash, ms, t => { double d = Math.Pow(1 - t, 2); sc.ScaleX = 1 + amp * d * Math.Sin(t * 26); sc.ScaleY = 1 - amp * .5 * d * Math.Sin(t * 26); wash.Opacity = d; });
+        Motion.Play(p.Body, ms, _ => { }, () => p.Body.ClearValue(UIElement.RenderTransformProperty));
+    }
+
+    /// <summary>A line in inverse video for a moment: its words dark on <paramref name="c"/>, blinking <paramref name="blinks"/> times by <paramref name="until"/> of the course.</summary>
+    static void Inverse(Border line, TextBlock words, Color c, double ms, int blinks, double until)
+    {
+        var fg = words.Foreground;
+        var on = Frozen(c);
+        var under = line.Background;   // a bloom under way keeps its glow between the blinks
+        Motion.Play(words, ms, t =>
+        {
+            bool inv = t < until && (int)(t / until * blinks * 2) % 2 == 0;
+            words.Foreground = inv ? Ground : fg;
+            if (inv) line.Background = on;
+            else if (ReferenceEquals(line.Background, on)) line.Background = under;
+        }, () => { words.Foreground = fg; if (ReferenceEquals(line.Background, on)) line.Background = under; });
+    }
+
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden) return;
@@ -469,6 +508,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         if (KinahHidden) return;
         var c = ColorOf(p.Color, p.Grade);
         Flicker(_crt, Glow, 800);
+        Degauss(_crt, 900, .035, c);
         Bloom(_rareLine, c, 1800, .38);
         if (!_runOn) TypeRare(held);
         if (_rareTile is { } tile)
@@ -484,19 +524,30 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         Bloom(_promptLine, Glow, 1600, .45);
         if (!_runOn) TypePrompt(held);
         var ok = (TextBlock)_ok.Child;
+        var okScale = new ScaleTransform(); _ok.RenderTransformOrigin = new Point(.5, .5); _ok.RenderTransform = okScale;
+        Degauss(_crt, 800, .02, Glow);
         Motion.Play(_ok, 1600, t =>
         {
             bool on = t >= .5 || (int)(t * 10) % 2 == 0;
             _ok.Background = on ? Phos : null; ok.Foreground = on ? Ground : Phos;
-        }, () => { _ok.Background = Phos; ok.Foreground = Ground; });
+            // OK stamps in: big, past its size, settled by a third of the course
+            okScale.ScaleX = okScale.ScaleY = t < .34 ? 1.9 - .9 * Back(t / .34, 2) : 1;
+        }, () => { _ok.Background = Phos; ok.Foreground = Ground; _ok.ClearValue(UIElement.RenderTransformProperty); });
     }
 
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        var (line, beep) = KinahHidden ? (_camTimerLine, _camBeep) : (_timerLine, _beep);
-        Bloom(line, Rgb(AmberC), 1500, .3);
+        var (line, beep, timer) = KinahHidden ? (_camTimerLine, _camBeep, _camTimer) : (_timerLine, _beep, _timer);
+        // the line rings: inverse video twice (amber, the words dark), then its amber glow decays; BEEP stamps in beside it
+        Bloom(line, Rgb(AmberC), 1800, .3);
+        Inverse(line, timer, Rgb(AmberC), 1800, 2, .3);
         beep.Visibility = Visibility.Visible;
-        Motion.Play(beep, 1800, t => beep.Visibility = t < .85 && (t > .45 || t * 8 % 1 < .6) ? Visibility.Visible : Visibility.Hidden, () => beep.Visibility = Visibility.Hidden);
+        var bs = new ScaleTransform(); beep.RenderTransformOrigin = new Point(0, .5); beep.RenderTransform = bs;
+        Motion.Play(beep, 1800, t =>
+        {
+            beep.Visibility = t < .85 && (t > .45 || t * 8 % 1 < .6) ? Visibility.Visible : Visibility.Hidden;
+            bs.ScaleX = bs.ScaleY = t < .2 ? 1.6 - .6 * Back(t / .2, 2.4) : 1;
+        }, () => { beep.Visibility = Visibility.Hidden; beep.ClearValue(UIElement.RenderTransformProperty); });
     }
 
     protected override void FightStarted(Encounter e, bool held)
@@ -512,6 +563,11 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         var cur = new Border { Width = 7.5, Height = 14, Background = Phos, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
         foreach (var l in new UIElement[] { l1, l2, l3, cur }) lines.Children.Add(l);
         cover.Child = lines;
+        // the tube powers on: a white line across the middle widens, opens into the picture, the white fading off it
+        Tube(_cam, 1300, t => (t < .05 ? .35 + .65 * Out(t / .05) : 1, t < .05 ? .015 : t < .15 ? .015 + .985 * Out((t - .05) / .1) : 1, t < .07 ? 1 : 1 - Out((t - .07) / .14)));
+        // the HP line steps aside under the boot lines (the cover is opaque; never two words over each other)
+        var hp = _hpRow;
+        Motion.Play(hp, 1300, t => hp.Opacity = t < .58 ? 0 : 1, () => hp.Opacity = 1);
         _cam.Run(cover, 1300, t =>
         {
             l1.Visibility = t >= 0 ? Visibility.Visible : Visibility.Hidden;
@@ -529,6 +585,15 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
         bool wipe = e.Outcome == "wipe";
         Flicker(_cam, wipe ? Rgb(RedC2) : Glow, 800);
         Bloom(_endLine, wipe ? Rgb(RedC2) : Rgb(0x7DFFC4), 2000, .34);
+        Inverse(_endLine, _end, wipe ? Rgb(RedC2) : Rgb(0x7DFFC4), 2000, wipe ? 3 : 2, wipe ? .4 : .3);
+        if (wipe)
+        {
+            // the picture fails: it rolls, collapses to a red-white line and comes back, the words rolling once more as it settles
+            var roll = new TranslateTransform(); _cam.Body.RenderTransform = roll;
+            Motion.Play(_cam.Body, 2000, t => roll.Y = t < .24 ? Math.Round((1 - t / .24) * ((int)(t * 40) % 2 == 0 ? -7 : 2)) : 0, () => _cam.Body.ClearValue(UIElement.RenderTransformProperty));
+            Tube(_cam, 2000, t => (1, t < .06 ? 1 - .97 * Out(t / .06) : t < .1 ? .03 : t < .18 ? .03 + .97 * Out((t - .1) / .08) : 1, t < .06 ? Out(t / .06) * .8 : t < .09 ? .9 : t < .13 ? .9 * (1 - (t - .09) / .04) : 0));
+        }
+        else Degauss(_cam, 1000, .025, Rgb(0x7DFFC4));
         if (!wipe && Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is TerminalRows.Row row) row.Bloom(Rgb(AmberC), 2000);
     }
 }

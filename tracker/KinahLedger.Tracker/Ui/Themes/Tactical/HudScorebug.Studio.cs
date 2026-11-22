@@ -24,6 +24,7 @@ sealed partial class HudScorebug
     FrameworkElement StudioTitle(Encounter e, DateTime now)
     {
         var head = new Grid { Height = 32 };
+        _outcomeEl = _clockEl = null;
         head.Children.Add(new TacSketch((dc, s) =>
         {
             var g = Slant(new Rect(s), 0, 9);
@@ -40,9 +41,11 @@ sealed partial class HudScorebug
         if (OutcomeText(e) is { Length: > 0 } ow)
         {
             var o = C(Up(ow), 12, e.Outcome == "wipe" ? PaperRed : PaperGreen, FontWeights.Bold, Semi); o.Margin = new Thickness(10, 1, 9, 0);
+            _outcomeEl = o;
             Grid.SetColumn(o, 1); hg.Children.Add(o);
         }
         var clockT = e.Waiting ? C(L.T("Ready"), 13.5, GreyOf, FontWeights.SemiBold) : C(Clock(e, now), 18, e.Live ? YellowC : Colors.White, FontWeights.Bold);
+        _clockEl = clockT;
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         var clock = GCell((dc, s) => Gloss(dc, Slant(new Rect(s), 6, 6), Color.FromRgb(0x2A, 0x2E, 0x38), Color.FromRgb(0x0B, 0x0C, 0x10), .18, .35), clockT, 24, new Thickness(13, 0, 13, 0));
         if (clockT.Text.Length > 0) right.Children.Add(clock);   // the PvP panel has no clock

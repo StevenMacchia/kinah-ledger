@@ -52,7 +52,8 @@ sealed partial class HudModernMono : ModernLook
     TacSketch? _ringArt;
     double _share = -1, _fill = -1;
     bool _beat;
-    FrameworkElement? _rareRow;
+    FrameworkElement? _rareRow, _rareLine, _rareTileEl, _ringEl;
+    TextBlock? _rateText;
     TacSketch? _rareRule;
     double _rareDraw = 1;
     Color _rareC;
@@ -115,7 +116,7 @@ sealed partial class HudModernMono : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _rareRow = null; _rareRule = null; _timerUp = false;
+        _ringArt = null; _rareRow = null; _rareRule = null; _rareLine = null; _rareTileEl = null; _ringEl = null; _rateText = null; _timerUp = false;
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (HudModernMono.Run.cs)
         if (RunNow() is { } rs)
         {
@@ -138,7 +139,7 @@ sealed partial class HudModernMono : ModernLook
             _share = f.Share; _beat = f.Beat; _fill = -1;
             var ring = new Grid { Width = 44, Height = 44, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
             var art = new TacSketch((dc, s) => Ring(dc, s, dim), 44, 44);
-            _ringArt = art;
+            _ringArt = art; _ringEl = ring;
             ring.Children.Add(art);
             var pc = Tt(f.Beat ? "★" : Pct(f.Share), 14, ink, FontWeights.Bold);
             pc.HorizontalAlignment = HorizontalAlignment.Center;
@@ -156,12 +157,15 @@ sealed partial class HudModernMono : ModernLook
             var w = Tt(Waiting(f.Abyss), 13, Grey, FontWeights.Medium);
             w.Margin = new Thickness(2, 6, 0, 6);
             kv.Children.Add(w);
+            // in the Abyss, what's already counted ("2 kills · 266.5K Kinah") under it: information, not emptiness (Steven, 2026-11-21)
+            if (f.Abyss && f.Stats.Count > 0) { w.Margin = new Thickness(2, 2, 0, 0); var st = Sub(f, false, dim, ink); st.Margin = new Thickness(2, 2, 0, 2); kv.Children.Add(st); }
         }
         else
         {
             var top = new StackPanel { Orientation = Orientation.Horizontal };
             var rate = Tt(f.Rate, f.Warm ? 15 : 24, f.Warm ? Grey : ink, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
             if (!f.Warm) rate.Margin = new Thickness(0, -2, 0, -1);
+            _rateText = rate;
             top.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 12, Grey, FontWeights.Medium); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
             kv.Children.Add(top);
@@ -213,7 +217,9 @@ sealed partial class HudModernMono : ModernLook
             }) { Height = 1, Margin = new Thickness(0, 0, 0, 8) };
             box.Children.Add(_rareRule);
             var rr = new StackPanel { Orientation = Orientation.Horizontal };
-            rr.Children.Add(FlatTile(r, 26, _rareC));
+            var tileEl = FlatTile(r, 26, _rareC);
+            _rareTileEl = tileEl; _rareLine = rr;
+            rr.Children.Add(tileEl);
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
             words.Children.Add(Label(L.T("RARE DROP")));
             var nm = new StackPanel { Orientation = Orientation.Horizontal };
@@ -449,98 +455,215 @@ sealed partial class HudModernMono : ModernLook
     }
 
     // ================================================================ the moments
+    //
+    // Mono's moments are Swiss and flat (2026-11-21, "cinematic ... keeping it light"): hard-edged blocks that wipe in and
+    // out on an exponential snap, rules that draw, registration marks at a panel's corners, a stutter in place of a shake.
+    // No glow, no blur, no curve. Each part is drawn once and moved by its transforms (Ui/Themes/Modern/ModernFx.cs).
 
-    /// <summary>A pickup: an accent line runs along the Buddy's foot, left to right, and goes.</summary>
+    /// <summary>
+    /// A block's visible run along its length, from <paramref name="a"/> to <paramref name="b"/> (0 to 1 of <paramref name="len"/>):
+    /// its scale from its start edge and its shift (the block's origin at its left or top).
+    /// </summary>
+    static void Run(ModFx.Xf x, double a, double b, double len, bool down = false)
+    {
+        double s = Math.Max(0, b - a);
+        if (down) { x.S.ScaleY = s; x.T.Y = a * len; } else { x.S.ScaleX = s; x.T.X = a * len; }
+    }
+
+    /// <summary>A block's wipe: in from its start (<paramref name="i0"/>..<paramref name="i1"/>), held, out at its far end (<paramref name="o0"/>..<paramref name="o1"/>).</summary>
+    static void Wipe(ModFx.Xf x, double t, double i0, double i1, double o0, double o1, double len, bool down = false) =>
+        Run(x, ModFx.Expo(Seg(t, o0, o1)), ModFx.Expo(Seg(t, i0, i1)), len, down);
+
+    /// <summary>Registration marks: an L at each corner of <paramref name="r"/>, 9 px arms, 2 px thick, 3 px inside its edge (each arm grows from the corner).</summary>
+    static List<(FrameworkElement El, ModFx.Xf X)> Marks(Canvas layer, Rect r, Brush ink)
+    {
+        const double arm = 9, th = 2, ins = 3;
+        var marks = new List<(FrameworkElement El, ModFx.Xf X)>();
+        foreach (var (cx, cy, sxs, sys) in new[] { (r.Left + ins, r.Top + ins, 1, 1), (r.Right - ins, r.Top + ins, -1, 1), (r.Left + ins, r.Bottom - ins, 1, -1), (r.Right - ins, r.Bottom - ins, -1, -1) })
+        {
+            var h = ModFx.Put(layer, ModFx.Block(arm, th, ink), sxs > 0 ? cx : cx - arm, sys > 0 ? cy : cy - th);
+            var v = ModFx.Put(layer, ModFx.Block(th, arm, ink), sxs > 0 ? cx : cx - th, sys > 0 ? cy : cy - arm);
+            marks.Add((h, new ModFx.Xf(h, new Point(sxs > 0 ? 0 : 1, .5))));
+            marks.Add((v, new ModFx.Xf(v, new Point(.5, sys > 0 ? 0 : 1))));
+        }
+        return marks;
+    }
+
+    /// <summary>A pickup: an accent block wipes over the new slot and off, and an accent rule runs along the Buddy's foot.</summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
-        double run = 0;
-        var line = new TacSketch((dc, s) =>
+        var lb = ModFx.In(_line, _root);
+        if (lb.IsEmpty) return;
+        var layer = FxLayer("pickup", _root);
+        double w = lb.Width - 2;
+        var rule = ModFx.Put(layer, ModFx.Block(w, 2, Accent), lb.Left + 1, lb.Bottom - 3);
+        var x = new ModFx.Xf(rule, new Point(0, .5));
+        // the new slot: a hard accent block wipes over it and off, the tile under it as it goes
+        var tile = NewestTile(_lineBody);
+        var tb = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
+        FrameworkElement? slot = null; ModFx.Xf? sx = null;
+        if (!tb.IsEmpty) { slot = ModFx.Put(layer, ModFx.Block(tb.Width + 2, tb.Height + 2, Accent, Corner2), tb.Left - 1, tb.Top - 1); sx = new ModFx.Xf(slot, new Point(0, .5)); }
+        Motion.Play(layer, 800, t =>
         {
-            double a = Out(Seg(run, 0, .55)), b = Out(Seg(run, .35, 1));
-            double x0 = s.Width * b, x1 = s.Width * a;
-            if (x1 - x0 > .5) dc.DrawRectangle(Accent, null, new Rect(x0, s.Height - 2, x1 - x0, 2));
-        });
-        _lineFx.Children.Clear(); _lineFx.Children.Add(line);
-        Motion.Play(line, 900, t => { run = t; line.InvalidateVisual(); }, () => _lineFx.Children.Remove(line));
+            Wipe(x, t, 0, .5, .38, .92, w);
+            if (sx != null) { Wipe(sx, t, 0, .1, .14, .24, tb.Width + 2); tile!.Opacity = t < .1 ? 0 : 1; }
+        }, () => { if (tile != null) tile.Opacity = 1; FxDone("pickup", layer); });
     }
 
-    /// <summary>A rare drop: the rule over it draws itself in the grade's colour.</summary>
+    /// <summary>
+    /// A rare drop, the big one: a block in its grade's colour wipes across its line and off again, the line under it; the
+    /// rule over it draws in the colour, the tile punches, and a bar of the colour grows down the panel's left edge.
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareRule is not { } rule || _rareRow is not { } row) return;
-        Motion.Play(rule, 1200, t =>
+        if (_rareLine is not { } line || _rareRule is not { } rule) return;
+        var rb = ModFx.In(line, _root); var lb = ModFx.In(_line, _root);
+        if (rb.IsEmpty || lb.IsEmpty) return;
+        var c = Frozen(_rareC);
+        var layer = FxLayer("rare", _root);
+        var box = new Rect(lb.Left + 1, rb.Top - 3, lb.Width - 2, rb.Height + 6);
+        var block = ModFx.Put(layer, ModFx.Block(box.Width, box.Height, c), box.Left, box.Top);
+        var bx = new ModFx.Xf(block, new Point(0, .5));
+        var edge = ModFx.Put(layer, ModFx.Block(3, lb.Height - 2, c), lb.Left + 1, lb.Top + 1);
+        var ex = new ModFx.Xf(edge, new Point(.5, 0));
+        var rx = new ModFx.Xf(rule, new Point(0, .5));
+        _rareDraw = 1; rule.InvalidateVisual();
+        ModFx.Xf? tx = _rareTileEl != null ? new ModFx.Xf(_rareTileEl) : null;
+        var marks = Marks(layer, box, c);
+        Motion.Play(layer, 1400, t =>
         {
-            _rareDraw = Out(Seg(t, 0, .5));
-            row.Opacity = .35 + .65 * Seg(t, .05, .3);
-            rule.InvalidateVisual();
-        }, () => { _rareDraw = 1; row.Opacity = 1; rule.InvalidateVisual(); });
+            for (int i = 0; i < marks.Count; i++)
+            {
+                double k = ModFx.Expo(Seg(t, .3, .4));
+                if (i % 2 == 0) marks[i].X.S.ScaleX = k; else marks[i].X.S.ScaleY = k;
+                marks[i].El.Opacity = t < .58 ? 1 : 0;
+            }
+            Wipe(bx, t, 0, .16, .26, .42, box.Width);
+            line.Opacity = t < .14 ? 0 : 1;
+            rx.S.ScaleX = ModFx.Expo(Seg(t, .3, .62));
+            Run(ex, 0, ModFx.Expo(Seg(t, .12, .4)), lb.Height - 2, down: true);
+            edge.Opacity = 1 - Seg(t, .82, 1);
+            if (tx != null) tx.Scale = t < .3 ? 1 : 1 + .16 * (1 - ModFx.Expo(Seg(t, .3, .55)));
+        }, () => { line.Opacity = 1; rx.S.ScaleX = 1; if (tx != null) tx.Scale = 1; FxDone("rare", layer); });
     }
 
-    /// <summary>Your best passed: the ring's arc runs on round to full.</summary>
+    /// <summary>
+    /// Your best passed: the ring fills; a solid accent square stamps over it with the star cut out in ink and lifts off the
+    /// full ring; registration marks snap onto the Buddy's four corners and an accent rule draws under the hour.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_ringArt is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .8;
-        Motion.Play(art, 1100, t => { _fill = was + (1 - was) * Out(Seg(t, 0, .7)); art.InvalidateVisual(); }, () => { _fill = -1; art.InvalidateVisual(); });
+        var lb = ModFx.In(_line, _root);
+        var rb = _ringEl != null ? ModFx.In(_ringEl, _root) : Rect.Empty;
+        var hb = _rateText != null ? ModFx.In(_rateText, _root) : Rect.Empty;
+        Canvas? layer = null;
+        var marks = new List<(FrameworkElement El, ModFx.Xf X)>();
+        FrameworkElement? stamp = null, under = null; ModFx.Xf? sx = null, ux = null;
+        if (!lb.IsEmpty)
+        {
+            layer = FxLayer("best", _root);
+            if (!rb.IsEmpty)
+            {
+                var st = new Grid { Width = rb.Width, Height = rb.Height, IsHitTestVisible = false };
+                st.Children.Add(ModFx.Block(rb.Width, rb.Height, Accent, Corner2));
+                var star = Tt("★", 17, Dark, FontWeights.Bold); star.HorizontalAlignment = HorizontalAlignment.Center;
+                st.Children.Add(star);
+                stamp = ModFx.Put(layer, st, rb.Left, rb.Top); sx = new ModFx.Xf(st);
+            }
+            if (!hb.IsEmpty) { under = ModFx.Put(layer, ModFx.Block(hb.Width, 2, Accent), hb.Left, hb.Bottom + 1); ux = new ModFx.Xf(under, new Point(0, .5)); }
+            marks.AddRange(Marks(layer, lb, Accent));
+        }
+        Motion.Play(art, 1500, t =>
+        {
+            _fill = was + (1 - was) * ModFx.Expo(Seg(t, 0, .4)); art.InvalidateVisual();
+            if (layer == null) return;
+            if (sx != null) { sx.Scale = t < .66 ? ModFx.Expo(Seg(t, .38, .48)) : 1 - ModFx.In(Seg(t, .66, .78)); stamp!.Opacity = t < .38 || t > .78 ? 0 : 1; }
+            if (ux != null) Wipe(ux, t, .48, .62, .84, .96, hb.Width);
+            for (int i = 0; i < marks.Count; i++)
+            {
+                double k = ModFx.Expo(Seg(t, .46 + .015 * (i / 2), .58 + .015 * (i / 2)));
+                if (i % 2 == 0) marks[i].X.S.ScaleX = k; else marks[i].X.S.ScaleY = k;
+                marks[i].El.Opacity = 1 - Seg(t, .86, 1);
+            }
+        }, () => { _fill = -1; art.InvalidateVisual(); if (layer != null) FxDone("best", layer); });
     }
 
-    /// <summary>An entry opened: the timer's box inverts once (off-white with dark words) and settles back.</summary>
+    /// <summary>An entry opened: a solid green block wipes across the timer's box and off again, revealing it lit; its dot blinks twice.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        if (_chip is not { } chip || _chipText is not { } t) return;
-        var tone = _chipTone == TimerBadge.Tone.On ? GreenC : PaperC;
-        Motion.Play(chip, 1000, p =>
+        if (_chip is not { } chip) return;
+        var cb = ModFx.In(chip, _root);
+        if (cb.IsEmpty) return;
+        var layer = FxLayer("entry", _root);
+        var tone = _chipTone == TimerBadge.Tone.On ? Green : Paper;
+        var block = ModFx.Put(layer, ModFx.Block(cb.Width, cb.Height, tone, Corner2), cb.Left, cb.Top);
+        var bx = new ModFx.Xf(block, new Point(0, .5));
+        var dot = _chipDot;
+        Motion.Play(layer, 1000, t =>
         {
-            double k = p < .55 ? 1 : 1 - Seg(p, .55, 1);
-            chip.Background = Frozen(Mod.A(tone, k));
-            t.Foreground = k > .5 ? Dark : Paper;
-            if (_chipDot != null) _chipDot.Background = k > .5 ? Dark : (_chipTone == TimerBadge.Tone.On ? Green : _chipTone == TimerBadge.Tone.Soon ? Accent : Grey);
-        }, () =>
-        {
-            chip.Background = null; t.Foreground = Paper;
-            if (_chipDot != null) _chipDot.Background = _chipTone == TimerBadge.Tone.On ? Green : _chipTone == TimerBadge.Tone.Soon ? Accent : Grey;
-        });
+            Wipe(bx, t, 0, .14, .3, .46, cb.Width);
+            chip.Opacity = t < .13 ? 0 : 1;
+            // the blink: off, on, off, on
+            if (dot != null) dot.Opacity = t is (>= .56 and < .63) or (>= .7 and < .77) ? 0 : 1;
+        }, () => { chip.Opacity = 1; if (dot != null) dot.Opacity = 1; FxDone("entry", layer); });
     }
 
     /// <summary>
-    /// A fight started: its panel wipes in from the top, its body after. The wipe is a mask with a short soft edge running
-    /// down (not a clip), so nothing in the panel is ever cut, only not yet lit.
+    /// A fight started: its panel wipes in from the top behind an accent scan rule, its body after. The wipe is a mask with
+    /// a short soft edge running down (not a clip), so nothing in the panel is ever cut, only not yet lit.
     /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
         var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         var lit = new GradientStop(Colors.Black, 0); var dark = new GradientStop(Colors.Transparent, 0);
         mask.GradientStops.Add(lit); mask.GradientStops.Add(dark);
-        Motion.Play(_fight, 520, t =>
+        var fb = ModFx.In(_fight, _root);
+        Canvas? layer = null; FrameworkElement? scan = null; ModFx.Xf? sx = null;
+        if (!fb.IsEmpty)
+        {
+            layer = FxLayer("start", _root);
+            scan = ModFx.Put(layer, ModFx.Block(fb.Width - 2, 2, Accent), fb.Left + 1, fb.Top);
+            sx = new ModFx.Xf(scan, new Point(0, .5));
+        }
+        Motion.Play(_fight, 700, t =>
         {
             // the lit part's foot, from the top to past the bottom, with a soft edge of about a tenth of the panel under it
-            double k = Out(Seg(t, 0, .8)) * 1.1;
+            double k = ModFx.Expo(Seg(t, 0, .85)) * 1.1;
             lit.Offset = Math.Max(0, k - .1); dark.Offset = Math.Max(.001, k);
             _fight.OpacityMask = mask;
-        }, () => _fight.ClearValue(UIElement.OpacityMaskProperty));
+            if (sx != null)
+            {
+                sx.T.Y = Math.Min(1, k) * (fb.Height - 2);
+                sx.S.ScaleX = ModFx.Expo(Seg(t, 0, .12));
+                scan!.Opacity = 1 - Seg(t, .55, .85);
+            }
+        }, () => { _fight.ClearValue(UIElement.OpacityMaskProperty); if (layer != null) FxDone("start", layer); });
     }
 
     /// <summary>
-    /// A fight ended: a flat band over the header line says KILLED (or WIPED in the accent) and the time, then goes. It sits
-    /// on the header (the boss and the clock, which say the same) and never over the rows, as Glass's plate does.
+    /// A fight ended, as a broadcast graphic over the header (the boss and the clock say the same; never over the rows). A
+    /// kill: an off-white block wipes in from the left with KILLED and the time in ink, an accent rule draws under it, and it
+    /// wipes off to the right. A wipe: an accent block drops down from the top with WIPED, the panel stutters, the rows go
+    /// dim, and it folds back up.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
-        var band = new Border
-        {
-            Background = Dark, BorderBrush = wipe ? Accent : Paper, BorderThickness = new Thickness(0, 1, 0, 1),
-            VerticalAlignment = VerticalAlignment.Top,
-        };
+        // the band: its block wipes (scaled), its words only fade and slide (never squashed)
+        var band = new Grid { VerticalAlignment = VerticalAlignment.Top };
+        var block = new Border { Background = wipe ? Accent : Paper };
+        band.Children.Add(block);
         var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Tt(OutcomeText(e).ToUpperInvariant(), 16, wipe ? Accent : Paper, FontWeights.Bold));
-        var tm = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, Grey, FontWeights.SemiBold); tm.Margin = new Thickness(10, 0, 0, 0);
+        words.Children.Add(Tt(OutcomeText(e).ToUpperInvariant(), 16, Dark, FontWeights.Bold));
+        var tm = Tt(Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, Frozen(Mod.A(BgC, .62)), FontWeights.SemiBold); tm.Margin = new Thickness(10, 0, 0, 0);
         words.Children.Add(tm);
-        band.Child = words;
-        var scale = new ScaleTransform(0, 1);
-        band.RenderTransformOrigin = new Point(0, .5); band.RenderTransform = scale;
+        band.Children.Add(words);
+        var bx = new ModFx.Xf(block, wipe ? new Point(.5, 0) : new Point(0, .5));
+        var wx = new ModFx.Xf(words);
         _fightFx.Children.Clear(); _fightFx.Children.Add(band);
         // over the header as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
         void Seat()
@@ -554,12 +677,43 @@ sealed partial class HudModernMono : ModernLook
             band.Height = h + 9;
         }
         Seat();
-        Motion.Play(_fightFx, 2200, t =>
+        double w = _fightGrid.ActualWidth > 0 ? _fightGrid.ActualWidth : FightWidth - 10;
+        var fb = ModFx.In(_fight, _root);
+        var hb = _head != null ? ModFx.In(_head, _root) : Rect.Empty;
+        var rows = RowRoots();
+        Canvas? layer = null; FrameworkElement? rule = null; ModFx.Xf? rx = null;
+        if (!wipe && !fb.IsEmpty && !hb.IsEmpty)
+        {
+            layer = FxLayer("end", _root);
+            rule = ModFx.Put(layer, ModFx.Block(fb.Width - 2, 2, Accent), fb.Left + 1, hb.Bottom + 4);
+            rx = new ModFx.Xf(rule, new Point(0, .5));
+        }
+        var shift = new TranslateTransform();
+        if (wipe) _fight.RenderTransform = shift;
+        Motion.Play(_fightFx, 1500, t =>
         {
             Seat();
-            scale.ScaleX = Out(Seg(t, 0, .14));
-            words.Opacity = Seg(t, .1, .18);
-            band.Opacity = t < .85 ? 1 : 1 - Seg(t, .85, 1);
-        }, () => _fightFx.Children.Clear());
+            if (!wipe)
+            {
+                // a stepped entrance (two hard steps, then whole), a short hold, a hard wipe off to the right
+                double inn = t < .03 ? .4 : t < .06 ? .75 : 1;
+                Run(bx, ModFx.Expo(Seg(t, .58, .68)), inn, w);
+                wx.T.X = -12 * (1 - ModFx.Expo(Seg(t, .06, .2))) + 10 * ModFx.In(Seg(t, .58, .62));
+                words.Opacity = Seg(t, .06, .09) * (1 - Seg(t, .58, .61));
+                if (rx != null) Wipe(rx, t, .08, .2, .56, .66, fb.Width - 2);
+            }
+            else
+            {
+                // the block falls from the top (heavy, no ease-out), one frame's jolt as it lands, then folds back up
+                double h = band.Height;
+                bx.S.ScaleY = t < .6 ? ModFx.In(Seg(t, 0, .08)) : 1 - ModFx.Expo(Seg(t, .6, .7));
+                bx.T.Y = t is >= .08 and < .11 ? 2 : 0;
+                words.Opacity = Seg(t, .07, .1) * (1 - Seg(t, .58, .61));
+                wx.T.Y = -6 * (1 - ModFx.Expo(Seg(t, .07, .16)));
+                // the stutter: hard 2 px steps, no easing
+                shift.X = t switch { >= .08 and < .11 => 2, >= .11 and < .14 => -2, >= .14 and < .17 => 1, _ => 0 };
+                foreach (var r in rows) r.Opacity = 1 - .55 * ModFx.Life(t, .08, .11, .24, .3);
+            }
+        }, () => { _fightFx.Children.Clear(); if (wipe) _fight.RenderTransform = null; foreach (var r in rows) r.Opacity = 1; if (layer != null) FxDone("end", layer); });
     }
 }

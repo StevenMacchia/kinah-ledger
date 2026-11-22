@@ -469,8 +469,9 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         name.Children.Add(Sign(p.Name, 14, WhiteB, Wk.Hex(c)));
         ((FrameworkElement)name.Children[^1]).Margin = new Thickness(0, -3, 0, 0);
         row.Children.Add(name);
-        var slide = new TranslateTransform();
-        row.RenderTransform = slide;
+        var zoom = new ScaleTransform(1, 1);
+        row.RenderTransformOrigin = new Point(.5, .5);
+        row.RenderTransform = zoom;
         double w = _cab.Root.ActualWidth > 0 ? _cab.Root.ActualWidth : 260, h = 38;
         var band = Band(w, h, row);
         var s = Spawn(band, StripAt(_cab.Root, h), "rare");
@@ -479,7 +480,11 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         Motion.Play(_cab.Ground, 1500, q => _cab.Hue(Seg(q, 0, 1)), () => _cab.Hue(0));
         Play(s, "rare", 2800, q =>
         {
-            slide.X = (1 - InOut(Seg(q, .02, .3))) * w * .85 - InOut(Seg(q, .6, .9)) * w * .85;
+            // the sign strikes on where it hangs (a tube catching: flicker, a surge past full, settled), then buzzes off;
+            // never slid through the band's edge, where its words were cut (2026-11-21: "×1" clipped at 15%)
+            double on = Seg(q, .04, .26);
+            row.Opacity = q < .6 ? (on <= 0 ? 0 : on < .3 ? (on < .12 ? .7 : .15) : on < .45 ? .85 : on < .55 ? .3 : 1) : PowerDown(Seg(q, .6, .9));
+            zoom.ScaleX = zoom.ScaleY = q < .6 ? 1 + .06 * (1 - Out(Seg(q, .1, .36))) : 1;
             BandLife(s, q, .07, .88, 1);
         });
     }
@@ -523,7 +528,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             for (int k = 0; k + 1 < keys.Length; k += 2) if (q >= keys[k]) o = keys[k + 1];
             _tube.Opacity = o;
             _tubeGlow.BorderThickness = new Thickness(3 + 4 * (1 - Seg(q, .5, 1)) * (o > .9 ? 1 : 0));
-            _tubeGlow.Opacity = .6 + .4 * (1 - Seg(q, .5, 1));
+            _tubeGlow.Opacity = q < .5 ? (o > .9 ? 1 : .25) : .6 + .4 * (1 - Seg(q, .5, 1));   // (a glow that strikes with each "on")
         }, () => { _tube.Opacity = 1; _tubeGlow.BorderThickness = new Thickness(3); _tubeGlow.Opacity = 1; });
     }
 
@@ -566,12 +571,31 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         var band = Band(w, h, words);
         var zoom = new ScaleTransform(); words.RenderTransform = zoom; words.RenderTransformOrigin = new Point(.5, .5);
         var s = Spawn(band, StripAt(_fight.Root, h), "end");
+        if (wipe)
+        {
+            // a wipe is a power cut, not a slam (2026-11-21 review: it read like the K.O.): the cabinet's tubes stutter and
+            // sag to half light, GAME OVER sputters on at its own size, the light crawls back up as it holds
+            var cab = _fight.Root;
+            Motion.Play(cab, 2300, q =>
+            {
+                double d = Seg(q, .06, .3), back = Seg(q, .5, .7);
+                double sag = q < .06 ? 1 : q < .3 ? .5 + .5 * PowerDown(d * .9) : .5 + .5 * Out(back);
+                cab.Opacity = Math.Max(.5, sag);
+            }, () => cab.Opacity = 1);
+        }
         Play(s, "end", 2300, q =>
         {
-            zoom.ScaleX = zoom.ScaleY = Lerp(2.2, 1, Back(Seg(q, .05, .22), 2.2));
-            words.Opacity = Seg(q, .05, .1);
-            // GAME OVER blinks once it lands; the K.O. holds
-            if (wipe && q > .24 && q < .36) words.Opacity = (int)(q * 50) % 2 == 0 ? 1 : .35;
+            if (wipe)
+            {
+                zoom.ScaleX = 1; zoom.ScaleY = Lerp(.2, 1, Out(Seg(q, .12, .2)));
+                double on = Seg(q, .12, .34);
+                words.Opacity = on <= 0 ? 0 : on < .2 ? .8 : on < .35 ? .1 : on < .5 ? .9 : on < .6 ? .25 : 1;
+            }
+            else
+            {
+                zoom.ScaleX = zoom.ScaleY = Lerp(2.2, 1, Back(Seg(q, .05, .22), 2.2));
+                words.Opacity = Seg(q, .05, .1);
+            }
             BandLife(s, q, .06, .62, .84);
         });
     }
@@ -872,7 +896,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             // the bar: the class's neon round a glass tinted in it (deeper at its start), its glow a wider faint ring; against the
             // top member's damage, so the top row's runs the table's width
             _tubeLine.BorderBrush = Wk.S(neon, .95);
-            _tubeLine.Background = Wk.Lin(0, 0, 1, 0, (neon, .34, 0), (neon, .16, 1));
+            _tubeLine.Background = Wk.Lin(0, 0, 1, 0, (neon, .36, 0), (neon, .27, 1));   // (its end lit too: a glass fading to .16 read as a bar ending at 70%)
             _tubeGlow.BorderBrush = Wk.S(neon, .3);
             _tubeHost.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
             _fill.Set(Wk.Bar(m, c), c, "bar", fresh);

@@ -47,6 +47,7 @@ sealed partial class HudModernFade : ModernLook
     static readonly PickStrip.Look Strip = new(24, 4, true, Frozen(Mod.A(Colors.White, .32)), Frozen(Color.FromRgb(0xFF, 0xCF, 0x6A)));
     bool _dim;
     TacSketch? _ringArt;
+    FrameworkElement? _ringEl;
     double _share = -1, _complete, _sheen = -1;
     bool _beat;
     Color _sheenC = Colors.White;
@@ -147,7 +148,7 @@ sealed partial class HudModernFade : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _timerUp = false; _stripTimerW = -1;
+        _ringArt = null; _ringEl = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _line.Opacity = _dim ? .62 : 1;
@@ -160,7 +161,15 @@ sealed partial class HudModernFade : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 9, 7, 0, 7);
-            _lineBody.Children.Add(w);
+            // in the Abyss, what's already counted ("2 kills · 266.5K Kinah") under it: information, not emptiness (Steven, 2026-11-21)
+            if (f.Abyss && f.Stats.Count > 0)
+            {
+                var both = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mark ? 0 : 9, 3, 0, 3) };
+                w.Margin = new Thickness(0);
+                both.Children.Add(w); both.Children.Add(Sub(f, false));
+                _lineBody.Children.Add(both);
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -173,6 +182,7 @@ sealed partial class HudModernFade : ModernLook
                 var pc = Tt(f.Beat ? "★" : Pct(f.Share), 13, White, FontWeights.Bold); pc.HorizontalAlignment = HorizontalAlignment.Center;
                 ring.Children.Add(pc);
                 _lineBody.Children.Add(ring);
+                _ringEl = ring;
             }
             else if (!mark) _lineBody.Children.Add(new Border { Width = 8 });
             // the hour big, its unit small; the session and the latest pickup under it
@@ -227,6 +237,7 @@ sealed partial class HudModernFade : ModernLook
             var mk = Mark(L.T("RARE DROP"), size: 8); mk.Margin = new Thickness(0, 0, 7, 0);
             row.Children.Add(mk);
             var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .45)), FontWeights.Bold);
+            _rareName = nm;
             row.Children.Add(nm);
             if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
             var lit = Lit(row);
@@ -286,6 +297,7 @@ sealed partial class HudModernFade : ModernLook
     double _rareBloom = 1, _rareFlash;
     TacSketch? _rareWash;
     FrameworkElement? _rareTile;
+    TextBlock? _rareName;
 
     /// <summary>The Buddy's wash: blue fading out to the right, rounded at its left (grey while paused); a pickup's light crossing it.</summary>
     void DrawLineWash(DrawingContext dc, Size s)
@@ -463,124 +475,317 @@ sealed partial class HudModernFade : ModernLook
     }
 
     // ================================================================ the moments
+    //
+    // Fade's moments are soft light and colour on the game (2026-11-21, "cinematic ... keeping it light"): washes that bloom
+    // open, soft glows that swell and dissolve, motes of light drifting up, a slow light passing under the words. No panel
+    // and no box ever appears. A kill blooms and lights; a wipe bleeds down like smoke. Each part is drawn once and moved by
+    // its transforms and opacity (Ui/Themes/Modern/ModernFx.cs); no wash redraws, and nothing that moves carries a shade.
 
-    /// <summary>A pickup: a soft light crosses the Buddy's wash and the worth floats in beside it, then fades.</summary>
+    /// <summary>
+    /// A pickup, small and local: a soft mint swell blooms under the newest tile, a light crosses the Buddy's wash under the
+    /// words, and the worth rises off the tile on a soft dark glow (no box) and dissolves, within about 0.8 s.
+    /// </summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-        var words = new StackPanel { Margin = new Thickness(9, 2, 11, 3) };
-        words.Children.Add(Tt(worth, 14, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .25)) : White, FontWeights.Bold));
-        var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
-        words.Children.Add(nm);
-        var chip = new Border
+        double w = _line.ActualWidth, h = _line.ActualHeight;
+        var tile = NewestTile(_lineBody);
+        var tl = tile != null ? ModFx.In(tile, _line) : Rect.Empty;
+        var tr = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
+        Canvas? layer = null, over = null; FrameworkElement? band = null, swell = null, rise = null; ModFx.Xf? bx = null, sx = null, rx = null;
+        if (w > 0 && h > 0)
         {
-            Child = words, MaxWidth = 88, CornerRadius = new CornerRadius(10), Background = Frozen(Mod.A(DeepC, .5)), BorderThickness = new Thickness(1),
-            BorderBrush = Frozen(Mod.A(Colors.White, .28)), Effect = Halo(),
-        };
-        var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
-        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
-        _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
-        _sheenC = Colors.White;
-        Motion.Play(chip, 1900, t =>
+            // the light and the swell: under the words, inside the wash's rounded start
+            layer = FxLayer("pickup", _line, ClipOf(new Rect(0, 0, w, h), h / 2), at: 1);
+            band = ModFx.Put(layer, ModFx.Band(44, h, Colors.White, .26, 0), -44, 0);
+            bx = new ModFx.Xf(band);
+            if (!tl.IsEmpty)
+            {
+                swell = ModFx.Centre(layer, ModFx.Bloom(MintC2, tl.Width * 2.4, tl.Height * 1.9, .55), new Point(tl.Left + tl.Width / 2, tl.Top + tl.Height / 2));
+                sx = new ModFx.Xf(swell);
+            }
+        }
+        if (!tr.IsEmpty && worth.Length > 0)
         {
-            _sheen = t < .5 ? Seg(t, 0, .5) : -1; _lineWash.InvalidateVisual();
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
-        }, () => { _sheen = -1; _lineWash.InvalidateVisual(); _lineAnchor.Children.Remove(chip); });
+            // the worth: no box and no shade (it moves), a soft dark glow behind it; from over the tile to just above it
+            var tt = Tt(worth, 12, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .3)) : White, FontWeights.Bold);
+            tt.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double ww = tt.DesiredSize.Width, wh = tt.DesiredSize.Height;
+            var g = new Grid { Width = ww + 20, Height = wh + 10 };
+            g.Children.Add(ModFx.Bloom(DeepC, ww + 20, wh + 10, .6));
+            tt.HorizontalAlignment = HorizontalAlignment.Center;
+            g.Children.Add(tt);
+            over = FxLayer("pickup-worth", _root);
+            rise = ModFx.Put(over, g, tr.Left + tr.Width / 2 - (ww + 20) / 2, tr.Top - wh - 5);
+            rx = new ModFx.Xf(rise);
+        }
+        Motion.Play(_lineAnchor, 1500, t =>
+        {
+            if (bx != null) { double s = Seg(t, 0, .5); bx.T.X = (w * .8 + 44) * ModFx.InOut(s); band!.Opacity = s <= 0 || s >= 1 ? 0 : 1 - .7 * s; }
+            if (sx != null) { sx.Scale = .5 + .5 * Out(Seg(t, 0, .25)); swell!.Opacity = ModFx.Life(t, 0, .08, .18, .5); }
+            if (rx != null) { double q = Seg(t, .04, .56); rx.T.Y = 8 * (1 - Out(q)); rise!.Opacity = q <= 0 || q >= 1 ? 0 : Math.Min(1, q * 8) * (1 - Seg(q, .5, 1)); }
+        }, () => { if (layer != null) FxDone("pickup", layer); if (over != null) FxDone("pickup-worth", over); });
     }
 
-    /// <summary>A rare drop: its wash blooms out to the right in the grade's colour, a flash in it, the tile popping in.</summary>
+    /// <summary>
+    /// A rare drop, the big one, in its grade's colour: a white-hot swell flashes on the tile as the row fades up, its wash
+    /// blooms open from the left with a swell of the colour under it (out quick, a slow decay), the tile pops, a light passes
+    /// under the item's name, and motes of the colour drift up from the tile and dissolve.
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareWash is not { } wash) return;
         var tile = _rareTile;
+        var c = _rareC;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        Motion.Play(wash, 1500, t =>
+        var wx = new ModFx.Xf(wash, new Point(0, .5));
+        _rareBloom = 1; _rareFlash = 0; wash.InvalidateVisual();
+        var words = _rare.Children.Count > 1 ? _rare.Children[^1] as FrameworkElement : null;
+        // the item's name brightens toward its grade's colour while the light passes under it
+        var name = _rareName;
+        var rest = name?.Foreground; var hot = Frozen(Mod.Mix(c, Colors.White, .15)); var mid = Frozen(Mod.Mix(c, Colors.White, .3));
+        var tb = tile != null ? ModFx.In(tile, _rare) : Rect.Empty;
+        var tr = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
+        double rw = _rare.ActualWidth, rh = _rare.ActualHeight;
+        Canvas? under = null, over = null;
+        FrameworkElement? swell = null, flash = null, light = null, boost = null; ModFx.Xf? sx = null, fx = null, lx = null, bsx = null;
+        var motes = new List<(FrameworkElement El, ModFx.Xf X, double Dx, double Dy, double At)>();
+        if (!tb.IsEmpty && !tr.IsEmpty && rw > 0)
         {
-            _rareBloom = Out(Seg(t, 0, .45));
-            _rareFlash = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, .8);
-            wash.InvalidateVisual();
-            sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, .05, .4), 2.2);
-        }, () => { _rareBloom = 1; _rareFlash = 0; wash.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+            // the swell and the light under the words (between the wash and them), the flash and the motes over everything
+            under = FxLayer("rare-under", _rare, at: 1);
+            // the colour swelling up under the row: a second wash over the resting one
+            boost = ModFx.Put(under, ModFx.Block(rw + 10, rh, Mod.Grad(false, (Mod.A(c, .9), 0), (Mod.A(c, .62), .6), (Mod.A(c, 0), 1)), rh / 2), 0, 0);
+            bsx = new ModFx.Xf(boost, new Point(0, .5));
+            swell = ModFx.Centre(under, ModFx.Bloom(Mod.Mix(c, Colors.White, .35), 130, 62, .95), new Point(tb.Left + tb.Width / 2 + 38, tb.Top + tb.Height / 2));
+            sx = new ModFx.Xf(swell);
+            var lane = ModFx.Put(under, new Canvas { Clip = ClipOf(new Rect(0, 0, rw, rh), rh / 2) }, 0, 0);
+            light = ModFx.Put(lane, ModFx.Band(36, rh, Colors.White, .5, rh * .4), -36 - rh * .4, 0);
+            lx = new ModFx.Xf(light);
+            over = FxLayer("rare-over", _root);
+            flash = ModFx.Centre(over, ModFx.Bloom(Mod.Mix(c, Colors.White, .6), 60, 60, .85), new Point(tr.Left + tr.Width / 2, tr.Top + tr.Height / 2));
+            fx = new ModFx.Xf(flash);
+            var rnd = new Random(7);
+            var mote = Mod.Mix(c, Colors.White, .7);
+            for (int i = 0; i < 6; i++)
+            {
+                // a bright core in a soft glow: each mote reads as a point of light
+                double d = 12 + 5 * rnd.NextDouble();
+                var el = new Grid { Width = d, Height = d, IsHitTestVisible = false };
+                el.Children.Add(ModFx.Bloom(mote, d, d, 1));
+                el.Children.Add(new System.Windows.Shapes.Ellipse { Width = 4.5, Height = 4.5, Fill = Frozen(Mod.Mix(c, Colors.White, .9)) });
+                ModFx.Centre(over, el, new Point(tr.Left + tr.Width * (.3 + .4 * rnd.NextDouble()), tr.Top + tr.Height * (.3 + .3 * rnd.NextDouble())));
+                motes.Add((el, new ModFx.Xf(el), 4 + 26 * rnd.NextDouble(), -(20 + 6 * rnd.NextDouble()), .1 + .035 * i));
+            }
+        }
+        Motion.Play(wash, 1700, t =>
+        {
+            wx.S.ScaleX = .02 + .98 * Out(Seg(t, 0, .2));
+            if (words != null) words.Opacity = Out(Seg(t, .04, .18));
+            // the tile: up past its size with the flash, then eased back
+            sc.ScaleX = sc.ScaleY = t < .08 ? .7 + .4 * Out(Seg(t, 0, .08)) : 1.1 - .1 * Out(Seg(t, .08, .32));
+            if (name != null) name.Foreground = t is >= .2 and < .55 ? (t < .26 || t >= .48 ? mid : hot) : rest;
+            if (sx != null) { sx.Scale = .4 + .6 * Out(Seg(t, .02, .2)); swell!.Opacity = t < .18 ? Seg(t, .02, .1) : 1 - Out(Seg(t, .18, .48)); }
+            if (fx != null) { fx.Scale = .3 + .8 * Out(Seg(t, 0, .25)); flash!.Opacity = ModFx.Life(t, 0, .04, .16, .36); }
+            if (bsx != null) { bsx.S.ScaleX = .1 + .9 * Out(Seg(t, .02, .2)); boost!.Opacity = t < .2 ? Out(Seg(t, .02, .2)) : 1 - Seg(t, .2, .5); }
+            if (lx != null) { double s = Seg(t, .2, .55); lx.T.X = (rw + 40 + rh * .4) * ModFx.InOut(s); light!.Opacity = s <= 0 || s >= 1 ? 0 : 1 - .6 * s; }
+            foreach (var (el, x, dx, dy, at) in motes)
+            {
+                double q = Seg(t, at, at + .45);
+                x.T.X = dx * Out(q); x.T.Y = dy * Out(q) + 3 * Math.Sin(q * Math.PI * 2);
+                x.Scale = 1 - .5 * q;
+                el.Opacity = q <= 0 || q >= 1 ? 0 : Math.Min(1, q * 6) * (1 - q);
+            }
+        }, () =>
+        {
+            wx.S.ScaleX = 1; sc.ScaleX = sc.ScaleY = 1;
+            if (words != null) words.Opacity = 1;
+            if (name != null) name.Foreground = rest;
+            if (under != null) FxDone("rare-under", under);
+            if (over != null) FxDone("rare-over", over);
+        });
     }
 
-    /// <summary>Your best passed: the ring runs on round to full in mint and a mint light crosses the wash.</summary>
+    /// <summary>
+    /// Your best passed: the ring runs on round to full in mint with a soft punch; a mint glow swells under it, a halo of
+    /// light opens out from it, and a mint light passes along the wash.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_ringArt is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
-        _sheenC = MintC2;
+        var rb = _ringEl != null ? ModFx.In(_ringEl, _line) : Rect.Empty;
+        double w = _line.ActualWidth, h = _line.ActualHeight;
+        Canvas? layer = null;
+        FrameworkElement? glow = null, halo = null, band = null; ModFx.Xf? gx = null, hx = null, bx = null;
+        if (!rb.IsEmpty && w > 0)
+        {
+            var mid = new Point(rb.Left + rb.Width / 2, rb.Top + rb.Height / 2);
+            layer = FxLayer("best", _line, at: 1);
+            var lane = ModFx.Put(layer, new Canvas { Clip = ClipOf(new Rect(0, 0, w, h), h / 2) }, 0, 0);
+            band = ModFx.Put(lane, ModFx.Band(60, h, MintC2, .3, 0), -60, 0); bx = new ModFx.Xf(band);
+            glow = ModFx.Centre(layer, ModFx.Bloom(MintC2, 64, 64, .7), mid); gx = new ModFx.Xf(glow);
+            halo = ModFx.Centre(layer, ModFx.Halo(Mod.Mix(MintC2, Colors.White, .3), 48, .9), mid); hx = new ModFx.Xf(halo);
+        }
+        ModFx.Xf? rx = _ringEl != null ? new ModFx.Xf(_ringEl) : null;
         Motion.Play(art, 1800, t =>
         {
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .5));
-            if (t >= .5) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, .45));
+            if (t >= .45) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
-            _sheen = t is > .3 and < .85 ? Seg(t, .3, .85) : -1; _lineWash.InvalidateVisual();
-        }, () => { _complete = 0; _beat = beat; _sheen = -1; _sheenC = Colors.White; art.InvalidateVisual(); _lineWash.InvalidateVisual(); });
+            if (rx != null) rx.Scale = 1 + .1 * ModFx.Bell(Out(Seg(t, .42, .7)));
+            if (layer == null) return;
+            gx!.Scale = .5 + .45 * Out(Seg(t, .4, .8)); glow!.Opacity = ModFx.Life(t, .4, .5, .6, .95);
+            double q = Seg(t, .44, .9);
+            hx!.Scale = 1 + .6 * Out(q); halo!.Opacity = q <= 0 || q >= 1 ? 0 : 1 - q;
+            double s = Seg(t, .45, .95);
+            bx!.T.X = (w * .85 + 60) * ModFx.InOut(s); band!.Opacity = s <= 0 || s >= 1 ? 0 : 1 - .6 * s;
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); if (rx != null) rx.Scale = 1; if (layer != null) FxDone("best", layer); });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights mint round its edge and settles.</summary>
+    /// <summary>An entry opened: the first timer's chip arrives with a soft punch on a swell of mint, a light passes over it and its edge lights.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
-        var edge = chip.BorderBrush;
-        Motion.Play(chip, 1200, t =>
+        var cb = ModFx.In(chip, _root);
+        if (cb.IsEmpty) return;
+        var layer = FxLayer("entry", _root);
+        var mid = new Point(cb.Left + cb.Width / 2, cb.Top + cb.Height / 2);
+        var glow = ModFx.Centre(layer, ModFx.Bloom(MintC2, cb.Width + 36, cb.Height + 30, .5), mid);
+        var gx = new ModFx.Xf(glow);
+        var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(cb, cb.Height / 2) }, 0, 0);
+        var band = ModFx.Put(pane, ModFx.Band(18, cb.Height, Colors.White, .5, cb.Height * .5), cb.Left - 18 - cb.Height * .5, cb.Top);
+        var bx = new ModFx.Xf(band);
+        var edge = ModFx.Put(layer, ModFx.Outline(cb, cb.Height / 2, MintC2, 1), cb.Left, cb.Top);
+        var cx = new ModFx.Xf(chip);
+        Motion.Play(layer, 1300, t =>
         {
-            double k = t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1);
-            glow.Opacity = .85 * k;
-            chip.BorderBrush = Frozen(Mod.A(MintC2, .5 + .5 * k));
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; });
+            cx.Scale = ModFx.Punch(Seg(t, 0, .32), .78, 2.2);
+            chip.Opacity = .2 + .8 * Seg(t, 0, .1);
+            gx.Scale = .6 + .5 * Out(Seg(t, 0, .5)); glow.Opacity = ModFx.Life(t, 0, .14, .35, .9);
+            bx.T.X = (cb.Width + 18 + cb.Height * .5) * ModFx.InOut(Seg(t, .14, .52));
+            edge.Opacity = ModFx.Life(t, .08, .2, .45, .9);
+        }, () => { cx.Scale = 1; chip.Opacity = 1; FxDone("entry", layer); });
     }
 
-    /// <summary>A fight started: the meter slides in from the left as it fades up.</summary>
+    /// <summary>
+    /// A fight started: the meter rises into place, its rows come up one after another, and a soft blue light passes
+    /// through them under the words.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 520, t =>
+        var rows = RowRoots();
+        double w = _fight.ActualWidth > 0 ? _fight.ActualWidth : _fight.Width, h = _fight.ActualHeight;
+        Canvas? layer = null; FrameworkElement? band = null; ModFx.Xf? bx = null;
+        if (w > 0 && h > 0)
         {
-            double k = Out(t);
-            _fightShift.Y = 10 * (1 - k);
-            _fightBody.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
+            layer = FxLayer("start", _fight, ClipOf(new Rect(0, 0, w, h), 0), at: 0);
+            band = ModFx.Put(layer, ModFx.Band(130, h, Mod.Mix(BlueC, Colors.White, .45), .2, h * .3), -130 - h * .3, 0);
+            bx = new ModFx.Xf(band);
+        }
+        Motion.Play(_fight, 1000, t =>
+        {
+            double k = Out(Seg(t, 0, .45));
+            _fightShift.Y = 8 * (1 - k);
+            _fightBody.Opacity = .1 + .9 * Out(Seg(t, 0, .25));
+            for (int i = 0; i < rows.Count; i++) rows[i].Opacity = .05 + .95 * Out(Seg(t, .12 + .07 * i, .42 + .07 * i));
+            if (bx != null) { bx.T.X = (w + 130 + h * .3) * ModFx.InOut(Seg(t, .15, .85)); band!.Opacity = ModFx.Life(t, .15, .25, .7, .85); }
+        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; foreach (var r in rows) r.Opacity = 1; if (layer != null) FxDone("start", layer); });
     }
 
-    /// <summary>A fight ended: a wash in mint (coral for a wipe) lays over the fight's head with the outcome and the clock, then lifts.</summary>
+    /// <summary>
+    /// A fight ended. A kill: a mint wash blooms open over the fight's head from the left with the outcome and the clock, a
+    /// light passes under the words, a soft mint light passes down through the rows, and it releases. A wipe: a coral wash
+    /// bleeds in from the right, the words drop into it, the colour bleeds down from the head into the rows like smoke and
+    /// thins away, the rows dim a moment, and the wash drains downward. The head comes back clean after, never under it.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
         bool wipe = e.Outcome == "wipe";
         var c = wipe ? CoralC : MintC2;
-        double bloom = 0;
         var band = new Grid { Height = 34, Margin = new Thickness(-4, -6, 0, 0) };
-        band.Children.Add(new TacSketch((dc, s) =>
+        var washArt = new TacSketch((dc, s) =>
         {
-            var r = new Rect(0, 0, s.Width * bloom, s.Height);
+            var r = new Rect(0, 0, s.Width, s.Height);
             Wash(dc, r, DeepC, .72, .5, 8);
             Wash(dc, r, c, .5, .26, 8);
-        }));
+        });
+        band.Children.Add(washArt);
+        var wsx = new ModFx.Xf(washArt, wipe ? new Point(1, .5) : new Point(0, .5));
+        // the light under the words (inside the wash)
+        var under = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
+        var glint = ModFx.Put(under, ModFx.Band(40, 34, Colors.White, .3, 14), -54, 0);
+        var gx = new ModFx.Xf(glint);
+        band.Children.Add(under);
         var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(Tt(OutcomeText(e), 18, White, FontWeights.Bold));
         var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 12, Frozen(Mod.Mix(c, Colors.White, .5)), FontWeights.SemiBold); ck.Margin = new Thickness(4, 3, 0, 0);
         words.Children.Add(ck);
         var lit = Lit(words);
+        var lx = new ModFx.Xf(lit);
         band.Children.Add(lit);
+        var bx = new ModFx.Xf(band);
         _fightFx.Children.Clear(); _fightFx.Children.Add(band);
         var head = _head;
-        Motion.Play(_fightFx, 2400, t =>
+        var rows = RowRoots();
+        double w = _fight.ActualWidth > 0 ? _fight.ActualWidth : _fight.Width, h = _fight.ActualHeight;
+        var top = head != null && head.IsDescendantOf(_fight) ? ModFx.In(head, _fight).Bottom : 30;
+        Canvas? layer = null; FrameworkElement? light = null, smoke = null; ModFx.Xf? sx = null, smx = null;
+        var goneStop = new GradientStop(Colors.Transparent, 0); var keptStop = new GradientStop(Colors.Black, .001);
+        if (w > 0 && h > top + 20)
         {
-            bloom = Out(Seg(t, 0, .22));
-            ((TacSketch)band.Children[0]).InvalidateVisual();
-            lit.Opacity = t < .84 ? Seg(t, .08, .22) : 1 - Seg(t, .84, 1);
-            band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .12) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+            layer = FxLayer("end", _fight, ClipOf(wipe ? new Rect(0, top - 10, w, h - top + 10) : new Rect(0, 0, w, h), 0), at: 0);
+            if (!wipe)
+            {
+                // a kill's light down through the rows, under the words
+                light = ModFx.Put(layer, ModFx.Block(w, 44, Mod.Grad(true, (Mod.A(MintC2, 0), 0), (Mod.A(MintC2, .2), .5), (Mod.A(MintC2, 0), 1))), 0, top - 44);
+                sx = new ModFx.Xf(light);
+            }
+            else
+            {
+                // a wipe's colour bleeding down from the head like smoke
+                smoke = ModFx.Put(layer, ModFx.Block(w, h - top + 10, Mod.Grad(true, (Mod.A(CoralC, .36), 0), (Mod.A(CoralC, .26), .72), (Mod.A(CoralC, 0), 1))), 0, top - 10);
+                smx = new ModFx.Xf(smoke, new Point(.5, 0));
+                var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+                mask.GradientStops.Add(goneStop); mask.GradientStops.Add(keptStop);
+                smoke.OpacityMask = mask;
+            }
+        }
+        Motion.Play(_fightFx, 2000, t =>
+        {
+            wsx.S.ScaleX = .02 + .98 * Out(Seg(t, 0, .2));
+            double i = Seg(t, .06, .2), o = Seg(t, .56, .62);
+            lit.Opacity = t < .56 ? i : 1 - o;
+            gx.T.X = (Math.Max(200, w) + 70) * ModFx.InOut(Seg(t, .2, .5)); glint.Opacity = wipe ? 0 : ModFx.Life(t, .2, .24, .45, .5);
+            if (!wipe) { lx.T.X = -10 * (1 - Out(i)); lx.T.Y = 0; bx.T.Y = 0; }
+            else
+            {
+                lx.T.Y = -8 * (1 - Out(i)); lx.T.X = 0;
+                bx.T.Y = 5 * ModFx.In(Seg(t, .54, .64));
+                foreach (var r in rows) r.Opacity = 1 - .5 * ModFx.Life(t, .08, .12, .22, .27);
+                if (smx != null)
+                {
+                    // down through every row over about 400 ms (its foot is the soft edge), then gone from the top down
+                    smx.T.Y = -smoke!.Height * (1 - Out(Seg(t, .06, .26)));
+                    double d = Seg(t, .3, .6) * 1.3 - .3;
+                    goneStop.Offset = Math.Clamp(d, 0, 1); keptStop.Offset = Math.Clamp(d + .3, .001, 1);
+                    smoke.Opacity = t < .6 ? Seg(t, .06, .1) : 0;
+                }
+            }
+            band.Opacity = t < .56 ? 1 : 1 - Seg(t, .56, .64);
+            // the head comes back only once the wash is gone, so the two never show over each other
+            if (head != null) head.Opacity = t < .64 ? 1 - Seg(t, 0, .08) : Seg(t, .66, .76);
+            if (sx != null) { sx.T.Y = (h - top + 44) * ModFx.InOut(Seg(t, .14, .6)); light!.Opacity = ModFx.Life(t, .14, .22, .5, .6); }
+        }, () =>
+        {
+            _fightFx.Children.Clear(); if (head != null) head.Opacity = 1;
+            foreach (var r in rows) r.Opacity = 1;
+            if (layer != null) FxDone("end", layer);
+        });
     }
 }
