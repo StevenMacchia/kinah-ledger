@@ -22,6 +22,58 @@ abstract class TacticalLook : HudThemeLook
     /// <summary>A course's part from <paramref name="a"/> to <paramref name="b"/>, 0 before it and 1 after.</summary>
     protected static double Seg(double p, double a, double b) => Math.Clamp((p - a) / (b - a), 0, 1);
 
+    // ---- the moments' shared beats (transforms and opacity on parts drawn once)
+
+    /// <summary>The centre of <paramref name="el"/> in <paramref name="host"/>'s terms; null when it isn't laid out in it.</summary>
+    protected static Point? Centre(FrameworkElement? el, FrameworkElement host)
+    {
+        if (el == null || el.ActualWidth <= 0 || !el.IsVisible) return null;
+        try { return el.IsDescendantOf(host) ? el.TranslatePoint(new Point(el.ActualWidth / 2, el.ActualHeight / 2), host) : null; }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>A scale about <paramref name="origin"/> set on <paramref name="el"/> for a pop (<see cref="Pop"/>); the caller clears it at the course's end.</summary>
+    protected static ScaleTransform? PopOn(FrameworkElement? el, Point origin)
+    {
+        if (el == null) return null;
+        var s = new ScaleTransform(); el.RenderTransformOrigin = origin; el.RenderTransform = s;
+        return s;
+    }
+
+    /// <summary>A part popping as a callout lands in it: past its size by <paramref name="amp"/> and back between <paramref name="a"/> and <paramref name="b"/> of the course (an overshoot).</summary>
+    protected static void Pop(ScaleTransform? s, double t, double a, double b, double amp)
+    {
+        if (s == null) return;
+        double k = Seg(t, a, b);
+        s.ScaleX = s.ScaleY = k <= 0 || k >= 1 ? 1 : k < .3 ? 1 + amp * Out(k / .3) : 1 + amp * (1 - Back((k - .3) / .7, 2.2));
+    }
+
+    /// <summary>
+    /// A light crossing <paramref name="host"/> once, left to right, between <paramref name="from"/> and <paramref name="to"/> of a
+    /// <paramref name="ms"/> course (a kill's sweep over the rows): a soft beam in <paramref name="c"/> on a clipped layer of its
+    /// own, moved by a transform, taken away at the end.
+    /// </summary>
+    protected static void LightSweep(Panel host, Color c, double ms, double from, double to, Thickness room)
+    {
+        var layer = new Grid { ClipToBounds = true, IsHitTestVisible = false, Margin = room };
+        var tt = new TranslateTransform(-140, 0);
+        var beam = new Border
+        {
+            Width = 120, HorizontalAlignment = HorizontalAlignment.Left, RenderTransform = tt,
+            Background = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0), GradientStops =
+                { new GradientStop(Tac.A(c, 0), 0), new GradientStop(Tac.A(c, .2), .55), new GradientStop(Tac.A(Colors.White, .38), .8), new GradientStop(Tac.A(c, 0), 1) } },
+        };
+        layer.Children.Add(beam);
+        host.Children.Add(layer);
+        double w = host.ActualWidth > 0 ? host.ActualWidth : 360;
+        Motion.Play(layer, ms, t =>
+        {
+            double k = Seg(t, from, to);
+            tt.X = -140 + (w + 160) * Out(k);
+            beam.Opacity = k > 0 && k < 1 ? 1 : 0;
+        }, () => host.Children.Remove(layer));
+    }
+
     /// <summary>Whether the line has an hour to show (else the waiting line).</summary>
     protected static bool HasHour(Figures f) => f.Counted && f.Rate.Length > 0;
 

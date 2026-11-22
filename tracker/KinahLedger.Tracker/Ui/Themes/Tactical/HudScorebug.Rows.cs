@@ -248,7 +248,7 @@ sealed partial class HudScorebug
             _barCol.Margin = new Thickness(0, 0, 3, 0);
             Grid.SetColumn(_barCol, 2); Grid.SetColumnSpan(_barCol, 3); Words.Children.Add(_barCol);
             var shade = new Border { IsHitTestVisible = false, Margin = new Thickness(-14, 2, 0, 2),
-                Background = Tac.Grad(false, (Tac.A(InkC0, 0), 0), (Tac.A(InkC0, .62), .22), (Tac.A(InkC0, .7), 1)) };
+                Background = Tac.Grad(false, (Tac.A(InkC0, 0), 0), (Tac.A(InkC0, .4), .25), (Tac.A(InkC0, .48), 1)) };
             Grid.SetColumn(shade, 3); Grid.SetColumnSpan(shade, 2); Words.Children.Add(shade);
             _heal.Effect = Glow(4, 0, 1); _heal.Tag = "heal-figures";
             _healBox.Child = _heal; _healBox.Margin = new Thickness(0, 0, 8, 0);

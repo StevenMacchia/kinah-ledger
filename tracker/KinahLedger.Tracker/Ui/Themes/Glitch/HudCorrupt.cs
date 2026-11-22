@@ -359,8 +359,6 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
     {
         if (KinahHidden) return;
         Tear(_deck, _deckGround, Hash(p.Id) < .5 ? 2 : 4, 700, 10);
-        // the hour's line itself jolts: its lower half torn a hair sideways for a few frames
-        _deck.Tear(700, GroundCol, TearL, TearR, new TearBand(At(_deck, _figRow, .4, 14), 9, 9, .04, .2));
         // the tears run in the gaps under the hour's line and under the session's, never through a figure
         double Under(FrameworkElement el, double fallback)
         {
@@ -393,6 +391,7 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
         if (KinahHidden) return;
         // the big one: the picture tears in three bands at once, flashed in the drop's grade, the frame torn twice
         var gc = ColorOf(p.Color, p.Grade);
+        var grade = Frozen(gc);
         _deck.Flash(gc, .45, 1800, .03, .3);
         Tear(_deck, _deckGround, 3, 1100, 12);
         Tear(_deck, _deckGround, 1, 900, -8);
@@ -405,7 +404,8 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             int s = (int)(t * 24);
             double j = t < .5 ? 7 * (1 - t / .5) : 0;
             ghostM.X = -2 - j * (s % 2 == 0 ? 1 : -.5); ghostC.X = 2 + j * (s % 3 == 0 ? 1 : -.4);
-            face.Background = t < .4 && s % 3 == 1 ? Cyan : Mag;
+            // DATA_FOUND floods the drop's grade as it tears in, flickering, then stands in the look's magenta
+            face.Background = t < .5 ? (s % 3 == 1 ? Cyan : grade) : Mag;
         }, () => { ghostM.X = -2; ghostC.X = 2; face.Background = Mag; });
         if (_rareTile is { } tile)
         {

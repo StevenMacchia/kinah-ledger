@@ -79,6 +79,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
     readonly StackPanel _rowsHost = new();
     readonly ContentControl _foot = new() { Focusable = false };
     double _hpShare = -1;
+    /// <summary>The fight's head (the OSD line, the boss and its clock): the STOP card covers all of it.</summary>
+    readonly FrameworkElement _head;
 
     public HudVhs() : this(Tape.Viewfinder) { }
 
@@ -130,7 +132,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _deck.Body.Children.Add(_note);
 
         // the camera: the head (Deck's in a display window of its own), the timer in a dungeon, the HP, the ready line, the rows, the foot
-        _cam.Body.Children.Add(Head());
+        _head = Head();
+        _cam.Body.Children.Add(_head);
         _camTimerCell.Children.Add(_camTimer); _camTimerCell.Children.Add(_camPlay);
         _cam.Body.Children.Add(_camTimerCell);
         BuildHp();
@@ -536,7 +539,10 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             var bar = new Rectangle { Fill = nb, Height = hh, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Round(_deck.H * y), 0, 0) };
             _deck.Run(bar, 2300, t => { bar.Opacity = Gate(t, .05, .9, .02, .12); Shift(nb, t, 40); }, under: true);
         }
-        // PAUSE blinks, the tile lands
+        // PAUSE blinks, the tile lands, the drop's row fills its grade and fades back to the glass
+        var fill = new SolidColorBrush(Color.FromArgb(0, gc.R, gc.G, gc.B));
+        _rare.Background = fill;
+        Motion.Play(_rare, 2300, t => fill.Color = Color.FromArgb((byte)(255 * .5 * (t < .06 ? t / .06 : Math.Pow(1 - Seg01(t, .06, .6), 2))), gc.R, gc.G, gc.B), () => _rare.Background = null);
         Motion.Play(_pause, 2300, t => _pause.Opacity = Blink(t, 4, .5) ? 1 : .2, () => _pause.Opacity = 1);
         if (_rareTile is { } tile)
         {
@@ -565,6 +571,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             tt.Y = roll == 0 ? 0 : Math.Round(roll * fade * (s % 4 == 0 ? 1 : s % 4 == 2 ? -.6 : .2));
         }, () => el.ClearValue(UIElement.RenderTransformProperty));
     }
+
+    static double Seg01(double p, double a, double b) => Math.Clamp((p - a) / (b - a), 0, 1);
 
     /// <summary>The tape row's parts (REC, the counter, a pickup's mark, a run's head and count): a title card over the row puts them away.</summary>
     IEnumerable<UIElement> TapeRow() => new UIElement[] { _rec, _tc, _ff, _runHead, _runCount };
@@ -653,7 +661,10 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
     {
         bool wipe = e.Outcome == "wipe";
         var outcome = OutcomeText(e).ToUpper(System.Globalization.CultureInfo.CurrentCulture);
-        var band = new Border { VerticalAlignment = VerticalAlignment.Top, Height = 44, Margin = new Thickness(0, 1, 0, 0) };
+        // the card covers the whole head (its glyphs never show cut under it)
+        double headH = 44;
+        try { if (_head.ActualHeight > 0 && _head.IsDescendantOf(_cam.Root)) headH = Math.Max(30, _head.TranslatePoint(new Point(0, _head.ActualHeight), _cam.Root).Y + 2); } catch (InvalidOperationException) { }
+        var band = new Border { VerticalAlignment = VerticalAlignment.Top, Height = headH, Margin = new Thickness(0, 1, 0, 0) };
         var words = Txt("", 14, White, Face);
         words.HorizontalAlignment = HorizontalAlignment.Center;
         if (wipe)
@@ -688,6 +699,9 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
                 _cam.Run(bar, 2200, t => { bar.Opacity = .7 * Gate(t, .04, .6, 0, .1); Shift(nb, Steps(t, 3), 3); });
             }
             if (Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is VhsRows.TapeRow row) row.Glint(2200);
+            // the tape stops with a jolt: the picture squashes a few percent and springs back
+            var sq = new ScaleTransform(1, 1); _cam.Root.RenderTransformOrigin = new Point(.5, 0); _cam.Root.RenderTransform = sq;
+            Motion.Play(_cam.Root, 2200, t => sq.ScaleY = t < .05 ? 1 - .06 * Out(t / .05) : 1 - .06 * Math.Abs(1 - Back(Seg01(t, .05, .2), 2.4)), () => _cam.Root.ClearValue(UIElement.RenderTransformProperty));
             band.Background = Br(0x000000); band.BorderBrush = Br(0xFFFFFF, .85); band.BorderThickness = new Thickness(0, 1.5, 0, 1.5);
             words.Inlines.Add(Rn("■ " + L.T("STOP") + "  —  ", White));
             words.Inlines.Add(Rn(outcome, Br(MintTextC)));
@@ -696,8 +710,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         var s = new ScaleTransform(1, 0); band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = s;
         _cam.Run(band, 2200, t =>
         {
-            s.ScaleY = t < .06 ? Steps(t / .06, 3) + .34 : t < .5 ? 1 : Math.Max(.04, 1 - Motion.Out((t - .5) / .14));
-            band.Opacity = t < .64 ? 1 : 0;
+            s.ScaleY = t < .06 ? Steps(t / .06, 3) : t < .5 ? 1 : Math.Max(.04, 1 - Motion.Out((t - .5) / .14));
+            band.Opacity = t > 0 && t < .64 ? 1 : 0;
         });
     }
 }

@@ -187,7 +187,7 @@ sealed partial class HudScorebug : TacticalLook
     protected override void DrawLine(Figures f)
     {
         _bug.Children.Clear();
-        _bestBlock = _timerBlock = null;
+        _bestBlock = _timerBlock = null; _hourEl = null;
         // in a dungeon run: the bug as the run's clock, its tab and splits (Ui/Themes/Tactical/HudScorebug.Run.cs)
         _runTab.Children.Clear(); _runTab.Visibility = Visibility.Collapsed;
         if (RunNow is { } rs) { DrawRun(rs, f); return; }
@@ -238,6 +238,7 @@ sealed partial class HudScorebug : TacticalLook
             hr.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = T(f.Unit, 14, Grey, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 7); hr.Children.Add(u); }
             Row(_bug, Ink(hr, BugH, new Thickness(14, 0, 14, 0)));
+            _hourEl = hr;
             // the light block: the session
             if (f.Total.Length > 0)
             {
@@ -337,7 +338,8 @@ sealed partial class HudScorebug : TacticalLook
         var tile = Tile(r, 30);
         Row(row, new Block(c, tile, 40, new Thickness(12, 0, 12, 0), leanLeft: false));
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Cap(L.T("Rare drop"), Yellow, 10));
+        // RARE DROP in the drop's grade, as its tile's block is
+        words.Children.Add(Cap(L.T("Rare drop"), Frozen(Tac.Mix(c, Colors.White, .35)), 10));
         var nm = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, -2, 0, 0) };
         nm.Children.Add(T(r.Name, 17, White));
         if (r.Count.Length > 0) { var cn = T(r.Count, 13, Grey, FontWeights.SemiBold); cn.Margin = new Thickness(6, 2, 0, 0); nm.Children.Add(cn); }
@@ -411,6 +413,7 @@ sealed partial class HudScorebug : TacticalLook
     FrameworkElement ArenaTitle(Encounter e, DateTime now)
     {
         var head = new Grid { Height = 34 };
+        _outcomeEl = _clockEl = null;
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = C(Up(e.Title), 15, Colors.White, FontWeights.Bold); title.TextTrimming = TextTrimming.CharacterEllipsis; title.Effect = Glow(3, 1, .6);
         head.Children.Add(GBlock(RedC, title, 34, new Thickness(12, 0, 14, 1), 0, 10, .22));
@@ -419,8 +422,10 @@ sealed partial class HudScorebug : TacticalLook
         {
             var oc = e.Outcome == "wipe" ? Coral : GreenC;
             var o = C(Up(ow), 11.5, oc, FontWeights.Bold, Semi); o.Margin = new Thickness(0, 1, 9, 0); o.Effect = Glow(8, 0, .8, oc); cl.Children.Add(o);
+            _outcomeEl = o;
         }
         var ct = e.Waiting ? C(L.T("Ready"), 14, GreyOf, FontWeights.SemiBold) : C(Clock(e, now), 21, Amber, FontWeights.Bold);
+        _clockEl = ct;
         if (!e.Waiting) ct.Effect = Glow(10, 0, .75, Amber);
         cl.Children.Add(ct);
         bool timer = KinahHidden && _timer is not null;
@@ -557,16 +562,22 @@ sealed partial class HudScorebug : TacticalLook
     {
         if (_rareBanner is not Panel row || row.Children.Count < 2) return;
         var first = (Grid)row.Children[0]; var second = (Grid)row.Children[1];
+        // (it grows from its left edge: the window's edge is a pixel off)
+        var pop = PopOn(first, new Point(.04, .5));
         Motion.Play(row, 1600, t =>
         {
+            Pop(pop, t, .12, .4, .18);
             double w1 = first.ActualWidth > 0 ? first.ActualWidth : 60, w2 = second.ActualWidth > 0 ? second.ActualWidth + Lean : 260;
             first.Clip = Wipe(-20, (w1 + 20) * Out(Seg(t, 0, .22)), 44);
             second.Clip = Wipe(-20, (w2 + 20) * Out(Seg(t, .12, .42)), 44);
             // the words come on once their plate is in (never cut by the wipe)
             if (second.Children.Count > 1) second.Children[1].Opacity = t < .4 ? 0 : 1;
             SweepOf(first, Seg(t, .3, .65)); SweepOf(second, Seg(t, .38, .78));
-        }, () => { first.ClearValue(UIElement.ClipProperty); second.ClearValue(UIElement.ClipProperty); if (second.Children.Count > 1) second.Children[1].Opacity = 1; SweepOf(first, -1); SweepOf(second, -1); });
+        }, () => { first.ClearValue(UIElement.RenderTransformProperty); first.ClearValue(UIElement.ClipProperty); second.ClearValue(UIElement.ClipProperty); if (second.Children.Count > 1) second.Children[1].Opacity = 1; SweepOf(first, -1); SweepOf(second, -1); });
     }
+
+    /// <summary>The bug's hour (a best passed punches it); the title's KILLED / WIPED and its clock (a kill's plate flies into one).</summary>
+    FrameworkElement? _hourEl, _outcomeEl, _clockEl;
 
     /// <summary>A wipe's window from <paramref name="x0"/> to <paramref name="x1"/>, its edges slanted as the blocks are (never a flat cut).</summary>
     static Geometry Wipe(double x0, double x1, double h)
@@ -596,14 +607,16 @@ sealed partial class HudScorebug : TacticalLook
         _bugAnchor.Children.Clear(); _bugAnchor.Children.Add(row);
         row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = row.DesiredSize.Width + 12;
+        var hour = _hourEl; var hp = PopOn(hour, new Point(0, .5));
         Motion.Play(row, 2600, t =>
         {
+            Pop(hp, t, .12, .32, .12);
             double i = Out(Seg(t, 0, .2)), o = Seg(t, .86, 1); o = o * o;
             row.Clip = Wipe(w * o, w * i, 34);
             LootUnder(Seg(t, 0, .1) * (1 - Seg(t, .92, 1)));
             words.Sweep = Seg(t, .16, .5); words.Art.InvalidateVisual();
             star.Sweep = Seg(t, .1, .36); star.Art.InvalidateVisual();
-        }, () => { _bugAnchor.Children.Remove(row); LootUnder(0); });
+        }, () => { _bugAnchor.Children.Remove(row); LootUnder(0); hour?.ClearValue(UIElement.RenderTransformProperty); });
         if (_bestBlock is Grid bg)
         {
             // the red block's own sweep, a beat after the lower third's
@@ -620,7 +633,9 @@ sealed partial class HudScorebug : TacticalLook
         Motion.Play(_timerEdge, 1500, t =>
         {
             // the block cuts in from its left edge past its width and settles, then a light crosses it and its edge rings out
-            sc.ScaleX = t < .16 ? Out(t / .16) * 1.1 : 1 + .1 * (1 - Back(Seg(t, .16, .3), 2));
+            // (never past its width: the block ends at the window's edge)
+            sc.ScaleX = Out(Seg(t, 0, .14));
+            sc.ScaleY = t < .14 ? 1.25 : 1 + .25 * (1 - Back(Seg(t, .14, .3), 2.2));
             _timerPulse = Seg(t, .2, 1); _timerEdge.InvalidateVisual();
             if (blk != null) SweepOf(blk, t < .14 ? -1 : Seg(t, .14, .5));
         }, () => { _timerPulse = -1; _timerEdge.InvalidateVisual(); if (blk != null) { SweepOf(blk, -1); blk.ClearValue(UIElement.RenderTransformProperty); } });
@@ -667,36 +682,52 @@ sealed partial class HudScorebug : TacticalLook
         _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band); _fightFx.Children.Add(plate);
         plate.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = plate.DesiredSize.Width + 16;
-        // after its hit the plate rises into the title bar and sits there, smaller, the title stepping aside (2026-11-21: the band
-        // held over the board two and a half seconds hid the figures); a scale and a move, never a clip on its words once in
-        double boxH = _fightGrid.ActualHeight > 0 ? _fightGrid.ActualHeight : 220, titleH = _titleHost.ActualHeight > 0 ? _titleHost.ActualHeight : 30;
+        // after its hit (a third of a second over the board, dimmed under it) the plate flies into the title's KILLED, which
+        // pops, the winner's row glinting; a loss slumps off the board instead, DEFEAT sinking and breaking up, WIPED
+        // stuttering; the title stays in sight throughout (2026-11-21: the band held over the board two and a half seconds,
+        // then a plate in the title bar hid the boss)
+        double boxH = _fightGrid.ActualHeight > 0 ? _fightGrid.ActualHeight : 220, boxW = _fightGrid.ActualWidth > 0 ? _fightGrid.ActualWidth : FightWidth;
         double plateMid = plate.VerticalAlignment == VerticalAlignment.Top ? plate.Margin.Top + plateH / 2 : boxH - plate.Margin.Bottom - plateH / 2;
-        double rise = titleH / 2 - plateMid, small = Math.Min(.62, (titleH - 2) / plateH);
+        var target = _outcomeEl ?? _clockEl;
+        Vector? to = Centre(target, _fightGrid) is Point tc ? new Vector(tc.X - boxW / 2, tc.Y - plateMid) : null;
         var lift = new TranslateTransform(); var shrink = new ScaleTransform(1, 1);
         plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = new TransformGroup { Children = { shrink, lift } };
-        var title = _titleHost; var board = _rowsHost;
-        Motion.Play(_fightFx, 2600, t =>
+        var board = _rowsHost;
+        var pop = wipe ? null : PopOn(target, new Point(.5, .5));
+        Motion.Play(_fightFx, 2200, t =>
         {
-            double i = Out(Seg(t, .02, .1)), o = Seg(t, .86, 1); o = o * o;
+            double i = Out(Seg(t, .02, .1));
             plate.Clip = t < .1 ? Wipe(0, w * i, plateH + 4) : null;
-            plate.Opacity = 1 - o;
-            // the hit: the band and the dim over the board for a third of a second, then gone as the plate rises
-            dim.Opacity = band.Opacity = t < .13 ? Out(Seg(t, 0, .04)) : 1 - Seg(t, .13, .18);
-            double k = Out(Seg(t, .14, .24));
-            lift.Y = rise * k; shrink.ScaleX = shrink.ScaleY = 1 - (1 - small) * k;
-            title.Opacity = t > .17 && t < .88 ? 0 : 1;
-            // the board itself dims under the hit (the plate crosses its words on the way up), back as the plate leaves it
-            board.Opacity = 1 - .88 * Seg(t, 0, .03) * (1 - Seg(t, .16, .22));
-            // a win glints; a loss slams in with a red flash and no shine
-            if (!wipe) { main.Sweep = Seg(t, .3, .6); main.Art.InvalidateVisual(); }
+            dim.Opacity = band.Opacity = t < .2 ? Out(Seg(t, 0, .04)) : 1 - Seg(t, .2, .25);
+            board.Opacity = 1 - .88 * Seg(t, 0, .03) * (1 - Seg(t, .2, .26));
+            double k = Seg(t, .2, .3);
+            if (wipe)
+            {
+                // the loss slams in (a red flash, no shine), then sinks off the board and breaks up
+                lift.X = 6 * (1 - Out(Seg(t, .02, .12)));
+                lift.Y = 30 * k * k; shrink.ScaleY = 1 - .4 * k;
+                plate.Opacity = k <= 0 ? 1 : ((int)(t * 50) % 2 == 0 ? 1 - k : .3 * (1 - k));
+                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .03 && t < .12 ? .6 : 0), _studio ? 1 : .9));
+                // the board shudders under it, WIPED stutters
+                board.RenderTransform = t < .3 ? new TranslateTransform(Math.Round(4 * (1 - t / .3) * ((int)(t * 60) % 2 == 0 ? 1 : -1)), 0) : null;
+                if (target != null) target.Opacity = t > .28 && t < .6 && (int)(t * 50) % 3 == 0 ? .2 : 1;
+            }
             else
             {
-                lift.X = 6 * (1 - Out(Seg(t, .02, .12)));
-                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .03 && t < .12 ? .6 : 0), _studio ? 1 : .9));
-                // the board shudders once under the loss
-                board.RenderTransform = t < .2 ? new TranslateTransform(Math.Round(4 * (1 - t / .2) * ((int)(t * 60) % 2 == 0 ? 1 : -1)), 0) : null;
+                // a win glints, then the plate shrinks into the title's KILLED, which pops as it lands
+                main.Sweep = Seg(t, .06, .2); main.Art.InvalidateVisual();
+                double q = Out(k);
+                if (to is Vector v) { lift.X = v.X * q; lift.Y = v.Y * q; shrink.ScaleX = shrink.ScaleY = 1 - .88 * q; }
+                plate.Opacity = k < .7 ? 1 : 1 - (k - .7) / .3;
+                Pop(pop, t, .28, .48, .45);
             }
-            if (winner != null) { winner.Sweep = Seg(t, .04, .4); winner.Apply(); }
-        }, () => { _fightFx.Children.Clear(); title.Opacity = 1; board.Opacity = 1; board.ClearValue(UIElement.RenderTransformProperty); if (winner != null) { winner.Sweep = -1; winner.Apply(); } });
+            if (k >= 1) plate.Opacity = 0;
+            if (winner != null) { winner.Sweep = Seg(t, .26, .62); winner.Apply(); }
+        }, () =>
+        {
+            _fightFx.Children.Clear(); board.Opacity = 1; board.ClearValue(UIElement.RenderTransformProperty);
+            if (target != null) { target.Opacity = 1; if (!wipe) target.ClearValue(UIElement.RenderTransformProperty); }
+            if (winner != null) { winner.Sweep = -1; winner.Apply(); }
+        });
     }
 }

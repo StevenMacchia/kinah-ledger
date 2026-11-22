@@ -591,7 +591,7 @@ sealed partial class HudTerminal : HudThemeLook, IThemeCard
             // the picture fails: it rolls, collapses to a red-white line and comes back, the words rolling once more as it settles
             var roll = new TranslateTransform(); _cam.Body.RenderTransform = roll;
             Motion.Play(_cam.Body, 2000, t => roll.Y = t < .24 ? Math.Round((1 - t / .24) * ((int)(t * 40) % 2 == 0 ? -7 : 2)) : 0, () => _cam.Body.ClearValue(UIElement.RenderTransformProperty));
-            Tube(_cam, 2000, t => (1, t < .06 ? 1 - .97 * Out(t / .06) : t < .1 ? .03 : t < .18 ? .03 + .97 * Out((t - .1) / .08) : 1, t < .06 ? Out(t / .06) * .8 : t < .1 ? .9 : t < .22 ? .9 * (1 - (t - .1) / .12) : 0));
+            Tube(_cam, 2000, t => (1, t < .06 ? 1 - .97 * Out(t / .06) : t < .1 ? .03 : t < .18 ? .03 + .97 * Out((t - .1) / .08) : 1, t < .06 ? Out(t / .06) * .8 : t < .09 ? .9 : t < .13 ? .9 * (1 - (t - .09) / .04) : 0));
         }
         else Degauss(_cam, 1000, .025, Rgb(0x7DFFC4));
         if (!wipe && Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is TerminalRows.Row row) row.Bloom(Rgb(AmberC), 2000);
