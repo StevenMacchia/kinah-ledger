@@ -339,11 +339,14 @@ public partial class MainWindow
         bool ap = inAbyss && _mode != Mode.Gather;
         _heroAbyss = ap;
         long hero = ap ? abyss : total;
+        // the points' hour is over the time in the Abyss (AbyssHours), the Kinah hour over the session's
+        double rh = ap ? Math.Max(AbyssHours(e), 1e-6) : h;
+        bool warming = ap ? AbyssWarming(rh) : _rateWarming;
         // it rolls when the count under it moved (a pickup), not as the hour ticks on; green when it rose 1% (not warming up)
         bool counted = hero != _heroTotal; _heroTotal = hero;
         // keyed apart in the Abyss, so walking in doesn't roll the Kinah hour down into the points'
         string heroKey = "hero|" + _part + "|" + CountWhere() + (ap ? "|ap" : "");
-        if (hero > 0) Motion.Number(HeadRate, heroKey, hero / h, v => Fk(v), _rateWarming ? -1 : 0.01, roll: counted);
+        if (hero > 0) Motion.Number(HeadRate, heroKey, hero / rh, v => Fk(v), warming ? -1 : 0.01, roll: counted);
         else Motion.Blank(HeadRate, heroKey, " ");
         // the first line: the hour, and the place's own hour beside it once the session has been in more than one place
         // (0.10.70: one screen, the place a sub-number of the whole). What it adds up, on the second
@@ -355,16 +358,16 @@ public partial class MainWindow
             : priced > 0 || loot > 0 ? which + "\n" + (_mode == Mode.Gather && kinah == 0 ? L.T("loot after tax") : L.T("Kinah and loot after tax"))
             : which + "\n" + L.T("Kinah; loot not priced yet");
         // warming up (FillNumbers): the figure dimmed, and said so, until the count is old enough for an hour to mean something
-        bool warm = _rateWarming && hero > 0;
+        bool warm = warming && hero > 0;
         HeadRate.Opacity = warm ? 0.4 : 1;
         if (warm) HeadRateLbl.Text += " · " + L.T("warming up");
         string flip = RunShown ? "" : "\n" + L.F("Every zone since your last break ({0:0} minutes with nothing farmed).", TrackerSession.BreakMinutes)
             + (hereHr.Length > 0 && _here is { } hh ? " " + L.F("{0}: the hour in {1} alone, over its {2}.", hereHr[3..], hh.Place, TodayLoot.Dur(hh.Hours * 3600)) : "");
         HeadRate.ToolTip = (warm ? L.F("Warming up: a rate from the first moments swings wildly. It shows after {0:0} seconds of farming and {1} things counted.", RateWarmup.TotalSeconds, RateWarmupCounts)
-            : ap ? (abyss > 0 ? L.F("{0} Abyss Points an hour: {1:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it.", Amounts.Full(abyss / h), abyss) : L.T("No Abyss Points picked up yet."))
+            : ap ? (abyss > 0 ? L.F("{0} Abyss Points an hour: {1:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it.", Amounts.Full(abyss / rh), abyss) : L.T("No Abyss Points picked up yet."))
             : total > 0 ? L.F("{0} an hour", Amounts.Full(total / h)) : L.T("Nothing counted yet.")) + flip;
         FillHeroTicket(ap, total, h, priced, loot, _rateWarming && total > 0);
-        FillRankTicket(ap, e.RankPoints, e.RankPointsLost, h, _rateWarming);
+        FillRankTicket(ap, e.RankPoints, e.RankPointsLost, rh, warming);
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
         // a clear that can still be undone draws no line and keeps the real one's samples for Undo
@@ -372,7 +375,7 @@ public partial class MainWindow
         {
             // a line of one thing: the points' in the Abyss, the Kinah hour's elsewhere (a count only crosses over at a break)
             if (!ReferenceEquals(_rateOf, e) || _rateOfAbyss != ap) { _rateOf = e; _rateOfAbyss = ap; _rateLine.Clear(); }
-            if (hero > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, hero / h);
+            if (hero > 0 && !warming) _rateLine.Add(DateTime.UtcNow, hero / rh);
         }
         KvLine.Inlines.Clear();
         void Fig(string text) { var r = new Run(text); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextElement.ForegroundProperty, "Ink"); KvLine.Inlines.Add(r); }
