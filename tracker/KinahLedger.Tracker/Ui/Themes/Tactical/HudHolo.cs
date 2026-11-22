@@ -63,6 +63,10 @@ sealed partial class HudHolo : TacticalLook
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly ScaleTransform _project = new(1, 1);
     double _projectLine = 0;
+    /// <summary>The head's KILLED / WIPED and its clock: the end's callout flies into one.</summary>
+    FrameworkElement? _outcomeEl, _clockEl;
+    /// <summary>The first timer's chip (an entry opening projects it in).</summary>
+    Grid? _chip;
 
     public HudHolo() : base(bare: false, Face)
     {
@@ -143,7 +147,7 @@ sealed partial class HudHolo : TacticalLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ring = null; _ringArt = null; _hexHost = null;
+        _ring = null; _ringArt = null; _hexHost = null; _hour = null;
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Tactical/HudHolo.Run.cs)
         if (RunNow is { } rs) { DrawRun(rs); DrawNote(f); return; }
         var row = new StackPanel { Orientation = Orientation.Horizontal };
@@ -187,6 +191,7 @@ sealed partial class HudHolo : TacticalLook
                 hour.Children.Add(gl);
             }
             row.Children.Add(hour);
+            _hour = hour;
             if (f.Total.Length > 0)
             {
                 row.Children.Add(new TacSketch((dc, s) =>
@@ -347,7 +352,7 @@ sealed partial class HudHolo : TacticalLook
     protected override void DrawTimers(IReadOnlyList<TimerBoard.Item> due, DateTime now)
     {
         _timers.Children.Clear();
-        _chipArt = null;
+        _chipArt = null; _chip = null;
         foreach (var i in due.Take(KinahHidden ? 2 : HudWindow.TimerLineMax))
         {
             var (text, tone) = TimerWords(i, now);
@@ -371,7 +376,7 @@ sealed partial class HudHolo : TacticalLook
             var t = Tt(text, first ? 13 : 11.5, Frozen(first ? c : Tac.A(c, .9)), Face, first ? FontWeights.Bold : FontWeights.SemiBold);
             t.Margin = first ? new Thickness(10, 3, 11, 4) : new Thickness(8, 2, 9, 3);
             chip.Children.Add(t);
-            if (first) _chipArt = art;
+            if (first) { _chipArt = art; _chip = chip; }
             _timers.Children.Add(chip);
         }
         PlaceTimers();
@@ -394,6 +399,7 @@ sealed partial class HudHolo : TacticalLook
     {
         StripFollowsFight(e);
         _fightBody.Children.Clear();
+        _outcomeEl = _clockEl = null;
         if (e == null) { _fight.Visibility = Visibility.Collapsed; _fightFx.Children.Clear(); PlaceTimers(); return; }
         double w = FightWidth - 10;
         _fight.Width = w;
@@ -412,8 +418,9 @@ sealed partial class HudHolo : TacticalLook
         else
         {
             var outcome = OutcomeText(e);
-            if (outcome.Length > 0) { var ot = Tt(outcome.ToUpperInvariant(), 10.5, e.Outcome == "wipe" ? Coral : Green, Small, FontWeights.Bold); ot.Margin = new Thickness(0, 1, 8, 0); right.Children.Add(ot); }
-            right.Children.Add(Tt(Clock(e, now), 17, e.Live ? Amber : Pale, Face, FontWeights.Bold));
+            if (outcome.Length > 0) { var ot = Tt(outcome.ToUpperInvariant(), 10.5, e.Outcome == "wipe" ? Coral : Green, Small, FontWeights.Bold); ot.Margin = new Thickness(0, 1, 8, 0); right.Children.Add(ot); _outcomeEl = ot; }
+            var clockFig = Tt(Clock(e, now), 17, e.Live ? Amber : Pale, Face, FontWeights.Bold);
+            right.Children.Add(clockFig); _clockEl = clockFig;
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         _fightBody.Children.Add(head);
@@ -508,8 +515,8 @@ sealed partial class HudHolo : TacticalLook
             for (double y = 0; y < s.Height; y += 3) dc.DrawRectangle(Frozen(Tac.A(DeepC, .85 * lines)), null, new Rect(0, y, s.Width, 1.6));
         });
         chip.Children.Add(mask);
-        var reveal = new RectangleGeometry(new Rect(0, 0, 200, 0));
-        chip.Clip = reveal;
+        // it opens downward from its top edge by its scale (a growing clip cut its words while it opened)
+        var open = new ScaleTransform(1, 0); chip.RenderTransformOrigin = new Point(0, 0); chip.RenderTransform = open;
         Canvas.SetLeft(chip, 8);
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
@@ -518,8 +525,8 @@ sealed partial class HudHolo : TacticalLook
         Motion.Play(chip, 2000, t =>
         {
             sweep = Seg(t, 0, .4); scan.InvalidateVisual();
-            // top to bottom, as the scan crosses the panel's edge; then the scan lines thin out
-            reveal.Rect = new Rect(-2, -2, 220, (ch + 4) * Out(Seg(t, .2, .36)));
+            // top to bottom, as the scan crosses the panel's edge (a hair past its size, back); then the scan lines thin out
+            open.ScaleY = Back(Seg(t, .2, .34), 1.6); open.ScaleX = 1 + .08 * (1 - Out(Seg(t, .2, .4)));
             lines = 1 - Seg(t, .28, .5); mask.InvalidateVisual();
             chip.Opacity = t < .86 ? Math.Max(.5, Seg(t, .2, .32)) : 1 - Seg(t, .86, 1);
         }, () => { _lineAnchor.Children.Remove(chip); _lineFx.Children.Remove(scan); });
@@ -529,25 +536,41 @@ sealed partial class HudHolo : TacticalLook
     protected override void RareDrop(Pick p, bool held)
     {
         if (_hexHost is not Grid hex || hex.Children[0] is not TacSketch art) return;
-        // the frame unfolds and the tile blooms in (from 0.6, past 1.15, settling); RARE DROP lights amber while it plays
+        // the line's glass flashes the drop's grade; the frame unfolds and the tile blooms in (from 0.6, past 1.15, settling);
+        // RARE DROP lights amber while it plays
+        if (_line.Visibility == Visibility.Visible) Flash(_line, ColorOf(p.Color, p.Grade), 1600);
         var sc = new ScaleTransform(1, 1);
         hex.RenderTransformOrigin = new Point(.5, .5); hex.RenderTransform = sc;
         var label = _rareLabel;
         Motion.Play(hex, 1600, t =>
         {
             _hex = Out(Seg(t, 0, .6)); art.InvalidateVisual();
+            hex.Opacity = t < .12 ? ((int)(t / .03) % 2 == 0 ? .3 : 1) : 1;
             double k = Seg(t, 0, .4);
             sc.ScaleX = sc.ScaleY = .6 + .4 * Back(k, 2.4);
             if (label != null) { label.Foreground = t < .9 ? Amber : Lite; label.FontSize = t < .9 ? 10.5 : 9.5; }
-        }, () => { _hex = 1; art.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; if (label != null) { label.Foreground = Lite; label.FontSize = 9.5; } });
+        }, () => { _hex = 1; hex.Opacity = 1; art.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; if (label != null) { label.Foreground = Lite; label.FontSize = 9.5; } });
     }
     TextBlock? _rareLabel;
+    /// <summary>The hour and the way to your best (a best passed punches it).</summary>
+    FrameworkElement? _hour;
+
+    /// <summary>A flash of <paramref name="c"/> over the fight's glass as a kill lands (drawn once, its opacity moved): up at once, gone by a fifth of the course.</summary>
+    static void Flash(Grid over, Color c, double ms)
+    {
+        var art = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Tac.A(c, .34)), null, Tac.Cut(new Rect(0, 0, s.Width, s.Height), Cut))) { IsHitTestVisible = false, Opacity = 0 };
+        over.Children.Add(art);
+        // up at once, held a beat (about 200 ms on a 1.6 s course), then gone
+        Motion.Play(art, ms, t => art.Opacity = t < .02 ? t / .02 : t < .13 ? 1 : 1 - Out(Seg(t, .13, .32)), () => over.Children.Remove(art));
+    }
 
     /// <summary>Your best passed: the ring's arc runs on round to full with a light trail and RECORD lights under it.</summary>
     protected override void BestPassed(bool held)
     {
         if (_ring == null || _ringArt == null) return;
         var ring = _ring; var art = _ringArt;
+        if (_line.Visibility == Visibility.Visible) Flash(_line, GreenC, 2000);
+        var hour = _hour; var hp = PopOn(hour, new Point(0, .5));
         // the arc runs from the share before (the beat ring is full: from 0.85 of it)
         double was = _share is > 0 and < 1 ? _share : .82;
         bool beat = _beat;
@@ -565,13 +588,41 @@ sealed partial class HudHolo : TacticalLook
             if (t >= .62) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
             tag.Opacity = t < .4 ? 0 : t < .44 ? .4 : 1;
-        }, () => { _complete = 0; _trail = -1; _beat = beat; art.InvalidateVisual(); ring.Children.Remove(tag); });
+            Pop(hp, t, .12, .5, .15);
+        }, () => { _complete = 0; _trail = -1; _beat = beat; art.InvalidateVisual(); ring.Children.Remove(tag); hour?.ClearValue(UIElement.RenderTransformProperty); });
     }
 
     /// <summary>An entry opened: the green chip's outline traces itself in, a light at its head.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        Motion.Play(_timers, 1100, t => { _trace = Out(t); _chipArt?.InvalidateVisual(); }, () => { _trace = 1; _chipArt?.InvalidateVisual(); });
+        var chip = _chip;
+        var sc = new ScaleTransform(1, 1);
+        Border? sweep = null; TranslateTransform? st = null;
+        if (chip != null)
+        {
+            chip.RenderTransformOrigin = new Point(0, .5); chip.RenderTransform = sc;
+            // a light crossing the chip once (its glass clips it)
+            st = new TranslateTransform(-40, 0);
+            sweep = new Border { Width = 26, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, RenderTransform = st,
+                Background = new LinearGradientBrush(Tac.A(Colors.White, 0), Tac.A(Colors.White, 0), 0) { GradientStops = { new GradientStop(Tac.A(Colors.White, 0), 0), new GradientStop(Tac.A(GreenC, .55), .5), new GradientStop(Tac.A(Colors.White, 0), 1) } } };
+            chip.ClipToBounds = true;
+            chip.Children.Add(sweep);
+        }
+        Motion.Play(_timers, 1300, t =>
+        {
+            _trace = Out(Seg(t, .1, .8)); _chipArt?.InvalidateVisual();
+            if (chip == null) return;
+            // projected on: flickering up, a punch past its size, settled; a light crossing it
+            chip.Opacity = t < .14 ? ((int)(t / .035) % 2 == 0 ? .3 : 1) : 1;
+            sc.ScaleX = sc.ScaleY = t < .14 ? 1.22 : 1 + .22 * (1 - Back(Seg(t, .14, .36), 2.2));
+            if (st != null) st.X = -40 + (chip.ActualWidth + 60) * Seg(t, .26, .62);
+        }, () =>
+        {
+            _trace = 1; _chipArt?.InvalidateVisual();
+            if (chip == null) return;
+            chip.Opacity = 1; chip.ClearValue(UIElement.RenderTransformProperty); chip.ClipToBounds = false;
+            if (sweep != null) chip.Children.Remove(sweep);
+        });
     }
 
     /// <summary>A fight started: its panel projects in, out of a bright line across its middle.</summary>
@@ -625,16 +676,48 @@ sealed partial class HudHolo : TacticalLook
         }
         if (height < least) { top -= (least - height) / 2; height = least; }
         var zone = new Grid { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Max(0, top), 0, 0), Height = height };
-        var dim = new Border { Background = Frozen(Tac.A(DeepC, .78)), Opacity = 0 };
-        zone.Children.Add(dim); zone.Children.Add(band);
+        zone.Children.Add(band);
+        // after its hit the band folds and flies into the head's KILLED (a kill: it pops, a cyan light sweeps the rows), or slumps
+        // and breaks up (a wipe: the projection drops out, rows flickering and slipping, WIPED stuttering); the head stays in sight
         _fightFx.Children.Clear(); _fightFx.Children.Add(zone);
-        Motion.Play(_fightFx, 2600, t =>
+        var body = _fightBody;
+        var target = _outcomeEl ?? _clockEl;
+        Vector? to = null;
+        if (Centre(target, _fight) is Point tc && _fight.ActualWidth > 0) to = new Vector(tc.X - _fight.ActualWidth / 2, tc.Y - (Math.Max(0, top) + height / 2));
+        var lift = new TranslateTransform(); var fly = new ScaleTransform(1, 1);
+        zone.RenderTransformOrigin = new Point(.5, .5); zone.RenderTransform = new TransformGroup { Children = { fly, lift } };
+        var pop = wipe ? null : PopOn(target, new Point(1, .5));
+        var slip = new TranslateTransform(); body.RenderTransform = slip;
+        if (!wipe) { Flash(_fight, CyanC, 2200); LightSweep(_fightFx, CyanC, 2200, .3, .62, new Thickness(0, 26, 0, 4)); }
+        Motion.Play(_fightFx, 2200, t =>
         {
-            scale.ScaleY = Math.Max(.03, Out(Seg(t, .04, .2)));
-            scale.ScaleX = Out(Seg(t, 0, .1)) * .9 + .1;
-            words.Opacity = t < .16 ? 0 : t < .19 ? .4 : t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            dim.Opacity = t < .84 ? Out(Seg(t, 0, .14)) : 1 - Seg(t, .84, 1);
-        }, () => _fightFx.Children.Clear());
+            // the hit: out of a line across the rows, held a moment (the rows dimmed under it)
+            scale.ScaleY = Math.Max(.03, Out(Seg(t, .02, .07)));
+            scale.ScaleX = Out(Seg(t, 0, .05)) * .9 + .1;
+            words.Opacity = t < .05 ? 0 : t < .07 ? .4 : 1;
+            double k = Seg(t, .19, .28);
+            if (wipe)
+            {
+                // beaten: it sinks and comes apart in scan gaps
+                lift.Y = 26 * k * k; fly.ScaleY = 1 - .5 * k; zone.Opacity = k <= 0 ? 1 : (int)(t * 50) % 2 == 0 ? .7 * (1 - k) : .25 * (1 - k);
+                int s = (int)(t * 50);
+                slip.X = t < .34 ? Math.Round(4 * (1 - t / .34) * (s % 3 - 1)) : 0;
+                body.Opacity = t < .19 ? 1 - .88 * Seg(t, 0, .03) : t < .5 ? (s % 4 == 0 ? .45 : 1) : 1;
+                if (target != null) target.Opacity = t > .26 && t < .6 && s % 3 == 0 ? .2 : 1;
+            }
+            else
+            {
+                double q = Out(k);
+                if (to is Vector v) { lift.X = v.X * q; lift.Y = v.Y * q; fly.ScaleX = 1 - .9 * q; fly.ScaleY = 1 - .8 * q; }
+                zone.Opacity = k < .7 ? 1 : 1 - (k - .7) / .3;
+                body.Opacity = 1 - .88 * Seg(t, 0, .03) * (1 - Seg(t, .19, .25));
+                Pop(pop, t, .27, .47, .45);
+            }
+            if (k >= 1) zone.Opacity = 0;
+        }, () =>
+        {
+            _fightFx.Children.Clear(); body.Opacity = 1; body.ClearValue(UIElement.RenderTransformProperty);
+            if (target != null) { target.Opacity = 1; if (!wipe) target.ClearValue(UIElement.RenderTransformProperty); }
+        });
     }
 }

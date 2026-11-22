@@ -259,8 +259,10 @@ static class VhsRows
         const double H = 25;
         readonly Border _chip = new() { MinWidth = 19, Height = 17, Padding = new Thickness(3, 0, 3, 0), CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 6, 0) };
         readonly TextBlock _rank = Txt("", 11, White, Sans);
+        // the counter window is smoked glass: the bar runs on under it to the row's end (Steven, 2026-11-21: the leader's bar
+        // stopped at about 60% of the row with the meter expanded), the DPS crisp on the glass
         readonly Border _counter = new() { CornerRadius = new CornerRadius(2), BorderThickness = new Thickness(1), Margin = new Thickness(5, 0, 0, 0),
-            Background = Vertical((Rgb(0x000000, .92), 0), (Rgb(0x0A0C10, .92), 1)) };
+            Background = Vertical((Rgb(0x000000, .7), 0), (Rgb(0x0A0C10, .62), 1)) };
         readonly TextBlock _fig = FigCell(16, White, Sans, Math.Ceiling(TextW("199.9K", Sans, 16, FontWeights.Bold)), FontWeights.Bold);
         static readonly Brush DeckHeal = Br(0x7DFFAA);
 
@@ -274,6 +276,7 @@ static class VhsRows
             Box.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Level.Track.Background = Vertical((Rgb(0x000000, .62), 0), (Rgb(0x000000, .5), 1));
             Level.Track.BorderBrush = Br(0xFFFFFF, .09); Level.Track.BorderThickness = new Thickness(1); Level.Track.CornerRadius = new CornerRadius(2);
+            Grid.SetColumnSpan(Level.Root, 2);
             Box.Children.Add(Level.Root);
             HealLevel.Root.Height = 3; HealLevel.Root.VerticalAlignment = VerticalAlignment.Bottom; HealLevel.Root.Margin = new Thickness(1, 0, 1, 1);
             Box.Children.Add(HealLevel.Root);

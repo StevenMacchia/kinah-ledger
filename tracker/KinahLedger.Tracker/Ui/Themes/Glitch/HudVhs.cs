@@ -79,6 +79,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
     readonly StackPanel _rowsHost = new();
     readonly ContentControl _foot = new() { Focusable = false };
     double _hpShare = -1;
+    /// <summary>The fight's head (the OSD line, the boss and its clock): the STOP card covers all of it.</summary>
+    readonly FrameworkElement _head;
 
     public HudVhs() : this(Tape.Viewfinder) { }
 
@@ -130,7 +132,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         _deck.Body.Children.Add(_note);
 
         // the camera: the head (Deck's in a display window of its own), the timer in a dungeon, the HP, the ready line, the rows, the foot
-        _cam.Body.Children.Add(Head());
+        _head = Head();
+        _cam.Body.Children.Add(_head);
         _camTimerCell.Children.Add(_camTimer); _camTimerCell.Children.Add(_camPlay);
         _cam.Body.Children.Add(_camTimerCell);
         BuildHp();
@@ -306,6 +309,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         // the hour, big and crisp, and your best
         _figRow.Children.Clear(); _figRow.ColumnDefinitions.Clear(); _figRow.RowDefinitions.Clear();
         _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); _figRow.ColumnDefinitions.Add(new ColumnDefinition()); _figRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _cells = null;
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         if (f.Abyss && f.Counted && f.Icon.Length > 0) { var m = AbyssMark(f.Icon, 30); m.Margin = new Thickness(0, 0, 9, 0); left.Children.Add(m); }
         if (!f.Counted || f.Rate.Length == 0)
@@ -396,8 +400,11 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             cells.Children.Add(new Border { Width = 5, Height = 8, Margin = new Thickness(0, 0, 1.5, 0), Background = i < lit ? on : Br(0xFFFFFF, .16) });
         cells.Children.Add(new Border { Width = 2, Height = 4, Background = Br(0xFFFFFF, .45), VerticalAlignment = VerticalAlignment.Center });
         sp.Children.Add(cells);
+        _cells = cells;
         return sp;
     }
+    /// <summary>The battery's cells drawn last (a best passed charges them one by one).</summary>
+    StackPanel? _cells;
 
     protected override void DrawTimers(IReadOnlyList<TimerBoard.Item> due, DateTime now)
     {
@@ -521,7 +528,10 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
     protected override void RareDrop(Pick p, bool held)
     {
         if (KinahHidden) return;
-        _deck.Flash(Colors.White, .6, 2300, .03, .36);
+        // the freeze-frame in the drop's grade: the picture flashes its colour and jolts as the tape pauses on it
+        var gc = ColorOf(p.Color, p.Grade);
+        _deck.Flash(gc, .5, 2300, .03, .34);
+        Wobble(_deck.Body, 2300, 4, .14);
         // the freeze-frame: two noise bars held across the still picture, seething in place
         foreach (var (y, hh) in new[] { (.28, 3.0), (.74, 2.0) })
         {
@@ -529,7 +539,10 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             var bar = new Rectangle { Fill = nb, Height = hh, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Round(_deck.H * y), 0, 0) };
             _deck.Run(bar, 2300, t => { bar.Opacity = Gate(t, .05, .9, .02, .12); Shift(nb, t, 40); }, under: true);
         }
-        // PAUSE blinks, the tile lands
+        // PAUSE blinks, the tile lands, the drop's row fills its grade and fades back to the glass
+        var fill = new SolidColorBrush(Color.FromArgb(0, gc.R, gc.G, gc.B));
+        _rare.Background = fill;
+        Motion.Play(_rare, 2300, t => fill.Color = Color.FromArgb((byte)(255 * .5 * (t < .06 ? t / .06 : Math.Pow(1 - Seg01(t, .06, .6), 2))), gc.R, gc.G, gc.B), () => _rare.Background = null);
         Motion.Play(_pause, 2300, t => _pause.Opacity = Blink(t, 4, .5) ? 1 : .2, () => _pause.Opacity = 1);
         if (_rareTile is { } tile)
         {
@@ -538,32 +551,83 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         }
     }
 
+    /// <summary>
+    /// The tape loses its hold for a moment: <paramref name="el"/> slips sideways in held steps (a new one every 40 ms),
+    /// sheared a little (<paramref name="skew"/> degrees), the slips dying away by <paramref name="until"/> of the course; then
+    /// it stands where it was. The figures move with it, a few px at most.
+    /// </summary>
+    /// <param name="roll">The vertical hold lost too: the picture jumps this many px up and down, less each time, then holds.</param>
+    static void Wobble(FrameworkElement el, double ms, double amp, double until = 1, double skew = 0, double roll = 0)
+    {
+        var tt = new TranslateTransform(); var sk = new SkewTransform();
+        el.RenderTransform = new TransformGroup { Children = { sk, tt } };
+        Motion.Play(el, ms, t =>
+        {
+            if (t >= until) { tt.X = tt.Y = 0; sk.AngleX = 0; return; }
+            double fade = 1 - t / until;
+            int s = (int)(t * ms / 40);
+            tt.X = Math.Round(amp * fade * (Hash("w" + s) * 2 - 1));
+            sk.AngleX = skew * fade * (Hash("k" + s) * 2 - 1);
+            tt.Y = roll == 0 ? 0 : Math.Round(roll * fade * (s % 4 == 0 ? 1 : s % 4 == 2 ? -.6 : .2));
+        }, () => el.ClearValue(UIElement.RenderTransformProperty));
+    }
+
+    static double Seg01(double p, double a, double b) => Math.Clamp((p - a) / (b - a), 0, 1);
+
+    /// <summary>The tape row's parts (REC, the counter, a pickup's mark, a run's head and count): a title card over the row puts them away.</summary>
+    IEnumerable<UIElement> TapeRow() => new UIElement[] { _rec, _tc, _ff, _runHead, _runCount };
+
     protected override void BestPassed(bool held)
     {
         if (KinahHidden) return;
-        _deck.Flash(Colors.White, .45, 1900, .05, .3);
+        _deck.Flash(Colors.White, .45, 2000, .04, .26);
         Band(_deck, 900, 22, .6);
-        // the title card over the tape row: a yellow card wiped open, held, wiped away
+        // the title card over the tape row: cut open in four hard steps, a punch in its height, held, folded to a line
         var card = new Grid { VerticalAlignment = VerticalAlignment.Top, Height = 19, Margin = new Thickness(6, 5, 6, 0) };
         card.Children.Add(new Border { Background = Yellow });
         var cw = Split(L.T("★ REC BEST"), 12, Face, FontWeights.Bold, Black, Rgb(RedC, .7), Rgb(CyanC, .9), 1.2);
         cw.HorizontalAlignment = HorizontalAlignment.Center;
         card.Children.Add(cw);
         var scale = new ScaleTransform(0, 1); card.RenderTransformOrigin = new Point(.5, .5); card.RenderTransform = scale;
-        _deck.Run(card, 1900, t => scale.ScaleX = t < .14 ? Steps(t / .14, 5) + .2 : t < .86 ? 1 : 1 - Steps((t - .86) / .14, 4));
+        var row = TapeRow().ToList();
+        var cells = _cells?.Children.OfType<Border>().Take(10).ToList();
+        _deck.Run(card, 2000, t =>
+        {
+            scale.ScaleX = t < .08 ? Steps(t / .08, 4) : 1;
+            scale.ScaleY = t < .08 ? 1 : t < .22 ? 1 + .3 * (1 - Out((t - .08) / .14)) : t < .86 ? 1 : Math.Max(.08, 1 - Steps((t - .86) / .08, 4));
+            card.Opacity = t < .94 ? 1 : 0;
+            // the tape row steps aside while the card is up (never two words over each other)
+            foreach (var el in row) el.Opacity = t > 0 && t < .94 ? 0 : 1;
+            // the battery charges cell by cell under it, then stands full
+            if (cells != null) for (int i = 0; i < cells.Count; i++) cells[i].Opacity = t < .14 + i * .03 ? .15 : 1;
+        });
+        // the course's end puts the row back (a frame held mid-course keeps it as above)
+        Motion.Play(_rec, 2000, _ => { }, () => { foreach (var el in row) el.Opacity = 1; if (cells != null) foreach (var c in cells) c.Opacity = 1; });
     }
 
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        var tag = KinahHidden ? _camPlay : _play;
+        var (tag, timer, panel) = KinahHidden ? (_camPlay, _camTimer, _cam) : (_play, _timer, _deck);
+        // PLAY pressed: the tag punches in over the timer (the timer steps aside), white for a frame, a tracking roll crosses
+        // the panel; it holds, then folds shut in steps and the timer stands lit in green where it was
         tag.Visibility = Visibility.Visible;
-        // PLAY flashes three times over the timer, then the timer stands lit in green
-        Motion.Play(tag, 1500, t => tag.Visibility = t < .8 && (t / .8 * 3) % 1 < .62 ? Visibility.Visible : Visibility.Hidden, () => tag.Visibility = Visibility.Hidden);
+        var s = new ScaleTransform(0, 1); tag.RenderTransformOrigin = new Point(.5, .5); tag.RenderTransform = s;
+        var green = tag.Background;
+        Band(panel, 700, 18, .5);
+        Motion.Play(tag, 1600, t =>
+        {
+            s.ScaleX = t < .1 ? Back(t / .1, 2.2) : 1;
+            s.ScaleY = t < .1 ? 1.3 : t < .24 ? 1 + .3 * (1 - Out((t - .1) / .14)) : t < .74 ? 1 : Math.Max(0, 1 - Steps((t - .74) / .1, 4));
+            tag.Background = t > .08 && t < .16 ? White : green;
+            tag.Visibility = t < .84 ? Visibility.Visible : Visibility.Hidden;
+            timer.Opacity = t < .84 ? 0 : Math.Min(1, .4 + (t - .84) / .1);
+        }, () => { tag.Visibility = Visibility.Hidden; tag.Background = green; tag.ClearValue(UIElement.RenderTransformProperty); timer.Opacity = 1; });
     }
 
     protected override void FightStarted(Encounter e, bool held)
     {
-        // a channel switch: the picture drops to static, a roll line crosses, the channel's OSD stands in the corner
+        // a channel switch: the picture drops to static, a roll line crosses, the picture finds its tracking (the rows slip
+        // and settle), the channel's OSD stands big in the corner (the small one steps aside for it)
         var veil = new Rectangle { Fill = NoiseBrush(.6) };
         _cam.Run(veil, 1100, t => { veil.Opacity = t < .04 ? .8 : t < .25 ? .8 * (1 - (t - .04) / .21) : 0; Shift((ImageBrush)veil.Fill, t, 36); }, under: true);
         double h = _cam.H;
@@ -579,23 +643,38 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
             double a = k * .22;
             _cam.Run(bar, 1100, t => { double q = Math.Clamp((t - a) / .4, 0, 1); bt.Y = -26 + (h + 26) * q; bar.Opacity = t >= a && q < 1 ? 1 : 0; Shift(nb, t, 30); }, under: true);
         }
+        Wobble(_rowsHost, 1100, 6, .36, 2);
+        // the new channel's picture tears in as the set locks on to it
+        _cam.Tear(1100, Colors.Black, Rgb(RedC, .8), Rgb(CyanC, .8), new TearBand(.5, 18, -16, .06, .15), new TearBand(.76, 12, 12, .1, .19));
         var osd = Split(_channel, 22, Face, FontWeights.Bold, Green, Rgb(RedC, .6), Rgb(CyanC, .6), 1.4);
-        osd.HorizontalAlignment = HorizontalAlignment.Right; osd.VerticalAlignment = VerticalAlignment.Top; osd.Margin = new Thickness(0, 26, 16, 0);
         var halo = new Border { Background = Br(0x000000, .96), Padding = new Thickness(8, 0, 8, 0), Child = osd, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8, 0) };
-        osd.Margin = new Thickness(0);
-        _cam.Run(halo, 1100, t => halo.Opacity = t < .8 ? (Blink(t, 4, .18) ? 1 : 0) : 1 - (t - .8) / .2);
+        var ch = _chText;
+        _cam.Run(halo, 1100, t =>
+        {
+            halo.Opacity = t < .8 ? (Blink(t, 4, .18) ? 1 : 0) : 1 - (t - .8) / .2;
+            ch.Opacity = t < .99 ? 0 : 1;
+        });
+        Motion.Play(ch, 1100, _ => { }, () => ch.Opacity = 1);
     }
 
     protected override void FightEnded(Encounter e, bool held)
     {
         bool wipe = e.Outcome == "wipe";
         var outcome = OutcomeText(e).ToUpper(System.Globalization.CultureInfo.CurrentCulture);
-        var band = new Border { VerticalAlignment = VerticalAlignment.Top, Height = 44, Margin = new Thickness(0, 1, 0, 0) };
+        // the card covers the whole head (its glyphs never show cut under it)
+        double headH = 44;
+        try { if (_head.ActualHeight > 0 && _head.IsDescendantOf(_cam.Root)) headH = Math.Max(30, _head.TranslatePoint(new Point(0, _head.ActualHeight), _cam.Root).Y + 2); } catch (InvalidOperationException) { }
+        var band = new Border { VerticalAlignment = VerticalAlignment.Top, Height = headH, Margin = new Thickness(0, 1, 0, 0) };
         var words = Txt("", 14, White, Face);
         words.HorizontalAlignment = HorizontalAlignment.Center;
         if (wipe)
         {
-            // the tracking lost: a blue band, the picture torn by noise bars that jump about
+            // the tracking lost: the screen goes blue, the picture shears and slips sideways, noise bars jump about it,
+            // the blue band over the head; then the tape finds its hold again
+            _cam.Flash(Color.FromRgb(0x14, 0x32, 0xC8), .5, 2200, .03, .42);
+            Wobble(_rowsHost, 2200, 9, .45, 4, 5);
+            // the tape itself creases: bands of the picture torn sideways as the heads lose it
+            _cam.Tear(2200, Colors.Black, Rgb(RedC, .85), Rgb(CyanC, .85), new TearBand(.42, 16, 18, .04, .22), new TearBand(.66, 10, -14, .1, .26), new TearBand(.84, 8, 10, .14, .3));
             band.Background = Br(BlueC);
             words.Text = L.T("TRACKING LOST");
             for (int k = 0; k < 3; k++)
@@ -609,10 +688,20 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         }
         else
         {
-            // STOP: a white flash, the stop card over the head
+            // STOP: a white flash, the picture freezes (two still noise bars across it, a jolt as the tape halts), the stop
+            // card over the head, the top DPS's line glinting
             _cam.Flash(Colors.White, .6, 2200, .04, .22);
-            // the top DPS's line glints as the picture stops
+            Wobble(_rowsHost, 2200, 3, .08);
+            foreach (var (y, hh) in new[] { (.42, 3.0), (.78, 2.0) })
+            {
+                var nb = NoiseBrush(.6);
+                var bar = new Rectangle { Fill = nb, Height = hh, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Round(_cam.H * y), 0, 0) };
+                _cam.Run(bar, 2200, t => { bar.Opacity = .7 * Gate(t, .04, .6, 0, .1); Shift(nb, Steps(t, 3), 3); });
+            }
             if (Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is VhsRows.TapeRow row) row.Glint(2200);
+            // the tape stops with a jolt: the picture squashes a few percent and springs back
+            var sq = new ScaleTransform(1, 1); _cam.Root.RenderTransformOrigin = new Point(.5, 0); _cam.Root.RenderTransform = sq;
+            Motion.Play(_cam.Root, 2200, t => sq.ScaleY = t < .05 ? 1 - .06 * Out(t / .05) : 1 - .06 * Math.Abs(1 - Back(Seg01(t, .05, .2), 2.4)), () => _cam.Root.ClearValue(UIElement.RenderTransformProperty));
             band.Background = Br(0x000000); band.BorderBrush = Br(0xFFFFFF, .85); band.BorderThickness = new Thickness(0, 1.5, 0, 1.5);
             words.Inlines.Add(Rn("■ " + L.T("STOP") + "  —  ", White));
             words.Inlines.Add(Rn(outcome, Br(MintTextC)));
@@ -621,8 +710,8 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         var s = new ScaleTransform(1, 0); band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = s;
         _cam.Run(band, 2200, t =>
         {
-            s.ScaleY = t < .06 ? Steps(t / .06, 3) + .34 : t < .5 ? 1 : Math.Max(.04, 1 - Motion.Out((t - .5) / .14));
-            band.Opacity = t < .64 ? 1 : 0;
+            s.ScaleY = t < .06 ? Steps(t / .06, 3) : t < .5 ? 1 : Math.Max(.04, 1 - Motion.Out((t - .5) / .14));
+            band.Opacity = t > 0 && t < .64 ? 1 : 0;
         });
     }
 }

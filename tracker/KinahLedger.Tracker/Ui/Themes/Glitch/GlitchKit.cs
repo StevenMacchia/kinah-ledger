@@ -422,6 +422,11 @@ static class GlitchKit
 /// A Glitch panel: its ground layers, the body (rows of text), the layers over the body (scanlines), and an effect layer
 /// on top that never takes a click and keeps every transient effect inside the panel (<see cref="Run"/>).
 /// </summary>
+/// <summary>One band of a tear (<see cref="GlitchPanel.Tear"/>): from <paramref name="Y"/> (a share of the panel's height)
+/// <paramref name="H"/> px tall, knocked <paramref name="Dx"/> px sideways between <paramref name="From"/> and <paramref name="To"/>
+/// of the course (it jumps back and forth in that time).</summary>
+readonly record struct TearBand(double Y, double H, double Dx, double From, double To);
+
 sealed class GlitchPanel
 {
     public readonly Grid Root = new();
@@ -450,6 +455,53 @@ sealed class GlitchPanel
         var layer = under ? Under : Fx;
         layer.Children.Add(el);
         Motion.Play(el, ms, step, () => layer.Children.Remove(el));
+    }
+
+    /// <summary>
+    /// A real tear of the picture: bands of the body (the words and figures as they are drawn) knocked sideways for a few
+    /// frames and snapped back, a strip of <paramref name="ground"/> where each band was, its edges split magenta and cyan.
+    /// Each band shows the body's own picture through a VisualBrush (the render thread draws it again; nothing is laid out
+    /// or drawn by the look), moved by a transform; all of it gone when the course ends. Short by design: the figures are
+    /// whole again within a few frames.
+    /// </summary>
+    public void Tear(double ms, Color ground, Color left, Color right, params TearBand[] bands)
+    {
+        double w = W, h = H;
+        var pad = Body.Margin;
+        var host = new Canvas { IsHitTestVisible = false, Width = w, Height = h, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        var parts = new List<(TearBand B, UIElement Gap, UIElement Pic, TranslateTransform T)>();
+        foreach (var b in bands)
+        {
+            double y = Math.Round(h * b.Y), bh = Math.Min(b.H, h - y);
+            if (bh < 1) continue;
+            var gap = new Rectangle { Width = w, Height = bh, Fill = HudKit.Frozen(ground) };
+            Canvas.SetTop(gap, y);
+            var brush = new VisualBrush(Body)
+            {
+                ViewboxUnits = BrushMappingMode.Absolute, ViewportUnits = BrushMappingMode.Absolute, Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top,
+                Viewbox = new Rect(-pad.Left, y - pad.Top, w, bh), Viewport = new Rect(0, 0, w, bh),
+            };
+            var pic = new Grid { Width = w, Height = bh };
+            pic.Children.Add(new Rectangle { Fill = HudKit.Frozen(left), Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-3, 0, 0, 0) });
+            pic.Children.Add(new Rectangle { Fill = HudKit.Frozen(right), Width = 3, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, -3, 0) });
+            pic.Children.Add(new Rectangle { Fill = brush });
+            var tt = new TranslateTransform(); pic.RenderTransform = tt;
+            Canvas.SetTop(pic, y);
+            host.Children.Add(gap); host.Children.Add(pic);
+            parts.Add((b, gap, pic, tt));
+        }
+        double[] jumps = { 1, -.55, .8, .25, 1, -.3 };
+        Run(host, ms, t =>
+        {
+            int step = (int)(t * ms / 45);
+            foreach (var (b, gap, pic, tt) in parts)
+            {
+                bool on = t >= b.From && t < b.To;
+                gap.Visibility = pic.Visibility = on ? Visibility.Visible : Visibility.Hidden;
+                if (on) tt.X = Math.Round(b.Dx * jumps[step % jumps.Length]);
+            }
+        });
     }
 
     /// <summary>A full-panel flash of <paramref name="c"/>: up to <paramref name="peak"/> by <paramref name="up"/> of the course, gone by <paramref name="gone"/>.</summary>
