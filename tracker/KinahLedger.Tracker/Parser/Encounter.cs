@@ -290,7 +290,12 @@ public sealed class Encounter : IJsonOnDeserialized
     // Damage per second is over the real time since the start (Steven, 2026-11-15, on 0.10.106's combat time, which held the
     // figure while he walked away: "i left and didnt kill anything for a while and it ... didnt drop the dps ... at all"):
     // fighting raises it, every second without a hit lowers it, and the meter shows that as it happens
-    public double DpsSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
+    // (no hold once a pull goes quiet: Steven wants the figure to fall while he isn't hitting; a wipe's end then sets it
+    // to the fight's own time, its last damage, which is the honest figure)
+    public double DpsSeconds(DateTime now) => FightSeconds(now);
+
+    /// <summary>The record's seconds to <paramref name="now"/> as DPS counts them, with no hold for a quiet live pull (healing's clock).</summary>
+    double FightSeconds(DateTime now) => ModeKind == ParserMode.Run && Splits.Count > 0 && (BossView || !TargetsSplit) ? Splits.Sum(x => x.Seconds) : Duration(now).TotalSeconds;
 
     /// <summary>
     /// A DPS is over at least this long: the meter shows a figure from the first hit, never a hit's damage over a split second
@@ -476,10 +481,10 @@ public sealed class Encounter : IJsonOnDeserialized
     /// 85% overheal): over the same seconds the group's DPS is over (the fight's real time, a run's boss pulls; never under
     /// <see cref="MinDpsSeconds"/>); an estimate when <see cref="Fighter.HealingEstimated"/> says so; null when they healed nothing.
     /// </summary>
-    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+    public double? HpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.HealingEffective / Math.Max(FightSeconds(now), MinDpsSeconds) : null;
 
     /// <summary>All their healing a second, overheal in (the tooltip's and the replay's).</summary>
-    public double? DoneHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(DpsSeconds(now), MinDpsSeconds) : null;
+    public double? DoneHpsOf(Fighter f, DateTime now) => f.Healing > 0 ? f.Healing / Math.Max(FightSeconds(now), MinDpsSeconds) : null;
 
     /// <summary>The group's healing done in the record.</summary>
     [JsonIgnore] public long GroupHealing => Members.Sum(f => f.Healing);

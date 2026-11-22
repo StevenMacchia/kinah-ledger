@@ -212,8 +212,41 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
         _idle = V("idle");
         if (today)
             return _figsNow = new Figures(true, false, V("todayRate"), V("todayTotal"), -1, "", false, V("zone"), "", note, tone, false, Array.Empty<(string, string, Brush)>(), "", _idle, null, Today: true);
+        // the themes' looks show what the Classic card does in their note line when it has nothing else to say (Steven,
+        // 2026-11-21: "some buddies just do not have any info at all... so tiny now"): the time counted, the chase of your
+        // best and the newest pickup with its worth, each only where the look doesn't draw it already
+        if (note.Length == 0 && counted && !abyss && this is HudThemeLook) note = InfoNote(clock, words, Picks(v).FirstOrDefault());
         return _figsNow = new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
             abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle, abyss && counted ? AbyssTip(v) : null);
+    }
+
+    /// <summary>The looks that draw the session's clock, the chase of your best or the newest pickup themselves (by their type).</summary>
+    static readonly HashSet<string> ClockShown = new() { "HudVhs", "HudCorrupt", "HudTerminal" },
+        ToBestShown = new() { "HudFighter", "HudHolo", "HudScorebug" },
+        FeedShown = new() { "HudHolo", "HudTerminal" };
+
+    /// <summary>
+    /// The note line's info when it has nothing else to say: "42 min · 130K to your best here · Spiritstone +7.5K". The clock
+    /// in whole minutes (TodayLoot.Dur), so the line is drawn again once a minute, not every second.
+    /// </summary>
+    string InfoNote(string clock, string toBest, Pick? newest)
+    {
+        var type = GetType().Name;
+        var parts = new List<string>();
+        if (!ClockShown.Contains(type) && Seconds(clock) is double secs && secs >= 60) parts.Add(KinahLedger.Session.TodayLoot.Dur(secs));
+        if (!ToBestShown.Contains(type) && toBest.Length > 0) parts.Add(toBest);
+        if (!FeedShown.Contains(type) && newest is { Name.Length: > 0 } p)
+            parts.Add(p.Worth.Length > 0 ? $"{p.Name} {(p.Worth.StartsWith('+') ? p.Worth : "+" + p.Worth)}" : p.Count.Length > 0 && p.Count != "1" ? $"{p.Name} ×{p.Count.TrimStart('x', '×')}" : p.Name);
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>"42:17" or "1:12:05" in seconds; null for none.</summary>
+    static double? Seconds(string clock)
+    {
+        var p = clock.Split(':');
+        if (p.Length == 2 && int.TryParse(p[0], out var mm) && int.TryParse(p[1], out var ss)) return mm * 60 + ss;
+        if (p.Length == 3 && int.TryParse(p[0], out var hh) && int.TryParse(p[1], out var m2) && int.TryParse(p[2], out var s2)) return hh * 3600 + m2 * 60 + s2;
+        return null;
     }
 
     /// <summary>A word with its first letter capital ("Today"), for a look whose labels are in title case.</summary>

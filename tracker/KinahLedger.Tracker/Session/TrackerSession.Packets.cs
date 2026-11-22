@@ -337,7 +337,7 @@ public sealed partial class TrackerSession
         // an update is taken once the chat had its say on each item that went up (a pickup line, or a box's or a reward's
         // contents), else once PacketHoldSeconds old as before: the chat tells a drop from a box's contents, and lags the
         // game's update by a second or two, so an item counts as fast as its line, not a fixed 3 s later
-        while (_itemHeld.Count > 0 && ((now - _itemHeld[0].At).TotalSeconds >= PacketHoldSeconds || ChatHadItsSay(p, _itemHeld[0])))
+        while (_itemHeld.Count > 0 && ((now - _itemHeld[0].At).TotalSeconds >= PacketHoldSeconds || ChatHadItsSay(p, _itemHeld[0]) || DropNow(_itemHeld[0], now)))
         {
             var b = _itemHeld[0]; _itemHeld.RemoveAt(0);
             TakeItems(p, b);
@@ -369,12 +369,74 @@ public sealed partial class TrackerSession
     /// <summary>
     /// Whether <paramref name="n"/> of <paramref name="id"/> that came at <paramref name="at"/> went again in the next
     /// update, with nothing else coming in it: the game used it at once (Stigma Shard points, a stack of Soul Crystals
-    /// registered as it lands), so it was never loot. An item that goes into something else (gear dismantled into Enhance
-    /// Stones) is not this: it dropped, and stays a drop.
+    /// registered as it lands), so it was never loot. An item that goes into something else is not this; gear dismantled
+    /// into Enhance Stones has its own rule (<see cref="DismantledAtOnce"/>, <see cref="TakeBackDismantled"/>).
     /// </summary>
     bool UsedAtOnce(long id, long n, DateTime at) =>
         _itemHeld.Any(h => (h.At - at).TotalSeconds is >= 0 and <= 1.5 && h.Net() is var hn
             && hn.Any(x => x.ItemId == id && !x.Unknown && x.Net == -n) && !hn.Any(x => x.Unknown || x.Net > 0));
+
+    /// <summary>How old an update is before <see cref="DropNow"/> takes it: long enough for the next update (the item used or dismantled at once, 0.1 s later on 2026-11-21 17:56:00) to be in.</summary>
+    const double DropSettleSeconds = 0.5;
+
+    /// <summary>
+    /// A kill's drop while the screen is the backup: one unbound item went up, nothing went down, and a kill came in the last
+    /// <see cref="PacketNearSeconds"/>. It counts now. The screen reads the chat only every <see cref="BackupPassMs"/> then,
+    /// so waiting for the chat's line took every drop to the full <see cref="PacketHoldSeconds"/> (2026-11-21: all eight of
+    /// the day's monster drops 3.01 to 3.24 s late). An update of several items (an event's rewards, a box's contents) and
+    /// a bound item (a quest's turn-in) still wait for the chat's say; the chat's line that comes later is this rise's to
+    /// the agreement check, as when the line comes after the count.
+    /// </summary>
+    bool DropNow(ItemBatch b, DateTime now)
+    {
+        if (!_screenBackup || b.Fell || (now - b.At).TotalSeconds < DropSettleSeconds) return false;
+        if ((_lastKillAt - b.At).TotalSeconds < -PacketNearSeconds) return false;
+        if (Instances.Current != null || InRun || CraftingAt(b.At)) return false;
+        var up = b.Net().Where(x => !ItemDictionary.IsMonsterSoul(x.ItemId) && (x.Unknown || x.Net > 0)).ToList();
+        return up.Count == 1 && !up[0].Unknown && _items.Get(up[0].ItemId) != null
+            && !_items.NameOf(up[0].ItemId).EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- gear dismantled at once ----
+    /// <summary>How soon after its pickup a piece of gear dismantled into Enhance Stones is taken out of the count.</summary>
+    const double GearDismantleSeconds = 60;
+    /// <summary>Gear counted as farming's pickups lately, for a dismantle right after (<see cref="TakeBackDismantled"/>).</summary>
+    readonly List<ItemAcquired> _gearCounted = new();
+
+    bool IsEnhanceStone(long id) => string.Equals(_items.NameOf(id), "Enhance Stone", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a held update within <see cref="GearDismantleSeconds"/> after <paramref name="at"/> takes <paramref name="id"/> away with Enhance Stones coming in.</summary>
+    bool DismantledAtOnce(long id, DateTime at) =>
+        _itemHeld.Any(h => (h.At - at).TotalSeconds is >= 0 and <= GearDismantleSeconds && h.Net() is var hn
+            && hn.Any(x => x.ItemId == id && !x.Unknown && x.Net < 0) && hn.Any(x => !x.Unknown && x.Net > 0 && IsEnhanceStone(x.ItemId)));
+
+    /// <summary>
+    /// Gear dismantled right after it dropped (2026-11-21 17:56:00: "Forgotten Gloves −1, Enhance Stone +18" 0.1 s after the
+    /// gloves came; 12:51:37, Riverside Gloves and Enhance Stone +23): it never reaches the Market, so it is no loot worth
+    /// counting. Each piece that went with Enhance Stones coming in, counted as a pickup in the last
+    /// <see cref="GearDismantleSeconds"/>, is taken back out of every count, as "Not a drop" would. The Enhance Stones are
+    /// not a pickup (they came with something going down) and have no price.
+    /// </summary>
+    void TakeBackDismantled(ItemBatch b)
+    {
+        _gearCounted.RemoveAll(g => (b.At - g.Time).TotalSeconds > GearDismantleSeconds * 2);
+        if (_gearCounted.Count == 0 || !b.Net().Any(x => !x.Unknown && x.Net > 0 && IsEnhanceStone(x.ItemId))) return;
+        foreach (var (id, n, unknown) in b.Net())
+        {
+            if (unknown || n >= 0 || !_items.IsGear(id)) continue;
+            long left = -n;
+            while (left > 0)
+            {
+                int i = _gearCounted.FindLastIndex(g => g.ItemId == id && g.Count <= left && (b.At - g.Time).TotalSeconds is >= 0 and <= GearDismantleSeconds);
+                if (i < 0) break;
+                var g = _gearCounted[i]; _gearCounted.RemoveAt(i); left -= g.Count;
+                var line = Live.Find(l => l.Kind == "item" && l.ItemId == g.ItemId && l.At == g.Time && l.Amount == g.Count);
+                var t = NotADrop(g, line?.Where ?? "", line);
+                CrashLog.Note($"packets: {_items.NameOf(id)} ×{g.Count} (counted {(b.At - g.Time).TotalSeconds:0.0} s before) dismantled into Enhance Stones: no loot, {(t.Any ? "taken back out of the count" : "no count held it")}");
+                _packetCountedNow = true;
+            }
+        }
+    }
 
     /// <summary>
     /// Whether every item that went up in <paramref name="b"/> has had the chat's say: a chat pickup line for it, or the chat
@@ -444,7 +506,7 @@ public sealed partial class TrackerSession
         if (b.Fell)
         {
             if (b.Rows.All(r => ItemDictionary.IsMonsterSoul(r.ItemId))) CrashLog.NoteBurst("packets: a monster's soul taken into the Soul Codex");
-            else CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup");
+            else { CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup"); TakeBackDismantled(b); }
             return;
         }
         var gather = GatherOf(b);
@@ -507,6 +569,7 @@ public sealed partial class TrackerSession
                 : _rewardLines.Any(r => Math.Abs((r.At - b.At).TotalSeconds) <= PacketNearSeconds && string.Equals(r.Name, un, StringComparison.OrdinalIgnoreCase)) ? "with the chat calling it a reward"
                 : outside && b.At <= _achieveUntil ? "with an achievement's reward"
                 : UsedAtOnce(id, n, b.At) ? "used at once (it went again in the next update)"
+                : outside && _items.IsGear(id) && DismantledAtOnce(id, b.At) ? "dismantled at once (it went into Enhance Stones in a later update)"
                 : outside && !IsGatherMaterial(id) && PickupCheck.TooMany((int)Math.Min(n, int.MaxValue)) is { } tooMany ? tooMany
                 : rewardWhy != null ? $"bound, with no pickup line for it, {rewardWhy} (a quest's or a box's reward)"
                 : bound && !screenSaw && !near && Instances.Current == null ? "bound, with no pickup line or kill for it (a quest's or a box's reward)"
@@ -516,6 +579,7 @@ public sealed partial class TrackerSession
             var ev = new ItemAcquired(b.At, id, (int)Math.Min(n, 99999), bound) { Via = "packets" };
             CrashLog.Note($"packets: {name} +{n:N0}: counted from the game's message, {After(b.At)}");
             CommitWith(ev, "counter");
+            if (outside && _items.IsGear(id)) { _gearCounted.Add(ev); if (_gearCounted.Count > 40) _gearCounted.RemoveAt(0); }
             NotePacketDelay(b.At);
             if (b.At > _packetPickupAt) _packetPickupAt = b.At;
         }
