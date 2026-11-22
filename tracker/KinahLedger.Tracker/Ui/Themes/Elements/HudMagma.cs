@@ -87,6 +87,13 @@ sealed partial class HudMagma : ModernLook
     readonly TranslateTransform _fightShift = new();
     DateTime _lastLead;
     FrameworkElement? _head;
+    /// <summary>Over everything, unclipped: the moments' short-lived bits (ElementsFx.cs), each moment on a layer of its own.</summary>
+    readonly Canvas _sky = new() { IsHitTestVisible = false };
+    /// <summary>A wipe's cooling: an ash-dark film over the slab and its flows (shown by its opacity).</summary>
+    readonly Border _fightAsh = new() { IsHitTestVisible = false, Margin = new Thickness(3), CornerRadius = new CornerRadius(3), Opacity = 0, Visibility = Visibility.Collapsed, Background = Frozen(Color.FromArgb(0xFF, 0x16, 0x13, 0x12)) };
+    /// <summary>The hour's host (its heat shimmer on your best passed), the rare drop's grade colour.</summary>
+    FrameworkElement? _rateHost;
+    Color _rareC = Colors.White;
 
     public HudMagma() : base(bare: true)
     {
@@ -125,13 +132,13 @@ sealed partial class HudMagma : ModernLook
             _jetParts.Add((jet, sc, bead, bt, jh, delay, jh > 40 ? .75 : 1));
         }
         _jets.Visibility = Visibility.Collapsed;
-        _fight.Children.Add(_fightSlab); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightErupt); _fight.Children.Add(_jets); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
+        _fight.Children.Add(_fightSlab); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightErupt); _fight.Children.Add(_jets); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightAsh); _fight.Children.Add(_fightFx);
         _fight.RenderTransform = _fightShift;
         _note.Children.Add(new TacSketch((dc, s) => Slab(dc, s, SlabA, 5, cracks: false)));
         _note.Children.Add(_noteBody);
         _runHeadHost = RunHeadSlab(_runHead); _runHeadHost.Visibility = Visibility.Collapsed;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_runHeadHost); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
-        _root.Children.Add(_body);
+        _root.Children.Add(_body); _root.Children.Add(_sky);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
@@ -161,7 +168,7 @@ sealed partial class HudMagma : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _ringHost = null; _timerUp = false; _stripTimerW = -1;
+        _ringArt = null; _ringHost = null; _rateHost = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _lineBody.Opacity = _dim ? .62 : 1;
@@ -173,8 +180,12 @@ sealed partial class HudMagma : ModernLook
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
         {
-            var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(2, 4, 0, 4);
-            _lineBody.Children.Add(w);
+            // the Abyss's stats so far under the waiting words ("2 kills · 4.4K Kinah": information, never an empty slab)
+            var ws = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 2, 0, 2) };
+            ws.Children.Add(Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold));
+            var wsub = Sub(f, false);
+            if (wsub.Inlines.Count > 0) ws.Children.Add(wsub);
+            _lineBody.Children.Add(ws);
         }
         else
         {
@@ -195,7 +206,9 @@ sealed partial class HudMagma : ModernLook
             var top = new StackPanel { Orientation = Orientation.Horizontal };
             var rate = Tt(f.Rate, f.Warm ? 15 : 23, f.Warm ? Soft : WhiteHot, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
             rate.Tag = "buddy-rate";
-            top.Children.Add(new Border { Child = rate, Effect = f.Warm ? null : Underglow() });
+            var rateHost = new Border { Child = rate, Effect = f.Warm ? null : Underglow(), RenderTransformOrigin = new Point(.5, .7) };
+            _rateHost = rateHost;
+            top.Children.Add(rateHost);
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, Quiet, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, f.Warm ? 1 : 4); top.Children.Add(u); }
             words.Children.Add(top);
             // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
@@ -231,6 +244,7 @@ sealed partial class HudMagma : ModernLook
         if (!KinahHidden && Rare(Values) is { } r)
         {
             var c = ColorOf(r.Color, r.Grade);
+            _rareC = c;
             var slab = new Grid();
             slab.Children.Add(new TacSketch((dc, s) =>
             {
@@ -545,7 +559,9 @@ sealed partial class HudMagma : ModernLook
         chip.Children.Add(new TacSketch((dc, s) => Slab(dc, s, 1, 3, .5)));
         chip.Children.Add(words);
         var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
+        var pop = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(0, .5);
+        chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 4); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
@@ -559,11 +575,26 @@ sealed partial class HudMagma : ModernLook
             _lineFlare.Opacity = t < .5 ? .6 * Math.Sin(Math.PI * k0) : 0;
             double k = Out(Seg(t, .1, .3));
             shift.X = -10 * (1 - k);
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .1, .34, .8, 2);
             chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
         }, () => { _lineFx.Visibility = Visibility.Collapsed; _lineFlare.Opacity = 0; _lineAnchor.Children.Remove(chip); });
     }
 
-    /// <summary>A rare drop: its slab breaks open to the right, its cracks burning in the grade's colour, the tile popping in.</summary>
+    /// <summary>An ember: a hot round spark, white at its heart (made once; moved by its transform).</summary>
+    static FrameworkElement Ember(double d, Color? tint = null) => ElemFx.Glow(tint ?? LavaYelC, d, d, 1, .85);
+
+    /// <summary>A streak of molten rock thrown off (a long drop, white-hot at its head).</summary>
+    static FrameworkElement Fleck(double len, Color? tint = null)
+    {
+        var c = tint ?? LavaHotC;
+        return ElemFx.Shape(ElemFx.Splint, Mod.Grad(false, (Mod.A(c, .15), 0), (Mod.A(Mod.Mix(c, LavaYelC, .5), .95), .6), (WhiteHotC, 1)), len, len * .26);
+    }
+
+    /// <summary>
+    /// A rare drop, the big one: the slab breaks open to the right, its cracks burning in the grade's colour; a column of the
+    /// colour's heat erupts out of the tile, molten flecks and embers of it burst up and fall back, a ring of heat rolls off
+    /// and the tile lands big and settles (a pickup is the small wave of heat across the Buddy).
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareArt is not { } art || _rareFlare is not { } flare) return;
@@ -572,34 +603,38 @@ sealed partial class HudMagma : ModernLook
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var open = new ScaleTransform(1, 1);
         art.RenderTransformOrigin = new Point(0, .5); art.RenderTransform = open;
-        Motion.Play(art, 1500, t =>
+        var c = _rareC;
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(c, 30, 100, .9, .7), new Point(0, -26), new Vector(0, 0), delay: 0, life: .55, s0: .2, s1: 1.05);
+        bits.Add(ElemFx.Glow(WhiteHotC, 50, 46, 1, 1), new Point(0, 0), new Vector(0, 0), delay: .04, life: .26, s0: .4, s1: 1.1);
+        bits.Add(ElemFx.Ring(Mod.Mix(c, LavaYelC, .3), 36, 30, 2.6), new Point(0, 0), new Vector(0, 0), delay: .08, life: .42, s0: .5, s1: 1.45);
+        double[] angs = { -150, -122, -100, -80, -60, -38, -16, 2 }, dist = { 16, 30, 42, 46, 46, 42, 38, 32 };
+        for (int i = 0; i < angs.Length; i++)
         {
-            open.ScaleX = .25 + .75 * Out(Seg(t, 0, .4));
-            flare.Opacity = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, .85);
-            sc.ScaleX = sc.ScaleY = .65 + .35 * Back(Seg(t, .05, .4), 2.2);
+            double a = angs[i] * Math.PI / 180;
+            var el = i % 2 == 0 ? Fleck(i % 4 == 0 ? 15 : 12, c) : Ember(i % 3 == 0 ? 7 : 5, Mod.Mix(c, LavaYelC, .35));
+            bits.Add(el, new Point(Math.Cos(a) * 6, Math.Sin(a) * 5), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i] * 1.1),
+                g: 30, delay: .08 + .015 * i, life: .55, s0: 1.1, s1: .5, face: i % 2 == 0);
+        }
+        ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? art, .5, .5, 1700, t =>
+        {
+            open.ScaleX = .25 + .75 * Out(Seg(t, 0, .36));
+            flare.Opacity = ElemFx.Hit(t, 0, .16, .85);
+            sc.ScaleX = sc.ScaleY = t < .04 ? .3 : ElemFx.Punch(t, .04, .38, .3, 3);
         }, () => { open.ScaleX = 1; flare.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; });
     }
 
-    /// <summary>Your best passed: the lava ring runs on round to full and goes white-hot, sparks spray off it and the slab's cracks flare.</summary>
+    /// <summary>
+    /// Your best passed: the lava ring runs on round to full and goes white-hot, sinks in a breath and erupts: it bursts out
+    /// big, a ring of heat rolls off, the Buddy's jets shoot up, embers and molten flecks fly and fall back, the slab's cracks
+    /// flare and the hour shimmers in the heat.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_ringArt is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
-        // the sparks: seven hot drops thrown up and out off the ring, each a small dot moved by its transform
-        var sparks = new Canvas { Width = 42, Height = 42, IsHitTestVisible = false };
-        var dots = new List<(UIElement Dot, TranslateTransform T, double Ang)>();
-        for (int i = 0; i < 7; i++)
-        {
-            var g = new RadialGradientBrush(Mod.A(i % 2 == 0 ? LavaYelC : WhiteHotC, 1), Mod.A(LavaC, 0)); g.Freeze();
-            var d = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = g, Opacity = 0 };
-            var tt = new TranslateTransform(); d.RenderTransform = tt;
-            Canvas.SetLeft(d, 17.5); Canvas.SetTop(d, 17.5);
-            sparks.Children.Add(d);
-            dots.Add((d, tt, -Math.PI / 2 + (i - 3) * .38));
-        }
-        _ringHost?.Children.Add(sparks);
-        // the ring's flare: it swells a quarter and settles, a halo of heat ringing out off it
+        // the ring's flare: a halo of heat ringing out off it
         var halo = new TacSketch((dc, s) =>
         {
             var c = new Point(21, 21);
@@ -611,60 +646,87 @@ sealed partial class HudMagma : ModernLook
         _ringHost?.Children.Insert(0, halo);
         var swell = new ScaleTransform(1, 1);
         if (_ringHost != null) { _ringHost.RenderTransformOrigin = new Point(.5, .5); _ringHost.RenderTransform = swell; }
+        // the hour's heat shimmer: a wobble of skew and height, dying away
+        var skew = new SkewTransform(); var tall = new ScaleTransform(1, 1);
+        var rate = _rateHost;
+        if (rate != null) rate.RenderTransform = new TransformGroup { Children = { tall, skew } };
         _lineJets.Visibility = Visibility.Visible;
+        // the eruption off the ring: up and out to the right (the ring sits at the window's left, its top near)
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(WhiteHotC, 56, 56, .95, 1), new Point(0, 0), new Vector(0, 0), delay: .42, life: .26, s0: .4, s1: 1.1);
+        double[] angs = { -120, -100, -82, -64, -46, -28, -10, 8, 22, -140 }, dist = { 16, 18, 18, 20, 28, 44, 50, 46, 30, 12 };
+        for (int i = 0; i < angs.Length; i++)
+        {
+            double a = angs[i] * Math.PI / 180;
+            var el = i % 3 == 0 ? Fleck(i % 2 == 0 ? 14 : 11) : Ember(i % 2 == 0 ? 7 : 5, i % 2 == 0 ? LavaYelC : WhiteHotC);
+            bits.Add(el, new Point(Math.Cos(a) * 14, Math.Sin(a) * 14), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i]),
+                g: 16, delay: .43 + .012 * i, life: .5, s0: 1.1, s1: .5, face: i % 3 == 0);
+        }
+        ElemFx.Play(_sky, bits, (FrameworkElement?)_ringHost ?? art, .5, .5, 1800);
         Motion.Play(art, 1800, t =>
         {
-            double fl = Seg(t, .4, .75);
-            swell.ScaleX = swell.ScaleY = 1 + .22 * Math.Sin(Math.PI * fl);
-            haloS.ScaleX = haloS.ScaleY = 1 + .55 * Out(fl);
+            // the charge round, a breath in as it brims, then the eruption's punch
+            double fl = Seg(t, .42, .75);
+            swell.ScaleX = swell.ScaleY = t < .42 ? 1 - .1 * Out(Seg(t, .3, .42)) : ElemFx.Punch(t, .42, .72, .9, 3.6);
+            haloS.ScaleX = haloS.ScaleY = 1 + .3 * Out(fl);
             halo.Opacity = fl is > 0 and < 1 ? 1 - fl : 0;
             for (int i = 0; i < _lineJetParts.Count; i++)
             {
                 var (jet, sc) = _lineJetParts[i];
-                double k = Seg(t, .4 + i * .04, .78 + i * .04);
+                double k = Seg(t, .42 + i * .04, .8 + i * .04);
                 sc.ScaleY = k < .4 ? 1.1 * Out(Seg(k, 0, .4)) : 1.1 * (1 - Seg(k, .4, 1) * Seg(k, .4, 1));
                 jet.Opacity = k is > 0 and < 1 ? .9 : 0;
             }
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .45));
-            if (t >= .45) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, .4));
+            if (t >= .4) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
-            double sp = Seg(t, .4, 1);
-            for (int i = 0; i < dots.Count; i++)
-            {
-                var (d, tt, ang) = dots[i];
-                double k = Out(Seg(sp, i * .04, .7 + i * .04)), fall = 8 * Seg(sp, .45, 1) * Seg(sp, .45, 1), dist = 17 + 9 * k;
-                tt.X = Math.Cos(ang) * dist; tt.Y = Math.Sin(ang) * dist + fall;
-                d.Opacity = t > .4 ? 1 - sp : 0;
-            }
-            _lineFlare.Opacity = t < .45 ? Seg(t, 0, .45) : 1 - Seg(t, .45, 1);
+            double sh = Seg(t, .44, 1), damp = (1 - sh) * (1 - sh);
+            skew.AngleX = sh is > 0 and < 1 ? 4 * Math.Sin(2 * Math.PI * 4 * sh) * damp : 0;
+            tall.ScaleY = sh is > 0 and < 1 ? 1 + .05 * Math.Sin(2 * Math.PI * 3 * sh + 1) * damp : 1;
+            _lineFlare.Opacity = t < .42 ? .6 * Seg(t, 0, .42) : ElemFx.Hit(t, .42, .46, 1);
         }, () =>
         {
-            _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFlare.Opacity = 0; (sparks.Parent as Panel)?.Children.Remove(sparks); (halo.Parent as Panel)?.Children.Remove(halo);
-            swell.ScaleX = swell.ScaleY = 1; _lineJets.Visibility = Visibility.Collapsed;
+            _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFlare.Opacity = 0; (halo.Parent as Panel)?.Children.Remove(halo);
+            swell.ScaleX = swell.ScaleY = 1; _lineJets.Visibility = Visibility.Collapsed; skew.AngleX = 0; tall.ScaleY = 1;
             foreach (var (jet, sc) in _lineJetParts) { jet.Opacity = 0; sc.ScaleY = 0; }
         });
     }
 
-    /// <summary>An entry opened: the first timer's chip flares mint round its edge and settles.</summary>
+    /// <summary>
+    /// An entry opened: the first timer's chip erupts. It sinks as the heat builds under it, then pops up big in a mint flare
+    /// with a gout of embers thrown up off it that fall back, and settles, its edge mint.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush;
         chip.BorderBrush = Frozen(MintC2);
-        Motion.Play(chip, 1200, t =>
+        var sc = new ScaleTransform(1, 1); var lift = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = new TransformGroup { Children = { sc, lift } };
+        double hw = chip.ActualWidth > 0 ? chip.ActualWidth / 2 : 46, hh = chip.ActualHeight > 0 ? chip.ActualHeight / 2 : 11;
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(LavaC, 2 * hw + 30, 2 * hh + 20, .8, .3), new Point(0, 2), new Vector(0, 0), delay: 0, life: .3, s0: .6, s1: 1);
+        bits.Add(ElemFx.Glow(MintC2, 2 * hw + 44, 2 * hh + 26, .7, .5), new Point(0, 0), new Vector(0, 0), delay: .26, life: .45, s0: .7, s1: 1.1);
+        double[] xs = { -.7, -.4, -.12, .15, .42, .7 };
+        for (int k = 0; k < xs.Length; k++)
+            bits.Add(k % 2 == 0 ? Ember(k % 3 == 0 ? 7 : 5) : Fleck(11), new Point(hw * xs[k], -hh + 2), new Vector(xs[k] * 14, -(13 + 4 * (k % 3))),
+                g: 30, delay: .26 + .015 * k, life: .5, s0: 1.1, s1: .5, face: k % 2 == 1);
+        ElemFx.Play(_sky, bits, chip, .5, .5, 1300, t =>
         {
-            double k = t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1);
-            glow.Opacity = .9 * k;
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; });
+            lift.Y = t < .26 ? 2 * Out(Seg(t, 0, .26)) : 2 * (1 - Out(Seg(t, .26, .4)));
+            sc.ScaleX = sc.ScaleY = t < .26 ? 1 - .06 * Seg(t, 0, .26) : ElemFx.Punch(t, .26, .6, .94, 3.6);
+        }, () => { chip.BorderBrush = edge; sc.ScaleX = sc.ScaleY = 1; lift.Y = 0; });
     }
 
-    /// <summary>A fight started: the slab rises in as it fades up, the crown rises out of its pool, the heat pulse rolls down the flows.</summary>
+    /// <summary>A fight started: the slab rises in as it fades up, the crown rises out of its pool, the eruption jolts it, the heat pulse rolls down the flows.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 420, t => _fightShift.Y = 2.5 * (1 - Out(t)), () => _fightShift.Y = 0);   // a short rise; the words never dim
+        Motion.Play(_fight, 900, t =>
+        {
+            _fightShift.Y = 2.5 * (1 - Out(Seg(t, 0, .45)));   // a short rise; the words never dim
+            _fightShift.X = ElemFx.Shake(t, .05, .45, 2.5, 3);
+        }, () => { _fightShift.Y = 0; _fightShift.X = 0; });
         if (Meter is { Members.Count: > 0 } m && m.RowOf(m.Members[0].Id) is MagmaRow top) top.Rise();
         Erupt(900);
         Heat();
@@ -708,8 +770,11 @@ sealed partial class HudMagma : ModernLook
     }
 
     /// <summary>
-    /// A fight ended: a basalt banner lands over the fight's head with how it went in white-hot and the clock, its cracks
-    /// flaring (cooled to ash and a dull seam for a wipe); a kill sends the heat pulse down the flows. It lifts after a moment.
+    /// A fight ended. A kill erupts: a basalt banner slams down over the fight's head with how it went in white-hot and the
+    /// clock, its words landing big, a shock ring rolling off, the slab jolting, its cracks flaring, a burst of molten flecks
+    /// and embers thrown up off it that fall back, the jets and the heat pulse down the flows. A wipe cools: the banner sinks
+    /// in slowly in ash, the slab's fire goes dark under a film of ash as it sags, and smoke rises off it; then the heat comes
+    /// back. Either lifts after a moment.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
@@ -729,22 +794,23 @@ sealed partial class HudMagma : ModernLook
         var who = Tt(e.Title, 11.5, Soft, FontWeights.SemiBold); who.Margin = new Thickness(10, 3, 0, 0); who.TextTrimming = TextTrimming.CharacterEllipsis;
         who.MaxWidth = Math.Max(40, FightWidth - 10 - 40 - Mod.W(otHost) - Mod.W(ck) - 50);
         words.Children.Add(who);
+        var wordsK = new ScaleTransform(1, 1);
+        words.RenderTransformOrigin = new Point(0, .5); words.RenderTransform = wordsK;
         band.Children.Add(words);
         var slam = new ScaleTransform(1, 1);
-        band.RenderTransformOrigin = new Point(.5, .5); band.RenderTransform = slam;
         // the shock ring off the slam: one ellipse's outline, drawn once, scaled out and faded
         var ring = new TacSketch((dc, s) =>
         {
             var c = new Point(s.Width / 2, s.Height / 2);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? AshC : LavaC, .4), 8), c, s.Width / 2 - 5, s.Height / 2 - 5);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? AshC : LavaHotC, 1), 3), c, s.Width / 2 - 5, s.Height / 2 - 5);
-            dc.DrawEllipse(null, Mod.P(Mod.Br(wipe ? Colors.White : WhiteHotC, 1), 1), c, s.Width / 2 - 6.5, s.Height / 2 - 6.5);
-        }) { Width = Math.Max(120, FightWidth - 16), Height = 44, Opacity = 0, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
+            dc.DrawEllipse(null, Mod.P(Mod.Br(LavaC, .4), 8), c, s.Width / 2 - 5, s.Height / 2 - 5);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(LavaHotC, 1), 3), c, s.Width / 2 - 5, s.Height / 2 - 5);
+            dc.DrawEllipse(null, Mod.P(Mod.Br(WhiteHotC, 1), 1), c, s.Width / 2 - 6.5, s.Height / 2 - 6.5);
+        }) { Width = Math.Max(120, FightWidth - 16), Height = 44, Opacity = 0, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center, Visibility = wipe ? Visibility.Collapsed : Visibility.Visible };
         var ringS = new ScaleTransform(.3, .3);
         ring.RenderTransformOrigin = new Point(.5, .5); ring.RenderTransform = ringS;
         var drop = new TranslateTransform();
-        var tg = new TransformGroup(); tg.Children.Add(slam); tg.Children.Add(drop);
-        band.RenderTransform = tg;
+        band.RenderTransformOrigin = new Point(.5, .5);
+        band.RenderTransform = new TransformGroup { Children = { slam, drop } };
         _fightFx.Children.Clear(); _fightFx.Children.Add(band); _fightFx.Children.Add(ring);
         void Seat()
         {
@@ -757,21 +823,59 @@ sealed partial class HudMagma : ModernLook
         Seat();
         bool seated = _head is { ActualHeight: > 0 };
         var head = _head;
+        // a kill's burst off the banner (up and out, falling back onto the slab), a wipe's smoke rising slow
+        double bw = Math.Max(120, FightWidth - 16);
+        var bits = new ElemFx.Bits();
+        if (!wipe)
+        {
+            bits.Add(ElemFx.Glow(WhiteHotC, bw * .9, 44, .75, 1), new Point(bw / 2, 0), new Vector(0, 0), delay: .08, life: .22, s0: .5, s1: 1.05);
+            for (int i = 0; i < 10; i++)
+            {
+                double x = bw * (.08 + .09 * i), vx = (i - 4.5) * 6, vy = -(8 + 4 * (i % 3));
+                bits.Add(i % 3 == 0 ? Fleck(i % 2 == 0 ? 15 : 12) : Ember(i % 2 == 0 ? 7 : 5, i % 2 == 0 ? LavaYelC : WhiteHotC), new Point(x, 4), new Vector(vx, vy),
+                    g: 90, delay: .1 + .012 * i, life: .55, s0: 1.1, s1: .5, face: i % 3 == 0);
+            }
+        }
+        else
+            for (int i = 0; i < 5; i++)
+                bits.Add(ElemFx.Glow(Color.FromRgb(0x9A, 0x90, 0x8A), 30 + 6 * (i % 2), 26 + 6 * (i % 2), .45, 0), new Point(bw * (.18 + .16 * i), 64), new Vector((i % 2 == 0 ? 6 : -6), -36),
+                    delay: .14 + .06 * i, life: .6, s0: .6, s1: 1.6, peak: .8);
+        bits.Shift = new Vector(-FightPad + 3, 0);
+        ElemFx.Play(_sky, bits, (FrameworkElement?)head ?? _fight, 0, .5, 2400);
         Motion.Play(_fightFx, 2400, t =>
         {
             if (!seated && _head is { ActualHeight: > 0 }) { Seat(); seated = true; }   // seated once, after the head's first layout
-            double i = Seg(t, 0, .1), o = Seg(t, .84, 1);
-            band.Opacity = Math.Min(1, i * 3) * (1 - o);
-            // the slam: dropped in from above, a touch large, landing past its size and settling
-            drop.Y = -24 * (1 - i * i);
-            slam.ScaleX = slam.ScaleY = t < .1 ? 1.15 : 1 - .04 * Math.Sin(Math.PI * Seg(t, .1, .22));
-            // the shock ring off the landing, and the fissures flaring thick with it
-            double r = Seg(t, .1, .5);
-            ringS.ScaleX = .3 + 1.1 * Out(r); ringS.ScaleY = .3 + .7 * Out(r);
-            ring.Opacity = t is >= .1 and < .5 ? 1 - r * r : 0;
-            flare.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .1, .7);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, .06, .1) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+            double o = Seg(t, .78, .88);
+            if (!wipe)
+            {
+                double i = Seg(t, 0, .1);
+                band.Opacity = Math.Min(1, i * 3) * (1 - o);
+                // the slam: dropped in from above, a touch large, landing past its size and settling; the slab jolts
+                drop.Y = -24 * (1 - i * i);
+                slam.ScaleX = slam.ScaleY = t < .1 ? 1.15 : 1 - .04 * Math.Sin(Math.PI * Seg(t, .1, .22));
+                wordsK.ScaleX = wordsK.ScaleY = ElemFx.Punch(t, .1, .3, 1.3, 2);
+                _fightShift.X = ElemFx.Shake(t, .1, .38, 4, 3.5);
+                // the shock ring off the landing, and the fissures flaring thick with it
+                double r = Seg(t, .1, .5);
+                ringS.ScaleX = .3 + 1.1 * Out(r); ringS.ScaleY = .3 + .7 * Out(r);
+                ring.Opacity = t is >= .1 and < .5 ? 1 - r * r : 0;
+                flare.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .1, .7);
+            }
+            else
+            {
+                // cooling: the banner sinks in slow, the fire under the slab dims to ash as it sags, then comes back
+                double i = Out(Seg(t, 0, .32));
+                band.Opacity = i * (1 - o);
+                drop.Y = -10 * (1 - i);
+                slam.ScaleX = slam.ScaleY = 1;
+                _fightAsh.Opacity = .42 * Seg(t, .04, .36) * (1 - Seg(t, .7, .94));
+                _fightAsh.Visibility = _fightAsh.Opacity > .01 ? Visibility.Visible : Visibility.Collapsed;
+                _fightShift.Y = 2.5 * Math.Sin(Math.PI * Seg(t, .04, .92));
+            }
+            // the outcome and the head never show at once: the head goes as the banner comes, and back as it lifts
+            words.Opacity = t < .78 ? (wipe ? Seg(t, .04, .14) : Seg(t, .1, .14)) : 1 - Seg(t, .78, .86);
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .03) : Seg(t, .86, .96);
+        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; _fightAsh.Opacity = 0; _fightAsh.Visibility = Visibility.Collapsed; _fightShift.X = 0; _fightShift.Y = 0; });
         if (!wipe) { Erupt(1000); Heat(); }
     }
 }

@@ -75,6 +75,11 @@ sealed partial class HudFrost : ModernLook
     readonly TranslateTransform _fightShift = new();
     FrameworkElement? _head;
     Canvas? _shards;
+    /// <summary>Over everything, unclipped: the moments' short-lived bits (ElementsFx.cs), each moment on a layer of its own.</summary>
+    readonly Canvas _sky = new() { IsHitTestVisible = false };
+    /// <summary>The Buddy's hop (your best passed) and the rare plate's jolt (its drop landing).</summary>
+    readonly TranslateTransform _lineHop = new(), _rareJolt = new();
+    Color _rareC = Colors.White;
 
     public HudFrost() : base(bare: true)
     {
@@ -89,11 +94,12 @@ sealed partial class HudFrost : ModernLook
         _fightBreath = FrostBreath(_fightArt);
         _fight.Children.Add(_fightIce); _fight.Children.Add(_fightBreath); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx); _fight.Children.Add(_frostRun);
         _fight.RenderTransform = _fightShift;
+        _line.RenderTransform = _lineHop; _rare.RenderTransform = _rareJolt;
         _note.Children.Add(new TacSketch((dc, s) => IcePanel(dc, s, _noteArt, _opacity, shadow: false, rimeK: .6)));
         _note.Children.Add(_noteBody);
         _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
-        _root.Children.Add(_body);
+        _root.Children.Add(_body); _root.Children.Add(_sky);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
@@ -132,8 +138,12 @@ sealed partial class HudFrost : ModernLook
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
         {
-            var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 7, 6, 0, 6);
-            _lineBody.Children.Add(w);
+            // the Abyss's stats so far under the waiting words ("2 kills · 4.4K Kinah": information, never an empty slab)
+            var ws = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mark ? 0 : 7, 4, 0, 4) };
+            ws.Children.Add(Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold));
+            var wsub = Sub(f, false);
+            if (wsub.Inlines.Count > 0) ws.Children.Add(wsub);
+            _lineBody.Children.Add(ws);
         }
         else
         {
@@ -200,6 +210,7 @@ sealed partial class HudFrost : ModernLook
         if (!KinahHidden && Rare(Values) is { } r)
         {
             var c = ColorOf(r.Color, r.Grade);
+            _rareC = c;
             var plate = new TacSketch((dc, s) => IcePanel(dc, s, _rareArt, _opacity, tint: c));
             _rareWash = plate;
             _rare.Children.Add(plate);
@@ -563,15 +574,22 @@ sealed partial class HudFrost : ModernLook
         chip.Children.Add(new TacSketch((dc, s) => IcePanel(dc, s, art, 1, shadow: false, rimeK: .7)));
         chip.Children.Add(words);
         var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
+        var pop = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(0, .5);
+        chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
-        Motion.Play(chip, 1900, t =>
+        // a small one: two motes of rime puff off the chip as it lands (a rare drop is the big one)
+        var bits = new ElemFx.Bits();
+        bits.Add(Piece(SparkleBrush, 8, 8), new Point(10, -4), new Vector(4, -16), spin: 90, delay: .2, life: .35, s0: .5, s1: 1);
+        bits.Add(Piece(SparkleBrush, 6, 6), new Point(22, 6), new Vector(12, 8), spin: -90, delay: .24, life: .3, s0: .5, s1: .9);
+        ElemFx.Play(_sky, bits, _lineAnchor, 0, 0, 1900, t =>
         {
             LineGlint(t < .5 ? Seg(t, 0, .5) : -1);
             double k = Out(Seg(t, .1, .3));
             shift.X = -10 * (1 - k);
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .1, .36, .82, 2);
             chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
         }, () => { LineGlint(-1); _lineAnchor.Children.Remove(chip); });
     }
@@ -587,14 +605,32 @@ sealed partial class HudFrost : ModernLook
         var clip = Reveal(plate, reveal);
         plate.Clip = clip; flash.Clip = clip;
         var words = _rareRow;
-        Motion.Play(plate, 1500, t =>
+        // the big one, in its grade's colour: a column of its light stands up out of the tile, ice crystallises round it and
+        // bursts, a ring of the colour thrown out, the plate jolts as it lands, two glints; every bit made here once and moved
+        var c = _rareC;
+        var shardFill = Mod.Grad(false, (Mod.Mix(c, Colors.White, .75), 0), (Mod.Mix(c, Colors.White, .25), .55), (Mod.A(c, .9), 1));
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(c, 34, 120, .85, .7), new Point(0, -28), new Vector(0, 0), delay: 0, life: .55, s0: .2, s1: 1.05);
+        bits.Add(ElemFx.Glow(Colors.White, 60, 60, .9, 1), new Point(0, 0), new Vector(0, 0), delay: .08, life: .3, s0: .3, s1: 1.1);
+        bits.Add(ElemFx.Ring(Mod.Mix(c, Colors.White, .35), 40, 40, 2.4), new Point(0, 0), new Vector(0, 0), delay: .12, life: .45, s0: .4, s1: 1.9);
+        // up and out to the right (the plate sits at the window's left edge, the window's foot under it)
+        double[] angs = { -160, -136, -114, -92, -70, -48, -26, -6 }, dist = { 26, 34, 48, 54, 56, 54, 50, 46 };
+        for (int i = 0; i < angs.Length; i++)
         {
-            reveal.ScaleX = Out(Seg(t, 0, .42));
-            if (words != null) words.Opacity = Seg(t, .3, .44);
-            _rareGlintT = t is > .3 and < .8 ? Seg(t, .3, .8) : -1; PlaceRareGlint();
-            Show(flash, t < .22 ? Seg(t, 0, .22) : 1 - Seg(t, .22, .85));
-            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .08, .42), 2.2);
-        }, () => { plate.Clip = null; flash.Clip = null; if (words != null) words.Opacity = 1; Show(flash, 0); sc.ScaleX = sc.ScaleY = 1; _rareGlintT = -1; PlaceRareGlint(); });
+            double a = angs[i] * Math.PI / 180, d = dist[i], k = i % 3 == 0 ? 1.3 : 1;
+            bits.Add(ElemFx.Shape(ElemFx.ShardGeo, shardFill, 14 * k, 7 * k), new Point(Math.Cos(a) * 8, Math.Sin(a) * 6), new Vector(Math.Cos(a) * d, Math.Sin(a) * d * .7),
+                g: 16, angle: 0, spin: (i % 2 == 0 ? 1 : -1) * 240, delay: .12 + .012 * i, life: .52, s0: 1.2, s1: .6, face: true);
+        }
+        ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? _rare, .5, .5, 1800, t =>
+        {
+            reveal.ScaleX = Out(Seg(t, .06, .4));
+            if (words != null) words.Opacity = Seg(t, .08, .16);
+            _rareGlintT = t is > .3 and < .75 ? Seg(t, .3, .75) : -1; PlaceRareGlint();
+            Show(flash, ElemFx.Hit(t, .04, .14, .8));
+            // the tile: drawn small as the light gathers, then it lands big and settles
+            sc.ScaleX = sc.ScaleY = t < .1 ? .3 : ElemFx.Punch(t, .1, .42, .3, 3);
+            _rareJolt.Y = ElemFx.Shake(t, .12, .4, 2.2, 2.5);
+        }, () => { plate.Clip = null; flash.Clip = null; if (words != null) words.Opacity = 1; Show(flash, 0); sc.ScaleX = sc.ScaleY = 1; _rareGlintT = -1; PlaceRareGlint(); _rareJolt.Y = 0; });
     }
 
     /// <summary>
@@ -608,56 +644,81 @@ sealed partial class HudFrost : ModernLook
         ring.RenderTransform = swell;
         var bk = (ScaleTransform)burst.RenderTransform;
         var sk = (ScaleTransform)star.RenderTransform;
+        // the hit: a white-cold flash, and eight splinters of ice thrown off the ring all round, spinning out and falling
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(Colors.White, 84, 84, .85, 1), new Point(0, 0), new Vector(0, 0), delay: .1, life: .32, s0: .3, s1: 1.2);
+        // thrown up and out to the right, where the window has room (the ring sits at the slab's left foot)
+        double[] bangs = { -165, -135, -108, -80, -52, -24, 4, 32 }, bdist = { 26, 34, 44, 50, 50, 48, 44, 30 };
+        for (int i = 0; i < 8; i++)
+        {
+            double a = bangs[i] * Math.PI / 180, d = bdist[i];
+            bits.Add(Piece(Splinter, i % 3 == 0 ? 22 : 17, i % 3 == 0 ? 9 : 7), new Point(Math.Cos(a) * 14, Math.Sin(a) * 14), new Vector(Math.Cos(a) * d, Math.Sin(a) * d),
+                g: 10, spin: (i % 2 == 0 ? 1 : -1) * 200, delay: .12 + .01 * i, life: .5, s0: 1.15, s1: .55, face: true);
+        }
+        ElemFx.Play(_sky, bits, ring, .5, .5, 1800);
         Motion.Play(ring, 1800, t =>
         {
-            double s0 = Seg(t, .04, .5);
-            Show(star, s0 is > 0 and < 1 ? (s0 < .2 ? s0 / .2 : 1 - Seg(s0, .2, 1)) : 0);
-            sk.ScaleX = sk.ScaleY = .5 + .52 * Out(s0);
-            double up = t < .15 ? Out(Seg(t, 0, .15)) : 1 - Out(Seg(t, .15, .45));
-            swell.ScaleX = swell.ScaleY = 1 + .1 * up;
-            double k = Seg(t, .1, .6);
+            double s0 = Seg(t, .1, .55);
+            Show(star, s0 is > 0 and < 1 ? (s0 < .15 ? s0 / .15 : 1 - Seg(s0, .15, 1)) : 0);
+            sk.ScaleX = sk.ScaleY = .5 + .56 * Out(s0);
+            // a breath in (the ring draws in, cold), then the hit: it bursts out big and settles
+            swell.ScaleX = swell.ScaleY = t < .1 ? 1 - .12 * Out(Seg(t, 0, .1)) : ElemFx.Punch(t, .1, .5, .88, 3.4);
+            _lineHop.Y = -4 * ElemFx.Hit(t, .1, .16, .42);
+            double k = Seg(t, .12, .6);
             Show(burst, k is > 0 and < 1 ? .9 * (1 - k) : 0);
             bk.ScaleX = bk.ScaleY = .7 + .5 * Out(k);
             double o = Seg(t, .05, .75);
             orbit.Angle = 360 * Out(o);
             Show(spark, o is > 0 and < 1 ? Math.Sin(Math.PI * o) : 0);
-            Show(_lineBreath, t < .3 ? .6 * Seg(t, .1, .3) : .6 * (1 - Seg(t, .3, .9)));
+            Show(_lineBreath, .8 * ElemFx.Hit(t, .08, .14, .8));
             LineGlint(t is > .4 and < .9 ? Seg(t, .4, .9) : -1);
-        }, () => { swell.ScaleX = swell.ScaleY = 1; Show(burst, 0); Show(star, 0); Show(spark, 0); orbit.Angle = 0; Show(_lineBreath, 0); LineGlint(-1); });
+        }, () => { swell.ScaleX = swell.ScaleY = 1; Show(burst, 0); Show(star, 0); Show(spark, 0); orbit.Angle = 0; Show(_lineBreath, 0); LineGlint(-1); _lineHop.Y = 0; });
     }
 
-    /// <summary>An entry opened: the first timer's chip flashes mint through its ice, grows a touch and settles.</summary>
+    /// <summary>
+    /// An entry opened: the chip crystallises. Six splinters of ice fly in from round it and lock into its edge as it draws in,
+    /// then it sets with a punch, flashing mint through its ice, a ring of frost thrown off it and a glint at its corner.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip || _firstChipGlow is not { } glow) return;
         var sc = new ScaleTransform(1, 1);
         chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = sc;
-        Motion.Play(chip, 1200, t =>
+        double hw = chip.ActualWidth > 0 ? chip.ActualWidth / 2 : 46, hh = chip.ActualHeight > 0 ? chip.ActualHeight / 2 : 11;
+        var bits = new ElemFx.Bits();
+        double[] angs = { 160, 200, 250, 290, 340, 20 };
+        for (int k = 0; k < angs.Length; k++)
         {
-            double k = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, 1);
-            Show(glow, k);
-            sc.ScaleX = sc.ScaleY = 1 + .05 * k;
+            double a = angs[k] * Math.PI / 180, rx = hw + 26, ry = hh + 16;
+            var from = new Point(Math.Cos(a) * rx, Math.Sin(a) * ry);
+            var to = new Point(Math.Cos(a) * hw * .8, Math.Sin(a) * hh * .8);
+            bits.Add(Piece(Splinter, 18, 7), from, to - from, delay: .02 * k, life: .3, s0: 1.1, s1: .7, face: true);
+        }
+        bits.Add(ElemFx.Outline(FrostC, 2 * hw + 4, 2 * hh + 4, 1.6), new Point(0, 0), new Vector(0, 0), delay: .3, life: .4, s0: 1, s1: 1.3);
+        bits.Add(ElemFx.Glow(MintC2, 2 * hw + 40, 2 * hh + 26, .6, .5), new Point(0, 0), new Vector(0, 0), delay: .28, life: .4, s0: .7, s1: 1.15);
+        bits.Add(Piece(SparkleBrush, 14, 14), new Point(hw - 4, -hh + 1), new Vector(0, 0), spin: 120, delay: .34, life: .4, s0: .3, s1: 1.3);
+        ElemFx.Play(_sky, bits, chip, .5, .5, 1300, t =>
+        {
+            Show(glow, t < .3 ? .2 * Seg(t, 0, .3) : ElemFx.Hit(t, .3, .34, 1));
+            sc.ScaleX = sc.ScaleY = t < .3 ? 1 - .1 * Out(Seg(t, 0, .3)) : ElemFx.Punch(t, .3, .62, .9, 3.2);
         }, () => { Show(glow, 0); sc.ScaleX = sc.ScaleY = 1; });
     }
 
     /// <summary>A fight started: the slab settles in as it fades up, the crown crystallises on the top row, the frost creeps along the bars.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 480, t =>
-        {
-            double k = Out(t);
-            _fightShift.Y = 5 * (1 - k);
-        }, () => { _fightShift.Y = 0; });
+        Motion.Play(_fight, 620, t => _fightShift.Y = -7 * (1 - ElemFx.Back(t, 1.6)), () => { _fightShift.Y = 0; });
         if (RowsNow().FirstOrDefault() is { } top) top.Crystallise();
         _lastLead = DateTime.UtcNow;
         Frost();
     }
 
     /// <summary>
-    /// A fight ended: a plate of ice freezes out over the fight's head from the left (its clip's scale), with how it went and
-    /// the clock (cold white and mint for a kill, its rim coral for a wipe), a flash of frost and a glint crossing it. A kill
-    /// shatters: a dozen splinters of ice burst off the plate across the meter, spinning and falling as they fade, and the frost
-    /// creeps along the bars. It lifts away after a moment.
+    /// A fight ended. A kill is a shatter: the panel goes white-cold for a beat, a plate of ice freezes out over the fight's
+    /// head with how it went and the clock (its words landing big and settling), cracks race across the slab from where it
+    /// struck, the slab jolts, and splinters of ice burst off it, spinning and falling; the frost creeps along the bars. A wipe
+    /// is the cold winning: no shatter, the plate forms slowly with its rim in coral, "Wiped" sinking into place, a grey frost
+    /// settling over the whole slab as it sags, a few flakes drifting down; then it thaws back. Either lifts after a moment.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
@@ -676,11 +737,14 @@ sealed partial class HudFrost : ModernLook
         glintHost.Children.Add(glint);
         band.Children.Add(glintHost);
         var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
-        var ot = Tt(OutcomeText(e), 18, White, FontWeights.Bold);
+        var ot = Tt(OutcomeText(e), 18, wipe ? Frozen(Color.FromRgb(0xE4, 0xEC, 0xF2)) : White, FontWeights.Bold);
         if (!wipe) ot.Effect = ColdGlow(.7);
         words.Children.Add(ot);
         var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 12, Frozen(Mod.Mix(c, Colors.White, .45)), FontWeights.SemiBold); ck.Margin = new Thickness(4, 3, 0, 0);
         words.Children.Add(ck);
+        var wordsK = new ScaleTransform(1, 1); var wordsY = new TranslateTransform();
+        words.RenderTransformOrigin = new Point(0, .5);
+        words.RenderTransform = new TransformGroup { Children = { wordsK, wordsY } };
         band.Children.Add(words);
         var reveal = new ScaleTransform(0, 1);
         band.Clip = Reveal(band, reveal);
@@ -688,22 +752,40 @@ sealed partial class HudFrost : ModernLook
         // the shatter: splinters of ice painted once, each only moved, turned and faded
         var shards = new Canvas { IsHitTestVisible = false };
         var pieces = new List<(Border El, TranslateTransform At, RotateTransform Turn, ScaleTransform K, double Ang, double Dist, double Spin)>();
+        // the cracks racing out from the strike (a kill), or the grey frost settling over the slab (a wipe): drawn once, under the words
+        TacSketch? cracks = null;
+        Grid? pall = null;
+        var pallK = new ScaleTransform(1, 1);
+        var crackK = new ScaleTransform(0, 0);
         if (!wipe)
         {
-            double[] angs = { -3.35, -3.1, -2.85, -2.6, -2.35, -2.1, -1.9, -1.7, -1.5, -1.3, -1.1, -.9, -.7, -.5, -.3, -.12, .06, .2 };
+            double[] angs = { -3.2, -2.85, -2.5, -2.15, -1.8, -1.45, -1.1, -.75, -.4, -.05, .25 };
             for (int i = 0; i < angs.Length; i++)
             {
-                double size = i % 3 == 0 ? 1.4 : i % 3 == 1 ? 1 : .7;
+                double size = i % 3 == 0 ? 1.7 : i % 3 == 1 ? 1.25 : .95;
                 var el = new Border { Width = 20 * size, Height = 8 * size, Background = Splinter, IsHitTestVisible = false, Visibility = Visibility.Hidden, RenderTransformOrigin = new Point(.5, .5) };
                 var at = new TranslateTransform(); var turn = new RotateTransform(); var k = new ScaleTransform(1, 1);
                 el.RenderTransform = new TransformGroup { Children = { k, turn, at } };
                 shards.Children.Add(el);
-                pieces.Add((el, at, turn, k, angs[i], 70 + 110 * ((i * 7) % 5) / 4.0, (i % 2 == 0 ? 1 : -1) * (200 + 60 * (i % 3))));
+                pieces.Add((el, at, turn, k, angs[i], 80 + 110 * ((i * 7) % 5) / 4.0, (i % 2 == 0 ? 1 : -1) * (220 + 60 * (i % 3))));
             }
             // under the meter's words (behind the rows and over the slab), and mostly up and out into the window's room
             if (_shards != null) _fight.Children.Remove(_shards);
             _shards = shards;
             _fight.Children.Insert(_fight.Children.IndexOf(_fightBody), shards);
+            var o = new Point(Pad + 34, 24);
+            if (_head is { } hd0 && hd0.ActualHeight > 0 && hd0.IsDescendantOf(_fight)) o.Y = hd0.TranslatePoint(new Point(0, hd0.ActualHeight / 2), _fight).Y;
+            cracks = new TacSketch((dc, s) => DrawCracks(dc, o, 37)) { Opacity = 0, RenderTransform = crackK, IsHitTestVisible = false };
+            crackK.CenterX = o.X; crackK.CenterY = o.Y;
+            cracks.Clip = _fightArt.Shape;
+            _fight.Children.Insert(_fight.Children.IndexOf(_fightBody) + 1, cracks);   // over the rows: thin lines, gone in half a second
+        }
+        else
+        {
+            // frost ferns creeping in from the slab's corners over a cold grey vignette, over the rows (the middle stays clear)
+            var over = new TacSketch((dc, s) => FrostOver(dc, s)) { RenderTransform = pallK, RenderTransformOrigin = new Point(.5, .5), IsHitTestVisible = false };
+            pall = new Grid { IsHitTestVisible = false, Clip = _fightArt.Shape, Opacity = 0, Children = { over } };
+            _fight.Children.Insert(_fight.Children.IndexOf(_fightBody) + 1, pall);
         }
         double shatterT = -1;
         void PlaceShards()
@@ -715,15 +797,14 @@ sealed partial class HudFrost : ModernLook
             foreach (var (el, at, turn, k, ang, dist, spin) in pieces)
             {
                 if (shatterT is < 0 or > 1) { Show(el, 0); continue; }
-                // each flies out on its line (kept inside the meter: never past the window), falls a little, spins and fades
                 // flung out past the slab's edges, into the window's own room round it (never past the window)
-                double ex = Math.Clamp(x0 + Math.Cos(ang) * dist, -18, w + 80), ey = Math.Clamp(y0 + Math.Sin(ang) * dist * .8, -40, h + 4);
+                double ex = Math.Clamp(x0 + Math.Cos(ang) * dist, -24 + el.Width / 2 + 1, w + 80), ey = Math.Clamp(y0 + Math.Sin(ang) * dist * .8, -40, h + 4);
                 double q = Out(l);
-                at.X = x0 + (ex - x0) * q - el.Width / 2; at.Y = y0 + (ey - y0) * q + 12 * l * l - el.Height / 2;
+                at.X = x0 + (ex - x0) * q - el.Width / 2; at.Y = y0 + (ey - y0) * q + 16 * l * l - el.Height / 2;
                 at.Y = Math.Min(at.Y, h + 4);
                 turn.Angle = ang * 57.3 + spin * l;
-                k.ScaleX = k.ScaleY = 1.25 - .5 * l;
-                Show(el, l < .08 ? l / .08 : 1 - Seg(l, .55, 1));
+                k.ScaleX = k.ScaleY = 1.3 - .55 * l;
+                Show(el, l < .06 ? l / .06 : 1 - Seg(l, .55, 1));
             }
         }
         double glintT = -1;
@@ -748,17 +829,127 @@ sealed partial class HudFrost : ModernLook
         band.SizeChanged += (_, ev) => { art.Fit(ev.NewSize); glintHost.Clip = art.Shape; PlaceGlint(); };
         var head = _head;
         var words0 = words;
+        // a wipe's flakes drifting down over the slab (a kill's light is the flash and the shards)
+        // and a kill's white-cold flash: a wide burst of light over the plate, hottest where it struck
+        var snow = new ElemFx.Bits();
+        double bw = Math.Max(120, FightWidth - 10 - 2 * (Pad - 4));
+        if (wipe)
+            for (int i = 0; i < 5; i++)
+                snow.Add(Piece(SparkleBrush, 9 + 3 * (i % 2), 9 + 3 * (i % 2)), new Point(bw * (.12 + .19 * i), 4 + 6 * (i % 2)), new Vector((i % 2 == 0 ? 8 : -8), 70 + 16 * (i % 3)),
+                    g: 16, spin: 90, delay: .14 + .05 * i, life: .6, s0: .8, s1: 1.1, peak: .85);
+        else
+        {
+            snow.Add(ElemFx.Glow(Colors.White, bw * 1.05, 84, .7, 1), new Point(bw / 2, 0), new Vector(0, 0), delay: 0, life: .2, s0: .6, s1: 1.05);
+            snow.Add(ElemFx.Glow(CyanC, 130, 80, .9, .8), new Point(38, 0), new Vector(0, 0), delay: .02, life: .3, s0: .3, s1: 1.15);
+        }
+        snow.Shift = new Vector(-4, 0);
+        ElemFx.Play(_sky, snow, (FrameworkElement?)_head ?? _fight, 0, .5, 2400);
         Motion.Play(_fightFx, 2400, t =>
         {
-            reveal.ScaleX = Out(Seg(t, 0, .2));
-            Show(flash, t < .14 ? .55 * Seg(t, .06, .14) : .55 * (1 - Seg(t, .14, .32)));
-            slam.Y = t < .1 ? -12 * (1 - Out(Seg(t, 0, .1))) : 2.5 * Math.Sin(Math.PI * Seg(t, .1, .2)) * (1 - Seg(t, .1, .2));
-            glintT = t is > .2 and < .6 ? Seg(t, .2, .6) : -1; PlaceGlint();
-            shatterT = t is > .16 and < .62 ? Seg(t, .16, .62) : -1; PlaceShards();
-            words0.Opacity = t < .84 ? Seg(t, .02, .07) : 1 - Seg(t, .84, 1);
-            band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .12) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; if (_shards != null) { _fight.Children.Remove(_shards); _shards = null; } });
+            if (!wipe)
+            {
+                // the strike: the slab white-cold for a beat, the plate frozen out fast, its words landing big; the slab jolts,
+                // the cracks race out and fade, the shards burst off
+                reveal.ScaleX = Out(Seg(t, 0, .14));
+                Show(flash, .75 * ElemFx.Hit(t, .02, .07, .32));
+                Show(_fightBreath, .85 * ElemFx.Hit(t, 0, .05, .34));
+                slam.Y = t < .08 ? -12 * (1 - Out(Seg(t, 0, .08))) : 0;
+                wordsK.ScaleX = wordsK.ScaleY = ElemFx.Punch(t, .04, .28, 1.4, 2);
+                _fightShift.X = ElemFx.Shake(t, .06, .34, 3.5, 3.5);
+                crackK.ScaleX = crackK.ScaleY = Out(Seg(t, .05, .2));
+                if (cracks != null) cracks.Opacity = t < .22 ? Seg(t, .05, .08) : 1 - Seg(t, .22, .4);
+                glintT = t is > .2 and < .6 ? Seg(t, .2, .6) : -1; PlaceGlint();
+                shatterT = t is > .12 and < .6 ? Seg(t, .12, .6) : -1; PlaceShards();
+            }
+            else
+            {
+                // the cold winning: the plate forms slowly, "Wiped" sinks into place, a grey frost settles over the slab as it sags
+                reveal.ScaleX = Out(Seg(t, 0, .34));
+                Show(flash, .3 * ElemFx.Hit(t, .04, .2, .5));
+                wordsY.Y = -8 * (1 - Out(Seg(t, .06, .42)));
+                if (pall != null) pall.Opacity = Seg(t, .04, .2) * (1 - Seg(t, .72, .94));
+                pallK.ScaleX = pallK.ScaleY = 1.3 - .3 * Out(Seg(t, .04, .5));
+                _fightShift.Y = 3.5 * Math.Sin(Math.PI * Seg(t, .04, .92));
+            }
+            // the outcome and the head never show at once: the head goes as the plate comes, and back as it lifts
+            words0.Opacity = t < .78 ? Seg(t, .03, .07) : 1 - Seg(t, .78, .86);
+            band.Opacity = t < .78 ? 1 : 1 - Seg(t, .78, .88);
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .03) : Seg(t, .86, .96);
+        }, () =>
+        {
+            _fightFx.Children.Clear(); if (head != null) head.Opacity = 1;
+            if (_shards != null) { _fight.Children.Remove(_shards); _shards = null; }
+            if (cracks != null) _fight.Children.Remove(cracks);
+            if (pall != null) _fight.Children.Remove(pall);
+            Show(_fightBreath, 0); _fightShift.X = 0; _fightShift.Y = 0;
+        });
         if (!wipe) Frost();
+    }
+
+    /// <summary>
+    /// The cracks a kill sends through the slab: nine jagged lines racing out from where it struck, each forking once or twice,
+    /// in cold white on a cyan glow (drawn once; the moment scales them out from <paramref name="o"/> and fades them).
+    /// </summary>
+    static void DrawCracks(DrawingContext dc, Point o, int seed)
+    {
+        var g = Veins(o, seed, -Math.PI * .98, Math.PI * .98, 9, 70, 190);
+        dc.DrawGeometry(null, Mod.P(Mod.Br(CyanC, .3), 3.2, round: true), g);
+        dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .9), .9, round: true), g);
+        dc.DrawEllipse(MakeGlow(Colors.White, .8), null, o, 16, 11);
+    }
+
+    /// <summary>
+    /// A wipe's frost over the slab: a cold grey-white vignette thickening to its edges and ferns of frost branching in from
+    /// its four corners (drawn once; the moment fades it in as it creeps inward by its scale, then thaws it away).
+    /// </summary>
+    static void FrostOver(DrawingContext dc, Size s)
+    {
+        if (s.Width < 20 || s.Height < 20) return;
+        var vig = new RadialGradientBrush { Center = new Point(.5, .5), GradientOrigin = new Point(.5, .5), RadiusX = .62, RadiusY = .72 };
+        vig.GradientStops.Add(new GradientStop(Mod.A(GreyC, 0), 0)); vig.GradientStops.Add(new GradientStop(Mod.A(GreyC, 0), .55));
+        vig.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0xC4, 0xD4, 0xE0), .32), .82)); vig.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .5), 1));
+        vig.Freeze();
+        dc.DrawRectangle(vig, null, new Rect(0, 0, s.Width, s.Height));
+        double q = Math.PI / 2;
+        foreach (var (o, a0, seed) in new[] { (new Point(2, 2), 0.0, 5), (new Point(s.Width - 2, 2), q, 6), (new Point(2, s.Height - 2), -q, 7), (new Point(s.Width - 2, s.Height - 2), Math.PI, 8) })
+        {
+            var g = Veins(o, seed, a0 + .12, a0 + q - .12, 5, 22, 46);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .25), 3, round: true), g);
+            dc.DrawGeometry(null, Mod.P(Mod.Br(Color.FromRgb(0xEE, 0xF6, 0xFF), .85), 1, round: true), g);
+        }
+    }
+
+    /// <summary><paramref name="n"/> jagged lines out from <paramref name="o"/> between angles <paramref name="from"/> and <paramref name="to"/>, each forking now and then.</summary>
+    static Geometry Veins(Point o, int seed, double from, double to, int n, double minLen, double maxLen)
+    {
+        var rnd = new Random(seed);
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            var forks = new List<(Point P, double A, double L)>();
+            for (int i = 0; i < n; i++)
+            {
+                double ang = from + i * ((to - from) / Math.Max(1, n - 1)) + (rnd.NextDouble() - .5) * .3, len = 0, max = minLen + rnd.NextDouble() * (maxLen - minLen);
+                var p = o;
+                c.BeginFigure(p, false, false);
+                while (len < max)
+                {
+                    double step = 8 + rnd.NextDouble() * 11;
+                    ang += (rnd.NextDouble() - .5) * .55;
+                    var q = new Point(p.X + Math.Cos(ang) * step, p.Y + Math.Sin(ang) * step * .75);
+                    c.LineTo(q, true, true);
+                    if (rnd.NextDouble() < .25) forks.Add((q, ang + (rnd.NextDouble() < .5 ? .7 : -.7), 14 + rnd.NextDouble() * 22));
+                    p = q; len += step;
+                }
+            }
+            foreach (var (p0, a0, l0) in forks)
+            {
+                var p = p0; double ang = a0, len = 0;
+                c.BeginFigure(p, false, false);
+                while (len < l0) { double step = 6 + rnd.NextDouble() * 6; ang += (rnd.NextDouble() - .5) * .5; var q = new Point(p.X + Math.Cos(ang) * step, p.Y + Math.Sin(ang) * step * .75); c.LineTo(q, true, true); p = q; len += step; }
+            }
+        }
+        g.Freeze();
+        return g;
     }
 }
