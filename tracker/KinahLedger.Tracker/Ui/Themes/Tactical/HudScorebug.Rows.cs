@@ -180,7 +180,10 @@ sealed partial class HudScorebug
         {
             if (Sweep is not (> 0 and < 1)) return;
             double x = -60 + (s.Width + 120) * Sweep;
+            // inside the row (it ran past the window's edges as it came on and went off)
+            dc.PushClip(new RectangleGeometry(new Rect(s)));
             dc.DrawGeometry(Tac.Grad(false, (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 0), (Color.FromArgb(0x9A, 0xFF, 0xF4, 0xC8), .5), (Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 1)), null, Tac.Lean(new Rect(x - 30, 0, 60, s.Height), 10));
+            dc.Pop();
         }
     }
 

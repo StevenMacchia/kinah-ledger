@@ -590,7 +590,8 @@ sealed partial class HudFighter : TacticalLook
         host.Children.Add(ring);
         var box = _contactBox;
         // the tile's box locks on: it punches past its size as the first flash lands, settles as the ping runs out
-        var pop = PopOn(host, new Point(.5, .5));
+        // (it grows up from near its foot: the window's edge is a pixel under it)
+        var pop = PopOn(host, new Point(.5, .9));
         Motion.Play(ring, 1500, t =>
         {
             // on, off, on, off, on (two flashes), then held on
@@ -730,6 +731,7 @@ sealed partial class HudFighter : TacticalLook
         var (root, step0) = BannerArt(big, small, tone, toneC);
         var lift = new TranslateTransform(); var shrink = new ScaleTransform(1, 1);
         var grid = (FrameworkElement)((Grid)root).Children[1];
+        var words = ((Grid)grid).Children[^1];
         grid.RenderTransformOrigin = new Point(.5, .5); grid.RenderTransform = new TransformGroup { Children = { shrink, lift } };
         Vector? to = null; bool sought = false;
         var body = _fightBody;
@@ -746,6 +748,7 @@ sealed partial class HudFighter : TacticalLook
             else if (to is Vector v) { double q = Out(k); lift.X = v.X * q; lift.Y = v.Y * q; shrink.ScaleX = shrink.ScaleY = 1 - .86 * q; grid.Opacity = k < .7 ? 1 : 1 - (k - .7) / .3; }
             else grid.Opacity = 1 - k;
             if (k >= 1) grid.Opacity = 0;
+            if (k > 0) words.Opacity = 0;
             // the part it flies into steps aside while it lands in it, then pops (never two words over each other)
             if (target != null && !slump && to != null) target.Opacity = k > .05 && k < 1 ? 0 : 1;
             // the box dims under the hit only

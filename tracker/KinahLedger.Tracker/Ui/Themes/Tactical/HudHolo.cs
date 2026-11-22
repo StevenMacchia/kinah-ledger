@@ -614,7 +614,8 @@ sealed partial class HudHolo : TacticalLook
             if (chip == null) return;
             // projected on: flickering up, a punch past its size, settled; a light crossing it
             chip.Opacity = t < .14 ? ((int)(t / .035) % 2 == 0 ? .3 : 1) : 1;
-            sc.ScaleX = sc.ScaleY = t < .14 ? 1.22 : 1 + .22 * (1 - Back(Seg(t, .14, .36), 2.2));
+            sc.ScaleY = t < .14 ? 1.22 : 1 + .22 * (1 - Back(Seg(t, .14, .36), 2.2));
+            sc.ScaleX = 1 + (sc.ScaleY - 1) * .12;
             if (st != null) st.X = -40 + (chip.ActualWidth + 60) * Seg(t, .26, .62);
         }, () =>
         {
@@ -694,7 +695,7 @@ sealed partial class HudHolo : TacticalLook
             // the hit: out of a line across the rows, held a moment (the rows dimmed under it)
             scale.ScaleY = Math.Max(.03, Out(Seg(t, .02, .07)));
             scale.ScaleX = Out(Seg(t, 0, .05)) * .9 + .1;
-            words.Opacity = t < .05 ? 0 : t < .07 ? .4 : 1;
+            words.Opacity = t < .05 ? 0 : t < .07 ? .4 : t < .19 ? 1 : 0;
             double k = Seg(t, .19, .28);
             if (wipe)
             {
