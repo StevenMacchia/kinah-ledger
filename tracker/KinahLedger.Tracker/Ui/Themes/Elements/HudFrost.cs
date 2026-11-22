@@ -80,6 +80,8 @@ sealed partial class HudFrost : ModernLook
     /// <summary>The Buddy's hop (your best passed) and the rare plate's jolt (its drop landing).</summary>
     readonly TranslateTransform _lineHop = new(), _rareJolt = new();
     Color _rareC = Colors.White;
+    /// <summary>The hour and its unit (your best passed punches them).</summary>
+    FrameworkElement? _rateTop;
 
     public HudFrost() : base(bare: true)
     {
@@ -126,7 +128,7 @@ sealed partial class HudFrost : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _timerUp = false; _stripTimerW = -1;
+        _ringArt = null; _rateTop = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _lineBody.Opacity = _dim ? .66 : 1;
@@ -170,7 +172,8 @@ sealed partial class HudFrost : ModernLook
             else if (!mark) _lineBody.Children.Add(new Border { Width = 6 });
             // the hour big in ice-white, its unit small; the session and the latest pickup under it
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 0, 1) };
-            var top = new StackPanel { Orientation = Orientation.Horizontal };
+            var top = new StackPanel { Orientation = Orientation.Horizontal, RenderTransformOrigin = new Point(0, .6) };
+            _rateTop = top;
             var rate = Tt(f.Rate, f.Warm ? 15 : 22, f.Warm ? Soft : White, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
             rate.Tag = "buddy-rate";
             if (!f.Warm) rate.Effect = ColdGlow(.6);
@@ -656,6 +659,8 @@ sealed partial class HudFrost : ModernLook
                 g: 10, spin: (i % 2 == 0 ? 1 : -1) * 200, delay: .12 + .01 * i, life: .5, s0: 1.15, s1: .55, face: true);
         }
         ElemFx.Play(_sky, bits, ring, .5, .5, 1800);
+        ScaleTransform? rateK = _rateTop != null ? new ScaleTransform(1, 1) : null;
+        if (_rateTop != null) _rateTop.RenderTransform = rateK;
         Motion.Play(ring, 1800, t =>
         {
             double s0 = Seg(t, .1, .55);
@@ -664,6 +669,7 @@ sealed partial class HudFrost : ModernLook
             // a breath in (the ring draws in, cold), then the hit: it bursts out big and settles
             swell.ScaleX = swell.ScaleY = t < .1 ? 1 - .12 * Out(Seg(t, 0, .1)) : ElemFx.Punch(t, .1, .5, .88, 3.4);
             _lineHop.Y = -4 * ElemFx.Hit(t, .1, .16, .42);
+            if (rateK != null) rateK.ScaleX = rateK.ScaleY = t < .12 ? 1 : ElemFx.Punch(t, .12, .42, 1.1, 2);
             double k = Seg(t, .12, .6);
             Show(burst, k is > 0 and < 1 ? .9 * (1 - k) : 0);
             bk.ScaleX = bk.ScaleY = .7 + .5 * Out(k);
@@ -672,7 +678,7 @@ sealed partial class HudFrost : ModernLook
             Show(spark, o is > 0 and < 1 ? Math.Sin(Math.PI * o) : 0);
             Show(_lineBreath, .8 * ElemFx.Hit(t, .08, .14, .8));
             LineGlint(t is > .4 and < .9 ? Seg(t, .4, .9) : -1);
-        }, () => { swell.ScaleX = swell.ScaleY = 1; Show(burst, 0); Show(star, 0); Show(spark, 0); orbit.Angle = 0; Show(_lineBreath, 0); LineGlint(-1); _lineHop.Y = 0; });
+        }, () => { swell.ScaleX = swell.ScaleY = 1; Show(burst, 0); Show(star, 0); Show(spark, 0); orbit.Angle = 0; Show(_lineBreath, 0); LineGlint(-1); _lineHop.Y = 0; if (rateK != null) rateK.ScaleX = rateK.ScaleY = 1; });
     }
 
     /// <summary>
@@ -694,13 +700,13 @@ sealed partial class HudFrost : ModernLook
             var to = new Point(Math.Cos(a) * hw * .8, Math.Sin(a) * hh * .8);
             bits.Add(Piece(Splinter, 18, 7), from, to - from, delay: .02 * k, life: .3, s0: 1.1, s1: .7, face: true);
         }
-        bits.Add(ElemFx.Outline(FrostC, 2 * hw + 4, 2 * hh + 4, 1.6), new Point(0, 0), new Vector(0, 0), delay: .3, life: .4, s0: 1, s1: 1.3);
+        bits.Add(Piece(SparkleBrush, 12, 12), new Point(-hw + 5, hh - 2), new Vector(0, 0), spin: -120, delay: .32, life: .36, s0: .3, s1: 1.1);
         bits.Add(ElemFx.Glow(MintC2, 2 * hw + 40, 2 * hh + 26, .6, .5), new Point(0, 0), new Vector(0, 0), delay: .28, life: .4, s0: .7, s1: 1.15);
         bits.Add(Piece(SparkleBrush, 14, 14), new Point(hw - 4, -hh + 1), new Vector(0, 0), spin: 120, delay: .34, life: .4, s0: .3, s1: 1.3);
         ElemFx.Play(_sky, bits, chip, .5, .5, 1300, t =>
         {
             Show(glow, t < .3 ? .2 * Seg(t, 0, .3) : ElemFx.Hit(t, .3, .34, 1));
-            sc.ScaleX = sc.ScaleY = t < .3 ? 1 - .1 * Out(Seg(t, 0, .3)) : ElemFx.Punch(t, .3, .62, .9, 3.2);
+            sc.ScaleX = sc.ScaleY = t < .3 ? 1 - .1 * Out(Seg(t, 0, .3)) : ElemFx.Punch(t, .3, .55, .9, 1.9);
         }, () => { Show(glow, 0); sc.ScaleX = sc.ScaleY = 1; });
     }
 
@@ -864,17 +870,17 @@ sealed partial class HudFrost : ModernLook
             else
             {
                 // the cold winning: the plate forms slowly, "Wiped" sinks into place, a grey frost settles over the slab as it sags
-                reveal.ScaleX = Out(Seg(t, 0, .34));
+                reveal.ScaleX = 1;
                 Show(flash, .3 * ElemFx.Hit(t, .04, .2, .5));
                 wordsY.Y = -8 * (1 - Out(Seg(t, .06, .42)));
-                if (pall != null) pall.Opacity = Seg(t, .04, .2) * (1 - Seg(t, .72, .94));
+                if (pall != null) pall.Opacity = Seg(t, .04, .2) * (1 - Seg(t, .5, .7));
                 pallK.ScaleX = pallK.ScaleY = 1.3 - .3 * Out(Seg(t, .04, .5));
                 _fightShift.Y = 3.5 * Math.Sin(Math.PI * Seg(t, .04, .92));
             }
             // the outcome and the head never show at once: the head goes as the plate comes, and back as it lifts
-            words0.Opacity = t < .78 ? Seg(t, .03, .07) : 1 - Seg(t, .78, .86);
-            band.Opacity = t < .78 ? 1 : 1 - Seg(t, .78, .88);
-            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .03) : Seg(t, .86, .96);
+            words0.Opacity = t < .74 ? Seg(t, .03, .07) : 1 - Seg(t, .74, .82);
+            band.Opacity = t < .74 ? (wipe ? Out(Seg(t, .01, .2)) : 1) : 1 - Seg(t, .74, .84);
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .03) : Out(Seg(t, .82, 1));
         }, () =>
         {
             _fightFx.Children.Clear(); if (head != null) head.Opacity = 1;
@@ -907,13 +913,13 @@ sealed partial class HudFrost : ModernLook
         if (s.Width < 20 || s.Height < 20) return;
         var vig = new RadialGradientBrush { Center = new Point(.5, .5), GradientOrigin = new Point(.5, .5), RadiusX = .62, RadiusY = .72 };
         vig.GradientStops.Add(new GradientStop(Mod.A(GreyC, 0), 0)); vig.GradientStops.Add(new GradientStop(Mod.A(GreyC, 0), .55));
-        vig.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0xC4, 0xD4, 0xE0), .32), .82)); vig.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .5), 1));
+        vig.GradientStops.Add(new GradientStop(Mod.A(Color.FromRgb(0xC4, 0xD4, 0xE0), .32), .82)); vig.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .36), 1));
         vig.Freeze();
         dc.DrawRectangle(vig, null, new Rect(0, 0, s.Width, s.Height));
         double q = Math.PI / 2;
         foreach (var (o, a0, seed) in new[] { (new Point(2, 2), 0.0, 5), (new Point(s.Width - 2, 2), q, 6), (new Point(2, s.Height - 2), -q, 7), (new Point(s.Width - 2, s.Height - 2), Math.PI, 8) })
         {
-            var g = Veins(o, seed, a0 + .12, a0 + q - .12, 5, 22, 46);
+            var g = Veins(o, seed, a0 + .16, a0 + q - .16, 4, 14, 30);
             dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .25), 3, round: true), g);
             dc.DrawGeometry(null, Mod.P(Mod.Br(Color.FromRgb(0xEE, 0xF6, 0xFF), .85), 1, round: true), g);
         }
