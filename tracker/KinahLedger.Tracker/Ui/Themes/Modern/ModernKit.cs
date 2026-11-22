@@ -136,6 +136,18 @@ abstract class ModernLook : HudThemeLook
     protected List<FrameworkElement> RowRoots() =>
         Meter?.Members.Select(m => Meter.RowOf(m.Id)?.Root).OfType<FrameworkElement>().Where(r => r.IsVisible || r.Visibility == Visibility.Visible).ToList() ?? new();
 
+    /// <summary>The pickup strip's newest tile (Ui/HudPickStrip.cs tags it "pick-tile", newest first) under <paramref name="under"/>, or null.</summary>
+    protected static FrameworkElement? NewestTile(DependencyObject under)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(under); i++)
+        {
+            var c = VisualTreeHelper.GetChild(under, i);
+            if (c is FrameworkElement fe && fe.Tag as string == "pick-tile" && fe.IsVisible) return fe;
+            if (NewestTile(c) is { } found) return found;
+        }
+        return null;
+    }
+
     /// <summary>A rounded clip in a layer's coordinates.</summary>
     protected static Geometry ClipOf(Rect r, double radius) => Mod.Pill(r, radius);
 

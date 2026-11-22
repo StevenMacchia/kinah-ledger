@@ -52,6 +52,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     double _share = -1, _complete = 0, _glint = -1, _sheen = -1;
     bool _beat;
     Grid? _rareTile;
+    FrameworkElement? _rareRowEl;
     TacSketch? _rareRing;
     double _rarePulse = -1;
     readonly TextBlock _note = new() { FontSize = 11.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 4, 12, 5) };
@@ -188,7 +189,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ring = null; _ringArt = null; _rareTile = null; _rareRing = null; _timerUp = false;
+        _ring = null; _ringArt = null; _rareTile = null; _rareRing = null; _rareRowEl = null; _timerUp = false;
         bool dim = Values.GetValueOrDefault("show", "") == "dim";
         // in a dungeon run: the run's clock, splits and verdict in place of the hour (Ui/Themes/Modern/HudModernGlass.Run.cs)
         if (!KinahHidden && Rare(Values) == null && RunBuddy.Of(Values) is { } rs)
@@ -337,6 +338,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         {
             _lineBody.Children.Add(Hairline(new Thickness(0, 8, 0, 7)));
             var rr = new StackPanel { Orientation = Orientation.Horizontal };
+            _rareRowEl = rr;
             var c = ColorOf(r.Color, r.Grade);
             var tile = new Grid { Width = 46, Height = 36 };
             _rareRing = new TacSketch((dc, s) =>
@@ -548,78 +550,99 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     //
     // Glass's moments are light on glass (2026-11-21, "cinematic ... keeping it light"): bands of specular light sweeping
     // the panes, a lens's four-point glint, soft blooms and rings of colour, and a glass plate that lands with a small scale
-    // punch. Each part is drawn once and moved by its transforms (Ui/Themes/Modern/ModernFx.cs); the panes never redraw.
+    // punch. A kill rises (punch, light, glints); a wipe falls (a drop, a shudder, the glass frosting red from below). Each
+    // part is drawn once and moved by its transforms (Ui/Themes/Modern/ModernFx.cs); the panes never redraw.
 
     static readonly Color FrostC = Color.FromRgb(0xE8, 0xF1, 0xFF);
 
-    /// <summary>A pickup: one quiet band of light crosses the Buddy's glass and its top edge catches the light.</summary>
+    /// <summary>
+    /// A pickup, small and local: the newest tile of the strip lands (a back-eased pop on a frosted bloom) and a glint of
+    /// light crosses the strip only. Without the strip, one quiet band crosses the Buddy's glass.
+    /// </summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         var lb = ModFx.In(_line, _root);
         if (lb.IsEmpty) return;
-        var layer = FxLayer("pickup", _root, ClipOf(lb, Radius));
-        double h = lb.Height;
-        var band = ModFx.Band(30, h, FrostC, .18, h * .45);
+        var tile = NewestTile(_lineBody);
+        var tb = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
+        var strip = tile != null && VisualTreeHelper.GetParent(tile) is FrameworkElement sp ? ModFx.In(sp, _root) : Rect.Empty;
+        var lane = !strip.IsEmpty ? new Rect(strip.Left - 2, strip.Top - 2, strip.Width + 4, strip.Height + 4) : lb;
+        var layer = FxLayer("pickup", _root);
+        var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(lane, strip.IsEmpty ? Radius : 6) }, 0, 0);
+        double h = lane.Height;
+        var band = ModFx.Band(strip.IsEmpty ? 30 : 16, h, FrostC, strip.IsEmpty ? .18 : .55, h * .45);
         var bx = new ModFx.Xf(band);
-        ModFx.Put(layer, band, lb.Left - 30 - h * .45, lb.Top);
-        var rim = ModFx.Block(Math.Max(1, lb.Width - Radius), 1.4, Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, .8), .5), (Mod.A(Colors.White, 0), 1)));
-        var rx = new ModFx.Xf(rim);
-        ModFx.Put(layer, rim, lb.Left + Radius / 2, lb.Top + 1);
-        Motion.Play(layer, 850, t =>
+        double bw = band.Width;
+        ModFx.Put(pane, band, lane.Left - bw, lane.Top);
+        ModFx.Xf? tx = null; FrameworkElement? bloom = null; ModFx.Xf? blx = null;
+        if (!tb.IsEmpty)
         {
-            bx.T.X = (lb.Width + 30 + h * .45) * ModFx.InOut(Seg(t, 0, .9));
-            band.Opacity = ModFx.Life(t, 0, .12, .75, .92);
-            rim.Opacity = ModFx.Bell(Seg(t, .05, .7));
-            rx.S.ScaleX = .3 + .7 * Out(Seg(t, .05, .5));
-        }, () => FxDone("pickup", layer));
+            bloom = ModFx.Centre(layer, ModFx.Bloom(FrostC, tb.Width * 2, tb.Height * 2, .4), new Point(tb.Left + tb.Width / 2, tb.Top + tb.Height / 2));
+            blx = new ModFx.Xf(bloom);
+            layer.Children.Remove(bloom); layer.Children.Insert(0, bloom);
+            tx = new ModFx.Xf(tile!);
+        }
+        Motion.Play(layer, 900, t =>
+        {
+            if (tx != null) { tx.Scale = ModFx.Punch(Seg(t, 0, .26), .6, 2.4); tile!.Opacity = Seg(t, 0, .06); }
+            if (blx != null) { blx.Scale = .6 + .5 * Out(Seg(t, 0, .3)); bloom!.Opacity = ModFx.Life(t, 0, .08, .16, .45); }
+            bx.T.X = (lane.Width + bw) * ModFx.InOut(Seg(t, .12, .62));
+            band.Opacity = ModFx.Life(t, .12, .2, .52, .62);
+        }, () => { if (tx != null) { tx.Scale = 1; tile!.Opacity = 1; } FxDone("pickup", layer); });
     }
 
     /// <summary>
-    /// A rare drop, the big one, in its grade's colour: the tile gathers and pops, two rings of the colour burst out of it, a
-    /// band of the colour sweeps the whole Buddy, and four glints flash round the tile one after another.
+    /// A rare drop, the big one, in its grade's colour. Wind-up: the row rises into place as the glass dims a touch. Hit: the
+    /// tile pops, two rings of the colour burst out of it, a bloom of the colour washes the whole row and four glints flash
+    /// round the tile; a light sweeps through the item's name just behind the rings. Settle: all of it gone by two thirds.
     /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareTile is not { } tile) return;
-        var tb = ModFx.In(tile, _root); var lb = ModFx.In(_line, _root);
-        if (tb.IsEmpty || lb.IsEmpty) return;
+        if (_rareTile is not { } tile || _rareRowEl is not { } row) return;
+        var tb = ModFx.In(tile, _root); var rb = ModFx.In(row, _root); var lb = ModFx.In(_line, _root);
+        if (tb.IsEmpty || rb.IsEmpty || lb.IsEmpty) return;
         var c = ColorOf(p.Color, p.Grade);
         var hot = Mod.Mix(c, Colors.White, .45);
         var layer = FxLayer("rare", _root);
         var mid = new Point(tb.Left + tb.Width / 2, tb.Top + 18);
-        // the band of colour, clipped to the glass
-        var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(lb, Radius) }, 0, 0);
-        double h = lb.Height;
-        var band = ModFx.Band(64, h, c, .24, h * .5);
+        // the dim of the glass (the wind-up), the bloom over the row, the light through the name (clipped to the row)
+        var dim = ModFx.Put(layer, ModFx.Outline(lb, Radius, Colors.Black, 0, 0, Mod.Br(Colors.Black, .22)), lb.Left, lb.Top);
+        var lane = new Rect(lb.Left + 4, rb.Top - 4, lb.Width - 8, rb.Height + 8);
+        var wash = ModFx.Put(layer, ModFx.Block(lane.Width, lane.Height, Mod.Grad(false, (Mod.A(c, .55), 0), (Mod.A(c, .3), .55), (Mod.A(c, 0), 1)), lane.Height / 2), lane.Left, lane.Top);
+        var wx = new ModFx.Xf(wash, new Point(0, .5));
+        var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(lane, lane.Height / 2) }, 0, 0);
+        var band = ModFx.Band(34, lane.Height, Colors.White, .5, lane.Height * .6);
         var bx = new ModFx.Xf(band);
-        ModFx.Put(pane, band, lb.Left - 64 - h * .5, lb.Top);
-        var bloom = ModFx.Centre(layer, ModFx.Bloom(c, 72, 72, .38), mid);
-        var blx = new ModFx.Xf(bloom);
-        var r1 = ModFx.Centre(layer, ModFx.Ring(c, 32, 2.4), mid);
-        var r2 = ModFx.Centre(layer, ModFx.Ring(hot, 32, 1.2), mid);
+        ModFx.Put(pane, band, lane.Left - 34 - lane.Height * .6, lane.Top);
+        var r1 = ModFx.Centre(layer, ModFx.Ring(c, 32, 2.6), mid);
+        var r2 = ModFx.Centre(layer, ModFx.Ring(hot, 32, 1.3), mid);
         var x1 = new ModFx.Xf(r1); var x2 = new ModFx.Xf(r2);
         var at = new (double X, double Y, double R)[] { (-17, -12, 8), (21, -13, 10), (25, 12, 7), (-12, 15, 9) };
-        var glints = at.Select(g => (El: ModFx.Centre(layer, ModFx.Glint(hot, g.R), new Point(mid.X + g.X, mid.Y + g.Y)), X: (ModFx.Xf?)null)).ToList();
-        for (int i = 0; i < glints.Count; i++) glints[i] = (glints[i].El, new ModFx.Xf(glints[i].El));
+        var glints = new List<(FrameworkElement El, ModFx.Xf X)>();
+        foreach (var g in at) { var el = ModFx.Centre(layer, ModFx.Glint(hot, g.R), new Point(mid.X + g.X, mid.Y + g.Y)); glints.Add((el, new ModFx.Xf(el))); }
+        var rowX = new ModFx.Xf(row);
         var tx = new ModFx.Xf(tile);
         Motion.Play(layer, 1700, t =>
         {
-            // the tile: a short gather, then the pop past its size and the settle
-            tx.Scale = t < .06 ? 1 - .16 * ModFx.In(Seg(t, 0, .06)) : ModFx.Punch(Seg(t, .06, .4), .84, 2.6);
-            double a = Seg(t, .06, .55), b = Seg(t, .16, .72);
+            // wind-up: the row rises 6 px into place, the glass dims; the hit at .1
+            double w = Out(Seg(t, 0, .1));
+            rowX.T.Y = 6 * (1 - w); row.Opacity = w;
+            dim.Opacity = ModFx.Life(t, 0, .08, .12, .3);
+            tx.Scale = t < .1 ? .84 : ModFx.Punch(Seg(t, .1, .4), .84, 2.6);
+            double a = Seg(t, .1, .5), b = Seg(t, .18, .62);
             x1.Scale = 1 + 1.1 * Out(a); r1.Opacity = a <= 0 || a >= 1 ? 0 : .95 * (1 - a);
             x2.Scale = 1 + 1.3 * Out(b); r2.Opacity = b <= 0 || b >= 1 ? 0 : .8 * (1 - b);
-            blx.Scale = .5 + .5 * Out(Seg(t, .04, .5)); bloom.Opacity = ModFx.Life(t, .04, .12, .3, .7);
-            bx.T.X = (lb.Width + 64 + h * .5) * ModFx.InOut(Seg(t, .1, .62));
-            band.Opacity = ModFx.Life(t, .1, .18, .5, .62);
+            wx.S.ScaleX = .2 + .8 * Out(Seg(t, .1, .3)); wash.Opacity = ModFx.Life(t, .1, .16, .32, .62);
+            bx.T.X = (lane.Width + 34 + lane.Height * .6) * ModFx.InOut(Seg(t, .15, .5));
+            band.Opacity = ModFx.Life(t, .15, .2, .44, .5);
             for (int i = 0; i < glints.Count; i++)
             {
-                double g = Seg(t, .12 + .08 * i, .42 + .08 * i);
-                glints[i].X!.Scale = ModFx.Bell(g); glints[i].X!.R.Angle = 70 * g;
+                double g = Seg(t, .12 + .07 * i, .4 + .07 * i);
+                glints[i].X.Scale = ModFx.Bell(g); glints[i].X.R.Angle = 70 * g;
                 glints[i].El.Opacity = g <= 0 || g >= 1 ? 0 : 1;
             }
-        }, () => { tx.Scale = 1; FxDone("rare", layer); });
+        }, () => { tx.Scale = 1; rowX.T.Y = 0; row.Opacity = 1; FxDone("rare", layer); });
     }
 
     /// <summary>
@@ -650,24 +673,24 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             glint = ModFx.Centre(layer, ModFx.Glint(PaleGreenC, 15), new Point(mid.X + 15, mid.Y - 15)); gx = new ModFx.Xf(glint);
         }
         var rx = new ModFx.Xf(ring);
-        Motion.Play(art, 1800, t =>
+        Motion.Play(art, 1700, t =>
         {
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .5));
-            _glint = t < .55 ? Seg(t, 0, .55) : -1;
-            if (t >= .55) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, .45));
+            _glint = t < .5 ? Seg(t, 0, .5) : -1;
+            if (t >= .5) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
-            rx.Scale = 1 + .13 * ModFx.Bell(Out(Seg(t, .5, .78)));
+            rx.Scale = 1 + .13 * ModFx.Bell(Out(Seg(t, .46, .72)));
             if (layer != null)
             {
-                double k = Seg(t, .5, .9);
-                blx!.Scale = .5 + .5 * Out(k); bloom!.Opacity = ModFx.Life(t, .5, .56, .62, .95);
-                double hk = Seg(t, .52, .92);
+                double k = Seg(t, .46, .72);
+                blx!.Scale = .5 + .5 * Out(k); bloom!.Opacity = ModFx.Life(t, .46, .52, .56, .72);
+                double hk = Seg(t, .48, .78);
                 hx!.Scale = 1 + .5 * Out(hk); halo!.Opacity = hk <= 0 || hk >= 1 ? 0 : 1 - hk;
-                double gk = Seg(t, .52, .86);
+                double gk = Seg(t, .48, .78);
                 gx!.Scale = ModFx.Bell(gk); gx.R.Angle = 90 * gk; glint!.Opacity = gk <= 0 || gk >= 1 ? 0 : 1;
-                bx!.T.X = (lb.Width + 56 + lb.Height * .45) * ModFx.InOut(Seg(t, .55, .98));
-                band!.Opacity = ModFx.Life(t, .55, .62, .88, .98);
+                bx!.T.X = (lb.Width + 56 + lb.Height * .45) * ModFx.InOut(Seg(t, .5, .9));
+                band!.Opacity = ModFx.Life(t, .5, .56, .82, .9);
             }
         }, () => { _complete = 0; _glint = -1; _beat = beat; art.InvalidateVisual(); rx.Scale = 1; if (layer != null) FxDone("best", layer); });
     }
@@ -732,10 +755,11 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     }
 
     /// <summary>
-    /// A fight ended. A kill: a frosted plate saying how and when lands over the header with a small scale punch, a glint of
-    /// light crosses it, a green hairline opens out under it from its middle, glints flash at its ends and a green light
-    /// sweeps the pane. A wipe: the plate drops in red, heavy, the pane shudders, a red veil passes over it and the rows
-    /// dim, the red hairline closes in. It sits on the boss and the clock (which say the same), never over the rows.
+    /// A fight ended, as a frosted plate over the header (the boss and the clock say the same; never over the rows). A kill
+    /// rises: the plate lands with a scale punch, a glint crosses it, glints flash at its ends, a green hairline opens out
+    /// under it, and a light runs along every row's bar one after another. A wipe falls: the plate drops in heavy with no
+    /// overshoot, the pane shudders and frosts over, a red glow rises from its foot, the rows dim for a moment and the red
+    /// hairline closes in. Either way the plate lifts off upward and the header slides back in under it, never the two at once.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
@@ -771,13 +795,16 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             plate.Height = h + 8;
         }
         Seat();
+        var head = _head;
+        ModFx.Xf? headX = head != null ? new ModFx.Xf(head) : null;
         // the plate's box on the look's layer, from the header's (the plate itself isn't laid out yet)
         var fb = ModFx.In(_fight, _root);
-        var hb = _head != null ? ModFx.In(_head, _root) : Rect.Empty;
+        var hb = head != null ? ModFx.In(head, _root) : Rect.Empty;
         var rows = RowRoots();
         Canvas? layer = null;
-        FrameworkElement? band = null, hair = null, veil = null; ModFx.Xf? bx = null, hx = null;
+        FrameworkElement? hair = null, frost = null, rise = null; ModFx.Xf? hx = null, rsx = null;
         var glints = new List<(FrameworkElement El, ModFx.Xf X, double At)>();
+        var lights = new List<(FrameworkElement El, ModFx.Xf X, double Run, double At)>();
         double glintRun = 0;
         if (!fb.IsEmpty && !hb.IsEmpty)
         {
@@ -787,60 +814,80 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             {
                 var plane = ModFx.Put(layer, new Canvas { Clip = ClipOf(pb, pb.Height / 2) }, 0, 0);
                 var glint = ModFx.Band(34, pb.Height, Colors.White, .5, pb.Height * .7);
-                var gxf = new ModFx.Xf(glint);
                 ModFx.Put(plane, glint, pb.Left - 34 - pb.Height * .7, pb.Top);
-                glints.Add((glint, gxf, -1));
+                glints.Add((glint, new ModFx.Xf(glint), -1));
                 glintRun = pb.Width + 34 + pb.Height * .7;
-                var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(fb, Radius) }, 0, 0);
-                band = ModFx.Band(110, fb.Height, GreenC, .09, fb.Height * .4);
-                bx = new ModFx.Xf(band);
-                ModFx.Put(pane, band, fb.Left - 110 - fb.Height * .4, fb.Top);
                 foreach (var (x, at) in new[] { (pb.Left + 16, .14), (pb.Right - 16, .22) })
                 {
                     var g = ModFx.Centre(layer, ModFx.Glint(PaleGreenC, 11), new Point(x, pb.Top + pb.Height / 2));
                     glints.Add((g, new ModFx.Xf(g), at));
                 }
+                // a light along each row's bar, one after another (each clipped to its row)
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    var rr = ModFx.In(rows[i], _root);
+                    if (rr.IsEmpty) continue;
+                    var lane = ModFx.Put(layer, new Canvas { Clip = ClipOf(rr, Math.Min(10, rr.Height / 2)) }, 0, 0);
+                    var l = ModFx.Band(40, rr.Height, Colors.White, .32, rr.Height * .6);
+                    ModFx.Put(lane, l, rr.Left - 40 - rr.Height * .6, rr.Top);
+                    lights.Add((l, new ModFx.Xf(l), rr.Width + 40 + rr.Height * .6, .16 + .03 * i));
+                }
             }
-            else veil = ModFx.Put(layer, ModFx.Outline(fb, Radius, RedC, 0, 0, Mod.Br(RedC, .13)), fb.Left, fb.Top);
+            else
+            {
+                frost = ModFx.Put(layer, ModFx.Outline(fb, Radius, Colors.White, 0, 0, Mod.Grad(true, (Mod.A(FrostC, .1), 0), (Mod.A(RedC, .1), 1))), fb.Left, fb.Top);
+                var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(fb, Radius) }, 0, 0);
+                rise = ModFx.Put(pane, ModFx.Block(fb.Width, fb.Height * .55, Mod.Grad(true, (Mod.A(RedC, 0), 0), (Mod.A(RedC, .3), 1))), fb.Left, fb.Bottom - fb.Height * .55);
+                rsx = new ModFx.Xf(rise, new Point(.5, 1));
+            }
             hair = ModFx.Put(layer, ModFx.Block(pb.Width - 40, 1.4, Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .95), .5), (Mod.A(c, 0), 1))), pb.Left + 20, pb.Bottom + 2);
             hx = new ModFx.Xf(hair);
         }
-        Motion.Play(_fightFx, 2400, t =>
+        Motion.Play(_fightFx, 2200, t =>
         {
             Seat();
-            // the exit: quick, a touch smaller, so the header comes back clean
-            double o = Seg(t, .8, .86);
+            // the exit: the plate lifts off upward, then the header slides back up into place
+            double o = Seg(t, .78, .85);
+            px.T.Y = -8 * ModFx.In(o);
+            if (headX != null) { head!.Opacity = t < .08 ? 1 - Seg(t, .04, .08) : t < .85 ? 0 : Seg(t, .85, .92); headX.T.Y = t < .85 ? 6 : 6 * (1 - Out(Seg(t, .85, .95))); }
             if (!wipe)
             {
                 // the plate lands: from a touch small, past its size, settled
-                px.Scale = t < .8 ? ModFx.Punch(Seg(t, 0, .18), .9, 2.2) : 1 - .04 * o;
-                px.T.Y = 0;
+                px.Scale = ModFx.Punch(Seg(t, 0, .18), .9, 2.2);
                 plate.Opacity = Seg(t, 0, .07) * (1 - o);
             }
             else
             {
-                // the plate drops in heavy, then the pane shudders
-                double d = Out(Seg(t, 0, .13));
-                px.T.Y = -12 * (1 - d); px.Scale = 1;
-                px.T.X = ModFx.Shake(Seg(t, .1, .42), 2.5, 3);
-                _settle.X = ModFx.Shake(Seg(t, .1, .42), 3, 3);
-                plate.Opacity = Seg(t, 0, .08) * (1 - o);
-                if (veil != null) veil.Opacity = ModFx.Life(t, .1, .16, .3, .62);
-                foreach (var r in rows) r.Opacity = 1 - .42 * ModFx.Life(t, .12, .24, .48, .78);
+                // the plate falls in heavy (no overshoot), then the pane shudders
+                double d = ModFx.In(Seg(t, 0, .1));
+                if (t < .78) px.T.Y = -14 * (1 - d) + 3 * ModFx.Bell(Seg(t, .1, .16));
+                px.Scale = 1;
+                px.T.X = ModFx.Shake(Seg(t, .1, .36), 2.5, 3);
+                _settle.X = ModFx.Shake(Seg(t, .1, .36), 3, 3);
+                plate.Opacity = Seg(t, 0, .06) * (1 - o);
+                frost!.Opacity = ModFx.Life(t, .1, .24, .4, .65);
+                rsx!.S.ScaleY = Out(Seg(t, .1, .4)); rise!.Opacity = ModFx.Life(t, .1, .2, .45, .72);
+                foreach (var r in rows) r.Opacity = 1 - .4 * ModFx.Life(t, .1, .14, .22, .27);
             }
             foreach (var (el, x, at) in glints)
             {
-                if (at < 0) { x.T.X = glintRun * ModFx.InOut(Seg(t, .1, .42)); el.Opacity = ModFx.Life(t, .1, .14, .36, .42); continue; }
+                if (at < 0) { x.T.X = glintRun * ModFx.InOut(Seg(t, .1, .4)); el.Opacity = ModFx.Life(t, .1, .14, .34, .4); continue; }
                 double g = Seg(t, at, at + .3);
                 x.Scale = ModFx.Bell(g); x.R.Angle = 80 * g; el.Opacity = g <= 0 || g >= 1 ? 0 : 1;
             }
-            if (bx != null) { bx.T.X = (fb.Width + 110 + fb.Height * .4) * ModFx.InOut(Seg(t, .16, .72)); band!.Opacity = ModFx.Life(t, .16, .24, .62, .72); }
+            foreach (var (el, x, run, at) in lights) { x.T.X = run * ModFx.InOut(Seg(t, at, at + .26)); el.Opacity = ModFx.Life(t, at, at + .04, at + .2, at + .26); }
             if (hx != null)
             {
                 // a kill's hairline opens out from the middle; a wipe's closes in
-                hx.S.ScaleX = wipe ? 1 - Out(Seg(t, .2, .62)) : Out(Seg(t, .1, .32));
-                hair!.Opacity = wipe ? ModFx.Life(t, .08, .14, .45, .62) : ModFx.Life(t, .1, .14, .62, .8);
+                hx.S.ScaleX = wipe ? 1 - Out(Seg(t, .2, .6)) : Out(Seg(t, .1, .3));
+                hair!.Opacity = wipe ? ModFx.Life(t, .08, .14, .45, .6) : ModFx.Life(t, .1, .14, .6, .78);
             }
-        }, () => { _fightFx.Children.Clear(); _settle.X = 0; foreach (var r in rows) r.Opacity = 1; if (layer != null) FxDone("end", layer); });
+        }, () =>
+        {
+            _fightFx.Children.Clear(); _settle.X = 0;
+            if (head != null) { head.Opacity = 1; headX!.T.Y = 0; }
+            foreach (var r in rows) r.Opacity = 1;
+            if (layer != null) FxDone("end", layer);
+        });
     }
 }

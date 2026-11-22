@@ -474,7 +474,22 @@ sealed partial class HudModernMono : ModernLook
     static void Wipe(ModFx.Xf x, double t, double i0, double i1, double o0, double o1, double len, bool down = false) =>
         Run(x, ModFx.Expo(Seg(t, o0, o1)), ModFx.Expo(Seg(t, i0, i1)), len, down);
 
-    /// <summary>A pickup: an accent rule runs along the Buddy's foot, left to right, and goes.</summary>
+    /// <summary>Registration marks: an L at each corner of <paramref name="r"/>, 9 px arms, 2 px thick, 3 px inside its edge (each arm grows from the corner).</summary>
+    static List<(FrameworkElement El, ModFx.Xf X)> Marks(Canvas layer, Rect r, Brush ink)
+    {
+        const double arm = 9, th = 2, ins = 3;
+        var marks = new List<(FrameworkElement El, ModFx.Xf X)>();
+        foreach (var (cx, cy, sxs, sys) in new[] { (r.Left + ins, r.Top + ins, 1, 1), (r.Right - ins, r.Top + ins, -1, 1), (r.Left + ins, r.Bottom - ins, 1, -1), (r.Right - ins, r.Bottom - ins, -1, -1) })
+        {
+            var h = ModFx.Put(layer, ModFx.Block(arm, th, ink), sxs > 0 ? cx : cx - arm, sys > 0 ? cy : cy - th);
+            var v = ModFx.Put(layer, ModFx.Block(th, arm, ink), sxs > 0 ? cx : cx - th, sys > 0 ? cy : cy - arm);
+            marks.Add((h, new ModFx.Xf(h, new Point(sxs > 0 ? 0 : 1, .5))));
+            marks.Add((v, new ModFx.Xf(v, new Point(.5, sys > 0 ? 0 : 1))));
+        }
+        return marks;
+    }
+
+    /// <summary>A pickup: an accent block wipes over the new slot and off, and an accent rule runs along the Buddy's foot.</summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
@@ -484,7 +499,16 @@ sealed partial class HudModernMono : ModernLook
         double w = lb.Width - 2;
         var rule = ModFx.Put(layer, ModFx.Block(w, 2, Accent), lb.Left + 1, lb.Bottom - 3);
         var x = new ModFx.Xf(rule, new Point(0, .5));
-        Motion.Play(layer, 800, t => Wipe(x, t, 0, .5, .38, .92, w), () => FxDone("pickup", layer));
+        // the new slot: a hard accent block wipes over it and off, the tile under it as it goes
+        var tile = NewestTile(_lineBody);
+        var tb = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
+        FrameworkElement? slot = null; ModFx.Xf? sx = null;
+        if (!tb.IsEmpty) { slot = ModFx.Put(layer, ModFx.Block(tb.Width + 2, tb.Height + 2, Accent, Corner2), tb.Left - 1, tb.Top - 1); sx = new ModFx.Xf(slot, new Point(0, .5)); }
+        Motion.Play(layer, 800, t =>
+        {
+            Wipe(x, t, 0, .5, .38, .92, w);
+            if (sx != null) { Wipe(sx, t, 0, .1, .14, .24, tb.Width + 2); tile!.Opacity = t < .1 ? 0 : 1; }
+        }, () => { if (tile != null) tile.Opacity = 1; FxDone("pickup", layer); });
     }
 
     /// <summary>
@@ -506,8 +530,15 @@ sealed partial class HudModernMono : ModernLook
         var rx = new ModFx.Xf(rule, new Point(0, .5));
         _rareDraw = 1; rule.InvalidateVisual();
         ModFx.Xf? tx = _rareTileEl != null ? new ModFx.Xf(_rareTileEl) : null;
+        var marks = Marks(layer, box, c);
         Motion.Play(layer, 1400, t =>
         {
+            for (int i = 0; i < marks.Count; i++)
+            {
+                double k = ModFx.Expo(Seg(t, .3, .4));
+                if (i % 2 == 0) marks[i].X.S.ScaleX = k; else marks[i].X.S.ScaleY = k;
+                marks[i].El.Opacity = t < .58 ? 1 : 0;
+            }
             Wipe(bx, t, 0, .16, .26, .42, box.Width);
             line.Opacity = t < .14 ? 0 : 1;
             rx.S.ScaleX = ModFx.Expo(Seg(t, .3, .62));
@@ -543,15 +574,7 @@ sealed partial class HudModernMono : ModernLook
                 stamp = ModFx.Put(layer, st, rb.Left, rb.Top); sx = new ModFx.Xf(st);
             }
             if (!hb.IsEmpty) { under = ModFx.Put(layer, ModFx.Block(hb.Width, 2, Accent), hb.Left, hb.Bottom + 1); ux = new ModFx.Xf(under, new Point(0, .5)); }
-            // the marks: an L at each corner, 9 px arms, 2 px thick, 3 px inside the edge
-            const double arm = 9, th = 2, ins = 3;
-            foreach (var (cx, cy, sxs, sys) in new[] { (lb.Left + ins, lb.Top + ins, 1, 1), (lb.Right - ins, lb.Top + ins, -1, 1), (lb.Left + ins, lb.Bottom - ins, 1, -1), (lb.Right - ins, lb.Bottom - ins, -1, -1) })
-            {
-                var h = ModFx.Put(layer, ModFx.Block(arm, th, Accent), sxs > 0 ? cx : cx - arm, sys > 0 ? cy : cy - th);
-                var v = ModFx.Put(layer, ModFx.Block(th, arm, Accent), sxs > 0 ? cx : cx - th, sys > 0 ? cy : cy - arm);
-                marks.Add((h, new ModFx.Xf(h, new Point(sxs > 0 ? 0 : 1, .5))));
-                marks.Add((v, new ModFx.Xf(v, new Point(.5, sys > 0 ? 0 : 1))));
-            }
+            marks.AddRange(Marks(layer, lb, Accent));
         }
         Motion.Play(art, 1500, t =>
         {
@@ -667,26 +690,29 @@ sealed partial class HudModernMono : ModernLook
         }
         var shift = new TranslateTransform();
         if (wipe) _fight.RenderTransform = shift;
-        Motion.Play(_fightFx, 2200, t =>
+        Motion.Play(_fightFx, 1500, t =>
         {
             Seat();
             if (!wipe)
             {
-                Wipe(bx, t, 0, .12, .82, .92, w);
-                wx.T.X = -14 * (1 - ModFx.Expo(Seg(t, .06, .2))) + 10 * ModFx.In(Seg(t, .8, .85));
-                words.Opacity = Seg(t, .06, .1) * (1 - Seg(t, .8, .84));
-                if (rx != null) Wipe(rx, t, .1, .24, .8, .9, fb.Width - 2);
+                // a stepped entrance (two hard steps, then whole), a short hold, a hard wipe off to the right
+                double inn = t < .03 ? .4 : t < .06 ? .75 : 1;
+                Run(bx, ModFx.Expo(Seg(t, .58, .68)), inn, w);
+                wx.T.X = -12 * (1 - ModFx.Expo(Seg(t, .06, .2))) + 10 * ModFx.In(Seg(t, .58, .62));
+                words.Opacity = Seg(t, .06, .09) * (1 - Seg(t, .58, .61));
+                if (rx != null) Wipe(rx, t, .08, .2, .56, .66, fb.Width - 2);
             }
             else
             {
+                // the block falls from the top (heavy, no ease-out), one frame's jolt as it lands, then folds back up
                 double h = band.Height;
-                Wipe(bx, t, 0, .1, 2, 3, h, down: true);
-                if (t > .82) { bx.S.ScaleY = 1 - ModFx.Expo(Seg(t, .82, .92)); bx.T.Y = 0; }
-                words.Opacity = Seg(t, .06, .1) * (1 - Seg(t, .8, .83));
-                wx.T.Y = -6 * (1 - ModFx.Expo(Seg(t, .05, .16)));
-                // the stutter: four hard steps, no easing
-                shift.X = t switch { >= .1 and < .13 => 3, >= .13 and < .16 => -3, >= .16 and < .19 => 2, >= .19 and < .22 => -1, _ => 0 };
-                foreach (var r in rows) r.Opacity = 1 - .55 * ModFx.Life(t, .1, .16, .5, .72);
+                bx.S.ScaleY = t < .6 ? ModFx.In(Seg(t, 0, .08)) : 1 - ModFx.Expo(Seg(t, .6, .7));
+                bx.T.Y = t is >= .08 and < .11 ? 2 : 0;
+                words.Opacity = Seg(t, .07, .1) * (1 - Seg(t, .58, .61));
+                wx.T.Y = -6 * (1 - ModFx.Expo(Seg(t, .07, .16)));
+                // the stutter: hard 2 px steps, no easing
+                shift.X = t switch { >= .08 and < .11 => 2, >= .11 and < .14 => -2, >= .14 and < .17 => 1, _ => 0 };
+                foreach (var r in rows) r.Opacity = 1 - .55 * ModFx.Life(t, .08, .11, .24, .3);
             }
         }, () => { _fightFx.Children.Clear(); if (wipe) _fight.RenderTransform = null; foreach (var r in rows) r.Opacity = 1; if (layer != null) FxDone("end", layer); });
     }
