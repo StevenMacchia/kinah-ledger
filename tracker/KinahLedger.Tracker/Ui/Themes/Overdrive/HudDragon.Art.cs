@@ -484,7 +484,7 @@ sealed partial class HudDragon
     /// its top from the left to the right end, down round it and back along the foot to its spade. With
     /// <paramref name="head"/> its head at the top-left (no ring there); with the ring, the ring is the dragon.
     /// </summary>
-    static DrawingGroup LineCoil(double w, double h, double ground, bool head, bool dim) => Cached(FormattableString.Invariant($"line|{w:0}|{h:0}|{ground:0.00}|{head}|{dim}"), dc =>
+    internal static DrawingGroup LineCoil(double w, double h, double ground, bool head, bool dim) => Cached(FormattableString.Invariant($"line|{w:0}|{h:0}|{ground:0.00}|{head}|{dim}"), dc =>
     {
         var gr = new Rect(3, 3, w - 7, h - 6);
         var tone = dim ? Color.FromRgb(0x12, 0x12, 0x15) : Color.FromRgb(0x14, 0x10, 0x1A);

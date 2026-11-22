@@ -31,12 +31,17 @@ sealed class ApplicantsOverlay : Window
     IntPtr _hwnd;
     bool _gripLive, _placed;
     string _sig = "";
+    /// <summary>Who is shown now (an arrival is a key not among them), and until when (Environment.TickCount64) an arrival's beat plays.</summary>
+    readonly HashSet<string> _shown = new();
+    long _beatUntil;
     double _opacity = 0.94, _scale = 1;
 
     /// <summary>Where the Kinah overlay is now (WPF units), null when it isn't shown: the first spot is just under it.</summary>
     public Func<Rect?>? KinahBox { get; set; }
     /// <summary>The overlay's theme now (HudThemes.Of the look in use).</summary>
     public Func<string> Theme { get; set; } = () => HudThemes.Classic;
+    /// <summary>The Buddy's look now (the face takes its look's plate and colours where its theme has more than one; null: the theme's first).</summary>
+    public Func<string?> Look { get; set; } = () => null;
 
     const double GripWidth = 16;
 
@@ -103,16 +108,33 @@ sealed class ApplicantsOverlay : Window
     /// </summary>
     public void Show(IReadOnlyList<PartyApplicants.Applicant> items, DateTime now)
     {
-        if (items.Count == 0) { if (IsVisible) Hide(); _sig = ""; return; }
-        string theme = Theme();
-        var sig = theme + "|" + _opacity + "|" + string.Join(",", items.Select(a => a.Key + ":" + PartyApplicants.Ago(a.At, now)));
-        if (sig != _sig)
+        if (items.Count == 0) { if (IsVisible) Hide(); _sig = ""; _shown.Clear(); return; }
+        string theme = Theme(), look = Look() ?? "";
+        var keys = items.Select(a => a.Key).ToList();
+        bool arrived = keys.Any(k => !_shown.Contains(k));
+        var sig = theme + "|" + look + "|" + _opacity + "|" + string.Join(",", items.Select(a => a.Key + ":" + PartyApplicants.Ago(a.At, now)));
+        // while an arrival's beat plays, a row's "ago" ticking over waits for it (the face drawn again would cut it short)
+        bool hold = !arrived && Environment.TickCount64 < _beatUntil && keys.Count == _shown.Count && _sig.StartsWith(theme + "|" + look + "|" + _opacity + "|", StringComparison.Ordinal);
+        FrameworkElement? fresh = null;
+        if (sig != _sig && !hold)
         {
             _sig = sig;
-            _faceSlot.Child = ApplicantsFace.Build(theme, items, now, _opacity);
+            _faceSlot.Child = fresh = ApplicantsFace.Build(theme, items, now, _opacity, Look());
         }
+        _shown.Clear(); foreach (var k in keys) _shown.Add(k);
         if (!IsVisible) Show();
         if (!_placed) PlaceFirst();
+        // someone new: their row comes in with the look's beat (nothing moves between arrivals)
+        if (arrived && fresh != null)
+        {
+            try
+            {
+                UpdateLayout();
+                double ms = ApplicantsFace.Arrive(fresh);
+                _beatUntil = ms > 0 ? Environment.TickCount64 + (long)ms + 50 : 0;
+            }
+            catch (Exception ex) { CrashLog.Write("applicants arrival", ex); }
+        }
     }
 
     /// <summary>The face shown now (renders and tests).</summary>

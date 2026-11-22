@@ -222,7 +222,7 @@ sealed partial class HudFrost
     // ================================================================ the panel
 
     /// <summary>A panel's drawn parts, made once per size (its shape, its drop, its facets and cracks).</summary>
-    sealed class IceArt
+    internal sealed class IceArt
     {
         Size _size;
         public Geometry Shape = Geometry.Empty, Inner = Geometry.Empty, Facets = Geometry.Empty, Cracks = Geometry.Empty, Crest = Geometry.Empty, CrestShade = Geometry.Empty, Ridges = Geometry.Empty, Cores = Geometry.Empty, Ticks = Geometry.Empty, Collars = Geometry.Empty;
@@ -400,7 +400,7 @@ sealed partial class HudFrost
     /// it; <paramref name="frost"/> 0 to 1 a breath of frost over the whole face (a moment's flash); <paramref name="tint"/>
     /// lights it in a grade's colour (a rare drop).
     /// </summary>
-    static void IcePanel(DrawingContext dc, Size s, IceArt art, double opacity, double sheen = -1, double frost = 0, Color? tint = null, bool shadow = true, double rimeK = 1)
+    internal static void IcePanel(DrawingContext dc, Size s, IceArt art, double opacity, double sheen = -1, double frost = 0, Color? tint = null, bool shadow = true, double rimeK = 1)
     {
         if (s.Width < 8 || s.Height < 8) return;
         art.Fit(s);

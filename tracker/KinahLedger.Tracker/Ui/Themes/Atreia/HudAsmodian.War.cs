@@ -15,7 +15,7 @@ namespace KinahLedger.Ui;
 sealed partial class HudAsmodian
 {
     /// <summary>The room round the war plates: the top for the horns and the crest, the sides for the horns' sweep, the foot for the fangs.</summary>
-    static readonly Thickness FightRoom = new(13, 35, 13, 12), LineRoom = new(12, 22, 12, 9), CardRoom = new(13, 31, 13, 11);
+    internal static readonly Thickness FightRoom = new(13, 35, 13, 12), LineRoom = new(12, 22, 12, 9), CardRoom = new(13, 31, 13, 11);
 
     static Point Bez(Point a, Point b, Point c, Point d, double t)
     {
@@ -126,7 +126,7 @@ sealed partial class HudAsmodian
     /// in <paramref name="room"/>, a crest of thorns rising from its top edge's middle, fangs hanging from its foot, thorns
     /// off its sides, and (<paramref name="moon"/>) the blood moon inside it at that point. Drawn once per size.
     /// </summary>
-    static void WarPlate(DrawingContext dc, Size s, double opacity, Thickness room, double big, double horn, Point? moon = null, double moonR = 26, Color? edge = null, bool crest = true, bool fangs = true)
+    internal static void WarPlate(DrawingContext dc, Size s, double opacity, Thickness room, double big, double horn, Point? moon = null, double moonR = 26, Color? edge = null, bool crest = true, bool fangs = true)
     {
         var r = new Rect(room.Left, room.Top, s.Width - room.Left - room.Right, s.Height - room.Top - room.Bottom);
         if (r.Width < 40 || r.Height < 12) return;

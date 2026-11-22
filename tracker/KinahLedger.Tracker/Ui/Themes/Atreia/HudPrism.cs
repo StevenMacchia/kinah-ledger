@@ -234,7 +234,7 @@ sealed partial class HudPrism : ModernLook
     /// ridges between the facets, the table's rim, the outer rim and a sparkle where the light enters. Drawn when its size
     /// changes only. <paramref name="tint"/>: a wash of colour from the left at <paramref name="tintA"/> (a plate's tone).
     /// </summary>
-    static void Crystal(DrawingContext dc, Size s, double opacity, double sheen, Color sheenC, double cut = Cut, bool glint = true, Color? tint = null, double tintA = 0, double tintW = 1, bool pools = true)
+    internal static void Crystal(DrawingContext dc, Size s, double opacity, double sheen, Color sheenC, double cut = Cut, bool glint = true, Color? tint = null, double tintA = 0, double tintW = 1, bool pools = true)
     {
         if (s.Width < 8 || s.Height < 8) return;
         double w = s.Width, h = s.Height;

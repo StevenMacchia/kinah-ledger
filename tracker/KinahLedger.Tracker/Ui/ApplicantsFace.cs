@@ -11,17 +11,18 @@ namespace KinahLedger.Ui;
 /// drawn in the look family of the overlay's theme (Settings › Buddy › Theme; HudThemes.Of the look in use) with that
 /// family's own parts: Classic the Kinah strip's surface (the glass when it is on), Tactical a cut glass plate with brackets
 /// (Tac), Wacky a sticker with a hard shadow and outlined words (Wk), Glitch a phosphor terminal with scan lines and corner
-/// marks (GlitchKit), Modern a soft frosted panel (Mod). One row per applicant, oldest at the top, newest at the bottom: the
+/// marks (GlitchKit), Modern a soft frosted panel (Mod); Atreia, Esports, Elements and Overdrive each look's own Buddy plate
+/// (Ui/ApplicantsFace.Themes.cs), with a short beat as someone new arrives (Ui/ApplicantsFace.Arrive.cs). One row per applicant, oldest at the top, newest at the bottom: the
 /// class's emblem, the name in its class's colour, the home server, then the level, the Combat Power and how long ago they
 /// asked. Reading only: the game keeps accepting and declining.
 /// </summary>
-static class ApplicantsFace
+static partial class ApplicantsFace
 {
     /// <summary>The rows shown at most; the oldest beyond them are counted on a line at the top.</summary>
     public const int MaxRows = 12;
 
     /// <summary>The face for <paramref name="theme"/> (a HudThemes key; Classic for any other) at the overlay's opacity.</summary>
-    public static FrameworkElement Build(string theme, IReadOnlyList<PartyApplicants.Applicant> items, DateTime now, double opacity = 0.94)
+    public static FrameworkElement Build(string theme, IReadOnlyList<PartyApplicants.Applicant> items, DateTime now, double opacity = 0.94, string? look = null)
     {
         var shown = items.Skip(Math.Max(0, items.Count - MaxRows)).ToList();
         int older = items.Count == 0 ? -1 : items.Count - shown.Count;   // -1: nobody waiting (the pop-out window draws that; the overlay folds away)
@@ -30,10 +31,11 @@ static class ApplicantsFace
             HudThemes.Tactical => Tactical(shown, older, items.Count, now, opacity),
             HudThemes.Wacky => Wacky(shown, older, items.Count, now, opacity),
             HudThemes.Glitch => Glitch(shown, older, items.Count, now, opacity),
-            HudThemes.Modern or HudThemes.Atreia => Modern(shown, older, items.Count, now, opacity),   // Atreia (2026-11-20) wears Modern's dark glass
+            HudThemes.Modern => Modern(shown, older, items.Count, now, opacity),
+            HudThemes.Atreia or HudThemes.Esports or HudThemes.Elements or HudThemes.Overdrive when SkinOf(theme, look, opacity) is { } skin => Skinned(skin, shown, older, items.Count, now),
             _ => Classic(shown, older, items.Count, now, opacity),
         };
-        face.Tag = "applicants:" + (theme == HudThemes.Atreia ? HudThemes.Modern : theme is HudThemes.Tactical or HudThemes.Wacky or HudThemes.Glitch or HudThemes.Modern ? theme : HudThemes.Classic);
+        face.Tag = "applicants:" + (theme is HudThemes.Tactical or HudThemes.Wacky or HudThemes.Glitch or HudThemes.Modern or HudThemes.Atreia or HudThemes.Esports or HudThemes.Elements or HudThemes.Overdrive ? theme : HudThemes.Classic);
         TextOptions.SetTextFormattingMode(face, TextFormattingMode.Display);
         System.Windows.Automation.AutomationProperties.SetName(face, L.F("{0} asking to join", items.Count));
         return face;
@@ -45,7 +47,8 @@ static class ApplicantsFace
     /* ---------------- the rows, the same columns in every theme ---------------- */
 
     /// <summary>How a theme writes a row: its faces, sizes and inks.</summary>
-    sealed record RowInk(FontFamily Face, double Size, Brush Figure, Brush Label, Brush Dim, Brush Ago, FontWeight NameWeight, FontWeight FigWeight, bool Caps = false, double Icon = 18, bool ClassCode = false, Brush? CodeBg = null, Brush? CodeFg = null);
+    sealed record RowInk(FontFamily Face, double Size, Brush Figure, Brush Label, Brush Dim, Brush Ago, FontWeight NameWeight, FontWeight FigWeight, bool Caps = false, double Icon = 18, bool ClassCode = false, Brush? CodeBg = null, Brush? CodeFg = null,
+        bool Italic = false, Func<string, Brush>? Name = null);
 
     static TextBlock Text(string s, double size, Brush fg, FontFamily face, FontWeight w)
     {
@@ -54,13 +57,23 @@ static class ApplicantsFace
         return t;
     }
 
-    /// <summary>A label and its figure on one baseline ("Lv 45", "CP 133.8K").</summary>
-    static TextBlock Labelled(string label, string fig, RowInk k)
+    /// <summary>
+    /// A label and its figure on one line ("Lv 45", "CP 133.8K"): the label at the column's left, the figure right-aligned, so
+    /// every row's label stands at the same place whatever its figure's width.
+    /// </summary>
+    static Grid Labelled(string label, string fig, RowInk k)
     {
-        var t = Text("", k.Size, k.Figure, k.Face, k.FigWeight);
-        t.Inlines.Add(new System.Windows.Documents.Run((k.Caps ? label.ToUpperInvariant() : label) + " ") { Foreground = k.Label, FontSize = k.Size - 2, FontWeight = FontWeights.SemiBold });
-        t.Inlines.Add(new System.Windows.Documents.Run(fig));
-        return t;
+        var l = Text((k.Caps ? label.ToUpperInvariant() : label), k.Size - 2, k.Label, k.Face, FontWeights.SemiBold);
+        var f = Text(fig, k.Size, k.Figure, k.Face, k.FigWeight);
+        if (k.Italic) { l.FontStyle = FontStyles.Italic; f.FontStyle = FontStyles.Italic; }
+        l.VerticalAlignment = f.VerticalAlignment = VerticalAlignment.Bottom;
+        l.Margin = new Thickness(0, 0, 4, 0.5);
+        f.TextAlignment = TextAlignment.Right; f.HorizontalAlignment = HorizontalAlignment.Right;
+        var g = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
+        Grid.SetColumn(f, 1);
+        g.Children.Add(l); g.Children.Add(f);
+        return g;
     }
 
     /// <summary>
@@ -100,17 +113,18 @@ static class ApplicantsFace
 
             // the name in its class's colour, the server after it, quieter
             var who = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = pad, FontFamily = k.Face, FontSize = k.Size + 0.5, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260 };
-            who.Inlines.Add(new System.Windows.Documents.Run(a.Name) { Foreground = ClassArt.NameBrush(a.Class), FontWeight = k.NameWeight });
+            if (k.Italic) who.FontStyle = FontStyles.Italic;
+            who.Inlines.Add(new System.Windows.Documents.Run(a.Name) { Foreground = k.Name?.Invoke(a.Class) ?? ClassArt.NameBrush(a.Class), FontWeight = k.NameWeight });
             if (a.Server.Length > 0) who.Inlines.Add(new System.Windows.Documents.Run("  " + (k.Caps ? a.Server.ToUpperInvariant() : a.Server)) { Foreground = k.Dim, FontSize = k.Size - 1.5, FontWeight = FontWeights.Medium });
             who.ToolTip = string.Join("  ·  ", new[] { a.Name, ThemeText.Class(a.Class), a.Server, a.ItemLevel > 0 ? L.F("item level {0:N0}", a.ItemLevel) : "" }.Where(s => s.Length > 0));
             Grid.SetRow(who, i); Grid.SetColumn(who, 1); g.Children.Add(who);
 
             // Lv 45 · CP 133.8K · 2m
             var lv = Labelled(L.T("Lv"), a.Level > 0 ? a.Level.ToString(System.Globalization.CultureInfo.InvariantCulture) : "–", k);
-            lv.Margin = new Thickness(14, rowPad, 0, rowPad); lv.HorizontalAlignment = HorizontalAlignment.Right;
+            lv.Margin = new Thickness(14, rowPad, 0, rowPad); lv.HorizontalAlignment = HorizontalAlignment.Stretch;
             Grid.SetRow(lv, i); Grid.SetColumn(lv, 2); g.Children.Add(lv);
             var cp = Labelled(L.T("CP"), a.CombatPower > 0 ? Amounts.Meter(a.CombatPower) : "–", k);
-            cp.Margin = new Thickness(12, rowPad, 0, rowPad); cp.HorizontalAlignment = HorizontalAlignment.Right;
+            cp.Margin = new Thickness(12, rowPad, 0, rowPad); cp.HorizontalAlignment = HorizontalAlignment.Stretch;
             if (a.CombatPower > 0) cp.ToolTip = Amounts.Full(a.CombatPower);
             Grid.SetRow(cp, i); Grid.SetColumn(cp, 3); g.Children.Add(cp);
             var ago = Text(PartyApplicants.Ago(a.At, now), k.Size - 0.5, newest ? k.Ago : k.Dim, k.Face, FontWeights.SemiBold);

@@ -248,7 +248,7 @@ sealed partial class HudHype : ModernLook
     /// <paramref name="linesH"/> px (right of its first fifth), the lime stripe and the magenta tab along its top, the chrome
     /// bevel and a dark line inside it. Drawn inside its element: the drop takes 3 px at the right and 4 at the foot.
     /// </summary>
-    static void Plate(DrawingContext dc, Size s, double opacity, Color accent, double linesH, double cut = Cut, bool dim = false, bool tail = false)
+    internal static void Plate(DrawingContext dc, Size s, double opacity, Color accent, double linesH, double cut = Cut, bool dim = false, bool tail = false)
     {
         if (s.Width < 12 || s.Height < 12) return;
         var r = new Rect(1, 1, s.Width - 4, s.Height - 5);

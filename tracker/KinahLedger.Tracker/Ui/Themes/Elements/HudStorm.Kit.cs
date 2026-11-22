@@ -153,7 +153,7 @@ sealed partial class HudStorm
     /// lit from within and a bolt caught inside the tallest; the charged rim (bright along the cloud tops, a white charge on the
     /// cut corner, violet along the foot). Drawn once and kept (StormGlass).
     /// </summary>
-    static void StormPanel(DrawingContext dc, Size s, double opacity, double big = 9, double small = 3, double lit = 0, bool drop = true, double crest = 0)
+    internal static void StormPanel(DrawingContext dc, Size s, double opacity, double big = 9, double small = 3, double lit = 0, bool drop = true, double crest = 0)
     {
         if (s.Width < 6 || s.Height < 6 + crest) return;
         var r = new Rect(.5, crest + .5, s.Width - 1, s.Height - crest - 1);

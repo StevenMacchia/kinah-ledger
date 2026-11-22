@@ -140,7 +140,7 @@ sealed partial class HudVersus
     }
 
     /// <summary>A dark slab behind words (a plate): navy-black, a chrome hairline, an optional hot stripe on its leading edge.</summary>
-    static void PlateArt(DrawingContext dc, Size s, double k, Brush? stripe = null, Color? tint = null, double bloom = 1)
+    internal static void PlateArt(DrawingContext dc, Size s, double k, Brush? stripe = null, Color? tint = null, double bloom = 1)
     {
         if (s.Width < 6 || s.Height < 4) return;
         var r = new Rect(1.5, 1.5, Math.Max(4, (s.Width - 3) * Math.Clamp(bloom, 0, 1)), s.Height - 3);

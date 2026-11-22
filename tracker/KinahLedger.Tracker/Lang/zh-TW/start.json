@@ -572,7 +572,7 @@
   "Waiting for Aion 2 to start. Reading starts on its own once it is open.": "等待 Aion 2 啟動。開啟後會自動開始讀取。",
   "Game found, looking for the chat. Keep the chat window open at the bottom left of the game.": "已找到遊戲，正在尋找聊天視窗。請讓聊天視窗開在遊戲畫面左下角。",
   "The game can't be read right now: {0}": "目前無法讀取遊戲：{0}",
-  "{0}s": "{0} 秒",
+  "{0}s": "{0}秒",
   "Paused: the chat is out of view": "已暫停：聊天視窗不在畫面中",
   "Reading the game · the chat not seen yet": "讀取遊戲中 · 尚未看到聊天視窗",
   "{0} reads so far.": "目前已讀取 {0} 次。",
