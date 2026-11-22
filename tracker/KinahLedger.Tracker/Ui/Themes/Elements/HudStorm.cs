@@ -76,6 +76,14 @@ sealed partial class HudStorm : ModernLook, IThemeCard
     readonly Grid _band = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top };
     readonly TranslateTransform _fightShift = new();
     FrameworkElement? _headEl;
+    /// <summary>A wipe's power cut: the panel's light failing (a dark wash over the glass and the rows, shown by its opacity).</summary>
+    readonly System.Windows.Shapes.Rectangle _fightDark;
+    /// <summary>Over everything, unclipped: the moments' short-lived bits (ElementsFx.cs), each moment on a layer of its own.</summary>
+    readonly Canvas _sky = new() { IsHitTestVisible = false };
+    Grid? _ringBox;
+    /// <summary>The hour and its unit (your best passed punches them); the rare strip's punch as it lands.</summary>
+    FrameworkElement? _rateTop;
+    readonly ScaleTransform _rareK = new(1, 1);
     double _clapT = -1, _shimT = -1;
     string _leadFight = "";
     long _leadId;
@@ -92,12 +100,14 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         _fightPanel = new StormGlass(() => _opacity, 11, 3, crest: FightCrest);
         _fightFlash = Flash(_fight, 11, 3, FightCrest);
         _bolts = new TacSketch(DrawBolts) { ClipToBounds = true };
-        _fight.Children.Add(_fightPanel); _fight.Children.Add(_fightFlash); _fight.Children.Add(_fightBody); _fight.Children.Add(_band); _fight.Children.Add(_bolts);
+        _fightDark = Flash(_fight, 11, 3, FightCrest);
+        _fightDark.Fill = Frozen(Color.FromArgb(0xFF, 0x03, 0x04, 0x0A));
+        _fight.Children.Add(_fightPanel); _fight.Children.Add(_fightFlash); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightDark); _fight.Children.Add(_band); _fight.Children.Add(_bolts);
         _fight.RenderTransform = _fightShift;
         _note.Child = _noteBody;
         _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
-        _root.Children.Add(_body);
+        _root.Children.Add(_body); _root.Children.Add(_sky);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
@@ -152,7 +162,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _coil = null; _timerUp = false; _stripTimerW = -1;
+        _coil = null; _ringBox = null; _rateTop = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _line.Opacity = _dim ? .62 : 1;
@@ -164,15 +174,20 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         if (rs != null) DrawRun(rs);
         else if (!HasHour(f))
         {
-            var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 4, 5, 0, 5);
-            _lineBody.Children.Add(w);
+            // the Abyss's stats so far under the waiting words ("2 kills · 4.4K Kinah": information, never an empty panel)
+            var ws = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mark ? 0 : 4, 3, 0, 3) };
+            ws.Children.Add(Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold));
+            var wsub = Sub(f, false);
+            if (wsub.Inlines.Count > 0) ws.Children.Add(wsub);
+            _lineBody.Children.Add(ws);
         }
         else
         {
             if (HasRing(f))
             {
                 _share = f.Share; _beat = f.Beat; _complete = 0;
-                var ring = new Grid { Width = 44, Height = 44, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+                var ring = new Grid { Width = 44, Height = 44, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0), RenderTransformOrigin = new Point(.5, .5) };
+                _ringBox = ring;
                 _coil = new TacSketch(DrawCoil, 44, 44);
                 ring.Children.Add(_coil);
                 var pc = Tt(f.Beat ? "★" : Pct(f.Share), 13, Arc, FontWeights.Bold); pc.HorizontalAlignment = HorizontalAlignment.Center;
@@ -182,7 +197,8 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             else if (!mark) _lineBody.Children.Add(new Border { Width = 4 });
             // the hour big in electric white (a blue glow round it), its unit small; the session and the latest pickup under it
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 1) };
-            var top = new StackPanel { Orientation = Orientation.Horizontal };
+            var top = new StackPanel { Orientation = Orientation.Horizontal, RenderTransformOrigin = new Point(0, .6) };
+            _rateTop = top;
             var rate = Tt(f.Rate, f.Warm ? 15 : 22, f.Warm ? Soft : Arc, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
             if (!f.Warm) rate.Effect = new DropShadowEffect { Color = VoltC, ShadowDepth = 0, BlurRadius = 9, Opacity = .55 };
             rate.Tag = "buddy-rate";
@@ -356,6 +372,7 @@ sealed partial class HudStorm : ModernLook, IThemeCard
     {
         _rare.Children.Clear();
         _rareBloom.ScaleX = 1;
+        _rare.RenderTransformOrigin = new Point(0, .5); _rare.RenderTransform = _rareK;
         if (!KinahHidden && Rare(Values) is { } r)
         {
             var c = ColorOf(r.Color, r.Grade);
@@ -716,7 +733,9 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             BorderBrush = Frozen(Mod.A(VoltC, .6)),
         };
         var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
+        var pop = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(0, .5);
+        chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 3); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2 + LineCrest / 2);
         // the spark it leaps out on: drawn once, shown by its opacity
@@ -726,13 +745,37 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         {
             Zap(t < .45 ? Seg(t, 0, .45) : -1);
             arc.Opacity = t < .12 ? 0 : t < .18 ? 1 : 1 - Seg(t, .18, .4);
-            double k = Out(Seg(t, .14, .3));
-            shift.X = -8 * (1 - k);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+            double k = Out(Seg(t, .14, .3)), gone = Seg(t, .76, .97);
+            shift.X = -8 * (1 - k) + 6 * gone;
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .14, .36, .8, 2) * (1 - .1 * gone);
+            chip.Opacity = t < .76 ? k : 1 - Out(gone);
         }, () => { Zap(-1); _lineAnchor.Children.Clear(); });
     }
 
-    /// <summary>A rare drop: its strip blooms out from the left (a clip widening), the grade's light flashes, the tile pops in with sparks bursting off it.</summary>
+    /// <summary>A bolt of lightning <paramref name="w"/> x <paramref name="h"/> (top to foot), made once: a blue glow round a white-hot core.</summary>
+    static Grid BoltEl(double w, double h, int seed, Color? tint = null)
+    {
+        var g = new Grid { Width = w, Height = h, IsHitTestVisible = false };
+        var c = tint ?? VoltC;
+        double th = Math.Clamp(w / 8, 2.2, 3.4);
+        g.Children.Add(new System.Windows.Shapes.Path { Data = ElemFx.Bolt(w, h, seed, th * 3.2), Fill = Frozen(Mod.A(c, .34)) });
+        g.Children.Add(new System.Windows.Shapes.Path { Data = ElemFx.Bolt(w, h, seed, th), Fill = Frozen(Mod.Mix(c, Colors.White, .8)) });
+        return g;
+    }
+
+    // made on first use: the palette's statics live in HudStorm.Kit.cs, and a partial class's statics start file by file
+    static Brush? _sparkFill;
+    static Brush SparkFill => _sparkFill ??= Mod.Grad(false, (Mod.A(VoltC, .2), 0), (Mod.A(ArcC, .95), .6), (Colors.White, 1));
+
+    /// <summary>A spark thrown off a strike: a short streak, white at its head (made once; moved along its line).</summary>
+    static FrameworkElement SparkEl(double len = 14, Color? tint = null) =>
+        ElemFx.Shape(ElemFx.Splint, tint is { } c ? Mod.Grad(false, (Mod.A(c, .2), 0), (Mod.A(Mod.Mix(c, Colors.White, .4), .95), .6), (Colors.White, 1)) : SparkFill, len, len * .22);
+
+    /// <summary>
+    /// A rare drop, the big one: lightning strikes the tile from above in the grade's colour (struck twice), the strip blooms
+    /// out from the left, the grade's light flashes, a ring of it is thrown out, sparks of it burst off and the tile lands
+    /// big and settles (a pickup is the small crackle along the Buddy's edge).
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareSparks is not { } sparks) return;
@@ -740,60 +783,135 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var row = _rareRow;
-        Motion.Play(sparks, 1500, t =>
+        var c = Rare(Values) is { } r ? ColorOf(r.Color, r.Grade) : VoltC;
+        var bits = new ElemFx.Bits();
+        // the strike out of the Buddy over it, onto the tile
+        bits.Add(BoltEl(24, 46, 401, c), new Point(0, -26), new Vector(0, 0), delay: 0, life: .1);
+        bits.Add(BoltEl(24, 46, 409, c), new Point(1, -26), new Vector(0, 0), delay: .12, life: .1);
+        bits.Add(ElemFx.Glow(Mod.Mix(c, Colors.White, .4), 46, 44, 1, 1), new Point(0, 0), new Vector(0, 0), delay: .01, life: .3, s0: .4, s1: 1.15);
+        bits.Add(ElemFx.Ring(Mod.Mix(c, Colors.White, .35), 38, 30, 2.2), new Point(0, 0), new Vector(0, 0), delay: .06, life: .42, s0: .5, s1: 1.4);
+        double[] angs = { -150, -118, -88, -58, -28, 4 }, dist = { 14, 30, 40, 42, 44, 36 };
+        for (int i = 0; i < angs.Length; i++)
         {
-            _rareBloom.ScaleX = Math.Max(.02, Out(Seg(t, 0, .4)));
-            if (row != null) row.Opacity = Seg(t, 0, .12);
-            if (_rareFlash != null) Lite(_rareFlash, t < .15 ? Seg(t, 0, .15) : 1 - Seg(t, .15, .7));
-            _rareBurst = t is > .12 and < .7 ? Seg(t, .12, .7) : -1;
+            double a = angs[i] * Math.PI / 180;
+            bits.Add(SparkEl(i % 2 == 0 ? 15 : 11, c), new Point(Math.Cos(a) * 8, Math.Sin(a) * 6), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i] * .8),
+                g: 10, delay: .05 + .012 * i, life: .36, s0: 1.1, s1: .6, face: true);
+        }
+        // the strike floods the whole strip with the grade's colour for a beat
+        var wash = ElemFx.Wash(c, 2);
+        int wi = row != null ? _rare.Children.IndexOf(row) : -1;
+        _rare.Children.Insert(wi >= 0 ? wi : _rare.Children.Count, wash);
+        ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? _rare, .5, .5, 1700, t =>
+        {
+            wash.Opacity = ElemFx.Hit(t, .04, .09, .42);
+            _rareBloom.ScaleX = Math.Max(.02, Out(Seg(t, 0, .1)));
+            if (row != null) row.Opacity = Seg(t, 0, .1);
+            if (_rareFlash != null) Lite(_rareFlash, ElemFx.Hit(t, .0, .05, .6) + .6 * ElemFx.Hit(t, .12, .14, .3));
+            _rareBurst = t is > .1 and < .6 ? Seg(t, .1, .6) : -1;
             sparks.InvalidateVisual();
-            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .08, .38), 2.4);
-        }, () => { _rareBloom.ScaleX = 1; if (row != null) row.Opacity = 1; if (_rareFlash != null) Lite(_rareFlash, 0); _rareBurst = -1; sparks.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; });
+            sc.ScaleX = sc.ScaleY = t < .02 ? .3 : ElemFx.Punch(t, .02, .36, .3, 3);
+            // the whole strip takes the strike: drawn in a touch, then it lands past its size and settles
+            _rareK.ScaleX = _rareK.ScaleY = t < .03 ? .82 : ElemFx.Punch(t, .03, .34, .82, 3);
+        }, () => { _rare.Children.Remove(wash); _rareBloom.ScaleX = 1; if (row != null) row.Opacity = 1; if (_rareFlash != null) Lite(_rareFlash, 0); _rareBurst = -1; sparks.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; _rareK.ScaleX = _rareK.ScaleY = 1; });
     }
 
-    /// <summary>Your best passed: the coil charges round to full, a spark at the head of the charge, and a crackle runs the Buddy's edge.</summary>
+    /// <summary>
+    /// Your best passed: the coil draws in and charges round to full, then lightning strikes it out of the Buddy's cloud
+    /// (struck twice); it bursts out big in a white flash, a shockwave of charge ringing off it and sparks flying, and a
+    /// crackle runs the Buddy's edge.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_coil is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
-        Motion.Play(art, 1800, t =>
+        var swell = new ScaleTransform(1, 1);
+        var ring = _ringBox;
+        if (ring != null) ring.RenderTransform = swell;
+        var bits = new ElemFx.Bits();
+        // the strike: from the cloud's crest straight down onto the coil's top (the window's top is near: kept short)
+        const double hit = .16;
+        bits.Add(BoltEl(18, 26, 503), new Point(0, -30), new Vector(0, 0), delay: hit - .02, life: .06);
+        bits.Add(BoltEl(18, 26, 509), new Point(1, -30), new Vector(0, 0), delay: hit + .06, life: .07);
+        bits.Add(ElemFx.Glow(Colors.White, 64, 64, .9, 1), new Point(0, 0), new Vector(0, 0), delay: hit, life: .26, s0: .4, s1: 1.15);
+        bits.Add(ElemFx.Ring(ArcC, 44, 44, 2.4), new Point(0, 0), new Vector(0, 0), delay: hit + .01, life: .36, s0: .9, s1: 1.6);
+        // sparks up and out to the right (the coil sits at the window's left, its top near)
+        double[] angs = { -150, -120, -90, -60, -30, 0, 30, 160 }, dist = { 14, 22, 22, 34, 42, 44, 34, 12 };
+        for (int i = 0; i < angs.Length; i++)
         {
+            double a = angs[i] * Math.PI / 180;
+            bits.Add(SparkEl(i % 2 == 0 ? 15 : 11), new Point(Math.Cos(a) * 16, Math.Sin(a) * 16), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i]),
+                g: 8, delay: hit + .01 + .01 * i, life: .34, s0: 1.1, s1: .6, face: true);
+        }
+        var rateK = new ScaleTransform(1, 1);
+        if (_rateTop != null) _rateTop.RenderTransform = rateK;
+        ElemFx.Play(_sky, bits, (FrameworkElement?)ring ?? art, .5, .5, 1800, t =>
+        {
+            // the charge races round to full, then the strike
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .5));
-            _head = t < .5 ? Seg(t, 0, .5) : -1;
-            if (t >= .5) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, hit));
+            _head = t < hit ? Seg(t, 0, hit) : -1;
+            if (t >= hit) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
-            Zap(t is > .45 and < .9 ? Seg(t, .45, .9) : -1);
-        }, () => { _complete = 0; _head = -1; _beat = beat; Zap(-1); art.InvalidateVisual(); });
+            // the charge drawing it in, then the strike's punch, the hour jolted with it
+            swell.ScaleX = swell.ScaleY = t < hit ? 1 - .08 * Out(Seg(t, .04, hit)) : ElemFx.Punch(t, hit, hit + .34, .92, 3.4);
+            rateK.ScaleX = rateK.ScaleY = t < hit + .02 ? 1 : ElemFx.Punch(t, hit + .02, hit + .32, 1.1, 2);
+            Zap(t is > .24 and < .7 ? Seg(t, .24, .7) : -1);
+        }, () => { _complete = 0; _head = -1; _beat = beat; Zap(-1); art.InvalidateVisual(); swell.ScaleX = swell.ScaleY = 1; rateK.ScaleX = rateK.ScaleY = 1; });
     }
 
-    /// <summary>An entry opened: the first timer's chip charges mint round its edge and settles.</summary>
+    /// <summary>
+    /// An entry opened: lightning strikes the first timer's chip out of the Buddy's cloud (struck twice); the chip jolts big
+    /// in a mint flash, sparks fly off where it struck, and it settles, charged mint round its edge.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush;
         chip.BorderBrush = Frozen(Mod.Mix(MintC2, Colors.White, .3));
-        Motion.Play(chip, 1200, t => glow.Opacity = .9 * (t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, 1)),
-            () => { chip.Effect = null; chip.BorderBrush = edge; });
+        var sc = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = sc;
+        double hw = chip.ActualWidth > 0 ? chip.ActualWidth / 2 : 46, hh = chip.ActualHeight > 0 ? chip.ActualHeight / 2 : 11, x = -hw * .35;
+        var bits = new ElemFx.Bits();
+        bits.Add(BoltEl(18, 32, 211), new Point(x, -hh - 15), new Vector(0, 0), delay: .02, life: .08);
+        bits.Add(BoltEl(18, 32, 223), new Point(x + 1, -hh - 15), new Vector(0, 0), delay: .12, life: .08);
+        bits.Add(ElemFx.Glow(Colors.White, 44, 30, 1, 1), new Point(x, -hh + 2), new Vector(0, 0), delay: 0, life: .2, s0: .5, s1: 1.3);
+        bits.Add(ElemFx.Glow(MintC2, 2 * hw + 46, 2 * hh + 26, .75, .5), new Point(0, 0), new Vector(0, 0), delay: .03, life: .5, s0: .7, s1: 1.1);
+        double[] angs = { -165, -130, -95, -60, -25 };
+        for (int k = 0; k < angs.Length; k++)
+        {
+            double a = angs[k] * Math.PI / 180, d = k % 2 == 0 ? 26 : 20;
+            bits.Add(SparkEl(k % 2 == 0 ? 13 : 10), new Point(x, -hh), new Vector(Math.Cos(a) * d, Math.Sin(a) * d * .8), g: 8, delay: .02 + .01 * k, life: .3, s0: 1, s1: .6, face: true);
+        }
+        ElemFx.Play(_sky, bits, chip, .5, .5, 1200, t =>
+        {
+            // struck into being: nothing, the bolt, the chip lit in its flash, landing past its size and settling
+            chip.Opacity = t < .05 ? 0 : 1;
+            sc.ScaleX = sc.ScaleY = t < .05 ? .85 : ElemFx.Punch(t, .05, .34, .85, 2.2);
+        }, () => { chip.BorderBrush = edge; chip.Opacity = 1; sc.ScaleX = sc.ScaleY = 1; });
     }
 
-    /// <summary>A fight started: the panel settles in, then the thunderclap on the leader and the arcs down the bars.</summary>
+    /// <summary>A fight started: the panel settles in, then the thunderclap on the leader (the panel jolts with it) and the arcs down the bars.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 420, t =>
+        Motion.Play(_fight, 900, t =>
         {
-            double k = Out(t);
+            double k = Out(Seg(t, 0, .45));
             _fightShift.Y = 6 * (1 - k);
+            _fightShift.X = ElemFx.Shake(t, .1, .5, 3, 3);
             _fight.Opacity = .85 + .15 * k;
-        }, () => { _fightShift.Y = 0; _fight.Opacity = 1; });
+        }, () => { _fightShift.Y = 0; _fightShift.X = 0; _fight.Opacity = 1; });
         _leadFight = e.Id; _leadId = Meter?.Members.FirstOrDefault(m => m.Rank == 1)?.Id ?? 0;
         Storm(true, true, 1700);
     }
 
-    /// <summary>A fight ended: a night-glass plate charged in mint (coral for a wipe) lays over the fight's head with the outcome and the clock; a kill sends the arcs down the bars.</summary>
+    /// <summary>
+    /// A fight ended. A kill is a lightning strike: a bolt out of the storm's crest strikes the plate as it lands over the
+    /// fight's head (struck three times), white light bursts where it hit, sparks fly, the panel jolts and flickers, the
+    /// outcome lands big and settles, and the arcs run down the bars. A wipe is the power failing: the plate stutters on in
+    /// coral like a dying light, the panel's light cuts out and flickers before it comes back, the panel sags and a few dying
+    /// sparks drop off the plate. Either lifts after a moment.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
@@ -815,10 +933,12 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             dc.DrawGeometry(null, Mod.P(Mod.Br(c, .7), 1.2), shape);
         }) { RenderTransform = bloomAt });
         var words = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Tt(OutcomeText(e), 17, White, FontWeights.Bold));
-        var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 12, Arc, FontWeights.SemiBold); ck.Margin = new Thickness(4, 3, 0, 0);
+        words.Children.Add(Tt(OutcomeText(e), 17, wipe ? Frozen(Color.FromRgb(0xFF, 0xD6, 0xD6)) : White, FontWeights.Bold));
+        var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 12, wipe ? Soft : Arc, FontWeights.SemiBold); ck.Margin = new Thickness(4, 3, 0, 0);
         words.Children.Add(ck);
         words.Effect = Shade();
+        var wordsK = new ScaleTransform(1, 1);
+        words.RenderTransformOrigin = new Point(0, .5); words.RenderTransform = wordsK;
         plate.Children.Add(words);
         _band.Children.Clear(); _band.Children.Add(plate);
         // over the head as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
@@ -832,14 +952,59 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         Seat();
         var head = _headEl;
         bool seated = false;
+        // the strike (a kill) or the dying sparks (a wipe), placed from the head (laid out already; the plate sits on it)
+        double bw = Math.Max(120, FightWidth - 10 - 2 * (Pad - 4));
+        var bits = new ElemFx.Bits();
+        if (!wipe)
+        {
+            const double sx = 36;
+            bits.Add(BoltEl(34, 58, 301), new Point(sx, -23), new Vector(0, 0), delay: 0, life: .07);
+            bits.Add(BoltEl(34, 58, 307), new Point(sx + 2, -23), new Vector(0, 0), delay: .07, life: .07);
+            bits.Add(BoltEl(34, 58, 311), new Point(sx - 1, -23), new Vector(0, 0), delay: .14, life: .09);
+            bits.Add(ElemFx.Glow(ArcC, 90, 40, .9, 1), new Point(sx, 2), new Vector(0, 0), delay: 0, life: .12, s0: .6, s1: 1.1);
+            // the storm still crackling over it: a smaller strike further along, half way through
+            bits.Add(BoltEl(30, 54, 331), new Point(bw * .62, -22), new Vector(0, 0), delay: .45, life: .07);
+            bits.Add(ElemFx.Glow(ArcC, 60, 30, .9, 1), new Point(bw * .62, 4), new Vector(0, 0), delay: .45, life: .08, s0: .6, s1: 1.1);
+            double[] angs = { -165, -128, -96, -64, -32, 0, 20 }, dist = { 26, 40, 46, 50, 48, 40, 30 };
+            for (int i = 0; i < angs.Length; i++)
+            {
+                double a = angs[i] * Math.PI / 180;
+                bits.Add(SparkEl(i % 2 == 0 ? 16 : 12), new Point(sx + Math.Cos(a) * 6, 2 + Math.Sin(a) * 4), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i] * .75),
+                    g: 12, delay: .02 + .008 * i, life: .32, s0: 1.15, s1: .6, face: true);
+            }
+        }
+        else
+            for (int i = 0; i < 4; i++)
+                bits.Add(SparkEl(i % 2 == 0 ? 9 : 7, CoralC), new Point(bw * (.55 + .1 * i), 10), new Vector((i % 2 == 0 ? 5 : -5), 8),
+                    g: 70, angle: 90, delay: .1 + .07 * i, life: .4, s0: 1, s1: .7, peak: .9);
+        bits.Shift = new Vector(-4, 0);
+        ElemFx.Play(_sky, bits, (FrameworkElement?)head ?? _fight, 0, .5, 2400);
         Motion.Play(_band, 2400, t =>
         {
             if (!seated) { Seat(); seated = true; }   // once, on the first frame after layout: never a layout per frame
-            bloomAt.ScaleX = Math.Max(.01, Out(Seg(t, 0, .2)));
-            words.Opacity = t < .84 ? Seg(t, .06, .2) : 1 - Seg(t, .84, 1);
-            plate.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .1) : Seg(t, .84, 1);
-        }, () => { _band.Children.Clear(); if (head != null) head.Opacity = 1; });
+            double on = 1;
+            if (!wipe)
+            {
+                // struck: the plate slams on, its words land big and settle, the panel jolts
+                bloomAt.ScaleX = Math.Max(.01, Out(Seg(t, 0, .12)));
+                wordsK.ScaleX = wordsK.ScaleY = ElemFx.Punch(t, .03, .24, 1.2, 1.6);
+                plate.Opacity = t < .74 ? 1 : 1 - Seg(t, .74, .84);
+                _fightShift.X = ElemFx.Shake(t, .02, .28, 2.5, 3.5);
+            }
+            else
+            {
+                // the power failing: the plate stutters on like a dying light, the panel's light cuts out and flickers, it sags
+                bloomAt.ScaleX = 1;
+                on = t < .04 ? 0 : t < .08 ? 1 : t < .12 ? .1 : t < .16 ? .9 : t < .2 ? .2 : t < .23 ? .7 : 1;
+                plate.Opacity = t < .74 ? on : 1 - Seg(t, .74, .84);
+                double dark = t < .05 ? 0 : t < .09 ? 1 : t < .13 ? .2 : t < .17 ? 1 : t < .21 ? .35 : t < .62 ? 1 : 1 - Seg(t, .62, .88);
+                Lite(_fightDark, .44 * dark);
+                _fightShift.Y = 3 * ElemFx.Hit(t, .05, .2, .92);
+            }
+            // the outcome and the head never show at once: the head goes as the plate comes, and back as it lifts
+            words.Opacity = t < .74 ? (wipe ? on : Seg(t, .03, .06)) : 1 - Seg(t, .74, .82);
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .03) : Out(Seg(t, .82, 1));
+        }, () => { _band.Children.Clear(); if (head != null) head.Opacity = 1; Lite(_fightDark, 0); _fightShift.X = 0; _fightShift.Y = 0; });
         if (!wipe) Storm(false, true, 1500, flicker: true);
     }
 }

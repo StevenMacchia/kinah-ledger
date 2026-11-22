@@ -342,9 +342,11 @@ sealed partial class HudMagma
             return g;
         }
         double lean = (rnd.NextDouble() - .5) * w * .5;
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaC, .7), 0), (Mod.A(LavaRedC, .95), .3), (LavaC, 1)), null, Spout(w / 2, lean));
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaYelC, .85), 0), (LavaHotC, .35), (LavaYelC, 1)), null, Spout(w * .3, lean * .9));
-        dc.DrawGeometry(Mod.Grad(true, (Mod.A(WhiteHotC, .5), 0), (WhiteHotC, .3), (WhiteHotC, 1)), null, Spout(w * .12, lean * .8));
+        // a soft heat round it first (no hard silhouette), then the skin fading out toward the tip, the body, the white-hot core
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaHotC, 0), 0), (Mod.A(LavaHotC, .18), .4), (Mod.A(LavaC, .3), 1)), null, Spout(w * .72, lean * 1.1));
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaC, .15), 0), (Mod.A(LavaRedC, .75), .35), (Mod.A(LavaC, .95), 1)), null, Spout(w / 2, lean));
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(LavaYelC, .3), 0), (Mod.A(LavaHotC, .9), .4), (LavaYelC, 1)), null, Spout(w * .3, lean * .9));
+        dc.DrawGeometry(Mod.Grad(true, (Mod.A(WhiteHotC, .2), 0), (Mod.A(WhiteHotC, .9), .35), (WhiteHotC, 1)), null, Spout(w * .12, lean * .8));
         dc.DrawEllipse(LavaYel, null, new Point(cx + lean * 1.3 + (rnd.NextDouble() - .5) * 3, 2.5), 1.6, 1.9);
     }
 

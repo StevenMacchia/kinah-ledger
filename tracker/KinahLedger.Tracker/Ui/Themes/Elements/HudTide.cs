@@ -88,6 +88,17 @@ sealed partial class HudTide : ModernLook
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _settle = new();
     FrameworkElement? _head;
+    /// <summary>Over everything, unclipped: the moments' short-lived bits (ElementsFx.cs), each moment on a layer of its own.</summary>
+    readonly Canvas _sky = new() { IsHitTestVisible = false };
+    /// <summary>A wipe's draining: the deep's dark rising from the panel's foot over the rows (its height by its scale, shown by its opacity).</summary>
+    readonly System.Windows.Shapes.Rectangle _fightDeep = new()
+    {
+        IsHitTestVisible = false, Opacity = 0, Visibility = Visibility.Collapsed, RenderTransformOrigin = new Point(.5, 1), RenderTransform = new ScaleTransform(1, 0),
+        Fill = Mod.Grad(true, (Mod.A(AbyssC, 0), 0), (Mod.A(AbyssC, .4), .45), (Mod.A(Color.FromRgb(0x02, 0x08, 0x0C), .62), 1)),
+    };
+    /// <summary>The Buddy's surge on your best passed: the breaking wave sized to the Buddy, run across its glass.</summary>
+    readonly TacSketch _lineWave = new((dc, s) => DrawBigWave(dc, s.Height)) { Width = BigWaveW, Visibility = Visibility.Collapsed };
+    readonly TranslateTransform _lineWaveT = new();
 
     public HudTide() : base(bare: true)
     {
@@ -106,10 +117,13 @@ sealed partial class HudTide : ModernLook
         _lineFx.Children.Add(_lineSplash.Layer);
         _rare.SizeChanged += (_, e) => ClipRare(e.NewSize);
         _fight.SizeChanged += (_, e) => { _fightOver.Clip = _fightUnder.Clip = PanelShape(e.NewSize, Radius, true); if (Math.Abs(_bigWave.Height - e.NewSize.Height) > .5) _bigWave.Height = e.NewSize.Height; };
-        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightUnder); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightOver); _fight.Children.Add(_fightFx);
+        _fight.Children.Add(_fightArt); _fight.Children.Add(_fightUnder); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightDeep); _fight.Children.Add(_fightOver); _fight.Children.Add(_fightFx);
+        _fight.SizeChanged += (_, e) => _fightDeep.Clip = PanelShape(e.NewSize, Radius, true);
+        _lineWave.RenderTransform = _lineWaveT;
+        _lineFx.Children.Insert(0, _lineWave);
         _fight.RenderTransform = _settle;
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
-        _root.Children.Add(_body);
+        _root.Children.Add(_body); _root.Children.Add(_sky);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
@@ -153,8 +167,12 @@ sealed partial class HudTide : ModernLook
         {
             // no hour yet: the well empty, the waiting words beside it
             if (!mark) _lineBody.Children.Add(Well(-1, false, ""));
-            var w = Lit(Tt(Waiting(f.Abyss), 13, Soft, FontWeights.SemiBold)); w.Margin = new Thickness(0, 0, 2, 0);
-            _lineBody.Children.Add(w);
+            // the Abyss's stats so far under the waiting words ("2 kills · 4.4K Kinah": information, never empty glass)
+            var ws = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0) };
+            ws.Children.Add(Tt(Waiting(f.Abyss), 13, Soft, FontWeights.SemiBold));
+            var wsub = Sub(f, false);
+            if (wsub.Inlines.Count > 0) ws.Children.Add(wsub);
+            _lineBody.Children.Add(Lit(ws));
         }
         else
         {
@@ -615,7 +633,30 @@ sealed partial class HudTide : ModernLook
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         double w = _line.ActualWidth > 0 ? _line.ActualWidth : 300, h = _line.ActualHeight > 0 ? _line.ActualHeight : 58;
         _lineBubbles.Place(new Rect(w * .3, 2, w * .66, h - 2), h * .7);
-        Motion.Play(_lineFx, 1500, t => Stir(t, 1.6), () => Stir(-1, 0));
+        // its worth floats up out of the glass on a small capsule of sea glass, then fades (the small one: a rare drop is the big one)
+        var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(Tt(worth, 12.5, p.Worth.Length > 0 ? Frozen(Mod.Mix(MintC2, Colors.White, .3)) : White, FontWeights.Bold));
+        var nm = Tt(" " + (p.Name.Length > 14 ? p.Name[..13].TrimEnd() + "…" : p.Name), 9.5, Soft, FontWeights.SemiBold); nm.VerticalAlignment = VerticalAlignment.Center; nm.Margin = new Thickness(2, 1, 0, 0);
+        sp.Children.Add(nm);
+        var cap = new Border
+        {
+            Child = Lit(sp), CornerRadius = new CornerRadius(99), Padding = new Thickness(8, 1, 9, 2), IsHitTestVisible = false,
+            Background = Mod.Grad(true, (Mod.A(SeaC, .92), 0), (Mod.A(AbyssC, .94), 1)), BorderThickness = new Thickness(1), BorderBrush = Frozen(Mod.A(AquaC, .6)),
+        };
+        var rise = new TranslateTransform(); var pop = new ScaleTransform(1, 1);
+        cap.RenderTransformOrigin = new Point(.5, .5); cap.RenderTransform = new TransformGroup { Children = { pop, rise } };
+        cap.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        // over the glass's top edge, left of the breaking wave (not in a run: its head sits there)
+        Canvas.SetLeft(cap, Math.Max(4, w * .62 - cap.DesiredSize.Width / 2)); Canvas.SetTop(cap, -cap.DesiredSize.Height / 2);
+        if (_runHead.Visibility != Visibility.Visible) _lineTop.Children.Add(cap);
+        Motion.Play(_lineFx, 1700, t =>
+        {
+            Stir(Seg(t, 0, .88), 1.6);
+            rise.Y = 4 - 12 * Out(Seg(t, .06, .5)) - 4 * Seg(t, .5, 1);
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .06, .3, .8, 2);
+            cap.Opacity = t < .74 ? Seg(t, .06, .14) : 1 - Out(Seg(t, .74, .95));
+        }, () => { Stir(-1, 0); _lineTop.Children.Remove(cap); });
     }
 
     /// <summary>The Buddy's glass stirred at a course's point (outside it: still): the second net's strength rises and falls as it drifts; the bubbles rise.</summary>
@@ -630,7 +671,16 @@ sealed partial class HudTide : ModernLook
         _stirT.X = -CauW + 40 * Out(t);
     }
 
-    /// <summary>A rare drop: its glass blooms in the grade's colour behind the tile, rings spreading out from it, the tile popping in.</summary>
+    /// <summary>A drop of water thrown up (made once; moved by its transform): the sea's bead, or a teardrop in <paramref name="tint"/>.</summary>
+    static FrameworkElement Droplet(double d, Color? tint = null) => tint is { } c
+        ? ElemFx.Shape(ElemFx.Drop, Mod.Grad(true, (Mod.Mix(c, Colors.White, .8), 0), (Mod.Mix(c, Colors.White, .3), .6), (Mod.A(c, .85), 1)), d * .66, d)
+        : new System.Windows.Shapes.Rectangle { Width = d, Height = d, Fill = DropBrush, IsHitTestVisible = false };
+
+    /// <summary>
+    /// A rare drop, the big one: a spout of the grade's colour bursts up out of the tile, its glass blooms in the colour and a
+    /// whirlpool turns behind the tile in rings of it, drops of it are thrown up and fall back, and the tile lands big and
+    /// settles (a pickup is the quiet stir of light and bubbles in the Buddy's glass).
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
         if (_rareArt is not { } art || _rareGlow is not { } glow || _rareRipples is not { } ripples) return;
@@ -638,17 +688,45 @@ sealed partial class HudTide : ModernLook
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var gs = (ScaleTransform)glow.RenderTransform;
-        Motion.Play(art, 1600, t =>
+        var c = _rareC;
+        var bits = new ElemFx.Bits();
+        // the spout: a column of the colour standing up out of the tile, a burst of white where it breaks
+        bits.Add(ElemFx.Glow(c, 30, 104, .9, .7), new Point(0, -28), new Vector(0, 0), delay: 0, life: .5, s0: .2, s1: 1.05);
+        bits.Add(ElemFx.Glow(Colors.White, 48, 44, .95, 1), new Point(0, -2), new Vector(0, 0), delay: .04, life: .26, s0: .4, s1: 1.15);
+        double[] angs = { -146, -122, -104, -88, -72, -56, -36, -14 }, dist = { 18, 32, 46, 52, 52, 46, 40, 34 };
+        for (int i = 0; i < angs.Length; i++)
         {
+            double a = angs[i] * Math.PI / 180;
+            bits.Add(Droplet(i % 3 == 0 ? 9 : 7, i % 2 == 0 ? c : null), new Point(Math.Cos(a) * 6, -4 + Math.Sin(a) * 4), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i] * 1.15),
+                g: 40, delay: .06 + .014 * i, life: .55, s0: 1, s1: .7);
+        }
+        // the whole glass takes it: a flash of the grade's colour over it, and it lands past its size and settles
+        double rw = _rare.ActualWidth > 0 ? _rare.ActualWidth : 240;
+        bits.Add(ElemFx.Glow(c, rw * 1.05, 60, .6, .3), new Point(rw / 2 - 23, 0), new Vector(0, 0), delay: .03, life: .4, s0: .7, s1: 1);
+        var cardK = new ScaleTransform(1, 1);
+        _rare.RenderTransformOrigin = new Point(0, .5); _rare.RenderTransform = cardK;
+        // the spout floods the whole glass with the grade's colour for a beat
+        var wash = ElemFx.Wash(c, 14);
+        wash.Margin = new Thickness(1);
+        int wi = tile?.Parent is UIElement rowEl ? _rare.Children.IndexOf(rowEl) : -1;
+        _rare.Children.Insert(wi >= 0 ? wi : _rare.Children.Count, wash);
+        ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? art, .5, .5, 1700, t =>
+        {
+            wash.Opacity = ElemFx.Hit(t, .04, .09, .42);
+            cardK.ScaleX = cardK.ScaleY = t < .03 ? .82 : ElemFx.Punch(t, .03, .32, .82, 1.8);
             double b = Math.Sin(Math.PI * Math.Min(1, t * 1.6));
             glow.Opacity = Math.Max(b, t < .06 ? t / .06 : 0); gs.ScaleX = gs.ScaleY = .5 + .5 * Out(Seg(t, 0, .35));
             ripples.Step(Seg(t, .02, .9));
             if (_whirl is { } wh && _whirlR is { } wr) { wh.Opacity = t < .08 ? t / .08 : 1 - Seg(t, .7, 1); wr.Angle = -360 * Out(t); }
-            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .05, .4), 2.2);
-        }, () => { glow.Opacity = 0; ripples.Step(-1); if (_whirl != null) _whirl.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; });
+            sc.ScaleX = sc.ScaleY = t < .04 ? .3 : ElemFx.Punch(t, .04, .38, .3, 3);
+        }, () => { _rare.Children.Remove(wash); glow.Opacity = 0; ripples.Step(-1); if (_whirl != null) _whirl.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; cardK.ScaleX = cardK.ScaleY = 1; });
     }
 
-    /// <summary>Your best passed: the well fills to the brim (its water rising) and turns aqua-mint, rings of ripples spreading round it; the glass's caustics stir.</summary>
+    /// <summary>
+    /// Your best passed: the well surges to the brim (its water rising past it) and turns aqua-mint, it swells and bursts with
+    /// a splash, rings of ripples spreading round it; then a wave surges across the Buddy's glass, drops are thrown up off the
+    /// well and fall back, and "Best here" rises out of it.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (_ringArt is not { } rim || _wellWater is not { } water) return;
@@ -657,6 +735,9 @@ sealed partial class HudTide : ModernLook
         var ripples = _wellRipples;
         void Full(bool full) { if (_wellFull == full) return; _wellFull = full; water.InvalidateVisual(); rim.InvalidateVisual(); }
         Full(false);
+        var well = rim.Parent as FrameworkElement;
+        var swell = new ScaleTransform(1, 1);
+        if (well != null) { well.RenderTransformOrigin = new Point(.5, .5); well.RenderTransform = swell; }
         // the splash off the brim: from the well's top, where it sits on the glass now
         var at = rim.IsDescendantOf(_line) && rim.ActualWidth > 0 ? rim.TranslatePoint(new Point(22, 16), _line) : new Point(_lineBody.Margin.Left + 22, _lineBody.Margin.Top + 16);
         _lineSplash.At(at.X, at.Y);
@@ -667,48 +748,85 @@ sealed partial class HudTide : ModernLook
         word.RenderTransform = wordT; word.Opacity = 0;
         Canvas.SetLeft(word, Math.Max(2, at.X - 30)); Canvas.SetTop(word, at.Y - 24);
         _lineTop.Children.Clear(); _lineTop.Children.Add(word);
+        // the wave across the glass, sized to it
+        double lw = _line.ActualWidth > 0 ? _line.ActualWidth : 300, lh = _line.ActualHeight > 0 ? _line.ActualHeight : 60;
+        if (Math.Abs(_lineWave.Height - lh) > .5 || double.IsNaN(_lineWave.Height)) _lineWave.Height = lh;
+        // drops thrown up off the well, out to the right and up (the well sits at the window's left)
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(Colors.White, 64, 64, .85, 1), new Point(0, 0), new Vector(0, 0), delay: .14, life: .26, s0: .4, s1: 1.1);
+        bits.Add(ElemFx.Ring(FoamC, 44, 44, 2), new Point(0, 0), new Vector(0, 0), delay: .16, life: .4, s0: .9, s1: 1.6);
+        double[] angs = { -140, -116, -96, -78, -60, -40, -20 }, dist = { 22, 34, 40, 44, 46, 46, 42 };
+        for (int i = 0; i < angs.Length; i++)
+        {
+            double a = angs[i] * Math.PI / 180;
+            bits.Add(Droplet(i % 3 == 0 ? 8 : 6), new Point(Math.Cos(a) * 14, Math.Sin(a) * 14), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i]),
+                g: 36, delay: .16 + .012 * i, life: .5, s0: 1, s1: .7);
+        }
+        ElemFx.Play(_sky, bits, well ?? rim, .5, .5, 1800);
         Motion.Play(rim, 1800, t =>
         {
-            word.Opacity = Seg(t, .03, .12) * (1 - Seg(t, .88, 1));
-            wordT.Y = 8 * (1 - Back(Seg(t, .03, .25), 2));
+            word.Opacity = Seg(t, .2, .3) * (1 - Seg(t, .88, 1));
+            wordT.Y = 8 * (1 - ElemFx.Back(Seg(t, .2, .42), 2));
             _lineSplash.Step(Seg(t, .14, .7));
-            _wellWaterT.Y = WellLevel(was + (1 - was) * Back(Seg(t, 0, .22), 1.4));
-            Full(t >= .18);
+            _wellWaterT.Y = WellLevel(was + (1 - was) * ElemFx.Back(Seg(t, 0, .18), 1.4));
+            Full(t >= .16);
+            // a breath in as it fills, then it bursts out and settles
+            swell.ScaleX = swell.ScaleY = t < .14 ? 1 - .08 * Out(Seg(t, 0, .14)) : ElemFx.Punch(t, .14, .46, .92, 3.4);
             ripples?.Step(Seg(t, .12, .85));
             Stir(Seg(t, .1, .9), 1.1, bubbles: false);
-        }, () => { Full(beat); _wellWaterT.Y = WellLevel(beat ? 1 : _share); ripples?.Step(-1); Stir(-1, 0); _lineSplash.Step(-1); _lineTop.Children.Clear(); });
+            // the surge: the wave runs across the glass behind the words
+            double k = Seg(t, .24, .7), e = k * k * (3 - 2 * k);
+            bool on = k is > 0 and < 1;
+            _lineWave.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (on) { _lineWaveT.X = -BigWaveW + (lw + BigWaveW + 12) * e; _lineWave.Opacity = .8 * Seg(k, 0, .08) * (1 - Seg(k, .85, 1)); }
+        }, () =>
+        {
+            Full(beat); _wellWaterT.Y = WellLevel(beat ? 1 : _share); ripples?.Step(-1); Stir(-1, 0); _lineSplash.Step(-1); _lineTop.Children.Clear();
+            swell.ScaleX = swell.ScaleY = 1; _lineWave.Visibility = Visibility.Collapsed;
+        });
     }
 
-    /// <summary>An entry opened: the first timer's capsule lights mint round its rim and breathes once.</summary>
+    /// <summary>
+    /// An entry opened: the first timer's capsule rides in on a swell. It dips and rises up past its place on the water, a
+    /// mint glow and a ripple ring spreading under it, a few drops thrown up off it falling back; then it rests.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush;
         chip.BorderBrush = Frozen(Mod.Mix(MintC2, Colors.White, .25));
-        var sc = new ScaleTransform(1, 1);
-        chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = sc;
-        Motion.Play(chip, 1300, t =>
+        var sc = new ScaleTransform(1, 1); var lift = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = new TransformGroup { Children = { sc, lift } };
+        double hw = chip.ActualWidth > 0 ? chip.ActualWidth / 2 : 46, hh = chip.ActualHeight > 0 ? chip.ActualHeight / 2 : 12;
+        var bits = new ElemFx.Bits();
+        bits.Add(ElemFx.Glow(MintC2, 2 * hw + 20, 2 * hh + 24, .7, .5), new Point(0, 0), new Vector(0, 0), delay: .06, life: .5, s0: .7, s1: 1.05);
+        bits.Add(ElemFx.Glow(FoamC, 2 * hw + 10, 14, .8, 1), new Point(0, -hh + 1), new Vector(0, 0), delay: .08, life: .22, s0: .5, s1: 1.05);
+        double[] xs = { -.62, -.34, -.08, .18, .42, .66 };
+        for (int k = 0; k < xs.Length; k++)
+            bits.Add(Droplet(k % 2 == 0 ? 7 : 5), new Point(hw * xs[k], -hh + 1), new Vector(xs[k] * 12, -(15 + 5 * (k % 3))), g: 40, delay: .08 + .012 * k, life: .46, s0: 1, s1: .7);
+        ElemFx.Play(_sky, bits, chip, .5, .5, 1300, t =>
         {
-            glow.Opacity = .9 * (t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1));
-            sc.ScaleX = sc.ScaleY = 1 + .05 * Math.Sin(Math.PI * Seg(t, 0, .5));
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; chip.RenderTransform = null; });
+            // it surfaces: up out of the water from under its place, breaking the surface in a crown of drops, bobbing to rest
+            chip.Opacity = Seg(t, 0, .08);
+            lift.Y = t < .01 ? 10 : 10 - 10 * ElemFx.Back(Seg(t, .01, .3), 2.2);
+            sc.ScaleX = sc.ScaleY = ElemFx.Punch(t, .01, .3, .88, 2);
+        }, () => { chip.BorderBrush = edge; chip.Opacity = 1; sc.ScaleX = sc.ScaleY = 1; lift.Y = 0; });
     }
 
-    /// <summary>A fight started: its glass rises into place as it fades up, the pearl surfaces on the leader, a swell rolls along the bars.</summary>
+    /// <summary>A fight started: its glass rises into place on a swell (past it and back), the pearl surfaces on the leader, a wall of water sweeps the bars.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 480, t => { double k = Out(t); _settle.Y = 8 * (1 - k); _fight.Opacity = .75 + .25 * Out(Seg(t, 0, .4)); }, () => { _settle.Y = 0; _fight.Opacity = 1; });
+        Motion.Play(_fight, 700, t => { _settle.Y = 8 - 8 * ElemFx.Back(t, 2); _fight.Opacity = .75 + .25 * Out(Seg(t, 0, .3)); }, () => { _settle.Y = 0; _fight.Opacity = 1; });
         LeaderRow()?.Surface();
         Swell();
     }
 
     /// <summary>
-    /// A fight ended: a plate of the glass saying how ("Killed 12:47", "Wiped") washes in over the head behind a curling crest,
-    /// in mint (coral for a wipe), as a swell rolls along the bars and bubbles rise; then it ebbs. It sits on the boss and the
-    /// clock (which say the same) and never over the rows. The plate and the crest are drawn once; the wash is a clip and the
-    /// crest sliding across, then the plate's opacity.
+    /// A fight ended. A kill is a wave breaking: a plate of the glass saying how ("Killed 12:47") washes in over the head
+    /// behind a curling crest in mint, the panel surges up on it and settles, the words land big as the crest breaks into a
+    /// splash and a flash of foam, a ripple runs out along the plate, and the wall of water sweeps the bars. A wipe is the tide
+    /// going out: the plate sinks in slowly in coral, the deep's dark rises from the panel's foot over the rows as it sinks,
+    /// a few bubbles drift up; then the water comes back. Either ebbs after a moment.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
@@ -729,7 +847,10 @@ sealed partial class HudTide : ModernLook
         var words = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(Tt(OutcomeText(e), 16, Frozen(Mod.Mix(c, Colors.White, .3)), FontWeights.Bold));
         words.Children.Add(Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, White, FontWeights.SemiBold));
-        plate.Children.Add(Lit(words));
+        var lit = Lit(words);
+        var wordsK = new ScaleTransform(1, 1); var wordsY = new TranslateTransform();
+        lit.RenderTransformOrigin = new Point(.5, .5); lit.RenderTransform = new TransformGroup { Children = { wordsK, wordsY } };
+        plate.Children.Add(lit);
         // the wash: the plate shown up to its front (a clip slid across), the crest riding the front
         var clipT = new TranslateTransform(-pw - 4, 0);
         plate.Clip = new RectangleGeometry(new Rect(-40, -4, pw + 44, 60)) { Transform = clipT };
@@ -740,6 +861,8 @@ sealed partial class HudTide : ModernLook
             WaterBar(dc, new Rect(0, 0, 34, s.Height), 30, c, boost: .6, alpha: .9);
             dc.Pop();
         }) { Width = 40, HorizontalAlignment = HorizontalAlignment.Left, RenderTransform = crestT };
+        var plateY = new ScaleTransform(1, 1);
+        plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = plateY;
         var host = new Grid { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, ClipToBounds = true };
         host.Children.Add(plate); host.Children.Add(crest);
         _fightFx.Children.Clear(); _fightFx.Children.Add(host);
@@ -753,22 +876,61 @@ sealed partial class HudTide : ModernLook
             if (host.Height != h + 8) host.Height = h + 8;
         }
         Seat();
-        if (!wipe) Swell();
         bool seated = false;
         var head = _head;
         void SplashAt() => _fightSplash.At(host.Margin.Left + pw - 6, host.Margin.Top + (host.Height is var hh && double.IsFinite(hh) ? hh * .7 : 20));
         SplashAt();
+        // a kill's foam flash where the crest breaks, and the ripple running out along the plate; a wipe's bubbles drifting up
+        var bits = new ElemFx.Bits();
+        if (!wipe)
+        {
+            // the wave crashing down over the meter: a wall of foam falling from the plate to the foot, a burst of white where it hit
+            double fh = _fight.ActualHeight > 0 ? _fight.ActualHeight : 200;
+            var front = new System.Windows.Shapes.Rectangle { Width = pw * .96, Height = 5, RadiusX = 2.5, RadiusY = 2.5, Fill = Mod.Grad(false, (Mod.A(FoamC, 0), 0), (Mod.A(Colors.White, .95), .3), (Mod.A(Colors.White, .95), .7), (Mod.A(FoamC, 0), 1)) };
+            bits.Add(front, new Point(pw / 2, 10), new Vector(0, fh - 64), delay: .1, life: .3, s0: 1, s1: 1, peak: .95);
+            bits.Add(ElemFx.Glow(AquaC, pw * .95, 34, .5, .3), new Point(pw / 2, 4), new Vector(0, fh - 64), delay: .11, life: .32, s0: 1, s1: 1, peak: .8);
+            // (the crash's light is its foam front: no soft blobs over the plate)
+        }
+        else
+            for (int i = 0; i < 6; i++)
+                bits.Add(new System.Windows.Shapes.Rectangle { Width = 7 + 3 * (i % 2), Height = 7 + 3 * (i % 2), Fill = BubbleBrush }, new Point(pw * (.1 + .16 * i), 150 - 14 * (i % 3)), new Vector(4 * Math.Sin(i * 1.7), -70 - 10 * (i % 2)),
+                    delay: .16 + .06 * i, life: .6, s0: .8, s1: 1, peak: .85);
+        bits.Shift = new Vector(-4, 0);
+        ElemFx.Play(_sky, bits, (FrameworkElement?)head ?? _fight, 0, .5, 2500);
+        var deepK = (ScaleTransform)_fightDeep.RenderTransform;
         Motion.Play(_fightFx, 2500, t =>
         {
             if (!seated && t > 0) { Seat(); SplashAt(); seated = true; }
-            if (!wipe) _fightSplash.Step(Seg(t, .24, .7));
-            double front = (pw + 30) * Out(Seg(t, 0, .3));
-            clipT.X = front - pw - 4 - 18;
-            crestT.X = front - 40;
-            crest.Opacity = 1 - Seg(t, .26, .34);
-            words.Opacity = 1 - Seg(t, .82, 1);
-            plate.Opacity = 1 - Seg(t, .84, 1);
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .08) : Seg(t, .84, 1);
-        }, () => { _fightFx.Children.Clear(); _fightSplash.Step(-1); if (head != null) head.Opacity = 1; });
+            if (!wipe)
+            {
+                // the crest races over the head and breaks: the words land big, the wave crashes down the meter, the panel takes it
+                _fightSplash.Step(Seg(t, .14, .6));
+                double front = (pw + 30) * Out(Seg(t, 0, .16));
+                clipT.X = front - pw - 4 - 18;
+                crestT.X = front - 40;
+                crest.Opacity = 1 - Seg(t, .14, .22);
+                _settle.Y = 5 * ElemFx.Hit(t, .1, .16, .45);
+                wordsK.ScaleX = wordsK.ScaleY = ElemFx.Punch(t, .08, .3, 1.3, 2);
+            }
+            else
+            {
+                // the tide going out: the plate sinks in slowly with no crest, the deep's dark rises over the rows, the panel sinks
+                clipT.X = 0; crest.Opacity = 0;
+                wordsY.Y = -8 * (1 - Out(Seg(t, .04, .4)));
+                plateY.ScaleY = .78 + .22 * Out(Seg(t, .02, .32));
+                double d = Seg(t, .04, .42) * (1 - Seg(t, .7, .94));
+                deepK.ScaleY = Out(Seg(t, .04, .5));
+                _fightDeep.Opacity = d;
+                _fightDeep.Visibility = d > .01 ? Visibility.Visible : Visibility.Collapsed;
+                _settle.Y = 4 * Math.Sin(Math.PI * Seg(t, .04, .92));
+            }
+            words.Opacity = t < .74 ? (wipe ? Seg(t, .04, .2) : Seg(t, .06, .1)) : 1 - Seg(t, .74, .82);
+            plate.Opacity = t < .74 ? (wipe ? Seg(t, .03, .2) : 1) : 1 - Seg(t, .74, .84);
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .03) : Out(Seg(t, .82, 1));
+        }, () =>
+        {
+            _fightFx.Children.Clear(); _fightSplash.Step(-1); if (head != null) head.Opacity = 1;
+            _fightDeep.Opacity = 0; _fightDeep.Visibility = Visibility.Collapsed; deepK.ScaleY = 0; _settle.Y = 0;
+        });
     }
 }
