@@ -745,29 +745,58 @@ sealed partial class HudPrism : ModernLook
             var glow = new RadialGradientBrush(Mod.A(Colors.White, .9), Mod.A(Colors.White, 0)); glow.Freeze();
             dc.DrawEllipse(glow, null, at, 9, 9);
         }) { RenderTransform = beamScale };
-        var rays = new TacSketch((dc, s) =>
+        // a ray to each bar, each its own part (drawn once), shot out of the prism a row after another; each ends in the
+        // bar's first half, short of the figures, and is gone by a little over half a second
+        // (built once the rows are laid out: a fight's start is told as it is first drawn, before its layout)
+        List<(TacSketch El, ScaleTransform Grow)>? rays = null;
+        void Build()
         {
-            var from = top.PrismIn(_momentFx) + new Vector(12, 0);
-            foreach (var r in rows)
+        rays = new List<(TacSketch El, ScaleTransform Grow)>();
+        var from0 = top.PrismIn(_momentFx) + new Vector(12, 0);
+        double reach = Math.Max(60, _fight.ActualWidth * .46);
+        foreach (var r in rows)
+        {
+            var to0 = r.EdgeAt(_momentFx);
+            if (to0.X > reach) to0 = new Point(reach, to0.Y);
+            var n0 = to0 - from0; if (n0.Length < 4) continue;
+            var c = Mod.Mix(r.Tone, Colors.White, .2);
+            var grow = new ScaleTransform(0, 0, from0.X, from0.Y);
+            var ray = new TacSketch((dc, s) =>
             {
-                var to = r.EdgeAt(_momentFx);
-                var c = Mod.Mix(r.Tone, Colors.White, .2);
-                var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = from, EndPoint = to };
-                b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .9), 0)); b.GradientStops.Add(new GradientStop(Mod.A(c, .95), .35)); b.GradientStops.Add(new GradientStop(Mod.A(c, .7), 1)); b.Freeze();
-                var n = to - from; if (n.Length < 4) continue;
-                n.Normalize(); var side = new Vector(-n.Y, n.X);
-                dc.DrawGeometry(b, null, Poly(from + side * .6, to + side * 2.2, to - side * 2.2, from - side * .6));
-                var spark = new RadialGradientBrush(Mod.A(c, .9), Mod.A(c, 0)); spark.Freeze();
-                dc.DrawEllipse(spark, null, to, 7, 7);
-            }
-        }) { Opacity = 0 };
-        _momentFx.Children.Clear(); _momentFx.Children.Add(rays); _momentFx.Children.Add(beam);
+                var n = n0; n.Normalize(); var side = new Vector(-n.Y, n.X);
+                // a soft halo round a bright core, white out of the prism into the member's colour
+                var halo = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = from0, EndPoint = to0 };
+                halo.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .3), 0)); halo.GradientStops.Add(new GradientStop(Mod.A(c, .4), 1)); halo.Freeze();
+                dc.DrawGeometry(halo, null, Poly(from0 + side * 1.5, to0 + side * 4.5, to0 - side * 4.5, from0 - side * 1.5));
+                var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = from0, EndPoint = to0 };
+                b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, 1), 0)); b.GradientStops.Add(new GradientStop(Mod.A(Mod.Mix(c, Colors.White, .4), 1), .4)); b.GradientStops.Add(new GradientStop(Mod.A(c, .9), 1)); b.Freeze();
+                dc.DrawGeometry(b, null, Poly(from0 + side * .7, to0 + side * 1.6, to0 - side * 1.6, from0 - side * .7));
+                var spark = new RadialGradientBrush(Mod.A(Colors.White, .95), Mod.A(c, 0)); spark.Freeze();
+                dc.DrawEllipse(spark, null, to0, 7, 7);
+            }) { Opacity = 0, RenderTransform = grow };
+            rays.Add((ray, grow));
+        }
+        foreach (var r in rays) _momentFx.Children.Insert(0, r.El);
+        }
+        _momentFx.Children.Clear();
+        _momentFx.Children.Add(beam);
+        bool Laid() => _momentFx.ActualWidth > 0 && rows.All(r => r.IsLaid);
+        if (Laid()) Build();
         Motion.Play(_momentFx, ms, t =>
         {
-            beamScale.ScaleX = Math.Max(.001, Out(Seg(t, 0, .3)));
-            beam.Opacity = t < .45 ? 1 : 1 - Seg(t, .45, .65);
-            rays.Opacity = t < .5 ? Seg(t, .3, .42) : 1 - Seg(t, .62, .95);
-        }, () => _momentFx.Children.Clear());
+            if (rays == null && Laid()) Build();
+            // the crystal rises in fast: its words whole by 0.15 s
+            _fightShift.Y = 8 * (1 - Out(Seg(t, 0, .16)));
+            _fightBody.Opacity = Out(Seg(t, 0, .12));
+            beamScale.ScaleX = Math.Max(.001, Out(Seg(t, 0, .14)));
+            beam.Opacity = t < .18 ? 1 : 1 - Seg(t, .18, .32);
+            for (int i = 0; i < (rays?.Count ?? 0); i++)
+            {
+                double a = .14 + .03 * i, k = Out(Seg(t, a, a + .09));
+                rays![i].Grow.ScaleX = rays[i].Grow.ScaleY = Math.Max(.001, k);
+                rays[i].El.Opacity = t < a ? 0 : t < a + .2 ? 1 : 1 - Seg(t, a + .2, a + .32);
+            }
+        }, () => { _momentFx.Children.Clear(); _fightShift.Y = 0; _fightBody.Opacity = 1; });
     }
 
     /// <summary>A kill: the crystal's eight bevel facets light up one after another round it, white flaring into each one's own colour of the spectrum.</summary>
@@ -818,14 +847,26 @@ sealed partial class HudPrism : ModernLook
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
-        _lineBand.Fill = Band;
+        _lineBand.Fill = Glint;
+        var pop = new ScaleTransform(1, 1); chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
         Motion.Play(chip, 1900, t =>
         {
-            LineSheen(t < .5 ? Seg(t, 0, .5) : -1);
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
+            LineSheen(t < .4 ? Seg(t, 0, .4) : -1);
+            double k = Back(Seg(t, .06, .22), 2.2);
+            shift.X = -14 * (1 - k);
+            pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .06, .4, .0, .05);
             chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
-        }, () => { LineSheen(-1); _lineAnchor.Children.Remove(chip); });
+        }, () => { LineSheen(-1); _lineAnchor.Children.Remove(chip); _lineBand.Fill = Band; });
+    }
+
+    /// <summary>A pickup's glint: a plain band of white light (the spectrum's band is the rare drop's and the fight's).</summary>
+    static readonly Brush Glint = MakeGlint();
+    static Brush MakeGlint()
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, 0), 0)); b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .42), .5)); b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, 0), 1));
+        b.Freeze();
+        return b;
     }
 
     /// <summary>
@@ -851,7 +892,9 @@ sealed partial class HudPrism : ModernLook
             parts.Add(AtreiaFx.Pillar(st, at + new Vector(0, 6), 38, 84, c, 0, .16, .58));
             parts.Add(AtreiaFx.Bloom(st, at, 96, 58, AtreiaFx.Glow(c, .85, Colors.White), .13, .19, .6));
             parts.Add(AtreiaFx.Rays(st, at, 12, 11, 42, 3.4, i => i % 2 == 0 ? Mod.Mix(c, Colors.White, .45) : SpecAt(i / 11.0), .14, .22, .72, turn: 28, max: .9));
-            parts.Add(AtreiaFx.Ring(st, at, 30, 30, AtreiaFx.Br(Mod.Mix(c, Colors.White, .35)), 2, .5, 2.6, .15, .62));
+            // the pillar's spectrum fringes, red to its left, violet to its right
+            parts.Add(AtreiaFx.Pillar(st, at + new Vector(-12, 6), 10, 78, Spec[0], .02, .17, .5));
+            parts.Add(AtreiaFx.Pillar(st, at + new Vector(12, 6), 10, 78, Spec[5], .02, .17, .5));
             var bits = new AtreiaFx.Bits(st);
             bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 3 == 0 ? Colors.White : i % 3 == 1 ? Mod.Mix(c, Colors.White, .2) : SpecAt(i / 9.0)), at, 36, 4.6, .16, .7,
                 fall: 26, dir: -50, spread: 220, r0: 8, spin: 220, seed: 23);
@@ -862,7 +905,7 @@ sealed partial class HudPrism : ModernLook
             AtreiaFx.All(parts, t);
             bloom.ScaleX = Math.Max(.001, Out(Seg(t, .15, .5)));
             wash.Opacity = .66 + .34 * AtreiaFx.Flash(t, .14, .22, .85);
-            sc.ScaleX = sc.ScaleY = AtreiaFx.Punch(t, .04, .66, .26, .34);
+            sc.ScaleX = sc.ScaleY = AtreiaFx.Punch(t, .06, .62, .2, .25);
             double sh = Seg(t, .2, .7);
             if (band != null && bx != null) { bx.X = -60 + (_rare.ActualWidth + 120) * sh; band.Opacity = Math.Sin(Math.PI * sh); }
         }, () => { bloom.ScaleX = 1; wash.Opacity = .66; sc.ScaleX = sc.ScaleY = 1; if (band != null) band.Visibility = Visibility.Collapsed; });
@@ -897,18 +940,18 @@ sealed partial class HudPrism : ModernLook
         {
             pop = AtreiaFx.ScaleOn(ring, new Point(21, 21));
             parts.Add(AtreiaFx.Bloom(st, c, 74, 74, AtreiaFx.Glow(Colors.White, .75), .3, .36, .66));
-            parts.Add(AtreiaFx.Rays(st, c, 14, 22, 42, 4.2, i => SpecAt(i / 13.0), .3, .4, .86, turn: 40, max: 1));
-            parts.Add(AtreiaFx.Ring(st, c, 42, 42, AtreiaFx.Br(Colors.White, .95), 2, 1, 1.7, .31, .72));
+            parts.Add(AtreiaFx.Rays(st, c, 14, 22, 34, 4.2, i => SpecAt(i / 13.0), .3, .38, .8, turn: 40, max: 1));
             var bits = new AtreiaFx.Bits(st);
             bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 4 == 0 ? Colors.White : SpecAt(i / 9.0)), c, 26, 4.6, .32, .55, fall: 12, dir: 0, spread: 250, r0: 20, spin: 220, seed: 5);
             parts.Add(bits.At);
         }
+        parts.Add(AtreiaFx.Pop(AtreiaFx.Hour(_lineBody), .3, .46, .08));
         AtreiaFx.Play(_fx, st, 1800, t =>
         {
             double shown = was + (1 - was) * Out(Seg(t, 0, .3));
             full.Clip = shown >= .999 ? null : Wedge(new Point(21, 21), 24, shown);
-            LineSheen(t is > .32 and < .82 ? Seg(t, .32, .82) : -1);
-            if (pop != null) pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .24, .9, .1, .24);
+            LineSheen(t is > .28 and < .62 ? Seg(t, .28, .62) : -1);
+            if (pop != null) pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, 0, .92, .08, .24);
             AtreiaFx.All(parts, t);
         }, () => { _beat = beat; full.Visibility = Visibility.Collapsed; full.Clip = null; art.InvalidateVisual(); LineSheen(-1); _lineBand.Fill = Band; if (pop != null) pop.ScaleX = pop.ScaleY = 1; });
     }
@@ -942,8 +985,7 @@ sealed partial class HudPrism : ModernLook
         var parts = new List<Action<double>>
         {
             AtreiaFx.Bloom(st, c, r.Width + 34, r.Height + 26, AtreiaFx.Glow(MintC2, .7), .12, .2, .6),
-            AtreiaFx.Ripple(st, r, 3, AtreiaFx.Br(Mod.Mix(MintC2, Colors.White, .3)), 1.8, 12, .14, .62),
-            AtreiaFx.Ripple(st, r, 3, AtreiaFx.Br(Colors.White, .8), 1, 20, .22, .78),
+            AtreiaFx.Ripple(st, r, 3, AtreiaFx.Br(Mod.Mix(MintC2, Colors.White, .3)), 1.8, 6, .14, .45),
         };
         // the band of spectrum across the chip (clipped to it)
         var lane = new Canvas { Width = r.Width, Height = r.Height, ClipToBounds = true, IsHitTestVisible = false };
@@ -965,16 +1007,13 @@ sealed partial class HudPrism : ModernLook
     /// <summary>A fight started: the crystal rises a few pixels as it fades up, white light enters the crown's prism and splits into the rows' colours, the sheen sweeps the bars.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fight, 520, t =>
-        {
-            double k = Out(t);
-            _fightShift.Y = 8 * (1 - k);
-            _fightBody.Opacity = k;
-        }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
-        // the opening light: white in from the edge, the prism flashing as it arrives, the colours out to every bar, the sheen
+        // the opening light, one course: the crystal rises in (its words whole by 0.15 s), white light shoots to the crown's
+        // prism and splits into a ray to each bar, row after row, gone by about 0.6 s; the sheen sweeps the bars
+        if (TopRow() == null)
+            Motion.Play(_fight, 360, t => { double k = Out(t); _fightShift.Y = 8 * (1 - k); _fightBody.Opacity = k; }, () => { _fightShift.Y = 0; _fightBody.Opacity = 1; });
         OpeningLight(1300);
-        TopRow()?.Crown(leadMs: 360);
-        SweepAll(1150, 520);
+        TopRow()?.Crown(leadMs: 200);
+        SweepAll(1150, 300);
     }
 
     /// <summary>A fight ended: a crystal plate tinted mint (coral for a wipe) lays over the head with the outcome and the clock, then lifts; a kill lights the crystal's facets in turn round it and sweeps the bars.</summary>
@@ -1016,9 +1055,7 @@ sealed partial class HudPrism : ModernLook
                 parts.Add(AtreiaFx.Bloom(st, hit, 150, 90, AtreiaFx.Glow(Colors.White, 1), 0, .05, .34, s0: .3));
                 parts.Add(AtreiaFx.Streak(st, hit, b.Width * 1.05, 7, Color.FromRgb(0xB8, 0xE4, 0xFF), 0, .06, .4));
                 parts.Add(AtreiaFx.Rays(st, hit, 18, 8, b.Width * .46, 4.5, i => SpecAt(i / 17.0), .02, .08, .5, turn: 14, max: .62));
-                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .9, b.Width * .34, AtreiaFx.Br(Color.FromRgb(0xCF, 0xE8, 0xFF), .55), 5, .12, 1, .03, .48));
-                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .9, b.Width * .34, AtreiaFx.Br(Colors.White, .95), 1.4, .12, 1, .03, .48));
-                bits.Burst(12, AtreiaFx.Shard, i => AtreiaFx.Br(i % 4 == 0 ? Colors.White : SpecAt(i / 11.0)), hit, b.Width * .3, 7, .04, .55, fall: 34, r0: 12, spin: 300, seed: 3, squash: .5);
+                bits.Burst(8, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 4 == 0 ? Colors.White : SpecAt(i / 7.0)), hit, b.Width * .34, 8, .04, .42, fall: 16, r0: 12, spin: 320, seed: 3, squash: .5);
             }
             else
             {
@@ -1026,9 +1063,9 @@ sealed partial class HudPrism : ModernLook
                 var at = new Point(b.X + b.Width * .58, b.Y + hy + 8);
                 parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 1, b.Y + 1, b.Width - 2, b.Height - 4), Color.FromRgb(0x12, 0x04, 0x08), .75, .02, .14, .62));
                 parts.Add(AtreiaFx.Bloom(st, at, 70, 44, AtreiaFx.Glow(CoralC, .9, Colors.White), 0, .03, .22, s0: .6));
-                parts.Add(AtreiaFx.Shatter(st, at, 7, 74, CoralC, 4, .01, .1, .62, squash: .55));
+                parts.Add(AtreiaFx.Shatter(st, at, 6, 70, CoralC, 4, .01, .08, .44, squash: .55, wobble: .1));
                 var rnd = new Random(17);
-                for (int k = 0; k < 10; k++)
+                for (int k = 0; k < 5; k++)
                 {
                     var o = new Point(at.X + (rnd.NextDouble() - .5) * 120, at.Y + (rnd.NextDouble() - .5) * 26);
                     var col = k % 3 == 0 ? Mod.Mix(CoralC, Colors.White, .3) : Color.FromRgb(0xB8, 0xBE, 0xCC);

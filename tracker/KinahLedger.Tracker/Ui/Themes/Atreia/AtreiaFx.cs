@@ -358,7 +358,7 @@ static class AtreiaFx
     /// jagged arms up to <paramref name="len"/> long (squashed to <paramref name="squash"/> of it upright) and a broken ring joining
     /// them near the middle; it spreads from the point over [<paramref name="a"/>, <paramref name="run"/>] and fades by <paramref name="b"/>.
     /// </summary>
-    public static Action<double> Shatter(Canvas st, Point c, int n, double len, Color col, int seed, double a, double run, double b, double squash = .6)
+    public static Action<double> Shatter(Canvas st, Point c, int n, double len, Color col, int seed, double a, double run, double b, double squash = .6, double wobble = .35)
     {
         var rnd = new Random(seed);
         var g = new StreamGeometry();
@@ -373,7 +373,7 @@ static class AtreiaFx
                 int segs = 4;
                 for (int k = 1; k <= segs; k++)
                 {
-                    double r = l * k / segs, wob = (rnd.NextDouble() - .5) * .35;
+                    double r = l * k / segs, wob = (rnd.NextDouble() - .5) * wobble;
                     p = new Point(Math.Cos(ang + wob) * r, Math.Sin(ang + wob) * r * squash);
                     x.LineTo(p, true, true);
                     if (k == 2) mids.Add(p);
@@ -394,6 +394,60 @@ static class AtreiaFx
         {
             sc.ScaleX = sc.ScaleY = .2 + .8 * Out(Seg(t, a, run));
             host.Opacity = t <= a || t >= b ? 0 : t < run ? 1 : 1 - InOut(Seg(t, run, b));
+        };
+    }
+
+    /// <summary>
+    /// A line of light across <paramref name="c"/> closing on its middle (a tear sealing): whole at [<paramref name="a"/>],
+    /// drawn in to nothing by <paramref name="b"/>, a hot point left at its middle as it goes.
+    /// </summary>
+    public static Action<double> Seal(Canvas st, Point c, double len, double th, Color col, double a, double b)
+    {
+        var br = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        br.GradientStops.Add(new GradientStop(A(col, .2), 0)); br.GradientStops.Add(new GradientStop(A(col, .95), .4));
+        br.GradientStops.Add(new GradientStop(A(Mix(col, Colors.White, .7), 1), .5)); br.GradientStops.Add(new GradientStop(A(col, .95), .6)); br.GradientStops.Add(new GradientStop(A(col, .2), 1)); br.Freeze();
+        var sc = new ScaleTransform(1, 1, len / 2, th / 2);
+        var e = new Ellipse { Width = len, Height = th, Fill = br, Opacity = 0, RenderTransform = sc, IsHitTestVisible = false };
+        Canvas.SetLeft(e, c.X - len / 2); Canvas.SetTop(e, c.Y - th / 2);
+        st.Children.Add(e);
+        return t =>
+        {
+            double u = Seg(t, a, b);
+            sc.ScaleX = Math.Max(.01, 1 - InOut(u));
+            sc.ScaleY = 1 + .6 * u;
+            e.Opacity = t <= a || t >= b ? 0 : u < .08 ? u / .08 : 1 - Seg(u, .85, 1);
+        };
+    }
+
+    /// <summary>The hour on a Buddy (the biggest words under <paramref name="root"/> with their unit beside them), or null: a moment punches it.</summary>
+    public static FrameworkElement? Hour(DependencyObject root) =>
+        Biggest(root) is { } tb ? tb.Parent is StackPanel { Orientation: Orientation.Horizontal } row ? row : tb : null;
+
+    /// <summary>The biggest words under <paramref name="root"/> (the hour on a Buddy), or null: a moment punches it.</summary>
+    public static TextBlock? Biggest(DependencyObject root)
+    {
+        TextBlock? best = null;
+        void Walk(DependencyObject d)
+        {
+            if (d is TextBlock tb && tb.IsVisible && (best == null || tb.FontSize > best.FontSize)) best = tb;
+            foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
+        }
+        Walk(root);
+        return best;
+    }
+
+    /// <summary>
+    /// The figure's punch: <paramref name="tb"/> scaled round its left middle (so it never grows into what is left of it),
+    /// up to 1 + <paramref name="over"/> over [<paramref name="a"/>, <paramref name="b"/>] with a dip after, ending on 1.
+    /// </summary>
+    public static Action<double> Pop(FrameworkElement? tb, double a, double b, double over)
+    {
+        if (tb == null || tb.ActualHeight <= 0) return _ => { };
+        var sc = ScaleOn(tb, new Point(0, tb.ActualHeight / 2));
+        return t =>
+        {
+            double u = Seg(t, a, b);
+            sc.ScaleX = sc.ScaleY = u <= 0 || u >= 1 ? 1 : u < .3 ? 1 + over * Out(u / .3) : 1 + over * Math.Cos(Math.PI * 1.5 * (u - .3) / .7) * Math.Exp(-2.2 * (u - .3) / .7);
         };
     }
 

@@ -604,8 +604,8 @@ sealed partial class HudRift : ModernLook
             Child = words, MaxWidth = 88, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1),
             Background = Mod.Grad(true, (Mod.A(DuskC, .95), 0), (Mod.A(VoidC, .96), 1)), BorderBrush = Mod.Grad(true, (Mod.A(CyanC, .85), 0), (Mod.A(VioletC, .5), 1)),
         };
-        var shift = new TranslateTransform();
-        chip.RenderTransform = shift;
+        var shift = new TranslateTransform(); var pop = new ScaleTransform(1, 1);
+        chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2 + 4);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
@@ -613,9 +613,10 @@ sealed partial class HudRift : ModernLook
         {
             _linePulse.At(t < .58 ? Seg(t, 0, .58) : -1);
             _lineFlare.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .05, .32);
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+            double k = Back(Seg(t, .06, .22), 2.2);
+            shift.X = -14 * (1 - k);
+            pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .06, .4, 0, .05);
+            chip.Opacity = t < .82 ? Math.Min(1, Seg(t, .06, .16)) : 1 - Seg(t, .82, 1);
         }, () => { _linePulse.At(-1); _lineFlare.Opacity = 0; _lineAnchor.Children.Remove(chip); });
     }
 
@@ -636,7 +637,8 @@ sealed partial class HudRift : ModernLook
             parts.Add(AtreiaFx.Pillar(st, at + new Vector(0, 6), 36, 86, c, 0, .15, .56));
             parts.Add(AtreiaFx.Bloom(st, at, 100, 60, AtreiaFx.Glow(c, .9, Colors.White), .12, .18, .58));
             parts.Add(AtreiaFx.Rays(st, at, 12, 11, 44, 3.4, i => i % 3 == 0 ? LightC : i % 3 == 1 ? Mod.Mix(c, Colors.White, .3) : VioletC, .13, .21, .7, turn: -26, max: .9));
-            parts.Add(AtreiaFx.Ring(st, at, 30, 30, AtreiaFx.Br(Mod.Mix(c, Colors.White, .4)), 2.2, .5, 2.7, .14, .62));
+            // the drop tears its own glass open: a line of its colour snapping out along the row from the tile
+            parts.Add(AtreiaFx.Streak(st, new Point(at.X + 90, at.Y), 200, 6, c, .14, .22, .6));
             var bits = new AtreiaFx.Bits(st);
             bits.Burst(10, AtreiaFx.Shard, i => AtreiaFx.Br(i % 3 == 0 ? LightC : i % 3 == 1 ? c : LilacC), at, 38, 6, .15, .7, fall: 26, dir: -50, spread: 220, r0: 8, spin: 260, seed: 29);
             parts.Add(bits.At);
@@ -649,7 +651,7 @@ sealed partial class HudRift : ModernLook
             fis.Opacity = tears.Opacity = Math.Min(1, 1.3 * k);
             _rareRun.ScaleX = Math.Max(.02, Out(Seg(t, .15, .5)));
             pulse.At(Seg(t, .2, .75) is var u && u > 0 && u < 1 ? u : -1);
-            sc.ScaleX = sc.ScaleY = AtreiaFx.Punch(t, .03, .66, .26, .34);
+            sc.ScaleX = sc.ScaleY = AtreiaFx.Punch(t, .05, .62, .2, .25);
         }, () => { glow.Opacity = fis.Opacity = tears.Opacity = 0; pulse.At(-1); _rareRun.ScaleX = 1; sc.ScaleX = sc.ScaleY = 1; });
     }
 
@@ -711,13 +713,16 @@ sealed partial class HudRift : ModernLook
         if (AtreiaFx.At(host, _fx, new Point(c, c)) is { } rc)
         {
             var portal = AtreiaFx.ScaleOn(host, new Point(c, c));
-            extra.Add(t => portal.ScaleX = portal.ScaleY = AtreiaFx.Punch(t, .42, .95, .1, .22));
-            extra.Add(AtreiaFx.Rays(st, rc, 12, 22, 44, 4.2, i => i % 2 == 0 ? CyanC : VioletC, .5, .6, .95, turn: -34, max: .95));
-            extra.Add(AtreiaFx.Bloom(st, rc, 70, 70, AtreiaFx.Glow(CyanC, .9, Colors.White), .5, .55, .8));
+            extra.Add(t => portal.ScaleX = portal.ScaleY = AtreiaFx.Punch(t, 0, .92, .08, .22));
+            extra.Add(AtreiaFx.Rays(st, rc, 12, 22, 34, 4.2, i => i % 2 == 0 ? CyanC : VioletC, .3, .38, .8, turn: -34, max: .95));
+            extra.Add(AtreiaFx.Bloom(st, rc, 70, 70, AtreiaFx.Glow(CyanC, .9, Colors.White), .3, .35, .66));
+            extra.Add(AtreiaFx.Pop(AtreiaFx.Hour(_lineBody), .3, .46, .08));
         }
         AtreiaFx.Play(_fx, st, 1800, t => AtreiaFx.All(extra, t));
-        Motion.Play(art, 1800, t =>
+        Motion.Play(art, 1800, t0 =>
         {
+            // the run round to the top in the first 0.55 s, the burst after it (its parts' times are of the course as it was)
+            double t = t0 < .3 ? t0 * .55 / .3 : .55 + (t0 - .3) * .45 / .7;
             double run = Out(Seg(t, 0, .55));
             turn.Angle = 360 * (was + (1 - was) * run);
             orbit.Opacity = t < .55 ? 1 : 1 - Seg(t, .55, .7);
@@ -760,8 +765,7 @@ sealed partial class HudRift : ModernLook
         {
             AtreiaFx.Bloom(st, c, r.Width + 40, r.Height + 30, AtreiaFx.Glow(CyanC, .85, Colors.White), .1, .17, .55, s0: .5),
             AtreiaFx.Streak(st, c, r.Width + 34, 6, VioletC, .08, .16, .5),
-            AtreiaFx.Ripple(st, r, r.Height / 2, AtreiaFx.Br(MintC2, .95), 1.8, 12, .14, .62),
-            AtreiaFx.Ripple(st, r, r.Height / 2, AtreiaFx.Br(LilacC, .7), 1, 20, .22, .78),
+            AtreiaFx.Ripple(st, r, r.Height / 2, AtreiaFx.Br(MintC2, .95), 1.8, 6, .14, .45),
         };
         var bits = new AtreiaFx.Bits(st);
         bits.Burst(8, AtreiaFx.Shard, k => AtreiaFx.Br(k % 3 == 0 ? LightC : k % 3 == 1 ? CyanC : LilacC), c, 18, 5.5, .12, .62, fall: 8, r0: r.Width / 2, spin: 200, seed: 13, squash: .42);
@@ -855,7 +859,7 @@ sealed partial class HudRift : ModernLook
         Motion.Play(_fight, 950, t =>
         {
             double w = _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth - 8, h = _fight.ActualHeight > 0 ? _fight.ActualHeight : 200;
-            double u = Seg(t, .02, .42), open = u * u * (3 - 2 * u), px = w * WoundPeak, half = 1 + (Math.Max(px, w - px) + 20) * open;
+            double u = Seg(t, .02, .3), open = u * u * (3 - 2 * u), px = w * WoundPeak, half = 1 + (Math.Max(px, w - px) + 20) * open;
             _ripClip.Rect = new Rect(px - half, -12, 2 * half, h + 40);
             _deepHost.Opacity = open;
             if (open < 1)
@@ -866,7 +870,7 @@ sealed partial class HudRift : ModernLook
             }
             else _fightBody.OpacityMask = null;
             _ripAt.X = Math.Max(-12, px - half - 12); _ripAt2.X = Math.Min(w - 12, px + half - 12);
-            _ripFront!.Opacity = _ripFront2!.Opacity = t < .02 ? Seg(t, 0, .02) : open < 1 ? 1 : 1 - Seg(t, .42, .52);
+            _ripFront!.Opacity = _ripFront2!.Opacity = t < .02 ? Seg(t, 0, .02) : open < 1 ? 1 : 1 - Seg(t, .3, .4);
             _flashScale.CenterX = px; _flashScale.CenterY = 6;
             _flashScale.ScaleX = Math.Max(.05, Math.Min(1, 2 * half / w)); _flashScale.ScaleY = .7 + .3 * open;
             _flash!.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .14, .4);
@@ -950,15 +954,14 @@ sealed partial class HudRift : ModernLook
                 parts.Add(AtreiaFx.Bloom(st, hit, 170, 90, AtreiaFx.Glow(CyanC, 1, Colors.White), 0, .05, .34, s0: .3));
                 parts.Add(AtreiaFx.Streak(st, new Point(b.X + b.Width / 2, hit.Y), b.Width * 1.05, 8, CyanC, 0, .07, .42));
                 parts.Add(AtreiaFx.Rays(st, hit, 16, 8, b.Width * .5, 4.5, i => i % 3 == 0 ? LightC : i % 3 == 1 ? VioletC : Color.FromRgb(0xFF, 0x2E, 0x9A), .02, .08, .5, turn: -16, max: .6));
-                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .95, b.Width * .4, AtreiaFx.Br(VioletC, .6), 5, .1, 1, .03, .5));
-                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .95, b.Width * .4, AtreiaFx.Br(LightC, .95), 1.4, .1, 1, .03, .5));
                 bits.Burst(12, AtreiaFx.Shard, i => AtreiaFx.Br(i % 3 == 0 ? LightC : i % 3 == 1 ? CyanC : LilacC), hit, b.Width * .32, 8, .04, .55, fall: 40, dir: 90, spread: 300, r0: 8, spin: 300, seed: 31, squash: .6);
             }
             else
             {
                 parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 1, b.Y + 1, b.Width - 2, b.Height - 2), Color.FromRgb(0x06, 0x02, 0x10), .8, .02, .16, .66));
-                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .9, b.Width * .4, AtreiaFx.Br(CoralC, .9), 2.4, 1, .04, .02, .42));
-                parts.Add(AtreiaFx.Bloom(st, hit, 90, 40, AtreiaFx.Glow(CoralC, .9), .34, .42, .62, s0: 1));
+                // the tear along the top seals: a coral line drawn in to its middle and gone
+                parts.Add(AtreiaFx.Seal(st, new Point(b.X + b.Width / 2, hit.Y), b.Width - 16, 7, CoralC, .02, .3));
+                parts.Add(AtreiaFx.Bloom(st, new Point(b.X + b.Width / 2, hit.Y), 90, 40, AtreiaFx.Glow(CoralC, .9), .24, .3, .5, s0: 1));
                 var rnd = new Random(37);
                 for (int k = 0; k < 11; k++)
                 {
