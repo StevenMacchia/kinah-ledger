@@ -24,6 +24,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudMagma : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly Color MintC2 = Color.FromRgb(0x5D, 0xF2, 0xA6), MarkMintC = Color.FromRgb(0x7D, 0xFF, 0xC0), CoralC = Color.FromRgb(0xFF, 0x8C, 0x7C),
         GoldC2 = Color.FromRgb(0xFF, 0xC8, 0x5A), WarnC2 = Color.FromRgb(0xFF, 0xB0, 0x86), HpC = Color.FromRgb(0xFF, 0x3E, 0x22);
     static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Frozen(Color.FromArgb(0xE0, 0xFF, 0xF0, 0xE4)), Quiet = Frozen(Color.FromArgb(0xA8, 0xFF, 0xE6, 0xD4)),

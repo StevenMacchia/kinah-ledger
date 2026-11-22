@@ -243,7 +243,12 @@ public static partial class WpfApp
             ("pickup", kinah, null, null, now, false), ("rare-drop", rare, null, null, now, false), ("best-passed", best, null, null, now, false),
             ("run-clear", Run("clear"), null, null, now, false), ("run-newbest", Run("newbest"), null, null, now, false),
             ("entry-opened", kinah, due, null, now, false), ("fight-started", kinah, null, live, now, true), ("fight-ended", kinah, null, kill, kill.End!.Value, true), ("fight-wiped", kinah, null, wipe, wipe.End!.Value, true),
+            ("note-pop", new Dictionary<string, string>(kinah) { ["notePop"] = "1", ["flash"] = L.T("Run started") }, null, null, now, false),
         };
+        // KL_THEME_MOMENT=note-pop: only the moments whose names start so, and no states, overlays or cards (a clip's frames);
+        // KL_THEME_MOMENT=overlay: no states or moments, the meters and cards only
+        var momentOnly = Environment.GetEnvironmentVariable("KL_THEME_MOMENT") ?? "";
+        if (momentOnly.Length > 0) { moments.RemoveAll(m => !m.Tag.StartsWith(momentOnly, StringComparison.Ordinal)); states.Clear(); }
         double? frozen0 = Motion.FrozenAt;
         foreach (var look in looks)
         {
@@ -280,6 +285,7 @@ public static partial class WpfApp
                     // files ui-theme-LOOK-MOMENT-sNN.png. Without it, the three held frames.
                     foreach (var f in MomentFrames())
                         Shot(m.Tag, MomentOnly(m.Tag, m.V), m.T, m.E, m.At, m.Dungeon, f);
+                if (momentOnly.Length > 0 && momentOnly != "overlay") continue;   // KL_THEME_MOMENT=overlay: the meters and cards alone
                 // the widest meter, and the Parser's own window in this look (Settings › In game › Parser › Overlay look)
                 double w0 = HudStackLook.FightWidth; HudStackLook.FightWidth = HudStackLook.FightWidthMax;
                 Shot("boss-wide", kinah, due, live, now, true, null);

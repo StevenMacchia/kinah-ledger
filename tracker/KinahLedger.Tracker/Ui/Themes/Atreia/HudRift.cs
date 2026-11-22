@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudRift : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     const double Radius = 12, Pad = 11;
     static readonly SolidColorBrush White = Frozen(StarC), Soft = Frozen(Mod.A(Color.FromRgb(0xEE, 0xE8, 0xFF), .86)), Quiet = Frozen(Mod.A(Color.FromRgb(0xD8, 0xCC, 0xFF), .62)),
         Lilac = Frozen(LilacC), Mint2 = Frozen(Color.FromRgb(0x8C, 0xFF, 0xD2)), Coral = Frozen(CoralC), Gold2 = Frozen(GoldC2), Cyan = Frozen(CyanC), Ink = Frozen(Color.FromRgb(0x16, 0x08, 0x30));

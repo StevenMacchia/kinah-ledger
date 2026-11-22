@@ -24,6 +24,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudFrost : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     const double Pad = 10;
 
     // the room round the look: the panels' drop stays inside the window; 98 at the right for the pickup's chip beside the Buddy

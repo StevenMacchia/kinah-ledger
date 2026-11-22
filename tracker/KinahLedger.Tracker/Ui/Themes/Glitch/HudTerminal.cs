@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudTerminal : HudThemeLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly FontFamily Face = CrtFace;
     const uint PhosC = 0x5CFF9A, PaleC = 0xD6FFE4, AmberC = 0xFFB641, GroundC = 0x031008, RedC2 = 0xFF6B5E;
     static readonly Brush Phos = Br(PhosC), PhosDim = Br(PhosC, .76), PhosFaint = Br(PhosC, .5), Pale = Br(PaleC), Amber = Br(AmberC), Ground = Br(GroundC);

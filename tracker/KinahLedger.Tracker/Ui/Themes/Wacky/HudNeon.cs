@@ -21,6 +21,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudNeon : WackyLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     const uint GroundC = 0x140A24, Mag = 0xFF2BD6, Cy = 0x00E5FF, Yel = 0xFFE66B, LilacC = 0xB79CFF, TubeC = 0x39FF88, RedC = 0xFF3355, Ice = 0xE9E4FF;
     static readonly Brush YelB = Wk.S(Yel), MagB = Wk.S(Mag), CyB = Wk.S(Cy), LilacB = Wk.S(LilacC), IceB = Wk.S(Ice), WhiteB = Wk.S(0xFFFFFF), GroundB = Wk.S(GroundC);
     const double Skew = -11;

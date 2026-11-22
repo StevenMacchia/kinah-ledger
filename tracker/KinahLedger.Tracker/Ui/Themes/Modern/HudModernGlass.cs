@@ -20,6 +20,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudModernGlass : ModernLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _noteHost;
+
     // the palette of the mock-up (mockups/modern.css, .glass)
     static readonly Color TintC = Color.FromRgb(0x12, 0x16, 0x1E), DeepC = Color.FromRgb(0x06, 0x08, 0x0C), GreenC = Color.FromRgb(0x5D, 0xF2, 0xA6),
         MintC = Color.FromRgb(0x7D, 0xFF, 0xC0), PaleGreenC = Color.FromRgb(0xC6, 0xFF, 0xE2), HealInkC = Color.FromRgb(0xB9, 0xFF, 0xDA), RedC = Color.FromRgb(0xFF, 0x6B, 0x6B),

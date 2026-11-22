@@ -13,6 +13,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 abstract class HudThemeDraft : HudThemeLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     readonly StackPanel _root = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly Border _frame;
     readonly TextBlock _line = new() { FontSize = 16, FontWeight = FontWeights.Bold, Foreground = Ink };

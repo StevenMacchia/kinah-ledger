@@ -210,43 +210,74 @@ abstract partial class HudStackLook : IHudLook, IHudStackLook
         else if (_acc.Length > 0) { note = _acc; tone = _accCheck ? Warn : Mint; }
         else { note = ""; tone = Muted; }
         _idle = V("idle");
+        // the note pops out for a few seconds and tucks away again, never a box left under the Buddy (Steven, 2026-11-22:
+        // "these little boxes in the bottom have to go"); a pause stays said. No info line of the time, the chase or the newest
+        // pickup any more: the tracker shows the first two and the pickups have their own pop-up ("just get rid of it").
+        note = Gate(note, V("paused").Length > 0);
         if (today)
             return _figsNow = new Figures(true, false, V("todayRate"), V("todayTotal"), -1, "", false, V("zone"), "", note, tone, false, Array.Empty<(string, string, Brush)>(), "", _idle, null, Today: true);
         // the themes' looks show what the Classic card does in their note line when it has nothing else to say (Steven,
         // 2026-11-21: "some buddies just do not have any info at all... so tiny now"): the time counted, the chase of your
         // best and the newest pickup with its worth, each only where the look doesn't draw it already
-        if (note.Length == 0 && counted && !abyss && this is HudThemeLook) note = InfoNote(clock, words, Picks(v).FirstOrDefault());
         return _figsNow = new Figures(counted, V("warm") == "1", V("rate"), V("total"), counted ? share : -1, counted ? words : "", beat, V("zone"), counted ? clock : "", note, tone,
             abyss, abyss && counted ? AbyssStats(v) : new(), abyss ? V("abIcon") : "", _idle, abyss && counted ? AbyssTip(v) : null);
     }
 
-    /// <summary>The looks that draw the session's clock, the chase of your best or the newest pickup themselves (by their type).</summary>
-    static readonly HashSet<string> ClockShown = new() { "HudVhs", "HudCorrupt", "HudTerminal" },
-        ToBestShown = new() { "HudFighter", "HudHolo", "HudScorebug" },
-        FeedShown = new() { "HudHolo", "HudTerminal" };
+    // ---- the note's pop-out
+
+    /// <summary>How long a note shows (seconds), and how often a note still standing is said again.</summary>
+    internal const double PopSeconds = 5, SayAgainEvery = 90;
+    string _popKey = "";
+    DateTime _popAt = DateTime.MinValue;
+    bool _popSticky;
 
     /// <summary>
-    /// The note line's info when it has nothing else to say: "42 min · 130K to your best here · Spiritstone +7.5K". The clock
-    /// in whole minutes (TodayLoot.Dur), so the line is drawn again once a minute, not every second.
+    /// The note as it shows now: a new or changed note for <see cref="PopSeconds"/>, again every <see cref="SayAgainEvery"/>
+    /// while it stands, otherwise nothing. A pause (<paramref name="sticky"/>) stays. A still render (<see cref="Still"/>)
+    /// shows it whole.
     /// </summary>
-    string InfoNote(string clock, string toBest, Pick? newest)
+    string Gate(string note, bool sticky)
     {
-        var type = GetType().Name;
-        var parts = new List<string>();
-        if (!ClockShown.Contains(type) && Seconds(clock) is double secs && secs >= 60) parts.Add(KinahLedger.Session.TodayLoot.Dur(secs));
-        if (!ToBestShown.Contains(type) && toBest.Length > 0) parts.Add(toBest);
-        if (!FeedShown.Contains(type) && newest is { Name.Length: > 0 } p)
-            parts.Add(p.Worth.Length > 0 ? $"{p.Name} {(p.Worth.StartsWith('+') ? p.Worth : "+" + p.Worth)}" : p.Count.Length > 0 && p.Count != "1" ? $"{p.Name} ×{p.Count.TrimStart('x', '×')}" : p.Name);
-        return string.Join(" · ", parts);
+        _popSticky = sticky;
+        if (sticky || note.Length == 0 || Still) { _popKey = note; return note; }
+        var now = DateTime.UtcNow;
+        if (note != _popKey || (now - _popAt).TotalSeconds >= SayAgainEvery) { _popKey = note; _popAt = now; }
+        return (now - _popAt).TotalSeconds >= PopSeconds ? "" : note;
     }
 
-    /// <summary>"42:17" or "1:12:05" in seconds; null for none.</summary>
-    static double? Seconds(string clock)
+    /// <summary>The element a look shows its note in (shown and hidden by the look), for its pop-out; none: no motion.</summary>
+    protected virtual UIElement? NoteHost => null;
+    UIElement? _poppedHost;
+    DateTime _poppedAt;
+
+    /// <summary>
+    /// The note's pop-out on <paramref name="host"/>: it slides in from the left and fades up, holds, and slips away by the end
+    /// of its <see cref="PopSeconds"/>, picked up where it is when the look draws a new host. Opacity and a translate only (the
+    /// motion rules). Not for a pause, a still render (unless held at a render's point, <paramref name="force"/>) or with motion off.
+    /// </summary>
+    protected void PopNote(UIElement? host, bool force = false)
     {
-        var p = clock.Split(':');
-        if (p.Length == 2 && int.TryParse(p[0], out var mm) && int.TryParse(p[1], out var ss)) return mm * 60 + ss;
-        if (p.Length == 3 && int.TryParse(p[0], out var hh) && int.TryParse(p[1], out var m2) && int.TryParse(p[2], out var s2)) return hh * 3600 + m2 * 60 + s2;
-        return null;
+        if (host == null) return;
+        bool moves = host.Visibility == Visibility.Visible && !_popSticky && Motion.On && (!Still || force);
+        if (!moves)
+        {
+            if (_poppedHost == host) { Motion.Halt(host); PopAt(host, PopSeconds / 2); _poppedHost = null; }
+            return;
+        }
+        if (!force && _poppedHost == host && _poppedAt == _popAt) return;
+        _poppedHost = host; _poppedAt = _popAt;
+        double from = force ? 0 : Math.Clamp((DateTime.UtcNow - _popAt).TotalSeconds, 0, PopSeconds);
+        if (host.RenderTransform == null || host.RenderTransform == Transform.Identity) host.RenderTransform = new TranslateTransform();
+        Motion.Play(host, (PopSeconds - from) * 1000, p => PopAt(host, from + p * (PopSeconds - from)), fps: 60);
+    }
+
+    /// <summary>The pop-out <paramref name="t"/> seconds in: in over .4 s (a slight overshoot), held, out over the last .5 s.</summary>
+    static void PopAt(UIElement host, double t)
+    {
+        double inP = Math.Clamp(t / .42, 0, 1), outP = Math.Clamp((t - (PopSeconds - .6)) / .5, 0, 1);
+        double back = 1 + 2.2 * Math.Pow(inP - 1, 3) + 1.2 * Math.Pow(inP - 1, 2);   // ease out with a small overshoot
+        host.Opacity = Motion.Out(Math.Clamp(t / .3, 0, 1)) * (1 - outP * outP);
+        if (host.RenderTransform is TranslateTransform tt) tt.X = -16 * (1 - back) + 10 * outP * outP;
     }
 
     /// <summary>A word with its first letter capital ("Today"), for a look whose labels are in title case.</summary>
@@ -455,6 +486,7 @@ sealed partial class HudCapsule : HudStackLook
         foreach (var (fig, word, tone) in f.Stats) { _row.Children.Add(Rule()); _row.Children.Add(Fig(fig, word, tone, 13)); }
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+        PopNote(_note);
     }
 
     /// <summary>The next timer due inside the meter, while the pill is away in a dungeon.</summary>
@@ -660,6 +692,7 @@ sealed partial class HudMeter : HudStackLook
         DrawFoot(f);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && _withFoot && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+        PopNote(_note);
     }
 
     public override void HideKinah(bool on)
@@ -880,6 +913,7 @@ sealed partial class HudFloat : HudStackLook
         _line.Children.Add(_strip);
         _note.Text = f.Note; _note.Foreground = f.NoteTone;
         _note.Visibility = f.Note.Length > 0 && !KinahHidden ? Visibility.Visible : Visibility.Collapsed;
+        PopNote(_note);
     }
 
     public override void HideKinah(bool on)

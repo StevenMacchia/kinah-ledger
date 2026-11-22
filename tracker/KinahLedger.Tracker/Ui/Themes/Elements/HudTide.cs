@@ -26,6 +26,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudTide : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly Color MintC2 = Color.FromRgb(0x5D, 0xF2, 0xA6), MarkMintC = Color.FromRgb(0x7D, 0xFF, 0xC0),
         CoralC = Color.FromRgb(0xFF, 0x86, 0x86), HpC = Color.FromRgb(0xFF, 0x6B, 0x7D), HpBC = Color.FromRgb(0xFF, 0x9A, 0x7A), GreyC = Color.FromRgb(0x8A, 0x90, 0xA0),
         WarnC2 = Color.FromRgb(0xFF, 0xB0, 0x86), GoldC2 = Color.FromRgb(0xFF, 0xCF, 0x6A);
