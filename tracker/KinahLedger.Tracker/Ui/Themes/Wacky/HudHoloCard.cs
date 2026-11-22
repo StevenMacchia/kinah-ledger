@@ -22,6 +22,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudHoloCard : WackyLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _noteHost;
+
     const uint Navy = 0x0A0F22, Navy2 = 0x141C3C, Deep = 0x050814, Ice = 0xDCE6FF, Steel = 0x9AA8D8, Cyan = 0x8FEFFF, GoldC = 0xFFE29A, Mint = 0x7AFFC4, Cherry = 0xFF4D6A, Ink = 0x0A0F22;
     static readonly Brush WhiteB = Wk.S(0xFFFFFF), IceB = Wk.S(Ice), SteelB = Wk.S(Steel), GoldB = Wk.S(GoldC), InkB = Wk.S(Ink);
     static readonly FontFamily Face = HudKit.Text;

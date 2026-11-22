@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudHype : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly Color LimeC = Color.FromRgb(0xC6, 0xFF, 0x00), LimeDeepC = Color.FromRgb(0x2E, 0x3E, 0x00), LimeInkC = Color.FromRgb(0xE2, 0xFF, 0x7A),
         MagC = Color.FromRgb(0xFF, 0x2B, 0xD6), MagHotC = Color.FromRgb(0xFF, 0x5A, 0x8C), MagInkC = Color.FromRgb(0xFF, 0x8F, 0xE6),
         InkC = Color.FromRgb(0x05, 0x06, 0x08), SteelC = Color.FromRgb(0x1B, 0x1F, 0x25), TrackC = Color.FromRgb(0x23, 0x28, 0x30), GreyC = Color.FromRgb(0x8A, 0x90, 0xA0),

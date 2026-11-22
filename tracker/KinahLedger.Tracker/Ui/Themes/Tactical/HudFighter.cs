@@ -19,6 +19,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudFighter : TacticalLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly Color PhosC = Color.FromRgb(0x7C, 0xFF, 0x9E), AmberC = Color.FromRgb(0xFF, 0xB8, 0x3D), RedC = Color.FromRgb(0xFF, 0x55, 0x55),
         InkC0 = Color.FromRgb(0x01, 0x0A, 0x04), PaleC = Color.FromRgb(0xDC, 0xFF, 0xE6);
     static readonly SolidColorBrush Phos = Frozen(PhosC), PhosDim = Frozen(Tac.A(PhosC, .66)), PhosFaint = Frozen(Tac.A(PhosC, .3)), Amber = Frozen(AmberC),

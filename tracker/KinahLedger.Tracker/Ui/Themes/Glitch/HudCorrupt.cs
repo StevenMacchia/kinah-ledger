@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudCorrupt : HudThemeLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly FontFamily Face = CodeFace;
     const uint MagC = 0xFF2B6A, CyanC = 0x2BE6FF, LilacC = 0xC9B8FF, GroundC = 0x0A0A12, GreenC = 0x3DFF8C, GoldC2 = 0xFFD24A, RedC2 = 0xFF3B3B;
     static readonly Brush White = Br(0xFFFFFF), Lilac = Br(LilacC), LilacDim = Br(LilacC, .62), Mag = Br(MagC), Cyan = Br(CyanC), Black = Br(0x000000), Gold2 = Br(GoldC2);

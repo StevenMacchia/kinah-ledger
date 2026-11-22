@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudModernLine : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly Color WhiteC = Colors.White, InkC0 = Color.FromRgb(0x0B, 0x0C, 0x10), MintC0 = Color.FromRgb(0x5D, 0xF2, 0xA6),
         RedC0 = Color.FromRgb(0xFF, 0x6B, 0x6B), GoldC0 = Color.FromRgb(0xF5, 0xC5, 0x42);
     static readonly SolidColorBrush WhiteB = Frozen(WhiteC), SoftB = Mod.Br(WhiteC, .86), DimB = Mod.Br(WhiteC, .66), FaintB = Mod.Br(WhiteC, .45),

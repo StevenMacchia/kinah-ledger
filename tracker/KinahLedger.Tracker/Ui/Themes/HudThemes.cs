@@ -192,6 +192,7 @@ abstract class HudThemeLook : HudStackLook, IHudMotionFrame
         Figs = f;
         var sig = LineSig(f);
         if (sig != _lineSig) { _lineSig = sig; DrawLine(f); }
+        PopNote(NoteHost);   // the note slides in, holds and slips away (HudStackLook.Gate)
         var p0 = Picks(values).FirstOrDefault();
         var rare = Rare(values);
         bool first = !_updated;
@@ -208,6 +209,7 @@ abstract class HudThemeLook : HudStackLook, IHudMotionFrame
     public virtual void MotionFrame(IReadOnlyDictionary<string, string> values)
     {
         Update(values);
+        if (values.ContainsKey("notePop")) { PopNote(NoteHost, force: true); return; }   // the note's pop-out alone (ui-shot --parser themes)
         if (Picks(values).FirstOrDefault() is { } p) Pickup(p, true);
         if (Rare(values) is { } r) RareDrop(r, true);
         if (Figs is { Beat: true }) BestPassed(true);

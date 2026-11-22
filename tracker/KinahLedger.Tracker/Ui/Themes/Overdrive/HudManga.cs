@@ -24,6 +24,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudManga : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     // the room round the look: 98 at the right for the pickup's panel beside the Buddy
     readonly Grid _root = new() { Margin = new Thickness(8, 8, 98, 10), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };

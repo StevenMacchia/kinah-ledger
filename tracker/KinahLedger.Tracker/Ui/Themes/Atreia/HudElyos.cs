@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudElyos : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     // ---- the palette: night and royal blue, gold leaf, ivory
     static readonly Color NightC = Color.FromRgb(0x0A, 0x12, 0x30), RoyalC = Color.FromRgb(0x13, 0x22, 0x4A), AbyssC = Color.FromRgb(0x05, 0x09, 0x18),
         GoldHiC = Color.FromRgb(0xF7, 0xDE, 0x96), GoldMidC = Color.FromRgb(0xDC, 0xB4, 0x62), GoldLoC = Color.FromRgb(0xB5, 0x86, 0x2F),

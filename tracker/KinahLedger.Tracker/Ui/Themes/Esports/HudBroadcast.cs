@@ -28,6 +28,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudBroadcast : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     // the package: navy ink, electric cyan, the LIVE red
     static readonly Color InkC = Color.FromRgb(0x06, 0x0A, 0x16), Ink2C = Color.FromRgb(0x12, 0x1B, 0x33), CyanC = Color.FromRgb(0x1C, 0xE3, 0xFF),
         LiveC = Color.FromRgb(0xFF, 0x1F, 0x45), MintC2 = Color.FromRgb(0x4D, 0xF5, 0xA8), CoralC = Color.FromRgb(0xFF, 0x7A, 0x86),

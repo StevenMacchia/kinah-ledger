@@ -19,6 +19,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudSticker : WackyLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _noteHost;
+
     const uint Yel = 0xFFE14D, KC = 0x111111, Pink = 0xFF3DA6, Cyan = 0x3DF5C8, GoC = 0x6CFF8E, Paper = 0xFFF8E8, CardC = 0x141414, Gold2 = 0xFFC21A, RedC = 0xFF4D4D, Lilac = 0xD9C8FF;
     static readonly Brush K = Wk.S(KC), PaperB = Wk.S(Paper), YelB = Wk.S(Yel), WhiteB = Wk.S(0xFFFFFF);
     static readonly FontWeight Black = FontWeights.Black;

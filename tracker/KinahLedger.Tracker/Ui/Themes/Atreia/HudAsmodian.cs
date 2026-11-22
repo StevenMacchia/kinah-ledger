@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudAsmodian : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     static readonly Color MintC2 = Color.FromRgb(0x5D, 0xF2, 0xA6), MarkMintC = Color.FromRgb(0x7D, 0xFF, 0xC0), CoralC = Color.FromRgb(0xFF, 0x8C, 0x8C),
         GoldC2 = Color.FromRgb(0xFF, 0xC4, 0x6A), WarnC2 = Color.FromRgb(0xFF, 0xB0, 0x86), HpLowC = Color.FromRgb(0xFF, 0x9A, 0x8A);
     static readonly SolidColorBrush White = Frozen(Colors.White), Soft = Frozen(Color.FromArgb(0xDC, 0xF6, 0xEE, 0xEE)), Quiet = Frozen(Color.FromArgb(0xC4, 0xF0, 0xDD, 0xDE)),

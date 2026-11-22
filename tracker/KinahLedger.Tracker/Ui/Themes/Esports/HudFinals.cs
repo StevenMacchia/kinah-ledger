@@ -23,6 +23,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudFinals : ModernLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     const double Radius = 4, Pad = 10;
     /// <summary>The pickup strip on the plate: 26 px tiles in black and gold beside the hour, a gold rule, the gold star.</summary>
     static readonly PickStrip.Look Strip = new(26, 4, true, Mod.Br(AuC, .45), Frozen(AuLightC));

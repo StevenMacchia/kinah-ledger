@@ -19,6 +19,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudHolo : TacticalLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _noteHost;
+
     static readonly Color CyanC = Color.FromRgb(0x00, 0xE5, 0xFF), LiteC = Color.FromRgb(0x7F, 0xE9, 0xFF), PaleC = Color.FromRgb(0xBF, 0xF6, 0xFF),
         GroundC = Color.FromRgb(0x06, 0x20, 0x2A), Ground2C = Color.FromRgb(0x0A, 0x30, 0x3E), GreenC = Color.FromRgb(0x2B, 0xFF, 0x9A), AmberC = Color.FromRgb(0xFF, 0xC8, 0x4A),
         CoralC = Color.FromRgb(0xFF, 0x6B, 0x6B), DeepC = Color.FromRgb(0x00, 0x08, 0x0C);

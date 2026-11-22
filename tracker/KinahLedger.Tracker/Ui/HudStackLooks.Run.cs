@@ -363,6 +363,7 @@ sealed partial class HudCapsule
         }
         _note.Text = _figsNow?.Note ?? ""; _note.Foreground = _figsNow?.NoteTone ?? Muted;
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PopNote(_note);
 
         void SetStrip(FrameworkElement? st)
         {
@@ -540,6 +541,7 @@ sealed partial class HudMeter
         side.Visibility = t1.Visibility == Visibility.Visible || t2.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
         _note.Text = _figsNow?.Note ?? ""; _note.Foreground = _figsNow?.NoteTone ?? Muted;
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PopNote(_note);
     }
 }
 
@@ -600,5 +602,6 @@ sealed partial class HudFloat
         _line.Children.Add(_strip);
         _note.Text = _figsNow?.Note ?? ""; _note.Foreground = _figsNow?.NoteTone ?? Muted;
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PopNote(_note);
     }
 }

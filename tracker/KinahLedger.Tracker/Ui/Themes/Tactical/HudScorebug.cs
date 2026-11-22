@@ -20,6 +20,10 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudScorebug : TacticalLook
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _noteRow;
+    StackPanel? _noteRow;
+
     static readonly Color RedC = Color.FromRgb(0xE8, 0x26, 0x3A), InkC0 = Color.FromRgb(0x0E, 0x10, 0x16), LightC = Color.FromRgb(0xF2, 0xF3, 0xF7),
         GreenC = Color.FromRgb(0x2B, 0xD4, 0x7A), YellowC = Color.FromRgb(0xFF, 0xD2, 0x3F), OrangeC = Color.FromRgb(0xFF, 0x9F, 0x1C), SlateC = Color.FromRgb(0x2A, 0x2F, 0x3B),
         GoldTab = Color.FromRgb(0xF5, 0xC5, 0x42), SilverTab = Color.FromRgb(0xC9, 0xD1, 0xDC), BronzeTab = Color.FromRgb(0xD0, 0x86, 0x4A), SubC = Color.FromRgb(0x5A, 0x60, 0x70);
@@ -315,7 +319,8 @@ sealed partial class HudScorebug : TacticalLook
             }
             _under.Children.Add(strip);
         }
-        if (NoteRow(f) is { } nr) _under.Children.Add(nr);
+        _noteRow = NoteRow(f);
+        if (_noteRow != null) _under.Children.Add(_noteRow);
     }
 
     /// <summary>The note under the bug: a bar in its tone, the words on a light block; null with no note.</summary>

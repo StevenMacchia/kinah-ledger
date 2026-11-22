@@ -31,6 +31,9 @@ namespace KinahLedger.Ui;
 /// </summary>
 sealed partial class HudVhs : HudThemeLook, IThemeCard
 {
+    /// <summary>The note's pop-out moves this (HudStackLook.PopNote).</summary>
+    protected override UIElement? NoteHost => _note;
+
     public enum Tape { Viewfinder, Deck }
 
     static readonly FontFamily Face = VhsFace, Sans = VhsRows.Sans;

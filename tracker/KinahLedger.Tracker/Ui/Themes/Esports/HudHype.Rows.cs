@@ -326,8 +326,6 @@ sealed partial class HudHype
                 // the member's class: a tick of its colour at the bar's left
                 dc.DrawGeometry(_tick ??= Frozen(m.ClassColor), null, Para(new Rect(x0 - 1, r.Top, 7 + Slant, r.Height), Slant));
                 dc.Pop();
-                // the chrome cap at the bar's end
-                if (bw > 8) dc.DrawGeometry(Chrome, Mod.P(Frozen(Mod.A(Colors.Black, .6)), .8), Para(new Rect(x0 + bw - 5.5, 1.5, 5.5, h - 3), Slant - .4));
             }
             // a healer's share of the group's healing as a green line along the track's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
@@ -336,6 +334,19 @@ sealed partial class HudHype
             dc.DrawGeometry(PlateShade(px, s.Width), null, Para(new Rect(px, 0, s.Width - px, h), Slant));
             dc.DrawLine(Mod.P(Chrome, 1.6), new Point(px + Slant, 0), new Point(px, h));
             if (_leader) dc.DrawGeometry(Frozen(LimeC), null, Para(new Rect(px + Slant + 2, 0, s.Width - px - Slant - 2, 2), 0));
+            // the bar's light and its chrome cap over the plate, so a full bar reads to the row's end (Steven, 2026-11-22: "why is
+            // dmg bar so short here": at 100% the lime seemed to stop at the plate's edge, the plate too dark over it)
+            if (bw > 1.5 && x0 + bw > px)
+            {
+                var g = Para(new Rect(x0, 1.5, bw, h - 3), Slant - .4);
+                dc.PushClip(Para(new Rect(px, 0, s.Width - px, h), Slant));
+                dc.PushClip(g);
+                dc.DrawRectangle(Frozen(Mod.A(_leader ? LimeC : Colors.White, _leader ? .55 : .3)), null, new Rect(x0, 1.5, bw, 1.2));
+                dc.DrawRectangle(Frozen(Mod.A(_leader ? LimeC : Colors.White, _leader ? .35 : .18)), null, new Rect(x0, h - 3, bw, 1.5));
+                dc.Pop(); dc.Pop();
+                if (_leader) dc.DrawGeometry(null, Mod.P(Frozen(Mod.A(LimeC, .7)), 1), g);
+            }
+            if (bw > 8) dc.DrawGeometry(Chrome, Mod.P(Frozen(Mod.A(Colors.Black, .6)), .8), Para(new Rect(x0 + bw - 5.5, 1.5, 5.5, h - 3), Slant - .4));
             // you: a magenta stripe at the row's left
             if (m.You) dc.DrawGeometry(Frozen(MagC), null, Para(new Rect(0, 0, 3 + Slant, h), Slant));
         }
@@ -346,7 +357,7 @@ sealed partial class HudHype
         /// <summary>The figures' plate as smoked glass: lighter at its chrome edge (the bar glows through), darker under the figures.</summary>
         static Brush PlateShade(double px, double w) => PlateShadeB;   // across the plate's own box: one frozen brush for every row
 
-        static readonly LinearGradientBrush PlateShadeB = Mod.Grad(false, (Mod.A(InkC, .6), 0), (Mod.A(InkC, .72), .25), (Mod.A(InkC, .8), 1));
+        static readonly LinearGradientBrush PlateShadeB = Mod.Grad(false, (Mod.A(InkC, .3), 0), (Mod.A(InkC, .42), .25), (Mod.A(InkC, .5), 1));
 
         /// <summary>The badge: a slanted tag with the rank in it; the leader's in lime with a magenta lightning bolt at its corner.</summary>
         void DrawBadge(DrawingContext dc, Size s)
