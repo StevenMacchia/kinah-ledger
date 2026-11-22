@@ -116,7 +116,16 @@ sealed partial class HudVersus : ModernLook
         else if (!HasHour(f))
         {
             var w = T(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold, italic: true); w.Margin = new Thickness(0, 6, 0, 6);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(0, 2, 0, 0);
+                var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 2) };
+                sp.Children.Add(w); sp.Children.Add(stats);
+                _lineBody.Children.Add(sp);
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -655,19 +664,43 @@ sealed partial class HudVersus : ModernLook
         }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFx.Children.Clear(); _lineAnchor.Children.Clear(); });
     }
 
-    /// <summary>An entry opened: the first timer's chip flashes white and glows mint, then settles.</summary>
+    /// <summary>
+    /// An entry opened, a challenger's entrance: the first timer's chip winds up (crouched, dimmed), punches out to past its
+    /// size on speed streaks, lands with a white flash frame, a jolt and a mint hit spark at its leading edge, a mint shockwave
+    /// of its outline spreads off it, and it settles where it rests.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC, ShadowDepth = 0, BlurRadius = 12, Opacity = 0 };
-        chip.Effect = glow;
-        var flash = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Mod.A(Colors.White, .85)), null, Slab(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3)))) { Opacity = 0 };
-        chip.Children.Insert(1, flash);
-        Motion.Play(chip, 1200, t =>
+        var flash = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Mod.A(Colors.White, .9)), null, Slab(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3)))) { Opacity = 0 };
+        var wave = new TacSketch((dc, s) => dc.DrawGeometry(null, Mod.P(Frozen(MintC), 3), Slab(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3))))
+            { Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+        var waveSc = new ScaleTransform(1, 1); wave.RenderTransform = waveSc;
+        var spark = Spark(19, MintC, 11); spark.HorizontalAlignment = HorizontalAlignment.Left; spark.Margin = new Thickness(-20, -14, 0, -14);
+        var spSc = new ScaleTransform(1, 1); var spRot = new RotateTransform(0); spark.RenderTransform = new TransformGroup { Children = { spSc, spRot } };
+        var lines = Streaks(MintC, 5, 21); lines.HorizontalAlignment = HorizontalAlignment.Right; lines.Width = 34; lines.Margin = new Thickness(0, 0, -36, 0);
+        var linesAt = new TranslateTransform(); lines.RenderTransform = linesAt;
+        chip.Children.Insert(0, lines);
+        chip.Children.Add(flash); chip.Children.Add(wave); chip.Children.Add(spark);
+        var sc = new ScaleTransform(1, 1); var at = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, .5);
+        chip.RenderTransform = new TransformGroup { Children = { sc, at } };
+        Motion.Play(chip, 1100, t =>
         {
-            glow.Opacity = .95 * (t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, 1));
-            flash.Opacity = .7 * Flash(t, .05, .25);
-        }, () => { chip.Effect = null; chip.Children.Remove(flash); });
+            // wind-up (yanked back right, faded), the punch in (an overshoot past its place), the hit, the settle
+            // (in place: a chip that travels runs into its neighbours' words)
+            double wind = Seg(t, 0, .1), pop = Ez.Wob(Seg(t, .1, .6), 1.5, 4), rise = Motion.Out(Seg(t, .1, .16));
+            sc.ScaleX = t < .1 ? 1 - .14 * Ez.InOut(wind) : .86 + .14 * rise + .24 * pop;
+            sc.ScaleY = t < .1 ? 1 - .2 * Ez.InOut(wind) : .8 + .2 * rise + .34 * pop;
+            at.X = Ez.Jolt(Seg(t, .25, .45), 2.5, 4);
+            chip.Opacity = t < .1 ? 1 - .6 * wind : .4 + .6 * Seg(t, .1, .16);
+            lines.Opacity = t < .1 ? 0 : .95 * (1 - Seg(t, .2, .5)); linesAt.X = 30 * Seg(t, .1, .5);
+            flash.Opacity = .85 * Flash(t, .25, .1);
+            double b = Seg(t, .25, .6);
+            spark.Opacity = t < .25 ? 0 : 1 - b; spSc.ScaleX = spSc.ScaleY = .4 + .9 * Motion.Out(b); spRot.Angle = 40 * b;
+            double w = Seg(t, .26, .75);
+            wave.Opacity = t < .26 ? 0 : .95 * (1 - w); waveSc.ScaleX = 1 + .35 * Motion.Out(w); waveSc.ScaleY = 1 + .9 * Motion.Out(w);
+        }, () => { chip.RenderTransform = null; chip.Opacity = 1; chip.Children.Remove(flash); chip.Children.Remove(wave); chip.Children.Remove(spark); chip.Children.Remove(lines); });
     }
 
     /// <summary>
@@ -725,28 +758,66 @@ sealed partial class HudVersus : ModernLook
         _fightFx.Children.Clear();
         foreach (var el in parts) _fightFx.Children.Add(el);
         var head = _head;
+        // where the word rests once it has hit: over the head (the boss's banner and the round timer), small, so every row's
+        // figures read again within about 0.4 s while the word stays on screen (2026-11-21: the K.O. covered rows 2 and 3)
+        double headY = h * .18;
+        try { if (head != null && head.ActualHeight > 0) headY = head.TranslatePoint(new Point(0, head.ActualHeight / 2), _fightFx).Y; } catch (InvalidOperationException) { }
+        double rest = Math.Clamp((head?.ActualHeight ?? 34) * 1.45 / Math.Max(1, slam.Height), .4, .7);
+        double liftY = Math.Max(headY, slam.Height * rest / 2 + 2) - h / 2;
+        var rot = new RotateTransform(0);
+        ((TransformGroup)slam.RenderTransform).Children.Insert(1, rot);
+        // start: the word flies at the camera and is gone (scale up, fade) instead of resting
+        bool start = !drop && !spark;
+        double hit = drop ? .17 : .15, leave = .24, gone = .34;
         Motion.Play(_fightFx, ms, t =>
         {
-            // in: the band snaps open, the word slams from big (or drops from above), a flash frame as it lands
-            double land = Seg(t, 0, .2);
-            bandSc.ScaleY = Out(Seg(t, 0, .1));
-            band.Opacity = t < .78 ? 1 : 1 - Seg(t, .78, .98);
-            if (drop) { ss.ScaleX = ss.ScaleY = 1; sy.Y = -h * .4 * (1 - Back(land, 1.6)); }
-            else { ss.ScaleX = ss.ScaleY = SlamScale(land, 2.3); sy.Y = 0; }
-            slam.Opacity = t < .75 ? Seg(t, 0, .06) : 1 - Seg(t, .75, .95);
-            flash.Opacity = (drop ? .4 : .5) * Flash(t, .14, .09);
-            lines.Opacity = t < .1 ? 0 : .9 * (1 - Seg(t, .2, .7));
-            lineAt.X = -w * .3 + w * .5 * Seg(t, .1, .7);
+            // in: the band snaps open, the word slams from big (or drops from above, heavy), a flash frame as it lands
+            double land = Seg(t, 0, hit + .03);
+            bandSc.ScaleY = t < leave ? Out(Seg(t, 0, .08)) : 1 - Ez.InOut(Seg(t, leave, gone));
+            band.Opacity = t < gone ? 1 : 0;
+            double l = Seg(t, leave, gone), k = Ez.InOut(l);
+            if (drop)
+            {
+                // a wipe: falls hard, a dead thud, then sags onto the banner, tipped like a fallen sign
+                ss.ScaleX = ss.ScaleY = 1 + (rest - 1) * k;
+                sy.Y = -h * .45 * (1 - Back(land, 1.2)) * (1 - k) + liftY * k;
+                rot.Angle = 5 * k;
+                slam.Opacity = t < .82 ? Seg(t, 0, .05) : 1 - Seg(t, .82, .97);
+            }
+            else if (start)
+            {
+                ss.ScaleX = ss.ScaleY = SlamScale(land, 2.3) * (1 + 1.4 * Ez.In(l));
+                sy.Y = 0;
+                slam.Opacity = t < leave ? Seg(t, 0, .05) : 1 - Out(l);
+            }
+            else
+            {
+                // a kill: slams in, holds a beat while the panel shakes, then lifts and stamps onto the head, a little turned
+                double sc = SlamScale(land, 2.3);
+                ss.ScaleX = ss.ScaleY = sc + (rest - sc) * k;
+                sy.Y = liftY * k;
+                rot.Angle = -4 * k;
+                slam.Opacity = t < .84 ? Seg(t, 0, .05) : 1 - Seg(t, .84, .98);
+            }
+            flash.Opacity = (drop ? .45 : .55) * Flash(t, hit, .08);
+            lines.Opacity = t < .06 ? 0 : .9 * (1 - Seg(t, .14, gone));
+            lineAt.X = -w * .3 + w * .5 * Seg(t, .06, gone);
+            // the hit shakes the whole panel: a sideways jolt for a kill, a dead vertical thud for a wipe, a light one at the start
+            double s = Seg(t, hit, hit + .14);
+            // (not at the start: the panel's own slide in owns its shift then)
+            double jolt = Ez.Jolt(s, drop ? 5 : 6);
+            if (drop) { _fightShift.X = 0; _fightShift.Y = Math.Abs(jolt); }
+            else if (!start) { _fightShift.X = jolt; _fightShift.Y = jolt * .35; }
             if (burst != null)
             {
-                double b = Seg(t, .14, .7);
-                burst.Opacity = t < .14 ? 0 : .95 * (1 - b);
-                bs!.ScaleX = bs.ScaleY = .5 + .7 * Out(b); br!.Angle = 18 * b;
-                double r = Seg(t, .16, .8);
-                ring!.Opacity = t < .16 ? 0 : .9 * (1 - r);
-                ((ScaleTransform)ring.RenderTransform).ScaleX = ((ScaleTransform)ring.RenderTransform).ScaleY = .2 + .95 * Out(r);
+                double b = Seg(t, hit, .34);
+                burst.Opacity = t < hit ? 0 : .95 * (1 - b);
+                bs!.ScaleX = bs.ScaleY = .5 + .8 * Out(b); br!.Angle = 24 * b;
+                double r = Seg(t, hit + .02, .38);
+                ring!.Opacity = t < hit + .02 ? 0 : .9 * (1 - r);
+                ((ScaleTransform)ring.RenderTransform).ScaleX = ((ScaleTransform)ring.RenderTransform).ScaleY = .2 + 1.1 * Out(r);
             }
-            if (head != null) head.Opacity = t < .8 ? .35 : .35 + .65 * Seg(t, .8, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+            if (head != null) head.Opacity = start ? (t < gone ? .35 + .65 * Seg(t, leave, gone) : 1) : t < .84 ? .35 : .35 + .65 * Seg(t, .84, 1);
+        }, () => { _fightFx.Children.Clear(); if (!start) _fightShift.X = _fightShift.Y = 0; if (head != null) head.Opacity = 1; });
     }
 }

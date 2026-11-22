@@ -253,7 +253,15 @@ sealed partial class HudArcade : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(0, 5, 0, 5);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(0, 2, 0, 0);
+                stats.Margin = new Thickness(1, 1, 0, 2);
+                _lineBody.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { w, stats } });
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -732,24 +740,38 @@ sealed partial class HudArcade : ModernLook
 
     static readonly SolidColorBrush EntryOn = Frozen(Mod.A(MintC2, .32)), EntryEdge = Frozen(MintC2);
 
-    /// <summary>An entry opened: the first timer's chip blinks mint three times, as a cabinet's start button does, and settles.</summary>
+    /// <summary>
+    /// An entry opened, a coin dropped in: the first timer's chip hops up as a sprite does (whole-pixel steps, a squash on the
+    /// way down), pixel sparks burst off both its ends, and it blinks mint three times as a cabinet's start button does, then
+    /// settles. (No glow effect: the hop and the sparks are transforms on pieces drawn once.)
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush; var bg = chip.Background;
+        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double cw = Math.Max(30, chip.DesiredSize.Width);
+        var (mid, restore) = Ez.Stage(chip, over: true);
+        Color pink = Color.FromRgb(0xFF, 0x66, 0xCC);
+        Burst(mid, new Point(-cw / 2 + 2, 0), new[] { MintC2, Colors.White, LedC }, 9, 90, 560);
+        Burst(mid, new Point(cw / 2 - 2, 0), new[] { MintC2, pink, Colors.White }, 9, 150, 560);
+        var sc = new ScaleTransform(1, 1); var hop = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, 1);
+        chip.RenderTransform = new TransformGroup { Children = { sc, hop } };
+        // the hop's frames: (from, y px, x scale, y scale), held as a sprite's are
+        (double At, double Y, double Sx, double Sy)[] frames = { (0, 0, 1, 1), (.04, 0, 1.12, .82), (.1, -4, .94, 1.12), (.16, -6, 1, 1.04), (.24, -4, 1, 1), (.3, 0, 1.14, .84), (.36, 0, .97, 1.04), (.42, 0, 1, 1) };
         bool? was = null;
         Motion.Play(chip, 1300, t =>
         {
+            var f = frames.Last(x => x.At <= t);
+            hop.Y = f.Y; sc.ScaleX = f.Sx; sc.ScaleY = f.Sy;
             bool lit = t < .75 && ((int)(t / .125)) % 2 == 0;
-            glow.Opacity = lit ? .9 : .15 * (1 - t);
             // the brushes change only on a blink, never each frame
             if (was == lit) return;
             was = lit;
             chip.BorderBrush = lit ? EntryEdge : edge;
             chip.Background = lit ? EntryOn : bg;
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; chip.Background = bg; });
+        }, () => { chip.RenderTransform = null; chip.BorderBrush = edge; chip.Background = bg; restore(); });
     }
 
     /// <summary>

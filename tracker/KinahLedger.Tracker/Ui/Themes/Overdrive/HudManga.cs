@@ -135,7 +135,15 @@ sealed partial class HudManga : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, InkB, FontWeights.Bold); w.Margin = new Thickness(mark ? 0 : 4, 6, 0, 6);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(mark ? 0 : 4, 3, 0, 0);
+                stats.Margin = new Thickness(mark ? 1 : 5, 1, 0, 3);
+                _lineBody.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { w, stats } });
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -756,17 +764,48 @@ sealed partial class HudManga : ModernLook
         dc.Pop();
     });
 
-    /// <summary>An entry opened: the first caption flashes red and ink twice, then settles red.</summary>
+    /// <summary>
+    /// An entry opened, a panel's "!" beat: the first caption crouches, then punches out tilted as a red explosion balloon
+    /// bursts behind its words and ink focus lines shoot out round it; the balloon shrinks back into the caption, which
+    /// shudders and settles red, square to the page.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        if (_firstChip is not { } chip) return;
-        var bg = chip.Background;
-        Motion.Play(chip, 800, t =>
+        if (_firstChip is not { } chip || chip.Child is not FrameworkElement words) return;
+        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double cw = Math.Max(40, chip.DesiredSize.Width), ch = Math.Max(14, chip.DesiredSize.Height);
+        // the balloon and the focus lines, drawn once round the caption's middle
+        var balloon = new InkArt(Drawn(dc => dc.DrawGeometry(RedB, Pn(InkB, 2), Balloon(P(0, 0), cw * .62, cw * .46, 11, 83, ch * 1.05 / cw))), 0, 0);
+        var bsc = new ScaleTransform(0, 0); balloon.RenderTransform = bsc;
+        // (flat: the bubble often sits at the window's top, with a few pixels above it)
+        var lines = new InkArt(Drawn(dc => dc.DrawGeometry(InkB, null, Burst(P(0, 0), cw * .64, cw * .96, 26, 85, 1.5, 1, ch * .95 / cw))), 0, 0);
+        var lsc = new ScaleTransform(1, 1); lines.RenderTransform = lsc;
+        var stage = new Canvas { Width = 0, Height = 0, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+        stage.Children.Add(lines); stage.Children.Add(balloon);
+        chip.Child = null;
+        var g = new Grid { Margin = new Thickness(-chip.Padding.Left, -chip.Padding.Top, -chip.Padding.Right, -chip.Padding.Bottom) };
+        var inner = new Border { Padding = chip.Padding, Child = words };
+        g.Children.Add(stage); g.Children.Add(inner);
+        chip.Child = g;
+        var sc = new ScaleTransform(1, 1); var rot = new RotateTransform(0); var at = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, .5);
+        chip.RenderTransform = new TransformGroup { Children = { sc, rot, at } };
+        Motion.Play(chip, 950, t =>
         {
-            int beat = (int)(Seg(t, 0, .7) * 6);
-            chip.Background = t < .7 && beat % 2 == 1 ? InkB : RedB;
-            chip.BorderThickness = new Thickness(t < .7 ? 2 : 1.2);
-        }, () => { chip.Background = bg; chip.BorderThickness = new Thickness(1.2); });
+            double wind = Seg(t, 0, .12), pop = Ez.Wob(Seg(t, .12, .62), 1.5, 4), rise = Out(Seg(t, .12, .18));
+            sc.ScaleX = sc.ScaleY = t < .12 ? 1 - .14 * Ez.InOut(wind) : .86 + .14 * rise + .2 * pop;
+            rot.Angle = t < .12 ? 3 * wind : -7 * (1 - Out(Seg(t, .12, .5)));
+            at.X = Ez.Jolt(Seg(t, .3, .55), 2, 5);
+            double b = Seg(t, .12, .24), shrink = Seg(t, .42, .62);
+            bsc.ScaleX = bsc.ScaleY = t < .12 ? 0 : 1.1 * Back(b, 2.2) * (1 - Ez.In(shrink));
+            double l = Seg(t, .14, .62);
+            lsc.ScaleX = lsc.ScaleY = .8 + .45 * Out(l);
+            lines.Opacity = t < .14 ? 0 : 1 - Seg(l, .4, 1);
+        }, () =>
+        {
+            chip.RenderTransform = null;
+            inner.Child = null; chip.Child = words;
+        });
     }
 
     /// <summary>
@@ -811,7 +850,7 @@ sealed partial class HudManga : ModernLook
             {
                 double s = Seg(t, .58, .82);
                 sfx.Opacity = t < .58 ? 0 : 1;
-                sfs.ScaleX = sfs.ScaleY = 1.9 - .9 * Back(s, 2.2);
+                sfs.ScaleX = sfs.ScaleY = 1.55 - .55 * Back(s, 2.2);   // (from 1.55: from 1.9 it ran 11 px past the window's left)
             }
         }, () => { _page.Clip = null; _sfxLayer.Clip = null; _fightBody.Opacity = 1; _fightFx.Children.Remove(stroke); _fightShift.X = 0; if (sfx != null) sfx.Opacity = 1; if (sfs != null) sfs.ScaleX = sfs.ScaleY = 1; });
     }
@@ -832,21 +871,38 @@ sealed partial class HudManga : ModernLook
         double fit = Math.Min(1, (w - 30) / Math.Max(1, size.Width));
         big.Margin = new Thickness(0, Math.Max(0, Mg + HeadH / 2 - size.Height * fit / 2 + 4), 0, 0);
         var sc = new ScaleTransform(fit, fit);
-        big.RenderTransform = sc;
+        var drop = new TranslateTransform(); var tip = new RotateTransform(0);
+        big.RenderTransform = new TransformGroup { Children = { sc, tip, drop } };
         var lines = new InkArt(Drawn(dc => dc.DrawGeometry(InkB, null, Burst(P(0, 0), size.Width * fit * .55, size.Width * fit * .95, 40, 19, 1.6, 1, .55))), 0, 0)
         { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Mg + HeadH / 2 + 4, 0, 0) };
         var lsc = new ScaleTransform(1, 1); lines.RenderTransform = lsc;
         _fightFx.Children.Clear(); _fightFx.Children.Add(lines); _fightFx.Children.Add(big);
+        double rise = Mg + HeadH / 2 + 4 + size.Height * fit;
         Motion.Play(_fightFx, 1000, t =>
         {
-            // two flashes of the inverted frame on the art, the page's own art under it
-            _pageInv.Opacity = (t is > .0 and < .07) || (t is > .12 and < .19) ? ArtK : 0;
-            double k = Seg(t, .03, .22);
-            sc.ScaleX = sc.ScaleY = fit * (2.1 - 1.1 * Back(k, 2));
+            if (!wipe)
+            {
+                // a kill: two flashes of the inverted frame on the art (the page's own art under it), the word slammed from
+                // big, the page jolted sideways by the hit
+                _pageInv.Opacity = (t is > .0 and < .07) || (t is > .12 and < .19) ? ArtK : 0;
+                double k = Seg(t, .03, .22);
+                sc.ScaleX = sc.ScaleY = fit * (2.1 - 1.1 * Back(k, 2));
+                _fightShift.X = Ez.Jolt(Seg(t, .12, .36), 5, 5); _fightShift.Y = Ez.Jolt(Seg(t, .12, .36), 2, 4);
+            }
+            else
+            {
+                // a wipe: no flash; the word falls from above the page, lands heavy (a dead thud down the page), tips and sags
+                double f = Seg(t, 0, .2);
+                drop.Y = -rise * (1 - f * f);
+                sc.ScaleX = sc.ScaleY = fit;
+                tip.Angle = 7 * Out(Seg(t, .2, .7));
+                drop.Y += 4 * Out(Seg(t, .2, .7));
+                _fightShift.Y = Math.Abs(Ez.Jolt(Seg(t, .2, .42), 5, 4));
+            }
             big.Opacity = t < .03 ? 0 : t < .8 ? 1 : 1 - Seg(t, .8, 1);
             lsc.ScaleX = lsc.ScaleY = .7 + .5 * Out(Seg(t, .05, .5));
-            lines.Opacity = t < .05 ? 0 : 1 - Seg(t, .25, .6);
-        }, () => { _fightFx.Children.Clear(); _pageInv.Opacity = 0; });
+            lines.Opacity = wipe || t < .05 ? 0 : 1 - Seg(t, .25, .6);
+        }, () => { _fightFx.Children.Clear(); _pageInv.Opacity = 0; _fightShift.X = _fightShift.Y = 0; });
     }
 
     /// <summary>

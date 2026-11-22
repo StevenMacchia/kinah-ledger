@@ -164,7 +164,15 @@ sealed partial class HudAura : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 4, 7, 0, 7);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(mark ? 0 : 4, 3, 0, 0);
+                stats.Margin = new Thickness(mark ? 1 : 5, 1, 0, 3);
+                _lineBody.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { w, stats } });
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -608,14 +616,26 @@ sealed partial class HudAura : ModernLook
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         var os = new ScaleTransform(.2, .2);
         orb.RenderTransformOrigin = new Point(.5, .5); orb.RenderTransform = os;
+        // the big one, a power-up in its grade's colour (2026-11-21: the small orb read like a pickup): the orb gathers,
+        // swells past the plate and bursts, the grade's energy surges up the whole plate, and the plate jolts with the burst
+        double pw = _rare.ActualWidth > 0 ? _rare.ActualWidth : 240, ph = _rare.ActualHeight > 0 ? _rare.ActualHeight : 46;
+        var surge = Surge(_rareC, pw - 20, ph, 16, 29); surge.HorizontalAlignment = HorizontalAlignment.Left; surge.VerticalAlignment = VerticalAlignment.Bottom; surge.Margin = new Thickness(10, 0, 0, 0);
+        var rise = new TranslateTransform(); surge.RenderTransform = rise;
+        _rare.Children.Insert(Math.Min(_rare.Children.Count, 2), surge);
+        var jolt = new TranslateTransform(); _rare.RenderTransform = jolt;
         Motion.Play(orb, 1500, t =>
         {
-            double k = Out(Seg(t, 0, .35));
-            os.ScaleX = os.ScaleY = .2 + .9 * k;
-            orb.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .3, .9);
-            if (flash != null) flash.Opacity = t < .12 ? Seg(t, 0, .12) : 1 - Seg(t, .12, .6);
+            // gather (a short pull in), swell, burst
+            double g = Seg(t, 0, .12), k = Out(Seg(t, .12, .4));
+            os.ScaleX = os.ScaleY = t < .12 ? .5 - .3 * g : .2 + 1.05 * k;
+            orb.Opacity = t < .12 ? Seg(t, 0, .06) : 1 - Seg(t, .3, .7);
+            if (flash != null) flash.Opacity = t < .14 ? Seg(t, .06, .14) : 1 - Seg(t, .14, .6);
             sc.ScaleX = sc.ScaleY = .5 + .5 * Back(Seg(t, .12, .45), 2.6);
-        }, () => { orb.Opacity = 0; if (flash != null) flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; });
+            double u = Seg(t, .14, .75);
+            rise.Y = -ph * .35 * Out(u);
+            surge.Opacity = t < .14 ? 0 : Math.Min(1, 6 * u) * (1 - u);
+            jolt.X = Ez.Jolt(Seg(t, .14, .36), 3, 5);
+        }, () => { orb.Opacity = 0; if (flash != null) flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; _rare.Children.Remove(surge); jolt.X = 0; _rare.RenderTransform = null; });
     }
 
     /// <summary>
@@ -685,19 +705,61 @@ sealed partial class HudAura : ModernLook
         }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineGold.Opacity = beat ? 1 : 0; _lineFlash.Opacity = 0; _lineAnchor.Children.Remove(slab); _lineAnchor.Children.Remove(streaks); });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights mint round its edge and settles.</summary>
+    /// <summary>
+    /// Energy rising (drawn once; a moment lifts and fades it): tapered streaks of <paramref name="c"/>, white-hot at their
+    /// heads, spread across <paramref name="w"/> and climbing <paramref name="h"/>.
+    /// </summary>
+    static TacSketch Surge(Color c, double w, double h, int n, int seed) => new((dc, s) =>
+    {
+        var rnd = new Random(seed);
+        var hot = Mod.Mix(c, Colors.White, .7);
+        for (int k = 0; k < n; k++)
+        {
+            double x = s.Width * (k + .5) / n + (rnd.NextDouble() - .5) * s.Width / n, len = s.Height * (.45 + .5 * rnd.NextDouble()), y = s.Height - len - rnd.NextDouble() * s.Height * .2;
+            double th = k % 3 == 0 ? 2 : 1.3;
+            dc.DrawRectangle(Mod.Grad(true, (Mod.A(hot, .95), 0), (Mod.A(c, .7), .35), (Mod.A(c, 0), 1)), null, new Rect(x - th / 2, Math.Max(0, y), th, len));
+        }
+    }, w, h) { IsHitTestVisible = false, Opacity = 0 };
+
+    /// <summary>
+    /// An entry opened, a power-up: the first timer's chip draws in, then flares out past its size as mint energy surges up
+    /// off it and a ring of mint light bursts round it; the chip settles with its edge lit mint.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 12, Opacity = 0 };
-        chip.Effect = glow;
+        if (_firstChip is not { } chip || chip.Child is not FrameworkElement words) return;
+        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double cw = Math.Max(40, chip.DesiredSize.Width), ch = Math.Max(14, chip.DesiredSize.Height);
         var edge = chip.BorderBrush;
         chip.BorderBrush = Frozen(MintC2);
+        // the surge and the ring, laid round the chip (its words over them)
+        var surge = Surge(MintC2, cw - 8, ch, 9, 17); surge.HorizontalAlignment = HorizontalAlignment.Center; surge.VerticalAlignment = VerticalAlignment.Bottom;
+        var rise = new TranslateTransform(); surge.RenderTransform = rise;
+        var ring = new System.Windows.Shapes.Rectangle { RadiusX = 6, RadiusY = 6, Stroke = Frozen(Mod.Mix(MintC2, Colors.White, .4)), StrokeThickness = 2, Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+        var ringSc = new ScaleTransform(1, 1); ring.RenderTransform = ringSc;
+        chip.Child = null;
+        var inner = new Border { Padding = chip.Padding, Child = words };
+        var g = new Grid { Margin = new Thickness(-chip.Padding.Left, -chip.Padding.Top, -chip.Padding.Right, -chip.Padding.Bottom) };
+        surge.Margin = new Thickness(0, 0, 0, 2);
+        g.Children.Add(ring); g.Children.Add(surge); g.Children.Add(inner);
+        chip.Child = g;
+        var sc = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = sc;
         Motion.Play(chip, 1200, t =>
         {
-            double k = t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, 1);
-            glow.Opacity = .95 * k;
-        }, () => { chip.Effect = null; chip.BorderBrush = edge; });
+            double wind = Seg(t, 0, .14), pop = Ez.Wob(Seg(t, .14, .6), 1.5, 4), r = Out(Seg(t, .14, .2));
+            sc.ScaleX = sc.ScaleY = t < .14 ? 1 - .12 * Ez.InOut(wind) : .88 + .12 * r + .22 * pop;
+            double u = Seg(t, .14, .7);
+            rise.Y = -ch * .6 * Out(u);   // (the line often sits at the window's top)
+            surge.Opacity = t < .14 ? 0 : Math.Min(1, 5 * u) * (1 - u);
+            double q = Seg(t, .16, .62);
+            ringSc.ScaleX = 1 + .25 * Out(q); ringSc.ScaleY = 1 + .9 * Out(q);
+            ring.Opacity = t < .16 ? 0 : 1 - q;
+        }, () =>
+        {
+            chip.RenderTransform = null; chip.BorderBrush = edge;
+            inner.Child = null; chip.Child = words;
+        });
     }
 
     /// <summary>
@@ -766,10 +828,11 @@ sealed partial class HudAura : ModernLook
         var rows = RowsNow();
         Motion.Play(_fightFx, 2400, t =>
         {
-            double i = Seg(t, 0, .1), o = Seg(t, .84, 1);
-            band.Opacity = Math.Min(1, i * 2) * (1 - o);
+            // the head gone before the band comes, back once it has left: their words never cross
+            double i = Seg(t, .04, .12), o = Seg(t, .84, .92);
+            band.Opacity = t < .04 ? 0 : Math.Min(1, i * 2) * (1 - o);
             shift.X = -14 * (1 - Out(i));
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, 0, .1) : Seg(t, .84, 1);
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, 0, .04) : Seg(t, .92, 1);
             for (int r = 0; r < rows.Count; r++)
             {
                 double p = Seg(t, .04 + .05 * r, .6 + .05 * r);
