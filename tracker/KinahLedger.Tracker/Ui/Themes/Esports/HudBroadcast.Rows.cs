@@ -270,8 +270,10 @@ sealed partial class HudBroadcast
         /// <summary>The row's three parts at width <paramref name="s"/>: the chip, the plate (its rect and shape) and the tile.</summary>
         (Geometry Chip, Rect Body, Geometry Plate, Geometry Tile) Parts(Size s)
         {
-            double bx = ChipW + ChipGap - Ln, br = BodyRight(s.Width), tx = br + 2 - Ln;
-            var body = new Rect(bx, 0, Math.Max(1, br - bx), s.Height);
+            // the plate (and the bar on it) runs the row's whole length, on under the score tile (Steven, 2026-11-21: expanded,
+            // the leader's bar stopped at four fifths of the row); the tile lies over it as smoked glass
+            double bx = ChipW + ChipGap - Ln, br = BodyRight(s.Width), tx = br + 2 - Ln, end = s.Width - 1;
+            var body = new Rect(bx, 0, Math.Max(1, end - bx), s.Height);
             return (Cut(new Rect(0, 0, ChipW, s.Height), Ln), body, Cut(body, Ln), Cut(new Rect(tx, 0, Math.Max(1, s.Width - tx), s.Height), Ln));
         }
 
@@ -302,12 +304,19 @@ sealed partial class HudBroadcast
             double g = Ground;
             // the depth: a hard offset shadow under the three plates
             dc.PushTransform(new TranslateTransform(2.5, 2.5));
-            dc.DrawGeometry(ShadowB, null, chip); dc.DrawGeometry(ShadowB, null, plate); dc.DrawGeometry(ShadowB, null, tile);
+            dc.DrawGeometry(ShadowB, null, chip); dc.DrawGeometry(ShadowB, null, plate);
             dc.Pop();
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Ink2C, .96 * g), 0), (Mod.A(InkC, .96 * g), 1)), null, chip);
             dc.DrawGeometry(Mod.Grad(true, (Mod.A(Color.FromRgb(0x10, 0x18, 0x2D), .9 * g), 0), (Mod.A(InkC, .9 * g), .6)), null, plate);
-            dc.DrawGeometry(Mod.Grad(true, (Mod.A(Color.FromRgb(0x1A, 0x25, 0x44), .97 * g), 0), (Mod.A(Ink2C, .97 * g), .55), (Mod.A(InkC, .97 * g), 1)), null, tile);
-            dc.DrawGeometry(GlossB, null, chip); dc.DrawGeometry(GlossB, null, tile);
+            dc.DrawGeometry(GlossB, null, chip);
+        }
+
+        /// <summary>The score tile over the bar's end: navy smoked glass (the bar's colour shows through, every figure reads), its gloss and top light.</summary>
+        void DrawTile(DrawingContext dc, Size s, Geometry tile)
+        {
+            double g = Ground;
+            dc.DrawGeometry(Mod.Grad(false, (Mod.A(Color.FromRgb(0x1A, 0x25, 0x44), .66 * g), 0), (Mod.A(Ink2C, .76 * g), .3), (Mod.A(InkC, .84 * g), 1)), null, tile);
+            dc.DrawGeometry(GlossB, null, tile);
             dc.PushClip(tile);
             dc.DrawRectangle(Frozen(Mod.A(Colors.White, .2)), null, new Rect(0, 0, s.Width, 1));
             dc.Pop();
@@ -351,7 +360,8 @@ sealed partial class HudBroadcast
         void DrawOver(DrawingContext dc, Size s)
         {
             if (_m is not { } m || s.Width < 60) return;
-            var (_, body, plate, _) = Parts(s);
+            var (_, body, plate, tile) = Parts(s);
+            DrawTile(dc, s, tile);
             dc.PushClip(plate);
             // a healer's share of the group's healing: a mint line along the plate's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)

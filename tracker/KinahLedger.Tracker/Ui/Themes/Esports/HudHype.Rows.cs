@@ -136,7 +136,7 @@ sealed partial class HudHype
 
         /// <summary>Where a FULL bar is drawn (main's PB ghost, IThemeBarSpan): in the bar's art, from after the badge to the figure plate.</summary>
         public (FrameworkElement On, Rect Track)? BarTrack => _art.ActualWidth < 40 ? null
-            : (_art, new Rect(PadL + BadgeW - 3, 1.5, PlateX(_art.ActualWidth) - (PadL + BadgeW - 3) + Slant, Math.Max(0, _art.ActualHeight - 3)));
+            : (_art, new Rect(PadL + BadgeW - 3, 1.5, BarEnd(_art.ActualWidth) - (PadL + BadgeW - 3), Math.Max(0, _art.ActualHeight - 3)));
 
         public HypeRow(HypeFit fit, HypeLead lead, HudHype look)
         {
@@ -306,8 +306,9 @@ sealed partial class HudHype
             // the steel track the whole row long
             dc.DrawGeometry(Frozen(Mod.A(TrackC, .92)), null, Para(new Rect(0, 0, s.Width, h), Slant));
             dc.DrawRectangle(Frozen(Mod.A(Colors.White, .08)), null, new Rect(Slant, 0, s.Width - Slant, 1));
-            // the bar: to the member's part of the top, from after the badge to the plate
-            double full = px - x0 + Slant, bw = full * Math.Clamp(_bar, 0, 1);
+            // the bar: to the member's part of the top, from after the badge to the row's end, running on under the figures'
+            // plate (Steven, 2026-11-21: expanded, the leader's bar stopped at two thirds of the row)
+            double full = BarEnd(s.Width) - x0, bw = full * Math.Clamp(_bar, 0, 1);
             if (bw > 1.5)
             {
                 var r = new Rect(x0, 1.5, bw, h - 3);
@@ -331,13 +332,21 @@ sealed partial class HudHype
             // a healer's share of the group's healing as a green line along the track's foot (Settings' heal bars)
             if (ParserRows.HealBarsPref && m.HealShare > 0)
                 dc.DrawGeometry(Frozen(Mod.A(HealC, .95)), null, Para(new Rect(x0, h - 2.5, Math.Max(4, (px - x0) * Math.Clamp(m.HealShare, 0, 1)), 2.5), 1));
-            // the figures' black plate, its chrome edge
-            dc.DrawGeometry(Frozen(Mod.A(InkC, .94)), null, Para(new Rect(px, 0, s.Width - px, h), Slant));
+            // the figures' black plate, its chrome edge: smoked glass the bar runs on under, dark enough that every digit reads
+            dc.DrawGeometry(PlateShade(px, s.Width), null, Para(new Rect(px, 0, s.Width - px, h), Slant));
             dc.DrawLine(Mod.P(Chrome, 1.6), new Point(px + Slant, 0), new Point(px, h));
             if (_leader) dc.DrawGeometry(Frozen(LimeC), null, Para(new Rect(px + Slant + 2, 0, s.Width - px - Slant - 2, 2), 0));
             // you: a magenta stripe at the row's left
             if (m.You) dc.DrawGeometry(Frozen(MagC), null, Para(new Rect(0, 0, 3 + Slant, h), Slant));
         }
+
+        /// <summary>Where a full bar ends: at the row's right end, under the figures' plate.</summary>
+        static double BarEnd(double w) => w - 2;
+
+        /// <summary>The figures' plate as smoked glass: lighter at its chrome edge (the bar glows through), darker under the figures.</summary>
+        static Brush PlateShade(double px, double w) => PlateShadeB;   // across the plate's own box: one frozen brush for every row
+
+        static readonly LinearGradientBrush PlateShadeB = Mod.Grad(false, (Mod.A(InkC, .6), 0), (Mod.A(InkC, .72), .25), (Mod.A(InkC, .8), 1));
 
         /// <summary>The badge: a slanted tag with the rank in it; the leader's in lime with a magenta lightning bolt at its corner.</summary>
         void DrawBadge(DrawingContext dc, Size s)
@@ -367,7 +376,7 @@ sealed partial class HudHype
         {
             double w = _root.ActualWidth, h = _root.ActualHeight;
             if (w < 40 || h < 4) return null;
-            double px = PlateX(w), x0 = PadL + BadgeW - 3, bw = (px - x0 + Slant) * Math.Clamp(_bar, 0, 1);
+            double x0 = PadL + BadgeW - 3, bw = (BarEnd(w) - x0) * Math.Clamp(_bar, 0, 1);
             return bw > 6 ? Para(new Rect(x0, 1.5, bw, h - 3), Slant - .4) : null;
         }
 
