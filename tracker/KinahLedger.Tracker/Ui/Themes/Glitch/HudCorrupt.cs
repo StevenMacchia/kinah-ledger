@@ -549,14 +549,17 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             double j = t < .35 ? 8 * (1 - t / .35) : wipe ? 3 : 0;
             ghostM.X = -4 - j * (s % 2); ghostC.X = 4 + j * ((s + 1) % 2);
             shift.X = t < .2 ? ((s % 3) - 1) * 10 * (1 - t / .2) : 0;
-            banner.Opacity = t < .03 ? 0 : t < .5 ? 1 : t < .62 ? (Steps(t, 40) * 40 % 2 == 0 ? .6 : .15) : 0;
+            // it goes in one cut (the head tears through where it was), never fading over the head's words
+            banner.Opacity = t < .03 ? 0 : t < .5 ? 1 : 0;
         });
         // the picture tears: a kill one clean cut through the winner's row; a wipe falls apart, band after band, for half a second
         double RowAt(int i) => Meter is { Members.Count: > 0 } mm && i < mm.Members.Count && mm.RowOf(mm.Members[i].Id)?.Root is FrameworkElement r ? At(_cam, r, .3 + .15 * i) : .3 + .15 * i;
         if (wipe)
             _cam.Tear(2200, GroundCol, Rgb(RedC2, .95), TearR, new TearBand(RowAt(0), 16, 22, .02, .12), new TearBand(RowAt(1) + .02, 20, -26, .06, .18),
-                new TearBand(RowAt(2), 12, 18, .1, .22), new TearBand(.05, 14, -14, .14, .24), new TearBand(RowAt(3), 24, 30, .16, .26));
+                new TearBand(RowAt(2), 12, 18, .1, .2), new TearBand(.05, 14, -14, .14, .22), new TearBand(RowAt(3), 14, 26, .16, .21));
         else _cam.Tear(2200, GroundCol, TearL, TearR, new TearBand(RowAt(0), 30, 26, .03, .2));
+        // the banner leaves through a tear of the head
+        _cam.Tear(2200, GroundCol, TearL, TearR, new TearBand(0, 24, wipe ? -18 : 14, .5, .56));
         // the frame tears: a kill once, a wipe every slice, again and again
         Tear(_cam, _camGround, 1, 900, wipe ? 14 : 9);
         if (!wipe && Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is CorruptRows.Row row) row.Glint(2200);

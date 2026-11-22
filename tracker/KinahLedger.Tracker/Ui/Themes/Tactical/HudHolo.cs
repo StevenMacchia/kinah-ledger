@@ -560,7 +560,8 @@ sealed partial class HudHolo : TacticalLook
     {
         var art = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Tac.A(c, .34)), null, Tac.Cut(new Rect(0, 0, s.Width, s.Height), Cut))) { IsHitTestVisible = false, Opacity = 0 };
         over.Children.Add(art);
-        Motion.Play(art, ms, t => art.Opacity = t < .02 ? t / .02 : 1 - Out(Seg(t, .02, .2)), () => over.Children.Remove(art));
+        // up at once, held a beat (about 200 ms on a 1.6 s course), then gone
+        Motion.Play(art, ms, t => art.Opacity = t < .02 ? t / .02 : t < .13 ? 1 : 1 - Out(Seg(t, .13, .32)), () => over.Children.Remove(art));
     }
 
     /// <summary>Your best passed: the ring's arc runs on round to full with a light trail and RECORD lights under it.</summary>
@@ -587,7 +588,7 @@ sealed partial class HudHolo : TacticalLook
             if (t >= .62) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
             tag.Opacity = t < .4 ? 0 : t < .44 ? .4 : 1;
-            Pop(hp, t, .4, .62, .12);
+            Pop(hp, t, .12, .5, .15);
         }, () => { _complete = 0; _trail = -1; _beat = beat; art.InvalidateVisual(); ring.Children.Remove(tag); hour?.ClearValue(UIElement.RenderTransformProperty); });
     }
 

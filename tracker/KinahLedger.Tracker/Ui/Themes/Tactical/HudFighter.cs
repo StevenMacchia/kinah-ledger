@@ -621,7 +621,7 @@ sealed partial class HudFighter : TacticalLook
         var figs = _figs; var pop = PopOn(figs, new Point(0, .5));
         Motion.Play(band, 2000, t =>
         {
-            Pop(pop, t, .22, .5, .12);
+            Pop(pop, t, .12, .5, .15);
             _spin = 90 * Back(Seg(t, 0, .35)); _reticleArt.InvalidateVisual();
             double k = Seg(t, .12, .26);
             bs.ScaleX = Out(k); bs.ScaleY = t < .12 ? 1 : 1 + .35 * (1 - Back(Seg(t, .2, .34), 2.4)) * (k >= 1 ? 1 : 0);
@@ -644,7 +644,8 @@ sealed partial class HudFighter : TacticalLook
             ps.ScaleX = t < .08 ? .82 : t < .3 ? .82 + .18 * Back(Seg(t, .08, .3), 1.2) : 1;
             ps.ScaleY = t < .08 ? 1.35 : t < .3 ? 1 + .35 * (1 - Back(Seg(t, .08, .3), 2.4)) : 1;
             if (_timerBlock != null) PaintBlock(_timerBlock, TimerBadge.Tone.On, on);
-            _blockLock = 11 * (1 - Back(Seg(t, 0, .4), 1.6)) + 2;
+            // the brackets hold wide a beat, then lock on with an overshoot
+            _blockLock = 11 * (1 - Back(Seg(t, .06, .5), 1.6)) + 2;
             _blockLockA = 1 - Seg(t, .7, 1);
             _blockBrackets?.InvalidateVisual();
         }, () => { if (_timerBlock != null) PaintBlock(_timerBlock, _timerTone, true); blk?.ClearValue(UIElement.RenderTransformProperty); _blockLock = -1; _blockBrackets?.InvalidateVisual(); });
@@ -653,19 +654,19 @@ sealed partial class HudFighter : TacticalLook
     /// <summary>A fight started: brackets slam onto its box from wide, ENGAGE hits across it, then flies into the T+ clock, which pops.</summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        var banner = Banner(L.T("ENGAGE"), null, Amber, AmberC, hit: .16, leave: .34, _clockEl, slump: false);
+        var banner = Banner(L.T("ENGAGE"), null, Amber, AmberC, hit: .12, leave: .22, _clockEl, slump: false);
         _fightFx.Children.Clear(); _fightFx.Children.Add(banner.Root);
         var body = _fightBody;
         var clock = _clockEl; var pop = PopOn(clock, new Point(1, .5));
         Motion.Play(_fightFx, 1800, t =>
         {
-            double k = Seg(t, 0, .16); k = k * k * (3 - 2 * k);
+            double k = Seg(t, 0, .12); k = k * k * (3 - 2 * k);
             // from 11 px out (the window's room round the box is 14: the slam is never cut at its edge), a recoil as they seat
-            _fightSpread = 11 * (1 - k) - (t > .16 && t < .23 ? 3 * Math.Sin((t - .16) / .07 * Math.PI) : 0);
-            _fightFlash = t < .16 ? 0 : 1 - Seg(t, .16, .34);
+            _fightSpread = 11 * (1 - k) - (t > .12 && t < .19 ? 3 * Math.Sin((t - .12) / .07 * Math.PI) : 0);
+            _fightFlash = t < .12 ? 0 : 1 - Seg(t, .12, .3);
             _fightBrackets.InvalidateVisual();
             banner.Step(t);
-            Pop(pop, t, .4, .62, .3);
+            Pop(pop, t, .27, .5, .35);
         }, () => { _fightFx.Children.Clear(); _fightSpread = 0; _fightFlash = 0; _fightBrackets.InvalidateVisual(); body.Opacity = 1; if (clock != null) { clock.Opacity = 1; clock.ClearValue(UIElement.RenderTransformProperty); } });
     }
 

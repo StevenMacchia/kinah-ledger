@@ -709,8 +709,12 @@ sealed partial class HudScorebug : TacticalLook
                 plate.Opacity = k <= 0 ? 1 : ((int)(t * 50) % 2 == 0 ? 1 - k : .3 * (1 - k));
                 band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .03 && t < .12 ? .6 : 0), _studio ? 1 : .9));
                 // the board shudders under it, WIPED stutters
-                board.RenderTransform = t < .3 ? new TranslateTransform(Math.Round(4 * (1 - t / .3) * ((int)(t * 60) % 2 == 0 ? 1 : -1)), 0) : null;
-                if (target != null) target.Opacity = t > .28 && t < .6 && (int)(t * 50) % 3 == 0 ? .2 : 1;
+                // the board shudders under it, then sags 4 px and greys as the team gives up, standing again by the end
+                double sagK = Seg(t, .22, .34) * (1 - Seg(t, .62, .74));
+                board.RenderTransform = t < .22 ? new TranslateTransform(Math.Round(4 * (1 - t / .22) * ((int)(t * 60) % 2 == 0 ? 1 : -1)), 0) : sagK > 0 ? new TranslateTransform(0, Math.Round(4 * sagK)) : null;
+                board.Opacity = Math.Min(board.Opacity, 1 - .35 * sagK);
+                // WIPED flickers out three times
+                if (target != null) target.Opacity = t > .3 && t < .62 && (int)((t - .3) / .053) % 2 == 0 ? .15 : 1;
             }
             else
             {

@@ -645,7 +645,7 @@ sealed partial class HudVhs : HudThemeLook, IThemeCard
         }
         Wobble(_rowsHost, 1100, 6, .36, 2);
         // the new channel's picture tears in as the set locks on to it
-        _cam.Tear(1100, Colors.Black, Rgb(RedC, .8), Rgb(CyanC, .8), new TearBand(.5, 18, -16, .06, .22), new TearBand(.76, 12, 12, .1, .26));
+        _cam.Tear(1100, Colors.Black, Rgb(RedC, .8), Rgb(CyanC, .8), new TearBand(.5, 18, -16, .06, .15), new TearBand(.76, 12, 12, .1, .19));
         var osd = Split(_channel, 22, Face, FontWeights.Bold, Green, Rgb(RedC, .6), Rgb(CyanC, .6), 1.4);
         var halo = new Border { Background = Br(0x000000, .96), Padding = new Thickness(8, 0, 8, 0), Child = osd, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8, 0) };
         var ch = _chText;
