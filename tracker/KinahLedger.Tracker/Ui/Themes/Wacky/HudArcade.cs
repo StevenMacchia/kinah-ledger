@@ -235,10 +235,14 @@ sealed partial class HudArcade : ModernLook
 
     // ================================================================ the Buddy
 
+    /// <summary>The score with its unit on the line (a best passed bumps it as a sprite).</summary>
+    FrameworkElement? _hourTop;
+
     protected override void DrawLine(Figures f)
     {
         _lineBody.Margin = LineBodyM;
         _lineBody.Children.Clear();
+        _hourTop = null;
         _ringArt = null; _lineWords = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         bool dim = Dimmed(Values);
@@ -282,6 +286,7 @@ sealed partial class HudArcade : ModernLook
             FrameworkElement rate = f.Warm ? Tt(f.Rate, 15, Soft, FontWeights.SemiBold) : Fig(f.Rate, 3, LedC, .45, textSize: 23);
             rate.Tag = "buddy-rate";
             top.Children.Add(rate);
+            _hourTop = f.Warm ? null : top;
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, Soft, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(4, 0, 0, 0); top.Children.Add(u); }
             words.Children.Add(top);
             // farming, the pickups as the strip beside the score where it fits (the best drop and the last three), the session
@@ -653,8 +658,17 @@ sealed partial class HudArcade : ModernLook
         Burst(_lineSparks, new Point(cx, cy), new[] { MintC2, LedC, Colors.White }, 30, 380, 900);
         Alert(_lineAlert, _lineLegend, L.T("HIGH SCORE!"), LedC, 300);
         double shown = -1;
+        // the score bumps as a sprite does when the ring completes (held frames, whole pixels: a squash, a hop, a land), and
+        // blinks three times with the HIGH SCORE! plate (2026-11-21 review: the best had no hit on the figure)
+        var hour = _hourTop;
+        var hsc = new ScaleTransform(1, 1); var hop = new TranslateTransform();
+        if (hour != null) { hour.RenderTransformOrigin = new Point(0, 1); hour.RenderTransform = new TransformGroup { Children = { hsc, hop } }; }
+        (double At, double Y, double Sx, double Sy)[] frames = { (0, 0, 1, 1), (.36, 0, 1.08, .86), (.4, -4, .96, 1.14), (.45, -6, 1.04, 1.08), (.5, -3, 1, 1), (.55, 0, 1.1, .9), (.6, 0, .98, 1.03), (.65, 0, 1, 1) };
         Motion.Play(art, 1600, t =>
         {
+            var fr = frames.Last(x => x.At <= t);
+            hop.Y = fr.Y; hsc.ScaleX = fr.Sx; hsc.ScaleY = fr.Sy;
+            if (hour != null) hour.Opacity = t > .66 && t < .9 && ((int)((t - .66) / .04)) % 2 == 1 ? .35 : 1;
             double step = t >= .4 ? 1 : Math.Floor(Out(Seg(t, 0, .4)) * 20) / 20;
             if (step != shown)
             {
@@ -663,7 +677,7 @@ sealed partial class HudArcade : ModernLook
                 art.InvalidateVisual();
             }
             Fade(_lineFlare, t > .35 && t < .8 && ((int)(Seg(t, .35, .8) * 6)) % 2 == 0 ? .9 : 0);
-        }, () => { _complete = 0; _beat = beat; Fade(_lineFlare, 0); art.InvalidateVisual(); });
+        }, () => { _complete = 0; _beat = beat; Fade(_lineFlare, 0); art.InvalidateVisual(); if (hour != null) { hour.RenderTransform = null; hour.Opacity = 1; } });
     }
 
     /// <summary>

@@ -777,21 +777,28 @@ sealed partial class HudAura : ModernLook
         var rows = RowsNow();
         var lead = Meter is { Members.Count: > 0 } m && m.Members[0] is { Rank: 1, CpOnly: false } && rows.Count > 0 ? rows[0] : null;
         var burst = lead != null ? Burst(lead) : null;
+        // the charge (2026-11-21 review: it popped in with nothing before it): the panel gathers in small and dim for a beat,
+        // then bursts out past its size as the auras ignite, settling square
+        var pull = new ScaleTransform(1, 1);
+        var was = _fight.RenderTransform;
+        _fight.RenderTransformOrigin = new Point(.5, .4);
+        _fight.RenderTransform = new TransformGroup { Children = { pull, _fightShift } };
         Motion.Play(_fight, 1500, t =>
         {
-            double k = Out(Seg(t, 0, .12));
-            _fightShift.Y = 6 * (1 - k);
-            _fightBody.Opacity = Math.Max(.0, k);
+            double c = Seg(t, 0, .07), k = Out(Seg(t, .07, .16));
+            pull.ScaleX = pull.ScaleY = t < .07 ? 1 - .05 * Ez.InOut(c) : .95 + .05 * k + .015 * Ez.Wob(Seg(t, .07, .4), 1.5, 4);
+            _fightShift.Y = t < .07 ? 3 * c : 3 * (1 - k);
+            _fightBody.Opacity = t < .07 ? .3 * c : .3 + .7 * k;
             for (int i = 0; i < rows.Count; i++)
             {
                 int j = rows.Count - 1 - i;
-                rows[i].Ignite(Seg(t, .02 + .05 * j, .3 + .05 * j));
+                rows[i].Ignite(Seg(t, .07 + .035 * j, .33 + .035 * j));
             }
             if (lead != null && t >= .3) lead.PowerUp(Seg(t, .3, 1));
             burst?.Invoke(t < .3 ? -2 : Seg(t, .3, 1) >= 1 ? .999 : Seg(t, .3, 1));
         }, () =>
         {
-            _fightShift.Y = 0; _fightBody.Opacity = 1;
+            _fightShift.Y = 0; _fightBody.Opacity = 1; pull.ScaleX = pull.ScaleY = 1; _fight.RenderTransform = was;
             foreach (var r in rows) r.Ignite(-1);
             lead?.PowerUp(-1);
             burst?.Invoke(-1);
