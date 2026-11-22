@@ -536,7 +536,7 @@ public sealed partial class SessionEngine
             if (_lastFarmAt is { } last)
             {
                 double tail = Math.Clamp((at - last).TotalSeconds, 0, GraceSeconds);
-                _active += tail; Z().Active += tail;
+                _active += tail; FarmZone().Active += tail;
                 _lastFarmAt = null;
             }
             ResumeLocked();
@@ -567,22 +567,38 @@ public sealed partial class SessionEngine
     // on time and keep counting regardless.
     const double GraceSeconds = 60;
     double _active; DateTime? _lastFarmAt;
+    /// <summary>The zone the last farming line came in: the gap after it, up to the next line, is that zone's farming time.</summary>
+    string? _lastFarmZone;
+    /// <summary>The farming clock's "now" (the wall clock; a test sets its own).</summary>
+    internal Func<DateTime> FarmClock { get; set; } = () => DateTime.UtcNow;
+
+    /// <summary>The zone the last farming line came in, else the zone now.</summary>
+    ZoneStats FarmZone()
+    {
+        if (_lastFarmZone == null) return Z();
+        if (!Zones.TryGetValue(_lastFarmZone, out var z)) Zones[_lastFarmZone] = z = new ZoneStats();
+        return z;
+    }
 
     void Farmed(DateTime now)
     {
         if (_lastFarmAt is { } last)
         {
+            // the gap since the last line is time spent where that line came: the walk to the next zone after the last kill
+            // is the last zone's grace, never the new one's farming (2026-11-21, Ellun River Midstream: 120 s of farming
+            // credited for 27 s spent there, nothing farmed)
             double gap = Math.Clamp((now - last).TotalSeconds, 0, GraceSeconds);
-            _active += gap; Z().Active += gap;
+            _active += gap; FarmZone().Active += gap;
         }
         _lastFarmAt = now;
+        _lastFarmZone = _zone ?? UnknownZone;
     }
 
     /// <summary>Seconds of the grace minute still running after the last farming line, up to the clock's end.</summary>
     double TrailingLocked()
     {
         if (_lastFarmAt is not { } last) return 0;
-        var end = Ended ?? _pausedAt ?? DateTime.UtcNow;
+        var end = Ended ?? _pausedAt ?? FarmClock();
         return Math.Clamp((end - last).TotalSeconds, 0, GraceSeconds);
     }
 
@@ -626,7 +642,11 @@ public sealed partial class SessionEngine
             }
             // what counts as farming: loot, Kinah, kills, gathers (failed ones too), Soul Crystals and Soul Points.
             // Crafts, enchants, Market lines and quest rewards don't: they happen in town.
-            if (ev is ItemAcquired or KinahChanged { Bound: false } or MobKilled or XpGained or GatherFailed or PetCrystal or CurrencyGained) Farmed(DateTime.UtcNow);
+            // A kill the game's messages tell (FightCounted) and the bound Kina paid with it (the packets let bound Kina through
+            // only beside a kill) are farming too: on 2026-11-21 in Destroyed Temple Site 20 such kills in 83 s ran the clock
+            // for 14 s, no chat kill line came, and the hour read 3.9M/h for about 0.67M/h
+            if (ev is ItemAcquired or KinahChanged { Bound: false } or MobKilled or XpGained or GatherFailed or PetCrystal or CurrencyGained
+                or FightCounted { Death: false } || ev is KinahChanged { Bound: true, Delta: > 0, Via: "packets" }) Farmed(FarmClock());
             switch (ev)
             {
                 case ItemAcquired a:
@@ -809,7 +829,7 @@ public sealed partial class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PlayerKills = v.PlayerKills, MonsterKills = v.MonsterKills, Deaths = v.Deaths, RankPoints = v.RankPoints, RankLost = v.RankLost, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_lastFarmZone ?? _zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PlayerKills = v.PlayerKills, MonsterKills = v.MonsterKills, Deaths = v.Deaths, RankPoints = v.RankPoints, RankLost = v.RankLost, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }
@@ -838,7 +858,7 @@ public sealed partial class SessionEngine
         lock (_lock)
         {
             if (KinahLedger.Ocr.ZoneLocator.KindOf(_zone) == KinahLedger.Ocr.ZoneLocator.Ignored) return;
-            Farmed(DateTime.UtcNow);
+            Farmed(FarmClock());
             Nodes++; Z().Nodes++; MarkGather(at);
             var sk = Skill(family); sk.Nodes++;
             if (!ok) { NodesFailed++; sk.Failed++; }

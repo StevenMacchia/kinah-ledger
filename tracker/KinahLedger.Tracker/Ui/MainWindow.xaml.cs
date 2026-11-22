@@ -68,6 +68,35 @@ public partial class MainWindow : Window
     readonly WF.ToolStripMenuItem _trayToggle = new(L.T("Start run"));
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     int _packetTickQueued;
+    // ---- a count's redraw (CountDue): queued once, at most every CountRefreshMs, nothing at all while nothing is counted ----
+    const int CountRefreshMs = 100;
+    readonly DispatcherTimer _countTimer = new(DispatcherPriority.Render);
+    int _countQueued;
+    long _countAskedTicks, _tickStartTicks;
+    DateTime _countDrawnAt = DateTime.MinValue;
+
+    /// <summary>
+    /// A count came (GameWatcher.Counted): the figures (FillNumbers) and the Buddy (UpdateHud) redraw now rather than at the
+    /// next 500 ms tick, at most every <see cref="CountRefreshMs"/> so a burst of pickups is one redraw. A tick that began
+    /// after the count already drew it.
+    /// </summary>
+    void CountDue()
+    {
+        double wait = CountRefreshMs - (DateTime.UtcNow - _countDrawnAt).TotalMilliseconds;
+        if (wait > 1) { _countTimer.Interval = TimeSpan.FromMilliseconds(wait); _countTimer.Start(); return; }
+        Interlocked.Exchange(ref _countQueued, 0);
+        // a full refresh began after the count, or one is queued (a count from the game's messages): it draws it
+        if (Interlocked.Read(ref _tickStartTicks) >= Interlocked.Read(ref _countAskedTicks) || Volatile.Read(ref _packetTickQueued) == 1) return;
+        _countDrawnAt = DateTime.UtcNow;
+        try
+        {
+            if (_demo || _moving) return;
+            var show = Shown();
+            if (show != null && (RunEngine != null || show != _lastRun)) FillNumbers(show, show.Active);
+            UpdateHud();
+        }
+        catch (Exception ex) { if (DateTime.UtcNow - _tickLoggedAt >= TimeSpan.FromMinutes(1)) { _tickLoggedAt = DateTime.UtcNow; CrashLog.Write("count redraw", ex); } }
+    }
     bool _framing; int _ticks;
 
     // a timer tick after the window closed (the off-screen renders) finds no theme: grey rather than a crash
@@ -228,6 +257,14 @@ public partial class MainWindow : Window
             if (Interlocked.Exchange(ref _packetTickQueued, 1) == 1) return;
             Dispatcher.BeginInvoke(() => { Interlocked.Exchange(ref _packetTickQueued, 0); Tick(); }, DispatcherPriority.Render);
         };
+        // every count (a chat line's too): the figures and the Buddy redraw at once, at most every 100 ms (CountDue)
+        _watcher.Counted += () =>
+        {
+            Interlocked.Exchange(ref _countAskedTicks, DateTime.UtcNow.Ticks);
+            if (Interlocked.Exchange(ref _countQueued, 1) == 1) return;
+            Dispatcher.BeginInvoke(CountDue, DispatcherPriority.Render);
+        };
+        _countTimer.Tick += (_, _) => { _countTimer.Stop(); CountDue(); };
         _timer.Start();
         SourceInitialized += OnSourceInitialized;
         WatchBalance();
@@ -710,6 +747,7 @@ public partial class MainWindow : Window
     void TickCore()
     {
         if (_demo || _moving) return;
+        Interlocked.Exchange(ref _tickStartTicks, DateTime.UtcNow.Ticks);   // the counts in by now are drawn by this tick (CountDue)
         WatchGame();
         var chat = _watcher.Chat; var farm = RunEngine;
         HookRunClosed(chat);   // an expedition's recap (Ui/MainWindow.Recap.cs)

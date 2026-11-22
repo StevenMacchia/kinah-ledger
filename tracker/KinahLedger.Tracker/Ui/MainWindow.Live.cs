@@ -426,7 +426,9 @@ public partial class MainWindow
         foreach (var z in mine)
             foreach (var (id, n) in z.Items)
                 if (n > 0 && PriceBook.Price(_items.NameOf(id)) is long p) value += (long)Math.Round(p * n * PriceBook.SellerKeeps);
-        return new HereShare(place, kinah, value, mine.Sum(z => z.Kills), abyss, mine.Sum(z => z.Seconds) / 3600);
+        // over the place's farming time, as the hero's hour is over the whole count's: its idle time (town, a walk, a break)
+        // never makes the place's hour read lower than the hero's for the same farming
+        return new HereShare(place, kinah, value, mine.Sum(z => z.Kills), abyss, mine.Sum(z => z.Active) / 3600);
     }
 
     static string AgoMinutes(DateTime minuteUtc) => L.F("{0} ago", TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds));

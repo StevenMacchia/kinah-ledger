@@ -1074,10 +1074,12 @@ options: --process aion[,other]");
         int si = 0; string? zoneNow = null; string rewardNow = ""; DateTime tickAt = DateTime.MinValue, rewardUntil = DateTime.MinValue, clock = DateTime.MinValue;
         // the replay's notes carry the replayed reads' times, so they line up with the player's own reads.log
         CrashLog.Clock = () => clock == DateTime.MinValue ? DateTime.Now : clock.ToLocalTime();
+        // the farming clock on the replayed reads' times too, so the farming time and the hours (--zones) are the day's
+        s.Engine.FarmClock = () => clock == DateTime.MinValue ? DateTime.UtcNow : clock;
         if (reader != null) KinahLedger.Packets.PacketClock.Fixed = () => clock == DateTime.MinValue ? DateTime.UtcNow : clock;
         // the game's data up to a time, each piece drained as it came (the live loop drains on every arrival), the agreement
         // check every 2 s. Before the cut only the currencies' amounts are kept, as baselines, so the cut counts what is in it
-        int fi = 0; DateTime agreedAt = DateTime.MinValue; bool fedBase = false, liveClock = opts.ContainsKey("live-clock");
+        int fi = 0; DateTime agreedAt = DateTime.MinValue, drainedAt = DateTime.MinValue; bool fedBase = false, liveClock = opts.ContainsKey("live-clock");
         void FeedUntil(DateTime t)
         {
             if (reader == null) return;
@@ -1094,10 +1096,18 @@ options: --process aion[,other]");
             while (fi < feed.Count && feed[fi].At <= t)
             {
                 var (at, ev) = feed[fi++];
+                // what is held is looked at again every quarter second, as the live loop's wait does (WaitWithPacketsAsync)
+                if (drainedAt != DateTime.MinValue) for (var x = drainedAt.AddMilliseconds(250); x < at && x < drainedAt.AddSeconds(30); x = x.AddMilliseconds(250)) { clock = x; s.DrainPacketsForTest(); }
+                drainedAt = at;
                 clock = at;
                 reader.ReplayFeed(ev, at);
                 s.DrainPacketsForTest();
                 if ((at - agreedAt).TotalSeconds >= 2) { reader.AgreeForTest(); agreedAt = at; }
+            }
+            if (drainedAt != DateTime.MinValue && t > drainedAt)
+            {
+                for (var x = drainedAt.AddMilliseconds(250); x < t && x < drainedAt.AddSeconds(30); x = x.AddMilliseconds(250)) { clock = x; s.DrainPacketsForTest(); }
+                drainedAt = t;
             }
             clock = t;
             // --live-clock: between the changes it decodes, the connection is taken as sending, as it is live (a capture sees
@@ -1197,6 +1207,16 @@ options: --process aion[,other]");
         }
         // --landed: every pickup counted, with its time and where it landed (to diff two builds' replays pickup by pickup)
         if (opts.ContainsKey("landed")) foreach (var (at, what, where) in landed.OrderBy(x => x.At)) Console.WriteLine($"    landed {at.ToLocalTime():HH:mm:ss.f}  {what}  -> {where}");
+        // --zones: each zone's farming time and its Kinah and loot an hour over it, as the window shows them
+        if (opts.ContainsKey("zones"))
+        {
+            Console.WriteLine($"  farming time {e.Active.TotalSeconds:0} s of {(last - first)?.TotalSeconds ?? 0:0} s replayed");
+            foreach (var (zn, z) in e.ZoneSnapshot().Where(kv => kv.Value.Active > 0 || kv.Value.Kinah > 0 || kv.Value.Drops > 0).OrderByDescending(kv => kv.Value.Active))
+            {
+                long worth = z.Items.Sum(kv => PriceBook.Price(items.NameOf(kv.Key)) is long p ? (long)Math.Round(p * kv.Value * PriceBook.SellerKeeps) : 0);
+                Console.WriteLine($"    {zn,-32} farmed {z.Active,6:0.0} s  {z.Kills,3} kills  {z.Drops,3} drops  {z.Kinah:N0} Kinah + {worth:N0} loot  = {(z.Active > 0 ? (z.Kinah + worth) / (z.Active / 3600) : 0):N0}/h");
+            }
+        }
         Console.WriteLine($"  loot list            {s.CrossCheck.Matched} matched the chat · {s.CrossCheck.Added} added (chat missed) · {s.CrossCheck.Duplicates} chat repeats skipped");
         Console.WriteLine("  by enemy:");
         foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
@@ -4422,6 +4442,10 @@ options: --process aion[,other]");
                 // 2026-11-21: Siel's Forgotten Gloves, one ask at 10,000,999 the site set aside against 1,000 on 2 servers: a joke, no price
                 var gloves = PriceBook.ParseQuotes("""{"items":[{"item":"Forgotten Gloves","price":null,"price_from":null,"readings":0,"sure":false,"listings":1,"lowest_seen_at":"2026-11-21T21:07:58Z","region_price":1000,"region_servers":2,"dropped":{"price":10000999,"why":"own"}}]}""", null);
                 Check("a set-aside ask over 5x the region's middle is a joke listing: no price", gloves.ContainsKey("Forgotten Gloves") ? $"priced {gloves["Forgotten Gloves"].Price}" : "none", "none");
+                // 2026-11-21: Siel's Shade Helm, one ask at 30,000,013 the site set aside, no other server's price: no price (it
+                // would have counted about 26.4M). The same ask with a week of readings under it stands, unsure
+                var helm = PriceBook.ParseQuotes("""{"items":[{"item":"210360021","lowest_ask":30000013,"lowest_seen_at":"2026-11-21T23:07:59Z","stale":false,"last_ask":30000013,"median_7d":30000013,"median_24h":30000013,"change_24h":0,"n_obs":1,"listings":1,"name":"Shade Helm","price":null,"price_from":null,"readings":0,"sure":false,"dropped":{"price":30000013,"why":"own"}},{"item":"Shade Boots","median_7d":40000,"n_obs":5,"listings":1,"price":null,"price_from":null,"readings":0,"sure":false,"lowest_seen_at":"2026-11-21T23:07:59Z","dropped":{"price":45000,"why":"own"}},{"item":"Shade Gloves","median_7d":40000,"n_obs":5,"listings":1,"price":null,"price_from":null,"readings":0,"sure":false,"lowest_seen_at":"2026-11-21T23:07:59Z","dropped":{"price":9000000,"why":"own"}}]}""", null);
+                Check("a set-aside ask with no region price: none, unless a week of 2+ readings backs it", string.Join(", ", new[] { "210360021", "Shade Boots", "Shade Gloves" }.Select(k => helm.TryGetValue(k, out var q) ? $"{k} {q.Price} {(q.Sure ? "sure" : "unsure")}" : $"{k} none")), "210360021 none, Shade Boots 45000 unsure, Shade Gloves none");
                 // a gear recipe's Splendent input on plenty of listings costs more than the output by design: never thin
                 PriceBook.SetBoardQuotes(new() { ["Expert's Splendent Orichalcum Greatsword"] = new(1_749_998, PriceBook.From.Feed, 24, true, now, Picked: true), ["Artisan's Orichalcum Greatsword"] = new(199_960, PriceBook.From.Feed, 43, true, now, Picked: true) });
                 var gs = RecipeBook.For("Artisan's Orichalcum Greatsword", 0);
@@ -5338,6 +5362,32 @@ options: --process aion[,other]");
                 Check("a kill's bound Kina in the Abyss is Kinah, by zone; a quest's isn't, nor bound Kina out of it",
                     $"{bk.Kinah} {bk.AbyssBoundKinah} {bk.KinahBound} {bk.ZoneSnapshot()["Abyss"].Kinah} {bk.Kills} | {bw.Kinah} {bw.KinahBound}", "1625 1625 8000 1625 2 | 0 1245");
                 Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
+                // the farming clock runs on the kills the game's messages tell and the bound Kina they pay: Steven's 2026-11-21
+                // 12:51:18.7 to 12:52:41.5 in Destroyed Temple Site (seconds from its start), 20 kills and 18 bound Kina, no chat
+                // kill line, two drops. Only the drops ran the clock: 14 s of the 83 s there, 3.9M/h for about 0.67M/h. And the
+                // gap after a zone's last line is that zone's: the walk on to Ellun River Midstream, where a quest's XP line came,
+                // was credited there (120 s of farming for 27 s there, nothing farmed)
+                {
+                    var fe = new SessionEngine(items); var f0 = DateTime.UtcNow.AddMinutes(-10); var fnow = f0;
+                    fe.FarmClock = () => fnow;
+                    var evs = new List<(double At, GameEvent Ev)>();
+                    foreach (var (sec, kina) in new[] { (0.1, 421L), (0.6, 367L), (2.2, 671L), (3.1, 443L), (3.4, 326L), (10.3, 364L), (12.9, 482L), (17.9, 178L), (18.5, 321L), (19.9, 518L), (20.3, 222L), (21.1, 484L), (22.2, 493L), (23.4, 242L), (25.1, 447L), (28.1, 505L), (29.0, 320L), (29.7, 500L) })
+                        evs.Add((sec, new KinahChanged(f0.AddSeconds(sec), kina, true) { Via = "packets" }));
+                    foreach (var sec in new[] { 0.5, 1.6, 3, 4, 5, 5.5, 6.3, 12.0, 14.5, 17.0, 21.0, 21.6, 22.9, 26.5, 28, 29.5, 31, 32, 33, 76.1 })
+                        evs.Add((sec, new FightCounted(f0.AddSeconds(sec), false, false, "") { Via = "packets" }));
+                    evs.Add((22.4, new ItemAcquired(f0.AddSeconds(22.4), items.IdOf("Refining Stone"), 1, false) { Via = "packets" }));
+                    evs.Add((32.7, new ItemAcquired(f0.AddSeconds(32.7), items.IdOf("Sapphire Gemstone"), 1, false) { Via = "packets" }));
+                    fe.SetZone("Destroyed Temple Site");
+                    foreach (var (sec, ev) in evs.OrderBy(x => x.At)) { fnow = f0.AddSeconds(sec); fe.Apply(ev); }
+                    fnow = f0.AddSeconds(82.8);
+                    double temple = fe.ZoneSnapshot()["Destroyed Temple Site"].Active;
+                    fe.SetZone("Ellun River Midstream");
+                    fnow = f0.AddSeconds(120); fe.Apply(new XpGained(fnow, 5_000));
+                    var fz = fe.ZoneSnapshot();
+                    Check("the game's kills and their bound Kina run the farming clock; the gap after a zone's last line is that zone's",
+                        $"{temple:0.0} {fe.MonsterKills} | {fz["Destroyed Temple Site"].Active:0.0} {fz.GetValueOrDefault("Ellun River Midstream")?.Active ?? 0:0.0} {fe.Active.TotalSeconds:0.0}",
+                        "82.7 20 | 119.9 0.0 119.9");
+                }
                 // 0.10.79: the upload carries the Abyss's figures, in all and per zone, each only when there is any, so the profile
                 // on the site can show them; a run out of the Abyss sends none of them
                 ae.Apply(new CurrencyGained(at0.AddSeconds(12), "Rank Points", 120)); ae.Apply(new RankPointsLost(at0.AddSeconds(14), 30));

@@ -453,6 +453,70 @@ public static class PacketTests
                 $"...rewards stay out: Oath Coin x1,280 at once {U(w, oath) + B(w, oath)}, Stigma Shard used at once {U(w, stigma) + B(w, stigma)}, Silentium (Bound) with no kill {B(w, silentium)}");
         }
 
+        // the screen as the backup: a kill's drop counts at once, not 3 s later (Steven's 2026-11-21, Destroyed Temple Site 12:51:19
+        // to 12:51:51: all eight of the day's monster drops landed 3.01 to 3.24 s after the game's message, Refining Stone +1 at
+        // 12:51:41.1 among them), and its chat line later is that pickup; an update of two items (an event's rewards, a box's
+        // contents) still waits for the chat's say. Gear dismantled into Enhance Stones right after it dropped is no loot:
+        // 17:56:00.0 Forgotten Gloves +1, 17:56:00.1 "Forgotten Gloves −1, Enhance Stone +18"; 12:51:37 Riverside Gloves +1, then
+        // −1 with Enhance Stone +23 (here 2.5 s later, after it counted). One dismantled 90 s on was loot, and stays
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            long stone = items.Find("Refining Stone") ?? 0, gem = items.Find("Sapphire Gemstone") ?? 0, river = items.Find("Riverside Gloves") ?? 0;
+            long forgot = items.Find("Forgotten Gloves") ?? 0, enhance = items.Find("Enhance Stone") ?? 0;
+            Check(stone != 0 && gem != 0 && river != 0 && forgot != 0 && enhance != 0 && items.IsGear(river) && items.IsGear(forgot) && !items.IsGear(stone),
+                "drops at once: the item list has the log's items, the gloves are gear");
+            // (after the counts began: taking a pickup back out looks only at what came since each count started)
+            var t0 = DateTime.UtcNow.AddSeconds(1);
+            var clock = t0; PacketClock.Fixed = () => clock;
+            try
+            {
+                var reader = new PacketReader(); reader.ReadingForTest();
+                reader.AmountForTest(CurrencyKind.Kinah, 1_000_000, t0.AddSeconds(-10));
+                var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+                s.Engine.SetZone("Destroyed Temple Site");
+                var when = new Dictionary<long, double>();
+                s.Parsed += ev => { if (ev is ItemAcquired ia && !when.ContainsKey(ia.ItemId)) when[ia.ItemId] = (clock - ia.Time).TotalSeconds; };
+                int batch = 5000;
+                ItemChange Up(double at, long id, long d, long total, int b, int rows = 1, bool fell = false) => new(t0.AddSeconds(at), id, ItemOp.Changed, id % 89, d, total, false, b, rows, fell);
+                void At(double sec) { clock = t0.AddSeconds(sec); reader.ReadingForTest(); s.DrainPacketsForTest(); }
+                void Kill(double sec) => reader.FightsForTest(new FightEvent(t0.AddSeconds(sec), FightKind.Kill, FightFlags.Mine, 1, 2, 3, 0, 0, "", ""));
+                Check(s.ScreenBackup(clock), $"...the screen is the backup ({s.FullReadingWhy(clock) ?? "the game reader counts"})");
+                int M(long id) => s.Engine.Items.GetValueOrDefault(id) + s.Engine.ItemsBound.GetValueOrDefault(id);
+                // a kill at 40.3, Refining Stone +1 at 41.1: counted half a second on, its chat line at 44 is that pickup
+                Kill(40.3); At(40.3);
+                reader.ItemsForTest(Up(41.1, stone, 1, 10, ++batch)); At(41.35);
+                int early = M(stone);
+                At(41.6);
+                At(44); s.CommitForTest(new ItemAcquired(t0.AddSeconds(44), stone, 1, false) { Via = "chat" });
+                // a kill at 49.5, then Sapphire Gemstone and Refining Stone in one update at 50: it waits for the chat's say (3 s)
+                Kill(49.5); At(49.5);
+                ++batch; reader.ItemsForTest(Up(50, gem, 1, 1, batch, 2), Up(50, stone, 1, 11, batch, 2)); At(50.6);
+                int heldTwo = M(gem);
+                At(53.1);
+                // Riverside Gloves +1 at 60.5 after a kill, counted; dismantled at 63: taken back out
+                Kill(60); At(60); reader.ItemsForTest(Up(60.5, river, 1, 1, ++batch)); At(61.1);
+                int riverIn = M(river);
+                ++batch; reader.ItemsForTest(Up(63, river, -1, 0, batch, 2, true), Up(63, enhance, 23, 590, batch, 2, true)); At(63.1);
+                // Forgotten Gloves +1 at 70.0, dismantled at 70.1 (the next update): never counted
+                Kill(69.8); At(69.8);
+                reader.ItemsForTest(Up(70, forgot, 1, 1, ++batch));
+                ++batch; reader.ItemsForTest(Up(70.1, forgot, -1, 0, batch, 2, true), Up(70.1, enhance, 18, 608, batch, 2, true)); At(70.6); At(71);
+                int forgotAtOnce = M(forgot);
+                // Forgotten Gloves +1 at 80, dismantled 90 s on: it was loot
+                Kill(79.8); At(79.8); reader.ItemsForTest(Up(80, forgot, 1, 1, ++batch)); At(80.6);
+                for (double x = 81; x <= 169; x += 4) At(x);
+                ++batch; reader.ItemsForTest(Up(170, forgot, -1, 0, batch, 2, true), Up(170, enhance, 18, 626, batch, 2, true)); At(170.1);
+                for (double x = 171; x <= 200; x += 1) { At(x); reader.AgreeItemsForTest(clock); s.DrainPacketsForTest(); }
+                Check(early == 0 && M(stone) == 2 && when.GetValueOrDefault(stone, 9) <= 0.75 && reader.Verdicts.Contains("covered"),
+                    $"...a kill's drop counts half a second after its message, not 3 s ({when.GetValueOrDefault(stone, -1):0.00} s), and its chat line later is that pickup: Refining Stone {M(stone)} (one alone, one in a two-item update)");
+                Check(heldTwo == 0 && M(gem) == 1 && when.GetValueOrDefault(gem, 0) >= 2.9,
+                    $"...an update of two items waits for the chat's say as before ({when.GetValueOrDefault(gem, -1):0.00} s): Sapphire Gemstone {M(gem)}");
+                Check(riverIn == 1 && M(river) == 0 && s.Live.Find(l => l.ItemId == river) == null && forgotAtOnce == 0 && M(forgot) == 1 && M(enhance) == 0,
+                    $"...gear dismantled into Enhance Stones right after it dropped is no loot: Riverside Gloves {riverIn} then {M(river)} (its feed line {(s.Live.Find(l => l.ItemId == river) == null ? "gone" : "kept")}), Forgotten Gloves dismantled at once {forgotAtOnce}, one dismantled 90 s on {M(forgot)}, Enhance Stone {M(enhance)}");
+            }
+            finally { PacketClock.Fixed = null; }
+        }
+
         // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
         // and a line the traffic never showed are the chat's, a rise with nothing around it or with something going down is
         // no pickup, and three chat pickups the traffic never showed hand items back to the screen
