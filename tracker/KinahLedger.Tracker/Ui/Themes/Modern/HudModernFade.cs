@@ -237,6 +237,7 @@ sealed partial class HudModernFade : ModernLook
             var mk = Mark(L.T("RARE DROP"), size: 8); mk.Margin = new Thickness(0, 0, 7, 0);
             row.Children.Add(mk);
             var nm = Tt(r.Name, 13, Frozen(Mod.Mix(c, Colors.White, .45)), FontWeights.Bold);
+            _rareName = nm;
             row.Children.Add(nm);
             if (r.Count.Length > 0) { var cn = Tt(" " + r.Count, 11, Soft, FontWeights.SemiBold); cn.Margin = new Thickness(2, 1, 0, 0); row.Children.Add(cn); }
             var lit = Lit(row);
@@ -296,6 +297,7 @@ sealed partial class HudModernFade : ModernLook
     double _rareBloom = 1, _rareFlash;
     TacSketch? _rareWash;
     FrameworkElement? _rareTile;
+    TextBlock? _rareName;
 
     /// <summary>The Buddy's wash: blue fading out to the right, rounded at its left (grey while paused); a pickup's light crossing it.</summary>
     void DrawLineWash(DrawingContext dc, Size s)
@@ -541,6 +543,9 @@ sealed partial class HudModernFade : ModernLook
         var wx = new ModFx.Xf(wash, new Point(0, .5));
         _rareBloom = 1; _rareFlash = 0; wash.InvalidateVisual();
         var words = _rare.Children.Count > 1 ? _rare.Children[^1] as FrameworkElement : null;
+        // the item's name brightens toward its grade's colour while the light passes under it
+        var name = _rareName;
+        var rest = name?.Foreground; var hot = Frozen(Mod.Mix(c, Colors.White, .15)); var mid = Frozen(Mod.Mix(c, Colors.White, .3));
         var tb = tile != null ? ModFx.In(tile, _rare) : Rect.Empty;
         var tr = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
         double rw = _rare.ActualWidth, rh = _rare.ActualHeight;
@@ -552,7 +557,7 @@ sealed partial class HudModernFade : ModernLook
             // the swell and the light under the words (between the wash and them), the flash and the motes over everything
             under = FxLayer("rare-under", _rare, at: 1);
             // the colour swelling up under the row: a second wash over the resting one
-            boost = ModFx.Put(under, ModFx.Block(rw, rh, Mod.Grad(false, (Mod.A(c, .62), 0), (Mod.A(c, .4), .6), (Mod.A(c, 0), 1)), rh / 2), 0, 0);
+            boost = ModFx.Put(under, ModFx.Block(rw + 10, rh, Mod.Grad(false, (Mod.A(c, .9), 0), (Mod.A(c, .62), .6), (Mod.A(c, 0), 1)), rh / 2), 0, 0);
             bsx = new ModFx.Xf(boost, new Point(0, .5));
             swell = ModFx.Centre(under, ModFx.Bloom(Mod.Mix(c, Colors.White, .35), 130, 62, .95), new Point(tb.Left + tb.Width / 2 + 38, tb.Top + tb.Height / 2));
             sx = new ModFx.Xf(swell);
@@ -570,18 +575,20 @@ sealed partial class HudModernFade : ModernLook
                 double d = 12 + 5 * rnd.NextDouble();
                 var el = new Grid { Width = d, Height = d, IsHitTestVisible = false };
                 el.Children.Add(ModFx.Bloom(mote, d, d, 1));
-                el.Children.Add(new System.Windows.Shapes.Ellipse { Width = d * .3, Height = d * .3, Fill = Frozen(Mod.Mix(c, Colors.White, .9)) });
+                el.Children.Add(new System.Windows.Shapes.Ellipse { Width = 4.5, Height = 4.5, Fill = Frozen(Mod.Mix(c, Colors.White, .9)) });
                 ModFx.Centre(over, el, new Point(tr.Left + tr.Width * (.3 + .4 * rnd.NextDouble()), tr.Top + tr.Height * (.3 + .3 * rnd.NextDouble())));
-                motes.Add((el, new ModFx.Xf(el), 4 + 30 * rnd.NextDouble(), -(18 + 18 * rnd.NextDouble()), .1 + .035 * i));
+                motes.Add((el, new ModFx.Xf(el), 4 + 26 * rnd.NextDouble(), -(20 + 6 * rnd.NextDouble()), .1 + .035 * i));
             }
         }
         Motion.Play(wash, 1700, t =>
         {
             wx.S.ScaleX = .02 + .98 * Out(Seg(t, 0, .2));
             if (words != null) words.Opacity = Out(Seg(t, .04, .18));
-            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .05, .3), 2.4);
+            // the tile: up past its size with the flash, then eased back
+            sc.ScaleX = sc.ScaleY = t < .08 ? .7 + .4 * Out(Seg(t, 0, .08)) : 1.1 - .1 * Out(Seg(t, .08, .32));
+            if (name != null) name.Foreground = t is >= .2 and < .55 ? (t < .26 || t >= .48 ? mid : hot) : rest;
             if (sx != null) { sx.Scale = .4 + .6 * Out(Seg(t, .02, .2)); swell!.Opacity = t < .18 ? Seg(t, .02, .1) : 1 - Out(Seg(t, .18, .48)); }
-            if (fx != null) { fx.Scale = .3 + .8 * Out(Seg(t, 0, .25)); flash!.Opacity = ModFx.Life(t, 0, .05, .1, .32); }
+            if (fx != null) { fx.Scale = .3 + .8 * Out(Seg(t, 0, .25)); flash!.Opacity = ModFx.Life(t, 0, .04, .16, .36); }
             if (bsx != null) { bsx.S.ScaleX = .1 + .9 * Out(Seg(t, .02, .2)); boost!.Opacity = t < .2 ? Out(Seg(t, .02, .2)) : 1 - Seg(t, .2, .5); }
             if (lx != null) { double s = Seg(t, .2, .55); lx.T.X = (rw + 40 + rh * .4) * ModFx.InOut(s); light!.Opacity = s <= 0 || s >= 1 ? 0 : 1 - .6 * s; }
             foreach (var (el, x, dx, dy, at) in motes)
@@ -595,6 +602,7 @@ sealed partial class HudModernFade : ModernLook
         {
             wx.S.ScaleX = 1; sc.ScaleX = sc.ScaleY = 1;
             if (words != null) words.Opacity = 1;
+            if (name != null) name.Foreground = rest;
             if (under != null) FxDone("rare-under", under);
             if (over != null) FxDone("rare-over", over);
         });
