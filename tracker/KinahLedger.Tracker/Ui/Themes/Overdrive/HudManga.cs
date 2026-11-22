@@ -119,9 +119,13 @@ sealed partial class HudManga : ModernLook
 
     // ================================================================ the Buddy
 
+    /// <summary>The hour with its unit on the bubble (a best passed punches it).</summary>
+    FrameworkElement? _hourTop;
+
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
+        _hourTop = null;
         _ringArt = null; _ringHost = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
@@ -167,6 +171,7 @@ sealed partial class HudManga : ModernLook
             rate.Tag = "buddy-rate";
             if (!f.Warm) rate.Margin = new Thickness(0, -3, 0, -3);
             top.Children.Add(rate);
+            _hourTop = f.Warm ? null : top;
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, OnPaperSoft, FontWeights.Black); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
             words.Children.Add(top);
             var sub = Sub(f, true);
@@ -692,17 +697,27 @@ sealed partial class HudManga : ModernLook
         var sc = new ScaleTransform(.3, .3); var rot = new RotateTransform(-20);
         var tg = new TransformGroup(); tg.Children.Add(sc); tg.Children.Add(rot);
         sparkle.RenderTransform = tg;
-        fx.Children.Clear(); fx.Children.Add(sparkle);
+        // the big one in its grade's colour (2026-11-21 review: no bigger than the pickup's card): a balloon of the grade's
+        // colour bursts behind the tile and the whole panel squashes and springs as it lands
+        var gc = Rare(Values) is { } rp ? ColorOf(rp.Color, rp.Grade) : RedC;
+        var balloon = new InkArt(Drawn(dc => dc.DrawGeometry(Frozen(gc), Pn(InkB, 2.2), Balloon(P(0, 0), 25, 17, 12, 97, .85))), 0, 0);
+        var bsc = new ScaleTransform(0, 0); balloon.RenderTransform = bsc;
+        fx.Children.Clear(); fx.Children.Add(balloon); fx.Children.Add(sparkle);
         var tsc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = tsc; }
+        var squash = new ScaleTransform(1, 1);
+        _rare.RenderTransformOrigin = new Point(0, .5); _rare.RenderTransform = squash;
         Motion.Play(fx, 1000, t =>
         {
+            bsc.ScaleX = bsc.ScaleY = Back(Seg(t, .04, .22), 2.6) * (1 - Ez.In(Seg(t, .6, .85)));
+            squash.ScaleX = t < .06 ? 1 - .06 * Seg(t, 0, .06) : 1 + .08 * Ez.Wob(Seg(t, .06, .5), 1.5, 4);
+            squash.ScaleY = t < .06 ? 1 + .08 * Seg(t, 0, .06) : 1 - .06 * Ez.Wob(Seg(t, .06, .5), 1.5, 4);
             double k = Out(Seg(t, 0, .45));
             sc.ScaleX = sc.ScaleY = .3 + .75 * k;
             rot.Angle = -20 + 26 * Out(t);
             sparkle.Opacity = t < .6 ? 1 : 1 - Seg(t, .6, 1);
             tsc.ScaleX = tsc.ScaleY = .6 + .4 * Back(Seg(t, .04, .36), 2.4);
-        }, () => { fx.Children.Clear(); tsc.ScaleX = tsc.ScaleY = 1; });
+        }, () => { fx.Children.Clear(); tsc.ScaleX = tsc.ScaleY = 1; _rare.RenderTransform = null; });
     }
 
     /// <summary>The sparkles: big and small four-pointed stars with ink edges and bubbles, round the drawing's origin.</summary>
@@ -742,8 +757,14 @@ sealed partial class HudManga : ModernLook
         var sc = new ScaleTransform(0, 0);
         balloon.RenderTransform = sc;
         host.Children.Add(balloon);
-        Motion.Play(art, 950, t =>
+        // the hour takes the hit with the balloon: crouched, punched past its size, a shudder
+        var hour = _hourTop;
+        var hsc = new ScaleTransform(1, 1); var hj = new TranslateTransform();
+        if (hour != null) { hour.RenderTransformOrigin = new Point(0, .6); hour.RenderTransform = new TransformGroup { Children = { hsc, hj } }; }
+        Motion.Play(art, 1100, t =>
         {
+            hsc.ScaleX = hsc.ScaleY = t < .3 ? 1 - .06 * Ez.InOut(Seg(t, .22, .3)) : .94 + .06 * Out(Seg(t, .3, .34)) + .12 * Ez.Wob(Seg(t, .3, .72), 1.5, 4);
+            hj.X = Ez.Jolt(Seg(t, .3, .5), 2, 6);
             _beat = false; _share = was;
             _complete = Out(Seg(t, 0, .4));
             if (t >= .4) { _beat = beat; _complete = 1; }
@@ -751,7 +772,7 @@ sealed partial class HudManga : ModernLook
             double k = Back(Seg(t, .3, .55), 2.6);
             sc.ScaleX = sc.ScaleY = k;
             balloon.Opacity = t < .8 ? 1 : 1 - Seg(t, .8, 1);
-        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); host.Children.Remove(balloon); });
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); host.Children.Remove(balloon); if (hour != null) hour.RenderTransform = null; });
     }
 
     /// <summary>The "!!" balloon: a red explosion with an ink edge, "!!" lettered in white, round its origin.</summary>

@@ -99,9 +99,13 @@ sealed partial class HudVersus : ModernLook
 
     // ================================================================ the Buddy
 
+    /// <summary>The hour with its unit on the line (a best passed punches it).</summary>
+    FrameworkElement? _hourTop;
+
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
+        _hourTop = null;
         _timerUp = false; _stripTimerW = -1;
         _super.Children.Clear(); _super.Visibility = Visibility.Collapsed; _superArt = null;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
@@ -149,6 +153,7 @@ sealed partial class HudVersus : ModernLook
             if (!f.Warm) rate.Margin = new Thickness(0, -3, 0, -3);
             rate.Tag = "buddy-rate";
             top.Children.Add(rate);
+            _hourTop = f.Warm ? null : top;
             if (f.Unit.Length > 0) { var u = T(f.Unit, 11, Yellow, FontWeights.Bold, italic: true); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
             words.Children.Add(top);
             // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
@@ -651,8 +656,15 @@ sealed partial class HudVersus : ModernLook
         var lineAt = new TranslateTransform(); lines.RenderTransform = lineAt;
         Canvas.SetLeft(lines, -18); Canvas.SetTop(lines, -ph / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(lines); _lineAnchor.Children.Add(slab);
+        // the score takes the hit as the meter completes: crouched a beat, punched past its size, the plate jolted
+        var hour = _hourTop;
+        var hsc = new ScaleTransform(1, 1);
+        if (hour != null) { hour.RenderTransformOrigin = new Point(0, .6); hour.RenderTransform = hsc; }
+        var jolt = new TranslateTransform(); _line.RenderTransform = jolt;
         Motion.Play(art, 1600, t =>
         {
+            hsc.ScaleX = hsc.ScaleY = t < .3 ? 1 - .06 * Ez.InOut(Seg(t, .24, .3)) : .94 + .06 * Out(Seg(t, .3, .34)) + .12 * Ez.Wob(Seg(t, .3, .7), 1.5, 4);
+            jolt.X = Ez.Jolt(Seg(t, .3, .48), 2.5, 5);
             _beat = false; _share = was;
             _complete = Out(Seg(t, 0, .3));
             if (t >= .3) { _beat = beat; _complete = 1; }
@@ -666,7 +678,7 @@ sealed partial class HudVersus : ModernLook
             slab.Opacity = t < .32 ? 0 : t < .82 ? Seg(t, .32, .37) : 1 - Seg(t, .82, .97);
             ss.ScaleX = ss.ScaleY = SlamScale(Seg(t, .36, .5), 1.5);
             lines.Opacity = t < .34 ? 0 : .9 * (1 - Seg(t, .36, .7)); lineAt.X = -10 * Seg(t, .34, .7);
-        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFx.Children.Clear(); _lineAnchor.Children.Clear(); });
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFx.Children.Clear(); _lineAnchor.Children.Clear(); if (hour != null) hour.RenderTransform = null; _line.RenderTransform = null; });
     }
 
     /// <summary>
@@ -790,7 +802,7 @@ sealed partial class HudVersus : ModernLook
         TacSketch? crack = null; System.Windows.Shapes.Rectangle? veil = null;
         if (drop)
         {
-            veil = new System.Windows.Shapes.Rectangle { Fill = Frozen(Mod.A(Colors.Black, .5)), Opacity = 0, IsHitTestVisible = false };
+            veil = new System.Windows.Shapes.Rectangle { Fill = Frozen(Mod.A(Colors.Black, .36)), Opacity = 0, IsHitTestVisible = false };
             crack = new TacSketch((dc, s) => DrawCrack(dc, s)) { Opacity = 0, IsHitTestVisible = false };
             parts.Insert(0, veil); parts.Add(crack);
         }

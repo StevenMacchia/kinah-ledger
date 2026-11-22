@@ -641,6 +641,10 @@ sealed partial class HudDragon : ModernLook
         // the big one in its grade's colour (2026-11-21: it read like a pickup): the light that runs the hoard, a shockwave
         // rolling off the tile and embers flung out of it are all the grade's
         var gc = _rareC;
+        // the hoard flares in the grade's colour as the tile lands (a frozen fill, its opacity only)
+        var flood = new Rectangle { Width = _rare.ActualWidth > 0 ? _rare.ActualWidth : 260, Height = _rare.ActualHeight > 0 ? _rare.ActualHeight : 46, Opacity = 0, IsHitTestVisible = false,
+            Fill = Mod.Grad(false, (Mod.A(Mod.Mix(gc, Colors.White, .4), .85), 0), (Mod.A(gc, .55), .45), (Mod.A(gc, 0), 1)) };
+        fx.Children.Add(flood);
         var race = Race(fx, 60, Mod.Mix(gc, Colors.White, .25));
         var waves = new List<(Ellipse E, ScaleTransform S, double At)>();
         var motes = new List<(Ellipse E, TranslateTransform T, Vector V, double At)>();
@@ -662,6 +666,7 @@ sealed partial class HudDragon : ModernLook
         Motion.Play(_rare, 1500, t =>
         {
             foreach (var (e, s, at) in waves) { double u = Seg(t, at, at + .45); s.ScaleX = s.ScaleY = .1 + 5.5 * Out(u); e.Opacity = u <= 0 || u >= 1 ? 0 : (1 - u); }
+            flood.Opacity = t < .06 ? Seg(t, 0, .06) : 1 - Seg(t, .06, .45);
             foreach (var (e, tr, v, at) in motes) { double u = Seg(t, at, at + .4); var q = Out(u); tr.X = v.X * q; tr.Y = v.Y * q; e.Opacity = u <= 0 || u >= 1 ? 0 : Math.Min(1, 4 * u) * (1 - u); }
             double a = Seg(t, .05, .55), k = Math.Sin(Math.PI * a);
             gs.ScaleX = gs.ScaleY = 1.25 * k; gr.Angle = 90 * a; glint.Opacity = Math.Min(1, 1.5 * k);

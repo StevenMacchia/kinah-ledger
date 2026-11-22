@@ -619,7 +619,7 @@ sealed partial class HudAura : ModernLook
         // the big one, a power-up in its grade's colour (2026-11-21: the small orb read like a pickup): the orb gathers,
         // swells past the plate and bursts, the grade's energy surges up the whole plate, and the plate jolts with the burst
         double pw = _rare.ActualWidth > 0 ? _rare.ActualWidth : 240, ph = _rare.ActualHeight > 0 ? _rare.ActualHeight : 46;
-        var surge = Surge(_rareC, pw - 20, ph, 16, 29); surge.HorizontalAlignment = HorizontalAlignment.Left; surge.VerticalAlignment = VerticalAlignment.Bottom; surge.Margin = new Thickness(10, 0, 0, 0);
+        var surge = Surge(Mod.Mix(_rareC, Colors.White, .15), pw - 20, ph, 26, 29); surge.HorizontalAlignment = HorizontalAlignment.Left; surge.VerticalAlignment = VerticalAlignment.Bottom; surge.Margin = new Thickness(10, 0, 0, 0);
         var rise = new TranslateTransform(); surge.RenderTransform = rise;
         _rare.Children.Insert(Math.Min(_rare.Children.Count, 2), surge);
         var jolt = new TranslateTransform(); _rare.RenderTransform = jolt;
