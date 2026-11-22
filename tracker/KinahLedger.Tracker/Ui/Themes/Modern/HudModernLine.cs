@@ -785,6 +785,7 @@ sealed partial class HudModernLine : ModernLook
         var fb = ModFx.In(_fight, _root);
         var cb = chip != null ? ModFx.In(chip, _root) : Rect.Empty;
         Canvas? layer = null; FrameworkElement? lit = null, ping = null; ModFx.Comet? ca = null, cbm = null; ModFx.Xf? px = null;
+        var darkStop = new GradientStop(Colors.Transparent, 1); var litStop = new GradientStop(Colors.Black, 1);
         double u0 = 0;
         // a wipe's frame sits in the frame's own host
         var flash = new List<Border>();
@@ -797,8 +798,12 @@ sealed partial class HudModernLine : ModernLook
         else if (!fb.IsEmpty)
         {
             layer = FxLayer("end", _root);
-            lit = ModFx.Put(layer, ModFx.Outline(fb, 12, MintC0, 1.2, .75), fb.Left, fb.Top);
-            ca = new ModFx.Comet(layer, MintC0); cbm = new ModFx.Comet(layer, MintC0);
+            lit = ModFx.Put(layer, ModFx.Outline(fb, 12, MintC0, 1.4, .9), fb.Left, fb.Top);
+            // the frame lights mint behind the comets as they climb: a mask whose lit part follows them up
+            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            mask.GradientStops.Add(darkStop); mask.GradientStops.Add(litStop);
+            lit.OpacityMask = mask;
+            ca = new ModFx.Comet(layer, MintC0, 1.4); cbm = new ModFx.Comet(layer, MintC0, 1.4);
             u0 = ModFx.TopAt(fb, 12, cb.IsEmpty ? fb.Right - 40 : cb.Left + cb.Width / 2);
             if (!cb.IsEmpty) { ping = ModFx.Put(layer, ModFx.Outline(cb, cb.Height / 2, MintC0, 1.4), cb.Left, cb.Top); px = new ModFx.Xf(ping); }
         }
@@ -818,23 +823,28 @@ sealed partial class HudModernLine : ModernLook
             {
                 if (ca != null)
                 {
-                    double k = ModFx.InOut(Seg(t, 0, .4)), o = ModFx.Life(t, 0, .04, .38, .43);
-                    ca.At(Bw, -(u0 + .5) + .5 * k, .05, o);
-                    cbm!.At(Fw, u0 + .5 + .5 * k, .05, o);
-                    lit!.Opacity = ModFx.Life(t, .38, .44, .6, .9);
+                    // the comets climb from the foot both ways and meet at the chip by a third; the frame lit behind them,
+                    // then the whole of it flashes at the meeting and eases out
+                    double k = ModFx.InOut(Seg(t, 0, .32)), o = ModFx.Life(t, 0, .03, .3, .35);
+                    ca.At(Bw, -(u0 + .5) + .5 * k, .06, o);
+                    cbm!.At(Fw, u0 + .5 + .5 * k, .06, o);
+                    double y = Math.Clamp((Fw(u0 + .5 + .5 * k).Y - fb.Top) / fb.Height, 0, 1);
+                    bool met = t >= .32;
+                    darkStop.Offset = met ? 0 : Math.Max(0, y - .04); litStop.Offset = met ? .001 : Math.Min(1, y + .04);
+                    lit!.Opacity = t < .32 ? .7 * Seg(t, 0, .04) : t < .34 ? 1 : 1 - Out(Seg(t, .34, .5));
                 }
                 if (chip != null)
                 {
-                    st.ScaleX = st.ScaleY = t < .4 ? 1.15 : 1.15 - .15 * Back(Seg(t, .4, .6), 1.6);
-                    chip.Opacity = Seg(t, .38, .42);
+                    st.ScaleX = st.ScaleY = t < .32 ? 1.15 : 1.15 - .15 * Back(Seg(t, .32, .52), 1.6);
+                    chip.Opacity = Seg(t, .3, .34);
                 }
                 if (px != null)
                 {
-                    double q = Seg(t, .4, .75);
+                    double q = Seg(t, .32, .68);
                     px.S.ScaleX = 1 + 10 * Out(q) / cb.Width; px.S.ScaleY = 1 + 10 * Out(q) / cb.Height;
                     ping!.Opacity = q <= 0 || q >= 1 ? 0 : 1 - q;
                 }
-                if (top != null) top.SetGlint(Seg(t, .42, .85));
+                if (top != null) top.SetGlint(Seg(t, .34, .8));
             }
         }, () =>
         {
