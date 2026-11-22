@@ -30,7 +30,7 @@ sealed partial class HudRift : ModernLook
     static readonly PickStrip.Look Strip = new(26, 4, true, Mod.Br(LilacC, .38), Frozen(GoldC2));
 
     // the room round the panels for the drop under them (drawn inside the window: nothing past its edge)
-    readonly Grid _root = new() { Margin = new Thickness(10, 8, 10, 16), HorizontalAlignment = HorizontalAlignment.Left };
+    readonly Grid _root = new() { Margin = new Thickness(10, 8, 98, 16), HorizontalAlignment = HorizontalAlignment.Left };
     readonly StackPanel _body = new() { HorizontalAlignment = HorizontalAlignment.Left };
     double _opacity = 0.9;
 
@@ -68,6 +68,12 @@ sealed partial class HudRift : ModernLook
     readonly Border _timersInFight = new() { Margin = new Thickness(0, 0, 0, 8), HorizontalAlignment = HorizontalAlignment.Left };
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly TranslateTransform _settle = new();
+    /// <summary>The meter glass's punch (a kill's hit), under its settle.</summary>
+    readonly ScaleTransform _fightPunch = new();
+    /// <summary>The moments' layer over the whole look (AtreiaFx): each moment a stage of its own on it, clipped to the window.</summary>
+    readonly Canvas _fx = new() { IsHitTestVisible = false };
+    /// <summary>Where a pickup's worth comes in, beside the Buddy (in the room at the root's right).</summary>
+    readonly Canvas _lineAnchor = Tac.Anchor(HorizontalAlignment.Right, VerticalAlignment.Center);
     FrameworkElement? _head;
 
     public HudRift() : base(bare: true)
@@ -77,15 +83,15 @@ sealed partial class HudRift : ModernLook
         UseRows(RiftRow.Pitch, m => new RiftRow(this, fit), 15, GapLine);
         _lineArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity, wound: true));
         _lineStack.Children.Add(_runHead); _lineStack.Children.Add(_lineBody);
-        _line.Children.Add(_lineArt); _line.Children.Add(_lineFlare); _line.Children.Add(_linePulse); _line.Children.Add(_lineStack); _line.Children.Add(_lineFx);
+        _line.Children.Add(_lineArt); _line.Children.Add(_lineFlare); _line.Children.Add(_linePulse); _line.Children.Add(_lineStack); _line.Children.Add(_lineFx); _line.Children.Add(_lineAnchor);
         _lineFx.SizeChanged += (_, _) => { var g = new RectangleGeometry(new Rect(0, 0, _lineFx.ActualWidth, _lineFx.ActualHeight), Radius, Radius); g.Freeze(); _lineFx.Clip = g; };
         _fightArt = new TacSketch((dc, s) => RiftPanel(dc, s, Radius, _opacity, wound: true));
         _deepHost.Children.Add(_deep);
         _deepHost.SizeChanged += (_, _) => ClipDeep();
         _fight.Children.Add(_fightArt); _fight.Children.Add(_deepHost); _fight.Children.Add(_fightFlare); _fight.Children.Add(_fightPulse); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightFx);
-        _fight.RenderTransform = _settle;
+        _fight.RenderTransform = new TransformGroup { Children = { _fightPunch, _settle } };
         _body.Children.Add(_fight); _body.Children.Add(_timersUp); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(_note);
-        _root.Children.Add(_body);
+        _root.Children.Add(_body); _root.Children.Add(_fx);
         System.Windows.Documents.TextElement.SetFontFamily(_root, Mod.Face);
         TextOptions.SetTextFormattingMode(_root, TextFormattingMode.Display);
     }
@@ -166,8 +172,13 @@ sealed partial class HudRift : ModernLook
         {
             // no hour yet: the portal closed (an empty ring), the waiting words beside it
             if (!mark) _lineBody.Children.Add(Ring(-1, false, true));
-            var w = Tt(Waiting(f.Abyss), 13, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 2, 0, 0, 0);
-            _lineBody.Children.Add(w);
+            // and the figures there are under the words (in the Abyss: "2 kills · Kinah"): information, never an empty glass
+            var w = Tt(Waiting(f.Abyss), 13, Soft, FontWeights.SemiBold);
+            var sub = Sub(f, false);
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mark ? 0 : 2, 0, 0, 0) };
+            words.Children.Add(w);
+            if (sub.Inlines.Count > 0) words.Children.Add(sub);
+            _lineBody.Children.Add(words);
         }
         else
         {
@@ -575,12 +586,37 @@ sealed partial class HudRift : ModernLook
 
     // ================================================================ the moments
 
-    /// <summary>A pickup: a pulse of rift light runs along the Buddy's tear.</summary>
+    /// <summary>
+    /// A pickup (the small one): a pulse of rift light runs along the Buddy's tear and the worth comes in beside it on a
+    /// small violet glass chip, then goes. A rare drop is the big one (<see cref="RareDrop"/>).
+    /// </summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
         _linePulse.Tint(null);
-        Motion.Play(_linePulse, 1100, t => { _linePulse.At(t); _lineFlare.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .1, .6); }, () => { _linePulse.At(-1); _lineFlare.Opacity = 0; });
+        var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
+        var words = new StackPanel { Margin = new Thickness(10, 3, 10, 4) };
+        words.Children.Add(Tt(worth, 14, p.Worth.Length > 0 ? Mint2 : White, FontWeights.Bold));
+        var nm = Tt(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 9.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -2, 0, 0);
+        words.Children.Add(nm);
+        var chip = new Border
+        {
+            Child = words, MaxWidth = 88, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1),
+            Background = Mod.Grad(true, (Mod.A(DuskC, .95), 0), (Mod.A(VoidC, .96), 1)), BorderBrush = Mod.Grad(true, (Mod.A(CyanC, .85), 0), (Mod.A(VioletC, .5), 1)),
+        };
+        var shift = new TranslateTransform();
+        chip.RenderTransform = shift;
+        chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2 + 4);
+        _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
+        Motion.Play(_linePulse, 1900, t =>
+        {
+            _linePulse.At(t < .58 ? Seg(t, 0, .58) : -1);
+            _lineFlare.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .05, .32);
+            double k = Out(Seg(t, .1, .3));
+            shift.X = -10 * (1 - k);
+            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+        }, () => { _linePulse.At(-1); _lineFlare.Opacity = 0; _lineAnchor.Children.Remove(chip); });
     }
 
     /// <summary>A rare drop: its glass tears open in its grade's colour (a fissure flaring behind the tile, the tear lit in the colour), the tile popping in.</summary>
@@ -590,14 +626,30 @@ sealed partial class HudRift : ModernLook
         var tile = _rareTile;
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
-        Motion.Play(glow, 1600, t =>
+        // the drop comes through the rift: a column of the grade's light pours down onto the tile, it ducks and punches up,
+        // a ring of that light and a burst of rays go out, shards of rift glass in its colour fly off and fall
+        var c = ColorOf(p.Color, p.Grade);
+        var st = AtreiaFx.Stage(_fx, _root);
+        var parts = new List<Action<double>>();
+        if (AtreiaFx.At(tile, _fx, new Point(13, 13)) is { } at)
         {
-            double k = Math.Sin(Math.PI * Seg(t, 0, .9));
+            parts.Add(AtreiaFx.Pillar(st, at + new Vector(0, 6), 36, 86, c, 0, .15, .56));
+            parts.Add(AtreiaFx.Bloom(st, at, 100, 60, AtreiaFx.Glow(c, .9, Colors.White), .12, .18, .58));
+            parts.Add(AtreiaFx.Rays(st, at, 12, 11, 44, 3.4, i => i % 3 == 0 ? LightC : i % 3 == 1 ? Mod.Mix(c, Colors.White, .3) : VioletC, .13, .21, .7, turn: -26, max: .9));
+            parts.Add(AtreiaFx.Ring(st, at, 30, 30, AtreiaFx.Br(Mod.Mix(c, Colors.White, .4)), 2.2, .5, 2.7, .14, .62));
+            var bits = new AtreiaFx.Bits(st);
+            bits.Burst(10, AtreiaFx.Shard, i => AtreiaFx.Br(i % 3 == 0 ? LightC : i % 3 == 1 ? c : LilacC), at, 38, 6, .15, .7, fall: 26, dir: -50, spread: 220, r0: 8, spin: 260, seed: 29);
+            parts.Add(bits.At);
+        }
+        AtreiaFx.Play(_fx, st, 1700, t =>
+        {
+            AtreiaFx.All(parts, t);
+            double k = Math.Sin(Math.PI * Seg(t, .12, .95));
             glow.Opacity = k;
             fis.Opacity = tears.Opacity = Math.Min(1, 1.3 * k);
-            _rareRun.ScaleX = Math.Max(.02, Out(Seg(t, .05, .45)));
-            pulse.At(Seg(t, .1, .7) is var u && u > 0 && u < 1 ? u : -1);
-            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .05, .4), 2.2);
+            _rareRun.ScaleX = Math.Max(.02, Out(Seg(t, .15, .5)));
+            pulse.At(Seg(t, .2, .75) is var u && u > 0 && u < 1 ? u : -1);
+            sc.ScaleX = sc.ScaleY = AtreiaFx.Punch(t, .03, .66, .26, .34);
         }, () => { glow.Opacity = fis.Opacity = tears.Opacity = 0; pulse.At(-1); _rareRun.ScaleX = 1; sc.ScaleX = sc.ScaleY = 1; });
     }
 
@@ -653,6 +705,17 @@ sealed partial class HudRift : ModernLook
         var burstParts = new UIElement[] { shock, flying, tag };
         foreach (var el in burstParts) _lineFx.Children.Add(el);
         _linePulse.Tint(MintC2);
+        // the portal punching as it closes, a crown of rift light turning out of it (on the look's stage, the same 1.8 s)
+        var st = AtreiaFx.Stage(_fx, _root);
+        var extra = new List<Action<double>>();
+        if (AtreiaFx.At(host, _fx, new Point(c, c)) is { } rc)
+        {
+            var portal = AtreiaFx.ScaleOn(host, new Point(c, c));
+            extra.Add(t => portal.ScaleX = portal.ScaleY = AtreiaFx.Punch(t, .42, .95, .1, .22));
+            extra.Add(AtreiaFx.Rays(st, rc, 12, 22, 44, 4.2, i => i % 2 == 0 ? CyanC : VioletC, .5, .6, .95, turn: -34, max: .95));
+            extra.Add(AtreiaFx.Bloom(st, rc, 70, 70, AtreiaFx.Glow(CyanC, .9, Colors.White), .5, .55, .8));
+        }
+        AtreiaFx.Play(_fx, st, 1800, t => AtreiaFx.All(extra, t));
         Motion.Play(art, 1800, t =>
         {
             double run = Out(Seg(t, 0, .55));
@@ -682,15 +745,32 @@ sealed partial class HudRift : ModernLook
         });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights in mint round its edge and settles.</summary>
+    /// <summary>
+    /// An entry opened: a rift tears open across the chip (a jagged line of light snapping out sideways from its middle),
+    /// the chips duck and punch out, rift light flashes through it, a ring ripples off its edge and shards of the rift's
+    /// glass spit out of the tear; then the tear closes and the chip rests.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC2, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
-        var edge = chip.BorderBrush;
-        chip.BorderBrush = Frozen(Mod.Mix(MintC2, Colors.White, .25));
-        Motion.Play(chip, 1300, t => glow.Opacity = .9 * (t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1)), () => { chip.Effect = null; chip.BorderBrush = edge; });
+        if (_firstChip is not { } chip || AtreiaFx.Box(chip, _fx) is not { } r) return;
+        var st = AtreiaFx.Stage(_fx, _root);
+        var pop = AtreiaFx.ScaleOn(_timers, chip.TranslatePoint(new Point(chip.ActualWidth / 2, chip.ActualHeight / 2), _timers));
+        var c = new Point(r.X + r.Width / 2, r.Y + r.Height / 2);
+        var parts = new List<Action<double>>
+        {
+            AtreiaFx.Bloom(st, c, r.Width + 40, r.Height + 30, AtreiaFx.Glow(CyanC, .85, Colors.White), .1, .17, .55, s0: .5),
+            AtreiaFx.Streak(st, c, r.Width + 34, 6, VioletC, .08, .16, .5),
+            AtreiaFx.Ripple(st, r, r.Height / 2, AtreiaFx.Br(MintC2, .95), 1.8, 12, .14, .62),
+            AtreiaFx.Ripple(st, r, r.Height / 2, AtreiaFx.Br(LilacC, .7), 1, 20, .22, .78),
+        };
+        var bits = new AtreiaFx.Bits(st);
+        bits.Burst(8, AtreiaFx.Shard, k => AtreiaFx.Br(k % 3 == 0 ? LightC : k % 3 == 1 ? CyanC : LilacC), c, 18, 5.5, .12, .62, fall: 8, r0: r.Width / 2, spin: 200, seed: 13, squash: .42);
+        parts.Add(bits.At);
+        AtreiaFx.Play(_fx, st, 1150, t =>
+        {
+            pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, 0, .72, .06, .08);
+            AtreiaFx.All(parts, t);
+        }, () => pop.ScaleX = pop.ScaleY = 1);
     }
 
     // ---- the Abyss tearing open (a fight's start): parts drawn once, then only clipped, moved, turned and faded
@@ -854,13 +934,57 @@ sealed partial class HudRift : ModernLook
         }
         bool seated = Seat();
         Seams(wipe ? CoralC : LilacC);
-        Motion.Play(_fightFx, 2400, t =>
+        // on the look's stage: a kill bursts out of the wound (a blinding flare along the tear, a crown of rift light, a
+        // shock ring, shards of the glass flung out and falling) and the glass punches; a wipe is the rift sealing: its
+        // edges go dark, the glass shakes, a coral ring and the shards are pulled back into the wound and gone
+        var st = AtreiaFx.Stage(_fx, _root);
+        var parts = new List<Action<double>>();
+        double fw = _fight.ActualWidth > 0 ? _fight.ActualWidth : FightWidth - 8;
+        var wp = new Point(fw * WoundPeak, WoundY + 2);
+        if (AtreiaFx.Box(_fight, _fx) is { } b)
         {
+            var hit = new Point(b.X + wp.X, b.Y + wp.Y);
+            var bits = new AtreiaFx.Bits(st);
+            if (!wipe)
+            {
+                parts.Add(AtreiaFx.Bloom(st, hit, 170, 90, AtreiaFx.Glow(CyanC, 1, Colors.White), 0, .05, .34, s0: .3));
+                parts.Add(AtreiaFx.Streak(st, new Point(b.X + b.Width / 2, hit.Y), b.Width * 1.05, 8, CyanC, 0, .07, .42));
+                parts.Add(AtreiaFx.Rays(st, hit, 16, 8, b.Width * .5, 4.5, i => i % 3 == 0 ? LightC : i % 3 == 1 ? VioletC : Color.FromRgb(0xFF, 0x2E, 0x9A), .02, .08, .5, turn: -16, max: .6));
+                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .95, b.Width * .4, AtreiaFx.Br(VioletC, .6), 5, .1, 1, .03, .5));
+                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .95, b.Width * .4, AtreiaFx.Br(LightC, .95), 1.4, .1, 1, .03, .5));
+                bits.Burst(12, AtreiaFx.Shard, i => AtreiaFx.Br(i % 3 == 0 ? LightC : i % 3 == 1 ? CyanC : LilacC), hit, b.Width * .32, 8, .04, .55, fall: 40, dir: 90, spread: 300, r0: 8, spin: 300, seed: 31, squash: .6);
+            }
+            else
+            {
+                parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 1, b.Y + 1, b.Width - 2, b.Height - 2), Color.FromRgb(0x06, 0x02, 0x10), .8, .02, .16, .66));
+                parts.Add(AtreiaFx.Ring(st, hit, b.Width * .9, b.Width * .4, AtreiaFx.Br(CoralC, .9), 2.4, 1, .04, .02, .42));
+                parts.Add(AtreiaFx.Bloom(st, hit, 90, 40, AtreiaFx.Glow(CoralC, .9), .34, .42, .62, s0: 1));
+                var rnd = new Random(37);
+                for (int k = 0; k < 11; k++)
+                {
+                    double a = 2 * Math.PI * k / 11 + .3 * rnd.NextDouble(), d = 50 + 60 * rnd.NextDouble();
+                    var u = new Vector(Math.Cos(a), Math.Abs(Math.Sin(a)) * .7);
+                    var from = hit + u * d;
+                    bits.Add(AtreiaFx.Shard, AtreiaFx.Br(k % 3 == 0 ? CoralC : LilacC, .85), from, -u * d, rot0: a * 180 / Math.PI + 180, spin: 120 * (rnd.NextDouble() - .5),
+                        s0: 7, s1: 1.5, delay: .02 + .06 * rnd.NextDouble(), life: .45);
+                }
+            }
+            parts.Add(bits.At);
+        }
+        _fightPunch.CenterX = wp.X; _fightPunch.CenterY = wp.Y;
+        AtreiaFx.Play(_fx, st, 2400, t =>
+        {
+            double k = Math.Min(1, t * 2400 / 1500);
+            AtreiaFx.All(parts, k);
+            if (wipe) _settle.X = AtreiaFx.Shake(k, .02, .46, 5, 3.5);
+            else _fightPunch.ScaleX = _fightPunch.ScaleY = AtreiaFx.Punch(k, 0, .5, .012, .026);
             if (!seated) seated = Seat();   // once the head is laid out (a fight just drawn), then never again
-            double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, 1);
+            double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, .9);
             plate.Opacity = i * (1 - o);
+            // the head under the plate steps back while it shows (their words never sit over each other half seen)
+            if (_head is { } hd0) hd0.Opacity = t < .8 ? 1 - Seg(t, 0, .06) : Seg(t, .88, 1);
             sc.ScaleX = sc.ScaleY = .96 + .04 * i;
             lit.At(Seg(t, .05, .45) is var u && u > 0 && u < 1 ? u : -1);
-        }, () => _fightFx.Children.Clear());
+        }, () => { _fightFx.Children.Clear(); _settle.X = 0; _fightPunch.ScaleX = _fightPunch.ScaleY = 1; if (_head != null) _head.Opacity = 1; });
     }
 }
