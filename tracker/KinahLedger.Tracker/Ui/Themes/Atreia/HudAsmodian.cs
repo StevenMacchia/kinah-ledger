@@ -831,6 +831,8 @@ sealed partial class HudAsmodian : ModernLook
             if (!wipe)
             {
                 parts.Add(AtreiaFx.Streak(st, hit, b.Width * 1.05, 8, HotC, .03, .08, .4));
+                // seven iron spikes flung out of the banner, outward and down (never up past the horns)
+                bits.Burst(7, AtreiaFx.Shard, i => AtreiaFx.Br(i % 2 == 0 ? CrimC : Mod.Mix(HotC, PaleC, .3)), hit, b.Width * .3, 9, .04, .45, fall: 18, dir: 90, spread: 170, r0: 16, spin: 120, seed: 83, squash: .5);
                 bits.Burst(10, AtreiaFx.Flame, i => AtreiaFx.Br(i % 3 == 0 ? PaleC : i % 3 == 1 ? EmberC : HotC), hit, b.Width * .3, 7, .05, .6, fall: -18, dir: -90, spread: 300, r0: 24, spin: 40, seed: 73, squash: .45);
             }
             else
@@ -923,7 +925,7 @@ sealed partial class HudAsmodian : ModernLook
         // the rings kept to the head's band, short of the figures' column: they never cross the rows' names
         var layer = new Canvas { IsHitTestVisible = false, Clip = new RectangleGeometry(new Rect(FightRoom.Left, 0, Math.Max(10, figX - FightRoom.Left), FightRoom.Top + 34)) };
         // the flash over the whole plate, soft to its edges (never cut at the figures' column); only the rings clipped short of it
-        foreach (var el in new UIElement[] { blood, hot, core }) layer.Children.Add(el);
+        // (the rings are not shown any more: they ran past the plate at its horn; spikes fly from the banner in their place)
         _fightFx.Children.Add(flash);
         _fightFx.Children.Add(layer);
         void Scale(System.Windows.Shapes.Ellipse r, double k) { var sc = (ScaleTransform)r.RenderTransform; sc.ScaleX = sc.ScaleY = .2 + 1.2 * k; }

@@ -940,7 +940,7 @@ sealed partial class HudElyos : ModernLook
             if (_lineWings.ActualHeight > 0)
             {
                 var beat = AtreiaFx.ScaleOn(_lineWings, new Point(_lineWings.ActualWidth / 2, _lineWings.ActualHeight / 2));
-                extra.Add(t => { double u = Seg(t, .3, .7); beat.ScaleY = u is > 0 and < 1 ? 1 + .14 * Math.Sin(2 * Math.PI * 2 * u) * (1 - u) : 1; });
+                extra.Add(t => { double u = Seg(t, .3, .7); beat.ScaleY = u is > 0 and < 1 ? 1 + .24 * Math.Sin(2 * Math.PI * 2 * u) * (1 - u) : 1; });
             }
             var bits = new AtreiaFx.Bits(st);
             bits.Burst(6, AtreiaFx.Star, i => AtreiaFx.Br(i % 2 == 0 ? IvoryC : GoldHiC), rc, 26, 4.2, .32, .5, fall: -6, dir: 0, spread: 240, r0: 20, spin: 90, seed: 47);

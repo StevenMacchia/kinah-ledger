@@ -850,7 +850,7 @@ sealed partial class HudPrism : ModernLook
         _lineBand.Fill = Glint;
         var pop = new ScaleTransform(1, 1); chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
         // the newest tile in the strip pops (1.15 and back in 0.22 s): the look's own copy of the strip, only scaled
-        var slot = AtreiaFx.Pop(AtreiaFx.NewestTile(_lineBody), 0, .116, .15, middle: true);
+        var slot = AtreiaFx.Pop(AtreiaFx.NewestTile(_lineBody), 0, .116, .2, middle: true);
         Motion.Play(chip, 1900, t =>
         {
             slot(t);
@@ -901,7 +901,7 @@ sealed partial class HudPrism : ModernLook
             parts.Add(AtreiaFx.Pillar(st, at + new Vector(-12, 6), 10, 78, Spec[0], .02, .17, .5));
             parts.Add(AtreiaFx.Pillar(st, at + new Vector(12, 6), 10, 78, Spec[5], .02, .17, .5));
             var bits = new AtreiaFx.Bits(st);
-            bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 3 == 0 ? Colors.White : i % 3 == 1 ? Mod.Mix(c, Colors.White, .2) : SpecAt(i / 9.0)), at, 36, 4.6, .16, .7,
+            bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 3 == 0 ? Colors.White : i % 3 == 1 ? Mod.Mix(c, Colors.White, .2) : SpecAt(i / 9.0)), at + new Vector(6, 0), 36, 4.6, .16, .7,
                 fall: 26, dir: -30, spread: 120, r0: 8, spin: 220, seed: 23);
             parts.Add(bits.At);
         }
