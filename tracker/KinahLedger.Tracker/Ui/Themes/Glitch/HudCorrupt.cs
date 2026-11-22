@@ -346,10 +346,21 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
         });
     }
 
+    /// <summary>Where <paramref name="el"/>'s top (plus <paramref name="dy"/>) sits in <paramref name="p"/> as a share of its height (<paramref name="fallback"/> before it is laid out).</summary>
+    static double At(GlitchPanel p, FrameworkElement el, double fallback, double dy = 0)
+    {
+        try { return el.ActualHeight > 0 && p.H > 0 && el.IsDescendantOf(p.Root) ? Math.Clamp(el.TranslatePoint(new Point(0, dy), p.Root).Y / p.H, 0, 1) : fallback; }
+        catch (InvalidOperationException) { return fallback; }
+    }
+
+    static readonly Color GroundCol = Rgb(GroundC), TearL = Rgb(MagC, .95), TearR = Rgb(CyanC, .95);
+
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden) return;
         Tear(_deck, _deckGround, Hash(p.Id) < .5 ? 2 : 4, 700, 10);
+        // the hour's line itself jolts: its lower half torn a hair sideways for a few frames
+        _deck.Tear(700, GroundCol, TearL, TearR, new TearBand(At(_deck, _figRow, .4, 14), 9, 9, .04, .2));
         // the tears run in the gaps under the hour's line and under the session's, never through a figure
         double Under(FrameworkElement el, double fallback)
         {
@@ -380,9 +391,12 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
     protected override void RareDrop(Pick p, bool held)
     {
         if (KinahHidden) return;
-        _deck.Flash(Rgb(MagC), .35, 1800, .04, .3);
+        // the big one: the picture tears in three bands at once, flashed in the drop's grade, the frame torn twice
+        var gc = ColorOf(p.Color, p.Grade);
+        _deck.Flash(gc, .45, 1800, .03, .3);
         Tear(_deck, _deckGround, 3, 1100, 12);
         Tear(_deck, _deckGround, 1, 900, -8);
+        _deck.Tear(1800, GroundCol, TearL, TearR, new TearBand(.12, 10, -14, .03, .14), new TearBand(.46, 14, 18, .06, .2), new TearBand(At(_deck, _rare, .8), 22, -10, .1, .24));
         var ghostM = (TranslateTransform)((Border)_found.Children[0]).RenderTransform;
         var ghostC = (TranslateTransform)((Border)_found.Children[1]).RenderTransform;
         var face = (Border)_found.Children[2];
@@ -404,6 +418,9 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
     {
         if (KinahHidden || _bestBlock == null) return;
         Tear(_deck, _deckGround, 2, 900, 7);
+        _deck.Tear(1600, GroundCol, TearL, TearR, new TearBand(.3, 12, 12, .04, .2), new TearBand(.62, 8, -9, .1, .22));
+        // the stream's header steps aside while the bar is over it (never two words over each other)
+        if (_meta.Parent is FrameworkElement mp && mp.Parent is FrameworkElement meta) Motion.Play(meta, 1600, t => meta.Opacity = t < .55 ? 0 : 1, () => meta.Opacity = 1);
         var bar = GlitchBlock(L.T("NEW_BEST.EXE") + "  ★  " + L.T("RECORD WRITTEN"), White, Black, 11.5);
         bar.VerticalAlignment = VerticalAlignment.Top; bar.Margin = new Thickness(6, 5, 6, 0);
         ((Border)bar.Children[2]).Padding = new Thickness(6, 1, 6, 1);
@@ -463,6 +480,16 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
         var bw = new Border { BorderBrush = White, BorderThickness = new Thickness(1.5) };
         cell.Children.Add(bw);
         Motion.Play(bw, 900, t => bw.Opacity = t < .5 && (int)(t * 12) % 2 == 0 ? 1 : 0, () => cell.Children.Remove(bw));
+        // the block lands with a punch (in wide and flat, past its size, back), the line it sits on torn for a beat
+        // (it grows from its outer edge, the session's figure keeping its room)
+        var sc = new ScaleTransform(); block.RenderTransformOrigin = new Point(right ? 0 : 1, .5); block.RenderTransform = sc;
+        Motion.Play(block, 1100, t =>
+        {
+            double k = Math.Clamp(t / .3, 0, 1);
+            sc.ScaleX = t < .3 ? .3 + .7 * Back(k, 1.2) : 1; sc.ScaleY = t < .3 ? 1.7 - .7 * Back(k, 2.2) : 1;
+        }, () => block.ClearValue(UIElement.RenderTransformProperty));
+        var (panel, line) = KinahHidden ? (_cam, (FrameworkElement)_camTimerCell) : (_deck, _sessRow);
+        panel.Tear(1100, GroundCol, TearL, TearR, new TearBand(At(panel, line, .8), 12, right ? 10 : -12, .04, .2));
     }
 
     protected override void FightStarted(Encounter e, bool held)
@@ -484,6 +511,8 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             canvas.Children.Add(rect);
             blocks.Add((rect, .08 + r.NextDouble() * .4, x));
         }
+        // as the picture locks, it tears in four bands that snap back one after another
+        _cam.Tear(1000, GroundCol, TearL, TearR, new TearBand(.08, 16, -16, .04, .2), new TearBand(.3, 22, 20, .08, .26), new TearBand(.55, 12, -12, .12, .3), new TearBand(.78, 18, 14, .16, .34));
         _cam.Run(canvas, 1000, under: true, step: t =>
         {
             cover.Opacity = t < .06 ? .9 : t < .4 ? .9 * (1 - (t - .06) / .34) : 0;
@@ -522,6 +551,12 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             shift.X = t < .2 ? ((s % 3) - 1) * 10 * (1 - t / .2) : 0;
             banner.Opacity = t < .03 ? 0 : t < .5 ? 1 : t < .62 ? (Steps(t, 40) * 40 % 2 == 0 ? .6 : .15) : 0;
         });
+        // the picture tears: a kill one clean cut through the winner's row; a wipe falls apart, band after band, for half a second
+        double RowAt(int i) => Meter is { Members.Count: > 0 } mm && i < mm.Members.Count && mm.RowOf(mm.Members[i].Id)?.Root is FrameworkElement r ? At(_cam, r, .3 + .15 * i) : .3 + .15 * i;
+        if (wipe)
+            _cam.Tear(2200, GroundCol, Rgb(RedC2, .95), TearR, new TearBand(RowAt(0), 16, 22, .02, .12), new TearBand(RowAt(1) + .02, 20, -26, .06, .18),
+                new TearBand(RowAt(2), 12, 18, .1, .22), new TearBand(.05, 14, -14, .14, .24), new TearBand(RowAt(3), 24, 30, .16, .26));
+        else _cam.Tear(2200, GroundCol, TearL, TearR, new TearBand(RowAt(0), 30, 26, .03, .2));
         // the frame tears: a kill once, a wipe every slice, again and again
         Tear(_cam, _camGround, 1, 900, wipe ? 14 : 9);
         if (!wipe && Meter?.Members.FirstOrDefault(m => m.TopDps) is { } top && Meter.RowOf(top.Id) is CorruptRows.Row row) row.Glint(2200);

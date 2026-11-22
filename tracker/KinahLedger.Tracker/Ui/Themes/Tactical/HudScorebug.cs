@@ -515,11 +515,16 @@ sealed partial class HudScorebug : TacticalLook
         void W(Border b, double p) { if (p >= 1) b.ClearValue(UIElement.ClipProperty); else b.Clip = Wipe(0, (FightWidth + 30) * p, 60); }
         W(_titleHost, tw); W(_hpHost, hw);
         // the board's ground fades up, then each row wipes in after the one above it (its words on once it is in)
-        _rowsHost.Opacity = Seg(_enter, .2, .3);
+        _rowsHost.Opacity = Seg(_enter, .12, .2);
+        // (each row's words come on just after its wipe is in: never a figure cut by the slanted edge)
         if (Meter is { } m)
             for (int i = 0; i < m.Members.Count; i++)
-                if (m.RowOf(m.Members[i].Id) is BoardRow r) { r.Enter = Out(Seg(_enter, .2 + i * .08, .44 + i * .08)); r.Apply(); }
-        _footHost.Clip = _enter >= 1 ? null : Wipe(0, (FightWidth + 30) * Out(Seg(_enter, .55, .8)), 60);
+                if (m.RowOf(m.Members[i].Id) is BoardRow r)
+                {
+                    double a = .12 + Math.Min(i, 6) * .05;
+                    r.Enter = Out(Seg(_enter, a, a + .14)); r.WordsIn = Seg(_enter, a + .14, a + .2); r.Apply();
+                }
+        _footHost.Opacity = Seg(_enter, .45, .6);
     }
 
     // ================================================================ the moments
@@ -609,7 +614,16 @@ sealed partial class HudScorebug : TacticalLook
     /// <summary>An entry opened: the green block's edge pulses outward twice.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        Motion.Play(_timerEdge, 1500, t => { _timerPulse = t; _timerEdge.InvalidateVisual(); }, () => { _timerPulse = -1; _timerEdge.InvalidateVisual(); });
+        var blk = _timerBlock as Grid;
+        var sc = new ScaleTransform(1, 1);
+        if (blk != null) { blk.RenderTransformOrigin = new Point(0, .5); blk.RenderTransform = sc; }
+        Motion.Play(_timerEdge, 1500, t =>
+        {
+            // the block cuts in from its left edge past its width and settles, then a light crosses it and its edge rings out
+            sc.ScaleX = t < .16 ? Out(t / .16) * 1.1 : 1 + .1 * (1 - Back(Seg(t, .16, .3), 2));
+            _timerPulse = Seg(t, .2, 1); _timerEdge.InvalidateVisual();
+            if (blk != null) SweepOf(blk, t < .14 ? -1 : Seg(t, .14, .5));
+        }, () => { _timerPulse = -1; _timerEdge.InvalidateVisual(); if (blk != null) { SweepOf(blk, -1); blk.ClearValue(UIElement.RenderTransformProperty); } });
     }
 
     /// <summary>A fight started: the leaderboard's blocks slide in one after another, as a broadcast's transition.</summary>
@@ -653,19 +667,36 @@ sealed partial class HudScorebug : TacticalLook
         _fightFx.Children.Clear(); _fightFx.Children.Add(dim); _fightFx.Children.Add(band); _fightFx.Children.Add(plate);
         plate.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double w = plate.DesiredSize.Width + 16;
+        // after its hit the plate rises into the title bar and sits there, smaller, the title stepping aside (2026-11-21: the band
+        // held over the board two and a half seconds hid the figures); a scale and a move, never a clip on its words once in
+        double boxH = _fightGrid.ActualHeight > 0 ? _fightGrid.ActualHeight : 220, titleH = _titleHost.ActualHeight > 0 ? _titleHost.ActualHeight : 30;
+        double plateMid = plate.VerticalAlignment == VerticalAlignment.Top ? plate.Margin.Top + plateH / 2 : boxH - plate.Margin.Bottom - plateH / 2;
+        double rise = titleH / 2 - plateMid, small = Math.Min(.62, (titleH - 2) / plateH);
+        var lift = new TranslateTransform(); var shrink = new ScaleTransform(1, 1);
+        plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = new TransformGroup { Children = { shrink, lift } };
+        var title = _titleHost; var board = _rowsHost;
         Motion.Play(_fightFx, 2600, t =>
         {
-            double i = Out(Seg(t, .06, .22)), o = Seg(t, .84, 1); o = o * o;
-            plate.Clip = Wipe(w * o, w * i, plateH + 4);
-            dim.Opacity = band.Opacity = t < .84 ? Out(Seg(t, 0, .1)) : 1 - Seg(t, .84, 1);
+            double i = Out(Seg(t, .02, .1)), o = Seg(t, .86, 1); o = o * o;
+            plate.Clip = t < .1 ? Wipe(0, w * i, plateH + 4) : null;
+            plate.Opacity = 1 - o;
+            // the hit: the band and the dim over the board for a third of a second, then gone as the plate rises
+            dim.Opacity = band.Opacity = t < .13 ? Out(Seg(t, 0, .04)) : 1 - Seg(t, .13, .18);
+            double k = Out(Seg(t, .14, .24));
+            lift.Y = rise * k; shrink.ScaleX = shrink.ScaleY = 1 - (1 - small) * k;
+            title.Opacity = t > .17 && t < .88 ? 0 : 1;
+            // the board itself dims under the hit (the plate crosses its words on the way up), back as the plate leaves it
+            board.Opacity = 1 - .88 * Seg(t, 0, .03) * (1 - Seg(t, .16, .22));
             // a win glints; a loss slams in with a red flash and no shine
-            if (!wipe) { main.Sweep = Seg(t, .24, .6); main.Art.InvalidateVisual(); }
+            if (!wipe) { main.Sweep = Seg(t, .3, .6); main.Art.InvalidateVisual(); }
             else
             {
-                plate.RenderTransform = new TranslateTransform(6 * (1 - Out(Seg(t, .06, .2))), 0);
-                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .08 && t < .2 ? .6 : 0), _studio ? 1 : .9));
+                lift.X = 6 * (1 - Out(Seg(t, .02, .12)));
+                band.Background = Frozen(Tac.A(Tac.Mix(InkC0, RedC, t > .03 && t < .12 ? .6 : 0), _studio ? 1 : .9));
+                // the board shudders once under the loss
+                board.RenderTransform = t < .2 ? new TranslateTransform(Math.Round(4 * (1 - t / .2) * ((int)(t * 60) % 2 == 0 ? 1 : -1)), 0) : null;
             }
             if (winner != null) { winner.Sweep = Seg(t, .04, .4); winner.Apply(); }
-        }, () => { _fightFx.Children.Clear(); if (winner != null) { winner.Sweep = -1; winner.Apply(); } });
+        }, () => { _fightFx.Children.Clear(); title.Opacity = 1; board.Opacity = 1; board.ClearValue(UIElement.RenderTransformProperty); if (winner != null) { winner.Sweep = -1; winner.Apply(); } });
     }
 }

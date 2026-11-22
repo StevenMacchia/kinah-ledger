@@ -93,11 +93,22 @@ static class TerminalRows
         readonly Border _rankBox = new() { HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(2, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center };
         readonly TextBlock _rank = Txt("", 11.5, PhosDim, Face, FontWeights.SemiBold);
         readonly TextBlock _name = Txt("", 11.5, Phos, Face, FontWeights.SemiBold, trim: true);
-        /// <summary>The load: [cells    20.0%] in the class's colour, as long as the member's DPS against the top member's.</summary>
+        /// <summary>
+        /// The load: [cells   20.0%  4.1K] in the class's colour, as long as the member's DPS against the top member's, the share
+        /// and the DPS printed inside its brackets as htop prints a meter's figure, on a dark plate the cells run under
+        /// (2026-11-21: the bar ran from the name to the DPS column only, the leader's about 60% of the row; it now runs to
+        /// the row's end).
+        /// </summary>
         readonly Grid _load = new() { VerticalAlignment = VerticalAlignment.Center };
-        readonly GlitchLevel _bar = new(13, Br(PhosC, .12), Cells);
-        readonly TextBlock _share = Txt("", 10.5, Br(PhosC, .82), Face, FontWeights.SemiBold);
+        readonly GlitchLevel _bar = new(15, Br(PhosC, .12), Cells);
+        readonly TextBlock _open = Txt("[", 14, PhosDim, Face, FontWeights.SemiBold), _close = Txt("]", 14, PhosDim, Face, FontWeights.SemiBold);
+        readonly Grid _lite = new();
+        readonly Border _plate = new() { Background = Br(GroundC, .8), Margin = new Thickness(2, 1, 0, 1) };
+        readonly TextBlock _share = Txt("", 10.5, Br(PhosC, .86), Face, FontWeights.SemiBold);
         readonly TextBlock _fig = FigCell(13, Pale, Face, 0);
+        /// <summary>A PvP assist's "by Tilly" inside the bar at its left, on the name's line (it wrapped under the name), on a plate of its own.</summary>
+        readonly TextBlock _by = Txt("", 10.5, PhosDim, Face, FontWeights.SemiBold);
+        readonly Border _byPlate = new() { Background = Br(GroundC, .72), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 1, 0, 1), Visibility = Visibility.Collapsed };
         // the quiet line: the class, the CP, the marks, a healer's figure; an expanded meter's damage and crit at its end
         readonly TextBlock _cls = Txt("", 10.5, Phos, Face);
         readonly TextBlock _cp = Txt("", 10, PhosDim, Face, FontWeights.SemiBold);
@@ -122,15 +133,18 @@ static class TerminalRows
             _rankBox.Child = _rank; _line.Children.Add(_rankBox);
             _name.Margin = new Thickness(4, 0, Gap0, 0); Grid.SetColumn(_name, 1); _line.Children.Add(_name);
             var load = _load;
-            foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
+            foreach (var w in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
                 load.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
-            load.Children.Add(Txt("[", 14, PhosDim, Face, FontWeights.SemiBold));
-            _bar.Root.Margin = new Thickness(1, 0, 0, 0); _bar.Root.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(_bar.Root, 1); load.Children.Add(_bar.Root);
-            _share.Margin = new Thickness(5, 0, 1, 0); Grid.SetColumn(_share, 2); load.Children.Add(_share);
-            var close = Txt("]", 14, PhosDim, Face, FontWeights.SemiBold); Grid.SetColumn(close, 3); load.Children.Add(close);
-            Grid.SetColumn(load, 2); _line.Children.Add(load);
-            _fig.Margin = new Thickness(0, 0, 2, 0); Grid.SetColumn(_fig, 3); _line.Children.Add(_fig);
+            load.Children.Add(_open);
+            // the cell: the cells, then the words over them twice (light over the track, dark over the fill)
+            var cell = new Grid { Margin = new Thickness(1, 0, 1, 0) };
+            _bar.Root.VerticalAlignment = VerticalAlignment.Center;
+            cell.Children.Add(_bar.Root);
+            Words(_lite, _byPlate, _by, _plate, _share, _fig);
+            cell.Children.Add(_lite);
+            Grid.SetColumn(cell, 1); load.Children.Add(cell);
+            Grid.SetColumn(_close, 2); load.Children.Add(_close);
+            Grid.SetColumn(load, 2); Grid.SetColumnSpan(load, 2); _line.Children.Add(load);
             // the quiet line under the name
             var quiet = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(RankW + 4, 0, 2, 0) };
             _extra.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(_extra, Dock.Right); quiet.Children.Add(_extra);
@@ -139,6 +153,16 @@ static class TerminalRows
             _heal.Margin = new Thickness(Gap0, 0, 0, 0);
             Grid.SetRow(quiet, 1); _root.Children.Add(quiet);
             Grid.SetRowSpan(_bloom, 2); _root.Children.Add(_bloom);
+        }
+
+        /// <summary>The words in the bar: a PvP assist's killer at the left, the share and the DPS at the right on their plate.</summary>
+        static void Words(Grid g, Border byPlate, TextBlock by, Border plate, TextBlock share, TextBlock fig)
+        {
+            g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            by.Margin = new Thickness(3, 0, 4, 0); by.VerticalAlignment = VerticalAlignment.Center; byPlate.Child = by; g.Children.Add(byPlate);
+            Grid.SetColumn(plate, 1); Grid.SetColumnSpan(plate, 2); g.Children.Add(plate);
+            share.Margin = new Thickness(6, 0, 0, 0); share.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(share, 1); g.Children.Add(share);
+            fig.Margin = new Thickness(8, 0, 3, 0); fig.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(fig, 2); g.Children.Add(fig);
         }
 
         public void Set(MeterMember m, MeterContext c, bool fresh)
@@ -158,9 +182,9 @@ static class TerminalRows
             _bar.Fill.Background = Frozen(cc);
             _bar.Slide(c.Key + "|bar", BarOf(m, c));
             _share.Text = m.ShareText;
-            // before a hit no load: the Combat Power short ("cp 167.5K") in the DPS's place, free to run into the empty load
-            _load.Visibility = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
-            Grid.SetColumn(_fig, m.CpOnly ? 2 : 3); Grid.SetColumnSpan(_fig, m.CpOnly ? 2 : 1);
+            // before a hit no load: the Combat Power short ("cp 167.5K") in the DPS's place, no cells, no brackets
+            var lit = m.CpOnly ? Visibility.Hidden : Visibility.Visible;
+            _bar.Root.Visibility = _open.Visibility = _close.Visibility = _share.Visibility = _plate.Visibility = lit;
             _fig.Inlines.Clear();
             if (m.CpOnly && m.FigureValue > 0) { _fig.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 10, FontWeights.SemiBold)); _fig.Inlines.Add(Rn(Amounts.Meter(m.FigureValue), PhosDim)); }
             else _fig.Inlines.Add(Rn(m.Figure, Pale));
@@ -169,8 +193,11 @@ static class TerminalRows
             _cls.Text = ClassCode(m.Class);
             _cls.Foreground = Frozen(cc);
             _cp.Inlines.Clear();
-            if (m.Cp.Length > 0) { if (!m.Pvp) _cp.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 9.5)); _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim)); }
-            _cp.Visibility = m.Cp.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // a PvP row's words where the CP would be ("by Tilly") go inside its bar, on the name's line
+            _by.Text = m.Pvp ? m.Cp : "";
+            _byPlate.Visibility = _by.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (m.Cp.Length > 0 && !m.Pvp) { _cp.Inlines.Add(Rn(L.T("CP").ToLower(CultureInfo.CurrentCulture) + " ", PhosFaint, 9.5)); _cp.Inlines.Add(Rn(m.Cp, you ? Br(PhosC, .9) : PhosDim)); }
+            _cp.Visibility = _cp.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             _death.Child = m.Deaths > 0 ? Txt("†" + m.Deaths.ToString(CultureInfo.InvariantCulture), 11, Red, Face) : null;
             _death.Visibility = m.Deaths > 0 ? Visibility.Visible : Visibility.Collapsed;
             bool top = m.TopDps || m.TopHeals;

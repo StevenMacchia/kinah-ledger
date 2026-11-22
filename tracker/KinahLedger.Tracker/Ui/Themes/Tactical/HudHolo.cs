@@ -63,6 +63,10 @@ sealed partial class HudHolo : TacticalLook
     readonly Grid _fightFx = new() { IsHitTestVisible = false };
     readonly ScaleTransform _project = new(1, 1);
     double _projectLine = 0;
+    /// <summary>The fight's head ("◇ Kashapa  2:40"): the end's callout settles over it.</summary>
+    FrameworkElement? _head;
+    /// <summary>The first timer's chip (an entry opening projects it in).</summary>
+    Grid? _chip;
 
     public HudHolo() : base(bare: false, Face)
     {
@@ -347,7 +351,7 @@ sealed partial class HudHolo : TacticalLook
     protected override void DrawTimers(IReadOnlyList<TimerBoard.Item> due, DateTime now)
     {
         _timers.Children.Clear();
-        _chipArt = null;
+        _chipArt = null; _chip = null;
         foreach (var i in due.Take(KinahHidden ? 2 : HudWindow.TimerLineMax))
         {
             var (text, tone) = TimerWords(i, now);
@@ -371,7 +375,7 @@ sealed partial class HudHolo : TacticalLook
             var t = Tt(text, first ? 13 : 11.5, Frozen(first ? c : Tac.A(c, .9)), Face, first ? FontWeights.Bold : FontWeights.SemiBold);
             t.Margin = first ? new Thickness(10, 3, 11, 4) : new Thickness(8, 2, 9, 3);
             chip.Children.Add(t);
-            if (first) _chipArt = art;
+            if (first) { _chipArt = art; _chip = chip; }
             _timers.Children.Add(chip);
         }
         PlaceTimers();
@@ -417,6 +421,7 @@ sealed partial class HudHolo : TacticalLook
         }
         Grid.SetColumn(right, 1); head.Children.Add(right);
         _fightBody.Children.Add(head);
+        _head = head;
         if (e.Waiting)
         {
             var wt = Tt(e.ReadyText, 13.5, Pale, Face, FontWeights.SemiBold); wt.Margin = new Thickness(0, 7, 0, 1);
@@ -508,8 +513,8 @@ sealed partial class HudHolo : TacticalLook
             for (double y = 0; y < s.Height; y += 3) dc.DrawRectangle(Frozen(Tac.A(DeepC, .85 * lines)), null, new Rect(0, y, s.Width, 1.6));
         });
         chip.Children.Add(mask);
-        var reveal = new RectangleGeometry(new Rect(0, 0, 200, 0));
-        chip.Clip = reveal;
+        // it opens downward from its top edge by its scale (a growing clip cut its words while it opened)
+        var open = new ScaleTransform(1, 0); chip.RenderTransformOrigin = new Point(0, 0); chip.RenderTransform = open;
         Canvas.SetLeft(chip, 8);
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
@@ -518,8 +523,8 @@ sealed partial class HudHolo : TacticalLook
         Motion.Play(chip, 2000, t =>
         {
             sweep = Seg(t, 0, .4); scan.InvalidateVisual();
-            // top to bottom, as the scan crosses the panel's edge; then the scan lines thin out
-            reveal.Rect = new Rect(-2, -2, 220, (ch + 4) * Out(Seg(t, .2, .36)));
+            // top to bottom, as the scan crosses the panel's edge (a hair past its size, back); then the scan lines thin out
+            open.ScaleY = Back(Seg(t, .2, .34), 1.6); open.ScaleX = 1 + .08 * (1 - Out(Seg(t, .2, .4)));
             lines = 1 - Seg(t, .28, .5); mask.InvalidateVisual();
             chip.Opacity = t < .86 ? Math.Max(.5, Seg(t, .2, .32)) : 1 - Seg(t, .86, 1);
         }, () => { _lineAnchor.Children.Remove(chip); _lineFx.Children.Remove(scan); });
@@ -529,7 +534,9 @@ sealed partial class HudHolo : TacticalLook
     protected override void RareDrop(Pick p, bool held)
     {
         if (_hexHost is not Grid hex || hex.Children[0] is not TacSketch art) return;
-        // the frame unfolds and the tile blooms in (from 0.6, past 1.15, settling); RARE DROP lights amber while it plays
+        // the line's glass flashes the drop's grade; the frame unfolds and the tile blooms in (from 0.6, past 1.15, settling);
+        // RARE DROP lights amber while it plays
+        if (_line.Visibility == Visibility.Visible) Flash(_line, ColorOf(p.Color, p.Grade), 1600);
         var sc = new ScaleTransform(1, 1);
         hex.RenderTransformOrigin = new Point(.5, .5); hex.RenderTransform = sc;
         var label = _rareLabel;
@@ -543,11 +550,20 @@ sealed partial class HudHolo : TacticalLook
     }
     TextBlock? _rareLabel;
 
+    /// <summary>A flash of <paramref name="c"/> over the fight's glass as a kill lands (drawn once, its opacity moved): up at once, gone by a fifth of the course.</summary>
+    static void Flash(Grid over, Color c, double ms)
+    {
+        var art = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Tac.A(c, .34)), null, Tac.Cut(new Rect(0, 0, s.Width, s.Height), Cut))) { IsHitTestVisible = false, Opacity = 0 };
+        over.Children.Add(art);
+        Motion.Play(art, ms, t => art.Opacity = t < .02 ? t / .02 : 1 - Out(Seg(t, .02, .2)), () => over.Children.Remove(art));
+    }
+
     /// <summary>Your best passed: the ring's arc runs on round to full with a light trail and RECORD lights under it.</summary>
     protected override void BestPassed(bool held)
     {
         if (_ring == null || _ringArt == null) return;
         var ring = _ring; var art = _ringArt;
+        if (_line.Visibility == Visibility.Visible) Flash(_line, GreenC, 2000);
         // the arc runs from the share before (the beat ring is full: from 0.85 of it)
         double was = _share is > 0 and < 1 ? _share : .82;
         bool beat = _beat;
@@ -571,7 +587,34 @@ sealed partial class HudHolo : TacticalLook
     /// <summary>An entry opened: the green chip's outline traces itself in, a light at its head.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        Motion.Play(_timers, 1100, t => { _trace = Out(t); _chipArt?.InvalidateVisual(); }, () => { _trace = 1; _chipArt?.InvalidateVisual(); });
+        var chip = _chip;
+        var sc = new ScaleTransform(1, 1);
+        Border? sweep = null; TranslateTransform? st = null;
+        if (chip != null)
+        {
+            chip.RenderTransformOrigin = new Point(0, .5); chip.RenderTransform = sc;
+            // a light crossing the chip once (its glass clips it)
+            st = new TranslateTransform(-40, 0);
+            sweep = new Border { Width = 26, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false, RenderTransform = st,
+                Background = new LinearGradientBrush(Tac.A(Colors.White, 0), Tac.A(Colors.White, 0), 0) { GradientStops = { new GradientStop(Tac.A(Colors.White, 0), 0), new GradientStop(Tac.A(GreenC, .55), .5), new GradientStop(Tac.A(Colors.White, 0), 1) } } };
+            chip.ClipToBounds = true;
+            chip.Children.Add(sweep);
+        }
+        Motion.Play(_timers, 1300, t =>
+        {
+            _trace = Out(Seg(t, .1, .8)); _chipArt?.InvalidateVisual();
+            if (chip == null) return;
+            // projected on: flickering up, a punch past its size, settled; a light crossing it
+            chip.Opacity = t < .14 ? ((int)(t / .035) % 2 == 0 ? .3 : 1) : 1;
+            sc.ScaleX = sc.ScaleY = t < .14 ? 1.22 : 1 + .22 * (1 - Back(Seg(t, .14, .36), 2.2));
+            if (st != null) st.X = -40 + (chip.ActualWidth + 60) * Seg(t, .26, .62);
+        }, () =>
+        {
+            _trace = 1; _chipArt?.InvalidateVisual();
+            if (chip == null) return;
+            chip.Opacity = 1; chip.ClearValue(UIElement.RenderTransformProperty); chip.ClipToBounds = false;
+            if (sweep != null) chip.Children.Remove(sweep);
+        });
     }
 
     /// <summary>A fight started: its panel projects in, out of a bright line across its middle.</summary>
@@ -625,16 +668,45 @@ sealed partial class HudHolo : TacticalLook
         }
         if (height < least) { top -= (least - height) / 2; height = least; }
         var zone = new Grid { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Math.Max(0, top), 0, 0), Height = height };
-        var dim = new Border { Background = Frozen(Tac.A(DeepC, .78)), Opacity = 0 };
-        zone.Children.Add(dim); zone.Children.Add(band);
-        _fightFx.Children.Clear(); _fightFx.Children.Add(zone);
-        Motion.Play(_fightFx, 2600, t =>
+        zone.Children.Add(band);
+        // the slim callout the hit leaves on the head: the words at the head's size, the clock (or RECONNECTING) at its right
+        var slim = new Grid { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(5, 4, 5, 0) };
+        var ss = new ScaleTransform(1, 0); slim.RenderTransformOrigin = new Point(.5, .5); slim.RenderTransform = ss;
+        slim.Children.Add(new TacSketch((dc, s) =>
         {
-            scale.ScaleY = Math.Max(.03, Out(Seg(t, .04, .2)));
-            scale.ScaleX = Out(Seg(t, 0, .1)) * .9 + .1;
-            words.Opacity = t < .16 ? 0 : t < .19 ? .4 : t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            band.Opacity = t < .84 ? 1 : 1 - Seg(t, .84, 1);
-            dim.Opacity = t < .84 ? Out(Seg(t, 0, .14)) : 1 - Seg(t, .84, 1);
-        }, () => _fightFx.Children.Clear());
+            var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
+            dc.DrawGeometry(Frozen(Tac.A(DeepC, .96)), Tac.P(Frozen(c), 1.2), Tac.Cut(r, 6));
+            dc.DrawRectangle(Frozen(Tac.A(c, .14)), null, new Rect(1, 1, Math.Max(0, s.Width - 2), Math.Max(0, s.Height / 2 - 1)));
+        }));
+        var slimWords = new Grid { Margin = new Thickness(10, 3, 10, 3) };
+        slimWords.ColumnDefinitions.Add(new ColumnDefinition()); slimWords.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        slimWords.Children.Add(Tt(L.T(wipe ? "SIGNAL LOST" : "TARGET ELIMINATED"), 14.5, Frozen(wipe ? CoralC : PaleC), Face, FontWeights.Bold));
+        var tail = Tt(wipe ? L.T("RECONNECTING") : "◇ " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 10, Frozen(Tac.A(c, .9)), Small, FontWeights.SemiBold);
+        tail.VerticalAlignment = VerticalAlignment.Center; tail.Margin = new Thickness(10, 1, 0, 0); Grid.SetColumn(tail, 1); slimWords.Children.Add(tail);
+        slim.Children.Add(slimWords);
+        _fightFx.Children.Clear(); _fightFx.Children.Add(zone); _fightFx.Children.Add(slim);
+        var body = _fightBody; var head = _head;
+        // a kill: the glass flashes cyan as the hit lands; a wipe: the projection fails, flickering and slipping sideways
+        var slip = new TranslateTransform(); _fightBody.RenderTransform = slip;
+        Motion.Play(_fightFx, 2400, t =>
+        {
+            // the hit: out of a line across the rows, held a moment (the rows dimmed under it), folded back into a line
+            scale.ScaleY = t < .17 ? Math.Max(.03, Out(Seg(t, .02, .07))) : Math.Max(0, 1 - Out(Seg(t, .17, .2)));
+            scale.ScaleX = Out(Seg(t, 0, .05)) * .9 + .1;
+            band.Opacity = t < .2 ? 1 : 0;
+            words.Opacity = t < .05 ? 0 : t < .07 ? .4 : t < .17 ? 1 : 0;
+            body.Opacity = 1 - .88 * Seg(t, 0, .03) * (1 - Seg(t, .17, .22));
+            // then the slim callout opens on the head, the head stepping aside under it, until it goes
+            ss.ScaleY = t < .18 ? 0 : t < .84 ? Back(Seg(t, .18, .25), 1.8) : 1 - Seg(t, .84, .94);
+            slim.Opacity = t < .18 ? 0 : t < .2 ? .5 : t < .84 ? 1 : 1 - Seg(t, .84, .94);
+            if (head != null) head.Opacity = t > .18 && t < .94 ? 0 : 1;
+            if (wipe)
+            {
+                int s = (int)(t * 50);
+                slip.X = t < .3 ? Math.Round(4 * (1 - t / .3) * (s % 3 - 1)) : 0;
+                if (t > .17 && t < .5) body.Opacity = s % 4 == 0 ? .55 : 1;
+            }
+        }, () => { _fightFx.Children.Clear(); body.Opacity = 1; if (head != null) head.Opacity = 1; body.ClearValue(UIElement.RenderTransformProperty); });
+        if (!wipe) Flash(_fight, CyanC, 2400);
     }
 }
