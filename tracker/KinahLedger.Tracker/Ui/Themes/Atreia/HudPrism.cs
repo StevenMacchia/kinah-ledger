@@ -849,10 +849,13 @@ sealed partial class HudPrism : ModernLook
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
         _lineBand.Fill = Glint;
         var pop = new ScaleTransform(1, 1); chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
+        // the newest tile in the strip pops (1.15 and back in 0.22 s): the look's own copy of the strip, only scaled
+        var slot = AtreiaFx.Pop(AtreiaFx.NewestTile(_lineBody), 0, .116, .15, middle: true);
         Motion.Play(chip, 1900, t =>
         {
+            slot(t);
             LineSheen(t < .4 ? Seg(t, 0, .4) : -1);
-            double k = Back(Seg(t, .06, .22), 2.2);
+            double k = Back(Seg(t, .06, .24), 3);
             shift.X = -14 * (1 - k);
             pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .06, .4, .0, .05);
             chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
@@ -864,7 +867,9 @@ sealed partial class HudPrism : ModernLook
     static Brush MakeGlint()
     {
         var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-        b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, 0), 0)); b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, .42), .5)); b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, 0), 1));
+        // two narrow bands, the first brighter: a highlight sliding over glass
+        foreach (var (at, a) in new[] { (0.0, 0.0), (.2, 0.0), (.3, .72), (.4, 0.0), (.58, 0.0), (.66, .5), (.74, 0.0), (1.0, 0.0) })
+            b.GradientStops.Add(new GradientStop(Mod.A(Colors.White, a), at));
         b.Freeze();
         return b;
     }
@@ -897,7 +902,7 @@ sealed partial class HudPrism : ModernLook
             parts.Add(AtreiaFx.Pillar(st, at + new Vector(12, 6), 10, 78, Spec[5], .02, .17, .5));
             var bits = new AtreiaFx.Bits(st);
             bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 3 == 0 ? Colors.White : i % 3 == 1 ? Mod.Mix(c, Colors.White, .2) : SpecAt(i / 9.0)), at, 36, 4.6, .16, .7,
-                fall: 26, dir: -50, spread: 220, r0: 8, spin: 220, seed: 23);
+                fall: 26, dir: -30, spread: 120, r0: 8, spin: 220, seed: 23);
             parts.Add(bits.At);
         }
         AtreiaFx.Play(_fx, st, 1700, t =>
@@ -942,7 +947,7 @@ sealed partial class HudPrism : ModernLook
             parts.Add(AtreiaFx.Bloom(st, c, 74, 74, AtreiaFx.Glow(Colors.White, .75), .3, .36, .66));
             parts.Add(AtreiaFx.Rays(st, c, 14, 22, 34, 4.2, i => SpecAt(i / 13.0), .3, .38, .8, turn: 40, max: 1));
             var bits = new AtreiaFx.Bits(st);
-            bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 4 == 0 ? Colors.White : SpecAt(i / 9.0)), c, 26, 4.6, .32, .55, fall: 12, dir: 0, spread: 250, r0: 20, spin: 220, seed: 5);
+            bits.Burst(10, AtreiaFx.Diamond, i => AtreiaFx.Br(i % 4 == 0 ? Colors.White : SpecAt(i / 9.0)), c, 26, 4.6, .32, .55, fall: 12, dir: 0, spread: 140, r0: 20, spin: 220, seed: 5);
             parts.Add(bits.At);
         }
         parts.Add(AtreiaFx.Pop(AtreiaFx.Hour(_lineBody), .3, .46, .08));
@@ -1063,14 +1068,13 @@ sealed partial class HudPrism : ModernLook
                 var at = new Point(b.X + b.Width * .58, b.Y + hy + 8);
                 parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 1, b.Y + 1, b.Width - 2, b.Height - 4), Color.FromRgb(0x12, 0x04, 0x08), .75, .02, .14, .62));
                 parts.Add(AtreiaFx.Bloom(st, at, 70, 44, AtreiaFx.Glow(CoralC, .9, Colors.White), 0, .03, .22, s0: .6));
-                parts.Add(AtreiaFx.Shatter(st, at, 6, 70, CoralC, 4, .01, .08, .44, squash: .55, wobble: .1));
-                var rnd = new Random(17);
-                for (int k = 0; k < 5; k++)
+                // six straight cracks out of one point, at once, gone by t .26; three dark chips of the glass drop out of it
+                parts.Add(AtreiaFx.Shatter(st, at, 6, 66, CoralC, 4, .01, .05, .42, squash: .55, wobble: .06, segs: 2, ring: false));
+                for (int k = 0; k < 3; k++)
                 {
-                    var o = new Point(at.X + (rnd.NextDouble() - .5) * 120, at.Y + (rnd.NextDouble() - .5) * 26);
-                    var col = k % 3 == 0 ? Mod.Mix(CoralC, Colors.White, .3) : Color.FromRgb(0xB8, 0xBE, 0xCC);
-                    bits.Add(AtreiaFx.Shard, AtreiaFx.Br(col, .85), o, new Vector((rnd.NextDouble() - .5) * 10, 4), fall: 44 + 30 * rnd.NextDouble(),
-                        rot0: 60 + 60 * rnd.NextDouble(), spin: (rnd.NextDouble() - .5) * 300, s0: 4 + 3 * rnd.NextDouble(), s1: 3, delay: .06 + .08 * rnd.NextDouble(), life: .55);
+                    var o = at + new Vector((k - 1) * 14, 2 + 3 * (k % 2));
+                    bits.Add(AtreiaFx.Shard, AtreiaFx.Br(Color.FromRgb(0x2A, 0x2C, 0x34), .95), o, new Vector((k - 1) * 3, 0), fall: 14,
+                        rot0: 70 + 25 * k, spin: (k - 1) * 40, s0: 6, s1: 5, delay: .05 + .03 * k, life: .36);
                 }
             }
             parts.Add(bits.At);

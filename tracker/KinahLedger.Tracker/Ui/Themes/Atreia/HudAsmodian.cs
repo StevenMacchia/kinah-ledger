@@ -605,14 +605,29 @@ sealed partial class HudAsmodian : ModernLook
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
         var band = (TranslateTransform)_sheenBand.RenderTransform;
         double w = Math.Max(120, _line.ActualWidth > 0 ? _line.ActualWidth : FightWidth * .7);
+        // the newest tile pops (1.15 and back in 0.22 s) and three embers flick up off it (on the look's stage)
+        var tile = AtreiaFx.NewestTile(_line);
+        var st = AtreiaFx.Stage(_fx, _root);
+        var parts = new List<Action<double>> { AtreiaFx.Pop(tile, 0, .116, .15, middle: true) };
+        if (tile != null && AtreiaFx.At(tile, _fx, new Point(tile.ActualWidth / 2, 2)) is { } tc)
+        {
+            var embers = new AtreiaFx.Bits(st);
+            for (int k = 0; k < 3; k++)
+                embers.Add(AtreiaFx.Flame, AtreiaFx.Br(k == 1 ? PaleC : EmberC, .95), tc + new Vector((k - 1) * 6, 0), new Vector((k - 1) * 5, -16 - 4 * (k % 2)), rot0: -90 + (k - 1) * 15,
+                    s0: 6, s1: 2, delay: .02 + .02 * k, life: .26);
+            parts.Add(embers.At);
+        }
+        var pop = new ScaleTransform(1, 1); chip.RenderTransform = new TransformGroup { Children = { pop, shift } };
+        AtreiaFx.Play(_fx, st, 1900, t => AtreiaFx.All(parts, t));
         Motion.Play(chip, 1900, t =>
         {
             double k0 = Seg(t, 0, .5);
             band.X = -70 + (w + 70) * k0; _sheenBand.Opacity = t < .5 ? Math.Sin(Math.PI * k0) : 0;
             Heat(_lineHeat, t < .5 ? .55 * Math.Sin(Math.PI * k0) : 0);
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+            double k = Back(Seg(t, .06, .24), 3);
+            shift.X = -14 * (1 - k);
+            pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .06, .4, 0, .05);
+            chip.Opacity = t < .82 ? Math.Min(1, Seg(t, .06, .16)) : 1 - Seg(t, .82, 1);
         }, () => { _sheenBand.Opacity = 0; Heat(_lineHeat, 0); _lineAnchor.Children.Remove(chip); });
     }
 
@@ -631,7 +646,9 @@ sealed partial class HudAsmodian : ModernLook
         sparks.Start(Enumerable.Range(0, 7).Select(i => (new Point(tx - 10 + 3.4 * i, ty), 40 + i, 20.0)));
         double w = Math.Max(160, _rare.ActualWidth > 0 ? _rare.ActualWidth : 260);
         var slam = new ScaleTransform(1, 1); _rare.RenderTransformOrigin = new Point(.04, .5); _rare.RenderTransform = slam;
-        var white = new TacSketch((dc, s) => { if (s.Width > 2 * G && s.Height > 2 * G) dc.DrawGeometry(Brushes.White, null, Plate(new Rect(G, G, s.Width - 2 * G, s.Height - 2 * G), 8, 3)); }) { Opacity = 0, IsHitTestVisible = false };
+        // the slam's flash on the plate in the grade's colour (at 40%), not white over its words
+        var gc = ColorOf(p.Color, p.Grade);
+        var white = new TacSketch((dc, s) => { if (s.Width > 2 * G && s.Height > 2 * G) dc.DrawGeometry(AtreiaFx.Br(gc), null, Plate(new Rect(G, G, s.Width - 2 * G, s.Height - 2 * G), 8, 3)); }) { Opacity = 0, IsHitTestVisible = false };
         _rare.Children.Add(white);
         // on the look's stage, the same 1.5 s: a column of dark fire in the grade's colour slams down onto the tile with the
         // plate, a ring of that fire and a crown of rays burst out of the tile
@@ -640,8 +657,17 @@ sealed partial class HudAsmodian : ModernLook
         var extra = new List<Action<double>>();
         if (AtreiaFx.At(tile, _fx, new Point(13, 13)) is { } at)
         {
-            extra.Add(AtreiaFx.Pillar(st, at + new Vector(0, 6), 38, 86, Mod.Mix(c, HotC, .2), 0, .07, .5));
-            extra.Add(AtreiaFx.Bloom(st, at, 100, 60, AtreiaFx.Glow(c, .95, PaleC), .05, .1, .5));
+            extra.Add(AtreiaFx.Pillar(st, at + new Vector(0, 6), 38, 86, CrimC, 0, .07, .5));
+            // dark fire: six black-red tongues licking up off the icon for 0.4 s
+            var fire = new AtreiaFx.Bits(st);
+            for (int k = 0; k < 6; k++)
+            {
+                var col = k % 3 == 0 ? Mod.Mix(BloodC, Colors.Black, .35) : k % 3 == 1 ? CrimC : HotC;
+                fire.Add(AtreiaFx.Flame, AtreiaFx.Br(col, .95), at + new Vector((k - 2.5) * 4.5, 8), new Vector((k - 2.5) * 2.5, -22 - 6 * (k % 2)), rot0: -90 + (k - 2.5) * 8,
+                    s0: 10, s1: 3, delay: .06 + .025 * k, life: .27);
+            }
+            extra.Add(fire.At);
+            extra.Add(AtreiaFx.Bloom(st, at, 100, 60, AtreiaFx.Glow(HotC, .9, PaleC), .05, .1, .5));
             extra.Add(AtreiaFx.Rays(st, at, 12, 11, 44, 3.6, i => i % 2 == 0 ? Mod.Mix(c, Colors.White, .35) : HotC, .06, .14, .62, turn: 24, max: .9));
         }
         AtreiaFx.Play(_fx, st, 1500, t => AtreiaFx.All(extra, t));
@@ -649,9 +675,9 @@ sealed partial class HudAsmodian : ModernLook
         {
             // the slam: from 1.12 to its size in 100 ms (inside the window), a white flash on the plate
             slam.ScaleX = slam.ScaleY = 1.12 - .12 * Out(Seg(t, 0, .07));
-            white.Opacity = t < .04 ? .8 * Seg(t, 0, .04) : .8 * (1 - Seg(t, .04, .2));
+            white.Opacity = t < .04 ? .4 * Seg(t, 0, .04) : .4 * (1 - Seg(t, .04, .2));
             if (heat != null) Heat(heat, t < .15 ? Seg(t, 0, .15) : 1 - Seg(t, .15, .85));
-            if (band != null) { double k = Seg(t, .05, .6); ((TranslateTransform)band.RenderTransform).X = -70 + (w - 50) * Out(k); band.Opacity = k is > 0 and < 1 ? Math.Sin(Math.PI * k) : 0; }
+            if (band != null) band.Opacity = 0;   // (its band ran past the plate's cut end: the fire carries the moment)
             sparks.Step(t is > .12 and < .95 ? Seg(t, .12, .95) : 1);
             sc.ScaleX = sc.ScaleY = AtreiaFx.Punch(t, 0, .5, .2, .3);
         }, () => { if (heat != null) Heat(heat, 0); if (band != null) band.Opacity = 0; sparks.Clear(); sc.ScaleX = sc.ScaleY = 1; slam.ScaleX = slam.ScaleY = 1; _rare.Children.Remove(white); });
@@ -859,17 +885,21 @@ sealed partial class HudAsmodian : ModernLook
     static Geometry MakeCut() { var g = Geometry.Parse("M 76,0 L 90,0 L 14,100 L 0,100 Z"); g.Freeze(); return g; }
     static readonly Brush SlashFill = Mod.Grad(false, (Color.FromArgb(0x00, 0xE0, 0x1C, 0x2A), 0), (Color.FromArgb(0xD0, 0xE0, 0x1C, 0x2A), .3), (Color.FromArgb(0xFF, 0xFF, 0xF2, 0xE0), .5), (Color.FromArgb(0xD0, 0xE0, 0x1C, 0x2A), .7), (Color.FromArgb(0x00, 0xE0, 0x1C, 0x2A), 1));
 
-    /// <summary>The blood moon behind the title flares: a bright copy of it (drawn once) scales from 1.4 down to its place and fades.</summary>
+    /// <summary>The flare's fade from its left (a mask): clear over its part past the plate's box, whole by its middle.</summary>
+    static readonly Brush FlareFade = Mod.Grad(false, (Colors.Transparent, 0), (Colors.Transparent, .4), (Colors.Black, .6), (Colors.Black, 1));
+
+    /// <summary>The blood moon behind the title flares: a bright copy of it (drawn once) scales from 1.2 down to its place and fades.</summary>
     void SigilFlare()
     {
         double r = 30, cx = FightRoom.Left + 2, cy = FightRoom.Top + 16;
         var flare = new TacSketch((dc, s) => { BloodMoon(dc, new Point(r * 1.4, r * 1.4), r); dc.DrawEllipse(SigilHot, null, new Point(r * 1.4, r * 1.4), r * .9, r * .9); }, r * 2.8, r * 2.8)
-            { Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(1.4, 1.4) };
+            { Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(1.2, 1.2), OpacityMask = FlareFade };
         Canvas.SetLeft(flare, cx - r * 1.4); Canvas.SetTop(flare, cy - r * 1.4);
         _fightFx.Children.Add(flare);
         Motion.Play(flare, 700, t =>
         {
-            var sc = (ScaleTransform)flare.RenderTransform; sc.ScaleX = sc.ScaleY = 1.4 - .4 * Out(Seg(t, 0, .4));
+            // from 1.2 (its top stays inside the plate's box), its left side faded out before the box's edge: never cut hard
+            var sc = (ScaleTransform)flare.RenderTransform; sc.ScaleX = sc.ScaleY = 1.2 - .2 * Out(Seg(t, 0, .4));
             flare.Opacity = t < .15 ? Seg(t, 0, .15) : 1 - Seg(t, .3, 1);
         }, () => _fightFx.Children.Remove(flare));
     }
@@ -890,7 +920,8 @@ sealed partial class HudAsmodian : ModernLook
         var blood = Ring(ShockBlood, 8, D); var hot = Ring(ShockHot, 4, D); var core = Ring(Brushes.White, 1, D - 4);
         foreach (var (r, d) in new[] { (blood, D), (hot, D), (core, D - 4) }) { Canvas.SetLeft(r, at.X - d / 2); Canvas.SetTop(r, at.Y - d * .31); }
         double figX = FightRoom.Left + FightPad + Math.Max(60, _rowsW - 110);
-        var layer = new Canvas { IsHitTestVisible = false, Clip = new RectangleGeometry(new Rect(0, 0, figX, h)) };
+        // the rings kept to the head's band, short of the figures' column: they never cross the rows' names
+        var layer = new Canvas { IsHitTestVisible = false, Clip = new RectangleGeometry(new Rect(FightRoom.Left, 0, Math.Max(10, figX - FightRoom.Left), FightRoom.Top + 34)) };
         // the flash over the whole plate, soft to its edges (never cut at the figures' column); only the rings clipped short of it
         foreach (var el in new UIElement[] { blood, hot, core }) layer.Children.Add(el);
         _fightFx.Children.Add(flash);

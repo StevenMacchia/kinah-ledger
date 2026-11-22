@@ -871,10 +871,13 @@ sealed partial class HudElyos : ModernLook
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
         _line.UpdateLayout(); FitSheen();
+        // the newest tile in the strip pops (1.15 and back in 0.22 s): the look's own copy of the strip, only scaled
+        var slot = AtreiaFx.Pop(AtreiaFx.NewestTile(_line), 0, .116, .15, middle: true);
         Motion.Play(chip, 1900, t =>
         {
+            slot(t);
             LineSheen(Seg(t, 0, .45));
-            double k = Back(Seg(t, .06, .22), 2.2);
+            double k = Back(Seg(t, .06, .24), 3);
             shift.X = -14 * (1 - k);
             pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .06, .4, 0, .05);
             chip.Opacity = t < .82 ? Math.Min(1, Seg(t, .06, .16)) : 1 - Seg(t, .82, 1);
@@ -932,6 +935,13 @@ sealed partial class HudElyos : ModernLook
             extra.Add(t => halo.ScaleX = halo.ScaleY = AtreiaFx.Punch(t, 0, .92, .08, .24));
             extra.Add(AtreiaFx.Pop(AtreiaFx.Hour(_lineBody), .3, .46, .08));
             extra.Add(AtreiaFx.Bloom(st, rc, 80, 80, AtreiaFx.Glow(WarmC, .95, IvoryC), .3, .36, .7));
+            extra.Add(AtreiaFx.Rays(st, rc, 16, 22, 34, 3.6, i => i % 2 == 0 ? GoldHiC : WarmC, .3, .38, .8, turn: 20, max: .95));
+            // the Buddy's wings beat twice with the punch (their drawing only scaled up and down from the plate's middle)
+            if (_lineWings.ActualHeight > 0)
+            {
+                var beat = AtreiaFx.ScaleOn(_lineWings, new Point(_lineWings.ActualWidth / 2, _lineWings.ActualHeight / 2));
+                extra.Add(t => { double u = Seg(t, .3, .7); beat.ScaleY = u is > 0 and < 1 ? 1 + .14 * Math.Sin(2 * Math.PI * 2 * u) * (1 - u) : 1; });
+            }
             var bits = new AtreiaFx.Bits(st);
             bits.Burst(6, AtreiaFx.Star, i => AtreiaFx.Br(i % 2 == 0 ? IvoryC : GoldHiC), rc, 26, 4.2, .32, .5, fall: -6, dir: 0, spread: 240, r0: 20, spin: 90, seed: 47);
             bits.Burst(5, AtreiaFx.Feather, i => AtreiaFx.Br(i % 2 == 0 ? GoldHiC : IvoryC, .95), rc, 24, 7, .34, .62, fall: 22, dir: 0, spread: 200, r0: 18, spin: 60, seed: 53, sway: 4);
@@ -942,8 +952,8 @@ sealed partial class HudElyos : ModernLook
         {
             full.Opacity = Out(Seg(t, 0, .4));
             double f = Seg(t, .3, .8);
-            fs.ScaleX = fs.ScaleY = .8 + .75 * Out(f);
-            flare.Opacity = f is > 0 and < 1 ? 1 - f : 0;
+            fs.ScaleX = fs.ScaleY = 1;
+            flare.Opacity = 0;   // (the thin ring spilled past the plate: the sun's rays carry the burst)
             if (_ringRays is { RenderTransform: ScaleTransform rs } rr)
             {
                 double b = Seg(t, .25, .85);
@@ -994,9 +1004,9 @@ sealed partial class HudElyos : ModernLook
         {
             double cx = Math.Round(w / 2);
             var beamScale = new ScaleTransform(1, 0);
-            var beam = new System.Windows.Shapes.Rectangle { Width = 40, Height = h, Fill = BeamBrush, RenderTransform = beamScale, RenderTransformOrigin = new Point(.5, 0) };
+            var beam = new System.Windows.Shapes.Rectangle { Width = 40, Height = h, Fill = BeamBrush, OpacityMask = BeamFade, RenderTransform = beamScale, RenderTransformOrigin = new Point(.5, 0) };
             Canvas.SetLeft(beam, cx - 20);
-            var halo = new System.Windows.Shapes.Rectangle { Width = 150, Height = h, Fill = BeamHalo, RenderTransform = beamScale, RenderTransformOrigin = new Point(.5, 0) };
+            var halo = new System.Windows.Shapes.Rectangle { Width = 150, Height = h, Fill = BeamHalo, OpacityMask = BeamFade, RenderTransform = beamScale, RenderTransformOrigin = new Point(.5, 0) };
             Canvas.SetLeft(halo, cx - 75);
             _fightFx.Children.Add(halo);
             var flareScale = new ScaleTransform(.2, .2, 40, 20);
@@ -1014,7 +1024,7 @@ sealed partial class HudElyos : ModernLook
             {
                 double drop = Seg(t, 0, .12), wipe = Out(Seg(t, .12, .36));
                 beamScale.ScaleY = Out(drop);
-                beam.Opacity = halo.Opacity = t < .2 ? 1 : 1 - Seg(t, .22, .45);
+                beam.Opacity = halo.Opacity = t < .18 ? 1 : 1 - Seg(t, .18, .3);
                 double f = Seg(t, .08, .4);
                 flareScale.ScaleX = flareScale.ScaleY = .2 + .9 * Out(f);
                 flare.Opacity = f is > 0 and < 1 ? Math.Sin(Math.PI * Math.Pow(f, .5)) : 0;
@@ -1022,7 +1032,7 @@ sealed partial class HudElyos : ModernLook
                 open.Rect = new Rect(cx - half, -20, 2 * half, h + 40);
                 eL.X = cx - half - 1.5; eR.X = cx + half - 1.5;
                 edgeL.Opacity = edgeR.Opacity = wipe is > 0 and < 1 ? 1 - wipe * .6 : 0;
-                _fightBody.Opacity = Seg(t, .14, .28);
+                _fightBody.Opacity = Seg(t, .26, .36);   // only once the plate is open wide (no words ghosting past the opening)
                 _fightShift.Y = 5 * (1 - Out(Seg(t, .14, .5)));
             }, () => { _fightFx.Children.Clear(); _fightArt.Clip = null; _fightBody.Opacity = 1; _fightShift.Y = 0; });
         }
@@ -1107,11 +1117,11 @@ sealed partial class HudElyos : ModernLook
                 parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 1, b.Y + 1, b.Width - 2, b.Height - 2), AbyssC, .85, .02, .16, .68));
                 parts.Add(AtreiaFx.Bloom(st, crest, 130, 60, AtreiaFx.Glow(CoralC, .7), 0, .04, .3, s0: .8));
                 var rnd = new Random(67);
-                for (int k = 0; k < 6; k++)
+                for (int k = 0; k < 5; k++)
                 {
-                    var o = new Point(b.X + 16 + (b.Width - 32) * (k + .5) / 6, b.Y + 6 + 30 * rnd.NextDouble());
-                    bits.Add(AtreiaFx.Feather, AtreiaFx.Br(k % 3 == 0 ? Mod.Mix(GreyC, IvoryC, .5) : GreyC, .9), o, new Vector((rnd.NextDouble() - .5) * 14, 10), fall: 50 + 30 * rnd.NextDouble(),
-                        rot0: 70 + 40 * rnd.NextDouble(), spin: (rnd.NextDouble() - .5) * 60, s0: 10 + 3 * rnd.NextDouble(), s1: 8, delay: .04 + .14 * rnd.NextDouble(), life: .75, sway: 7);
+                    var o = new Point(b.X + 16 + (b.Width - 32) * (k + .5) / 5, b.Y + 6 + 30 * rnd.NextDouble());
+                    bits.Add(AtreiaFx.Feather, AtreiaFx.Br(k % 3 == 0 ? Mod.Mix(GreyC, IvoryC, .5) : GreyC, .9), o, new Vector((rnd.NextDouble() - .5) * 4, 22), fall: 64 + 20 * rnd.NextDouble(),
+                        rot0: 70 + 40 * rnd.NextDouble(), spin: (rnd.NextDouble() - .5) * 60, s0: 10 + 3 * rnd.NextDouble(), s1: 8, delay: .04 + .1 * rnd.NextDouble(), life: .5, sway: 2);
                 }
             }
             parts.Add(bits.At);
@@ -1143,8 +1153,9 @@ sealed partial class HudElyos : ModernLook
         if (!_wingsOn) return;
         Motion.Play(_bigWingL, 1400, p =>
         {
-            double k = p < .25 ? Out(p / .25) : 1 - Out(Seg(p, .55, 1));
-            _bigWingLTurn.Angle = 10 * k; _bigWingRTurn.Angle = -10 * k;
+            // down 12 degrees, easing in, held 0.3 s, then back to rest with a small overshoot
+            double k = p < .22 ? Math.Pow(p / .22, 2) : p < .44 ? 1 : 1 - Back(Seg(p, .44, 1), 1.6);
+            _bigWingLTurn.Angle = 12 * k; _bigWingRTurn.Angle = -12 * k;
             _bigWingLScale.ScaleY = _bigWingRScale.ScaleY = 1 - .08 * k;
             _bigWingL.Opacity = _bigWingR.Opacity = 1 - .35 * k;
         }, () => { _bigWingLTurn.Angle = _bigWingRTurn.Angle = 0; _bigWingLScale.ScaleY = _bigWingRScale.ScaleY = 1; _bigWingL.Opacity = _bigWingR.Opacity = 1; });

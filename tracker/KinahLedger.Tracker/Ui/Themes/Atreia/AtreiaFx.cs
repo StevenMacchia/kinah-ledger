@@ -127,7 +127,14 @@ static class AtreiaFx
     {
         readonly Canvas _host;
         readonly List<(Path P, MatrixTransform M, Point O, Vector V, double Fall, double R0, double Spin, double S0, double S1, double D, double L, double Sway)> _b = new();
-        public Bits(Canvas host) { _host = host; }
+        /// <summary>The room the bits fly in: the stage's clip less 6 px each way (a bit never reaches the window's edge).</summary>
+        readonly Rect _room;
+        public Bits(Canvas host)
+        {
+            _host = host;
+            var r = host.Clip?.Bounds ?? Rect.Empty;
+            _room = r.IsEmpty || r.Width < 20 || r.Height < 20 ? Rect.Empty : new Rect(r.X + 6, r.Y + 6, r.Width - 12, r.Height - 12);
+        }
 
         /// <summary>One bit: from <paramref name="o"/> along <paramref name="v"/> (eased out), falling <paramref name="fall"/> px by its end, sized <paramref name="s0"/> to <paramref name="s1"/>, alive from <paramref name="delay"/> for <paramref name="life"/> of the course.</summary>
         public void Add(Geometry g, Brush fill, Point o, Vector v, double fall = 0, double rot0 = 0, double spin = 0, double s0 = 4, double s1 = 4, double delay = 0, double life = 1, double sway = 0)
@@ -165,6 +172,12 @@ static class AtreiaFx
                 double k = Out(u);
                 var at = b.O + b.V * k + new Vector(b.Sway * Math.Sin(2 * Math.PI * 1.5 * u), b.Fall * u * u);
                 double s = b.S0 + (b.S1 - b.S0) * u;
+                if (!_room.IsEmpty)
+                {
+                    // kept inside the room by its size: a bit that would reach the edge slides along it instead
+                    double e = s;
+                    at = new Point(Math.Clamp(at.X, _room.Left + e, Math.Max(_room.Left + e, _room.Right - e)), Math.Clamp(at.Y, _room.Top + e, Math.Max(_room.Top + e, _room.Bottom - e)));
+                }
                 var m = Matrix.Identity;
                 m.Scale(s, s);
                 m.Rotate(b.R0 + b.Spin * u + (b.Sway != 0 ? 18 * Math.Sin(2 * Math.PI * 1.5 * u) : 0));
@@ -358,7 +371,7 @@ static class AtreiaFx
     /// jagged arms up to <paramref name="len"/> long (squashed to <paramref name="squash"/> of it upright) and a broken ring joining
     /// them near the middle; it spreads from the point over [<paramref name="a"/>, <paramref name="run"/>] and fades by <paramref name="b"/>.
     /// </summary>
-    public static Action<double> Shatter(Canvas st, Point c, int n, double len, Color col, int seed, double a, double run, double b, double squash = .6, double wobble = .35)
+    public static Action<double> Shatter(Canvas st, Point c, int n, double len, Color col, int seed, double a, double run, double b, double squash = .6, double wobble = .35, int segs = 4, bool ring = true)
     {
         var rnd = new Random(seed);
         var g = new StreamGeometry();
@@ -370,18 +383,17 @@ static class AtreiaFx
                 double ang = 2 * Math.PI * (i + .35 * rnd.NextDouble()) / n, l = len * (.55 + .45 * rnd.NextDouble());
                 var p = new Point(0, 0);
                 x.BeginFigure(p, false, false);
-                int segs = 4;
                 for (int k = 1; k <= segs; k++)
                 {
                     double r = l * k / segs, wob = (rnd.NextDouble() - .5) * wobble;
                     p = new Point(Math.Cos(ang + wob) * r, Math.Sin(ang + wob) * r * squash);
                     x.LineTo(p, true, true);
-                    if (k == 2) mids.Add(p);
+                    if (k == Math.Max(1, segs / 2)) mids.Add(p);
                 }
             }
             // the broken ring between the arms, near the middle
             for (int i = 0; i < mids.Count; i++)
-                if (rnd.NextDouble() < .7) { x.BeginFigure(mids[i], false, false); x.LineTo(mids[(i + 1) % mids.Count], true, true); }
+                if (ring && rnd.NextDouble() < .7) { x.BeginFigure(mids[i], false, false); x.LineTo(mids[(i + 1) % mids.Count], true, true); }
         }
         g.Freeze();
         var sc = new ScaleTransform(.2, .2);
@@ -440,15 +452,24 @@ static class AtreiaFx
     /// The figure's punch: <paramref name="tb"/> scaled round its left middle (so it never grows into what is left of it),
     /// up to 1 + <paramref name="over"/> over [<paramref name="a"/>, <paramref name="b"/>] with a dip after, ending on 1.
     /// </summary>
-    public static Action<double> Pop(FrameworkElement? tb, double a, double b, double over)
+    public static Action<double> Pop(FrameworkElement? tb, double a, double b, double over, bool middle = false)
     {
         if (tb == null || tb.ActualHeight <= 0) return _ => { };
-        var sc = ScaleOn(tb, new Point(0, tb.ActualHeight / 2));
+        var sc = ScaleOn(tb, new Point(middle ? tb.ActualWidth / 2 : 0, tb.ActualHeight / 2));
         return t =>
         {
             double u = Seg(t, a, b);
             sc.ScaleX = sc.ScaleY = u <= 0 || u >= 1 ? 1 : u < .3 ? 1 + over * Out(u / .3) : 1 + over * Math.Cos(Math.PI * 1.5 * (u - .3) / .7) * Math.Exp(-2.2 * (u - .3) / .7);
         };
+    }
+
+    /// <summary>The pickup strip's newest tile under <paramref name="root"/> (the strip puts it first), or null: a pickup pops it.</summary>
+    public static FrameworkElement? NewestTile(DependencyObject root)
+    {
+        if (root is FrameworkElement { Tag: "pick-tile" } fe) return fe;
+        foreach (var ch in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            if (NewestTile(ch) is { } hit) return hit;
+        return null;
     }
 
     /// <summary>A scale set round a point of the element (its punch): the element's own transform becomes this, kept after.</summary>

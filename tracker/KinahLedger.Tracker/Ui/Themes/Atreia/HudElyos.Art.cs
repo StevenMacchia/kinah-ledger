@@ -188,7 +188,10 @@ sealed partial class HudElyos
     /// <summary>The beam of a fight's start: a column of light, white at its heart, warm at its sides, gone at its edges.</summary>
     static LinearGradientBrush BeamBrush => _beam ??= Lin(new Point(0, 0), new Point(1, 0),
         (Mod.A(WarmC, 0), 0), (Mod.A(WarmC, .3), .4), (Colors.White, .49), (Colors.White, .51), (Mod.A(WarmC, .3), .6), (Mod.A(WarmC, 0), 1));
-    static LinearGradientBrush? _beamHalo;
+    static LinearGradientBrush? _beamHalo, _beamFade;
+    /// <summary>The beam's fall-off down its length (a mask): soft at its top, fading out before the plate's foot, never a hard end.</summary>
+    static LinearGradientBrush BeamFade => _beamFade ??= Lin(new Point(0, 0), new Point(0, 1),
+        (Mod.A(Colors.Black, .2), 0), (Colors.Black, .12), (Mod.A(Colors.Black, .7), .55), (Mod.A(Colors.Black, 0), 1));
     /// <summary>The beam's halo: a wide soft column of sky light round it.</summary>
     static LinearGradientBrush BeamHalo => _beamHalo ??= Lin(new Point(0, 0), new Point(1, 0),
         (Mod.A(Color.FromRgb(0x7F, 0xC4, 0xFF), 0), 0), (Mod.A(Color.FromRgb(0x9F, 0xD4, 0xFF), .38), .5), (Mod.A(Color.FromRgb(0x7F, 0xC4, 0xFF), 0), 1));

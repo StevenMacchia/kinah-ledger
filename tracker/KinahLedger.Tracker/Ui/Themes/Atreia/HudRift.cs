@@ -609,11 +609,18 @@ sealed partial class HudRift : ModernLook
         chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(chip, 6); Canvas.SetTop(chip, -chip.DesiredSize.Height / 2 + 4);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(chip);
+        // the newest tile pops (1.15 and back in 0.22 s) under a 0.15 s glint of the tear's cyan (on the look's stage)
+        var tile = AtreiaFx.NewestTile(_line);
+        var st = AtreiaFx.Stage(_fx, _root);
+        var parts = new List<Action<double>> { AtreiaFx.Pop(tile, 0, .116, .15, middle: true) };
+        if (tile != null && AtreiaFx.At(tile, _fx, new Point(tile.ActualWidth / 2, tile.ActualHeight / 2)) is { } tc)
+            parts.Add(AtreiaFx.Streak(st, tc, 46, 5, CyanC, 0, .03, .08));
+        AtreiaFx.Play(_fx, st, 1900, t => AtreiaFx.All(parts, t));
         Motion.Play(_linePulse, 1900, t =>
         {
             _linePulse.At(t < .58 ? Seg(t, 0, .58) : -1);
             _lineFlare.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Seg(t, .05, .32);
-            double k = Back(Seg(t, .06, .22), 2.2);
+            double k = Back(Seg(t, .06, .24), 3);
             shift.X = -14 * (1 - k);
             pop.ScaleX = pop.ScaleY = AtreiaFx.Punch(t, .06, .4, 0, .05);
             chip.Opacity = t < .82 ? Math.Min(1, Seg(t, .06, .16)) : 1 - Seg(t, .82, 1);
@@ -640,7 +647,7 @@ sealed partial class HudRift : ModernLook
             // the drop tears its own glass open: a line of its colour snapping out along the row from the tile
             parts.Add(AtreiaFx.Streak(st, new Point(at.X + 90, at.Y), 200, 6, c, .14, .22, .6));
             var bits = new AtreiaFx.Bits(st);
-            bits.Burst(10, AtreiaFx.Shard, i => AtreiaFx.Br(i % 3 == 0 ? LightC : i % 3 == 1 ? c : LilacC), at, 38, 6, .15, .7, fall: 26, dir: -50, spread: 220, r0: 8, spin: 260, seed: 29);
+            bits.Burst(10, AtreiaFx.Shard, i => AtreiaFx.Br(i % 3 == 0 ? LightC : i % 3 == 1 ? c : LilacC), at, 38, 6, .15, .7, fall: 26, dir: -30, spread: 120, r0: 8, spin: 260, seed: 29);
             parts.Add(bits.At);
         }
         AtreiaFx.Play(_fx, st, 1700, t =>
@@ -869,6 +876,7 @@ sealed partial class HudRift : ModernLook
                 _fightBody.OpacityMask ??= _reveal;
             }
             else _fightBody.OpacityMask = null;
+            _fightBody.Opacity = open < .02 ? 0 : 1;   // nothing before the tear opens (the slit's mask is not yet a slit)
             _ripAt.X = Math.Max(-12, px - half - 12); _ripAt2.X = Math.Min(w - 12, px + half - 12);
             _ripFront!.Opacity = _ripFront2!.Opacity = t < .02 ? Seg(t, 0, .02) : open < 1 ? 1 : 1 - Seg(t, .3, .4);
             _flashScale.CenterX = px; _flashScale.CenterY = 6;
@@ -885,7 +893,7 @@ sealed partial class HudRift : ModernLook
             _deepAt.Y = 16 * (1 - Out(Seg(t, 0, .9))); _deepAt.X = -8 * (1 - Out(Seg(t, 0, .9)));
         }, () =>
         {
-            _fightArt.Clip = null; _fightBody.OpacityMask = null; _deepHost.Opacity = 1; _ripFront!.Opacity = _ripFront2!.Opacity = 0; _flash!.Opacity = 0; _fightFlare.Opacity = 0; _deepAt.X = _deepAt.Y = 0;
+            _fightArt.Clip = null; _fightBody.OpacityMask = null; _fightBody.Opacity = 1; _deepHost.Opacity = 1; _ripFront!.Opacity = _ripFront2!.Opacity = 0; _flash!.Opacity = 0; _fightFlare.Opacity = 0; _deepAt.X = _deepAt.Y = 0;
             foreach (var s in _shards) s.El.Opacity = 0;
         });
         LeaderRow()?.Land();
@@ -959,8 +967,9 @@ sealed partial class HudRift : ModernLook
             else
             {
                 parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 1, b.Y + 1, b.Width - 2, b.Height - 2), Color.FromRgb(0x06, 0x02, 0x10), .8, .02, .16, .66));
-                // the tear along the top seals: a coral line drawn in to its middle and gone
-                parts.Add(AtreiaFx.Seal(st, new Point(b.X + b.Width / 2, hit.Y), b.Width - 16, 7, CoralC, .02, .3));
+                // a dark band along the top, the tear's light drawn in to its middle over it in 0.25 s, ease-in, and gone
+                parts.Add(AtreiaFx.Veil(st, new Rect(b.X + 6, b.Y, b.Width - 12, 18), Color.FromRgb(0x05, 0x02, 0x0C), 1, .02, .06, .34));
+                parts.Add(AtreiaFx.Seal(st, new Point(b.X + b.Width / 2, hit.Y + 1), b.Width - 16, 10, CoralC, .03, .2));
                 parts.Add(AtreiaFx.Bloom(st, new Point(b.X + b.Width / 2, hit.Y), 90, 40, AtreiaFx.Glow(CoralC, .9), .24, .3, .5, s0: 1));
                 var rnd = new Random(37);
                 for (int k = 0; k < 11; k++)
@@ -975,11 +984,14 @@ sealed partial class HudRift : ModernLook
             parts.Add(bits.At);
         }
         _fightPunch.CenterX = wp.X; _fightPunch.CenterY = wp.Y;
+        // a wipe glitches the head sideways 2 px for three frames as the tear seals
+        var jit = new TranslateTransform();
+        if (wipe && _head != null) _head.RenderTransform = jit;
         AtreiaFx.Play(_fx, st, 2400, t =>
         {
             double k = Math.Min(1, t * 2400 / 1500);
             AtreiaFx.All(parts, k);
-            if (wipe) _settle.X = AtreiaFx.Shake(k, .02, .46, 5, 3.5);
+            if (wipe) { _settle.X = AtreiaFx.Shake(k, .02, .46, 5, 3.5); jit.X = k is > .03 and < .09 ? ((int)(k * 50) % 2 == 0 ? 2 : -2) : 0; }
             else _fightPunch.ScaleX = _fightPunch.ScaleY = AtreiaFx.Punch(k, 0, .5, .012, .026);
             if (!seated) seated = Seat();   // once the head is laid out (a fight just drawn), then never again
             double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, .9);
@@ -988,6 +1000,6 @@ sealed partial class HudRift : ModernLook
             if (_head is { } hd0) hd0.Opacity = t < .8 ? 1 - Seg(t, 0, .06) : Seg(t, .88, 1);
             sc.ScaleX = sc.ScaleY = .96 + .04 * i;
             lit.At(Seg(t, .05, .45) is var u && u > 0 && u < 1 ? u : -1);
-        }, () => { _fightFx.Children.Clear(); _settle.X = 0; _fightPunch.ScaleX = _fightPunch.ScaleY = 1; if (_head != null) _head.Opacity = 1; });
+        }, () => { _fightFx.Children.Clear(); _settle.X = 0; _fightPunch.ScaleX = _fightPunch.ScaleY = 1; if (_head != null) _head.Opacity = 1; jit.X = 0; });
     }
 }
